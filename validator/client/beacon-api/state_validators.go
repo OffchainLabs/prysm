@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/pkg/errors"
@@ -21,7 +22,7 @@ type StateValidatorsProvider interface {
 }
 
 type beaconApiStateValidatorsProvider struct {
-	jsonRestHandler RestHandler
+	handler rest.Handler
 }
 
 func (c beaconApiStateValidatorsProvider) StateValidators(
@@ -93,7 +94,7 @@ func (c beaconApiStateValidatorsProvider) getStateValidatorsHelper(
 	}
 	stateValidatorsJson := &structs.GetValidatorsResponse{}
 	// First try POST endpoint to check whether it is supported by the beacon node.
-	if err = c.jsonRestHandler.Post(ctx, endpoint, nil, bytes.NewBuffer(reqBytes), stateValidatorsJson); err == nil {
+	if err = c.handler.Post(ctx, endpoint, nil, bytes.NewBuffer(reqBytes), stateValidatorsJson); err == nil {
 		if stateValidatorsJson.Data == nil {
 			return nil, errors.New("stateValidatorsJson.Data is nil")
 		}
@@ -115,7 +116,7 @@ func (c beaconApiStateValidatorsProvider) getStateValidatorsHelper(
 
 	query := apiutil.BuildURL(endpoint, queryParams)
 
-	err = c.jsonRestHandler.Get(ctx, query, stateValidatorsJson)
+	err = c.handler.Get(ctx, query, stateValidatorsJson)
 	if err != nil {
 		return nil, err
 	}

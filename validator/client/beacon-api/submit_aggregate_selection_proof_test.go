@@ -94,10 +94,10 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := t.Context()
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			// Call node syncing endpoint to check if head is optimistic.
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				syncingEndpoint,
 				&structs.SyncStatusResponse{},
@@ -113,7 +113,7 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 			).Times(1)
 
 			// Call attestation data to get attestation data root to query aggregate attestation.
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				fmt.Sprintf("%s?committee_index=%d&slot=%d", attestationDataEndpoint, committeeIndex, slot),
 				&structs.GetAttestationDataResponse{},
@@ -128,7 +128,7 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 			require.NoError(t, err)
 
 			// Call attestation data to get attestation data root to query aggregate attestation.
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				fmt.Sprintf("%s?attestation_data_root=%s&committee_index=%d&slot=%d", aggregateAttestationEndpoint, hexutil.Encode(attestationDataRootBytes[:]), committeeIndex, slot),
 				&structs.AggregateAttestationResponse{},
@@ -156,12 +156,12 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 			}
 
 			validatorClient := &beaconApiValidatorClient{
-				jsonRestHandler: jsonRestHandler,
+				handler: handler,
 				stateValidatorsProvider: beaconApiStateValidatorsProvider{
-					jsonRestHandler: jsonRestHandler,
+					handler: handler,
 				},
 				dutiesProvider: beaconApiDutiesProvider{
-					jsonRestHandler: jsonRestHandler,
+					handler: handler,
 				},
 			}
 
@@ -263,10 +263,10 @@ func TestSubmitAggregateSelectionProofElectra(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := t.Context()
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			// Call node syncing endpoint to check if head is optimistic.
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				syncingEndpoint,
 				&structs.SyncStatusResponse{},
@@ -282,7 +282,7 @@ func TestSubmitAggregateSelectionProofElectra(t *testing.T) {
 			).Times(1)
 
 			// Call attestation data to get attestation data root to query aggregate attestation.
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				fmt.Sprintf("%s?committee_index=%d&slot=%d", attestationDataEndpoint, committeeIndex, slot),
 				&structs.GetAttestationDataResponse{},
@@ -297,7 +297,7 @@ func TestSubmitAggregateSelectionProofElectra(t *testing.T) {
 			require.NoError(t, err)
 
 			// Call attestation data to get attestation data root to query aggregate attestation.
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				fmt.Sprintf("%s?attestation_data_root=%s&committee_index=%d&slot=%d", aggregateAttestationEndpoint, hexutil.Encode(attestationDataRootBytes[:]), committeeIndex, slot),
 				&structs.AggregateAttestationResponse{},
@@ -325,12 +325,12 @@ func TestSubmitAggregateSelectionProofElectra(t *testing.T) {
 			}
 
 			validatorClient := &beaconApiValidatorClient{
-				jsonRestHandler: jsonRestHandler,
+				handler: handler,
 				stateValidatorsProvider: beaconApiStateValidatorsProvider{
-					jsonRestHandler: jsonRestHandler,
+					handler: handler,
 				},
 				dutiesProvider: beaconApiDutiesProvider{
-					jsonRestHandler: jsonRestHandler,
+					handler: handler,
 				},
 			}
 

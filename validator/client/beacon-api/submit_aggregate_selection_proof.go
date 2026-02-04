@@ -129,7 +129,7 @@ func (c *beaconApiValidatorClient) aggregateAttestation(
 	endpoint := apiutil.BuildURL("/eth/v2/validator/aggregate_attestation", params)
 
 	var aggregateAttestationResponse structs.AggregateAttestationResponse
-	err := c.jsonRestHandler.Get(ctx, endpoint, &aggregateAttestationResponse)
+	err := c.handler.Get(ctx, endpoint, &aggregateAttestationResponse)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (c *beaconApiValidatorClient) aggregateAttestationElectra(
 	endpoint := apiutil.BuildURL("/eth/v2/validator/aggregate_attestation", params)
 
 	var aggregateAttestationResponse structs.AggregateAttestationResponse
-	if err := c.jsonRestHandler.Get(ctx, endpoint, &aggregateAttestationResponse); err != nil {
+	if err := c.handler.Get(ctx, endpoint, &aggregateAttestationResponse); err != nil {
 		return nil, err
 	}
 

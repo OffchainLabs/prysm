@@ -103,13 +103,13 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 				defer ctrl.Finish()
 
 				ctx := t.Context()
-				jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+				handler := mock.NewMockJsonRestHandler(ctrl)
 
 				// Expect PostSSZ to be called first with SSZ data
 				headers := map[string]string{
 					"Eth-Consensus-Version": testCase.consensusVersion,
 				}
-				jsonRestHandler.EXPECT().PostSSZ(
+				handler.EXPECT().PostSSZ(
 					gomock.Any(),
 					testCase.endpoint,
 					headers,
@@ -120,7 +120,7 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 
 				// No JSON fallback expected for non-406 errors
 
-				validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+				validatorClient := &beaconApiValidatorClient{handler: handler}
 				_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
 				assert.ErrorContains(t, testSuite.expectedErrorMessage, err)
 			})
@@ -165,13 +165,13 @@ func TestProposeBeaconBlock_SSZSuccess_NoFallback(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			// Expect PostSSZ to be called and succeed
 			headers := map[string]string{
 				"Eth-Consensus-Version": testCase.consensusVersion,
 			}
-			jsonRestHandler.EXPECT().PostSSZ(
+			handler.EXPECT().PostSSZ(
 				gomock.Any(),
 				testCase.endpoint,
 				headers,
@@ -181,7 +181,7 @@ func TestProposeBeaconBlock_SSZSuccess_NoFallback(t *testing.T) {
 			).Times(1)
 
 			// Post should NOT be called when PostSSZ succeeds
-			jsonRestHandler.EXPECT().Post(
+			handler.EXPECT().Post(
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
@@ -189,7 +189,7 @@ func TestProposeBeaconBlock_SSZSuccess_NoFallback(t *testing.T) {
 				gomock.Any(),
 			).Times(0)
 
-			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			validatorClient := &beaconApiValidatorClient{handler: handler}
 			_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
 			assert.NoError(t, err)
 		})
@@ -200,7 +200,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 	t.Run("deneb", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockJsonRestHandler(ctrl)
 
 		var blockContents structs.SignedBeaconBlockContentsDeneb
 		err := json.Unmarshal([]byte(rpctesting.DenebBlockContents), &blockContents)
@@ -211,14 +211,14 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 		denebBytes, err := genericSignedBlock.GetDeneb().MarshalSSZ()
 		require.NoError(t, err)
 
-		jsonRestHandler.EXPECT().PostSSZ(
+		handler.EXPECT().PostSSZ(
 			gomock.Any(),
 			"/eth/v2/beacon/blocks",
 			gomock.Any(),
 			bytes.NewBuffer(denebBytes),
 		)
 
-		validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+		validatorClient := &beaconApiValidatorClient{handler: handler}
 		proposeResponse, err := validatorClient.proposeBeaconBlock(t.Context(), genericSignedBlock)
 		assert.NoError(t, err)
 		require.NotNil(t, proposeResponse)
@@ -231,7 +231,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 	t.Run("blinded_deneb", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockJsonRestHandler(ctrl)
 
 		var blindedBlock structs.SignedBlindedBeaconBlockDeneb
 		err := json.Unmarshal([]byte(rpctesting.BlindedDenebBlock), &blindedBlock)
@@ -242,14 +242,14 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 		blindedDenebBytes, err := genericSignedBlock.GetBlindedDeneb().MarshalSSZ()
 		require.NoError(t, err)
 
-		jsonRestHandler.EXPECT().PostSSZ(
+		handler.EXPECT().PostSSZ(
 			gomock.Any(),
 			"/eth/v2/beacon/blinded_blocks",
 			gomock.Any(),
 			bytes.NewBuffer(blindedDenebBytes),
 		)
 
-		validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+		validatorClient := &beaconApiValidatorClient{handler: handler}
 		proposeResponse, err := validatorClient.proposeBeaconBlock(t.Context(), genericSignedBlock)
 		assert.NoError(t, err)
 		require.NotNil(t, proposeResponse)
@@ -262,7 +262,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 	t.Run("electra", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockJsonRestHandler(ctrl)
 
 		var blockContents structs.SignedBeaconBlockContentsElectra
 		err := json.Unmarshal([]byte(rpctesting.ElectraBlockContents), &blockContents)
@@ -273,14 +273,14 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 		electraBytes, err := genericSignedBlock.GetElectra().MarshalSSZ()
 		require.NoError(t, err)
 
-		jsonRestHandler.EXPECT().PostSSZ(
+		handler.EXPECT().PostSSZ(
 			gomock.Any(),
 			"/eth/v2/beacon/blocks",
 			gomock.Any(),
 			bytes.NewBuffer(electraBytes),
 		)
 
-		validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+		validatorClient := &beaconApiValidatorClient{handler: handler}
 		proposeResponse, err := validatorClient.proposeBeaconBlock(t.Context(), genericSignedBlock)
 		assert.NoError(t, err)
 		require.NotNil(t, proposeResponse)
@@ -293,7 +293,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 	t.Run("blinded_electra", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockJsonRestHandler(ctrl)
 
 		var blindedBlock structs.SignedBlindedBeaconBlockElectra
 		err := json.Unmarshal([]byte(rpctesting.BlindedElectraBlock), &blindedBlock)
@@ -304,14 +304,14 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 		blindedElectraBytes, err := genericSignedBlock.GetBlindedElectra().MarshalSSZ()
 		require.NoError(t, err)
 
-		jsonRestHandler.EXPECT().PostSSZ(
+		handler.EXPECT().PostSSZ(
 			gomock.Any(),
 			"/eth/v2/beacon/blinded_blocks",
 			gomock.Any(),
 			bytes.NewBuffer(blindedElectraBytes),
 		)
 
-		validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+		validatorClient := &beaconApiValidatorClient{handler: handler}
 		proposeResponse, err := validatorClient.proposeBeaconBlock(t.Context(), genericSignedBlock)
 		assert.NoError(t, err)
 		require.NotNil(t, proposeResponse)
@@ -324,7 +324,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 	t.Run("fulu", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockJsonRestHandler(ctrl)
 
 		var blockContents structs.SignedBeaconBlockContentsFulu
 		err := json.Unmarshal([]byte(rpctesting.FuluBlockContents), &blockContents)
@@ -335,14 +335,14 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 		fuluBytes, err := genericSignedBlock.GetFulu().MarshalSSZ()
 		require.NoError(t, err)
 
-		jsonRestHandler.EXPECT().PostSSZ(
+		handler.EXPECT().PostSSZ(
 			gomock.Any(),
 			"/eth/v2/beacon/blocks",
 			gomock.Any(),
 			bytes.NewBuffer(fuluBytes),
 		)
 
-		validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+		validatorClient := &beaconApiValidatorClient{handler: handler}
 		proposeResponse, err := validatorClient.proposeBeaconBlock(t.Context(), genericSignedBlock)
 		assert.NoError(t, err)
 		require.NotNil(t, proposeResponse)
@@ -355,7 +355,7 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 	t.Run("blinded_fulu", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+		handler := mock.NewMockJsonRestHandler(ctrl)
 
 		var blindedBlock structs.SignedBlindedBeaconBlockFulu
 		err := json.Unmarshal([]byte(rpctesting.BlindedFuluBlock), &blindedBlock)
@@ -366,14 +366,14 @@ func TestProposeBeaconBlock_NewerTypes_SSZMarshal(t *testing.T) {
 		blindedFuluBytes, err := genericSignedBlock.GetBlindedFulu().MarshalSSZ()
 		require.NoError(t, err)
 
-		jsonRestHandler.EXPECT().PostSSZ(
+		handler.EXPECT().PostSSZ(
 			gomock.Any(),
 			"/eth/v2/beacon/blinded_blocks",
 			gomock.Any(),
 			bytes.NewBuffer(blindedFuluBytes),
 		)
 
-		validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+		validatorClient := &beaconApiValidatorClient{handler: handler}
 		proposeResponse, err := validatorClient.proposeBeaconBlock(t.Context(), genericSignedBlock)
 		assert.NoError(t, err)
 		require.NotNil(t, proposeResponse)
@@ -588,10 +588,10 @@ func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			// Expect PostSSZ to be called first and fail
-			jsonRestHandler.EXPECT().PostSSZ(
+			handler.EXPECT().PostSSZ(
 				gomock.Any(),
 				testCase.endpoint,
 				gomock.Any(),
@@ -603,7 +603,7 @@ func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 				},
 			).Times(1)
 
-			jsonRestHandler.EXPECT().Post(
+			handler.EXPECT().Post(
 				gomock.Any(),
 				testCase.endpoint,
 				gomock.Any(),
@@ -613,7 +613,7 @@ func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 				nil,
 			).Times(1)
 
-			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			validatorClient := &beaconApiValidatorClient{handler: handler}
 			_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
 			assert.NoError(t, err)
 		})
@@ -643,13 +643,13 @@ func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			// Expect PostSSZ to be called first and fail with non-406 error
 			sszHeaders := map[string]string{
 				"Eth-Consensus-Version": testCase.consensusVersion,
 			}
-			jsonRestHandler.EXPECT().PostSSZ(
+			handler.EXPECT().PostSSZ(
 				gomock.Any(),
 				testCase.endpoint,
 				sszHeaders,
@@ -662,7 +662,7 @@ func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
 			).Times(1)
 
 			// Post should NOT be called for non-406 errors
-			jsonRestHandler.EXPECT().Post(
+			handler.EXPECT().Post(
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
@@ -670,7 +670,7 @@ func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
 				gomock.Any(),
 			).Times(0)
 
-			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			validatorClient := &beaconApiValidatorClient{handler: handler}
 			_, err := validatorClient.proposeBeaconBlock(ctx, testCase.block)
 			require.ErrorContains(t, "Internal server error", err)
 		})

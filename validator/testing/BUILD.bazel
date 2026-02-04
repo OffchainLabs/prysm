@@ -5,6 +5,7 @@ go_library(
     testonly = True,
     srcs = [
         "constants.go",
+        "mock_node_connection.go",
         "mock_protector.go",
         "protection_history.go",
     ],
@@ -14,6 +15,7 @@ go_library(
         "//validator:__subpackages__",
     ],
     deps = [
+        "//api/grpc:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
@@ -22,6 +24,7 @@ go_library(
         "//encoding/bytesutil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//validator/db/common:go_default_library",
+        "//validator/helpers:go_default_library",
         "//validator/slashing-protection-history/format:go_default_library",
     ],
 )

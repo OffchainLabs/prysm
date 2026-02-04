@@ -2,24 +2,38 @@ version: v1.7.0-alpha.2
 style: full
 
 specrefs:
-  search_root: ..
+  search_root: .
+  auto_standardize_names: true
+  auto_add_missing_entries: true
+  require_exceptions_have_fork: true
+
   files:
-    - configs.yml
-    - constants.yml
-    - containers.yml
-    - dataclasses.yml
-    - functions.yml
-    - presets.yml
+    - specrefs/configs.yml
+    - specrefs/constants.yml
+    - specrefs/containers.yml
+    - specrefs/dataclasses.yml
+    - specrefs/functions.yml
+    - specrefs/presets.yml
 
 exceptions:
   presets:
-    # Not implemented: gloas (future fork)
+    # gloas
     - BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
     - MAX_PAYLOAD_ATTESTATIONS#gloas
     - PTC_SIZE#gloas
 
   constants:
-    # Constants in the KZG library
+    # phase0
+    - BASIS_POINTS#phase0
+    - ENDIANNESS#phase0
+    - MAX_CONCURRENT_REQUESTS#phase0
+    - UINT64_MAX#phase0
+    - UINT64_MAX_SQRT#phase0
+    # altair
+    - PARTICIPATION_FLAG_WEIGHTS#altair
+    # bellatrix
+    - SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY#bellatrix
+    # deneb
     - BLS_MODULUS#deneb
     - BYTES_PER_COMMITMENT#deneb
     - BYTES_PER_FIELD_ELEMENT#deneb
@@ -33,18 +47,9 @@ exceptions:
     - PRIMITIVE_ROOT_OF_UNITY#deneb
     - RANDOM_CHALLENGE_KZG_BATCH_DOMAIN#deneb
     - RANDOM_CHALLENGE_KZG_CELL_BATCH_DOMAIN#fulu
-
-    # Not implemented
-    - BASIS_POINTS#phase0
-    - ENDIANNESS#phase0
-    - MAX_CONCURRENT_REQUESTS#phase0
-    - PARTICIPATION_FLAG_WEIGHTS#altair
-    - SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY#bellatrix
+    # fulu
     - UINT256_MAX#fulu
-    - UINT64_MAX#phase0
-    - UINT64_MAX_SQRT#phase0
-
-    # Not implemented: gloas (future fork)
+    # gloas
     - BUILDER_PAYMENT_THRESHOLD_DENOMINATOR#gloas
     - BUILDER_PAYMENT_THRESHOLD_NUMERATOR#gloas
     - BUILDER_WITHDRAWAL_PREFIX#gloas
@@ -61,61 +66,62 @@ exceptions:
     - PTC_TIMELINESS_INDEX#gloas
 
   configs:
-    # Not implemented: gloas (future fork)
+    # gloas
     - AGGREGATE_DUE_BPS_GLOAS#gloas
     - ATTESTATION_DUE_BPS_GLOAS#gloas
     - CONTRIBUTION_DUE_BPS_GLOAS#gloas
     - GLOAS_FORK_EPOCH#gloas
     - GLOAS_FORK_VERSION#gloas
     - MAX_REQUEST_PAYLOADS#gloas
+    - MIN_BUILDER_WITHDRAWABILITY_DELAY#gloas
     - PAYLOAD_ATTESTATION_DUE_BPS#gloas
     - SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
-    - MIN_BUILDER_WITHDRAWABILITY_DELAY#gloas
 
   ssz_objects:
-    # Not implemented
+    # phase0
     - Eth1Block#phase0
-    - MatrixEntry#fulu
-
-    # Not implemented: capella
+    # capella
     - LightClientBootstrap#capella
     - LightClientFinalityUpdate#capella
     - LightClientOptimisticUpdate#capella
     - LightClientUpdate#capella
-
-    # Not implemented: gloas (future fork)
+    # fulu
+    - MatrixEntry#fulu
+    # gloas
     - BeaconBlockBody#gloas
     - BeaconState#gloas
+    - Builder#gloas
     - BuilderPendingPayment#gloas
     - BuilderPendingWithdrawal#gloas
     - DataColumnSidecar#gloas
-    - ExecutionPayloadEnvelope#gloas
     - ExecutionPayloadBid#gloas
+    - ExecutionPayloadEnvelope#gloas
     - ForkChoiceNode#gloas
     - IndexedPayloadAttestation#gloas
     - PayloadAttestation#gloas
     - PayloadAttestationData#gloas
     - PayloadAttestationMessage#gloas
-    - SignedExecutionPayloadEnvelope#gloas
-    - SignedExecutionPayloadBid#gloas
-    - Builder#gloas
     - ProposerPreferences#gloas
+    - SignedExecutionPayloadBid#gloas
+    - SignedExecutionPayloadEnvelope#gloas
     - SignedProposerPreferences#gloas
 
   dataclasses:
-    # Not implemented
-    - BlobParameters#fulu
-    - ExpectedWithdrawals#capella
-    - ExpectedWithdrawals#electra
+    # phase0
     - LatestMessage#phase0
-    - LightClientStore#altair
-    - OptimisticStore#bellatrix
     - Store#phase0
-
-    # Not implemented: capella
+    # altair
+    - LightClientStore#altair
+    # bellatrix
+    - OptimisticStore#bellatrix
+    # capella
+    - ExpectedWithdrawals#capella
     - LightClientStore#capella
-
-    # Not implemented: gloas (future fork)
+    # electra
+    - ExpectedWithdrawals#electra
+    # fulu
+    - BlobParameters#fulu
+    # gloas
     - ExpectedWithdrawals#gloas
     - LatestMessage#gloas
     - Store#gloas
@@ -174,7 +180,12 @@ exceptions:
     - verify_cell_kzg_proof_batch#fulu
     - verify_cell_kzg_proof_batch_impl#fulu
 
-    # Not implemented: phase0
+    # phase0
+    - update_proposer_boost_root#phase0
+    - is_proposer_equivocation#phase0
+    - record_block_timeliness#phase0
+    - compute_proposer_score#phase0
+    - get_attestation_score#phase0
     - calculate_committee_fraction#phase0
     - compute_fork_version#phase0
     - compute_pulled_up_tip#phase0
@@ -220,8 +231,7 @@ exceptions:
     - validate_on_attestation#phase0
     - validate_target_epoch_against_current_time#phase0
     - xor#phase0
-
-    # Not implemented: altair
+    # altair
     - compute_merkle_proof#altair
     - compute_sync_committee_period_at_slot#altair
     - get_contribution_and_proof#altair
@@ -243,27 +253,29 @@ exceptions:
     - process_sync_committee_contributions#altair
     - set_or_append_list#altair
     - validate_light_client_update#altair
-
-    # Not implemented: bellatrix
+    # bellatrix
     - get_execution_payload#bellatrix
     - is_merge_transition_block#bellatrix
     - is_optimistic_candidate_block#bellatrix
     - latest_verified_ancestor#bellatrix
     - prepare_execution_payload#bellatrix
-
-    # Not implemented: capella
+    # capella
+    - apply_withdrawals#capella
+    - get_balance_after_withdrawals#capella
     - get_lc_execution_root#capella
+    - get_validators_sweep_withdrawals#capella
     - is_valid_light_client_header#capella
     - prepare_execution_payload#capella
     - process_epoch#capella
+    - update_next_withdrawal_index#capella
+    - update_next_withdrawal_validator_index#capella
     - upgrade_lc_bootstrap_to_capella#capella
     - upgrade_lc_finality_update_to_capella#capella
     - upgrade_lc_header_to_capella#capella
     - upgrade_lc_optimistic_update_to_capella#capella
     - upgrade_lc_store_to_capella#capella
     - upgrade_lc_update_to_capella#capella
-
-    # Not implemented: deneb
+    # deneb
     - get_lc_execution_root#deneb
     - is_valid_light_client_header#deneb
     - prepare_execution_payload#deneb
@@ -273,33 +285,34 @@ exceptions:
     - upgrade_lc_optimistic_update_to_deneb#deneb
     - upgrade_lc_store_to_deneb#deneb
     - upgrade_lc_update_to_deneb#deneb
-
-    # Not implemented: electra
+    # electra
     - compute_weak_subjectivity_period#electra
     - current_sync_committee_gindex_at_slot#electra
     - finalized_root_gindex_at_slot#electra
     - get_eth1_vote#electra
     - get_lc_execution_root#electra
+    - get_pending_partial_withdrawals#electra
+    - get_validators_sweep_withdrawals#electra
     - is_compounding_withdrawal_credential#electra
+    - is_eligible_for_partial_withdrawals#electra
     - is_within_weak_subjectivity_period#electra
     - next_sync_committee_gindex_at_slot#electra
     - normalize_merkle_branch#electra
     - prepare_execution_payload#electra
+    - update_pending_partial_withdrawals#electra
     - upgrade_lc_bootstrap_to_electra#electra
     - upgrade_lc_finality_update_to_electra#electra
     - upgrade_lc_header_to_electra#electra
     - upgrade_lc_optimistic_update_to_electra#electra
     - upgrade_lc_store_to_electra#electra
     - upgrade_lc_update_to_electra#electra
-
-    # Not implemented: fulu
+    # fulu
     - compute_matrix#fulu
     - get_blob_parameters#fulu
     - get_data_column_sidecars_from_block#fulu
     - get_data_column_sidecars_from_column_sidecar#fulu
     - recover_matrix#fulu
-
-    # Not implemented: gloas (future fork)
+    # gloas
     - compute_balance_weighted_acceptance#gloas
     - compute_balance_weighted_selection#gloas
     - compute_fork_version#gloas
@@ -367,10 +380,8 @@ exceptions:
     - verify_execution_payload_bid_signature#gloas
     - add_builder_to_registry#gloas
     - apply_deposit_for_builder#gloas
-    - apply_withdrawals#capella
     - apply_withdrawals#gloas
     - can_builder_cover_bid#gloas
-    - compute_proposer_score#phase0
     - convert_builder_index_to_validator_index#gloas
     - convert_validator_index_to_builder_index#gloas
     - get_attestation_score#gloas
@@ -380,11 +391,8 @@ exceptions:
     - get_builders_sweep_withdrawals#gloas
     - get_index_for_new_builder#gloas
     - get_pending_balance_to_withdraw_for_builder#gloas
-    - get_pending_partial_withdrawals#electra
     - get_proposer_preferences_signature#gloas
     - get_upcoming_proposal_slots#gloas
-    - get_validators_sweep_withdrawals#capella
-    - get_validators_sweep_withdrawals#electra
     - initiate_builder_exit#gloas
     - is_active_builder#gloas
     - is_builder_index#gloas
@@ -393,7 +401,6 @@ exceptions:
     - is_head_late#gloas
     - is_head_weak#gloas
     - is_parent_strong#gloas
-    - is_proposer_equivocation#phase0
     - is_valid_proposal_slot#gloas
     - onboard_builders_from_pending_deposits#gloas
     - process_deposit_request#gloas
@@ -404,14 +411,11 @@ exceptions:
     - should_apply_proposer_boost#gloas
     - update_builder_pending_withdrawals#gloas
     - update_next_withdrawal_builder_index#gloas
-    - update_next_withdrawal_index#capella
-    - update_next_withdrawal_validator_index#capella
     - update_payload_expected_withdrawals#gloas
-    - update_pending_partial_withdrawals#electra
     - update_proposer_boost_root#gloas
-    - update_proposer_boost_root#phase0
 
   presets:
+    # gloas
     - BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
     - BUILDER_REGISTRY_LIMIT#gloas
     - MAX_BUILDERS_PER_WITHDRAWALS_SWEEP#gloas

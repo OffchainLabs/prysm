@@ -5,8 +5,8 @@ import (
 
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
+	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/golang/protobuf/ptypes/empty"
-	"google.golang.org/grpc"
 )
 
 var (
@@ -14,35 +14,40 @@ var (
 )
 
 type grpcNodeClient struct {
-	nodeClient ethpb.NodeClient
+	*grpcClientManager[ethpb.NodeClient]
 }
 
 func (c *grpcNodeClient) SyncStatus(ctx context.Context, in *empty.Empty) (*ethpb.SyncStatus, error) {
-	return c.nodeClient.GetSyncStatus(ctx, in)
+	return c.getClient().GetSyncStatus(ctx, in)
 }
 
 func (c *grpcNodeClient) Genesis(ctx context.Context, in *empty.Empty) (*ethpb.Genesis, error) {
-	return c.nodeClient.GetGenesis(ctx, in)
+	return c.getClient().GetGenesis(ctx, in)
 }
 
 func (c *grpcNodeClient) Version(ctx context.Context, in *empty.Empty) (*ethpb.Version, error) {
-	return c.nodeClient.GetVersion(ctx, in)
+	return c.getClient().GetVersion(ctx, in)
 }
 
 func (c *grpcNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Peers, error) {
-	return c.nodeClient.ListPeers(ctx, in)
+	return c.getClient().ListPeers(ctx, in)
 }
 
 func (c *grpcNodeClient) IsReady(ctx context.Context) bool {
-	_, err := c.nodeClient.GetHealth(ctx, &ethpb.HealthRequest{})
+	// GetHealth returns 200 OK only if node is synced and not optimistic.
+	// otherwise it will throw an error
+	_, err := c.getClient().GetHealth(ctx, &ethpb.HealthRequest{})
 	if err != nil {
-		log.WithError(err).Error("Failed to get health of node")
+		log.WithError(err).WithField("url", c.conn.GetGrpcConnectionProvider().CurrentHost()).Debug("Node is not ready")
 		return false
 	}
 	return true
 }
 
-func NewNodeClient(cc grpc.ClientConnInterface) iface.NodeClient {
-	g := &grpcNodeClient{nodeClient: ethpb.NewNodeClient(cc)}
-	return g
+// NewNodeClient creates a new gRPC node client that supports
+// dynamic connection switching via the NodeConnection's GrpcConnectionProvider.
+func NewNodeClient(conn validatorHelpers.NodeConnection) iface.NodeClient {
+	return &grpcNodeClient{
+		grpcClientManager: newGrpcClientManager(conn, ethpb.NewNodeClient),
+	}
 }
