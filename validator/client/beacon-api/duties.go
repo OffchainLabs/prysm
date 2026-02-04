@@ -28,7 +28,7 @@ type dutiesProvider interface {
 }
 
 type beaconApiDutiesProvider struct {
-	jsonRestHandler rest.RestHandler
+	handler rest.Handler
 }
 
 type attesterDuty struct {
@@ -280,7 +280,7 @@ func (c beaconApiDutiesProvider) Committees(ctx context.Context, epoch primitive
 	committeesRequest := apiutil.BuildURL("/eth/v1/beacon/states/head/committees", committeeParams)
 
 	var stateCommittees structs.GetCommitteesResponse
-	if err := c.jsonRestHandler.Get(ctx, committeesRequest, &stateCommittees); err != nil {
+	if err := c.handler.Get(ctx, committeesRequest, &stateCommittees); err != nil {
 		return nil, err
 	}
 
@@ -310,7 +310,7 @@ func (c beaconApiDutiesProvider) AttesterDuties(ctx context.Context, epoch primi
 	}
 
 	attesterDuties := &structs.GetAttesterDutiesResponse{}
-	if err = c.jsonRestHandler.Post(
+	if err = c.handler.Post(
 		ctx,
 		fmt.Sprintf("/eth/v1/validator/duties/attester/%d", epoch),
 		nil,
@@ -332,7 +332,7 @@ func (c beaconApiDutiesProvider) AttesterDuties(ctx context.Context, epoch primi
 // ProposerDuties retrieves the proposer duties for the given epoch
 func (c beaconApiDutiesProvider) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*structs.GetProposerDutiesResponse, error) {
 	proposerDuties := &structs.GetProposerDutiesResponse{}
-	if err := c.jsonRestHandler.Get(ctx, fmt.Sprintf("/eth/v1/validator/duties/proposer/%d", epoch), proposerDuties); err != nil {
+	if err := c.handler.Get(ctx, fmt.Sprintf("/eth/v1/validator/duties/proposer/%d", epoch), proposerDuties); err != nil {
 		return nil, err
 	}
 
@@ -362,7 +362,7 @@ func (c beaconApiDutiesProvider) SyncDuties(ctx context.Context, epoch primitive
 	}
 
 	syncDuties := structs.GetSyncCommitteeDutiesResponse{}
-	if err = c.jsonRestHandler.Post(
+	if err = c.handler.Post(
 		ctx,
 		fmt.Sprintf("/eth/v1/validator/duties/sync/%d", epoch),
 		nil,

@@ -34,7 +34,7 @@ func TestGetStateValidators_Nominal_POST(t *testing.T) {
 	require.NoError(t, err)
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
 	wanted := []*structs.ValidatorContainer{
 		{
@@ -69,7 +69,7 @@ func TestGetStateValidators_Nominal_POST(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler.EXPECT().Post(
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil,
@@ -84,7 +84,7 @@ func TestGetStateValidators_Nominal_POST(t *testing.T) {
 		},
 	).Times(1)
 
-	stateValidatorsProvider := beaconApiStateValidatorsProvider{jsonRestHandler: jsonRestHandler}
+	stateValidatorsProvider := beaconApiStateValidatorsProvider{handler: handler}
 	actual, err := stateValidatorsProvider.StateValidators(ctx, []string{
 		"0x8000091c2ae64ee414a54c1cc1fc67dec663408bc636cb86756e0200e41a75c8f86603f104f02c856983d2783116be13", // active_ongoing
 		"0x80000e851c0f53c3246ff726d7ff7766661ca5e12a07c45c114d208d54f0f8233d4380b2e9aff759d69795d1df905526", // active_exiting
@@ -120,7 +120,7 @@ func TestGetStateValidators_Nominal_GET(t *testing.T) {
 	require.NoError(t, err)
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
 	wanted := []*structs.ValidatorContainer{
 		{
@@ -156,7 +156,7 @@ func TestGetStateValidators_Nominal_GET(t *testing.T) {
 	ctx := t.Context()
 
 	// First return an error from POST call.
-	jsonRestHandler.EXPECT().Post(
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil,
@@ -177,7 +177,7 @@ func TestGetStateValidators_Nominal_GET(t *testing.T) {
 
 	query := apiutil.BuildURL("/eth/v1/beacon/states/head/validators", queryParams)
 
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		query,
 		&stateValidatorsResponseJson,
@@ -190,7 +190,7 @@ func TestGetStateValidators_Nominal_GET(t *testing.T) {
 		},
 	).Times(1)
 
-	stateValidatorsProvider := beaconApiStateValidatorsProvider{jsonRestHandler: jsonRestHandler}
+	stateValidatorsProvider := beaconApiStateValidatorsProvider{handler: handler}
 	actual, err := stateValidatorsProvider.StateValidators(ctx, []string{
 		"0x8000091c2ae64ee414a54c1cc1fc67dec663408bc636cb86756e0200e41a75c8f86603f104f02c856983d2783116be13", // active_ongoing
 		"0x80000e851c0f53c3246ff726d7ff7766661ca5e12a07c45c114d208d54f0f8233d4380b2e9aff759d69795d1df905526", // active_exiting
@@ -220,12 +220,12 @@ func TestGetStateValidators_GetRestJsonResponseOnError(t *testing.T) {
 	require.NoError(t, err)
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
 	ctx := t.Context()
 
 	// First call POST.
-	jsonRestHandler.EXPECT().Post(
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil,
@@ -246,7 +246,7 @@ func TestGetStateValidators_GetRestJsonResponseOnError(t *testing.T) {
 
 	query := apiutil.BuildURL("/eth/v1/beacon/states/head/validators", queryParams)
 
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		query,
 		&stateValidatorsResponseJson,
@@ -254,7 +254,7 @@ func TestGetStateValidators_GetRestJsonResponseOnError(t *testing.T) {
 		errors.New("an error"),
 	).Times(1)
 
-	stateValidatorsProvider := beaconApiStateValidatorsProvider{jsonRestHandler: jsonRestHandler}
+	stateValidatorsProvider := beaconApiStateValidatorsProvider{handler: handler}
 	_, err = stateValidatorsProvider.StateValidators(ctx, []string{
 		"0x8000091c2ae64ee414a54c1cc1fc67dec663408bc636cb86756e0200e41a75c8f86603f104f02c856983d2783116be13", // active_ongoing
 	},
@@ -277,9 +277,9 @@ func TestGetStateValidators_DataIsNil_POST(t *testing.T) {
 
 	ctx := t.Context()
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
-	jsonRestHandler.EXPECT().Post(
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil, bytes.NewBuffer(reqBytes),
@@ -293,7 +293,7 @@ func TestGetStateValidators_DataIsNil_POST(t *testing.T) {
 		},
 	).Times(1)
 
-	stateValidatorsProvider := beaconApiStateValidatorsProvider{jsonRestHandler: jsonRestHandler}
+	stateValidatorsProvider := beaconApiStateValidatorsProvider{handler: handler}
 	_, err = stateValidatorsProvider.StateValidators(ctx, []string{
 		"0x8000091c2ae64ee414a54c1cc1fc67dec663408bc636cb86756e0200e41a75c8f86603f104f02c856983d2783116be13", // active_ongoing
 	},
@@ -316,10 +316,10 @@ func TestGetStateValidators_DataIsNil_GET(t *testing.T) {
 
 	ctx := t.Context()
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
 	// First call POST which will return an error.
-	jsonRestHandler.EXPECT().Post(
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil,
@@ -340,7 +340,7 @@ func TestGetStateValidators_DataIsNil_GET(t *testing.T) {
 
 	query := apiutil.BuildURL("/eth/v1/beacon/states/head/validators", queryParams)
 
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		query,
 		&stateValidatorsResponseJson,
@@ -353,7 +353,7 @@ func TestGetStateValidators_DataIsNil_GET(t *testing.T) {
 		},
 	).Times(1)
 
-	stateValidatorsProvider := beaconApiStateValidatorsProvider{jsonRestHandler: jsonRestHandler}
+	stateValidatorsProvider := beaconApiStateValidatorsProvider{handler: handler}
 	_, err = stateValidatorsProvider.StateValidators(ctx, []string{
 		"0x8000091c2ae64ee414a54c1cc1fc67dec663408bc636cb86756e0200e41a75c8f86603f104f02c856983d2783116be13", // active_ongoing
 	},
