@@ -74,6 +74,7 @@ type partialSubscribeParameters struct {
 	validateHeader partialdatacolumnbroadcaster.HeaderValidator
 	validate       partialdatacolumnbroadcaster.ColumnValidator
 	handle         partialdatacolumnbroadcaster.SubHandler
+	handleHeader   partialdatacolumnbroadcaster.HeaderHandler
 }
 
 // shortTopic is a less verbose version of topic strings used for logging.
@@ -360,6 +361,14 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 							log.WithError(err).Error("Failed to handle verified RO data column subscriber")
 						}
 					},
+					handleHeader: func(header *ethpb.PartialDataColumnHeader) {
+						ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
+						defer cancel()
+						err := s.partialDataColumnHeaderSubscriber(ctx, header)
+						if err != nil {
+							log.WithError(err).Error("Failed to handle partial data column header")
+						}
+					},
 				}
 			}
 			s.subscribeWithParameters(subscribeParameters{
@@ -643,7 +652,7 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 
 		if requestPartial {
 			log.Info("Subscribing to partial columns on", topicStr)
-			err = t.partial.broadcaster.Subscribe(topic, t.partial.validateHeader, t.partial.validate, t.partial.handle)
+			err = t.partial.broadcaster.Subscribe(topic, t.partial.validateHeader, t.partial.validate, t.partial.handle, t.partial.handleHeader)
 
 			if err != nil {
 				log.WithError(err).Error("Failed to subscribe to partial column")

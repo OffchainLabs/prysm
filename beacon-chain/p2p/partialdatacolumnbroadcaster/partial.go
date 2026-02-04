@@ -47,6 +47,7 @@ func extractColumnIndexFromTopic(topic string) (uint64, error) {
 //   - reject=false, err!=nil: IGNORE - don't penalize, just ignore
 //   - reject=false, err=nil: valid header
 type HeaderValidator func(header *ethpb.PartialDataColumnHeader) (reject bool, err error)
+type HeaderHandler func(header *ethpb.PartialDataColumnHeader)
 type ColumnValidator func(cells []blocks.CellProofBundle) error
 
 type PartialColumnBroadcaster struct {
@@ -62,6 +63,9 @@ type PartialColumnBroadcaster struct {
 
 	// map topic -> handler
 	handlers map[string]SubHandler
+
+	// map topic -> headerHandler
+	headerHandlers map[string]HeaderHandler
 
 	// map topic -> *pubsub.Topic
 	topics map[string]*pubsub.Topic
@@ -109,6 +113,7 @@ type subscribe struct {
 	headerValidator HeaderValidator
 	validator       ColumnValidator
 	handler         SubHandler
+	headerHandler   HeaderHandler
 }
 
 type unsubscribe struct {
@@ -133,6 +138,7 @@ func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 		validators:       make(map[string]ColumnValidator),
 		headerValidators: make(map[string]HeaderValidator),
 		handlers:         make(map[string]SubHandler),
+		headerHandlers:   make(map[string]HeaderHandler),
 		topics:           make(map[string]*pubsub.Topic),
 		partialMsgStore:  make(map[string]map[string]*blocks.PartialDataColumn),
 		groupTTL:         make(map[string]int8),
@@ -225,7 +231,7 @@ func (p *PartialColumnBroadcaster) loop() {
 			case requestKindPublish:
 				req.response <- p.publish(req.publish.topic, req.publish.c)
 			case requestKindSubscribe:
-				req.response <- p.subscribe(req.sub.t, req.sub.headerValidator, req.sub.validator, req.sub.handler)
+				req.response <- p.subscribe(req.sub.t, req.sub.headerValidator, req.sub.validator, req.sub.handler, req.sub.headerHandler)
 			case requestKindUnsubscribe:
 				req.response <- p.unsubscribe(req.unsub.topic)
 			case requestKindHandleIncomingRPC:
@@ -309,7 +315,12 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			// Cache the valid header
 			p.validHeaderCache[string(groupID)] = header
 
-			// TODO: We now have the information we need to call GetBlobsV3, we should do that to see what we have locally.
+			headerHandler, ok := p.headerHandlers[topicID]
+			if !ok || headerHandler == nil {
+				p.logger.Debug("No header handler registered for topic")
+				return nil
+			}
+			headerHandler(header)
 		}
 
 		columnIndex, err := extractColumnIndexFromTopic(topicID)
@@ -491,7 +502,7 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 
 type SubHandler func(topic string, col blocks.VerifiedRODataColumn)
 
-func (p *PartialColumnBroadcaster) Subscribe(t *pubsub.Topic, headerValidator HeaderValidator, validator ColumnValidator, handler SubHandler) error {
+func (p *PartialColumnBroadcaster) Subscribe(t *pubsub.Topic, headerValidator HeaderValidator, validator ColumnValidator, handler SubHandler, headerHandler HeaderHandler) error {
 	respCh := make(chan error)
 	p.incomingReq <- request{
 		kind: requestKindSubscribe,
@@ -500,12 +511,13 @@ func (p *PartialColumnBroadcaster) Subscribe(t *pubsub.Topic, headerValidator He
 			headerValidator: headerValidator,
 			validator:       validator,
 			handler:         handler,
+			headerHandler:   headerHandler,
 		},
 		response: respCh,
 	}
 	return <-respCh
 }
-func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic, headerValidator HeaderValidator, validator ColumnValidator, handler SubHandler) error {
+func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic, headerValidator HeaderValidator, validator ColumnValidator, handler SubHandler, headerHandler HeaderHandler) error {
 	topic := t.String()
 	if _, ok := p.topics[topic]; ok {
 		return errors.New("already subscribed")
@@ -515,6 +527,7 @@ func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic, headerValidator He
 	p.headerValidators[topic] = headerValidator
 	p.validators[topic] = validator
 	p.handlers[topic] = handler
+	p.headerHandlers[topic] = headerHandler
 	return nil
 }
 
@@ -539,6 +552,6 @@ func (p *PartialColumnBroadcaster) unsubscribe(topic string) error {
 	delete(p.headerValidators, topic)
 	delete(p.validators, topic)
 	delete(p.handlers, topic)
-
+	delete(p.headerHandlers, topic)
 	return t.Close()
 }
