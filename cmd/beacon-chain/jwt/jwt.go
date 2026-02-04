@@ -6,7 +6,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/io/file"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -23,7 +22,7 @@ var Commands = &cli.Command{
 	}),
 	Action: func(cliCtx *cli.Context) error {
 		if err := generateAuthSecretInFile(cliCtx); err != nil {
-			logrus.WithError(err).Fatal("Could not generate jwt")
+			log.WithError(err).Fatal("Could not generate jwt")
 		}
 		return nil
 	},
@@ -57,6 +56,6 @@ func generateAuthSecretInFile(c *cli.Context) error {
 	if err := file.WriteFile(fileName, []byte(secret)); err != nil {
 		return err
 	}
-	logrus.Infof("Successfully wrote JSON-RPC authentication secret to file %s", fileName)
+	log.Infof("Successfully wrote JSON-RPC authentication secret to file %s", fileName)
 	return nil
 }

@@ -59,7 +59,7 @@ func TestNodeClose_OK(t *testing.T) {
 		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 	}
 
-	node, err := New(ctx, cancel, options...)
+	node, err := New(ctx, cancel, nil, options...)
 	require.NoError(t, err)
 
 	node.Close()
@@ -68,7 +68,6 @@ func TestNodeClose_OK(t *testing.T) {
 }
 
 func TestNodeStart_Ok(t *testing.T) {
-	hook := logTest.NewGlobal()
 	app := cli.App{}
 	tmp := fmt.Sprintf("%s/datadirtest2", t.TempDir())
 	set := flag.NewFlagSet("test", 0)
@@ -88,7 +87,7 @@ func TestNodeStart_Ok(t *testing.T) {
 		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 	}
 
-	node, err := New(ctx, cancel, options...)
+	node, err := New(ctx, cancel, nil, options...)
 	require.NoError(t, err)
 	require.NotNil(t, node.lcStore)
 	node.services = &runtime.ServiceRegistry{}
@@ -97,11 +96,9 @@ func TestNodeStart_Ok(t *testing.T) {
 	}()
 	time.Sleep(3 * time.Second)
 	node.Close()
-	require.LogsContain(t, hook, "Starting beacon node")
 }
 
 func TestNodeStart_SyncChecker(t *testing.T) {
-	hook := logTest.NewGlobal()
 	app := cli.App{}
 	tmp := fmt.Sprintf("%s/datadirtest2", t.TempDir())
 	set := flag.NewFlagSet("test", 0)
@@ -119,7 +116,7 @@ func TestNodeStart_SyncChecker(t *testing.T) {
 		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 	}
 
-	node, err := New(ctx, cancel, options...)
+	node, err := New(ctx, cancel, nil, options...)
 	require.NoError(t, err)
 	go func() {
 		node.Start()
@@ -127,7 +124,6 @@ func TestNodeStart_SyncChecker(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	assert.NotNil(t, node.syncChecker.Svc)
 	node.Close()
-	require.LogsContain(t, hook, "Starting beacon node")
 }
 
 // TestClearDB tests clearing the database
@@ -155,7 +151,7 @@ func TestClearDB(t *testing.T) {
 		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 	}
 
-	_, err = New(context, cancel, options...)
+	_, err = New(context, cancel, nil, options...)
 	require.NoError(t, err)
 	require.LogsContain(t, hook, "Removing database")
 }

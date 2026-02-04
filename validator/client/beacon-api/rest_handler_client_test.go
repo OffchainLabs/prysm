@@ -12,13 +12,12 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/test"
 )
@@ -45,12 +44,9 @@ func TestGet(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	jsonRestHandler := BeaconApiRestHandler{
-		client: http.Client{Timeout: time.Second * 5},
-		host:   server.URL,
-	}
+	handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 	resp := &structs.GetGenesisResponse{}
-	require.NoError(t, jsonRestHandler.Get(ctx, endpoint+"?arg1=abc&arg2=def", resp))
+	require.NoError(t, handler.Get(ctx, endpoint+"?arg1=abc&arg2=def", resp))
 	assert.DeepEqual(t, genesisJson, resp)
 }
 
@@ -79,12 +75,9 @@ func TestGetSSZ(t *testing.T) {
 		server := httptest.NewServer(mux)
 		defer server.Close()
 
-		jsonRestHandler := BeaconApiRestHandler{
-			client: http.Client{Timeout: time.Second * 5},
-			host:   server.URL,
-		}
+		handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 
-		body, header, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		body, header, err := handler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
 		assert.DeepEqual(t, expectedBody, body)
 		require.StringContains(t, api.OctetStreamMediaType, header.Get("Content-Type"))
@@ -108,12 +101,9 @@ func TestGetSSZ(t *testing.T) {
 		server := httptest.NewServer(mux)
 		defer server.Close()
 
-		jsonRestHandler := BeaconApiRestHandler{
-			client: http.Client{Timeout: time.Second * 5},
-			host:   server.URL,
-		}
+		handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 
-		body, header, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		body, header, err := handler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
 		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
 		require.Equal(t, api.JsonMediaType, header.Get("Content-Type"))
@@ -136,12 +126,9 @@ func TestGetSSZ(t *testing.T) {
 		server := httptest.NewServer(mux)
 		defer server.Close()
 
-		jsonRestHandler := BeaconApiRestHandler{
-			client: http.Client{Timeout: time.Second * 5},
-			host:   server.URL,
-		}
+		handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 
-		_, _, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		_, _, err := handler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
 		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
 	})
@@ -161,7 +148,7 @@ func TestAcceptOverrideSSZ(t *testing.T) {
 		require.NoError(t, err)
 	}))
 	defer srv.Close()
-	c := NewBeaconApiRestHandler(http.Client{Timeout: time.Second * 5}, srv.URL)
+	c := rest.NewHandler(http.Client{Timeout: time.Second * 5}, srv.URL)
 	_, _, err := c.GetSSZ(t.Context(), "/test")
 	require.NoError(t, err)
 }
@@ -204,160 +191,10 @@ func TestPost(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	jsonRestHandler := BeaconApiRestHandler{
-		client: http.Client{Timeout: time.Second * 5},
-		host:   server.URL,
-	}
+	handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 	resp := &structs.GetGenesisResponse{}
-	require.NoError(t, jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(dataBytes), resp))
+	require.NoError(t, handler.Post(ctx, endpoint, headers, bytes.NewBuffer(dataBytes), resp))
 	assert.DeepEqual(t, genesisJson, resp)
-}
-
-func Test_decodeResp(t *testing.T) {
-	type j struct {
-		Foo string `json:"foo"`
-	}
-	t.Run("200 JSON with charset", func(t *testing.T) {
-		body := bytes.Buffer{}
-		r := &http.Response{
-			Status:     "200",
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {"application/json; charset=utf-8"}},
-		}
-		require.NoError(t, decodeResp(r, nil))
-	})
-	t.Run("200 non-JSON", func(t *testing.T) {
-		body := bytes.Buffer{}
-		r := &http.Response{
-			Status:     "200",
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.OctetStreamMediaType}},
-		}
-		require.NoError(t, decodeResp(r, nil))
-	})
-	t.Run("204 non-JSON", func(t *testing.T) {
-		body := bytes.Buffer{}
-		r := &http.Response{
-			Status:     "204",
-			StatusCode: http.StatusNoContent,
-			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.OctetStreamMediaType}},
-		}
-		require.NoError(t, decodeResp(r, nil))
-	})
-	t.Run("500 non-JSON", func(t *testing.T) {
-		body := bytes.Buffer{}
-		_, err := body.WriteString("foo")
-		require.NoError(t, err)
-		r := &http.Response{
-			Status:     "500",
-			StatusCode: http.StatusInternalServerError,
-			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.OctetStreamMediaType}},
-		}
-		err = decodeResp(r, nil)
-		errJson := &httputil.DefaultJsonError{}
-		require.Equal(t, true, errors.As(err, &errJson))
-		assert.Equal(t, http.StatusInternalServerError, errJson.Code)
-		assert.Equal(t, "foo", errJson.Message)
-	})
-	t.Run("200 JSON with resp", func(t *testing.T) {
-		body := bytes.Buffer{}
-		b, err := json.Marshal(&j{Foo: "foo"})
-		require.NoError(t, err)
-		body.Write(b)
-		r := &http.Response{
-			Status:     "200",
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
-		}
-		resp := &j{}
-		require.NoError(t, decodeResp(r, resp))
-		assert.Equal(t, "foo", resp.Foo)
-	})
-	t.Run("200 JSON without resp", func(t *testing.T) {
-		body := bytes.Buffer{}
-		r := &http.Response{
-			Status:     "200",
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
-		}
-		require.NoError(t, decodeResp(r, nil))
-	})
-	t.Run("204 JSON", func(t *testing.T) {
-		body := bytes.Buffer{}
-		r := &http.Response{
-			Status:     "204",
-			StatusCode: http.StatusNoContent,
-			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
-		}
-		require.NoError(t, decodeResp(r, nil))
-	})
-	t.Run("500 JSON", func(t *testing.T) {
-		body := bytes.Buffer{}
-		b, err := json.Marshal(&httputil.DefaultJsonError{Code: http.StatusInternalServerError, Message: "error"})
-		require.NoError(t, err)
-		body.Write(b)
-		r := &http.Response{
-			Status:     "500",
-			StatusCode: http.StatusInternalServerError,
-			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
-		}
-		err = decodeResp(r, nil)
-		errJson := &httputil.DefaultJsonError{}
-		require.Equal(t, true, errors.As(err, &errJson))
-		assert.Equal(t, http.StatusInternalServerError, errJson.Code)
-		assert.Equal(t, "error", errJson.Message)
-	})
-	t.Run("200 JSON cannot decode", func(t *testing.T) {
-		body := bytes.Buffer{}
-		_, err := body.WriteString("foo")
-		require.NoError(t, err)
-		r := &http.Response{
-			Status:     "200",
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
-			Request:    &http.Request{},
-		}
-		resp := &j{}
-		err = decodeResp(r, resp)
-		assert.ErrorContains(t, "failed to decode response body into json", err)
-	})
-	t.Run("500 JSON cannot decode", func(t *testing.T) {
-		body := bytes.Buffer{}
-		_, err := body.WriteString("foo")
-		require.NoError(t, err)
-		r := &http.Response{
-			Status:     "500",
-			StatusCode: http.StatusInternalServerError,
-			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
-			Request:    &http.Request{},
-		}
-		err = decodeResp(r, nil)
-		assert.ErrorContains(t, "failed to decode response body into error json", err)
-	})
-	t.Run("500 not JSON", func(t *testing.T) {
-		body := bytes.Buffer{}
-		_, err := body.WriteString("foo")
-		require.NoError(t, err)
-		r := &http.Response{
-			Status:     "500",
-			StatusCode: http.StatusInternalServerError,
-			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {"text/plain"}},
-			Request:    &http.Request{},
-		}
-		err = decodeResp(r, nil)
-		assert.ErrorContains(t, "HTTP request unsuccessful (500: foo)", err)
-	})
 }
 
 func TestGetStatusCode(t *testing.T) {
@@ -401,24 +238,18 @@ func TestGetStatusCode(t *testing.T) {
 			server := httptest.NewServer(mux)
 			defer server.Close()
 
-			jsonRestHandler := BeaconApiRestHandler{
-				client: http.Client{Timeout: time.Second * 5},
-				host:   server.URL,
-			}
+			handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 
-			statusCode, err := jsonRestHandler.GetStatusCode(ctx, endpoint)
+			statusCode, err := handler.GetStatusCode(ctx, endpoint)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedStatusCode, statusCode)
 		})
 	}
 
 	t.Run("returns error on connection failure", func(t *testing.T) {
-		jsonRestHandler := BeaconApiRestHandler{
-			client: http.Client{Timeout: time.Millisecond * 100},
-			host:   "http://localhost:99999", // Invalid port
-		}
+		handler := rest.NewHandler(http.Client{Timeout: time.Millisecond * 100}, "http://localhost:99999")
 
-		_, err := jsonRestHandler.GetStatusCode(ctx, endpoint)
+		_, err := handler.GetStatusCode(ctx, endpoint)
 		require.ErrorContains(t, "failed to perform request", err)
 	})
 }

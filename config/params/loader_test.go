@@ -24,12 +24,9 @@ import (
 // These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
-	"AGGREGATE_DUE_BPS_GLOAS",
 	"ATTESTATION_DEADLINE",
-	"ATTESTATION_DUE_BPS_GLOAS",
 	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
 	"CELLS_PER_EXT_BLOB",
-	"CONTRIBUTION_DUE_BPS_GLOAS",
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
 	"EIP7002_FORK_EPOCH",
@@ -45,7 +42,6 @@ var placeholderFields = []string{
 	"EPOCHS_PER_SHUFFLING_PHASE",
 	"FIELD_ELEMENTS_PER_CELL",     // Configured as a constant in config/fieldparams/mainnet.go
 	"FIELD_ELEMENTS_PER_EXT_BLOB", // Configured in proto/ssz_proto_library.bzl
-	"GLOAS_FORK_EPOCH",
 	"GLOAS_FORK_VERSION",
 	"INCLUSION_LIST_SUBMISSION_DEADLINE",
 	"INCLUSION_LIST_SUBMISSION_DUE_BPS",
@@ -60,7 +56,6 @@ var placeholderFields = []string{
 	"PROPOSER_INCLUSION_LIST_CUTOFF",
 	"PROPOSER_INCLUSION_LIST_CUTOFF_BPS",
 	"PROPOSER_SELECTION_GAP",
-	"SYNC_MESSAGE_DUE_BPS_GLOAS",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
 	"VIEW_FREEZE_CUTOFF_BPS",

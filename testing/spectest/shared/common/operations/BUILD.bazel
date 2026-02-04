@@ -13,6 +13,7 @@ go_library(
         "deposit_request.go",
         "execution_payload.go",
         "execution_payload_bid.go",
+        "payload_attestation.go",
         "proposer_slashing.go",
         "slashing.go",
         "sync_aggregate.go",
@@ -26,9 +27,9 @@ go_library(
     deps = [
         "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/core/blocks:go_default_library",
-        "//beacon-chain/core/electra:go_default_library",
         "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/requests:go_default_library",
         "//beacon-chain/core/validators:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//config/params:go_default_library",

@@ -1,4 +1,4 @@
-package beacon_api
+package rest
 
 import (
 	"bytes"
@@ -21,37 +21,46 @@ import (
 
 type reqOption func(*http.Request)
 
-type RestHandler interface {
+// Handler defines the interface for making REST API requests.
+type Handler interface {
 	Get(ctx context.Context, endpoint string, resp any) error
 	GetStatusCode(ctx context.Context, endpoint string) (int, error)
 	GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error)
 	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error
 	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error)
-	HttpClient() *http.Client
 	Host() string
-	SetHost(host string)
 }
 
-type BeaconApiRestHandler struct {
+type handler struct {
 	client       http.Client
 	host         string
 	reqOverrides []reqOption
 }
 
-// NewBeaconApiRestHandler returns a RestHandler
-func NewBeaconApiRestHandler(client http.Client, host string) RestHandler {
-	brh := &BeaconApiRestHandler{
+// newHandler returns a *handler for internal use within the rest package.
+func newHandler(client http.Client, host string) *handler {
+	rh := &handler{
 		client: client,
 		host:   host,
 	}
-	brh.appendAcceptOverride()
-	return brh
+	rh.appendAcceptOverride()
+	return rh
+}
+
+// NewHandler returns a Handler
+func NewHandler(client http.Client, host string) Handler {
+	rh := &handler{
+		client: client,
+		host:   host,
+	}
+	rh.appendAcceptOverride()
+	return rh
 }
 
 // appendAcceptOverride enables the Accept header to be customized at runtime via an environment variable.
 // This is specified as an env var because it is a niche option that prysm may use for performance testing or debugging
 // bug which users are unlikely to need. Using an env var keeps the set of user-facing flags cleaner.
-func (c *BeaconApiRestHandler) appendAcceptOverride() {
+func (c *handler) appendAcceptOverride() {
 	if accept := os.Getenv(params.EnvNameOverrideAccept); accept != "" {
 		c.reqOverrides = append(c.reqOverrides, func(req *http.Request) {
 			req.Header.Set("Accept", accept)
@@ -60,18 +69,18 @@ func (c *BeaconApiRestHandler) appendAcceptOverride() {
 }
 
 // HttpClient returns the underlying HTTP client of the handler
-func (c *BeaconApiRestHandler) HttpClient() *http.Client {
+func (c *handler) HttpClient() *http.Client {
 	return &c.client
 }
 
 // Host returns the underlying HTTP host
-func (c *BeaconApiRestHandler) Host() string {
+func (c *handler) Host() string {
 	return c.host
 }
 
 // Get sends a GET request and decodes the response body as a JSON object into the passed in object.
 // If an HTTP error is returned, the body is decoded as a DefaultJsonError JSON object and returned as the first return value.
-func (c *BeaconApiRestHandler) Get(ctx context.Context, endpoint string, resp any) error {
+func (c *handler) Get(ctx context.Context, endpoint string, resp any) error {
 	url := c.host + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -94,7 +103,7 @@ func (c *BeaconApiRestHandler) Get(ctx context.Context, endpoint string, resp an
 // GetStatusCode sends a GET request and returns only the HTTP status code.
 // This is useful for endpoints like /eth/v1/node/health that communicate status via HTTP codes
 // (200 = ready, 206 = syncing, 503 = unavailable) rather than response bodies.
-func (c *BeaconApiRestHandler) GetStatusCode(ctx context.Context, endpoint string) (int, error) {
+func (c *handler) GetStatusCode(ctx context.Context, endpoint string) (int, error) {
 	url := c.host + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -113,7 +122,7 @@ func (c *BeaconApiRestHandler) GetStatusCode(ctx context.Context, endpoint strin
 	return httpResp.StatusCode, nil
 }
 
-func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error) {
+func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error) {
 	url := c.host + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -168,7 +177,7 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 
 // Post sends a POST request and decodes the response body as a JSON object into the passed in object.
 // If an HTTP error is returned, the body is decoded as a DefaultJsonError JSON object and returned as the first return value.
-func (c *BeaconApiRestHandler) Post(
+func (c *handler) Post(
 	ctx context.Context,
 	apiEndpoint string,
 	headers map[string]string,
@@ -204,7 +213,7 @@ func (c *BeaconApiRestHandler) Post(
 }
 
 // PostSSZ sends a POST request and prefers an SSZ (application/octet-stream) response body.
-func (c *BeaconApiRestHandler) PostSSZ(
+func (c *handler) PostSSZ(
 	ctx context.Context,
 	apiEndpoint string,
 	headers map[string]string,
@@ -305,6 +314,6 @@ func decodeResp(httpResp *http.Response, resp any) error {
 	return nil
 }
 
-func (c *BeaconApiRestHandler) SetHost(host string) {
+func (c *handler) SwitchHost(host string) {
 	c.host = host
 }

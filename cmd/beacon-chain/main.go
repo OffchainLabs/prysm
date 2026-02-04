@@ -160,6 +160,7 @@ var appFlags = []cli.Flag{
 	dasFlags.BackfillOldestSlot,
 	dasFlags.BlobRetentionEpochFlag,
 	flags.BatchVerifierLimit,
+	flags.StateDiffExponents,
 	flags.DisableEphemeralLogFile,
 }
 
@@ -242,6 +243,11 @@ func before(ctx *cli.Context) error {
 			log.WithError(err).Error("Failed to configure debug log file")
 		}
 	}
+
+	// Log Prysm version on startup. After initializing log-file and ephemeral log-file.
+	log.WithFields(logrus.Fields{
+		"version": version.Version(),
+	}).Info("Prysm Beacon Chain started")
 
 	if err := cmd.ExpandSingleEndpointIfFile(ctx, flags.ExecutionEngineEndpoint); err != nil {
 		return errors.Wrap(err, "failed to expand single endpoint")
@@ -361,17 +367,8 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 		backfill.BeaconNodeOptions,
 		das.BeaconNodeOptions,
 	}
-	for _, of := range optFuncs {
-		ofo, err := of(ctx)
-		if err != nil {
-			return err
-		}
-		if ofo != nil {
-			opts = append(opts, ofo...)
-		}
-	}
 
-	beacon, err := node.New(ctx, cancel, opts...)
+	beacon, err := node.New(ctx, cancel, optFuncs, opts...)
 	if err != nil {
 		return fmt.Errorf("unable to start beacon node: %w", err)
 	}

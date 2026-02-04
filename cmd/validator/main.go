@@ -34,8 +34,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var log = logrus.WithField("prefix", "main")
-
 func startNode(ctx *cli.Context) error {
 	// Verify if ToS is accepted.
 	if err := tos.VerifyTosAcceptedOrPrompt(ctx); err != nil {
@@ -220,6 +218,11 @@ func main() {
 					log.WithError(err).Error("Failed to configure debug log file")
 				}
 			}
+
+			// Log Prysm version on startup. After initializing log-file and ephemeral log-file.
+			log.WithFields(logrus.Fields{
+				"version": version.Version(),
+			}).Info("Prysm Validator started")
 
 			// Fix data dir for Windows users.
 			outdatedDataDir := filepath.Join(file.HomeDir(), "AppData", "Roaming", "Eth2Validators")

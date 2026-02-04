@@ -66,7 +66,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/prometheus"
 	"github.com/OffchainLabs/prysm/v7/runtime"
 	"github.com/OffchainLabs/prysm/v7/runtime/prereqs"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -135,9 +134,19 @@ type BeaconNode struct {
 
 // New creates a new node instance, sets up configuration options, and registers
 // every required service to the node.
-func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*BeaconNode, error) {
+func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Context) ([]Option, error), opts ...Option) (*BeaconNode, error) {
 	if err := configureBeacon(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not set beacon configuration options")
+	}
+
+	for _, of := range optFuncs {
+		ofo, err := of(cliCtx)
+		if err != nil {
+			return nil, err
+		}
+		if ofo != nil {
+			opts = append(opts, ofo...)
+		}
 	}
 	ctx := cliCtx.Context
 
@@ -469,10 +478,6 @@ func (b *BeaconNode) OperationFeed() event.SubscriberSender {
 func (b *BeaconNode) Start() {
 	b.lock.Lock()
 
-	log.WithFields(logrus.Fields{
-		"version": version.Version(),
-	}).Info("Starting beacon node")
-
 	b.services.StartAll()
 
 	stop := b.stop
@@ -540,7 +545,12 @@ func openDB(ctx context.Context, dbPath string, clearer *dbClearer) (*kv.Store, 
 	log.WithField("databasePath", dbPath).Info("Checking DB")
 
 	d, err := kv.NewKVStore(ctx, dbPath)
-	if err != nil {
+	if errors.Is(err, kv.ErrStateDiffIncompatible) {
+		log.WithError(err).Warn("Disabling state-diff feature")
+		cfg := features.Get()
+		cfg.EnableStateDiff = false
+		features.Init(cfg)
+	} else if err != nil {
 		return nil, errors.Wrapf(err, "could not create database at %s", dbPath)
 	}
 

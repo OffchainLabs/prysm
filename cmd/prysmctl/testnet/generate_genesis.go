@@ -43,7 +43,6 @@ var (
 		GethGenesisJsonIn  string
 		GethGenesisJsonOut string
 	}{}
-	log           = logrus.WithField("prefix", "genesis")
 	outputSSZFlag = &cli.StringFlag{
 		Name:        "output-ssz",
 		Destination: &generateGenesisStateFlags.OutputSSZ,
