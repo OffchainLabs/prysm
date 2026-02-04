@@ -34,6 +34,47 @@ func TestStateDiff_LoadOrInitOffset(t *testing.T) {
 	require.Equal(t, uint64(10), offset)
 }
 
+func TestStateDiff_EncodeDecodeExponents(t *testing.T) {
+	t.Run("roundtrip", func(t *testing.T) {
+		exponents := []int{21, 18, 16, 13}
+		encoded, err := encodeStateDiffExponents(exponents)
+		require.NoError(t, err)
+		decoded, err := decodeStateDiffExponents(encoded)
+		require.NoError(t, err)
+		require.DeepEqual(t, exponents, decoded)
+	})
+
+	t.Run("encode-empty", func(t *testing.T) {
+		_, err := encodeStateDiffExponents(nil)
+		require.ErrorContains(t, "cannot be empty", err)
+	})
+
+	t.Run("encode-negative", func(t *testing.T) {
+		_, err := encodeStateDiffExponents([]int{21, -1})
+		require.ErrorContains(t, "out of range", err)
+	})
+
+	t.Run("encode-too-large", func(t *testing.T) {
+		_, err := encodeStateDiffExponents([]int{flags.MaxStateDiffExponent + 1})
+		require.ErrorContains(t, "out of range", err)
+	})
+
+	t.Run("decode-empty", func(t *testing.T) {
+		_, err := decodeStateDiffExponents(nil)
+		require.ErrorContains(t, "missing length prefix", err)
+	})
+
+	t.Run("decode-zero-length", func(t *testing.T) {
+		_, err := decodeStateDiffExponents([]byte{0})
+		require.ErrorContains(t, "length cannot be zero", err)
+	})
+
+	t.Run("decode-length-mismatch", func(t *testing.T) {
+		_, err := decodeStateDiffExponents([]byte{2, 10})
+		require.ErrorContains(t, "length mismatch", err)
+	})
+}
+
 func TestStateDiff_ComputeLevel(t *testing.T) {
 	db := setupDB(t)
 	setDefaultStateDiffExponents()

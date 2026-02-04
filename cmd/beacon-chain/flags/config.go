@@ -9,7 +9,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const maxStateDiffExponents = 30
+const MaxStateDiffExponent = 30
 
 // GlobalFlags specifies all the global flags for the
 // beacon node.
@@ -132,7 +132,7 @@ func validateStateDiffExponents(exponents []int) error {
 	if exponents[length-1] < 5 {
 		return errors.New("the last state diff exponent must be at least 5")
 	}
-	prev := maxStateDiffExponents + 1
+	prev := MaxStateDiffExponent + 1
 	for _, exp := range exponents {
 		if exp >= prev {
 			return errors.New("state diff exponents must be in strictly decreasing order, and each exponent must be <= 30")

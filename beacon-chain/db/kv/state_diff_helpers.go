@@ -21,8 +21,45 @@ import (
 
 var (
 	offsetKey           = []byte("offset")
+	exponentsKey        = []byte("exponents")
 	ErrSlotBeforeOffset = errors.New("slot is before state-diff root offset")
 )
+
+func encodeStateDiffExponents(exponents []int) ([]byte, error) {
+	if len(exponents) == 0 {
+		return nil, errors.New("state diff exponents cannot be empty")
+	}
+	if len(exponents) > 255 {
+		return nil, fmt.Errorf("state diff exponents length %d exceeds max 255", len(exponents))
+	}
+	encoded := make([]byte, len(exponents)+1)
+	encoded[0] = byte(len(exponents))
+	for i, exp := range exponents {
+		if exp < 2 || exp > flags.MaxStateDiffExponent {
+			return nil, fmt.Errorf("state diff exponent %d out of range for encoding", exp)
+		}
+		encoded[i+1] = byte(exp)
+	}
+	return encoded, nil
+}
+
+func decodeStateDiffExponents(encoded []byte) ([]int, error) {
+	if len(encoded) == 0 {
+		return nil, errors.New("state diff exponents missing length prefix")
+	}
+	count := int(encoded[0])
+	if count == 0 {
+		return nil, errors.New("state diff exponents length cannot be zero")
+	}
+	if len(encoded) != count+1 {
+		return nil, fmt.Errorf("state diff exponents length mismatch: expected %d got %d", count, len(encoded)-1)
+	}
+	exponents := make([]int, count)
+	for i := range count {
+		exponents[i] = int(encoded[i+1])
+	}
+	return exponents, nil
+}
 
 func makeKeyForStateDiffTree(level int, slot uint64) []byte {
 	buf := make([]byte, 16)
