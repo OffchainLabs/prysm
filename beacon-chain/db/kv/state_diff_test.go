@@ -35,6 +35,20 @@ func TestStateDiff_LoadOrInitOffset(t *testing.T) {
 	require.Equal(t, uint64(10), offset)
 }
 
+func TestStateDiff_LoadOffset(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	db := setupDB(t)
+	_, err := db.loadOffset()
+	require.ErrorContains(t, "offset not found", err)
+
+	err = setOffsetInDB(db, 10)
+	require.NoError(t, err)
+	offset, err := db.loadOffset()
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), offset)
+}
+
 func TestStateDiff_EncodeDecodeExponents(t *testing.T) {
 	t.Run("roundtrip", func(t *testing.T) {
 		exponents := []int{21, 18, 16, 13}

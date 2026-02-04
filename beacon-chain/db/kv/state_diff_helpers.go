@@ -194,6 +194,29 @@ func (s *Store) getOffset() uint64 {
 	return s.stateDiffCache.getOffset()
 }
 
+func (s *Store) loadOffset() (uint64, error) {
+	var offset uint64
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		offsetBytes := bucket.Get(offsetKey)
+		if offsetBytes == nil {
+			return errors.New("state diff offset not found")
+		}
+		if len(offsetBytes) != 8 {
+			return fmt.Errorf("state diff offset has invalid length %d", len(offsetBytes))
+		}
+		offset = binary.LittleEndian.Uint64(offsetBytes)
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return offset, nil
+}
+
 // hasStateDiffOffset checks if the state-diff offset has been set in the database.
 // This is used to detect if an existing database has state-diff enabled.
 func (s *Store) hasStateDiffOffset() (bool, error) {
