@@ -1309,17 +1309,11 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Get dependent root. The dependent root is the block root at start_slot(epoch) - 1.
-	// For epoch 0, this would underflow, so we use genesis block root.
-	// For next epoch requests, we use the same dependent root as current epoch since
-	// we're computing from the current epoch's state and the next epoch's RANDAO
-	// isn't finalized yet.
-	dependentEpoch := requestedEpoch
-	if requestedEpoch == nextEpoch {
-		dependentEpoch = currentEpoch
-	}
+	// Get dependent root. Per the spec, dependent_root is:
+	// get_block_root_at_slot(state, compute_start_slot_at_epoch(epoch - 1) - 1)
+	// or the genesis block root in the case of underflow.
 	var dependentRoot []byte
-	if dependentEpoch == 0 {
+	if requestedEpoch <= 1 {
 		r, err := s.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
 			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
@@ -1327,7 +1321,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = r[:]
 	} else {
-		dependentRoot, err = ptcDependentRoot(st, dependentEpoch)
+		dependentRoot, err = ptcDependentRoot(st, requestedEpoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -1349,13 +1343,18 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 }
 
 // ptcDependentRoot returns the block root that PTC assignments depend on.
-// PTC depends on the shuffling, which is determined by RANDAO at epoch boundary.
+// Per the spec: get_block_root_at_slot(state, compute_start_slot_at_epoch(epoch - 1) - 1)
+// This should only be called for epoch > 1 (caller handles epoch <= 1 with genesis root).
 func ptcDependentRoot(st state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
-	epochStartSlot, err := slots.EpochStart(epoch)
+	prevEpochStartSlot, err := slots.EpochStart(epoch.Sub(1))
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not get previous epoch start slot")
 	}
-	return helpers.BlockRootAtSlot(st, epochStartSlot-1)
+	root, err := helpers.BlockRootAtSlot(st, prevEpochStartSlot-1)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get block root")
+	}
+	return root, nil
 }
 
 // GetLiveness requests the beacon node to indicate if a validator has been observed to be live in a given epoch.
