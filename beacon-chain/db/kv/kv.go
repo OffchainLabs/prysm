@@ -23,6 +23,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	prombolt "github.com/prysmaticlabs/prombbolt"
+	logrus "github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -242,8 +243,20 @@ func (kv *Store) startStateDiff(ctx context.Context) error {
 				formatStateDiffExponents(storedExponents),
 			)
 		}
-		// Existing state-diff database - restarts not yet supported.
-		return errors.New("restarting with existing state-diff database not yet supported")
+		offset, err := kv.loadOffset()
+		if err != nil {
+			return err
+		}
+		cache, err := populateStateDiffCacheFromDB(kv, offset)
+		if err != nil {
+			return err
+		}
+		kv.stateDiffCache = cache
+		log.WithFields(logrus.Fields{
+			"offset":    offset,
+			"exponents": storedExponents,
+		}).Info("State-diff cache initialized from existing database")
+		return nil
 	}
 
 	// Check if this is a new database (no head block).
