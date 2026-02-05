@@ -298,7 +298,7 @@ func TestPTCDuties(t *testing.T) {
 	// Create state with enough validators.
 	numVals := 100
 	vals := make([]*eth.Validator, numVals)
-	for i := 0; i < numVals; i++ {
+	for i := range numVals {
 		_, pk := newKey(t)
 		vals[i] = activeValidator(pk)
 	}
@@ -307,7 +307,7 @@ func TestPTCDuties(t *testing.T) {
 	t.Run("returns duties for validators in PTC", func(t *testing.T) {
 		// Request duties for all validators.
 		requested := make(map[primitives.ValidatorIndex]struct{})
-		for i := 0; i < numVals; i++ {
+		for i := range numVals {
 			requested[primitives.ValidatorIndex(i)] = struct{}{}
 		}
 
@@ -343,7 +343,7 @@ func TestPTCDuties(t *testing.T) {
 
 	t.Run("each validator has at most one duty per epoch", func(t *testing.T) {
 		requested := make(map[primitives.ValidatorIndex]struct{})
-		for i := 0; i < numVals; i++ {
+		for i := range numVals {
 			requested[primitives.ValidatorIndex(i)] = struct{}{}
 		}
 
@@ -362,7 +362,7 @@ func TestPTCDuties(t *testing.T) {
 
 	t.Run("duties are deterministic", func(t *testing.T) {
 		requested := make(map[primitives.ValidatorIndex]struct{})
-		for i := 0; i < 50; i++ {
+		for i := range 50 {
 			requested[primitives.ValidatorIndex(i)] = struct{}{}
 		}
 
