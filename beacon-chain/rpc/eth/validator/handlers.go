@@ -1284,53 +1284,29 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build a set of requested validators for O(1) lookup.
-	requestedSet := make(map[primitives.ValidatorIndex]bool, len(requestedValIndices))
+	// Build a set of requested validators.
+	requestedSet := make(map[primitives.ValidatorIndex]struct{}, len(requestedValIndices))
 	for _, idx := range requestedValIndices {
-		requestedSet[idx] = true
+		requestedSet[idx] = struct{}{}
 	}
 
-	// Compute PTC duties for each slot in the epoch.
-	startSlot, err := slots.EpochStart(requestedEpoch)
+	// Compute PTC duties using the optimized batch function.
+	// This exits early once all requested validators are found.
+	ptcDuties, err := gloas.PTCDuties(ctx, st, requestedEpoch, requestedSet)
 	if err != nil {
-		httputil.HandleError(w, "Could not get epoch start slot: "+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not compute PTC duties: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	endSlot := startSlot + params.BeaconConfig().SlotsPerEpoch
 
-	duties := make([]*structs.PTCDuty, 0)
-	for slot := startSlot; slot < endSlot; slot++ {
-		ptc, err := gloas.PayloadCommittee(ctx, st, slot)
-		if err != nil {
-			httputil.HandleError(w,
-				fmt.Sprintf("Could not get PTC for slot %d: %s", slot, err.Error()),
-				http.StatusInternalServerError)
-			return
-		}
-
-		// Check which requested validators are in this slot's PTC.
-		for _, valIdx := range ptc {
-			if !requestedSet[valIdx] {
-				continue
-			}
-			// Validate the validator index with explicit bounds check.
-			if uint64(valIdx) >= uint64(st.NumValidators()) {
-				httputil.HandleError(w, fmt.Sprintf("Invalid validator index %d", valIdx), http.StatusBadRequest)
-				return
-			}
-			pubkey := st.PubkeyAtIndex(valIdx)
-			// Defensive check: ensure pubkey is not zero.
-			var zeroPubkey [fieldparams.BLSPubkeyLength]byte
-			if bytes.Equal(pubkey[:], zeroPubkey[:]) {
-				httputil.HandleError(w, fmt.Sprintf("Invalid validator index %d", valIdx), http.StatusBadRequest)
-				return
-			}
-			duties = append(duties, &structs.PTCDuty{
-				Pubkey:         hexutil.Encode(pubkey[:]),
-				ValidatorIndex: strconv.FormatUint(uint64(valIdx), 10),
-				Slot:           strconv.FormatUint(uint64(slot), 10),
-			})
-		}
+	// Convert to response format.
+	duties := make([]*structs.PTCDuty, 0, len(ptcDuties))
+	for _, duty := range ptcDuties {
+		pubkey := st.PubkeyAtIndex(duty.ValidatorIndex)
+		duties = append(duties, &structs.PTCDuty{
+			Pubkey:         hexutil.Encode(pubkey[:]),
+			ValidatorIndex: strconv.FormatUint(uint64(duty.ValidatorIndex), 10),
+			Slot:           strconv.FormatUint(uint64(duty.Slot), 10),
+		})
 	}
 
 	// Get dependent root. The dependent root is the block root at start_slot(epoch) - 1.

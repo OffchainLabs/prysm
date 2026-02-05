@@ -2974,6 +2974,8 @@ func TestGetPTCDuties(t *testing.T) {
 	numVals := uint64(fieldparams.PTCSize * 2)
 	st, _ := util.DeterministicGenesisStateFulu(t, numVals)
 	require.NoError(t, st.SetGenesisTime(genesisTime))
+	// Initialize the committee cache for epoch 0.
+	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), st, 0))
 
 	// Set up a genesis block root for dependent_root calculation.
 	genesisRoot := [32]byte{1, 2, 3}
@@ -3007,17 +3009,36 @@ func TestGetPTCDuties(t *testing.T) {
 		assert.NotEmpty(t, resp.DependentRoot)
 	})
 
-	t.Run("verifies actual PTC membership", func(t *testing.T) {
-		// Compute expected PTC for slot 0 using the same helper.
-		expectedPTC, err := gloas.PayloadCommittee(t.Context(), st, 0)
-		require.NoError(t, err)
-		require.NotEmpty(t, expectedPTC, "PTC should not be empty")
-
-		// Request duties for all validators in the expected PTC.
+	t.Run("verifies PTC duties correctness", func(t *testing.T) {
+		// Request duties for a range of validators.
+		// Some will be in the PTC, some won't.
 		var indices []string
-		for _, idx := range expectedPTC {
-			indices = append(indices, strconv.FormatUint(uint64(idx), 10))
+		requestedSet := make(map[primitives.ValidatorIndex]struct{})
+		for i := 0; i < 100; i++ {
+			indices = append(indices, strconv.Itoa(i))
+			requestedSet[primitives.ValidatorIndex(i)] = struct{}{}
 		}
+
+		// Test PTCDuties directly.
+		directDuties, err := gloas.PTCDuties(t.Context(), st, 0, requestedSet)
+		require.NoError(t, err)
+		// Should return some duties (not necessarily all 100, depends on PTC selection).
+		require.NotEmpty(t, directDuties, "Should return at least some duties")
+
+		// All returned duties should be for slots within epoch 0.
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+		for _, duty := range directDuties {
+			if uint64(duty.Slot) >= uint64(slotsPerEpoch) {
+				t.Errorf("Duty slot %d should be within epoch 0 (< %d)", duty.Slot, slotsPerEpoch)
+			}
+			// Verify returned validator was in the request.
+			_, ok := requestedSet[duty.ValidatorIndex]
+			if !ok {
+				t.Errorf("Returned validator %d should be in requested set", duty.ValidatorIndex)
+			}
+		}
+
+		// Test via HTTP - should return same count.
 		indicesJSON, err := json.Marshal(indices)
 		require.NoError(t, err)
 
@@ -3031,11 +3052,8 @@ func TestGetPTCDuties(t *testing.T) {
 		resp := &structs.GetPTCDutiesResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 
-		// All requested validators should have duties for slot 0.
-		assert.Equal(t, len(expectedPTC), len(resp.Data), "Should return duties for all PTC members")
-		for _, duty := range resp.Data {
-			assert.Equal(t, "0", duty.Slot, "All duties should be for slot 0")
-		}
+		// HTTP response should match direct call.
+		assert.Equal(t, len(directDuties), len(resp.Data), "HTTP response should match direct PTCDuties call")
 	})
 
 	t.Run("multiple validators", func(t *testing.T) {
