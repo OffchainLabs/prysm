@@ -163,13 +163,6 @@ func (ro *ROForkChoice) Slot(root [32]byte) (primitives.Slot, error) {
 	return ro.getter.Slot(root)
 }
 
-// LastRoot delegates to the underlying forkchoice call, under a lock.
-func (ro *ROForkChoice) LastRoot(e primitives.Epoch) [32]byte {
-	ro.l.RLock()
-	defer ro.l.RUnlock()
-	return ro.getter.LastRoot(e)
-}
-
 // DependentRoot delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
 	ro.l.RLock()

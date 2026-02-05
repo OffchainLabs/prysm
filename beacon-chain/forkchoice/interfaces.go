@@ -73,7 +73,6 @@ type FastGetter interface {
 	IsViableForCheckpoint(*forkchoicetypes.Checkpoint) (bool, error)
 	JustifiedCheckpoint() *forkchoicetypes.Checkpoint
 	JustifiedPayloadBlockHash() [32]byte
-	LastRoot(primitives.Epoch) [32]byte
 	NodeCount() int
 	PreviousJustifiedCheckpoint() *forkchoicetypes.Checkpoint
 	ProposerBoost() [fieldparams.RootLength]byte

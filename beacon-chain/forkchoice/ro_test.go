@@ -149,11 +149,6 @@ func TestROLocking(t *testing.T) {
 			cb:   func(g FastGetter) { _, err := g.Slot([32]byte{}); _discard(t, err) },
 		},
 		{
-			name: "lastRootCalled",
-			call: lastRootCalled,
-			cb:   func(g FastGetter) { g.LastRoot(0) },
-		},
-		{
 			name: "targetRootForEpochCalled",
 			call: targetRootForEpochCalled,
 			cb:   func(g FastGetter) { _, err := g.TargetRootForEpoch([32]byte{}, 0); _discard(t, err) },
@@ -293,11 +288,6 @@ func (ro *mockROForkchoice) ShouldOverrideFCU() bool {
 func (ro *mockROForkchoice) Slot(_ [32]byte) (primitives.Slot, error) {
 	ro.calls = append(ro.calls, slotCalled)
 	return 0, nil
-}
-
-func (ro *mockROForkchoice) LastRoot(_ primitives.Epoch) [32]byte {
-	ro.calls = append(ro.calls, lastRootCalled)
-	return [32]byte{}
 }
 
 // DependentRoot impoements FastGetter.
