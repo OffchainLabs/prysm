@@ -507,14 +507,11 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 
 	ws := *withdrawals
 
-	buildersLimit := len(b.builders)
-	if maxBuilders := int(cfg.MaxBuildersPerWithdrawalsSweep); buildersLimit > maxBuilders {
-		buildersLimit = maxBuilders
-	}
+	buildersLimit := min(len(b.builders), int(cfg.MaxBuildersPerWithdrawalsSweep))
 
 	builderIndex := b.nextWithdrawalBuilderIndex
 	epoch := slots.ToEpoch(b.slot)
-	for i := 0; i < buildersLimit; i++ {
+	for range buildersLimit {
 		if len(ws) >= withdrawalsLimit {
 			break
 		}

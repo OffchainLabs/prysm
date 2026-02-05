@@ -50,6 +50,7 @@ go_test(
         "payload_test.go",
         "pending_payment_test.go",
         "proposer_slashing_test.go",
+        "withdrawal_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

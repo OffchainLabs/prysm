@@ -470,16 +470,16 @@ func (b *BeaconState) DequeueBuilderPendingWithdrawals(n uint64) error {
 		return errNotSupported("DequeueBuilderPendingWithdrawals", b.version)
 	}
 
-	if n > uint64(len(b.builderPendingWithdrawals)) {
-		return errors.New("cannot dequeue more builder withdrawals than are in the queue")
-	}
-
 	if n == 0 {
 		return nil
 	}
 
 	b.lock.Lock()
 	defer b.lock.Unlock()
+
+	if n > uint64(len(b.builderPendingWithdrawals)) {
+		return errors.New("cannot dequeue more builder withdrawals than are in the queue")
+	}
 
 	if b.sharedFieldReferences[types.BuilderPendingWithdrawals].Refs() > 1 {
 		withdrawals := make([]*ethpb.BuilderPendingWithdrawal, len(b.builderPendingWithdrawals))
