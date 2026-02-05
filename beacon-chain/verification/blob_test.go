@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -20,6 +21,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 func TestBlobIndexInBounds(t *testing.T) {
@@ -165,6 +168,99 @@ func TestValidProposerSignature_Cached(t *testing.T) {
 	require.ErrorIs(t, v.ValidProposerSignature(ctx), ErrInvalidProposerSignature)
 	require.Equal(t, true, v.results.executed(RequireValidProposerSignature))
 	require.NotNil(t, v.results.result(RequireValidProposerSignature))
+}
+
+func TestValidProposerSignature_MetricsClassification(t *testing.T) {
+	ctx := t.Context()
+	_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 1)
+	b := blobs[0]
+	expectedSd := blobToSignatureData(b)
+
+	originalMetrics := blobVerificationProposerSignatureCache
+	defer func() { blobVerificationProposerSignatureCache = originalMetrics }()
+
+	newMetrics := func() {
+		blobVerificationProposerSignatureCache = prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "test_blob_verification_proposer_signature_cache",
+				Help: "Test-only metrics for blob proposer signature cache classification.",
+			},
+			[]string{"result"},
+		)
+	}
+
+	getMetric := func(label string) float64 {
+		m := blobVerificationProposerSignatureCache.WithLabelValues(label)
+		return testutil.ToFloat64(m)
+	}
+
+	t.Run("cached valid hit", func(t *testing.T) {
+		newMetrics()
+		sc := &mockSignatureCache{
+			svcb: func(sig signatureData) (bool, error) {
+				if sig != expectedSd {
+					t.Error("Did not see expected SignatureData")
+				}
+				return true, nil
+			},
+			vscb: func(signatureData, validatorAtIndexer) error {
+				t.Error("VerifySignature should not be called on cached hit")
+				return nil
+			},
+		}
+		ini := Initializer{shared: &sharedResources{sc: sc, sr: &mockStateByRooter{sbr: sbrErrorIfCalled(t)}}}
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
+		require.NoError(t, v.ValidProposerSignature(ctx))
+		require.Equal(t, 1.0, getMetric("hit-valid"))
+		require.Equal(t, 0.0, getMetric("hit-invalid"))
+		require.Equal(t, 0.0, getMetric("miss"))
+	})
+
+	t.Run("cached invalid hit", func(t *testing.T) {
+		newMetrics()
+		sc := &mockSignatureCache{
+			svcb: func(sig signatureData) (bool, error) {
+				if sig != expectedSd {
+					t.Error("Did not see expected SignatureData")
+				}
+				return true, signing.ErrSigFailedToVerify
+			},
+			vscb: func(signatureData, validatorAtIndexer) error {
+				t.Error("VerifySignature should not be called on cached failure")
+				return nil
+			},
+		}
+		ini := Initializer{shared: &sharedResources{sc: sc, sr: &mockStateByRooter{sbr: sbrErrorIfCalled(t)}}}
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
+		require.ErrorIs(t, v.ValidProposerSignature(ctx), ErrInvalidProposerSignature)
+		require.Equal(t, 0.0, getMetric("hit-valid"))
+		require.Equal(t, 1.0, getMetric("hit-invalid"))
+		require.Equal(t, 0.0, getMetric("miss"))
+	})
+
+	t.Run("cache miss", func(t *testing.T) {
+		newMetrics()
+		sc := &mockSignatureCache{
+			svcb: func(sig signatureData) (bool, error) {
+				if sig != expectedSd {
+					t.Error("Did not see expected SignatureData")
+				}
+				return false, nil
+			},
+			vscb: func(sig signatureData, v validatorAtIndexer) error {
+				if sig != expectedSd {
+					t.Error("unexpected signature data")
+				}
+				return nil
+			},
+		}
+		ini := Initializer{shared: &sharedResources{sc: sc, sr: sbrForValOverride(b.ProposerIndex(), &ethpb.Validator{})}}
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
+		require.NoError(t, v.ValidProposerSignature(ctx))
+		require.Equal(t, 0.0, getMetric("hit-valid"))
+		require.Equal(t, 0.0, getMetric("hit-invalid"))
+		require.Equal(t, 1.0, getMetric("miss"))
+	})
 }
 
 func TestValidProposerSignature_CacheMiss(t *testing.T) {
