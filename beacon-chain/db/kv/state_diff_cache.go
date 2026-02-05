@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	pkgerrors "github.com/pkg/errors"
 	"go.etcd.io/bbolt"
 )
@@ -31,10 +32,29 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 			return bbolt.ErrBucketNotFound
 		}
 		for level := range cache.levelsWithData {
+			if level == 0 {
+				if bucket.Get(makeKeyForStateDiffTree(0, offset)) != nil {
+					cache.levelsWithData[level] = true
+				}
+				continue
+			}
 			cursor := bucket.Cursor()
 			prefix := []byte{byte(level)}
 			key, _ := cursor.Seek(prefix)
 			if key != nil && key[0] == byte(level) {
+				slot, ok := slotFromStateDiffKey(key)
+				if !ok {
+					return ErrStateDiffCorrupted
+				}
+				if slot < offset {
+					return ErrStateDiffCorrupted
+				}
+				if level == 0 && slot != offset {
+					return ErrStateDiffCorrupted
+				}
+				if computeLevel(offset, primitives.Slot(slot)) != level {
+					return ErrStateDiffCorrupted
+				}
 				cache.levelsWithData[level] = true
 			}
 		}
@@ -51,6 +71,13 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 	cache.levelsWithData[0] = true
 
 	return cache, nil
+}
+
+func slotFromStateDiffKey(key []byte) (uint64, bool) {
+	if len(key) < 9 {
+		return 0, false
+	}
+	return binary.LittleEndian.Uint64(key[1:9]), true
 }
 
 func newStateDiffCache(s *Store) (*stateDiffCache, error) {

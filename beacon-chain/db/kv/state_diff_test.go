@@ -246,7 +246,7 @@ func TestStateDiff_PopulateStateDiffCacheFromDB(t *testing.T) {
 		if bucket == nil {
 			return bbolt.ErrBucketNotFound
 		}
-		key := makeKeyForStateDiffTree(2, 0)
+		key := makeKeyForStateDiffTree(2, math.PowerOf2(16))
 		return bucket.Put(append(key, stateSuffix...), []byte{1})
 	})
 	require.NoError(t, err)
@@ -259,6 +259,27 @@ func TestStateDiff_PopulateStateDiffCacheFromDB(t *testing.T) {
 	require.Equal(t, true, cache.levelHasData(0))
 	require.Equal(t, false, cache.levelHasData(1))
 	require.Equal(t, true, cache.levelHasData(2))
+}
+
+func TestStateDiff_PopulateStateDiffCacheFromDB_InvalidLevelKey(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	db := setupDB(t)
+	st, _ := createState(t, 0, version.Phase0)
+	require.NoError(t, setOffsetInDB(db, 0))
+	require.NoError(t, db.saveStateByDiff(context.Background(), st))
+
+	require.NoError(t, db.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		key := makeKeyForStateDiffTree(2, 1)
+		return bucket.Put(append(key, stateSuffix...), []byte{1})
+	}))
+
+	_, err := populateStateDiffCacheFromDB(db, 0)
+	require.ErrorIs(t, ErrStateDiffCorrupted, err)
 }
 
 func TestStateDiff_GetBaseAndDiffChainSkipsEmptyLevels(t *testing.T) {
