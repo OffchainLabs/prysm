@@ -3,11 +3,11 @@ package kv
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	pkgerrors "github.com/pkg/errors"
 	"go.etcd.io/bbolt"
 )
 
@@ -45,7 +45,7 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 
 	anchor0, err := s.getFullSnapshot(offset)
 	if err != nil {
-		return nil, fmt.Errorf("state diff cache: missing offset snapshot at %d: %w", offset, err)
+		return nil, pkgerrors.Wrapf(ErrStateDiffMissingSnapshot, "state diff cache: missing offset snapshot at %d", offset)
 	}
 	cache.anchors[0] = anchor0
 	cache.levelsWithData[0] = true

@@ -229,11 +229,12 @@ func (kv *Store) startStateDiff(ctx context.Context) error {
 	if hasOffset {
 		storedExponents, err := kv.loadStateDiffExponents()
 		if err != nil {
-			return errors.Wrap(err, "state-diff metadata missing or invalid; re-sync required")
+			return fmt.Errorf("%w: state-diff metadata missing or invalid; re-sync required: %v", ErrStateDiffCorrupted, err)
 		}
 		currentExponents := flags.Get().StateDiffExponents
 		if !slices.Equal(storedExponents, currentExponents) {
-			return fmt.Errorf(
+			return errors.Wrapf(
+				ErrStateDiffExponentMismatch,
 				"state-diff exponents changed; database incompatible. "+
 					"Database was initialized with: %v. "+
 					"Current configuration: %v. "+
