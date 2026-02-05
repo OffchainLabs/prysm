@@ -3014,7 +3014,7 @@ func TestGetPTCDuties(t *testing.T) {
 		// Some will be in the PTC, some won't.
 		var indices []string
 		requestedSet := make(map[primitives.ValidatorIndex]struct{})
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			indices = append(indices, strconv.Itoa(i))
 			requestedSet[primitives.ValidatorIndex(i)] = struct{}{}
 		}
