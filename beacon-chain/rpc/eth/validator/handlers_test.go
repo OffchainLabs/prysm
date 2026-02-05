@@ -3078,6 +3078,30 @@ func TestGetPTCDuties(t *testing.T) {
 		}
 	})
 
+	t.Run("duplicate validator indices are deduplicated", func(t *testing.T) {
+		// Request the same validator multiple times - should be deduplicated.
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"0\",\"0\",\"0\",\"1\",\"1\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", &body)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetPTCDutiesResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		// Each validator should appear at most once in the response.
+		seen := make(map[string]bool)
+		for _, duty := range resp.Data {
+			if seen[duty.ValidatorIndex] {
+				t.Errorf("Validator %s appears multiple times in response", duty.ValidatorIndex)
+			}
+			seen[duty.ValidatorIndex] = true
+		}
+	})
+
 	t.Run("pre-Gloas epoch returns error", func(t *testing.T) {
 		// Temporarily set GloasForkEpoch to 10
 		cfg := params.BeaconConfig()
@@ -3156,11 +3180,11 @@ func TestGetPTCDuties(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 
 		s.GetPTCDuties(writer, request)
-		// OOB validator won't be in any PTC, so request succeeds with empty duties.
-		assert.Equal(t, http.StatusOK, writer.Code)
-		resp := &structs.GetPTCDutiesResponse{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		assert.Equal(t, 0, len(resp.Data), "OOB validator should have no duties")
+		// Invalid validator index should return 400, matching attester duties behavior.
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.StringContains(t, "Invalid validator index", e.Message)
 	})
 
 	t.Run("epoch too far in future", func(t *testing.T) {

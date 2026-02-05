@@ -1284,9 +1284,21 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build a set of requested validators.
+	// Build a set of requested validators (also deduplicates per spec's uniqueItems requirement).
+	// Validate that each index exists in the validator registry.
 	requestedSet := make(map[primitives.ValidatorIndex]struct{}, len(requestedValIndices))
+	var zeroPubkey [fieldparams.BLSPubkeyLength]byte
 	for _, idx := range requestedValIndices {
+		// Skip duplicates.
+		if _, exists := requestedSet[idx]; exists {
+			continue
+		}
+		// Validate index exists.
+		pubkey := st.PubkeyAtIndex(idx)
+		if bytes.Equal(pubkey[:], zeroPubkey[:]) {
+			httputil.HandleError(w, fmt.Sprintf("Invalid validator index %d", idx), http.StatusBadRequest)
+			return
+		}
 		requestedSet[idx] = struct{}{}
 	}
 
