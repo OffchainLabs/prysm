@@ -46,6 +46,8 @@ const (
 	GossipLightClientOptimisticUpdateMessage = "light_client_optimistic_update"
 	// GossipDataColumnSidecarMessage is the name for the data column sidecar message type.
 	GossipDataColumnSidecarMessage = "data_column_sidecar"
+	// GossipPayloadAttestationMessage is the name for the payload attestation message type.
+	GossipPayloadAttestationMessage = "payload_attestation_message"
 
 	// Topic Formats
 	//
@@ -75,6 +77,8 @@ const (
 	LightClientOptimisticUpdateTopicFormat = GossipProtocolAndDigest + GossipLightClientOptimisticUpdateMessage
 	// DataColumnSubnetTopicFormat is the topic format for the data column subnet.
 	DataColumnSubnetTopicFormat = GossipProtocolAndDigest + GossipDataColumnSidecarMessage + "_%d"
+	// PayloadAttestationMessageTopicFormat is the topic format for payload attestation messages.
+	PayloadAttestationMessageTopicFormat = GossipProtocolAndDigest + GossipPayloadAttestationMessage
 )
 
 // topic is a struct representing a single gossipsub topic.
@@ -148,6 +152,7 @@ func (s *Service) allTopics() []topic {
 	empty := [4]byte{0, 0, 0, 0} // empty digest for templates, replaced by real digests in per-fork copies.
 	templates := []topic{
 		newTopic(genesis, future, empty, GossipBlockMessage),
+		newTopic(genesis, future, empty, GossipPayloadAttestationMessage),
 		newTopic(genesis, future, empty, GossipAggregateAndProofMessage),
 		newTopic(genesis, future, empty, GossipExitMessage),
 		newTopic(genesis, future, empty, GossipProposerSlashingMessage),

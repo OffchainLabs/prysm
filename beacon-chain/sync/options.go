@@ -207,6 +207,13 @@ func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
 	}
 }
 
+func WithPayloadAttestationCache(r *cache.PayloadAttestationCache) Option {
+	return func(s *Service) error {
+		s.payloadAttestationCache = r
+		return nil
+	}
+}
+
 // WithSlasherEnabled configures the sync package to support slashing detection.
 func WithSlasherEnabled(enabled bool) Option {
 	return func(s *Service) error {
