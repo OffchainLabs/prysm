@@ -182,13 +182,13 @@ func (bv *ROBlobVerifier) ValidProposerSignature(ctx context.Context) (err error
 	sd := blobToSignatureData(bv.blob)
 	// First check if there is a cached verification that can be reused.
 	seen, err := bv.sc.SignatureVerified(sd)
+	if err != nil {
+		log.WithFields(logging.BlobFields(bv.blob)).WithError(err).Debug("Reusing failed proposer signature validation from cache")
+		blobVerificationProposerSignatureCache.WithLabelValues("hit-invalid").Inc()
+		return ErrInvalidProposerSignature
+	}
 	if seen {
 		blobVerificationProposerSignatureCache.WithLabelValues("hit-valid").Inc()
-		if err != nil {
-			log.WithFields(logging.BlobFields(bv.blob)).WithError(err).Debug("Reusing failed proposer signature validation from cache")
-			blobVerificationProposerSignatureCache.WithLabelValues("hit-invalid").Inc()
-			return ErrInvalidProposerSignature
-		}
 		return nil
 	}
 	blobVerificationProposerSignatureCache.WithLabelValues("miss").Inc()
