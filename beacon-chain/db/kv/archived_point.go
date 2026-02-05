@@ -34,7 +34,7 @@ func (s *Store) LastArchivedRoot(ctx context.Context) [32]byte {
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(stateSlotIndicesBucket)
 		_, blockRoot = bkt.Cursor().Last()
-		if blockRoot != nil {
+		if len(blockRoot) > 0 {
 			blockRoot = slices.Clone(blockRoot)
 		}
 		return nil
@@ -55,7 +55,7 @@ func (s *Store) ArchivedPointRoot(ctx context.Context, slot primitives.Slot) [32
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateSlotIndicesBucket)
 		blockRoot = bucket.Get(bytesutil.SlotToBytesBigEndian(slot))
-		if blockRoot != nil {
+		if len(blockRoot) > 0 {
 			blockRoot = slices.Clone(blockRoot)
 		}
 		return nil

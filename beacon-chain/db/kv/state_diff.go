@@ -189,19 +189,19 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 		}
 		buf := append(key, stateSuffix...)
 		rawStateDiff := bucket.Get(buf)
-		if rawStateDiff == nil {
+		if len(rawStateDiff) == 0 {
 			return errors.New("state diff not found")
 		}
 		stateDiff = slices.Clone(rawStateDiff)
 		buf = append(key, validatorSuffix...)
 		rawValidatorDiff := bucket.Get(buf)
-		if rawValidatorDiff == nil {
+		if len(rawValidatorDiff) == 0 {
 			return errors.New("validator diff not found")
 		}
 		validatorDiff = slices.Clone(rawValidatorDiff)
 		buf = append(key, balancesSuffix...)
 		rawBalancesDiff := bucket.Get(buf)
-		if rawBalancesDiff == nil {
+		if len(rawBalancesDiff) == 0 {
 			return errors.New("balances diff not found")
 		}
 		balancesDiff = slices.Clone(rawBalancesDiff)

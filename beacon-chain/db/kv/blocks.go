@@ -813,7 +813,7 @@ func (s *Store) FeeRecipientByValidatorID(ctx context.Context, id primitives.Val
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(feeRecipientBucket)
 		stored := bkt.Get(bytesutil.Uint64ToBytesBigEndian(uint64(id)))
-		if stored != nil {
+		if len(stored) > 0 {
 			addr = slices.Clone(stored)
 		}
 		// IF the fee recipient is not found in the standard fee recipient bucket, then

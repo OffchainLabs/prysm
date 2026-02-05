@@ -19,7 +19,7 @@ func (s *Store) DepositContractAddress(ctx context.Context) ([]byte, error) {
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		chainInfo := tx.Bucket(chainMetadataBucket)
 		stored := chainInfo.Get(depositContractAddressKey)
-		if stored != nil {
+		if len(stored) > 0 {
 			addr = slices.Clone(stored)
 		}
 		return nil
