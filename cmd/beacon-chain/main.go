@@ -161,6 +161,7 @@ var appFlags = []cli.Flag{
 	dasFlags.BlobRetentionEpochFlag,
 	flags.BatchVerifierLimit,
 	flags.StateDiffExponents,
+	flags.StateDiffValidateOnStartup,
 	flags.DisableEphemeralLogFile,
 }
 

@@ -253,6 +253,11 @@ func (kv *Store) startStateDiff(ctx context.Context) error {
 			return err
 		}
 		kv.stateDiffCache = cache
+		if flags.Get().StateDiffValidateOnStartup {
+			if err := validateStateDiffCache(ctx, kv, cache); err != nil {
+				return err
+			}
+		}
 		log.WithFields(logrus.Fields{
 			"offset":    offset,
 			"exponents": storedExponents,

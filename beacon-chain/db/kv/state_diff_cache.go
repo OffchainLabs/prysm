@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"sync"
@@ -71,6 +72,53 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 	cache.levelsWithData[0] = true
 
 	return cache, nil
+}
+
+func validateStateDiffCache(ctx context.Context, s *Store, cache *stateDiffCache) error {
+	for level, hasData := range cache.levelsWithData {
+		if !hasData || level == 0 {
+			continue
+		}
+		maxSlot, err := latestSlotForLevel(s, level)
+		if err != nil {
+			return err
+		}
+		if _, err := s.stateByDiff(ctx, primitives.Slot(maxSlot)); err != nil {
+			return pkgerrors.Wrapf(ErrStateDiffCorrupted, "state diff validation failed for level %d slot %d: %v", level, maxSlot, err)
+		}
+	}
+	return nil
+}
+
+func latestSlotForLevel(s *Store, level int) (uint64, error) {
+	var maxSlot uint64
+	found := false
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		cursor := bucket.Cursor()
+		prefix := []byte{byte(level)}
+		for key, _ := cursor.Seek(prefix); key != nil && key[0] == byte(level); key, _ = cursor.Next() {
+			slot, ok := slotFromStateDiffKey(key)
+			if !ok {
+				return ErrStateDiffCorrupted
+			}
+			if !found || slot > maxSlot {
+				maxSlot = slot
+				found = true
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	if !found {
+		return 0, ErrStateDiffCorrupted
+	}
+	return maxSlot, nil
 }
 
 func slotFromStateDiffKey(key []byte) (uint64, bool) {
