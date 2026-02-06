@@ -116,11 +116,11 @@ func TestGetValidatorCount(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			// Expect node version endpoint call.
 			var nodeVersionResponse structs.GetVersionResponse
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v1/node/version",
 				&nodeVersionResponse,
@@ -132,7 +132,7 @@ func TestGetValidatorCount(t *testing.T) {
 			)
 
 			var validatorCountResponse structs.GetValidatorCountResponse
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v1/beacon/states/head/validator_count?status=active",
 				&validatorCountResponse,
@@ -145,8 +145,8 @@ func TestGetValidatorCount(t *testing.T) {
 
 			// Type assertion.
 			var client iface.PrysmChainClient = &prysmChainClient{
-				nodeClient:      &beaconApiNodeClient{jsonRestHandler: jsonRestHandler},
-				jsonRestHandler: jsonRestHandler,
+				nodeClient: &beaconApiNodeClient{handler: handler},
+				handler:    handler,
 			}
 
 			countResponse, err := client.ValidatorCount(ctx, "head", []validator.Status{validator.Active})
@@ -177,10 +177,10 @@ func Test_beaconApiBeaconChainClient_GetValidatorPerformance(t *testing.T) {
 		PublicKeys: [][]byte{publicKeys[0][:], publicKeys[2][:], publicKeys[1][:]},
 	})
 	require.NoError(t, err)
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 	// Expect node version endpoint call.
 	var nodeVersionResponse structs.GetVersionResponse
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
@@ -196,7 +196,7 @@ func Test_beaconApiBeaconChainClient_GetValidatorPerformance(t *testing.T) {
 	wantResponse := &structs.GetValidatorPerformanceResponse{}
 	want := &ethpb.ValidatorPerformanceResponse{}
 
-	jsonRestHandler.EXPECT().Post(
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/prysm/validators/performance",
 		nil,
@@ -207,8 +207,8 @@ func Test_beaconApiBeaconChainClient_GetValidatorPerformance(t *testing.T) {
 	)
 
 	var client iface.PrysmChainClient = &prysmChainClient{
-		nodeClient:      &beaconApiNodeClient{jsonRestHandler: jsonRestHandler},
-		jsonRestHandler: jsonRestHandler,
+		nodeClient: &beaconApiNodeClient{handler: handler},
+		handler:    handler,
 	}
 
 	got, err := client.ValidatorPerformance(ctx, &ethpb.ValidatorPerformanceRequest{

@@ -18,7 +18,7 @@ func (c *beaconApiValidatorClient) submitSignedAggregateSelectionProof(ctx conte
 		return nil, errors.Wrap(err, "failed to marshal SignedAggregateAttestationAndProof")
 	}
 	headers := map[string]string{"Eth-Consensus-Version": version.String(in.SignedAggregateAndProof.Version())}
-	err = c.jsonRestHandler.Post(ctx, "/eth/v2/validator/aggregate_and_proofs", headers, bytes.NewBuffer(body), nil)
+	err = c.handler.Post(ctx, "/eth/v2/validator/aggregate_and_proofs", headers, bytes.NewBuffer(body), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (c *beaconApiValidatorClient) submitSignedAggregateSelectionProofElectra(ct
 	dataSlot := in.SignedAggregateAndProof.Message.Aggregate.Data.Slot
 	consensusVersion := version.String(slots.ToForkVersion(dataSlot))
 	headers := map[string]string{"Eth-Consensus-Version": consensusVersion}
-	if err = c.jsonRestHandler.Post(ctx, "/eth/v2/validator/aggregate_and_proofs", headers, bytes.NewBuffer(body), nil); err != nil {
+	if err = c.handler.Post(ctx, "/eth/v2/validator/aggregate_and_proofs", headers, bytes.NewBuffer(body), nil); err != nil {
 		return nil, err
 	}
 

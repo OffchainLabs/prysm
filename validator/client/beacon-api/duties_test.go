@@ -60,8 +60,8 @@ func TestGetAttesterDuties_Valid(t *testing.T) {
 	ctx := t.Context()
 
 	validatorIndices := []primitives.ValidatorIndex{2, 9}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Post(
 		gomock.Any(),
 		fmt.Sprintf("%s/%d", getAttesterDutiesTestEndpoint, epoch),
 		nil,
@@ -74,7 +74,7 @@ func TestGetAttesterDuties_Valid(t *testing.T) {
 		expectedAttesterDuties,
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	attesterDuties, err := dutiesProvider.AttesterDuties(ctx, epoch, validatorIndices)
 	require.NoError(t, err)
 	assert.DeepEqual(t, expectedAttesterDuties.Data, attesterDuties.Data)
@@ -88,8 +88,8 @@ func TestGetAttesterDuties_HttpError(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Post(
 		gomock.Any(),
 		fmt.Sprintf("%s/%d", getAttesterDutiesTestEndpoint, epoch),
 		gomock.Any(),
@@ -99,7 +99,7 @@ func TestGetAttesterDuties_HttpError(t *testing.T) {
 		errors.New("foo error"),
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	_, err := dutiesProvider.AttesterDuties(ctx, epoch, nil)
 	assert.ErrorContains(t, "foo error", err)
 }
@@ -112,8 +112,8 @@ func TestGetAttesterDuties_NilAttesterDuty(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Post(
 		gomock.Any(),
 		fmt.Sprintf("%s/%d", getAttesterDutiesTestEndpoint, epoch),
 		gomock.Any(),
@@ -128,7 +128,7 @@ func TestGetAttesterDuties_NilAttesterDuty(t *testing.T) {
 		},
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	_, err := dutiesProvider.AttesterDuties(ctx, epoch, nil)
 	assert.ErrorContains(t, "attester duty at index `0` is nil", err)
 }
@@ -156,8 +156,8 @@ func TestGetProposerDuties_Valid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Get(
 		gomock.Any(),
 		fmt.Sprintf("%s/%d", getProposerDutiesTestEndpoint, epoch),
 		&structs.GetProposerDutiesResponse{},
@@ -168,7 +168,7 @@ func TestGetProposerDuties_Valid(t *testing.T) {
 		expectedProposerDuties,
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	proposerDuties, err := dutiesProvider.ProposerDuties(ctx, epoch)
 	require.NoError(t, err)
 	assert.DeepEqual(t, expectedProposerDuties.Data, proposerDuties.Data)
@@ -182,8 +182,8 @@ func TestGetProposerDuties_HttpError(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Get(
 		gomock.Any(),
 		fmt.Sprintf("%s/%d", getProposerDutiesTestEndpoint, epoch),
 		gomock.Any(),
@@ -191,7 +191,7 @@ func TestGetProposerDuties_HttpError(t *testing.T) {
 		errors.New("foo error"),
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	_, err := dutiesProvider.ProposerDuties(ctx, epoch)
 	assert.ErrorContains(t, "foo error", err)
 }
@@ -204,8 +204,8 @@ func TestGetProposerDuties_NilData(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Get(
 		gomock.Any(),
 		fmt.Sprintf("%s/%d", getProposerDutiesTestEndpoint, epoch),
 		gomock.Any(),
@@ -218,7 +218,7 @@ func TestGetProposerDuties_NilData(t *testing.T) {
 		},
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	_, err := dutiesProvider.ProposerDuties(ctx, epoch)
 	assert.ErrorContains(t, "proposer duties data is nil", err)
 }
@@ -231,8 +231,8 @@ func TestGetProposerDuties_NilProposerDuty(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Get(
 		gomock.Any(),
 		fmt.Sprintf("%s/%d", getProposerDutiesTestEndpoint, epoch),
 		gomock.Any(),
@@ -245,7 +245,7 @@ func TestGetProposerDuties_NilProposerDuty(t *testing.T) {
 		},
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	_, err := dutiesProvider.ProposerDuties(ctx, epoch)
 	assert.ErrorContains(t, "proposer duty at index `0` is nil", err)
 }
@@ -284,8 +284,8 @@ func TestGetSyncDuties_Valid(t *testing.T) {
 	ctx := t.Context()
 
 	validatorIndices := []primitives.ValidatorIndex{2, 6}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Post(
 		gomock.Any(),
 		fmt.Sprintf("%s/%d", getSyncDutiesTestEndpoint, epoch),
 		nil,
@@ -298,7 +298,7 @@ func TestGetSyncDuties_Valid(t *testing.T) {
 		expectedSyncDuties,
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	syncDuties, err := dutiesProvider.SyncDuties(ctx, epoch, validatorIndices)
 	require.NoError(t, err)
 	assert.DeepEqual(t, expectedSyncDuties.Data, syncDuties)
@@ -312,8 +312,8 @@ func TestGetSyncDuties_HttpError(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Post(
 		gomock.Any(),
 		fmt.Sprintf("%s/%d", getSyncDutiesTestEndpoint, epoch),
 		gomock.Any(),
@@ -323,7 +323,7 @@ func TestGetSyncDuties_HttpError(t *testing.T) {
 		errors.New("foo error"),
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	_, err := dutiesProvider.SyncDuties(ctx, epoch, nil)
 	assert.ErrorContains(t, "foo error", err)
 }
@@ -336,8 +336,8 @@ func TestGetSyncDuties_NilData(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Post(
 		gomock.Any(),
 		fmt.Sprintf("%s/%d", getSyncDutiesTestEndpoint, epoch),
 		gomock.Any(),
@@ -352,7 +352,7 @@ func TestGetSyncDuties_NilData(t *testing.T) {
 		},
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	_, err := dutiesProvider.SyncDuties(ctx, epoch, nil)
 	assert.ErrorContains(t, "sync duties data is nil", err)
 }
@@ -365,8 +365,8 @@ func TestGetSyncDuties_NilSyncDuty(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Post(
 		gomock.Any(),
 		fmt.Sprintf("%s/%d", getSyncDutiesTestEndpoint, epoch),
 		gomock.Any(),
@@ -381,7 +381,7 @@ func TestGetSyncDuties_NilSyncDuty(t *testing.T) {
 		},
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	_, err := dutiesProvider.SyncDuties(ctx, epoch, nil)
 	assert.ErrorContains(t, "sync duty at index `0` is nil", err)
 }
@@ -415,8 +415,8 @@ func TestGetCommittees_Valid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Get(
 		gomock.Any(),
 		fmt.Sprintf("%s?epoch=%d", getCommitteesTestEndpoint, epoch),
 		&structs.GetCommitteesResponse{},
@@ -427,7 +427,7 @@ func TestGetCommittees_Valid(t *testing.T) {
 		expectedCommittees,
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	committees, err := dutiesProvider.Committees(ctx, epoch)
 	require.NoError(t, err)
 	assert.DeepEqual(t, expectedCommittees.Data, committees)
@@ -441,8 +441,8 @@ func TestGetCommittees_HttpError(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Get(
 		gomock.Any(),
 		fmt.Sprintf("%s?epoch=%d", getCommitteesTestEndpoint, epoch),
 		gomock.Any(),
@@ -450,7 +450,7 @@ func TestGetCommittees_HttpError(t *testing.T) {
 		errors.New("foo error"),
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	_, err := dutiesProvider.Committees(ctx, epoch)
 	assert.ErrorContains(t, "foo error", err)
 }
@@ -463,8 +463,8 @@ func TestGetCommittees_NilData(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Get(
 		gomock.Any(),
 		fmt.Sprintf("%s?epoch=%d", getCommitteesTestEndpoint, epoch),
 		gomock.Any(),
@@ -477,7 +477,7 @@ func TestGetCommittees_NilData(t *testing.T) {
 		},
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	_, err := dutiesProvider.Committees(ctx, epoch)
 	assert.ErrorContains(t, "state committees data is nil", err)
 }
@@ -490,8 +490,8 @@ func TestGetCommittees_NilCommittee(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Get(
 		gomock.Any(),
 		fmt.Sprintf("%s?epoch=%d", getCommitteesTestEndpoint, epoch),
 		gomock.Any(),
@@ -504,7 +504,7 @@ func TestGetCommittees_NilCommittee(t *testing.T) {
 		},
 	).Times(1)
 
-	dutiesProvider := &beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler}
+	dutiesProvider := &beaconApiDutiesProvider{handler: handler}
 	_, err := dutiesProvider.Committees(ctx, epoch)
 	assert.ErrorContains(t, "committee at index `0` is nil", err)
 }

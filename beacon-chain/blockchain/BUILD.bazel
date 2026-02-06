@@ -85,6 +85,7 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//io/logs:go_default_library",
         "//math:go_default_library",
         "//monitoring/tracing:go_default_library",
         "//monitoring/tracing/trace:go_default_library",

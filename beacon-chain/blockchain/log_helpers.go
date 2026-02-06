@@ -10,6 +10,7 @@ import (
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
@@ -87,36 +88,45 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte, justified, finalized *ethpb.Checkpoint, receivedTime time.Time, genesis time.Time, daWaitedTime time.Duration) error {
 	startTime, err := slots.StartTime(genesis, block.Slot())
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to get slot start time")
 	}
-	level := log.Logger.GetLevel()
+	parentRoot := block.ParentRoot()
+	blkRoot := fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8])
+	finalizedRoot := fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8])
+	sinceSlotStartTime := prysmTime.Now().Sub(startTime)
+
+	lessFields := logrus.Fields{
+		"slot":               block.Slot(),
+		"block":              blkRoot,
+		"finalizedEpoch":     finalized.Epoch,
+		"finalizedRoot":      finalizedRoot,
+		"epoch":              slots.ToEpoch(block.Slot()),
+		"sinceSlotStartTime": sinceSlotStartTime,
+	}
+	moreFields := logrus.Fields{
+		"slot":                       block.Slot(),
+		"slotInEpoch":                block.Slot() % params.BeaconConfig().SlotsPerEpoch,
+		"block":                      blkRoot,
+		"epoch":                      slots.ToEpoch(block.Slot()),
+		"justifiedEpoch":             justified.Epoch,
+		"justifiedRoot":              fmt.Sprintf("0x%s...", hex.EncodeToString(justified.Root)[:8]),
+		"finalizedEpoch":             finalized.Epoch,
+		"finalizedRoot":              finalizedRoot,
+		"parentRoot":                 fmt.Sprintf("0x%s...", hex.EncodeToString(parentRoot[:])[:8]),
+		"version":                    version.String(block.Version()),
+		"sinceSlotStartTime":         sinceSlotStartTime,
+		"chainServiceProcessedTime":  prysmTime.Now().Sub(receivedTime) - daWaitedTime,
+		"dataAvailabilityWaitedTime": daWaitedTime,
+	}
+
+	level := logs.PackageVerbosity("beacon-chain/blockchain")
 	if level >= logrus.DebugLevel {
-		parentRoot := block.ParentRoot()
-		lf := logrus.Fields{
-			"slot":                       block.Slot(),
-			"slotInEpoch":                block.Slot() % params.BeaconConfig().SlotsPerEpoch,
-			"block":                      fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8]),
-			"epoch":                      slots.ToEpoch(block.Slot()),
-			"justifiedEpoch":             justified.Epoch,
-			"justifiedRoot":              fmt.Sprintf("0x%s...", hex.EncodeToString(justified.Root)[:8]),
-			"finalizedEpoch":             finalized.Epoch,
-			"finalizedRoot":              fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8]),
-			"parentRoot":                 fmt.Sprintf("0x%s...", hex.EncodeToString(parentRoot[:])[:8]),
-			"version":                    version.String(block.Version()),
-			"sinceSlotStartTime":         prysmTime.Now().Sub(startTime),
-			"chainServiceProcessedTime":  prysmTime.Now().Sub(receivedTime) - daWaitedTime,
-			"dataAvailabilityWaitedTime": daWaitedTime,
-		}
-		log.WithFields(lf).Debug("Synced new block")
-	} else {
-		log.WithFields(logrus.Fields{
-			"slot":           block.Slot(),
-			"block":          fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8]),
-			"finalizedEpoch": finalized.Epoch,
-			"finalizedRoot":  fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8]),
-			"epoch":          slots.ToEpoch(block.Slot()),
-		}).Info("Synced new block")
+		log.WithFields(moreFields).Info("Synced new block")
+		return nil
 	}
+
+	log.WithFields(lessFields).WithField(logs.LogTargetField, logs.LogTargetUser).Info("Synced new block")
+	log.WithFields(moreFields).WithField(logs.LogTargetField, logs.LogTargetEphemeral).Info("Synced new block")
 	return nil
 }
 
