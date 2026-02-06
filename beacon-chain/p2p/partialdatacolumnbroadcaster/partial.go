@@ -47,7 +47,7 @@ func extractColumnIndexFromTopic(topic string) (uint64, error) {
 //   - reject=false, err!=nil: IGNORE - don't penalize, just ignore
 //   - reject=false, err=nil: valid header
 type HeaderValidator func(header *ethpb.PartialDataColumnHeader) (reject bool, err error)
-type HeaderHandler func(header *ethpb.PartialDataColumnHeader)
+type HeaderHandler func(header *ethpb.PartialDataColumnHeader) error
 type ColumnValidator func(cells []blocks.CellProofBundle) error
 
 type PartialColumnBroadcaster struct {
@@ -282,6 +282,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 	groupID := rpcWithFrom.GroupID
 	ourDataColumn := p.getDataColumn(topicID, groupID)
 	var shouldRepublish bool
+	var handledHeader bool
 
 	if ourDataColumn == nil && hasMessage {
 		var header *ethpb.PartialDataColumnHeader
@@ -320,7 +321,12 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 				p.logger.Debug("No header handler registered for topic")
 				return nil
 			}
-			headerHandler(header)
+			err = headerHandler(header)
+			if err != nil {
+				p.logger.Error("Failed to handle header", "err", err)
+			} else {
+				handledHeader = true
+			}
 		}
 
 		columnIndex, err := extractColumnIndexFromTopic(topicID)
@@ -419,7 +425,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		logger.Debug("republishing due to parts metadata difference")
 	}
 
-	if shouldRepublish {
+	if shouldRepublish && !handledHeader {
 		err := p.ps.PublishPartialMessage(topicID, ourDataColumn, partialmessages.PublishOptions{})
 		if err != nil {
 			return err

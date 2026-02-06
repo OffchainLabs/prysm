@@ -193,9 +193,9 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		require.NoError(t, err)
 		defer sub2.Cancel()
 
-		err = broadcaster1.Subscribe(topic1, headerValidator, cellValidator, handler1)
+		err = broadcaster1.Subscribe(topic1, headerValidator, cellValidator, handler1, nil)
 		require.NoError(t, err)
-		err = broadcaster2.Subscribe(topic2, headerValidator, cellValidator, handler2)
+		err = broadcaster2.Subscribe(topic2, headerValidator, cellValidator, handler2, nil)
 		require.NoError(t, err)
 
 		// Wait for mesh to form

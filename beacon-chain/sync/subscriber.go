@@ -361,15 +361,12 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 							log.WithError(err).Error("Failed to handle verified RO data column subscriber")
 						}
 					},
-					handleHeader: func(header *ethpb.PartialDataColumnHeader) {
+					handleHeader: func(header *ethpb.PartialDataColumnHeader) error {
 						ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
 						defer cancel()
 						source := peerdas.PopulateFromPartialHeader(header)
 						log.WithField("slot", source.Slot()).Info("Received data column header")
-						err := s.processDataColumnSidecarsFromExecution(ctx, source)
-						if err != nil {
-							log.WithError(err).Error("Failed to handle partial data column header")
-						}
+						return s.processDataColumnSidecarsFromExecution(ctx, source)
 					},
 				}
 			}
