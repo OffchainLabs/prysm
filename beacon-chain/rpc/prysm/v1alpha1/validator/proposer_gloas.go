@@ -7,9 +7,19 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -17,126 +27,163 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// GloasBlockBuilder defines the interface for building GLOAS beacon blocks.
-// This interface allows for easier testing and potential alternative implementations.
-type GloasBlockBuilder interface {
-	// BuildGloasBlock constructs a GLOAS beacon block for the given slot.
-	// Returns the block with a signed execution payload bid and caches the
-	// corresponding execution payload envelope for later retrieval.
-	BuildGloasBlock(ctx context.Context, slot primitives.Slot, randaoReveal, graffiti []byte) (*ethpb.BeaconBlockGloas, error)
+// setGloasExecutionData creates an execution payload bid from the local payload,
+// sets it on the block, and caches the execution payload envelope for later
+// retrieval by the validator client.
+func (vs *Server) setGloasExecutionData(
+	ctx context.Context,
+	sBlk interfaces.SignedBeaconBlock,
+	local *consensusblocks.GetPayloadResponse,
+) error {
+	_, span := trace.StartSpan(ctx, "ProposerServer.setGloasExecutionData")
+	defer span.End()
+
+	if local == nil || local.ExecutionData == nil {
+		return errors.New("local execution payload is nil")
+	}
+
+	// Create execution payload bid from the local payload.
+	parentRoot := sBlk.Block().ParentRoot()
+	bid, err := vs.createExecutionPayloadBid(
+		local.ExecutionData,
+		primitives.BuilderIndex(sBlk.Block().ProposerIndex()),
+		parentRoot[:],
+		sBlk.Block().Slot(),
+		local.BlobsBundler,
+	)
+	if err != nil {
+		return errors.Wrap(err, "could not create execution payload bid")
+	}
+
+	// The bid signature is set to the BLS point-at-infinity as a placeholder.
+	// For self-building (BUILDER_INDEX_SELF_BUILD), the VC must replace this
+	// with a real signature using the proposer's key before broadcasting.
+	signedBid := &ethpb.SignedExecutionPayloadBid{
+		Message:   bid,
+		Signature: common.InfiniteSignature[:],
+	}
+	if err := sBlk.SetSignedExecutionPayloadBid(signedBid); err != nil {
+		return errors.Wrap(err, "could not set signed execution payload bid")
+	}
+
+	// Cache the execution payload envelope for later retrieval by the VC.
+	envelope := vs.createExecutionPayloadEnvelope(
+		local.ExecutionData,
+		local.ExecutionRequests,
+		primitives.BuilderIndex(sBlk.Block().ProposerIndex()),
+		sBlk.Block().Slot(),
+		local.BlobsBundler,
+	)
+	vs.cacheExecutionPayloadEnvelope(envelope)
+
+	return nil
 }
 
-// GloasEnvelopePublisher defines the interface for broadcasting execution payload envelopes.
-type GloasEnvelopePublisher interface {
-	// PublishExecutionPayloadEnvelope broadcasts a signed execution payload envelope
-	// to the P2P network after validating its signature.
-	PublishExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedExecutionPayloadEnvelope) error
-}
-
-// getGloasBeaconBlock produces a GLOAS beacon block for the given request.
-// This is called from GetBeaconBlock when the requested slot is in the GLOAS fork.
-//
-// The GLOAS flow differs from previous forks:
-// 1. Block contains a signed execution payload bid instead of full payload
-// 2. Execution payload envelope is cached for later retrieval
-// 3. Validator must separately retrieve, sign, and broadcast the envelope
-func (vs *Server) getGloasBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (*ethpb.GenericBeaconBlock, error) {
-	// TODO: Implement GLOAS block production
-	//
-	// Implementation steps:
-	// 1. Get parent state via getParentState()
-	// 2. Create empty GLOAS block template
-	// 3. Set basic fields (slot, proposer_index, parent_root, graffiti, randao_reveal)
-	// 4. Build consensus fields via BuildBlockParallel() - reuse existing logic
-	// 5. Get execution payload from local execution client
-	// 6. Create execution payload bid from the payload
-	// 7. Sign the bid (for self-building, proposer signs as builder)
-	// 8. Create execution payload envelope and cache it
-	// 9. Return GenericBeaconBlock with GLOAS block type
-
-	return nil, status.Error(codes.Unimplemented, "GLOAS block production not yet implemented")
-}
-
-// buildGloasBlock constructs a GLOAS beacon block with all required fields.
-func (vs *Server) buildGloasBlock(ctx context.Context, slot primitives.Slot, randaoReveal, graffiti []byte) (*ethpb.BeaconBlockGloas, error) {
-	// TODO: Implement GLOAS block building
-	//
-	// This method should:
-	// 1. Reuse BuildBlockParallel() for consensus fields (attestations, slashings, etc.)
-	// 2. Create the execution payload bid instead of including full payload
-	// 3. Include payload attestations from the previous slot's PTC
-
-	return nil, errors.New("buildGloasBlock not yet implemented")
+// getPayloadAttestations returns payload attestations for inclusion in a GLOAS block.
+// These attest to the payload timeliness from the previous slot's PTC.
+func (vs *Server) getPayloadAttestations(ctx context.Context, head state.BeaconState, slot primitives.Slot) []*ethpb.PayloadAttestation {
+	// TODO: Implement payload attestation retrieval from pool.
+	// This requires:
+	// 1. A PayloadAttestationPool to collect PTC votes
+	// 2. Aggregation of individual PayloadAttestationMessages into PayloadAttestations
+	// For now, return empty - blocks are valid without payload attestations.
+	return []*ethpb.PayloadAttestation{}
 }
 
 // createExecutionPayloadBid creates an ExecutionPayloadBid from a full execution payload.
 // For local block building, the beacon node acts as its own builder.
 func (vs *Server) createExecutionPayloadBid(
-	ctx context.Context,
-	slot primitives.Slot,
+	executionData interfaces.ExecutionData,
 	builderIndex primitives.BuilderIndex,
-	parentBlockHash []byte,
 	parentBlockRoot []byte,
-	payload any, // TODO: Use proper execution payload type
-) (*ethpb.ExecutionPayloadBid, error) {
-	// TODO: Implement bid creation
-	//
-	// The bid should contain:
-	// - parent_block_hash: From execution payload
-	// - parent_block_root: From beacon chain
-	// - block_hash: Execution payload block hash
-	// - prev_randao: From beacon state
-	// - fee_recipient: From execution payload
-	// - gas_limit: From execution payload
-	// - builder_index: The proposer's builder index (for self-building)
-	// - slot: Current slot
-	// - value: Bid value (for self-building, can be 0 or calculated)
-	// - execution_payment: Payment amount
-	// - blob_kzg_commitments_root: Hash tree root of blob commitments
-
-	return nil, errors.New("createExecutionPayloadBid not yet implemented")
-}
-
-// signExecutionPayloadBid signs an execution payload bid.
-// For local block building, this uses the proposer's key.
-func (vs *Server) signExecutionPayloadBid(
-	ctx context.Context,
-	bid *ethpb.ExecutionPayloadBid,
-	proposerIndex primitives.ValidatorIndex,
-) (*ethpb.SignedExecutionPayloadBid, error) {
-	// TODO: Implement bid signing
-	//
-	// For local/self-building:
-	// - The proposer acts as the builder
-	// - Sign with the proposer's key
-	// - Use DOMAIN_EXECUTION_PAYLOAD_BID signing domain
-
-	return nil, errors.New("signExecutionPayloadBid not yet implemented")
-}
-
-// createExecutionPayloadEnvelope wraps an execution payload with metadata for the envelope.
-func (vs *Server) createExecutionPayloadEnvelope(
-	ctx context.Context,
-	payload any, // TODO: Use proper execution payload type
-	executionRequests any, // TODO: Use proper type
-	builderIndex primitives.BuilderIndex,
-	beaconBlockRoot []byte,
 	slot primitives.Slot,
-	blobKzgCommitments [][]byte,
-	stateRoot []byte,
-) (*ethpb.ExecutionPayloadEnvelope, error) {
-	// TODO: Implement envelope creation
-	//
-	// The envelope wraps the full execution payload with:
-	// - payload: The full execution payload
-	// - execution_requests: EL execution requests
-	// - builder_index: Builder who created this payload
-	// - beacon_block_root: Root of the beacon block this envelope is for
-	// - slot: Current slot
-	// - blob_kzg_commitments: KZG commitments for blobs
-	// - state_root: Beacon state root after applying the block
+	blobsBundler enginev1.BlobsBundler,
+) (*ethpb.ExecutionPayloadBid, error) {
+	if executionData == nil || executionData.IsNil() {
+		return nil, errors.New("execution data is nil")
+	}
 
-	return nil, errors.New("createExecutionPayloadEnvelope not yet implemented")
+	// Compute blob_kzg_commitments_root from the blobs bundle.
+	// This is hash_tree_root(List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]).
+	kzgCommitmentsRoot := make([]byte, 32)
+	if blobsBundler != nil {
+		commitments := extractKzgCommitments(blobsBundler)
+		if len(commitments) > 0 {
+			leaves := consensusblocks.LeavesFromCommitments(commitments)
+			commitmentsTree, err := trie.GenerateTrieFromItems(leaves, fieldparams.LogMaxBlobCommitments)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not generate kzg commitments trie")
+			}
+			root, err := commitmentsTree.HashTreeRoot()
+			if err != nil {
+				return nil, errors.Wrap(err, "could not compute kzg commitments root")
+			}
+			kzgCommitmentsRoot = root[:]
+		}
+	}
+
+	return &ethpb.ExecutionPayloadBid{
+		ParentBlockHash:        executionData.ParentHash(),
+		ParentBlockRoot:        bytesutil.SafeCopyBytes(parentBlockRoot),
+		BlockHash:              executionData.BlockHash(),
+		PrevRandao:             executionData.PrevRandao(),
+		FeeRecipient:           executionData.FeeRecipient(),
+		GasLimit:               executionData.GasLimit(),
+		BuilderIndex:           builderIndex,
+		Slot:                   slot,
+		Value:                  0, // Self-building: no competitive bid
+		ExecutionPayment:       0, // Self-building: no payment
+		BlobKzgCommitmentsRoot: kzgCommitmentsRoot,
+	}, nil
+}
+
+// createExecutionPayloadEnvelope wraps a full execution payload with metadata.
+// The envelope is cached by the beacon node during block production for later
+// retrieval by the validator via GetExecutionPayloadEnvelope.
+func (vs *Server) createExecutionPayloadEnvelope(
+	executionData interfaces.ExecutionData,
+	executionRequests *enginev1.ExecutionRequests,
+	builderIndex primitives.BuilderIndex,
+	slot primitives.Slot,
+	blobsBundler enginev1.BlobsBundler,
+) *ethpb.ExecutionPayloadEnvelope {
+	// Extract the underlying ExecutionPayloadDeneb proto
+	var payload *enginev1.ExecutionPayloadDeneb
+	if executionData != nil && !executionData.IsNil() {
+		if p, ok := executionData.Proto().(*enginev1.ExecutionPayloadDeneb); ok {
+			payload = p
+		}
+	}
+
+	commitments := extractKzgCommitments(blobsBundler)
+
+	return &ethpb.ExecutionPayloadEnvelope{
+		Payload:            payload,
+		ExecutionRequests:  executionRequests,
+		BuilderIndex:       builderIndex,
+		BeaconBlockRoot:    make([]byte, 32), // Populated later when block root is known
+		Slot:               slot,
+		BlobKzgCommitments: commitments,
+		StateRoot:          make([]byte, 32), // Computed later in GetExecutionPayloadEnvelope
+	}
+}
+
+// extractKzgCommitments pulls KZG commitments from a blobs bundler.
+func extractKzgCommitments(blobsBundler enginev1.BlobsBundler) [][]byte {
+	if blobsBundler == nil {
+		return nil
+	}
+	switch b := blobsBundler.(type) {
+	case *enginev1.BlobsBundle:
+		if b != nil {
+			return b.KzgCommitments
+		}
+	case *enginev1.BlobsBundleV2:
+		if b != nil {
+			return b.KzgCommitments
+		}
+	}
+	return nil
 }
 
 // cacheExecutionPayloadEnvelope stores an envelope for later retrieval by the validator.
@@ -149,7 +196,7 @@ func (vs *Server) cacheExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayload
 }
 
 // GetExecutionPayloadEnvelope retrieves a cached execution payload envelope.
-// This is called by validators after receiving a GLOAS block to get the envelope
+// This is called by validators after receiving a GLOAS block to get the envelopeF
 // they need to sign and broadcast.
 //
 // gRPC endpoint: /eth/v1alpha1/validator/execution_payload_envelope/{slot}/{builder_index}
@@ -157,17 +204,19 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 	ctx context.Context,
 	req *ethpb.ExecutionPayloadEnvelopeRequest,
 ) (*ethpb.ExecutionPayloadEnvelopeResponse, error) {
-	// Validate request
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request cannot be nil")
 	}
 
-	// Check if cache is available
+	if slots.ToEpoch(req.Slot) < params.BeaconConfig().GloasForkEpoch {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"execution payload envelopes are not supported before GLOAS fork (slot %d)", req.Slot)
+	}
+
 	if vs.ExecutionPayloadEnvelopeCache == nil {
 		return nil, status.Error(codes.Internal, "execution payload envelope cache not initialized")
 	}
 
-	// Retrieve from cache
 	envelope, found := vs.ExecutionPayloadEnvelopeCache.Get(req.Slot, req.BuilderIndex)
 	if !found {
 		return nil, status.Errorf(
@@ -178,13 +227,12 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 		)
 	}
 
-	// Compute state root if not already set
-	// Following the pattern from epbs-interop: compute post-payload state root
+	// Compute state root if not already set.
+	// Following the pattern from epbs-interop: compute post-payload state root.
 	if len(envelope.StateRoot) == 0 || bytesutil.ZeroRoot(envelope.StateRoot) {
 		stateRoot, err := vs.computePostPayloadStateRoot(ctx, envelope)
 		if err != nil {
 			log.WithError(err).Warn("Failed to compute post-payload state root")
-			// Continue without state root - validator may still need the envelope
 		} else {
 			envelope.StateRoot = stateRoot
 			log.WithField("stateRoot", fmt.Sprintf("%#x", stateRoot)).Debug("Computed state root at execution stage")
@@ -198,18 +246,38 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 
 // computePostPayloadStateRoot computes the state root after an execution
 // payload envelope has been processed through a state transition.
-// This follows the pattern from epbs-interop.
 func (vs *Server) computePostPayloadStateRoot(ctx context.Context, envelope *ethpb.ExecutionPayloadEnvelope) ([]byte, error) {
-	// TODO: Implement post-payload state root computation
-	//
-	// Steps from epbs-interop:
-	// 1. Get beacon state by the envelope's beacon_block_root
-	// 2. Copy the state
-	// 3. Call UpdateHeaderAndVerify to verify the header
-	// 4. Call ProcessPayloadStateTransition to process the envelope
-	// 5. Compute and return the state root
+	ctx, span := trace.StartSpan(ctx, "ProposerServer.computePostPayloadStateRoot")
+	defer span.End()
 
-	return nil, errors.New("computePostPayloadStateRoot not yet implemented")
+	if len(envelope.BeaconBlockRoot) == 0 || bytesutil.ZeroRoot(envelope.BeaconBlockRoot) {
+		return nil, errors.New("beacon block root not set on envelope")
+	}
+
+	blockRoot := bytesutil.ToBytes32(envelope.BeaconBlockRoot)
+	st, err := vs.StateGen.StateByRoot(ctx, blockRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get state by block root")
+	}
+	if st == nil {
+		return nil, errors.New("nil state for block root")
+	}
+
+	// Copy the state to avoid mutating the original
+	st = st.Copy()
+
+	// TODO: Process the execution payload envelope through state transition.
+	// This requires implementing ProcessPayloadStateTransition in beacon-chain/core/gloas.
+	// For now, use the state root from the beacon block state as a placeholder.
+	// The correct implementation would:
+	// 1. Call ProcessPayloadStateTransition(ctx, st, envelope) to apply payload effects
+	// 2. Compute HashTreeRoot of the resulting state
+
+	root, err := st.HashTreeRoot(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compute state root")
+	}
+	return root[:], nil
 }
 
 // envelopeBlockWaitTimeout is the maximum time to wait for the associated beacon block
@@ -233,6 +301,11 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 ) (*emptypb.Empty, error) {
 	if req == nil || req.Message == nil {
 		return nil, status.Error(codes.InvalidArgument, "signed envelope cannot be nil")
+	}
+
+	if slots.ToEpoch(req.Message.Slot) < params.BeaconConfig().GloasForkEpoch {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"execution payload envelopes are not supported before GLOAS fork (slot %d)", req.Message.Slot)
 	}
 
 	beaconBlockRoot := bytesutil.ToBytes32(req.Message.BeaconBlockRoot)
@@ -261,33 +334,11 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		return nil, status.Errorf(codes.Internal, "failed to broadcast signed execution payload envelope: %v", err)
 	}
 
-	// TODO: Wrap and receive the envelope locally
-	// This requires implementing blocks.WrappedROSignedExecutionPayloadEnvelope
-	// in the consensus-types/blocks package, similar to epbs-interop branch.
-	//
-	// For local processing, clear blob commitments to avoid duplicates:
-	// reqCopy := &ethpb.SignedExecutionPayloadEnvelope{
-	//     Message: &ethpb.ExecutionPayloadEnvelope{
-	//         Payload:            req.Message.Payload,
-	//         ExecutionRequests:  req.Message.ExecutionRequests,
-	//         BuilderIndex:       req.Message.BuilderIndex,
-	//         BeaconBlockRoot:    req.Message.BeaconBlockRoot,
-	//         Slot:               req.Message.Slot,
-	//         BlobKzgCommitments: [][]byte{}, // Clear for local processing
-	//         StateRoot:          req.Message.StateRoot,
-	//     },
-	//     Signature: req.Signature,
-	// }
-	//
-	// wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(reqCopy)
-	// if err != nil {
-	//     return nil, status.Errorf(codes.InvalidArgument, "failed to wrap execution payload envelope: %v", err)
-	// }
-	//
-	// Also requires adding ExecutionPayloadReceiver to the server struct:
-	// if err := vs.ExecutionPayloadReceiver.ReceiveExecutionPayloadEnvelope(ctx, wrapped, nil); err != nil {
-	//     return nil, status.Errorf(codes.Internal, "failed to receive execution payload envelope: %v", err)
-	// }
+	// TODO: Receive the envelope locally following the broadcastReceiveBlock pattern.
+	// This requires:
+	// 1. blocks.WrappedROSignedExecutionPayloadEnvelope wrapper
+	// 2. BlockReceiver.ReceiveExecutionPayloadEnvelope method
+	// See epbs branch's receive_execution_payload_envelope.go for reference.
 
 	log.Info("Successfully published execution payload envelope")
 
@@ -306,16 +357,13 @@ func (vs *Server) waitForBeaconBlock(ctx context.Context, blockRoot [32]byte) er
 	log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot[:8])).
 		Debug("Waiting for beacon block to arrive")
 
-	// Create a context with timeout for waiting
 	waitCtx, cancel := context.WithTimeout(ctx, envelopeBlockWaitTimeout)
 	defer cancel()
 
-	// Subscribe to block notifications
 	blocksChan := make(chan *feed.Event, 1)
 	blockSub := vs.BlockNotifier.BlockFeed().Subscribe(blocksChan)
 	defer blockSub.Unsubscribe()
 
-	// Create a ticker for periodic polling
 	ticker := time.NewTicker(envelopeBlockPollInterval)
 	defer ticker.Stop()
 
@@ -325,25 +373,18 @@ func (vs *Server) waitForBeaconBlock(ctx context.Context, blockRoot [32]byte) er
 			return errors.Wrap(waitCtx.Err(), "timeout waiting for beacon block")
 
 		case blockEvent := <-blocksChan:
-			// Check if this is the block we're waiting for
 			if blockEvent.Type == blockfeed.ReceivedBlock {
 				data, ok := blockEvent.Data.(*blockfeed.ReceivedBlockData)
 				if ok && data != nil && data.SignedBlock != nil {
-					receivedRoot := data.SignedBlock.Block().HashTreeRoot
-					root, err := receivedRoot()
+					root, err := data.SignedBlock.Block().HashTreeRoot()
 					if err == nil && root == blockRoot {
-						log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot[:8])).
-							Debug("Received beacon block via notification")
 						return nil
 					}
 				}
 			}
 
 		case <-ticker.C:
-			// Periodic poll in case we missed a notification
 			if vs.BlockReceiver.HasBlock(ctx, blockRoot) {
-				log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot[:8])).
-					Debug("Found beacon block via polling")
 				return nil
 			}
 
@@ -352,27 +393,3 @@ func (vs *Server) waitForBeaconBlock(ctx context.Context, blockRoot [32]byte) er
 		}
 	}
 }
-
-// validateEnvelopeSignature verifies the signature on a signed execution payload envelope.
-func (vs *Server) validateEnvelopeSignature(
-	ctx context.Context,
-	signedEnvelope *ethpb.SignedExecutionPayloadEnvelope,
-) error {
-	// TODO: Implement signature validation
-	//
-	// Steps:
-	// 1. Get head state
-	// 2. Look up builder in builder registry by builder_index
-	// 3. Get builder's pubkey
-	// 4. Compute signing root for envelope using DOMAIN_EXECUTION_PAYLOAD_ENVELOPE
-	// 5. Verify BLS signature
-
-	return errors.New("validateEnvelopeSignature not yet implemented")
-}
-
-// TODO: The following wrapper function needs to be added to consensus-types/blocks:
-// - WrappedROSignedExecutionPayloadEnvelope(envelope *ethpb.SignedExecutionPayloadEnvelope) (interfaces.ROSignedExecutionPayloadEnvelope, error)
-// - WrappedROExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope) (interfaces.ROExecutionPayloadEnvelope, error)
-//
-// These are needed to properly receive and process execution payload envelopes.
-// See the epbs-interop branch for reference implementation.

@@ -231,6 +231,13 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 		// Set bls to execution change. New in Capella.
 		vs.setBlsToExecData(sBlk, head)
+
+		// Set payload attestations. New in GLOAS.
+		if sBlk.Version() >= version.Gloas {
+			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head, sBlk.Block().Slot())); err != nil {
+				log.WithError(err).Error("Could not set payload attestations")
+			}
+		}
 	})
 
 	winningBid := primitives.ZeroWei()
@@ -241,24 +248,31 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
 		}
 
-		// There's no reason to try to get a builder bid if local override is true.
-		var builderBid builderapi.Bid
-		if !(local.OverrideBuilder || skipMevBoost) {
-			latestHeader, err := head.LatestExecutionPayloadHeader()
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
+		switch {
+		case sBlk.Version() >= version.Gloas:
+			if err := vs.setGloasExecutionData(ctx, sBlk, local); err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not set GLOAS execution data: %v", err)
 			}
-			parentGasLimit := latestHeader.GasLimit()
-			builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
-			if err != nil {
-				builderGetPayloadMissCount.Inc()
-				log.WithError(err).Error("Could not get builder payload")
+		default:
+			// There's no reason to try to get a builder bid if local override is true.
+			var builderBid builderapi.Bid
+			if !(local.OverrideBuilder || skipMevBoost) {
+				latestHeader, err := head.LatestExecutionPayloadHeader()
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
+				}
+				parentGasLimit := latestHeader.GasLimit()
+				builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
+				if err != nil {
+					builderGetPayloadMissCount.Inc()
+					log.WithError(err).Error("Could not get builder payload")
+				}
 			}
-		}
 
-		winningBid, bundle, err = setExecutionData(ctx, sBlk, local, builderBid, builderBoostFactor)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
+			winningBid, bundle, err = setExecutionData(ctx, sBlk, local, builderBid, builderBoostFactor)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
+			}
 		}
 	}
 
@@ -277,11 +291,6 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 //
 // ProposeBeaconBlock handles the proposal of beacon blocks.
 func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
-	var (
-		blobSidecars       []*ethpb.BlobSidecar
-		dataColumnSidecars []blocks.RODataColumn
-	)
-
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
 	defer span.End()
 
@@ -298,14 +307,57 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
 	}
 
-	// For post-Fulu blinded blocks, submit to relay and return early
-	if block.IsBlinded() && slots.ToEpoch(block.Block().Slot()) >= params.BeaconConfig().FuluForkEpoch {
-		err := vs.BlockBuilder.SubmitBlindedBlockPostFulu(ctx, block)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not submit blinded block post-Fulu: %v", err)
+	if block.Version() < version.Gloas {
+		// For post-Fulu blinded blocks, submit to relay and return early.
+		if block.IsBlinded() && slots.ToEpoch(block.Block().Slot()) >= params.BeaconConfig().FuluForkEpoch {
+			err := vs.BlockBuilder.SubmitBlindedBlockPostFulu(ctx, block)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not submit blinded block post-Fulu: %v", err)
+			}
+			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 		}
-		return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+		return vs.proposeBlockWithSidecars(ctx, block, root, req)
 	}
+
+	return vs.proposeBlock(ctx, block, root)
+}
+
+// proposeBlock broadcasts and receives a beacon block without sidecars.
+// Used for GLOAS and beyond where execution data is delivered via a separate envelope.
+func (vs *Server) proposeBlock(
+	ctx context.Context,
+	block interfaces.SignedBeaconBlock,
+	root [fieldparams.RootLength]byte,
+) (*ethpb.ProposeResponse, error) {
+	protoBlock, err := block.Proto()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not convert block to proto: %v", err)
+	}
+	if err := vs.P2P.Broadcast(ctx, protoBlock); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not broadcast block: %v", err)
+	}
+	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
+		Type: blockfeed.ReceivedBlock,
+		Data: &blockfeed.ReceivedBlockData{SignedBlock: block},
+	})
+	if err := vs.BlockReceiver.ReceiveBlock(ctx, block, root, nil); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not receive block: %v", err)
+	}
+	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+}
+
+// proposeBlockWithSidecars handles block proposal for forks that carry blob or
+// data column sidecars alongside the block (Bellatrix through Fulu).
+func (vs *Server) proposeBlockWithSidecars(
+	ctx context.Context,
+	block interfaces.SignedBeaconBlock,
+	root [fieldparams.RootLength]byte,
+	req *ethpb.GenericSignedBeaconBlock,
+) (*ethpb.ProposeResponse, error) {
+	var (
+		blobSidecars       []*ethpb.BlobSidecar
+		dataColumnSidecars []blocks.RODataColumn
+	)
 
 	rob, err := blocks.NewROBlockWithRoot(block, root)
 	if block.IsBlinded() {
