@@ -30,7 +30,6 @@ const (
 	nodeCountCalled
 	highestReceivedBlockSlotCalled
 	highestReceivedBlockRootCalled
-	highestReceivedBlockDelayCalled
 	receivedBlocksLastEpochCalled
 	weightCalled
 	isOptimisticCalled
@@ -117,11 +116,6 @@ func TestROLocking(t *testing.T) {
 			name: "highestReceivedBlockSlotCalled",
 			call: highestReceivedBlockSlotCalled,
 			cb:   func(g FastGetter) { g.HighestReceivedBlockSlot() },
-		},
-		{
-			name: "highestReceivedBlockDelayCalled",
-			call: highestReceivedBlockDelayCalled,
-			cb:   func(g FastGetter) { g.HighestReceivedBlockDelay() },
 		},
 		{
 			name: "receivedBlocksLastEpochCalled",
@@ -258,11 +252,6 @@ func (ro *mockROForkchoice) HighestReceivedBlockSlot() primitives.Slot {
 func (ro *mockROForkchoice) HighestReceivedBlockRoot() [32]byte {
 	ro.calls = append(ro.calls, highestReceivedBlockRootCalled)
 	return [32]byte{}
-}
-
-func (ro *mockROForkchoice) HighestReceivedBlockDelay() primitives.Slot {
-	ro.calls = append(ro.calls, highestReceivedBlockDelayCalled)
-	return 0
 }
 
 func (ro *mockROForkchoice) ReceivedBlocksLastEpoch() (uint64, error) {

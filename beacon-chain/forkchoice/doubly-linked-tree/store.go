@@ -270,21 +270,6 @@ func (f *ForkChoice) HighestReceivedBlockSlot() primitives.Slot {
 	return f.store.highestReceivedNode.slot
 }
 
-// HighestReceivedBlockDelay returns the number of slots that the highest
-// received block was late when receiving it. For example, a block was late by 12 slots,
-// then this method is expected to return 12.
-func (f *ForkChoice) HighestReceivedBlockDelay() primitives.Slot {
-	n := f.store.highestReceivedNode
-	if n == nil {
-		return 0
-	}
-	sss, err := slots.SinceSlotStart(n.slot, f.store.genesisTime, n.timestamp)
-	if err != nil {
-		return 0
-	}
-	return primitives.Slot(uint64(sss/time.Second) / params.BeaconConfig().SecondsPerSlot)
-}
-
 // ReceivedBlocksLastEpoch returns the number of blocks received in the last epoch
 func (f *ForkChoice) ReceivedBlocksLastEpoch() (uint64, error) {
 	count := uint64(0)
