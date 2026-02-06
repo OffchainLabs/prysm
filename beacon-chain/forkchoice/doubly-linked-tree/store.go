@@ -113,7 +113,6 @@ func (s *Store) insert(ctx context.Context,
 		}
 	}
 
-	s.nodeByPayload[payloadHash] = n
 	s.nodeByRoot[root] = n
 	if parent == nil {
 		if s.treeRootNode == nil {
@@ -122,7 +121,6 @@ func (s *Store) insert(ctx context.Context,
 			s.highestReceivedNode = n
 		} else {
 			delete(s.nodeByRoot, root)
-			delete(s.nodeByPayload, payloadHash)
 			return nil, errInvalidParentRoot
 		}
 	} else {
@@ -191,7 +189,6 @@ func (s *Store) pruneFinalizedNodeByRootMap(ctx context.Context, node, finalized
 
 	node.children = nil
 	delete(s.nodeByRoot, node.root)
-	delete(s.nodeByPayload, node.payloadHash)
 	return nil
 }
 
