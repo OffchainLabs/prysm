@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/internal/logrusadapter"
@@ -153,15 +152,12 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 		pubsub.WithPartialMessagesExtension(&partialmessages.PartialMessagesExtension{
 			Logger: slogger,
 			MergePartsMetadata: func(topic string, left, right partialmessages.PartsMetadata) partialmessages.PartsMetadata {
-				if len(left) == 0 {
-					return right
-				}
-				merged, err := bitfield.Bitlist(left).Or(bitfield.Bitlist(right))
+				merged, err := blocks.MergePartsMetadata(left, right)
 				if err != nil {
 					p.logger.Warn("Failed to merge bitfields", "err", err, "left", left, "right", right)
 					return left
 				}
-				return partialmessages.PartsMetadata(merged)
+				return merged
 			},
 			ValidateRPC: func(from peer.ID, rpc *pubsub_pb.PartialMessagesExtension) error {
 				// TODO. Add some basic and fast sanity checks
