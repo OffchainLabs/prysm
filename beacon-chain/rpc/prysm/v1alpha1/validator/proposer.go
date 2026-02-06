@@ -462,18 +462,10 @@ func (vs *Server) handleUnblindedBlock(
 	}
 
 	if block.Version() >= version.Fulu {
-		// Compute cells and proofs from the blobs and cell proofs.
-		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, proofs)
+		roDataColumnSidecars, err := buildDataColumnSidecars(rawBlobs, proofs, peerdas.PopulateFromBlock(block))
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "compute cells and proofs")
+			return nil, nil, err
 		}
-
-		// Construct data column sidecars from the signed block and cells and proofs.
-		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "data column sidcars")
-		}
-
 		return nil, roDataColumnSidecars, nil
 	}
 
@@ -483,6 +475,22 @@ func (vs *Server) handleUnblindedBlock(
 	}
 
 	return blobSidecars, nil, nil
+}
+
+// buildDataColumnSidecars computes cells and proofs from blobs and constructs
+// data column sidecars using the given ConstructionPopulator source.
+func buildDataColumnSidecars(blobs, proofs [][]byte, src peerdas.ConstructionPopulator) ([]blocks.RODataColumn, error) {
+	cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, proofs)
+	if err != nil {
+		return nil, errors.Wrap(err, "compute cells and proofs")
+	}
+
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, src)
+	if err != nil {
+		return nil, errors.Wrap(err, "data column sidecars")
+	}
+
+	return roDataColumnSidecars, nil
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.

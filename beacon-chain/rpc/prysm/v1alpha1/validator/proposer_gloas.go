@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -22,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -44,7 +46,7 @@ func (vs *Server) setGloasExecutionData(
 
 	// Create execution payload bid from the local payload.
 	parentRoot := sBlk.Block().ParentRoot()
-	bid, err := vs.createExecutionPayloadBid(
+	bid, err := vs.createSelfBuildExecutionPayloadBid(
 		local.ExecutionData,
 		primitives.BuilderIndex(sBlk.Block().ProposerIndex()),
 		parentRoot[:],
@@ -55,9 +57,8 @@ func (vs *Server) setGloasExecutionData(
 		return errors.Wrap(err, "could not create execution payload bid")
 	}
 
-	// The bid signature is set to the BLS point-at-infinity as a placeholder.
-	// For self-building (BUILDER_INDEX_SELF_BUILD), the VC must replace this
-	// with a real signature using the proposer's key before broadcasting.
+	// Per spec, self-build bids must use G2 point-at-infinity as the signature.
+	// Only the execution payload envelope requires a real signature from the proposer.
 	signedBid := &ethpb.SignedExecutionPayloadBid{
 		Message:   bid,
 		Signature: common.InfiniteSignature[:],
@@ -66,7 +67,9 @@ func (vs *Server) setGloasExecutionData(
 		return errors.Wrap(err, "could not set signed execution payload bid")
 	}
 
-	// Cache the execution payload envelope for later retrieval by the VC.
+	// Cache the execution payload envelope and blobs bundle for later retrieval.
+	// The envelope is retrieved by the VC to sign and broadcast.
+	// The blobs bundle is needed during block proposal to build and broadcast blob sidecars.
 	envelope := vs.createExecutionPayloadEnvelope(
 		local.ExecutionData,
 		local.ExecutionRequests,
@@ -74,7 +77,7 @@ func (vs *Server) setGloasExecutionData(
 		sBlk.Block().Slot(),
 		local.BlobsBundler,
 	)
-	vs.cacheExecutionPayloadEnvelope(envelope)
+	vs.cacheExecutionPayloadEnvelope(envelope, local.BlobsBundler)
 
 	return nil
 }
@@ -90,9 +93,10 @@ func (vs *Server) getPayloadAttestations(ctx context.Context, head state.BeaconS
 	return []*ethpb.PayloadAttestation{}
 }
 
-// createExecutionPayloadBid creates an ExecutionPayloadBid from a full execution payload.
-// For local block building, the beacon node acts as its own builder.
-func (vs *Server) createExecutionPayloadBid(
+// createSelfBuildExecutionPayloadBid creates an ExecutionPayloadBid for self-building,
+// where the proposer acts as its own builder. Value and payment are zero, and the
+// bid fields are derived directly from the local execution payload.
+func (vs *Server) createSelfBuildExecutionPayloadBid(
 	executionData interfaces.ExecutionData,
 	builderIndex primitives.BuilderIndex,
 	parentBlockRoot []byte,
@@ -131,8 +135,8 @@ func (vs *Server) createExecutionPayloadBid(
 		GasLimit:               executionData.GasLimit(),
 		BuilderIndex:           builderIndex,
 		Slot:                   slot,
-		Value:                  0, // Self-building: no competitive bid
-		ExecutionPayment:       0, // Self-building: no payment
+		Value:                  0,
+		ExecutionPayment:       0,
 		BlobKzgCommitmentsRoot: kzgCommitmentsRoot,
 	}, nil
 }
@@ -186,13 +190,15 @@ func extractKzgCommitments(blobsBundler enginev1.BlobsBundler) [][]byte {
 	return nil
 }
 
-// cacheExecutionPayloadEnvelope stores an envelope for later retrieval by the validator.
-func (vs *Server) cacheExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope) {
+// cacheExecutionPayloadEnvelope stores an envelope and its blobs bundle for later retrieval.
+// The blobs bundle is cached alongside the envelope because blobs from the EL are only
+// held in memory until they are broadcast as sidecars during block proposal.
+func (vs *Server) cacheExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope, blobsBundle enginev1.BlobsBundler) {
 	if vs.ExecutionPayloadEnvelopeCache == nil {
 		log.Warn("ExecutionPayloadEnvelopeCache is nil, envelope will not be cached")
 		return
 	}
-	vs.ExecutionPayloadEnvelopeCache.Set(envelope)
+	vs.ExecutionPayloadEnvelopeCache.Set(envelope, blobsBundle)
 }
 
 // GetExecutionPayloadEnvelope retrieves a cached execution payload envelope.
@@ -329,16 +335,35 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	//     return nil, status.Errorf(codes.InvalidArgument, "invalid envelope signature: %v", err)
 	// }
 
-	// Broadcast to P2P network
-	if err := vs.P2P.Broadcast(ctx, req); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to broadcast signed execution payload envelope: %v", err)
+	// Build data column sidecars from the cached blobs bundle before broadcasting.
+	// In GLOAS, blob data is delivered alongside the execution payload envelope
+	// rather than with the beacon block (which only carries the bid).
+	dataColumnSidecars, err := vs.buildEnvelopeDataColumns(ctx, req.Message, beaconBlockRoot)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to build data column sidecars: %v", err)
 	}
 
-	// TODO: Receive the envelope locally following the broadcastReceiveBlock pattern.
-	// This requires:
-	// 1. blocks.WrappedROSignedExecutionPayloadEnvelope wrapper
-	// 2. BlockReceiver.ReceiveExecutionPayloadEnvelope method
-	// See epbs branch's receive_execution_payload_envelope.go for reference.
+	// Broadcast envelope and data column sidecars concurrently.
+	eg, eCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		if err := vs.P2P.Broadcast(eCtx, req); err != nil {
+			return errors.Wrap(err, "broadcast signed execution payload envelope")
+		}
+		// TODO: Receive the envelope locally following the broadcastReceiveBlock pattern.
+		// This requires:
+		// 1. blocks.WrappedROSignedExecutionPayloadEnvelope wrapper
+		// 2. BlockReceiver.ReceiveExecutionPayloadEnvelope method
+		// See epbs branch's receive_execution_payload_envelope.go for reference.
+		return nil
+	})
+	if len(dataColumnSidecars) > 0 {
+		eg.Go(func() error {
+			return vs.broadcastAndReceiveDataColumns(eCtx, dataColumnSidecars)
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to publish execution payload envelope: %v", err)
+	}
 
 	log.Info("Successfully published execution payload envelope")
 
@@ -392,4 +417,44 @@ func (vs *Server) waitForBeaconBlock(ctx context.Context, blockRoot [32]byte) er
 			return errors.New("block subscription closed")
 		}
 	}
+}
+
+// buildEnvelopeDataColumns retrieves the cached blobs bundle for the envelope's
+// slot/builder and builds data column sidecars. Returns nil if no blobs to broadcast.
+func (vs *Server) buildEnvelopeDataColumns(
+	ctx context.Context,
+	envelope *ethpb.ExecutionPayloadEnvelope,
+	blockRoot [32]byte,
+) ([]consensusblocks.RODataColumn, error) {
+	if vs.ExecutionPayloadEnvelopeCache == nil {
+		return nil, nil
+	}
+
+	blobsBundle, found := vs.ExecutionPayloadEnvelopeCache.GetBlobsBundle(envelope.Slot, envelope.BuilderIndex)
+	if !found || blobsBundle == nil {
+		return nil, nil
+	}
+
+	blobs := blobsBundle.GetBlobs()
+	proofs := blobsBundle.GetProofs()
+	commitments := envelope.BlobKzgCommitments
+	if len(blobs) == 0 {
+		return nil, nil
+	}
+
+	// Retrieve the beacon block to build the signed block header for sidecars.
+	blk, err := vs.BeaconDB.Block(ctx, blockRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get block for data column sidecars")
+	}
+	if blk == nil {
+		return nil, errors.New("block not found for data column sidecars")
+	}
+
+	roBlock, err := consensusblocks.NewROBlockWithRoot(blk, blockRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not create ROBlock")
+	}
+
+	return buildDataColumnSidecars(blobs, proofs, peerdas.PopulateFromEnvelope(roBlock, commitments))
 }

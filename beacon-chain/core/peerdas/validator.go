@@ -23,11 +23,13 @@ var (
 var (
 	_ ConstructionPopulator = (*BlockReconstructionSource)(nil)
 	_ ConstructionPopulator = (*SidecarReconstructionSource)(nil)
+	_ ConstructionPopulator = (*EnvelopeReconstructionSource)(nil)
 )
 
 const (
-	BlockType   = "BeaconBlock"
-	SidecarType = "DataColumnSidecar"
+	BlockType    = "BeaconBlock"
+	SidecarType  = "DataColumnSidecar"
+	EnvelopeType = "ExecutionPayloadEnvelope"
 )
 
 type (
@@ -49,9 +51,18 @@ type (
 		blocks.ROBlock
 	}
 
-	// DataColumnSidecar is a ConstructionPopulator that uses a data column sidecar as the source of data
+	// SidecarReconstructionSource is a ConstructionPopulator that uses a data column sidecar as the source of data
 	SidecarReconstructionSource struct {
 		blocks.VerifiedRODataColumn
+	}
+
+	// EnvelopeReconstructionSource is a ConstructionPopulator for GLOAS+ where
+	// blob KZG commitments are in the execution payload envelope rather than the
+	// block body. It uses the block for the header and root, but overrides
+	// commitments with those from the envelope.
+	EnvelopeReconstructionSource struct {
+		blocks.ROBlock
+		commitments [][]byte
 	}
 
 	blockInfo struct {
@@ -69,6 +80,13 @@ func PopulateFromBlock(block blocks.ROBlock) *BlockReconstructionSource {
 // PopulateFromSidecar creates a SidecarReconstructionSource from a data column sidecar
 func PopulateFromSidecar(sidecar blocks.VerifiedRODataColumn) *SidecarReconstructionSource {
 	return &SidecarReconstructionSource{VerifiedRODataColumn: sidecar}
+}
+
+// PopulateFromEnvelope creates an EnvelopeReconstructionSource from a block and
+// the KZG commitments from the execution payload envelope. This is used for GLOAS+
+// where commitments are in the envelope rather than the block body.
+func PopulateFromEnvelope(block blocks.ROBlock, commitments [][]byte) *EnvelopeReconstructionSource {
+	return &EnvelopeReconstructionSource{ROBlock: block, commitments: commitments}
 }
 
 // ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
@@ -253,4 +271,47 @@ func (s *SidecarReconstructionSource) extract() (*blockInfo, error) {
 	}
 
 	return info, nil
+}
+
+// Slot returns the slot of the source
+func (s *EnvelopeReconstructionSource) Slot() primitives.Slot {
+	return s.Block().Slot()
+}
+
+// ProposerIndex returns the proposer index of the source
+func (s *EnvelopeReconstructionSource) ProposerIndex() primitives.ValidatorIndex {
+	return s.Block().ProposerIndex()
+}
+
+// Commitments returns the blob KZG commitments from the envelope.
+func (s *EnvelopeReconstructionSource) Commitments() ([][]byte, error) {
+	return s.commitments, nil
+}
+
+// Type returns the type of the source
+func (s *EnvelopeReconstructionSource) Type() string {
+	return EnvelopeType
+}
+
+// extract extracts the block information from the source, using commitments
+// from the envelope rather than the block body.
+func (s *EnvelopeReconstructionSource) extract() (*blockInfo, error) {
+	header, err := s.Header()
+	if err != nil {
+		return nil, errors.Wrap(err, "header")
+	}
+
+	// TODO: Implement proper merkle proof for envelope commitments.
+	// In GLOAS, commitments are in the envelope not the block body,
+	// so the inclusion proof structure differs from pre-GLOAS forks.
+	inclusionProof := make([][]byte, 4)
+	for i := range inclusionProof {
+		inclusionProof[i] = make([]byte, 32)
+	}
+
+	return &blockInfo{
+		signedBlockHeader: header,
+		kzgCommitments:    s.commitments,
+		kzgInclusionProof: inclusionProof,
+	}, nil
 }
