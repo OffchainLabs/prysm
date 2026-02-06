@@ -199,8 +199,7 @@ func performValidatorStateMigration(ctx context.Context, bar *progressbar.Progre
 func stateBucketKeys(stateBucket *bolt.Bucket) ([][]byte, error) {
 	var keys [][]byte
 	if err := stateBucket.ForEach(func(pubKey, v []byte) error {
-		keyCopy := bytes.Clone(pubKey)
-		keys = append(keys, keyCopy)
+		keys = append(keys, bytes.Clone(pubKey))
 		return nil
 	}); err != nil {
 		return nil, err
