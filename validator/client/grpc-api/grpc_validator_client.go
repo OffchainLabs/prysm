@@ -391,3 +391,24 @@ func (c *grpcValidatorClient) EnsureReady(ctx context.Context) bool {
 	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
 	return fallback.EnsureReady(ctx, provider, c.nodeClient)
 }
+
+// GLOAS Fork Methods
+
+func (c *grpcValidatorClient) ExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, builderIndex primitives.BuilderIndex) (*ethpb.ExecutionPayloadEnvelope, error) {
+	req := &ethpb.ExecutionPayloadEnvelopeRequest{
+		Slot:         slot,
+		BuilderIndex: builderIndex,
+	}
+	resp, err := c.getClient().GetExecutionPayloadEnvelope(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(
+			client.ErrConnectionIssue,
+			errors.Wrap(err, "ExecutionPayloadEnvelope").Error(),
+		)
+	}
+	return resp.Envelope, nil
+}
+
+func (c *grpcValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
+	return c.getClient().PublishExecutionPayloadEnvelope(ctx, in)
+}

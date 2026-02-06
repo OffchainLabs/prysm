@@ -518,6 +518,36 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) WaitForChainStart(arg0, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForChainStart", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).WaitForChainStart), arg0, arg1)
 }
 
+// GetExecutionPayloadEnvelope mocks base method.
+func (m *MockBeaconNodeValidatorServer) GetExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.ExecutionPayloadEnvelopeRequest) (*eth.ExecutionPayloadEnvelopeResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecutionPayloadEnvelope", arg0, arg1)
+	ret0, _ := ret[0].(*eth.ExecutionPayloadEnvelopeResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetExecutionPayloadEnvelope indicates an expected call of GetExecutionPayloadEnvelope.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) GetExecutionPayloadEnvelope(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetExecutionPayloadEnvelope), arg0, arg1)
+}
+
+// PublishExecutionPayloadEnvelope mocks base method.
+func (m *MockBeaconNodeValidatorServer) PublishExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.SignedExecutionPayloadEnvelope) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishExecutionPayloadEnvelope", arg0, arg1)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishExecutionPayloadEnvelope indicates an expected call of PublishExecutionPayloadEnvelope.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) PublishExecutionPayloadEnvelope(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).PublishExecutionPayloadEnvelope), arg0, arg1)
+}
+
 // MockBeaconNodeValidator_WaitForActivationServer is a mock of BeaconNodeValidator_WaitForActivationServer interface.
 type MockBeaconNodeValidator_WaitForActivationServer struct {
 	ctrl     *gomock.Controller

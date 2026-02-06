@@ -150,3 +150,36 @@ type ActiveSetChanges struct {
 	EjectedPublicKeys   []string `json:"ejected_public_keys"`
 	EjectedIndices      []string `json:"ejected_indices"`
 }
+
+// =============================================================================
+// GLOAS Fork Types - Execution Payload Envelope
+// =============================================================================
+// Note: Block-related GLOAS types (BeaconBlockGloas, ExecutionPayloadBid, etc.)
+// are defined in block.go. This file contains only the envelope types used for
+// the validator API endpoints.
+
+// ExecutionPayloadEnvelope represents an execution payload envelope in the GLOAS fork.
+// This wraps the full execution payload with builder metadata for separate signing
+// and broadcasting by validators.
+type ExecutionPayloadEnvelope struct {
+	Payload            json.RawMessage `json:"payload"`              // ExecutionPayloadDeneb
+	ExecutionRequests  json.RawMessage `json:"execution_requests"`   // ExecutionRequests
+	BuilderIndex       string          `json:"builder_index"`        // uint64 as string
+	BeaconBlockRoot    string          `json:"beacon_block_root"`    // hex encoded 32 bytes
+	Slot               string          `json:"slot"`                 // uint64 as string
+	BlobKzgCommitments []string        `json:"blob_kzg_commitments"` // list of hex encoded 48-byte commitments
+	StateRoot          string          `json:"state_root"`           // hex encoded 32 bytes
+}
+
+// SignedExecutionPayloadEnvelope wraps an execution payload envelope with a BLS signature.
+// The signature is provided by the validator after retrieving the envelope from the beacon node.
+type SignedExecutionPayloadEnvelope struct {
+	Message   *ExecutionPayloadEnvelope `json:"message"`
+	Signature string                    `json:"signature"` // hex encoded 96-byte BLS signature
+}
+
+// GetExecutionPayloadEnvelopeResponse is the response for retrieving a cached execution payload envelope.
+type GetExecutionPayloadEnvelopeResponse struct {
+	Version string                    `json:"version"`
+	Data    *ExecutionPayloadEnvelope `json:"data"`
+}

@@ -342,3 +342,23 @@ func (c *beaconApiValidatorClient) Host() string {
 func (c *beaconApiValidatorClient) EnsureReady(ctx context.Context) bool {
 	return fallback.EnsureReady(ctx, c.restProvider, c.nodeClient)
 }
+
+// GLOAS Fork Methods
+
+func (c *beaconApiValidatorClient) ExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, builderIndex primitives.BuilderIndex) (*ethpb.ExecutionPayloadEnvelope, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.ExecutionPayloadEnvelope")
+	defer span.End()
+
+	return wrapInMetrics[*ethpb.ExecutionPayloadEnvelope]("ExecutionPayloadEnvelope", func() (*ethpb.ExecutionPayloadEnvelope, error) {
+		return c.getExecutionPayloadEnvelope(ctx, slot, builderIndex)
+	})
+}
+
+func (c *beaconApiValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.PublishExecutionPayloadEnvelope")
+	defer span.End()
+
+	return wrapInMetrics[*empty.Empty]("PublishExecutionPayloadEnvelope", func() (*empty.Empty, error) {
+		return c.publishExecutionPayloadEnvelope(ctx, in)
+	})
+}

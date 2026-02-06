@@ -518,3 +518,33 @@ func (mr *MockValidatorClientMockRecorder) WaitForChainStart(ctx, in any) *gomoc
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForChainStart", reflect.TypeOf((*MockValidatorClient)(nil).WaitForChainStart), ctx, in)
 }
+
+// GetExecutionPayloadEnvelope mocks base method.
+func (m *MockValidatorClient) ExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, builderIndex primitives.BuilderIndex) (*eth.ExecutionPayloadEnvelope, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecutionPayloadEnvelope", ctx, slot, builderIndex)
+	ret0, _ := ret[0].(*eth.ExecutionPayloadEnvelope)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetExecutionPayloadEnvelope indicates an expected call of GetExecutionPayloadEnvelope.
+func (mr *MockValidatorClientMockRecorder) GetExecutionPayloadEnvelope(ctx, slot, builderIndex any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).ExecutionPayloadEnvelope), ctx, slot, builderIndex)
+}
+
+// PublishExecutionPayloadEnvelope mocks base method.
+func (m *MockValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *eth.SignedExecutionPayloadEnvelope) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishExecutionPayloadEnvelope", ctx, in)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishExecutionPayloadEnvelope indicates an expected call of PublishExecutionPayloadEnvelope.
+func (mr *MockValidatorClientMockRecorder) PublishExecutionPayloadEnvelope(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).PublishExecutionPayloadEnvelope), ctx, in)
+}

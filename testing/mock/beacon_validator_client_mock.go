@@ -683,6 +683,46 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) WaitForChainStart(arg0, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForChainStart", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).WaitForChainStart), varargs...)
 }
 
+// GetExecutionPayloadEnvelope mocks base method.
+func (m *MockBeaconNodeValidatorClient) GetExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.ExecutionPayloadEnvelopeRequest, arg2 ...grpc.CallOption) (*eth.ExecutionPayloadEnvelopeResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ExecutionPayloadEnvelope", varargs...)
+	ret0, _ := ret[0].(*eth.ExecutionPayloadEnvelopeResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetExecutionPayloadEnvelope indicates an expected call of GetExecutionPayloadEnvelope.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) GetExecutionPayloadEnvelope(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetExecutionPayloadEnvelope), varargs...)
+}
+
+// PublishExecutionPayloadEnvelope mocks base method.
+func (m *MockBeaconNodeValidatorClient) PublishExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.SignedExecutionPayloadEnvelope, arg2 ...grpc.CallOption) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "PublishExecutionPayloadEnvelope", varargs...)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishExecutionPayloadEnvelope indicates an expected call of PublishExecutionPayloadEnvelope.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) PublishExecutionPayloadEnvelope(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).PublishExecutionPayloadEnvelope), varargs...)
+}
+
 // MockBeaconNodeValidator_WaitForChainStartClient is a mock of BeaconNodeValidator_WaitForChainStartClient interface.
 type MockBeaconNodeValidator_WaitForChainStartClient struct {
 	ctrl     *gomock.Controller
