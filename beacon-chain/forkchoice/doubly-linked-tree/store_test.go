@@ -128,10 +128,9 @@ func TestStore_Insert(t *testing.T) {
 	// The new node does not have a parent.
 	treeRootNode := &Node{slot: 0, root: indexToHash(0)}
 	nodeByRoot := map[[32]byte]*Node{indexToHash(0): treeRootNode}
-	nodeByPayload := map[[32]byte]*Node{indexToHash(0): treeRootNode}
 	jc := &forkchoicetypes.Checkpoint{Epoch: 0}
 	fc := &forkchoicetypes.Checkpoint{Epoch: 0}
-	s := &Store{nodeByRoot: nodeByRoot, treeRootNode: treeRootNode, nodeByPayload: nodeByPayload, justifiedCheckpoint: jc, finalizedCheckpoint: fc, highestReceivedNode: &Node{}}
+	s := &Store{nodeByRoot: nodeByRoot, treeRootNode: treeRootNode, justifiedCheckpoint: jc, finalizedCheckpoint: fc, highestReceivedNode: &Node{}}
 	payloadHash := [32]byte{'a'}
 	ctx := t.Context()
 	_, blk, err := prepareForkchoiceState(ctx, 100, indexToHash(100), indexToHash(0), payloadHash, 1, 1)
@@ -238,7 +237,6 @@ func TestStore_Prune_NoDanglingBranch(t *testing.T) {
 	s.finalizedCheckpoint.Root = indexToHash(1)
 	require.NoError(t, s.prune(t.Context()))
 	require.Equal(t, len(s.nodeByRoot), 1)
-	require.Equal(t, len(s.nodeByPayload), 1)
 }
 
 // This test starts with the following branching diagram
@@ -319,8 +317,6 @@ func TestStore_PruneMapsNodes(t *testing.T) {
 	s.finalizedCheckpoint.Root = indexToHash(1)
 	require.NoError(t, s.prune(t.Context()))
 	require.Equal(t, len(s.nodeByRoot), 1)
-	require.Equal(t, len(s.nodeByPayload), 1)
-
 }
 
 func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
