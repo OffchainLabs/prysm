@@ -86,14 +86,32 @@ func (p *PartialDataColumn) GroupID() []byte {
 	return p.groupID
 }
 func (p *PartialDataColumn) PartialMessageBytes(metadata partialmessages.PartsMetadata) ([]byte, error) {
-	peerHas := bitfield.Bitlist(metadata)
-	if peerHas.Len() != p.Included.Len() {
+	numCommitments := p.Included.Len()
+	peerAvailable, peerRequests, isNewFormat := ParseMetadata(metadata, numCommitments)
+	if peerAvailable.Len() != numCommitments {
+		return nil, errors.New("metadata length does not match expected length")
+	}
+	if isNewFormat && peerRequests.Len() != numCommitments {
 		return nil, errors.New("metadata length does not match expected length")
 	}
 
+	// shouldSend returns true if we should send cell i to this peer.
+	shouldSend := func(i uint64) bool {
+		if !p.Included.BitAt(i) {
+			return false
+		}
+		if peerAvailable.BitAt(i) {
+			return false
+		}
+		if isNewFormat && !peerRequests.BitAt(i) {
+			return false
+		}
+		return true
+	}
+
 	var cellsToReturn int
-	for i := range peerHas.Len() {
-		if !peerHas.BitAt(i) && p.Included.BitAt(i) {
+	for i := range numCommitments {
+		if shouldSend(i) {
 			cellsToReturn++
 		}
 	}
@@ -101,14 +119,14 @@ func (p *PartialDataColumn) PartialMessageBytes(metadata partialmessages.PartsMe
 		return nil, nil
 	}
 
-	included := bitfield.NewBitlist(p.Included.Len())
+	included := bitfield.NewBitlist(numCommitments)
 	outMessage := ethpb.PartialDataColumnSidecar{
 		CellsPresentBitmap: included,
 		PartialColumn:      make([][]byte, 0, cellsToReturn),
 		KzgProofs:          make([][]byte, 0, cellsToReturn),
 	}
-	for i := range peerHas.Len() {
-		if peerHas.BitAt(i) || !p.Included.BitAt(i) {
+	for i := range numCommitments {
+		if !shouldSend(i) {
 			continue
 		}
 		included.SetBitAt(i, true)
@@ -124,6 +142,7 @@ func (p *PartialDataColumn) PartialMessageBytes(metadata partialmessages.PartsMe
 	return marshalled, nil
 }
 
+// TODO: This method will be removed after upgrading to the latest Gossipsub.
 func (p *PartialDataColumn) EagerPartialMessageBytes() ([]byte, partialmessages.PartsMetadata, error) {
 	// TODO: do we want to send this once per groupID per peer
 	// Eagerly push the PartialDataColumnHeader
@@ -148,7 +167,83 @@ func (p *PartialDataColumn) EagerPartialMessageBytes() ([]byte, partialmessages.
 }
 
 func (p *PartialDataColumn) PartsMetadata() partialmessages.PartsMetadata {
-	return partialmessages.PartsMetadata(p.Included)
+	n := p.Included.Len()
+	requests := bitfield.NewBitlist(n)
+	for i := range n {
+		requests.SetBitAt(i, true)
+	}
+	return combinedMetadata(p.Included, requests)
+}
+
+// ParseMetadata splits PartsMetadata into available and request bitlists.
+// Old format (len==N): returns (metadata, nil, false)
+// New format (len==2N): returns (first N bits, next N bits, true)
+func ParseMetadata(metadata partialmessages.PartsMetadata, numCommitments uint64) (available bitfield.Bitlist, requests bitfield.Bitlist, isNewFormat bool) {
+	bl := bitfield.Bitlist(metadata)
+	if bl.Len() == 2*numCommitments {
+		available = bitfield.NewBitlist(numCommitments)
+		requests = bitfield.NewBitlist(numCommitments)
+		for i := range numCommitments {
+			available.SetBitAt(i, bl.BitAt(i))
+			requests.SetBitAt(i, bl.BitAt(i+numCommitments))
+		}
+		return available, requests, true
+	}
+	return bl, nil, false
+}
+
+func combinedMetadata(available, requests bitfield.Bitlist) partialmessages.PartsMetadata {
+	n := available.Len()
+	combined := bitfield.NewBitlist(2 * n)
+	for i := range n {
+		combined.SetBitAt(i, available.BitAt(i))
+		combined.SetBitAt(i+n, requests.BitAt(i))
+	}
+	return partialmessages.PartsMetadata(combined)
+}
+
+// MergePartsMetadata merges two PartsMetadata values, handling old (N) and new (2N) formats.
+// If lengths differ, the old-format (N) is extended to new-format (2N) with all request bits set to 1.
+// TODO: This method will be removed after upgrading to the latest Gossipsub.
+func MergePartsMetadata(left, right partialmessages.PartsMetadata) (partialmessages.PartsMetadata, error) {
+	if len(left) == 0 {
+		return right, nil
+	}
+	if len(right) == 0 {
+		return left, nil
+	}
+	leftBl := bitfield.Bitlist(left)
+	rightBl := bitfield.Bitlist(right)
+	if leftBl.Len() != rightBl.Len() {
+		leftBl, rightBl = normalizeMetadataLengths(leftBl, rightBl)
+	}
+	merged, err := leftBl.Or(rightBl)
+	if err != nil {
+		return nil, err
+	}
+	return partialmessages.PartsMetadata(merged), nil
+}
+
+// normalizeMetadataLengths extends old-format (N) bitlists to new-format (2N)
+// by adding all-1 request bits. Returns both bitlists at the same length.
+func normalizeMetadataLengths(left, right bitfield.Bitlist) (bitfield.Bitlist, bitfield.Bitlist) {
+	if left.Len() < right.Len() {
+		left = extendToNewFormat(left)
+	} else {
+		right = extendToNewFormat(right)
+	}
+	return left, right
+}
+
+// extendToNewFormat converts old-format (N bits) to new-format (2N bits) with all request bits set to 1.
+func extendToNewFormat(bl bitfield.Bitlist) bitfield.Bitlist {
+	n := bl.Len()
+	extended := bitfield.NewBitlist(2 * n)
+	for i := range n {
+		extended.SetBitAt(i, bl.BitAt(i))
+		extended.SetBitAt(i+n, true)
+	}
+	return extended
 }
 
 // CellsToVerifyFromPartialMessage returns cells from the partial message that need to be verified.

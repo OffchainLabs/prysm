@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -20,7 +19,11 @@ type invariantChecker struct {
 var _ partialmessages.InvariantChecker[*blocks.PartialDataColumn] = (*invariantChecker)(nil)
 
 func (i *invariantChecker) MergePartsMetadata(left, right partialmessages.PartsMetadata) partialmessages.PartsMetadata {
-	return partialmessages.MergeBitmap(left, right)
+	merged, err := blocks.MergePartsMetadata(left, right)
+	if err != nil {
+		i.t.Fatal(err)
+	}
+	return merged
 }
 
 func (i *invariantChecker) SplitIntoParts(in *blocks.PartialDataColumn) ([]*blocks.PartialDataColumn, error) {
@@ -112,9 +115,11 @@ func (i *invariantChecker) ExtendFromBytes(a *blocks.PartialDataColumn, data []b
 }
 
 func (i *invariantChecker) ShouldRequest(a *blocks.PartialDataColumn, from peer.ID, partsMetadata []byte) bool {
-	peerHas := bitfield.Bitlist(partsMetadata)
-	for i := range peerHas.Len() {
-		if peerHas.BitAt(i) && !a.Included.BitAt(i) {
+	numCommitments := uint64(len(a.KzgCommitments))
+	available, requests, isNew := blocks.ParseMetadata(partsMetadata, numCommitments)
+	for idx := range available.Len() {
+		peerHasAndWilling := available.BitAt(idx) && (!isNew || requests.BitAt(idx))
+		if peerHasAndWilling && !a.Included.BitAt(idx) {
 			return true
 		}
 	}
