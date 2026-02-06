@@ -116,8 +116,9 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 	}
 
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(block.Slot()))
-	if len(bid.BlobKzgCommitments()) > maxBlobsPerBlock {
-		return fmt.Errorf("bid has %d blob KZG commitments over max %d", len(bid.BlobKzgCommitments()), maxBlobsPerBlock)
+	commitmentCount := bid.BlobKzgCommitmentCount()
+	if commitmentCount > uint64(maxBlobsPerBlock) {
+		return fmt.Errorf("bid has %d blob KZG commitments over max %d", commitmentCount, maxBlobsPerBlock)
 	}
 
 	if err := validateBidConsistency(st, bid, block); err != nil {

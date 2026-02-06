@@ -5,6 +5,7 @@ import (
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
@@ -138,7 +139,12 @@ func (h executionPayloadBidGloas) ExecutionPayment() primitives.Gwei {
 
 // BlobKzgCommitments returns the KZG commitments for blobs.
 func (h executionPayloadBidGloas) BlobKzgCommitments() [][]byte {
-	return h.payload.BlobKzgCommitments
+	return bytesutil.SafeCopy2dBytes(h.payload.BlobKzgCommitments)
+}
+
+// BlobKzgCommitmentCount returns the number of blob KZG commitments.
+func (h executionPayloadBidGloas) BlobKzgCommitmentCount() uint64 {
+	return uint64(len(h.payload.BlobKzgCommitments))
 }
 
 // FeeRecipient returns the execution address that will receive the builder payment.

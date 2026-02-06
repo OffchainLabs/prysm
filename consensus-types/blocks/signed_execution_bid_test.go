@@ -15,17 +15,17 @@ import (
 
 func validExecutionPayloadBid() *ethpb.ExecutionPayloadBid {
 	return &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:        bytes.Repeat([]byte{0x01}, 32),
-		ParentBlockRoot:        bytes.Repeat([]byte{0x02}, 32),
-		BlockHash:              bytes.Repeat([]byte{0x03}, 32),
-		PrevRandao:             bytes.Repeat([]byte{0x04}, 32),
-		GasLimit:               123,
-		BuilderIndex:           5,
-		Slot:                   6,
-		Value:                  7,
-		ExecutionPayment:       8,
-		BlobKzgCommitments:     [][]byte{bytes.Repeat([]byte{0x05}, 48)},
-		FeeRecipient:           bytes.Repeat([]byte{0x06}, 20),
+		ParentBlockHash:    bytes.Repeat([]byte{0x01}, 32),
+		ParentBlockRoot:    bytes.Repeat([]byte{0x02}, 32),
+		BlockHash:          bytes.Repeat([]byte{0x03}, 32),
+		PrevRandao:         bytes.Repeat([]byte{0x04}, 32),
+		GasLimit:           123,
+		BuilderIndex:       5,
+		Slot:               6,
+		Value:              7,
+		ExecutionPayment:   8,
+		BlobKzgCommitments: [][]byte{bytes.Repeat([]byte{0x05}, 48)},
+		FeeRecipient:       bytes.Repeat([]byte{0x06}, 20),
 	}
 }
 
@@ -86,6 +86,7 @@ func TestWrappedROExecutionPayloadBid(t *testing.T) {
 		assert.DeepEqual(t, [32]byte(bytes.Repeat([]byte{0x03}, 32)), wrapped.BlockHash())
 		assert.DeepEqual(t, [32]byte(bytes.Repeat([]byte{0x04}, 32)), wrapped.PrevRandao())
 		assert.DeepEqual(t, [][]byte{bytes.Repeat([]byte{0x05}, 48)}, wrapped.BlobKzgCommitments())
+		require.Equal(t, uint64(1), wrapped.BlobKzgCommitmentCount())
 		assert.DeepEqual(t, [20]byte(bytes.Repeat([]byte{0x06}, 20)), wrapped.FeeRecipient())
 	})
 }
