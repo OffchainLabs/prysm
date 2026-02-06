@@ -27,15 +27,15 @@ func TestNode_ApplyWeightChanges_PositiveChange(t *testing.T) {
 	// The updated balances of each node is 100
 	s := f.store
 
-	s.nodeByRoot[indexToHash(1)].balance = 100
-	s.nodeByRoot[indexToHash(2)].balance = 100
-	s.nodeByRoot[indexToHash(3)].balance = 100
+	s.emptyNodeByRoot[indexToHash(1)].balance = 100
+	s.emptyNodeByRoot[indexToHash(2)].balance = 100
+	s.emptyNodeByRoot[indexToHash(3)].balance = 100
 
 	assert.NoError(t, s.treeRootNode.applyWeightChanges(ctx))
 
-	assert.Equal(t, uint64(300), s.nodeByRoot[indexToHash(1)].weight)
-	assert.Equal(t, uint64(200), s.nodeByRoot[indexToHash(2)].weight)
-	assert.Equal(t, uint64(100), s.nodeByRoot[indexToHash(3)].weight)
+	assert.Equal(t, uint64(300), s.emptyNodeByRoot[indexToHash(1)].weight)
+	assert.Equal(t, uint64(200), s.emptyNodeByRoot[indexToHash(2)].weight)
+	assert.Equal(t, uint64(100), s.emptyNodeByRoot[indexToHash(3)].weight)
 }
 
 func TestNode_ApplyWeightChanges_NegativeChange(t *testing.T) {
@@ -53,19 +53,19 @@ func TestNode_ApplyWeightChanges_NegativeChange(t *testing.T) {
 
 	// The updated balances of each node is 100
 	s := f.store
-	s.nodeByRoot[indexToHash(1)].weight = 400
-	s.nodeByRoot[indexToHash(2)].weight = 400
-	s.nodeByRoot[indexToHash(3)].weight = 400
+	s.emptyNodeByRoot[indexToHash(1)].weight = 400
+	s.emptyNodeByRoot[indexToHash(2)].weight = 400
+	s.emptyNodeByRoot[indexToHash(3)].weight = 400
 
-	s.nodeByRoot[indexToHash(1)].balance = 100
-	s.nodeByRoot[indexToHash(2)].balance = 100
-	s.nodeByRoot[indexToHash(3)].balance = 100
+	s.emptyNodeByRoot[indexToHash(1)].balance = 100
+	s.emptyNodeByRoot[indexToHash(2)].balance = 100
+	s.emptyNodeByRoot[indexToHash(3)].balance = 100
 
 	assert.NoError(t, s.treeRootNode.applyWeightChanges(ctx))
 
-	assert.Equal(t, uint64(300), s.nodeByRoot[indexToHash(1)].weight)
-	assert.Equal(t, uint64(200), s.nodeByRoot[indexToHash(2)].weight)
-	assert.Equal(t, uint64(100), s.nodeByRoot[indexToHash(3)].weight)
+	assert.Equal(t, uint64(300), s.emptyNodeByRoot[indexToHash(1)].weight)
+	assert.Equal(t, uint64(200), s.emptyNodeByRoot[indexToHash(2)].weight)
+	assert.Equal(t, uint64(100), s.emptyNodeByRoot[indexToHash(3)].weight)
 }
 
 func TestNode_UpdateBestDescendant_NonViableChild(t *testing.T) {
@@ -108,8 +108,8 @@ func TestNode_UpdateBestDescendant_HigherWeightChild(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, state, blk))
 
 	s := f.store
-	s.nodeByRoot[indexToHash(1)].weight = 100
-	s.nodeByRoot[indexToHash(2)].weight = 200
+	s.emptyNodeByRoot[indexToHash(1)].weight = 100
+	s.emptyNodeByRoot[indexToHash(2)].weight = 200
 	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, 1, 1, 1))
 
 	assert.Equal(t, 2, len(s.treeRootNode.children))
@@ -128,8 +128,8 @@ func TestNode_UpdateBestDescendant_LowerWeightChild(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, state, blk))
 
 	s := f.store
-	s.nodeByRoot[indexToHash(1)].weight = 200
-	s.nodeByRoot[indexToHash(2)].weight = 100
+	s.emptyNodeByRoot[indexToHash(1)].weight = 200
+	s.emptyNodeByRoot[indexToHash(2)].weight = 100
 	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, 1, 1, 1))
 
 	assert.Equal(t, 2, len(s.treeRootNode.children))
@@ -176,9 +176,9 @@ func TestNode_LeadsToViableHead(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, state, blk))
 
 	require.Equal(t, true, f.store.treeRootNode.leadsToViableHead(4, 5))
-	require.Equal(t, true, f.store.nodeByRoot[indexToHash(5)].leadsToViableHead(4, 5))
-	require.Equal(t, false, f.store.nodeByRoot[indexToHash(2)].leadsToViableHead(4, 5))
-	require.Equal(t, false, f.store.nodeByRoot[indexToHash(4)].leadsToViableHead(4, 5))
+	require.Equal(t, true, f.store.emptyNodeByRoot[indexToHash(5)].leadsToViableHead(4, 5))
+	require.Equal(t, false, f.store.emptyNodeByRoot[indexToHash(2)].leadsToViableHead(4, 5))
+	require.Equal(t, false, f.store.emptyNodeByRoot[indexToHash(4)].leadsToViableHead(4, 5))
 }
 
 func TestNode_SetFullyValidated(t *testing.T) {
@@ -195,25 +195,25 @@ func TestNode_SetFullyValidated(t *testing.T) {
 	state, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
-	storeNodes[1] = f.store.nodeByRoot[blk.Root()]
+	storeNodes[1] = f.store.emptyNodeByRoot[blk.Root()]
 	require.NoError(t, f.SetOptimisticToValid(ctx, params.BeaconConfig().ZeroHash))
 	state, blk, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
-	storeNodes[2] = f.store.nodeByRoot[blk.Root()]
+	storeNodes[2] = f.store.emptyNodeByRoot[blk.Root()]
 	require.NoError(t, f.SetOptimisticToValid(ctx, indexToHash(1)))
 	state, blk, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
-	storeNodes[3] = f.store.nodeByRoot[blk.Root()]
+	storeNodes[3] = f.store.emptyNodeByRoot[blk.Root()]
 	state, blk, err = prepareForkchoiceState(ctx, 4, indexToHash(4), indexToHash(3), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
-	storeNodes[4] = f.store.nodeByRoot[blk.Root()]
+	storeNodes[4] = f.store.emptyNodeByRoot[blk.Root()]
 	state, blk, err = prepareForkchoiceState(ctx, 5, indexToHash(5), indexToHash(1), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
-	storeNodes[5] = f.store.nodeByRoot[blk.Root()]
+	storeNodes[5] = f.store.emptyNodeByRoot[blk.Root()]
 
 	opt, err := f.IsOptimistic(indexToHash(5))
 	require.NoError(t, err)
@@ -223,7 +223,7 @@ func TestNode_SetFullyValidated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, true, opt)
 
-	require.NoError(t, f.store.nodeByRoot[indexToHash(4)].setNodeAndParentValidated(ctx))
+	require.NoError(t, f.store.emptyNodeByRoot[indexToHash(4)].setNodeAndParentValidated(ctx))
 
 	// block 5 should still be optimistic
 	opt, err = f.IsOptimistic(indexToHash(5))

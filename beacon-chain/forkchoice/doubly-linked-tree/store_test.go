@@ -52,7 +52,7 @@ func TestStore_NodeByRoot(t *testing.T) {
 	}
 
 	require.Equal(t, 3, f.NodeCount())
-	for root, node := range f.store.nodeByRoot {
+	for root, node := range f.store.emptyNodeByRoot {
 		v, ok := expectedRoots[root]
 		require.Equal(t, ok, true)
 		require.Equal(t, v, node)
@@ -130,14 +130,14 @@ func TestStore_Insert(t *testing.T) {
 	nodeByRoot := map[[32]byte]*Node{indexToHash(0): treeRootNode}
 	jc := &forkchoicetypes.Checkpoint{Epoch: 0}
 	fc := &forkchoicetypes.Checkpoint{Epoch: 0}
-	s := &Store{nodeByRoot: nodeByRoot, treeRootNode: treeRootNode, justifiedCheckpoint: jc, finalizedCheckpoint: fc, highestReceivedNode: &Node{}}
+	s := &Store{emptyNodeByRoot: nodeByRoot, treeRootNode: treeRootNode, justifiedCheckpoint: jc, finalizedCheckpoint: fc, highestReceivedNode: &Node{}}
 	payloadHash := [32]byte{'a'}
 	ctx := t.Context()
 	_, blk, err := prepareForkchoiceState(ctx, 100, indexToHash(100), indexToHash(0), payloadHash, 1, 1)
 	require.NoError(t, err)
 	_, err = s.insert(ctx, blk, 1, 1)
 	require.NoError(t, err)
-	assert.Equal(t, 2, len(s.nodeByRoot), "Did not insert block")
+	assert.Equal(t, 2, len(s.emptyNodeByRoot), "Did not insert block")
 	assert.Equal(t, (*Node)(nil), treeRootNode.parent, "Incorrect parent")
 	assert.Equal(t, 1, len(treeRootNode.children), "Incorrect children number")
 	assert.Equal(t, payloadHash, treeRootNode.children[0].payloadHash, "Incorrect payload hash")
@@ -166,7 +166,7 @@ func TestStore_Prune_MoreThanThreshold(t *testing.T) {
 	// Finalized root is at index 99 so everything before 99 should be pruned.
 	s.finalizedCheckpoint.Root = indexToHash(99)
 	require.NoError(t, s.prune(t.Context()))
-	assert.Equal(t, 1, len(s.nodeByRoot), "Incorrect nodes count")
+	assert.Equal(t, 1, len(s.emptyNodeByRoot), "Incorrect nodes count")
 }
 
 func TestStore_Prune_MoreThanOnce(t *testing.T) {
@@ -188,12 +188,12 @@ func TestStore_Prune_MoreThanOnce(t *testing.T) {
 	// Finalized root is at index 11 so everything before 11 should be pruned.
 	s.finalizedCheckpoint.Root = indexToHash(10)
 	require.NoError(t, s.prune(t.Context()))
-	assert.Equal(t, 90, len(s.nodeByRoot), "Incorrect nodes count")
+	assert.Equal(t, 90, len(s.emptyNodeByRoot), "Incorrect nodes count")
 
 	// One more time.
 	s.finalizedCheckpoint.Root = indexToHash(20)
 	require.NoError(t, s.prune(t.Context()))
-	assert.Equal(t, 80, len(s.nodeByRoot), "Incorrect nodes count")
+	assert.Equal(t, 80, len(s.emptyNodeByRoot), "Incorrect nodes count")
 }
 
 func TestStore_Prune_ReturnEarly(t *testing.T) {
@@ -236,7 +236,7 @@ func TestStore_Prune_NoDanglingBranch(t *testing.T) {
 	s := f.store
 	s.finalizedCheckpoint.Root = indexToHash(1)
 	require.NoError(t, s.prune(t.Context()))
-	require.Equal(t, len(s.nodeByRoot), 1)
+	require.Equal(t, len(s.emptyNodeByRoot), 1)
 }
 
 // This test starts with the following branching diagram
@@ -316,7 +316,7 @@ func TestStore_PruneMapsNodes(t *testing.T) {
 	s := f.store
 	s.finalizedCheckpoint.Root = indexToHash(1)
 	require.NoError(t, s.prune(t.Context()))
-	require.Equal(t, len(s.nodeByRoot), 1)
+	require.Equal(t, len(s.emptyNodeByRoot), 1)
 }
 
 func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {

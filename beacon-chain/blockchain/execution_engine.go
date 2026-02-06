@@ -101,7 +101,8 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 			if len(lastValidHash) == 0 {
 				lastValidHash = defaultLatestValidHash
 			}
-			invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, headRoot, headBlk.ParentRoot(), bytesutil.ToBytes32(lastValidHash))
+			// this call has guaranteed to have the `headRoot` with its payload in forkchoice.
+			invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, headRoot, headBlk.ParentRoot(), [32]byte(headPayload.ParentHash()), bytesutil.ToBytes32(lastValidHash))
 			if err != nil {
 				log.WithError(err).Error("Could not set head root to invalid")
 				return nil, nil
@@ -290,10 +291,10 @@ func (s *Service) notifyNewPayload(ctx context.Context, stVersion int, header in
 	return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 }
 
-// reportInvalidBlock deals with the event that an invalid block was detected by the execution layer
-func (s *Service) pruneInvalidBlock(ctx context.Context, root, parentRoot, lvh [32]byte) error {
+// pruneInvalidBlock deals with the event that an invalid block was detected by the execution layer
+func (s *Service) pruneInvalidBlock(ctx context.Context, root, parentRoot, parentHash [32]byte, lvh [32]byte) error {
 	newPayloadInvalidNodeCount.Inc()
-	invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, root, parentRoot, lvh)
+	invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, root, parentRoot, parentHash, lvh)
 	if err != nil {
 		return err
 	}
