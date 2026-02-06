@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
@@ -82,7 +83,7 @@ func (b *BeaconState) SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid)
 	parentBlockRoot := h.ParentBlockRoot()
 	blockHash := h.BlockHash()
 	randao := h.PrevRandao()
-	blobKzgCommitments := h.BlobKzgCommitments()
+	blobKzgCommitments := bytesutil.SafeCopy2dBytes(h.BlobKzgCommitments())
 	feeRecipient := h.FeeRecipient()
 	b.latestExecutionPayloadBid = &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:    parentBlockHash[:],
