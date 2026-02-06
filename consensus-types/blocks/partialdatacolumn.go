@@ -224,8 +224,6 @@ func MergePartsMetadata(left, right partialmessages.PartsMetadata) (partialmessa
 	return partialmessages.PartsMetadata(merged), nil
 }
 
-// normalizeMetadataLengths extends old-format (N) bitlists to new-format (2N)
-// by adding all-1 request bits. Returns both bitlists at the same length.
 func normalizeMetadataLengths(left, right bitfield.Bitlist) (bitfield.Bitlist, bitfield.Bitlist) {
 	if left.Len() < right.Len() {
 		left = extendToNewFormat(left)
@@ -235,7 +233,6 @@ func normalizeMetadataLengths(left, right bitfield.Bitlist) (bitfield.Bitlist, b
 	return left, right
 }
 
-// extendToNewFormat converts old-format (N bits) to new-format (2N bits) with all request bits set to 1.
 func extendToNewFormat(bl bitfield.Bitlist) bitfield.Bitlist {
 	n := bl.Len()
 	extended := bitfield.NewBitlist(2 * n)
