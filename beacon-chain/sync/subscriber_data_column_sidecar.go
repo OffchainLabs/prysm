@@ -11,9 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
@@ -63,22 +61,6 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	if err := wg.Wait(); err != nil {
 		return err
 	}
-
-	return nil
-}
-
-func (s *Service) partialDataColumnHeaderSubscriber(ctx context.Context, header *ethpb.PartialDataColumnHeader) error {
-	source := peerdas.PopulateFromPartialHeader(header)
-	log.WithField("slot", source.Slot()).Info("Received data column header")
-
-	go func() {
-		if err := s.processDataColumnSidecarsFromExecution(ctx, source); err != nil {
-			log.WithError(err).WithFields(logrus.Fields{
-				"root": fmt.Sprintf("%#x", source.Root()),
-				"slot": source.Slot(),
-			}).Error("Failed to process sidecars from execution for partial data column header")
-		}
-	}()
 
 	return nil
 }

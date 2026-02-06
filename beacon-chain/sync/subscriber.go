@@ -364,7 +364,9 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 					handleHeader: func(header *ethpb.PartialDataColumnHeader) {
 						ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
 						defer cancel()
-						err := s.partialDataColumnHeaderSubscriber(ctx, header)
+						source := peerdas.PopulateFromPartialHeader(header)
+						log.WithField("slot", source.Slot()).Info("Received data column header")
+						err := s.processDataColumnSidecarsFromExecution(ctx, source)
 						if err != nil {
 							log.WithError(err).Error("Failed to handle partial data column header")
 						}
