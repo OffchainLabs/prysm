@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('.')
+[]byte("\x90\xf5\xa0\xd5\xd51\xbb5W")
