@@ -67,7 +67,7 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 
 	// Try PostSSZ first with SSZ data
 	if res.marshalledSSZ != nil {
-		_, _, err = c.jsonRestHandler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(res.marshalledSSZ))
+		_, _, err = c.handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(res.marshalledSSZ))
 		if err != nil {
 			errJson := &httputil.DefaultJsonError{}
 			// If PostSSZ fails with 406 (Not Acceptable), fall back to JSON
@@ -81,7 +81,7 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 					return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
 				}
 				// Reset headers for JSON
-				err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
+				err = c.handler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
 				// If JSON also fails, return that error
 				if err != nil {
 					return nil, errors.Wrap(err, "failed to submit block via JSON fallback")
@@ -100,7 +100,7 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 			return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
 		}
 		// Reset headers for JSON
-		err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
+		err = c.handler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
 		errJson := &httputil.DefaultJsonError{}
 		if err != nil {
 			if !errors.As(err, &errJson) {

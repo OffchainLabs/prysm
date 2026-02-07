@@ -107,7 +107,7 @@ func TestProposeAttestation(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			var marshalledAttestations []byte
 			if helpers.ValidateNilAttestation(test.attestation) == nil {
@@ -119,7 +119,7 @@ func TestProposeAttestation(t *testing.T) {
 			ctx := t.Context()
 
 			headers := map[string]string{"Eth-Consensus-Version": version.String(test.attestation.Version())}
-			jsonRestHandler.EXPECT().Post(
+			handler.EXPECT().Post(
 				gomock.Any(),
 				"/eth/v2/beacon/pool/attestations",
 				headers,
@@ -129,7 +129,7 @@ func TestProposeAttestation(t *testing.T) {
 				test.endpointError,
 			).Times(test.endpointCall)
 
-			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			validatorClient := &beaconApiValidatorClient{handler: handler}
 			proposeResponse, err := validatorClient.proposeAttestation(ctx, test.attestation)
 			if test.expectedErrorMessage != "" {
 				require.ErrorContains(t, test.expectedErrorMessage, err)
@@ -254,7 +254,7 @@ func TestProposeAttestationElectra(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			var marshalledAttestations []byte
 			if helpers.ValidateNilAttestation(test.attestation) == nil {
@@ -268,7 +268,7 @@ func TestProposeAttestationElectra(t *testing.T) {
 			if test.expectedConsensusVersion != "" {
 				headerMatcher = gomock.Eq(map[string]string{"Eth-Consensus-Version": test.expectedConsensusVersion})
 			}
-			jsonRestHandler.EXPECT().Post(
+			handler.EXPECT().Post(
 				gomock.Any(),
 				"/eth/v2/beacon/pool/attestations",
 				headerMatcher,
@@ -278,7 +278,7 @@ func TestProposeAttestationElectra(t *testing.T) {
 				test.endpointError,
 			).Times(test.endpointCall)
 
-			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			validatorClient := &beaconApiValidatorClient{handler: handler}
 			proposeResponse, err := validatorClient.proposeAttestationElectra(ctx, test.attestation)
 			if test.expectedErrorMessage != "" {
 				require.ErrorContains(t, test.expectedErrorMessage, err)

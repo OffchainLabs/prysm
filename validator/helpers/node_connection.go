@@ -20,7 +20,7 @@ type NodeConnection interface {
 	GetRestConnectionProvider() rest.RestConnectionProvider
 	// GetRestHandler returns the REST handler for making API requests.
 	// Returns nil if no REST provider is configured.
-	GetRestHandler() rest.RestHandler
+	GetRestHandler() rest.Handler
 }
 
 type nodeConnection struct {
@@ -43,11 +43,11 @@ func (c *nodeConnection) GetRestConnectionProvider() rest.RestConnectionProvider
 	return c.restConnectionProvider
 }
 
-func (c *nodeConnection) GetRestHandler() rest.RestHandler {
+func (c *nodeConnection) GetRestHandler() rest.Handler {
 	if c.restConnectionProvider == nil {
 		return nil
 	}
-	return c.restConnectionProvider.RestHandler()
+	return c.restConnectionProvider.Handler()
 }
 
 // NodeConnectionOption is a functional option for configuring a NodeConnection.
