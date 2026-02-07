@@ -3,7 +3,6 @@ package validator
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
@@ -48,10 +47,7 @@ func TestSetGloasExecutionData(t *testing.T) {
 		ExecutionRequests: &enginev1.ExecutionRequests{},
 	}
 
-	envelopeCache := cache.NewExecutionPayloadEnvelopeCache()
-	vs := &Server{
-		ExecutionPayloadEnvelopeCache: envelopeCache,
-	}
+	vs := &Server{}
 
 	err = vs.setGloasExecutionData(t.Context(), sBlk, local)
 	require.NoError(t, err)
@@ -73,13 +69,6 @@ func TestSetGloasExecutionData(t *testing.T) {
 	require.DeepEqual(t, parentRoot[:], bid.ParentBlockRoot)
 	require.Equal(t, uint64(0), bid.Value)
 	require.Equal(t, uint64(0), bid.ExecutionPayment)
-
-	// Verify the envelope was cached.
-	envelope, found := envelopeCache.Get(slot, primitives.BuilderIndex(proposerIndex))
-	require.Equal(t, true, found)
-	require.NotNil(t, envelope)
-	require.Equal(t, slot, envelope.Slot)
-	require.Equal(t, primitives.BuilderIndex(proposerIndex), envelope.BuilderIndex)
 }
 
 func TestSetGloasExecutionData_NilPayload(t *testing.T) {
@@ -92,9 +81,7 @@ func TestSetGloasExecutionData_NilPayload(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	vs := &Server{
-		ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
-	}
+	vs := &Server{}
 
 	err = vs.setGloasExecutionData(t.Context(), sBlk, nil)
 	require.ErrorContains(t, "local execution payload is nil", err)

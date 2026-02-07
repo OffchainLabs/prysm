@@ -242,8 +242,10 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 	winningBid := primitives.ZeroWei()
 	var bundle enginev1.BlobsBundler
+	var local *blocks.GetPayloadResponse
 	if sBlk.Version() >= version.Bellatrix {
-		local, err := vs.getLocalPayload(ctx, sBlk.Block(), head)
+		var err error
+		local, err = vs.getLocalPayload(ctx, sBlk.Block(), head)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
 		}
@@ -283,6 +285,15 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		return nil, status.Errorf(codes.Internal, "Could not compute state root: %v", err)
 	}
 	sBlk.SetStateRoot(sr)
+
+	// For GLOAS, build and cache the execution payload envelope now that the block
+	// is fully built (state root set). The envelope needs the final block HTR as
+	// BeaconBlockRoot and the post-payload state root as StateRoot.
+	if sBlk.Version() >= version.Gloas {
+		if err := vs.buildExecutionPayloadEnvelope(ctx, sBlk, head, local); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
+		}
+	}
 
 	return vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
 }

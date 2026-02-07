@@ -29,9 +29,9 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// setGloasExecutionData creates an execution payload bid from the local payload,
-// sets it on the block, and caches the execution payload envelope for later
-// retrieval by the validator client.
+// setGloasExecutionData creates an execution payload bid from the local payload
+// and sets it on the block body. The envelope is created and cached later by
+// buildExecutionPayloadEnvelope once the block is fully built.
 func (vs *Server) setGloasExecutionData(
 	ctx context.Context,
 	sBlk interfaces.SignedBeaconBlock,
@@ -67,18 +67,50 @@ func (vs *Server) setGloasExecutionData(
 		return errors.Wrap(err, "could not set signed execution payload bid")
 	}
 
-	// Cache the execution payload envelope and blobs bundle for later retrieval.
-	// The envelope is retrieved by the VC to sign and broadcast.
-	// The blobs bundle is needed during block proposal to build and broadcast blob sidecars.
-	envelope := vs.createExecutionPayloadEnvelope(
-		local.ExecutionData,
-		local.ExecutionRequests,
-		primitives.BuilderIndex(sBlk.Block().ProposerIndex()),
-		sBlk.Block().Slot(),
-		local.BlobsBundler,
-	)
-	vs.cacheExecutionPayloadEnvelope(envelope, local.BlobsBundler)
+	return nil
+}
 
+// buildExecutionPayloadEnvelope creates and caches the execution payload envelope
+// after the block is fully built (state root set). This allows setting the
+// BeaconBlockRoot from the final block HTR and computing the post-payload state root.
+func (vs *Server) buildExecutionPayloadEnvelope(
+	ctx context.Context,
+	sBlk interfaces.SignedBeaconBlock,
+	head state.BeaconState,
+	local *consensusblocks.GetPayloadResponse,
+) error {
+	blockRoot, err := sBlk.Block().HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not compute block hash tree root")
+	}
+
+	// Extract the underlying ExecutionPayloadDeneb proto.
+	var payload *enginev1.ExecutionPayloadDeneb
+	if local.ExecutionData != nil && !local.ExecutionData.IsNil() {
+		if p, ok := local.ExecutionData.Proto().(*enginev1.ExecutionPayloadDeneb); ok {
+			payload = p
+		}
+	}
+
+	// TODO: Compute post-payload state root. This requires:
+	// 1. Run state transition on head state with the block to get post-block state
+	// 2. Run ProcessPayloadStateTransition(ctx, postBlockState, envelope) to apply
+	//    execution payload effects (deposits, withdrawals, consolidations, etc.)
+	// 3. Set stateRoot = postPayloadState.HashTreeRoot()
+	// For now, the state root remains zeroed until ProcessPayloadStateTransition
+	// is implemented in beacon-chain/core/gloas.
+
+	envelope := &ethpb.ExecutionPayloadEnvelope{
+		Payload:            payload,
+		ExecutionRequests:  local.ExecutionRequests,
+		BuilderIndex:       primitives.BuilderIndex(sBlk.Block().ProposerIndex()),
+		BeaconBlockRoot:    blockRoot[:],
+		Slot:               sBlk.Block().Slot(),
+		BlobKzgCommitments: extractKzgCommitments(local.BlobsBundler),
+		StateRoot:          make([]byte, 32),
+	}
+
+	vs.cacheExecutionPayloadEnvelope(envelope, local.BlobsBundler)
 	return nil
 }
 
@@ -141,37 +173,6 @@ func (vs *Server) createSelfBuildExecutionPayloadBid(
 	}, nil
 }
 
-// createExecutionPayloadEnvelope wraps a full execution payload with metadata.
-// The envelope is cached by the beacon node during block production for later
-// retrieval by the validator via GetExecutionPayloadEnvelope.
-func (vs *Server) createExecutionPayloadEnvelope(
-	executionData interfaces.ExecutionData,
-	executionRequests *enginev1.ExecutionRequests,
-	builderIndex primitives.BuilderIndex,
-	slot primitives.Slot,
-	blobsBundler enginev1.BlobsBundler,
-) *ethpb.ExecutionPayloadEnvelope {
-	// Extract the underlying ExecutionPayloadDeneb proto
-	var payload *enginev1.ExecutionPayloadDeneb
-	if executionData != nil && !executionData.IsNil() {
-		if p, ok := executionData.Proto().(*enginev1.ExecutionPayloadDeneb); ok {
-			payload = p
-		}
-	}
-
-	commitments := extractKzgCommitments(blobsBundler)
-
-	return &ethpb.ExecutionPayloadEnvelope{
-		Payload:            payload,
-		ExecutionRequests:  executionRequests,
-		BuilderIndex:       builderIndex,
-		BeaconBlockRoot:    make([]byte, 32), // Populated later when block root is known
-		Slot:               slot,
-		BlobKzgCommitments: commitments,
-		StateRoot:          make([]byte, 32), // Computed later in GetExecutionPayloadEnvelope
-	}
-}
-
 // extractKzgCommitments pulls KZG commitments from a blobs bundler.
 func extractKzgCommitments(blobsBundler enginev1.BlobsBundler) [][]byte {
 	if blobsBundler == nil {
@@ -202,7 +203,7 @@ func (vs *Server) cacheExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayload
 }
 
 // GetExecutionPayloadEnvelope retrieves a cached execution payload envelope.
-// This is called by validators after receiving a GLOAS block to get the envelopeF
+// This is called by validators after receiving a GLOAS block to get the envelope
 // they need to sign and broadcast.
 //
 // gRPC endpoint: /eth/v1alpha1/validator/execution_payload_envelope/{slot}/{builder_index}
@@ -233,57 +234,9 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 		)
 	}
 
-	// Compute state root if not already set.
-	// Following the pattern from epbs-interop: compute post-payload state root.
-	if len(envelope.StateRoot) == 0 || bytesutil.ZeroRoot(envelope.StateRoot) {
-		stateRoot, err := vs.computePostPayloadStateRoot(ctx, envelope)
-		if err != nil {
-			log.WithError(err).Warn("Failed to compute post-payload state root")
-		} else {
-			envelope.StateRoot = stateRoot
-			log.WithField("stateRoot", fmt.Sprintf("%#x", stateRoot)).Debug("Computed state root at execution stage")
-		}
-	}
-
 	return &ethpb.ExecutionPayloadEnvelopeResponse{
 		Envelope: envelope,
 	}, nil
-}
-
-// computePostPayloadStateRoot computes the state root after an execution
-// payload envelope has been processed through a state transition.
-func (vs *Server) computePostPayloadStateRoot(ctx context.Context, envelope *ethpb.ExecutionPayloadEnvelope) ([]byte, error) {
-	ctx, span := trace.StartSpan(ctx, "ProposerServer.computePostPayloadStateRoot")
-	defer span.End()
-
-	if len(envelope.BeaconBlockRoot) == 0 || bytesutil.ZeroRoot(envelope.BeaconBlockRoot) {
-		return nil, errors.New("beacon block root not set on envelope")
-	}
-
-	blockRoot := bytesutil.ToBytes32(envelope.BeaconBlockRoot)
-	st, err := vs.StateGen.StateByRoot(ctx, blockRoot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get state by block root")
-	}
-	if st == nil {
-		return nil, errors.New("nil state for block root")
-	}
-
-	// Copy the state to avoid mutating the original
-	st = st.Copy()
-
-	// TODO: Process the execution payload envelope through state transition.
-	// This requires implementing ProcessPayloadStateTransition in beacon-chain/core/gloas.
-	// For now, use the state root from the beacon block state as a placeholder.
-	// The correct implementation would:
-	// 1. Call ProcessPayloadStateTransition(ctx, st, envelope) to apply payload effects
-	// 2. Compute HashTreeRoot of the resulting state
-
-	root, err := st.HashTreeRoot(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not compute state root")
-	}
-	return root[:], nil
 }
 
 // envelopeBlockWaitTimeout is the maximum time to wait for the associated beacon block
