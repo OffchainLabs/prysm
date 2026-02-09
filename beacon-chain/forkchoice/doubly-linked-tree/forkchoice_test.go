@@ -225,11 +225,11 @@ func TestForkChoice_IsCanonicalReorg(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	f.store.emptyNodeByRoot[[32]byte{'3'}].balance = 10
-	require.NoError(t, f.store.treeRootNode.applyWeightChanges(ctx))
+	require.NoError(t, f.store.applyWeightChangesConsensusNode(ctx, f.store.treeRootNode))
 	require.Equal(t, uint64(10), f.store.emptyNodeByRoot[[32]byte{'1'}].weight)
 	require.Equal(t, uint64(0), f.store.emptyNodeByRoot[[32]byte{'2'}].weight)
 
-	require.NoError(t, f.store.treeRootNode.updateBestDescendant(ctx, 1, 1, 1))
+	require.NoError(t, f.store.updateBestDescendantConsensusNode(ctx, f.store.treeRootNode, 1, 1, 1))
 	require.DeepEqual(t, [32]byte{'3'}, f.store.treeRootNode.bestDescendant.root)
 
 	r1 := [32]byte{'1'}
@@ -260,7 +260,7 @@ func TestForkChoice_AncestorRoot(t *testing.T) {
 	st, roblock, err = prepareForkchoiceState(ctx, 5, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
-	f.store.treeRootNode = f.store.emptyNodeByRoot[indexToHash(1)]
+	f.store.treeRootNode = f.store.emptyNodeByRoot[indexToHash(1)].node
 	f.store.treeRootNode.parent = nil
 
 	r, err := f.AncestorRoot(ctx, indexToHash(3), 6)
@@ -588,10 +588,9 @@ func TestStore_CommonAncestor(t *testing.T) {
 		unrealizedJustifiedEpoch: 1,
 		finalizedEpoch:           1,
 		unrealizedFinalizedEpoch: 1,
-		optimistic:               true,
 	}
 
-	f.store.emptyNodeByRoot[[32]byte{'y'}] = n
+	f.store.emptyNodeByRoot[[32]byte{'y'}] = &PayloadNode{node: n, optimistic: true}
 	// broken link
 	_, _, err = f.CommonAncestor(ctx, [32]byte{'y'}, [32]byte{'a'})
 	require.ErrorIs(t, err, forkchoice.ErrUnknownCommonAncestor)

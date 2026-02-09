@@ -31,7 +31,7 @@ func TestNode_ApplyWeightChanges_PositiveChange(t *testing.T) {
 	s.emptyNodeByRoot[indexToHash(2)].balance = 100
 	s.emptyNodeByRoot[indexToHash(3)].balance = 100
 
-	assert.NoError(t, s.treeRootNode.applyWeightChanges(ctx))
+	assert.NoError(t, s.applyWeightChangesConsensusNode(ctx, s.treeRootNode))
 
 	assert.Equal(t, uint64(300), s.emptyNodeByRoot[indexToHash(1)].weight)
 	assert.Equal(t, uint64(200), s.emptyNodeByRoot[indexToHash(2)].weight)
@@ -61,7 +61,7 @@ func TestNode_ApplyWeightChanges_NegativeChange(t *testing.T) {
 	s.emptyNodeByRoot[indexToHash(2)].balance = 100
 	s.emptyNodeByRoot[indexToHash(3)].balance = 100
 
-	assert.NoError(t, s.treeRootNode.applyWeightChanges(ctx))
+	assert.NoError(t, s.applyWeightChangesConsensusNode(ctx, s.treeRootNode))
 
 	assert.Equal(t, uint64(300), s.emptyNodeByRoot[indexToHash(1)].weight)
 	assert.Equal(t, uint64(200), s.emptyNodeByRoot[indexToHash(2)].weight)
@@ -78,7 +78,7 @@ func TestNode_UpdateBestDescendant_NonViableChild(t *testing.T) {
 
 	// Verify parent's best child and best descendant are `none`.
 	s := f.store
-	assert.Equal(t, 1, len(s.treeRootNode.children))
+	assert.Equal(t, 1, len(s.allConsensusChildren(s.treeRootNode)))
 	nilBestDescendant := s.treeRootNode.bestDescendant == nil
 	assert.Equal(t, true, nilBestDescendant)
 }
@@ -92,8 +92,9 @@ func TestNode_UpdateBestDescendant_ViableChild(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, state, blk))
 
 	s := f.store
-	assert.Equal(t, 1, len(s.treeRootNode.children))
-	assert.Equal(t, s.treeRootNode.children[0], s.treeRootNode.bestDescendant)
+	children := s.allConsensusChildren(s.treeRootNode)
+	assert.Equal(t, 1, len(children))
+	assert.Equal(t, children[0], s.treeRootNode.bestDescendant)
 }
 
 func TestNode_UpdateBestDescendant_HigherWeightChild(t *testing.T) {
@@ -110,10 +111,11 @@ func TestNode_UpdateBestDescendant_HigherWeightChild(t *testing.T) {
 	s := f.store
 	s.emptyNodeByRoot[indexToHash(1)].weight = 100
 	s.emptyNodeByRoot[indexToHash(2)].weight = 200
-	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, 1, 1, 1))
+	assert.NoError(t, s.updateBestDescendantConsensusNode(ctx, s.treeRootNode, 1, 1, 1))
 
-	assert.Equal(t, 2, len(s.treeRootNode.children))
-	assert.Equal(t, s.treeRootNode.children[1], s.treeRootNode.bestDescendant)
+	children := s.allConsensusChildren(s.treeRootNode)
+	assert.Equal(t, 2, len(children))
+	assert.Equal(t, children[1], s.treeRootNode.bestDescendant)
 }
 
 func TestNode_UpdateBestDescendant_LowerWeightChild(t *testing.T) {
@@ -130,10 +132,11 @@ func TestNode_UpdateBestDescendant_LowerWeightChild(t *testing.T) {
 	s := f.store
 	s.emptyNodeByRoot[indexToHash(1)].weight = 200
 	s.emptyNodeByRoot[indexToHash(2)].weight = 100
-	assert.NoError(t, s.treeRootNode.updateBestDescendant(ctx, 1, 1, 1))
+	assert.NoError(t, s.updateBestDescendantConsensusNode(ctx, s.treeRootNode, 1, 1, 1))
 
-	assert.Equal(t, 2, len(s.treeRootNode.children))
-	assert.Equal(t, s.treeRootNode.children[0], s.treeRootNode.bestDescendant)
+	children := s.allConsensusChildren(s.treeRootNode)
+	assert.Equal(t, 2, len(children))
+	assert.Equal(t, children[0], s.treeRootNode.bestDescendant)
 }
 
 func TestNode_ViableForHead(t *testing.T) {
@@ -176,16 +179,16 @@ func TestNode_LeadsToViableHead(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, state, blk))
 
 	require.Equal(t, true, f.store.treeRootNode.leadsToViableHead(4, 5))
-	require.Equal(t, true, f.store.emptyNodeByRoot[indexToHash(5)].leadsToViableHead(4, 5))
-	require.Equal(t, false, f.store.emptyNodeByRoot[indexToHash(2)].leadsToViableHead(4, 5))
-	require.Equal(t, false, f.store.emptyNodeByRoot[indexToHash(4)].leadsToViableHead(4, 5))
+	require.Equal(t, true, f.store.emptyNodeByRoot[indexToHash(5)].node.leadsToViableHead(4, 5))
+	require.Equal(t, false, f.store.emptyNodeByRoot[indexToHash(2)].node.leadsToViableHead(4, 5))
+	require.Equal(t, false, f.store.emptyNodeByRoot[indexToHash(4)].node.leadsToViableHead(4, 5))
 }
 
 func TestNode_SetFullyValidated(t *testing.T) {
 	f := setup(1, 1)
 	ctx := t.Context()
-	storeNodes := make([]*Node, 6)
-	storeNodes[0] = f.store.treeRootNode
+	storeNodes := make([]*PayloadNode, 6)
+	storeNodes[0] = f.store.emptyNodeByRoot[params.BeaconConfig().ZeroHash]
 	// insert blocks in the fork pattern (optimistic status in parenthesis)
 	//
 	// 0 (false) -- 1 (false) -- 2 (false) -- 3 (true) -- 4 (true)
@@ -223,7 +226,7 @@ func TestNode_SetFullyValidated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, true, opt)
 
-	require.NoError(t, f.store.emptyNodeByRoot[indexToHash(4)].setNodeAndParentValidated(ctx))
+	require.NoError(t, f.store.setNodeAndParentValidated(ctx, f.store.fullNodeByRoot[indexToHash(4)]))
 
 	// block 5 should still be optimistic
 	opt, err = f.IsOptimistic(indexToHash(5))
@@ -240,20 +243,20 @@ func TestNode_SetFullyValidated(t *testing.T) {
 	require.Equal(t, false, opt)
 
 	respNodes := make([]*forkchoice.Node, 0)
-	respNodes, err = f.store.treeRootNode.nodeTreeDump(ctx, respNodes)
+	respNodes, err = f.store.nodeTreeDump(ctx, f.store.treeRootNode, respNodes)
 	require.NoError(t, err)
 	require.Equal(t, len(respNodes), f.NodeCount())
 
 	for i, respNode := range respNodes {
-		require.Equal(t, storeNodes[i].slot, respNode.Slot)
-		require.DeepEqual(t, storeNodes[i].root[:], respNode.BlockRoot)
-		require.Equal(t, storeNodes[i].balance, respNode.Balance)
-		require.Equal(t, storeNodes[i].weight, respNode.Weight)
+		require.Equal(t, storeNodes[i].node.slot, respNode.Slot)
+		require.DeepEqual(t, storeNodes[i].node.root[:], respNode.BlockRoot)
+		require.Equal(t, storeNodes[i].node.balance, respNode.Balance)
+		require.Equal(t, storeNodes[i].node.weight, respNode.Weight)
 		require.Equal(t, storeNodes[i].optimistic, respNode.ExecutionOptimistic)
-		require.Equal(t, storeNodes[i].justifiedEpoch, respNode.JustifiedEpoch)
-		require.Equal(t, storeNodes[i].unrealizedJustifiedEpoch, respNode.UnrealizedJustifiedEpoch)
-		require.Equal(t, storeNodes[i].finalizedEpoch, respNode.FinalizedEpoch)
-		require.Equal(t, storeNodes[i].unrealizedFinalizedEpoch, respNode.UnrealizedFinalizedEpoch)
+		require.Equal(t, storeNodes[i].node.justifiedEpoch, respNode.JustifiedEpoch)
+		require.Equal(t, storeNodes[i].node.unrealizedJustifiedEpoch, respNode.UnrealizedJustifiedEpoch)
+		require.Equal(t, storeNodes[i].node.finalizedEpoch, respNode.FinalizedEpoch)
+		require.Equal(t, storeNodes[i].node.unrealizedFinalizedEpoch, respNode.UnrealizedFinalizedEpoch)
 		require.Equal(t, storeNodes[i].timestamp, respNode.Timestamp)
 	}
 }
@@ -272,10 +275,10 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	headRoot, err := f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, root, headRoot)
-	early, err := f.store.headNode.arrivedEarly(f.store.genesisTime)
+	early, err := f.store.choosePayloadContent(f.store.headNode).arrivedEarly(f.store.genesisTime)
 	require.NoError(t, err)
 	require.Equal(t, true, early)
-	late, err := f.store.headNode.arrivedAfterOrphanCheck(f.store.genesisTime)
+	late, err := f.store.choosePayloadContent(f.store.headNode).arrivedAfterOrphanCheck(f.store.genesisTime)
 	require.NoError(t, err)
 	require.Equal(t, false, late)
 
@@ -289,10 +292,10 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, root, headRoot)
-	early, err = f.store.headNode.arrivedEarly(f.store.genesisTime)
+	early, err = f.store.choosePayloadContent(f.store.headNode).arrivedEarly(f.store.genesisTime)
 	require.NoError(t, err)
 	require.Equal(t, false, early)
-	late, err = f.store.headNode.arrivedAfterOrphanCheck(f.store.genesisTime)
+	late, err = f.store.choosePayloadContent(f.store.headNode).arrivedAfterOrphanCheck(f.store.genesisTime)
 	require.NoError(t, err)
 	require.Equal(t, false, late)
 
@@ -305,10 +308,10 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, root, headRoot)
-	early, err = f.store.headNode.arrivedEarly(f.store.genesisTime)
+	early, err = f.store.choosePayloadContent(f.store.headNode).arrivedEarly(f.store.genesisTime)
 	require.NoError(t, err)
 	require.Equal(t, false, early)
-	late, err = f.store.headNode.arrivedAfterOrphanCheck(f.store.genesisTime)
+	late, err = f.store.choosePayloadContent(f.store.headNode).arrivedAfterOrphanCheck(f.store.genesisTime)
 	require.NoError(t, err)
 	require.Equal(t, true, late)
 
@@ -320,10 +323,10 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, root, headRoot)
-	early, err = f.store.headNode.arrivedEarly(f.store.genesisTime)
+	early, err = f.store.choosePayloadContent(f.store.headNode).arrivedEarly(f.store.genesisTime)
 	require.ErrorContains(t, "invalid timestamp", err)
 	require.Equal(t, true, early)
-	late, err = f.store.headNode.arrivedAfterOrphanCheck(f.store.genesisTime)
+	late, err = f.store.choosePayloadContent(f.store.headNode).arrivedAfterOrphanCheck(f.store.genesisTime)
 	require.ErrorContains(t, "invalid timestamp", err)
 	require.Equal(t, false, late)
 }

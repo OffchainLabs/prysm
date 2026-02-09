@@ -41,11 +41,11 @@ func TestStore_NodeByRoot(t *testing.T) {
 	state, blkRoot, err = prepareForkchoiceState(t.Context(), 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	node0 := f.store.treeRootNode
-	node1 := node0.children[0]
-	node2 := node1.children[0]
+	node0 := f.store.emptyNodeByRoot[params.BeaconConfig().ZeroHash]
+	node1 := f.store.emptyNodeByRoot[indexToHash(1)]
+	node2 := f.store.emptyNodeByRoot[indexToHash(2)]
 
-	expectedRoots := map[[32]byte]*Node{
+	expectedRoots := map[[32]byte]*PayloadNode{
 		params.BeaconConfig().ZeroHash: node0,
 		indexToHash(1):                 node1,
 		indexToHash(2):                 node2,
@@ -127,10 +127,13 @@ func TestStore_UpdateBestDescendant_ContextCancelled(t *testing.T) {
 func TestStore_Insert(t *testing.T) {
 	// The new node does not have a parent.
 	treeRootNode := &Node{slot: 0, root: indexToHash(0)}
-	nodeByRoot := map[[32]byte]*Node{indexToHash(0): treeRootNode}
+	emptyRootPN := &PayloadNode{node: treeRootNode}
+	fullRootPN := &PayloadNode{node: treeRootNode, full: true, optimistic: true}
+	emptyNodeByRoot := map[[32]byte]*PayloadNode{indexToHash(0): emptyRootPN}
+	fullNodeByRoot := map[[32]byte]*PayloadNode{indexToHash(0): fullRootPN}
 	jc := &forkchoicetypes.Checkpoint{Epoch: 0}
 	fc := &forkchoicetypes.Checkpoint{Epoch: 0}
-	s := &Store{emptyNodeByRoot: nodeByRoot, treeRootNode: treeRootNode, justifiedCheckpoint: jc, finalizedCheckpoint: fc, highestReceivedNode: &Node{}}
+	s := &Store{emptyNodeByRoot: emptyNodeByRoot, fullNodeByRoot: fullNodeByRoot, treeRootNode: treeRootNode, justifiedCheckpoint: jc, finalizedCheckpoint: fc, highestReceivedNode: &Node{}}
 	payloadHash := [32]byte{'a'}
 	ctx := t.Context()
 	_, blk, err := prepareForkchoiceState(ctx, 100, indexToHash(100), indexToHash(0), payloadHash, 1, 1)
@@ -138,10 +141,11 @@ func TestStore_Insert(t *testing.T) {
 	_, err = s.insert(ctx, blk, 1, 1)
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(s.emptyNodeByRoot), "Did not insert block")
-	assert.Equal(t, (*Node)(nil), treeRootNode.parent, "Incorrect parent")
-	assert.Equal(t, 1, len(treeRootNode.children), "Incorrect children number")
-	assert.Equal(t, payloadHash, treeRootNode.children[0].payloadHash, "Incorrect payload hash")
-	child := treeRootNode.children[0]
+	assert.Equal(t, (*PayloadNode)(nil), treeRootNode.parent, "Incorrect parent")
+	children := s.allConsensusChildren(treeRootNode)
+	assert.Equal(t, 1, len(children), "Incorrect children number")
+	assert.Equal(t, payloadHash, children[0].payloadHash, "Incorrect payload hash")
+	child := children[0]
 	assert.Equal(t, primitives.Epoch(1), child.justifiedEpoch, "Incorrect justification")
 	assert.Equal(t, primitives.Epoch(1), child.finalizedEpoch, "Incorrect finalization")
 	assert.Equal(t, indexToHash(100), child.root, "Incorrect root")
