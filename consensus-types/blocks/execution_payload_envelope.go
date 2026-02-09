@@ -96,7 +96,7 @@ func (p *executionPayloadEnvelope) IsNil() bool {
 }
 
 // IsBlinded reports whether the envelope contains a blinded payload.
-func (p *executionPayloadEnvelope) IsBlinded() bool {	
+func (p *executionPayloadEnvelope) IsBlinded() bool {
 	return false
 }
 
