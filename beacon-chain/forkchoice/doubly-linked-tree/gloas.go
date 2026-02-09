@@ -33,8 +33,8 @@ func (s *Store) getNodeInformation(block interfaces.ReadOnlyBeaconBlock, parent 
 		return nil
 	}
 	if bid.ParentBlockHash() == (*parent).node.payloadHash {
-		//block builds on full
-		*parent = s.fullNodeByRoot[(*parent).node.payloadHash]
+		// block builds on full
+		*parent = s.fullNodeByRoot[(*parent).node.root]
 	}
 	return nil
 }
