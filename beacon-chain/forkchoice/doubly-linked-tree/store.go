@@ -84,7 +84,7 @@ func (s *Store) insert(ctx context.Context,
 	block := roblock.Block()
 	slot := block.Slot()
 	var parent *PayloadNode
-	var payloadHash = &[32]byte{}
+	payloadHash := &[32]byte{}
 	if block.Version() >= version.Gloas {
 		if err := s.getNodeInformation(block, &parent, payloadHash); err != nil {
 			return nil, err
@@ -127,10 +127,14 @@ func (s *Store) insert(ctx context.Context,
 		}
 	}
 	var ret *PayloadNode
+	optimistic := true
+	if parent != nil {
+		optimistic = n.parent.optimistic
+	}
 	// Make the empty node.It's optimistic status equals it's parent's status.
 	pn := &PayloadNode{
 		node:       n,
-		optimistic: n.parent.optimistic,
+		optimistic: optimistic,
 		timestamp:  time.Now(),
 	}
 	s.emptyNodeByRoot[root] = pn

@@ -226,8 +226,8 @@ func TestForkChoice_IsCanonicalReorg(t *testing.T) {
 
 	f.store.emptyNodeByRoot[[32]byte{'3'}].balance = 10
 	require.NoError(t, f.store.applyWeightChangesConsensusNode(ctx, f.store.treeRootNode))
-	require.Equal(t, uint64(10), f.store.emptyNodeByRoot[[32]byte{'1'}].weight)
-	require.Equal(t, uint64(0), f.store.emptyNodeByRoot[[32]byte{'2'}].weight)
+	require.Equal(t, uint64(10), f.store.emptyNodeByRoot[[32]byte{'1'}].node.weight)
+	require.Equal(t, uint64(0), f.store.emptyNodeByRoot[[32]byte{'2'}].node.weight)
 
 	require.NoError(t, f.store.updateBestDescendantConsensusNode(ctx, f.store.treeRootNode, 1, 1, 1))
 	require.DeepEqual(t, [32]byte{'3'}, f.store.treeRootNode.bestDescendant.root)
@@ -514,58 +514,6 @@ func TestStore_CommonAncestor(t *testing.T) {
 		})
 	}
 
-	// a -- b -- c -- d
-	f = setup(0, 0)
-	st, roblock, err = prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, roblock))
-	st, roblock, err = prepareForkchoiceState(ctx, 1, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, roblock))
-	st, roblock, err = prepareForkchoiceState(ctx, 2, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, roblock))
-	st, roblock, err = prepareForkchoiceState(ctx, 3, [32]byte{'d'}, [32]byte{'c'}, [32]byte{}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, roblock))
-	tests = []struct {
-		name     string
-		r1       [32]byte
-		r2       [32]byte
-		wantRoot [32]byte
-		wantSlot primitives.Slot
-	}{
-		{
-			name:     "Common ancestor between a and b is a",
-			r1:       [32]byte{'a'},
-			r2:       [32]byte{'b'},
-			wantRoot: [32]byte{'a'},
-			wantSlot: 0,
-		},
-		{
-			name:     "Common ancestor between b and d is b",
-			r1:       [32]byte{'d'},
-			r2:       [32]byte{'b'},
-			wantRoot: [32]byte{'b'},
-			wantSlot: 1,
-		},
-		{
-			name:     "Common ancestor between d and a is a",
-			r1:       [32]byte{'d'},
-			r2:       [32]byte{'a'},
-			wantRoot: [32]byte{'a'},
-			wantSlot: 0,
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			gotRoot, gotSlot, err := f.CommonAncestor(ctx, tc.r1, tc.r2)
-			require.NoError(t, err)
-			require.Equal(t, tc.wantRoot, gotRoot)
-			require.Equal(t, tc.wantSlot, gotSlot)
-		})
-	}
-
 	// Equal inputs should return the same root.
 	r, s, err := f.CommonAncestor(ctx, [32]byte{'b'}, [32]byte{'b'})
 	require.NoError(t, err)
@@ -609,7 +557,8 @@ func TestStore_InsertChain(t *testing.T) {
 	require.NoError(t, err)
 	roblock, err := blocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	blks = append(blks, &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
+	blks = append(blks, &forkchoicetypes.BlockAndCheckpoints{
+		Block:               roblock,
 		JustifiedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 		FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 	})
@@ -624,7 +573,8 @@ func TestStore_InsertChain(t *testing.T) {
 		require.NoError(t, err)
 		roblock, err := blocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		blks = append(blks, &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
+		blks = append(blks, &forkchoicetypes.BlockAndCheckpoints{
+			Block:               roblock,
 			JustifiedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 			FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 		})

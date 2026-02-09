@@ -149,8 +149,10 @@ func (f *ForkChoice) updateCheckpoints(ctx context.Context, jc, fc *ethpb.Checkp
 	if fc.Epoch <= f.store.finalizedCheckpoint.Epoch {
 		return nil
 	}
-	f.store.finalizedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: fc.Epoch,
-		Root: bytesutil.ToBytes32(fc.Root)}
+	f.store.finalizedCheckpoint = &forkchoicetypes.Checkpoint{
+		Epoch: fc.Epoch,
+		Root:  bytesutil.ToBytes32(fc.Root),
+	}
 	return f.store.prune(ctx)
 }
 
@@ -163,7 +165,7 @@ func (f *ForkChoice) HasNode(root [32]byte) bool {
 
 // IsCanonical returns true if the given root is part of the canonical chain.
 func (f *ForkChoice) IsCanonical(root [32]byte) bool {
-	//It is fine to pick empty node here since we only check if the beacon block is canonical.
+	// It is fine to pick empty node here since we only check if the beacon block is canonical.
 	pn, ok := f.store.emptyNodeByRoot[root]
 	if !ok || pn == nil {
 		return false
@@ -442,6 +444,8 @@ func (f *ForkChoice) UpdateFinalizedCheckpoint(fc *forkchoicetypes.Checkpoint) e
 //	\---------[B, empty] <--[D, pending]
 //
 // Then even though C and D both descend from the beacon block B, their common ancestor is A.
+// Notice that also this function **requires** that the two roots are actually contending blocks! otherwise the
+// behavior is not defined.
 func (f *ForkChoice) CommonAncestor(ctx context.Context, r1 [32]byte, r2 [32]byte) ([32]byte, primitives.Slot, error) {
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.CommonAncestorRoot")
 	defer span.End()
