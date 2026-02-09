@@ -51,14 +51,20 @@ func (b *BeaconState) BuilderPubkey(builderIndex primitives.BuilderIndex) ([fiel
 }
 
 // IsActiveBuilder returns true if the builder placement is finalized and it has not initiated exit.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// def is_active_builder(state: BeaconState, builder_index: BuilderIndex) -> bool:
 //
-//	builder = state.builders[builder_index]
-//	return (
-//	    builder.deposit_epoch < state.finalized_checkpoint.epoch
-//	    and builder.withdrawable_epoch == FAR_FUTURE_EPOCH
-//	)
+//	<spec fn="is_active_builder" fork="gloas" hash="1a599fb2">
+//	def is_active_builder(state: BeaconState, builder_index: BuilderIndex) -> bool:
+//	    """
+//	    Check if the builder at ``builder_index`` is active for the given ``state``.
+//	    """
+//	    builder = state.builders[builder_index]
+//	    return (
+//	        # Placement in builder list is finalized
+//	        builder.deposit_epoch < state.finalized_checkpoint.epoch
+//	        # Has not initiated exit
+//	        and builder.withdrawable_epoch == FAR_FUTURE_EPOCH
+//	    )
+//	</spec>
 func (b *BeaconState) IsActiveBuilder(builderIndex primitives.BuilderIndex) (bool, error) {
 	if b.version < version.Gloas {
 		return false, errNotSupported("IsActiveBuilder", b.version)
@@ -77,15 +83,18 @@ func (b *BeaconState) IsActiveBuilder(builderIndex primitives.BuilderIndex) (boo
 }
 
 // CanBuilderCoverBid returns true if the builder has enough balance to cover the given bid amount.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// def can_builder_cover_bid(state: BeaconState, builder_index: BuilderIndex, bid_amount: Gwei) -> bool:
 //
-//	builder_balance = state.builders[builder_index].balance
-//	pending_withdrawals_amount = get_pending_balance_to_withdraw_for_builder(state, builder_index)
-//	min_balance = MIN_DEPOSIT_AMOUNT + pending_withdrawals_amount
-//	if builder_balance < min_balance:
-//	    return False
-//	return builder_balance - min_balance >= bid_amount
+//	<spec fn="can_builder_cover_bid" fork="gloas" hash="9e3f2d7c">
+//	def can_builder_cover_bid(
+//	    state: BeaconState, builder_index: BuilderIndex, bid_amount: Gwei
+//	) -> bool:
+//	    builder_balance = state.builders[builder_index].balance
+//	    pending_withdrawals_amount = get_pending_balance_to_withdraw_for_builder(state, builder_index)
+//	    min_balance = MIN_DEPOSIT_AMOUNT + pending_withdrawals_amount
+//	    if builder_balance < min_balance:
+//	        return False
+//	    return builder_balance - min_balance >= bid_amount
+//	</spec>
 func (b *BeaconState) CanBuilderCoverBid(builderIndex primitives.BuilderIndex, bidAmount primitives.Gwei) (bool, error) {
 	if b.version < version.Gloas {
 		return false, errNotSupported("CanBuilderCoverBid", b.version)

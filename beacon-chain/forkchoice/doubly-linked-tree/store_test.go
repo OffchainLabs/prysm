@@ -128,10 +128,9 @@ func TestStore_Insert(t *testing.T) {
 	// The new node does not have a parent.
 	treeRootNode := &Node{slot: 0, root: indexToHash(0)}
 	nodeByRoot := map[[32]byte]*Node{indexToHash(0): treeRootNode}
-	nodeByPayload := map[[32]byte]*Node{indexToHash(0): treeRootNode}
 	jc := &forkchoicetypes.Checkpoint{Epoch: 0}
 	fc := &forkchoicetypes.Checkpoint{Epoch: 0}
-	s := &Store{nodeByRoot: nodeByRoot, treeRootNode: treeRootNode, nodeByPayload: nodeByPayload, justifiedCheckpoint: jc, finalizedCheckpoint: fc, highestReceivedNode: &Node{}}
+	s := &Store{nodeByRoot: nodeByRoot, treeRootNode: treeRootNode, justifiedCheckpoint: jc, finalizedCheckpoint: fc, highestReceivedNode: &Node{}}
 	payloadHash := [32]byte{'a'}
 	ctx := t.Context()
 	_, blk, err := prepareForkchoiceState(ctx, 100, indexToHash(100), indexToHash(0), payloadHash, 1, 1)
@@ -238,7 +237,6 @@ func TestStore_Prune_NoDanglingBranch(t *testing.T) {
 	s.finalizedCheckpoint.Root = indexToHash(1)
 	require.NoError(t, s.prune(t.Context()))
 	require.Equal(t, len(s.nodeByRoot), 1)
-	require.Equal(t, len(s.nodeByPayload), 1)
 }
 
 // This test starts with the following branching diagram
@@ -319,8 +317,6 @@ func TestStore_PruneMapsNodes(t *testing.T) {
 	s.finalizedCheckpoint.Root = indexToHash(1)
 	require.NoError(t, s.prune(t.Context()))
 	require.Equal(t, len(s.nodeByRoot), 1)
-	require.Equal(t, len(s.nodeByPayload), 1)
-
 }
 
 func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
@@ -339,7 +335,6 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
 	require.Equal(t, primitives.Slot(1), f.HighestReceivedBlockSlot())
-	require.Equal(t, primitives.Slot(0), f.HighestReceivedBlockDelay())
 
 	// 64
 	// Received block last epoch is 1
@@ -352,7 +347,6 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), count)
 	require.Equal(t, primitives.Slot(64), f.HighestReceivedBlockSlot())
-	require.Equal(t, primitives.Slot(0), f.HighestReceivedBlockDelay())
 
 	// 64 65
 	// Received block last epoch is 2
@@ -365,7 +359,6 @@ func TestForkChoice_ReceivedBlocksLastEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), count)
 	require.Equal(t, primitives.Slot(65), f.HighestReceivedBlockSlot())
-	require.Equal(t, primitives.Slot(1), f.HighestReceivedBlockDelay())
 
 	// 64 65 66
 	// Received block last epoch is 3
@@ -716,18 +709,4 @@ func TestStore_CleanupInserting(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, f.InsertNode(ctx, st, blk))
 	require.Equal(t, false, f.HasNode(blk.Root()))
-}
-
-func TestStore_HighestReceivedBlockDelay(t *testing.T) {
-	f := ForkChoice{
-		store: &Store{
-			genesisTime: time.Unix(0, 0),
-			highestReceivedNode: &Node{
-				slot:      10,
-				timestamp: time.Unix(int64(((10 + 12) * params.BeaconConfig().SecondsPerSlot)), 0), // 12 slots late
-			},
-		},
-	}
-
-	require.Equal(t, primitives.Slot(12), f.HighestReceivedBlockDelay())
 }

@@ -65,8 +65,8 @@ func TestRegistration_Valid(t *testing.T) {
 	marshalledJsonRegistrations, err := json.Marshal(jsonRegistrations)
 	require.NoError(t, err)
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/validator/register_validator",
 		nil,
@@ -129,7 +129,7 @@ func TestRegistration_Valid(t *testing.T) {
 		},
 	}
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	res, err := validatorClient.SubmitValidatorRegistrations(t.Context(), &protoRegistrations)
 
 	assert.DeepEqual(t, new(empty.Empty), res)
@@ -140,8 +140,8 @@ func TestRegistration_BadRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/validator/register_validator",
 		nil,
@@ -151,7 +151,7 @@ func TestRegistration_BadRequest(t *testing.T) {
 		errors.New("foo error"),
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	_, err := validatorClient.SubmitValidatorRegistrations(t.Context(), &ethpb.SignedValidatorRegistrationsV1{})
 	assert.ErrorContains(t, "foo error", err)
 }
