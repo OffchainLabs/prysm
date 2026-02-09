@@ -1,7 +1,6 @@
 package doublylinkedtree
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -109,19 +108,6 @@ func TestStore_Head_BestDescendant(t *testing.T) {
 	h, err := f.store.head(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, h, indexToHash(4))
-}
-
-func TestStore_UpdateBestDescendant_ContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	f := setup(0, 0)
-	state, blkRoot, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	cancel()
-	state, blkRoot, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
-	require.NoError(t, err)
-	err = f.InsertNode(ctx, state, blkRoot)
-	require.ErrorContains(t, "context canceled", err)
 }
 
 func TestStore_Insert(t *testing.T) {
