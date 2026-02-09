@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
-	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -49,10 +48,6 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		{Index: 0, ValidatorIndex: 1, Address: bytes.Repeat([]byte{0x01}, 20), Amount: 0},
 	}
 
-	blobCommitments := [][]byte{}
-	blobRoot, err := ssz.KzgCommitmentsRoot(blobCommitments)
-	require.NoError(t, err)
-
 	payload := &enginev1.ExecutionPayloadDeneb{
 		ParentHash:    parentHash,
 		FeeRecipient:  bytes.Repeat([]byte{0x01}, 20),
@@ -83,7 +78,6 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		Slot:                   slot,
 		Value:                  0,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: blobRoot[:],
 		FeeRecipient:           bytes.Repeat([]byte{0xEE}, 20),
 	}
 
@@ -101,7 +95,6 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		BuilderIndex:       builderIdx,
 		BeaconBlockRoot:    headerRoot[:],
 		Payload:            payload,
-		BlobKzgCommitments: blobCommitments,
 		ExecutionRequests:  &enginev1.ExecutionRequests{},
 	}
 
@@ -289,7 +282,6 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 
 		msg := proto.Clone(fixture.signedProto.Message).(*ethpb.ExecutionPayloadEnvelope)
 		msg.BuilderIndex = params.BeaconConfig().BuilderIndexSelfBuild
-		msg.BlobKzgCommitments = []([]byte){}
 
 		epoch := slots.ToEpoch(msg.Slot)
 		domain, err := signing.Domain(st.Fork(), epoch, params.BeaconConfig().DomainBeaconBuilder, st.GenesisValidatorsRoot())
@@ -330,9 +322,6 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 
 			msg := proto.Clone(fixture.signedProto.Message).(*ethpb.ExecutionPayloadEnvelope)
 			msg.BuilderIndex = params.BeaconConfig().BuilderIndexSelfBuild
-			if msg.BlobKzgCommitments == nil {
-				msg.BlobKzgCommitments = [][]byte{}
-			}
 
 			signedProto := &ethpb.SignedExecutionPayloadEnvelope{
 				Message:   msg,
