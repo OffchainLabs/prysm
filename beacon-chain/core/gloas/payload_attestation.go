@@ -264,24 +264,24 @@ func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex
 
 // validIndexedPayloadAttestation verifies the signature of an indexed payload attestation.
 //
-//	<spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="cf1e65b5">
+//	<spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="d76e0f89">
 //	def is_valid_indexed_payload_attestation(
-//	    state: BeaconState, indexed_payload_attestation: IndexedPayloadAttestation
+//	    state: BeaconState, attestation: IndexedPayloadAttestation
 //	) -> bool:
 //	    """
-//	    Check if ``indexed_payload_attestation`` is non-empty, has sorted indices, and has
+//	    Check if ``attestation`` is non-empty, has sorted indices, and has
 //	    a valid aggregate signature.
 //	    """
 //	    # Verify indices are non-empty and sorted
-//	    indices = indexed_payload_attestation.attesting_indices
+//	    indices = attestation.attesting_indices
 //	    if len(indices) == 0 or not indices == sorted(indices):
 //	        return False
 //
 //	    # Verify aggregate signature
 //	    pubkeys = [state.validators[i].pubkey for i in indices]
-//	    domain = get_domain(state, DOMAIN_PTC_ATTESTER, None)
-//	    signing_root = compute_signing_root(indexed_payload_attestation.data, domain)
-//	    return bls.FastAggregateVerify(pubkeys, signing_root, indexed_payload_attestation.signature)
+//	    domain = get_domain(state, DOMAIN_PTC_ATTESTER, compute_epoch_at_slot(attestation.data.slot))
+//	    signing_root = compute_signing_root(attestation.data, domain)
+//	    return bls.FastAggregateVerify(pubkeys, signing_root, attestation.signature)
 //	</spec>
 func validIndexedPayloadAttestation(st state.ReadOnlyBeaconState, att *consensus_types.IndexedPayloadAttestation) error {
 	indices := att.AttestingIndices
