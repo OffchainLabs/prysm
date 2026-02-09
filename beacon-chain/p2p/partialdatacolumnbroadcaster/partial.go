@@ -30,6 +30,7 @@ import (
 
 const TTLInSlots = 3
 const maxConcurrentValidators = 128
+const headerHandledTimeout = time.Second * 1
 
 var dataColumnTopicRegex = regexp.MustCompile(`data_column_sidecar_(\d+)`)
 
@@ -47,7 +48,7 @@ func extractColumnIndexFromTopic(topic string) (uint64, error) {
 //   - reject=false, err!=nil: IGNORE - don't penalize, just ignore
 //   - reject=false, err=nil: valid header
 type HeaderValidator func(header *ethpb.PartialDataColumnHeader) (reject bool, err error)
-type HeaderHandler func(header *ethpb.PartialDataColumnHeader) error
+type HeaderHandler func(header *ethpb.PartialDataColumnHeader) chan bool
 type ColumnValidator func(cells []blocks.CellProofBundle) error
 
 type PartialColumnBroadcaster struct {
@@ -56,16 +57,12 @@ type PartialColumnBroadcaster struct {
 	ps   *pubsub.PubSub
 	stop chan struct{}
 
-	// map topic -> headerValidators
-	headerValidators map[string]HeaderValidator
-	// map topic -> Validator
-	validators map[string]ColumnValidator
+	ValidateHeader HeaderValidator
+	ValidateColumn ColumnValidator
+	HandleColumn   SubHandler
+	HandleHeader   HeaderHandler
 
-	// map topic -> handler
-	handlers map[string]SubHandler
-
-	// map topic -> headerHandler
-	headerHandlers map[string]HeaderHandler
+	headerHandled map[string]chan bool
 
 	// map topic -> *pubsub.Topic
 	topics map[string]*pubsub.Topic
@@ -109,11 +106,7 @@ type publish struct {
 }
 
 type subscribe struct {
-	t               *pubsub.Topic
-	headerValidator HeaderValidator
-	validator       ColumnValidator
-	handler         SubHandler
-	headerHandler   HeaderHandler
+	t *pubsub.Topic
 }
 
 type unsubscribe struct {
@@ -135,14 +128,11 @@ type cellsValidated struct {
 
 func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 	return &PartialColumnBroadcaster{
-		validators:       make(map[string]ColumnValidator),
-		headerValidators: make(map[string]HeaderValidator),
-		handlers:         make(map[string]SubHandler),
-		headerHandlers:   make(map[string]HeaderHandler),
 		topics:           make(map[string]*pubsub.Topic),
 		partialMsgStore:  make(map[string]map[string]*blocks.PartialDataColumn),
 		groupTTL:         make(map[string]int8),
 		validHeaderCache: make(map[string]*ethpb.PartialDataColumnHeader),
+		headerHandled:    make(map[string]chan bool),
 		// GossipSub sends the messages to this channel. The buffer should be
 		// big enough to avoid dropping messages. We don't want to block the gossipsub event loop for this.
 		incomingReq: make(chan request, 128*16),
@@ -199,6 +189,24 @@ func (p *PartialColumnBroadcaster) Start() {
 	if p.stop != nil {
 		return
 	}
+
+	if p.ValidateHeader == nil {
+		p.logger.Error("No header validator registered")
+		return
+	}
+	if p.HandleHeader == nil {
+		p.logger.Error("No header handler registered")
+		return
+	}
+	if p.ValidateColumn == nil {
+		p.logger.Error("No column validator registered")
+		return
+	}
+	if p.HandleColumn == nil {
+		p.logger.Error("No column handler registered")
+		return
+	}
+
 	p.stop = make(chan struct{})
 	p.loop()
 }
@@ -219,6 +227,7 @@ func (p *PartialColumnBroadcaster) loop() {
 
 				delete(p.groupTTL, groupID)
 				delete(p.validHeaderCache, groupID)
+				delete(p.headerHandled, groupID)
 				for topic, msgStore := range p.partialMsgStore {
 					delete(msgStore, groupID)
 					if len(msgStore) == 0 {
@@ -231,7 +240,7 @@ func (p *PartialColumnBroadcaster) loop() {
 			case requestKindPublish:
 				req.response <- p.publish(req.publish.topic, req.publish.c)
 			case requestKindSubscribe:
-				req.response <- p.subscribe(req.sub.t, req.sub.headerValidator, req.sub.validator, req.sub.handler, req.sub.headerHandler)
+				req.response <- p.subscribe(req.sub.t)
 			case requestKindUnsubscribe:
 				req.response <- p.unsubscribe(req.unsub.topic)
 			case requestKindHandleIncomingRPC:
@@ -282,7 +291,6 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 	groupID := rpcWithFrom.GroupID
 	ourDataColumn := p.getDataColumn(topicID, groupID)
 	var shouldRepublish bool
-	var handledHeader bool
 
 	if ourDataColumn == nil && hasMessage {
 		var header *ethpb.PartialDataColumnHeader
@@ -297,13 +305,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			}
 
 			header = message.Header[0]
-			headerValidator, ok := p.headerValidators[topicID]
-			if !ok || headerValidator == nil {
-				p.logger.Debug("No header validator registered for topic")
-				return nil
-			}
-
-			reject, err := headerValidator(header)
+			reject, err := p.ValidateHeader(header)
 			if err != nil {
 				p.logger.Debug("Header validation failed", "err", err, "reject", reject)
 				if reject {
@@ -315,18 +317,8 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			}
 			// Cache the valid header
 			p.validHeaderCache[string(groupID)] = header
-
-			headerHandler, ok := p.headerHandlers[topicID]
-			if !ok || headerHandler == nil {
-				p.logger.Debug("No header handler registered for topic")
-				return nil
-			}
-			err = headerHandler(header)
-			if err != nil {
-				p.logger.Error("Failed to handle header", "err", err)
-			} else {
-				handledHeader = true
-			}
+			handledCh := p.HandleHeader(header)
+			p.headerHandled[string(groupID)] = handledCh
 		}
 
 		columnIndex, err := extractColumnIndexFromTopic(topicID)
@@ -374,8 +366,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		"group": groupID,
 	})
 
-	validator, validatorOK := p.validators[topicID]
-	if len(rpcWithFrom.PartialMessage) > 0 && validatorOK {
+	if len(rpcWithFrom.PartialMessage) > 0 {
 		// TODO: is there any penalty we want to consider for giving us data we didn't request?
 		// Note that we need to be careful around race conditions and eager data.
 		// Also note that protobufs by design allow extra data that we don't parse.
@@ -396,7 +387,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 					<-p.concurrentValidatorSemaphore
 				}()
 				start := time.Now()
-				err := validator(cellsToVerify)
+				err := p.ValidateColumn(cellsToVerify)
 				if err != nil {
 					logger.Error("failed to validate cells", "err", err)
 					_ = p.ps.PeerFeedback(topicID, rpcWithFrom.from, pubsub.PeerFeedbackInvalidMessage)
@@ -425,7 +416,17 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		logger.Debug("republishing due to parts metadata difference")
 	}
 
-	if shouldRepublish && !handledHeader {
+	headerHandled := p.headerHandled[string(groupID)]
+	if headerHandled == nil {
+		return nil
+	}
+	select {
+	case <-headerHandled:
+	case <-time.After(headerHandledTimeout):
+		return errors.New("header not handled in time")
+	}
+
+	if shouldRepublish {
 		err := p.ps.PublishPartialMessage(topicID, ourDataColumn, partialmessages.PublishOptions{})
 		if err != nil {
 			return err
@@ -453,13 +454,21 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 
 		if col, ok := ourDataColumn.Complete(p.logger); ok {
 			p.logger.Info("Completed partial column", "topic", cells.topic, "group", cells.group)
-			handler, handlerOK := p.handlers[cells.topic]
-
-			if handlerOK {
-				go handler(cells.topic, col)
+			if p.HandleColumn != nil {
+				go p.HandleColumn(cells.topic, col)
 			}
 		} else {
 			p.logger.Info("Extended partial column", "topic", cells.topic, "group", cells.group)
+		}
+
+		headerHandled := p.headerHandled[string(ourDataColumn.GroupID())]
+		if headerHandled == nil {
+			return errors.New("header not handled")
+		}
+		select {
+		case <-headerHandled:
+		case <-time.After(headerHandledTimeout):
+			return errors.New("header not handled in time")
 		}
 
 		err := p.ps.PublishPartialMessage(cells.topic, ourDataColumn, partialmessages.PublishOptions{})
@@ -500,6 +509,9 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 		topicStore = make(map[string]*blocks.PartialDataColumn)
 		p.partialMsgStore[topic] = topicStore
 	}
+
+	// extend the column from the EL
+
 	topicStore[string(c.GroupID())] = &c
 	p.groupTTL[string(c.GroupID())] = TTLInSlots
 
@@ -508,32 +520,24 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 
 type SubHandler func(topic string, col blocks.VerifiedRODataColumn)
 
-func (p *PartialColumnBroadcaster) Subscribe(t *pubsub.Topic, headerValidator HeaderValidator, validator ColumnValidator, handler SubHandler, headerHandler HeaderHandler) error {
+func (p *PartialColumnBroadcaster) Subscribe(t *pubsub.Topic) error {
 	respCh := make(chan error)
 	p.incomingReq <- request{
 		kind: requestKindSubscribe,
 		sub: subscribe{
-			t:               t,
-			headerValidator: headerValidator,
-			validator:       validator,
-			handler:         handler,
-			headerHandler:   headerHandler,
+			t: t,
 		},
 		response: respCh,
 	}
 	return <-respCh
 }
-func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic, headerValidator HeaderValidator, validator ColumnValidator, handler SubHandler, headerHandler HeaderHandler) error {
+func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic) error {
 	topic := t.String()
 	if _, ok := p.topics[topic]; ok {
 		return errors.New("already subscribed")
 	}
 
 	p.topics[topic] = t
-	p.headerValidators[topic] = headerValidator
-	p.validators[topic] = validator
-	p.handlers[topic] = handler
-	p.headerHandlers[topic] = headerHandler
 	return nil
 }
 
@@ -555,9 +559,5 @@ func (p *PartialColumnBroadcaster) unsubscribe(topic string) error {
 	}
 	delete(p.topics, topic)
 	delete(p.partialMsgStore, topic)
-	delete(p.headerValidators, topic)
-	delete(p.validators, topic)
-	delete(p.handlers, topic)
-	delete(p.headerHandlers, topic)
 	return t.Close()
 }

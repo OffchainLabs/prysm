@@ -70,11 +70,7 @@ type subscribeParameters struct {
 }
 
 type partialSubscribeParameters struct {
-	broadcaster    *partialdatacolumnbroadcaster.PartialColumnBroadcaster
-	validateHeader partialdatacolumnbroadcaster.HeaderValidator
-	validate       partialdatacolumnbroadcaster.ColumnValidator
-	handle         partialdatacolumnbroadcaster.SubHandler
-	handleHeader   partialdatacolumnbroadcaster.HeaderHandler
+	broadcaster *partialdatacolumnbroadcaster.PartialColumnBroadcaster
 }
 
 // shortTopic is a less verbose version of topic strings used for logging.
@@ -337,37 +333,50 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 			var ps *partialSubscribeParameters
 			broadcaster := s.cfg.p2p.PartialColumnBroadcaster()
 			if broadcaster != nil {
+				broadcaster.ValidateHeader = func(header *ethpb.PartialDataColumnHeader) (bool, error) {
+					return s.validatePartialDataColumnHeader(context.TODO(), header)
+				}
+				broadcaster.ValidateColumn = func(cellsToVerify []blocks.CellProofBundle) error {
+					return peerdas.VerifyDataColumnsCellsKZGProofs(len(cellsToVerify), slices.Values(cellsToVerify))
+				}
+				broadcaster.HandleColumn = func(topic string, col blocks.VerifiedRODataColumn) {
+					ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
+					defer cancel()
+
+					slot := col.SignedBlockHeader.Header.Slot
+					proposerIndex := col.SignedBlockHeader.Header.ProposerIndex
+					if !s.hasSeenDataColumnIndex(slot, proposerIndex, col.Index) {
+						s.setSeenDataColumnIndex(slot, proposerIndex, col.Index)
+						// This column was completed from a partial message.
+						partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index, 10)).Inc()
+					}
+					err := s.verifiedRODataColumnSubscriber(ctx, col)
+					if err != nil {
+						log.WithError(err).Error("Failed to handle verified RO data column subscriber")
+					}
+				}
+				broadcaster.HandleHeader = func(header *ethpb.PartialDataColumnHeader) chan bool {
+					ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
+					defer cancel()
+					source := peerdas.PopulateFromPartialHeader(header)
+					log.WithField("slot", source.Slot()).Info("Received data column header")
+
+					doneCh := make(chan bool, 1)
+
+					// we spin up a goroutine to process the partial column header recieved via Gossipsub as handling this
+					// header involves going to the EL, retrieving blobs and then publishing the partial columns constructed from the blobs.
+					// The partial publishing needs access to the broadcaster event loop and so doing the below without a goroutine can potentially cause a deadlock.
+					go func() {
+						err := s.processDataColumnSidecarsFromExecution(ctx, source)
+						if err != nil {
+							log.WithError(err).Error("Failed to process partial data column header")
+						}
+						close(doneCh)
+					}()
+					return doneCh
+				}
 				ps = &partialSubscribeParameters{
 					broadcaster: broadcaster,
-					validateHeader: func(header *ethpb.PartialDataColumnHeader) (bool, error) {
-						return s.validatePartialDataColumnHeader(context.TODO(), header)
-					},
-					validate: func(cellsToVerify []blocks.CellProofBundle) error {
-						return peerdas.VerifyDataColumnsCellsKZGProofs(len(cellsToVerify), slices.Values(cellsToVerify))
-					},
-					handle: func(topic string, col blocks.VerifiedRODataColumn) {
-						ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
-						defer cancel()
-
-						slot := col.SignedBlockHeader.Header.Slot
-						proposerIndex := col.SignedBlockHeader.Header.ProposerIndex
-						if !s.hasSeenDataColumnIndex(slot, proposerIndex, col.Index) {
-							s.setSeenDataColumnIndex(slot, proposerIndex, col.Index)
-							// This column was completed from a partial message.
-							partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index, 10)).Inc()
-						}
-						err := s.verifiedRODataColumnSubscriber(ctx, col)
-						if err != nil {
-							log.WithError(err).Error("Failed to handle verified RO data column subscriber")
-						}
-					},
-					handleHeader: func(header *ethpb.PartialDataColumnHeader) error {
-						ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
-						defer cancel()
-						source := peerdas.PopulateFromPartialHeader(header)
-						log.WithField("slot", source.Slot()).Info("Received data column header")
-						return s.processDataColumnSidecarsFromExecution(ctx, source)
-					},
 				}
 			}
 			s.subscribeWithParameters(subscribeParameters{
@@ -651,7 +660,7 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 
 		if requestPartial {
 			log.Info("Subscribing to partial columns on", topicStr)
-			err = t.partial.broadcaster.Subscribe(topic, t.partial.validateHeader, t.partial.validate, t.partial.handle, t.partial.handleHeader)
+			err = t.partial.broadcaster.Subscribe(topic)
 
 			if err != nil {
 				log.WithError(err).Error("Failed to subscribe to partial column")
