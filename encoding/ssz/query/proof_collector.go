@@ -10,6 +10,8 @@ import (
 	"slices"
 	"sync"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
@@ -340,61 +342,25 @@ func (pc *proofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 		// Composite elements: compute each element root (no padding here; merkleizeVectorAndCollect pads).
 		chunks = make([][32]byte, length)
 
-		// Fall back to per-element merkleization with proper gindices for proof collection.
-		// Parallel execution
-		workerCount := min(runtime.GOMAXPROCS(0), length)
+		// Parallel per-element merkleization with proper gindices for proof collection.
+		var g errgroup.Group
+		g.SetLimit(runtime.GOMAXPROCS(0))
 
-		jobs := make(chan int, workerCount*16)
-		errCh := make(chan error, 1) // only need the first error
-		stopCh := make(chan struct{})
-		var stopOnce sync.Once
-		var wg sync.WaitGroup
-
-		worker := func() {
-			defer wg.Done()
-			for idx := range jobs {
-				select {
-				case <-stopCh:
-					return
-				default:
-				}
-
+		for i := range length {
+			idx := i
+			g.Go(func() error {
 				elemGindex := subtreeRootGindex<<depth + uint64(idx)
 				htr, err := pc.merkleize(elemInfo, v.Index(idx), elemGindex)
 				if err != nil {
-					stopOnce.Do(func() { close(stopCh) })
-					select {
-					case errCh <- fmt.Errorf("index %d: %w", idx, err):
-					default:
-					}
-					return
+					return fmt.Errorf("index %d: %w", idx, err)
 				}
 				chunks[idx] = htr
-			}
+				return nil
+			})
 		}
 
-		wg.Add(workerCount)
-		for range workerCount {
-			go worker()
-		}
-
-		// Enqueue jobs; stop early if any worker reports an error.
-	enqueue:
-		for i := range length {
-			select {
-			case <-stopCh:
-				break enqueue
-			case jobs <- i:
-			}
-		}
-		close(jobs)
-
-		wg.Wait()
-
-		select {
-		case err := <-errCh:
+		if err := g.Wait(); err != nil {
 			return [32]byte{}, err
-		default:
 		}
 	}
 
