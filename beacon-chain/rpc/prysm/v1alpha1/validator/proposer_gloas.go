@@ -45,11 +45,10 @@ func (vs *Server) setGloasExecutionData(
 	// Create execution payload bid from the local payload.
 	parentRoot := sBlk.Block().ParentRoot()
 	bid, err := vs.createSelfBuildExecutionPayloadBid(
-		local.ExecutionData,
+		local,
 		primitives.BuilderIndex(sBlk.Block().ProposerIndex()),
 		parentRoot[:],
 		sBlk.Block().Slot(),
-		local.BlobsBundler,
 	)
 	if err != nil {
 		return errors.Wrap(err, "could not create execution payload bid")
@@ -123,31 +122,31 @@ func (vs *Server) getPayloadAttestations(ctx context.Context, head state.BeaconS
 }
 
 // createSelfBuildExecutionPayloadBid creates an ExecutionPayloadBid for self-building,
-// where the proposer acts as its own builder. Value and payment are zero, and the
-// bid fields are derived directly from the local execution payload.
+// where the proposer acts as its own builder. The value is the block value from the
+// execution layer, and execution payment is zero since the proposer doesn't pay themselves.
 func (vs *Server) createSelfBuildExecutionPayloadBid(
-	executionData interfaces.ExecutionData,
+	local *consensusblocks.GetPayloadResponse,
 	builderIndex primitives.BuilderIndex,
 	parentBlockRoot []byte,
 	slot primitives.Slot,
-	blobsBundler enginev1.BlobsBundler,
 ) (*ethpb.ExecutionPayloadBid, error) {
-	if executionData == nil || executionData.IsNil() {
+	ed := local.ExecutionData
+	if ed == nil || ed.IsNil() {
 		return nil, errors.New("execution data is nil")
 	}
 
 	return &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:    executionData.ParentHash(),
+		ParentBlockHash:    ed.ParentHash(),
 		ParentBlockRoot:    bytesutil.SafeCopyBytes(parentBlockRoot),
-		BlockHash:          executionData.BlockHash(),
-		PrevRandao:         executionData.PrevRandao(),
-		FeeRecipient:       executionData.FeeRecipient(),
-		GasLimit:           executionData.GasLimit(),
+		BlockHash:          ed.BlockHash(),
+		PrevRandao:         ed.PrevRandao(),
+		FeeRecipient:       ed.FeeRecipient(),
+		GasLimit:           ed.GasLimit(),
 		BuilderIndex:       builderIndex,
 		Slot:               slot,
-		Value:              0,
-		ExecutionPayment:   0,
-		BlobKzgCommitments: extractKzgCommitments(blobsBundler),
+		Value:              primitives.WeiToGwei(local.Bid),
+		ExecutionPayment:   0, // Self-build: proposer doesn't pay themselves.
+		BlobKzgCommitments: extractKzgCommitments(local.BlobsBundler),
 	}, nil
 }
 

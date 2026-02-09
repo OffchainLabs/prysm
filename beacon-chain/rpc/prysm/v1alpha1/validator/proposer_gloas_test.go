@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"math/big"
 	"testing"
 
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -40,9 +41,11 @@ func TestSetGloasExecutionData(t *testing.T) {
 	ed, err := consensusblocks.WrappedExecutionPayloadDeneb(payload)
 	require.NoError(t, err)
 
+	// 5 Gwei = 5,000,000,000 Wei
+	bidValue := big.NewInt(5_000_000_000)
 	local := &consensusblocks.GetPayloadResponse{
 		ExecutionData:     ed,
-		Bid:               primitives.ZeroWei(),
+		Bid:               bidValue,
 		BlobsBundler:      nil,
 		ExecutionRequests: &enginev1.ExecutionRequests{},
 	}
@@ -67,8 +70,8 @@ func TestSetGloasExecutionData(t *testing.T) {
 	require.Equal(t, slot, bid.Slot)
 	require.Equal(t, primitives.BuilderIndex(proposerIndex), bid.BuilderIndex)
 	require.DeepEqual(t, parentRoot[:], bid.ParentBlockRoot)
-	require.Equal(t, uint64(0), bid.Value)
-	require.Equal(t, uint64(0), bid.ExecutionPayment)
+	require.Equal(t, primitives.Gwei(5), bid.Value)
+	require.Equal(t, primitives.Gwei(0), bid.ExecutionPayment)
 }
 
 func TestSetGloasExecutionData_NilPayload(t *testing.T) {
