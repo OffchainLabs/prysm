@@ -6,10 +6,8 @@ import (
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/ethereum/go-ethereum/common"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -57,6 +55,18 @@ func (s signedExecutionPayloadEnvelope) IsNil() bool {
 	if len(s.s.Signature) != field_params.BLSSignatureLength {
 		return true
 	}
+	if len(s.s.Message.BeaconBlockRoot) != field_params.RootLength {
+		return true
+	}
+	if len(s.s.Message.StateRoot) != field_params.RootLength {
+		return true
+	}
+	if s.s.Message.ExecutionRequests == nil {
+		return true
+	}
+	if s.s.Message.Payload == nil {
+		return true
+	}
 	w := executionPayloadEnvelope{p: s.s.Message}
 	return w.IsNil()
 }
@@ -82,15 +92,12 @@ func (p *executionPayloadEnvelope) IsNil() bool {
 	if len(p.p.BeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
-	if p.p.BlobKzgCommitments == nil {
-		return true
-	}
 	return false
 }
 
 // IsBlinded reports whether the envelope contains a blinded payload.
 func (p *executionPayloadEnvelope) IsBlinded() bool {
-	return !p.IsNil() && p.p.Payload == nil
+	return false
 }
 
 // Execution returns the execution payload as a read-only interface.
@@ -100,7 +107,7 @@ func (p *executionPayloadEnvelope) Execution() (interfaces.ExecutionData, error)
 
 // ExecutionRequests returns the execution requests attached to the envelope.
 func (p *executionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequests {
-	return p.p.ExecutionRequests
+	return ethpb.CopyExecutionRequests(p.p.ExecutionRequests)
 }
 
 // BuilderIndex returns the proposer/builder index for the envelope.
@@ -111,35 +118,6 @@ func (p *executionPayloadEnvelope) BuilderIndex() primitives.BuilderIndex {
 // BeaconBlockRoot returns the beacon block root referenced by the envelope.
 func (p *executionPayloadEnvelope) BeaconBlockRoot() [field_params.RootLength]byte {
 	return [field_params.RootLength]byte(p.p.BeaconBlockRoot)
-}
-
-// BlobKzgCommitments returns a copy of the envelope's KZG commitments.
-func (p *executionPayloadEnvelope) BlobKzgCommitments() [][]byte {
-	commitments := make([][]byte, len(p.p.BlobKzgCommitments))
-	for i, commit := range p.p.BlobKzgCommitments {
-		commitments[i] = make([]byte, len(commit))
-		copy(commitments[i], commit)
-	}
-	return commitments
-}
-
-// VersionedHashes returns versioned hashes derived from the KZG commitments.
-func (p *executionPayloadEnvelope) VersionedHashes() []common.Hash {
-	commitments := p.p.BlobKzgCommitments
-	versionedHashes := make([]common.Hash, len(commitments))
-	for i, commitment := range commitments {
-		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(commitment)
-	}
-	return versionedHashes
-}
-
-// BlobKzgCommitmentsRoot returns the SSZ root of the envelope's KZG commitments.
-func (p *executionPayloadEnvelope) BlobKzgCommitmentsRoot() ([field_params.RootLength]byte, error) {
-	if p.IsNil() || p.p.BlobKzgCommitments == nil {
-		return [field_params.RootLength]byte{}, consensus_types.ErrNilObjectWrapped
-	}
-
-	return ssz.KzgCommitmentsRoot(p.p.BlobKzgCommitments)
 }
 
 // Slot returns the slot of the envelope.

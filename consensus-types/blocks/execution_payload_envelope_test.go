@@ -35,17 +35,31 @@ func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 	}
 
 	return &ethpb.ExecutionPayloadEnvelope{
-		Payload:            payload,
-		ExecutionRequests:  &enginev1.ExecutionRequests{},
-		BuilderIndex:       10,
-		BeaconBlockRoot:    bytes.Repeat([]byte{0xAA}, 32),
-		Slot:               9,
-		BlobKzgCommitments: [][]byte{bytes.Repeat([]byte{0x0C}, 48)},
-		StateRoot:          bytes.Repeat([]byte{0xBB}, 32),
+		Payload: payload,
+		ExecutionRequests: &enginev1.ExecutionRequests{
+			Deposits: []*enginev1.DepositRequest{
+				{
+					Pubkey:                bytes.Repeat([]byte{0x09}, 48),
+					WithdrawalCredentials: bytes.Repeat([]byte{0x0A}, 32),
+					Signature:             bytes.Repeat([]byte{0x0B}, 96),
+				},
+			},
+		},
+		BuilderIndex:    10,
+		BeaconBlockRoot: bytes.Repeat([]byte{0xAA}, 32),
+		Slot:            9,
+		StateRoot:       bytes.Repeat([]byte{0xBB}, 32),
 	}
 }
 
 func TestWrappedROExecutionPayloadEnvelope(t *testing.T) {
+	t.Run("returns error on nil payload", func(t *testing.T) {
+		invalid := validExecutionPayloadEnvelope()
+		invalid.Payload = nil
+		_, err := blocks.WrappedROExecutionPayloadEnvelope(invalid)
+		require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
+	})
+
 	t.Run("returns error on invalid beacon root length", func(t *testing.T) {
 		invalid := validExecutionPayloadEnvelope()
 		invalid.BeaconBlockRoot = []byte{0x01}
@@ -63,18 +77,18 @@ func TestWrappedROExecutionPayloadEnvelope(t *testing.T) {
 		assert.DeepEqual(t, [32]byte(bytes.Repeat([]byte{0xAA}, 32)), wrapped.BeaconBlockRoot())
 		assert.DeepEqual(t, [32]byte(bytes.Repeat([]byte{0xBB}, 32)), wrapped.StateRoot())
 
-		commitments := wrapped.BlobKzgCommitments()
-		assert.DeepEqual(t, env.BlobKzgCommitments, commitments)
-
-		versioned := wrapped.VersionedHashes()
-		require.Equal(t, 1, len(versioned))
-
 		reqs := wrapped.ExecutionRequests()
 		require.NotNil(t, reqs)
+		if len(reqs.Deposits) > 0 {
+			reqs.Deposits[0].Pubkey[0] = 0xFF
+			require.NotEqual(t, reqs.Deposits[0].Pubkey[0], env.ExecutionRequests.Deposits[0].Pubkey[0])
+		}
 
 		exec, err := wrapped.Execution()
 		require.NoError(t, err)
 		assert.DeepEqual(t, env.Payload.ParentHash, exec.ParentHash())
+
+		require.Equal(t, false, wrapped.IsBlinded())
 	})
 }
 
@@ -85,6 +99,11 @@ func TestWrappedROSignedExecutionPayloadEnvelope(t *testing.T) {
 			Signature: bytes.Repeat([]byte{0xAA}, 95),
 		}
 		_, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signed)
+		require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
+	})
+
+	t.Run("returns error on nil envelope", func(t *testing.T) {
+		_, err := blocks.WrappedROSignedExecutionPayloadEnvelope(nil)
 		require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
 	})
 
@@ -111,5 +130,7 @@ func TestWrappedROSignedExecutionPayloadEnvelope(t *testing.T) {
 		gotRoot, err := wrapped.SigningRoot(domain)
 		require.NoError(t, err)
 		require.Equal(t, wantRoot, gotRoot)
+
+		require.Equal(t, signed, wrapped.Proto())
 	})
 }

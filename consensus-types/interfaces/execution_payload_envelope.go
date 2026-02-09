@@ -4,7 +4,6 @@ import (
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	"github.com/ethereum/go-ethereum/common"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -21,9 +20,6 @@ type ROExecutionPayloadEnvelope interface {
 	ExecutionRequests() *enginev1.ExecutionRequests
 	BuilderIndex() primitives.BuilderIndex
 	BeaconBlockRoot() [field_params.RootLength]byte
-	BlobKzgCommitments() [][]byte
-	BlobKzgCommitmentsRoot() ([field_params.RootLength]byte, error)
-	VersionedHashes() []common.Hash
 	Slot() primitives.Slot
 	StateRoot() [field_params.RootLength]byte
 	IsBlinded() bool
