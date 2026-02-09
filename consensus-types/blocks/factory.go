@@ -27,6 +27,11 @@ var (
 	// ErrNilBeaconBlock is returned when a nil beacon block is received.
 	ErrNilBeaconBlock              = errors.New("beacon block can't be nil")
 	errNonBlindedSignedBeaconBlock = errors.New("can only build signed beacon block from blinded format")
+	// ErrNonCanonicalBlock is returned when a reconstructed execution payload does
+	// not match the expected payload header. This occurs when the execution layer
+	// returns the canonical block's payload at the same height instead of the
+	// requested (orphaned/reorged) block's payload.
+	ErrNonCanonicalBlock = errors.New("no canonical block found for payload header")
 )
 
 // NewSignedBeaconBlock creates a signed beacon block from a protobuf signed beacon block.
@@ -308,11 +313,11 @@ func checkPayloadAgainstHeader(wrappedPayload, payloadHeader interfaces.Executio
 		return errors.Wrap(err, "could not hash tree root payload header")
 	}
 	if payloadRoot != payloadHeaderRoot {
-		return fmt.Errorf(
+		return errors.Wrap(ErrNonCanonicalBlock, fmt.Sprintf(
 			"payload %#x and header %#x roots do not match",
 			payloadRoot,
 			payloadHeaderRoot,
-		)
+		))
 	}
 	return nil
 }

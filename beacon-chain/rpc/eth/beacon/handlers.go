@@ -163,7 +163,11 @@ func (s *Server) GetBlockV2(w http.ResponseWriter, r *http.Request) {
 	if blk.Version() >= version.Bellatrix && blk.IsBlinded() {
 		blk, err = s.ExecutionReconstructor.ReconstructFullBlock(ctx, blk)
 		if err != nil {
-			httputil.HandleError(w, errors.Wrapf(err, "could not reconstruct full execution payload to create signed beacon block").Error(), http.StatusBadRequest)
+			if errors.Is(err, blocks.ErrNonCanonicalBlock) {
+				httputil.HandleError(w, fmt.Sprintf("no canonical block found for block %s: execution payload is unavailable (block may have been orphaned)", blockId), http.StatusNotFound)
+			} else {
+				httputil.HandleError(w, errors.Wrapf(err, "could not reconstruct full execution payload to create signed beacon block").Error(), http.StatusInternalServerError)
+			}
 			return
 		}
 	}
