@@ -196,9 +196,38 @@ func TestSetOptimisticToInvalid_ProposerBoost(t *testing.T) {
 
 	_, err = f.SetOptimisticToInvalid(ctx, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'B'}, [32]byte{'A'})
 	require.NoError(t, err)
+	// proposer boost is still applied to c
+	require.Equal(t, uint64(10), f.store.previousProposerBoostScore)
+	require.Equal(t, [32]byte{}, f.store.proposerBoostRoot)
+	require.Equal(t, [32]byte{'b'}, f.store.previousProposerBoostRoot)
+}
+
+func TestSetOptimisticToInvalid_ProposerBoost_Older(t *testing.T) {
+	ctx := t.Context()
+	f := setup(1, 1)
+
+	state, blkRoot, err := prepareForkchoiceState(ctx, 100, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
+	state, blkRoot, err = prepareForkchoiceState(ctx, 101, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
+	state, blkRoot, err = prepareForkchoiceState(ctx, 102, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
+	state, blkRoot, err = prepareForkchoiceState(ctx, 103, [32]byte{'d'}, [32]byte{'c'}, [32]byte{'D'}, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
+	f.store.proposerBoostRoot = [32]byte{'d'}
+	f.store.previousProposerBoostScore = 10
+	f.store.previousProposerBoostRoot = [32]byte{'c'}
+
+	_, err = f.SetOptimisticToInvalid(ctx, [32]byte{'d'}, [32]byte{'c'}, [32]byte{'C'}, [32]byte{'A'})
+	require.NoError(t, err)
+	// proposer boost is still applied to c
 	require.Equal(t, uint64(0), f.store.previousProposerBoostScore)
-	require.DeepEqual(t, [32]byte{}, f.store.proposerBoostRoot)
-	require.DeepEqual(t, params.BeaconConfig().ZeroHash, f.store.previousProposerBoostRoot)
+	require.Equal(t, [32]byte{}, f.store.proposerBoostRoot)
+	require.Equal(t, [32]byte{}, f.store.previousProposerBoostRoot)
 }
 
 // This is a regression test (10565)
@@ -277,11 +306,11 @@ func TestSetOptimisticToInvalid_ForkAtMerge(t *testing.T) {
 
 	roots, err := f.SetOptimisticToInvalid(ctx, [32]byte{'x'}, [32]byte{'d'}, [32]byte{'D'}, [32]byte{})
 	require.NoError(t, err)
-	require.Equal(t, 4, len(roots))
+	require.Equal(t, 3, len(roots))
 	sort.Slice(roots, func(i, j int) bool {
 		return bytesutil.BytesToUint64BigEndian(roots[i][:]) < bytesutil.BytesToUint64BigEndian(roots[j][:])
 	})
-	require.DeepEqual(t, roots, [][32]byte{{'b'}, {'c'}, {'d'}, {'e'}})
+	require.DeepEqual(t, roots, [][32]byte{{'c'}, {'d'}, {'e'}})
 }
 
 // Pow       |      Pos
@@ -330,11 +359,11 @@ func TestSetOptimisticToInvalid_ForkAtMerge_bis(t *testing.T) {
 
 	roots, err := f.SetOptimisticToInvalid(ctx, [32]byte{'x'}, [32]byte{'d'}, [32]byte{'D'}, [32]byte{})
 	require.NoError(t, err)
-	require.Equal(t, 4, len(roots))
+	require.Equal(t, 3, len(roots))
 	sort.Slice(roots, func(i, j int) bool {
 		return bytesutil.BytesToUint64BigEndian(roots[i][:]) < bytesutil.BytesToUint64BigEndian(roots[j][:])
 	})
-	require.DeepEqual(t, roots, [][32]byte{{'b'}, {'c'}, {'d'}, {'e'}})
+	require.DeepEqual(t, roots, [][32]byte{{'c'}, {'d'}, {'e'}})
 }
 
 func TestSetOptimisticToValid(t *testing.T) {

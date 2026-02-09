@@ -59,11 +59,11 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 		f.store.headNode.slot = saved
 	})
 	t.Run("head is early", func(t *testing.T) {
-		en := f.store.emptyNodeByRoot[f.store.headNode.root]
-		saved := en.timestamp
-		en.timestamp = saved.Add(-2 * time.Second)
+		fn := f.store.fullNodeByRoot[f.store.headNode.root]
+		saved := fn.timestamp
+		fn.timestamp = saved.Add(-2 * time.Second)
 		require.Equal(t, false, f.ShouldOverrideFCU())
-		en.timestamp = saved
+		fn.timestamp = saved
 	})
 	t.Run("chain not finalizing", func(t *testing.T) {
 		saved := f.store.headNode.slot
@@ -135,8 +135,8 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, blk.Root(), headRoot)
 	orphanLateBlockFirstThreshold := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AttestationDueBPS)
-	en := f.store.emptyNodeByRoot[f.store.headNode.root]
-	en.timestamp.Add(-1 * (params.BeaconConfig().SlotDuration() - orphanLateBlockFirstThreshold))
+	fn := f.store.fullNodeByRoot[f.store.headNode.root]
+	fn.timestamp.Add(-1 * (params.BeaconConfig().SlotDuration() - orphanLateBlockFirstThreshold))
 	t.Run("head is weak", func(t *testing.T) {
 		require.Equal(t, parentRoot, f.GetProposerHead())
 	})

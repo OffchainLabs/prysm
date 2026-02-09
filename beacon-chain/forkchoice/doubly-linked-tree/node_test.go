@@ -122,16 +122,16 @@ func TestNode_UpdateBestDescendant_LowerWeightChild(t *testing.T) {
 	f := setup(1, 1)
 	ctx := t.Context()
 	// Input child is the best descendant
-	state, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
+	state, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, indexToHash(101), 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
-	state, blk, err = prepareForkchoiceState(ctx, 2, indexToHash(2), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
+	state, blk, err = prepareForkchoiceState(ctx, 2, indexToHash(2), params.BeaconConfig().ZeroHash, indexToHash(102), 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
 
 	s := f.store
-	s.emptyNodeByRoot[indexToHash(1)].weight = 200
-	s.emptyNodeByRoot[indexToHash(2)].weight = 100
+	s.emptyNodeByRoot[indexToHash(1)].node.weight = 200
+	s.emptyNodeByRoot[indexToHash(2)].node.weight = 100
 	assert.NoError(t, s.updateBestDescendantConsensusNode(ctx, s.treeRootNode, 1, 1, 1))
 
 	children := s.allConsensusChildren(s.treeRootNode)

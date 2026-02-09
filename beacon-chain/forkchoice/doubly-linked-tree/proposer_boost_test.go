@@ -167,13 +167,13 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		//		    \--------------->(4: 18)
 		//
 		node1 := f.store.emptyNodeByRoot[indexToHash(1)]
-		require.Equal(t, node1.weight, uint64(48))
+		require.Equal(t, node1.node.weight, uint64(48))
 		node2 := f.store.emptyNodeByRoot[indexToHash(2)]
-		require.Equal(t, node2.weight, uint64(38))
+		require.Equal(t, node2.node.weight, uint64(38))
 		node3 := f.store.emptyNodeByRoot[indexToHash(3)]
-		require.Equal(t, node3.weight, uint64(10))
+		require.Equal(t, node3.node.weight, uint64(10))
 		node4 := f.store.emptyNodeByRoot[indexToHash(4)]
-		require.Equal(t, node4.weight, uint64(18))
+		require.Equal(t, node4.node.weight, uint64(18))
 
 		// Regression: process attestations for C, check that it
 		// becomes head, we need two attestations to have C.weight = 30 > 24 = D.weight
