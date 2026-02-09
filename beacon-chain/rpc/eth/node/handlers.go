@@ -116,6 +116,35 @@ func (*Server) GetVersion(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, resp)
 }
 
+// GetVersionV2 Retrieves structured information about the version of the beacon node and its attached
+// execution client(s) in the same format as used on the Engine API
+func (s *Server) GetVersionV2(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "node.GetVersionV2")
+	defer span.End()
+
+	elDataList, err := s.ExecutionEngineCaller.GetClientVersionV1(ctx)
+	if err != nil {
+		log.WithError(err).WithField("endpoint", "GetVersionV2").Debug("Could not get execution client version")
+	}
+
+	commit := version.GitCommit()
+	if len(commit) >= 8 {
+		commit = commit[:8]
+	}
+	resp := &structs.GetVersionV2Response{
+		Data: &structs.VersionV2{
+			BeaconNode: &structs.ClientVersionV1{
+				Code:    "PM",
+				Name:    "Prysm",
+				Version: version.SemanticVersion(),
+				Commit:  commit,
+			},
+			ExecutionClient: elDataList,
+		},
+	}
+	httputil.WriteJson(w, resp)
+}
+
 // GetHealth returns node health status in http status codes. Useful for load balancers.
 func (s *Server) GetHealth(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "node.GetHealth")

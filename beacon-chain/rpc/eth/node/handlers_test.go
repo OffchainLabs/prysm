@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	mockengine "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
@@ -88,6 +89,41 @@ func TestGetVersion(t *testing.T) {
 	assert.StringContains(t, semVer, resp.Data.Version)
 	assert.StringContains(t, os, resp.Data.Version)
 	assert.StringContains(t, arch, resp.Data.Version)
+}
+
+func TestGetVersionV2(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/node/version", nil)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	s := &Server{
+		ExecutionEngineCaller: &mockengine.EngineClient{
+			ClientVersion: []*structs.ClientVersionV1{{
+				Code:    "EL",
+				Name:    "ExecutionClient",
+				Version: "v1.0.0",
+				Commit:  "abcdef12",
+			}},
+		},
+	}
+	s.GetVersionV2(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+
+	resp := &structs.GetVersionV2Response{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+	require.NotNil(t, resp)
+	require.NotNil(t, resp.Data)
+	require.NotNil(t, resp.Data.BeaconNode)
+	require.NotNil(t, resp.Data.ExecutionClient)
+	e := resp.Data.ExecutionClient[0]
+	require.Equal(t, "EL", e.Code)
+	require.Equal(t, "ExecutionClient", e.Name)
+	require.Equal(t, "v1.0.0", e.Version)
+	require.Equal(t, "abcdef12", e.Commit)
+	require.Equal(t, "PM", resp.Data.BeaconNode.Code)
+	require.Equal(t, "Prysm", resp.Data.BeaconNode.Name)
+	require.Equal(t, version.SemanticVersion(), resp.Data.BeaconNode.Version)
+	require.Equal(t, true, len(resp.Data.BeaconNode.Commit) <= 8)
 }
 
 func TestGetHealth(t *testing.T) {
