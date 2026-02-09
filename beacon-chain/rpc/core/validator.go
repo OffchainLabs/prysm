@@ -99,7 +99,7 @@ func (s *Service) ComputeValidatorPerformance(
 		}
 		validatorSummary = vp
 	} else {
-		return nil, &RpcError{Err: errors.Wrapf(err, "head state version %d not supported", headState.Version()), Reason: Internal}
+		return nil, &RpcError{Err: errors.Errorf("head state version %d not supported", headState.Version()), Reason: Internal}
 	}
 
 	responseCap := len(req.Indices) + len(req.PublicKeys)
@@ -273,7 +273,7 @@ func (s *Service) IndividualVotes(
 		}
 	} else {
 		return nil, &RpcError{
-			Err:    errors.Wrapf(err, "invalid state type retrieved with a version of %d", st.Version()),
+			Err:    errors.Errorf("invalid state type retrieved with a version of %d", st.Version()),
 			Reason: Internal,
 		}
 	}
