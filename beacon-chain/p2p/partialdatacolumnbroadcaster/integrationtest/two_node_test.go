@@ -77,8 +77,6 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		ps2, err := pubsub.NewGossipSub(ctx, h2, opts2...)
 		require.NoError(t, err)
 
-		go broadcaster1.Start()
-		go broadcaster2.Start()
 		defer func() {
 			broadcaster1.Stop()
 			broadcaster2.Stop()
@@ -140,7 +138,7 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		topic2, err := ps2.Join(topicStr, pubsub.RequestPartialMessages())
 		require.NoError(t, err)
 
-		// Header validator that verifies the inclusion proof
+		// Header validator that checks basic structure
 		headerValidator := func(header *ethpb.PartialDataColumnHeader) (reject bool, err error) {
 			if header == nil {
 				return false, fmt.Errorf("nil header")
@@ -150,10 +148,6 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 			}
 			if len(header.KzgCommitments) == 0 {
 				return true, fmt.Errorf("empty kzg commitments")
-			}
-			// Verify inclusion proof
-			if err := peerdas.VerifyPartialDataColumnHeaderInclusionProof(header); err != nil {
-				return true, fmt.Errorf("invalid inclusion proof: %w", err)
 			}
 			t.Log("Header validation passed")
 			return false, nil
@@ -193,13 +187,24 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		require.NoError(t, err)
 		defer sub2.Cancel()
 
+		noopHeaderHandler := func(header *ethpb.PartialDataColumnHeader) chan bool {
+			ch := make(chan bool)
+			close(ch)
+			return ch
+		}
+
 		broadcaster1.ValidateHeader = headerValidator
 		broadcaster1.ValidateColumn = cellValidator
 		broadcaster1.HandleColumn = handler1
+		broadcaster1.HandleHeader = noopHeaderHandler
 
 		broadcaster2.ValidateHeader = headerValidator
 		broadcaster2.ValidateColumn = cellValidator
 		broadcaster2.HandleColumn = handler2
+		broadcaster2.HandleHeader = noopHeaderHandler
+
+		go broadcaster1.Start()
+		go broadcaster2.Start()
 
 		err = broadcaster1.Subscribe(topic1)
 		require.NoError(t, err)

@@ -417,13 +417,12 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 	}
 
 	headerHandled := p.headerHandled[string(groupID)]
-	if headerHandled == nil {
-		return nil
-	}
-	select {
-	case <-headerHandled:
-	case <-time.After(headerHandledTimeout):
-		return errors.New("header not handled in time")
+	if headerHandled != nil {
+		select {
+		case <-headerHandled:
+		case <-time.After(headerHandledTimeout):
+			return errors.New("header not handled in time")
+		}
 	}
 
 	if shouldRepublish {
@@ -462,13 +461,12 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 		}
 
 		headerHandled := p.headerHandled[string(ourDataColumn.GroupID())]
-		if headerHandled == nil {
-			return errors.New("header not handled")
-		}
-		select {
-		case <-headerHandled:
-		case <-time.After(headerHandledTimeout):
-			return errors.New("header not handled in time")
+		if headerHandled != nil {
+			select {
+			case <-headerHandled:
+			case <-time.After(headerHandledTimeout):
+				return errors.New("header not handled in time")
+			}
 		}
 
 		err := p.ps.PublishPartialMessage(cells.topic, ourDataColumn, partialmessages.PublishOptions{})
