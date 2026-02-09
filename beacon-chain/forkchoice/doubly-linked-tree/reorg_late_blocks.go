@@ -93,7 +93,7 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 		return true
 	}
 	// Only orphan a block if the parent LMD vote is strong
-	if parent.weight*100 < f.store.committeeWeight*params.BeaconConfig().ReorgParentWeightThreshold {
+	if parent.node.weight*100 < f.store.committeeWeight*params.BeaconConfig().ReorgParentWeightThreshold {
 		return
 	}
 	return true
@@ -150,7 +150,7 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	}
 
 	// Only orphan a block if the parent LMD vote is strong
-	if parent.weight*100 < f.store.committeeWeight*params.BeaconConfig().ReorgParentWeightThreshold {
+	if parent.node.weight*100 < f.store.committeeWeight*params.BeaconConfig().ReorgParentWeightThreshold {
 		return consensusHead.root
 	}
 
