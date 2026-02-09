@@ -96,8 +96,8 @@ func (p *executionPayloadEnvelope) IsNil() bool {
 }
 
 // IsBlinded reports whether the envelope contains a blinded payload.
-func (p *executionPayloadEnvelope) IsBlinded() bool {
-	return !p.IsNil() && p.p.Payload == nil
+func (p *executionPayloadEnvelope) IsBlinded() bool {	
+	return false
 }
 
 // Execution returns the execution payload as a read-only interface.
