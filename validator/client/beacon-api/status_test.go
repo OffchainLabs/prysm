@@ -50,19 +50,19 @@ func TestValidatorStatus_Nominal(t *testing.T) {
 		nil,
 	).Times(1)
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: stateValidatorsProvider,
 		prysmChainClient: prysmChainClient{
 			nodeClient: &beaconApiNodeClient{
-				jsonRestHandler: jsonRestHandler,
+				handler: handler,
 			},
 		},
 	}
 
 	// Expect node version endpoint call.
 	var nodeVersionResponse structs.GetVersionResponse
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
@@ -165,11 +165,11 @@ func TestMultipleValidatorStatus_Nominal(t *testing.T) {
 		nil,
 	).Times(1)
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
 	// Expect node version endpoint call.
 	var nodeVersionResponse structs.GetVersionResponse
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
@@ -181,7 +181,7 @@ func TestMultipleValidatorStatus_Nominal(t *testing.T) {
 		stateValidatorsProvider: stateValidatorsProvider,
 		prysmChainClient: prysmChainClient{
 			nodeClient: &beaconApiNodeClient{
-				jsonRestHandler: jsonRestHandler,
+				handler: handler,
 			},
 		},
 	}
@@ -317,11 +317,11 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 		nil,
 	).Times(1)
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
 	// Expect node version endpoint call.
 	var nodeVersionResponse structs.GetVersionResponse
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
@@ -333,7 +333,7 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 	).Times(1)
 
 	var validatorCountResponse structs.GetValidatorCountResponse
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/beacon/states/head/validator_count?",
 		&validatorCountResponse,
@@ -420,9 +420,9 @@ func TestGetValidatorsStatusResponse_Nominal_SomeActiveValidators(t *testing.T) 
 		stateValidatorsProvider: stateValidatorsProvider,
 		prysmChainClient: prysmChainClient{
 			nodeClient: &beaconApiNodeClient{
-				jsonRestHandler: jsonRestHandler,
+				handler: handler,
 			},
-			jsonRestHandler: jsonRestHandler,
+			handler: handler,
 		},
 	}
 	actualValidatorsPubKey, actualValidatorsIndex, actualValidatorsStatusResponse, err := validatorClient.validatorsStatusResponse(ctx, validatorsPubKey, validatorsIndex)
@@ -465,11 +465,11 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 		nil,
 	).Times(1)
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
 	// Expect node version endpoint call.
 	var nodeVersionResponse structs.GetVersionResponse
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/node/version",
 		&nodeVersionResponse,
@@ -490,9 +490,9 @@ func TestGetValidatorsStatusResponse_Nominal_NoActiveValidators(t *testing.T) {
 		stateValidatorsProvider: stateValidatorsProvider,
 		prysmChainClient: prysmChainClient{
 			nodeClient: &beaconApiNodeClient{
-				jsonRestHandler: jsonRestHandler,
+				handler: handler,
 			},
-			jsonRestHandler: jsonRestHandler,
+			handler: handler,
 		},
 	}
 	actualValidatorsPubKey, actualValidatorsIndex, actualValidatorsStatusResponse, err := validatorClient.validatorsStatusResponse(ctx, wantedValidatorsPubKey, nil)
@@ -704,11 +704,11 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 					testCase.inputGetStateValidatorsInterface.outputErr,
 				).Times(1)
 
-				jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+				handler := mock.NewMockJsonRestHandler(ctrl)
 
 				// Expect node version endpoint call.
 				var nodeVersionResponse structs.GetVersionResponse
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					"/eth/v1/node/version",
 					&nodeVersionResponse,
@@ -720,9 +720,9 @@ func TestValidatorStatusResponse_InvalidData(t *testing.T) {
 					stateValidatorsProvider: stateValidatorsProvider,
 					prysmChainClient: prysmChainClient{
 						nodeClient: &beaconApiNodeClient{
-							jsonRestHandler: jsonRestHandler,
+							handler: handler,
 						},
-						jsonRestHandler: jsonRestHandler,
+						handler: handler,
 					},
 				}
 

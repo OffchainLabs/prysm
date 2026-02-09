@@ -41,9 +41,9 @@ func TestIndex_Nominal(t *testing.T) {
 	ctx := t.Context()
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
-	jsonRestHandler.EXPECT().Post(
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil,
@@ -68,7 +68,7 @@ func TestIndex_Nominal(t *testing.T) {
 
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: beaconApiStateValidatorsProvider{
-			jsonRestHandler: jsonRestHandler,
+			handler: handler,
 		},
 	}
 
@@ -91,9 +91,9 @@ func TestIndex_UnexistingValidator(t *testing.T) {
 	ctx := t.Context()
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
-	jsonRestHandler.EXPECT().Post(
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil,
@@ -110,7 +110,7 @@ func TestIndex_UnexistingValidator(t *testing.T) {
 
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: beaconApiStateValidatorsProvider{
-			jsonRestHandler: jsonRestHandler,
+			handler: handler,
 		},
 	}
 
@@ -133,9 +133,9 @@ func TestIndex_BadIndexError(t *testing.T) {
 	ctx := t.Context()
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
-	jsonRestHandler.EXPECT().Post(
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil,
@@ -160,7 +160,7 @@ func TestIndex_BadIndexError(t *testing.T) {
 
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: beaconApiStateValidatorsProvider{
-			jsonRestHandler: jsonRestHandler,
+			handler: handler,
 		},
 	}
 
@@ -182,9 +182,9 @@ func TestIndex_JsonResponseError(t *testing.T) {
 	ctx := t.Context()
 
 	stateValidatorsResponseJson := structs.GetValidatorsResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
-	jsonRestHandler.EXPECT().Post(
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/states/head/validators",
 		nil,
@@ -207,7 +207,7 @@ func TestIndex_JsonResponseError(t *testing.T) {
 		queryParams.Add("status", st)
 	}
 
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		apiutil.BuildURL("/eth/v1/beacon/states/head/validators", queryParams),
 		&stateValidatorsResponseJson,
@@ -217,7 +217,7 @@ func TestIndex_JsonResponseError(t *testing.T) {
 
 	validatorClient := beaconApiValidatorClient{
 		stateValidatorsProvider: beaconApiStateValidatorsProvider{
-			jsonRestHandler: jsonRestHandler,
+			handler: handler,
 		},
 	}
 

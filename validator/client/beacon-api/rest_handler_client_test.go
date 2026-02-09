@@ -44,9 +44,9 @@ func TestGet(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	jsonRestHandler := rest.NewRestHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+	handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 	resp := &structs.GetGenesisResponse{}
-	require.NoError(t, jsonRestHandler.Get(ctx, endpoint+"?arg1=abc&arg2=def", resp))
+	require.NoError(t, handler.Get(ctx, endpoint+"?arg1=abc&arg2=def", resp))
 	assert.DeepEqual(t, genesisJson, resp)
 }
 
@@ -75,9 +75,9 @@ func TestGetSSZ(t *testing.T) {
 		server := httptest.NewServer(mux)
 		defer server.Close()
 
-		jsonRestHandler := rest.NewRestHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+		handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 
-		body, header, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		body, header, err := handler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
 		assert.DeepEqual(t, expectedBody, body)
 		require.StringContains(t, api.OctetStreamMediaType, header.Get("Content-Type"))
@@ -101,9 +101,9 @@ func TestGetSSZ(t *testing.T) {
 		server := httptest.NewServer(mux)
 		defer server.Close()
 
-		jsonRestHandler := rest.NewRestHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+		handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 
-		body, header, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		body, header, err := handler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
 		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
 		require.Equal(t, api.JsonMediaType, header.Get("Content-Type"))
@@ -126,9 +126,9 @@ func TestGetSSZ(t *testing.T) {
 		server := httptest.NewServer(mux)
 		defer server.Close()
 
-		jsonRestHandler := rest.NewRestHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+		handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 
-		_, _, err := jsonRestHandler.GetSSZ(ctx, endpoint)
+		_, _, err := handler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
 		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
 	})
@@ -148,7 +148,7 @@ func TestAcceptOverrideSSZ(t *testing.T) {
 		require.NoError(t, err)
 	}))
 	defer srv.Close()
-	c := rest.NewRestHandler(http.Client{Timeout: time.Second * 5}, srv.URL)
+	c := rest.NewHandler(http.Client{Timeout: time.Second * 5}, srv.URL)
 	_, _, err := c.GetSSZ(t.Context(), "/test")
 	require.NoError(t, err)
 }
@@ -191,9 +191,9 @@ func TestPost(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	jsonRestHandler := rest.NewRestHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+	handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 	resp := &structs.GetGenesisResponse{}
-	require.NoError(t, jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(dataBytes), resp))
+	require.NoError(t, handler.Post(ctx, endpoint, headers, bytes.NewBuffer(dataBytes), resp))
 	assert.DeepEqual(t, genesisJson, resp)
 }
 
@@ -238,18 +238,18 @@ func TestGetStatusCode(t *testing.T) {
 			server := httptest.NewServer(mux)
 			defer server.Close()
 
-			jsonRestHandler := rest.NewRestHandler(http.Client{Timeout: time.Second * 5}, server.URL)
+			handler := rest.NewHandler(http.Client{Timeout: time.Second * 5}, server.URL)
 
-			statusCode, err := jsonRestHandler.GetStatusCode(ctx, endpoint)
+			statusCode, err := handler.GetStatusCode(ctx, endpoint)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedStatusCode, statusCode)
 		})
 	}
 
 	t.Run("returns error on connection failure", func(t *testing.T) {
-		jsonRestHandler := rest.NewRestHandler(http.Client{Timeout: time.Millisecond * 100}, "http://localhost:99999")
+		handler := rest.NewHandler(http.Client{Timeout: time.Millisecond * 100}, "http://localhost:99999")
 
-		_, err := jsonRestHandler.GetStatusCode(ctx, endpoint)
+		_, err := handler.GetStatusCode(ctx, endpoint)
 		require.ErrorContains(t, "failed to perform request", err)
 	})
 }
