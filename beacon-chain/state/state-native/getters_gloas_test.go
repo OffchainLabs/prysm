@@ -46,6 +46,17 @@ func TestLatestBlockHash(t *testing.T) {
 	})
 }
 
+func TestLatestExecutionPayloadBid(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		stIface, _ := util.DeterministicGenesisState(t, 1)
+		native, ok := stIface.(*state_native.BeaconState)
+		require.Equal(t, true, ok)
+
+		_, err := native.LatestExecutionPayloadBid()
+		require.ErrorContains(t, "is not supported", err)
+	})
+}
+
 func TestBuilderPubkey(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
 		stIface, _ := util.DeterministicGenesisState(t, 1)

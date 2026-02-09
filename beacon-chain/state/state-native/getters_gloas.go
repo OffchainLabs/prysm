@@ -164,6 +164,10 @@ func (b *BeaconState) BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, 
 
 // LatestExecutionPayloadBid returns the cached latest execution payload bid for Gloas.
 func (b *BeaconState) LatestExecutionPayloadBid() (interfaces.ROExecutionPayloadBid, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("LatestExecutionPayloadBid", b.version)
+	}
+
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 

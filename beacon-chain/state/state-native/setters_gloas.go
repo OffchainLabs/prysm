@@ -202,6 +202,10 @@ func (b *BeaconState) UpdateExecutionPayloadAvailabilityAtIndex(idx uint64, val 
 
 // SetLatestBlockHash sets the latest execution block hash.
 func (b *BeaconState) SetLatestBlockHash(hash [32]byte) error {
+	if b.version < version.Gloas {
+		return errNotSupported("SetLatestBlockHash", b.version)
+	}
+
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
@@ -212,12 +216,20 @@ func (b *BeaconState) SetLatestBlockHash(hash [32]byte) error {
 
 // SetExecutionPayloadAvailability sets the execution payload availability bit for a specific slot.
 func (b *BeaconState) SetExecutionPayloadAvailability(index primitives.Slot, available bool) error {
+	if b.version < version.Gloas {
+		return errNotSupported("SetExecutionPayloadAvailability", b.version)
+	}
+
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
 	bitIndex := index % params.BeaconConfig().SlotsPerHistoricalRoot
 	byteIndex := bitIndex / 8
 	bitPosition := bitIndex % 8
+
+	if uint64(byteIndex) >= uint64(len(b.executionPayloadAvailability)) {
+		return fmt.Errorf("bit index %d (byte index %d) out of range for execution payload availability length %d", bitIndex, byteIndex, len(b.executionPayloadAvailability))
+	}
 
 	// Set or clear the bit
 	if available {
@@ -232,6 +244,10 @@ func (b *BeaconState) SetExecutionPayloadAvailability(index primitives.Slot, ava
 
 // IncreaseBuilderBalance increases the balance of the builder at the given index.
 func (b *BeaconState) IncreaseBuilderBalance(index primitives.BuilderIndex, amount uint64) error {
+	if b.version < version.Gloas {
+		return errNotSupported("IncreaseBuilderBalance", b.version)
+	}
+
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
@@ -242,9 +258,18 @@ func (b *BeaconState) IncreaseBuilderBalance(index primitives.BuilderIndex, amou
 		return fmt.Errorf("builder at index %d is nil", index)
 	}
 
-	builder := ethpb.CopyBuilder(b.builders[index])
+	builders := b.builders
+	if b.sharedFieldReferences[types.Builders].Refs() > 1 {
+		builders = make([]*ethpb.Builder, len(b.builders))
+		copy(builders, b.builders)
+		b.sharedFieldReferences[types.Builders].MinusRef()
+		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
+	}
+
+	builder := ethpb.CopyBuilder(builders[index])
 	builder.Balance += primitives.Gwei(amount)
-	b.builders[index] = builder
+	builders[index] = builder
+	b.builders = builders
 
 	b.markFieldAsDirty(types.Builders)
 	return nil
@@ -252,6 +277,10 @@ func (b *BeaconState) IncreaseBuilderBalance(index primitives.BuilderIndex, amou
 
 // AddBuilderFromDeposit creates or replaces a builder entry derived from a deposit.
 func (b *BeaconState) AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64) error {
+	if b.version < version.Gloas {
+		return errNotSupported("AddBuilderFromDeposit", b.version)
+	}
+
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
@@ -267,13 +296,22 @@ func (b *BeaconState) AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]
 		WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch,
 	}
 
-	if index < primitives.BuilderIndex(len(b.builders)) {
-		b.builders[index] = builder
-	} else {
-		gap := index - primitives.BuilderIndex(len(b.builders)) + 1
-		b.builders = append(b.builders, make([]*ethpb.Builder, gap)...)
-		b.builders[index] = builder
+	builders := b.builders
+	if b.sharedFieldReferences[types.Builders].Refs() > 1 {
+		builders = make([]*ethpb.Builder, len(b.builders))
+		copy(builders, b.builders)
+		b.sharedFieldReferences[types.Builders].MinusRef()
+		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
 	}
+
+	if index < primitives.BuilderIndex(len(builders)) {
+		builders[index] = builder
+	} else {
+		gap := index - primitives.BuilderIndex(len(builders)) + 1
+		builders = append(builders, make([]*ethpb.Builder, gap)...)
+		builders[index] = builder
+	}
+	b.builders = builders
 
 	b.markFieldAsDirty(types.Builders)
 	return nil

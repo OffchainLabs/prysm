@@ -166,7 +166,7 @@ func TestClearBuilderPendingPayment(t *testing.T) {
 		}
 
 		require.NoError(t, st.ClearBuilderPendingPayment(1))
-		require.Equal(t, emptyBuilderPendingPayment, st.builderPendingPayments[1])
+		require.DeepEqual(t, emptyBuilderPendingPayment, st.builderPendingPayments[1])
 		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
 	})
 
@@ -215,7 +215,7 @@ func TestQueueBuilderPayment(t *testing.T) {
 		}
 
 		require.NoError(t, st.QueueBuilderPayment())
-		require.Equal(t, emptyBuilderPendingPayment, st.builderPendingPayments[paymentIndex])
+		require.DeepEqual(t, emptyBuilderPendingPayment, st.builderPendingPayments[paymentIndex])
 		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
 		require.Equal(t, true, st.dirtyFields[types.BuilderPendingWithdrawals])
 		require.Equal(t, 1, len(st.builderPendingWithdrawals))
@@ -251,7 +251,7 @@ func TestQueueBuilderPayment(t *testing.T) {
 		}
 
 		require.NoError(t, st.QueueBuilderPayment())
-		require.Equal(t, emptyBuilderPendingPayment, st.builderPendingPayments[paymentIndex])
+		require.DeepEqual(t, emptyBuilderPendingPayment, st.builderPendingPayments[paymentIndex])
 		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
 		require.Equal(t, false, st.dirtyFields[types.BuilderPendingWithdrawals])
 		require.Equal(t, 0, len(st.builderPendingWithdrawals))
@@ -407,10 +407,18 @@ func newGloasStateWithAvailability(t *testing.T, availability []byte) *BeaconSta
 }
 
 func TestSetLatestBlockHash(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		var hash [32]byte
+		st := &BeaconState{version: version.Fulu}
+		err := st.SetLatestBlockHash(hash)
+		require.ErrorContains(t, "SetLatestBlockHash", err)
+	})
+
 	var hash [32]byte
 	copy(hash[:], []byte("latest-block-hash"))
 
 	state := &BeaconState{
+		version:     version.Gloas,
 		dirtyFields: make(map[types.FieldIndex]bool),
 	}
 
@@ -420,7 +428,14 @@ func TestSetLatestBlockHash(t *testing.T) {
 }
 
 func TestSetExecutionPayloadAvailability(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.SetExecutionPayloadAvailability(0, true)
+		require.ErrorContains(t, "SetExecutionPayloadAvailability", err)
+	})
+
 	state := &BeaconState{
+		version:                      version.Gloas,
 		executionPayloadAvailability: make([]byte, params.BeaconConfig().SlotsPerHistoricalRoot/8),
 		dirtyFields:                  make(map[types.FieldIndex]bool),
 	}
@@ -438,12 +453,33 @@ func TestSetExecutionPayloadAvailability(t *testing.T) {
 	require.Equal(t, byte(0), state.executionPayloadAvailability[byteIndex]&(1<<bitPosition))
 }
 
+func TestSetExecutionPayloadAvailability_OutOfRange(t *testing.T) {
+	state := &BeaconState{
+		version:                      version.Gloas,
+		executionPayloadAvailability: []byte{},
+		dirtyFields:                  make(map[types.FieldIndex]bool),
+	}
+
+	err := state.SetExecutionPayloadAvailability(0, true)
+	require.ErrorContains(t, "out of range", err)
+	require.Equal(t, false, state.dirtyFields[types.ExecutionPayloadAvailability])
+}
+
 func TestIncreaseBuilderBalance(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.IncreaseBuilderBalance(0, 1)
+		require.ErrorContains(t, "IncreaseBuilderBalance", err)
+	})
+
 	t.Run("out of bounds returns error", func(t *testing.T) {
 		st := &BeaconState{
 			version:     version.Gloas,
 			dirtyFields: make(map[types.FieldIndex]bool),
-			builders:    []*ethpb.Builder{},
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
+			builders: []*ethpb.Builder{},
 		}
 
 		err := st.IncreaseBuilderBalance(0, 1)
@@ -455,7 +491,10 @@ func TestIncreaseBuilderBalance(t *testing.T) {
 		st := &BeaconState{
 			version:     version.Gloas,
 			dirtyFields: make(map[types.FieldIndex]bool),
-			builders:    []*ethpb.Builder{nil},
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
+			builders: []*ethpb.Builder{nil},
 		}
 
 		err := st.IncreaseBuilderBalance(0, 1)
@@ -468,7 +507,10 @@ func TestIncreaseBuilderBalance(t *testing.T) {
 		st := &BeaconState{
 			version:     version.Gloas,
 			dirtyFields: make(map[types.FieldIndex]bool),
-			builders:    []*ethpb.Builder{orig},
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
+			builders: []*ethpb.Builder{orig},
 		}
 
 		require.NoError(t, st.IncreaseBuilderBalance(0, 5))
@@ -479,7 +521,35 @@ func TestIncreaseBuilderBalance(t *testing.T) {
 	})
 }
 
+func TestIncreaseBuilderBalance_CopyOnWrite(t *testing.T) {
+	orig := &ethpb.Builder{Balance: 10}
+	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		Builders: []*ethpb.Builder{orig},
+	})
+	require.NoError(t, err)
+
+	st, ok := statePb.(*BeaconState)
+	require.Equal(t, true, ok)
+
+	copied := st.Copy().(*BeaconState)
+	require.Equal(t, uint(2), st.sharedFieldReferences[types.Builders].Refs())
+
+	require.NoError(t, copied.IncreaseBuilderBalance(0, 5))
+	require.Equal(t, primitives.Gwei(10), st.builders[0].Balance)
+	require.Equal(t, primitives.Gwei(15), copied.builders[0].Balance)
+	require.Equal(t, uint(1), st.sharedFieldReferences[types.Builders].Refs())
+	require.Equal(t, uint(1), copied.sharedFieldReferences[types.Builders].Refs())
+}
+
 func TestAddBuilderFromDeposit(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		var pubkey [48]byte
+		var wc [32]byte
+		st := &BeaconState{version: version.Fulu}
+		err := st.AddBuilderFromDeposit(pubkey, wc, 1)
+		require.ErrorContains(t, "AddBuilderFromDeposit", err)
+	})
+
 	t.Run("reuses empty withdrawable slot", func(t *testing.T) {
 		var pubkey [48]byte
 		copy(pubkey[:], bytes.Repeat([]byte{0xAA}, 48))
@@ -491,6 +561,9 @@ func TestAddBuilderFromDeposit(t *testing.T) {
 			version:     version.Gloas,
 			slot:        0, // epoch 0
 			dirtyFields: make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
 			builders: []*ethpb.Builder{
 				{
 					WithdrawableEpoch: 0,
@@ -522,6 +595,9 @@ func TestAddBuilderFromDeposit(t *testing.T) {
 			version:     version.Gloas,
 			slot:        0,
 			dirtyFields: make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
 			builders: []*ethpb.Builder{
 				{
 					WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch,
@@ -535,4 +611,35 @@ func TestAddBuilderFromDeposit(t *testing.T) {
 		require.NotNil(t, st.builders[1])
 		require.Equal(t, primitives.Gwei(5), st.builders[1].Balance)
 	})
+}
+
+func TestAddBuilderFromDeposit_CopyOnWrite(t *testing.T) {
+	var pubkey [48]byte
+	copy(pubkey[:], bytes.Repeat([]byte{0xAA}, 48))
+	var wc [32]byte
+	copy(wc[:], bytes.Repeat([]byte{0xBB}, 32))
+	wc[0] = 0x42 // version byte
+
+	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		Slot: 0,
+		Builders: []*ethpb.Builder{
+			{
+				WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch,
+				Balance:           1,
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	st, ok := statePb.(*BeaconState)
+	require.Equal(t, true, ok)
+
+	copied := st.Copy().(*BeaconState)
+	require.Equal(t, uint(2), st.sharedFieldReferences[types.Builders].Refs())
+
+	require.NoError(t, copied.AddBuilderFromDeposit(pubkey, wc, 5))
+	require.Equal(t, 1, len(st.builders))
+	require.Equal(t, 2, len(copied.builders))
+	require.Equal(t, uint(1), st.sharedFieldReferences[types.Builders].Refs())
+	require.Equal(t, uint(1), copied.sharedFieldReferences[types.Builders].Refs())
 }
