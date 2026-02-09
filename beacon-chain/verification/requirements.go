@@ -24,4 +24,11 @@ const (
 	RequireBlockRootSeen
 	RequireBlockRootValid
 	RequireSignatureValid
+
+	// Execution payload envelope specific.
+	RequireBuilderValid
+	RequirePayloadHashValid
+	RequireEnvelopeSlotAboveFinalized
+	RequireEnvelopeSlotMatchesBlock
+	RequireBuilderSignatureValid
 )
