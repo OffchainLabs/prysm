@@ -102,7 +102,7 @@ import (
 //	    # Verify the state root
 //	    if verify:
 //	        assert envelope.state_root == hash_tree_root(state)
-//	</spec> 
+//	</spec>
 func ProcessExecutionPayload(
 	ctx context.Context,
 	st state.BeaconState,
