@@ -111,13 +111,12 @@ func (vs *Server) buildExecutionPayloadEnvelope(
 }
 
 // getPayloadAttestations returns payload attestations for inclusion in a GLOAS block.
-// These attest to the payload timeliness from the previous slot's PTC.
+// PTC members broadcast PayloadAttestationMessages via P2P gossip during slot N.
+// All nodes collect these in a pool. The slot N+1 proposer retrieves and aggregates
+// them into PayloadAttestations for block inclusion.
 func (vs *Server) getPayloadAttestations(ctx context.Context, head state.BeaconState, slot primitives.Slot) []*ethpb.PayloadAttestation {
-	// TODO: Implement payload attestation retrieval from pool.
-	// This requires:
-	// 1. A PayloadAttestationPool to collect PTC votes
-	// 2. Aggregation of individual PayloadAttestationMessages into PayloadAttestations
-	// For now, return empty - blocks are valid without payload attestations.
+	// TODO: Retrieve and aggregate PayloadAttestationMessages from the pool
+	// for the previous slot. Blocks are valid without payload attestations.
 	return []*ethpb.PayloadAttestation{}
 }
 
