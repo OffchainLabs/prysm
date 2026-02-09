@@ -366,6 +366,10 @@ func TestPruner_UpdateEarliestSlotError(t *testing.T) {
 	// Should have called UpdateEarliestAvailableSlot
 	assert.Equal(t, 1, mockCustody.updateCallCount, "UpdateEarliestAvailableSlot should be called")
 
+	// prunedUpto must NOT advance when updateEarliestAvailableSlot fails,
+	// so the pruner retries on the next tick instead of skipping.
+	assert.Equal(t, primitives.Slot(0), p.prunedUpto, "prunedUpto should not advance when updateEarliestAvailableSlot fails")
+
 	// Check that error was logged by the prune function
 	found := false
 	for _, entry := range hook.AllEntries() {
