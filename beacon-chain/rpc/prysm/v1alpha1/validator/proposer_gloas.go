@@ -9,12 +9,10 @@ import (
 	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -101,13 +99,12 @@ func (vs *Server) buildExecutionPayloadEnvelope(
 	// is implemented in beacon-chain/core/gloas.
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload:            payload,
-		ExecutionRequests:  local.ExecutionRequests,
-		BuilderIndex:       primitives.BuilderIndex(sBlk.Block().ProposerIndex()),
-		BeaconBlockRoot:    blockRoot[:],
-		Slot:               sBlk.Block().Slot(),
-		BlobKzgCommitments: extractKzgCommitments(local.BlobsBundler),
-		StateRoot:          make([]byte, 32),
+		Payload:           payload,
+		ExecutionRequests: local.ExecutionRequests,
+		BuilderIndex:      primitives.BuilderIndex(sBlk.Block().ProposerIndex()),
+		BeaconBlockRoot:   blockRoot[:],
+		Slot:              sBlk.Block().Slot(),
+		StateRoot:         make([]byte, 32),
 	}
 
 	vs.cacheExecutionPayloadEnvelope(envelope, local.BlobsBundler)
@@ -139,37 +136,18 @@ func (vs *Server) createSelfBuildExecutionPayloadBid(
 		return nil, errors.New("execution data is nil")
 	}
 
-	// Compute blob_kzg_commitments_root from the blobs bundle.
-	// This is hash_tree_root(List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]).
-	kzgCommitmentsRoot := make([]byte, 32)
-	if blobsBundler != nil {
-		commitments := extractKzgCommitments(blobsBundler)
-		if len(commitments) > 0 {
-			leaves := consensusblocks.LeavesFromCommitments(commitments)
-			commitmentsTree, err := trie.GenerateTrieFromItems(leaves, fieldparams.LogMaxBlobCommitments)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not generate kzg commitments trie")
-			}
-			root, err := commitmentsTree.HashTreeRoot()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not compute kzg commitments root")
-			}
-			kzgCommitmentsRoot = root[:]
-		}
-	}
-
 	return &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:        executionData.ParentHash(),
-		ParentBlockRoot:        bytesutil.SafeCopyBytes(parentBlockRoot),
-		BlockHash:              executionData.BlockHash(),
-		PrevRandao:             executionData.PrevRandao(),
-		FeeRecipient:           executionData.FeeRecipient(),
-		GasLimit:               executionData.GasLimit(),
-		BuilderIndex:           builderIndex,
-		Slot:                   slot,
-		Value:                  0,
-		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: kzgCommitmentsRoot,
+		ParentBlockHash:    executionData.ParentHash(),
+		ParentBlockRoot:    bytesutil.SafeCopyBytes(parentBlockRoot),
+		BlockHash:          executionData.BlockHash(),
+		PrevRandao:         executionData.PrevRandao(),
+		FeeRecipient:       executionData.FeeRecipient(),
+		GasLimit:           executionData.GasLimit(),
+		BuilderIndex:       builderIndex,
+		Slot:               slot,
+		Value:              0,
+		ExecutionPayment:   0,
+		BlobKzgCommitments: extractKzgCommitments(blobsBundler),
 	}, nil
 }
 
@@ -390,7 +368,7 @@ func (vs *Server) buildEnvelopeDataColumns(
 
 	blobs := blobsBundle.GetBlobs()
 	proofs := blobsBundle.GetProofs()
-	commitments := envelope.BlobKzgCommitments
+	commitments := blobsBundle.GetKzgCommitments()
 	if len(blobs) == 0 {
 		return nil, nil
 	}
