@@ -703,7 +703,7 @@ func Test_reportInvalidBlock(t *testing.T) {
 	require.NoError(t, fcs.InsertNode(ctx, st, root))
 
 	require.NoError(t, fcs.SetOptimisticToValid(ctx, [32]byte{'A'}))
-	err = service.pruneInvalidBlock(ctx, [32]byte{'D'}, [32]byte{'C'}, [32]byte{'a'})
+	err = service.pruneInvalidBlock(ctx, [32]byte{'D'}, [32]byte{'C'}, [32]byte{'a'}, [32]byte{'c'})
 	require.Equal(t, IsInvalidBlock(err), true)
 	require.Equal(t, InvalidBlockLVH(err), [32]byte{'a'})
 	invalidRoots := InvalidAncestorRoots(err)
@@ -785,7 +785,7 @@ func Test_GetPayloadAttributeV2(t *testing.T) {
 }
 
 func Test_GetPayloadAttributeV3(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		name string
 		st   bstate.BeaconState
 	}{

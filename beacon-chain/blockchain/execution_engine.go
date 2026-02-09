@@ -102,10 +102,14 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 				lastValidHash = defaultLatestValidHash
 			}
 			// this call has guaranteed to have the `headRoot` with its payload in forkchoice.
-			invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, headRoot, headBlk.ParentRoot(), [32]byte(headPayload.ParentHash()), bytesutil.ToBytes32(lastValidHash))
+			invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, headRoot, headBlk.ParentRoot(), bytesutil.ToBytes32(headPayload.ParentHash()), bytesutil.ToBytes32(lastValidHash))
 			if err != nil {
 				log.WithError(err).Error("Could not set head root to invalid")
 				return nil, nil
+			}
+			// TODO: Gloas, we should not include the head root in this call
+			if len(invalidRoots) == 0 || invalidRoots[0] != headRoot {
+				invalidRoots = append([][32]byte{headRoot}, invalidRoots...)
 			}
 			if err := s.removeInvalidBlockAndState(ctx, invalidRoots); err != nil {
 				log.WithError(err).Error("Could not remove invalid block and state")
