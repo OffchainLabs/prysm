@@ -3,10 +3,7 @@ package validator
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
-	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -215,19 +212,8 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 	}, nil
 }
 
-// envelopeBlockWaitTimeout is the maximum time to wait for the associated beacon block
-// before giving up on publishing the execution payload envelope.
-const envelopeBlockWaitTimeout = 4 * time.Second
-
-// envelopeBlockPollInterval is how often to check for the beacon block while waiting.
-const envelopeBlockPollInterval = 100 * time.Millisecond
-
 // PublishExecutionPayloadEnvelope validates and broadcasts a signed execution payload envelope.
 // This is called by validators after signing the envelope retrieved from GetExecutionPayloadEnvelope.
-//
-// The function waits for the associated beacon block to be available before processing,
-// as the envelope references a beacon_block_root that must exist either from local
-// production or P2P gossip.
 //
 // gRPC endpoint: POST /eth/v1alpha1/validator/execution_payload_envelope
 func (vs *Server) PublishExecutionPayloadEnvelope(
@@ -251,13 +237,6 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		"beaconBlockRoot": fmt.Sprintf("%#x", beaconBlockRoot[:8]),
 	})
 	log.Info("Publishing signed execution payload envelope")
-
-	// Wait for the associated beacon block to be available.
-	// The block may come from local production or P2P gossip.
-	if err := vs.waitForBeaconBlock(ctx, beaconBlockRoot); err != nil {
-		return nil, status.Errorf(codes.FailedPrecondition,
-			"beacon block %#x not available: %v", beaconBlockRoot[:8], err)
-	}
 
 	// TODO: Validate envelope signature before broadcasting
 	// if err := vs.validateEnvelopeSignature(ctx, req); err != nil {
@@ -297,55 +276,6 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	log.Info("Successfully published execution payload envelope")
 
 	return &emptypb.Empty{}, nil
-}
-
-// waitForBeaconBlock waits for the beacon block with the given root to be available.
-// It first checks if the block already exists, then subscribes to block notifications
-// and polls periodically until the block arrives or the timeout is reached.
-func (vs *Server) waitForBeaconBlock(ctx context.Context, blockRoot [32]byte) error {
-	// Fast path: check if block already exists
-	if vs.BlockReceiver.HasBlock(ctx, blockRoot) {
-		return nil
-	}
-
-	log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot[:8])).
-		Debug("Waiting for beacon block to arrive")
-
-	waitCtx, cancel := context.WithTimeout(ctx, envelopeBlockWaitTimeout)
-	defer cancel()
-
-	blocksChan := make(chan *feed.Event, 1)
-	blockSub := vs.BlockNotifier.BlockFeed().Subscribe(blocksChan)
-	defer blockSub.Unsubscribe()
-
-	ticker := time.NewTicker(envelopeBlockPollInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-waitCtx.Done():
-			return errors.Wrap(waitCtx.Err(), "timeout waiting for beacon block")
-
-		case blockEvent := <-blocksChan:
-			if blockEvent.Type == blockfeed.ReceivedBlock {
-				data, ok := blockEvent.Data.(*blockfeed.ReceivedBlockData)
-				if ok && data != nil && data.SignedBlock != nil {
-					root, err := data.SignedBlock.Block().HashTreeRoot()
-					if err == nil && root == blockRoot {
-						return nil
-					}
-				}
-			}
-
-		case <-ticker.C:
-			if vs.BlockReceiver.HasBlock(ctx, blockRoot) {
-				return nil
-			}
-
-		case <-blockSub.Err():
-			return errors.New("block subscription closed")
-		}
-	}
 }
 
 // buildEnvelopeDataColumns retrieves the cached blobs bundle for the envelope's

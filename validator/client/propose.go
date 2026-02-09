@@ -168,6 +168,29 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		}
 	}
 
+	// For GLOAS, retrieve and sign the execution payload envelope before
+	// broadcasting the block. This ensures we can bail out early if signing
+	// fails, rather than broadcasting a block with no valid envelope to back it.
+	var signedEnvelope *ethpb.SignedExecutionPayloadEnvelope
+	if blk.Version() >= version.Gloas {
+		envelope, err := v.getExecutionPayloadEnvelope(ctx, slot, b)
+		if err != nil {
+			log.WithError(err).Error("Failed to get execution payload envelope")
+			if v.emitAccountMetrics {
+				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+			}
+			return
+		}
+		signedEnvelope, err = v.signExecutionPayloadEnvelope(ctx, pubKey, slot, envelope)
+		if err != nil {
+			log.WithError(err).Error("Failed to sign execution payload envelope")
+			if v.emitAccountMetrics {
+				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+			}
+			return
+		}
+	}
+
 	blkResp, err := v.validatorClient.ProposeBeaconBlock(ctx, genericSignedBlock)
 	if err != nil {
 		log.WithField("slot", slot).WithError(err).Error("Failed to propose block")
@@ -177,11 +200,10 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		return
 	}
 
-	// GLOAS: After proposing the beacon block, handle the execution payload envelope
-	if blk.Version() >= version.Gloas {
-		if err := v.handleGloasExecutionPayloadEnvelope(ctx, slot, pubKey, b); err != nil {
-			log.WithError(err).Error("Failed to handle GLOAS execution payload envelope")
-			// Don't return - the block was proposed successfully, envelope handling is secondary
+	// Publish the signed envelope after block broadcast.
+	if signedEnvelope != nil {
+		if _, err := v.validatorClient.PublishExecutionPayloadEnvelope(ctx, signedEnvelope); err != nil {
+			log.WithError(err).Error("Failed to publish execution payload envelope")
 		}
 	}
 
@@ -591,99 +613,4 @@ func blockLogFields(pubKey [fieldparams.BLSPubkeyLength]byte, blk interfaces.Rea
 		fields["signature"] = fmt.Sprintf("%#x", sig)
 	}
 	return fields
-}
-
-// handleGloasExecutionPayloadEnvelope retrieves, signs, and publishes the execution payload envelope
-// for GLOAS blocks. This is called after the beacon block has been proposed.
-func (v *validator) handleGloasExecutionPayloadEnvelope(
-	ctx context.Context,
-	slot primitives.Slot,
-	pubKey [fieldparams.BLSPubkeyLength]byte,
-	b *ethpb.GenericBeaconBlock,
-) error {
-	ctx, span := trace.StartSpan(ctx, "validator.handleGloasExecutionPayloadEnvelope")
-	defer span.End()
-
-	log := log.WithFields(logrus.Fields{
-		"slot":   slot,
-		"pubkey": fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:])),
-	})
-
-	// Extract builder_index from the GLOAS block's signed execution payload bid
-	gloasBlock := b.GetGloas()
-	if gloasBlock == nil {
-		return errors.New("expected GLOAS block but got nil")
-	}
-	if gloasBlock.Body == nil || gloasBlock.Body.SignedExecutionPayloadBid == nil || gloasBlock.Body.SignedExecutionPayloadBid.Message == nil {
-		return errors.New("GLOAS block missing signed execution payload bid")
-	}
-	builderIndex := gloasBlock.Body.SignedExecutionPayloadBid.Message.BuilderIndex
-
-	log = log.WithField("builderIndex", builderIndex)
-	log.Debug("Retrieving execution payload envelope")
-
-	// 1. Retrieve the execution payload envelope from the beacon node
-	envelope, err := v.validatorClient.ExecutionPayloadEnvelope(ctx, slot, builderIndex)
-	if err != nil {
-		return errors.Wrap(err, "failed to get execution payload envelope")
-	}
-
-	// 2. Sign the envelope
-	signedEnvelope, err := v.signExecutionPayloadEnvelope(ctx, pubKey, slot, envelope)
-	if err != nil {
-		return errors.Wrap(err, "failed to sign execution payload envelope")
-	}
-
-	// 3. Publish the signed envelope
-	log.Debug("Publishing signed execution payload envelope")
-	if _, err := v.validatorClient.PublishExecutionPayloadEnvelope(ctx, signedEnvelope); err != nil {
-		return errors.Wrap(err, "failed to publish execution payload envelope")
-	}
-
-	log.Info("Successfully published execution payload envelope")
-	return nil
-}
-
-// signExecutionPayloadEnvelope signs the execution payload envelope using the validator's key.
-func (v *validator) signExecutionPayloadEnvelope(
-	ctx context.Context,
-	pubKey [fieldparams.BLSPubkeyLength]byte,
-	slot primitives.Slot,
-	envelope *ethpb.ExecutionPayloadEnvelope,
-) (*ethpb.SignedExecutionPayloadEnvelope, error) {
-	ctx, span := trace.StartSpan(ctx, "validator.signExecutionPayloadEnvelope")
-	defer span.End()
-
-	epoch := slots.ToEpoch(slot)
-
-	// Use DomainBeaconBuilder for execution payload envelope signing.
-	// This domain is used for builder-related operations including envelope signing.
-	domain, err := v.domainData(ctx, epoch, params.BeaconConfig().DomainBeaconBuilder[:])
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get domain data")
-	}
-	if domain == nil {
-		return nil, errors.New("nil domain data")
-	}
-
-	signingRoot, err := signing.ComputeSigningRoot(envelope, domain.SignatureDomain)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not compute signing root")
-	}
-
-	sig, err := v.km.Sign(ctx, &validatorpb.SignRequest{
-		PublicKey:       pubKey[:],
-		SigningRoot:     signingRoot[:],
-		SignatureDomain: domain.SignatureDomain,
-		Object:          &validatorpb.SignRequest_Slot{Slot: slot},
-		SigningSlot:     slot,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "could not sign execution payload envelope")
-	}
-
-	return &ethpb.SignedExecutionPayloadEnvelope{
-		Message:   envelope,
-		Signature: sig.Marshal(),
-	}, nil
 }
