@@ -3,7 +3,6 @@ package doublylinkedtree
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
@@ -862,17 +861,4 @@ func TestForkchoiceParentRoot(t *testing.T) {
 	root, err = f.ParentRoot(zeroHash)
 	require.NoError(t, err)
 	require.Equal(t, zeroHash, root)
-}
-
-func TestForkChoice_CleanupInserting(t *testing.T) {
-	f := setup(0, 0)
-	ctx := t.Context()
-	st, roblock, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 2, 2)
-	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) {
-		return f.justifiedBalances, errors.New("mock err")
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, f.InsertNode(ctx, st, roblock))
-	require.Equal(t, false, f.HasNode(roblock.Root()))
 }

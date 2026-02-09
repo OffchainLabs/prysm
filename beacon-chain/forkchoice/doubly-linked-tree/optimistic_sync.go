@@ -46,8 +46,17 @@ func (s *Store) setOptimisticToInvalid(ctx context.Context, root, parentRoot, pa
 				return nil, errors.Wrap(ErrNilNode, "could not set node to invalid, could not find full parent in ancestry")
 			}
 		}
+	} else {
+		// check consistency with the parent information
+		if n.node.parent == nil {
+			return nil, ErrNilNode
+		}
+		if n.node.parent.node.root != parentRoot {
+			return nil, errInvalidParentRoot
+		}
 	}
 	// n points to a full node that has an invalid payload in forkchoice. We need to find the fist node in the chain that is actually invalid.
+	startNode := n
 	fp := s.fullParent(n)
 	for ; fp != nil && fp.node.payloadHash != lastValidHash; fp = s.fullParent(fp) {
 		if ctx.Err() != nil {
@@ -59,9 +68,11 @@ func (s *Store) setOptimisticToInvalid(ctx context.Context, root, parentRoot, pa
 	// This means we are dealing with an EE that does not follow the spec
 	if fp == nil {
 		// return early if the invalid node was not imported
-		if n.node.root == parentRoot {
+		if startNode.node.root != root {
 			return invalidRoots, nil
 		}
+		// Remove just the imported invalid root
+		n = startNode
 	}
 	return s.removeNode(ctx, n)
 }

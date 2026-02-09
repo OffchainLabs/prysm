@@ -188,17 +188,24 @@ func (f *ForkChoice) IsCanonical(root [32]byte) bool {
 }
 
 // IsOptimistic returns true if the given root has been optimistically synced.
+// TODO: Gloas, the current implementation uses the result of the full block for
+// the given root. In gloas this would be incorrect and we should specify the
+// payload content, thus we should expose a full/empty version of this call.
 func (f *ForkChoice) IsOptimistic(root [32]byte) (bool, error) {
 	if f.store.allTipsAreInvalid {
 		return true, nil
 	}
 
-	node, ok := f.store.emptyNodeByRoot[root]
-	if !ok || node == nil {
+	en, ok := f.store.emptyNodeByRoot[root]
+	if !ok || en == nil {
 		return true, ErrNilNode
 	}
+	fn := f.store.fullNodeByRoot[root]
+	if fn != nil {
+		return fn.optimistic, nil
+	}
 
-	return node.optimistic, nil
+	return en.optimistic, nil
 }
 
 // AncestorRoot returns the ancestor root of input block root at a given slot.

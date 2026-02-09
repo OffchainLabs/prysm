@@ -33,9 +33,9 @@ func TestNode_ApplyWeightChanges_PositiveChange(t *testing.T) {
 
 	assert.NoError(t, s.applyWeightChangesConsensusNode(ctx, s.treeRootNode))
 
-	assert.Equal(t, uint64(300), s.emptyNodeByRoot[indexToHash(1)].weight)
-	assert.Equal(t, uint64(200), s.emptyNodeByRoot[indexToHash(2)].weight)
-	assert.Equal(t, uint64(100), s.emptyNodeByRoot[indexToHash(3)].weight)
+	assert.Equal(t, uint64(300), s.emptyNodeByRoot[indexToHash(1)].node.weight)
+	assert.Equal(t, uint64(200), s.emptyNodeByRoot[indexToHash(2)].node.weight)
+	assert.Equal(t, uint64(100), s.emptyNodeByRoot[indexToHash(3)].node.weight)
 }
 
 func TestNode_ApplyWeightChanges_NegativeChange(t *testing.T) {
@@ -63,9 +63,9 @@ func TestNode_ApplyWeightChanges_NegativeChange(t *testing.T) {
 
 	assert.NoError(t, s.applyWeightChangesConsensusNode(ctx, s.treeRootNode))
 
-	assert.Equal(t, uint64(300), s.emptyNodeByRoot[indexToHash(1)].weight)
-	assert.Equal(t, uint64(200), s.emptyNodeByRoot[indexToHash(2)].weight)
-	assert.Equal(t, uint64(100), s.emptyNodeByRoot[indexToHash(3)].weight)
+	assert.Equal(t, uint64(300), s.emptyNodeByRoot[indexToHash(1)].node.weight)
+	assert.Equal(t, uint64(200), s.emptyNodeByRoot[indexToHash(2)].node.weight)
+	assert.Equal(t, uint64(100), s.emptyNodeByRoot[indexToHash(3)].node.weight)
 }
 
 func TestNode_UpdateBestDescendant_NonViableChild(t *testing.T) {
@@ -188,35 +188,35 @@ func TestNode_SetFullyValidated(t *testing.T) {
 	f := setup(1, 1)
 	ctx := t.Context()
 	storeNodes := make([]*PayloadNode, 6)
-	storeNodes[0] = f.store.emptyNodeByRoot[params.BeaconConfig().ZeroHash]
+	storeNodes[0] = f.store.fullNodeByRoot[params.BeaconConfig().ZeroHash]
 	// insert blocks in the fork pattern (optimistic status in parenthesis)
 	//
 	// 0 (false) -- 1 (false) -- 2 (false) -- 3 (true) -- 4 (true)
 	//               \
 	//                 -- 5 (true)
 	//
-	state, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
+	state, blk, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, indexToHash(101), 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
-	storeNodes[1] = f.store.emptyNodeByRoot[blk.Root()]
-	require.NoError(t, f.SetOptimisticToValid(ctx, params.BeaconConfig().ZeroHash))
-	state, blk, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, state, blk))
-	storeNodes[2] = f.store.emptyNodeByRoot[blk.Root()]
+	storeNodes[1] = f.store.fullNodeByRoot[blk.Root()]
 	require.NoError(t, f.SetOptimisticToValid(ctx, indexToHash(1)))
-	state, blk, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 1, 1)
+	state, blk, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), indexToHash(102), 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
-	storeNodes[3] = f.store.emptyNodeByRoot[blk.Root()]
-	state, blk, err = prepareForkchoiceState(ctx, 4, indexToHash(4), indexToHash(3), params.BeaconConfig().ZeroHash, 1, 1)
+	storeNodes[2] = f.store.fullNodeByRoot[blk.Root()]
+	require.NoError(t, f.SetOptimisticToValid(ctx, indexToHash(2)))
+	state, blk, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(2), indexToHash(103), 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
-	storeNodes[4] = f.store.emptyNodeByRoot[blk.Root()]
-	state, blk, err = prepareForkchoiceState(ctx, 5, indexToHash(5), indexToHash(1), params.BeaconConfig().ZeroHash, 1, 1)
+	storeNodes[3] = f.store.fullNodeByRoot[blk.Root()]
+	state, blk, err = prepareForkchoiceState(ctx, 4, indexToHash(4), indexToHash(3), indexToHash(104), 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
-	storeNodes[5] = f.store.emptyNodeByRoot[blk.Root()]
+	storeNodes[4] = f.store.fullNodeByRoot[blk.Root()]
+	state, blk, err = prepareForkchoiceState(ctx, 5, indexToHash(5), indexToHash(1), indexToHash(105), 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blk))
+	storeNodes[5] = f.store.fullNodeByRoot[blk.Root()]
 
 	opt, err := f.IsOptimistic(indexToHash(5))
 	require.NoError(t, err)

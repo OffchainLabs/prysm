@@ -258,7 +258,10 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 	if n.target != nil {
 		target = n.target.root
 	}
-	optimistic := n.parent.optimistic
+	optimistic := false
+	if n.parent != nil {
+		optimistic = n.parent.optimistic
+	}
 	en := s.emptyNodeByRoot[n.root]
 	timestamp := en.timestamp
 	fn := s.fullNodeByRoot[n.root]
