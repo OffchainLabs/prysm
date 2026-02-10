@@ -190,9 +190,6 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 // Start starts the event loop of the PartialColumnBroadcaster. Should be called
 // within a goroutine (go p.Start())
 func (p *PartialColumnBroadcaster) Start() {
-	if p.stop != nil {
-		return
-	}
 	p.stop = make(chan struct{})
 	p.loop()
 }
@@ -456,7 +453,6 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 func (p *PartialColumnBroadcaster) Stop() {
 	if p.stop != nil {
 		close(p.stop)
-		p.stop = nil
 	}
 }
 
