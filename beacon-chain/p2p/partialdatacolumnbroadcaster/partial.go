@@ -508,12 +508,30 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 		p.partialMsgStore[topic] = topicStore
 	}
 
-	// extend the column from the EL
+	existing := topicStore[string(c.GroupID())]
+	if existing != nil {
+		// Extend the existing column with cells being published here.
+		// The existing column may already contain cells received from peers. We must not overwrite it.
+		for i := range c.Included.Len() {
+			if c.Included.BitAt(i) {
+				existing.ExtendFromVerfifiedCell(uint64(i), c.Column[i], c.KzgProofs[i])
+			}
+		}
 
-	topicStore[string(c.GroupID())] = &c
+		if col, ok := existing.Complete(p.logger); ok {
+			p.logger.Info("Completed partial column", "topic", topic, "group", existing.GroupID())
+			if p.HandleColumn != nil {
+				go p.HandleColumn(topic, col)
+			}
+		}
+	} else {
+		topicStore[string(c.GroupID())] = &c
+		existing = &c
+	}
+
 	p.groupTTL[string(c.GroupID())] = TTLInSlots
 
-	return p.ps.PublishPartialMessage(topic, &c, partialmessages.PublishOptions{})
+	return p.ps.PublishPartialMessage(topic, existing, partialmessages.PublishOptions{})
 }
 
 type SubHandler func(topic string, col blocks.VerifiedRODataColumn)
