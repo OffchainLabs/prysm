@@ -1,4 +1,4 @@
-version: v1.7.0-alpha.1
+version: v1.7.0-alpha.2
 style: full
 
 specrefs:
@@ -146,7 +146,6 @@ exceptions:
     - g1_lincomb#deneb
     - hash_to_bls_field#deneb
     - is_power_of_two#deneb
-    - multi_exp#deneb
     - reverse_bits#deneb
     - validate_kzg_g1#deneb
     - verify_blob_kzg_proof#deneb
@@ -386,7 +385,8 @@ exceptions:
     - convert_builder_index_to_validator_index#gloas
     - convert_validator_index_to_builder_index#gloas
     - get_attestation_score#gloas
-    - get_builder_from_deposit#gloas
+    - get_attestation_score#phase0
+    - get_balance_after_withdrawals#capella
     - get_builder_withdrawals#gloas
     - get_builders_sweep_withdrawals#gloas
     - get_index_for_new_builder#gloas
@@ -396,13 +396,18 @@ exceptions:
     - initiate_builder_exit#gloas
     - is_active_builder#gloas
     - is_builder_index#gloas
+    - is_data_available#gloas
+    - is_eligible_for_partial_withdrawals#electra
     - is_head_late#gloas
     - is_head_weak#gloas
     - is_parent_strong#gloas
     - is_valid_proposal_slot#gloas
+    - onboard_builders_from_pending_deposits#gloas
     - process_deposit_request#gloas
     - process_voluntary_exit#gloas
     - record_block_timeliness#gloas
+    - record_block_timeliness#phase0
+    - verify_data_column_sidecar_kzg_proofs#gloas
     - should_apply_proposer_boost#gloas
     - update_builder_pending_withdrawals#gloas
     - update_next_withdrawal_builder_index#gloas

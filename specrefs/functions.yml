@@ -1,13 +1,26 @@
 - name: add_builder_to_registry#gloas
   sources: []
   spec: |
-    <spec fn="add_builder_to_registry" fork="gloas" hash="938224ec">
+    <spec fn="add_builder_to_registry" fork="gloas" hash="cd0414c9">
     def add_builder_to_registry(
-        state: BeaconState, pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: uint64
+        state: BeaconState,
+        pubkey: BLSPubkey,
+        withdrawal_credentials: Bytes32,
+        amount: uint64,
+        slot: Slot,
     ) -> None:
-        index = get_index_for_new_builder(state)
-        builder = get_builder_from_deposit(state, pubkey, withdrawal_credentials, amount)
-        set_or_append_list(state.builders, index, builder)
+        set_or_append_list(
+            state.builders,
+            get_index_for_new_builder(state),
+            Builder(
+                pubkey=pubkey,
+                version=uint8(withdrawal_credentials[0]),
+                execution_address=ExecutionAddress(withdrawal_credentials[12:]),
+                balance=amount,
+                deposit_epoch=compute_epoch_at_slot(slot),
+                withdrawable_epoch=FAR_FUTURE_EPOCH,
+            ),
+        )
     </spec>
 
 - name: add_flag#altair
@@ -145,19 +158,20 @@
 - name: apply_deposit_for_builder#gloas
   sources: []
   spec: |
-    <spec fn="apply_deposit_for_builder" fork="gloas" hash="eae84bc2">
+    <spec fn="apply_deposit_for_builder" fork="gloas" hash="e4bc98c7">
     def apply_deposit_for_builder(
         state: BeaconState,
         pubkey: BLSPubkey,
         withdrawal_credentials: Bytes32,
         amount: uint64,
         signature: BLSSignature,
+        slot: Slot,
     ) -> None:
         builder_pubkeys = [b.pubkey for b in state.builders]
         if pubkey not in builder_pubkeys:
             # Verify the deposit signature (proof of possession) which is not checked by the deposit contract
             if is_valid_deposit_signature(pubkey, withdrawal_credentials, amount, signature):
-                add_builder_to_registry(state, pubkey, withdrawal_credentials, amount)
+                add_builder_to_registry(state, pubkey, withdrawal_credentials, amount, slot)
         else:
             # Increase balance by deposit amount
             builder_index = builder_pubkeys.index(pubkey)
@@ -551,9 +565,11 @@
     - file: beacon-chain/core/signing/signing_root.go
       search: func ComputeDomain(
   spec: |
-    <spec fn="compute_domain" fork="phase0" hash="948e1334">
+    <spec fn="compute_domain" fork="phase0" hash="a78b32e4">
     def compute_domain(
-        domain_type: DomainType, fork_version: Version = None, genesis_validators_root: Root = None
+        domain_type: DomainType,
+        fork_version: Optional[Version] = None,
+        genesis_validators_root: Optional[Root] = None,
     ) -> Domain:
         """
         Return the domain for the ``domain_type`` and ``fork_version``.
@@ -2312,23 +2328,6 @@
         return bls.Sign(privkey, signing_root)
     </spec>
 
-- name: get_builder_from_deposit#gloas
-  sources: []
-  spec: |
-    <spec fn="get_builder_from_deposit" fork="gloas" hash="7f914af6">
-    def get_builder_from_deposit(
-        state: BeaconState, pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: uint64
-    ) -> Builder:
-        return Builder(
-            pubkey=pubkey,
-            version=uint8(withdrawal_credentials[0]),
-            execution_address=ExecutionAddress(withdrawal_credentials[12:]),
-            balance=amount,
-            deposit_epoch=get_current_epoch(state),
-            withdrawable_epoch=FAR_FUTURE_EPOCH,
-        )
-    </spec>
-
 - name: get_builder_payment_quorum_threshold#gloas
   sources: []
   spec: |
@@ -2345,19 +2344,20 @@
 - name: get_builder_withdrawals#gloas
   sources: []
   spec: |
-    <spec fn="get_builder_withdrawals" fork="gloas" hash="35cd32cd">
+    <spec fn="get_builder_withdrawals" fork="gloas" hash="d54dd146">
     def get_builder_withdrawals(
         state: BeaconState,
         withdrawal_index: WithdrawalIndex,
         prior_withdrawals: Sequence[Withdrawal],
     ) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, uint64]:
-        withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD
+        withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
+        assert len(prior_withdrawals) <= withdrawals_limit
 
         processed_count: uint64 = 0
         withdrawals: List[Withdrawal] = []
         for withdrawal in state.builder_pending_withdrawals:
             all_withdrawals = prior_withdrawals + withdrawals
-            has_reached_limit = len(all_withdrawals) == withdrawals_limit
+            has_reached_limit = len(all_withdrawals) >= withdrawals_limit
             if has_reached_limit:
                 break
 
@@ -2379,7 +2379,7 @@
 - name: get_builders_sweep_withdrawals#gloas
   sources: []
   spec: |
-    <spec fn="get_builders_sweep_withdrawals" fork="gloas" hash="028d161d">
+    <spec fn="get_builders_sweep_withdrawals" fork="gloas" hash="04c1cb10">
     def get_builders_sweep_withdrawals(
         state: BeaconState,
         withdrawal_index: WithdrawalIndex,
@@ -2387,14 +2387,15 @@
     ) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, uint64]:
         epoch = get_current_epoch(state)
         builders_limit = min(len(state.builders), MAX_BUILDERS_PER_WITHDRAWALS_SWEEP)
-        withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD
+        withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
+        assert len(prior_withdrawals) <= withdrawals_limit
 
         processed_count: uint64 = 0
         withdrawals: List[Withdrawal] = []
         builder_index = state.next_withdrawal_builder_index
         for _ in range(builders_limit):
             all_withdrawals = prior_withdrawals + withdrawals
-            has_reached_limit = len(all_withdrawals) == withdrawals_limit
+            has_reached_limit = len(all_withdrawals) >= withdrawals_limit
             if has_reached_limit:
                 break
 
@@ -2674,7 +2675,7 @@
 - name: get_data_column_sidecars#gloas
   sources: []
   spec: |
-    <spec fn="get_data_column_sidecars" fork="gloas" hash="c8d64ac9">
+    <spec fn="get_data_column_sidecars" fork="gloas" hash="abaf4385">
     def get_data_column_sidecars(
         # [Modified in Gloas:EIP7732]
         # Removed `signed_block_header`
@@ -2682,7 +2683,8 @@
         beacon_block_root: Root,
         # [New in Gloas:EIP7732]
         slot: Slot,
-        kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK],
+        # [Modified in Gloas:EIP7732]
+        # Removed `kzg_commitments`
         # [Modified in Gloas:EIP7732]
         # Removed `kzg_commitments_inclusion_proof`
         cells_and_kzg_proofs: Sequence[
@@ -2690,11 +2692,10 @@
         ],
     ) -> Sequence[DataColumnSidecar]:
         """
-        Given a beacon block root and the commitments, cells/proofs associated with
-        each blob in the block, assemble the sidecars which can be distributed to peers.
+        Given a beacon block root and the cells/proofs associated with each blob
+        in the corresponding payload, assemble the sidecars which can be
+        distributed to peers.
         """
-        assert len(cells_and_kzg_proofs) == len(kzg_commitments)
-
         sidecars = []
         for column_index in range(NUMBER_OF_COLUMNS):
             column_cells, column_proofs = [], []
@@ -2702,10 +2703,10 @@
                 column_cells.append(cells[column_index])
                 column_proofs.append(proofs[column_index])
             sidecars.append(
+                # [Modified in Gloas:EIP7732]
                 DataColumnSidecar(
                     index=column_index,
                     column=column_cells,
-                    kzg_commitments=kzg_commitments,
                     kzg_proofs=column_proofs,
                     slot=slot,
                     beacon_block_root=beacon_block_root,
@@ -2745,11 +2746,9 @@
 - name: get_data_column_sidecars_from_block#gloas
   sources: []
   spec: |
-    <spec fn="get_data_column_sidecars_from_block" fork="gloas" hash="8ac19a18">
+    <spec fn="get_data_column_sidecars_from_block" fork="gloas" hash="302616d2">
     def get_data_column_sidecars_from_block(
         signed_block: SignedBeaconBlock,
-        # [New in Gloas:EIP7732]
-        blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK],
         cells_and_kzg_proofs: Sequence[
             Tuple[Vector[Cell, CELLS_PER_EXT_BLOB], Vector[KZGProof, CELLS_PER_EXT_BLOB]]
         ],
@@ -2762,7 +2761,6 @@
         return get_data_column_sidecars(
             beacon_block_root,
             signed_block.message.slot,
-            blob_kzg_commitments,
             cells_and_kzg_proofs,
         )
     </spec>
@@ -2770,7 +2768,7 @@
 - name: get_data_column_sidecars_from_column_sidecar#fulu
   sources: []
   spec: |
-    <spec fn="get_data_column_sidecars_from_column_sidecar" fork="fulu" hash="4304cdec">
+    <spec fn="get_data_column_sidecars_from_column_sidecar" fork="fulu" hash="4877148a">
     def get_data_column_sidecars_from_column_sidecar(
         sidecar: DataColumnSidecar,
         cells_and_kzg_proofs: Sequence[
@@ -2778,7 +2776,7 @@
         ],
     ) -> Sequence[DataColumnSidecar]:
         """
-        Given a DataColumnSidecar and the cells/proofs associated with each blob corresponding
+        Given a data column sidecar and the cells/proofs associated with each blob corresponding
         to the commitments it contains, assemble all sidecars for distribution to peers.
         """
         assert len(cells_and_kzg_proofs) == len(sidecar.kzg_commitments)
@@ -2794,7 +2792,7 @@
 - name: get_data_column_sidecars_from_column_sidecar#gloas
   sources: []
   spec: |
-    <spec fn="get_data_column_sidecars_from_column_sidecar" fork="gloas" hash="a1052a1c">
+    <spec fn="get_data_column_sidecars_from_column_sidecar" fork="gloas" hash="beb1f94f">
     def get_data_column_sidecars_from_column_sidecar(
         sidecar: DataColumnSidecar,
         cells_and_kzg_proofs: Sequence[
@@ -2802,15 +2800,14 @@
         ],
     ) -> Sequence[DataColumnSidecar]:
         """
-        Given a DataColumnSidecar and the cells/proofs associated with each blob corresponding
-        to the commitments it contains, assemble all sidecars for distribution to peers.
+        Given a data column sidecar and the cells/proofs associated with each blob
+        in the corresponding payload, assemble the sidecars which can be
+        distributed to peers.
         """
-        assert len(cells_and_kzg_proofs) == len(sidecar.kzg_commitments)
-
+        # [Modified in Gloas:EIP7732]
         return get_data_column_sidecars(
             sidecar.beacon_block_root,
             sidecar.slot,
-            sidecar.kzg_commitments,
             cells_and_kzg_proofs,
         )
     </spec>
@@ -2820,8 +2817,10 @@
     - file: beacon-chain/core/signing/domain.go
       search: func Domain(
   spec: |
-    <spec fn="get_domain" fork="phase0" hash="99ea23f6">
-    def get_domain(state: BeaconState, domain_type: DomainType, epoch: Epoch = None) -> Domain:
+    <spec fn="get_domain" fork="phase0" hash="e60c5fbc">
+    def get_domain(
+        state: BeaconState, domain_type: DomainType, epoch: Optional[Epoch] = None
+    ) -> Domain:
         """
         Return the signature domain (fork version concatenated with domain type) of a message.
         """
@@ -3888,7 +3887,7 @@
 - name: get_pending_partial_withdrawals#electra
   sources: []
   spec: |
-    <spec fn="get_pending_partial_withdrawals" fork="electra" hash="b53b25d7">
+    <spec fn="get_pending_partial_withdrawals" fork="electra" hash="306047e9">
     def get_pending_partial_withdrawals(
         state: BeaconState,
         withdrawal_index: WithdrawalIndex,
@@ -3899,13 +3898,14 @@
             len(prior_withdrawals) + MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP,
             MAX_WITHDRAWALS_PER_PAYLOAD - 1,
         )
+        assert len(prior_withdrawals) <= withdrawals_limit
 
         processed_count: uint64 = 0
         withdrawals: List[Withdrawal] = []
         for withdrawal in state.pending_partial_withdrawals:
             all_withdrawals = prior_withdrawals + withdrawals
             is_withdrawable = withdrawal.withdrawable_epoch <= epoch
-            has_reached_limit = len(all_withdrawals) == withdrawals_limit
+            has_reached_limit = len(all_withdrawals) >= withdrawals_limit
             if not is_withdrawable or has_reached_limit:
                 break
 
@@ -4091,13 +4091,13 @@
 - name: get_ptc_assignment#gloas
   sources: []
   spec: |
-    <spec fn="get_ptc_assignment" fork="gloas" hash="817acb90">
+    <spec fn="get_ptc_assignment" fork="gloas" hash="7fd50097">
     def get_ptc_assignment(
         state: BeaconState, epoch: Epoch, validator_index: ValidatorIndex
     ) -> Optional[Slot]:
         """
         Returns the slot during the requested epoch in which the validator with
-        index `validator_index` is a member of the PTC. Returns None if no
+        index ``validator_index`` is a member of the PTC. Returns None if no
         assignment is found.
         """
         next_epoch = Epoch(get_current_epoch(state) + 1)
@@ -4509,7 +4509,7 @@
 - name: get_validators_sweep_withdrawals#capella
   sources: []
   spec: |
-    <spec fn="get_validators_sweep_withdrawals" fork="capella" hash="81868c81">
+    <spec fn="get_validators_sweep_withdrawals" fork="capella" hash="59563c2a">
     def get_validators_sweep_withdrawals(
         state: BeaconState,
         withdrawal_index: WithdrawalIndex,
@@ -4518,13 +4518,15 @@
         epoch = get_current_epoch(state)
         validators_limit = min(len(state.validators), MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP)
         withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD
+        # There must be at least one space reserved for validator sweep withdrawals
+        assert len(prior_withdrawals) < withdrawals_limit
 
         processed_count: uint64 = 0
         withdrawals: List[Withdrawal] = []
         validator_index = state.next_withdrawal_validator_index
         for _ in range(validators_limit):
             all_withdrawals = prior_withdrawals + withdrawals
-            has_reached_limit = len(all_withdrawals) == withdrawals_limit
+            has_reached_limit = len(all_withdrawals) >= withdrawals_limit
             if has_reached_limit:
                 break
 
@@ -4560,7 +4562,7 @@
 - name: get_validators_sweep_withdrawals#electra
   sources: []
   spec: |
-    <spec fn="get_validators_sweep_withdrawals" fork="electra" hash="74bbd437">
+    <spec fn="get_validators_sweep_withdrawals" fork="electra" hash="034093ad">
     def get_validators_sweep_withdrawals(
         state: BeaconState,
         withdrawal_index: WithdrawalIndex,
@@ -4569,13 +4571,15 @@
         epoch = get_current_epoch(state)
         validators_limit = min(len(state.validators), MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP)
         withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD
+        # There must be at least one space reserved for validator sweep withdrawals
+        assert len(prior_withdrawals) < withdrawals_limit
 
         processed_count: uint64 = 0
         withdrawals: List[Withdrawal] = []
         validator_index = state.next_withdrawal_validator_index
         for _ in range(validators_limit):
             all_withdrawals = prior_withdrawals + withdrawals
-            has_reached_limit = len(all_withdrawals) == withdrawals_limit
+            has_reached_limit = len(all_withdrawals) >= withdrawals_limit
             if has_reached_limit:
                 break
 
@@ -5731,24 +5735,24 @@
 - name: is_valid_indexed_payload_attestation#gloas
   sources: []
   spec: |
-    <spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="cf1e65b5">
+    <spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="d76e0f89">
     def is_valid_indexed_payload_attestation(
-        state: BeaconState, indexed_payload_attestation: IndexedPayloadAttestation
+        state: BeaconState, attestation: IndexedPayloadAttestation
     ) -> bool:
         """
-        Check if ``indexed_payload_attestation`` is non-empty, has sorted indices, and has
+        Check if ``attestation`` is non-empty, has sorted indices, and has
         a valid aggregate signature.
         """
         # Verify indices are non-empty and sorted
-        indices = indexed_payload_attestation.attesting_indices
+        indices = attestation.attesting_indices
         if len(indices) == 0 or not indices == sorted(indices):
             return False
 
         # Verify aggregate signature
         pubkeys = [state.validators[i].pubkey for i in indices]
-        domain = get_domain(state, DOMAIN_PTC_ATTESTER, None)
-        signing_root = compute_signing_root(indexed_payload_attestation.data, domain)
-        return bls.FastAggregateVerify(pubkeys, signing_root, indexed_payload_attestation.signature)
+        domain = get_domain(state, DOMAIN_PTC_ATTESTER, compute_epoch_at_slot(attestation.data.slot))
+        signing_root = compute_signing_root(attestation.data, domain)
+        return bls.FastAggregateVerify(pubkeys, signing_root, attestation.signature)
     </spec>
 
 - name: is_valid_light_client_header#altair
@@ -6574,13 +6578,15 @@
 - name: prepare_execution_payload#capella
   sources: []
   spec: |
-    <spec fn="prepare_execution_payload" fork="capella" hash="998e8b92">
+    <spec fn="prepare_execution_payload" fork="capella" hash="bdb15c3f">
     def prepare_execution_payload(
         state: BeaconState,
         safe_block_hash: Hash32,
         finalized_block_hash: Hash32,
         suggested_fee_recipient: ExecutionAddress,
         execution_engine: ExecutionEngine,
+        # [Modified in Capella]
+        # Removed `pow_chain`
     ) -> Optional[PayloadId]:
         # [Modified in Capella]
         # Removed `is_merge_transition_complete` check
@@ -7311,7 +7317,7 @@
 - name: process_deposit_request#gloas
   sources: []
   spec: |
-    <spec fn="process_deposit_request" fork="gloas" hash="50ffbd27">
+    <spec fn="process_deposit_request" fork="gloas" hash="3c6b0310">
     def process_deposit_request(state: BeaconState, deposit_request: DepositRequest) -> None:
         # [New in Gloas:EIP7732]
         builder_pubkeys = [b.pubkey for b in state.builders]
@@ -7331,6 +7337,7 @@
                 deposit_request.withdrawal_credentials,
                 deposit_request.amount,
                 deposit_request.signature,
+                state.slot,
             )
             return
 
@@ -7841,7 +7848,7 @@
 - name: process_execution_payload#gloas
   sources: []
   spec: |
-    <spec fn="process_execution_payload" fork="gloas" hash="98cceb7d">
+    <spec fn="process_execution_payload" fork="gloas" hash="36bd3af3">
     def process_execution_payload(
         state: BeaconState,
         # [Modified in Gloas:EIP7732]
@@ -7871,7 +7878,6 @@
         # Verify consistency with the committed bid
         committed_bid = state.latest_execution_payload_bid
         assert envelope.builder_index == committed_bid.builder_index
-        assert committed_bid.blob_kzg_commitments_root == hash_tree_root(envelope.blob_kzg_commitments)
         assert committed_bid.prev_randao == payload.prev_randao
 
         # Verify consistency with expected withdrawals
@@ -7885,14 +7891,11 @@
         assert payload.parent_hash == state.latest_block_hash
         # Verify timestamp
         assert payload.timestamp == compute_time_at_slot(state, state.slot)
-        # Verify commitments are under limit
-        assert (
-            len(envelope.blob_kzg_commitments)
-            <= get_blob_parameters(get_current_epoch(state)).max_blobs_per_block
-        )
         # Verify the execution payload is valid
         versioned_hashes = [
-            kzg_commitment_to_versioned_hash(commitment) for commitment in envelope.blob_kzg_commitments
+            kzg_commitment_to_versioned_hash(commitment)
+            # [Modified in Gloas:EIP7732]
+            for commitment in committed_bid.blob_kzg_commitments
         ]
         requests = envelope.execution_requests
         assert execution_engine.verify_and_notify_new_payload(
@@ -7933,7 +7936,7 @@
 - name: process_execution_payload_bid#gloas
   sources: []
   spec: |
-    <spec fn="process_execution_payload_bid" fork="gloas" hash="6dc696bb">
+    <spec fn="process_execution_payload_bid" fork="gloas" hash="823c9f3a">
     def process_execution_payload_bid(state: BeaconState, block: BeaconBlock) -> None:
         signed_bid = block.body.signed_execution_payload_bid
         bid = signed_bid.message
@@ -7951,6 +7954,12 @@
             assert can_builder_cover_bid(state, builder_index, amount)
             # Verify that the bid signature is valid
             assert verify_execution_payload_bid_signature(state, signed_bid)
+
+        # Verify commitments are under limit
+        assert (
+            len(bid.blob_kzg_commitments)
+            <= get_blob_parameters(get_current_epoch(state)).max_blobs_per_block
+        )
 
         # Verify that the bid is for the current slot
         assert bid.slot == block.slot
@@ -9526,9 +9535,11 @@
     - file: beacon-chain/core/validators/validator.go
       search: func SlashValidator(
   spec: |
-    <spec fn="slash_validator" fork="phase0" hash="85d8d7c9">
+    <spec fn="slash_validator" fork="phase0" hash="d2b5fafa">
     def slash_validator(
-        state: BeaconState, slashed_index: ValidatorIndex, whistleblower_index: ValidatorIndex = None
+        state: BeaconState,
+        slashed_index: ValidatorIndex,
+        whistleblower_index: Optional[ValidatorIndex] = None,
     ) -> None:
         """
         Slash the validator with index ``slashed_index``.
@@ -9560,9 +9571,11 @@
     - file: beacon-chain/core/validators/validator.go
       search: func SlashValidator(
   spec: |
-    <spec fn="slash_validator" fork="altair" hash="88f6c284">
+    <spec fn="slash_validator" fork="altair" hash="179ea102">
     def slash_validator(
-        state: BeaconState, slashed_index: ValidatorIndex, whistleblower_index: ValidatorIndex = None
+        state: BeaconState,
+        slashed_index: ValidatorIndex,
+        whistleblower_index: Optional[ValidatorIndex] = None,
     ) -> None:
         """
         Slash the validator with index ``slashed_index``.
@@ -9594,9 +9607,11 @@
     - file: beacon-chain/core/validators/validator.go
       search: func SlashValidator(
   spec: |
-    <spec fn="slash_validator" fork="bellatrix" hash="124f6889">
+    <spec fn="slash_validator" fork="bellatrix" hash="5964268e">
     def slash_validator(
-        state: BeaconState, slashed_index: ValidatorIndex, whistleblower_index: ValidatorIndex = None
+        state: BeaconState,
+        slashed_index: ValidatorIndex,
+        whistleblower_index: Optional[ValidatorIndex] = None,
     ) -> None:
         """
         Slash the validator with index ``slashed_index``.
@@ -9628,9 +9643,11 @@
     - file: beacon-chain/core/validators/validator.go
       search: func SlashValidator(
   spec: |
-    <spec fn="slash_validator" fork="electra" hash="54b64d21">
+    <spec fn="slash_validator" fork="electra" hash="07e584e2">
     def slash_validator(
-        state: BeaconState, slashed_index: ValidatorIndex, whistleblower_index: ValidatorIndex = None
+        state: BeaconState,
+        slashed_index: ValidatorIndex,
+        whistleblower_index: Optional[ValidatorIndex] = None,
     ) -> None:
         """
         Slash the validator with index ``slashed_index``.
@@ -10633,7 +10650,7 @@
 - name: upgrade_to_gloas#gloas
   sources: []
   spec: |
-    <spec fn="upgrade_to_gloas" fork="gloas" hash="855ad3f7">
+    <spec fn="upgrade_to_gloas" fork="gloas" hash="6e66df25">
     def upgrade_to_gloas(pre: fulu.BeaconState) -> BeaconState:
         epoch = fulu.get_current_epoch(pre)
 
@@ -10701,6 +10718,9 @@
             # [New in Gloas:EIP7732]
             payload_expected_withdrawals=[],
         )
+
+        # [New in Gloas:EIP7732]
+        onboard_builders_from_pending_deposits(post)
 
         return post
     </spec>
@@ -10979,8 +10999,12 @@
 - name: verify_data_column_sidecar#gloas
   sources: []
   spec: |
-    <spec fn="verify_data_column_sidecar" fork="gloas" hash="8838c4fd">
-    def verify_data_column_sidecar(sidecar: DataColumnSidecar) -> bool:
+    <spec fn="verify_data_column_sidecar" fork="gloas" hash="71548b68">
+    def verify_data_column_sidecar(
+        sidecar: DataColumnSidecar,
+        # [New in Gloas:EIP7732]
+        kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK],
+    ) -> bool:
         """
         Verify if the data column sidecar is valid.
         """
@@ -10988,18 +11012,14 @@
         if sidecar.index >= NUMBER_OF_COLUMNS:
             return False
 
+        # [Modified in Gloas:EIP7732]
         # A sidecar for zero blobs is invalid
-        if len(sidecar.kzg_commitments) == 0:
+        if len(sidecar.column) == 0:
             return False
 
         # [Modified in Gloas:EIP7732]
-        # Check that the sidecar respects the blob limit
-        epoch = compute_epoch_at_slot(sidecar.slot)
-        if len(sidecar.kzg_commitments) > get_blob_parameters(epoch).max_blobs_per_block:
-            return False
-
         # The column length must be equal to the number of commitments/proofs
-        if len(sidecar.column) != len(sidecar.kzg_commitments) or len(sidecar.column) != len(
+        if len(sidecar.column) != len(kzg_commitments) or len(sidecar.column) != len(
             sidecar.kzg_proofs
         ):
             return False
