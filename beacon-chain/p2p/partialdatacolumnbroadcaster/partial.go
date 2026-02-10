@@ -186,7 +186,7 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 // Start starts the event loop of the PartialColumnBroadcaster. Should be called
 // within a goroutine (go p.Start())
 func (p *PartialColumnBroadcaster) Start() {
- if p.ValidateHeader == nil {
+	if p.ValidateHeader == nil {
 		p.logger.Error("No header validator registered")
 		return
 	}
@@ -198,8 +198,8 @@ func (p *PartialColumnBroadcaster) Start() {
 		p.logger.Error("No column validator registered")
 		return
 	}
-	
-if p.HandleColumn == nil {
+
+	if p.HandleColumn == nil {
 		p.logger.Error("No column handler registered")
 		return
 	}
