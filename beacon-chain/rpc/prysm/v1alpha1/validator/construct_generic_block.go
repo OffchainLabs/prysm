@@ -58,7 +58,10 @@ func (vs *Server) constructGenericBeaconBlock(
 		}
 		return vs.constructFuluBlock(blockProto, isBlinded, bidStr, bundle), nil
 	case version.Gloas:
-		return vs.constructGloasBlock(blockProto), nil
+		// GLOAS blocks do not carry a separate payload value — the bid is part of the block body.
+		return &ethpb.GenericBeaconBlock{
+			Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: blockProto.(*ethpb.BeaconBlockGloas)},
+		}, nil
 	default:
 		return nil, fmt.Errorf("unknown block version: %d", sBlk.Version())
 	}
@@ -109,13 +112,6 @@ func (vs *Server) constructElectraBlock(blockProto proto.Message, isBlinded bool
 		electraContents.Blobs = bundle.Blobs
 	}
 	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Electra{Electra: electraContents}, IsBlinded: false, PayloadValue: payloadValue}
-}
-
-func (vs *Server) constructGloasBlock(blockProto proto.Message) *ethpb.GenericBeaconBlock {
-	// GLOAS blocks do not carry a separate payload value — the bid is part of the block body.
-	return &ethpb.GenericBeaconBlock{
-		Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: blockProto.(*ethpb.BeaconBlockGloas)},
-	}
 }
 
 func (vs *Server) constructFuluBlock(blockProto proto.Message, isBlinded bool, payloadValue string, bundle *enginev1.BlobsBundleV2) *ethpb.GenericBeaconBlock {

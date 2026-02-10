@@ -87,49 +87,50 @@ type serviceFlagOpts struct {
 // full PoS node. It handles the lifecycle of the entire system and registers
 // services to a service registry.
 type BeaconNode struct {
-	cliCtx                   *cli.Context
-	ctx                      context.Context
-	cancel                   context.CancelFunc
-	services                 *runtime.ServiceRegistry
-	lock                     sync.RWMutex
-	stop                     chan struct{} // Channel to wait for termination notifications.
-	db                       db.Database
-	slasherDB                db.SlasherDatabase
-	attestationCache         *cache.AttestationCache
-	attestationPool          attestations.Pool
-	exitPool                 voluntaryexits.PoolManager
-	slashingsPool            slashings.PoolManager
-	syncCommitteePool        synccommittee.Pool
-	blsToExecPool            blstoexec.PoolManager
-	depositCache             cache.DepositCache
-	trackedValidatorsCache   *cache.TrackedValidatorsCache
-	payloadIDCache           *cache.PayloadIDCache
-	stateFeed                *event.Feed
-	blockFeed                *event.Feed
-	opFeed                   *event.Feed
-	stateGen                 *stategen.State
-	collector                *bcnodeCollector
-	slasherBlockHeadersFeed  *event.Feed
-	slasherAttestationsFeed  *event.Feed
-	finalizedStateAtStartUp  state.BeaconState
-	serviceFlagOpts          *serviceFlagOpts
-	GenesisProviders         []genesis.Provider
-	CheckpointInitializer    checkpoint.Initializer
-	forkChoicer              forkchoice.ForkChoicer
-	ClockWaiter              startup.ClockWaiter
-	BackfillOpts             []backfill.ServiceOption
-	initialSyncComplete      chan struct{}
-	BlobStorage              *filesystem.BlobStorage
-	BlobStorageOptions       []filesystem.BlobStorageOption
-	DataColumnStorage        *filesystem.DataColumnStorage
-	DataColumnStorageOptions []filesystem.DataColumnStorageOption
-	verifyInitWaiter         *verification.InitializerWaiter
-	lhsp                     *verification.LazyHeadStateProvider
-	syncChecker              *initialsync.SyncChecker
-	slasherEnabled           bool
-	lcStore                  *lightclient.Store
-	ConfigOptions            []params.Option
-	SyncNeedsWaiter          func() (das.SyncNeeds, error)
+	cliCtx                        *cli.Context
+	ctx                           context.Context
+	cancel                        context.CancelFunc
+	services                      *runtime.ServiceRegistry
+	lock                          sync.RWMutex
+	stop                          chan struct{} // Channel to wait for termination notifications.
+	db                            db.Database
+	slasherDB                     db.SlasherDatabase
+	attestationCache              *cache.AttestationCache
+	attestationPool               attestations.Pool
+	exitPool                      voluntaryexits.PoolManager
+	slashingsPool                 slashings.PoolManager
+	syncCommitteePool             synccommittee.Pool
+	blsToExecPool                 blstoexec.PoolManager
+	depositCache                  cache.DepositCache
+	trackedValidatorsCache        *cache.TrackedValidatorsCache
+	payloadIDCache                *cache.PayloadIDCache
+	executionPayloadEnvelopeCache *cache.ExecutionPayloadEnvelopeCache
+	stateFeed                     *event.Feed
+	blockFeed                     *event.Feed
+	opFeed                        *event.Feed
+	stateGen                      *stategen.State
+	collector                     *bcnodeCollector
+	slasherBlockHeadersFeed       *event.Feed
+	slasherAttestationsFeed       *event.Feed
+	finalizedStateAtStartUp       state.BeaconState
+	serviceFlagOpts               *serviceFlagOpts
+	GenesisProviders              []genesis.Provider
+	CheckpointInitializer         checkpoint.Initializer
+	forkChoicer                   forkchoice.ForkChoicer
+	ClockWaiter                   startup.ClockWaiter
+	BackfillOpts                  []backfill.ServiceOption
+	initialSyncComplete           chan struct{}
+	BlobStorage                   *filesystem.BlobStorage
+	BlobStorageOptions            []filesystem.BlobStorageOption
+	DataColumnStorage             *filesystem.DataColumnStorage
+	DataColumnStorageOptions      []filesystem.DataColumnStorageOption
+	verifyInitWaiter              *verification.InitializerWaiter
+	lhsp                          *verification.LazyHeadStateProvider
+	syncChecker                   *initialsync.SyncChecker
+	slasherEnabled                bool
+	lcStore                       *lightclient.Store
+	ConfigOptions                 []params.Option
+	SyncNeedsWaiter               func() (das.SyncNeeds, error)
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -151,28 +152,29 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 	ctx := cliCtx.Context
 
 	beacon := &BeaconNode{
-		cliCtx:                  cliCtx,
-		ctx:                     ctx,
-		cancel:                  cancel,
-		services:                runtime.NewServiceRegistry(),
-		stop:                    make(chan struct{}),
-		stateFeed:               new(event.Feed),
-		blockFeed:               new(event.Feed),
-		opFeed:                  new(event.Feed),
-		attestationCache:        cache.NewAttestationCache(),
-		attestationPool:         attestations.NewPool(),
-		exitPool:                voluntaryexits.NewPool(),
-		slashingsPool:           slashings.NewPool(),
-		syncCommitteePool:       synccommittee.NewPool(),
-		blsToExecPool:           blstoexec.NewPool(),
-		trackedValidatorsCache:  cache.NewTrackedValidatorsCache(),
-		payloadIDCache:          cache.NewPayloadIDCache(),
-		slasherBlockHeadersFeed: new(event.Feed),
-		slasherAttestationsFeed: new(event.Feed),
-		serviceFlagOpts:         &serviceFlagOpts{},
-		initialSyncComplete:     make(chan struct{}),
-		syncChecker:             &initialsync.SyncChecker{},
-		slasherEnabled:          cliCtx.Bool(flags.SlasherFlag.Name),
+		cliCtx:                        cliCtx,
+		ctx:                           ctx,
+		cancel:                        cancel,
+		services:                      runtime.NewServiceRegistry(),
+		stop:                          make(chan struct{}),
+		stateFeed:                     new(event.Feed),
+		blockFeed:                     new(event.Feed),
+		opFeed:                        new(event.Feed),
+		attestationCache:              cache.NewAttestationCache(),
+		attestationPool:               attestations.NewPool(),
+		exitPool:                      voluntaryexits.NewPool(),
+		slashingsPool:                 slashings.NewPool(),
+		syncCommitteePool:             synccommittee.NewPool(),
+		blsToExecPool:                 blstoexec.NewPool(),
+		trackedValidatorsCache:        cache.NewTrackedValidatorsCache(),
+		payloadIDCache:                cache.NewPayloadIDCache(),
+		executionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
+		slasherBlockHeadersFeed:       new(event.Feed),
+		slasherAttestationsFeed:       new(event.Feed),
+		serviceFlagOpts:               &serviceFlagOpts{},
+		initialSyncComplete:           make(chan struct{}),
+		syncChecker:                   &initialsync.SyncChecker{},
+		slasherEnabled:                cliCtx.Bool(flags.SlasherFlag.Name),
 	}
 
 	for _, opt := range opts {
@@ -950,59 +952,60 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 
 	p2pService := b.fetchP2P()
 	rpcService := rpc.NewService(b.ctx, &rpc.Config{
-		ExecutionEngineCaller:     web3Service,
-		ExecutionReconstructor:    web3Service,
-		Host:                      host,
-		Port:                      port,
-		BeaconMonitoringHost:      beaconMonitoringHost,
-		BeaconMonitoringPort:      beaconMonitoringPort,
-		CertFlag:                  cert,
-		KeyFlag:                   key,
-		BeaconDB:                  b.db,
-		Broadcaster:               p2pService,
-		PeersFetcher:              p2pService,
-		PeerManager:               p2pService,
-		MetadataProvider:          p2pService,
-		ChainInfoFetcher:          chainService,
-		HeadFetcher:               chainService,
-		CanonicalFetcher:          chainService,
-		ForkFetcher:               chainService,
-		ForkchoiceFetcher:         chainService,
-		FinalizationFetcher:       chainService,
-		BlockReceiver:             chainService,
-		BlobReceiver:              chainService,
-		DataColumnReceiver:        chainService,
-		AttestationReceiver:       chainService,
-		GenesisTimeFetcher:        chainService,
-		GenesisFetcher:            chainService,
-		OptimisticModeFetcher:     chainService,
-		AttestationCache:          b.attestationCache,
-		AttestationsPool:          b.attestationPool,
-		ExitPool:                  b.exitPool,
-		SlashingsPool:             b.slashingsPool,
-		BLSChangesPool:            b.blsToExecPool,
-		SyncCommitteeObjectPool:   b.syncCommitteePool,
-		ExecutionChainService:     web3Service,
-		ExecutionChainInfoFetcher: web3Service,
-		ChainStartFetcher:         chainStartFetcher,
-		MockEth1Votes:             mockEth1DataVotes,
-		SyncService:               syncService,
-		DepositFetcher:            depositFetcher,
-		PendingDepositFetcher:     b.depositCache,
-		BlockNotifier:             b,
-		StateNotifier:             b,
-		OperationNotifier:         b,
-		StateGen:                  b.stateGen,
-		EnableDebugRPCEndpoints:   enableDebugRPCEndpoints,
-		MaxMsgSize:                maxMsgSize,
-		BlockBuilder:              b.fetchBuilderService(),
-		Router:                    router,
-		ClockWaiter:               b.ClockWaiter,
-		BlobStorage:               b.BlobStorage,
-		DataColumnStorage:         b.DataColumnStorage,
-		TrackedValidatorsCache:    b.trackedValidatorsCache,
-		PayloadIDCache:            b.payloadIDCache,
-		LCStore:                   b.lcStore,
+		ExecutionEngineCaller:         web3Service,
+		ExecutionReconstructor:        web3Service,
+		Host:                          host,
+		Port:                          port,
+		BeaconMonitoringHost:          beaconMonitoringHost,
+		BeaconMonitoringPort:          beaconMonitoringPort,
+		CertFlag:                      cert,
+		KeyFlag:                       key,
+		BeaconDB:                      b.db,
+		Broadcaster:                   p2pService,
+		PeersFetcher:                  p2pService,
+		PeerManager:                   p2pService,
+		MetadataProvider:              p2pService,
+		ChainInfoFetcher:              chainService,
+		HeadFetcher:                   chainService,
+		CanonicalFetcher:              chainService,
+		ForkFetcher:                   chainService,
+		ForkchoiceFetcher:             chainService,
+		FinalizationFetcher:           chainService,
+		BlockReceiver:                 chainService,
+		BlobReceiver:                  chainService,
+		DataColumnReceiver:            chainService,
+		AttestationReceiver:           chainService,
+		GenesisTimeFetcher:            chainService,
+		GenesisFetcher:                chainService,
+		OptimisticModeFetcher:         chainService,
+		AttestationCache:              b.attestationCache,
+		AttestationsPool:              b.attestationPool,
+		ExitPool:                      b.exitPool,
+		SlashingsPool:                 b.slashingsPool,
+		BLSChangesPool:                b.blsToExecPool,
+		SyncCommitteeObjectPool:       b.syncCommitteePool,
+		ExecutionChainService:         web3Service,
+		ExecutionChainInfoFetcher:     web3Service,
+		ChainStartFetcher:             chainStartFetcher,
+		MockEth1Votes:                 mockEth1DataVotes,
+		SyncService:                   syncService,
+		DepositFetcher:                depositFetcher,
+		PendingDepositFetcher:         b.depositCache,
+		BlockNotifier:                 b,
+		StateNotifier:                 b,
+		OperationNotifier:             b,
+		StateGen:                      b.stateGen,
+		EnableDebugRPCEndpoints:       enableDebugRPCEndpoints,
+		MaxMsgSize:                    maxMsgSize,
+		BlockBuilder:                  b.fetchBuilderService(),
+		Router:                        router,
+		ClockWaiter:                   b.ClockWaiter,
+		BlobStorage:                   b.BlobStorage,
+		DataColumnStorage:             b.DataColumnStorage,
+		TrackedValidatorsCache:        b.trackedValidatorsCache,
+		PayloadIDCache:                b.payloadIDCache,
+		ExecutionPayloadEnvelopeCache: b.executionPayloadEnvelopeCache,
+		LCStore:                       b.lcStore,
 	})
 
 	return b.services.RegisterService(rpcService)

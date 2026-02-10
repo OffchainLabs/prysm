@@ -98,7 +98,7 @@ func (vs *Server) buildExecutionPayloadEnvelope(
 		BuilderIndex:      primitives.BuilderIndex(sBlk.Block().ProposerIndex()),
 		BeaconBlockRoot:   blockRoot[:],
 		Slot:              sBlk.Block().Slot(),
-		StateRoot:         make([]byte, 32),
+		StateRoot:         make([]byte, 32), // TODO: computed state root
 	}
 
 	vs.cacheExecutionPayloadEnvelope(envelope, local.BlobsBundler)
@@ -189,10 +189,6 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 	if slots.ToEpoch(req.Slot) < params.BeaconConfig().GloasForkEpoch {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"execution payload envelopes are not supported before GLOAS fork (slot %d)", req.Slot)
-	}
-
-	if vs.ExecutionPayloadEnvelopeCache == nil {
-		return nil, status.Error(codes.Internal, "execution payload envelope cache not initialized")
 	}
 
 	envelope, found := vs.ExecutionPayloadEnvelopeCache.Get(req.Slot, req.BuilderIndex)
