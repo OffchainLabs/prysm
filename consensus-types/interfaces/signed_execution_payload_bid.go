@@ -22,7 +22,8 @@ type ROExecutionPayloadBid interface {
 	Slot() primitives.Slot
 	Value() primitives.Gwei
 	ExecutionPayment() primitives.Gwei
-	BlobKzgCommitmentsRoot() [32]byte
+	BlobKzgCommitments() [][]byte
+	BlobKzgCommitmentCount() uint64
 	FeeRecipient() [20]byte
 	IsNil() bool
 }

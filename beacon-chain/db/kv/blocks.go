@@ -816,7 +816,10 @@ func (s *Store) FeeRecipientByValidatorID(ctx context.Context, id primitives.Val
 	var addr []byte
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(feeRecipientBucket)
-		addr = bkt.Get(bytesutil.Uint64ToBytesBigEndian(uint64(id)))
+		stored := bkt.Get(bytesutil.Uint64ToBytesBigEndian(uint64(id)))
+		if len(stored) > 0 {
+			addr = slices.Clone(stored)
+		}
 		// IF the fee recipient is not found in the standard fee recipient bucket, then
 		// check the registration bucket. The fee recipient may be there.
 		// This is to resolve imcompatility until we fully migrate to the registration bucket.
@@ -830,7 +833,7 @@ func (s *Store) FeeRecipientByValidatorID(ctx context.Context, id primitives.Val
 			if err := decode(ctx, enc, reg); err != nil {
 				return err
 			}
-			addr = reg.FeeRecipient
+			addr = slices.Clone(reg.FeeRecipient)
 		}
 		return nil
 	})

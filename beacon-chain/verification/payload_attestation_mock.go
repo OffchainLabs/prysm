@@ -1,0 +1,46 @@
+package verification
+
+import (
+	"context"
+
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
+)
+
+type MockPayloadAttestation struct {
+	ErrIncorrectPayloadAttSlot      error
+	ErrIncorrectPayloadAttValidator error
+	ErrPayloadAttBlockRootNotSeen   error
+	ErrPayloadAttBlockRootInvalid   error
+	ErrInvalidPayloadAttMessage     error
+	ErrInvalidMessageSignature      error
+	ErrUnsatisfiedRequirement       error
+}
+
+var _ PayloadAttestationMsgVerifier = &MockPayloadAttestation{}
+
+func (m *MockPayloadAttestation) VerifyCurrentSlot() error {
+	return m.ErrIncorrectPayloadAttSlot
+}
+
+func (m *MockPayloadAttestation) VerifyValidatorInPTC(ctx context.Context, st state.ReadOnlyBeaconState) error {
+	return m.ErrIncorrectPayloadAttValidator
+}
+
+func (m *MockPayloadAttestation) VerifyBlockRootSeen(_ func([32]byte) bool) error {
+	return m.ErrPayloadAttBlockRootNotSeen
+}
+
+func (m *MockPayloadAttestation) VerifyBlockRootValid(func([32]byte) bool) error {
+	return m.ErrPayloadAttBlockRootInvalid
+}
+
+func (m *MockPayloadAttestation) VerifySignature(st state.ReadOnlyBeaconState) (err error) {
+	return m.ErrInvalidMessageSignature
+}
+
+func (m *MockPayloadAttestation) VerifiedPayloadAttestation() (payloadattestation.VerifiedROMessage, error) {
+	return payloadattestation.VerifiedROMessage{}, nil
+}
+
+func (m *MockPayloadAttestation) SatisfyRequirement(req Requirement) {}

@@ -12,9 +12,9 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
+	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 )
 
 type grpcPrysmChainClient struct {
@@ -95,6 +95,8 @@ func (c *grpcPrysmChainClient) ValidatorPerformance(ctx context.Context, in *eth
 	return c.chainClient.ValidatorPerformance(ctx, in)
 }
 
-func NewGrpcPrysmChainClient(cc grpc.ClientConnInterface) iface.PrysmChainClient {
-	return &grpcPrysmChainClient{chainClient: &grpcChainClient{ethpb.NewBeaconChainClient(cc)}}
+// NewGrpcPrysmChainClient creates a new gRPC Prysm chain client that supports
+// dynamic connection switching via the NodeConnection's GrpcConnectionProvider.
+func NewGrpcPrysmChainClient(conn validatorHelpers.NodeConnection) iface.PrysmChainClient {
+	return &grpcPrysmChainClient{chainClient: NewGrpcChainClient(conn)}
 }

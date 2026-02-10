@@ -144,15 +144,17 @@ func copySignedExecutionPayloadBid(header *SignedExecutionPayloadBid) *SignedExe
 	}
 	if header.Message != nil {
 		copied.Message = &ExecutionPayloadBid{
-			ParentBlockHash:        bytesutil.SafeCopyBytes(header.Message.ParentBlockHash),
-			ParentBlockRoot:        bytesutil.SafeCopyBytes(header.Message.ParentBlockRoot),
-			BlockHash:              bytesutil.SafeCopyBytes(header.Message.BlockHash),
-			FeeRecipient:           bytesutil.SafeCopyBytes(header.Message.FeeRecipient),
-			GasLimit:               header.Message.GasLimit,
-			BuilderIndex:           header.Message.BuilderIndex,
-			Slot:                   header.Message.Slot,
-			Value:                  header.Message.Value,
-			BlobKzgCommitmentsRoot: bytesutil.SafeCopyBytes(header.Message.BlobKzgCommitmentsRoot),
+			ParentBlockHash:    bytesutil.SafeCopyBytes(header.Message.ParentBlockHash),
+			ParentBlockRoot:    bytesutil.SafeCopyBytes(header.Message.ParentBlockRoot),
+			BlockHash:          bytesutil.SafeCopyBytes(header.Message.BlockHash),
+			PrevRandao:         bytesutil.SafeCopyBytes(header.Message.PrevRandao),
+			FeeRecipient:       bytesutil.SafeCopyBytes(header.Message.FeeRecipient),
+			GasLimit:           header.Message.GasLimit,
+			BuilderIndex:       header.Message.BuilderIndex,
+			Slot:               header.Message.Slot,
+			Value:              header.Message.Value,
+			ExecutionPayment:   header.Message.ExecutionPayment,
+			BlobKzgCommitments: bytesutil.SafeCopy2dBytes(header.Message.BlobKzgCommitments),
 		}
 	}
 	return copied

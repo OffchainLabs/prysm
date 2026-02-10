@@ -283,16 +283,18 @@ func (mr *MockValidatorClientMockRecorder) ProposeExit(ctx, in any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeExit", reflect.TypeOf((*MockValidatorClient)(nil).ProposeExit), ctx, in)
 }
 
-// SetHost mocks base method.
-func (m *MockValidatorClient) SetHost(host string) {
+// EnsureReady mocks base method.
+func (m *MockValidatorClient) EnsureReady(ctx context.Context) bool {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetHost", host)
+	ret := m.ctrl.Call(m, "EnsureReady", ctx)
+	ret0, _ := ret[0].(bool)
+	return ret0
 }
 
-// SetHost indicates an expected call of SetHost.
-func (mr *MockValidatorClientMockRecorder) SetHost(host any) *gomock.Call {
+// EnsureReady indicates an expected call of EnsureReady.
+func (mr *MockValidatorClientMockRecorder) EnsureReady(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHost", reflect.TypeOf((*MockValidatorClient)(nil).SetHost), host)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureReady", reflect.TypeOf((*MockValidatorClient)(nil).EnsureReady), ctx)
 }
 
 // StartEventStream mocks base method.
