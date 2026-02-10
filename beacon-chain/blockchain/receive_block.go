@@ -633,7 +633,7 @@ func (s *Service) validateExecutionOnBlock(ctx context.Context, ver int, header 
 	isValidPayload, err := s.notifyNewPayload(ctx, ver, header, block)
 	if err != nil {
 		s.cfg.ForkChoiceStore.Lock()
-		err = s.handleInvalidExecutionError(ctx, err, block.Root(), block.Block().ParentRoot(), [32]byte(header.ParentHash()))
+		err = s.handleInvalidExecutionError(ctx, err, block.Root(), block.Block().ParentRoot(), [32]byte(header.BlockHash()))
 		s.cfg.ForkChoiceStore.Unlock()
 		return false, err
 	}
