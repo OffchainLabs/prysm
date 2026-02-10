@@ -9,6 +9,7 @@ import (
 const (
 	// CLCode is the two-letter client code for Prysm.
 	CLCode = "PR"
+	Name   = "Prysm"
 )
 
 // GraffitiInfo holds version information for generating block graffiti.

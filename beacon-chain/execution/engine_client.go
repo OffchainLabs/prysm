@@ -368,7 +368,7 @@ func (s *Service) GetClientVersion(ctx context.Context) ([]ClientVersionV1, erro
 	// Per spec, we send our own client info as the parameter
 	clVersion := ClientVersionV1{
 		Code:    CLCode,
-		Name:    "Prysm",
+		Name:    Name,
 		Version: version.SemanticVersion(),
 		Commit:  version.GetCommitPrefix(),
 	}
