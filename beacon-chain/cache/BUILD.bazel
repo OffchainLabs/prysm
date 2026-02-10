@@ -18,6 +18,7 @@ go_library(
         "execution_payload_envelope.go",
         "interfaces.go",
         "log.go",
+        "payload_attestation.go",
         "payload_id.go",
         "proposer_indices.go",
         "proposer_indices_disabled.go",  # keep
@@ -79,6 +80,7 @@ go_test(
         "committee_fuzz_test.go",
         "committee_test.go",
         "execution_payload_envelope_test.go",
+        "payload_attestation_test.go",
         "payload_id_test.go",
         "private_access_test.go",
         "proposer_indices_test.go",

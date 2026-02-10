@@ -29,6 +29,22 @@ func (r Requirement) String() string {
 		return "RequireSidecarKzgProofVerified"
 	case RequireSidecarProposerExpected:
 		return "RequireSidecarProposerExpected"
+	case RequireValidFields:
+		return "RequireValidFields"
+	case RequireCorrectSubnet:
+		return "RequireCorrectSubnet"
+	case RequireCurrentSlot:
+		return "RequireCurrentSlot"
+	case RequireMessageNotSeen:
+		return "RequireMessageNotSeen"
+	case RequireValidatorInPTC:
+		return "RequireValidatorInPTC"
+	case RequireBlockRootSeen:
+		return "RequireBlockRootSeen"
+	case RequireBlockRootValid:
+		return "RequireBlockRootValid"
+	case RequireSignatureValid:
+		return "RequireSignatureValid"
 	default:
 		return unknownRequirementName
 	}
