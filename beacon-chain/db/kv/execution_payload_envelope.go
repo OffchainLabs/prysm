@@ -93,13 +93,12 @@ func blindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope) (*ethpb.SignedBlin
 	}
 	return &ethpb.SignedBlindedExecutionPayloadEnvelope{
 		Message: &ethpb.BlindedExecutionPayloadEnvelope{
-			PayloadRoot:        payloadRoot[:],
-			ExecutionRequests:  env.Message.ExecutionRequests,
-			BuilderIndex:       env.Message.BuilderIndex,
-			BeaconBlockRoot:    env.Message.BeaconBlockRoot,
-			Slot:               env.Message.Slot,
-			BlobKzgCommitments: env.Message.BlobKzgCommitments,
-			StateRoot:          env.Message.StateRoot,
+			PayloadRoot:       payloadRoot[:],
+			ExecutionRequests: env.Message.ExecutionRequests,
+			BuilderIndex:      env.Message.BuilderIndex,
+			BeaconBlockRoot:   env.Message.BeaconBlockRoot,
+			Slot:              env.Message.Slot,
+			StateRoot:         env.Message.StateRoot,
 		},
 		Signature: env.Signature,
 	}, nil

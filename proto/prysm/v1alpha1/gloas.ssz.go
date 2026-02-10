@@ -3594,7 +3594,7 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the BlindedExecutionPayloadEnvelope object to a target array
 func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(120)
+	offset := int(116)
 
 	// Field (0) 'PayloadRoot'
 	if size := len(b.PayloadRoot); size != 32 {
@@ -3623,11 +3623,7 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, 
 	// Field (4) 'Slot'
 	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
 
-	// Offset (5) 'BlobKzgCommitments'
-	dst = ssz.WriteOffset(dst, offset)
-	offset += len(b.BlobKzgCommitments) * 48
-
-	// Field (6) 'StateRoot'
+	// Field (5) 'StateRoot'
 	if size := len(b.StateRoot); size != 32 {
 		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
 		return
@@ -3639,19 +3635,6 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, 
 		return
 	}
 
-	// Field (5) 'BlobKzgCommitments'
-	if size := len(b.BlobKzgCommitments); size > 4096 {
-		err = ssz.ErrListTooBigFn("--.BlobKzgCommitments", size, 4096)
-		return
-	}
-	for ii := 0; ii < len(b.BlobKzgCommitments); ii++ {
-		if size := len(b.BlobKzgCommitments[ii]); size != 48 {
-			err = ssz.ErrBytesLengthFn("--.BlobKzgCommitments[ii]", size, 48)
-			return
-		}
-		dst = append(dst, b.BlobKzgCommitments[ii]...)
-	}
-
 	return
 }
 
@@ -3659,12 +3642,12 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, 
 func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 120 {
+	if size < 116 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o1, o5 uint64
+	var o1 uint64
 
 	// Field (0) 'PayloadRoot'
 	if cap(b.PayloadRoot) == 0 {
@@ -3677,7 +3660,7 @@ func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o1 != 120 {
+	if o1 != 116 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -3693,20 +3676,15 @@ func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	// Field (4) 'Slot'
 	b.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[76:84]))
 
-	// Offset (5) 'BlobKzgCommitments'
-	if o5 = ssz.ReadOffset(buf[84:88]); o5 > size || o1 > o5 {
-		return ssz.ErrOffset
-	}
-
-	// Field (6) 'StateRoot'
+	// Field (5) 'StateRoot'
 	if cap(b.StateRoot) == 0 {
-		b.StateRoot = make([]byte, 0, len(buf[88:120]))
+		b.StateRoot = make([]byte, 0, len(buf[84:116]))
 	}
-	b.StateRoot = append(b.StateRoot, buf[88:120]...)
+	b.StateRoot = append(b.StateRoot, buf[84:116]...)
 
 	// Field (1) 'ExecutionRequests'
 	{
-		buf = tail[o1:o5]
+		buf = tail[o1:]
 		if b.ExecutionRequests == nil {
 			b.ExecutionRequests = new(v1.ExecutionRequests)
 		}
@@ -3714,37 +3692,18 @@ func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 			return err
 		}
 	}
-
-	// Field (5) 'BlobKzgCommitments'
-	{
-		buf = tail[o5:]
-		num, err := ssz.DivideInt2(len(buf), 48, 4096)
-		if err != nil {
-			return err
-		}
-		b.BlobKzgCommitments = make([][]byte, num)
-		for ii := 0; ii < num; ii++ {
-			if cap(b.BlobKzgCommitments[ii]) == 0 {
-				b.BlobKzgCommitments[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
-			}
-			b.BlobKzgCommitments[ii] = append(b.BlobKzgCommitments[ii], buf[ii*48:(ii+1)*48]...)
-		}
-	}
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the BlindedExecutionPayloadEnvelope object
 func (b *BlindedExecutionPayloadEnvelope) SizeSSZ() (size int) {
-	size = 120
+	size = 116
 
 	// Field (1) 'ExecutionRequests'
 	if b.ExecutionRequests == nil {
 		b.ExecutionRequests = new(v1.ExecutionRequests)
 	}
 	size += b.ExecutionRequests.SizeSSZ()
-
-	// Field (5) 'BlobKzgCommitments'
-	size += len(b.BlobKzgCommitments) * 48
 
 	return
 }
@@ -3783,26 +3742,7 @@ func (b *BlindedExecutionPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err 
 	// Field (4) 'Slot'
 	hh.PutUint64(uint64(b.Slot))
 
-	// Field (5) 'BlobKzgCommitments'
-	{
-		if size := len(b.BlobKzgCommitments); size > 4096 {
-			err = ssz.ErrListTooBigFn("--.BlobKzgCommitments", size, 4096)
-			return
-		}
-		subIndx := hh.Index()
-		for _, i := range b.BlobKzgCommitments {
-			if len(i) != 48 {
-				err = ssz.ErrBytesLength
-				return
-			}
-			hh.PutBytes(i)
-		}
-
-		numItems := uint64(len(b.BlobKzgCommitments))
-		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
-	}
-
-	// Field (6) 'StateRoot'
+	// Field (5) 'StateRoot'
 	if size := len(b.StateRoot); size != 32 {
 		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
 		return

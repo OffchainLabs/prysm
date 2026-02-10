@@ -209,13 +209,12 @@ func copyExecutionPayloadEnvelope(env *ExecutionPayloadEnvelope) *ExecutionPaylo
 		return nil
 	}
 	return &ExecutionPayloadEnvelope{
-		Payload:            env.Payload, // engine proto, not deep copied here
-		ExecutionRequests:  env.ExecutionRequests,
-		BuilderIndex:       env.BuilderIndex,
-		BeaconBlockRoot:    bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
-		Slot:               env.Slot,
-		BlobKzgCommitments: bytesutil.SafeCopy2dBytes(env.BlobKzgCommitments),
-		StateRoot:          bytesutil.SafeCopyBytes(env.StateRoot),
+		Payload:           env.Payload, // engine proto, not deep copied here
+		ExecutionRequests: env.ExecutionRequests,
+		BuilderIndex:      env.BuilderIndex,
+		BeaconBlockRoot:   bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
+		Slot:              env.Slot,
+		StateRoot:         bytesutil.SafeCopyBytes(env.StateRoot),
 	}
 }
 
@@ -236,13 +235,12 @@ func copyBlindedExecutionPayloadEnvelope(env *BlindedExecutionPayloadEnvelope) *
 		return nil
 	}
 	return &BlindedExecutionPayloadEnvelope{
-		PayloadRoot:        bytesutil.SafeCopyBytes(env.PayloadRoot),
-		ExecutionRequests:  env.ExecutionRequests,
-		BuilderIndex:       env.BuilderIndex,
-		BeaconBlockRoot:    bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
-		Slot:               env.Slot,
-		BlobKzgCommitments: bytesutil.SafeCopy2dBytes(env.BlobKzgCommitments),
-		StateRoot:          bytesutil.SafeCopyBytes(env.StateRoot),
+		PayloadRoot:       bytesutil.SafeCopyBytes(env.PayloadRoot),
+		ExecutionRequests: env.ExecutionRequests,
+		BuilderIndex:      env.BuilderIndex,
+		BeaconBlockRoot:   bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
+		Slot:              env.Slot,
+		StateRoot:         bytesutil.SafeCopyBytes(env.StateRoot),
 	}
 }
 

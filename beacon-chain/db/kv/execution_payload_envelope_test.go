@@ -39,10 +39,7 @@ func testEnvelope(t *testing.T) *ethpb.SignedExecutionPayloadEnvelope {
 			BuilderIndex:      primitives.BuilderIndex(42),
 			BeaconBlockRoot:   bytesutil.PadTo([]byte("beaconroot"), 32),
 			Slot:              primitives.Slot(99),
-			BlobKzgCommitments: [][]byte{
-				bytesutil.PadTo([]byte("commitment1"), 48),
-			},
-			StateRoot: bytesutil.PadTo([]byte("envelopestateroot"), 32),
+			StateRoot:         bytesutil.PadTo([]byte("envelopestateroot"), 32),
 		},
 		Signature: bytesutil.PadTo([]byte("sig"), 96),
 	}

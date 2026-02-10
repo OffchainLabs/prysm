@@ -441,11 +441,7 @@ message BlindedExecutionPayloadEnvelope {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
-  repeated bytes blob_kzg_commitments = 6 [
-    (ethereum.eth.ext.ssz_size) = "?,48",
-    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
-  ];
-  bytes state_root = 7 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes state_root = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // SignedBlindedExecutionPayloadEnvelope wraps a blinded execution payload envelope with a signature.
