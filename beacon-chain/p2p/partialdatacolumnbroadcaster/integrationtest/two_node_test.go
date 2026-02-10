@@ -138,7 +138,7 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		topic2, err := ps2.Join(topicStr, pubsub.RequestPartialMessages())
 		require.NoError(t, err)
 
-		// Header validator that checks basic structure
+		// Header validator
 		headerValidator := func(header *ethpb.PartialDataColumnHeader) (reject bool, err error) {
 			if header == nil {
 				return false, fmt.Errorf("nil header")
@@ -148,6 +148,10 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 			}
 			if len(header.KzgCommitments) == 0 {
 				return true, fmt.Errorf("empty kzg commitments")
+			}
+			// Verify inclusion proof
+			if err := peerdas.VerifyPartialDataColumnHeaderInclusionProof(header); err != nil {
+				return true, fmt.Errorf("invalid inclusion proof: %w", err)
 			}
 			t.Log("Header validation passed")
 			return false, nil
