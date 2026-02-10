@@ -111,6 +111,8 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		return pubsub.ValidationReject, err
 	}
 
+	// For self-build, the state is retrived via how we retrieve for beacon block optimization
+	// For builder index, the state is retrived via head state read only
 	st, err := s.blockVerifyingState(ctx, block)
 	if err != nil {
 		return pubsub.ValidationIgnore, err

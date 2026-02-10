@@ -111,6 +111,18 @@ func TestValidateExecutionPayloadEnvelope_ErrorPathsWithMock(t *testing.T) {
 	}
 }
 
+func TestValidateExecutionPayloadEnvelope_HappyPath(t *testing.T) {
+	ctx := context.Background()
+	s, msg, builderIdx, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+
+	require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, result, pubsub.ValidationAccept)
+	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
+}
+
 type mockExecutionPayloadEnvelopeVerifier struct {
 	errBlockRootSeen      error
 	errBlockRootValid     error
