@@ -3,6 +3,7 @@ package doublylinkedtree
 import (
 	"bytes"
 	"context"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -85,7 +86,7 @@ func (s *Store) allConsensusChildren(n *Node) []*Node {
 	en := s.emptyNodeByRoot[n.root]
 	fn, ok := s.fullNodeByRoot[n.root]
 	if ok {
-		return append(en.children, fn.children...)
+		return append(slices.Clone(en.children), fn.children...)
 	}
 	return en.children
 }
