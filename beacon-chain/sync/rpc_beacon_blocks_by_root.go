@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -134,16 +133,9 @@ func (s *Service) sendAndSaveExecutionProofs(ctx context.Context, block blocks.R
 		return nil
 	}
 
-	alreadyHave := make([]primitives.ExecutionProofId, 0, len(storedIds))
-	for _, id := range storedIds {
-		alreadyHave = append(alreadyHave, primitives.ExecutionProofId(id))
-	}
-
 	// Construct request
-	req := &ethpb.ExecutionProofsByRootRequest{
-		BlockRoot:   root[:],
-		CountNeeded: params.BeaconConfig().MinProofsRequired - count,
-		AlreadyHave: alreadyHave,
+	request := &ethpb.ExecutionProofsByRootRequest{
+		BlockRoot: root[:],
 	}
 
 	// Call SendExecutionProofByRootRequest
@@ -155,13 +147,20 @@ func (s *Service) sendAndSaveExecutionProofs(ctx context.Context, block blocks.R
 	// TODO: For simplicity, just pick the first peer for now.
 	// In the future, we can implement better peer selection logic.
 	pid := zkvmEnabledPeers[0]
-	proofs, err := SendExecutionProofsByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, pid, req)
+	proofs, err := SendExecutionProofsByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, pid, request, blockEpoch)
 	if err != nil {
 		return fmt.Errorf("send execution proofs by root request: %w", err)
 	}
 
+	// TODO: Verify really instead of blindly converting to verified sidecars.
+	verifiedProofs := make([]blocks.VerifiedROSignedExecutionProof, 0, len(proofs))
+	for _, proof := range proofs {
+		verifiedProof := blocks.NewVerifiedROSignedExecutionProof(proof)
+		verifiedProofs = append(verifiedProofs, verifiedProof)
+	}
+
 	// Save the proofs into storage.
-	if err := proofStorage.Save(proofs); err != nil {
+	if err := proofStorage.Save(verifiedProofs); err != nil {
 		return fmt.Errorf("proof storage save: %w", err)
 	}
 

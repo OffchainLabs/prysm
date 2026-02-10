@@ -2366,6 +2366,354 @@ func (d *DataColumnsByRootIdentifier) HashTreeRootWith(hh *ssz.Hasher) (err erro
 	return
 }
 
+// MarshalSSZ ssz marshals the SignedExecutionProof object
+func (s *SignedExecutionProof) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedExecutionProof object to a target array
+func (s *SignedExecutionProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(148)
+
+	// Offset (0) 'Message'
+	dst = ssz.WriteOffset(dst, offset)
+	if s.Message == nil {
+		s.Message = new(ExecutionProof)
+	}
+	offset += s.Message.SizeSSZ()
+
+	// Field (1) 'ProverPubkey'
+	if size := len(s.ProverPubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.ProverPubkey", size, 48)
+		return
+	}
+	dst = append(dst, s.ProverPubkey...)
+
+	// Field (2) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, s.Signature...)
+
+	// Field (0) 'Message'
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SignedExecutionProof object
+func (s *SignedExecutionProof) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 148 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Message'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 148 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'ProverPubkey'
+	if cap(s.ProverPubkey) == 0 {
+		s.ProverPubkey = make([]byte, 0, len(buf[4:52]))
+	}
+	s.ProverPubkey = append(s.ProverPubkey, buf[4:52]...)
+
+	// Field (2) 'Signature'
+	if cap(s.Signature) == 0 {
+		s.Signature = make([]byte, 0, len(buf[52:148]))
+	}
+	s.Signature = append(s.Signature, buf[52:148]...)
+
+	// Field (0) 'Message'
+	{
+		buf = tail[o0:]
+		if s.Message == nil {
+			s.Message = new(ExecutionProof)
+		}
+		if err = s.Message.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedExecutionProof object
+func (s *SignedExecutionProof) SizeSSZ() (size int) {
+	size = 148
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(ExecutionProof)
+	}
+	size += s.Message.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the SignedExecutionProof object
+func (s *SignedExecutionProof) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedExecutionProof object with a hasher
+func (s *SignedExecutionProof) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Message'
+	if err = s.Message.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'ProverPubkey'
+	if size := len(s.ProverPubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.ProverPubkey", size, 48)
+		return
+	}
+	hh.PutBytes(s.ProverPubkey)
+
+	// Field (2) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(s.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the ExecutionProof object
+func (e *ExecutionProof) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(e)
+}
+
+// MarshalSSZTo ssz marshals the ExecutionProof object to a target array
+func (e *ExecutionProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(40)
+
+	// Offset (0) 'ProofData'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.ProofData)
+
+	// Offset (1) 'ProofType'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.ProofType)
+
+	// Field (2) 'PublicInput'
+	if e.PublicInput == nil {
+		e.PublicInput = new(PublicInput)
+	}
+	if dst, err = e.PublicInput.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (0) 'ProofData'
+	if size := len(e.ProofData); size > 307200 {
+		err = ssz.ErrBytesLengthFn("--.ProofData", size, 307200)
+		return
+	}
+	dst = append(dst, e.ProofData...)
+
+	// Field (1) 'ProofType'
+	if size := len(e.ProofType); size > 1 {
+		err = ssz.ErrBytesLengthFn("--.ProofType", size, 1)
+		return
+	}
+	dst = append(dst, e.ProofType...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ExecutionProof object
+func (e *ExecutionProof) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 40 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1 uint64
+
+	// Offset (0) 'ProofData'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 40 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'ProofType'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Field (2) 'PublicInput'
+	if e.PublicInput == nil {
+		e.PublicInput = new(PublicInput)
+	}
+	if err = e.PublicInput.UnmarshalSSZ(buf[8:40]); err != nil {
+		return err
+	}
+
+	// Field (0) 'ProofData'
+	{
+		buf = tail[o0:o1]
+		if len(buf) > 307200 {
+			return ssz.ErrBytesLength
+		}
+		if cap(e.ProofData) == 0 {
+			e.ProofData = make([]byte, 0, len(buf))
+		}
+		e.ProofData = append(e.ProofData, buf...)
+	}
+
+	// Field (1) 'ProofType'
+	{
+		buf = tail[o1:]
+		if len(buf) > 1 {
+			return ssz.ErrBytesLength
+		}
+		if cap(e.ProofType) == 0 {
+			e.ProofType = make([]byte, 0, len(buf))
+		}
+		e.ProofType = append(e.ProofType, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ExecutionProof object
+func (e *ExecutionProof) SizeSSZ() (size int) {
+	size = 40
+
+	// Field (0) 'ProofData'
+	size += len(e.ProofData)
+
+	// Field (1) 'ProofType'
+	size += len(e.ProofType)
+
+	return
+}
+
+// HashTreeRoot ssz hashes the ExecutionProof object
+func (e *ExecutionProof) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(e)
+}
+
+// HashTreeRootWith ssz hashes the ExecutionProof object with a hasher
+func (e *ExecutionProof) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'ProofData'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(e.ProofData))
+		if byteLen > 307200 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.PutBytes(e.ProofData)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (307200+31)/32)
+	}
+
+	// Field (1) 'ProofType'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(e.ProofType))
+		if byteLen > 1 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.PutBytes(e.ProofType)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (1+31)/32)
+	}
+
+	// Field (2) 'PublicInput'
+	if err = e.PublicInput.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the PublicInput object
+func (p *PublicInput) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PublicInput object to a target array
+func (p *PublicInput) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'NewPayloadRequestRoot'
+	if size := len(p.NewPayloadRequestRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.NewPayloadRequestRoot", size, 32)
+		return
+	}
+	dst = append(dst, p.NewPayloadRequestRoot...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PublicInput object
+func (p *PublicInput) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 32 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'NewPayloadRequestRoot'
+	if cap(p.NewPayloadRequestRoot) == 0 {
+		p.NewPayloadRequestRoot = make([]byte, 0, len(buf[0:32]))
+	}
+	p.NewPayloadRequestRoot = append(p.NewPayloadRequestRoot, buf[0:32]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PublicInput object
+func (p *PublicInput) SizeSSZ() (size int) {
+	size = 32
+	return
+}
+
+// HashTreeRoot ssz hashes the PublicInput object
+func (p *PublicInput) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the PublicInput object with a hasher
+func (p *PublicInput) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'NewPayloadRequestRoot'
+	if size := len(p.NewPayloadRequestRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.NewPayloadRequestRoot", size, 32)
+		return
+	}
+	hh.PutBytes(p.NewPayloadRequestRoot)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the StatusV2 object
 func (s *StatusV2) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(s)

@@ -5,7 +5,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/config/features"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
@@ -29,7 +28,6 @@ type GlobalFlags struct {
 	DataColumnBatchLimit            int
 	DataColumnBatchLimitBurstFactor int
 	StateDiffExponents              []int
-	ProofGenerationTypes            []primitives.ExecutionProofId
 }
 
 var globalConfig *GlobalFlags
@@ -92,19 +90,6 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 		}
 	}
 
-	// zkVM Proof Generation Types
-	proofTypes := make([]primitives.ExecutionProofId, 0, len(ctx.IntSlice(ZkvmGenerationProofTypeFlag.Name)))
-	for _, t := range ctx.IntSlice(ZkvmGenerationProofTypeFlag.Name) {
-		proofTypes = append(proofTypes, primitives.ExecutionProofId(t))
-	}
-	cfg.ProofGenerationTypes = proofTypes
-
-	if features.Get().EnableZkvm {
-		if err := validateZkvmProofGenerationTypes(cfg.ProofGenerationTypes); err != nil {
-			return fmt.Errorf("validate Zkvm proof generation types: %w", err)
-		}
-	}
-
 	cfg.BlockBatchLimit = ctx.Int(BlockBatchLimit.Name)
 	cfg.BlockBatchLimitBurstFactor = ctx.Int(BlockBatchLimitBurstFactor.Name)
 	cfg.BlobBatchLimit = ctx.Int(BlobBatchLimit.Name)
@@ -153,16 +138,6 @@ func validateStateDiffExponents(exponents []int) error {
 			return errors.New("state diff exponents must be in strictly decreasing order, and each exponent must be <= 30")
 		}
 		prev = exp
-	}
-	return nil
-}
-
-// validateZkvmProofGenerationTypes validates the provided proof IDs.
-func validateZkvmProofGenerationTypes(types []primitives.ExecutionProofId) error {
-	for _, t := range types {
-		if t >= primitives.EXECUTION_PROOF_TYPE_COUNT {
-			return fmt.Errorf("invalid zkvm proof generation type: %d; valid types are between 0 and %d", t, primitives.EXECUTION_PROOF_TYPE_COUNT-1)
-		}
 	}
 	return nil
 }

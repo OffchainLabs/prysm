@@ -38,6 +38,7 @@ go_library(
         "//beacon-chain/rpc/eth/events:go_default_library",
         "//beacon-chain/rpc/eth/light-client:go_default_library",
         "//beacon-chain/rpc/eth/node:go_default_library",
+        "//beacon-chain/rpc/eth/prover:go_default_library",
         "//beacon-chain/rpc/eth/rewards:go_default_library",
         "//beacon-chain/rpc/eth/validator:go_default_library",
         "//beacon-chain/rpc/lookup:go_default_library",

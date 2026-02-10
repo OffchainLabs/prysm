@@ -63,7 +63,7 @@ type DataColumnReceiver interface {
 // ProofReceiver interface defines the methods of chain service for receiving new
 // execution proofs
 type ProofReceiver interface {
-	ReceiveProof(proof *ethpb.ExecutionProof) error
+	ReceiveProof(blocks.VerifiedROSignedExecutionProof) error
 }
 
 // SlashingReceiver interface defines the methods of chain service for receiving validated slashing over the wire.

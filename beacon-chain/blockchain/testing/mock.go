@@ -75,7 +75,7 @@ type ChainService struct {
 	SyncingRoot                 [32]byte
 	Blobs                       []blocks.VerifiedROBlob
 	DataColumns                 []blocks.VerifiedRODataColumn
-	Proofs                      []*ethpb.ExecutionProof
+	Proofs                      []blocks.VerifiedROSignedExecutionProof
 	TargetRoot                  [32]byte
 	MockHeadSlot                *primitives.Slot
 }
@@ -759,7 +759,7 @@ func (c *ChainService) ReceiveDataColumns(dcs []blocks.VerifiedRODataColumn) err
 }
 
 // ReceiveProof implements the same method in chain service
-func (c *ChainService) ReceiveProof(proof *ethpb.ExecutionProof) error {
+func (c *ChainService) ReceiveProof(proof blocks.VerifiedROSignedExecutionProof) error {
 	c.Proofs = append(c.Proofs, proof)
 	return nil
 }

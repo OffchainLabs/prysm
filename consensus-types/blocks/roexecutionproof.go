@@ -2,98 +2,90 @@ package blocks
 
 import (
 	"errors"
+	"fmt"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 var (
-	errNilExecutionProof    = errors.New("execution proof is nil")
-	errEmptyBlockRoot       = errors.New("block root is empty")
-	errInvalidBlockRootSize = errors.New("block root has invalid size")
-	errInvalidBlockHashSize = errors.New("block hash has invalid size")
+	errNilExecutionProof          = errors.New("execution proof is nil")
+	errEmptyProverPubkey          = errors.New("prover pubkey is empty")
+	errEmptyProofData             = errors.New("proof data is empty")
+	errEmptyNewPayloadRequestRoot = errors.New("new payload request root is empty")
 )
 
 // ROExecutionProof represents a read-only execution proof with its block root.
-type ROExecutionProof struct {
-	*ethpb.ExecutionProof
+type ROSignedExecutionProof struct {
+	*ethpb.SignedExecutionProof
 	blockRoot [fieldparams.RootLength]byte
+	epoch     primitives.Epoch
 }
 
-func roExecutionProofNilCheck(ep *ethpb.ExecutionProof) error {
-	if ep == nil {
+func roSignedExecutionProofNilCheck(sep *ethpb.SignedExecutionProof) error {
+	if sep == nil {
 		return errNilExecutionProof
 	}
 
-	if len(ep.BlockRoot) == 0 {
-		return errEmptyBlockRoot
+	if len(sep.ProverPubkey) == 0 {
+		return errEmptyProverPubkey
 	}
 
-	if len(ep.BlockRoot) != fieldparams.RootLength {
-		return errInvalidBlockRootSize
+	ep := sep.Message
+
+	if len(ep.ProofData) == 0 {
+		return errEmptyProofData
 	}
 
-	if len(ep.BlockHash) != fieldparams.RootLength {
-		return errInvalidBlockHashSize
+	if len(ep.PublicInput.NewPayloadRequestRoot) == 0 {
+		return errEmptyNewPayloadRequestRoot
 	}
 
 	return nil
 }
 
-// NewROExecutionProof creates a new ROExecutionProof from the given ExecutionProof.
-// The block root is extracted from the ExecutionProof's BlockRoot field.
-func NewROExecutionProof(ep *ethpb.ExecutionProof) (ROExecutionProof, error) {
-	if err := roExecutionProofNilCheck(ep); err != nil {
-		return ROExecutionProof{}, err
+// NewROSignedExecutionProofWithRoot creates a new ROSignedExecutionProof with a given root.
+func NewROSignedExecutionProof(
+	signedExecutionProof *ethpb.SignedExecutionProof,
+	root [fieldparams.RootLength]byte,
+	epoch primitives.Epoch,
+) (ROSignedExecutionProof, error) {
+	if err := roSignedExecutionProofNilCheck(signedExecutionProof); err != nil {
+		return ROSignedExecutionProof{}, fmt.Errorf("ro signed execution proof nil check: %w", err)
 	}
 
-	return ROExecutionProof{
-		ExecutionProof: ep,
-		blockRoot:      bytesutil.ToBytes32(ep.BlockRoot),
-	}, nil
-}
-
-// NewROExecutionProofWithRoot creates a new ROExecutionProof with a given root.
-func NewROExecutionProofWithRoot(ep *ethpb.ExecutionProof, root [fieldparams.RootLength]byte) (ROExecutionProof, error) {
-	if err := roExecutionProofNilCheck(ep); err != nil {
-		return ROExecutionProof{}, err
+	roSignedExecutionProof := ROSignedExecutionProof{
+		SignedExecutionProof: signedExecutionProof,
+		blockRoot:            root,
+		epoch:                epoch,
 	}
 
-	return ROExecutionProof{
-		ExecutionProof: ep,
-		blockRoot:      root,
-	}, nil
+	return roSignedExecutionProof, nil
 }
 
 // BlockRoot returns the block root of the execution proof.
-func (p *ROExecutionProof) BlockRoot() [fieldparams.RootLength]byte {
+func (p *ROSignedExecutionProof) BlockRoot() [fieldparams.RootLength]byte {
 	return p.blockRoot
 }
 
-// Slot returns the slot of the execution proof.
-func (p *ROExecutionProof) Slot() primitives.Slot {
-	return p.ExecutionProof.Slot
+// Epoch returns the epoch of the execution proof.
+func (p *ROSignedExecutionProof) Epoch() primitives.Epoch {
+	return p.epoch
 }
 
-// ProofId returns the proof ID of the execution proof.
-func (p *ROExecutionProof) ProofId() primitives.ExecutionProofId {
-	return p.ExecutionProof.ProofId
-}
-
-// BlockHash returns the block hash of the execution proof.
-func (p *ROExecutionProof) BlockHash() [32]byte {
-	return bytesutil.ToBytes32(p.ExecutionProof.BlockHash)
-}
+// // ProofType returns the proof type of the execution proof.
+// func (p *ROExecutionProof) ProofType() primitives.ProofType {
+// 	return p.ExecutionProof.ProofType
+// }
 
 // VerifiedROExecutionProof represents an ROExecutionProof that has undergone full verification.
-type VerifiedROExecutionProof struct {
-	ROExecutionProof
+type VerifiedROSignedExecutionProof struct {
+	ROSignedExecutionProof
 }
 
 // NewVerifiedROExecutionProof "upgrades" an ROExecutionProof to a VerifiedROExecutionProof.
 // This method should only be used by the verification package.
-func NewVerifiedROExecutionProof(ro ROExecutionProof) VerifiedROExecutionProof {
-	return VerifiedROExecutionProof{ROExecutionProof: ro}
+func NewVerifiedROSignedExecutionProof(ro ROSignedExecutionProof) VerifiedROSignedExecutionProof {
+	return VerifiedROSignedExecutionProof{ROSignedExecutionProof: ro}
 }

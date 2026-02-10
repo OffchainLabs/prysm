@@ -85,6 +85,9 @@ var (
 	// ErrProofInvalid is joined with all other execution proof verification errors.
 	ErrProofInvalid = AsVerificationFailure(errors.New("invalid execution proof"))
 
+	// ErrProofDataNonEmpty means RequireProofDataNonEmpty failed.
+	ErrProofDataEmpty = errors.Join(ErrProofInvalid, errors.New("proof data is empty"))
+
 	// ErrProofSizeTooLarge means RequireProofSizeLimits failed.
 	ErrProofSizeTooLarge = errors.Join(ErrProofInvalid, errors.New("proof data exceeds maximum size"))
 

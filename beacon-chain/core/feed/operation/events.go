@@ -82,7 +82,7 @@ type BLSToExecutionChangeReceivedData struct {
 
 // ExecutionProofReceivedData is the data sent with ExecutionProofReceived events.
 type ExecutionProofReceivedData struct {
-	ExecutionProof *ethpb.ExecutionProof
+	ExecutionProof *blocks.VerifiedROSignedExecutionProof
 }
 
 // BlobSidecarReceivedData is the data sent with BlobSidecarReceived events.

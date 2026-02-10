@@ -3580,3 +3580,211 @@ func (b *BlobsBundleV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.Merkleize(indx)
 	return
 }
+
+// MarshalSSZ ssz marshals the NewPayloadRequest object
+func (n *NewPayloadRequest) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(n)
+}
+
+// MarshalSSZTo ssz marshals the NewPayloadRequest object to a target array
+func (n *NewPayloadRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(44)
+
+	// Offset (0) 'ExecutionPayload'
+	dst = ssz.WriteOffset(dst, offset)
+	if n.ExecutionPayload == nil {
+		n.ExecutionPayload = new(ExecutionPayloadDeneb)
+	}
+	offset += n.ExecutionPayload.SizeSSZ()
+
+	// Offset (1) 'VersionedHashes'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(n.VersionedHashes) * 32
+
+	// Field (2) 'ParentBlockRoot'
+	if size := len(n.ParentBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentBlockRoot", size, 32)
+		return
+	}
+	dst = append(dst, n.ParentBlockRoot...)
+
+	// Offset (3) 'ExecutionRequests'
+	dst = ssz.WriteOffset(dst, offset)
+	if n.ExecutionRequests == nil {
+		n.ExecutionRequests = new(ExecutionRequests)
+	}
+	offset += n.ExecutionRequests.SizeSSZ()
+
+	// Field (0) 'ExecutionPayload'
+	if dst, err = n.ExecutionPayload.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'VersionedHashes'
+	if size := len(n.VersionedHashes); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.VersionedHashes", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(n.VersionedHashes); ii++ {
+		if size := len(n.VersionedHashes[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.VersionedHashes[ii]", size, 32)
+			return
+		}
+		dst = append(dst, n.VersionedHashes[ii]...)
+	}
+
+	// Field (3) 'ExecutionRequests'
+	if dst, err = n.ExecutionRequests.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the NewPayloadRequest object
+func (n *NewPayloadRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 44 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1, o3 uint64
+
+	// Offset (0) 'ExecutionPayload'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 44 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'VersionedHashes'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Field (2) 'ParentBlockRoot'
+	if cap(n.ParentBlockRoot) == 0 {
+		n.ParentBlockRoot = make([]byte, 0, len(buf[8:40]))
+	}
+	n.ParentBlockRoot = append(n.ParentBlockRoot, buf[8:40]...)
+
+	// Offset (3) 'ExecutionRequests'
+	if o3 = ssz.ReadOffset(buf[40:44]); o3 > size || o1 > o3 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'ExecutionPayload'
+	{
+		buf = tail[o0:o1]
+		if n.ExecutionPayload == nil {
+			n.ExecutionPayload = new(ExecutionPayloadDeneb)
+		}
+		if err = n.ExecutionPayload.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (1) 'VersionedHashes'
+	{
+		buf = tail[o1:o3]
+		num, err := ssz.DivideInt2(len(buf), 32, 4096)
+		if err != nil {
+			return err
+		}
+		n.VersionedHashes = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(n.VersionedHashes[ii]) == 0 {
+				n.VersionedHashes[ii] = make([]byte, 0, len(buf[ii*32:(ii+1)*32]))
+			}
+			n.VersionedHashes[ii] = append(n.VersionedHashes[ii], buf[ii*32:(ii+1)*32]...)
+		}
+	}
+
+	// Field (3) 'ExecutionRequests'
+	{
+		buf = tail[o3:]
+		if n.ExecutionRequests == nil {
+			n.ExecutionRequests = new(ExecutionRequests)
+		}
+		if err = n.ExecutionRequests.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the NewPayloadRequest object
+func (n *NewPayloadRequest) SizeSSZ() (size int) {
+	size = 44
+
+	// Field (0) 'ExecutionPayload'
+	if n.ExecutionPayload == nil {
+		n.ExecutionPayload = new(ExecutionPayloadDeneb)
+	}
+	size += n.ExecutionPayload.SizeSSZ()
+
+	// Field (1) 'VersionedHashes'
+	size += len(n.VersionedHashes) * 32
+
+	// Field (3) 'ExecutionRequests'
+	if n.ExecutionRequests == nil {
+		n.ExecutionRequests = new(ExecutionRequests)
+	}
+	size += n.ExecutionRequests.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the NewPayloadRequest object
+func (n *NewPayloadRequest) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(n)
+}
+
+// HashTreeRootWith ssz hashes the NewPayloadRequest object with a hasher
+func (n *NewPayloadRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'ExecutionPayload'
+	if err = n.ExecutionPayload.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'VersionedHashes'
+	{
+		if size := len(n.VersionedHashes); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.VersionedHashes", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range n.VersionedHashes {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+
+		numItems := uint64(len(n.VersionedHashes))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (2) 'ParentBlockRoot'
+	if size := len(n.ParentBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentBlockRoot", size, 32)
+		return
+	}
+	hh.PutBytes(n.ParentBlockRoot)
+
+	// Field (3) 'ExecutionRequests'
+	if err = n.ExecutionRequests.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}

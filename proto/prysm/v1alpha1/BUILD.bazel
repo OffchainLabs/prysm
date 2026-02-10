@@ -192,6 +192,7 @@ ssz_fulu_objs = [
     "SignedBeaconBlockContentsFulu",
     "SignedBeaconBlockFulu",
     "SignedBlindedBeaconBlockFulu",
+    "SignedExecutionProof", 
 ]
 
 ssz_gloas_objs = [
@@ -372,10 +373,6 @@ go_library(
         "cloners.go",
         "eip_7521.go",
         "execution_proof.go",
-        # NOTE: ExecutionProof includes an alias type of uint8,
-        # which is not supported by fastssz sszgen.
-        # Temporarily managed manually.
-        "execution_proof.ssz.go",
         "gloas.go",
         "log.go",
         "sync_committee_mainnet.go",

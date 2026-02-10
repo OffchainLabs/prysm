@@ -162,7 +162,6 @@ var appFlags = []cli.Flag{
 	flags.BatchVerifierLimit,
 	flags.StateDiffExponents,
 	flags.DisableEphemeralLogFile,
-	flags.ZkvmGenerationProofTypeFlag,
 }
 
 func init() {

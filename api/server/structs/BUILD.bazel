@@ -16,6 +16,7 @@ go_library(
         "endpoints_config.go",
         "endpoints_debug.go",
         "endpoints_events.go",
+        "endpoints_execproofs.go",
         "endpoints_lightclient.go",
         "endpoints_node.go",
         "endpoints_rewards.go",

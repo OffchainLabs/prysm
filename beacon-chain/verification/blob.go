@@ -32,7 +32,10 @@ const (
 	RequireCorrectSubnet
 
 	// Execution proof specific.
-	RequireProofSizeLimits
+	RequireActiveValidator
+	RequireValidProverSignature
+	RequireProofDataNonEmpty
+	RequireProofDataNotTooLarge
 	RequireProofVerified
 )
 

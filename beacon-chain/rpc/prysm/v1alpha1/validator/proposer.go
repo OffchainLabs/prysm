@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -322,91 +321,38 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
 	}
 
-	var wg errgroup.Group
-	blockBroadcastDone := make(chan bool)
+	var wg sync.WaitGroup
+	errChan := make(chan error, 1)
 
-	wg.Go(func() error {
-		if err := vs.broadcastReceiveBlock(ctx, blockBroadcastDone, block, root); err != nil {
-			return fmt.Errorf("broadcast receive block: %w", err)
+	wg.Add(1)
+	go func() {
+		if err := vs.broadcastReceiveBlock(ctx, &wg, block, root); err != nil {
+			errChan <- errors.Wrap(err, "broadcast/receive block failed")
+			return
 		}
+		errChan <- nil
+	}()
 
-		return nil
-	})
+	wg.Wait()
 
-	wg.Go(func() error {
-		if err := vs.broadcastAndReceiveSidecars(ctx, blockBroadcastDone, block, root, blobSidecars, dataColumnSidecars); err != nil {
-			return fmt.Errorf("broadcast and receive sidecars: %w", err)
-		}
-
-		return nil
-	})
-
-	if err := wg.Wait(); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block/sidecars: %v", err)
+	if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
 	}
-
-	// Generate and broadcast execution proofs.
-	go vs.generateAndBroadcastExecutionProofs(ctx, rob)
+	if err := <-errChan; err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
+	}
 
 	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
-}
-
-// TODO: This is a duplicate from the same function in the sync package.
-func (vs *Server) generateAndBroadcastExecutionProofs(ctx context.Context, roBlock blocks.ROBlock) {
-	const delay = 2 * time.Second
-	proofTypes := flags.Get().ProofGenerationTypes
-
-	if len(proofTypes) == 0 {
-		return
-	}
-
-	var wg errgroup.Group
-	for _, proofType := range proofTypes {
-		wg.Go(func() error {
-			execProof, err := generateExecProof(roBlock, primitives.ExecutionProofId(proofType), delay)
-
-			if err != nil {
-				return fmt.Errorf("generate exec proof: %w", err)
-			}
-
-			if err := vs.P2P.Broadcast(ctx, execProof); err != nil {
-				return fmt.Errorf("broadcast exec proof: %w", err)
-			}
-
-			// Save the proof to storage.
-			if vs.ProofReceiver != nil {
-				if err := vs.ProofReceiver.ReceiveProof(execProof); err != nil {
-					return fmt.Errorf("receive proof: %w", err)
-				}
-			}
-
-			return nil
-		})
-	}
-
-	if err := wg.Wait(); err != nil {
-		log.WithError(err).Error("Failed to generate and broadcast execution proofs")
-	}
-
-	log.WithFields(logrus.Fields{
-		"root":  fmt.Sprintf("%#x", roBlock.Root()),
-		"slot":  roBlock.Block().Slot(),
-		"count": len(proofTypes),
-	}).Debug("Generated and broadcasted execution proofs")
 }
 
 // broadcastAndReceiveSidecars broadcasts and receives sidecars.
 func (vs *Server) broadcastAndReceiveSidecars(
 	ctx context.Context,
-	blockBroadcastDone <-chan bool,
 	block interfaces.SignedBeaconBlock,
 	root [fieldparams.RootLength]byte,
 	blobSidecars []*ethpb.BlobSidecar,
 	dataColumnSidecars []blocks.RODataColumn,
 ) error {
-	// Wait for block broadcast to complete before broadcasting sidecars.
-	<-blockBroadcastDone
-
 	if block.Version() >= version.Fulu {
 		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSidecars); err != nil {
 			return errors.Wrap(err, "broadcast and receive data columns")
@@ -488,13 +434,10 @@ func (vs *Server) handleUnblindedBlock(
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.
-// It closes the blockBroadcastDone channel once broadcasting is complete (but before receiving the block).
-func (vs *Server) broadcastReceiveBlock(ctx context.Context, blockBroadcastDone chan<- bool, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
-	if err := vs.broadcastBlock(ctx, block, root); err != nil {
+func (vs *Server) broadcastReceiveBlock(ctx context.Context, wg *sync.WaitGroup, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
+	if err := vs.broadcastBlock(ctx, wg, block, root); err != nil {
 		return errors.Wrap(err, "broadcast block")
 	}
-
-	close(blockBroadcastDone)
 
 	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
 		Type: blockfeed.ReceivedBlock,
@@ -508,7 +451,9 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, blockBroadcastDone 
 	return nil
 }
 
-func (vs *Server) broadcastBlock(ctx context.Context, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
+func (vs *Server) broadcastBlock(ctx context.Context, wg *sync.WaitGroup, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
+	defer wg.Done()
+
 	protoBlock, err := block.Proto()
 	if err != nil {
 		return errors.Wrap(err, "protobuf conversion failed")
@@ -763,58 +708,4 @@ func blobsAndProofs(req *ethpb.GenericSignedBeaconBlock) ([][]byte, [][]byte, er
 	default:
 		return nil, nil, errors.Errorf("unknown request type provided: %T", req)
 	}
-}
-
-// generateExecProof returns a dummy execution proof after the specified delay.
-// TODO: This is a duplicate from the same function in the sync package.
-func generateExecProof(roBlock blocks.ROBlock, proofID primitives.ExecutionProofId, delay time.Duration) (*ethpb.ExecutionProof, error) {
-	// Simulate proof generation work
-	time.Sleep(delay)
-
-	// Create a dummy proof with some deterministic data
-	block := roBlock.Block()
-	if block == nil {
-		return nil, errors.New("nil block")
-	}
-
-	body := block.Body()
-	if body == nil {
-		return nil, errors.New("nil block body")
-	}
-
-	executionData, err := body.Execution()
-	if err != nil {
-		return nil, fmt.Errorf("execution: %w", err)
-	}
-
-	if executionData == nil {
-		return nil, errors.New("nil execution data")
-	}
-
-	hash, err := executionData.HashTreeRoot()
-	if err != nil {
-		return nil, fmt.Errorf("hash tree root: %w", err)
-	}
-
-	proofData := []byte{
-		0xFF, // Magic byte for dummy proof
-		byte(proofID),
-		// Include some payload hash bytes
-		hash[0],
-		hash[1],
-		hash[2],
-		hash[3],
-	}
-
-	blockRoot := roBlock.Root()
-
-	proof := &ethpb.ExecutionProof{
-		ProofId:   proofID,
-		Slot:      block.Slot(),
-		BlockHash: hash[:],
-		BlockRoot: blockRoot[:],
-		ProofData: proofData,
-	}
-
-	return proof, nil
 }

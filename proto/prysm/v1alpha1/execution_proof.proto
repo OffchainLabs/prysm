@@ -11,42 +11,26 @@ option java_outer_classname = "ExecutionProofProto";
 option java_package = "org.ethereum.eth.v1alpha1";
 option php_namespace = "Ethereum\\Eth\\v1alpha1";
 
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8025/beacon-chain.md#new-signedexecutionproof
+message SignedExecutionProof {
+    ExecutionProof message = 1;
+    bytes prover_pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
+    bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8025/beacon-chain.md#new-executionproof
 message ExecutionProof {
-    // Which proof type (zkVM+EL combination) this proof belongs to
-    // Examples: 0=SP1+Reth, 1=Risc0+Geth, 2=SP1+Geth, etc.
-    uint64 proof_id = 1 [
-        (ethereum.eth.ext.cast_type) =
-            "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ExecutionProofId"
-    ];
+    bytes proof_data = 1 [ (ethereum.eth.ext.ssz_max) = "proof.size" ];
+    // proof_type should be an uint8
+    bytes proof_type = 2 [ (ethereum.eth.ext.ssz_max) = "1" ];
+    PublicInput public_input = 3;
+}
 
-    // The slot of the beacon block this proof validates
-    uint64 slot = 2 [
-      (ethereum.eth.ext.cast_type) =
-          "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
-    ];
-
-    // The block hash of the execution payload this proof validates
-    bytes block_hash = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-    // The beacon block root corresponding to the beacon block
-    // with the execution payload, that this proof attests to.
-    bytes block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-    // The actual proof data
-    bytes proof_data = 5 [ (ethereum.eth.ext.ssz_max) = "1048576" ];
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8025/beacon-chain.md#new-publicinput
+message PublicInput {
+    bytes new_payload_request_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 message ExecutionProofsByRootRequest {
-  // The block root we need proofs for
   bytes block_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
-
-  // The number of proofs needed
-  uint64 count_needed = 2;
-
-  // We already have these proof IDs, so don't send them again
-  repeated uint64 already_have = 3 [
-    (ethereum.eth.ext.ssz_max) = "8",
-    (ethereum.eth.ext.cast_type) =
-    "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ExecutionProofId"
-  ];
 }

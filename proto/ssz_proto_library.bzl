@@ -49,6 +49,7 @@ mainnet = {
     "execution_payload_availability.size": "1024",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "64",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
     "builder_registry_limit": "1099511627776",  # Gloas: BUILDER_REGISTRY_LIMIT (same for mainnet/minimal)
+    "proof.size": "307200",  # EIP-8025: MAX_PROOF_SIZE
 }
 
 minimal = {
@@ -94,6 +95,7 @@ minimal = {
     "execution_payload_availability.size": "8",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "16",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
     "builder_registry_limit": "1099511627776",  # Gloas: BUILDER_REGISTRY_LIMIT (same for mainnet/minimal)
+    "proof.size": "307200",  # EIP-8025: MAX_PROOF_SIZE
 }
 
 ###### Rules definitions #######

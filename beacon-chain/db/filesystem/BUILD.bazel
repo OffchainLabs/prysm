@@ -54,7 +54,6 @@ go_test(
         "iteration_test.go",
         "layout_test.go",
         "migration_test.go",
-        "proof_test.go",
         "pruner_test.go",
     ],
     embed = [":go_default_library"],

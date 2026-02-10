@@ -2,12 +2,12 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -23,7 +23,7 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 
 	// Ignore messages during initial sync.
 	if s.cfg.initialSync.Syncing() {
-		return pubsub.ValidationIgnore, nil
+		return pubsub.ValidationIgnore, errors.New("initial sync in progress")
 	}
 
 	// Reject messages with a nil topic.
@@ -39,47 +39,90 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 	}
 
 	// Reject messages that are not of the expected type.
-	executionProof, ok := m.(*ethpb.ExecutionProof)
+	signedExecutionProof, ok := m.(*ethpb.SignedExecutionProof)
 	if !ok {
-		log.WithField("message", m).Error("Message is not of type *ethpb.ExecutionProof")
+		log.WithField("message", m).Error("Message is not of type *ethpb.SignedExecutionProof")
 		return pubsub.ValidationReject, errWrongMessage
 	}
 
-	// Convert to ROExecutionProof.
-	roProof, err := blocks.NewROExecutionProof(executionProof)
+	executionProof := signedExecutionProof.Message
+
+	// [IGNORE] The proof's corresponding new payload request
+	// (identified by `proof.message.public_input.new_payload_request_root`)
+	// has been seen (via gossip or non-gossip sources)
+	// (a client MAY queue proofs for processing once the new payload request is
+	// retrieved).
+	newPayloadRequestRoot := bytesutil.ToBytes32(executionProof.PublicInput.NewPayloadRequestRoot)
+	ok, blockRootEpoch := s.hasSeenNewPayloadRequest(newPayloadRequestRoot)
+	if !ok {
+		return pubsub.ValidationIgnore, fmt.Errorf("new payload request root %#x not seen", newPayloadRequestRoot)
+	}
+
+	blockRoot, blockEpoch := blockRootEpoch.root, blockRootEpoch.epoch
+
+	// Convert to ROSignedExecutionProof.
+	roSignedProof, err := blocks.NewROSignedExecutionProof(signedExecutionProof, blockRoot, blockEpoch)
 	if err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	// Check if the proof has already been seen.
-	if s.hasSeenProof(roProof.BlockRoot(), roProof.ProofId()) {
-		return pubsub.ValidationIgnore, nil
+	// [IGNORE] The proof is the first proof received for the tuple
+	// `(proof.message.public_input.new_payload_request_root, proof.message.proof_type, proof.prover_pubkey)`
+	// -- i.e. the first valid or invalid proof for `proof.message.proof_type` from `proof.prover_pubkey`.
+	if s.hasSeenProof(&roSignedProof) {
+		return pubsub.ValidationIgnore, errors.New("proof already seen for (newPayloadRequestRoot, proofType, proverPubkey) tuple")
 	}
+
+	// Mark the proof as seen regardless of whether it is valid or not,
+	// to prevent processing multiple proofs with the same
+	// (new payload request root, proof type, prover pubkey) tuple.
+	defer s.setSeenProof(&roSignedProof)
 
 	// Create the verifier with gossip requirements.
-	verifier := s.newProofsVerifier([]blocks.ROExecutionProof{roProof}, verification.GossipExecutionProofRequirements)
+	verifier := s.newSignedExecutionProofsVerifier([]blocks.ROSignedExecutionProof{roSignedProof}, verification.GossipSignedExecutionProofRequirements)
 
 	// Run verifications.
-	if err := verifier.NotFromFutureSlot(); err != nil {
+	// [REJECT] `proof.prover_pubkey` is associated with an active validator.
+	if err := verifier.IsFromActiveValidator(); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	if err := verifier.ProofSizeLimits(); err != nil {
+
+	// [REJECT] `proof.signature` is valid with respect to the prover's public key.
+	if err := verifier.ValidProverSignature(); err != nil {
 		return pubsub.ValidationReject, err
 	}
+
+	// [REJECT] `proof.message.proof_data` is non-empty.
+	if err := verifier.ProofDataNonEmpty(); err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	// [REJECT] `proof.message.proof_data` is not larger than MAX_PROOF_SIZE.
+	if err := verifier.ProofDataNotTooLarge(); err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	// [REJECT] `proof.message` is a valid execution proof.
 	if err := verifier.ProofVerified(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
+	// [IGNORE] The proof is the first proof received for the tuple
+	// `(proof.message.public_input.new_payload_request_root, proof.message.proof_type)`
+	// -- i.e. the first valid proof for `proof.message.proof_type` from any prover.
+	if s.hasSeenValidProof(&roSignedProof) {
+		return pubsub.ValidationIgnore, errors.New("valid proof already seen for (newPayloadRequestRoot, proofType) tuple")
+	}
+
 	// Get verified proofs.
-	verifiedProofs, err := verifier.VerifiedROExecutionProofs()
+	verifiedProofs, err := verifier.VerifiedROSignedExecutionProofs()
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 
 	log.WithFields(logrus.Fields{
-		"root": fmt.Sprintf("%#x", roProof.BlockRoot()),
-		"slot": roProof.Slot(),
-		"id":   roProof.ProofId(),
+		"blockRoot": fmt.Sprintf("%#x", roSignedProof.BlockRoot()),
+		"type":      roSignedProof.Message.ProofType,
 	}).Debug("Accepted execution proof")
 
 	// Set validator data to the verified proof.
@@ -87,24 +130,51 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 	return pubsub.ValidationAccept, nil
 }
 
-// hasSeenProof returns true if the proof with the same block root and proof ID has been seen before.
-func (s *Service) hasSeenProof(blockRoot [32]byte, proofId primitives.ExecutionProofId) bool {
-	key := computeProofCacheKey(blockRoot, proofId)
-	_, seen := s.seenProofCache.Get(key)
-	return seen
+// hasSeenProof returns true if the proof with the same new payload request root, proof type and prover pubkey has been seen before, false otherwise.
+func (s *Service) hasSeenProof(roSignedProof *blocks.ROSignedExecutionProof) bool {
+	key := computeProofCacheKey(roSignedProof)
+	_, ok := s.seenProofCache.Get(string(key))
+
+	return ok
 }
 
-// setSeenProof marks the proof with the given block root and proof ID as seen.
-func (s *Service) setSeenProof(slot primitives.Slot, blockRoot [32]byte, proofId primitives.ExecutionProofId) {
-	key := computeProofCacheKey(blockRoot, proofId)
-	s.seenProofCache.Add(slot, key, true)
+// setSeenProof marks the proof with the given new payload request root, proof type and prover pubkey as seen before.
+func (s *Service) setSeenProof(roSignedProof *blocks.ROSignedExecutionProof) {
+	key := computeProofCacheKey(roSignedProof)
+	s.seenProofCache.Add(string(key), true)
 }
 
-func computeProofCacheKey(blockRoot [32]byte, proofId primitives.ExecutionProofId) string {
+// hasSeenValidProof returns true if a proof with the same new payload request root and proof type has been seen before, false otherwise.
+func (s *Service) hasSeenValidProof(roSignedProof *blocks.ROSignedExecutionProof) bool {
+	key := computeValidProofCacheKey(*roSignedProof)
+	_, ok := s.seenValidProofCache.Get(string(key))
+
+	return ok
+}
+
+// setSeenValidProof marks a proof with the given new payload request root and proof type as seen before.
+func (s *Service) setSeenValidProof(roSignedProof *blocks.ROSignedExecutionProof) {
+	key := computeValidProofCacheKey(*roSignedProof)
+	s.seenValidProofCache.Add(string(key), true)
+}
+
+func computeProofCacheKey(roSignedProof *blocks.ROSignedExecutionProof) []byte {
+	executionProof := roSignedProof.Message
+
+	key := make([]byte, 0, 81)
+	key = append(key, executionProof.PublicInput.NewPayloadRequestRoot...)
+	key = append(key, executionProof.ProofType...)
+	key = append(key, roSignedProof.ProverPubkey...)
+
+	return key
+}
+
+func computeValidProofCacheKey(roSignedProof blocks.ROSignedExecutionProof) []byte {
+	executionProof := roSignedProof.Message
+
 	key := make([]byte, 0, 33)
+	key = append(key, executionProof.PublicInput.NewPayloadRequestRoot...)
+	key = append(key, executionProof.ProofType...)
 
-	key = append(key, blockRoot[:]...)
-	key = append(key, bytesutil.Bytes1(uint64(proofId))...)
-
-	return string(key)
+	return key
 }

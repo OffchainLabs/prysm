@@ -2,7 +2,9 @@ syntax = "proto3";
 
 package ethereum.engine.v1;
 
+import "proto/eth/ext/options.proto";
 import "proto/engine/v1/execution_engine.proto";
+import "proto/engine/v1/electra.proto";
 
 option csharp_namespace = "Ethereum.Engine.V1";
 option go_package = "github.com/prysmaticlabs/prysm/v5/proto/engine/v1;enginev1";
@@ -17,4 +19,16 @@ message ExecutionBundleFulu {
   BlobsBundleV2 blobs_bundle = 3;
   bool should_override_builder = 4;
   repeated bytes execution_requests = 5;
+}
+
+message NewPayloadRequest {
+  ExecutionPayloadDeneb execution_payload = 1;
+
+  repeated bytes versioned_hashes = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "4096"
+  ];
+
+  bytes parent_block_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  ExecutionRequests execution_requests = 4;
 }

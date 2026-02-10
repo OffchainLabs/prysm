@@ -368,12 +368,4 @@ var (
 		Usage:  "Disables the engine_getBlobsV2 usage.",
 		Hidden: true,
 	}
-	// ZKVM Generation Proof Type
-	ZkvmGenerationProofTypeFlag = &cli.IntSliceFlag{
-		Name: "zkvm-generation-proof-types",
-		Usage: `
-			Comma-separated list of proof type IDs to generate
-            (e.g., '0,1' where 0=SP1+Reth, 1=Risc0+Geth).
-            Optional - nodes can verify proofs without generating them.`,
-	}
 )

@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/events"
 	lightclient "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/node"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/prover"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/validator"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
@@ -98,6 +99,7 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.prysmBeaconEndpoints(ch, stater, blocker, coreService)...)
 	endpoints = append(endpoints, s.prysmNodeEndpoints()...)
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
+	endpoints = append(endpoints, s.proverEndpoints()...)
 
 	if features.Get().EnableLightClient {
 		endpoints = append(endpoints, s.lightClientEndpoints()...)
@@ -1285,6 +1287,27 @@ func (s *Service) prysmValidatorEndpoints(stater lookup.Stater, coreService *cor
 			},
 			handler: server.GetActiveSetChanges,
 			methods: []string{http.MethodGet},
+		},
+	}
+}
+
+func (s *Service) proverEndpoints() []endpoint {
+	server := &prover.Server{
+		Broadcaster: s.cfg.Broadcaster,
+	}
+
+	const namespace = "prover"
+	return []endpoint{
+		{
+			template: "/eth/v1/prover/execution_proofs",
+			name:     namespace + ".SubmitExecutionProof",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.SubmitExecutionProof,
+			methods: []string{http.MethodPost},
 		},
 	}
 }

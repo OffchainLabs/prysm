@@ -11,35 +11,35 @@ import (
 
 // ProofStorageSummary represents cached information about the proofs on disk for each root the cache knows about.
 type ProofStorageSummary struct {
-	epoch    primitives.Epoch
-	proofIDs map[uint64]bool
+	epoch      primitives.Epoch
+	proofTypes map[uint8]bool
 }
 
 // HasProof returns true if the proof with the given proofID is available in the filesystem.
-func (s ProofStorageSummary) HasProof(proofID uint64) bool {
-	if s.proofIDs == nil {
+func (s ProofStorageSummary) HasProof(proofID uint8) bool {
+	if s.proofTypes == nil {
 		return false
 	}
-	_, ok := s.proofIDs[proofID]
+	_, ok := s.proofTypes[proofID]
 	return ok
 }
 
 // Count returns the number of available proofs.
 func (s ProofStorageSummary) Count() int {
-	return len(s.proofIDs)
+	return len(s.proofTypes)
 }
 
 // All returns all stored proofIDs sorted in ascending order.
-func (s ProofStorageSummary) All() []uint64 {
-	if s.proofIDs == nil {
+func (s ProofStorageSummary) All() []uint8 {
+	if s.proofTypes == nil {
 		return nil
 	}
-	ids := make([]uint64, 0, len(s.proofIDs))
-	for id := range s.proofIDs {
-		ids = append(ids, id)
+	proofTypes := make([]uint8, 0, len(s.proofTypes))
+	for proofType := range s.proofTypes {
+		proofTypes = append(proofTypes, proofType)
 	}
-	slices.Sort(ids)
-	return ids
+	slices.Sort(proofTypes)
+	return proofTypes
 }
 
 type proofCache struct {
@@ -80,17 +80,17 @@ func (pc *proofCache) set(ident ProofIdent) {
 	defer pc.mu.Unlock()
 
 	summary := pc.cache[ident.BlockRoot]
-	if summary.proofIDs == nil {
-		summary.proofIDs = make(map[uint64]bool)
+	if summary.proofTypes == nil {
+		summary.proofTypes = make(map[uint8]bool)
 	}
 	summary.epoch = ident.Epoch
 
-	if _, exists := summary.proofIDs[ident.ProofID]; exists {
+	if _, exists := summary.proofTypes[ident.ProofType]; exists {
 		pc.cache[ident.BlockRoot] = summary
 		return
 	}
 
-	summary.proofIDs[ident.ProofID] = true
+	summary.proofTypes[ident.ProofType] = true
 	pc.lowestCachedEpoch = min(pc.lowestCachedEpoch, ident.Epoch)
 	pc.highestCachedEpoch = max(pc.highestCachedEpoch, ident.Epoch)
 
@@ -107,17 +107,17 @@ func (pc *proofCache) setMultiple(ident ProofsIdent) {
 	defer pc.mu.Unlock()
 
 	summary := pc.cache[ident.BlockRoot]
-	if summary.proofIDs == nil {
-		summary.proofIDs = make(map[uint64]bool)
+	if summary.proofTypes == nil {
+		summary.proofTypes = make(map[uint8]bool)
 	}
 	summary.epoch = ident.Epoch
 
 	addedCount := 0
-	for _, proofID := range ident.ProofIDs {
-		if _, exists := summary.proofIDs[proofID]; exists {
+	for _, proofID := range ident.ProofTypes {
+		if _, exists := summary.proofTypes[proofID]; exists {
 			continue
 		}
-		summary.proofIDs[proofID] = true
+		summary.proofTypes[proofID] = true
 		addedCount++
 	}
 
@@ -156,7 +156,7 @@ func (pc *proofCache) evict(blockRoot [fieldparams.RootLength]byte) int {
 		return 0
 	}
 
-	deleted := len(summary.proofIDs)
+	deleted := len(summary.proofTypes)
 	delete(pc.cache, blockRoot)
 
 	if deleted > 0 {
@@ -185,7 +185,7 @@ func (pc *proofCache) pruneUpTo(targetEpoch primitives.Epoch) uint64 {
 		}
 
 		if epoch <= targetEpoch {
-			prunedCount += uint64(len(summary.proofIDs))
+			prunedCount += uint64(len(summary.proofTypes))
 			delete(pc.cache, blockRoot)
 		}
 	}

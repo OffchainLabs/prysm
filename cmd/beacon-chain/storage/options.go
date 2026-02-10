@@ -78,11 +78,10 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 	}
 
 	if layout == filesystem.LayoutNameFlat {
-		log.Warningf(
+		log.Warnf(
 			"Existing '%s' blob storage layout detected. Consider setting the flag --%s=%s for faster startup and more reliable pruning. Setting this flag will automatically migrate your existing blob storage to the newer layout on the next restart.",
 			filesystem.LayoutNameFlat, BlobStorageLayout.Name, filesystem.LayoutNameByEpoch)
 	}
-
 	blobStorageOptions := node.WithBlobStorageOptions(
 		filesystem.WithBlobRetentionEpochs(blobRetentionEpoch),
 		filesystem.WithBasePath(blobPath),

@@ -20,10 +20,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/spf13/afero"
 )
 
@@ -54,14 +54,14 @@ type (
 	ProofIdent struct {
 		BlockRoot [fieldparams.RootLength]byte
 		Epoch     primitives.Epoch
-		ProofID   uint64
+		ProofType uint8
 	}
 
 	// ProofsIdent is a collection of unique identifiers for proofs.
 	ProofsIdent struct {
-		BlockRoot [fieldparams.RootLength]byte
-		Epoch     primitives.Epoch
-		ProofIDs  []uint64
+		BlockRoot  [fieldparams.RootLength]byte
+		Epoch      primitives.Epoch
+		ProofTypes []uint8
 	}
 
 	// ProofStorage is the concrete implementation of the filesystem backend for saving and retrieving ExecutionProofs.
@@ -82,7 +82,7 @@ type (
 
 	proofMuChan struct {
 		mu      *sync.RWMutex
-		toStore chan []*ethpb.ExecutionProof
+		toStore chan []blocks.VerifiedROSignedExecutionProof
 	}
 
 	// proofSlotEntry represents the offset and size for a proof in the file.
@@ -295,7 +295,7 @@ func (ps *ProofStorage) processProofFile(filePath string) error {
 		proofIdent := ProofIdent{
 			BlockRoot: fileMetadata.blockRoot,
 			Epoch:     fileMetadata.epoch,
-			ProofID:   uint64(proofID),
+			ProofType: uint8(proofID),
 		}
 
 		ps.cache.set(proofIdent)
@@ -310,55 +310,43 @@ func (ps *ProofStorage) Summary(root [fieldparams.RootLength]byte) ProofStorageS
 }
 
 // Save saves execution proofs into the database.
-func (ps *ProofStorage) Save(proofs []*ethpb.ExecutionProof) error {
+// The proofs must all belong to the same block (same block root).
+func (ps *ProofStorage) Save(proofs []blocks.VerifiedROSignedExecutionProof) error {
 	startTime := time.Now()
 
 	if len(proofs) == 0 {
 		return nil
 	}
 
-	proofsByRoot := make(map[[fieldparams.RootLength]byte][]*ethpb.ExecutionProof)
+	// Safely retrieve the block root and the epoch.
+	first := proofs[0]
+	blockRoot := first.BlockRoot()
+	epoch := first.Epoch()
 
-	// Group proofs by root.
+	proofTypes := make([]uint8, 0, len(proofs))
 	for _, proof := range proofs {
 		// Check if the proof ID is valid.
-		proofID := uint64(proof.ProofId)
-		if proofID >= maxProofTypes {
+		proofType := proof.Message.ProofType[0]
+		if proofType >= maxProofTypes {
 			return errProofIDTooLarge
 		}
 
-		// Extract block root from proof.
-		var blockRoot [fieldparams.RootLength]byte
-		copy(blockRoot[:], proof.BlockRoot)
-
-		// Group proofs by root.
-		proofsByRoot[blockRoot] = append(proofsByRoot[blockRoot], proof)
-	}
-
-	for blockRoot, proofsForRoot := range proofsByRoot {
-		// Compute epoch from slot.
-		epoch := slots.ToEpoch(proofsForRoot[0].Slot)
-
 		// Save proofs in the filesystem.
-		if err := ps.saveFilesystem(blockRoot, epoch, proofsForRoot); err != nil {
+		if err := ps.saveFilesystem(proof.BlockRoot(), proof.Epoch(), proofs); err != nil {
 			return fmt.Errorf("save filesystem: %w", err)
 		}
 
-		// Get all proof IDs.
-		proofIDs := make([]uint64, 0, len(proofsForRoot))
-		for _, proof := range proofsForRoot {
-			proofIDs = append(proofIDs, uint64(proof.ProofId))
-		}
-
-		// Compute the proofs ident.
-		proofsIdent := ProofsIdent{BlockRoot: blockRoot, Epoch: epoch, ProofIDs: proofIDs}
-
-		// Set proofs in the cache.
-		ps.cache.setMultiple(proofsIdent)
-
-		// Notify the proof feed.
-		ps.proofFeed.Send(proofsIdent)
+		proofTypes = append(proofTypes, proof.Message.ProofType[0])
 	}
+
+	// Compute the proofs ident.
+	proofsIdent := ProofsIdent{BlockRoot: blockRoot, Epoch: epoch, ProofTypes: proofTypes}
+
+	// Set proofs in the cache.
+	ps.cache.setMultiple(proofsIdent)
+
+	// Notify the proof feed.
+	ps.proofFeed.Send(proofsIdent)
 
 	proofSaveLatency.Observe(float64(time.Since(startTime).Milliseconds()))
 
@@ -367,7 +355,7 @@ func (ps *ProofStorage) Save(proofs []*ethpb.ExecutionProof) error {
 
 // saveFilesystem saves proofs into the database.
 // This function expects all proofs to belong to the same block.
-func (ps *ProofStorage) saveFilesystem(root [fieldparams.RootLength]byte, epoch primitives.Epoch, proofs []*ethpb.ExecutionProof) error {
+func (ps *ProofStorage) saveFilesystem(root [fieldparams.RootLength]byte, epoch primitives.Epoch, proofs []blocks.VerifiedROSignedExecutionProof) error {
 	// Compute the file path.
 	filePath := proofFilePath(root, epoch)
 
@@ -409,10 +397,10 @@ func (ps *ProofStorage) Subscribe() (event.Subscription, <-chan ProofsIdent) {
 	return subscription, identsChan
 }
 
-// Get retrieves execution proofs from the database.
+// Get retrieves signed execution proofs from the database.
 // If one of the requested proofs is not found, it is just skipped.
 // If proofIDs is nil, then all stored proofs are returned.
-func (ps *ProofStorage) Get(root [fieldparams.RootLength]byte, proofIDs []uint64) ([]*ethpb.ExecutionProof, error) {
+func (ps *ProofStorage) Get(root [fieldparams.RootLength]byte, proofIDs []uint8) ([]*ethpb.SignedExecutionProof, error) {
 	ps.pruneMu.RLock()
 	defer ps.pruneMu.RUnlock()
 
@@ -424,9 +412,9 @@ func (ps *ProofStorage) Get(root [fieldparams.RootLength]byte, proofIDs []uint64
 
 	// Build all proofIDs if none are provided.
 	if proofIDs == nil {
-		proofIDs = make([]uint64, maxProofTypes)
+		proofIDs = make([]uint8, maxProofTypes)
 		for i := range proofIDs {
-			proofIDs[i] = uint64(i)
+			proofIDs[i] = uint8(i)
 		}
 	}
 
@@ -462,7 +450,7 @@ func (ps *ProofStorage) Get(root [fieldparams.RootLength]byte, proofIDs []uint64
 	}
 
 	// Retrieve proofs from the file.
-	proofs := make([]*ethpb.ExecutionProof, 0, len(proofIDs))
+	proofs := make([]*ethpb.SignedExecutionProof, 0, len(proofIDs))
 	for _, proofID := range proofIDs {
 		if proofID >= maxProofTypes {
 			continue
@@ -490,8 +478,8 @@ func (ps *ProofStorage) Get(root [fieldparams.RootLength]byte, proofIDs []uint64
 			return nil, errWrongProofBytesRead
 		}
 
-		// Unmarshal the proof.
-		proof := new(ethpb.ExecutionProof)
+		// Unmarshal the signed proof.
+		proof := new(ethpb.SignedExecutionProof)
 		if err := proof.UnmarshalSSZ(sszProof); err != nil {
 			return nil, fmt.Errorf("unmarshal proof: %w", err)
 		}
@@ -553,7 +541,7 @@ func (ps *ProofStorage) Clear() error {
 }
 
 // saveProofNewFile saves proofs to a new file.
-func (ps *ProofStorage) saveProofNewFile(filePath string, inputProofs chan []*ethpb.ExecutionProof) (err error) {
+func (ps *ProofStorage) saveProofNewFile(filePath string, inputProofs chan []blocks.VerifiedROSignedExecutionProof) (err error) {
 	// Initialize the offset table.
 	var offsetTable proofOffsetTable
 
@@ -567,18 +555,18 @@ func (ps *ProofStorage) saveProofNewFile(filePath string, inputProofs chan []*et
 		}
 
 		for _, proof := range proofs {
-			proofID := uint64(proof.ProofId)
-			if proofID >= maxProofTypes {
+			proofType := proof.Message.ProofType[0]
+			if proofType >= maxProofTypes {
 				continue
 			}
 
 			// Skip if already in offset table (duplicate).
-			if offsetTable[proofID].size != 0 {
+			if offsetTable[proofType].size != 0 {
 				continue
 			}
 
-			// SSZ encode the proof.
-			sszProof, err := proof.MarshalSSZ()
+			// SSZ encode the full signed proof.
+			sszProof, err := proof.SignedExecutionProof.MarshalSSZ()
 			if err != nil {
 				return fmt.Errorf("marshal proof SSZ: %w", err)
 			}
@@ -586,7 +574,7 @@ func (ps *ProofStorage) saveProofNewFile(filePath string, inputProofs chan []*et
 			proofSize := uint32(len(sszProof))
 
 			// Update offset table.
-			offsetTable[proofID] = proofSlotEntry{
+			offsetTable[proofType] = proofSlotEntry{
 				offset: currentOffset,
 				size:   proofSize,
 			}
@@ -651,7 +639,7 @@ func (ps *ProofStorage) saveProofNewFile(filePath string, inputProofs chan []*et
 }
 
 // saveProofExistingFile saves proofs to an existing file.
-func (ps *ProofStorage) saveProofExistingFile(filePath string, inputProofs chan []*ethpb.ExecutionProof) (err error) {
+func (ps *ProofStorage) saveProofExistingFile(filePath string, inputProofs chan []blocks.VerifiedROSignedExecutionProof) (err error) {
 	// Open the file for read/write.
 	file, err := ps.fs.OpenFile(filePath, os.O_RDWR, os.FileMode(0600))
 	if err != nil {
@@ -682,18 +670,18 @@ func (ps *ProofStorage) saveProofExistingFile(filePath string, inputProofs chan 
 		}
 
 		for _, proof := range proofs {
-			proofID := uint64(proof.ProofId)
-			if proofID >= maxProofTypes {
+			proofType := proof.Message.ProofType[0]
+			if proofType >= maxProofTypes {
 				continue
 			}
 
 			// Skip if proof already exists.
-			if offsetTable[proofID].size != 0 {
+			if offsetTable[proofType].size != 0 {
 				continue
 			}
 
-			// SSZ encode the proof.
-			sszProof, err := proof.MarshalSSZ()
+			// SSZ encode the full signed proof.
+			sszProof, err := proof.SignedExecutionProof.MarshalSSZ()
 			if err != nil {
 				return fmt.Errorf("marshal proof SSZ: %w", err)
 			}
@@ -701,7 +689,7 @@ func (ps *ProofStorage) saveProofExistingFile(filePath string, inputProofs chan 
 			proofSize := uint32(len(sszProof))
 
 			// Update offset table.
-			offsetTable[proofID] = proofSlotEntry{
+			offsetTable[proofType] = proofSlotEntry{
 				offset: currentOffset,
 				size:   proofSize,
 			}
@@ -863,7 +851,7 @@ func (ps *ProofStorage) prune() {
 }
 
 // fileMutexChan returns the file mutex and channel for a given block root.
-func (ps *ProofStorage) fileMutexChan(root [fieldparams.RootLength]byte) (*sync.RWMutex, chan []*ethpb.ExecutionProof) {
+func (ps *ProofStorage) fileMutexChan(root [fieldparams.RootLength]byte) (*sync.RWMutex, chan []blocks.VerifiedROSignedExecutionProof) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -871,7 +859,7 @@ func (ps *ProofStorage) fileMutexChan(root [fieldparams.RootLength]byte) (*sync.
 	if !ok {
 		mc = &proofMuChan{
 			mu:      new(sync.RWMutex),
-			toStore: make(chan []*ethpb.ExecutionProof, 1),
+			toStore: make(chan []blocks.VerifiedROSignedExecutionProof, 1),
 		}
 		ps.muChans[root] = mc
 		return mc.mu, mc.toStore
@@ -881,8 +869,8 @@ func (ps *ProofStorage) fileMutexChan(root [fieldparams.RootLength]byte) (*sync.
 }
 
 // pullProofChan pulls proofs from the input channel until it is empty.
-func pullProofChan(inputProofs chan []*ethpb.ExecutionProof) []*ethpb.ExecutionProof {
-	proofs := make([]*ethpb.ExecutionProof, 0, maxProofTypes)
+func pullProofChan(inputProofs chan []blocks.VerifiedROSignedExecutionProof) []blocks.VerifiedROSignedExecutionProof {
+	proofs := make([]blocks.VerifiedROSignedExecutionProof, 0, maxProofTypes)
 
 	for {
 		select {

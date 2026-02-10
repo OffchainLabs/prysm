@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -691,7 +690,7 @@ func (s *Service) isDataAvailable(
 func (s *Service) areExecutionProofsAvailable(ctx context.Context, roBlock consensusblocks.ROBlock) error {
 	// Return early if zkVM features are disabled (no need to check for execution proofs),
 	// or if the generation proof is enabled (we will generate proofs ourselves).
-	if !features.Get().EnableZkvm || len(flags.Get().ProofGenerationTypes) > 0 {
+	if !features.Get().EnableZkvm {
 		return nil
 	}
 

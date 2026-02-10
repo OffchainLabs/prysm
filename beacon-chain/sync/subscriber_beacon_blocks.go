@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
-	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -19,11 +18,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/io/file"
+	engine "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -36,18 +35,22 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
-	s.setSeenBlockIndexSlot(signed.Block().Slot(), signed.Block().ProposerIndex())
-
 	block := signed.Block()
+	s.setSeenBlockIndexSlot(block.Slot(), block.ProposerIndex())
 
 	root, err := block.HashTreeRoot()
 	if err != nil {
-		return err
+		return fmt.Errorf("hash tree root: %w", err)
 	}
 
 	roBlock, err := blocks.NewROBlockWithRoot(signed, root)
 	if err != nil {
 		return errors.Wrap(err, "new ro block with root")
+	}
+
+	// Cache the new payload request hash tree root corresponding to this block.
+	if err := s.cacheNewPayloadRequestRoot(roBlock); err != nil {
+		return fmt.Errorf("cacheNewPayloadRequestRoot: %w", err)
 	}
 
 	go func() {
@@ -79,11 +82,6 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
-	// We use the service context to ensure this context is not cancelled
-	// when the current function returns.
-	// TODO: Do not broadcast proofs for blocks we have already seen.
-	go s.generateAndBroadcastExecutionProofs(s.ctx, roBlock)
-
 	if err := s.processPendingAttsForBlock(ctx, root); err != nil {
 		return errors.Wrap(err, "process pending atts for block")
 	}
@@ -91,45 +89,99 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 	return nil
 }
 
-func (s *Service) generateAndBroadcastExecutionProofs(ctx context.Context, roBlock blocks.ROBlock) {
-	const delay = 2 * time.Second
-	proofTypes := flags.Get().ProofGenerationTypes
+func (s *Service) cacheNewPayloadRequestRoot(roBlock blocks.ROBlock) error {
+	block := roBlock.Block()
+	body := block.Body()
 
-	// Exit early if proof generation is disabled.
-	if len(proofTypes) == 0 {
-		return
+	execution, err := body.Execution()
+	if err != nil {
+		return fmt.Errorf("execution: %w", err)
 	}
 
-	var wg errgroup.Group
-	for _, proofType := range proofTypes {
-		wg.Go(func() error {
-			execProof, err := generateExecProof(roBlock, primitives.ExecutionProofId(proofType), delay)
-
-			if err != nil {
-				return fmt.Errorf("generate exec proof: %w", err)
-			}
-
-			if err := s.cfg.p2p.Broadcast(ctx, execProof); err != nil {
-				return fmt.Errorf("broadcast exec proof: %w", err)
-			}
-
-			if err := s.cfg.chain.ReceiveProof(execProof); err != nil {
-				return errors.Wrap(err, "receive proof")
-			}
-
-			return nil
-		})
+	transactions, err := execution.Transactions()
+	if err != nil {
+		return fmt.Errorf("transactions: %w", err)
 	}
 
-	if err := wg.Wait(); err != nil {
-		log.WithError(err).Error("Failed to generate and broadcast execution proofs")
+	withdrawals, err := execution.Withdrawals()
+	if err != nil {
+		return fmt.Errorf("withdrawals: %w", err)
 	}
+
+	blobGasUsed, err := execution.BlobGasUsed()
+	if err != nil {
+		return fmt.Errorf("blob gas used: %w", err)
+	}
+
+	excessBlobGas, err := execution.ExcessBlobGas()
+	if err != nil {
+		return fmt.Errorf("excess blob gas: %w", err)
+	}
+
+	executionPayload := &engine.ExecutionPayloadDeneb{
+		ParentHash:    execution.ParentHash(),
+		FeeRecipient:  execution.FeeRecipient(),
+		StateRoot:     execution.StateRoot(),
+		ReceiptsRoot:  execution.ReceiptsRoot(),
+		LogsBloom:     execution.LogsBloom(),
+		PrevRandao:    execution.PrevRandao(),
+		BlockNumber:   execution.BlockNumber(),
+		GasLimit:      execution.GasLimit(),
+		GasUsed:       execution.GasUsed(),
+		Timestamp:     execution.Timestamp(),
+		ExtraData:     execution.ExtraData(),
+		BaseFeePerGas: execution.BaseFeePerGas(),
+		BlockHash:     execution.BlockHash(),
+		Transactions:  transactions,
+		Withdrawals:   withdrawals,
+		BlobGasUsed:   blobGasUsed,
+		ExcessBlobGas: excessBlobGas,
+	}
+
+	kzgCommitments, err := body.BlobKzgCommitments()
+	if err != nil {
+		return fmt.Errorf("blob kzg commitments: %w", err)
+	}
+
+	versionedHashes := make([][]byte, len(kzgCommitments))
+	for _, kzgCommitment := range kzgCommitments {
+		versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(kzgCommitment)
+		versionedHashes = append(versionedHashes, versionedHash[:])
+	}
+
+	parentBlockRoot := block.ParentRoot()
+
+	executionRequests, err := body.ExecutionRequests()
+	if err != nil {
+		return fmt.Errorf("execution requests: %w", err)
+	}
+
+	newPayloadRequest := engine.NewPayloadRequest{
+		ExecutionPayload:  executionPayload,
+		VersionedHashes:   versionedHashes,
+		ParentBlockRoot:   parentBlockRoot[:],
+		ExecutionRequests: executionRequests,
+	}
+
+	rootEpoch := rootEpoch{
+		root:  roBlock.Root(),
+		epoch: slots.ToEpoch(block.Slot()),
+	}
+
+	newPayloadRequestRoot, err := newPayloadRequest.HashTreeRoot()
+	if err != nil {
+		return fmt.Errorf("hash tree root: %w", err)
+	}
+
+	s.setSeenNewPayloadRequest(newPayloadRequestRoot, rootEpoch)
 
 	log.WithFields(logrus.Fields{
-		"root":  fmt.Sprintf("%#x", roBlock.Root()),
-		"slot":  roBlock.Block().Slot(),
-		"count": len(proofTypes),
-	}).Debug("Generated and broadcasted execution proofs")
+		"newPayloadRequestRoot": fmt.Sprintf("%#x", newPayloadRequestRoot),
+		"blockRoot":             fmt.Sprintf("%#x", rootEpoch.root),
+		"slot":                  block.Slot(),
+	}).Debug("Cached new payload request root")
+
+	return nil
 }
 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,

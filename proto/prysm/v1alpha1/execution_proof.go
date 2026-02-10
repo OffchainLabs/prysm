@@ -9,10 +9,10 @@ func (e *ExecutionProof) Copy() *ExecutionProof {
 	}
 
 	return &ExecutionProof{
-		ProofId:   e.ProofId,
-		Slot:      e.Slot,
-		BlockHash: bytesutil.SafeCopyBytes(e.BlockHash),
-		BlockRoot: bytesutil.SafeCopyBytes(e.BlockRoot),
 		ProofData: bytesutil.SafeCopyBytes(e.ProofData),
+		ProofType: e.ProofType,
+		PublicInput: &PublicInput{
+			NewPayloadRequestRoot: bytesutil.SafeCopyBytes(e.PublicInput.NewPayloadRequestRoot),
+		},
 	}
 }

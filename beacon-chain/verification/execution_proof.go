@@ -6,46 +6,48 @@ import (
 	"github.com/pkg/errors"
 )
 
-// GossipExecutionProofRequirements defines the set of requirements that ExecutionProofs received on gossip
-// must satisfy in order to upgrade an ROExecutionProof to a VerifiedROExecutionProof.
-var GossipExecutionProofRequirements = []Requirement{
-	RequireNotFromFutureSlot,
-	RequireProofSizeLimits,
+// GossipSignedExecutionProofRequirements defines the set of requirements that SignedExecutionProofs received on gossip
+// must satisfy in order to upgrade an ROSignedExecutionProof to a VerifiedROSignedExecutionProof.
+var GossipSignedExecutionProofRequirements = []Requirement{
+	RequireActiveValidator,
+	RequireValidProverSignature,
+	RequireProofDataNonEmpty,
+	RequireProofDataNotTooLarge,
 	RequireProofVerified,
 }
 
-// ROExecutionProofsVerifier verifies execution proofs.
-type ROExecutionProofsVerifier struct {
+// ROSignedExecutionProofsVerifier verifies execution proofs.
+type ROSignedExecutionProofsVerifier struct {
 	*sharedResources
 	results *results
-	proofs  []blocks.ROExecutionProof
+	proofs  []blocks.ROSignedExecutionProof
 }
 
-var _ ExecutionProofsVerifier = &ROExecutionProofsVerifier{}
+var _ SignedExecutionProofsVerifier = &ROSignedExecutionProofsVerifier{}
 
-// VerifiedROExecutionProofs "upgrades" wrapped ROExecutionProofs to VerifiedROExecutionProofs.
+// VerifiedROSignedExecutionProofs "upgrades" wrapped ROSignedExecutionProofs to VerifiedROSignedExecutionProofs.
 // If any of the verifications ran against the proofs failed, or some required verifications
 // were not run, an error will be returned.
-func (v *ROExecutionProofsVerifier) VerifiedROExecutionProofs() ([]blocks.VerifiedROExecutionProof, error) {
+func (v *ROSignedExecutionProofsVerifier) VerifiedROSignedExecutionProofs() ([]blocks.VerifiedROSignedExecutionProof, error) {
 	if !v.results.allSatisfied() {
 		return nil, v.results.errors(errProofsInvalid)
 	}
 
-	verifiedProofs := make([]blocks.VerifiedROExecutionProof, 0, len(v.proofs))
+	verifiedSignedProofs := make([]blocks.VerifiedROSignedExecutionProof, 0, len(v.proofs))
 	for _, proof := range v.proofs {
-		verifiedProof := blocks.NewVerifiedROExecutionProof(proof)
-		verifiedProofs = append(verifiedProofs, verifiedProof)
+		verifiedProof := blocks.NewVerifiedROSignedExecutionProof(proof)
+		verifiedSignedProofs = append(verifiedSignedProofs, verifiedProof)
 	}
 
-	return verifiedProofs, nil
+	return verifiedSignedProofs, nil
 }
 
 // SatisfyRequirement allows the caller to assert that a requirement has been satisfied.
-func (v *ROExecutionProofsVerifier) SatisfyRequirement(req Requirement) {
+func (v *ROSignedExecutionProofsVerifier) SatisfyRequirement(req Requirement) {
 	v.recordResult(req, nil)
 }
 
-func (v *ROExecutionProofsVerifier) recordResult(req Requirement, err *error) {
+func (v *ROSignedExecutionProofsVerifier) recordResult(req Requirement, err *error) {
 	if err == nil || *err == nil {
 		v.results.record(req, nil)
 		return
@@ -53,51 +55,55 @@ func (v *ROExecutionProofsVerifier) recordResult(req Requirement, err *error) {
 	v.results.record(req, *err)
 }
 
-// NotFromFutureSlot verifies that the execution proof is not from a future slot.
-func (v *ROExecutionProofsVerifier) NotFromFutureSlot() (err error) {
-	if ok, err := v.results.cached(RequireNotFromFutureSlot); ok {
+func (v *ROSignedExecutionProofsVerifier) IsFromActiveValidator() (err error) {
+	if ok, err := v.results.cached(RequireActiveValidator); ok {
 		return err
 	}
 
-	defer v.recordResult(RequireNotFromFutureSlot, &err)
+	defer v.recordResult(RequireActiveValidator, &err)
 
-	currentSlot := v.clock.CurrentSlot()
-	now := v.clock.Now()
-	maximumGossipClockDisparity := params.BeaconConfig().MaximumGossipClockDisparityDuration()
+	// TODO: To implement
+	return nil
+}
+
+func (v *ROSignedExecutionProofsVerifier) ValidProverSignature() (err error) {
+	if ok, err := v.results.cached(RequireValidProverSignature); ok {
+		return err
+	}
+
+	defer v.recordResult(RequireValidProverSignature, &err)
+
+	// TODO: To implement
+	return nil
+}
+
+func (v *ROSignedExecutionProofsVerifier) ProofDataNonEmpty() (err error) {
+	if ok, err := v.results.cached(RequireProofDataNonEmpty); ok {
+		return err
+	}
+
+	defer v.recordResult(RequireProofDataNonEmpty, &err)
 
 	for _, proof := range v.proofs {
-		proofSlot := proof.Slot()
-
-		if currentSlot == proofSlot {
-			continue
-		}
-
-		earliestStart, err := v.clock.SlotStart(proofSlot)
-		if err != nil {
-			return proofErrBuilder(errors.Wrap(err, "failed to determine slot start time from clock"))
-		}
-		earliestStart = earliestStart.Add(-maximumGossipClockDisparity)
-
-		if now.Before(earliestStart) {
-			return proofErrBuilder(errFromFutureSlot)
+		if len(proof.Message.ProofData) == 0 {
+			return proofErrBuilder(ErrProofDataEmpty)
 		}
 	}
 
 	return nil
 }
 
-// ProofSizeLimits verifies that the execution proof data does not exceed the maximum allowed size.
-func (v *ROExecutionProofsVerifier) ProofSizeLimits() (err error) {
-	if ok, err := v.results.cached(RequireProofSizeLimits); ok {
+func (v *ROSignedExecutionProofsVerifier) ProofDataNotTooLarge() (err error) {
+	if ok, err := v.results.cached(RequireProofDataNotTooLarge); ok {
 		return err
 	}
 
-	defer v.recordResult(RequireProofSizeLimits, &err)
+	defer v.recordResult(RequireProofDataNotTooLarge, &err)
 
 	maxProofDataBytes := params.BeaconConfig().MaxProofDataBytes
 
 	for _, proof := range v.proofs {
-		if uint64(len(proof.ProofData)) > maxProofDataBytes {
+		if uint64(len(proof.Message.ProofData)) > maxProofDataBytes {
 			return proofErrBuilder(ErrProofSizeTooLarge)
 		}
 	}
@@ -107,15 +113,14 @@ func (v *ROExecutionProofsVerifier) ProofSizeLimits() (err error) {
 
 // ProofVerified performs zkVM proof verification.
 // Currently a no-op, will be implemented when actual proof verification is added.
-func (v *ROExecutionProofsVerifier) ProofVerified() (err error) {
+func (v *ROSignedExecutionProofsVerifier) ProofVerified() (err error) {
 	if ok, err := v.results.cached(RequireProofVerified); ok {
 		return err
 	}
 
 	defer v.recordResult(RequireProofVerified, &err)
 
-	// For now, all proofs are considered valid.
-	// TODO: Implement actual zkVM proof verification.
+	// TODO: To implement
 	return nil
 }
 

@@ -33,8 +33,6 @@ func (r Requirement) String() string {
 		return "RequireValidFields"
 	case RequireCorrectSubnet:
 		return "RequireCorrectSubnet"
-	case RequireProofSizeLimits:
-		return "RequireProofSizeLimits"
 	case RequireProofVerified:
 		return "RequireProofVerified"
 	default:

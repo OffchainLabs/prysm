@@ -212,8 +212,7 @@ func (s *Service) Start() {
 	if err := s.StartFromSavedState(s.cfg.FinalizedStateAtStartUp); err != nil {
 		log.Fatal(err)
 	}
-
-	go s.spawnProcessAttestationsRoutine()
+	s.spawnProcessAttestationsRoutine()
 	go s.runLateBlockTasks()
 }
 

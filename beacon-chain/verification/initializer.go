@@ -88,8 +88,8 @@ func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColu
 
 // NewExecutionProofsVerifier creates an ExecutionProofsVerifier for a slice of execution proofs,
 // with the given set of requirements.
-func (ini *Initializer) NewExecutionProofsVerifier(proofs []blocks.ROExecutionProof, reqs []Requirement) *ROExecutionProofsVerifier {
-	return &ROExecutionProofsVerifier{
+func (ini *Initializer) NewExecutionProofsVerifier(proofs []blocks.ROSignedExecutionProof, reqs []Requirement) *ROSignedExecutionProofsVerifier {
+	return &ROSignedExecutionProofsVerifier{
 		sharedResources: ini.shared,
 		proofs:          proofs,
 		results:         newResults(reqs...),

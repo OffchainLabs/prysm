@@ -1569,3 +1569,39 @@ func SyncAggregateFromConsensus(sa *eth.SyncAggregate) *SyncAggregate {
 		SyncCommitteeSignature: hexutil.Encode(sa.SyncCommitteeSignature),
 	}
 }
+
+func (s *SignedExecutionProof) ToConsensus() (*eth.SignedExecutionProof, error) {
+	if s.Message == nil {
+		return nil, server.NewDecodeError(errNilValue, "Message")
+	}
+	message, err := s.Message.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Message")
+	}
+	return &eth.SignedExecutionProof{
+		Message:      message,
+		ProverPubkey: s.ProverPubkey,
+		Signature:    s.Signature,
+	}, nil
+}
+
+func (e *ExecutionProof) ToConsensus() (*eth.ExecutionProof, error) {
+	if e.PublicInput == nil {
+		return nil, server.NewDecodeError(errNilValue, "PublicInput")
+	}
+	publicInput, err := e.PublicInput.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "PublicInput")
+	}
+	return &eth.ExecutionProof{
+		ProofData:   e.ProofData,
+		ProofType:   []byte{e.ProofType},
+		PublicInput: publicInput,
+	}, nil
+}
+
+func (p *PublicInput) ToConsensus() (*eth.PublicInput, error) {
+	return &eth.PublicInput{
+		NewPayloadRequestRoot: p.NewPayloadRequestRoot,
+	}, nil
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	cBlocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -38,6 +39,11 @@ var (
 	ErrSlashingSignatureFailure = errors.New("proposer slashing signature verification failed")
 )
 
+type rootEpoch struct {
+	root  [32]byte
+	epoch primitives.Epoch
+}
+
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
 // Blocks that have already been seen are ignored. If the BLS signature is any valid signature,
 // this method rebroadcasts the message.
@@ -46,6 +52,28 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	// Validation runs on publish (not just subscriptions), so we should approve any message from
 	// ourselves.
 	if pid == s.cfg.p2p.PeerID() {
+		// TODO: We use here a hack that we send our own message when proposing a local block.
+		// We should find a better way to handle local blocks instead of sending them through pubsub.
+		m, err := s.decodePubsubMessage(msg)
+		if err != nil {
+			return pubsub.ValidationReject, errors.Wrap(err, "Could not decode message")
+		}
+
+		blk, ok := m.(interfaces.ReadOnlySignedBeaconBlock)
+		if !ok {
+			return pubsub.ValidationReject, errors.New("msg is not ethpb.ReadOnlySignedBeaconBlock")
+		}
+
+		roBlock, err := cBlocks.NewROBlock(blk)
+		if err != nil {
+			return pubsub.ValidationReject, fmt.Errorf("new beacon block: %w", err)
+		}
+
+		// Cache the new payload request hash tree root corresponding to this block.
+		if err := s.cacheNewPayloadRequestRoot(roBlock); err != nil {
+			return pubsub.ValidationReject, fmt.Errorf("cacheNewPayloadRequestRoot: %w", err)
+		}
+
 		return pubsub.ValidationAccept, nil
 	}
 
@@ -470,6 +498,25 @@ func (s *Service) setSeenBlockIndexSlot(slot primitives.Slot, proposerIdx primit
 	defer s.seenBlockLock.Unlock()
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIdx))...)
 	s.seenBlockCache.Add(string(b), true)
+}
+
+func (s *Service) hasSeenNewPayloadRequest(newPayloadRequestRoot [32]byte) (bool, rootEpoch) {
+	v, ok := s.seenNewPayloadRequestCache.Get(newPayloadRequestRoot)
+	if !ok {
+		return false, rootEpoch{}
+	}
+
+	re, ok := v.(rootEpoch)
+	if !ok {
+		log.Error("Cannot cast value to rootEpoch")
+		return false, rootEpoch{}
+	}
+
+	return true, re
+}
+
+func (s *Service) setSeenNewPayloadRequest(newPayloadRequestRoot [32]byte, re rootEpoch) {
+	s.seenNewPayloadRequestCache.Add(newPayloadRequestRoot, re)
 }
 
 // Returns true if the block is marked as a bad block.

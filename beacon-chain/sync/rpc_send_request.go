@@ -21,6 +21,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	goPeer "github.com/libp2p/go-libp2p/core/peer"
@@ -827,4 +828,99 @@ func DataColumnSidecarsByRangeRequest(columns []uint64, start, end primitives.Sl
 		Count:     uint64(end-start) + 1,
 		Columns:   columns,
 	}, nil
+}
+
+// ----------------
+// Execution proofs
+// ----------------
+
+// SendExecutionProofsByRootRequest sends a request for execution proofs by root
+// and returns the fetched execution proofs.
+func SendExecutionProofsByRootRequest(
+	ctx context.Context,
+	clock blockchain.TemporalOracle,
+	p2pProvider p2p.P2P,
+	pid peer.ID,
+	request *ethpb.ExecutionProofsByRootRequest,
+	blockEpoch primitives.Epoch,
+) ([]blocks.ROSignedExecutionProof, error) {
+	// Return early if nothing to request.
+	if request == nil {
+		return nil, nil
+	}
+
+	// Build the topic.
+	topic, err := p2p.TopicFromMessage(p2p.ExecutionProofsByRootName, slots.ToEpoch(clock.CurrentSlot()))
+	if err != nil {
+		return nil, fmt.Errorf("topic from message: %w", err)
+	}
+
+	log.WithFields(logrus.Fields{
+		"topic":     topic,
+		"blockRoot": fmt.Sprintf("%#x", request.BlockRoot),
+	}).Debug("Sending execution proofs by root request")
+
+	// Send the request.
+	stream, err := p2pProvider.Send(ctx, request, topic, pid)
+	if err != nil {
+		return nil, fmt.Errorf("send: %w", err)
+	}
+	defer closeStream(stream, log)
+
+	// Read execution proofs from stream
+	// TODO: Set capacity to MAX_EXECUTION_PROOFS_PER_PAYLOAD
+	proofs := make([]blocks.ROSignedExecutionProof, 0, 4)
+
+	// TODO: Use MAX_EXECUTION_PROOFS_PER_PAYLOAD instead of 4.
+	// TODO: Verify that the peer does not send more than MAX_EXECUTION_PROOFS_PER_PAYLOAD proofs, and downscore if it does.
+	for range 4 {
+		proof, err := readChunkedExecutionProof(stream, p2pProvider, request.BlockRoot, blockEpoch)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read chunked execution proof: %w", err)
+		}
+
+		proofs = append(proofs, *proof)
+	}
+
+	return proofs, nil
+}
+
+// ReadChunkedExecutionProof reads a chunked execution proof from the stream.
+// TODO: Add validation here
+// TODO: Add msgVersion check with ctxMap
+func readChunkedExecutionProof(
+	stream libp2pcore.Stream,
+	encoding p2p.EncodingProvider,
+	blockRoot []byte,
+	blockEpoch primitives.Epoch,
+) (*blocks.ROSignedExecutionProof, error) {
+	// Read the status statusCode from the stream.
+	statusCode, errMessage, err := ReadStatusCode(stream, encoding.Encoding())
+	if err != nil {
+		return nil, fmt.Errorf("read status code: %w", err)
+	}
+
+	if statusCode != 0 {
+		return nil, errors.New(errMessage)
+	}
+
+	// Read context bytes (fork digest)
+	_, err = readContextFromStream(stream)
+	if err != nil {
+		return nil, fmt.Errorf("read context from stream: %w", err)
+	}
+
+	// Decode the execution proof from the stream.
+	proof := new(ethpb.SignedExecutionProof)
+	if err := encoding.Encoding().DecodeWithMaxLength(stream, proof); err != nil {
+		return nil, fmt.Errorf("decode execution proof: %w", err)
+	}
+
+	// Create a read-only execution proof from the proof.
+	roProof, err := blocks.NewROSignedExecutionProof(proof, bytesutil.ToBytes32(blockRoot), blockEpoch)
+
+	return &roProof, err
 }

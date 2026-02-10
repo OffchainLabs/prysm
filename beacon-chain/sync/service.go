@@ -149,10 +149,12 @@ type Service struct {
 	rateLimiter                      *limiter
 	seenBlockLock                    sync.RWMutex
 	seenBlockCache                   *lru.Cache
+	seenNewPayloadRequestCache       *lru.Cache
 	seenBlobLock                     sync.RWMutex
 	seenBlobCache                    *lru.Cache
 	seenDataColumnCache              *slotAwareCache
-	seenProofCache                   *slotAwareCache
+	seenProofCache                   *lru.Cache
+	seenValidProofCache              *lru.Cache
 	seenAggregatedAttestationLock    sync.RWMutex
 	seenAggregatedAttestationCache   *lru.Cache
 	seenUnAggregatedAttestationLock  sync.RWMutex
@@ -177,7 +179,7 @@ type Service struct {
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
 	newColumnsVerifier               verification.NewDataColumnsVerifier
-	newProofsVerifier                verification.NewExecutionProofsVerifier
+	newSignedExecutionProofsVerifier verification.NewSignedExecutionProofsVerifier
 	columnSidecarsExecSingleFlight   singleflight.Group
 	reconstructionSingleFlight       singleflight.Group
 	availableBlocker                 coverage.AvailableBlocker
@@ -239,6 +241,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	r.subHandler = newSubTopicHandler()
 	r.rateLimiter = newRateLimiter(r.cfg.p2p)
 	r.initCaches()
+
 	return r
 }
 
@@ -254,8 +257,8 @@ func newDataColumnsVerifierFromInitializer(ini *verification.Initializer) verifi
 	}
 }
 
-func newExecutionProofsVerifierFromInitializer(ini *verification.Initializer) verification.NewExecutionProofsVerifier {
-	return func(proofs []blocks.ROExecutionProof, reqs []verification.Requirement) verification.ExecutionProofsVerifier {
+func newExecutionProofsVerifierFromInitializer(ini *verification.Initializer) verification.NewSignedExecutionProofsVerifier {
+	return func(proofs []blocks.ROSignedExecutionProof, reqs []verification.Requirement) verification.SignedExecutionProofsVerifier {
 		return ini.NewExecutionProofsVerifier(proofs, reqs)
 	}
 }
@@ -269,7 +272,7 @@ func (s *Service) Start() {
 	}
 	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
 	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
-	s.newProofsVerifier = newExecutionProofsVerifierFromInitializer(v)
+	s.newSignedExecutionProofsVerifier = newExecutionProofsVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
 	go s.startDiscoveryAndSubscriptions()
@@ -359,7 +362,8 @@ func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
 	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
 	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)
-	s.seenProofCache = newSlotAwareCache(seenExecutionProofSize)
+	s.seenProofCache = lruwrpr.New(seenBlockSize * 8 * 128) // TODO: Replace 8 with the actual max number of proofs per block and 128 with the maximal estimated prover count.
+	s.seenValidProofCache = lruwrpr.New(seenBlockSize * 8)  // TODO: Replace 8 with the actual max number of proofs per block.
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
 	s.seenSyncMessageCache = lruwrpr.New(seenSyncMsgSize)
@@ -369,6 +373,7 @@ func (s *Service) initCaches() {
 	s.seenAttesterSlashingCache = make(map[uint64]bool)
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
+	s.seenNewPayloadRequestCache = lruwrpr.New(seenBlockSize)
 }
 
 func (s *Service) waitForChainStart() {
