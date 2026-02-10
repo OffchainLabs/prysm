@@ -508,20 +508,22 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 		p.partialMsgStore[topic] = topicStore
 	}
 
+	var extended bool
 	existing := topicStore[string(c.GroupID())]
 	if existing != nil {
 		// Extend the existing column with cells being published here.
 		// The existing column may already contain cells received from peers. We must not overwrite it.
 		for i := range c.Included.Len() {
 			if c.Included.BitAt(i) {
-				existing.ExtendFromVerfifiedCell(uint64(i), c.Column[i], c.KzgProofs[i])
+				extended = existing.ExtendFromVerfifiedCell(uint64(i), c.Column[i], c.KzgProofs[i])
 			}
 		}
-
-		if col, ok := existing.Complete(p.logger); ok {
-			p.logger.Info("Completed partial column", "topic", topic, "group", existing.GroupID())
-			if p.HandleColumn != nil {
-				go p.HandleColumn(topic, col)
+		if extended {
+			if col, ok := existing.Complete(p.logger); ok {
+				p.logger.Info("Completed partial column", "topic", topic, "group", existing.GroupID())
+				if p.HandleColumn != nil {
+					go p.HandleColumn(topic, col)
+				}
 			}
 		}
 	} else {
