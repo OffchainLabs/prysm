@@ -17,6 +17,7 @@ go_library(
         "mock.go",
         "payload_attestation.go",
         "payload_attestation_mock.go",
+        "requirements.go",
         "result.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/verification",

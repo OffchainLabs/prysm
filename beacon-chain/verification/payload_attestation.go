@@ -19,15 +19,6 @@ import (
 // RequirementList defines a list of requirements.
 type RequirementList []Requirement
 
-const (
-	RequireCurrentSlot Requirement = iota
-	RequireMessageNotSeen
-	RequireValidatorInPTC
-	RequireBlockRootSeen
-	RequireBlockRootValid
-	RequireSignatureValid
-)
-
 // PayloadAttGossipRequirements defines the list of requirements for gossip payload attestation messages.
 var PayloadAttGossipRequirements = []Requirement{
 	RequireCurrentSlot,

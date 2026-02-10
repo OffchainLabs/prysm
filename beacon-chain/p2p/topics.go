@@ -145,14 +145,13 @@ func (s *Service) allTopics() []topic {
 	cfg := params.BeaconConfig()
 	// bellatrix: no special topics; electra: blobs topics handled all together
 	genesis, altair, capella := cfg.GenesisEpoch, cfg.AltairForkEpoch, cfg.CapellaForkEpoch
-	deneb, fulu, future := cfg.DenebForkEpoch, cfg.FuluForkEpoch, cfg.FarFutureEpoch
+	deneb, fulu, gloas, future := cfg.DenebForkEpoch, cfg.FuluForkEpoch, cfg.GloasForkEpoch, cfg.FarFutureEpoch
 	// Templates are starter topics - they have a placeholder digest and the subnet is set to the maximum value
 	// for the subnet (see how this is used in allSubnetsBelow). These are not directly returned by the method,
 	// they are copied and modified for each digest where they apply based on the start and end epochs.
 	empty := [4]byte{0, 0, 0, 0} // empty digest for templates, replaced by real digests in per-fork copies.
 	templates := []topic{
 		newTopic(genesis, future, empty, GossipBlockMessage),
-		newTopic(genesis, future, empty, GossipPayloadAttestationMessage),
 		newTopic(genesis, future, empty, GossipAggregateAndProofMessage),
 		newTopic(genesis, future, empty, GossipExitMessage),
 		newTopic(genesis, future, empty, GossipProposerSlashingMessage),
@@ -163,6 +162,7 @@ func (s *Service) allTopics() []topic {
 		newTopic(altair, future, empty, GossipLightClientOptimisticUpdateMessage),
 		newTopic(altair, future, empty, GossipLightClientFinalityUpdateMessage),
 		newTopic(capella, future, empty, GossipBlsToExecutionChangeMessage),
+		newTopic(gloas, future, empty, GossipPayloadAttestationMessage),
 	}
 	last := params.GetNetworkScheduleEntry(genesis)
 	schedule := []params.NetworkScheduleEntry{last}

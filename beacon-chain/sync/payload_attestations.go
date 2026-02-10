@@ -6,7 +6,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -62,7 +61,7 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 	// [IGNORE] The message's block data.beacon_block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue attestation for processing once the block is retrieved. Note a client might want to request payload after).
 	if err := v.VerifyBlockRootSeen(s.cfg.chain.InForkchoice); err != nil {
-		// TODO: queue attestation 
+		// TODO: queue attestation
 		return pubsub.ValidationIgnore, err
 	}
 
@@ -98,7 +97,7 @@ func (s *Service) payloadAttestationSubscriber(ctx context.Context, msg proto.Me
 		return errWrongMessage
 	}
 
-	if err := s.payloadAttestationCache.Add(a.Data.Slot, primitives.ValidatorIndex(a.ValidatorIndex)); err != nil {
+	if err := s.payloadAttestationCache.Add(a.Data.Slot, a.ValidatorIndex); err != nil {
 		return err
 	}
 

@@ -14,5 +14,6 @@ type PayloadAttestationReceiver interface {
 
 // ReceivePayloadAttestationMessage accepts a payload attestation message.
 func (s *Service) ReceivePayloadAttestationMessage(ctx context.Context, a *ethpb.PayloadAttestationMessage) error {
+	// TODO: Handle payload attestation message processing once Gloas is fully wired.
 	return nil
 }
