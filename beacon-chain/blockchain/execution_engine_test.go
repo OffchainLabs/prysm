@@ -465,9 +465,9 @@ func Test_NotifyForkchoiceUpdateRecursive_DoublyLinkedTree(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, brd, headRoot)
 
-	// Ensure F and G where removed but their parent E wasn't
-	require.Equal(t, false, fcs.HasNode(brf))
-	require.Equal(t, false, fcs.HasNode(brg))
+	// Ensure F and G's full nodes were removed but their empty (consensus) nodes remain, as does E
+	require.Equal(t, true, fcs.HasNode(brf))
+	require.Equal(t, true, fcs.HasNode(brg))
 	require.Equal(t, true, fcs.HasNode(bre))
 }
 
@@ -703,14 +703,13 @@ func Test_reportInvalidBlock(t *testing.T) {
 	require.NoError(t, fcs.InsertNode(ctx, st, root))
 
 	require.NoError(t, fcs.SetOptimisticToValid(ctx, [32]byte{'A'}))
-	err = service.pruneInvalidBlock(ctx, [32]byte{'D'}, [32]byte{'C'}, [32]byte{'a'}, [32]byte{'c'})
+	err = service.pruneInvalidBlock(ctx, [32]byte{'D'}, [32]byte{'C'}, [32]byte{'c'}, [32]byte{'a'})
 	require.Equal(t, IsInvalidBlock(err), true)
 	require.Equal(t, InvalidBlockLVH(err), [32]byte{'a'})
 	invalidRoots := InvalidAncestorRoots(err)
-	require.Equal(t, 3, len(invalidRoots))
+	require.Equal(t, 2, len(invalidRoots))
 	require.Equal(t, [32]byte{'D'}, invalidRoots[0])
 	require.Equal(t, [32]byte{'C'}, invalidRoots[1])
-	require.Equal(t, [32]byte{'B'}, invalidRoots[2])
 }
 
 func Test_GetPayloadAttribute(t *testing.T) {
