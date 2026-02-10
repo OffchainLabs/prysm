@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -18,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -238,82 +236,20 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	})
 	log.Info("Publishing signed execution payload envelope")
 
-	// TODO: Validate envelope signature before broadcasting
-	// if err := vs.validateEnvelopeSignature(ctx, req); err != nil {
-	//     return nil, status.Errorf(codes.InvalidArgument, "invalid envelope signature: %v", err)
-	// }
+	// TODO: Validate envelope signature before broadcasting.
 
-	// Build data column sidecars from the cached blobs bundle before broadcasting.
+	if err := vs.P2P.Broadcast(ctx, req); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to broadcast execution payload envelope: %v", err)
+	}
+
+	// TODO: Receive the envelope locally following the broadcastReceiveBlock pattern.
+
+	// TODO: Build and broadcast data column sidecars from the cached blobs bundle.
 	// In GLOAS, blob data is delivered alongside the execution payload envelope
-	// rather than with the beacon block (which only carries the bid).
-	dataColumnSidecars, err := vs.buildEnvelopeDataColumns(ctx, req.Message, beaconBlockRoot)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to build data column sidecars: %v", err)
-	}
-
-	// Broadcast envelope and data column sidecars concurrently.
-	eg, eCtx := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		if err := vs.P2P.Broadcast(eCtx, req); err != nil {
-			return errors.Wrap(err, "broadcast signed execution payload envelope")
-		}
-		// TODO: Receive the envelope locally following the broadcastReceiveBlock pattern.
-		// This requires:
-		// 1. blocks.WrappedROSignedExecutionPayloadEnvelope wrapper
-		// 2. BlockReceiver.ReceiveExecutionPayloadEnvelope method
-		// See epbs branch's receive_execution_payload_envelope.go for reference.
-		return nil
-	})
-	if len(dataColumnSidecars) > 0 {
-		eg.Go(func() error {
-			return vs.broadcastAndReceiveDataColumns(eCtx, dataColumnSidecars)
-		})
-	}
-	if err := eg.Wait(); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to publish execution payload envelope: %v", err)
-	}
+	// rather than with the beacon block (which only carries the bid). Not needed
+	// for devnet-0.
 
 	log.Info("Successfully published execution payload envelope")
 
 	return &emptypb.Empty{}, nil
-}
-
-// buildEnvelopeDataColumns retrieves the cached blobs bundle for the envelope's
-// slot/builder and builds data column sidecars. Returns nil if no blobs to broadcast.
-func (vs *Server) buildEnvelopeDataColumns(
-	ctx context.Context,
-	envelope *ethpb.ExecutionPayloadEnvelope,
-	blockRoot [32]byte,
-) ([]consensusblocks.RODataColumn, error) {
-	if vs.ExecutionPayloadEnvelopeCache == nil {
-		return nil, nil
-	}
-
-	blobsBundle, found := vs.ExecutionPayloadEnvelopeCache.GetBlobsBundle(envelope.Slot, envelope.BuilderIndex)
-	if !found || blobsBundle == nil {
-		return nil, nil
-	}
-
-	blobs := blobsBundle.GetBlobs()
-	proofs := blobsBundle.GetProofs()
-	commitments := blobsBundle.GetKzgCommitments()
-	if len(blobs) == 0 {
-		return nil, nil
-	}
-
-	// Retrieve the beacon block to build the signed block header for sidecars.
-	blk, err := vs.BeaconDB.Block(ctx, blockRoot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get block for data column sidecars")
-	}
-	if blk == nil {
-		return nil, errors.New("block not found for data column sidecars")
-	}
-
-	roBlock, err := consensusblocks.NewROBlockWithRoot(blk, blockRoot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not create ROBlock")
-	}
-
-	return buildDataColumnSidecars(blobs, proofs, peerdas.PopulateFromEnvelope(roBlock, commitments))
 }
