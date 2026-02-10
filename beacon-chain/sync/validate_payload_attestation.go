@@ -1,17 +1,21 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -41,7 +45,6 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 	}
 	pa, err := payloadattestation.NewReadOnly(att)
 	if err != nil {
-		log.WithError(err).Error("Failed to create read only payload attestation")
 		return pubsub.ValidationIgnore, err
 	}
 	v := s.newPayloadAttestationVerifier(pa, verification.GossipPayloadAttestationMessageRequirements)
@@ -70,7 +73,7 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 		return pubsub.ValidationReject, err
 	}
 
-	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	st, err := s.getPtcState(ctx, pa)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
@@ -91,15 +94,38 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 	return pubsub.ValidationAccept, nil
 }
 
-func (s *Service) payloadAttestationSubscriber(ctx context.Context, msg proto.Message) error {
-	a, ok := msg.(*eth.PayloadAttestationMessage)
-	if !ok {
-		return errWrongMessage
+func (s *Service) getPtcState(ctx context.Context, pa payloadattestation.ROMessage) (state.ReadOnlyBeaconState, error) {
+	blockRoot := pa.BeaconBlockRoot()
+	blockSlot := pa.Slot()
+	blockEpoch := slots.ToEpoch(blockSlot)
+	headSlot := s.cfg.chain.HeadSlot()
+	headEpoch := slots.ToEpoch(headSlot)
+	headRoot, err := s.cfg.chain.HeadRoot(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	if err := s.payloadAttestationCache.Add(a.Data.Slot, a.ValidatorIndex); err != nil {
-		return err
+	if blockEpoch == headEpoch {
+		if bytes.Equal(blockRoot[:], headRoot) {
+			return s.cfg.chain.HeadStateReadOnly(ctx)
+		}
+
+		headDependent, err := s.cfg.chain.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), blockEpoch)
+		if err != nil {
+			return nil, err
+		}
+		blockDependent, err := s.cfg.chain.DependentRootForEpoch(blockRoot, blockEpoch)
+		if err != nil {
+			return nil, err
+		}
+		if bytes.Equal(headDependent[:], blockDependent[:]) {
+			return s.cfg.chain.HeadStateReadOnly(ctx)
+		}
 	}
 
-	return s.cfg.chain.ReceivePayloadAttestationMessage(ctx, a)
+	headState, err := s.cfg.chain.HeadState(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, blockSlot)
 }

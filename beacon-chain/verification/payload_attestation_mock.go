@@ -27,7 +27,7 @@ func (m *MockPayloadAttestation) VerifyValidatorInPTC(ctx context.Context, st st
 	return m.ErrIncorrectPayloadAttValidator
 }
 
-func (m *MockPayloadAttestation) VerifyBlockRootSeen(func([32]byte) bool) error {
+func (m *MockPayloadAttestation) VerifyBlockRootSeen(_ func([32]byte) bool) error {
 	return m.ErrPayloadAttBlockRootNotSeen
 }
 

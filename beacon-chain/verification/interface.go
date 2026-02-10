@@ -60,7 +60,7 @@ type NewDataColumnsVerifier func(dataColumns []blocks.RODataColumn, reqs []Requi
 // PayloadAttestationMsgVerifier defines the methods implemented by the ROPayloadAttestation.
 type PayloadAttestationMsgVerifier interface {
 	VerifyCurrentSlot() error
-	VerifyBlockRootSeen(func([32]byte) bool) error
+	VerifyBlockRootSeen(blockRootSeen func([32]byte) bool) error
 	VerifyBlockRootValid(func([32]byte) bool) error
 	VerifyValidatorInPTC(context.Context, state.ReadOnlyBeaconState) error
 	VerifySignature(state.ReadOnlyBeaconState) error

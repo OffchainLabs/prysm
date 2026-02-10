@@ -10,14 +10,14 @@ import (
 type PayloadAttestationCache struct {
 	slot primitives.Slot
 	seen map[primitives.ValidatorIndex]struct{}
-	sync.Mutex
+	mu   sync.RWMutex
 }
 
 // Seen returns true if a vote for the given slot has already been
 // processed for this validator index.
 func (p *PayloadAttestationCache) Seen(slot primitives.Slot, idx primitives.ValidatorIndex) bool {
-	p.Lock()
-	defer p.Unlock()
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	if p.slot != slot {
 		return false
 	}
@@ -31,8 +31,8 @@ func (p *PayloadAttestationCache) Seen(slot primitives.Slot, idx primitives.Vali
 // Add marks the given slot and validator index as seen.
 // This function assumes that the message has already been validated.
 func (p *PayloadAttestationCache) Add(slot primitives.Slot, idx primitives.ValidatorIndex) error {
-	p.Lock()
-	defer p.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.slot != slot {
 		p.slot = slot
 		p.seen = make(map[primitives.ValidatorIndex]struct{})
@@ -46,8 +46,8 @@ func (p *PayloadAttestationCache) Add(slot primitives.Slot, idx primitives.Valid
 
 // Clear clears the internal cache.
 func (p *PayloadAttestationCache) Clear() {
-	p.Lock()
-	defer p.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.slot = 0
 	p.seen = nil
 }

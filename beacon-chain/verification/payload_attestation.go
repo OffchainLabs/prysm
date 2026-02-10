@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // RequirementList defines a list of requirements.
@@ -55,9 +54,9 @@ type PayloadAttMsgVerifier struct {
 func (v *PayloadAttMsgVerifier) VerifyCurrentSlot() (err error) {
 	defer v.record(RequireCurrentSlot, &err)
 
-	if v.pa.Slot() != v.clock.CurrentSlot() {
-		log.WithFields(logFields(v.pa)).Errorf("does not match current slot %d", v.clock.CurrentSlot())
-		return ErrIncorrectPayloadAttSlot
+	currentSlot := v.clock.CurrentSlot()
+	if v.pa.Slot() != currentSlot {
+		return fmt.Errorf("%w: got %d want %d", ErrIncorrectPayloadAttSlot, v.pa.Slot(), currentSlot)
 	}
 
 	return nil
@@ -66,13 +65,12 @@ func (v *PayloadAttMsgVerifier) VerifyCurrentSlot() (err error) {
 // VerifyBlockRootSeen verifies if the block root has been seen before.
 // Represents the following spec verification:
 // [IGNORE] The attestation's data.beacon_block_root has been seen (via both gossip and non-gossip sources).
-func (v *PayloadAttMsgVerifier) VerifyBlockRootSeen(parentSeen func([32]byte) bool) (err error) {
+func (v *PayloadAttMsgVerifier) VerifyBlockRootSeen(blockRootSeen func([32]byte) bool) (err error) {
 	defer v.record(RequireBlockRootSeen, &err)
-	if parentSeen != nil && parentSeen(v.pa.BeaconBlockRoot()) {
+	if blockRootSeen != nil && blockRootSeen(v.pa.BeaconBlockRoot()) {
 		return nil
 	}
-	log.WithFields(logFields(v.pa)).Error(ErrPayloadAttBlockRootNotSeen.Error())
-	return ErrPayloadAttBlockRootNotSeen
+	return fmt.Errorf("%w: root=%#x", ErrPayloadAttBlockRootNotSeen, v.pa.BeaconBlockRoot())
 }
 
 // VerifyBlockRootValid verifies if the block root is valid.
@@ -82,8 +80,7 @@ func (v *PayloadAttMsgVerifier) VerifyBlockRootValid(badBlock func([32]byte) boo
 	defer v.record(RequireBlockRootValid, &err)
 
 	if badBlock != nil && badBlock(v.pa.BeaconBlockRoot()) {
-		log.WithFields(logFields(v.pa)).Error(ErrPayloadAttBlockRootInvalid.Error())
-		return ErrPayloadAttBlockRootInvalid
+		return fmt.Errorf("%w: root=%#x", ErrPayloadAttBlockRootInvalid, v.pa.BeaconBlockRoot())
 	}
 
 	return nil
@@ -100,10 +97,8 @@ func (v *PayloadAttMsgVerifier) VerifyValidatorInPTC(ctx context.Context, st sta
 		return err
 	}
 
-	idx := slices.Index(ptc, v.pa.ValidatorIndex())
-	if idx == -1 {
-		log.WithFields(logFields(v.pa)).Error(ErrIncorrectPayloadAttValidator.Error())
-		return ErrIncorrectPayloadAttValidator
+	if slices.Index(ptc, v.pa.ValidatorIndex()) == -1 {
+		return fmt.Errorf("%w: validatorIndex=%d", ErrIncorrectPayloadAttValidator, v.pa.ValidatorIndex())
 	}
 
 	return nil
@@ -117,7 +112,6 @@ func (v *PayloadAttMsgVerifier) VerifySignature(st state.ReadOnlyBeaconState) (e
 
 	err = validatePayloadAttestationMessageSignature(st, v.pa)
 	if err != nil {
-		log.WithFields(logFields(v.pa)).WithError(err).Error("Could not validate signature")
 		return err
 	}
 
@@ -141,33 +135,33 @@ func (v *PayloadAttMsgVerifier) SatisfyRequirement(req Requirement) {
 func validatePayloadAttestationMessageSignature(st state.ReadOnlyBeaconState, payloadAtt payloadattestation.ROMessage) error {
 	val, err := st.ValidatorAtIndex(payloadAtt.ValidatorIndex())
 	if err != nil {
-		return err
+		return fmt.Errorf("validator %d: %w", payloadAtt.ValidatorIndex(), err)
 	}
 
 	pub, err := bls.PublicKeyFromBytes(val.PublicKey)
 	if err != nil {
-		return err
+		return fmt.Errorf("public key: %w", err)
 	}
 
 	s := payloadAtt.Signature()
 	sig, err := bls.SignatureFromBytes(s[:])
 	if err != nil {
-		return err
+		return fmt.Errorf("signature bytes: %w", err)
 	}
 
 	currentEpoch := slots.ToEpoch(st.Slot())
 	domain, err := signing.Domain(st.Fork(), currentEpoch, params.BeaconConfig().DomainPTCAttester, st.GenesisValidatorsRoot())
 	if err != nil {
-		return err
+		return fmt.Errorf("domain: %w", err)
 	}
 
 	root, err := payloadAtt.SigningRoot(domain)
 	if err != nil {
-		return err
+		return fmt.Errorf("signing root: %w", err)
 	}
 
 	if !sig.Verify(pub, root[:]) {
-		return signing.ErrSigFailedToVerify
+		return fmt.Errorf("verify signature: %w", signing.ErrSigFailedToVerify)
 	}
 	return nil
 }
@@ -180,16 +174,4 @@ func (v *PayloadAttMsgVerifier) record(req Requirement, err *error) {
 	}
 
 	v.results.record(req, *err)
-}
-
-// logFields returns log fields for a ROMessage instance.
-func logFields(payload payloadattestation.ROMessage) logrus.Fields {
-	return logrus.Fields{
-		"slot":              payload.Slot(),
-		"validatorIndex":    payload.ValidatorIndex(),
-		"signature":         fmt.Sprintf("%#x", payload.Signature()),
-		"beaconBlockRoot":   fmt.Sprintf("%#x", payload.BeaconBlockRoot()),
-		"payloadPresent":    payload.PayloadPresent(),
-		"blobDataAvailable": payload.BlobDataAvailable(),
-	}
 }

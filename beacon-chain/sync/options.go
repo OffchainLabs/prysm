@@ -207,9 +207,9 @@ func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
 	}
 }
 
-func WithPayloadAttestationCache(r *cache.PayloadAttestationCache) Option {
+func WithPayloadAttestationCache(c *cache.PayloadAttestationCache) Option {
 	return func(s *Service) error {
-		s.payloadAttestationCache = r
+		s.payloadAttestationCache = c
 		return nil
 	}
 }
