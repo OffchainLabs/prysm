@@ -17,11 +17,43 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-var ephemeralLogFileVerbosity = logrus.DebugLevel
+var (
+	userVerbosity = logrus.InfoLevel
+	vmodule       = make(map[string]logrus.Level)
+)
 
-// SetLoggingLevel sets the base logging level for logrus.
-func SetLoggingLevel(lvl logrus.Level) {
-	logrus.SetLevel(max(lvl, ephemeralLogFileVerbosity))
+const (
+	ephemeralLogFileVerbosity                = logrus.DebugLevel
+	LogTargetField                           = "log_target"
+	LogTargetEphemeral        HookIdentifier = "ephemeral"
+	LogTargetUser             HookIdentifier = "user"
+)
+
+// SetLoggingLevelAndData sets the base logging level for logrus.
+func SetLoggingLevelAndData(baseVerbosity logrus.Level, vmoduleMap map[string]logrus.Level, maxVmoduleLevel logrus.Level, disableEphemeral bool) {
+	userVerbosity = baseVerbosity
+	vmodule = vmoduleMap
+
+	globalLevel := max(baseVerbosity, maxVmoduleLevel)
+	if !disableEphemeral {
+		globalLevel = max(globalLevel, ephemeralLogFileVerbosity)
+	}
+	logrus.SetLevel(globalLevel)
+}
+
+// PackageVerbosity returns the verbosity of a given package.
+func PackageVerbosity(packagePath string) logrus.Level {
+	bestLen := 0
+	bestLevel := userVerbosity
+	for k, v := range vmodule {
+		if k == packagePath || strings.HasPrefix(packagePath, k+"/") {
+			if len(k) > bestLen {
+				bestLen = len(k)
+				bestLevel = v
+			}
+		}
+	}
+	return bestLevel
 }
 
 func addLogWriter(w io.Writer) {
@@ -68,6 +100,7 @@ func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Le
 		Formatter:     formatter,
 		Writer:        f,
 		AllowedLevels: logrus.AllLevels[:max(lvl, maxVmoduleLevel)+1],
+		Identifier:    LogTargetUser,
 	})
 
 	logrus.Debug("File logging initialized")
@@ -101,6 +134,7 @@ func ConfigureEphemeralLogFile(datadirPath string, app string) error {
 		Formatter:     formatter,
 		Writer:        debugWriter,
 		AllowedLevels: logrus.AllLevels[:ephemeralLogFileVerbosity+1],
+		Identifier:    LogTargetEphemeral,
 	})
 
 	logrus.WithField("path", logFilePath).Debug("Ephemeral log file initialized")
