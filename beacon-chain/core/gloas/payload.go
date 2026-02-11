@@ -132,6 +132,7 @@ func ProcessExecutionPayload(
 	if err != nil {
 		return errors.Wrap(err, "could not get envelope from signed envelope")
 	}
+
 	beaconBlockRoot := envelope.BeaconBlockRoot()
 	if !bytes.Equal(beaconBlockRoot[:], blockHeaderRoot[:]) {
 		return errors.Errorf("envelope beacon block root does not match state latest block header root: envelope=%#x, header=%#x", beaconBlockRoot, blockHeaderRoot)
@@ -156,6 +157,11 @@ func ProcessExecutionPayload(
 	if err != nil {
 		return errors.Wrap(err, "could not get execution payload from envelope")
 	}
+	latestBidPrevRandao := latestBid.PrevRandao()
+	if !bytes.Equal(payload.PrevRandao(), latestBidPrevRandao[:]) {
+		return errors.Errorf("payload prev randao does not match committed bid prev randao: payload=%#x, bid=%#x", payload.PrevRandao(), latestBidPrevRandao)
+	}
+
 	withdrawals, err := payload.Withdrawals()
 	if err != nil {
 		return errors.Wrap(err, "could not get withdrawals from payload")
@@ -171,11 +177,6 @@ func ProcessExecutionPayload(
 
 	if latestBid.GasLimit() != payload.GasLimit() {
 		return errors.Errorf("committed bid gas limit does not match payload gas limit: bid=%d, payload=%d", latestBid.GasLimit(), payload.GasLimit())
-	}
-
-	latestBidPrevRandao := latestBid.PrevRandao()
-	if !bytes.Equal(payload.PrevRandao(), latestBidPrevRandao[:]) {
-		return errors.Errorf("payload prev randao does not match committed bid prev randao: payload=%#x, bid=%#x", payload.PrevRandao(), latestBidPrevRandao)
 	}
 
 	bidBlockHash := latestBid.BlockHash()

@@ -97,13 +97,20 @@ func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1
 
 	pubkey := bytesutil.ToBytes48(request.Pubkey)
 	_, isValidator := beaconState.ValidatorIndexByPubkey(pubkey)
-	_, isBuilder := beaconState.BuilderIndexByPubkey(pubkey)
+	idx, isBuilder := beaconState.BuilderIndexByPubkey(pubkey)
 	isBuilderPrefix := IsBuilderWithdrawalCredential(request.WithdrawalCredentials)
 	if !isBuilder && (!isBuilderPrefix || isValidator) {
 		return false, nil
 	}
 
-	if err := applyDepositForBuilder(
+	if isBuilder {
+		if err := beaconState.IncreaseBuilderBalance(idx, request.Amount); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	if err := applyDepositForNewBuilder(
 		beaconState,
 		request.Pubkey,
 		request.WithdrawalCredentials,
@@ -115,7 +122,7 @@ func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1
 	return true, nil
 }
 
-// ApplyDepositForBuilder processes an execution-layer deposit for a builder.
+// applyDepositForNewBuilder processes an execution-layer deposit for a new builder.
 // Spec v1.7.0-alpha.0 (pseudocode):
 // def apply_deposit_for_builder(
 //
@@ -132,11 +139,7 @@ func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1
 //	    # Verify the deposit signature (proof of possession) which is not checked by the deposit contract
 //	    if is_valid_deposit_signature(pubkey, withdrawal_credentials, amount, signature):
 //	        add_builder_to_registry(state, pubkey, withdrawal_credentials, amount)
-//	else:
-//	    # Increase balance by deposit amount
-//	    builder_index = builder_pubkeys.index(pubkey)
-//	    state.builders[builder_index].balance += amount
-func applyDepositForBuilder(
+func applyDepositForNewBuilder(
 	beaconState state.BeaconState,
 	pubkey []byte,
 	withdrawalCredentials []byte,
@@ -144,10 +147,6 @@ func applyDepositForBuilder(
 	signature []byte,
 ) error {
 	pubkeyBytes := bytesutil.ToBytes48(pubkey)
-	if idx, exists := beaconState.BuilderIndexByPubkey(pubkeyBytes); exists {
-		return beaconState.IncreaseBuilderBalance(idx, amount)
-	}
-
 	valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
 		PublicKey:             pubkey,
 		WithdrawalCredentials: withdrawalCredentials,

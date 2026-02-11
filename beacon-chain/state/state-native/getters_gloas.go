@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -188,23 +187,24 @@ func (b *BeaconState) WithdrawalsMatchPayloadExpected(withdrawals []*enginev1.Wi
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	cfg := params.BeaconConfig()
+	return withdrawalsEqual(withdrawals, b.payloadExpectedWithdrawals), nil
+}
 
-	withdrawalsRoot, err := ssz.WithdrawalSliceRoot(withdrawals, cfg.MaxWithdrawalsPerPayload)
-	if err != nil {
-		return false, fmt.Errorf("could not compute withdrawals root: %w", err)
+func withdrawalsEqual(a, b []*enginev1.Withdrawal) bool {
+	if len(a) != len(b) {
+		return false
 	}
-
-	expected := b.payloadExpectedWithdrawals
-	if expected == nil {
-		expected = []*enginev1.Withdrawal{}
+	for i := range a {
+		wa := a[i]
+		wb := b[i]
+		if wa.Index != wb.Index ||
+			wa.ValidatorIndex != wb.ValidatorIndex ||
+			wa.Amount != wb.Amount ||
+			!bytes.Equal(wa.Address, wb.Address) {
+			return false
+		}
 	}
-	expectedRoot, err := ssz.WithdrawalSliceRoot(expected, cfg.MaxWithdrawalsPerPayload)
-	if err != nil {
-		return false, fmt.Errorf("could not compute expected withdrawals root: %w", err)
-	}
-
-	return withdrawalsRoot == expectedRoot, nil
+	return true
 }
 
 // Builder returns the builder at the given index.

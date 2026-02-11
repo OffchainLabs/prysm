@@ -97,7 +97,7 @@ func TestApplyDepositForBuilder_InvalidSignatureIgnoresDeposit(t *testing.T) {
 
 	cred := builderWithdrawalCredentials()
 	st := newGloasState(t, nil, nil)
-	err = applyDepositForBuilder(st, sk.PublicKey().Marshal(), cred[:], 100, make([]byte, 96))
+	err = applyDepositForNewBuilder(st, sk.PublicKey().Marshal(), cred[:], 100, make([]byte, 96))
 	require.NoError(t, err)
 
 	_, ok := st.BuilderIndexByPubkey(toBytes48(sk.PublicKey().Marshal()))
