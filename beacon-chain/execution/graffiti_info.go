@@ -57,10 +57,6 @@ func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 
 	available := 32 - len(userStr)
 
-	g.logOnce.Do(func() {
-		logGraffitiInfo(userStr, available)
-	})
-
 	clCommit := version.GetCommitPrefix()
 	clCommit4 := truncateCommit(clCommit, 4)
 	clCommit2 := truncateCommit(clCommit, 2)
@@ -104,26 +100,20 @@ func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 		graffiti = userStr
 	}
 
+	g.logOnce.Do(func() {
+		logGraffitiInfo(graffiti, available)
+	})
+
 	copy(result[:], graffiti)
 	return result
 }
 
-// logGraffitiInfo logs the graffiti format that will be used based on available space.
-func logGraffitiInfo(userStr string, available int) {
-	userLen := len(userStr)
-	fields := log.WithField("userGraffiti", userStr).WithField("userGraffitiLength", userLen)
-
-	switch {
-	case available >= 12:
-		fields.Info("Graffiti: full client version format (EL code + 4-char commit + CL code + 4-char commit)")
-	case available >= 8:
-		fields.Warn("Graffiti: user graffiti reduces client version to 2-char commits")
-	case available >= 4:
-		fields.Warn("Graffiti: user graffiti reduces client version to codes only (no commits)")
-	case available >= 2:
-		fields.Warn("Graffiti: user graffiti reduces client version to single code only")
-	default:
-		fields.Warn("Graffiti: user graffiti consumes all 32 bytes, no client version info will be included")
+// logGraffitiInfo logs the graffiti that will be used.
+func logGraffitiInfo(graffiti string, available int) {
+	if available >= 2 {
+		log.WithField("graffiti", graffiti).Info("Graffiti includes client version info appended after user graffiti")
+	} else {
+		log.WithField("graffiti", graffiti).Info("Prysm adds consensus and execution debugging information to the end of the graffiti field when possible. To prevent truncation, please consider using a shorter graffiti")
 	}
 }
 
