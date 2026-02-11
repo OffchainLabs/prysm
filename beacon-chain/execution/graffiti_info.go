@@ -72,23 +72,32 @@ func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 		elCommit2 = truncateCommit(g.elCommit, 2)
 	}
 
+	// Add a space separator between user graffiti and client info,
+	// but only if it won't reduce the space available for client version info.
+	space := func(minForTier int) string {
+		if len(userStr) > 0 && available >= minForTier+1 {
+			return " "
+		}
+		return ""
+	}
+
 	var graffiti string
 	switch {
 	case available >= 12:
 		// Full: user+EL(2)+commit(4)+CL(2)+commit(4)
-		graffiti = userStr + g.elCode + elCommit4 + CLCode + clCommit4
+		graffiti = userStr + space(12) + g.elCode + elCommit4 + CLCode + clCommit4
 	case available >= 8:
 		// Reduced commits: user+EL(2)+commit(2)+CL(2)+commit(2)
-		graffiti = userStr + g.elCode + elCommit2 + CLCode + clCommit2
+		graffiti = userStr + space(8) + g.elCode + elCommit2 + CLCode + clCommit2
 	case available >= 4:
 		// Codes only: user+EL(2)+CL(2)
-		graffiti = userStr + g.elCode + CLCode
+		graffiti = userStr + space(4) + g.elCode + CLCode
 	case available >= 2:
 		// Single code: user+code(2)
 		if g.elCode != "" {
-			graffiti = userStr + g.elCode
+			graffiti = userStr + space(2) + g.elCode
 		} else {
-			graffiti = userStr + CLCode
+			graffiti = userStr + space(2) + CLCode
 		}
 	default:
 		// User graffiti only
