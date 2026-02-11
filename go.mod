@@ -43,7 +43,7 @@ require (
 	github.com/kr/pretty v0.3.1
 	github.com/libp2p/go-libp2p v0.44.0
 	github.com/libp2p/go-libp2p-mplex v0.11.0
-	github.com/libp2p/go-libp2p-pubsub v0.15.1-0.20260203150236-415b1d0de51e
+	github.com/libp2p/go-libp2p-pubsub v0.15.1-0.20260204134226-63d7d8e05d52
 	github.com/libp2p/go-mplex v0.7.0
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/manifoldco/promptui v0.7.0
