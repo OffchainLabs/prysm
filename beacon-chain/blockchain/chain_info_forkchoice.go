@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -53,6 +54,13 @@ func (s *Service) InsertNode(ctx context.Context, st state.BeaconState, block co
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
 	return s.cfg.ForkChoiceStore.InsertNode(ctx, st, block)
+}
+
+// InsertPayload is a wrapper for payload insertion which is self locked
+func (s *Service) InsertPayload(ctx context.Context, pe interfaces.ROExecutionPayloadEnvelope) error {
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
+	return s.cfg.ForkChoiceStore.InsertPayload(ctx, pe)
 }
 
 // ForkChoiceDump returns the corresponding value from forkchoice

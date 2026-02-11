@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"slices"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -286,4 +287,26 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 		}
 	}
 	return nodes, nil
+}
+
+func (f *ForkChoice) InsertPayload(ctx context.Context, pe interfaces.ROExecutionPayloadEnvelope) error {
+	s := f.store
+	root := pe.BeaconBlockRoot()
+	en := s.emptyNodeByRoot[root]
+	if en == nil {
+		return errors.Wrap(ErrNilNode, "cannot insert full node without an empty one")
+	}
+	if _, ok := s.fullNodeByRoot[root]; ok {
+		// We don't import two payloads for the same root
+		return nil
+	}
+	fn := &PayloadNode{
+		node:       en.node,
+		optimistic: true,
+		timestamp:  time.Now(),
+		full:       true,
+		children:   make([]*Node, 0),
+	}
+	s.fullNodeByRoot[root] = fn
+	return nil
 }

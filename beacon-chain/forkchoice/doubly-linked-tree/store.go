@@ -136,6 +136,7 @@ func (s *Store) insert(ctx context.Context,
 		node:       n,
 		optimistic: optimistic,
 		timestamp:  time.Now(),
+		children:   make([]*Node, 0),
 	}
 	s.emptyNodeByRoot[root] = pn
 	ret = pn

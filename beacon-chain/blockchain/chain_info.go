@@ -46,6 +46,7 @@ type ForkchoiceFetcher interface {
 	HighestReceivedBlockSlot() primitives.Slot
 	ReceivedBlocksLastEpoch() (uint64, error)
 	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error
+	InsertPayload(context.Context, interfaces.ROExecutionPayloadEnvelope) error
 	ForkChoiceDump(context.Context) (*forkchoice.Dump, error)
 	NewSlot(context.Context, primitives.Slot) error
 	ProposerBoost() [32]byte

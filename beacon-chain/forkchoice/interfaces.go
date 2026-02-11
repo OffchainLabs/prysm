@@ -9,6 +9,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
@@ -23,6 +24,7 @@ type ForkChoicer interface {
 	Unlock()
 	HeadRetriever        // to compute head.
 	BlockProcessor       // to track new block for fork choice.
+	PayloadProcessor     // to track new payloads for fork choice.
 	AttestationProcessor // to track new attestation for fork choice.
 	Getter               // to retrieve fork choice information.
 	Setter               // to set fork choice information.
@@ -45,6 +47,11 @@ type HeadRetriever interface {
 type BlockProcessor interface {
 	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error
 	InsertChain(context.Context, []*forkchoicetypes.BlockAndCheckpoints) error
+}
+
+// PayloadProcessor processes a payload envelope
+type PayloadProcessor interface {
+	InsertPayload(context.Context, interfaces.ROExecutionPayloadEnvelope) error
 }
 
 // AttestationProcessor processes the attestation that's used for accounting fork choice.
