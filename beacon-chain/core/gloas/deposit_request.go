@@ -30,41 +30,42 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 }
 
 // processDepositRequest processes the specific deposit request
-// Spec v1.7.0-alpha.0 (pseudocode):
-// def process_deposit_request(state: BeaconState, deposit_request: DepositRequest) -> None:
 //
-//	# [New in Gloas:EIP7732]
-//	builder_pubkeys = [b.pubkey for b in state.builders]
-//	validator_pubkeys = [v.pubkey for v in state.validators]
+//	<spec fn="process_deposit_request" fork="gloas" hash="3c6b0310">
+//	def process_deposit_request(state: BeaconState, deposit_request: DepositRequest) -> None:
+//	    # [New in Gloas:EIP7732]
+//	    builder_pubkeys = [b.pubkey for b in state.builders]
+//	    validator_pubkeys = [v.pubkey for v in state.validators]
 //
-//	# [New in Gloas:EIP7732]
-//	# Regardless of the withdrawal credentials prefix, if a builder/validator
-//	# already exists with this pubkey, apply the deposit to their balance
-//	is_builder = deposit_request.pubkey in builder_pubkeys
-//	is_validator = deposit_request.pubkey in validator_pubkeys
-//	is_builder_prefix = is_builder_withdrawal_credential(deposit_request.withdrawal_credentials)
-//	if is_builder or (is_builder_prefix and not is_validator):
+//	    # [New in Gloas:EIP7732]
+//	    # Regardless of the withdrawal credentials prefix, if a builder/validator
+//	    # already exists with this pubkey, apply the deposit to their balance
+//	    is_builder = deposit_request.pubkey in builder_pubkeys
+//	    is_validator = deposit_request.pubkey in validator_pubkeys
+//	    is_builder_prefix = is_builder_withdrawal_credential(deposit_request.withdrawal_credentials)
+//	    if is_builder or (is_builder_prefix and not is_validator):
+//	        # Apply builder deposits immediately
+//	        apply_deposit_for_builder(
+//	            state,
+//	            deposit_request.pubkey,
+//	            deposit_request.withdrawal_credentials,
+//	            deposit_request.amount,
+//	            deposit_request.signature,
+//	            state.slot,
+//	        )
+//	        return
 //
-//	    # Apply builder deposits immediately
-//	    apply_deposit_for_builder(
-//	        state,
-//	        deposit_request.pubkey,
-//	        deposit_request.withdrawal_credentials,
-//	        deposit_request.amount,
-//	        deposit_request.signature,
+//	    # Add validator deposits to the queue
+//	    state.pending_deposits.append(
+//	        PendingDeposit(
+//	            pubkey=deposit_request.pubkey,
+//	            withdrawal_credentials=deposit_request.withdrawal_credentials,
+//	            amount=deposit_request.amount,
+//	            signature=deposit_request.signature,
+//	            slot=state.slot,
+//	        )
 //	    )
-//	    return
-//
-//	# Add validator deposits to the queue
-//	state.pending_deposits.append(
-//	    PendingDeposit(
-//	        pubkey=deposit_request.pubkey,
-//	        withdrawal_credentials=deposit_request.withdrawal_credentials,
-//	        amount=deposit_request.amount,
-//	        signature=deposit_request.signature,
-//	        slot=state.slot,
-//	    )
-//	)
+//	</spec>
 func processDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest) error {
 	if request == nil {
 		return errors.New("nil deposit request")
@@ -90,6 +91,29 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 	return nil
 }
 
+// <spec fn="apply_deposit_for_builder" fork="gloas" hash="e4bc98c7">
+// def apply_deposit_for_builder(
+//
+//	state: BeaconState,
+//	pubkey: BLSPubkey,
+//	withdrawal_credentials: Bytes32,
+//	amount: uint64,
+//	signature: BLSSignature,
+//	slot: Slot,
+//
+// ) -> None:
+//
+//	builder_pubkeys = [b.pubkey for b in state.builders]
+//	if pubkey not in builder_pubkeys:
+//	    # Verify the deposit signature (proof of possession) which is not checked by the deposit contract
+//	    if is_valid_deposit_signature(pubkey, withdrawal_credentials, amount, signature):
+//	        add_builder_to_registry(state, pubkey, withdrawal_credentials, amount, slot)
+//	else:
+//	    # Increase balance by deposit amount
+//	    builder_index = builder_pubkeys.index(pubkey)
+//	    state.builders[builder_index].balance += amount
+//
+// </spec>
 func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest) (bool, error) {
 	if beaconState.Version() < version.Gloas {
 		return false, nil
@@ -122,23 +146,6 @@ func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1
 	return true, nil
 }
 
-// applyDepositForNewBuilder processes an execution-layer deposit for a new builder.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// def apply_deposit_for_builder(
-//
-//	state: BeaconState,
-//	pubkey: BLSPubkey,
-//	withdrawal_credentials: Bytes32,
-//	amount: uint64,
-//	signature: BLSSignature,
-//
-// ) -> None:
-//
-//	builder_pubkeys = [b.pubkey for b in state.builders]
-//	if pubkey not in builder_pubkeys:
-//	    # Verify the deposit signature (proof of possession) which is not checked by the deposit contract
-//	    if is_valid_deposit_signature(pubkey, withdrawal_credentials, amount, signature):
-//	        add_builder_to_registry(state, pubkey, withdrawal_credentials, amount)
 func applyDepositForNewBuilder(
 	beaconState state.BeaconState,
 	pubkey []byte,
