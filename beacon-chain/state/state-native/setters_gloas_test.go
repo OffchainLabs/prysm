@@ -15,17 +15,17 @@ import (
 )
 
 type testExecutionPayloadBid struct {
-	parentBlockHash        [32]byte
-	parentBlockRoot        [32]byte
-	blockHash              [32]byte
-	prevRandao             [32]byte
-	blobKzgCommitmentsRoot [32]byte
-	feeRecipient           [20]byte
-	gasLimit               uint64
-	builderIndex           primitives.BuilderIndex
-	slot                   primitives.Slot
-	value                  primitives.Gwei
-	executionPayment       primitives.Gwei
+	parentBlockHash    [32]byte
+	parentBlockRoot    [32]byte
+	blockHash          [32]byte
+	prevRandao         [32]byte
+	blobKzgCommitments [][]byte
+	feeRecipient       [20]byte
+	gasLimit           uint64
+	builderIndex       primitives.BuilderIndex
+	slot               primitives.Slot
+	value              primitives.Gwei
+	executionPayment   primitives.Gwei
 }
 
 func (t testExecutionPayloadBid) ParentBlockHash() [32]byte { return t.parentBlockHash }
@@ -41,9 +41,12 @@ func (t testExecutionPayloadBid) Value() primitives.Gwei { return t.value }
 func (t testExecutionPayloadBid) ExecutionPayment() primitives.Gwei {
 	return t.executionPayment
 }
-func (t testExecutionPayloadBid) BlobKzgCommitmentsRoot() [32]byte { return t.blobKzgCommitmentsRoot }
-func (t testExecutionPayloadBid) FeeRecipient() [20]byte           { return t.feeRecipient }
-func (t testExecutionPayloadBid) IsNil() bool                      { return false }
+func (t testExecutionPayloadBid) BlobKzgCommitments() [][]byte { return t.blobKzgCommitments }
+func (t testExecutionPayloadBid) BlobKzgCommitmentCount() uint64 {
+	return uint64(len(t.blobKzgCommitments))
+}
+func (t testExecutionPayloadBid) FeeRecipient() [20]byte { return t.feeRecipient }
+func (t testExecutionPayloadBid) IsNil() bool            { return false }
 
 func TestSetExecutionPayloadBid(t *testing.T) {
 	t.Run("previous fork returns expected error", func(t *testing.T) {
@@ -58,7 +61,7 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 			parentBlockRoot = [32]byte(bytes.Repeat([]byte{0xCD}, 32))
 			blockHash       = [32]byte(bytes.Repeat([]byte{0xEF}, 32))
 			prevRandao      = [32]byte(bytes.Repeat([]byte{0x11}, 32))
-			blobRoot        = [32]byte(bytes.Repeat([]byte{0x22}, 32))
+			blobCommitments = [][]byte{bytes.Repeat([]byte{0x22}, 48)}
 			feeRecipient    [20]byte
 		)
 		copy(feeRecipient[:], bytes.Repeat([]byte{0x33}, len(feeRecipient)))
@@ -67,17 +70,17 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 			dirtyFields: make(map[types.FieldIndex]bool),
 		}
 		bid := testExecutionPayloadBid{
-			parentBlockHash:        parentBlockHash,
-			parentBlockRoot:        parentBlockRoot,
-			blockHash:              blockHash,
-			prevRandao:             prevRandao,
-			blobKzgCommitmentsRoot: blobRoot,
-			feeRecipient:           feeRecipient,
-			gasLimit:               123,
-			builderIndex:           7,
-			slot:                   9,
-			value:                  11,
-			executionPayment:       22,
+			parentBlockHash:    parentBlockHash,
+			parentBlockRoot:    parentBlockRoot,
+			blockHash:          blockHash,
+			prevRandao:         prevRandao,
+			blobKzgCommitments: blobCommitments,
+			feeRecipient:       feeRecipient,
+			gasLimit:           123,
+			builderIndex:       7,
+			slot:               9,
+			value:              11,
+			executionPayment:   22,
 		}
 
 		require.NoError(t, st.SetExecutionPayloadBid(bid))
@@ -87,7 +90,7 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 		require.DeepEqual(t, parentBlockRoot[:], st.latestExecutionPayloadBid.ParentBlockRoot)
 		require.DeepEqual(t, blockHash[:], st.latestExecutionPayloadBid.BlockHash)
 		require.DeepEqual(t, prevRandao[:], st.latestExecutionPayloadBid.PrevRandao)
-		require.DeepEqual(t, blobRoot[:], st.latestExecutionPayloadBid.BlobKzgCommitmentsRoot)
+		require.DeepEqual(t, blobCommitments, st.latestExecutionPayloadBid.BlobKzgCommitments)
 		require.DeepEqual(t, feeRecipient[:], st.latestExecutionPayloadBid.FeeRecipient)
 		require.Equal(t, uint64(123), st.latestExecutionPayloadBid.GasLimit)
 		require.Equal(t, primitives.BuilderIndex(7), st.latestExecutionPayloadBid.BuilderIndex)

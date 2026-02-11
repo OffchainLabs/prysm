@@ -38,6 +38,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
@@ -121,6 +122,7 @@ type blockchainService interface {
 	blockchain.FinalizationFetcher
 	blockchain.ForkFetcher
 	blockchain.AttestationReceiver
+	blockchain.PayloadAttestationReceiver
 	blockchain.TimeFetcher
 	blockchain.GenesisFetcher
 	blockchain.CanonicalFetcher
@@ -173,6 +175,7 @@ type Service struct {
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
 	newColumnsVerifier               verification.NewDataColumnsVerifier
+	newPayloadAttestationVerifier    verification.NewPayloadAttestationMsgVerifier
 	columnSidecarsExecSingleFlight   singleflight.Group
 	reconstructionSingleFlight       singleflight.Group
 	availableBlocker                 coverage.AvailableBlocker
@@ -182,6 +185,7 @@ type Service struct {
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
+	payloadAttestationCache          *cache.PayloadAttestationCache
 	digestActions                    perDigestSet
 	subscriptionSpawner              func(func()) // see Service.spawn for details
 }
@@ -190,15 +194,16 @@ type Service struct {
 func NewService(ctx context.Context, opts ...Option) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
-		ctx:                   ctx,
-		cancel:                cancel,
-		chainStarted:          abool.New(),
-		cfg:                   &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:   gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
-		seenPendingBlocks:     make(map[[32]byte]bool),
-		blkRootToPendingAtts:  make(map[[32]byte][]any),
-		dataColumnLogCh:       make(chan dataColumnLogEntry, 1000),
-		reconstructionRandGen: rand.NewGenerator(),
+		ctx:                     ctx,
+		cancel:                  cancel,
+		chainStarted:            abool.New(),
+		cfg:                     &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
+		slotToPendingBlocks:     gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
+		seenPendingBlocks:       make(map[[32]byte]bool),
+		blkRootToPendingAtts:    make(map[[32]byte][]any),
+		dataColumnLogCh:         make(chan dataColumnLogEntry, 1000),
+		reconstructionRandGen:   rand.NewGenerator(),
+		payloadAttestationCache: &cache.PayloadAttestationCache{},
 	}
 
 	for _, opt := range opts {
@@ -250,6 +255,12 @@ func newDataColumnsVerifierFromInitializer(ini *verification.Initializer) verifi
 	}
 }
 
+func newPayloadAttestationMessageFromInitializer(ini *verification.Initializer) verification.NewPayloadAttestationMsgVerifier {
+	return func(pa payloadattestation.ROMessage, reqs []verification.Requirement) verification.PayloadAttestationMsgVerifier {
+		return ini.NewPayloadAttestationMsgVerifier(pa, reqs)
+	}
+}
+
 // Start the regular sync service.
 func (s *Service) Start() {
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -259,6 +270,7 @@ func (s *Service) Start() {
 	}
 	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
 	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
+	s.newPayloadAttestationVerifier = newPayloadAttestationMessageFromInitializer(v)
 
 	go s.verifierRoutine()
 	go s.startDiscoveryAndSubscriptions()

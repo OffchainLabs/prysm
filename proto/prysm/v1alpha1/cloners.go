@@ -144,15 +144,17 @@ func copySignedExecutionPayloadBid(header *SignedExecutionPayloadBid) *SignedExe
 	}
 	if header.Message != nil {
 		copied.Message = &ExecutionPayloadBid{
-			ParentBlockHash:        bytesutil.SafeCopyBytes(header.Message.ParentBlockHash),
-			ParentBlockRoot:        bytesutil.SafeCopyBytes(header.Message.ParentBlockRoot),
-			BlockHash:              bytesutil.SafeCopyBytes(header.Message.BlockHash),
-			FeeRecipient:           bytesutil.SafeCopyBytes(header.Message.FeeRecipient),
-			GasLimit:               header.Message.GasLimit,
-			BuilderIndex:           header.Message.BuilderIndex,
-			Slot:                   header.Message.Slot,
-			Value:                  header.Message.Value,
-			BlobKzgCommitmentsRoot: bytesutil.SafeCopyBytes(header.Message.BlobKzgCommitmentsRoot),
+			ParentBlockHash:    bytesutil.SafeCopyBytes(header.Message.ParentBlockHash),
+			ParentBlockRoot:    bytesutil.SafeCopyBytes(header.Message.ParentBlockRoot),
+			BlockHash:          bytesutil.SafeCopyBytes(header.Message.BlockHash),
+			PrevRandao:         bytesutil.SafeCopyBytes(header.Message.PrevRandao),
+			FeeRecipient:       bytesutil.SafeCopyBytes(header.Message.FeeRecipient),
+			GasLimit:           header.Message.GasLimit,
+			BuilderIndex:       header.Message.BuilderIndex,
+			Slot:               header.Message.Slot,
+			Value:              header.Message.Value,
+			ExecutionPayment:   header.Message.ExecutionPayment,
+			BlobKzgCommitments: bytesutil.SafeCopy2dBytes(header.Message.BlobKzgCommitments),
 		}
 	}
 	return copied
@@ -188,6 +190,58 @@ func copyBeaconBlockBodyGloas(body *BeaconBlockBodyGloas) *BeaconBlockBodyGloas 
 	copied.PayloadAttestations = copyPayloadAttestations(body.PayloadAttestations)
 
 	return copied
+}
+
+// CopySignedExecutionPayloadEnvelope copies the provided signed execution payload envelope.
+func CopySignedExecutionPayloadEnvelope(env *SignedExecutionPayloadEnvelope) *SignedExecutionPayloadEnvelope {
+	if env == nil {
+		return nil
+	}
+	return &SignedExecutionPayloadEnvelope{
+		Message:   copyExecutionPayloadEnvelope(env.Message),
+		Signature: bytesutil.SafeCopyBytes(env.Signature),
+	}
+}
+
+// copyExecutionPayloadEnvelope copies the provided execution payload envelope.
+func copyExecutionPayloadEnvelope(env *ExecutionPayloadEnvelope) *ExecutionPayloadEnvelope {
+	if env == nil {
+		return nil
+	}
+	return &ExecutionPayloadEnvelope{
+		Payload:           env.Payload, // engine proto, not deep copied here
+		ExecutionRequests: env.ExecutionRequests,
+		BuilderIndex:      env.BuilderIndex,
+		BeaconBlockRoot:   bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
+		Slot:              env.Slot,
+		StateRoot:         bytesutil.SafeCopyBytes(env.StateRoot),
+	}
+}
+
+// CopySignedBlindedExecutionPayloadEnvelope copies the provided signed blinded execution payload envelope.
+func CopySignedBlindedExecutionPayloadEnvelope(env *SignedBlindedExecutionPayloadEnvelope) *SignedBlindedExecutionPayloadEnvelope {
+	if env == nil {
+		return nil
+	}
+	return &SignedBlindedExecutionPayloadEnvelope{
+		Message:   copyBlindedExecutionPayloadEnvelope(env.Message),
+		Signature: bytesutil.SafeCopyBytes(env.Signature),
+	}
+}
+
+// copyBlindedExecutionPayloadEnvelope copies the provided blinded execution payload envelope.
+func copyBlindedExecutionPayloadEnvelope(env *BlindedExecutionPayloadEnvelope) *BlindedExecutionPayloadEnvelope {
+	if env == nil {
+		return nil
+	}
+	return &BlindedExecutionPayloadEnvelope{
+		BlockHash:         bytesutil.SafeCopyBytes(env.BlockHash),
+		ExecutionRequests: env.ExecutionRequests,
+		BuilderIndex:      env.BuilderIndex,
+		BeaconBlockRoot:   bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
+		Slot:              env.Slot,
+		StateRoot:         bytesutil.SafeCopyBytes(env.StateRoot),
+	}
 }
 
 // CopyBuilderPendingPayment creates a deep copy of a builder pending payment.

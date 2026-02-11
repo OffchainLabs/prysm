@@ -83,20 +83,20 @@ func (b *BeaconState) SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid)
 	parentBlockRoot := h.ParentBlockRoot()
 	blockHash := h.BlockHash()
 	randao := h.PrevRandao()
-	blobKzgCommitmentsRoot := h.BlobKzgCommitmentsRoot()
+	blobKzgCommitments := h.BlobKzgCommitments()
 	feeRecipient := h.FeeRecipient()
 	b.latestExecutionPayloadBid = &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:        parentBlockHash[:],
-		ParentBlockRoot:        parentBlockRoot[:],
-		BlockHash:              blockHash[:],
-		PrevRandao:             randao[:],
-		GasLimit:               h.GasLimit(),
-		BuilderIndex:           h.BuilderIndex(),
-		Slot:                   h.Slot(),
-		Value:                  h.Value(),
-		ExecutionPayment:       h.ExecutionPayment(),
-		BlobKzgCommitmentsRoot: blobKzgCommitmentsRoot[:],
-		FeeRecipient:           feeRecipient[:],
+		ParentBlockHash:    parentBlockHash[:],
+		ParentBlockRoot:    parentBlockRoot[:],
+		BlockHash:          blockHash[:],
+		PrevRandao:         randao[:],
+		GasLimit:           h.GasLimit(),
+		BuilderIndex:       h.BuilderIndex(),
+		Slot:               h.Slot(),
+		Value:              h.Value(),
+		ExecutionPayment:   h.ExecutionPayment(),
+		BlobKzgCommitments: blobKzgCommitments,
+		FeeRecipient:       feeRecipient[:],
 	}
 	b.markFieldAsDirty(types.LatestExecutionPayloadBid)
 

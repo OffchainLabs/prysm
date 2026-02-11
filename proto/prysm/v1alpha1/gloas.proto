@@ -33,7 +33,7 @@ option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
 //     slot: Slot
 //     value: Gwei
 //     execution_payment: Gwei
-//     blob_kzg_commitments_root: Root
+//     blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
 message ExecutionPayloadBid {
   bytes parent_block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes parent_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
@@ -56,7 +56,10 @@ message ExecutionPayloadBid {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
   ];
-  bytes blob_kzg_commitments_root = 11 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated bytes blob_kzg_commitments = 11 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
 }
 
 // SignedExecutionPayloadBid wraps an execution payload bid with a signature.
@@ -366,7 +369,6 @@ message BuilderPendingWithdrawal {
 // class DataColumnSidecar(Container):
 //     index: ColumnIndex
 //     column: List[Cell, MAX_BLOB_COMMITMENTS_PER_BLOCK]
-//     kzg_commitents: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
 //     kzg_proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]
 //     slot: Slot
 //     beacon_block_root: Root
@@ -374,10 +376,6 @@ message DataColumnSidecarGloas {
   uint64 index = 1;
   repeated bytes column = 2 [
     (ethereum.eth.ext.ssz_size) = "?,bytes_per_cell.size",
-    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
-  ];
-  repeated bytes kzg_commitments = 3 [
-    (ethereum.eth.ext.ssz_size) = "?,48",
     (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
   ];
   repeated bytes kzg_proofs = 4 [
@@ -402,7 +400,6 @@ message DataColumnSidecarGloas {
 //     builder_index: BuilderIndex
 //     beacon_block_root: Root
 //     slot: Slot
-//     blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
 //     state_root: Root
 message ExecutionPayloadEnvelope {
   ethereum.engine.v1.ExecutionPayloadDeneb payload = 1;
@@ -415,11 +412,7 @@ message ExecutionPayloadEnvelope {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
-  repeated bytes blob_kzg_commitments = 6 [
-    (ethereum.eth.ext.ssz_size) = "?,48",
-    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
-  ];
-  bytes state_root = 7 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes state_root = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // SignedExecutionPayloadEnvelope wraps an execution payload envelope with a signature.
@@ -431,6 +424,29 @@ message ExecutionPayloadEnvelope {
 //     signature: BLSSignature
 message SignedExecutionPayloadEnvelope {
   ExecutionPayloadEnvelope message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// BlindedExecutionPayloadEnvelope is a storage-only envelope that replaces the
+// full execution payload with its block hash for space savings. The full payload
+// can be retrieved from the EL via engine_getPayloadBodiesByHash using the block_hash.
+message BlindedExecutionPayloadEnvelope {
+  bytes block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  ethereum.engine.v1.ExecutionRequests execution_requests = 2;
+  uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
+  "github.com/OffchainLabs/prysm/v7/"
+      "consensus-types/primitives.BuilderIndex" ];
+  bytes beacon_block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 slot = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  bytes state_root = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// SignedBlindedExecutionPayloadEnvelope wraps a blinded execution payload envelope with a signature.
+message SignedBlindedExecutionPayloadEnvelope {
+  BlindedExecutionPayloadEnvelope message = 1;
   bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 

@@ -3,8 +3,10 @@ package verification
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 )
 
 // BlobVerifier defines the methods implemented by the ROBlobVerifier.
@@ -54,3 +56,18 @@ type DataColumnsVerifier interface {
 // NewDataColumnsVerifier is a function signature that can be used to mock a setup where a
 // column verifier can be easily initialized.
 type NewDataColumnsVerifier func(dataColumns []blocks.RODataColumn, reqs []Requirement) DataColumnsVerifier
+
+// PayloadAttestationMsgVerifier defines the methods implemented by the ROPayloadAttestation.
+type PayloadAttestationMsgVerifier interface {
+	VerifyCurrentSlot() error
+	VerifyBlockRootSeen(blockRootSeen func([32]byte) bool) error
+	VerifyBlockRootValid(func([32]byte) bool) error
+	VerifyValidatorInPTC(context.Context, state.ReadOnlyBeaconState) error
+	VerifySignature(state.ReadOnlyBeaconState) error
+	VerifiedPayloadAttestation() (payloadattestation.VerifiedROMessage, error)
+	SatisfyRequirement(Requirement)
+}
+
+// NewPayloadAttestationMsgVerifier is a function signature that can be used by code that needs to be
+// able to mock Initializer.NewPayloadAttestationMsgVerifier without complex setup.
+type NewPayloadAttestationMsgVerifier func(pa payloadattestation.ROMessage, reqs []Requirement) PayloadAttestationMsgVerifier

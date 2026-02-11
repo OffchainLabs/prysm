@@ -32,7 +32,6 @@ func New() *ForkChoice {
 		finalizedCheckpoint:           &forkchoicetypes.Checkpoint{},
 		proposerBoostRoot:             [32]byte{},
 		nodeByRoot:                    make(map[[fieldparams.RootLength]byte]*Node),
-		nodeByPayload:                 make(map[[fieldparams.RootLength]byte]*Node),
 		slashedIndices:                make(map[primitives.ValidatorIndex]bool),
 		receivedBlocksLastEpoch:       [fieldparams.SlotsPerEpoch]primitives.Slot{},
 	}
