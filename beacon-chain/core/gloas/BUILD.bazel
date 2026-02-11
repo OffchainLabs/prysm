@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "attestation.go",
         "bid.go",
         "payload_attestation.go",
         "pending_payment.go",
@@ -26,6 +27,7 @@ go_library(
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
     ],
@@ -34,6 +36,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "attestation_test.go",
         "bid_test.go",
         "payload_attestation_test.go",
         "pending_payment_test.go",
