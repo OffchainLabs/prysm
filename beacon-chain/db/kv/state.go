@@ -1048,10 +1048,15 @@ func (s *Store) isStateValidatorMigrationOver() (bool, error) {
 }
 
 func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
-	slot, err := s.SlotByBlockRoot(ctx, blockRoot)
+	stateSummary, err := s.StateSummary(ctx, blockRoot)
 	if err != nil {
 		return nil, err
 	}
+	if stateSummary == nil {
+		return nil, ErrNotFoundState
+	}
+
+	slot := stateSummary.Slot
 
 	if uint64(slot) < s.getOffset() {
 		return nil, ErrSlotBeforeOffset
@@ -1065,14 +1070,33 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 		return nil, errors.New("state not found")
 	}
 
+	blk, err := s.Block(ctx, blockRoot)
+	if err != nil {
+		return nil, err
+	}
+	if blk != nil && !blk.IsNil() {
+		stateRoot, err := st.HashTreeRoot(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if stateRoot != blk.Block().StateRoot() {
+			return nil, errors.Wrap(ErrNotFoundState, "state root mismatch for block")
+		}
+	}
+
 	return st, nil
 }
 
 func (s *Store) hasStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) (bool, error) {
-	slot, err := s.SlotByBlockRoot(ctx, blockRoot)
+	stateSummary, err := s.StateSummary(ctx, blockRoot)
 	if err != nil {
 		return false, err
 	}
+	if stateSummary == nil {
+		return false, nil
+	}
+
+	slot := stateSummary.Slot
 
 	if uint64(slot) < s.getOffset() {
 		return false, ErrSlotBeforeOffset

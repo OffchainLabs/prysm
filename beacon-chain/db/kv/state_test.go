@@ -26,7 +26,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	logTest "github.com/sirupsen/logrus/hooks/test"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -1349,7 +1348,7 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 
 		readSt, err := db.State(context.Background(), [32]byte{'A'})
 		require.IsNil(t, readSt)
-		require.ErrorContains(t, "neither state summary nor block found", err)
+		require.ErrorIs(t, err, ErrNotFoundState)
 	})
 
 	t.Run("Slot not in tree", func(t *testing.T) {
@@ -1477,14 +1476,8 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 					require.NoError(t, err)
 
 					readSt, err := db.State(context.Background(), r)
-					require.NoError(t, err)
-					require.NotNil(t, readSt)
-
-					stSSZ, err := st.MarshalSSZ()
-					require.NoError(t, err)
-					readStSSZ, err := readSt.MarshalSSZ()
-					require.NoError(t, err)
-					require.DeepSSZEqual(t, stSSZ, readStSSZ)
+					require.ErrorIs(t, err, ErrNotFoundState)
+					require.IsNil(t, readSt)
 				})
 			}
 		})
@@ -1578,14 +1571,8 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 					require.NoError(t, err)
 
 					readSt, err := db.State(context.Background(), r)
-					require.NoError(t, err)
-					require.NotNil(t, readSt)
-
-					stSSZ, err := st.MarshalSSZ()
-					require.NoError(t, err)
-					readStSSZ, err := readSt.MarshalSSZ()
-					require.NoError(t, err)
-					require.DeepSSZEqual(t, stSSZ, readStSSZ)
+					require.ErrorIs(t, err, ErrNotFoundState)
+					require.IsNil(t, readSt)
 				})
 			}
 		})
@@ -1594,7 +1581,6 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 
 func TestStore_HasStateUsingStateDiff(t *testing.T) {
 	t.Run("No state summary or block", func(t *testing.T) {
-		hook := logTest.NewGlobal()
 		db := setupDB(t)
 		featCfg := &features.Flags{}
 		featCfg.EnableStateDiff = true
@@ -1607,7 +1593,6 @@ func TestStore_HasStateUsingStateDiff(t *testing.T) {
 
 		hasSt := db.HasState(t.Context(), [32]byte{'A'})
 		require.Equal(t, false, hasSt)
-		require.LogsContain(t, hook, "neither state summary nor block found")
 	})
 
 	t.Run("slot in tree or not", func(t *testing.T) {
