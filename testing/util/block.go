@@ -1568,8 +1568,8 @@ func HydrateExecutionPayloadBid(b *ethpb.ExecutionPayloadBid) *ethpb.ExecutionPa
 	if b.FeeRecipient == nil {
 		b.FeeRecipient = make([]byte, fieldparams.FeeRecipientLength)
 	}
-	if b.BlobKzgCommitmentsRoot == nil {
-		b.BlobKzgCommitmentsRoot = make([]byte, fieldparams.RootLength)
+	if b.BlobKzgCommitments == nil {
+		b.BlobKzgCommitments = make([][]byte, 0)
 	}
 	return b
 }
@@ -1636,21 +1636,22 @@ func GenerateTestSignedExecutionPayloadBid(slot primitives.Slot) *ethpb.SignedEx
 	blockHash := bytesutil.PadTo([]byte{0x03}, fieldparams.RootLength)
 	prevRandao := bytesutil.PadTo([]byte{0x04}, fieldparams.RootLength)
 	feeRecipient := bytesutil.PadTo([]byte{0x05}, fieldparams.FeeRecipientLength)
-	blobKzgRoot := bytesutil.PadTo([]byte{0x06}, fieldparams.RootLength)
+	blobKzgCommitment := bytesutil.PadTo([]byte{0x06}, fieldparams.BLSPubkeyLength)
 	signature := bytesutil.PadTo([]byte{0x07}, fieldparams.BLSSignatureLength)
 
 	return &ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
-			Slot:                   slot,
-			BuilderIndex:           1,
-			ParentBlockHash:        parentBlockHash,
-			ParentBlockRoot:        parentBlockRoot,
-			BlockHash:              blockHash,
-			GasLimit:               30000000,
-			PrevRandao:             prevRandao,
-			FeeRecipient:           feeRecipient,
-			Value:                  1000000,
-			BlobKzgCommitmentsRoot: blobKzgRoot,
+			Slot:               slot,
+			BuilderIndex:       1,
+			ParentBlockHash:    parentBlockHash,
+			ParentBlockRoot:    parentBlockRoot,
+			BlockHash:          blockHash,
+			GasLimit:           30000000,
+			PrevRandao:         prevRandao,
+			FeeRecipient:       feeRecipient,
+			Value:              1000000,
+			ExecutionPayment:   2000000,
+			BlobKzgCommitments: [][]byte{blobKzgCommitment},
 		},
 		Signature: signature,
 	}

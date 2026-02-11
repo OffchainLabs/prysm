@@ -162,6 +162,7 @@ type Service struct {
 	verifierWaiter          *verification.InitializerWaiter
 	blobVerifier            verification.NewBlobVerifier
 	capabilityCache         *capabilityCache
+	graffitiInfo            *GraffitiInfo
 }
 
 // NewService sets up a new instance with an ethclient when given a web3 endpoint as a string in the config.
@@ -316,6 +317,28 @@ func (s *Service) updateBeaconNodeStats() {
 func (s *Service) updateConnectedETH1(state bool) {
 	s.connectedETH1 = state
 	s.updateBeaconNodeStats()
+}
+
+// GraffitiInfo returns the GraffitiInfo struct for graffiti generation.
+func (s *Service) GraffitiInfo() *GraffitiInfo {
+	return s.graffitiInfo
+}
+
+// updateGraffitiInfo fetches EL client version and updates the graffiti info.
+func (s *Service) updateGraffitiInfo() {
+	if s.graffitiInfo == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
+	defer cancel()
+	versions, err := s.GetClientVersion(ctx)
+	if err != nil {
+		log.WithError(err).Debug("Could not get execution client version for graffiti")
+		return
+	}
+	if len(versions) >= 1 {
+		s.graffitiInfo.UpdateFromEngine(versions[0].Code, versions[0].Commit)
+	}
 }
 
 // refers to the latest eth1 block which follows the condition: eth1_timestamp +
@@ -598,6 +621,12 @@ func (s *Service) run(done <-chan struct{}) {
 	chainstartTicker := time.NewTicker(logPeriod)
 	defer chainstartTicker.Stop()
 
+	// Update graffiti info 4 times per epoch (~96 seconds with 12s slots and 32 slots/epoch)
+	graffitiTicker := time.NewTicker(96 * time.Second)
+	defer graffitiTicker.Stop()
+	// Initial update
+	s.updateGraffitiInfo()
+
 	for {
 		select {
 		case <-done:
@@ -622,6 +651,8 @@ func (s *Service) run(done <-chan struct{}) {
 				continue
 			}
 			s.logTillChainStart(context.Background())
+		case <-graffitiTicker.C:
+			s.updateGraffitiInfo()
 		}
 	}
 }

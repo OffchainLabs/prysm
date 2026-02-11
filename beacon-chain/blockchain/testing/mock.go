@@ -700,6 +700,14 @@ func (s *ChainService) InsertNode(ctx context.Context, st state.BeaconState, blo
 	return nil
 }
 
+// InsertPayload mocks the same method in the chain service
+func (s *ChainService) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) error {
+	if s.ForkChoiceStore != nil {
+		return s.ForkChoiceStore.InsertPayload(pe)
+	}
+	return nil
+}
+
 // ForkChoiceDump mocks the same method in the chain service
 func (s *ChainService) ForkChoiceDump(ctx context.Context) (*forkchoice2.Dump, error) {
 	if s.ForkChoiceStore != nil {
@@ -754,6 +762,16 @@ func (c *ChainService) ReceiveDataColumn(dc blocks.VerifiedRODataColumn) error {
 // ReceiveDataColumns implements the same method in chain service
 func (c *ChainService) ReceiveDataColumns(dcs []blocks.VerifiedRODataColumn) error {
 	c.DataColumns = append(c.DataColumns, dcs...)
+	return nil
+}
+
+// ReceivePayloadAttestationMessage implements the same method in the chain service.
+func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *ethpb.PayloadAttestationMessage) error {
+	return nil
+}
+
+// ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
+func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
 	return nil
 }
 

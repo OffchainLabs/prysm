@@ -12,6 +12,8 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"golang.org/x/sync/singleflight"
@@ -83,6 +85,24 @@ func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColu
 		results:                     newResults(reqs...),
 		verifyDataColumnsCommitment: peerdas.VerifyDataColumnsSidecarKZGProofs,
 		stateByRoot:                 make(map[[fieldparams.RootLength]byte]state.BeaconState),
+	}
+}
+
+// NewPayloadAttestationMsgVerifier creates a PayloadAttestationMsgVerifier for a single payload attestation message,
+// with the given set of requirements.
+func (ini *Initializer) NewPayloadAttestationMsgVerifier(pa payloadattestation.ROMessage, reqs []Requirement) *PayloadAttMsgVerifier {
+	return &PayloadAttMsgVerifier{
+		sharedResources: ini.shared,
+		results:         newResults(reqs...),
+		pa:              pa,
+	}
+}
+
+// NewPayloadEnvelopeVerifier creates a SignedExecutionPayloadEnvelopeVerifier for a single signed execution payload envelope with the given set of requirements.
+func (ini *Initializer) NewPayloadEnvelopeVerifier(ee interfaces.ROSignedExecutionPayloadEnvelope, reqs []Requirement) *EnvelopeVerifier {
+	return &EnvelopeVerifier{
+		results: newResults(reqs...),
+		e:       ee,
 	}
 }
 

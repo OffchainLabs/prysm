@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -21,6 +23,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	prombolt "github.com/prysmaticlabs/prombbolt"
+	logrus "github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -126,6 +129,7 @@ var Buckets = [][]byte{
 	feeRecipientBucket,
 	registrationBucket,
 	custodyBucket,
+	executionPayloadEnvelopesBucket,
 }
 
 // KVStoreOption is a functional option that modifies a kv.Store.
@@ -223,8 +227,42 @@ func (kv *Store) startStateDiff(ctx context.Context) error {
 	}
 
 	if hasOffset {
-		// Existing state-diff database - restarts not yet supported.
-		return errors.New("restarting with existing state-diff database not yet supported")
+		storedExponents, err := kv.loadStateDiffExponents()
+		if err != nil {
+			return fmt.Errorf("%w: state-diff metadata missing or invalid; re-sync required: %v", ErrStateDiffCorrupted, err)
+		}
+		currentExponents := flags.Get().StateDiffExponents
+		if !slices.Equal(storedExponents, currentExponents) {
+			return errors.Wrapf(
+				ErrStateDiffExponentMismatch,
+				"state-diff exponents changed; database incompatible. "+
+					"Database was initialized with: %v. "+
+					"Current configuration: %v. "+
+					"Options: use original exponents (--state-diff-exponents=%s) or delete database and re-sync from genesis/checkpoint.",
+				storedExponents,
+				currentExponents,
+				formatStateDiffExponents(storedExponents),
+			)
+		}
+		offset, err := kv.loadOffset()
+		if err != nil {
+			return err
+		}
+		cache, err := populateStateDiffCacheFromDB(kv, offset)
+		if err != nil {
+			return err
+		}
+		kv.stateDiffCache = cache
+		if flags.Get().StateDiffValidateOnStartup {
+			if err := validateStateDiffCache(ctx, kv, cache); err != nil {
+				return err
+			}
+		}
+		log.WithFields(logrus.Fields{
+			"offset":    offset,
+			"exponents": storedExponents,
+		}).Info("State-diff cache initialized from existing database")
+		return nil
 	}
 
 	// Check if this is a new database (no head block).

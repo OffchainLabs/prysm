@@ -9,24 +9,25 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const maxStateDiffExponents = 30
+const MaxStateDiffExponent = 30
 
 // GlobalFlags specifies all the global flags for the
 // beacon node.
 type GlobalFlags struct {
-	SubscribeToAllSubnets           bool
+	StateDiffValidateOnStartup      bool
 	Supernode                       bool
-	SemiSupernode                   bool
 	DisableGetBlobsV2               bool
-	MinimumSyncPeers                int
-	MinimumPeersPerSubnet           int
-	MaxConcurrentDials              int
-	BlockBatchLimit                 int
-	BlockBatchLimitBurstFactor      int
-	BlobBatchLimit                  int
+	SemiSupernode                   bool
+	SubscribeToAllSubnets           bool
 	BlobBatchLimitBurstFactor       int
 	DataColumnBatchLimit            int
+	BlockBatchLimit                 int
+	MaxConcurrentDials              int
+	MinimumPeersPerSubnet           int
+	MinimumSyncPeers                int
 	DataColumnBatchLimitBurstFactor int
+	BlockBatchLimitBurstFactor      int
+	BlobBatchLimit                  int
 	StateDiffExponents              []int
 }
 
@@ -80,6 +81,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 
 	// State-diff-exponents
 	cfg.StateDiffExponents = ctx.IntSlice(StateDiffExponents.Name)
+	cfg.StateDiffValidateOnStartup = !ctx.Bool(StateDiffValidateOnStartup.Name)
 	if features.Get().EnableStateDiff {
 		if err := validateStateDiffExponents(cfg.StateDiffExponents); err != nil {
 			return err
@@ -87,6 +89,9 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	} else {
 		if ctx.IsSet(StateDiffExponents.Name) {
 			log.Warn("--state-diff-exponents is set but --enable-state-diff is not; the value will be ignored.")
+		}
+		if ctx.IsSet(StateDiffValidateOnStartup.Name) {
+			log.Warn("--disable-hdiff-validate-on-startup is set but --enable-state-diff is not; the value will be ignored.")
 		}
 	}
 
@@ -132,7 +137,7 @@ func validateStateDiffExponents(exponents []int) error {
 	if exponents[length-1] < 5 {
 		return errors.New("the last state diff exponent must be at least 5")
 	}
-	prev := maxStateDiffExponents + 1
+	prev := MaxStateDiffExponent + 1
 	for _, exp := range exponents {
 		if exp >= prev {
 			return errors.New("state diff exponents must be in strictly decreasing order, and each exponent must be <= 30")

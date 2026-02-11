@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -21,8 +22,77 @@ import (
 
 var (
 	offsetKey           = []byte("offset")
+	exponentsKey        = []byte("exponents")
 	ErrSlotBeforeOffset = errors.New("slot is before state-diff root offset")
 )
+
+func encodeStateDiffExponents(exponents []int) ([]byte, error) {
+	if len(exponents) == 0 {
+		return nil, errors.New("state diff exponents cannot be empty")
+	}
+	if len(exponents) > 255 {
+		return nil, fmt.Errorf("state diff exponents length %d exceeds max 255", len(exponents))
+	}
+	encoded := make([]byte, len(exponents)+1)
+	encoded[0] = byte(len(exponents))
+	for i, exp := range exponents {
+		if exp < 2 || exp > flags.MaxStateDiffExponent {
+			return nil, fmt.Errorf("state diff exponent %d out of range for encoding", exp)
+		}
+		encoded[i+1] = byte(exp)
+	}
+	return encoded, nil
+}
+
+func decodeStateDiffExponents(encoded []byte) ([]int, error) {
+	if len(encoded) == 0 {
+		return nil, errors.New("state diff exponents missing length prefix")
+	}
+	count := int(encoded[0])
+	if count == 0 {
+		return nil, errors.New("state diff exponents length cannot be zero")
+	}
+	if len(encoded) != count+1 {
+		return nil, fmt.Errorf("state diff exponents length mismatch: expected %d got %d", count, len(encoded)-1)
+	}
+	exponents := make([]int, count)
+	for i := range count {
+		exponents[i] = int(encoded[i+1])
+	}
+	return exponents, nil
+}
+
+func formatStateDiffExponents(exponents []int) string {
+	if len(exponents) == 0 {
+		return ""
+	}
+	parts := make([]string, len(exponents))
+	for i, exp := range exponents {
+		parts[i] = fmt.Sprintf("%d", exp)
+	}
+	return strings.Join(parts, ",")
+}
+
+func (s *Store) loadStateDiffExponents() ([]int, error) {
+	var encoded []byte
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		value := bucket.Get(exponentsKey)
+		if value == nil {
+			return errors.New("state diff exponents not found")
+		}
+		encoded = make([]byte, len(value))
+		copy(encoded, value)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return decodeStateDiffExponents(encoded)
+}
 
 func makeKeyForStateDiffTree(level int, slot uint64) []byte {
 	buf := make([]byte, 16)
@@ -124,6 +194,29 @@ func (s *Store) getOffset() uint64 {
 	return s.stateDiffCache.getOffset()
 }
 
+func (s *Store) loadOffset() (uint64, error) {
+	var offset uint64
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		offsetBytes := bucket.Get(offsetKey)
+		if offsetBytes == nil {
+			return errors.New("state diff offset not found")
+		}
+		if len(offsetBytes) != 8 {
+			return fmt.Errorf("state diff offset has invalid length %d", len(offsetBytes))
+		}
+		offset = binary.LittleEndian.Uint64(offsetBytes)
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return offset, nil
+}
+
 // hasStateDiffOffset checks if the state-diff offset has been set in the database.
 // This is used to detect if an existing database has state-diff enabled.
 func (s *Store) hasStateDiffOffset() (bool, error) {
@@ -153,8 +246,13 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 			return nil
 		}
 	}
-	// Write offset directly to the database (without using cache which doesn't exist yet).
-	err := s.db.Update(func(tx *bbolt.Tx) error {
+	exponentsBytes, err := encodeStateDiffExponents(flags.Get().StateDiffExponents)
+	if err != nil {
+		return pkgerrors.Wrap(err, "failed to encode state diff exponents")
+	}
+
+	// Write metadata directly to the database (without using cache which doesn't exist yet).
+	err = s.db.Update(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
 		if bucket == nil {
 			return bbolt.ErrBucketNotFound
@@ -162,7 +260,10 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 
 		offsetBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(offsetBytes, uint64(slot))
-		return bucket.Put(offsetKey, offsetBytes)
+		if err := bucket.Put(offsetKey, offsetBytes); err != nil {
+			return err
+		}
+		return bucket.Put(exponentsKey, exponentsBytes)
 	})
 	if err != nil {
 		return pkgerrors.Wrap(err, "failed to set offset")
@@ -286,15 +387,20 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 	}
 
 	var diffChainItems []diffItem
-	lastSeenAnchorSlot := baseAnchorSlot
+	lastSeenAnchorRelSlot := baseAnchorSlot - offset
 	for i, exp := range exponents[1 : lvl+1] {
 		span := math.PowerOf2(uint64(exp))
 		diffSlot := rel / span * span
-		if diffSlot == lastSeenAnchorSlot {
+		if diffSlot == lastSeenAnchorRelSlot {
 			continue
 		}
-		diffChainItems = append(diffChainItems, diffItem{level: i + 1, slot: diffSlot + offset})
-		lastSeenAnchorSlot = diffSlot
+		level := i + 1
+		if s.stateDiffCache != nil && !s.stateDiffCache.levelHasData(level) {
+			lastSeenAnchorRelSlot = diffSlot
+			continue
+		}
+		diffChainItems = append(diffChainItems, diffItem{level: level, slot: diffSlot + offset})
+		lastSeenAnchorRelSlot = diffSlot
 	}
 
 	baseSnapshot, err := s.getFullSnapshot(baseAnchorSlot)

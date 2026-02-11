@@ -86,6 +86,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/node/peers/{peer_id}": {http.MethodGet},
 		"/eth/v1/node/peer_count":      {http.MethodGet},
 		"/eth/v1/node/version":         {http.MethodGet},
+		"/eth/v2/node/version":         {http.MethodGet},
 		"/eth/v1/node/syncing":         {http.MethodGet},
 		"/eth/v1/node/health":          {http.MethodGet},
 	}
@@ -94,6 +95,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/validator/duties/attester/{epoch}":        {http.MethodPost},
 		"/eth/v1/validator/duties/proposer/{epoch}":        {http.MethodGet},
 		"/eth/v1/validator/duties/sync/{epoch}":            {http.MethodPost},
+		"/eth/v1/validator/duties/ptc/{epoch}":             {http.MethodPost},
 		"/eth/v3/validator/blocks/{slot}":                  {http.MethodGet},
 		"/eth/v1/validator/attestation_data":               {http.MethodGet},
 		"/eth/v2/validator/aggregate_attestation":          {http.MethodGet},

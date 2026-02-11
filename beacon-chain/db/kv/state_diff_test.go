@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/math"
@@ -32,6 +33,81 @@ func TestStateDiff_LoadOrInitOffset(t *testing.T) {
 	require.ErrorContains(t, "offset already set", err)
 	offset = db.getOffset()
 	require.Equal(t, uint64(10), offset)
+}
+
+func TestStateDiff_LoadOffset(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	db := setupDB(t)
+	_, err := db.loadOffset()
+	require.ErrorContains(t, "offset not found", err)
+
+	err = setOffsetInDB(db, 10)
+	require.NoError(t, err)
+	offset, err := db.loadOffset()
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), offset)
+}
+
+func TestStateDiff_EncodeDecodeExponents(t *testing.T) {
+	t.Run("roundtrip", func(t *testing.T) {
+		exponents := []int{21, 18, 16, 13}
+		encoded, err := encodeStateDiffExponents(exponents)
+		require.NoError(t, err)
+		decoded, err := decodeStateDiffExponents(encoded)
+		require.NoError(t, err)
+		require.DeepEqual(t, exponents, decoded)
+	})
+
+	t.Run("encode-empty", func(t *testing.T) {
+		_, err := encodeStateDiffExponents(nil)
+		require.ErrorContains(t, "cannot be empty", err)
+	})
+
+	t.Run("encode-negative", func(t *testing.T) {
+		_, err := encodeStateDiffExponents([]int{21, -1})
+		require.ErrorContains(t, "out of range", err)
+	})
+
+	t.Run("encode-too-large", func(t *testing.T) {
+		_, err := encodeStateDiffExponents([]int{flags.MaxStateDiffExponent + 1})
+		require.ErrorContains(t, "out of range", err)
+	})
+
+	t.Run("decode-empty", func(t *testing.T) {
+		_, err := decodeStateDiffExponents(nil)
+		require.ErrorContains(t, "missing length prefix", err)
+	})
+
+	t.Run("decode-zero-length", func(t *testing.T) {
+		_, err := decodeStateDiffExponents([]byte{0})
+		require.ErrorContains(t, "length cannot be zero", err)
+	})
+
+	t.Run("decode-length-mismatch", func(t *testing.T) {
+		_, err := decodeStateDiffExponents([]byte{2, 10})
+		require.ErrorContains(t, "length mismatch", err)
+	})
+}
+
+func TestStateDiff_InitializeStoresExponents(t *testing.T) {
+	setDefaultStateDiffExponents()
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+	defer resetCfg()
+
+	db := setupDB(t)
+	st, _ := createState(t, 0, version.Phase0)
+	require.NoError(t, db.initializeStateDiff(0, st))
+
+	stored, err := db.loadStateDiffExponents()
+	require.NoError(t, err)
+	require.DeepEqual(t, flags.Get().StateDiffExponents, stored)
+}
+
+func TestStateDiff_LoadExponentsMissing(t *testing.T) {
+	db := setupDB(t)
+	_, err := db.loadStateDiffExponents()
+	require.ErrorContains(t, "exponents not found", err)
 }
 
 func TestStateDiff_ComputeLevel(t *testing.T) {
@@ -152,6 +228,124 @@ func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestStateDiff_StateByDiff_NonZeroOffsetSkipsRedundantLevelDiff(t *testing.T) {
+	setStateDiffExponents([]int{6, 5, 4})
+
+	db := setupDB(t)
+
+	offset := uint64(1000)
+	require.NoError(t, setOffsetInDB(db, offset))
+
+	stOffset, _ := createState(t, primitives.Slot(offset), version.Phase0)
+	require.NoError(t, db.saveStateByDiff(context.Background(), stOffset))
+
+	st32, _ := createState(t, primitives.Slot(offset+32), version.Phase0)
+	require.NoError(t, db.saveStateByDiff(context.Background(), st32))
+
+	st64, _ := createState(t, primitives.Slot(offset+64), version.Phase0)
+	require.NoError(t, db.saveStateByDiff(context.Background(), st64))
+
+	st80, _ := createState(t, primitives.Slot(offset+80), version.Phase0)
+	require.NoError(t, db.saveStateByDiff(context.Background(), st80))
+
+	readSt, err := db.stateByDiff(context.Background(), primitives.Slot(offset+80))
+	require.NoError(t, err)
+
+	stWantSSZ, err := st80.MarshalSSZ()
+	require.NoError(t, err)
+	stGotSSZ, err := readSt.MarshalSSZ()
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, stWantSSZ, stGotSSZ)
+}
+
+func TestStateDiff_PopulateStateDiffCacheFromDB(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	db := setupDB(t)
+	_, err := populateStateDiffCacheFromDB(db, 0)
+	require.ErrorContains(t, "missing offset snapshot", err)
+
+	st, _ := createState(t, 0, version.Phase0)
+	require.NoError(t, setOffsetInDB(db, 0))
+	require.NoError(t, db.saveStateByDiff(context.Background(), st))
+
+	err = db.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		key := makeKeyForStateDiffTree(2, math.PowerOf2(16))
+		return bucket.Put(append(key, stateSuffix...), []byte{1})
+	})
+	require.NoError(t, err)
+
+	cache, err := populateStateDiffCacheFromDB(db, 0)
+	require.NoError(t, err)
+	require.NotNil(t, cache)
+	require.Equal(t, uint64(0), cache.getOffset())
+	require.NotNil(t, cache.getAnchor(0))
+	require.Equal(t, true, cache.levelHasData(0))
+	require.Equal(t, false, cache.levelHasData(1))
+	require.Equal(t, true, cache.levelHasData(2))
+}
+
+func TestStateDiff_PopulateStateDiffCacheFromDB_InvalidLevelKey(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	db := setupDB(t)
+	st, _ := createState(t, 0, version.Phase0)
+	require.NoError(t, setOffsetInDB(db, 0))
+	require.NoError(t, db.saveStateByDiff(context.Background(), st))
+
+	require.NoError(t, db.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		key := makeKeyForStateDiffTree(2, 1)
+		return bucket.Put(append(key, stateSuffix...), []byte{1})
+	}))
+
+	_, err := populateStateDiffCacheFromDB(db, 0)
+	require.ErrorIs(t, ErrStateDiffCorrupted, err)
+}
+
+func TestStateDiff_GetBaseAndDiffChainSkipsEmptyLevels(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	db := setupDB(t)
+	require.NoError(t, setOffsetInDB(db, 0))
+	st, _ := createState(t, 0, version.Phase0)
+	require.NoError(t, db.saveFullSnapshot(st))
+
+	cache, err := populateStateDiffCacheFromDB(db, 0)
+	require.NoError(t, err)
+	cache.levelsWithData[0] = true
+	cache.levelsWithData[1] = false
+	cache.levelsWithData[2] = true
+	db.stateDiffCache = cache
+
+	slot := primitives.Slot(math.PowerOf2(18) + math.PowerOf2(16))
+	key := makeKeyForStateDiffTree(2, uint64(slot))
+	require.NoError(t, db.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		if err := bucket.Put(append(key, stateSuffix...), []byte{1}); err != nil {
+			return err
+		}
+		if err := bucket.Put(append(key, validatorSuffix...), []byte{2}); err != nil {
+			return err
+		}
+		return bucket.Put(append(key, balancesSuffix...), []byte{3})
+	}))
+
+	_, diffChain, err := db.getBaseAndDiffChain(0, slot)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(diffChain))
 }
 
 func TestStateDiff_SaveAndReadFullSnapshot(t *testing.T) {
@@ -659,8 +853,10 @@ func setOffsetInDB(s *Store, offset uint64) error {
 }
 
 func setDefaultStateDiffExponents() {
-	globalFlags := flags.GlobalFlags{
-		StateDiffExponents: []int{21, 18, 16, 13, 11, 9, 5},
-	}
+	setStateDiffExponents([]int{21, 18, 16, 13, 11, 9, 5})
+}
+
+func setStateDiffExponents(exponents []int) {
+	globalFlags := flags.GlobalFlags{StateDiffExponents: exponents}
 	flags.Init(&globalFlags)
 }

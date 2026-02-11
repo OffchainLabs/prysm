@@ -5,6 +5,7 @@ import (
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
@@ -43,9 +44,14 @@ func (h executionPayloadBidGloas) IsNil() bool {
 		len(h.payload.ParentBlockRoot) != 32 ||
 		len(h.payload.BlockHash) != 32 ||
 		len(h.payload.PrevRandao) != 32 ||
-		len(h.payload.BlobKzgCommitmentsRoot) != 32 ||
 		len(h.payload.FeeRecipient) != 20 {
 		return true
+	}
+
+	for _, commitment := range h.payload.BlobKzgCommitments {
+		if len(commitment) != 48 {
+			return true
+		}
 	}
 
 	return false
@@ -111,7 +117,7 @@ func (h executionPayloadBidGloas) GasLimit() uint64 {
 	return h.payload.GasLimit
 }
 
-// BuilderIndex returns the validator index of the builder who created this bid.
+// BuilderIndex returns the builder index of the builder who created this bid.
 func (h executionPayloadBidGloas) BuilderIndex() primitives.BuilderIndex {
 	return h.payload.BuilderIndex
 }
@@ -131,9 +137,14 @@ func (h executionPayloadBidGloas) ExecutionPayment() primitives.Gwei {
 	return primitives.Gwei(h.payload.ExecutionPayment)
 }
 
-// BlobKzgCommitmentsRoot returns the root of the KZG commitments for blobs.
-func (h executionPayloadBidGloas) BlobKzgCommitmentsRoot() [32]byte {
-	return [32]byte(h.payload.BlobKzgCommitmentsRoot)
+// BlobKzgCommitments returns the KZG commitments for blobs.
+func (h executionPayloadBidGloas) BlobKzgCommitments() [][]byte {
+	return bytesutil.SafeCopy2dBytes(h.payload.BlobKzgCommitments)
+}
+
+// BlobKzgCommitmentCount returns the number of blob KZG commitments.
+func (h executionPayloadBidGloas) BlobKzgCommitmentCount() uint64 {
+	return uint64(len(h.payload.BlobKzgCommitments))
 }
 
 // FeeRecipient returns the execution address that will receive the builder payment.

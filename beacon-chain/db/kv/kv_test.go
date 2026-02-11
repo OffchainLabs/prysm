@@ -3,12 +3,15 @@ package kv
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	bolt "go.etcd.io/bbolt"
@@ -25,6 +28,108 @@ func setupDB(t testing.TB) *Store {
 		}
 	})
 	return db
+}
+
+func TestStartStateDiff_ExponentMismatch(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+	defer resetCfg()
+	setDefaultStateDiffExponents()
+
+	store := setupDB(t)
+	require.NoError(t, store.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bolt.ErrBucketNotFound
+		}
+		offsetBytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(offsetBytes, 0)
+		if err := bucket.Put(offsetKey, offsetBytes); err != nil {
+			return err
+		}
+		encoded, err := encodeStateDiffExponents([]int{20, 10})
+		if err != nil {
+			return err
+		}
+		return bucket.Put(exponentsKey, encoded)
+	}))
+
+	ctx := t.Context()
+	err := store.startStateDiff(ctx)
+	require.ErrorContains(t, "state-diff exponents changed", err)
+}
+
+func TestStartStateDiff_MissingOffsetSnapshot(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+	defer resetCfg()
+	setDefaultStateDiffExponents()
+
+	store := setupDB(t)
+	require.NoError(t, store.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bolt.ErrBucketNotFound
+		}
+		offsetBytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(offsetBytes, 0)
+		if err := bucket.Put(offsetKey, offsetBytes); err != nil {
+			return err
+		}
+		encoded, err := encodeStateDiffExponents(flags.Get().StateDiffExponents)
+		if err != nil {
+			return err
+		}
+		return bucket.Put(exponentsKey, encoded)
+	}))
+
+	ctx := t.Context()
+	err := store.startStateDiff(ctx)
+	require.ErrorContains(t, "missing offset snapshot", err)
+}
+
+func TestStartStateDiff_ValidateOnStartup(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+	defer resetCfg()
+	setDefaultStateDiffExponents()
+
+	globalFlags := flags.GlobalFlags{
+		StateDiffExponents:         flags.Get().StateDiffExponents,
+		StateDiffValidateOnStartup: true,
+	}
+	flags.Init(&globalFlags)
+
+	store := setupDB(t)
+	require.NoError(t, store.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bolt.ErrBucketNotFound
+		}
+		st, _ := createState(t, 0, version.Phase0)
+		stateBytes, err := st.MarshalSSZ()
+		if err != nil {
+			return err
+		}
+		enc, err := addKey(st.Version(), stateBytes)
+		if err != nil {
+			return err
+		}
+		offsetBytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(offsetBytes, 0)
+		if err := bucket.Put(offsetKey, offsetBytes); err != nil {
+			return err
+		}
+		encoded, err := encodeStateDiffExponents(flags.Get().StateDiffExponents)
+		if err != nil {
+			return err
+		}
+		if err := bucket.Put(exponentsKey, encoded); err != nil {
+			return err
+		}
+		key := makeKeyForStateDiffTree(0, 0)
+		return bucket.Put(key, enc)
+	}))
+
+	err := store.startStateDiff(t.Context())
+	require.NoError(t, err)
 }
 
 func Test_setupBlockStorageType(t *testing.T) {

@@ -30,7 +30,6 @@ const (
 	nodeCountCalled
 	highestReceivedBlockSlotCalled
 	highestReceivedBlockRootCalled
-	highestReceivedBlockDelayCalled
 	receivedBlocksLastEpochCalled
 	weightCalled
 	isOptimisticCalled
@@ -119,11 +118,6 @@ func TestROLocking(t *testing.T) {
 			cb:   func(g FastGetter) { g.HighestReceivedBlockSlot() },
 		},
 		{
-			name: "highestReceivedBlockDelayCalled",
-			call: highestReceivedBlockDelayCalled,
-			cb:   func(g FastGetter) { g.HighestReceivedBlockDelay() },
-		},
-		{
 			name: "receivedBlocksLastEpochCalled",
 			call: receivedBlocksLastEpochCalled,
 			cb:   func(g FastGetter) { _, err := g.ReceivedBlocksLastEpoch(); _discard(t, err) },
@@ -147,11 +141,6 @@ func TestROLocking(t *testing.T) {
 			name: "slotCalled",
 			call: slotCalled,
 			cb:   func(g FastGetter) { _, err := g.Slot([32]byte{}); _discard(t, err) },
-		},
-		{
-			name: "lastRootCalled",
-			call: lastRootCalled,
-			cb:   func(g FastGetter) { g.LastRoot(0) },
 		},
 		{
 			name: "targetRootForEpochCalled",
@@ -265,11 +254,6 @@ func (ro *mockROForkchoice) HighestReceivedBlockRoot() [32]byte {
 	return [32]byte{}
 }
 
-func (ro *mockROForkchoice) HighestReceivedBlockDelay() primitives.Slot {
-	ro.calls = append(ro.calls, highestReceivedBlockDelayCalled)
-	return 0
-}
-
 func (ro *mockROForkchoice) ReceivedBlocksLastEpoch() (uint64, error) {
 	ro.calls = append(ro.calls, receivedBlocksLastEpochCalled)
 	return 0, nil
@@ -293,11 +277,6 @@ func (ro *mockROForkchoice) ShouldOverrideFCU() bool {
 func (ro *mockROForkchoice) Slot(_ [32]byte) (primitives.Slot, error) {
 	ro.calls = append(ro.calls, slotCalled)
 	return 0, nil
-}
-
-func (ro *mockROForkchoice) LastRoot(_ primitives.Epoch) [32]byte {
-	ro.calls = append(ro.calls, lastRootCalled)
-	return [32]byte{}
 }
 
 // DependentRoot impoements FastGetter.

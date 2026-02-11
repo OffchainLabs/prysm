@@ -11,17 +11,12 @@ Install `ethspecify` with the following command:
 pipx install ethspecify
 ```
 
-> [!NOTE]
-> You can run `ethspecify <cmd>` in the `specrefs` directory or
-> `ethspecify <cmd> --path=specrefs` from the project's root directory.
-
 ## Maintenance
 
 When adding support for a new specification version, follow these steps:
 
-0. Change directory into the `specrefs` directory.
 1. Update the version in `.ethspecify.yml` configuration.
-2. Run `ethspecify process` to update/populate specrefs.
+2. Run `ethspecify` to update/populate specrefs.
 3. Run `ethspecify check` to check specrefs.
 4. If there are errors, use the error message as a guide to fix the issue. If
    there are new specrefs with empty sources, implement/locate each item and

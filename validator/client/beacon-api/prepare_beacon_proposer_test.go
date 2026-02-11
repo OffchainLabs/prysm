@@ -45,8 +45,8 @@ func TestPrepareBeaconProposer_Valid(t *testing.T) {
 	marshalledJsonRecipients, err := json.Marshal(jsonRecipients)
 	require.NoError(t, err)
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Post(
 		gomock.Any(),
 		prepareBeaconProposerTestEndpoint,
 		nil,
@@ -78,7 +78,7 @@ func TestPrepareBeaconProposer_Valid(t *testing.T) {
 		},
 	}
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	err = validatorClient.prepareBeaconProposer(ctx, protoRecipients)
 	require.NoError(t, err)
 }
@@ -89,8 +89,8 @@ func TestPrepareBeaconProposer_BadRequest(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Post(
 		gomock.Any(),
 		prepareBeaconProposerTestEndpoint,
 		nil,
@@ -100,7 +100,7 @@ func TestPrepareBeaconProposer_BadRequest(t *testing.T) {
 		errors.New("foo error"),
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	err := validatorClient.prepareBeaconProposer(ctx, nil)
 	assert.ErrorContains(t, "foo error", err)
 }
