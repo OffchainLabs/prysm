@@ -3596,12 +3596,12 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, 
 	dst = buf
 	offset := int(116)
 
-	// Field (0) 'PayloadRoot'
-	if size := len(b.PayloadRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.PayloadRoot", size, 32)
+	// Field (0) 'BlockHash'
+	if size := len(b.BlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockHash", size, 32)
 		return
 	}
-	dst = append(dst, b.PayloadRoot...)
+	dst = append(dst, b.BlockHash...)
 
 	// Offset (1) 'ExecutionRequests'
 	dst = ssz.WriteOffset(dst, offset)
@@ -3649,11 +3649,11 @@ func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	tail := buf
 	var o1 uint64
 
-	// Field (0) 'PayloadRoot'
-	if cap(b.PayloadRoot) == 0 {
-		b.PayloadRoot = make([]byte, 0, len(buf[0:32]))
+	// Field (0) 'BlockHash'
+	if cap(b.BlockHash) == 0 {
+		b.BlockHash = make([]byte, 0, len(buf[0:32]))
 	}
-	b.PayloadRoot = append(b.PayloadRoot, buf[0:32]...)
+	b.BlockHash = append(b.BlockHash, buf[0:32]...)
 
 	// Offset (1) 'ExecutionRequests'
 	if o1 = ssz.ReadOffset(buf[32:36]); o1 > size {
@@ -3717,12 +3717,12 @@ func (b *BlindedExecutionPayloadEnvelope) HashTreeRoot() ([32]byte, error) {
 func (b *BlindedExecutionPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
-	// Field (0) 'PayloadRoot'
-	if size := len(b.PayloadRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.PayloadRoot", size, 32)
+	// Field (0) 'BlockHash'
+	if size := len(b.BlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockHash", size, 32)
 		return
 	}
-	hh.PutBytes(b.PayloadRoot)
+	hh.PutBytes(b.BlockHash)
 
 	// Field (1) 'ExecutionRequests'
 	if err = b.ExecutionRequests.HashTreeRootWith(hh); err != nil {

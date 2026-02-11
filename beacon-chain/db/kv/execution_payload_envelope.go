@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/golang/snappy"
@@ -10,9 +11,10 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// SaveExecutionPayloadEnvelope blinds and saves a signed execution payload envelope.
-// The envelope is always stored in blinded form (payload replaced with its hash tree root).
-// The key is the execution payload's BlockHash extracted from the envelope.
+// SaveExecutionPayloadEnvelope blinds and saves a signed execution payload envelope keyed by
+// beacon block root. The envelope is stored in blinded form: the full execution payload is replaced
+// with its block hash. The full payload can later be retrieved from the EL via
+// engine_getPayloadBodiesByHash.
 func (s *Store) SaveExecutionPayloadEnvelope(ctx context.Context, env *ethpb.SignedExecutionPayloadEnvelope) error {
 	_, span := trace.StartSpan(ctx, "BeaconDB.SaveExecutionPayloadEnvelope")
 	defer span.End()
@@ -21,11 +23,8 @@ func (s *Store) SaveExecutionPayloadEnvelope(ctx context.Context, env *ethpb.Sig
 		return errors.New("cannot save nil execution payload envelope")
 	}
 
-	blockHash := env.Message.Payload.BlockHash
-	blinded, err := blindEnvelope(env)
-	if err != nil {
-		return err
-	}
+	blockRoot := bytesutil.ToBytes32(env.Message.BeaconBlockRoot)
+	blinded := blindEnvelope(env)
 
 	enc, err := encodeBlindedEnvelope(blinded)
 	if err != nil {
@@ -34,19 +33,19 @@ func (s *Store) SaveExecutionPayloadEnvelope(ctx context.Context, env *ethpb.Sig
 
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(executionPayloadEnvelopesBucket)
-		return bkt.Put(blockHash, enc)
+		return bkt.Put(blockRoot[:], enc)
 	})
 }
 
-// ExecutionPayloadEnvelope retrieves the blinded signed execution payload envelope by block hash.
-func (s *Store) ExecutionPayloadEnvelope(ctx context.Context, blockHash [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error) {
+// ExecutionPayloadEnvelope retrieves the blinded signed execution payload envelope by beacon block root.
+func (s *Store) ExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.ExecutionPayloadEnvelope")
 	defer span.End()
 
 	var enc []byte
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(executionPayloadEnvelopesBucket)
-		enc = bkt.Get(blockHash[:])
+		enc = bkt.Get(blockRoot[:])
 		return nil
 	}); err != nil {
 		return nil, err
@@ -57,15 +56,15 @@ func (s *Store) ExecutionPayloadEnvelope(ctx context.Context, blockHash [32]byte
 	return decodeBlindedEnvelope(enc)
 }
 
-// HasExecutionPayloadEnvelope checks whether an execution payload envelope exists for the given block hash.
-func (s *Store) HasExecutionPayloadEnvelope(ctx context.Context, blockHash [32]byte) bool {
+// HasExecutionPayloadEnvelope checks whether an execution payload envelope exists for the given beacon block root.
+func (s *Store) HasExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) bool {
 	_, span := trace.StartSpan(ctx, "BeaconDB.HasExecutionPayloadEnvelope")
 	defer span.End()
 
 	var exists bool
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(executionPayloadEnvelopesBucket)
-		exists = bkt.Get(blockHash[:]) != nil
+		exists = bkt.Get(blockRoot[:]) != nil
 		return nil
 	}); err != nil {
 		return false
@@ -73,27 +72,24 @@ func (s *Store) HasExecutionPayloadEnvelope(ctx context.Context, blockHash [32]b
 	return exists
 }
 
-// DeleteExecutionPayloadEnvelope removes a signed execution payload envelope by block hash.
-func (s *Store) DeleteExecutionPayloadEnvelope(ctx context.Context, blockHash [32]byte) error {
+// DeleteExecutionPayloadEnvelope removes a signed execution payload envelope by beacon block root.
+func (s *Store) DeleteExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) error {
 	_, span := trace.StartSpan(ctx, "BeaconDB.DeleteExecutionPayloadEnvelope")
 	defer span.End()
 
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(executionPayloadEnvelopesBucket)
-		return bkt.Delete(blockHash[:])
+		return bkt.Delete(blockRoot[:])
 	})
 }
 
 // blindEnvelope converts a full signed envelope to its blinded form by replacing
-// the execution payload with its hash tree root.
-func blindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error) {
-	payloadRoot, err := env.Message.Payload.HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not compute payload hash tree root")
-	}
+// the execution payload with its block hash. This avoids computing the expensive
+// payload hash tree root on the critical path.
+func blindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope) *ethpb.SignedBlindedExecutionPayloadEnvelope {
 	return &ethpb.SignedBlindedExecutionPayloadEnvelope{
 		Message: &ethpb.BlindedExecutionPayloadEnvelope{
-			PayloadRoot:       payloadRoot[:],
+			BlockHash:         env.Message.Payload.BlockHash,
 			ExecutionRequests: env.Message.ExecutionRequests,
 			BuilderIndex:      env.Message.BuilderIndex,
 			BeaconBlockRoot:   env.Message.BeaconBlockRoot,
@@ -101,7 +97,7 @@ func blindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope) (*ethpb.SignedBlin
 			StateRoot:         env.Message.StateRoot,
 		},
 		Signature: env.Signature,
-	}, nil
+	}
 }
 
 // encodeBlindedEnvelope SSZ-encodes and snappy-compresses a blinded envelope for storage.

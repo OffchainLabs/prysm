@@ -50,20 +50,20 @@ func TestStore_SaveAndRetrieveExecutionPayloadEnvelope(t *testing.T) {
 	ctx := context.Background()
 	env := testEnvelope(t)
 
-	// Use the block hash as lookup key (matches what save extracts internally).
-	blockHash := bytesutil.ToBytes32(env.Message.Payload.BlockHash)
+	// Keyed by beacon block root.
+	blockRoot := bytesutil.ToBytes32(env.Message.BeaconBlockRoot)
 
 	// Initially should not exist.
-	assert.Equal(t, false, db.HasExecutionPayloadEnvelope(ctx, blockHash))
+	assert.Equal(t, false, db.HasExecutionPayloadEnvelope(ctx, blockRoot))
 
 	// Save (always blinds internally).
 	require.NoError(t, db.SaveExecutionPayloadEnvelope(ctx, env))
 
 	// Should exist now.
-	assert.Equal(t, true, db.HasExecutionPayloadEnvelope(ctx, blockHash))
+	assert.Equal(t, true, db.HasExecutionPayloadEnvelope(ctx, blockRoot))
 
-	// Load and verify it's always blinded.
-	loaded, err := db.ExecutionPayloadEnvelope(ctx, blockHash)
+	// Load and verify it's blinded.
+	loaded, err := db.ExecutionPayloadEnvelope(ctx, blockRoot)
 	require.NoError(t, err)
 
 	// Verify metadata is preserved.
@@ -73,22 +73,21 @@ func TestStore_SaveAndRetrieveExecutionPayloadEnvelope(t *testing.T) {
 	assert.DeepEqual(t, env.Message.StateRoot, loaded.Message.StateRoot)
 	assert.DeepEqual(t, env.Signature, loaded.Signature)
 
-	// PayloadRoot should be 32 bytes (the hash tree root of the full payload).
-	assert.Equal(t, 32, len(loaded.Message.PayloadRoot))
-	assert.Equal(t, false, bytesutil.ToBytes32(loaded.Message.PayloadRoot) == [32]byte{})
+	// BlockHash should be the payload's block hash (not a hash tree root).
+	assert.DeepEqual(t, env.Message.Payload.BlockHash, loaded.Message.BlockHash)
 }
 
 func TestStore_DeleteExecutionPayloadEnvelope(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
 	env := testEnvelope(t)
-	blockHash := bytesutil.ToBytes32(env.Message.Payload.BlockHash)
+	blockRoot := bytesutil.ToBytes32(env.Message.BeaconBlockRoot)
 
 	require.NoError(t, db.SaveExecutionPayloadEnvelope(ctx, env))
-	assert.Equal(t, true, db.HasExecutionPayloadEnvelope(ctx, blockHash))
+	assert.Equal(t, true, db.HasExecutionPayloadEnvelope(ctx, blockRoot))
 
-	require.NoError(t, db.DeleteExecutionPayloadEnvelope(ctx, blockHash))
-	assert.Equal(t, false, db.HasExecutionPayloadEnvelope(ctx, blockHash))
+	require.NoError(t, db.DeleteExecutionPayloadEnvelope(ctx, blockRoot))
+	assert.Equal(t, false, db.HasExecutionPayloadEnvelope(ctx, blockRoot))
 }
 
 func TestStore_ExecutionPayloadEnvelope_NotFound(t *testing.T) {
@@ -108,19 +107,18 @@ func TestStore_SaveExecutionPayloadEnvelope_NilRejected(t *testing.T) {
 	require.ErrorContains(t, "nil", err)
 }
 
-func TestBlindEnvelope_PreservesPayloadRoot(t *testing.T) {
+func TestBlindEnvelope_PreservesBlockHash(t *testing.T) {
 	env := testEnvelope(t)
 
-	blinded, err := blindEnvelope(env)
-	require.NoError(t, err)
+	blinded := blindEnvelope(env)
 
-	// Compute expected payload root.
-	expectedRoot, err := env.Message.Payload.HashTreeRoot()
-	require.NoError(t, err)
+	// Should contain the block hash from the payload, not a hash tree root.
+	assert.DeepEqual(t, env.Message.Payload.BlockHash, blinded.Message.BlockHash)
 
-	assert.DeepEqual(t, expectedRoot[:], blinded.Message.PayloadRoot)
+	// Metadata should be preserved.
 	assert.Equal(t, env.Message.BuilderIndex, blinded.Message.BuilderIndex)
 	assert.Equal(t, env.Message.Slot, blinded.Message.Slot)
 	assert.DeepEqual(t, env.Message.BeaconBlockRoot, blinded.Message.BeaconBlockRoot)
+	assert.DeepEqual(t, env.Message.StateRoot, blinded.Message.StateRoot)
 	assert.DeepEqual(t, env.Signature, blinded.Signature)
 }

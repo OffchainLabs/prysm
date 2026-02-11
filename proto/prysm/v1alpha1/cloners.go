@@ -235,7 +235,7 @@ func copyBlindedExecutionPayloadEnvelope(env *BlindedExecutionPayloadEnvelope) *
 		return nil
 	}
 	return &BlindedExecutionPayloadEnvelope{
-		PayloadRoot:       bytesutil.SafeCopyBytes(env.PayloadRoot),
+		BlockHash:         bytesutil.SafeCopyBytes(env.BlockHash),
 		ExecutionRequests: env.ExecutionRequests,
 		BuilderIndex:      env.BuilderIndex,
 		BeaconBlockRoot:   bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
