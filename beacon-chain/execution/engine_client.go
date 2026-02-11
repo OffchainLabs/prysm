@@ -561,6 +561,11 @@ func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVers
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionV1")
 	defer span.End()
 
+	commit := version.GitCommit()
+	if len(commit) >= 8 {
+		commit = commit[:8]
+	}
+
 	var result []*structs.ClientVersionV1
 	err := s.rpcClient.CallContext(
 		ctx,
@@ -570,15 +575,19 @@ func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVers
 			Code:    "PM",
 			Name:    "Prysm",
 			Version: version.SemanticVersion(),
-			Commit:  version.GitCommit()[:8],
+			Commit:  commit,
 		},
 	)
+
+	if err != nil {
+		return nil, handleRPCError(err)
+	}
 
 	if len(result) == 0 {
 		return nil, errors.New("execution client returned no result")
 	}
 
-	return result, handleRPCError(err)
+	return result, nil
 }
 
 // ReconstructFullBlock takes in a blinded beacon block and reconstructs

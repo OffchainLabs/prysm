@@ -92,38 +92,72 @@ func TestGetVersion(t *testing.T) {
 }
 
 func TestGetVersionV2(t *testing.T) {
-	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/node/version", nil)
-	writer := httptest.NewRecorder()
-	writer.Body = &bytes.Buffer{}
+	t.Run("happy path", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/node/version", nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
 
-	s := &Server{
-		ExecutionEngineCaller: &mockengine.EngineClient{
-			ClientVersion: []*structs.ClientVersionV1{{
-				Code:    "EL",
-				Name:    "ExecutionClient",
-				Version: "v1.0.0",
-				Commit:  "abcdef12",
-			}},
-		},
-	}
-	s.GetVersionV2(writer, request)
-	require.Equal(t, http.StatusOK, writer.Code)
+		s := &Server{
+			ExecutionEngineCaller: &mockengine.EngineClient{
+				ClientVersion: []*structs.ClientVersionV1{{
+					Code:    "EL",
+					Name:    "ExecutionClient",
+					Version: "v1.0.0",
+					Commit:  "abcdef12",
+				}},
+			},
+		}
+		s.GetVersionV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
 
-	resp := &structs.GetVersionV2Response{}
-	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-	require.NotNil(t, resp)
-	require.NotNil(t, resp.Data)
-	require.NotNil(t, resp.Data.BeaconNode)
-	require.NotNil(t, resp.Data.ExecutionClient)
-	e := resp.Data.ExecutionClient[0]
-	require.Equal(t, "EL", e.Code)
-	require.Equal(t, "ExecutionClient", e.Name)
-	require.Equal(t, "v1.0.0", e.Version)
-	require.Equal(t, "abcdef12", e.Commit)
-	require.Equal(t, "PM", resp.Data.BeaconNode.Code)
-	require.Equal(t, "Prysm", resp.Data.BeaconNode.Name)
-	require.Equal(t, version.SemanticVersion(), resp.Data.BeaconNode.Version)
-	require.Equal(t, true, len(resp.Data.BeaconNode.Commit) <= 8)
+		resp := &structs.GetVersionV2Response{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.NotNil(t, resp)
+		require.NotNil(t, resp.Data)
+		require.NotNil(t, resp.Data.BeaconNode)
+		require.NotNil(t, resp.Data.ExecutionClient)
+		require.Equal(t, "EL", resp.Data.ExecutionClient.Code)
+		require.Equal(t, "ExecutionClient", resp.Data.ExecutionClient.Name)
+		require.Equal(t, "v1.0.0", resp.Data.ExecutionClient.Version)
+		require.Equal(t, "abcdef12", resp.Data.ExecutionClient.Commit)
+		require.Equal(t, "PM", resp.Data.BeaconNode.Code)
+		require.Equal(t, "Prysm", resp.Data.BeaconNode.Name)
+		require.Equal(t, version.SemanticVersion(), resp.Data.BeaconNode.Version)
+		require.Equal(t, true, len(resp.Data.BeaconNode.Commit) <= 8)
+	})
+
+	t.Run("unhappy path", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/node/version", nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s := &Server{
+			ExecutionEngineCaller: &mockengine.EngineClient{
+				ClientVersion:      nil,
+				ErrorClientVersion: fmt.Errorf("error"),
+			},
+		}
+		s.GetVersionV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.GetVersionV2Response{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.NotNil(t, resp)
+		require.NotNil(t, resp.Data)
+		require.NotNil(t, resp.Data.BeaconNode)
+		require.Equal(t, true, resp.Data.ExecutionClient == nil)
+
+		// make sure there is no 'execution_client' field
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &payload))
+		data, ok := payload["data"].(map[string]any)
+		require.Equal(t, true, ok)
+		_, found := data["beacon_node"]
+		require.Equal(t, true, found)
+		_, found = data["execution_client"]
+		require.Equal(t, false, found)
+	})
+
 }
 
 func TestGetHealth(t *testing.T) {

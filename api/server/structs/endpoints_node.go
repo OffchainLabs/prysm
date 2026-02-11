@@ -67,8 +67,8 @@ type GetVersionV2Response struct {
 	Data *VersionV2 `json:"data"`
 }
 type VersionV2 struct {
-	BeaconNode      *ClientVersionV1   `json:"beacon_node"`
-	ExecutionClient []*ClientVersionV1 `json:"execution_client"`
+	BeaconNode      *ClientVersionV1 `json:"beacon_node"`
+	ExecutionClient *ClientVersionV1 `json:"execution_client,omitempty"`
 }
 type ClientVersionV1 struct {
 	Code    string `json:"code"`

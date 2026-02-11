@@ -1001,59 +1001,97 @@ func TestClient_HTTP(t *testing.T) {
 		require.DeepEqual(t, want, resp)
 	})
 	t.Run(GetClientVersionV1, func(t *testing.T) {
-		want := []*structs.ClientVersionV1{{
-			Code:    "GE",
-			Name:    "go-ethereum",
-			Version: "1.15.11-stable",
-			Commit:  "36b2371c",
-		}}
+		tests := []struct {
+			name     string
+			want     any
+			resp     []*structs.ClientVersionV1
+			hasError bool
+			errMsg   string
+		}{
+			{
+				name: "happy path",
+				want: []*structs.ClientVersionV1{{
+					Code:    "GE",
+					Name:    "go-ethereum",
+					Version: "1.15.11-stable",
+					Commit:  "36b2371c",
+				}},
+				resp: []*structs.ClientVersionV1{{
+					Code:    "GE",
+					Name:    "go-ethereum",
+					Version: "1.15.11-stable",
+					Commit:  "36b2371c",
+				}},
+			},
+			{
+				name:     "empty response",
+				want:     []*structs.ClientVersionV1{},
+				hasError: true,
+				errMsg:   "execution client returned no result",
+			},
+			{
+				name:     "RPC error",
+				want:     "brokenMsg",
+				hasError: true,
+				errMsg:   "unexpected error in JSON-RPC",
+			},
+		}
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			defer func() {
-				require.NoError(t, r.Body.Close())
-			}()
-			enc, err := io.ReadAll(r.Body)
-			require.NoError(t, err)
-			jsonRequestString := string(enc)
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					defer func() {
+						require.NoError(t, r.Body.Close())
+					}()
+					enc, err := io.ReadAll(r.Body)
+					require.NoError(t, err)
+					jsonRequestString := string(enc)
 
-			// We expect the JSON string RPC request contains the right method name.
-			require.Equal(t, true, strings.Contains(
-				jsonRequestString, GetClientVersionV1,
-			))
-			require.Equal(t, true, strings.Contains(
-				jsonRequestString, "\"code\":\"PM\"",
-			))
-			require.Equal(t, true, strings.Contains(
-				jsonRequestString, "\"name\":\"Prysm\"",
-			))
-			require.Equal(t, true, strings.Contains(
-				jsonRequestString, fmt.Sprintf("\"version\":\"%s\"", version.SemanticVersion()),
-			))
-			require.Equal(t, true, strings.Contains(
-				jsonRequestString, fmt.Sprintf("\"commit\":\"%s\"", version.GitCommit()[:8]),
-			))
-			resp := map[string]any{
-				"jsonrpc": "2.0",
-				"id":      1,
-				"result":  want,
-			}
-			err = json.NewEncoder(w).Encode(resp)
-			require.NoError(t, err)
-		}))
-		defer srv.Close()
+					// We expect the JSON string RPC request contains the right method name.
+					require.Equal(t, true, strings.Contains(
+						jsonRequestString, GetClientVersionV1,
+					))
+					require.Equal(t, true, strings.Contains(
+						jsonRequestString, "\"code\":\"PM\"",
+					))
+					require.Equal(t, true, strings.Contains(
+						jsonRequestString, "\"name\":\"Prysm\"",
+					))
+					require.Equal(t, true, strings.Contains(
+						jsonRequestString, fmt.Sprintf("\"version\":\"%s\"", version.SemanticVersion()),
+					))
+					require.Equal(t, true, strings.Contains(
+						jsonRequestString, fmt.Sprintf("\"commit\":\"%s\"", version.GitCommit()[:8]),
+					))
+					resp := map[string]any{
+						"jsonrpc": "2.0",
+						"id":      1,
+						"result":  tc.want,
+					}
+					err = json.NewEncoder(w).Encode(resp)
+					require.NoError(t, err)
+				}))
+				defer srv.Close()
 
-		rpcClient, err := rpc.DialHTTP(srv.URL)
-		require.NoError(t, err)
-		defer rpcClient.Close()
+				rpcClient, err := rpc.DialHTTP(srv.URL)
+				require.NoError(t, err)
+				defer rpcClient.Close()
 
-		service := &Service{}
-		service.rpcClient = rpcClient
+				service := &Service{}
+				service.rpcClient = rpcClient
 
-		// We call the RPC method via HTTP and expect a proper result.
-		resp, err := service.GetClientVersionV1(ctx)
-		require.NoError(t, err)
-		require.DeepEqual(t, want, resp)
+				// We call the RPC method via HTTP and expect a proper result.
+				resp, err := service.GetClientVersionV1(ctx)
+				if tc.hasError {
+					require.NotNil(t, err)
+					require.ErrorContains(t, tc.errMsg, err)
+				} else {
+					require.NoError(t, err)
+				}
+				require.DeepEqual(t, tc.resp, resp)
+			})
+		}
 	})
 }
 

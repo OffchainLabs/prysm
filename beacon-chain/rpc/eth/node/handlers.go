@@ -103,6 +103,8 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 
 // GetVersion requests that the beacon node identify information about its implementation in a
 // format similar to a HTTP User-Agent field.
+//
+// Deprecated: in favour of GetVersionV2.
 func (*Server) GetVersion(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "node.GetVersion")
 	defer span.End()
@@ -117,14 +119,17 @@ func (*Server) GetVersion(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetVersionV2 Retrieves structured information about the version of the beacon node and its attached
-// execution client(s) in the same format as used on the Engine API
+// execution client in the same format as used on the Engine API
 func (s *Server) GetVersionV2(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "node.GetVersionV2")
 	defer span.End()
 
+	var elData *structs.ClientVersionV1
 	elDataList, err := s.ExecutionEngineCaller.GetClientVersionV1(ctx)
 	if err != nil {
 		log.WithError(err).WithField("endpoint", "GetVersionV2").Debug("Could not get execution client version")
+	} else {
+		elData = elDataList[0]
 	}
 
 	commit := version.GitCommit()
@@ -139,7 +144,7 @@ func (s *Server) GetVersionV2(w http.ResponseWriter, r *http.Request) {
 				Version: version.SemanticVersion(),
 				Commit:  commit,
 			},
-			ExecutionClient: elDataList,
+			ExecutionClient: elData,
 		},
 	}
 	httputil.WriteJson(w, resp)
