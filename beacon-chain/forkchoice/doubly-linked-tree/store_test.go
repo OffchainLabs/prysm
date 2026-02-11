@@ -130,7 +130,7 @@ func TestStore_Insert(t *testing.T) {
 	assert.Equal(t, (*PayloadNode)(nil), treeRootNode.parent, "Incorrect parent")
 	children := s.allConsensusChildren(treeRootNode)
 	assert.Equal(t, 1, len(children), "Incorrect children number")
-	assert.Equal(t, payloadHash, children[0].payloadHash, "Incorrect payload hash")
+	assert.Equal(t, payloadHash, children[0].blockHash, "Incorrect payload hash")
 	child := children[0]
 	assert.Equal(t, primitives.Epoch(1), child.justifiedEpoch, "Incorrect justification")
 	assert.Equal(t, primitives.Epoch(1), child.finalizedEpoch, "Incorrect finalization")

@@ -17,11 +17,11 @@ func (s *Store) setOptimisticToInvalid(ctx context.Context, root, parentRoot, pa
 		if n == nil {
 			return invalidRoots, errors.Wrap(ErrNilNode, "could not set node to invalid, could not find consensus parent")
 		}
-		if n.node.payloadHash == lastValidHash {
+		if n.node.blockHash == lastValidHash {
 			// The parent node must have been full and with a valid payload
 			return invalidRoots, nil
 		}
-		if n.node.payloadHash == parentHash {
+		if n.node.blockHash == parentHash {
 			// The parent was full and invalid
 			n = s.fullNodeByRoot[parentRoot]
 			if n == nil {
@@ -33,11 +33,11 @@ func (s *Store) setOptimisticToInvalid(ctx context.Context, root, parentRoot, pa
 				if ctx.Err() != nil {
 					return invalidRoots, ctx.Err()
 				}
-				if n.node.payloadHash == lastValidHash {
+				if n.node.blockHash == lastValidHash {
 					// The node built on empty and the whole chain was valid
 					return invalidRoots, nil
 				}
-				if n.node.payloadHash == parentHash {
+				if n.node.blockHash == parentHash {
 					// The parent was full and invalid
 					break
 				}
@@ -58,7 +58,7 @@ func (s *Store) setOptimisticToInvalid(ctx context.Context, root, parentRoot, pa
 	// n points to a full node that has an invalid payload in forkchoice. We need to find the fist node in the chain that is actually invalid.
 	startNode := n
 	fp := s.fullParent(n)
-	for ; fp != nil && fp.node.payloadHash != lastValidHash; fp = s.fullParent(fp) {
+	for ; fp != nil && fp.node.blockHash != lastValidHash; fp = s.fullParent(fp) {
 		if ctx.Err() != nil {
 			return invalidRoots, ctx.Err()
 		}

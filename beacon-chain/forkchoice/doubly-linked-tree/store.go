@@ -84,9 +84,9 @@ func (s *Store) insert(ctx context.Context,
 	block := roblock.Block()
 	slot := block.Slot()
 	var parent *PayloadNode
-	payloadHash := &[32]byte{}
+	blockHash := &[32]byte{}
 	if block.Version() >= version.Gloas {
-		if err := s.getNodeInformation(block, &parent, payloadHash); err != nil {
+		if err := s.resolveParentPayloadStatus(block, &parent, blockHash); err != nil {
 			return nil, err
 		}
 	} else {
@@ -95,10 +95,10 @@ func (s *Store) insert(ctx context.Context,
 			if err != nil {
 				return nil, err
 			}
-			copy(payloadHash[:], execution.BlockHash())
+			copy(blockHash[:], execution.BlockHash())
 		}
 		parentRoot := block.ParentRoot()
-		en := s.fullNodeByRoot[parentRoot]
+		en := s.emptyNodeByRoot[parentRoot]
 		parent = s.fullNodeByRoot[parentRoot]
 		if parent == nil && en != nil {
 			// pre-Gloas only full parents are allowed.
@@ -114,7 +114,7 @@ func (s *Store) insert(ctx context.Context,
 		unrealizedJustifiedEpoch: justifiedEpoch,
 		finalizedEpoch:           finalizedEpoch,
 		unrealizedFinalizedEpoch: finalizedEpoch,
-		payloadHash:              *payloadHash,
+		blockHash:                *blockHash,
 	}
 	// Set the node's target checkpoint
 	if slot%params.BeaconConfig().SlotsPerEpoch == 0 {

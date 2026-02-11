@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *Store) getNodeInformation(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, payloadHash *[32]byte) error {
+func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte) error {
 	sb, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
 		return err
@@ -26,14 +26,14 @@ func (s *Store) getNodeInformation(block interfaces.ReadOnlyBeaconBlock, parent 
 	if err != nil {
 		return errors.Wrap(err, "failed to get bid from wrapped bid")
 	}
-	*payloadHash = bid.BlockHash()
+	*blockHash = bid.BlockHash()
 	parentRoot := block.ParentRoot()
 	*parent = s.emptyNodeByRoot[parentRoot]
 	if *parent == nil {
 		// This is the tree root node.
 		return nil
 	}
-	if bid.ParentBlockHash() == (*parent).node.payloadHash {
+	if bid.ParentBlockHash() == (*parent).node.blockHash {
 		// block builds on full
 		*parent = s.fullNodeByRoot[(*parent).node.root]
 	}
@@ -114,7 +114,7 @@ func (s *Store) setNodeAndParentValidated(ctx context.Context, pn *PayloadNode) 
 
 // fullAncestor returns the highest ancestor with a full payload that a block with the
 // given root has. If there is a payload for the past root, then it will return that full
-// node. Otherwise it will use the full parent actually being an acestor of the given root
+// node. Otherwise it will use the full parent actually being an ancestor of the given root
 func (s *Store) fullAncestor(root [32]byte) *PayloadNode {
 	fn, ok := s.fullNodeByRoot[root]
 	if ok {
@@ -141,7 +141,7 @@ func (s *Store) parentHash(pn *PayloadNode) [32]byte {
 	if fullParent == nil {
 		return [32]byte{}
 	}
-	return fullParent.node.payloadHash
+	return fullParent.node.blockHash
 }
 
 // latestHashForRoot returns the latest payload hash for the given block root.
@@ -149,7 +149,7 @@ func (s *Store) latestHashForRoot(root [32]byte) [32]byte {
 	// try to get the full node first
 	fn, ok := s.fullNodeByRoot[root]
 	if ok && fn != nil {
-		return fn.node.payloadHash
+		return fn.node.blockHash
 	}
 	en := s.emptyNodeByRoot[root]
 	if !ok || en == nil {
@@ -281,7 +281,7 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 		Balance:                  n.balance,
 		Weight:                   n.weight,
 		ExecutionOptimistic:      optimistic,
-		ExecutionBlockHash:       n.payloadHash[:],
+		ExecutionBlockHash:       n.blockHash[:],
 		Timestamp:                timestamp,
 		Target:                   target[:],
 	}

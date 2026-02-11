@@ -52,7 +52,7 @@ type Store struct {
 type Node struct {
 	slot                     primitives.Slot              // slot of the block converted to the node.
 	root                     [fieldparams.RootLength]byte // root of the block converted to the node.
-	payloadHash              [fieldparams.RootLength]byte // payloadHash of the block converted to the node.
+	blockHash                [fieldparams.RootLength]byte // payloadHash of the block converted to the node.
 	parent                   *PayloadNode                 // parent index of this node.
 	target                   *Node                        // target checkpoint for
 	bestDescendant           *Node                        // bestDescendant node of this node.
