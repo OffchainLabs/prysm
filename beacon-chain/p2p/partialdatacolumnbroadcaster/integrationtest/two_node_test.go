@@ -197,18 +197,11 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 			return ch
 		}
 
-		broadcaster1.ValidateHeader = headerValidator
-		broadcaster1.ValidateColumn = cellValidator
-		broadcaster1.HandleColumn = handler1
-		broadcaster1.HandleHeader = noopHeaderHandler
+		err = broadcaster1.Start(headerValidator, cellValidator, handler1, noopHeaderHandler)
+		require.NoError(t, err)
 
-		broadcaster2.ValidateHeader = headerValidator
-		broadcaster2.ValidateColumn = cellValidator
-		broadcaster2.HandleColumn = handler2
-		broadcaster2.HandleHeader = noopHeaderHandler
-
-		go broadcaster1.Start()
-		go broadcaster2.Start()
+		err = broadcaster2.Start(headerValidator, cellValidator, handler2, noopHeaderHandler)
+		require.NoError(t, err)
 
 		err = broadcaster1.Subscribe(topic1)
 		require.NoError(t, err)

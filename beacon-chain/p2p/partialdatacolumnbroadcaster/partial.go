@@ -57,10 +57,10 @@ type PartialColumnBroadcaster struct {
 	ps   *pubsub.PubSub
 	stop chan struct{}
 
-	ValidateHeader HeaderValidator
-	ValidateColumn ColumnValidator
-	HandleColumn   SubHandler
-	HandleHeader   HeaderHandler
+	validateHeader HeaderValidator
+	validateColumn ColumnValidator
+	handleColumn   SubHandler
+	handleHeader   HeaderHandler
 
 	headerHandled map[string]chan bool
 
@@ -183,29 +183,34 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 	return opts
 }
 
-// Start starts the event loop of the PartialColumnBroadcaster. Should be called
-// within a goroutine (go p.Start())
-func (p *PartialColumnBroadcaster) Start() {
-	if p.ValidateHeader == nil {
-		p.logger.Error("No header validator registered")
-		return
+// Start starts the event loop of the PartialColumnBroadcaster.
+// It accepts the required validator and handler functions, returning an error if any is nil.
+// The event loop is launched in a goroutine.
+func (p *PartialColumnBroadcaster) Start(
+	validateHeader HeaderValidator,
+	validateColumn ColumnValidator,
+	handleColumn SubHandler,
+	handleHeader HeaderHandler,
+) error {
+	if validateHeader == nil {
+		return errors.New("no header validator provided")
 	}
-	if p.HandleHeader == nil {
-		p.logger.Error("No header handler registered")
-		return
+	if handleHeader == nil {
+		return errors.New("no header handler provided")
 	}
-	if p.ValidateColumn == nil {
-		p.logger.Error("No column validator registered")
-		return
+	if validateColumn == nil {
+		return errors.New("no column validator provided")
 	}
-
-	if p.HandleColumn == nil {
-		p.logger.Error("No column handler registered")
-		return
+	if handleColumn == nil {
+		return errors.New("no column handler provided")
 	}
-
+	p.validateHeader = validateHeader
+	p.validateColumn = validateColumn
+	p.handleColumn = handleColumn
+	p.handleHeader = handleHeader
 	p.stop = make(chan struct{})
-	p.loop()
+	go p.loop()
+	return nil
 }
 
 func (p *PartialColumnBroadcaster) loop() {
@@ -302,7 +307,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			}
 
 			header = message.Header[0]
-			reject, err := p.ValidateHeader(header)
+			reject, err := p.validateHeader(header)
 			if err != nil {
 				p.logger.Debug("Header validation failed", "err", err, "reject", reject)
 				if reject {
@@ -314,7 +319,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			}
 			// Cache the valid header
 			p.validHeaderCache[string(groupID)] = header
-			handledCh := p.HandleHeader(header)
+			handledCh := p.handleHeader(header)
 			p.headerHandled[string(groupID)] = handledCh
 		}
 
@@ -384,7 +389,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 					<-p.concurrentValidatorSemaphore
 				}()
 				start := time.Now()
-				err := p.ValidateColumn(cellsToVerify)
+				err := p.validateColumn(cellsToVerify)
 				if err != nil {
 					logger.Error("failed to validate cells", "err", err)
 					_ = p.ps.PeerFeedback(topicID, rpcWithFrom.from, pubsub.PeerFeedbackInvalidMessage)
@@ -450,8 +455,8 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 
 		if col, ok := ourDataColumn.Complete(p.logger); ok {
 			p.logger.Info("Completed partial column", "topic", cells.topic, "group", cells.group)
-			if p.HandleColumn != nil {
-				go p.HandleColumn(cells.topic, col)
+			if p.handleColumn != nil {
+				go p.handleColumn(cells.topic, col)
 			}
 		} else {
 			p.logger.Info("Extended partial column", "topic", cells.topic, "group", cells.group)
@@ -517,8 +522,8 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 		if extended {
 			if col, ok := existing.Complete(p.logger); ok {
 				p.logger.Info("Completed partial column", "topic", topic, "group", existing.GroupID())
-				if p.HandleColumn != nil {
-					go p.HandleColumn(topic, col)
+				if p.handleColumn != nil {
+					go p.handleColumn(topic, col)
 				}
 			}
 		}

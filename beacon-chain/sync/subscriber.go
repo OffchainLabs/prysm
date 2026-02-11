@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"runtime/debug"
-	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,7 +20,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -331,50 +328,7 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 	if params.BeaconConfig().FuluForkEpoch <= nse.Epoch {
 		s.spawn(func() {
 			var ps *partialSubscribeParameters
-			broadcaster := s.cfg.p2p.PartialColumnBroadcaster()
-			if broadcaster != nil {
-				broadcaster.ValidateHeader = func(header *ethpb.PartialDataColumnHeader) (bool, error) {
-					return s.validatePartialDataColumnHeader(context.TODO(), header)
-				}
-				broadcaster.ValidateColumn = func(cellsToVerify []blocks.CellProofBundle) error {
-					return peerdas.VerifyDataColumnsCellsKZGProofs(len(cellsToVerify), slices.Values(cellsToVerify))
-				}
-				broadcaster.HandleColumn = func(topic string, col blocks.VerifiedRODataColumn) {
-					ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
-					defer cancel()
-
-					slot := col.SignedBlockHeader.Header.Slot
-					proposerIndex := col.SignedBlockHeader.Header.ProposerIndex
-					if !s.hasSeenDataColumnIndex(slot, proposerIndex, col.Index) {
-						s.setSeenDataColumnIndex(slot, proposerIndex, col.Index)
-						// This column was completed from a partial message.
-						partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index, 10)).Inc()
-					}
-					err := s.verifiedRODataColumnSubscriber(ctx, col)
-					if err != nil {
-						log.WithError(err).Error("Failed to handle verified RO data column subscriber")
-					}
-				}
-				broadcaster.HandleHeader = func(header *ethpb.PartialDataColumnHeader) chan bool {
-					ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
-					defer cancel()
-					source := peerdas.PopulateFromPartialHeader(header)
-					log.WithField("slot", source.Slot()).Info("Received data column header")
-
-					doneCh := make(chan bool, 1)
-
-					// we spin up a goroutine to process the partial column header recieved via Gossipsub as handling this
-					// header involves going to the EL, retrieving blobs and then publishing the partial columns constructed from the blobs.
-					// The partial publishing needs access to the broadcaster event loop and so doing the below without a goroutine can potentially cause a deadlock.
-					go func() {
-						err := s.processDataColumnSidecarsFromExecution(ctx, source)
-						if err != nil {
-							log.WithError(err).Error("Failed to process partial data column header")
-						}
-						close(doneCh)
-					}()
-					return doneCh
-				}
+			if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
 				ps = &partialSubscribeParameters{
 					broadcaster: broadcaster,
 				}

@@ -311,10 +311,6 @@ func (s *Service) Start() {
 		logExternalDNSAddr(s.host.ID(), p2pHostDNS, p2pTCPPort)
 	}
 	go s.forkWatcher()
-
-	if s.partialColumnBroadcaster != nil {
-		go s.partialColumnBroadcaster.Start()
-	}
 }
 
 // Stop the p2p service and terminate all peer connections.
@@ -325,9 +321,6 @@ func (s *Service) Stop() error {
 		s.dv5Listener.Close()
 	}
 
-	if s.partialColumnBroadcaster != nil {
-		s.partialColumnBroadcaster.Stop()
-	}
 	return nil
 }
 

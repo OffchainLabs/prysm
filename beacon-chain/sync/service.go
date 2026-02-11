@@ -6,6 +6,8 @@ package sync
 
 import (
 	"context"
+	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -28,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
@@ -41,6 +44,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -261,6 +265,13 @@ func (s *Service) Start() {
 	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
+
+	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+		if err := s.startPartialColumnBroadcaster(broadcaster); err != nil {
+			log.WithError(err).Error("Failed to start partial column broadcaster")
+		}
+	}
+
 	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
 
@@ -327,6 +338,9 @@ func (s *Service) Stop() error {
 	}
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
+	}
+	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+		broadcaster.Stop()
 	}
 	return nil
 }
@@ -395,6 +409,53 @@ func (s *Service) waitForChainStart() {
 	}
 	log.WithField("startTime", startTime).Debug("Chain started in sync service")
 	s.markForChainStart()
+}
+
+func (s *Service) startPartialColumnBroadcaster(broadcaster *partialdatacolumnbroadcaster.PartialColumnBroadcaster) error {
+	return broadcaster.Start(
+		func(header *ethpb.PartialDataColumnHeader) (bool, error) {
+			return s.validatePartialDataColumnHeader(s.ctx, header)
+		},
+		func(cellsToVerify []blocks.CellProofBundle) error {
+			return peerdas.VerifyDataColumnsCellsKZGProofs(len(cellsToVerify), slices.Values(cellsToVerify))
+		},
+		func(topic string, col blocks.VerifiedRODataColumn) {
+			ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
+			defer cancel()
+
+			slot := col.SignedBlockHeader.Header.Slot
+			proposerIndex := col.SignedBlockHeader.Header.ProposerIndex
+			if !s.hasSeenDataColumnIndex(slot, proposerIndex, col.Index) {
+				s.setSeenDataColumnIndex(slot, proposerIndex, col.Index)
+				// This column was completed from a partial message.
+				partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index, 10)).Inc()
+			}
+			err := s.verifiedRODataColumnSubscriber(ctx, col)
+			if err != nil {
+				log.WithError(err).Error("Failed to handle verified RO data column subscriber")
+			}
+		},
+		func(header *ethpb.PartialDataColumnHeader) chan bool {
+			ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
+			defer cancel()
+			source := peerdas.PopulateFromPartialHeader(header)
+			log.WithField("slot", source.Slot()).Info("Received data column header")
+
+			doneCh := make(chan bool, 1)
+
+			// we spin up a goroutine to process the partial column header recieved via Gossipsub as handling this
+			// header involves going to the EL, retrieving blobs and then publishing the partial columns constructed from the blobs.
+			// The partial publishing needs access to the broadcaster event loop and so doing the below without a goroutine can potentially cause a deadlock.
+			go func() {
+				err := s.processDataColumnSidecarsFromExecution(ctx, source)
+				if err != nil {
+					log.WithError(err).Error("Failed to process partial data column header")
+				}
+				close(doneCh)
+			}()
+			return doneCh
+		},
+	)
 }
 
 func (s *Service) startDiscoveryAndSubscriptions() {
