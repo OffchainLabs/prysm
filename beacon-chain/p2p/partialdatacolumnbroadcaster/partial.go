@@ -48,7 +48,7 @@ func extractColumnIndexFromTopic(topic string) (uint64, error) {
 //   - reject=false, err!=nil: IGNORE - don't penalize, just ignore
 //   - reject=false, err=nil: valid header
 type HeaderValidator func(header *ethpb.PartialDataColumnHeader) (reject bool, err error)
-type HeaderHandler func(header *ethpb.PartialDataColumnHeader) chan bool
+type HeaderHandler func(header *ethpb.PartialDataColumnHeader, groupID string) chan bool
 type ColumnValidator func(cells []blocks.CellProofBundle) error
 
 type PartialColumnBroadcaster struct {
@@ -62,6 +62,7 @@ type PartialColumnBroadcaster struct {
 	handleColumn   SubHandler
 	handleHeader   HeaderHandler
 
+	// map groupID -> channel to signal when header has been handled
 	headerHandled map[string]chan bool
 
 	// map topic -> *pubsub.Topic
@@ -88,16 +89,18 @@ const (
 	requestKindUnsubscribe
 	requestKindHandleIncomingRPC
 	requestKindCellsValidated
+	requestKindHeaderHandled
 )
 
 type request struct {
-	kind           requestKind
-	response       chan error
-	sub            subscribe
-	unsub          unsubscribe
-	publish        publish
-	incomingRPC    rpcWithFrom
-	cellsValidated *cellsValidated
+	kind               requestKind
+	response           chan error
+	sub                subscribe
+	unsub              unsubscribe
+	publish            publish
+	incomingRPC        rpcWithFrom
+	cellsValidated     *cellsValidated
+	headerHandledGroup string
 }
 
 type publish struct {
@@ -255,6 +258,8 @@ func (p *PartialColumnBroadcaster) loop() {
 				if err != nil {
 					p.logger.Error("Failed to handle cells validated", "err", err)
 				}
+			case requestKindHeaderHandled:
+				p.handleHeaderHandled(req.headerHandledGroup)
 			default:
 				p.logger.Error("Unknown request kind", "kind", req.kind)
 			}
@@ -319,7 +324,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			}
 			// Cache the valid header
 			p.validHeaderCache[string(groupID)] = header
-			handledCh := p.handleHeader(header)
+			handledCh := p.handleHeader(header, string(groupID))
 			p.headerHandled[string(groupID)] = handledCh
 		}
 
@@ -422,8 +427,9 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 	if headerHandled != nil {
 		select {
 		case <-headerHandled:
-		case <-time.After(headerHandledTimeout):
-			return errors.New("header not handled in time")
+		default:
+			p.logger.Debug("Header not handled, skipping republish", "topic", topicID, "group", groupID)
+			return nil
 		}
 	}
 
@@ -466,8 +472,9 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 		if headerHandled != nil {
 			select {
 			case <-headerHandled:
-			case <-time.After(headerHandledTimeout):
-				return errors.New("header not handled in time")
+			default:
+				p.logger.Debug("Header not handled, skipping republish", "topic", cells.topic, "group", cells.group)
+				return nil
 			}
 		}
 
@@ -479,10 +486,36 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 	return nil
 }
 
+func (p *PartialColumnBroadcaster) handleHeaderHandled(groupID string) {
+	for topic, topicStore := range p.partialMsgStore {
+		col, ok := topicStore[groupID]
+		if !ok {
+			continue
+		}
+		err := p.ps.PublishPartialMessage(topic, col, partialmessages.PublishOptions{})
+		if err != nil {
+			p.logger.WithError(err).Error("Failed to republish after header handled", "topic", topic, "groupID", groupID)
+		}
+	}
+}
+
 func (p *PartialColumnBroadcaster) Stop() {
 	if p.stop != nil {
 		close(p.stop)
 	}
+}
+
+// HeaderHandled notifies the event loop that a header has been fully processed,
+// triggering republishing of all columns in the store for the given groupID.
+func (p *PartialColumnBroadcaster) HeaderHandled(groupID string) error {
+	if p.ps == nil {
+		return errors.New("pubsub not initialized")
+	}
+	p.incomingReq <- request{
+		kind:               requestKindHeaderHandled,
+		headerHandledGroup: groupID,
+	}
+	return nil
 }
 
 // Publish publishes the partial column.

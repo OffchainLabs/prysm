@@ -435,7 +435,7 @@ func (s *Service) startPartialColumnBroadcaster(broadcaster *partialdatacolumnbr
 				log.WithError(err).Error("Failed to handle verified RO data column subscriber")
 			}
 		},
-		func(header *ethpb.PartialDataColumnHeader) chan bool {
+		func(header *ethpb.PartialDataColumnHeader, groupID string) chan bool {
 			ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
 			defer cancel()
 			source := peerdas.PopulateFromPartialHeader(header)
@@ -452,6 +452,7 @@ func (s *Service) startPartialColumnBroadcaster(broadcaster *partialdatacolumnbr
 					log.WithError(err).Error("Failed to process partial data column header")
 				}
 				close(doneCh)
+				broadcaster.HeaderHandled(groupID)
 			}()
 			return doneCh
 		},

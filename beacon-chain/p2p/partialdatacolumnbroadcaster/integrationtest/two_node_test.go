@@ -191,7 +191,7 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		require.NoError(t, err)
 		defer sub2.Cancel()
 
-		noopHeaderHandler := func(header *ethpb.PartialDataColumnHeader) chan bool {
+		noopHeaderHandler := func(header *ethpb.PartialDataColumnHeader, groupID string) chan bool {
 			ch := make(chan bool)
 			close(ch)
 			return ch
