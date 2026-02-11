@@ -31,6 +31,7 @@ import (
 const TTLInSlots = 3
 const maxConcurrentValidators = 128
 const headerHandledTimeout = time.Second * 1
+const maxConcurrentHeaderHandlers = 128
 
 var dataColumnTopicRegex = regexp.MustCompile(`data_column_sidecar_(\d+)`)
 
@@ -48,7 +49,7 @@ func extractColumnIndexFromTopic(topic string) (uint64, error) {
 //   - reject=false, err!=nil: IGNORE - don't penalize, just ignore
 //   - reject=false, err=nil: valid header
 type HeaderValidator func(header *ethpb.PartialDataColumnHeader) (reject bool, err error)
-type HeaderHandler func(header *ethpb.PartialDataColumnHeader, groupID string) chan bool
+type HeaderHandler func(header *ethpb.PartialDataColumnHeader, groupID string)
 type ColumnValidator func(cells []blocks.CellProofBundle) error
 
 type PartialColumnBroadcaster struct {
@@ -62,13 +63,14 @@ type PartialColumnBroadcaster struct {
 	handleColumn   SubHandler
 	handleHeader   HeaderHandler
 
-	// map groupID -> channel to signal when header has been handled
-	headerHandled map[string]chan bool
+	// map groupID -> bool to signal when header has been handled
+	headerHandled map[string]bool
 
 	// map topic -> *pubsub.Topic
 	topics map[string]*pubsub.Topic
 
-	concurrentValidatorSemaphore chan struct{}
+	concurrentValidatorSemaphore     chan struct{}
+	concurrentHeaderHandlerSemaphore chan struct{}
 
 	// map topic -> map[groupID]PartialColumn
 	partialMsgStore map[string]map[string]*blocks.PartialDataColumn
@@ -135,13 +137,14 @@ func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 		partialMsgStore:  make(map[string]map[string]*blocks.PartialDataColumn),
 		groupTTL:         make(map[string]int8),
 		validHeaderCache: make(map[string]*ethpb.PartialDataColumnHeader),
-		headerHandled:    make(map[string]chan bool),
+		headerHandled:    make(map[string]bool),
 		// GossipSub sends the messages to this channel. The buffer should be
 		// big enough to avoid dropping messages. We don't want to block the gossipsub event loop for this.
 		incomingReq: make(chan request, 128*16),
 		logger:      logger,
 
-		concurrentValidatorSemaphore: make(chan struct{}, maxConcurrentValidators),
+		concurrentValidatorSemaphore:     make(chan struct{}, maxConcurrentValidators),
+		concurrentHeaderHandlerSemaphore: make(chan struct{}, maxConcurrentHeaderHandlers),
 	}
 }
 
@@ -324,8 +327,15 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			}
 			// Cache the valid header
 			p.validHeaderCache[string(groupID)] = header
-			handledCh := p.handleHeader(header, string(groupID))
-			p.headerHandled[string(groupID)] = handledCh
+			p.headerHandled[string(groupID)] = false
+
+			p.concurrentHeaderHandlerSemaphore <- struct{}{}
+			go func() {
+				defer func() {
+					<-p.concurrentHeaderHandlerSemaphore
+				}()
+				p.handleHeader(header, string(groupID))
+			}()
 		}
 
 		columnIndex, err := extractColumnIndexFromTopic(topicID)
@@ -423,14 +433,13 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		logger.Debug("republishing due to parts metadata difference")
 	}
 
-	headerHandled := p.headerHandled[string(groupID)]
-	if headerHandled != nil {
-		select {
-		case <-headerHandled:
-		default:
-			p.logger.Debug("Header not handled, skipping republish", "topic", topicID, "group", groupID)
-			return nil
-		}
+	headerHandled, ok := p.headerHandled[string(groupID)]
+	// we only want to skip republishing if the header is currently being handled but hasn't been handled yet.
+	// If the header is NOT being handled at all, these incoming cells are likely in response to a previous publish we sent
+	// (either when got a data column sidecar, a beacon block body or if we are a block proposer).
+	if ok && !headerHandled {
+		p.logger.Debug("Header not handled, skipping republish", "topic", topicID, "group", groupID)
+		return nil
 	}
 
 	if shouldRepublish {
@@ -468,14 +477,10 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 			p.logger.Info("Extended partial column", "topic", cells.topic, "group", cells.group)
 		}
 
-		headerHandled := p.headerHandled[string(ourDataColumn.GroupID())]
-		if headerHandled != nil {
-			select {
-			case <-headerHandled:
-			default:
-				p.logger.Debug("Header not handled, skipping republish", "topic", cells.topic, "group", cells.group)
-				return nil
-			}
+		headerHandled, ok := p.headerHandled[string(ourDataColumn.GroupID())]
+		if ok && !headerHandled {
+			p.logger.Debug("Header not handled, skipping republish", "topic", cells.topic, "group", cells.group)
+			return nil
 		}
 
 		err := p.ps.PublishPartialMessage(cells.topic, ourDataColumn, partialmessages.PublishOptions{})
@@ -487,6 +492,7 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 }
 
 func (p *PartialColumnBroadcaster) handleHeaderHandled(groupID string) {
+	p.headerHandled[groupID] = true
 	for topic, topicStore := range p.partialMsgStore {
 		col, ok := topicStore[groupID]
 		if !ok {

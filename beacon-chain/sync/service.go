@@ -435,28 +435,18 @@ func (s *Service) startPartialColumnBroadcaster(broadcaster *partialdatacolumnbr
 				log.WithError(err).Error("Failed to handle verified RO data column subscriber")
 			}
 		},
-		func(header *ethpb.PartialDataColumnHeader, groupID string) chan bool {
+		func(header *ethpb.PartialDataColumnHeader, groupID string) {
 			ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
 			defer cancel()
 			source := peerdas.PopulateFromPartialHeader(header)
 			log.WithField("slot", source.Slot()).Info("Received data column header")
-
-			doneCh := make(chan bool, 1)
-
-			// we spin up a goroutine to process the partial column header recieved via Gossipsub as handling this
-			// header involves going to the EL, retrieving blobs and then publishing the partial columns constructed from the blobs.
-			// The partial publishing needs access to the broadcaster event loop and so doing the below without a goroutine can potentially cause a deadlock.
-			go func() {
-				err := s.processDataColumnSidecarsFromExecution(ctx, source)
-				if err != nil {
-					log.WithError(err).Error("Failed to process partial data column header")
-				}
-				close(doneCh)
-				if err := broadcaster.HeaderHandled(groupID); err != nil {
-					log.WithError(err).Error("Failed to call header handled on broadcaster")
-				}
-			}()
-			return doneCh
+			err := s.processDataColumnSidecarsFromExecution(ctx, source)
+			if err != nil {
+				log.WithError(err).Error("Failed to process partial data column header")
+			}
+			if err := broadcaster.HeaderHandled(groupID); err != nil {
+				log.WithError(err).Error("Failed to call header handled on broadcaster")
+			}
 		},
 	)
 }
