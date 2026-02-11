@@ -185,6 +185,71 @@ type testSetupSlots struct {
 	lastblock primitives.Slot
 }
 
+type notFoundOnRootDB struct {
+	db.NoHeadAccessDatabase
+	target [32]byte
+}
+
+func (d *notFoundOnRootDB) HasState(ctx context.Context, blockRoot [32]byte) bool {
+	if blockRoot == d.target {
+		return true
+	}
+	return d.NoHeadAccessDatabase.HasState(ctx, blockRoot)
+}
+
+func (d *notFoundOnRootDB) State(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
+	if blockRoot == d.target {
+		return nil, db.ErrNotFoundState
+	}
+	return d.NoHeadAccessDatabase.State(ctx, blockRoot)
+}
+
+func TestStateByRoot_FallsBackToReplayOnNotFoundStateFromDirectRead(t *testing.T) {
+	ctx := t.Context()
+	beaconDB := testDB.SetupDB(t)
+
+	st9, _ := util.DeterministicGenesisState(t, 32)
+	st9, err := ReplayProcessSlots(ctx, st9, 9)
+	require.NoError(t, err)
+
+	hdr := st9.LatestBlockHeader()
+	hdrRoot, err := hdr.HashTreeRoot()
+	require.NoError(t, err)
+
+	st10 := st9.Copy()
+	blk10 := util.NewBeaconBlock()
+	blk10.Block.Slot = 10
+	blk10.Block.ParentRoot = hdrRoot[:]
+	idx10, err := helpers.BeaconProposerIndexAtSlot(ctx, st10, blk10.Block.Slot)
+	require.NoError(t, err)
+	blk10.Block.ProposerIndex = idx10
+	ib10, err := blt.NewSignedBeaconBlock(blk10)
+	require.NoError(t, err)
+
+	st10, err = executeStateTransitionStateGen(ctx, st10, ib10)
+	require.NoError(t, err)
+	st10Root, err := st10.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	blk10.Block.StateRoot = st10Root[:]
+
+	util.SaveBlock(t, ctx, beaconDB, blk10)
+	require.NoError(t, beaconDB.SaveState(ctx, st9, hdrRoot))
+
+	ib10, err = blt.NewSignedBeaconBlock(blk10)
+	require.NoError(t, err)
+	rob10, err := blt.NewROBlock(ib10)
+	require.NoError(t, err)
+
+	service := New(&notFoundOnRootDB{NoHeadAccessDatabase: beaconDB, target: rob10.Root()}, doublylinkedtree.New())
+
+	got, err := service.StateByRoot(ctx, rob10.Root())
+	require.NoError(t, err)
+
+	gotRoot, err := got.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, st10Root, gotRoot)
+}
+
 func TestLoadStateByRoot(t *testing.T) {
 	ctx := t.Context()
 	persistEpochBoundary := func(r testChain, slot primitives.Slot) {

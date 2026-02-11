@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -122,8 +123,13 @@ func (s *State) StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) 
 	}
 
 	if s.beaconDB.HasState(ctx, blockRoot) {
-		s, err := s.beaconDB.State(ctx, blockRoot)
-		return s, errors.Wrap(err, "failed to retrieve init-sync state from db")
+		st, err := s.beaconDB.State(ctx, blockRoot)
+		if err == nil {
+			return st, nil
+		}
+		if !stderrors.Is(err, db.ErrNotFoundState) {
+			return nil, errors.Wrap(err, "failed to retrieve init-sync state from db")
+		}
 	}
 
 	startState, err := s.latestAncestor(ctx, blockRoot)
@@ -213,7 +219,13 @@ func (s *State) loadStateByRoot(ctx context.Context, blockRoot [32]byte) (state.
 
 	// Short circuit if the state is already in the DB.
 	if s.beaconDB.HasState(ctx, blockRoot) {
-		return s.beaconDB.State(ctx, blockRoot)
+		st, err := s.beaconDB.State(ctx, blockRoot)
+		if err == nil {
+			return st, nil
+		}
+		if !stderrors.Is(err, db.ErrNotFoundState) {
+			return nil, err
+		}
 	}
 
 	summary, err := s.stateSummary(ctx, blockRoot)
