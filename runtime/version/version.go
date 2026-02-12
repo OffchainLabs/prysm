@@ -47,3 +47,13 @@ func BuildData() string {
 	}
 	return fmt.Sprintf("Prysm/%s/%s", gitTag, gitCommit)
 }
+
+// GetCommitPrefix returns the first 4 characters of the git commit.
+// This is used for graffiti generation per the client identification spec.
+// Note: BuildData() must be called before this (happens at startup via Version()).
+func GetCommitPrefix() string {
+	if len(gitCommit) < 4 {
+		return gitCommit
+	}
+	return gitCommit[:4]
+}

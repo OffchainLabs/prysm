@@ -427,6 +427,29 @@ message SignedExecutionPayloadEnvelope {
   bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
+// BlindedExecutionPayloadEnvelope is a storage-only envelope that replaces the
+// full execution payload with its block hash for space savings. The full payload
+// can be retrieved from the EL via engine_getPayloadBodiesByHash using the block_hash.
+message BlindedExecutionPayloadEnvelope {
+  bytes block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  ethereum.engine.v1.ExecutionRequests execution_requests = 2;
+  uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
+  "github.com/OffchainLabs/prysm/v7/"
+      "consensus-types/primitives.BuilderIndex" ];
+  bytes beacon_block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 slot = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  bytes state_root = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// SignedBlindedExecutionPayloadEnvelope wraps a blinded execution payload envelope with a signature.
+message SignedBlindedExecutionPayloadEnvelope {
+  BlindedExecutionPayloadEnvelope message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
 // Builder represents a builder in the Gloas fork.
 //
 // Spec:

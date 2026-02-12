@@ -517,6 +517,10 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 				return errors.Wrap(err, "could not delete validators")
 			}
 
+			// TODO: execution payload envelopes (Gloas+) are keyed by execution payload
+			// block hash, not beacon block root, so they cannot be pruned in this loop.
+			// A separate pruning mechanism is needed (e.g. secondary index or cursor scan).
+
 			numSlotsDeleted++
 		}
 
@@ -1250,6 +1254,12 @@ func unmarshalBlock(_ context.Context, enc []byte) (interfaces.ReadOnlySignedBea
 		if err := rawBlock.UnmarshalSSZ(enc[len(fuluBlindKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal blinded Fulu block")
 		}
+	case hasGloasKey(enc):
+		// post Gloas we save the full beacon block as EIP-7732 separates beacon block and payload
+		rawBlock = &ethpb.SignedBeaconBlockGloas{}
+		if err := rawBlock.UnmarshalSSZ(enc[len(gloasKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal Gloas block")
+		}
 	default:
 		// Marshal block bytes to phase 0 beacon block.
 		rawBlock = &ethpb.SignedBeaconBlock{}
@@ -1279,6 +1289,11 @@ func encodeBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 
 func keyForBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 	v := blk.Version()
+
+	if v >= version.Gloas {
+		// Gloas blocks are never blinded (no execution payload in block body).
+		return gloasKey, nil
+	}
 
 	if v >= version.Fulu {
 		if blk.IsBlinded() {

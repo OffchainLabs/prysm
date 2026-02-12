@@ -45,6 +45,16 @@ func (r Requirement) String() string {
 		return "RequireBlockRootValid"
 	case RequireSignatureValid:
 		return "RequireSignatureValid"
+	case RequireBuilderValid:
+		return "RequireBuilderValid"
+	case RequirePayloadHashValid:
+		return "RequirePayloadHashValid"
+	case RequireEnvelopeSlotAboveFinalized:
+		return "RequireEnvelopeSlotAboveFinalized"
+	case RequireEnvelopeSlotMatchesBlock:
+		return "RequireEnvelopeSlotMatchesBlock"
+	case RequireBuilderSignatureValid:
+		return "RequireBuilderSignatureValid"
 	default:
 		return unknownRequirementName
 	}
