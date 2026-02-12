@@ -232,7 +232,8 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			postVersionAndHeaders[i].version,
 			postVersionAndHeaders[i].header, b)
 		if err != nil {
-			return s.handleInvalidExecutionError(ctx, err, root, b.Block().ParentRoot())
+			// this call does not have the root in forkchoice yet.
+			return s.handleInvalidExecutionError(ctx, err, root, b.Block().ParentRoot(), [32]byte(postVersionAndHeaders[i].header.ParentHash()))
 		}
 		if isValidPayload {
 			if err := s.validateMergeTransitionBlock(ctx, preVersionAndHeaders[i].version,
@@ -992,9 +993,9 @@ func (s *Service) waitForSync() error {
 	}
 }
 
-func (s *Service) handleInvalidExecutionError(ctx context.Context, err error, blockRoot, parentRoot [fieldparams.RootLength]byte) error {
+func (s *Service) handleInvalidExecutionError(ctx context.Context, err error, blockRoot, parentRoot [32]byte, parentHash [32]byte) error {
 	if IsInvalidBlock(err) && InvalidBlockLVH(err) != [32]byte{} {
-		return s.pruneInvalidBlock(ctx, blockRoot, parentRoot, InvalidBlockLVH(err))
+		return s.pruneInvalidBlock(ctx, blockRoot, parentRoot, parentHash, InvalidBlockLVH(err))
 	}
 	return err
 }
