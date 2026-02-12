@@ -1354,7 +1354,6 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, resp)
 }
 
-
 // GetLiveness requests the beacon node to indicate if a validator has been observed to be live in a given epoch.
 // The beacon node might detect liveness by observing messages from the validator on the network,
 // in the beacon chain, from its API or from any other source.
