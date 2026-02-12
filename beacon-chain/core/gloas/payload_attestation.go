@@ -195,7 +195,7 @@ func PTCDuties(
 		}
 
 		// Compute PTC for this slot.
-		ptc, err := payloadCommittee(ctx, st, slot)
+		ptc, err := PayloadCommittee(ctx, st, slot)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to get PTC for slot %d", slot)
 		}
