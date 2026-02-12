@@ -128,7 +128,7 @@ func (s *Server) GetVersionV2(w http.ResponseWriter, r *http.Request) {
 	elDataList, err := s.ExecutionEngineCaller.GetClientVersionV1(ctx)
 	if err != nil {
 		log.WithError(err).WithField("endpoint", "GetVersionV2").Debug("Could not get execution client version")
-	} else {
+	} else if len(elDataList) > 0 {
 		elData = elDataList[0]
 	}
 
