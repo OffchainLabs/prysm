@@ -3586,6 +3586,282 @@ func (s *SignedExecutionPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err e
 	return
 }
 
+// MarshalSSZ ssz marshals the BlindedExecutionPayloadEnvelope object
+func (b *BlindedExecutionPayloadEnvelope) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BlindedExecutionPayloadEnvelope object to a target array
+func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(116)
+
+	// Field (0) 'BlockHash'
+	if size := len(b.BlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockHash", size, 32)
+		return
+	}
+	dst = append(dst, b.BlockHash...)
+
+	// Offset (1) 'ExecutionRequests'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.ExecutionRequests == nil {
+		b.ExecutionRequests = new(v1.ExecutionRequests)
+	}
+	offset += b.ExecutionRequests.SizeSSZ()
+
+	// Field (2) 'BuilderIndex'
+	dst = ssz.MarshalUint64(dst, uint64(b.BuilderIndex))
+
+	// Field (3) 'BeaconBlockRoot'
+	if size := len(b.BeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BeaconBlockRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.BeaconBlockRoot...)
+
+	// Field (4) 'Slot'
+	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+
+	// Field (5) 'StateRoot'
+	if size := len(b.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.StateRoot...)
+
+	// Field (1) 'ExecutionRequests'
+	if dst, err = b.ExecutionRequests.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BlindedExecutionPayloadEnvelope object
+func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 116 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o1 uint64
+
+	// Field (0) 'BlockHash'
+	if cap(b.BlockHash) == 0 {
+		b.BlockHash = make([]byte, 0, len(buf[0:32]))
+	}
+	b.BlockHash = append(b.BlockHash, buf[0:32]...)
+
+	// Offset (1) 'ExecutionRequests'
+	if o1 = ssz.ReadOffset(buf[32:36]); o1 > size {
+		return ssz.ErrOffset
+	}
+
+	if o1 != 116 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (2) 'BuilderIndex'
+	b.BuilderIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.BuilderIndex(ssz.UnmarshallUint64(buf[36:44]))
+
+	// Field (3) 'BeaconBlockRoot'
+	if cap(b.BeaconBlockRoot) == 0 {
+		b.BeaconBlockRoot = make([]byte, 0, len(buf[44:76]))
+	}
+	b.BeaconBlockRoot = append(b.BeaconBlockRoot, buf[44:76]...)
+
+	// Field (4) 'Slot'
+	b.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[76:84]))
+
+	// Field (5) 'StateRoot'
+	if cap(b.StateRoot) == 0 {
+		b.StateRoot = make([]byte, 0, len(buf[84:116]))
+	}
+	b.StateRoot = append(b.StateRoot, buf[84:116]...)
+
+	// Field (1) 'ExecutionRequests'
+	{
+		buf = tail[o1:]
+		if b.ExecutionRequests == nil {
+			b.ExecutionRequests = new(v1.ExecutionRequests)
+		}
+		if err = b.ExecutionRequests.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BlindedExecutionPayloadEnvelope object
+func (b *BlindedExecutionPayloadEnvelope) SizeSSZ() (size int) {
+	size = 116
+
+	// Field (1) 'ExecutionRequests'
+	if b.ExecutionRequests == nil {
+		b.ExecutionRequests = new(v1.ExecutionRequests)
+	}
+	size += b.ExecutionRequests.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BlindedExecutionPayloadEnvelope object
+func (b *BlindedExecutionPayloadEnvelope) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BlindedExecutionPayloadEnvelope object with a hasher
+func (b *BlindedExecutionPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'BlockHash'
+	if size := len(b.BlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockHash", size, 32)
+		return
+	}
+	hh.PutBytes(b.BlockHash)
+
+	// Field (1) 'ExecutionRequests'
+	if err = b.ExecutionRequests.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'BuilderIndex'
+	hh.PutUint64(uint64(b.BuilderIndex))
+
+	// Field (3) 'BeaconBlockRoot'
+	if size := len(b.BeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BeaconBlockRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.BeaconBlockRoot)
+
+	// Field (4) 'Slot'
+	hh.PutUint64(uint64(b.Slot))
+
+	// Field (5) 'StateRoot'
+	if size := len(b.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.StateRoot)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the SignedBlindedExecutionPayloadEnvelope object
+func (s *SignedBlindedExecutionPayloadEnvelope) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedBlindedExecutionPayloadEnvelope object to a target array
+func (s *SignedBlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(100)
+
+	// Offset (0) 'Message'
+	dst = ssz.WriteOffset(dst, offset)
+	if s.Message == nil {
+		s.Message = new(BlindedExecutionPayloadEnvelope)
+	}
+	offset += s.Message.SizeSSZ()
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, s.Signature...)
+
+	// Field (0) 'Message'
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SignedBlindedExecutionPayloadEnvelope object
+func (s *SignedBlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 100 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Message'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 100 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'Signature'
+	if cap(s.Signature) == 0 {
+		s.Signature = make([]byte, 0, len(buf[4:100]))
+	}
+	s.Signature = append(s.Signature, buf[4:100]...)
+
+	// Field (0) 'Message'
+	{
+		buf = tail[o0:]
+		if s.Message == nil {
+			s.Message = new(BlindedExecutionPayloadEnvelope)
+		}
+		if err = s.Message.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedBlindedExecutionPayloadEnvelope object
+func (s *SignedBlindedExecutionPayloadEnvelope) SizeSSZ() (size int) {
+	size = 100
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(BlindedExecutionPayloadEnvelope)
+	}
+	size += s.Message.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the SignedBlindedExecutionPayloadEnvelope object
+func (s *SignedBlindedExecutionPayloadEnvelope) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedBlindedExecutionPayloadEnvelope object with a hasher
+func (s *SignedBlindedExecutionPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Message'
+	if err = s.Message.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(s.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the Builder object
 func (b *Builder) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)

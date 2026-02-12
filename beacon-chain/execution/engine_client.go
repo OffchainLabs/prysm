@@ -61,7 +61,17 @@ var (
 	}
 )
 
+// ClientVersionV1 represents the response from engine_getClientVersionV1.
+type ClientVersionV1 struct {
+	Code    string `json:"code"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+}
+
 const (
+	// GetClientVersionMethod is the engine_getClientVersionV1 method for JSON-RPC.
+	GetClientVersionMethod = "engine_getClientVersionV1"
 	// NewPayloadMethod v1 request string for JSON-RPC.
 	NewPayloadMethod = "engine_newPayloadV1"
 	// NewPayloadMethodV2 v2 request string for JSON-RPC.
@@ -348,6 +358,24 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	}
 
 	return elSupportedEndpointsSlice, nil
+}
+
+// GetClientVersion calls engine_getClientVersionV1 to retrieve EL client information.
+func (s *Service) GetClientVersion(ctx context.Context) ([]ClientVersionV1, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersion")
+	defer span.End()
+
+	// Per spec, we send our own client info as the parameter
+	clVersion := ClientVersionV1{
+		Code:    CLCode,
+		Name:    Name,
+		Version: version.SemanticVersion(),
+		Commit:  version.GetCommitPrefix(),
+	}
+
+	var result []ClientVersionV1
+	err := s.rpcClient.CallContext(ctx, &result, GetClientVersionMethod, clVersion)
+	return result, handleRPCError(err)
 }
 
 // GetTerminalBlockHash returns the valid terminal block hash based on total difficulty.
