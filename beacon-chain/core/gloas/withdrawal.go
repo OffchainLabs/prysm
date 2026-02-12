@@ -64,13 +64,11 @@ func ProcessWithdrawals(st state.BeaconState) error {
 		}
 	}
 
-	err = st.SetPayloadExpectedWithdrawals(expected.Withdrawals)
-	if err != nil {
+	if err := st.SetPayloadExpectedWithdrawals(expected.Withdrawals); err != nil {
 		return errors.Wrap(err, "could not set payload expected withdrawals")
 	}
 
-	err = st.DequeueBuilderPendingWithdrawals(expected.ProcessedBuilderWithdrawalsCount)
-	if err != nil {
+	if err := st.DequeueBuilderPendingWithdrawals(expected.ProcessedBuilderWithdrawalsCount); err != nil {
 		return errors.Wrap(err, "unable to dequeue builder pending withdrawals from state")
 	}
 

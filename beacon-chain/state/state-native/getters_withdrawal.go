@@ -134,21 +134,24 @@ func (b *BeaconState) appendPendingPartialWithdrawals(withdrawalIndex uint64, wi
 	}
 
 	cfg := params.BeaconConfig()
-	withdrawalsLimit := min(
-		len(*withdrawals)+int(cfg.MaxPendingPartialsPerWithdrawalsSweep),
-		int(cfg.MaxWithdrawalsPerPayload-1),
-	)
-	if len(*withdrawals) > withdrawalsLimit {
-		return withdrawalIndex, 0, fmt.Errorf("prior withdrawals length %d exceeds limit %d", len(*withdrawals), withdrawalsLimit)
+	var withdrawalsLimit int
+	if b.version >= version.Gloas {
+		withdrawalsLimit = min(
+			len(*withdrawals)+int(cfg.MaxPendingPartialsPerWithdrawalsSweep),
+			int(cfg.MaxWithdrawalsPerPayload-1),
+		)
+		if len(*withdrawals) > withdrawalsLimit {
+			return withdrawalIndex, 0, fmt.Errorf("prior withdrawals length %d exceeds limit %d", len(*withdrawals), withdrawalsLimit)
+		}
+	} else {
+		withdrawalsLimit = int(cfg.MaxPendingPartialsPerWithdrawalsSweep)
 	}
 
 	ws := *withdrawals
 	epoch := slots.ToEpoch(b.slot)
 	var processedPartialWithdrawalsCount uint64
 	for _, w := range b.pendingPartialWithdrawals {
-		isWithdrawable := w.WithdrawableEpoch <= epoch
-		hasReachedLimit := len(ws) >= withdrawalsLimit
-		if !isWithdrawable || hasReachedLimit {
+		if w.WithdrawableEpoch > epoch || len(ws) >= withdrawalsLimit {
 			break
 		}
 
@@ -194,7 +197,7 @@ func (b *BeaconState) appendValidatorsSweepWithdrawals(withdrawalIndex uint64, w
 	validatorIndex := b.nextWithdrawalValidatorIndex
 	validatorsLen := b.validatorsLen()
 	epoch := slots.ToEpoch(b.slot)
-	bound := min(validatorsLen, int(params.BeaconConfig().MaxValidatorsPerWithdrawalsSweep))
+	bound := min(uint64(validatorsLen), params.BeaconConfig().MaxValidatorsPerWithdrawalsSweep)
 	for range bound {
 		val, err := b.validatorAtIndexReadOnly(validatorIndex)
 		if err != nil {
@@ -233,7 +236,7 @@ func (b *BeaconState) appendValidatorsSweepWithdrawals(withdrawalIndex uint64, w
 			})
 			withdrawalIndex++
 		}
-		if len(ws) == int(params.BeaconConfig().MaxWithdrawalsPerPayload) {
+		if uint64(len(ws)) == params.BeaconConfig().MaxWithdrawalsPerPayload {
 			break
 		}
 		validatorIndex += 1

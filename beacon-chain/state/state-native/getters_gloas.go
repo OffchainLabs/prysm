@@ -267,11 +267,12 @@ func withdrawalsEqual(a, b []*enginev1.Withdrawal) bool {
 
 // IsParentBlockFull returns true if the last committed payload bid was fulfilled with a payload,
 // which can only happen when both beacon block and payload were present.
-// This function must be called on a beacon state before processing the execution payload bid in the block.
-// Spec v1.7.0-alpha.2 (pseudocode):
-// def is_parent_block_full(state: BeaconState) -> bool:
+// This function must be called on a beacon state before processing the bid in the block.
 //
-//	return state.latest_execution_payload_bid.block_hash == state.latest_block_hash
+//	<spec fn="is_parent_block_full" fork="gloas" hash="b59640c9">
+//	def is_parent_block_full(state: BeaconState) -> bool:
+//	    return state.latest_execution_payload_bid.block_hash == state.latest_block_hash
+//	</spec>
 func (b *BeaconState) IsParentBlockFull() (bool, error) {
 	if b.version < version.Gloas {
 		return false, errNotSupported("IsParentBlockFull", b.version)
@@ -343,8 +344,7 @@ func (b *BeaconState) BuilderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]b
 // applied to the current state. It is also used by validators to check that the execution payload carried
 // the right number of withdrawals.
 //
-// Spec v1.7.0-alpha.1:
-//
+//	<spec fn="get_expected_withdrawals" fork="gloas" hash="8d0675cb">
 //	def get_expected_withdrawals(state: BeaconState) -> ExpectedWithdrawals:
 //	    withdrawal_index = state.next_withdrawal_index
 //	    withdrawals: List[Withdrawal] = []
@@ -384,6 +384,7 @@ func (b *BeaconState) BuilderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]b
 //	        processed_builders_sweep_count,
 //	        processed_validators_sweep_count,
 //	    )
+//	</spec>
 func (b *BeaconState) ExpectedWithdrawalsGloas() (state.ExpectedWithdrawalsGloasResult, error) {
 	if b.version < version.Gloas {
 		return state.ExpectedWithdrawalsGloasResult{}, errNotSupported("ExpectedWithdrawalsGloas", b.version)

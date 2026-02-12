@@ -20,20 +20,20 @@ type ValidatorIndex uint64
 
 // IsBuilderIndex returns true when the BuilderIndex flag is set on the validator index.
 //
-// Spec v1.6.1 (pseudocode):
-// def is_builder_index(validator_index: ValidatorIndex) -> bool:
-//
-//	return (validator_index & BUILDER_INDEX_FLAG) != 0
+//	<spec fn="is_builder_index" fork="gloas" hash="2fbd46e9">
+//	def is_builder_index(validator_index: ValidatorIndex) -> bool:
+//	    return (validator_index & BUILDER_INDEX_FLAG) != 0
+//	</spec>
 func (v ValidatorIndex) IsBuilderIndex() bool {
 	return uint64(v)&BuilderIndexFlag != 0
 }
 
 // ToBuilderIndex strips the builder flag from a validator index.
 //
-// Spec v1.6.1 (pseudocode):
-// def convert_validator_index_to_builder_index(validator_index: ValidatorIndex) -> BuilderIndex:
-//
-//	return BuilderIndex(validator_index & ~BUILDER_INDEX_FLAG)
+//	<spec fn="convert_validator_index_to_builder_index" fork="gloas" hash="2fea5b47">
+//	def convert_validator_index_to_builder_index(validator_index: ValidatorIndex) -> BuilderIndex:
+//	    return BuilderIndex(validator_index & ~BUILDER_INDEX_FLAG)
+//	</spec>
 func (v ValidatorIndex) ToBuilderIndex() BuilderIndex {
 	return BuilderIndex(uint64(v) & ^BuilderIndexFlag)
 }
