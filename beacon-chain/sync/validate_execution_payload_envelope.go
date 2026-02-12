@@ -144,7 +144,7 @@ func (s *Service) hasSeenPayloadEnvelope(root [32]byte, builderIdx primitives.Bu
 	}
 
 	b := append(bytesutil.Bytes32(uint64(builderIdx)), root[:]...)
-	_, seen := s.seenPayloadEnvelopeCache.Get(b)
+	_, seen := s.seenPayloadEnvelopeCache.Get(string(b))
 	return seen
 }
 
@@ -154,5 +154,5 @@ func (s *Service) setSeenPayloadEnvelope(root [32]byte, builderIdx primitives.Bu
 	}
 
 	b := append(bytesutil.Bytes32(uint64(builderIdx)), root[:]...)
-	s.seenPayloadEnvelopeCache.Add(b, true)
+	s.seenPayloadEnvelopeCache.Add(string(b), true)
 }
