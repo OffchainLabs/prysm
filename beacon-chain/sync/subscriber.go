@@ -341,6 +341,15 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 				nse,
 			)
 		})
+
+		s.spawn(func() {
+			s.subscribe(
+				p2p.ExecutionPayloadEnvelopeTopicFormat,
+				s.validateExecutionPayloadEnvelope,
+				s.executionPayloadEnvelopeSubscriber,
+				nse,
+			)
+		})
 	}
 	return true
 }

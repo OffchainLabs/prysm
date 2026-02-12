@@ -762,6 +762,11 @@ func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *et
 	return nil
 }
 
+// ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
+func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
+	return nil
+}
+
 // DependentRootForEpoch mocks the same method in the chain service
 func (c *ChainService) DependentRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
 	return c.TargetRoot, nil
