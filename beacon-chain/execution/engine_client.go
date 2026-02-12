@@ -375,10 +375,7 @@ func (s *Service) GetClientVersion(ctx context.Context) ([]ClientVersionV1, erro
 
 	var result []ClientVersionV1
 	err := s.rpcClient.CallContext(ctx, &result, GetClientVersionMethod, clVersion)
-	if err != nil {
-		return nil, handleRPCError(err)
-	}
-	return result, nil
+	return result, handleRPCError(err)
 }
 
 // GetTerminalBlockHash returns the valid terminal block hash based on total difficulty.

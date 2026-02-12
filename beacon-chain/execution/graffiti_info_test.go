@@ -164,6 +164,21 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			wantPrefix:   "test",
 			wantSuffix:   " GEabcdPR",
 		},
+		// 0x prefix handling - some ELs return 0x-prefixed commits
+		{
+			name:         "0x prefix - stripped from EL commit",
+			elCode:       "GE",
+			elCommit:     "0xabcd1234",
+			userGraffiti: []byte{},
+			wantPrefix:   "GEabcdPR",
+		},
+		{
+			name:         "No 0x prefix - commit used as-is",
+			elCode:       "NM",
+			elCommit:     "abcd1234",
+			userGraffiti: []byte{},
+			wantPrefix:   "NMabcdPR",
+		},
 	}
 
 	for _, tt := range tests {

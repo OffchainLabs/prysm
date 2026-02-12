@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -31,19 +32,26 @@ func (g *GraffitiInfo) UpdateFromEngine(code, commit string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.elCode = code
-	g.elCommit = commit
+	g.elCommit = strings.TrimPrefix(commit, "0x")
 }
 
 // GenerateGraffiti generates graffiti using the flexible standard
 // with the provided user graffiti from the validator client request.
 // It places user graffiti first, then appends as much client info as space allows.
 //
+// A space separator is added between user graffiti and client info when it
+// fits without reducing the client version tier.
+//
 // Available Space | Format
-// ≥12 bytes       | user+EL(2)+commit(4)+CL(2)+commit(4)  e.g. "SushiGEabcdPRxxxx"
-// 8-11 bytes      | user+EL(2)+commit(2)+CL(2)+commit(2)  e.g. "SushiGEabPRxx"
-// 4-7 bytes       | user+EL(2)+CL(2)                      e.g. "SushiGEPR"
-// 2-3 bytes       | user+code(2)                          e.g. "SushiGE" or "SushiPR"
-// <2 bytes        | user only                             e.g. "Sushi"
+// ≥13 bytes       | user + space + EL(2)+commit(4)+CL(2)+commit(4)  e.g. "Sushi GEabcdPRe4f6"
+// 12 bytes        | user + EL(2)+commit(4)+CL(2)+commit(4)          e.g. "12345678901234567890GEabcdPRe4f6"
+// 9-11 bytes      | user + space + EL(2)+commit(2)+CL(2)+commit(2)  e.g. "12345678901234567890123 GEabPRe4"
+// 8 bytes         | user + EL(2)+commit(2)+CL(2)+commit(2)          e.g. "123456789012345678901234GEabPRe4"
+// 5-7 bytes       | user + space + EL(2)+CL(2)                      e.g. "123456789012345678901234567 GEPR"
+// 4 bytes         | user + EL(2)+CL(2)                              e.g. "1234567890123456789012345678GEPR"
+// 3 bytes         | user + space + code(2)                          e.g. "12345678901234567890123456789 GE"
+// 2 bytes         | user + code(2)                                  e.g. "123456789012345678901234567890GE"
+// <2 bytes        | user only                                       e.g. "1234567890123456789012345678901x"
 func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -112,9 +120,9 @@ func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 func logGraffitiInfo(graffiti string, available int) {
 	if available >= 2 {
 		log.WithField("graffiti", graffiti).Info("Graffiti includes client version info appended after user graffiti")
-	} else {
-		log.WithField("graffiti", graffiti).Info("Prysm adds consensus and execution debugging information to the end of the graffiti field when possible. To prevent truncation, please consider using a shorter graffiti")
+		return
 	}
+	log.WithField("graffiti", graffiti).Info("Prysm adds consensus and execution debugging information to the end of the graffiti field when possible. To prevent deletion of debugging info, please consider using a shorter graffiti")
 }
 
 // truncateCommit returns the first n characters of the commit string.
