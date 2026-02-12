@@ -36,7 +36,6 @@ type Store struct {
 	treeRootNode                  *Node                                  // the root node of the store tree.
 	headNode                      *Node                                  // last head Node
 	nodeByRoot                    map[[fieldparams.RootLength]byte]*Node // nodes indexed by roots.
-	nodeByPayload                 map[[fieldparams.RootLength]byte]*Node // nodes indexed by payload Hash
 	slashedIndices                map[primitives.ValidatorIndex]bool     // the list of equivocating validator indices
 	originRoot                    [fieldparams.RootLength]byte           // The genesis block root
 	genesisTime                   time.Time

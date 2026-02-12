@@ -19,16 +19,16 @@ import (
 )
 
 // NewPrysmChainClient returns implementation of iface.PrysmChainClient.
-func NewPrysmChainClient(jsonRestHandler rest.RestHandler, nodeClient iface.NodeClient) iface.PrysmChainClient {
+func NewPrysmChainClient(handler rest.Handler, nodeClient iface.NodeClient) iface.PrysmChainClient {
 	return prysmChainClient{
-		jsonRestHandler: jsonRestHandler,
-		nodeClient:      nodeClient,
+		handler:    handler,
+		nodeClient: nodeClient,
 	}
 }
 
 type prysmChainClient struct {
-	jsonRestHandler rest.RestHandler
-	nodeClient      iface.NodeClient
+	handler    rest.Handler
+	nodeClient iface.NodeClient
 }
 
 func (c prysmChainClient) ValidatorCount(ctx context.Context, stateID string, statuses []validator2.Status) ([]iface.ValidatorCount, error) {
@@ -50,7 +50,7 @@ func (c prysmChainClient) ValidatorCount(ctx context.Context, stateID string, st
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v1/beacon/states/%s/validator_count", stateID), queryParams)
 
 	var validatorCountResponse structs.GetValidatorCountResponse
-	if err = c.jsonRestHandler.Get(ctx, queryUrl, &validatorCountResponse); err != nil {
+	if err = c.handler.Get(ctx, queryUrl, &validatorCountResponse); err != nil {
 		return nil, err
 	}
 
@@ -97,7 +97,7 @@ func (c prysmChainClient) ValidatorPerformance(ctx context.Context, in *ethpb.Va
 		return nil, errors.Wrap(err, "failed to marshal request")
 	}
 	resp := &structs.GetValidatorPerformanceResponse{}
-	if err = c.jsonRestHandler.Post(ctx, "/prysm/validators/performance", nil, bytes.NewBuffer(request), resp); err != nil {
+	if err = c.handler.Post(ctx, "/prysm/validators/performance", nil, bytes.NewBuffer(request), resp); err != nil {
 		return nil, err
 	}
 

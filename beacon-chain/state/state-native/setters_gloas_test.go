@@ -11,20 +11,21 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 type testExecutionPayloadBid struct {
-	parentBlockHash        [32]byte
-	parentBlockRoot        [32]byte
-	blockHash              [32]byte
-	prevRandao             [32]byte
-	blobKzgCommitmentsRoot [32]byte
-	feeRecipient           [20]byte
-	gasLimit               uint64
-	builderIndex           primitives.BuilderIndex
-	slot                   primitives.Slot
-	value                  primitives.Gwei
-	executionPayment       primitives.Gwei
+	parentBlockHash    [32]byte
+	parentBlockRoot    [32]byte
+	blockHash          [32]byte
+	prevRandao         [32]byte
+	blobKzgCommitments [][]byte
+	feeRecipient       [20]byte
+	gasLimit           uint64
+	builderIndex       primitives.BuilderIndex
+	slot               primitives.Slot
+	value              primitives.Gwei
+	executionPayment   primitives.Gwei
 }
 
 func (t testExecutionPayloadBid) ParentBlockHash() [32]byte { return t.parentBlockHash }
@@ -40,9 +41,12 @@ func (t testExecutionPayloadBid) Value() primitives.Gwei { return t.value }
 func (t testExecutionPayloadBid) ExecutionPayment() primitives.Gwei {
 	return t.executionPayment
 }
-func (t testExecutionPayloadBid) BlobKzgCommitmentsRoot() [32]byte { return t.blobKzgCommitmentsRoot }
-func (t testExecutionPayloadBid) FeeRecipient() [20]byte           { return t.feeRecipient }
-func (t testExecutionPayloadBid) IsNil() bool                      { return false }
+func (t testExecutionPayloadBid) BlobKzgCommitments() [][]byte { return t.blobKzgCommitments }
+func (t testExecutionPayloadBid) BlobKzgCommitmentCount() uint64 {
+	return uint64(len(t.blobKzgCommitments))
+}
+func (t testExecutionPayloadBid) FeeRecipient() [20]byte { return t.feeRecipient }
+func (t testExecutionPayloadBid) IsNil() bool            { return false }
 
 func TestSetExecutionPayloadBid(t *testing.T) {
 	t.Run("previous fork returns expected error", func(t *testing.T) {
@@ -57,7 +61,7 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 			parentBlockRoot = [32]byte(bytes.Repeat([]byte{0xCD}, 32))
 			blockHash       = [32]byte(bytes.Repeat([]byte{0xEF}, 32))
 			prevRandao      = [32]byte(bytes.Repeat([]byte{0x11}, 32))
-			blobRoot        = [32]byte(bytes.Repeat([]byte{0x22}, 32))
+			blobCommitments = [][]byte{bytes.Repeat([]byte{0x22}, 48)}
 			feeRecipient    [20]byte
 		)
 		copy(feeRecipient[:], bytes.Repeat([]byte{0x33}, len(feeRecipient)))
@@ -66,17 +70,17 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 			dirtyFields: make(map[types.FieldIndex]bool),
 		}
 		bid := testExecutionPayloadBid{
-			parentBlockHash:        parentBlockHash,
-			parentBlockRoot:        parentBlockRoot,
-			blockHash:              blockHash,
-			prevRandao:             prevRandao,
-			blobKzgCommitmentsRoot: blobRoot,
-			feeRecipient:           feeRecipient,
-			gasLimit:               123,
-			builderIndex:           7,
-			slot:                   9,
-			value:                  11,
-			executionPayment:       22,
+			parentBlockHash:    parentBlockHash,
+			parentBlockRoot:    parentBlockRoot,
+			blockHash:          blockHash,
+			prevRandao:         prevRandao,
+			blobKzgCommitments: blobCommitments,
+			feeRecipient:       feeRecipient,
+			gasLimit:           123,
+			builderIndex:       7,
+			slot:               9,
+			value:              11,
+			executionPayment:   22,
 		}
 
 		require.NoError(t, st.SetExecutionPayloadBid(bid))
@@ -86,7 +90,7 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 		require.DeepEqual(t, parentBlockRoot[:], st.latestExecutionPayloadBid.ParentBlockRoot)
 		require.DeepEqual(t, blockHash[:], st.latestExecutionPayloadBid.BlockHash)
 		require.DeepEqual(t, prevRandao[:], st.latestExecutionPayloadBid.PrevRandao)
-		require.DeepEqual(t, blobRoot[:], st.latestExecutionPayloadBid.BlobKzgCommitmentsRoot)
+		require.DeepEqual(t, blobCommitments, st.latestExecutionPayloadBid.BlobKzgCommitments)
 		require.DeepEqual(t, feeRecipient[:], st.latestExecutionPayloadBid.FeeRecipient)
 		require.Equal(t, uint64(123), st.latestExecutionPayloadBid.GasLimit)
 		require.Equal(t, primitives.BuilderIndex(7), st.latestExecutionPayloadBid.BuilderIndex)
@@ -179,6 +183,99 @@ func TestClearBuilderPendingPayment(t *testing.T) {
 		require.ErrorContains(t, "out of range", err)
 		require.Equal(t, false, st.dirtyFields[types.BuilderPendingPayments])
 	})
+}
+
+func TestUpdatePendingPaymentWeight(t *testing.T) {
+	cfg := params.BeaconConfig()
+	slotsPerEpoch := cfg.SlotsPerEpoch
+	slot := primitives.Slot(4)
+	stateSlot := slot + 1
+	stateEpoch := slots.ToEpoch(stateSlot)
+
+	rootA := bytes.Repeat([]byte{0xAA}, 32)
+	rootB := bytes.Repeat([]byte{0xBB}, 32)
+
+	tests := []struct {
+		name          string
+		targetEpoch   primitives.Epoch
+		blockRoot     []byte
+		initialAmount primitives.Gwei
+		initialWeight primitives.Gwei
+		wantWeight    primitives.Gwei
+	}{
+		{
+			name:          "same slot current epoch adds weight",
+			targetEpoch:   stateEpoch,
+			blockRoot:     rootA,
+			initialAmount: 1,
+			initialWeight: 0,
+			wantWeight:    primitives.Gwei(cfg.MinActivationBalance),
+		},
+		{
+			name:          "same slot zero amount no weight change",
+			targetEpoch:   stateEpoch,
+			blockRoot:     rootA,
+			initialAmount: 0,
+			initialWeight: 5,
+			wantWeight:    5,
+		},
+		{
+			name:          "non matching block root no change",
+			targetEpoch:   stateEpoch,
+			blockRoot:     rootB,
+			initialAmount: 1,
+			initialWeight: 7,
+			wantWeight:    7,
+		},
+		{
+			name:          "previous epoch target uses earlier slot",
+			targetEpoch:   stateEpoch - 1,
+			blockRoot:     rootA,
+			initialAmount: 1,
+			initialWeight: 0,
+			wantWeight:    primitives.Gwei(cfg.MinActivationBalance),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var paymentIdx int
+			if tt.targetEpoch == stateEpoch {
+				paymentIdx = int(slotsPerEpoch + (slot % slotsPerEpoch))
+			} else {
+				paymentIdx = int(slot % slotsPerEpoch)
+			}
+			state := buildGloasStateForPaymentWeightTest(t, stateSlot, paymentIdx, tt.initialAmount, tt.initialWeight, map[primitives.Slot][]byte{
+				slot:     tt.blockRoot,
+				slot - 1: rootB,
+			})
+
+			att := &ethpb.Attestation{
+				Data: &ethpb.AttestationData{
+					Slot:            slot,
+					CommitteeIndex:  0,
+					BeaconBlockRoot: tt.blockRoot,
+					Source:          &ethpb.Checkpoint{},
+					Target: &ethpb.Checkpoint{
+						Epoch: tt.targetEpoch,
+					},
+				},
+			}
+
+			participatedFlags := map[uint8]bool{
+				cfg.TimelySourceFlagIndex: true,
+				cfg.TimelyTargetFlagIndex: true,
+				cfg.TimelyHeadFlagIndex:   true,
+			}
+			indices := []uint64{0}
+
+			require.NoError(t, state.UpdatePendingPaymentWeight(att, indices, participatedFlags))
+
+			payment, err := state.BuilderPendingPayment(uint64(paymentIdx))
+			require.NoError(t, err)
+			require.Equal(t, tt.wantWeight, payment.Weight)
+		})
+	}
 }
 
 func TestRotateBuilderPendingPayments(t *testing.T) {
@@ -316,6 +413,79 @@ func TestUpdateExecutionPayloadAvailabilityAtIndex_OutOfRange(t *testing.T) {
 			t.Fatalf("execution payload availability mutated on error")
 		}
 	}
+}
+
+func buildGloasStateForPaymentWeightTest(
+	t *testing.T,
+	stateSlot primitives.Slot,
+	paymentIdx int,
+	amount primitives.Gwei,
+	weight primitives.Gwei,
+	roots map[primitives.Slot][]byte,
+) *BeaconState {
+	t.Helper()
+
+	cfg := params.BeaconConfig()
+	blockRoots := make([][]byte, cfg.SlotsPerHistoricalRoot)
+	for slot, root := range roots {
+		blockRoots[slot%cfg.SlotsPerHistoricalRoot] = root
+	}
+
+	stateRoots := make([][]byte, cfg.SlotsPerHistoricalRoot)
+	for i := range stateRoots {
+		stateRoots[i] = bytes.Repeat([]byte{0x44}, 32)
+	}
+	randaoMixes := make([][]byte, cfg.EpochsPerHistoricalVector)
+	for i := range randaoMixes {
+		randaoMixes[i] = bytes.Repeat([]byte{0x55}, 32)
+	}
+
+	validator := &ethpb.Validator{
+		PublicKey:             bytes.Repeat([]byte{0x01}, 48),
+		WithdrawalCredentials: append([]byte{cfg.ETH1AddressWithdrawalPrefixByte}, bytes.Repeat([]byte{0x02}, 31)...),
+		EffectiveBalance:      cfg.MinActivationBalance,
+	}
+
+	payments := make([]*ethpb.BuilderPendingPayment, cfg.SlotsPerEpoch*2)
+	for i := range payments {
+		payments[i] = &ethpb.BuilderPendingPayment{
+			Withdrawal: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: make([]byte, 20),
+			},
+		}
+	}
+	payments[paymentIdx] = &ethpb.BuilderPendingPayment{
+		Weight: weight,
+		Withdrawal: &ethpb.BuilderPendingWithdrawal{
+			FeeRecipient: make([]byte, 20),
+			Amount:       amount,
+		},
+	}
+
+	execPayloadAvailability := make([]byte, cfg.SlotsPerHistoricalRoot/8)
+
+	stProto := &ethpb.BeaconStateGloas{
+		Slot:                         stateSlot,
+		GenesisValidatorsRoot:        bytes.Repeat([]byte{0x33}, 32),
+		BlockRoots:                   blockRoots,
+		StateRoots:                   stateRoots,
+		RandaoMixes:                  randaoMixes,
+		ExecutionPayloadAvailability: execPayloadAvailability,
+		Validators:                   []*ethpb.Validator{validator},
+		Balances:                     []uint64{cfg.MinActivationBalance},
+		CurrentEpochParticipation:    []byte{0},
+		PreviousEpochParticipation:   []byte{0},
+		BuilderPendingPayments:       payments,
+		Fork: &ethpb.Fork{
+			CurrentVersion:  bytes.Repeat([]byte{0x66}, 4),
+			PreviousVersion: bytes.Repeat([]byte{0x66}, 4),
+			Epoch:           0,
+		},
+	}
+
+	statePb, err := InitializeFromProtoGloas(stProto)
+	require.NoError(t, err)
+	return statePb.(*BeaconState)
 }
 
 func newGloasStateWithAvailability(t *testing.T, availability []byte) *BeaconState {

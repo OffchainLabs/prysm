@@ -8,12 +8,14 @@ import (
 	"time"
 
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
+	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	validatorTesting "github.com/OffchainLabs/prysm/v7/validator/testing"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
@@ -250,6 +252,97 @@ func TestStartEventStream(t *testing.T) {
 			// Depending on what you're testing, you may need a timeout or a specific number of events to read
 			time.AfterFunc(1*time.Second, cancel) // Prevents hanging forever
 			tc.verify(t, event)
+		})
+	}
+}
+
+func TestEnsureReady(t *testing.T) {
+	tests := []struct {
+		name           string
+		hosts          []string
+		healthResults  []error // one per GetHealth call in order
+		expectedResult bool
+		expectedIndex  int // expected provider index after EnsureReady
+	}{
+		{
+			name:           "Single host ready",
+			hosts:          []string{"host1:4000"},
+			healthResults:  []error{nil},
+			expectedResult: true,
+			expectedIndex:  0,
+		},
+		{
+			name:           "Single host not ready",
+			hosts:          []string{"host1:4000"},
+			healthResults:  []error{errors.New("not synced")},
+			expectedResult: false,
+			expectedIndex:  0,
+		},
+		{
+			name:           "Multiple hosts first ready",
+			hosts:          []string{"host1:4000", "host2:4000", "host3:4000"},
+			healthResults:  []error{nil},
+			expectedResult: true,
+			expectedIndex:  0,
+		},
+		{
+			name:           "Failover to second host",
+			hosts:          []string{"host1:4000", "host2:4000", "host3:4000"},
+			healthResults:  []error{errors.New("not synced"), nil},
+			expectedResult: true,
+			expectedIndex:  1,
+		},
+		{
+			name:           "Failover to third host",
+			hosts:          []string{"host1:4000", "host2:4000", "host3:4000"},
+			healthResults:  []error{errors.New("not synced"), errors.New("not synced"), nil},
+			expectedResult: true,
+			expectedIndex:  2,
+		},
+		{
+			name:           "All hosts down",
+			hosts:          []string{"host1:4000", "host2:4000", "host3:4000"},
+			healthResults:  []error{errors.New("not synced"), errors.New("not synced"), errors.New("not synced")},
+			expectedResult: false,
+			expectedIndex:  2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			mockProvider := &grpcutil.MockGrpcProvider{
+				MockHosts: tt.hosts,
+			}
+			conn, err := validatorHelpers.NewNodeConnection(
+				validatorHelpers.WithGRPCProvider(mockProvider),
+			)
+			require.NoError(t, err)
+
+			mockNodeClient := mock2.NewMockNodeClient(ctrl)
+			for _, healthErr := range tt.healthResults {
+				if healthErr != nil {
+					mockNodeClient.EXPECT().GetHealth(gomock.Any(), gomock.Any()).Return(nil, healthErr)
+				} else {
+					mockNodeClient.EXPECT().GetHealth(gomock.Any(), gomock.Any()).Return(&emptypb.Empty{}, nil)
+				}
+			}
+
+			client := &grpcValidatorClient{
+				grpcClientManager: newGrpcClientManager(conn, func(_ grpc.ClientConnInterface) eth.BeaconNodeValidatorClient {
+					return mock2.NewMockBeaconNodeValidatorClient(ctrl)
+				}),
+				nodeClient: &grpcNodeClient{
+					grpcClientManager: newGrpcClientManager(conn, func(_ grpc.ClientConnInterface) eth.NodeClient {
+						return mockNodeClient
+					}),
+				},
+			}
+
+			result := client.EnsureReady(t.Context())
+			assert.Equal(t, tt.expectedResult, result)
+			assert.Equal(t, tt.expectedIndex, mockProvider.CurrentIndex)
 		})
 	}
 }

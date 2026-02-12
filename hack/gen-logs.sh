@@ -31,6 +31,11 @@ EXCLUDED_PATH_PREFIXES=(
   ".vscode"
 )
 
+# Gitignore overrides: paths that should still be scanned even if ignored by VCS.
+GITIGNORE_OVERRIDES=(
+  "cmd/beacon-chain/execution"
+)
+
 # The logrus import path
 LOGRUS_IMPORT="github.com/sirupsen/logrus"
 # ----------------------------
@@ -69,6 +74,14 @@ rg_args=(
   -l    # list matching files
   -0    # NUL-delimited output
 )
+
+if [[ ${#GITIGNORE_OVERRIDES[@]} -gt 0 ]]; then
+  # Disable VCS ignores so overrides are honored.
+  rg_args+=( --no-ignore-vcs )
+  for ov in "${GITIGNORE_OVERRIDES[@]}"; do
+    rg_args+=( --glob "$ov/**" )
+  done
+fi
 
 for ex in "${EXCLUDED_PATH_PREFIXES[@]}"; do
   rg_args+=( --glob "!$ex/**" )

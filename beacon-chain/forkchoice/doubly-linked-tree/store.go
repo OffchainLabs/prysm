@@ -113,7 +113,6 @@ func (s *Store) insert(ctx context.Context,
 		}
 	}
 
-	s.nodeByPayload[payloadHash] = n
 	s.nodeByRoot[root] = n
 	if parent == nil {
 		if s.treeRootNode == nil {
@@ -122,7 +121,6 @@ func (s *Store) insert(ctx context.Context,
 			s.highestReceivedNode = n
 		} else {
 			delete(s.nodeByRoot, root)
-			delete(s.nodeByPayload, payloadHash)
 			return nil, errInvalidParentRoot
 		}
 	} else {
@@ -191,7 +189,6 @@ func (s *Store) pruneFinalizedNodeByRootMap(ctx context.Context, node, finalized
 
 	node.children = nil
 	delete(s.nodeByRoot, node.root)
-	delete(s.nodeByPayload, node.payloadHash)
 	return nil
 }
 
@@ -271,21 +268,6 @@ func (f *ForkChoice) HighestReceivedBlockSlot() primitives.Slot {
 		return 0
 	}
 	return f.store.highestReceivedNode.slot
-}
-
-// HighestReceivedBlockDelay returns the number of slots that the highest
-// received block was late when receiving it. For example, a block was late by 12 slots,
-// then this method is expected to return 12.
-func (f *ForkChoice) HighestReceivedBlockDelay() primitives.Slot {
-	n := f.store.highestReceivedNode
-	if n == nil {
-		return 0
-	}
-	sss, err := slots.SinceSlotStart(n.slot, f.store.genesisTime, n.timestamp)
-	if err != nil {
-		return 0
-	}
-	return primitives.Slot(uint64(sss/time.Second) / params.BeaconConfig().SecondsPerSlot)
 }
 
 // ReceivedBlocksLastEpoch returns the number of blocks received in the last epoch

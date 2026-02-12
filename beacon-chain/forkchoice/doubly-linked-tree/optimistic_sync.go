@@ -94,6 +94,5 @@ func (s *Store) removeNodeAndChildren(ctx context.Context, node *Node, invalidRo
 		s.previousProposerBoostScore = 0
 	}
 	delete(s.nodeByRoot, node.root)
-	delete(s.nodeByPayload, node.payloadHash)
 	return invalidRoots, nil
 }

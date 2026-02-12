@@ -25,8 +25,9 @@ func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
 	parentCtx, parentCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	t.Cleanup(parentCancel)
 
-	// Expectation for newHealthMonitor's FindHealthyHost call
-	mockValidator.EXPECT().FindHealthyHost(gomock.Any()).Return(true).Times(1)
+	// Expectation for newHealthMonitor's EnsureReady call
+	mockValidator.EXPECT().EnsureReady(gomock.Any()).Return(true).Times(1)
+	mockValidator.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
 
 	monitor := newHealthMonitor(parentCtx, parentCancel, 3, mockValidator)
 	require.NotNil(t, monitor)
@@ -64,81 +65,81 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 	mockValidator := validatormock.NewMockValidator(ctrl)
 
 	tests := []struct {
-		expectStatusUpdate     bool // true if healthyCh should receive a new, different status
-		expectCancelCalled     bool
-		expectedIsHealthy      bool
-		findHealthyHostReturns bool
-		initialIsHealthy       bool
-		expectedFails          int
-		maxFails               int
-		initialFails           int
-		name                   string
+		expectStatusUpdate bool // true if healthyCh should receive a new, different status
+		expectCancelCalled bool
+		expectedIsHealthy  bool
+		ensureReadyReturns bool
+		initialIsHealthy   bool
+		expectedFails      int
+		maxFails           int
+		initialFails       int
+		name               string
 	}{
 		{
-			name:                   "Becomes Unhealthy",
-			initialIsHealthy:       true,
-			initialFails:           0,
-			maxFails:               3,
-			findHealthyHostReturns: false,
-			expectedIsHealthy:      false,
-			expectedFails:          1,
-			expectCancelCalled:     false,
-			expectStatusUpdate:     true,
+			name:               "Becomes Unhealthy",
+			initialIsHealthy:   true,
+			initialFails:       0,
+			maxFails:           3,
+			ensureReadyReturns: false,
+			expectedIsHealthy:  false,
+			expectedFails:      1,
+			expectCancelCalled: false,
+			expectStatusUpdate: true,
 		},
 		{
-			name:                   "Becomes Healthy",
-			initialIsHealthy:       false,
-			initialFails:           1,
-			maxFails:               3,
-			findHealthyHostReturns: true,
-			expectedIsHealthy:      true,
-			expectedFails:          0,
-			expectCancelCalled:     false,
-			expectStatusUpdate:     true,
+			name:               "Becomes Healthy",
+			initialIsHealthy:   false,
+			initialFails:       1,
+			maxFails:           3,
+			ensureReadyReturns: true,
+			expectedIsHealthy:  true,
+			expectedFails:      0,
+			expectCancelCalled: false,
+			expectStatusUpdate: true,
 		},
 		{
-			name:                   "Remains Healthy",
-			initialIsHealthy:       true,
-			initialFails:           0,
-			maxFails:               3,
-			findHealthyHostReturns: true,
-			expectedIsHealthy:      true,
-			expectedFails:          0,
-			expectCancelCalled:     false,
-			expectStatusUpdate:     false, // Status did not change
+			name:               "Remains Healthy",
+			initialIsHealthy:   true,
+			initialFails:       0,
+			maxFails:           3,
+			ensureReadyReturns: true,
+			expectedIsHealthy:  true,
+			expectedFails:      0,
+			expectCancelCalled: false,
+			expectStatusUpdate: false, // Status did not change
 		},
 		{
-			name:                   "Remains Unhealthy",
-			initialIsHealthy:       false,
-			initialFails:           1,
-			maxFails:               3,
-			findHealthyHostReturns: false,
-			expectedIsHealthy:      false,
-			expectedFails:          2,
-			expectCancelCalled:     false,
-			expectStatusUpdate:     false, // Status did not change
+			name:               "Remains Unhealthy",
+			initialIsHealthy:   false,
+			initialFails:       1,
+			maxFails:           3,
+			ensureReadyReturns: false,
+			expectedIsHealthy:  false,
+			expectedFails:      2,
+			expectCancelCalled: false,
+			expectStatusUpdate: false, // Status did not change
 		},
 		{
-			name:                   "Max Fails Reached - Stays Unhealthy and Cancels",
-			initialIsHealthy:       false,
-			initialFails:           2, // One fail away from maxFails
-			maxFails:               2,
-			findHealthyHostReturns: false,
-			expectedIsHealthy:      false,
-			expectedFails:          2,
-			expectCancelCalled:     true,
-			expectStatusUpdate:     false, // Status was already false, no new update sent before cancel
+			name:               "Max Fails Reached - Stays Unhealthy and Cancels",
+			initialIsHealthy:   false,
+			initialFails:       2, // One fail away from maxFails
+			maxFails:           2,
+			ensureReadyReturns: false,
+			expectedIsHealthy:  false,
+			expectedFails:      2,
+			expectCancelCalled: true,
+			expectStatusUpdate: false, // Status was already false, no new update sent before cancel
 		},
 		{
-			name:                   "MaxFails is 0 - Remains Unhealthy, No Cancel",
-			initialIsHealthy:       false,
-			initialFails:           100, // Arbitrarily high
-			maxFails:               0,   // Infinite
-			findHealthyHostReturns: false,
-			expectedIsHealthy:      false,
-			expectedFails:          100,
-			expectCancelCalled:     false,
-			expectStatusUpdate:     false,
+			name:               "MaxFails is 0 - Remains Unhealthy, No Cancel",
+			initialIsHealthy:   false,
+			initialFails:       100, // Arbitrarily high
+			maxFails:           0,   // Infinite
+			ensureReadyReturns: false,
+			expectedIsHealthy:  false,
+			expectedFails:      100,
+			expectCancelCalled: false,
+			expectStatusUpdate: false,
 		},
 	}
 
@@ -163,7 +164,8 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 			}
 			monitor.healthEventFeed.Subscribe(monitor.healthyCh)
 
-			mockValidator.EXPECT().FindHealthyHost(gomock.Any()).Return(tt.findHealthyHostReturns)
+			mockValidator.EXPECT().EnsureReady(gomock.Any()).Return(tt.ensureReadyReturns)
+			mockValidator.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
 
 			monitor.performHealthCheck()
 
@@ -218,12 +220,14 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 	ch := monitor.HealthyChan()
 	require.NotNil(t, ch)
 
+	mockValidator.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
+
 	first := mockValidator.EXPECT().
-		FindHealthyHost(gomock.Any()).
+		EnsureReady(gomock.Any()).
 		Return(true).Times(1)
 
 	mockValidator.EXPECT().
-		FindHealthyHost(gomock.Any()).
+		EnsureReady(gomock.Any()).
 		Return(false).
 		AnyTimes().
 		After(first)
