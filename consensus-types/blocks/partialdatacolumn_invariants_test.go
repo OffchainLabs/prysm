@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -20,7 +19,11 @@ type invariantChecker struct {
 var _ partialmessages.InvariantChecker[*blocks.PartialDataColumn] = (*invariantChecker)(nil)
 
 func (i *invariantChecker) MergePartsMetadata(left, right partialmessages.PartsMetadata) partialmessages.PartsMetadata {
-	return partialmessages.MergeBitmap(left, right)
+	merged, err := blocks.MergePartsMetadata(left, right)
+	if err != nil {
+		i.t.Fatalf("Failed to merge parts metadata: %v", err)
+	}
+	return merged
 }
 
 func (i *invariantChecker) SplitIntoParts(in *blocks.PartialDataColumn) ([]*blocks.PartialDataColumn, error) {
@@ -47,13 +50,10 @@ func (i *invariantChecker) FullMessage() (*blocks.PartialDataColumn, error) {
 	proofs := make([][]byte, numCells)
 
 	for i := range numCells {
-		for j := range commitments[i] {
-			commitments[i][j] = byte(i)
-		}
 		cells[i] = make([]byte, 2048)
-		cells[i] = fmt.Appendf(cells[i][:0], "cell %d", i)
+		copy(cells[i], fmt.Sprintf("cell %d", i))
 		proofs[i] = make([]byte, 48)
-		proofs[i] = fmt.Appendf(proofs[i][:0], "proof %d", i)
+		copy(proofs[i], fmt.Sprintf("proof %d", i))
 	}
 
 	roDC, _ := util.CreateTestVerifiedRoDataColumnSidecars(i.t, []util.DataColumnParam{
@@ -66,7 +66,14 @@ func (i *invariantChecker) FullMessage() (*blocks.PartialDataColumn, error) {
 	})
 
 	c, err := blocks.NewPartialDataColumn(roDC[0].DataColumnSidecar.SignedBlockHeader, roDC[0].Index, roDC[0].KzgCommitments, roDC[0].KzgCommitmentsInclusionProof)
-	return &c, err
+	if err != nil {
+		return nil, err
+	}
+	// Populate all cells to make this a full message
+	for idx := range numCells {
+		c.ExtendFromVerfifiedCell(uint64(idx), roDC[0].Column[idx], roDC[0].KzgProofs[idx])
+	}
+	return &c, nil
 }
 
 func (i *invariantChecker) EmptyMessage() *blocks.PartialDataColumn {
@@ -112,9 +119,13 @@ func (i *invariantChecker) ExtendFromBytes(a *blocks.PartialDataColumn, data []b
 }
 
 func (i *invariantChecker) ShouldRequest(a *blocks.PartialDataColumn, from peer.ID, partsMetadata []byte) bool {
-	peerHas := bitfield.Bitlist(partsMetadata)
-	for i := range peerHas.Len() {
-		if peerHas.BitAt(i) && !a.Included.BitAt(i) {
+	peerMeta, err := blocks.ParsePartsMetadata(partsMetadata)
+	if err != nil {
+		return false
+	}
+	for idx := range peerMeta.Available.Len() {
+		// Request if peer has cell, is willing to provide it, and we don't have it.
+		if peerMeta.Available.BitAt(idx) && peerMeta.Requests.BitAt(idx) && !a.Included.BitAt(idx) {
 			return true
 		}
 	}

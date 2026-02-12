@@ -7,14 +7,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/internal/logrusadapter"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
-	"github.com/libp2p/go-libp2p-pubsub/partialmessages/bitmap"
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -155,15 +153,12 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 		pubsub.WithPartialMessagesExtension(&partialmessages.PartialMessagesExtension{
 			Logger: slogger,
 			MergePartsMetadata: func(topic string, left, right partialmessages.PartsMetadata) partialmessages.PartsMetadata {
-				if len(left) == 0 {
-					return right
-				}
-				merged, err := bitfield.Bitlist(left).Or(bitfield.Bitlist(right))
+				merged, err := blocks.MergePartsMetadata(left, right)
 				if err != nil {
-					p.logger.Warn("Failed to merge bitfields", "err", err, "left", left, "right", right)
+					p.logger.Warn("Failed to merge parts metadata", "err", err)
 					return left
 				}
-				return partialmessages.PartsMetadata(merged)
+				return merged
 			},
 			ValidateRPC: func(from peer.ID, rpc *pubsub_pb.PartialMessagesExtension) error {
 				// TODO. Add some basic and fast sanity checks
@@ -425,12 +420,14 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		}
 	}
 
-	peerHas := bitmap.Bitmap(rpcWithFrom.PartsMetadata)
-	iHave := bitmap.Bitmap(ourDataColumn.PartsMetadata())
-	if !shouldRepublish && len(peerHas) > 0 && !bytes.Equal(peerHas, iHave) {
-		// Either we have something they don't or vice versa
-		shouldRepublish = true
-		logger.Debug("republishing due to parts metadata difference")
+	if !shouldRepublish && len(rpcWithFrom.PartsMetadata) > 0 {
+		peerMeta, err := blocks.ParsePartsMetadata(rpcWithFrom.PartsMetadata)
+		ourMeta, err2 := blocks.ParsePartsMetadata(ourDataColumn.PartsMetadata())
+		if err == nil && err2 == nil && !bytes.Equal(peerMeta.Available, ourMeta.Available) {
+			// Either we have something they don't or vice versa
+			shouldRepublish = true
+			logger.Debug("republishing due to parts metadata difference")
+		}
 	}
 
 	headerHandled, ok := p.headerHandled[string(groupID)]

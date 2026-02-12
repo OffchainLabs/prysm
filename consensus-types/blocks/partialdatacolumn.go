@@ -85,15 +85,81 @@ func NewPartialDataColumn(
 func (p *PartialDataColumn) GroupID() []byte {
 	return p.groupID
 }
+
+// NewPartsMetadata creates SSZ-encoded PartialDataColumnPartsMetadata from the given bitmaps.
+func NewPartsMetadata(available, requests bitfield.Bitlist) (partialmessages.PartsMetadata, error) {
+	meta := &ethpb.PartialDataColumnPartsMetadata{
+		Available: available,
+		Requests:  requests,
+	}
+	marshalled, err := meta.MarshalSSZ()
+	if err != nil {
+		return nil, err
+	}
+	return partialmessages.PartsMetadata(marshalled), nil
+}
+
+// ParsePartsMetadata deserializes SSZ-encoded PartialDataColumnPartsMetadata.
+func ParsePartsMetadata(data partialmessages.PartsMetadata) (*ethpb.PartialDataColumnPartsMetadata, error) {
+	meta := &ethpb.PartialDataColumnPartsMetadata{}
+	if err := meta.UnmarshalSSZ(data); err != nil {
+		return nil, err
+	}
+	return meta, nil
+}
+
+// MergePartsMetadata merges two SSZ-encoded PartialDataColumnPartsMetadata by OR-ing
+// both available and requests bitmaps.
+// TODO: How do we handle the request bitmap here ?
+func MergePartsMetadata(left, right partialmessages.PartsMetadata) (partialmessages.PartsMetadata, error) {
+	if len(left) == 0 {
+		return right, nil
+	}
+	if len(right) == 0 {
+		return left, nil
+	}
+
+	leftMeta, err := ParsePartsMetadata(left)
+	if err != nil {
+		return left, err
+	}
+	rightMeta, err := ParsePartsMetadata(right)
+	if err != nil {
+		return left, err
+	}
+
+	mergedAvailable, err := bitfield.Bitlist(leftMeta.Available).Or(bitfield.Bitlist(rightMeta.Available))
+	if err != nil {
+		return left, err
+	}
+	mergedRequests, err := bitfield.Bitlist(leftMeta.Requests).Or(bitfield.Bitlist(rightMeta.Requests))
+	if err != nil {
+		return left, err
+	}
+
+	return NewPartsMetadata(mergedAvailable, mergedRequests)
+}
+
 func (p *PartialDataColumn) PartialMessageBytes(metadata partialmessages.PartsMetadata) ([]byte, error) {
-	peerHas := bitfield.Bitlist(metadata)
-	if peerHas.Len() != p.Included.Len() {
-		return nil, errors.New("metadata length does not match expected length")
+	peerMeta, err := ParsePartsMetadata(metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	peerAvailable := bitfield.Bitlist(peerMeta.Available)
+	peerRequests := bitfield.Bitlist(peerMeta.Requests)
+
+	if peerAvailable.Len() != p.Included.Len() {
+		return nil, errors.New("available bitmap length does not match expected length")
+	}
+	if peerRequests.Len() != p.Included.Len() {
+		return nil, errors.New("requests bitmap length does not match expected length")
 	}
 
 	var cellsToReturn int
-	for i := range peerHas.Len() {
-		if !peerHas.BitAt(i) && p.Included.BitAt(i) {
+	for i := range p.Included.Len() {
+		// Send cell if: we have it, peer doesn't have it, and peer wants it.
+		if p.Included.BitAt(i) && !peerAvailable.BitAt(i) && peerRequests.BitAt(i) {
 			cellsToReturn++
 		}
 	}
@@ -107,8 +173,8 @@ func (p *PartialDataColumn) PartialMessageBytes(metadata partialmessages.PartsMe
 		PartialColumn:      make([][]byte, 0, cellsToReturn),
 		KzgProofs:          make([][]byte, 0, cellsToReturn),
 	}
-	for i := range peerHas.Len() {
-		if peerHas.BitAt(i) || !p.Included.BitAt(i) {
+	for i := range p.Included.Len() {
+		if !p.Included.BitAt(i) || peerAvailable.BitAt(i) || !peerRequests.BitAt(i) {
 			continue
 		}
 		included.SetBitAt(i, true)
@@ -141,14 +207,27 @@ func (p *PartialDataColumn) EagerPartialMessageBytes() ([]byte, partialmessages.
 	if err != nil {
 		return nil, nil, err
 	}
-	// Empty bitlist since we aren't including any cells here
-	peersNextParts := partialmessages.PartsMetadata(bitfield.NewBitlist(uint64(len(p.KzgCommitments))))
+	// Empty available (no cells sent), empty requests (we don't know what the peer wants)
+	numCommitments := uint64(len(p.KzgCommitments))
+	peersNextParts, err := NewPartsMetadata(
+		bitfield.NewBitlist(numCommitments),
+		bitfield.NewBitlist(numCommitments),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return marshalled, peersNextParts, nil
 }
 
 func (p *PartialDataColumn) PartsMetadata() partialmessages.PartsMetadata {
-	return partialmessages.PartsMetadata(p.Included)
+	numCommitments := uint64(len(p.KzgCommitments))
+	meta, err := NewPartsMetadata(p.Included, allOnesBitlist(numCommitments))
+	if err != nil {
+		logrus.Error("failed to create parts metadata", "err", err)
+		return nil
+	}
+	return meta
 }
 
 // CellsToVerifyFromPartialMessage returns cells from the partial message that need to be verified.
@@ -242,4 +321,12 @@ func (p *PartialDataColumn) Complete(logger *logrus.Logger) (VerifiedRODataColum
 	}
 
 	return NewVerifiedRODataColumn(rodc), true
+}
+
+func allOnesBitlist(length uint64) bitfield.Bitlist {
+	bl := bitfield.NewBitlist(length)
+	for i := range length {
+		bl.SetBitAt(i, true)
+	}
+	return bl
 }

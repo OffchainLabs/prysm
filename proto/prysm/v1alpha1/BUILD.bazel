@@ -189,6 +189,7 @@ ssz_fulu_objs = [
     "DataColumnsByRootIdentifier",
     "DataColumnSidecar",
     "PartialDataColumnSidecar",
+    "PartialDataColumnPartsMetadata",
     "StatusV2",
     "SignedBeaconBlockContentsFulu",
     "SignedBeaconBlockFulu",
