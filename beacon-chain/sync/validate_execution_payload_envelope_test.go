@@ -123,6 +123,22 @@ func TestValidateExecutionPayloadEnvelope_HappyPath(t *testing.T) {
 	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
 }
 
+func TestExecutionPayloadEnvelopeSubscriber_WrongMessage(t *testing.T) {
+	s := &Service{cfg: &config{}}
+	err := s.executionPayloadEnvelopeSubscriber(context.Background(), &ethpb.BeaconBlock{})
+	require.ErrorIs(t, errWrongMessage, err)
+}
+
+func TestExecutionPayloadEnvelopeSubscriber_HappyPath(t *testing.T) {
+	s := &Service{cfg: &config{chain: &mock.ChainService{}}}
+	root := [32]byte{0x01}
+	blockHash := [32]byte{0x02}
+	env := testSignedExecutionPayloadEnvelope(t, 1, 2, root, blockHash)
+
+	err := s.executionPayloadEnvelopeSubscriber(context.Background(), env)
+	require.NoError(t, err)
+}
+
 type mockExecutionPayloadEnvelopeVerifier struct {
 	errBlockRootSeen      error
 	errBlockRootValid     error

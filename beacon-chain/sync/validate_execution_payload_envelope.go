@@ -133,7 +133,7 @@ func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg pr
 	}
 	env, err := blocks.WrappedROSignedExecutionPayloadEnvelope(e)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not wrap signed execution payload envelope")
 	}
 	return s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, env)
 }
@@ -142,10 +142,9 @@ func (s *Service) hasSeenPayloadEnvelope(root [32]byte, builderIdx primitives.Bu
 	if s.seenPayloadEnvelopeCache == nil {
 		return false
 	}
-	s.seenPayloadEnvelopeLock.RLock()
-	defer s.seenPayloadEnvelopeLock.RUnlock()
+
 	b := append(bytesutil.Bytes32(uint64(builderIdx)), root[:]...)
-	_, seen := s.seenPayloadEnvelopeCache.Get(string(b))
+	_, seen := s.seenPayloadEnvelopeCache.Get(b)
 	return seen
 }
 
@@ -153,8 +152,7 @@ func (s *Service) setSeenPayloadEnvelope(root [32]byte, builderIdx primitives.Bu
 	if s.seenPayloadEnvelopeCache == nil {
 		return
 	}
-	s.seenPayloadEnvelopeLock.Lock()
-	defer s.seenPayloadEnvelopeLock.Unlock()
+
 	b := append(bytesutil.Bytes32(uint64(builderIdx)), root[:]...)
-	s.seenPayloadEnvelopeCache.Add(string(b), true)
+	s.seenPayloadEnvelopeCache.Add(b, true)
 }

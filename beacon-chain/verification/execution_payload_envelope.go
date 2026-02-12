@@ -62,13 +62,13 @@ type EnvelopeVerifier struct {
 }
 
 // VerifyBlockRootSeen verifies if the block root has been seen before.
-func (v *EnvelopeVerifier) VerifyBlockRootSeen(parentSeen func([32]byte) bool) (err error) {
+func (v *EnvelopeVerifier) VerifyBlockRootSeen(blockRootSeen func([32]byte) bool) (err error) {
 	defer v.record(RequireBlockRootSeen, &err)
 	env, err := v.e.Envelope()
 	if err != nil {
 		return errors.Wrap(err, "failed to get envelope")
 	}
-	if parentSeen != nil && parentSeen(env.BeaconBlockRoot()) {
+	if blockRootSeen != nil && blockRootSeen(env.BeaconBlockRoot()) {
 		return nil
 	}
 	return fmt.Errorf("%w: root=%#x slot=%d builder=%d", ErrEnvelopeBlockRootNotSeen, env.BeaconBlockRoot(), env.Slot(), env.BuilderIndex())

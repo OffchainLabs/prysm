@@ -150,7 +150,6 @@ type Service struct {
 	rateLimiter                         *limiter
 	seenBlockLock                       sync.RWMutex
 	seenBlockCache                      *lru.Cache
-	seenPayloadEnvelopeLock             sync.RWMutex
 	seenPayloadEnvelopeCache            *lru.Cache
 	seenBlobLock                        sync.RWMutex
 	seenBlobCache                       *lru.Cache
