@@ -44,6 +44,92 @@ func TestLatestBlockHash(t *testing.T) {
 	})
 }
 
+func TestIsAttestationSameSlot(t *testing.T) {
+	buildStateWithBlockRoots := func(t *testing.T, stateSlot primitives.Slot, roots map[primitives.Slot][]byte) *state_native.BeaconState {
+		t.Helper()
+
+		cfg := params.BeaconConfig()
+		blockRoots := make([][]byte, cfg.SlotsPerHistoricalRoot)
+		for slot, root := range roots {
+			blockRoots[slot%cfg.SlotsPerHistoricalRoot] = root
+		}
+
+		stIface, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			Slot:       stateSlot,
+			BlockRoots: blockRoots,
+		})
+		require.NoError(t, err)
+		return stIface.(*state_native.BeaconState)
+	}
+
+	rootA := bytes.Repeat([]byte{0xAA}, 32)
+	rootB := bytes.Repeat([]byte{0xBB}, 32)
+	rootC := bytes.Repeat([]byte{0xCC}, 32)
+
+	tests := []struct {
+		name      string
+		stateSlot primitives.Slot
+		slot      primitives.Slot
+		blockRoot []byte
+		roots     map[primitives.Slot][]byte
+		want      bool
+	}{
+		{
+			name:      "slot zero always true",
+			stateSlot: 1,
+			slot:      0,
+			blockRoot: rootA,
+			roots:     map[primitives.Slot][]byte{},
+			want:      true,
+		},
+		{
+			name:      "matching current different previous",
+			stateSlot: 6,
+			slot:      4,
+			blockRoot: rootA,
+			roots: map[primitives.Slot][]byte{
+				4: rootA,
+				3: rootB,
+			},
+			want: true,
+		},
+		{
+			name:      "matching current same previous",
+			stateSlot: 6,
+			slot:      4,
+			blockRoot: rootA,
+			roots: map[primitives.Slot][]byte{
+				4: rootA,
+				3: rootA,
+			},
+			want: false,
+		},
+		{
+			name:      "non matching current",
+			stateSlot: 6,
+			slot:      4,
+			blockRoot: rootC,
+			roots: map[primitives.Slot][]byte{
+				4: rootA,
+				3: rootB,
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := buildStateWithBlockRoots(t, tt.stateSlot, tt.roots)
+			var rootArr [32]byte
+			copy(rootArr[:], tt.blockRoot)
+
+			got, err := st.IsAttestationSameSlot(rootArr, tt.slot)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestBuilderPubkey(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
 		stIface, _ := util.DeterministicGenesisState(t, 1)
@@ -165,4 +251,80 @@ func TestBuilderPendingPayments_UnsupportedVersion(t *testing.T) {
 
 	_, err = st.BuilderPendingPayments()
 	require.ErrorContains(t, "BuilderPendingPayments", err)
+}
+
+func TestBuilderPendingPayment(t *testing.T) {
+	t.Run("returns copy", func(t *testing.T) {
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+		payments := make([]*ethpb.BuilderPendingPayment, 2*slotsPerEpoch)
+		target := uint64(slotsPerEpoch + 1)
+		payments[target] = &ethpb.BuilderPendingPayment{Weight: 10}
+
+		st, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+			BuilderPendingPayments: payments,
+		})
+		require.NoError(t, err)
+
+		payment, err := st.BuilderPendingPayment(target)
+		require.NoError(t, err)
+
+		// mutate returned copy
+		payment.Weight = 99
+
+		original, err := st.BuilderPendingPayment(target)
+		require.NoError(t, err)
+		require.Equal(t, uint64(10), uint64(original.Weight))
+	})
+
+	t.Run("unsupported version", func(t *testing.T) {
+		stIface, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		require.NoError(t, err)
+		st := stIface.(*state_native.BeaconState)
+
+		_, err = st.BuilderPendingPayment(0)
+		require.ErrorContains(t, "BuilderPendingPayment", err)
+	})
+
+	t.Run("out of range", func(t *testing.T) {
+		stIface, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+			BuilderPendingPayments: []*ethpb.BuilderPendingPayment{},
+		})
+		require.NoError(t, err)
+
+		_, err = stIface.BuilderPendingPayment(0)
+		require.ErrorContains(t, "out of range", err)
+	})
+}
+
+func TestExecutionPayloadAvailability(t *testing.T) {
+	t.Run("unsupported version", func(t *testing.T) {
+		stIface, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		require.NoError(t, err)
+		st := stIface.(*state_native.BeaconState)
+
+		_, err = st.ExecutionPayloadAvailability(0)
+		require.ErrorContains(t, "ExecutionPayloadAvailability", err)
+	})
+
+	t.Run("reads expected bit", func(t *testing.T) {
+		// Ensure the backing slice is large enough.
+		availability := make([]byte, params.BeaconConfig().SlotsPerHistoricalRoot/8)
+
+		// Pick a slot and set its corresponding bit.
+		slot := primitives.Slot(9) // byteIndex=1, bitIndex=1
+		availability[1] = 0b00000010
+
+		stIface, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+			ExecutionPayloadAvailability: availability,
+		})
+		require.NoError(t, err)
+
+		bit, err := stIface.ExecutionPayloadAvailability(slot)
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), bit)
+
+		otherBit, err := stIface.ExecutionPayloadAvailability(8)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), otherBit)
+	})
 }

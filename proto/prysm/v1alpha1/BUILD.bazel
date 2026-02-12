@@ -195,6 +195,7 @@ ssz_fulu_objs = [
 ]
 
 ssz_gloas_objs = [
+    "BlindedExecutionPayloadEnvelope",
     "BuilderPendingPayment",
     "BuilderPendingWithdrawal",
     "DataColumnSidecarGloas",
@@ -204,6 +205,7 @@ ssz_gloas_objs = [
     "PayloadAttestationMessage",
     "ExecutionPayloadBid",
     "SignedExecutionPayloadBid",
+    "SignedBlindedExecutionPayloadEnvelope",
     "SignedExecutionPayloadEnvelope",
     "BeaconBlockGloas",
     "SignedBeaconBlockGloas",

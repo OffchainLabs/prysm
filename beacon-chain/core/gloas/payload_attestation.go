@@ -77,7 +77,7 @@ func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body 
 
 // indexedPayloadAttestation converts a payload attestation into its indexed form.
 func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState, att *eth.PayloadAttestation) (*consensus_types.IndexedPayloadAttestation, error) {
-	committee, err := payloadCommittee(ctx, st, att.Data.Slot)
+	committee, err := PayloadCommittee(ctx, st, att.Data.Slot)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 	}, nil
 }
 
-// payloadCommittee returns the payload timeliness committee for a given slot for the state.
+// PayloadCommittee returns the payload timeliness committee for a given slot for the state.
 //
 //	<spec fn="get_ptc" fork="gloas" hash="ae15f761">
 //	def get_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
@@ -115,7 +115,7 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 //	        state, indices, seed, size=PTC_SIZE, shuffle_indices=False
 //	    )
 //	</spec>
-func payloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
+func PayloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
 	epoch := slots.ToEpoch(slot)
 	seed, err := ptcSeed(st, epoch, slot)
 	if err != nil {
@@ -323,24 +323,24 @@ func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex
 
 // validIndexedPayloadAttestation verifies the signature of an indexed payload attestation.
 //
-//	<spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="cf1e65b5">
+//	<spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="d76e0f89">
 //	def is_valid_indexed_payload_attestation(
-//	    state: BeaconState, indexed_payload_attestation: IndexedPayloadAttestation
+//	    state: BeaconState, attestation: IndexedPayloadAttestation
 //	) -> bool:
 //	    """
-//	    Check if ``indexed_payload_attestation`` is non-empty, has sorted indices, and has
+//	    Check if ``attestation`` is non-empty, has sorted indices, and has
 //	    a valid aggregate signature.
 //	    """
 //	    # Verify indices are non-empty and sorted
-//	    indices = indexed_payload_attestation.attesting_indices
+//	    indices = attestation.attesting_indices
 //	    if len(indices) == 0 or not indices == sorted(indices):
 //	        return False
 //
 //	    # Verify aggregate signature
 //	    pubkeys = [state.validators[i].pubkey for i in indices]
-//	    domain = get_domain(state, DOMAIN_PTC_ATTESTER, None)
-//	    signing_root = compute_signing_root(indexed_payload_attestation.data, domain)
-//	    return bls.FastAggregateVerify(pubkeys, signing_root, indexed_payload_attestation.signature)
+//	    domain = get_domain(state, DOMAIN_PTC_ATTESTER, compute_epoch_at_slot(attestation.data.slot))
+//	    signing_root = compute_signing_root(attestation.data, domain)
+//	    return bls.FastAggregateVerify(pubkeys, signing_root, attestation.signature)
 //	</spec>
 func validIndexedPayloadAttestation(st state.ReadOnlyBeaconState, att *consensus_types.IndexedPayloadAttestation) error {
 	indices := att.AttestingIndices
