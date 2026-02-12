@@ -112,21 +112,6 @@ func (s *Store) setNodeAndParentValidated(ctx context.Context, pn *PayloadNode) 
 	return s.setNodeAndParentValidated(ctx, pn.node.parent)
 }
 
-// fullAncestor returns the highest ancestor with a full payload that a block with the
-// given root has. If there is a payload for the past root, then it will return that full
-// node. Otherwise it will use the full parent actually being an ancestor of the given root
-func (s *Store) fullAncestor(root [32]byte) *PayloadNode {
-	fn, ok := s.fullNodeByRoot[root]
-	if ok {
-		return fn
-	}
-	en := s.emptyNodeByRoot[root]
-	if en == nil {
-		return nil
-	}
-	return s.fullParent(en)
-}
-
 // fullParent returns the latest full node that this block builds on.
 func (s *Store) fullParent(pn *PayloadNode) *PayloadNode {
 	parent := pn.node.parent
