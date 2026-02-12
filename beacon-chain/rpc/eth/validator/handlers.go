@@ -1333,7 +1333,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = r[:]
 	} else {
-		dependentRoot, err = ptcDependentRoot(st, requestedEpoch)
+		dependentRoot, err = attestationDependentRoot(st, requestedEpoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -1354,20 +1354,6 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, resp)
 }
 
-// ptcDependentRoot returns the block root that PTC assignments depend on.
-// Per the spec: get_block_root_at_slot(state, compute_start_slot_at_epoch(epoch - 1) - 1)
-// This should only be called for epoch > 1 (caller handles epoch <= 1 with genesis root).
-func ptcDependentRoot(st state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
-	prevEpochStartSlot, err := slots.EpochStart(epoch.Sub(1))
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get previous epoch start slot")
-	}
-	root, err := helpers.BlockRootAtSlot(st, prevEpochStartSlot-1)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get block root")
-	}
-	return root, nil
-}
 
 // GetLiveness requests the beacon node to indicate if a validator has been observed to be live in a given epoch.
 // The beacon node might detect liveness by observing messages from the validator on the network,
