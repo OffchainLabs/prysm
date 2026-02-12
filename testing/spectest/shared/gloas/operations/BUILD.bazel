@@ -4,8 +4,8 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = [
-        "execution_payload.go",
         "attestation.go",
+        "execution_payload.go",
         "execution_payload_bid.go",
         "helpers.go",
         "payload_attestation.go",
@@ -14,9 +14,9 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/gloas/operations",
     visibility = ["//visibility:public"],
     deps = [
+        "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
-        "//beacon-chain/core/altair:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
         "//config/params:go_default_library",
