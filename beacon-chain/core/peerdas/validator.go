@@ -74,22 +74,21 @@ func PopulateFromSidecar(sidecar blocks.VerifiedRODataColumn) *SidecarReconstruc
 // ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#validator-custody
 func ValidatorsCustodyRequirement(finalized beaconState.ReadOnlyBalances, validatorsIndex map[primitives.ValidatorIndex]bool) (uint64, error) {
-	totalNodeBalance := uint64(0)
 	cfg := params.BeaconConfig()
+	idxs := make([]primitives.ValidatorIndex, 0, len(validatorsIndex))
 	for index := range validatorsIndex {
-		bal, err := finalized.BalanceAtIndex(index)
-		if err != nil {
-			return 0, errors.Wrapf(err, "validator at index %v", index)
-		}
-
-		totalNodeBalance += min(uint64(bal), cfg.MaxEffectiveBalance)
+		idxs = append(idxs, index)
+	}
+	totalBalance, _, err := finalized.EffectiveBalances(idxs)
+	if err != nil {
+		return 0, errors.Wrap(err, "effective balances")
 	}
 
 	numberOfCustodyGroups := cfg.NumberOfCustodyGroups
 	validatorCustodyRequirement := cfg.ValidatorCustodyRequirement
 	balancePerAdditionalCustodyGroup := cfg.BalancePerAdditionalCustodyGroup
 
-	count := totalNodeBalance / balancePerAdditionalCustodyGroup
+	count := totalBalance / balancePerAdditionalCustodyGroup
 	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroups), nil
 }
 

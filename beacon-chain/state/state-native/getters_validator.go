@@ -80,6 +80,27 @@ func (b *BeaconState) ValidatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Va
 	return b.validatorAtIndex(idx)
 }
 
+// EffectiveBalances returns the sum of the effective balances of the given list of validator indices, the eb of each given validator, or an
+// error if one of the indices is out of bounds, or the state wasn't correctly initialized.
+func (b *BeaconState) EffectiveBalances(idxs []primitives.ValidatorIndex) (uint64, []uint64, error) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	balances := make([]uint64, len(idxs))
+	var sum uint64
+	for i := range idxs {
+		if b.validatorsMultiValue == nil {
+			return 0, nil, state.ErrNilValidatorsInState
+		}
+		v, err := b.validatorsMultiValue.At(b, uint64(idxs[i]))
+		if err != nil {
+			return 0, nil, err
+		}
+		balances[i] = v.EffectiveBalance
+		sum += v.EffectiveBalance
+	}
+	return sum, balances, nil
+}
+
 func (b *BeaconState) validatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Validator, error) {
 	if b.validatorsMultiValue == nil {
 		return &ethpb.Validator{}, nil

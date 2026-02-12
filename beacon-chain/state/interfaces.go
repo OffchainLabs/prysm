@@ -152,6 +152,7 @@ type ReadOnlyBalances interface {
 	Balances() []uint64
 	BalanceAtIndex(idx primitives.ValidatorIndex) (uint64, error)
 	BalancesLength() int
+	EffectiveBalances([]primitives.ValidatorIndex) (uint64, []uint64, error)
 }
 
 // ReadOnlyCheckpoint defines a struct which only has read access to checkpoint methods.
