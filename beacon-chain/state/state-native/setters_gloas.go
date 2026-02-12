@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 // RotateBuilderPendingPayments rotates the queue by dropping slots per epoch payments from the
@@ -159,5 +160,125 @@ func (b *BeaconState) UpdateExecutionPayloadAvailabilityAtIndex(idx uint64, val 
 	}
 
 	b.markFieldAsDirty(types.ExecutionPayloadAvailability)
+	return nil
+}
+
+// UpdatePendingPaymentWeight updates the builder pending payment weight based on attestation participation.
+//
+// This is a no-op for pre-Gloas forks.
+//
+// Spec v1.7.0-alpha pseudocode:
+//
+//	if data.target.epoch == get_current_epoch(state):
+//	    current_epoch_target = True
+//	    epoch_participation = state.current_epoch_participation
+//	    payment = state.builder_pending_payments[SLOTS_PER_EPOCH + data.slot % SLOTS_PER_EPOCH]
+//	else:
+//	    current_epoch_target = False
+//	    epoch_participation = state.previous_epoch_participation
+//	    payment = state.builder_pending_payments[data.slot % SLOTS_PER_EPOCH]
+//
+//	proposer_reward_numerator = 0
+//	for index in get_attesting_indices(state, attestation):
+//	    will_set_new_flag = False
+//	    for flag_index, weight in enumerate(PARTICIPATION_FLAG_WEIGHTS):
+//	        if flag_index in participation_flag_indices and not has_flag(epoch_participation[index], flag_index):
+//	            epoch_participation[index] = add_flag(epoch_participation[index], flag_index)
+//	            proposer_reward_numerator += get_base_reward(state, index) * weight
+//	            # [New in Gloas:EIP7732]
+//	            will_set_new_flag = True
+//	    if (
+//	        will_set_new_flag
+//	        and is_attestation_same_slot(state, data)
+//	        and payment.withdrawal.amount > 0
+//	    ):
+//	        payment.weight += state.validators[index].effective_balance
+//	if current_epoch_target:
+//	    state.builder_pending_payments[SLOTS_PER_EPOCH + data.slot % SLOTS_PER_EPOCH] = payment
+//	else:
+//	    state.builder_pending_payments[data.slot % SLOTS_PER_EPOCH] = payment
+func (b *BeaconState) UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64, participatedFlags map[uint8]bool) error {
+	var (
+		paymentSlot    primitives.Slot
+		currentPayment *ethpb.BuilderPendingPayment
+		weight         primitives.Gwei
+	)
+
+	early, err := func() (bool, error) {
+		b.lock.RLock()
+		defer b.lock.RUnlock()
+
+		if b.version < version.Gloas {
+			return true, nil
+		}
+
+		data := att.GetData()
+		var beaconBlockRoot [32]byte
+		copy(beaconBlockRoot[:], data.BeaconBlockRoot)
+		sameSlot, err := b.IsAttestationSameSlot(beaconBlockRoot, data.Slot)
+		if err != nil {
+			return false, err
+		}
+		if !sameSlot {
+			return true, nil
+		}
+
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+		var epochParticipation []byte
+
+		if data.Target != nil && data.Target.Epoch == slots.ToEpoch(b.slot) {
+			paymentSlot = slotsPerEpoch + (data.Slot % slotsPerEpoch)
+			epochParticipation = b.currentEpochParticipation
+		} else {
+			paymentSlot = data.Slot % slotsPerEpoch
+			epochParticipation = b.previousEpochParticipation
+		}
+
+		if uint64(paymentSlot) >= uint64(len(b.builderPendingPayments)) {
+			return false, fmt.Errorf("builder pending payments index %d out of range (len=%d)", paymentSlot, len(b.builderPendingPayments))
+		}
+		currentPayment = b.builderPendingPayments[paymentSlot]
+		if currentPayment.Withdrawal.Amount == 0 {
+			return true, nil
+		}
+
+		cfg := params.BeaconConfig()
+		flagIndices := []uint8{cfg.TimelySourceFlagIndex, cfg.TimelyTargetFlagIndex, cfg.TimelyHeadFlagIndex}
+		for _, idx := range indices {
+			if idx >= uint64(len(epochParticipation)) {
+				return false, fmt.Errorf("index %d exceeds participation length %d", idx, len(epochParticipation))
+			}
+			participation := epochParticipation[idx]
+			for _, f := range flagIndices {
+				if !participatedFlags[f] {
+					continue
+				}
+				if participation&(1<<f) == 0 {
+					v, err := b.validatorAtIndexReadOnly(primitives.ValidatorIndex(idx))
+					if err != nil {
+						return false, fmt.Errorf("validator at index %d: %w", idx, err)
+					}
+					weight += primitives.Gwei(v.EffectiveBalance())
+					break
+				}
+			}
+		}
+		return false, nil
+	}()
+	if err != nil {
+		return err
+	}
+	if early || weight == 0 {
+		return nil
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	newPayment := ethpb.CopyBuilderPendingPayment(currentPayment)
+	newPayment.Weight += weight
+	b.builderPendingPayments[paymentSlot] = newPayment
+	b.markFieldAsDirty(types.BuilderPendingPayments)
+
 	return nil
 }
