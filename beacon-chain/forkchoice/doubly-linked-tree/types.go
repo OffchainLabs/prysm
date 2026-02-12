@@ -21,23 +21,26 @@ type ForkChoice struct {
 	balancesByRoot      forkchoice.BalancesByRooter // handler to obtain balances for the state with a given root
 }
 
+var _ forkchoice.ForkChoicer = (*ForkChoice)(nil)
+
 // Store defines the fork choice store which includes block nodes and the last view of checkpoint information.
 type Store struct {
-	justifiedCheckpoint           *forkchoicetypes.Checkpoint            // latest justified epoch in store.
-	unrealizedJustifiedCheckpoint *forkchoicetypes.Checkpoint            // best unrealized justified checkpoint in store.
-	unrealizedFinalizedCheckpoint *forkchoicetypes.Checkpoint            // best unrealized finalized checkpoint in store.
-	prevJustifiedCheckpoint       *forkchoicetypes.Checkpoint            // previous justified checkpoint in store.
-	finalizedCheckpoint           *forkchoicetypes.Checkpoint            // latest finalized epoch in store.
-	proposerBoostRoot             [fieldparams.RootLength]byte           // latest block root that was boosted after being received in a timely manner.
-	previousProposerBoostRoot     [fieldparams.RootLength]byte           // previous block root that was boosted after being received in a timely manner.
-	previousProposerBoostScore    uint64                                 // previous proposer boosted root score.
-	finalizedDependentRoot        [fieldparams.RootLength]byte           // dependent root at finalized checkpoint.
-	committeeWeight               uint64                                 // tracks the total active validator balance divided by the number of slots per Epoch.
-	treeRootNode                  *Node                                  // the root node of the store tree.
-	headNode                      *Node                                  // last head Node
-	nodeByRoot                    map[[fieldparams.RootLength]byte]*Node // nodes indexed by roots.
-	slashedIndices                map[primitives.ValidatorIndex]bool     // the list of equivocating validator indices
-	originRoot                    [fieldparams.RootLength]byte           // The genesis block root
+	justifiedCheckpoint           *forkchoicetypes.Checkpoint                   // latest justified epoch in store.
+	unrealizedJustifiedCheckpoint *forkchoicetypes.Checkpoint                   // best unrealized justified checkpoint in store.
+	unrealizedFinalizedCheckpoint *forkchoicetypes.Checkpoint                   // best unrealized finalized checkpoint in store.
+	prevJustifiedCheckpoint       *forkchoicetypes.Checkpoint                   // previous justified checkpoint in store.
+	finalizedCheckpoint           *forkchoicetypes.Checkpoint                   // latest finalized epoch in store.
+	proposerBoostRoot             [fieldparams.RootLength]byte                  // latest block root that was boosted after being received in a timely manner.
+	previousProposerBoostRoot     [fieldparams.RootLength]byte                  // previous block root that was boosted after being received in a timely manner.
+	previousProposerBoostScore    uint64                                        // previous proposer boosted root score.
+	finalizedDependentRoot        [fieldparams.RootLength]byte                  // dependent root at finalized checkpoint.
+	committeeWeight               uint64                                        // tracks the total active validator balance divided by the number of slots per Epoch.
+	treeRootNode                  *Node                                         // the root node of the store tree.
+	headNode                      *Node                                         // last head Node
+	emptyNodeByRoot               map[[fieldparams.RootLength]byte]*PayloadNode // nodes indexed by roots.
+	fullNodeByRoot                map[[fieldparams.RootLength]byte]*PayloadNode // full nodes (the payload was present) indexed by beacon block root.
+	slashedIndices                map[primitives.ValidatorIndex]bool            // the list of equivocating validator indices
+	originRoot                    [fieldparams.RootLength]byte                  // The genesis block root
 	genesisTime                   time.Time
 	highestReceivedNode           *Node                                      // The highest slot node.
 	receivedBlocksLastEpoch       [fieldparams.SlotsPerEpoch]primitives.Slot // Using `highestReceivedSlot`. The slot of blocks received in the last epoch.
@@ -49,19 +52,28 @@ type Store struct {
 type Node struct {
 	slot                     primitives.Slot              // slot of the block converted to the node.
 	root                     [fieldparams.RootLength]byte // root of the block converted to the node.
-	payloadHash              [fieldparams.RootLength]byte // payloadHash of the block converted to the node.
-	parent                   *Node                        // parent index of this node.
+	blockHash                [fieldparams.RootLength]byte // payloadHash of the block converted to the node.
+	parent                   *PayloadNode                 // parent index of this node.
 	target                   *Node                        // target checkpoint for
-	children                 []*Node                      // the list of direct children of this Node
+	bestDescendant           *Node                        // bestDescendant node of this node.
 	justifiedEpoch           primitives.Epoch             // justifiedEpoch of this node.
 	unrealizedJustifiedEpoch primitives.Epoch             // the epoch that would be justified if the block would be advanced to the next epoch.
 	finalizedEpoch           primitives.Epoch             // finalizedEpoch of this node.
 	unrealizedFinalizedEpoch primitives.Epoch             // the epoch that would be finalized if the block would be advanced to the next epoch.
 	balance                  uint64                       // the balance that voted for this node directly
 	weight                   uint64                       // weight of this node: the total balance including children
-	bestDescendant           *Node                        // bestDescendant node of this node.
-	optimistic               bool                         // whether the block has been fully validated or not
-	timestamp                time.Time                    // The timestamp when the node was inserted.
+}
+
+// PayloadNode defines a full Forkchoice node after the Gloas fork, with the payload status either empty of full
+type PayloadNode struct {
+	optimistic     bool      // whether the block has been fully validated or not
+	full           bool      // whether this node represents a payload present or not
+	weight         uint64    // weight of this node: the total balance including children
+	balance        uint64    // the balance that voted for this node directly
+	bestDescendant *Node     // bestDescendant node of this payload node.
+	node           *Node     // the consensus part of this full forkchoice node
+	timestamp      time.Time // The timestamp when the node was inserted.
+	children       []*Node   // the list of direct children of this Node
 }
 
 // Vote defines an individual validator's vote.
