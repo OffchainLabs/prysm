@@ -132,12 +132,12 @@ func (s *Store) parentHash(pn *PayloadNode) [32]byte {
 // latestHashForRoot returns the latest payload hash for the given block root.
 func (s *Store) latestHashForRoot(root [32]byte) [32]byte {
 	// try to get the full node first
-	fn, ok := s.fullNodeByRoot[root]
-	if ok && fn != nil {
+	fn := s.fullNodeByRoot[root]
+	if fn != nil {
 		return fn.node.blockHash
 	}
 	en := s.emptyNodeByRoot[root]
-	if !ok || en == nil {
+	if en == nil {
 		// This should not happen
 		return [32]byte{}
 	}
