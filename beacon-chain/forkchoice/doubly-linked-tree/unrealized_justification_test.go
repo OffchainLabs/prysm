@@ -76,7 +76,7 @@ func TestStore_LongFork(t *testing.T) {
 	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'c'}, 2))
 
 	// Add an attestation to c, it is head
-	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'c'}, 1)
+	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'c'}, 1, true)
 	f.justifiedBalances = []uint64{100}
 	c := f.store.emptyNodeByRoot[[32]byte{'c'}]
 	require.Equal(t, primitives.Epoch(2), slots.ToEpoch(c.node.slot))
@@ -153,7 +153,7 @@ func TestStore_NoDeadLock(t *testing.T) {
 	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'h'}, 2))
 	require.NoError(t, f.store.setUnrealizedFinalizedEpoch([32]byte{'h'}, 1))
 	// Add an attestation for h
-	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'h'}, 1)
+	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'h'}, 1, true)
 
 	// Epoch 3
 	// Current Head is H
@@ -225,7 +225,7 @@ func TestStore_ForkNextEpoch(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 
 	// Insert an attestation to H, H is head
-	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'h'}, 1)
+	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'h'}, 1, true)
 	f.justifiedBalances = []uint64{100}
 	headRoot, err := f.Head(ctx)
 	require.NoError(t, err)

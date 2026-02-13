@@ -429,9 +429,9 @@ func Test_NotifyForkchoiceUpdateRecursive_DoublyLinkedTree(t *testing.T) {
 
 	// Insert Attestations to D, F and G so that they have higher weight than D
 	// Ensure G is head
-	fcs.ProcessAttestation(ctx, []uint64{0}, brd, 1)
-	fcs.ProcessAttestation(ctx, []uint64{1}, brf, 1)
-	fcs.ProcessAttestation(ctx, []uint64{2}, brg, 1)
+	fcs.ProcessAttestation(ctx, []uint64{0}, brd, 1, true)
+	fcs.ProcessAttestation(ctx, []uint64{1}, brf, 1, true)
+	fcs.ProcessAttestation(ctx, []uint64{2}, brg, 1, true)
 	fcs.SetBalancesByRooter(service.cfg.StateGen.ActiveNonSlashedBalancesByRoot)
 	jc := &forkchoicetypes.Checkpoint{Epoch: 0, Root: bra}
 	require.NoError(t, fcs.UpdateJustifiedCheckpoint(ctx, jc))
