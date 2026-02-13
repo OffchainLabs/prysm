@@ -683,8 +683,8 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) WaitForChainStart(arg0, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForChainStart", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).WaitForChainStart), varargs...)
 }
 
-// GetExecutionPayloadEnvelope mocks base method.
-func (m *MockBeaconNodeValidatorClient) GetExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.ExecutionPayloadEnvelopeRequest, arg2 ...grpc.CallOption) (*eth.ExecutionPayloadEnvelopeResponse, error) {
+// ExecutionPayloadEnvelope mocks base method.
+func (m *MockBeaconNodeValidatorClient) ExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.ExecutionPayloadEnvelopeRequest, arg2 ...grpc.CallOption) (*eth.ExecutionPayloadEnvelopeResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{arg0, arg1}
 	for _, a := range arg2 {
@@ -696,11 +696,11 @@ func (m *MockBeaconNodeValidatorClient) GetExecutionPayloadEnvelope(arg0 context
 	return ret0, ret1
 }
 
-// GetExecutionPayloadEnvelope indicates an expected call of GetExecutionPayloadEnvelope.
-func (mr *MockBeaconNodeValidatorClientMockRecorder) GetExecutionPayloadEnvelope(arg0, arg1 any, arg2 ...any) *gomock.Call {
+// ExecutionPayloadEnvelope indicates an expected call of ExecutionPayloadEnvelope.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) ExecutionPayloadEnvelope(arg0, arg1 any, arg2 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetExecutionPayloadEnvelope), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).ExecutionPayloadEnvelope), varargs...)
 }
 
 // PublishExecutionPayloadEnvelope mocks base method.

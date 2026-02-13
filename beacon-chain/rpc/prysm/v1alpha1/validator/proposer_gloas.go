@@ -67,7 +67,7 @@ func (vs *Server) setGloasExecutionData(
 // buildExecutionPayloadEnvelope creates and caches the execution payload envelope
 // after the block is fully built (state root set). The envelope is cached with a
 // zeroed state root; the actual post-payload state root is computed lazily in
-// GetExecutionPayloadEnvelope once the block has been submitted and the post-block
+// ExecutionPayloadEnvelope once the block has been submitted and the post-block
 // state is available via StateGen.
 func (vs *Server) buildExecutionPayloadEnvelope(
 	ctx context.Context,
@@ -93,7 +93,7 @@ func (vs *Server) buildExecutionPayloadEnvelope(
 		BuilderIndex:      primitives.BuilderIndex(sBlk.Block().ProposerIndex()),
 		BeaconBlockRoot:   blockRoot[:],
 		Slot:              sBlk.Block().Slot(),
-		StateRoot:         make([]byte, 32), // zeroed; computed lazily in GetExecutionPayloadEnvelope
+		StateRoot:         make([]byte, 32), // zeroed; computed lazily in ExecutionPayloadEnvelope
 	}
 
 	vs.ExecutionPayloadEnvelopeCache.Set(envelope, local.BlobsBundler)
@@ -176,12 +176,12 @@ func extractKzgCommitments(blobsBundler enginev1.BlobsBundler) [][]byte {
 	return nil
 }
 
-// GetExecutionPayloadEnvelope retrieves a cached execution payload envelope.
+// ExecutionPayloadEnvelope retrieves a cached execution payload envelope.
 // If the envelope has a zeroed state root (self-build), the post-payload state
 // root is lazily computed using the post-block state from StateGen.
 //
 // gRPC endpoint: /eth/v1alpha1/validator/execution_payload_envelope/{slot}/{builder_index}
-func (vs *Server) GetExecutionPayloadEnvelope(
+func (vs *Server) ExecutionPayloadEnvelope(
 	ctx context.Context,
 	req *ethpb.ExecutionPayloadEnvelopeRequest,
 ) (*ethpb.ExecutionPayloadEnvelopeResponse, error) {
@@ -225,7 +225,7 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 }
 
 // PublishExecutionPayloadEnvelope validates and broadcasts a signed execution payload envelope.
-// This is called by validators after signing the envelope retrieved from GetExecutionPayloadEnvelope.
+// This is called by validators after signing the envelope retrieved from ExecutionPayloadEnvelope.
 //
 // gRPC endpoint: POST /eth/v1alpha1/validator/execution_payload_envelope
 func (vs *Server) PublishExecutionPayloadEnvelope(

@@ -4,13 +4,17 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/pkg/errors"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func testExecutionPayloadEnvelope(slot primitives.Slot, builderIndex primitives.BuilderIndex) *ethpb.ExecutionPayloadEnvelope {
@@ -34,7 +38,7 @@ func testExecutionPayloadEnvelope(slot primitives.Slot, builderIndex primitives.
 	}
 }
 
-func TestGetExecutionPayloadEnvelope(t *testing.T) {
+func TestExecutionPayloadEnvelope(t *testing.T) {
 	validator, m, _, finish := setup(t, false)
 	defer finish()
 
@@ -44,7 +48,7 @@ func TestGetExecutionPayloadEnvelope(t *testing.T) {
 	expectedEnvelope := testExecutionPayloadEnvelope(slot, builderIndex)
 
 	m.validatorClient.EXPECT().
-		GetExecutionPayloadEnvelope(gomock.Any(), slot, builderIndex).
+		ExecutionPayloadEnvelope(gomock.Any(), slot, builderIndex).
 		Return(expectedEnvelope, nil)
 
 	b := &ethpb.GenericBeaconBlock{
@@ -68,7 +72,7 @@ func TestGetExecutionPayloadEnvelope(t *testing.T) {
 	require.DeepEqual(t, expectedEnvelope, envelope)
 }
 
-func TestGetExecutionPayloadEnvelope_NilBlock(t *testing.T) {
+func TestExecutionPayloadEnvelope_NilBlock(t *testing.T) {
 	validator, _, _, finish := setup(t, false)
 	defer finish()
 
@@ -80,7 +84,7 @@ func TestGetExecutionPayloadEnvelope_NilBlock(t *testing.T) {
 	require.ErrorContains(t, "expected GLOAS block but got nil", err)
 }
 
-func TestGetExecutionPayloadEnvelope_MissingBid(t *testing.T) {
+func TestExecutionPayloadEnvelope_MissingBid(t *testing.T) {
 	validator, _, _, finish := setup(t, false)
 	defer finish()
 
@@ -97,12 +101,12 @@ func TestGetExecutionPayloadEnvelope_MissingBid(t *testing.T) {
 	require.ErrorContains(t, "block missing signed execution payload bid", err)
 }
 
-func TestGetExecutionPayloadEnvelope_ClientError(t *testing.T) {
+func TestExecutionPayloadEnvelope_ClientError(t *testing.T) {
 	validator, m, _, finish := setup(t, false)
 	defer finish()
 
 	m.validatorClient.EXPECT().
-		GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any(), gomock.Any()).
+		ExecutionPayloadEnvelope(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, errors.New("connection refused"))
 
 	b := &ethpb.GenericBeaconBlock{
@@ -202,4 +206,66 @@ func TestSignExecutionPayloadEnvelope_UsesDomainBeaconBuilder(t *testing.T) {
 
 	_, err := validator.signExecutionPayloadEnvelope(t.Context(), kp.pub, 100, envelope)
 	require.NoError(t, err)
+}
+
+// TestProposeBlock_Gloas_EnvelopeAfterBlock verifies that the GLOAS propose flow
+// submits the block first, then retrieves, signs, and publishes the envelope.
+// The envelope's state root is lazily computed by the beacon node from the
+// post-block state, so this ordering is critical.
+func TestProposeBlock_Gloas_EnvelopeAfterBlock(t *testing.T) {
+	hook := logTest.NewGlobal()
+	validator, m, validatorKey, finish := setup(t, false)
+	defer finish()
+
+	var pubKey [fieldparams.BLSPubkeyLength]byte
+	copy(pubKey[:], validatorKey.PublicKey().Marshal())
+
+	blk := util.NewBeaconBlockGloas()
+	builderIndex := blk.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex
+
+	gloasBlock := &ethpb.GenericBeaconBlock{
+		Block: &ethpb.GenericBeaconBlock_Gloas{
+			Gloas: blk.Block,
+		},
+	}
+
+	envelope := testExecutionPayloadEnvelope(1, builderIndex)
+
+	// DomainData for randao signing.
+	m.validatorClient.EXPECT().
+		DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+
+	// BeaconBlock returns a GLOAS block.
+	m.validatorClient.EXPECT().
+		BeaconBlock(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.BlockRequest{})).
+		Return(gloasBlock, nil)
+
+	// DomainData for block signing.
+	m.validatorClient.EXPECT().
+		DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+
+	// Critical ordering: ProposeBeaconBlock must be called BEFORE ExecutionPayloadEnvelope.
+	proposeCall := m.validatorClient.EXPECT().
+		ProposeBeaconBlock(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.GenericSignedBeaconBlock{})).
+		Return(&ethpb.ProposeResponse{BlockRoot: make([]byte, 32)}, nil)
+
+	getEnvelopeCall := m.validatorClient.EXPECT().
+		ExecutionPayloadEnvelope(gomock.Any(), primitives.Slot(1), builderIndex).
+		Return(envelope, nil).
+		After(proposeCall)
+
+	// DomainData for envelope signing.
+	m.validatorClient.EXPECT().
+		DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
+		After(getEnvelopeCall)
+
+	m.validatorClient.EXPECT().
+		PublishExecutionPayloadEnvelope(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.SignedExecutionPayloadEnvelope{})).
+		Return(&emptypb.Empty{}, nil)
+
+	validator.ProposeBlock(t.Context(), 1, pubKey)
+	require.LogsContain(t, hook, "Submitted new block")
 }

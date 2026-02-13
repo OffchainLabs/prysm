@@ -399,7 +399,7 @@ func (c *grpcValidatorClient) ExecutionPayloadEnvelope(ctx context.Context, slot
 		Slot:         slot,
 		BuilderIndex: builderIndex,
 	}
-	resp, err := c.getClient().GetExecutionPayloadEnvelope(ctx, req)
+	resp, err := c.getClient().ExecutionPayloadEnvelope(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(
 			client.ErrConnectionIssue,

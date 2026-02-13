@@ -519,7 +519,7 @@ func (mr *MockValidatorClientMockRecorder) WaitForChainStart(ctx, in any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForChainStart", reflect.TypeOf((*MockValidatorClient)(nil).WaitForChainStart), ctx, in)
 }
 
-// GetExecutionPayloadEnvelope mocks base method.
+// ExecutionPayloadEnvelope mocks base method.
 func (m *MockValidatorClient) ExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, builderIndex primitives.BuilderIndex) (*eth.ExecutionPayloadEnvelope, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ExecutionPayloadEnvelope", ctx, slot, builderIndex)
@@ -528,8 +528,8 @@ func (m *MockValidatorClient) ExecutionPayloadEnvelope(ctx context.Context, slot
 	return ret0, ret1
 }
 
-// GetExecutionPayloadEnvelope indicates an expected call of GetExecutionPayloadEnvelope.
-func (mr *MockValidatorClientMockRecorder) GetExecutionPayloadEnvelope(ctx, slot, builderIndex any) *gomock.Call {
+// ExecutionPayloadEnvelope indicates an expected call of ExecutionPayloadEnvelope.
+func (mr *MockValidatorClientMockRecorder) ExecutionPayloadEnvelope(ctx, slot, builderIndex any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).ExecutionPayloadEnvelope), ctx, slot, builderIndex)
 }

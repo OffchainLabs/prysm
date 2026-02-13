@@ -14,12 +14,12 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	httputil.HandleError(w, "ProduceBlockV4 not yet implemented", http.StatusNotImplemented)
 }
 
-// GetExecutionPayloadEnvelope retrieves a cached execution payload envelope.
+// ExecutionPayloadEnvelope retrieves a cached execution payload envelope.
 //
 // TODO: Implement envelope retrieval from cache.
 // Endpoint: GET /eth/v1/validator/execution_payload_envelope/{slot}/{builder_index}
-func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request) {
-	httputil.HandleError(w, "GetExecutionPayloadEnvelope not yet implemented", http.StatusNotImplemented)
+func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request) {
+	httputil.HandleError(w, "ExecutionPayloadEnvelope not yet implemented", http.StatusNotImplemented)
 }
 
 // PublishExecutionPayloadEnvelope broadcasts a signed execution payload envelope.

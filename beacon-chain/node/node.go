@@ -1010,7 +1010,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		PayloadIDCache:                b.payloadIDCache,
 		ExecutionPayloadEnvelopeCache: b.executionPayloadEnvelopeCache,
 		LCStore:                       b.lcStore,
-    GraffitiInfo:                  web3Service.GraffitiInfo(),
+		GraffitiInfo:                  web3Service.GraffitiInfo(),
 	})
 
 	return b.services.RegisterService(rpcService)
