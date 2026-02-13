@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/pkg/errors"
 )
 
 // Validators participating in consensus on the beacon chain.
@@ -89,11 +90,11 @@ func (b *BeaconState) EffectiveBalances(idxs []primitives.ValidatorIndex) (uint6
 	var sum uint64
 	for i := range idxs {
 		if b.validatorsMultiValue == nil {
-			return 0, nil, state.ErrNilValidatorsInState
+			return 0, nil, errors.Wrap(state.ErrNilValidatorsInState, "nil validators multi-value slice")
 		}
 		v, err := b.validatorsMultiValue.At(b, uint64(idxs[i]))
 		if err != nil {
-			return 0, nil, err
+			return 0, nil, errors.Wrap(err, "validators multi value at index")
 		}
 		balances[i] = v.EffectiveBalance
 		sum += v.EffectiveBalance

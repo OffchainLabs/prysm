@@ -27,6 +27,8 @@ var defaultHotStateDBInterval primitives.Slot = 128
 
 var populatePubkeyCacheOnce sync.Once
 
+// NilCheckableReadOnlyBalances adds the IsNil method to ReadOnlyBalances
+// to allow checking if the underlying state value is nil.
 type NilCheckableReadOnlyBalances interface {
 	state.ReadOnlyBalances
 	IsNil() bool
