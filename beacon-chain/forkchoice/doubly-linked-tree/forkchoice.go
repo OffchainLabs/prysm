@@ -428,15 +428,23 @@ func (f *ForkChoice) InsertSlashedIndex(_ context.Context, index primitives.Vali
 		return
 	}
 
-	node, ok := f.store.emptyNodeByRoot[f.votes[index].currentRoot]
-	if !ok || node == nil {
+	v := f.votes[index]
+	pn, pending := f.store.resolveVoteNode(v.currentRoot, v.currentSlot, v.currentPayloadStatus)
+	if pn == nil {
 		return
 	}
-
-	if node.balance < f.balances[index] {
-		node.balance = 0
+	if pending {
+		if pn.node.balance < f.balances[index] {
+			pn.node.balance = 0
+		} else {
+			pn.node.balance -= f.balances[index]
+		}
+		return
+	}
+	if pn.balance < f.balances[index] {
+		pn.balance = 0
 	} else {
-		node.balance -= f.balances[index]
+		pn.balance -= f.balances[index]
 	}
 }
 

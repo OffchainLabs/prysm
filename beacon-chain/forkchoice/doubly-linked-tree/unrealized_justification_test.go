@@ -76,7 +76,7 @@ func TestStore_LongFork(t *testing.T) {
 	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'c'}, 2))
 
 	// Add an attestation to c, it is head
-	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'c'}, 1, true)
+	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'c'}, params.BeaconConfig().SlotsPerEpoch, true)
 	f.justifiedBalances = []uint64{100}
 	c := f.store.emptyNodeByRoot[[32]byte{'c'}]
 	require.Equal(t, primitives.Epoch(2), slots.ToEpoch(c.node.slot))
@@ -98,8 +98,8 @@ func TestStore_LongFork(t *testing.T) {
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{'c'}, headRoot)
-	require.Equal(t, uint64(0), f.store.emptyNodeByRoot[[32]byte{'d'}].weight)
-	require.Equal(t, uint64(100), f.store.emptyNodeByRoot[[32]byte{'c'}].weight)
+	require.Equal(t, uint64(0), f.store.emptyNodeByRoot[[32]byte{'d'}].node.weight)
+	require.Equal(t, uint64(100), f.store.emptyNodeByRoot[[32]byte{'c'}].node.weight)
 }
 
 //	Epoch 1                Epoch 2               Epoch 3
@@ -153,7 +153,7 @@ func TestStore_NoDeadLock(t *testing.T) {
 	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'h'}, 2))
 	require.NoError(t, f.store.setUnrealizedFinalizedEpoch([32]byte{'h'}, 1))
 	// Add an attestation for h
-	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'h'}, 1, true)
+	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'h'}, params.BeaconConfig().SlotsPerEpoch, true)
 
 	// Epoch 3
 	// Current Head is H
@@ -225,7 +225,7 @@ func TestStore_ForkNextEpoch(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 
 	// Insert an attestation to H, H is head
-	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'h'}, 1, true)
+	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'h'}, params.BeaconConfig().SlotsPerEpoch, true)
 	f.justifiedBalances = []uint64{100}
 	headRoot, err := f.Head(ctx)
 	require.NoError(t, err)
@@ -243,8 +243,8 @@ func TestStore_ForkNextEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{'d'}, headRoot)
 	require.Equal(t, primitives.Epoch(2), f.JustifiedCheckpoint().Epoch)
-	require.Equal(t, uint64(0), f.store.emptyNodeByRoot[[32]byte{'d'}].weight)
-	require.Equal(t, uint64(100), f.store.emptyNodeByRoot[[32]byte{'h'}].weight)
+	require.Equal(t, uint64(0), f.store.emptyNodeByRoot[[32]byte{'d'}].node.weight)
+	require.Equal(t, uint64(100), f.store.emptyNodeByRoot[[32]byte{'h'}].node.weight)
 	// Set current epoch to 3, and H's unrealized checkpoint. Check it's head
 	driftGenesisTime(f, 99, 0)
 	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'h'}, 2))
@@ -252,8 +252,8 @@ func TestStore_ForkNextEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{'h'}, headRoot)
 	require.Equal(t, primitives.Epoch(2), f.JustifiedCheckpoint().Epoch)
-	require.Equal(t, uint64(0), f.store.emptyNodeByRoot[[32]byte{'d'}].weight)
-	require.Equal(t, uint64(100), f.store.emptyNodeByRoot[[32]byte{'h'}].weight)
+	require.Equal(t, uint64(0), f.store.emptyNodeByRoot[[32]byte{'d'}].node.weight)
+	require.Equal(t, uint64(100), f.store.emptyNodeByRoot[[32]byte{'h'}].node.weight)
 }
 
 func TestStore_PullTips_Heuristics(t *testing.T) {
