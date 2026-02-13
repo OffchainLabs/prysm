@@ -168,29 +168,6 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		}
 	}
 
-	// For GLOAS, retrieve and sign the execution payload envelope before
-	// broadcasting the block. This ensures we can bail out early if signing
-	// fails, rather than broadcasting a block with no valid envelope to back it.
-	var signedEnvelope *ethpb.SignedExecutionPayloadEnvelope
-	if blk.Version() >= version.Gloas {
-		envelope, err := v.getExecutionPayloadEnvelope(ctx, slot, b)
-		if err != nil {
-			log.WithError(err).Error("Failed to get execution payload envelope")
-			if v.emitAccountMetrics {
-				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
-			}
-			return
-		}
-		signedEnvelope, err = v.signExecutionPayloadEnvelope(ctx, pubKey, slot, envelope)
-		if err != nil {
-			log.WithError(err).Error("Failed to sign execution payload envelope")
-			if v.emitAccountMetrics {
-				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
-			}
-			return
-		}
-	}
-
 	blkResp, err := v.validatorClient.ProposeBeaconBlock(ctx, genericSignedBlock)
 	if err != nil {
 		log.WithField("slot", slot).WithError(err).Error("Failed to propose block")
@@ -200,8 +177,26 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		return
 	}
 
-	// Publish the signed envelope after block broadcast.
-	if signedEnvelope != nil {
+	// For GLOAS, retrieve, sign, and publish the execution payload envelope after
+	// broadcasting the block. The envelope's state root is lazily computed by the
+	// beacon node using the post-block state, so the block must be submitted first.
+	if blk.Version() >= version.Gloas {
+		envelope, err := v.getExecutionPayloadEnvelope(ctx, slot, b)
+		if err != nil {
+			log.WithError(err).Error("Failed to get execution payload envelope")
+			if v.emitAccountMetrics {
+				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+			}
+			return
+		}
+		signedEnvelope, err := v.signExecutionPayloadEnvelope(ctx, pubKey, slot, envelope)
+		if err != nil {
+			log.WithError(err).Error("Failed to sign execution payload envelope")
+			if v.emitAccountMetrics {
+				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+			}
+			return
+		}
 		if _, err := v.validatorClient.PublishExecutionPayloadEnvelope(ctx, signedEnvelope); err != nil {
 			log.WithError(err).Error("Failed to publish execution payload envelope")
 		}

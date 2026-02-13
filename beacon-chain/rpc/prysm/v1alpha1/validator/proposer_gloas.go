@@ -1,9 +1,11 @@
 package validator
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
+	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -63,12 +65,13 @@ func (vs *Server) setGloasExecutionData(
 }
 
 // buildExecutionPayloadEnvelope creates and caches the execution payload envelope
-// after the block is fully built (state root set). This allows setting the
-// BeaconBlockRoot from the final block HTR and computing the post-payload state root.
+// after the block is fully built (state root set). The envelope is cached with a
+// zeroed state root; the actual post-payload state root is computed lazily in
+// GetExecutionPayloadEnvelope once the block has been submitted and the post-block
+// state is available via StateGen.
 func (vs *Server) buildExecutionPayloadEnvelope(
 	ctx context.Context,
 	sBlk interfaces.SignedBeaconBlock,
-	head state.BeaconState,
 	local *consensusblocks.GetPayloadResponse,
 ) error {
 	blockRoot, err := sBlk.Block().HashTreeRoot()
@@ -84,25 +87,36 @@ func (vs *Server) buildExecutionPayloadEnvelope(
 		}
 	}
 
-	// TODO: Compute post-payload state root. This requires:
-	// 1. Run state transition on head state with the block to get post-block state
-	// 2. Run ProcessPayloadStateTransition(ctx, postBlockState, envelope) to apply
-	//    execution payload effects (deposits, withdrawals, consolidations, etc.)
-	// 3. Set stateRoot = postPayloadState.HashTreeRoot()
-	// For now, the state root remains zeroed until ProcessPayloadStateTransition
-	// is implemented in beacon-chain/core/gloas.
-
 	envelope := &ethpb.ExecutionPayloadEnvelope{
 		Payload:           payload,
 		ExecutionRequests: local.ExecutionRequests,
 		BuilderIndex:      primitives.BuilderIndex(sBlk.Block().ProposerIndex()),
 		BeaconBlockRoot:   blockRoot[:],
 		Slot:              sBlk.Block().Slot(),
-		StateRoot:         make([]byte, 32), // TODO: computed state root
+		StateRoot:         make([]byte, 32), // zeroed; computed lazily in GetExecutionPayloadEnvelope
 	}
 
 	vs.cacheExecutionPayloadEnvelope(envelope, local.BlobsBundler)
 	return nil
+}
+
+// computePostPayloadStateRoot retrieves the post-block state (after the block has
+// been submitted and processed) and applies the execution payload state mutations
+// to compute the post-payload state root for the envelope.
+func (vs *Server) computePostPayloadStateRoot(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) ([]byte, error) {
+	beaconState, err := vs.StateGen.StateByRoot(ctx, envelope.BeaconBlockRoot())
+	if err != nil {
+		return nil, errors.Wrap(err, "could not retrieve post-block state")
+	}
+	beaconState = beaconState.Copy()
+	if err := coregloas.ApplyExecutionPayload(ctx, beaconState, envelope); err != nil {
+		return nil, errors.Wrapf(err, "could not apply execution payload at slot %d", beaconState.Slot())
+	}
+	root, err := beaconState.HashTreeRoot(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not compute post-payload state root at slot %d", beaconState.Slot())
+	}
+	return root[:], nil
 }
 
 // getPayloadAttestations returns payload attestations for inclusion in a GLOAS block.
@@ -174,8 +188,8 @@ func (vs *Server) cacheExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayload
 }
 
 // GetExecutionPayloadEnvelope retrieves a cached execution payload envelope.
-// This is called by validators after receiving a GLOAS block to get the envelope
-// they need to sign and broadcast.
+// If the envelope has a zeroed state root (self-build), the post-payload state
+// root is lazily computed using the post-block state from StateGen.
 //
 // gRPC endpoint: /eth/v1alpha1/validator/execution_payload_envelope/{slot}/{builder_index}
 func (vs *Server) GetExecutionPayloadEnvelope(
@@ -199,6 +213,21 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 			req.Slot,
 			req.BuilderIndex,
 		)
+	}
+
+	// Lazily compute the post-payload state root if the envelope was cached
+	// with a zeroed state root (self-build). The block must have been submitted
+	// by this point so the post-block state is available via StateGen.
+	if bytes.Equal(envelope.StateRoot, make([]byte, 32)) {
+		roEnvelope, err := consensusblocks.WrappedROExecutionPayloadEnvelope(envelope)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "could not wrap envelope: %v", err)
+		}
+		stateRoot, err := vs.computePostPayloadStateRoot(ctx, roEnvelope)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "could not compute post-payload state root: %v", err)
+		}
+		envelope.StateRoot = stateRoot
 	}
 
 	return &ethpb.ExecutionPayloadEnvelopeResponse{
@@ -232,7 +261,18 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	})
 	log.Info("Publishing signed execution payload envelope")
 
-	// TODO: Validate envelope signature before broadcasting.
+	// Validate the envelope signature before broadcasting.
+	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(req)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid envelope: %v", err)
+	}
+	headState, err := vs.HeadFetcher.HeadState(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "could not get head state: %v", err)
+	}
+	if err := coregloas.VerifyExecutionPayloadEnvelopeSignature(headState, roSigned); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "envelope signature verification failed: %v", err)
+	}
 
 	if err := vs.P2P.Broadcast(ctx, req); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to broadcast execution payload envelope: %v", err)

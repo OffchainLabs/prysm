@@ -108,7 +108,7 @@ func ProcessExecutionPayload(
 	st state.BeaconState,
 	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
 ) error {
-	if err := verifyExecutionPayloadEnvelopeSignature(st, signedEnvelope); err != nil {
+	if err := VerifyExecutionPayloadEnvelopeSignature(st, signedEnvelope); err != nil {
 		return errors.Wrap(err, "signature verification failed")
 	}
 
@@ -301,25 +301,24 @@ func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *en
 	return nil
 }
 
-// verifyExecutionPayloadEnvelopeSignature verifies the BLS signature on a signed execution payload envelope.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// builder_index = signed_envelope.message.builder_index
-// if builder_index == BUILDER_INDEX_SELF_BUILD:
+// VerifyExecutionPayloadEnvelopeSignature verifies the BLS signature on a signed execution payload envelope.
+// <spec fn="verify_execution_payload_envelope_signature" fork="gloas" style="full" hash="49483ae2">
+// def verify_execution_payload_envelope_signature(
+//     state: BeaconState, signed_envelope: SignedExecutionPayloadEnvelope
+// ) -> bool:
+//     builder_index = signed_envelope.message.builder_index
+//     if builder_index == BUILDER_INDEX_SELF_BUILD:
+//         validator_index = state.latest_block_header.proposer_index
+//         pubkey = state.validators[validator_index].pubkey
+//     else:
+//         pubkey = state.builders[builder_index].pubkey
 //
-//	validator_index = state.latest_block_header.proposer_index
-//	pubkey = state.validators[validator_index].pubkey
-//
-// else:
-//
-//	pubkey = state.builders[builder_index].pubkey
-//
-// signing_root = compute_signing_root(
-//
-//	signed_envelope.message, get_domain(state, DOMAIN_BEACON_BUILDER)
-//
-// )
-// return bls.Verify(pubkey, signing_root, signed_envelope.signature)
-func verifyExecutionPayloadEnvelopeSignature(st state.BeaconState, signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope) error {
+//     signing_root = compute_signing_root(
+//         signed_envelope.message, get_domain(state, DOMAIN_BEACON_BUILDER)
+//     )
+//     return bls.Verify(pubkey, signing_root, signed_envelope.signature)
+// </spec>
+func VerifyExecutionPayloadEnvelopeSignature(st state.BeaconState, signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope) error {
 	envelope, err := signedEnvelope.Envelope()
 	if err != nil {
 		return fmt.Errorf("failed to get envelope: %w", err)

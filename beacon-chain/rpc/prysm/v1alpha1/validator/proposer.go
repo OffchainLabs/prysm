@@ -296,7 +296,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	// is fully built (state root set). The envelope needs the final block HTR as
 	// BeaconBlockRoot and the post-payload state root as StateRoot.
 	if sBlk.Version() >= version.Gloas {
-		if err := vs.buildExecutionPayloadEnvelope(ctx, sBlk, head, local); err != nil {
+		if err := vs.buildExecutionPayloadEnvelope(ctx, sBlk, local); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
 		}
 	}
