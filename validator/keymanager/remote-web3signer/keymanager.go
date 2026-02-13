@@ -432,6 +432,12 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 		return handleBlockFulu(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlindedBlockFulu:
 		return handleBlindedBlockFulu(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_BlockGloas:
+		// TODO: Implement GLOAS block signing for web3signer.
+		return nil, fmt.Errorf("web3signer GLOAS block signing not yet implemented")
+	case *validatorpb.SignRequest_ExecutionPayloadEnvelope:
+		// TODO: Implement execution payload envelope signing for web3signer.
+		return nil, fmt.Errorf("web3signer execution payload envelope signing not yet implemented")
 
 	// We do not support "DEPOSIT" type.
 	/*

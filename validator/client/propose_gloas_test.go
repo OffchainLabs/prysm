@@ -7,6 +7,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -135,6 +136,7 @@ func TestSignExecutionPayloadEnvelope(t *testing.T) {
 	validator.km = newMockKeymanager(t, kp)
 
 	builderDomain := make([]byte, 32)
+	copy(builderDomain, params.BeaconConfig().DomainBeaconBuilder[:])
 	m.validatorClient.EXPECT().
 		DomainData(gomock.Any(), gomock.Any()).
 		Return(&ethpb.DomainResponse{SignatureDomain: builderDomain}, nil)
@@ -151,6 +153,33 @@ func TestSignExecutionPayloadEnvelope(t *testing.T) {
 	expectedRoot, err := signing.ComputeSigningRoot(envelope, builderDomain)
 	require.NoError(t, err)
 	require.NotEqual(t, [32]byte{}, expectedRoot)
+}
+
+func TestSignExecutionPayloadEnvelope_VerifySignature(t *testing.T) {
+	validator, m, _, finish := setup(t, false)
+	defer finish()
+
+	kp := testKeyFromBytes(t, []byte{1})
+	validator.km = newMockKeymanager(t, kp)
+
+	builderDomain := make([]byte, 32)
+	copy(builderDomain, params.BeaconConfig().DomainBeaconBuilder[:])
+	m.validatorClient.EXPECT().
+		DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: builderDomain}, nil)
+
+	envelope := testExecutionPayloadEnvelope(100, 42)
+
+	signed, err := validator.signExecutionPayloadEnvelope(t.Context(), kp.pub, 100, envelope)
+	require.NoError(t, err)
+
+	// Compute the expected signing root and verify the signature.
+	signingRoot, err := signing.ComputeSigningRoot(envelope, builderDomain)
+	require.NoError(t, err)
+
+	sig, err := bls.SignatureFromBytes(signed.Signature)
+	require.NoError(t, err)
+	require.Equal(t, true, sig.Verify(kp.pri.PublicKey(), signingRoot[:]))
 }
 
 func TestSignExecutionPayloadEnvelope_DomainDataError(t *testing.T) {

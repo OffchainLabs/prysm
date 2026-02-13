@@ -68,8 +68,10 @@ func (v *validator) signExecutionPayloadEnvelope(
 		PublicKey:       pubKey[:],
 		SigningRoot:     signingRoot[:],
 		SignatureDomain: domain.SignatureDomain,
-		Object:          &validatorpb.SignRequest_Slot{Slot: slot},
-		SigningSlot:     slot,
+		Object: &validatorpb.SignRequest_ExecutionPayloadEnvelope{
+			ExecutionPayloadEnvelope: envelope,
+		},
+		SigningSlot: slot,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "could not sign execution payload envelope")
