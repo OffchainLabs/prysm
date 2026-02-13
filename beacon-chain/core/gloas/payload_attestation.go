@@ -162,19 +162,19 @@ type PTCDuty struct {
 	Slot           primitives.Slot
 }
 
-// PTCDuties returns PTC slot assignments for the requested validators in the given epoch.
+// PTCDuties returns PTC slot assignments for the requested validators in the epoch derived from the state's slot.
 // It's optimized for batch lookups with early exit once all validators are found.
 // Validators not in any PTC for the epoch will not appear in the result.
 func PTCDuties(
 	ctx context.Context,
 	st state.ReadOnlyBeaconState,
-	epoch primitives.Epoch,
 	validators map[primitives.ValidatorIndex]struct{},
 ) ([]PTCDuty, error) {
 	if len(validators) == 0 {
 		return nil, nil
 	}
 
+	epoch := slots.ToEpoch(st.Slot())
 	startSlot, err := slots.EpochStart(epoch)
 	if err != nil {
 		return nil, err

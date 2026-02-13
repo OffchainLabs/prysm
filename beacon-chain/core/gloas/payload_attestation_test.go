@@ -311,7 +311,7 @@ func TestPTCDuties(t *testing.T) {
 			requested[primitives.ValidatorIndex(i)] = struct{}{}
 		}
 
-		duties, err := gloas.PTCDuties(t.Context(), st, 0, requested)
+		duties, err := gloas.PTCDuties(t.Context(), st, requested)
 		require.NoError(t, err)
 		require.NotEmpty(t, duties, "Should return some duties")
 
@@ -324,7 +324,7 @@ func TestPTCDuties(t *testing.T) {
 
 	t.Run("returns empty for empty request", func(t *testing.T) {
 		requested := make(map[primitives.ValidatorIndex]struct{})
-		duties, err := gloas.PTCDuties(t.Context(), st, 0, requested)
+		duties, err := gloas.PTCDuties(t.Context(), st, requested)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(duties), "Should return no duties for empty request")
 	})
@@ -336,7 +336,7 @@ func TestPTCDuties(t *testing.T) {
 			requested[primitives.ValidatorIndex(i)] = struct{}{}
 		}
 
-		duties, err := gloas.PTCDuties(t.Context(), st, 0, requested)
+		duties, err := gloas.PTCDuties(t.Context(), st, requested)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(duties), "Non-existent validators should have no duties")
 	})
@@ -347,7 +347,7 @@ func TestPTCDuties(t *testing.T) {
 			requested[primitives.ValidatorIndex(i)] = struct{}{}
 		}
 
-		duties, err := gloas.PTCDuties(t.Context(), st, 0, requested)
+		duties, err := gloas.PTCDuties(t.Context(), st, requested)
 		require.NoError(t, err)
 
 		// Check for duplicates.
@@ -366,10 +366,10 @@ func TestPTCDuties(t *testing.T) {
 			requested[primitives.ValidatorIndex(i)] = struct{}{}
 		}
 
-		duties1, err := gloas.PTCDuties(t.Context(), st, 0, requested)
+		duties1, err := gloas.PTCDuties(t.Context(), st, requested)
 		require.NoError(t, err)
 
-		duties2, err := gloas.PTCDuties(t.Context(), st, 0, requested)
+		duties2, err := gloas.PTCDuties(t.Context(), st, requested)
 		require.NoError(t, err)
 
 		require.Equal(t, len(duties1), len(duties2), "Should return same number of duties")

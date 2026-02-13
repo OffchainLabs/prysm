@@ -1304,7 +1304,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 
 	// Compute PTC duties using the optimized batch function.
 	// This exits early once all requested validators are found.
-	ptcDuties, err := gloas.PTCDuties(ctx, st, requestedEpoch, requestedSet)
+	ptcDuties, err := gloas.PTCDuties(ctx, st, requestedSet)
 	if err != nil {
 		httputil.HandleError(w, "Could not compute PTC duties: "+err.Error(), http.StatusInternalServerError)
 		return

@@ -3020,7 +3020,7 @@ func TestGetPTCDuties(t *testing.T) {
 		}
 
 		// Test PTCDuties directly.
-		directDuties, err := gloas.PTCDuties(t.Context(), st, 0, requestedSet)
+		directDuties, err := gloas.PTCDuties(t.Context(), st, requestedSet)
 		require.NoError(t, err)
 		// Should return some duties (not necessarily all 100, depends on PTC selection).
 		require.NotEmpty(t, directDuties, "Should return at least some duties")
