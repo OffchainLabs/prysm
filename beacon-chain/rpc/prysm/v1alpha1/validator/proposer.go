@@ -609,21 +609,31 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 // computeStateRoot computes the state root after a block has been processed through a state transition and
 // returns it to the validator client.
 func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, error) {
+	st, err := vs.computePostBlockState(ctx, block)
+	if err != nil {
+		return nil, err
+	}
+	root, err := st.HashTreeRoot(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compute state root")
+	}
+	log.WithField("beaconStateRoot", fmt.Sprintf("%#x", root)).Debugf("Computed state root")
+	return root[:], nil
+}
+
+// computePostBlockState computes the post-block state by running the state transition.
+// It uses the same logic as CalculateStateRoot (Copy, feature flags, slot processing)
+// but returns the full state instead of just its hash.
+func (vs *Server) computePostBlockState(ctx context.Context, block interfaces.SignedBeaconBlock) (state.BeaconState, error) {
 	beaconState, err := vs.StateGen.StateByRoot(ctx, block.Block().ParentRoot())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve beacon state")
 	}
-	root, err := transition.CalculateStateRoot(
-		ctx,
-		beaconState,
-		block,
-	)
+	st, err := transition.CalculatePostState(ctx, beaconState, block)
 	if err != nil {
-		return vs.handleStateRootError(ctx, block, err)
+		return vs.handlePostBlockStateError(ctx, block, err)
 	}
-
-	log.WithField("beaconStateRoot", fmt.Sprintf("%#x", root)).Debugf("Computed state root")
-	return root[:], nil
+	return st, nil
 }
 
 type computeStateRootAttemptsKeyType string
@@ -631,8 +641,8 @@ type computeStateRootAttemptsKeyType string
 const computeStateRootAttemptsKey = computeStateRootAttemptsKeyType("compute-state-root-attempts")
 const maxComputeStateRootAttempts = 3
 
-// handleStateRootError retries block construction in some error cases.
-func (vs *Server) handleStateRootError(ctx context.Context, block interfaces.SignedBeaconBlock, err error) ([]byte, error) {
+// handlePostBlockStateError retries block construction in some error cases.
+func (vs *Server) handlePostBlockStateError(ctx context.Context, block interfaces.SignedBeaconBlock, err error) (state.BeaconState, error) {
 	if ctx.Err() != nil {
 		return nil, status.Errorf(codes.Canceled, "context error: %v", ctx.Err())
 	}
@@ -681,8 +691,8 @@ func (vs *Server) handleStateRootError(ctx context.Context, block interfaces.Sig
 	} else {
 		ctx = context.WithValue(ctx, computeStateRootAttemptsKey, v+1)
 	}
-	// recursive call to compute state root again
-	return vs.computeStateRoot(ctx, block)
+	// recursive call to compute post-block state again
+	return vs.computePostBlockState(ctx, block)
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
