@@ -112,6 +112,34 @@ func ProcessExecutionPayload(
 		return errors.Wrap(err, "signature verification failed")
 	}
 
+	envelope, err := signedEnvelope.Envelope()
+	if err != nil {
+		return errors.Wrap(err, "could not get envelope from signed envelope")
+	}
+
+	if err := ApplyExecutionPayload(ctx, st, envelope); err != nil {
+		return err
+	}
+
+	r, err := st.HashTreeRoot(ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not get hash tree root")
+	}
+	if r != envelope.StateRoot() {
+		return fmt.Errorf("state root mismatch: expected %#x, got %#x", envelope.StateRoot(), r)
+	}
+
+	return nil
+}
+
+// ApplyExecutionPayload applies the execution payload envelope to the state and performs the same
+// consistency checks as the full processing path. This keeps the post-payload state root computation
+// on a shared code path, even though some bid/payload checks are not strictly required for the root itself.
+func ApplyExecutionPayload(
+	ctx context.Context,
+	st state.BeaconState,
+	envelope interfaces.ROExecutionPayloadEnvelope,
+) error {
 	latestHeader := st.LatestBlockHeader()
 	if len(latestHeader.StateRoot) == 0 || bytes.Equal(latestHeader.StateRoot, make([]byte, 32)) {
 		previousStateRoot, err := st.HashTreeRoot(ctx)
@@ -127,10 +155,6 @@ func ProcessExecutionPayload(
 	blockHeaderRoot, err := latestHeader.HashTreeRoot()
 	if err != nil {
 		return errors.Wrap(err, "could not compute block header root")
-	}
-	envelope, err := signedEnvelope.Envelope()
-	if err != nil {
-		return errors.Wrap(err, "could not get envelope from signed envelope")
 	}
 
 	beaconBlockRoot := envelope.BeaconBlockRoot()
@@ -215,14 +239,6 @@ func ProcessExecutionPayload(
 
 	if err := st.SetLatestBlockHash([32]byte(payload.BlockHash())); err != nil {
 		return errors.Wrap(err, "could not set latest block hash")
-	}
-
-	r, err := st.HashTreeRoot(ctx)
-	if err != nil {
-		return errors.Wrap(err, "could not get hash tree root")
-	}
-	if r != envelope.StateRoot() {
-		return fmt.Errorf("state root mismatch: expected %#x, got %#x", envelope.StateRoot(), r)
 	}
 
 	return nil
