@@ -96,7 +96,7 @@ func (vs *Server) buildExecutionPayloadEnvelope(
 		StateRoot:         make([]byte, 32), // zeroed; computed lazily in GetExecutionPayloadEnvelope
 	}
 
-	vs.cacheExecutionPayloadEnvelope(envelope, local.BlobsBundler)
+	vs.ExecutionPayloadEnvelopeCache.Set(envelope, local.BlobsBundler)
 	return nil
 }
 
@@ -174,17 +174,6 @@ func extractKzgCommitments(blobsBundler enginev1.BlobsBundler) [][]byte {
 		}
 	}
 	return nil
-}
-
-// cacheExecutionPayloadEnvelope stores an envelope and its blobs bundle for later retrieval.
-// The blobs bundle is cached alongside the envelope because blobs from the EL are only
-// held in memory until they are broadcast as sidecars during block proposal.
-func (vs *Server) cacheExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope, blobsBundle enginev1.BlobsBundler) {
-	if vs.ExecutionPayloadEnvelopeCache == nil {
-		log.Warn("ExecutionPayloadEnvelopeCache is nil, envelope will not be cached")
-		return
-	}
-	vs.ExecutionPayloadEnvelopeCache.Set(envelope, blobsBundle)
 }
 
 // GetExecutionPayloadEnvelope retrieves a cached execution payload envelope.
