@@ -126,7 +126,7 @@ type Config struct {
 	PayloadIDCache                *cache.PayloadIDCache
 	ExecutionPayloadEnvelopeCache *cache.ExecutionPayloadEnvelopeCache
 	LCStore                       *lightClient.Store
-  GraffitiInfo                  *execution.GraffitiInfo
+  	GraffitiInfo                  *execution.GraffitiInfo
 }
 
 // NewService instantiates a new RPC service instance that will
