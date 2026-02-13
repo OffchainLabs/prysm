@@ -79,7 +79,7 @@ func ValidatorsCustodyRequirement(st beaconState.ReadOnlyBalances, validatorsInd
 	for index := range validatorsIndex {
 		idxs = append(idxs, index)
 	}
-	totalBalance, _, err := st.EffectiveBalances(idxs)
+	totalBalance, err := st.EffectiveBalanceSum(idxs)
 	if err != nil {
 		return 0, errors.Wrap(err, "effective balances")
 	}
