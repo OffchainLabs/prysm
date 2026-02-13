@@ -126,7 +126,7 @@ type Config struct {
 	PayloadIDCache                *cache.PayloadIDCache
 	ExecutionPayloadEnvelopeCache *cache.ExecutionPayloadEnvelopeCache
 	LCStore                       *lightClient.Store
-  	GraffitiInfo                  *execution.GraffitiInfo
+	GraffitiInfo                  *execution.GraffitiInfo
 }
 
 // NewService instantiates a new RPC service instance that will
@@ -259,7 +259,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		PayloadIDCache:                s.cfg.PayloadIDCache,
 		AttestationStateFetcher:       s.cfg.AttestationReceiver,
 		ExecutionPayloadEnvelopeCache: s.cfg.ExecutionPayloadEnvelopeCache,
-    GraffitiInfo:                  s.cfg.GraffitiInfo,
+		GraffitiInfo:                  s.cfg.GraffitiInfo,
 	}
 	s.validatorServer = validatorServer
 	nodeServer := &nodev1alpha1.Server{
