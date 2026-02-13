@@ -1,6 +1,7 @@
 package forkchoice
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -140,7 +141,7 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 	if c.Head != nil {
 		r, err := bb.service.HeadRoot(ctx)
 		require.NoError(t, err)
-		require.DeepEqual(t, common.FromHex(c.Head.Root), r)
+		require.Equal(t, true, bytes.Equal(common.FromHex(c.Head.Root), r))
 		require.Equal(t, primitives.Slot(c.Head.Slot), bb.service.HeadSlot())
 	}
 	if c.JustifiedCheckPoint != nil {
