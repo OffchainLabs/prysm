@@ -289,6 +289,7 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 	return nodes, nil
 }
 
+// InsertPayload inserts a full node into forkchoice after the Gloas fork.
 func (f *ForkChoice) InsertPayload(ctx context.Context, pe interfaces.ROExecutionPayloadEnvelope) error {
 	s := f.store
 	root := pe.BeaconBlockRoot()
