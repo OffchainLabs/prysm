@@ -14,24 +14,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	RequireBlobIndexInBounds Requirement = iota
-	RequireNotFromFutureSlot
-	RequireSlotAboveFinalized
-	RequireValidProposerSignature
-	RequireSidecarParentSeen
-	RequireSidecarParentValid
-	RequireSidecarParentSlotLower
-	RequireSidecarDescendsFromFinalized
-	RequireSidecarInclusionProven
-	RequireSidecarKzgProofVerified
-	RequireSidecarProposerExpected
-
-	// Data columns specific.
-	RequireValidFields
-	RequireCorrectSubnet
-)
-
 var allBlobSidecarRequirements = []Requirement{
 	RequireBlobIndexInBounds,
 	RequireNotFromFutureSlot,

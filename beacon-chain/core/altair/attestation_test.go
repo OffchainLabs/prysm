@@ -1,7 +1,9 @@
 package altair_test
 
 import (
+	"bytes"
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -556,7 +558,7 @@ func TestSetParticipationAndRewardProposer(t *testing.T) {
 
 			b, err := helpers.TotalActiveBalance(beaconState)
 			require.NoError(t, err)
-			st, err := altair.SetParticipationAndRewardProposer(t.Context(), beaconState, test.epoch, test.indices, test.participatedFlags, b)
+			st, err := altair.SetParticipationAndRewardProposer(t.Context(), beaconState, test.epoch, test.indices, test.participatedFlags, b, &ethpb.Attestation{})
 			require.NoError(t, err)
 
 			i, err := helpers.BeaconProposerIndex(t.Context(), st)
@@ -775,11 +777,67 @@ func TestAttestationParticipationFlagIndices(t *testing.T) {
 				headFlagIndex:   true,
 			},
 		},
+		{
+			name: "gloas same-slot committee index non-zero errors",
+			inputState: func() state.BeaconState {
+				stateSlot := primitives.Slot(5)
+				slot := primitives.Slot(3)
+				targetRoot := bytes.Repeat([]byte{0xAA}, 32)
+				headRoot := bytes.Repeat([]byte{0xBB}, 32)
+				prevRoot := bytes.Repeat([]byte{0xCC}, 32)
+				return buildGloasStateForFlags(t, stateSlot, slot, targetRoot, headRoot, prevRoot, 0, 0)
+			}(),
+			inputData: &ethpb.AttestationData{
+				Slot:            3,
+				CommitteeIndex:  1, // invalid for same-slot
+				BeaconBlockRoot: bytes.Repeat([]byte{0xBB}, 32),
+				Source:          &ethpb.Checkpoint{Root: bytes.Repeat([]byte{0xDD}, 32)},
+				Target: &ethpb.Checkpoint{
+					Epoch: 0,
+					Root:  bytes.Repeat([]byte{0xAA}, 32),
+				},
+			},
+			inputDelay:           1,
+			participationIndices: nil,
+		},
+		{
+			name: "gloas payload availability matches committee index",
+			inputState: func() state.BeaconState {
+				stateSlot := primitives.Slot(5)
+				slot := primitives.Slot(3)
+				targetRoot := bytes.Repeat([]byte{0xAA}, 32)
+				headRoot := bytes.Repeat([]byte{0xBB}, 32)
+				// Same prev root to make SameSlotAttestation false and use payload availability.
+				return buildGloasStateForFlags(t, stateSlot, slot, targetRoot, headRoot, headRoot, 1, slot)
+			}(),
+			inputData: &ethpb.AttestationData{
+				Slot:            3,
+				CommitteeIndex:  1,
+				BeaconBlockRoot: bytes.Repeat([]byte{0xBB}, 32),
+				Source:          &ethpb.Checkpoint{Root: bytes.Repeat([]byte{0xDD}, 32)},
+				Target: &ethpb.Checkpoint{
+					Epoch: 0,
+					Root:  bytes.Repeat([]byte{0xAA}, 32),
+				},
+			},
+			inputDelay: 1,
+			participationIndices: map[uint8]bool{
+				sourceFlagIndex: true,
+				targetFlagIndex: true,
+				headFlagIndex:   true,
+			},
+		},
 	}
 	for _, test := range tests {
 		flagIndices, err := altair.AttestationParticipationFlagIndices(test.inputState, test.inputData, test.inputDelay)
+		if test.participationIndices == nil {
+			require.ErrorContains(t, "committee index", err)
+			continue
+		}
 		require.NoError(t, err)
-		require.DeepEqual(t, test.participationIndices, flagIndices)
+		if !reflect.DeepEqual(test.participationIndices, flagIndices) {
+			t.Fatalf("unexpected participation indices: got %v want %v", flagIndices, test.participationIndices)
+		}
 	}
 }
 
@@ -857,4 +915,62 @@ func TestMatchingStatus(t *testing.T) {
 		require.Equal(t, test.matchedTarget, tgt)
 		require.Equal(t, test.matchedHead, head)
 	}
+}
+
+func buildGloasStateForFlags(t *testing.T, stateSlot, slot primitives.Slot, targetRoot, headRoot, prevRoot []byte, availabilityBit uint8, availabilitySlot primitives.Slot) state.BeaconState {
+	t.Helper()
+
+	cfg := params.BeaconConfig()
+	blockRoots := make([][]byte, cfg.SlotsPerHistoricalRoot)
+	blockRoots[0] = targetRoot
+	blockRoots[slot%cfg.SlotsPerHistoricalRoot] = headRoot
+	blockRoots[(slot-1)%cfg.SlotsPerHistoricalRoot] = prevRoot
+
+	stateRoots := make([][]byte, cfg.SlotsPerHistoricalRoot)
+	for i := range stateRoots {
+		stateRoots[i] = make([]byte, fieldparams.RootLength)
+	}
+	randaoMixes := make([][]byte, cfg.EpochsPerHistoricalVector)
+	for i := range randaoMixes {
+		randaoMixes[i] = make([]byte, fieldparams.RootLength)
+	}
+
+	execPayloadAvailability := make([]byte, cfg.SlotsPerHistoricalRoot/8)
+	idx := availabilitySlot % cfg.SlotsPerHistoricalRoot
+	byteIndex := idx / 8
+	bitIndex := idx % 8
+	if availabilityBit == 1 {
+		execPayloadAvailability[byteIndex] |= 1 << bitIndex
+	}
+
+	checkpointRoot := bytes.Repeat([]byte{0xDD}, fieldparams.RootLength)
+	justified := &ethpb.Checkpoint{Root: checkpointRoot}
+
+	stProto := &ethpb.BeaconStateGloas{
+		Slot:                         stateSlot,
+		GenesisValidatorsRoot:        bytes.Repeat([]byte{0x11}, fieldparams.RootLength),
+		BlockRoots:                   blockRoots,
+		StateRoots:                   stateRoots,
+		RandaoMixes:                  randaoMixes,
+		ExecutionPayloadAvailability: execPayloadAvailability,
+		CurrentJustifiedCheckpoint:   justified,
+		PreviousJustifiedCheckpoint:  justified,
+		Validators: []*ethpb.Validator{
+			{
+				EffectiveBalance:      cfg.MinActivationBalance,
+				WithdrawalCredentials: append([]byte{cfg.ETH1AddressWithdrawalPrefixByte}, bytes.Repeat([]byte{0x01}, 31)...),
+			},
+		},
+		Balances:               []uint64{cfg.MinActivationBalance},
+		BuilderPendingPayments: make([]*ethpb.BuilderPendingPayment, cfg.SlotsPerEpoch*2),
+		Fork: &ethpb.Fork{
+			CurrentVersion:  bytes.Repeat([]byte{0x01}, 4),
+			PreviousVersion: bytes.Repeat([]byte{0x01}, 4),
+			Epoch:           0,
+		},
+	}
+
+	beaconState, err := state_native.InitializeFromProtoGloas(stProto)
+	require.NoError(t, err)
+	return beaconState
 }

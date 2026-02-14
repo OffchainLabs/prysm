@@ -89,7 +89,7 @@ type FastGetter interface {
 // Setter allows to set forkchoice information
 type Setter interface {
 	SetOptimisticToValid(context.Context, [fieldparams.RootLength]byte) error
-	SetOptimisticToInvalid(context.Context, [fieldparams.RootLength]byte, [fieldparams.RootLength]byte, [fieldparams.RootLength]byte) ([][32]byte, error)
+	SetOptimisticToInvalid(context.Context, [32]byte, [32]byte, [32]byte, [32]byte) ([][32]byte, error)
 	UpdateJustifiedCheckpoint(context.Context, *forkchoicetypes.Checkpoint) error
 	UpdateFinalizedCheckpoint(*forkchoicetypes.Checkpoint) error
 	SetGenesisTime(time.Time)
