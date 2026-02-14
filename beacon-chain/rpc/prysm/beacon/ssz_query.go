@@ -112,7 +112,7 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteSsz(w, responseSsz)
 }
 
-// QueryBeaconState handles SSZ Query request for BeaconState.
+// QueryBeaconBlock handles SSZ Query request for BeaconBlock.
 // Returns as bytes serialized SSZQueryResponse.
 func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.QueryBeaconBlock")
@@ -223,7 +223,7 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteSsz(w, responseSsz)
 }
 
-// getSSZQueryProof retrieves Merkle proof for a given SSZInfo object and query path,
+// getSSZQueryProof retrieves Merkle proof for a given SSZInfo object and query path
 func getSSZQueryProof(info *query.SszInfo, path query.Path) (*ssz.Proof, error) {
 	gi, err := query.GetGeneralizedIndexFromPath(info, path)
 	if err != nil {

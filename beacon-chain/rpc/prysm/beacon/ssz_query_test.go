@@ -391,32 +391,33 @@ func TestQueryBeaconBlock(t *testing.T) {
 				sszExpectedResponse, err := expectedResponse.MarshalSSZ()
 				require.NoError(t, err)
 				assert.DeepEqual(t, sszExpectedResponse, writer.Body.Bytes())
-			} else {
-				// Decode the response to verify the proof
-				responseData := writer.Body.Bytes()
-				var response sszquerypb.SSZQueryResponseWithProof
-				require.NoError(t, response.UnmarshalSSZ(responseData))
-
-				// Verify the proof is included
-				require.NotNil(t, response.Proof)
-				require.Equal(t, true, len(response.Proof.Proofs) > 0, "merkle proof should not be empty")
-
-				// Verify the result matches expected value
-				require.DeepEqual(t, tt.expectedValue, response.Result)
-
-				// Verify root matches block root
-				require.DeepEqual(t, blockRoot[:], response.Root)
-
-				// Verify the merkle proof using VerifyProof
-				merkleProof := &ssz.Proof{
-					Index:  int(response.Proof.Gindex),
-					Leaf:   response.Proof.Leaf,
-					Hashes: response.Proof.Proofs,
-				}
-				isValid, err := ssz.VerifyProof(response.Root, merkleProof)
-				require.NoError(t, err)
-				require.Equal(t, true, isValid, "merkle proof verification failed")
+				return
 			}
+
+			// Decode the response to verify the proof
+			responseData := writer.Body.Bytes()
+			var response sszquerypb.SSZQueryResponseWithProof
+			require.NoError(t, response.UnmarshalSSZ(responseData))
+
+			// Verify the proof is included
+			require.NotNil(t, response.Proof)
+			require.Equal(t, true, len(response.Proof.Proofs) > 0, "merkle proof should not be empty")
+
+			// Verify the result matches expected value
+			require.DeepEqual(t, tt.expectedValue, response.Result)
+
+			// Verify root matches block root
+			require.DeepEqual(t, blockRoot[:], response.Root)
+
+			// Verify the merkle proof using VerifyProof
+			merkleProof := &ssz.Proof{
+				Index:  int(response.Proof.Gindex),
+				Leaf:   response.Proof.Leaf,
+				Hashes: response.Proof.Proofs,
+			}
+			isValid, err := ssz.VerifyProof(response.Root, merkleProof)
+			require.NoError(t, err)
+			require.Equal(t, true, isValid, "merkle proof verification failed")
 		})
 	}
 }
