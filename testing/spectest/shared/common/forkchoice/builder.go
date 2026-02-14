@@ -141,7 +141,8 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 	if c.Head != nil {
 		r, err := bb.service.HeadRoot(ctx)
 		require.NoError(t, err)
-		require.Equal(t, true, bytes.Equal(common.FromHex(c.Head.Root), r))
+		wantedRoot := common.FromHex(c.Head.Root)
+		require.Equal(t, true, bytes.Equal(wantedRoot, r), fmt.Sprintf("Roots differ. wanted %#x, got %#x", wantedRoot, r))
 		require.Equal(t, primitives.Slot(c.Head.Slot), bb.service.HeadSlot())
 	}
 	if c.JustifiedCheckPoint != nil {
