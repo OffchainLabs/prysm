@@ -310,52 +310,49 @@ func (f *ForkChoice) updateBalances() error {
 
 		// Update only if the validator's balance or vote has changed.
 		if vote.currentRoot != vote.nextRoot || oldBalance != newBalance {
-			// Ignore the vote if the root is not in fork choice
-			// store, that means we have not seen the block before.
+			// Add new balance to the next vote target if the root is known.
 			pn, pending := f.store.resolveVoteNode(vote.nextRoot, vote.nextSlot, vote.nextPayloadStatus)
-			if pn == nil {
-				// TODO: check cl-spec #4918
-				continue
-			}
-			if pending {
-				pn.node.balance += newBalance
-			} else {
-				pn.balance += newBalance
+			if pn != nil && vote.nextRoot != zHash {
+				if pending {
+					pn.node.balance += newBalance
+				} else {
+					pn.balance += newBalance
+				}
 			}
 
+			// Subtract old balance from the current vote target if the root is known.
 			pn, pending = f.store.resolveVoteNode(vote.currentRoot, vote.currentSlot, vote.currentPayloadStatus)
-			if pn == nil {
-				continue
-			}
-			if pending {
-				if pn.node.balance < oldBalance {
-					log.WithFields(logrus.Fields{
-						"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
-						"oldBalance":                 oldBalance,
-						"nodeBalance":                pn.node.balance,
-						"nodeWeight":                 pn.node.weight,
-						"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
-						"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
-						"previousProposerBoostScore": f.store.previousProposerBoostScore,
-					}).Warning("node with invalid balance, setting it to zero")
-					pn.node.balance = 0
+			if pn != nil && vote.currentRoot != zHash {
+				if pending {
+					if pn.node.balance < oldBalance {
+						log.WithFields(logrus.Fields{
+							"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
+							"oldBalance":                 oldBalance,
+							"nodeBalance":                pn.node.balance,
+							"nodeWeight":                 pn.node.weight,
+							"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
+							"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
+							"previousProposerBoostScore": f.store.previousProposerBoostScore,
+						}).Warning("node with invalid balance, setting it to zero")
+						pn.node.balance = 0
+					} else {
+						pn.node.balance -= oldBalance
+					}
 				} else {
-					pn.node.balance -= oldBalance
-				}
-			} else {
-				if pn.balance < oldBalance {
-					log.WithFields(logrus.Fields{
-						"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
-						"oldBalance":                 oldBalance,
-						"nodeBalance":                pn.balance,
-						"nodeWeight":                 pn.weight,
-						"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
-						"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
-						"previousProposerBoostScore": f.store.previousProposerBoostScore,
-					}).Warning("node with invalid balance, setting it to zero")
-					pn.balance = 0
-				} else {
-					pn.balance -= oldBalance
+					if pn.balance < oldBalance {
+						log.WithFields(logrus.Fields{
+							"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
+							"oldBalance":                 oldBalance,
+							"nodeBalance":                pn.balance,
+							"nodeWeight":                 pn.weight,
+							"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
+							"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
+							"previousProposerBoostScore": f.store.previousProposerBoostScore,
+						}).Warning("node with invalid balance, setting it to zero")
+						pn.balance = 0
+					} else {
+						pn.balance -= oldBalance
+					}
 				}
 			}
 		}
