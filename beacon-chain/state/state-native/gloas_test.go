@@ -11,7 +11,8 @@ import (
 func TestBuildersVal(t *testing.T) {
 	st := &BeaconState{}
 
-	require.Nil(t, st.buildersVal())
+	require.NotNil(t, st.buildersVal())
+	require.Len(t, st.buildersVal(), 0)
 
 	st.builders = []*ethpb.Builder{
 		{Pubkey: []byte{0x01}, ExecutionAddress: []byte{0x02}, Balance: 3},

@@ -140,9 +140,6 @@ func (b *BeaconState) appendPendingPartialWithdrawals(withdrawalIndex uint64, wi
 			len(*withdrawals)+int(cfg.MaxPendingPartialsPerWithdrawalsSweep),
 			int(cfg.MaxWithdrawalsPerPayload-1),
 		)
-		if len(*withdrawals) > withdrawalsLimit {
-			return withdrawalIndex, 0, fmt.Errorf("prior withdrawals length %d exceeds limit %d", len(*withdrawals), withdrawalsLimit)
-		}
 	} else {
 		withdrawalsLimit = int(cfg.MaxPendingPartialsPerWithdrawalsSweep)
 	}

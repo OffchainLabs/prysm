@@ -9,8 +9,7 @@ import (
 
 // ProcessWithdrawals applies withdrawals to the state for Gloas.
 //
-// Spec v1.7.0-alpha.1 (pseudocode):
-//
+// <spec fn="process_withdrawals" fork="gloas" hash="16d9ad2a">
 // def process_withdrawals(
 //
 //	state: BeaconState,
@@ -40,6 +39,8 @@ import (
 //	# [New in Gloas:EIP7732]
 //	update_next_withdrawal_builder_index(state, expected.processed_builders_sweep_count)
 //	update_next_withdrawal_validator_index(state, expected.withdrawals)
+//
+// </spec>
 func ProcessWithdrawals(st state.BeaconState) error {
 	full, err := st.IsParentBlockFull()
 	if err != nil {

@@ -311,9 +311,6 @@ func (b *BeaconState) Builder(index primitives.BuilderIndex) (*ethpb.Builder, er
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	if b.builders == nil {
-		return nil, nil
-	}
 	if uint64(index) >= uint64(len(b.builders)) {
 		return nil, fmt.Errorf("builder index %d out of bounds", index)
 	}
@@ -518,7 +515,10 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 		}
 
 		builder := b.builders[builderIndex]
-		if builder != nil && builder.WithdrawableEpoch <= epoch && builder.Balance > 0 {
+		if builder == nil {
+			return withdrawalIndex, 0, fmt.Errorf("builder at index %d is nil", builderIndex)
+		}
+		if builder.WithdrawableEpoch <= epoch && builder.Balance > 0 {
 			ws = append(ws, &enginev1.Withdrawal{
 				Index:          withdrawalIndex,
 				ValidatorIndex: builderIndex.ToValidatorIndex(),

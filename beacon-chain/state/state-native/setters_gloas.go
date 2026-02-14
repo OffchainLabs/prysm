@@ -549,8 +549,8 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 		if err != nil {
 			return err
 		}
-		newBal := decreaseBalanceWithVal(balAtIdx, withdrawal.Amount)
-		if err := b.balancesMultiValue.UpdateAt(b, uint64(withdrawal.ValidatorIndex), newBal); err != nil {
+		newBal := decreaseBalanceWithVal(primitives.Gwei(balAtIdx), primitives.Gwei(withdrawal.Amount))
+		if err := b.balancesMultiValue.UpdateAt(b, uint64(withdrawal.ValidatorIndex), uint64(newBal)); err != nil {
 			return pkgerrors.Wrap(err, "could not update balances")
 		}
 		balanceIndices = append(balanceIndices, uint64(withdrawal.ValidatorIndex))
@@ -577,23 +577,20 @@ func (b *BeaconState) decreaseBuilderBalanceLockFree(builderIndex primitives.Bui
 	if b.sharedFieldReferences[types.Builders].Refs() > 1 {
 		builders := make([]*ethpb.Builder, len(b.builders))
 		copy(builders, b.builders)
+		builder := ethpb.CopyBuilder(builders[idx])
+		builders[idx] = builder
 		b.builders = builders
 		b.sharedFieldReferences[types.Builders].MinusRef()
 		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
 	}
 
 	builder := b.builders[idx]
-	bal := uint64(builder.Balance)
-	if amount >= bal {
-		builder.Balance = 0
-	} else {
-		builder.Balance = primitives.Gwei(bal - amount)
-	}
+	builder.Balance = decreaseBalanceWithVal(builder.Balance, primitives.Gwei(amount))
 
 	return nil
 }
 
-func decreaseBalanceWithVal(currBalance, delta uint64) uint64 {
+func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei {
 	if delta > currBalance {
 		return 0
 	}

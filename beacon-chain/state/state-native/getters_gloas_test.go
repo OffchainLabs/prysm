@@ -301,15 +301,14 @@ func TestWithdrawalsMatchPayloadExpected(t *testing.T) {
 }
 
 func TestBuilder(t *testing.T) {
-	t.Run("nil builders returns nil", func(t *testing.T) {
+	t.Run("nil builders returns error", func(t *testing.T) {
 		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
 			Builders: nil,
 		})
 		require.NoError(t, err)
 
-		got, err := st.Builder(0)
-		require.NoError(t, err)
-		require.Equal(t, (*ethpb.Builder)(nil), got)
+		_, err = st.Builder(0)
+		require.ErrorContains(t, "out of bounds", err)
 	})
 
 	t.Run("out of bounds returns error", func(t *testing.T) {
