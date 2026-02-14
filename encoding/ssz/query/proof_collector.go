@@ -347,14 +347,13 @@ func (pc *proofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 		g.SetLimit(runtime.GOMAXPROCS(0))
 
 		for i := range length {
-			idx := i
 			g.Go(func() error {
-				elemGindex := subtreeRootGindex<<depth + uint64(idx)
-				htr, err := pc.merkleize(elemInfo, v.Index(idx), elemGindex)
+				elemGindex := subtreeRootGindex<<depth + uint64(i)
+				htr, err := pc.merkleize(elemInfo, v.Index(i), elemGindex)
 				if err != nil {
-					return fmt.Errorf("index %d: %w", idx, err)
+					return fmt.Errorf("index %d: %w", i, err)
 				}
-				chunks[idx] = htr
+				chunks[i] = htr
 				return nil
 			})
 		}
