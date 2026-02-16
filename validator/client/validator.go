@@ -60,6 +60,8 @@ var (
 	ErrValidatorsAllExited          = errors.New("All validators are exited, no more work to perform...")
 )
 
+const syncCommitteeSelectionTimeout = 1 * time.Second
+
 var (
 	msgCouldNotFetchKeys = "could not fetch validating keys"
 	msgNoKeysFetched     = "No validating keys fetched. Waiting for keys..."
@@ -896,8 +898,16 @@ func (v *validator) isSyncCommitteeAggregator(ctx context.Context, slot primitiv
 
 	// Override selections with aggregated ones if the node is part of a Distributed Validator.
 	if v.distributed && len(selections) > 0 {
-		var err error
-		selections, err = v.validatorClient.AggregatedSyncSelections(ctx, selections)
+		var (
+			aggCtx = ctx
+			cancel context.CancelFunc
+			err    error
+		)
+		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > syncCommitteeSelectionTimeout {
+			aggCtx, cancel = context.WithTimeout(ctx, syncCommitteeSelectionTimeout)
+			defer cancel()
+		}
+		selections, err = v.validatorClient.AggregatedSyncSelections(aggCtx, selections)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get aggregated sync selections")
 		}
