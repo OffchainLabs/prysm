@@ -7,14 +7,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/internal/logrusadapter"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
-	"github.com/libp2p/go-libp2p-pubsub/partialmessages/bitmap"
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -154,22 +152,7 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 	opts = append(opts,
 		pubsub.WithPartialMessagesExtension(&partialmessages.PartialMessagesExtension{
 			Logger: slogger,
-			MergePartsMetadata: func(topic string, left, right partialmessages.PartsMetadata) partialmessages.PartsMetadata {
-				if len(left) == 0 {
-					return right
-				}
-				merged, err := bitfield.Bitlist(left).Or(bitfield.Bitlist(right))
-				if err != nil {
-					p.logger.Warn("Failed to merge bitfields", "err", err, "left", left, "right", right)
-					return left
-				}
-				return partialmessages.PartsMetadata(merged)
-			},
-			ValidateRPC: func(from peer.ID, rpc *pubsub_pb.PartialMessagesExtension) error {
-				// TODO. Add some basic and fast sanity checks
-				return nil
-			},
-			OnIncomingRPC: func(from peer.ID, rpc *pubsub_pb.PartialMessagesExtension) error {
+			OnIncomingRPC: func(from peer.ID, peerState partialmessages.PeerState, rpc *pubsub_pb.PartialMessagesExtension) (partialmessages.PeerState, error) {
 				select {
 				case p.incomingReq <- request{
 					kind:        requestKindHandleIncomingRPC,
@@ -178,7 +161,8 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 				default:
 					p.logger.Warn("Dropping incoming partial RPC", "rpc", rpc)
 				}
-				return nil
+				// TODO: Update peerState properly in follow-up.
+				return peerState, nil
 			},
 		}),
 		func(ps *pubsub.PubSub) error {
@@ -237,6 +221,9 @@ func (p *PartialColumnBroadcaster) loop() {
 				delete(p.validHeaderCache, groupID)
 				delete(p.getBlobsCalled, groupID)
 				for topic, msgStore := range p.partialMsgStore {
+					if col, ok := msgStore[groupID]; ok {
+						col.ClearEagerPushSent()
+					}
 					delete(msgStore, groupID)
 					if len(msgStore) == 0 {
 						delete(p.partialMsgStore, topic)
@@ -424,9 +411,9 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		}
 	}
 
-	peerHas := bitmap.Bitmap(rpcWithFrom.PartsMetadata)
-	iHave := bitmap.Bitmap(ourDataColumn.PartsMetadata())
-	if !shouldRepublish && len(peerHas) > 0 && !bytes.Equal(peerHas, iHave) {
+	peerMeta := rpcWithFrom.PartsMetadata
+	myMeta := ourDataColumn.PartsMetadata()
+	if !shouldRepublish && len(peerMeta) > 0 && !bytes.Equal(peerMeta, myMeta) {
 		// Either we have something they don't or vice versa
 		shouldRepublish = true
 		logger.Debug("republishing due to parts metadata difference")

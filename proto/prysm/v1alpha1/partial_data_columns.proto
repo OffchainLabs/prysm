@@ -44,3 +44,14 @@ message PartialDataColumnHeader {
   SignedBeaconBlockHeader signed_block_header = 2;
   repeated bytes kzg_commitments_inclusion_proof = 3 [(ethereum.eth.ext.ssz_size) = "kzg_commitments_inclusion_proof_depth.size,32"];
 }
+
+message PartialDataColumnPartsMetadata {
+  bytes available = 1 [
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments_bitmap.size",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+  bytes requests = 2 [
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments_bitmap.size",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+}
