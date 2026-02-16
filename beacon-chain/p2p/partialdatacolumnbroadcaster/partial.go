@@ -99,6 +99,12 @@ type request struct {
 	incomingRPC    rpcWithFrom
 	sub            subscribe
 	publish        publish
+	getBlobsCalled getBlobsCalled
+	gossipForPeer  gossipForPeer
+}
+
+type getBlobsCalled struct {
+	groupID string
 }
 
 type publish struct {
@@ -573,12 +579,6 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		logger.Debug("republishing due to parts metadata difference")
 	}
 
-	getBlobsCalled := p.getBlobsCalled[string(groupID)]
-	if !getBlobsCalled {
-		p.logger.Debug("GetBlobs not called, skipping republish", "topic", topicID, "group", groupID)
-		return nil
-	}
-
 	if shouldRepublish {
 		err := p.ps.PublishPartialMessage(topicID, ourDataColumn, partialmessages.PublishOptions{})
 		if err != nil {
@@ -667,7 +667,7 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 		// The existing column may already contain cells received from peers. We must not overwrite it.
 		for i := range c.Included.Len() {
 			if c.Included.BitAt(i) {
-				if existing.ExtendFromVerfifiedCell(uint64(i), c.Column[i], c.KzgProofs[i]) {
+				if existing.ExtendFromVerifiedCell(uint64(i), c.Column[i], c.KzgProofs[i]) {
 					extended = true
 				}
 			}

@@ -186,7 +186,7 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 			if !included.BitAt(uint64(i)) {
 				continue
 			}
-			dc.ExtendFromVerfifiedCell(uint64(i), cells[idx][0], proofs[idx][0])
+			dc.ExtendFromVerifiedCell(uint64(i), cells[idx][0], proofs[idx][0])
 			cells[idx] = cells[idx][1:]
 			proofs[idx] = proofs[idx][1:]
 		}
