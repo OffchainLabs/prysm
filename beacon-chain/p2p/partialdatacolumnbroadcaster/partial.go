@@ -517,9 +517,13 @@ func (p *PartialColumnBroadcaster) HeaderHandled(groupID string) error {
 	if p.ps == nil {
 		return errors.New("pubsub not initialized")
 	}
-	p.incomingReq <- request{
+	select {
+	case p.incomingReq <- request{
 		kind:               requestKindHeaderHandled,
 		headerHandledGroup: groupID,
+	}:
+	default:
+		return errors.Errorf("dropping header handled message as incomingReq channel is full, groupID: %s", groupID)
 	}
 	return nil
 }
