@@ -19,6 +19,7 @@ import (
 	ssz "github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/math"
 	fastssz "github.com/prysmaticlabs/fastssz"
+	"github.com/sirupsen/logrus"
 )
 
 // proofCollector collects sibling hashes and leaves needed for Merkle proofs.
@@ -634,4 +635,101 @@ func (pc *proofCollector) mixinLengthAndCollect(currentGindex uint64, chunks [][
 	pc.collectLeaf(lengthHashGindex, lengthHash)
 
 	return ssz.MixInLength(dataRoot, lengthHash[:])
+}
+
+// OptimizedSliceRoots uses an optimized routine with gohashtree to derive
+// a list of roots from a slice of SSZ container objects.
+// It works similarly to stateutil.OptimizedValidatorRoots but for any container type.
+//
+// Parameters:
+// - info: SSZ type metadata for the container element type.
+// - v: reflect.Value of the slice of containers.
+// - pc: proofCollector used for merkleizing field values (gindex 0, no proof bookkeeping).
+//
+// Returns:
+// - [][32]byte: one Merkle root per container element.
+// - error: any error encountered during merkleization.
+func OptimizedSliceRoots(info *SszInfo, v reflect.Value, pc *proofCollector) ([][32]byte, error) {
+	ci, err := info.ContainerInfo()
+	if err != nil {
+		return [][32]byte{}, err
+	}
+
+	containerFieldRoots := len(ci.order)
+	depth := ssz.Depth(uint64(containerFieldRoots))
+	paddedFieldCount := 1 << depth // next power of 2 >= containerFieldRoots
+
+	v = dereferencePointer(v)
+
+	// Exit early if no containers are provided.
+	if v.Len() == 0 {
+		return [][32]byte{}, nil
+	}
+
+	wg := sync.WaitGroup{}
+	n := runtime.GOMAXPROCS(0)
+	rootsSize := v.Len() * paddedFieldCount
+	groupSize := v.Len() / n
+	roots := make([][32]byte, rootsSize)
+	// Padding positions are initialized to zero, which matches SSZ zero hashes at depth 0.
+
+	wg.Add(n - 1)
+	for j := 0; j < n-1; j++ {
+		go pc.hashContainerHelper(ci, v, roots, j, groupSize, paddedFieldCount, containerFieldRoots, &wg)
+	}
+	for i := (n - 1) * groupSize; i < v.Len(); i++ {
+		fRoots, err := pc.containerFieldRoots(ci, v.Index(i))
+		if err != nil {
+			return [][32]byte{}, fmt.Errorf("could not compute container merkleization: %w", err)
+		}
+		for k, root := range fRoots {
+			roots[i*paddedFieldCount+k] = root
+		}
+	}
+	wg.Wait()
+
+	// A container's tree is represented with depth = ceil(log2(fieldCount)).
+	// Using this property we can lay out all the individual fields of a
+	// container and hash them in single level using our vectorized routine.
+	for range depth {
+		// Overwrite input lists as we are hashing by level
+		// and only need the highest level to proceed.
+		roots = htr.VectorizedSha256(roots)
+	}
+	return roots, nil
+}
+
+func (pc *proofCollector) hashContainerHelper(ci *containerInfo, v reflect.Value, roots [][32]byte, j int, groupSize, paddedFieldCount, containerFieldRoots int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for i := range groupSize {
+		fRoots, err := pc.containerFieldRoots(ci, v.Index(j*groupSize+i))
+		if err != nil {
+			logrus.WithError(err).Error("Could not get container field roots")
+			return
+		}
+		for k, root := range fRoots {
+			roots[(j*groupSize+i)*paddedFieldCount+k] = root
+		}
+	}
+}
+
+func (pc *proofCollector) containerFieldRoots(ci *containerInfo, v reflect.Value) ([][32]byte, error) {
+	v = dereferencePointer(v)
+
+	fieldCount := len(ci.order)
+	fieldRoots := make([][32]byte, fieldCount)
+
+	for i, name := range ci.order {
+		fieldInfo := ci.fields[name]
+		fieldVal := v.FieldByName(fieldInfo.goFieldName)
+
+		// Non-proof path: use a constant gindex to avoid proof bookkeeping.
+		root, err := pc.merkleize(fieldInfo.sszInfo, fieldVal, 0)
+		if err != nil {
+			return nil, fmt.Errorf("field %s: %w", name, err)
+		}
+		fieldRoots[i] = root
+	}
+
+	return fieldRoots, nil
 }

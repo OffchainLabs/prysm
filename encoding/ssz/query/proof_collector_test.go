@@ -393,8 +393,63 @@ func TestProofCollector_MixinLengthAndCollect(t *testing.T) {
 	require.Equal(t, expectedRoot, root)
 }
 
+func TestOptimizedSliceRootsMatchesValidatorRoots(t *testing.T) {
+	validators := make([]*ethpb.Validator, 16)
+	for i := range validators {
+		validators[i] = makeTestValidator(i)
+	}
+
+	info, err := AnalyzeObject(validators[0])
+	require.NoError(t, err)
+
+	pc := newProofCollector()
+	roots, err := OptimizedSliceRoots(info, reflect.ValueOf(validators), pc)
+	require.NoError(t, err)
+
+	expected, err := stateutil.OptimizedValidatorRoots(validators)
+	require.NoError(t, err)
+
+	require.Equal(t, len(expected), len(roots))
+	for i := range expected {
+		require.Equal(t, expected[i], roots[i])
+	}
+}
+
+func TestOptimizedSliceRoots_Empty(t *testing.T) {
+	validators := make([]*ethpb.Validator, 0)
+
+	info, err := AnalyzeObject(&ethpb.Validator{})
+	require.NoError(t, err)
+
+	pc := newProofCollector()
+	roots, err := OptimizedSliceRoots(info, reflect.ValueOf(validators), pc)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(roots))
+}
+
+func BenchmarkOptimizedSliceRoots(b *testing.B) {
+	validators := make([]*ethpb.Validator, 1_000_000)
+	for i := range validators {
+		validators[i] = makeTestValidator(i)
+	}
+
+	info, err := AnalyzeObject(validators[0])
+	require.NoError(b, err)
+
+	pc := newProofCollector()
+	v := reflect.ValueOf(validators)
+
+	b.ResetTimer()
+	for b.Loop() {
+		_, err := OptimizedSliceRoots(info, v, pc)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkOptimizedValidatorRoots(b *testing.B) {
-	validators := make([]*ethpb.Validator, 1000)
+	validators := make([]*ethpb.Validator, 1_000_000)
 	for i := range validators {
 		validators[i] = makeTestValidator(i)
 	}
@@ -409,7 +464,7 @@ func BenchmarkOptimizedValidatorRoots(b *testing.B) {
 }
 
 func BenchmarkProofCollectorMerkleize(b *testing.B) {
-	validators := make([]*ethpb.Validator, 1000)
+	validators := make([]*ethpb.Validator, 1000000)
 	for i := range validators {
 		validators[i] = makeTestValidator(i)
 	}
