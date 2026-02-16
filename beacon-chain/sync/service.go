@@ -444,8 +444,8 @@ func (s *Service) startPartialColumnBroadcaster(broadcaster *partialdatacolumnbr
 			if err != nil {
 				log.WithError(err).Error("Failed to process partial data column header")
 			}
-			if err := broadcaster.HeaderHandled(groupID); err != nil {
-				log.WithError(err).Error("Failed to call header handled on broadcaster")
+			if err := broadcaster.GetBlobsCalled(groupID); err != nil {
+				log.WithError(err).Error("Failed to call getBlobs called on broadcaster")
 			}
 		},
 	)
