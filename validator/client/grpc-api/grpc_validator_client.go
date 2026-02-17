@@ -393,7 +393,6 @@ func (c *grpcValidatorClient) EnsureReady(ctx context.Context) bool {
 }
 
 // Gloas Fork Methods
-
 func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, builderIndex primitives.BuilderIndex) (*ethpb.ExecutionPayloadEnvelope, error) {
 	req := &ethpb.ExecutionPayloadEnvelopeRequest{
 		Slot:         slot,
