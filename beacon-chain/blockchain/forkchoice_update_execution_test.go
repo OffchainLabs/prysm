@@ -92,7 +92,6 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 	}
 	service.cfg.PayloadIDCache.Set(2, [32]byte{2}, [8]byte{1})
 	args := &fcuConfig{
-		headState:     st,
 		headRoot:      r1,
 		headBlock:     wsb,
 		proposingSlot: service.CurrentSlot() + 1,
@@ -146,7 +145,6 @@ func TestService_forkchoiceUpdateWithExecution_SameHeadRootNewProposer(t *testin
 	service.head.state = st
 	service.cfg.PayloadIDCache.Set(service.CurrentSlot()+1, [32]byte{} /* root */, [8]byte{})
 	args := &fcuConfig{
-		headState:     st,
 		headBlock:     sb,
 		headRoot:      r,
 		proposingSlot: service.CurrentSlot() + 1,

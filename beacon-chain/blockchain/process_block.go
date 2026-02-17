@@ -970,7 +970,6 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	s.headLock.RUnlock()
 
 	fcuArgs := &fcuConfig{
-		headState:  headState,
 		headRoot:   headRoot,
 		headBlock:  headBlock,
 		attributes: attribute,

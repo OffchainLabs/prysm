@@ -11,7 +11,6 @@ import (
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	bstate "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -73,11 +72,7 @@ func Test_NotifyForkchoiceUpdate_GetPayloadAttrErrorCanContinue(t *testing.T) {
 	require.NoError(t, beaconDB.SaveState(ctx, st, bellatrixBlkRoot))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, bellatrixBlkRoot))
 
-	// Intentionally generate a bad state such that `hash_tree_root` fails during `process_slot`
-	s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{})
-	require.NoError(t, err)
 	arg := &fcuConfig{
-		headState: s,
 		headRoot:  [32]byte{},
 		headBlock: b,
 	}
@@ -233,8 +228,7 @@ func Test_NotifyForkchoiceUpdate(t *testing.T) {
 			require.NoError(t, beaconDB.SaveState(ctx, st, tt.finalizedRoot))
 			require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, tt.finalizedRoot))
 			arg := &fcuConfig{
-				headState: st,
-				headRoot:  tt.headRoot,
+						headRoot:  tt.headRoot,
 				headBlock: tt.blk,
 			}
 			_, err = service.notifyForkchoiceUpdate(ctx, arg)
@@ -314,7 +308,6 @@ func Test_NotifyForkchoiceUpdate_NIlLVH(t *testing.T) {
 	require.NoError(t, beaconDB.SaveState(ctx, st, bra))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, bra))
 	a := &fcuConfig{
-		headState: st,
 		headBlock: wbd,
 		headRoot:  brd,
 	}
@@ -452,7 +445,6 @@ func Test_NotifyForkchoiceUpdateRecursive_DoublyLinkedTree(t *testing.T) {
 	require.NoError(t, beaconDB.SaveState(ctx, st, bra))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, bra))
 	a := &fcuConfig{
-		headState: st,
 		headBlock: wbg,
 		headRoot:  brg,
 	}

@@ -150,7 +150,6 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 	}
 	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	fcuArgs := &fcuConfig{
-		headState:     headState,
 		headRoot:      newHeadRoot,
 		headBlock:     headBlock,
 		proposingSlot: proposingSlot,
@@ -162,10 +161,10 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		}
 		go s.forkchoiceUpdateWithExecution(s.ctx, fcuArgs)
 	}
-	if err := s.saveHead(s.ctx, fcuArgs.headRoot, fcuArgs.headBlock, fcuArgs.headState); err != nil {
+	if err := s.saveHead(s.ctx, newHeadRoot, headBlock, headState); err != nil {
 		log.WithError(err).Error("Could not save head")
 	}
-	s.pruneAttsFromPool(s.ctx, fcuArgs.headState, fcuArgs.headBlock)
+	s.pruneAttsFromPool(s.ctx, headState, headBlock)
 }
 
 // This processes fork choice attestations from the pool to account for validator votes and fork choice.

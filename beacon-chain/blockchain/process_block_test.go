@@ -2418,13 +2418,13 @@ func Test_getFCUArgs(t *testing.T) {
 	}
 	// error branch
 	fcuArgs := &fcuConfig{}
-	err = s.getFCUArgs(cfg, fcuArgs)
+	_, err = s.getFCUArgs(cfg, fcuArgs)
 	require.ErrorContains(t, "block does not exist", err)
 
 	// canonical branch
 	cfg.headRoot = cfg.roblock.Root()
 	fcuArgs = &fcuConfig{}
-	err = s.getFCUArgs(cfg, fcuArgs)
+	_, err = s.getFCUArgs(cfg, fcuArgs)
 	require.NoError(t, err)
 	require.Equal(t, cfg.roblock.Root(), fcuArgs.headRoot)
 }

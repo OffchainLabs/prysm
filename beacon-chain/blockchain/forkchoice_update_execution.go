@@ -46,7 +46,6 @@ func (s *Service) getStateAndBlock(ctx context.Context, r [32]byte) (state.Beaco
 }
 
 type fcuConfig struct {
-	headState     state.BeaconState
 	headBlock     interfaces.ReadOnlySignedBeaconBlock
 	headRoot      [32]byte
 	proposingSlot primitives.Slot
@@ -64,7 +63,8 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
 		s.updateCachesPostBlockProcessing(cfg)
 		s.ForkChoicer().Lock()
 	}
-	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
+	headState, err := s.getFCUArgs(cfg, fcuArgs)
+	if err != nil {
 		log.WithError(err).Error("Could not get forkchoice update argument")
 		return
 	}
@@ -81,10 +81,10 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
 	}
 
 	if s.isNewHead(fcuArgs.headRoot) {
-		if err := s.saveHead(cfg.ctx, fcuArgs.headRoot, fcuArgs.headBlock, fcuArgs.headState); err != nil {
+		if err := s.saveHead(cfg.ctx, fcuArgs.headRoot, fcuArgs.headBlock, headState); err != nil {
 			log.WithError(err).Error("Could not save head")
 		}
-		s.pruneAttsFromPool(s.ctx, fcuArgs.headState, fcuArgs.headBlock)
+		s.pruneAttsFromPool(s.ctx, headState, fcuArgs.headBlock)
 	}
 }
 

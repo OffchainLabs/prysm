@@ -136,7 +136,6 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 				return nil, nil
 			}
 			pid, err := s.notifyForkchoiceUpdate(ctx, &fcuConfig{
-				headState:  st,
 				headRoot:   r,
 				headBlock:  b,
 				attributes: arg.attributes,
