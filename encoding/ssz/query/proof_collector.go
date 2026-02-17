@@ -359,7 +359,7 @@ func (pc *proofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 		}
 
 		if err := g.Wait(); err != nil {
-			return [32]byte{}, err
+			return [32]byte{}, fmt.Errorf("merkelize vector body concurrently: %w", err)
 		}
 	}
 
