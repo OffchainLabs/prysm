@@ -559,7 +559,7 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 	if ourDataColumn == nil {
 		return errors.New("data column not found for verified cells")
 	}
-	extended := ourDataColumn.ExtendFromVerfifiedCells(cells.cellIndices, cells.cells)
+	extended := ourDataColumn.ExtendFromVerifiedCells(cells.cellIndices, cells.cells)
 	p.logger.Debug("Extended partial message", "duration", cells.validationTook, "extended", extended)
 
 	columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
@@ -663,7 +663,7 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 		// The existing column may already contain cells received from peers. We must not overwrite it.
 		for i := range c.Included.Len() {
 			if c.Included.BitAt(i) {
-				extended = existing.ExtendFromVerfifiedCell(uint64(i), c.Column[i], c.KzgProofs[i])
+				extended = existing.ExtendFromVerifiedCell(uint64(i), c.Column[i], c.KzgProofs[i])
 			}
 		}
 		if extended {

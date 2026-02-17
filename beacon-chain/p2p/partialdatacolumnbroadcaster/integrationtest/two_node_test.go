@@ -118,9 +118,9 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		// Split data
 		for i := range numCells {
 			if i%2 == 0 {
-				pc1.ExtendFromVerfifiedCell(uint64(i), roDC[0].Column[i], roDC[0].KzgProofs[i])
+				pc1.ExtendFromVerifiedCell(uint64(i), roDC[0].Column[i], roDC[0].KzgProofs[i])
 			} else {
-				pc2.ExtendFromVerfifiedCell(uint64(i), roDC[0].Column[i], roDC[0].KzgProofs[i])
+				pc2.ExtendFromVerifiedCell(uint64(i), roDC[0].Column[i], roDC[0].KzgProofs[i])
 			}
 		}
 

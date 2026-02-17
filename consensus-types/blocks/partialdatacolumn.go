@@ -15,6 +15,8 @@ import (
 
 var _ partialmessages.Message = (*PartialDataColumn)(nil)
 
+// CellProofBundle contains a cell, its proof, and the corresponding
+// commitment/index information.
 type CellProofBundle struct {
 	ColumnIndex uint64
 	Commitment  []byte
@@ -22,6 +24,8 @@ type CellProofBundle struct {
 	Proof       []byte
 }
 
+// PartialDataColumn is a partially populated DataColumnSidecar used for
+// exchanging cells and metadata with peers.
 type PartialDataColumn struct {
 	*ethpb.DataColumnSidecar
 	root    [fieldparams.RootLength]byte
@@ -66,13 +70,6 @@ func NewPartialDataColumn(
 		Included:          bitfield.NewBitlist(uint64(len(sidecar.KzgCommitments))),
 		eagerPushSent:     make(map[peer.ID]struct{}),
 	}
-	if len(c.Column) != len(c.KzgCommitments) {
-		return PartialDataColumn{}, errors.New("mismatch between number of cells and commitments")
-	}
-	if len(c.KzgProofs) != len(c.KzgCommitments) {
-		return PartialDataColumn{}, errors.New("mismatch between number of proofs and commitments")
-	}
-
 	for i := range len(c.KzgCommitments) {
 		if sidecar.Column[i] == nil {
 			continue
@@ -82,6 +79,7 @@ func NewPartialDataColumn(
 	return c, nil
 }
 
+// GroupID returns the libp2p partial-messages group identifier.
 func (p *PartialDataColumn) GroupID() []byte {
 	return p.groupID
 }
@@ -89,7 +87,7 @@ func (p *PartialDataColumn) GroupID() []byte {
 // ClearEagerPushSent resets the set of peers that have received the eager push
 // header, allowing the header to be re-sent on the next ForPeer call.
 func (p *PartialDataColumn) ClearEagerPushSent() {
-	p.eagerPushSent = nil
+	p.eagerPushSent = make(map[peer.ID]struct{})
 }
 
 func (p *PartialDataColumn) newPartsMetadata() *ethpb.PartialDataColumnPartsMetadata {
@@ -110,6 +108,8 @@ func (p *PartialDataColumn) newPartsMetadata() *ethpb.PartialDataColumnPartsMeta
 	}
 }
 
+// NewPartsMetaWithNoAvailableAndAllRequests creates metadata for n parts where
+// all requests are set and no parts are marked as available.
 func NewPartsMetaWithNoAvailableAndAllRequests(n uint64) *ethpb.PartialDataColumnPartsMetadata {
 	available := bitfield.NewBitlist(n)
 	requests := bitfield.NewBitlist(n)
@@ -130,6 +130,7 @@ func marshalPartsMetadata(meta *ethpb.PartialDataColumnPartsMetadata) (partialme
 	return partialmessages.PartsMetadata(b), nil
 }
 
+// NKzgCommitments returns the number of commitments in the column.
 func (p *PartialDataColumn) NKzgCommitments() uint64 {
 	return p.Included.Len()
 }
@@ -207,6 +208,8 @@ func (p *PartialDataColumn) PartsMetadata() (partialmessages.PartsMetadata, erro
 	return marshalPartsMetadata(meta)
 }
 
+// MergeAvailableIntoPartsMetadata merges additional availability into base and
+// returns the marshaled metadata.
 func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata, additionalAvailable bitfield.Bitlist) (partialmessages.PartsMetadata, error) {
 	if base == nil {
 		return nil, errors.New("base is nil")
@@ -249,9 +252,8 @@ func (p *PartialDataColumn) ForPeer(remote peer.ID, requestedMessage bool, peerS
 				return peerState, nil, nil, err
 			}
 			return peerState, encoded, nil, nil
-		} else {
-			return peerState, nil, nil, nil
 		}
+		return peerState, nil, nil, nil
 	}
 
 	var encodedMsg []byte
@@ -327,7 +329,7 @@ func (p *PartialDataColumn) CellsToVerifyFromPartialMessage(message *ethpb.Parti
 
 	ourIncludedList := p.Included
 	if included.Len() != ourIncludedList.Len() {
-		return nil, nil, errors.New("invalid message. Wrong bitmap length.")
+		return nil, nil, errors.New("invalid message: wrong bitmap length")
 	}
 
 	cellIndices := make([]uint64, 0, includedCells)
@@ -358,8 +360,8 @@ func (p *PartialDataColumn) CellsToVerifyFromPartialMessage(message *ethpb.Parti
 	return cellIndices, cellsToVerify, nil
 }
 
-// ExtendFromVerfifiedCells will extend this partial column with the provided verified cells
-func (p *PartialDataColumn) ExtendFromVerfifiedCell(cellIndex uint64, cell, proof []byte) bool {
+// ExtendFromVerifiedCell extends this partial column with one verified cell.
+func (p *PartialDataColumn) ExtendFromVerifiedCell(cellIndex uint64, cell, proof []byte) bool {
 	if p.Included.BitAt(cellIndex) {
 		// We already have this cell
 		return false
@@ -371,21 +373,22 @@ func (p *PartialDataColumn) ExtendFromVerfifiedCell(cellIndex uint64, cell, proo
 	return true
 }
 
-// ExtendFromVerfifiedCells will extend this partial column with the provided verified cells
-func (p *PartialDataColumn) ExtendFromVerfifiedCells(cellIndices []uint64, cells []CellProofBundle) /* extended */ bool {
+// ExtendFromVerifiedCells extends this partial column with the provided verified cells.
+func (p *PartialDataColumn) ExtendFromVerifiedCells(cellIndices []uint64, cells []CellProofBundle) /* extended */ bool {
 	var extended bool
 	for i, bundle := range cells {
 		if bundle.ColumnIndex != p.Index {
 			// Invalid column index, shouldn't happen
 			return false
 		}
-		if p.ExtendFromVerfifiedCell(cellIndices[i], bundle.Cell, bundle.Proof) {
+		if p.ExtendFromVerifiedCell(cellIndices[i], bundle.Cell, bundle.Proof) {
 			extended = true
 		}
 	}
 	return extended
 }
 
+// Complete returns a verified read-only column if all cells are present.
 func (p *PartialDataColumn) Complete(logger *logrus.Logger) (VerifiedRODataColumn, bool) {
 	if uint64(len(p.KzgCommitments)) != p.Included.Count() {
 		return VerifiedRODataColumn{}, false
