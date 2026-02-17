@@ -26,14 +26,14 @@ func (v *validator) getExecutionPayloadEnvelope(
 
 	gloasBlock := b.GetGloas()
 	if gloasBlock == nil {
-		return nil, errors.New("expected GLOAS block but got nil")
+		return nil, errors.New("expected Gloas block but got nil")
 	}
 	if gloasBlock.Body == nil || gloasBlock.Body.SignedExecutionPayloadBid == nil || gloasBlock.Body.SignedExecutionPayloadBid.Message == nil {
 		return nil, errors.New("block missing signed execution payload bid")
 	}
 	builderIndex := gloasBlock.Body.SignedExecutionPayloadBid.Message.BuilderIndex
 
-	return v.validatorClient.ExecutionPayloadEnvelope(ctx, slot, builderIndex)
+	return v.validatorClient.GetExecutionPayloadEnvelope(ctx, slot, builderIndex)
 }
 
 // signExecutionPayloadEnvelope signs the execution payload envelope using the

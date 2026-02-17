@@ -23,6 +23,7 @@ import (
 type MockBeaconNodeValidatorServer struct {
 	ctrl     *gomock.Controller
 	recorder *MockBeaconNodeValidatorServerMockRecorder
+	isgomock struct{}
 }
 
 // MockBeaconNodeValidatorServerMockRecorder is the mock recorder for MockBeaconNodeValidatorServer.
@@ -160,6 +161,21 @@ func (m *MockBeaconNodeValidatorServer) GetDutiesV2(arg0 context.Context, arg1 *
 func (mr *MockBeaconNodeValidatorServerMockRecorder) GetDutiesV2(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDutiesV2", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetDutiesV2), arg0, arg1)
+}
+
+// GetExecutionPayloadEnvelope mocks base method.
+func (m *MockBeaconNodeValidatorServer) GetExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.ExecutionPayloadEnvelopeRequest) (*eth.ExecutionPayloadEnvelopeResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetExecutionPayloadEnvelope", arg0, arg1)
+	ret0, _ := ret[0].(*eth.ExecutionPayloadEnvelopeResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetExecutionPayloadEnvelope indicates an expected call of GetExecutionPayloadEnvelope.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) GetExecutionPayloadEnvelope(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetExecutionPayloadEnvelope), arg0, arg1)
 }
 
 // GetFeeRecipientByPubKey mocks base method.
@@ -310,6 +326,21 @@ func (m *MockBeaconNodeValidatorServer) ProposeExit(arg0 context.Context, arg1 *
 func (mr *MockBeaconNodeValidatorServerMockRecorder) ProposeExit(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeExit", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).ProposeExit), arg0, arg1)
+}
+
+// PublishExecutionPayloadEnvelope mocks base method.
+func (m *MockBeaconNodeValidatorServer) PublishExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.SignedExecutionPayloadEnvelope) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishExecutionPayloadEnvelope", arg0, arg1)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishExecutionPayloadEnvelope indicates an expected call of PublishExecutionPayloadEnvelope.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) PublishExecutionPayloadEnvelope(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).PublishExecutionPayloadEnvelope), arg0, arg1)
 }
 
 // StreamBlocksAltair mocks base method.
@@ -518,40 +549,11 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) WaitForChainStart(arg0, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForChainStart", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).WaitForChainStart), arg0, arg1)
 }
 
-// ExecutionPayloadEnvelope mocks base method.
-func (m *MockBeaconNodeValidatorServer) ExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.ExecutionPayloadEnvelopeRequest) (*eth.ExecutionPayloadEnvelopeResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExecutionPayloadEnvelope", arg0, arg1)
-	ret0, _ := ret[0].(*eth.ExecutionPayloadEnvelopeResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ExecutionPayloadEnvelope indicates an expected call of ExecutionPayloadEnvelope.
-func (mr *MockBeaconNodeValidatorServerMockRecorder) ExecutionPayloadEnvelope(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).ExecutionPayloadEnvelope), arg0, arg1)
-}
-
-// PublishExecutionPayloadEnvelope mocks base method.
-func (m *MockBeaconNodeValidatorServer) PublishExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.SignedExecutionPayloadEnvelope) (*emptypb.Empty, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PublishExecutionPayloadEnvelope", arg0, arg1)
-	ret0, _ := ret[0].(*emptypb.Empty)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// PublishExecutionPayloadEnvelope indicates an expected call of PublishExecutionPayloadEnvelope.
-func (mr *MockBeaconNodeValidatorServerMockRecorder) PublishExecutionPayloadEnvelope(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).PublishExecutionPayloadEnvelope), arg0, arg1)
-}
-
 // MockBeaconNodeValidator_WaitForActivationServer is a mock of BeaconNodeValidator_WaitForActivationServer interface.
 type MockBeaconNodeValidator_WaitForActivationServer struct {
 	ctrl     *gomock.Controller
 	recorder *MockBeaconNodeValidator_WaitForActivationServerMockRecorder
+	isgomock struct{}
 }
 
 // MockBeaconNodeValidator_WaitForActivationServerMockRecorder is the mock recorder for MockBeaconNodeValidator_WaitForActivationServer.
@@ -586,17 +588,17 @@ func (mr *MockBeaconNodeValidator_WaitForActivationServerMockRecorder) Context()
 }
 
 // RecvMsg mocks base method.
-func (m *MockBeaconNodeValidator_WaitForActivationServer) RecvMsg(arg0 any) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RecvMsg", arg0)
+func (m_2 *MockBeaconNodeValidator_WaitForActivationServer) RecvMsg(m any) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "RecvMsg", m)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RecvMsg indicates an expected call of RecvMsg.
-func (mr *MockBeaconNodeValidator_WaitForActivationServerMockRecorder) RecvMsg(arg0 any) *gomock.Call {
+func (mr *MockBeaconNodeValidator_WaitForActivationServerMockRecorder) RecvMsg(m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecvMsg", reflect.TypeOf((*MockBeaconNodeValidator_WaitForActivationServer)(nil).RecvMsg), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecvMsg", reflect.TypeOf((*MockBeaconNodeValidator_WaitForActivationServer)(nil).RecvMsg), m)
 }
 
 // Send mocks base method.
@@ -628,17 +630,17 @@ func (mr *MockBeaconNodeValidator_WaitForActivationServerMockRecorder) SendHeade
 }
 
 // SendMsg mocks base method.
-func (m *MockBeaconNodeValidator_WaitForActivationServer) SendMsg(arg0 any) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendMsg", arg0)
+func (m_2 *MockBeaconNodeValidator_WaitForActivationServer) SendMsg(m any) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "SendMsg", m)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendMsg indicates an expected call of SendMsg.
-func (mr *MockBeaconNodeValidator_WaitForActivationServerMockRecorder) SendMsg(arg0 any) *gomock.Call {
+func (mr *MockBeaconNodeValidator_WaitForActivationServerMockRecorder) SendMsg(m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMsg", reflect.TypeOf((*MockBeaconNodeValidator_WaitForActivationServer)(nil).SendMsg), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMsg", reflect.TypeOf((*MockBeaconNodeValidator_WaitForActivationServer)(nil).SendMsg), m)
 }
 
 // SetHeader mocks base method.
@@ -671,6 +673,7 @@ func (mr *MockBeaconNodeValidator_WaitForActivationServerMockRecorder) SetTraile
 type MockBeaconNodeValidator_WaitForChainStartServer struct {
 	ctrl     *gomock.Controller
 	recorder *MockBeaconNodeValidator_WaitForChainStartServerMockRecorder
+	isgomock struct{}
 }
 
 // MockBeaconNodeValidator_WaitForChainStartServerMockRecorder is the mock recorder for MockBeaconNodeValidator_WaitForChainStartServer.
@@ -705,17 +708,17 @@ func (mr *MockBeaconNodeValidator_WaitForChainStartServerMockRecorder) Context()
 }
 
 // RecvMsg mocks base method.
-func (m *MockBeaconNodeValidator_WaitForChainStartServer) RecvMsg(arg0 any) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RecvMsg", arg0)
+func (m_2 *MockBeaconNodeValidator_WaitForChainStartServer) RecvMsg(m any) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "RecvMsg", m)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RecvMsg indicates an expected call of RecvMsg.
-func (mr *MockBeaconNodeValidator_WaitForChainStartServerMockRecorder) RecvMsg(arg0 any) *gomock.Call {
+func (mr *MockBeaconNodeValidator_WaitForChainStartServerMockRecorder) RecvMsg(m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecvMsg", reflect.TypeOf((*MockBeaconNodeValidator_WaitForChainStartServer)(nil).RecvMsg), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecvMsg", reflect.TypeOf((*MockBeaconNodeValidator_WaitForChainStartServer)(nil).RecvMsg), m)
 }
 
 // Send mocks base method.
@@ -747,17 +750,17 @@ func (mr *MockBeaconNodeValidator_WaitForChainStartServerMockRecorder) SendHeade
 }
 
 // SendMsg mocks base method.
-func (m *MockBeaconNodeValidator_WaitForChainStartServer) SendMsg(arg0 any) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendMsg", arg0)
+func (m_2 *MockBeaconNodeValidator_WaitForChainStartServer) SendMsg(m any) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "SendMsg", m)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendMsg indicates an expected call of SendMsg.
-func (mr *MockBeaconNodeValidator_WaitForChainStartServerMockRecorder) SendMsg(arg0 any) *gomock.Call {
+func (mr *MockBeaconNodeValidator_WaitForChainStartServerMockRecorder) SendMsg(m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMsg", reflect.TypeOf((*MockBeaconNodeValidator_WaitForChainStartServer)(nil).SendMsg), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMsg", reflect.TypeOf((*MockBeaconNodeValidator_WaitForChainStartServer)(nil).SendMsg), m)
 }
 
 // SetHeader mocks base method.
@@ -790,6 +793,7 @@ func (mr *MockBeaconNodeValidator_WaitForChainStartServerMockRecorder) SetTraile
 type MockBeaconNodeValidator_StreamSlotsServer struct {
 	ctrl     *gomock.Controller
 	recorder *MockBeaconNodeValidator_StreamSlotsServerMockRecorder
+	isgomock struct{}
 }
 
 // MockBeaconNodeValidator_StreamSlotsServerMockRecorder is the mock recorder for MockBeaconNodeValidator_StreamSlotsServer.
@@ -824,17 +828,17 @@ func (mr *MockBeaconNodeValidator_StreamSlotsServerMockRecorder) Context() *gomo
 }
 
 // RecvMsg mocks base method.
-func (m *MockBeaconNodeValidator_StreamSlotsServer) RecvMsg(arg0 any) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RecvMsg", arg0)
+func (m_2 *MockBeaconNodeValidator_StreamSlotsServer) RecvMsg(m any) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "RecvMsg", m)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RecvMsg indicates an expected call of RecvMsg.
-func (mr *MockBeaconNodeValidator_StreamSlotsServerMockRecorder) RecvMsg(arg0 any) *gomock.Call {
+func (mr *MockBeaconNodeValidator_StreamSlotsServerMockRecorder) RecvMsg(m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecvMsg", reflect.TypeOf((*MockBeaconNodeValidator_StreamSlotsServer)(nil).RecvMsg), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecvMsg", reflect.TypeOf((*MockBeaconNodeValidator_StreamSlotsServer)(nil).RecvMsg), m)
 }
 
 // Send mocks base method.
@@ -866,17 +870,17 @@ func (mr *MockBeaconNodeValidator_StreamSlotsServerMockRecorder) SendHeader(arg0
 }
 
 // SendMsg mocks base method.
-func (m *MockBeaconNodeValidator_StreamSlotsServer) SendMsg(arg0 any) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendMsg", arg0)
+func (m_2 *MockBeaconNodeValidator_StreamSlotsServer) SendMsg(m any) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "SendMsg", m)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendMsg indicates an expected call of SendMsg.
-func (mr *MockBeaconNodeValidator_StreamSlotsServerMockRecorder) SendMsg(arg0 any) *gomock.Call {
+func (mr *MockBeaconNodeValidator_StreamSlotsServerMockRecorder) SendMsg(m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMsg", reflect.TypeOf((*MockBeaconNodeValidator_StreamSlotsServer)(nil).SendMsg), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMsg", reflect.TypeOf((*MockBeaconNodeValidator_StreamSlotsServer)(nil).SendMsg), m)
 }
 
 // SetHeader mocks base method.

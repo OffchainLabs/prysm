@@ -52,7 +52,7 @@ func TestSetGloasExecutionData(t *testing.T) {
 
 	vs := &Server{}
 
-	err = vs.setGloasExecutionData(t.Context(), sBlk, local)
+	err = vs.setSelfBuildExecutionPayloadBid(t.Context(), sBlk, local)
 	require.NoError(t, err)
 
 	// Verify the signed bid was set on the block.
@@ -86,9 +86,9 @@ func TestSetGloasExecutionData_NilPayload(t *testing.T) {
 
 	vs := &Server{}
 
-	err = vs.setGloasExecutionData(t.Context(), sBlk, nil)
+	err = vs.setSelfBuildExecutionPayloadBid(t.Context(), sBlk, nil)
 	require.ErrorContains(t, "local execution payload is nil", err)
 
-	err = vs.setGloasExecutionData(t.Context(), sBlk, &consensusblocks.GetPayloadResponse{})
+	err = vs.setSelfBuildExecutionPayloadBid(t.Context(), sBlk, &consensusblocks.GetPayloadResponse{})
 	require.ErrorContains(t, "local execution payload is nil", err)
 }

@@ -128,7 +128,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 
 	var genericSignedBlock *ethpb.GenericSignedBeaconBlock
 	// Special handling for Deneb blocks and later version because of blob side cars.
-	// GLOAS blocks are handled differently - no blobs in block, execution payload is separate.
+	// Gloas blocks are handled differently - no blobs in block, execution payload is separate.
 	if blk.Version() >= version.Deneb && blk.Version() < version.Gloas && !blk.IsBlinded() {
 		pb, err := blk.Proto()
 		if err != nil {
@@ -177,7 +177,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		return
 	}
 
-	// For GLOAS, retrieve, sign, and publish the execution payload envelope after
+	// For Gloas, retrieve, sign, and publish the execution payload envelope after
 	// broadcasting the block. The envelope's state root is lazily computed by the
 	// beacon node using the post-block state, so the block must be submitted first.
 	if blk.Version() >= version.Gloas {
