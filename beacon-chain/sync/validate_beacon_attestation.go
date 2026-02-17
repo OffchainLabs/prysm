@@ -272,8 +272,8 @@ func (s *Service) validateCommitteeIndexAndCount(
 	if a.Version() >= version.Electra {
 		data := a.GetData()
 		attEpoch := slots.ToEpoch(data.Slot)
-		isGloas := attEpoch >= params.BeaconConfig().GloasForkEpoch
-		if isGloas {
+		postGloas := attEpoch >= params.BeaconConfig().GloasForkEpoch
+		if postGloas {
 			if result, err := s.validateGloasCommitteeIndex(data); result != pubsub.ValidationAccept {
 				return 0, 0, result, err
 			}
