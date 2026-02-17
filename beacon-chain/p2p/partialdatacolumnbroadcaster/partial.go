@@ -86,6 +86,7 @@ const (
 	requestKindPublish requestKind = iota
 	requestKindSubscribe
 	requestKindUnsubscribe
+	requestKindGossipForPeer
 	requestKindHandleIncomingRPC
 	requestKindCellsValidated
 	requestKindGetBlobsCalled
@@ -99,6 +100,8 @@ type request struct {
 	getBlobsCalledGroup string
 	unsub               unsubscribe
 	incomingRPC         rpcWithFrom
+	gossipForPeer       gossipForPeer
+	gossipForPeerResp   chan gossipForPeerResponse
 	sub                 subscribe
 	publish             publish
 }
@@ -129,6 +132,20 @@ type cellsValidated struct {
 	cells          []blocks.CellProofBundle
 }
 
+type gossipForPeer struct {
+	topic     string
+	groupID   string
+	remote    peer.ID
+	peerState partialmessages.PeerState
+}
+
+type gossipForPeerResponse struct {
+	nextPeerState       partialmessages.PeerState
+	encodedMsg          []byte
+	partsMetadataToSend partialmessages.PartsMetadata
+	err                 error
+}
+
 func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 	return &PartialColumnBroadcaster{
 		topics:           make(map[string]*pubsub.Topic),
@@ -152,6 +169,21 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 	opts = append(opts,
 		pubsub.WithPartialMessagesExtension(&partialmessages.PartialMessagesExtension{
 			Logger: slogger,
+			GossipForPeer: func(topic string, groupID string, remote peer.ID, peerState partialmessages.PeerState) (partialmessages.PeerState, []byte, partialmessages.PartsMetadata, error) {
+				respCh := make(chan gossipForPeerResponse, 1)
+				p.incomingReq <- request{
+					kind: requestKindGossipForPeer,
+					gossipForPeer: gossipForPeer{
+						topic:     topic,
+						groupID:   groupID,
+						remote:    remote,
+						peerState: peerState,
+					},
+					gossipForPeerResp: respCh,
+				}
+				resp := <-respCh
+				return resp.nextPeerState, resp.encodedMsg, resp.partsMetadataToSend, resp.err
+			},
 			OnIncomingRPC: func(from peer.ID, peerState partialmessages.PeerState, rpc *pubsub_pb.PartialMessagesExtension) (partialmessages.PeerState, error) {
 				select {
 				case p.incomingReq <- request{
@@ -238,6 +270,14 @@ func (p *PartialColumnBroadcaster) loop() {
 				req.response <- p.subscribe(req.sub.t)
 			case requestKindUnsubscribe:
 				req.response <- p.unsubscribe(req.unsub.topic)
+			case requestKindGossipForPeer:
+				nextPeerState, encodedMsg, partsMetadataToSend, err := p.handleGossipForPeer(req.gossipForPeer)
+				req.gossipForPeerResp <- gossipForPeerResponse{
+					nextPeerState:       nextPeerState,
+					encodedMsg:          encodedMsg,
+					partsMetadataToSend: partsMetadataToSend,
+					err:                 err,
+				}
 			case requestKindHandleIncomingRPC:
 				err := p.handleIncomingRPC(req.incomingRPC)
 				if err != nil {
@@ -267,6 +307,18 @@ func (p *PartialColumnBroadcaster) getDataColumn(topic string, group []byte) *bl
 		return nil
 	}
 	return msg
+}
+
+func (p *PartialColumnBroadcaster) handleGossipForPeer(req gossipForPeer) (partialmessages.PeerState, []byte, partialmessages.PartsMetadata, error) {
+	topicStore, ok := p.partialMsgStore[req.topic]
+	if !ok {
+		return req.peerState, nil, nil, errors.New("not tracking topic for group")
+	}
+	partialColumn, ok := topicStore[req.groupID]
+	if !ok || partialColumn == nil {
+		return req.peerState, nil, nil, errors.New("not tracking topic for group")
+	}
+	return partialColumn.ForPeer(req.remote, false, req.peerState)
 }
 
 func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) error {
@@ -412,7 +464,10 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 	}
 
 	peerMeta := rpcWithFrom.PartsMetadata
-	myMeta := ourDataColumn.PartsMetadata()
+	myMeta, err := ourDataColumn.PartsMetadata()
+	if err != nil {
+		return err
+	}
 	if !shouldRepublish && len(peerMeta) > 0 && !bytes.Equal(peerMeta, myMeta) {
 		// Either we have something they don't or vice versa
 		shouldRepublish = true
