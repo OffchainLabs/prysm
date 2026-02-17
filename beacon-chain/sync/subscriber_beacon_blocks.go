@@ -202,12 +202,6 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			return nil, errors.Wrap(err, "column indices to sample")
 		}
 
-		// TODO: the deadline here was removed in https://github.com/OffchainLabs/prysm/pull/16155/files
-		// make sure that reintroducing it does not cause issues.
-		secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
-		ctx, cancel := context.WithTimeout(ctx, secondsPerHalfSlot)
-		defer cancel()
-
 		digest, err := s.currentForkDigest()
 		if err != nil {
 			return nil, err
