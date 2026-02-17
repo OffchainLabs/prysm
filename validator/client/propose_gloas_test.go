@@ -6,6 +6,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -17,6 +19,26 @@ import (
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
+
+func signedGloasBlock(t *testing.T, slot primitives.Slot, builderIndex primitives.BuilderIndex) interfaces.SignedBeaconBlock {
+	t.Helper()
+
+	blk := util.NewBeaconBlockGloas()
+	blk.Block.Slot = slot
+	if blk.Block.Body == nil {
+		blk.Block.Body = &ethpb.BeaconBlockBodyGloas{}
+	}
+	blk.Block.Body.SignedExecutionPayloadBid = &ethpb.SignedExecutionPayloadBid{
+		Message: &ethpb.ExecutionPayloadBid{
+			BuilderIndex: builderIndex,
+		},
+		Signature: make([]byte, 96),
+	}
+
+	signed, err := consensusblocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	return signed
+}
 
 func testExecutionPayloadEnvelope(slot primitives.Slot, builderIndex primitives.BuilderIndex) *ethpb.ExecutionPayloadEnvelope {
 	return &ethpb.ExecutionPayloadEnvelope{
@@ -39,8 +61,8 @@ func testExecutionPayloadEnvelope(slot primitives.Slot, builderIndex primitives.
 	}
 }
 
-func TestExecutionPayloadEnvelope(t *testing.T) {
-	validator, m, _, finish := setup(t, false)
+func TestProposeSelfBuildEnvelope(t *testing.T) {
+	validator, m, validatorKey, finish := setup(t, false)
 	defer finish()
 
 	slot := primitives.Slot(100)
@@ -52,80 +74,59 @@ func TestExecutionPayloadEnvelope(t *testing.T) {
 		GetExecutionPayloadEnvelope(gomock.Any(), slot, builderIndex).
 		Return(expectedEnvelope, nil)
 
-	b := &ethpb.GenericBeaconBlock{
-		Block: &ethpb.GenericBeaconBlock_Gloas{
-			Gloas: &ethpb.BeaconBlockGloas{
-				Slot: slot,
-				Body: &ethpb.BeaconBlockBodyGloas{
-					SignedExecutionPayloadBid: &ethpb.SignedExecutionPayloadBid{
-						Message: &ethpb.ExecutionPayloadBid{
-							BuilderIndex: builderIndex,
-						},
-						Signature: make([]byte, 96),
-					},
-				},
-			},
-		},
-	}
+	builderDomain := make([]byte, 32)
+	copy(builderDomain, params.BeaconConfig().DomainBeaconBuilder[:])
+	m.validatorClient.EXPECT().
+		DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: builderDomain}, nil)
 
-	envelope, err := validator.getSelfBuildExecutionPayloadEnvelope(t.Context(), slot, b)
+	m.validatorClient.EXPECT().
+		PublishExecutionPayloadEnvelope(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.SignedExecutionPayloadEnvelope{})).
+		Return(&emptypb.Empty{}, nil)
+
+	signedBlock := signedGloasBlock(t, slot, builderIndex)
+
+	var pubKey [fieldparams.BLSPubkeyLength]byte
+	copy(pubKey[:], validatorKey.PublicKey().Marshal())
+
+	err := validator.proposeSelfBuildEnvelope(t.Context(), slot, pubKey, signedBlock)
 	require.NoError(t, err)
-	require.DeepEqual(t, expectedEnvelope, envelope)
 }
 
-func TestExecutionPayloadEnvelope_NilBlock(t *testing.T) {
+func TestProposeSelfBuildEnvelope_MissingBid(t *testing.T) {
 	validator, _, _, finish := setup(t, false)
 	defer finish()
 
-	b := &ethpb.GenericBeaconBlock{
-		Block: &ethpb.GenericBeaconBlock_Gloas{},
+	blk := util.NewBeaconBlockGloas()
+	blk.Block.Slot = 1
+	if blk.Block.Body == nil {
+		blk.Block.Body = &ethpb.BeaconBlockBodyGloas{}
 	}
+	blk.Block.Body.SignedExecutionPayloadBid = nil
 
-	_, err := validator.getSelfBuildExecutionPayloadEnvelope(t.Context(), 1, b)
-	require.ErrorContains(t, "expected Gloas block but got nil", err)
+	signedBlock, err := consensusblocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	var pubKey [fieldparams.BLSPubkeyLength]byte
+	err = validator.proposeSelfBuildEnvelope(t.Context(), 1, pubKey, signedBlock)
+	require.ErrorContains(t, "no execution payload bid found in block body", err)
 }
 
-func TestExecutionPayloadEnvelope_MissingBid(t *testing.T) {
-	validator, _, _, finish := setup(t, false)
-	defer finish()
-
-	b := &ethpb.GenericBeaconBlock{
-		Block: &ethpb.GenericBeaconBlock_Gloas{
-			Gloas: &ethpb.BeaconBlockGloas{
-				Slot: 1,
-				Body: &ethpb.BeaconBlockBodyGloas{},
-			},
-		},
-	}
-
-	_, err := validator.getSelfBuildExecutionPayloadEnvelope(t.Context(), 1, b)
-	require.ErrorContains(t, "block missing signed execution payload bid", err)
-}
-
-func TestExecutionPayloadEnvelope_ClientError(t *testing.T) {
-	validator, m, _, finish := setup(t, false)
+func TestProposeSelfBuildEnvelope_ClientError(t *testing.T) {
+	validator, m, validatorKey, finish := setup(t, false)
 	defer finish()
 
 	m.validatorClient.EXPECT().
 		GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, errors.New("connection refused"))
 
-	b := &ethpb.GenericBeaconBlock{
-		Block: &ethpb.GenericBeaconBlock_Gloas{
-			Gloas: &ethpb.BeaconBlockGloas{
-				Slot: 1,
-				Body: &ethpb.BeaconBlockBodyGloas{
-					SignedExecutionPayloadBid: &ethpb.SignedExecutionPayloadBid{
-						Message:   &ethpb.ExecutionPayloadBid{BuilderIndex: 1},
-						Signature: make([]byte, 96),
-					},
-				},
-			},
-		},
-	}
+	signedBlock := signedGloasBlock(t, 1, params.BeaconConfig().BuilderIndexSelfBuild)
 
-	_, err := validator.getSelfBuildExecutionPayloadEnvelope(t.Context(), 1, b)
-	require.ErrorContains(t, "connection refused", err)
+	var pubKey [fieldparams.BLSPubkeyLength]byte
+	copy(pubKey[:], validatorKey.PublicKey().Marshal())
+
+	err := validator.proposeSelfBuildEnvelope(t.Context(), 1, pubKey, signedBlock)
+	require.ErrorContains(t, "failed to get execution payload envelope for self-build", err)
 }
 
 func TestSignExecutionPayloadEnvelope(t *testing.T) {
@@ -251,6 +252,16 @@ func TestProposeBlock_Gloas_EnvelopeAfterBlock(t *testing.T) {
 
 	blk := util.NewBeaconBlockGloas()
 	builderIndex := params.BeaconConfig().BuilderIndexSelfBuild
+	if blk.Block.Body == nil {
+		blk.Block.Body = &ethpb.BeaconBlockBodyGloas{}
+	}
+	if blk.Block.Body.SignedExecutionPayloadBid == nil {
+		blk.Block.Body.SignedExecutionPayloadBid = &ethpb.SignedExecutionPayloadBid{}
+	}
+	if blk.Block.Body.SignedExecutionPayloadBid.Message == nil {
+		blk.Block.Body.SignedExecutionPayloadBid.Message = &ethpb.ExecutionPayloadBid{}
+	}
+	blk.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = builderIndex
 
 	gloasBlock := &ethpb.GenericBeaconBlock{
 		Block: &ethpb.GenericBeaconBlock_Gloas{
