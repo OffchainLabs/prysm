@@ -160,13 +160,13 @@ func (b *BeaconState) AppendHistoricalSummaries(summary *ethpb.HistoricalSummary
 // hold the lock before calling this method.
 func (b *BeaconState) recomputeRoot(idx int) {
 	hashFunc := hash.CustomSHA256Hasher()
-	layers := b.merkleLayers
+	layers := b.merkleLayers.layers
 	// The merkle tree structure looks as follows:
 	// [[r1, r2, r3, r4], [parent1, parent2], [root]]
 	// Using information about the index which changed, idx, we recompute
 	// only its branch up the tree.
 	currentIndex := idx
-	root := b.merkleLayers[0][idx]
+	root := layers[0][idx]
 	for i := 0; i < len(layers)-1; i++ {
 		isLeft := currentIndex%2 == 0
 		neighborIdx := currentIndex ^ 1
@@ -187,7 +187,6 @@ func (b *BeaconState) recomputeRoot(idx int) {
 		layers[i+1][parentIdx] = root
 		currentIndex = parentIdx
 	}
-	b.merkleLayers = layers
 }
 
 func (b *BeaconState) markFieldAsDirty(field types.FieldIndex) {
