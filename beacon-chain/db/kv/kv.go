@@ -300,6 +300,14 @@ func (s *Store) ClearDB() error {
 // Close closes the underlying BoltDB database.
 func (s *Store) Close() error {
 	prometheus.Unregister(createBoltCollector(s.db))
+	if s.blockCache != nil {
+		s.blockCache.Close()
+		s.blockCache = nil
+	}
+	if s.validatorEntryCache != nil {
+		s.validatorEntryCache.Close()
+		s.validatorEntryCache = nil
+	}
 
 	// Before DB closes, we should dump the cached state summary objects to DB.
 	if err := s.saveCachedStateSummariesDB(s.ctx); err != nil {

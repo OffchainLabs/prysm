@@ -125,7 +125,7 @@ func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (an
 
 	// Check if we have the anchor in cache.
 	anchor = s.stateDiffCache.getAnchor(anchorLvl)
-	if anchor != nil {
+	if anchor != nil && anchor.Slot() == anchorSlot {
 		return anchor, nil
 	}
 
