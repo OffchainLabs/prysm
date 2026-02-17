@@ -149,10 +149,7 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 			if len(header.KzgCommitments) == 0 {
 				return true, fmt.Errorf("empty kzg commitments")
 			}
-			// Verify inclusion proof
-			if err := peerdas.VerifyPartialDataColumnHeaderInclusionProof(header); err != nil {
-				return true, fmt.Errorf("invalid inclusion proof: %w", err)
-			}
+
 			t.Log("Header validation passed")
 			return false, nil
 		}

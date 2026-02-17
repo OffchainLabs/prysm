@@ -110,6 +110,18 @@ func (p *PartialDataColumn) newPartsMetadata() *ethpb.PartialDataColumnPartsMeta
 	}
 }
 
+func NewPartsMetaWithNoAvailableAndAllRequests(n uint64) *ethpb.PartialDataColumnPartsMetadata {
+	available := bitfield.NewBitlist(n)
+	requests := bitfield.NewBitlist(n)
+	for i := range n {
+		requests.SetBitAt(i, true)
+	}
+	return &ethpb.PartialDataColumnPartsMetadata{
+		Available: available,
+		Requests:  requests,
+	}
+}
+
 func marshalPartsMetadata(meta *ethpb.PartialDataColumnPartsMetadata) (partialmessages.PartsMetadata, error) {
 	b, err := meta.MarshalSSZ()
 	if err != nil {
@@ -118,8 +130,12 @@ func marshalPartsMetadata(meta *ethpb.PartialDataColumnPartsMetadata) (partialme
 	return partialmessages.PartsMetadata(b), nil
 }
 
+func (p *PartialDataColumn) NKzgCommitments() uint64 {
+	return p.Included.Len()
+}
+
 // ParsePartsMetadata SSZ-decodes bytes back to PartialDataColumnPartsMetadata.
-func parsePartsMetadata(pm partialmessages.PartsMetadata, expectedLength uint64) (*ethpb.PartialDataColumnPartsMetadata, error) {
+func ParsePartsMetadata(pm partialmessages.PartsMetadata, expectedLength uint64) (*ethpb.PartialDataColumnPartsMetadata, error) {
 	meta := &ethpb.PartialDataColumnPartsMetadata{}
 	if err := meta.UnmarshalSSZ([]byte(pm)); err != nil {
 		return nil, err
@@ -191,7 +207,7 @@ func (p *PartialDataColumn) PartsMetadata() (partialmessages.PartsMetadata, erro
 	return marshalPartsMetadata(meta)
 }
 
-func mergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata, additionalAvailable bitfield.Bitlist) (partialmessages.PartsMetadata, error) {
+func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata, additionalAvailable bitfield.Bitlist) (partialmessages.PartsMetadata, error) {
 	if base == nil {
 		return nil, errors.New("base is nil")
 	}
@@ -214,11 +230,11 @@ func (p *PartialDataColumn) updateReceivedStateOutgoing(receivedMeta partialmess
 	if receivedMeta == nil || len(receivedMeta) == 0 {
 		return nil, errors.New("recievedMeta is nil")
 	}
-	peerMeta, err := parsePartsMetadata(receivedMeta, p.Included.Len())
+	peerMeta, err := ParsePartsMetadata(receivedMeta, p.Included.Len())
 	if err != nil {
 		return nil, err
 	}
-	return mergeAvailableIntoPartsMetadata(peerMeta, cellsSent)
+	return MergeAvailableIntoPartsMetadata(peerMeta, cellsSent)
 }
 
 // ForPeer implements partialmessages.Message.
@@ -259,7 +275,7 @@ func (p *PartialDataColumn) ForPeer(remote peer.ID, requestedMessage bool, peerS
 
 	//  Normal - message requested and we have RecvdState.
 	if requestedMessage && peerState.RecvdState != nil {
-		peerMeta, err := parsePartsMetadata(recvdMeta, p.Included.Len())
+		peerMeta, err := ParsePartsMetadata(recvdMeta, p.Included.Len())
 		if err != nil {
 			return peerState, nil, nil, err
 		}
