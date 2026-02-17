@@ -14,6 +14,8 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	sszquerypb "github.com/OffchainLabs/prysm/v7/proto/ssz_query/testing"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	fastssz "github.com/prysmaticlabs/fastssz"
 )
 
 func TestProofCollector_New(t *testing.T) {
@@ -393,6 +395,128 @@ func TestProofCollector_MixinLengthAndCollect(t *testing.T) {
 	require.Equal(t, expectedRoot, root)
 }
 
+func TestIsDescendant(t *testing.T) {
+	// Derive real gindices from the FixedTestContainer SSZ layout.
+	// FixedTestContainer has 10 fields → depth 4 (next power-of-2 = 16).
+	//   root gindex = 1
+	//   field gindex = 1<<4 + fieldIndex  (e.g., field_uint32 at index 0 → gindex 16)
+	//
+	// The nested container (field index 4, gindex 20) has 2 sub-fields at depth 1:
+	//   value1 → gindex 20<<1 + 0 = 40
+	//   value2 → gindex 20<<1 + 1 = 41
+	container := makeFixedTestContainer()
+	info, err := AnalyzeObject(container)
+	require.NoError(t, err)
+
+	giFieldUint32, err := GetGeneralizedIndexFromPath(info, mustParsePath(t, ".field_uint32"))
+	require.NoError(t, err)
+
+	giNested, err := GetGeneralizedIndexFromPath(info, mustParsePath(t, ".nested"))
+	require.NoError(t, err)
+
+	giNestedValue1, err := GetGeneralizedIndexFromPath(info, mustParsePath(t, ".nested.value1"))
+	require.NoError(t, err)
+
+	giTrailing, err := GetGeneralizedIndexFromPath(info, mustParsePath(t, ".trailing_field"))
+	require.NoError(t, err)
+
+	tests := []struct {
+		name             string
+		generalizedIndex uint64
+		ancestor         uint64
+		want             bool
+	}{
+		{
+			name:             "self: nested == nested",
+			generalizedIndex: giNested,
+			ancestor:         giNested,
+			want:             false,
+		},
+		{
+			name:             "nested.value1 descends from nested",
+			generalizedIndex: giNestedValue1,
+			ancestor:         giNested,
+			want:             true,
+		},
+		{
+			name:             "nested.value1 descends from root",
+			generalizedIndex: giNestedValue1,
+			ancestor:         1,
+			want:             true,
+		},
+		{
+			name:             "field_uint32 does not descend from nested",
+			generalizedIndex: giFieldUint32,
+			ancestor:         giNested,
+			want:             false,
+		},
+		{
+			name:             "nested does not descend from trailing_field",
+			generalizedIndex: giNested,
+			ancestor:         giTrailing,
+			want:             false,
+		},
+		{
+			name:             "g smaller than ancestor",
+			generalizedIndex: 3,
+			ancestor:         giFieldUint32,
+			want:             false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isDescendant(tc.generalizedIndex, tc.ancestor)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func mustParsePath(t *testing.T, raw string) Path {
+	t.Helper()
+	p, err := ParsePath(raw)
+	require.NoError(t, err)
+	return p
+}
+
+func TestHasTargetsInSubtree(t *testing.T) {
+	t.Run("no targets", func(t *testing.T) {
+		pc := newProofCollector()
+		require.Equal(t, false, pc.hasTargetsInSubtree(8))
+	})
+
+	t.Run("self target is not considered in subtree", func(t *testing.T) {
+		pc := newProofCollector()
+		pc.addTarget(8)
+		require.Equal(t, false, pc.hasTargetsInSubtree(8))
+	})
+
+	t.Run("sentinel gindex 0", func(t *testing.T) {
+		pc := newProofCollector()
+		pc.addTarget(8)
+		require.Equal(t, false, pc.hasTargetsInSubtree(0))
+	})
+
+	t.Run("leaf target in subtree", func(t *testing.T) {
+		pc := newProofCollector()
+		pc.addTarget(35) // leaf at 35: 35 -> 17 -> 8
+		require.Equal(t, true, pc.hasTargetsInSubtree(8))
+	})
+
+	t.Run("sibling target in subtree", func(t *testing.T) {
+		pc := newProofCollector()
+		pc.addTarget(35) // siblings include 34 (sibling of 35), 16 (sibling of 17), 9 (sibling of 8)
+		// subtree rooted at 4 includes gindex 9 (= 4*2+1) as a sibling
+		require.Equal(t, true, pc.hasTargetsInSubtree(4))
+	})
+
+	t.Run("target outside subtree", func(t *testing.T) {
+		pc := newProofCollector()
+		pc.addTarget(35) // descendants of 8
+		require.Equal(t, false, pc.hasTargetsInSubtree(12))
+	})
+}
+
 func TestOptimizedSliceRootsMatchesValidatorRoots(t *testing.T) {
 	validators := make([]*ethpb.Validator, 16)
 	for i := range validators {
@@ -415,16 +539,112 @@ func TestOptimizedSliceRootsMatchesValidatorRoots(t *testing.T) {
 	}
 }
 
-func TestOptimizedSliceRoots_Empty(t *testing.T) {
-	validators := make([]*ethpb.Validator, 0)
+func TestMerkleizeVectorBody_FastPath_ProofCorrectness(t *testing.T) {
+	// Prove genesis_validators_root on a BeaconState.
+	// The validators list should use the fast path since the target is outside its subtree.
+	state := deterministicBeaconState(t, 16)
 
-	info, err := AnalyzeObject(&ethpb.Validator{})
+	info, err := AnalyzeObject(state)
 	require.NoError(t, err)
 
-	pc := newProofCollector()
-	roots, err := OptimizedSliceRoots(info, reflect.ValueOf(validators), pc)
+	path, err := ParsePath(".genesis_validators_root")
 	require.NoError(t, err)
-	require.Equal(t, 0, len(roots))
+
+	gi, err := GetGeneralizedIndexFromPath(info, path)
+	require.NoError(t, err)
+
+	proof, err := info.Prove(gi)
+	require.NoError(t, err)
+
+	root, err := state.HashTreeRoot()
+	require.NoError(t, err)
+
+	ok, err := fastssz.VerifyProof(root[:], proof)
+	require.NoError(t, err)
+	require.Equal(t, true, ok, "proof for genesis_validators_root should verify")
+}
+
+func TestMerkleizeVectorBody_SlowPath_ProofCorrectness(t *testing.T) {
+	// Prove validators[0].effective_balance on a BeaconState.
+	// The target is inside the validators subtree, so it should use the slow path.
+	state := deterministicBeaconState(t, 16)
+
+	info, err := AnalyzeObject(state)
+	require.NoError(t, err)
+
+	path, err := ParsePath(".validators[0].effective_balance")
+	require.NoError(t, err)
+
+	gi, err := GetGeneralizedIndexFromPath(info, path)
+	require.NoError(t, err)
+
+	proof, err := info.Prove(gi)
+	require.NoError(t, err)
+
+	root, err := state.HashTreeRoot()
+	require.NoError(t, err)
+
+	ok, err := fastssz.VerifyProof(root[:], proof)
+	require.NoError(t, err)
+	require.Equal(t, true, ok, "proof for validators[0].effective_balance should verify")
+}
+
+func BenchmarkProve_GenesisValidatorsRoot(b *testing.B) {
+	// Target is genesis_validators_root — the validators list should take the
+	// OptimizedSliceRoots fast path since no proof targets fall inside it.
+	state := deterministicBeaconState(b, 10000)
+
+	info, err := AnalyzeObject(state)
+	require.NoError(b, err)
+
+	path, err := ParsePath(".genesis_validators_root")
+	require.NoError(b, err)
+
+	gi, err := GetGeneralizedIndexFromPath(info, path)
+	require.NoError(b, err)
+
+	b.ResetTimer()
+	for b.Loop() {
+		// Re-analyze to re-populate variable length info each iteration,
+		// mirroring real usage where the state may change between proofs.
+		info, _ = AnalyzeObject(state)
+		_, err = info.Prove(gi)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkProve_ValidatorEffectiveBalance(b *testing.B) {
+	// Target is validators[0].effective_balance — the validators list must use
+	// the slow path to collect proof hashes within the subtree.
+	state := deterministicBeaconState(b, 10000)
+
+	info, err := AnalyzeObject(state)
+	require.NoError(b, err)
+
+	path, err := ParsePath(".validators[0].effective_balance")
+	require.NoError(b, err)
+
+	gi, err := GetGeneralizedIndexFromPath(info, path)
+	require.NoError(b, err)
+
+	b.ResetTimer()
+	for b.Loop() {
+		info, _ = AnalyzeObject(state)
+		_, err = info.Prove(gi)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// deterministicBeaconState creates a phase 0 BeaconState with deterministic
+// validators via util.DeterministicGenesisState and returns the proto representation.
+func deterministicBeaconState(tb testing.TB, numValidators uint64) *ethpb.BeaconState {
+	tb.Helper()
+	st, _ := util.DeterministicGenesisState(tb, numValidators)
+	return st.ToProtoUnsafe().(*ethpb.BeaconState)
 }
 
 func BenchmarkOptimizedSliceRoots(b *testing.B) {

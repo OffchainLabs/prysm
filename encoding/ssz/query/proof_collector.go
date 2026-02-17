@@ -154,28 +154,35 @@ func (pc *proofCollector) collectSibling(gindex uint64, hash [32]byte) {
 }
 
 // hasTargetsInSubtree reports whether any registered proof target (leaf or sibling)
-// is a descendant of (or equal to) the given subtree root gindex.
+// is a strict descendant of the given subtree root gindex.
+//
+// Equality (g == subtreeRoot) is intentionally excluded: when only the subtree
+// root itself is needed, callers can still use optimized root computation and
+// collect the root at the current level afterward.
 // Returns false when subtreeRoot is 0 (sentinel used for non-proof paths).
 func (pc *proofCollector) hasTargetsInSubtree(subtreeRoot uint64) bool {
 	if subtreeRoot == 0 {
 		return false
 	}
 	for g := range pc.requiredLeaves {
-		if isDescendantOrSelf(g, subtreeRoot) {
+		if isDescendant(g, subtreeRoot) {
 			return true
 		}
 	}
 	for g := range pc.requiredSiblings {
-		if isDescendantOrSelf(g, subtreeRoot) {
+		if isDescendant(g, subtreeRoot) {
 			return true
 		}
 	}
 	return false
 }
 
-// isDescendantOrSelf returns true if g == ancestor or g is below ancestor
+// isDescendant returns true if g is strictly below ancestor
 // in the generalized-index tree (i.e. walking g upward by halving reaches ancestor).
-func isDescendantOrSelf(g, ancestor uint64) bool {
+func isDescendant(g, ancestor uint64) bool {
+	if g == ancestor {
+		return false
+	}
 	for g >= ancestor {
 		if g == ancestor {
 			return true
