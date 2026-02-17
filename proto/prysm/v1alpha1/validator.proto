@@ -442,16 +442,16 @@ service BeaconNodeValidator {
   }
 
   // ==========================================================================
-  // GLOAS Fork Endpoints
+  // Gloas Fork Endpoints
   // ==========================================================================
 
-  // ExecutionPayloadEnvelope retrieves a cached execution payload envelope
+  // GetExecutionPayloadEnvelope retrieves a cached execution payload envelope
   // for the given slot and builder index. This is called by validators after
-  // receiving a GLOAS block to get the envelope they need to sign and broadcast.
+  // receiving a Gloas block to get the envelope they need to sign and broadcast.
   //
   // The envelope is cached by the beacon node during block production and
   // contains the full execution payload that corresponds to the bid in the block.
-  rpc ExecutionPayloadEnvelope(ExecutionPayloadEnvelopeRequest)
+  rpc GetExecutionPayloadEnvelope(ExecutionPayloadEnvelopeRequest)
       returns (ExecutionPayloadEnvelopeResponse) {
     option deprecated = true;
     option (google.api.http) = {
@@ -461,7 +461,7 @@ service BeaconNodeValidator {
 
   // PublishExecutionPayloadEnvelope broadcasts a signed execution payload envelope
   // to the P2P network. This is called by validators after signing the envelope
-  // retrieved from ExecutionPayloadEnvelope.
+  // retrieved from GetExecutionPayloadEnvelope.
   //
   // The beacon node validates the envelope signature and broadcasts it to peers
   // via the execution_payload_envelope gossip topic.
@@ -1170,7 +1170,7 @@ message AggregatedSigAndAggregationBitsResponse {
 }
 
 // =============================================================================
-// GLOAS Fork Messages
+// Gloas Fork Messages
 // =============================================================================
 
 // ExecutionPayloadEnvelopeRequest is the request for retrieving a cached

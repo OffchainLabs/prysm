@@ -49,7 +49,7 @@ func TestExecutionPayloadEnvelope(t *testing.T) {
 	expectedEnvelope := testExecutionPayloadEnvelope(slot, builderIndex)
 
 	m.validatorClient.EXPECT().
-		ExecutionPayloadEnvelope(gomock.Any(), slot, builderIndex).
+		GetExecutionPayloadEnvelope(gomock.Any(), slot, builderIndex).
 		Return(expectedEnvelope, nil)
 
 	b := &ethpb.GenericBeaconBlock{
@@ -82,7 +82,7 @@ func TestExecutionPayloadEnvelope_NilBlock(t *testing.T) {
 	}
 
 	_, err := validator.getExecutionPayloadEnvelope(t.Context(), 1, b)
-	require.ErrorContains(t, "expected GLOAS block but got nil", err)
+	require.ErrorContains(t, "expected Gloas block but got nil", err)
 }
 
 func TestExecutionPayloadEnvelope_MissingBid(t *testing.T) {
@@ -107,7 +107,7 @@ func TestExecutionPayloadEnvelope_ClientError(t *testing.T) {
 	defer finish()
 
 	m.validatorClient.EXPECT().
-		ExecutionPayloadEnvelope(gomock.Any(), gomock.Any(), gomock.Any()).
+		GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, errors.New("connection refused"))
 
 	b := &ethpb.GenericBeaconBlock{
@@ -237,7 +237,7 @@ func TestSignExecutionPayloadEnvelope_UsesDomainBeaconBuilder(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestProposeBlock_Gloas_EnvelopeAfterBlock verifies that the GLOAS propose flow
+// TestProposeBlock_Gloas_EnvelopeAfterBlock verifies that the Gloas propose flow
 // submits the block first, then retrieves, signs, and publishes the envelope.
 // The envelope's state root is lazily computed by the beacon node from the
 // post-block state, so this ordering is critical.
@@ -265,7 +265,7 @@ func TestProposeBlock_Gloas_EnvelopeAfterBlock(t *testing.T) {
 		DomainData(gomock.Any(), gomock.Any()).
 		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
 
-	// BeaconBlock returns a GLOAS block.
+	// BeaconBlock returns a Gloas block.
 	m.validatorClient.EXPECT().
 		BeaconBlock(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.BlockRequest{})).
 		Return(gloasBlock, nil)
@@ -281,7 +281,7 @@ func TestProposeBlock_Gloas_EnvelopeAfterBlock(t *testing.T) {
 		Return(&ethpb.ProposeResponse{BlockRoot: make([]byte, 32)}, nil)
 
 	getEnvelopeCall := m.validatorClient.EXPECT().
-		ExecutionPayloadEnvelope(gomock.Any(), primitives.Slot(1), builderIndex).
+		GetExecutionPayloadEnvelope(gomock.Any(), primitives.Slot(1), builderIndex).
 		Return(envelope, nil).
 		After(proposeCall)
 

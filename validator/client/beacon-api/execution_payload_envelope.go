@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// TODO: Implement GLOAS beacon API client methods.
+// TODO: Implement Gloas beacon API client methods.
 
 // getExecutionPayloadEnvelope retrieves the execution payload envelope for the given slot and builder index.
 func (c *beaconApiValidatorClient) getExecutionPayloadEnvelope(

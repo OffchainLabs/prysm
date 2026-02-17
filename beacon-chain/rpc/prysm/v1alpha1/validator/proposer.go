@@ -238,9 +238,9 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		// Set bls to execution change. New in Capella.
 		vs.setBlsToExecData(sBlk, head)
 
-		// Set payload attestations. New in GLOAS.
+		// Set payload attestations. New in Gloas.
 		if sBlk.Version() >= version.Gloas {
-			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head, sBlk.Block().Slot())); err != nil {
+			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head)); err != nil {
 				log.WithError(err).Error("Could not set payload attestations")
 			}
 		}
@@ -256,12 +256,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
 		}
 
-		switch {
-		case sBlk.Version() >= version.Gloas:
-			if err := vs.setGloasExecutionData(ctx, sBlk, local); err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not set GLOAS execution data: %v", err)
-			}
-		default:
+		if sBlk.Version() < version.Gloas {
 			// There's no reason to try to get a builder bid if local override is true.
 			var builderBid builderapi.Bid
 			if !(local.OverrideBuilder || skipMevBoost) {
@@ -281,6 +276,10 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
 			}
+		} else {
+			if err := vs.setSelfBuildExecutionPayloadBid(ctx, sBlk, local); err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
+			}
 		}
 	}
 
@@ -292,11 +291,11 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	}
 	sBlk.SetStateRoot(sr)
 
-	// For GLOAS, build and cache the execution payload envelope now that the block
+	// For Gloas, build and cache the execution payload envelope now that the block
 	// is fully built (state root set). The envelope needs the final block HTR as
 	// BeaconBlockRoot and the post-payload state root as StateRoot.
 	if sBlk.Version() >= version.Gloas {
-		if err := vs.buildExecutionPayloadEnvelope(ctx, sBlk, local); err != nil {
+		if err := vs.storeExecutionPayloadEnvelope(ctx, sBlk, local); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
 		}
 	}
@@ -308,6 +307,11 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 //
 // ProposeBeaconBlock handles the proposal of beacon blocks.
 func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
+	var (
+		blobSidecars       []*ethpb.BlobSidecar
+		dataColumnSidecars []blocks.RODataColumn
+	)
+
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
 	defer span.End()
 
@@ -324,57 +328,14 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
 	}
 
-	if block.Version() < version.Gloas {
-		// For post-Fulu blinded blocks, submit to relay and return early.
-		if block.IsBlinded() && slots.ToEpoch(block.Block().Slot()) >= params.BeaconConfig().FuluForkEpoch {
-			err := vs.BlockBuilder.SubmitBlindedBlockPostFulu(ctx, block)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not submit blinded block post-Fulu: %v", err)
-			}
-			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+	// For post-Fulu blinded blocks, submit to relay and return early
+	if block.IsBlinded() && slots.ToEpoch(block.Block().Slot()) >= params.BeaconConfig().FuluForkEpoch {
+		err := vs.BlockBuilder.SubmitBlindedBlockPostFulu(ctx, block)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not submit blinded block post-Fulu: %v", err)
 		}
-		return vs.proposeBlockWithSidecars(ctx, block, root, req)
+		return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 	}
-
-	return vs.proposeBlock(ctx, block, root)
-}
-
-// proposeBlock broadcasts and receives a beacon block without sidecars.
-// Used for GLOAS and beyond where execution data is delivered via a separate envelope.
-func (vs *Server) proposeBlock(
-	ctx context.Context,
-	block interfaces.SignedBeaconBlock,
-	root [fieldparams.RootLength]byte,
-) (*ethpb.ProposeResponse, error) {
-	protoBlock, err := block.Proto()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not convert block to proto: %v", err)
-	}
-	if err := vs.P2P.Broadcast(ctx, protoBlock); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not broadcast block: %v", err)
-	}
-	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
-		Type: blockfeed.ReceivedBlock,
-		Data: &blockfeed.ReceivedBlockData{SignedBlock: block},
-	})
-	if err := vs.BlockReceiver.ReceiveBlock(ctx, block, root, nil); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not receive block: %v", err)
-	}
-	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
-}
-
-// proposeBlockWithSidecars handles block proposal for forks that carry blob or
-// data column sidecars alongside the block (Bellatrix through Fulu).
-func (vs *Server) proposeBlockWithSidecars(
-	ctx context.Context,
-	block interfaces.SignedBeaconBlock,
-	root [fieldparams.RootLength]byte,
-	req *ethpb.GenericSignedBeaconBlock,
-) (*ethpb.ProposeResponse, error) {
-	var (
-		blobSidecars       []*ethpb.BlobSidecar
-		dataColumnSidecars []blocks.RODataColumn
-	)
 
 	rob, err := blocks.NewROBlockWithRoot(block, root)
 	if block.IsBlinded() {
@@ -383,7 +344,7 @@ func (vs *Server) proposeBlockWithSidecars(
 			log.WithError(err).Info("Optimistically proposed block - builder relay temporarily unavailable, block may arrive over P2P")
 			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 		}
-	} else if block.Version() >= version.Deneb {
+	} else if block.Version() >= version.Deneb && block.Version() < version.Gloas {
 		blobSidecars, dataColumnSidecars, err = vs.handleUnblindedBlock(rob, req)
 	}
 	if err != nil {
@@ -404,8 +365,10 @@ func (vs *Server) proposeBlockWithSidecars(
 
 	wg.Wait()
 
-	if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
+	if block.Version() < version.Gloas {
+		if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
+		}
 	}
 	if err := <-errChan; err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
@@ -479,10 +442,18 @@ func (vs *Server) handleUnblindedBlock(
 	}
 
 	if block.Version() >= version.Fulu {
-		roDataColumnSidecars, err := buildDataColumnSidecars(rawBlobs, proofs, peerdas.PopulateFromBlock(block))
+		// Compute cells and proofs from the blobs and cell proofs.
+		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, proofs)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, errors.Wrap(err, "compute cells and proofs")
 		}
+
+		// Construct data column sidecars from the signed block and cells and proofs.
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "data column sidcars")
+		}
+
 		return nil, roDataColumnSidecars, nil
 	}
 
@@ -492,22 +463,6 @@ func (vs *Server) handleUnblindedBlock(
 	}
 
 	return blobSidecars, nil, nil
-}
-
-// buildDataColumnSidecars computes cells and proofs from blobs and constructs
-// data column sidecars using the given ConstructionPopulator source.
-func buildDataColumnSidecars(blobs, proofs [][]byte, src peerdas.ConstructionPopulator) ([]blocks.RODataColumn, error) {
-	cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, proofs)
-	if err != nil {
-		return nil, errors.Wrap(err, "compute cells and proofs")
-	}
-
-	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, src)
-	if err != nil {
-		return nil, errors.Wrap(err, "data column sidecars")
-	}
-
-	return roDataColumnSidecars, nil
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.

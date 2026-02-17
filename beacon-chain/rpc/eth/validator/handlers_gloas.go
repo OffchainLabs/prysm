@@ -6,9 +6,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 )
 
-// ProduceBlockV4 requests a beacon node to produce a valid GLOAS block.
+// ProduceBlockV4 requests a beacon node to produce a valid Gloas block.
 //
-// TODO: Implement GLOAS-specific block production.
+// TODO: Implement Gloas-specific block production.
 // Endpoint: GET /eth/v4/validator/blocks/{slot}
 func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 	httputil.HandleError(w, "ProduceBlockV4 not yet implemented", http.StatusNotImplemented)
