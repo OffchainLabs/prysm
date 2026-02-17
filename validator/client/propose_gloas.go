@@ -6,38 +6,18 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
-// getExecutionPayloadEnvelope retrieves the execution payload envelope from the
-// beacon node for the given block's builder index and slot.
-func (v *validator) getExecutionPayloadEnvelope(
-	ctx context.Context,
-	slot primitives.Slot,
-	b *ethpb.GenericBeaconBlock,
-) (*ethpb.ExecutionPayloadEnvelope, error) {
-	ctx, span := trace.StartSpan(ctx, "validator.getExecutionPayloadEnvelope")
-	defer span.End()
-
-	gloasBlock := b.GetGloas()
-	if gloasBlock == nil {
-		return nil, errors.New("expected Gloas block but got nil")
-	}
-	if gloasBlock.Body == nil || gloasBlock.Body.SignedExecutionPayloadBid == nil || gloasBlock.Body.SignedExecutionPayloadBid.Message == nil {
-		return nil, errors.New("block missing signed execution payload bid")
-	}
-	builderIndex := gloasBlock.Body.SignedExecutionPayloadBid.Message.BuilderIndex
-
-	return v.validatorClient.GetExecutionPayloadEnvelope(ctx, slot, builderIndex)
-}
-
 // signExecutionPayloadEnvelope signs the execution payload envelope using the
-// builder's key. The envelope is signed with DomainBeaconBuilder since it is
+// proposer's key. The envelope is signed with DomainBeaconBuilder since it is
 // a builder artifact — even in the self-build case where the proposer acts as
 // their own builder.
 func (v *validator) signExecutionPayloadEnvelope(
@@ -81,4 +61,42 @@ func (v *validator) signExecutionPayloadEnvelope(
 		Message:   envelope,
 		Signature: sig.Marshal(),
 	}, nil
+}
+
+func (v *validator) proposeSelfBuildEnvelope(
+	ctx context.Context,
+	slot primitives.Slot,
+	pubKey [fieldparams.BLSPubkeyLength]byte,
+	blk interfaces.SignedBeaconBlock,
+) error {
+	if blk.Version() < version.Gloas {
+		return nil
+	}
+
+	bid, err := blk.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return err
+	}
+	if bid == nil || bid.Message == nil {
+		return errors.New("no execution payload bid found in block body")
+	}
+	if bid.Message.BuilderIndex != params.BeaconConfig().BuilderIndexSelfBuild {
+		return nil
+	}
+
+	envelope, err := v.validatorClient.GetExecutionPayloadEnvelope(ctx, slot, params.BeaconConfig().BuilderIndexSelfBuild)
+	if err != nil {
+		return errors.Wrap(err, "failed to get execution payload envelope for self-build")
+	}
+
+	signedEnvelope, err := v.signExecutionPayloadEnvelope(ctx, pubKey, slot, envelope)
+	if err != nil {
+		return errors.Wrap(err, "could not sign execution payload envelope")
+	}
+
+	if _, err := v.validatorClient.PublishExecutionPayloadEnvelope(ctx, signedEnvelope); err != nil {
+		return errors.Wrap(err, "failed to publish execution payload envelope")
+	}
+
+	return nil
 }

@@ -44,7 +44,7 @@ func TestExecutionPayloadEnvelope(t *testing.T) {
 	defer finish()
 
 	slot := primitives.Slot(100)
-	builderIndex := primitives.BuilderIndex(42)
+	builderIndex := params.BeaconConfig().BuilderIndexSelfBuild
 
 	expectedEnvelope := testExecutionPayloadEnvelope(slot, builderIndex)
 
@@ -68,7 +68,7 @@ func TestExecutionPayloadEnvelope(t *testing.T) {
 		},
 	}
 
-	envelope, err := validator.getExecutionPayloadEnvelope(t.Context(), slot, b)
+	envelope, err := validator.getSelfBuildExecutionPayloadEnvelope(t.Context(), slot, b)
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedEnvelope, envelope)
 }
@@ -81,7 +81,7 @@ func TestExecutionPayloadEnvelope_NilBlock(t *testing.T) {
 		Block: &ethpb.GenericBeaconBlock_Gloas{},
 	}
 
-	_, err := validator.getExecutionPayloadEnvelope(t.Context(), 1, b)
+	_, err := validator.getSelfBuildExecutionPayloadEnvelope(t.Context(), 1, b)
 	require.ErrorContains(t, "expected Gloas block but got nil", err)
 }
 
@@ -98,7 +98,7 @@ func TestExecutionPayloadEnvelope_MissingBid(t *testing.T) {
 		},
 	}
 
-	_, err := validator.getExecutionPayloadEnvelope(t.Context(), 1, b)
+	_, err := validator.getSelfBuildExecutionPayloadEnvelope(t.Context(), 1, b)
 	require.ErrorContains(t, "block missing signed execution payload bid", err)
 }
 
@@ -124,7 +124,7 @@ func TestExecutionPayloadEnvelope_ClientError(t *testing.T) {
 		},
 	}
 
-	_, err := validator.getExecutionPayloadEnvelope(t.Context(), 1, b)
+	_, err := validator.getSelfBuildExecutionPayloadEnvelope(t.Context(), 1, b)
 	require.ErrorContains(t, "connection refused", err)
 }
 
@@ -250,7 +250,7 @@ func TestProposeBlock_Gloas_EnvelopeAfterBlock(t *testing.T) {
 	copy(pubKey[:], validatorKey.PublicKey().Marshal())
 
 	blk := util.NewBeaconBlockGloas()
-	builderIndex := blk.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex
+	builderIndex := params.BeaconConfig().BuilderIndexSelfBuild
 
 	gloasBlock := &ethpb.GenericBeaconBlock{
 		Block: &ethpb.GenericBeaconBlock_Gloas{
