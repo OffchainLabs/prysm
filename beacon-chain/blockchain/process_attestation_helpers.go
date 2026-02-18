@@ -92,10 +92,6 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 // getAttPreState retrieves the att pre state by either from the cache or the DB.
 // The caller of this function must have a lock on forkchoice.
 func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (state.ReadOnlyBeaconState, error) {
-	// If the attestation is recent and canonical we can use the head state to compute the shuffling.
-	if st := s.getRecentPreState(ctx, c); st != nil {
-		return st, nil
-	}
 	// Use a multilock to allow scoped holding of a mutex by a checkpoint root + epoch
 	// allowing us to behave smarter in terms of how this function is used concurrently.
 	epochKey := strconv.FormatUint(uint64(c.Epoch), 10 /* base 10 */)
@@ -127,6 +123,10 @@ func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (stat
 			return nil, errors.Wrap(err, "could not save checkpoint state to cache")
 		}
 		return cachedState, nil
+	}
+	// If the attestation is recent and canonical we can use the head state to compute the shuffling.
+	if st := s.getRecentPreState(ctx, c); st != nil {
+		return st, nil
 	}
 
 	// Do not process attestations for old non viable checkpoints otherwise
