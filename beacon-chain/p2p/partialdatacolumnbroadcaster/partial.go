@@ -94,7 +94,6 @@ const (
 )
 
 type request struct {
-	publish             publish
 	kind           requestKind
 	cellsValidated *cellsValidated
 	response       chan error
@@ -103,8 +102,7 @@ type request struct {
 	sub            subscribe
 	publish        publish
 	getBlobsCalled getBlobsCalled
-  gossipForPeer       gossipForPeer
-	gossipForPeerResp   chan gossipForPeerResponse
+	gossipForPeer  gossipForPeer
 }
 
 type getBlobsCalled struct {
@@ -139,10 +137,11 @@ type cellsValidated struct {
 }
 
 type gossipForPeer struct {
-	topic     string
-	groupID   string
-	remote    peer.ID
-	peerState partialmessages.PeerState
+	topic             string
+	groupID           string
+	remote            peer.ID
+	peerState         partialmessages.PeerState
+	gossipForPeerResp chan gossipForPeerResponse
 }
 
 type gossipForPeerResponse struct {
@@ -180,15 +179,19 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 				p.incomingReq <- request{
 					kind: requestKindGossipForPeer,
 					gossipForPeer: gossipForPeer{
-						topic:     topic,
-						groupID:   groupID,
-						remote:    remote,
-						peerState: peerState,
+						topic:             topic,
+						groupID:           groupID,
+						remote:            remote,
+						peerState:         peerState,
+						gossipForPeerResp: respCh,
 					},
-					gossipForPeerResp: respCh,
 				}
-				resp := <-respCh
-				return resp.nextPeerState, resp.encodedMsg, resp.partsMetadataToSend, resp.err
+				select {
+				case resp := <-respCh:
+					return resp.nextPeerState, resp.encodedMsg, resp.partsMetadataToSend, resp.err
+				case <-p.stop:
+					return peerState, nil, nil, errors.New("broadcaster stopped")
+				}
 			},
 			OnIncomingRPC: func(from peer.ID, peerState partialmessages.PeerState, rpc *pubsub_pb.PartialMessagesExtension) (partialmessages.PeerState, error) {
 				if rpc == nil {
@@ -205,7 +208,7 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 				}:
 				default:
 					p.logger.Warn("Dropping incoming partial RPC", "rpc", rpc)
-					return nextPeerState, nil
+					return nextPeerState, errors.New("incomingReq channel is full, dropping RPC")
 				}
 				return nextPeerState, nil
 			},
@@ -285,7 +288,7 @@ func (p *PartialColumnBroadcaster) loop() {
 				req.response <- p.unsubscribe(req.unsub.topic)
 			case requestKindGossipForPeer:
 				nextPeerState, encodedMsg, partsMetadataToSend, err := p.handleGossipForPeer(req.gossipForPeer)
-				req.gossipForPeerResp <- gossipForPeerResponse{
+				req.gossipForPeer.gossipForPeerResp <- gossipForPeerResponse{
 					nextPeerState:       nextPeerState,
 					encodedMsg:          encodedMsg,
 					partsMetadataToSend: partsMetadataToSend,
@@ -331,6 +334,7 @@ func (p *PartialColumnBroadcaster) handleGossipForPeer(req gossipForPeer) (parti
 	if !ok || partialColumn == nil {
 		return req.peerState, nil, nil, errors.New("not tracking topic for group")
 	}
+	// we're not requesting a message here as this will be used to emit gossip. So, we pass requested message as false.
 	return partialColumn.ForPeer(req.remote, false, req.peerState)
 }
 
@@ -361,7 +365,7 @@ func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pu
 	if err := message.UnmarshalSSZ(rpc.PartialMessage); err != nil {
 		return peerState, errors.Wrap(err, "failed to unmarshal partial message data")
 	}
-	if message.CellsPresentBitmap == nil {
+	if len(message.CellsPresentBitmap) == 0 {
 		return nextPeerState, nil
 	}
 
@@ -533,6 +537,12 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		}
 	}
 
+	getBlobsCalled := p.getBlobsCalled[string(groupID)]
+	if !getBlobsCalled {
+		p.logger.Debug("GetBlobs not called, skipping republish", "topic", topicID, "group", groupID)
+		return nil
+	}
+
 	peerMeta := rpcWithFrom.PartsMetadata
 	myMeta, err := ourDataColumn.PartsMetadata()
 	if err != nil {
@@ -542,12 +552,6 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		// Either we have something they don't or vice versa
 		shouldRepublish = true
 		logger.Debug("republishing due to parts metadata difference")
-	}
-
-	getBlobsCalled := p.getBlobsCalled[string(groupID)]
-	if !getBlobsCalled {
-		p.logger.Debug("GetBlobs not called, skipping republish", "topic", topicID, "group", groupID)
-		return nil
 	}
 
 	if shouldRepublish {
@@ -671,7 +675,7 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 		// The existing column may already contain cells received from peers. We must not overwrite it.
 		for i := range c.Included.Len() {
 			if c.Included.BitAt(i) {
-				if existing.ExtendFromVerfifiedCell(uint64(i), c.Column[i], c.KzgProofs[i]) {
+				if existing.ExtendFromVerifiedCell(uint64(i), c.Column[i], c.KzgProofs[i]) {
 					extended = true
 				}
 			}

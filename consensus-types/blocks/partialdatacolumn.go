@@ -25,7 +25,7 @@ type CellProofBundle struct {
 }
 
 // PartialDataColumn is a partially populated DataColumnSidecar used for
-// exchanging cells and metadata with peers.
+// exchanging cells with peers.
 type PartialDataColumn struct {
 	*ethpb.DataColumnSidecar
 	root    [fieldparams.RootLength]byte
@@ -44,6 +44,9 @@ func NewPartialDataColumn(
 	kzgCommitments [][]byte,
 	kzgInclusionProof [][]byte,
 ) (PartialDataColumn, error) {
+	if signedBlockHeader == nil {
+		return PartialDataColumn{}, errors.New("signedBlockHeader is nil")
+	}
 	root, err := signedBlockHeader.Header.HashTreeRoot()
 	if err != nil {
 		return PartialDataColumn{}, err
@@ -70,12 +73,6 @@ func NewPartialDataColumn(
 		Included:          bitfield.NewBitlist(uint64(len(sidecar.KzgCommitments))),
 		eagerPushSent:     make(map[peer.ID]struct{}),
 	}
-	for i := range len(c.KzgCommitments) {
-		if sidecar.Column[i] == nil {
-			continue
-		}
-		c.Included.SetBitAt(uint64(i), true)
-	}
 	return c, nil
 }
 
@@ -85,7 +82,7 @@ func (p *PartialDataColumn) GroupID() []byte {
 }
 
 // ClearEagerPushSent resets the set of peers that have received the eager push
-// header, allowing the header to be re-sent on the next ForPeer call.
+// header.
 func (p *PartialDataColumn) ClearEagerPushSent() {
 	p.eagerPushSent = make(map[peer.ID]struct{})
 }
@@ -130,7 +127,8 @@ func marshalPartsMetadata(meta *ethpb.PartialDataColumnPartsMetadata) (partialme
 	return partialmessages.PartsMetadata(b), nil
 }
 
-// NKzgCommitments returns the number of commitments in the column.
+// NKzgCommitments returns the number of commitments in the block header for this column which
+// in turn will be equal to the number of cells in this column.
 func (p *PartialDataColumn) NKzgCommitments() uint64 {
 	return p.Included.Len()
 }
@@ -138,7 +136,7 @@ func (p *PartialDataColumn) NKzgCommitments() uint64 {
 // ParsePartsMetadata SSZ-decodes bytes back to PartialDataColumnPartsMetadata.
 func ParsePartsMetadata(pm partialmessages.PartsMetadata, expectedLength uint64) (*ethpb.PartialDataColumnPartsMetadata, error) {
 	meta := &ethpb.PartialDataColumnPartsMetadata{}
-	if err := meta.UnmarshalSSZ([]byte(pm)); err != nil {
+	if err := meta.UnmarshalSSZ(pm); err != nil {
 		return nil, err
 	}
 	if meta.Available.Len() != expectedLength || meta.Requests.Len() != expectedLength {
@@ -208,7 +206,7 @@ func (p *PartialDataColumn) PartsMetadata() (partialmessages.PartsMetadata, erro
 	return marshalPartsMetadata(meta)
 }
 
-// MergeAvailableIntoPartsMetadata merges additional availability into base and
+// MergeAvailableIntoPartsMetadata merges additional availabe cells into the base partsmetadata's available cells and
 // returns the marshaled metadata.
 func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata, additionalAvailable bitfield.Bitlist) (partialmessages.PartsMetadata, error) {
 	if base == nil {
@@ -230,8 +228,8 @@ func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata,
 
 // merge available, keep request unchanged, if my parts are different, simply over write with myparts
 func (p *PartialDataColumn) updateReceivedStateOutgoing(receivedMeta partialmessages.PartsMetadata, cellsSent bitfield.Bitlist) (partialmessages.PartsMetadata, error) {
-	if receivedMeta == nil || len(receivedMeta) == 0 {
-		return nil, errors.New("recievedMeta is nil")
+	if len(receivedMeta) == 0 {
+		return nil, errors.New("receivedMeta is empty")
 	}
 	peerMeta, err := ParsePartsMetadata(receivedMeta, p.Included.Len())
 	if err != nil {
@@ -241,16 +239,17 @@ func (p *PartialDataColumn) updateReceivedStateOutgoing(receivedMeta partialmess
 }
 
 // ForPeer implements partialmessages.Message.
-func (p *PartialDataColumn) ForPeer(remote peer.ID, requestedMessage bool, peerState partialmessages.PeerState) (partialmessages.PeerState, []byte, partialmessages.PartsMetadata, error) {
-	// Eager push - peer has never been seen (RecvdState nil) and message requested.
+func (p *PartialDataColumn) ForPeer(remote peer.ID, requestedMessage bool, peerState partialmessages.PeerState) (partialmessages.PeerState, []byte,
+	partialmessages.PartsMetadata, error) {
+	// Eager push header - we don't know what the peer has and message has been requested.
 	// Only send the header once per peer.
 	if requestedMessage && peerState.RecvdState == nil {
 		if _, sent := p.eagerPushSent[remote]; !sent {
-			p.eagerPushSent[remote] = struct{}{}
 			encoded, err := p.eagerPushBytes()
 			if err != nil {
 				return peerState, nil, nil, err
 			}
+			p.eagerPushSent[remote] = struct{}{}
 			return peerState, encoded, nil, nil
 		}
 		return peerState, nil, nil, nil
@@ -263,6 +262,7 @@ func (p *PartialDataColumn) ForPeer(remote peer.ID, requestedMessage bool, peerS
 	if peerState.SentState != nil {
 		var ok bool
 		sentMeta, ok = peerState.SentState.(partialmessages.PartsMetadata)
+		// should never happen but checking this for safety
 		if !ok {
 			return peerState, nil, nil, errors.New("SentState is not PartsMetadata")
 		}
@@ -388,7 +388,7 @@ func (p *PartialDataColumn) ExtendFromVerifiedCells(cellIndices []uint64, cells 
 	return extended
 }
 
-// Complete returns a verified read-only column if all cells are present.
+// Complete returns a verified read-only column if all cells are now present in this column.
 func (p *PartialDataColumn) Complete(logger *logrus.Logger) (VerifiedRODataColumn, bool) {
 	if uint64(len(p.KzgCommitments)) != p.Included.Count() {
 		return VerifiedRODataColumn{}, false
