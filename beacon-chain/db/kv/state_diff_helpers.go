@@ -21,9 +21,10 @@ import (
 )
 
 var (
-	offsetKey           = []byte("offset")
-	exponentsKey        = []byte("exponents")
-	ErrSlotBeforeOffset = errors.New("slot is before state-diff root offset")
+	offsetKey                   = []byte("offset")
+	exponentsKey                = []byte("exponents")
+	ErrSlotBeforeOffset         = errors.New("slot is before state-diff root offset")
+	errExponentsMetadataMissing = errors.New("state diff exponents metadata not found")
 )
 
 func encodeStateDiffExponents(exponents []int) ([]byte, error) {
@@ -82,7 +83,7 @@ func (s *Store) loadStateDiffExponents() ([]int, error) {
 		}
 		value := bucket.Get(exponentsKey)
 		if value == nil {
-			return errors.New("state diff exponents not found")
+			return errExponentsMetadataMissing
 		}
 		encoded = make([]byte, len(value))
 		copy(encoded, value)
@@ -101,7 +102,7 @@ func makeKeyForStateDiffTree(level int, slot uint64) []byte {
 	return buf
 }
 
-func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (anchor state.ReadOnlyBeaconState, err error) {
+func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot primitives.Slot) (anchor state.ReadOnlyBeaconState, err error) {
 	if lvl <= 0 || lvl > len(flags.Get().StateDiffExponents) {
 		return nil, errors.New("invalid value for level")
 	}
@@ -130,7 +131,7 @@ func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (an
 	}
 
 	// If not, load it from the database.
-	anchor, err = s.stateByDiff(context.Background(), anchorSlot)
+	anchor, err = s.stateByDiff(ctx, anchorSlot)
 	if err != nil {
 		return nil, err
 	}
@@ -396,7 +397,6 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 		}
 		level := i + 1
 		if s.stateDiffCache != nil && !s.stateDiffCache.levelHasData(level) {
-			lastSeenAnchorRelSlot = diffSlot
 			continue
 		}
 		diffChainItems = append(diffChainItems, diffItem{level: level, slot: diffSlot + offset})

@@ -19,6 +19,8 @@ const (
 	balancesSuffix  = "_b"
 )
 
+var errSnapshotNotFound = errors.New("full snapshot not found")
+
 /*
 	We use a level-based approach to save state diffs. Each level corresponds to an exponent of 2 (exponents[lvl]).
 	The data at level 0 is saved every 2**exponent[0] slots and always contains a full state snapshot that is used as a base for the delta saved at other levels.
@@ -58,7 +60,7 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 	}
 
 	// Get anchor state to compute the diff from.
-	anchorState, err := s.getAnchorState(offset, lvl, slot)
+	anchorState, err := s.getAnchorState(ctx, offset, lvl, slot)
 	if err != nil {
 		return err
 	}
@@ -171,9 +173,10 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	}
 	// Save the full state to the cache, and invalidate other levels.
 	s.stateDiffCache.clearAnchors()
-	err = s.stateDiffCache.setAnchor(0, st)
-	if err != nil {
-		return err
+	if len(flags.Get().StateDiffExponents) > 1 {
+		if err = s.stateDiffCache.setAnchor(0, st); err != nil {
+			return err
+		}
 	}
 	if err := s.stateDiffCache.setLevelHasData(0); err != nil {
 		return err
@@ -236,7 +239,7 @@ func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 		}
 		rawEnc := bucket.Get(key)
 		if rawEnc == nil {
-			return errors.New("state not found")
+			return errSnapshotNotFound
 		}
 		enc = slices.Clone(rawEnc)
 		return nil

@@ -50,9 +50,6 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 				if slot < offset {
 					return ErrStateDiffCorrupted
 				}
-				if level == 0 && slot != offset {
-					return ErrStateDiffCorrupted
-				}
 				if computeLevel(offset, primitives.Slot(slot)) != level {
 					return ErrStateDiffCorrupted
 				}
@@ -66,16 +63,28 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 
 	anchor0, err := s.getFullSnapshot(offset)
 	if err != nil {
-		return nil, pkgerrors.Wrapf(ErrStateDiffMissingSnapshot, "state diff cache: missing offset snapshot at %d", offset)
+		if errors.Is(err, errSnapshotNotFound) {
+			return nil, pkgerrors.Wrapf(ErrStateDiffMissingSnapshot, "offset snapshot at slot %d", offset)
+		}
+		return nil, pkgerrors.Wrapf(ErrStateDiffCorrupted, "failed to load offset snapshot at slot %d: %v", offset, err)
 	}
-	cache.anchors[0] = anchor0
+	// Only cache anchor if there are higher levels that need it.
+	// With a single exponent, len(anchors)==0 and no caching is needed.
+	if len(cache.anchors) > 0 {
+		cache.anchors[0] = anchor0
+	}
 	cache.levelsWithData[0] = true
 
 	return cache, nil
 }
 
 func validateStateDiffCache(ctx context.Context, s *Store, cache *stateDiffCache) error {
-	for level, hasData := range cache.levelsWithData {
+	cache.RLock()
+	levels := make([]bool, len(cache.levelsWithData))
+	copy(levels, cache.levelsWithData)
+	cache.RUnlock()
+
+	for level, hasData := range levels {
 		if !hasData || level == 0 {
 			continue
 		}

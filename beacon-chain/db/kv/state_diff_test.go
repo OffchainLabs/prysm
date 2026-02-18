@@ -107,7 +107,7 @@ func TestStateDiff_InitializeStoresExponents(t *testing.T) {
 func TestStateDiff_LoadExponentsMissing(t *testing.T) {
 	db := setupDB(t)
 	_, err := db.loadStateDiffExponents()
-	require.ErrorContains(t, "exponents not found", err)
+	require.ErrorContains(t, "exponents metadata not found", err)
 }
 
 func TestStateDiff_ComputeLevel(t *testing.T) {
@@ -265,7 +265,7 @@ func TestStateDiff_PopulateStateDiffCacheFromDB(t *testing.T) {
 
 	db := setupDB(t)
 	_, err := populateStateDiffCacheFromDB(db, 0)
-	require.ErrorContains(t, "missing offset snapshot", err)
+	require.ErrorContains(t, "offset snapshot", err)
 
 	st, _ := createState(t, 0, version.Phase0)
 	require.NoError(t, setOffsetInDB(db, 0))
@@ -289,6 +289,21 @@ func TestStateDiff_PopulateStateDiffCacheFromDB(t *testing.T) {
 	require.Equal(t, true, cache.levelHasData(0))
 	require.Equal(t, false, cache.levelHasData(1))
 	require.Equal(t, true, cache.levelHasData(2))
+}
+
+func TestStateDiff_PopulateStateDiffCacheFromDB_SingleExponent(t *testing.T) {
+	setStateDiffExponents([]int{5})
+
+	db := setupDB(t)
+	require.NoError(t, setOffsetInDB(db, 0))
+	st, _ := createState(t, 0, version.Phase0)
+	require.NoError(t, db.saveStateByDiff(context.Background(), st))
+
+	cache, err := populateStateDiffCacheFromDB(db, 0)
+	require.NoError(t, err)
+	require.NotNil(t, cache)
+	require.Equal(t, 0, len(cache.anchors))
+	require.Equal(t, true, cache.levelHasData(0))
 }
 
 func TestStateDiff_PopulateStateDiffCacheFromDB_InvalidLevelKey(t *testing.T) {

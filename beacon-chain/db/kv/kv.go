@@ -229,7 +229,12 @@ func (kv *Store) startStateDiff(ctx context.Context) error {
 	if hasOffset {
 		storedExponents, err := kv.loadStateDiffExponents()
 		if err != nil {
-			return fmt.Errorf("%w: state-diff metadata missing or invalid; re-sync required: %v", ErrStateDiffCorrupted, err)
+			if errors.Is(err, errExponentsMetadataMissing) {
+				return fmt.Errorf("%w: database has state-diff offset but no exponents metadata. "+
+					"This may indicate the database was created by an older software version that predates exponent storage. "+
+					"Delete database and re-sync from genesis/checkpoint", ErrStateDiffCorrupted)
+			}
+			return fmt.Errorf("%w: state-diff exponents metadata corrupted: %v", ErrStateDiffCorrupted, err)
 		}
 		currentExponents := flags.Get().StateDiffExponents
 		if !slices.Equal(storedExponents, currentExponents) {

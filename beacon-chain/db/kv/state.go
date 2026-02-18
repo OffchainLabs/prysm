@@ -1074,7 +1074,9 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 	if err != nil {
 		return nil, err
 	}
-	if blk != nil && !blk.IsNil() {
+	if blk == nil || blk.IsNil() {
+		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Warn("Block not found for state-diff root verification")
+	} else {
 		stateRoot, err := st.HashTreeRoot(ctx)
 		if err != nil {
 			return nil, err

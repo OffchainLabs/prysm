@@ -83,7 +83,7 @@ func TestStartStateDiff_MissingOffsetSnapshot(t *testing.T) {
 
 	ctx := t.Context()
 	err := store.startStateDiff(ctx)
-	require.ErrorContains(t, "missing offset snapshot", err)
+	require.ErrorContains(t, "offset snapshot", err)
 }
 
 func TestStartStateDiff_ValidateOnStartup(t *testing.T) {
