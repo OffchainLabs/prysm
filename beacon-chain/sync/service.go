@@ -443,6 +443,7 @@ func (s *Service) startPartialColumnBroadcaster(broadcaster *partialdatacolumnbr
 			err := s.processDataColumnSidecarsFromExecution(ctx, source)
 			if err != nil {
 				log.WithError(err).Error("Failed to process partial data column header")
+				return
 			}
 			if err := broadcaster.GetBlobsCalled(groupID); err != nil {
 				log.WithError(err).Error("Failed to call getBlobs called on broadcaster")
