@@ -1141,7 +1141,7 @@ func (s *Server) GetProposerDutiesV2(w http.ResponseWriter, r *http.Request) {
 		}
 		depEpoch := info.dutiesEpoch
 		if depEpoch >= params.BeaconConfig().FuluForkEpoch {
-			depEpoch = info.dutiesEpoch - 1
+			depEpoch = info.dutiesEpoch.Sub(1)
 		}
 		root, err := s.HeadFetcher.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), depEpoch)
 		if err != nil {

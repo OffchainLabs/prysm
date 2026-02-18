@@ -2683,9 +2683,14 @@ func TestGetProposerDutiesV2(t *testing.T) {
 		require.NoError(t, err, "Could not set up genesis state")
 		require.NoError(t, bs.SetSlot(params.BeaconConfig().SlotsPerEpoch))
 		chainSlot := primitives.Slot(0)
-		targetRoot := [32]byte{'n', 'e', 'x', 't'}
+		lookaheadRoot := [32]byte{'l', 'o', 'o', 'k'}
+		var capturedEpoch primitives.Epoch
 		chain := &mockChain.ChainService{
-			State: bs, Root: genesisRoot[:], Slot: &chainSlot, TargetRoot: targetRoot,
+			State: bs, Root: genesisRoot[:], Slot: &chainSlot,
+			DependentRootCB: func(_ [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+				capturedEpoch = epoch
+				return lookaheadRoot, nil
+			},
 		}
 		s := &Server{
 			Stater:                 &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
@@ -2698,6 +2703,8 @@ func TestGetProposerDutiesV2(t *testing.T) {
 			BeaconDB:               db,
 		}
 
+		// Request epoch 1 when current epoch is 0, triggering next-epoch lookahead.
+		// dutiesEpoch should remain 1, and DependentRootForEpoch should be called with epoch 1.
 		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v2/validator/duties/proposer/{epoch}", nil)
 		request.SetPathValue("epoch", "1")
 		writer := httptest.NewRecorder()
@@ -2707,6 +2714,8 @@ func TestGetProposerDutiesV2(t *testing.T) {
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.GetProposerDutiesResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, hexutil.Encode(lookaheadRoot[:]), resp.DependentRoot)
+		assert.Equal(t, primitives.Epoch(1), capturedEpoch, "next-epoch lookahead should pass dutiesEpoch to DependentRootForEpoch")
 		assert.Equal(t, 32, len(resp.Data))
 	})
 }
