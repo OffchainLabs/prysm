@@ -423,25 +423,39 @@ func (b *BeaconState) ExpectedWithdrawalsGloas() (state.ExpectedWithdrawalsGloas
 }
 
 // appendBuilderWithdrawals returns builder pending withdrawals, the updated withdrawal index,
-// and the processed count, following spec v1.7.0-alpha.2:
+// and the processed count.
 //
-//	def get_builder_withdrawals(state, withdrawal_index, prior_withdrawals):
+//	<spec fn="get_builder_withdrawals" fork="gloas" hash="d54dd146">
+//	def get_builder_withdrawals(
+//	    state: BeaconState,
+//	    withdrawal_index: WithdrawalIndex,
+//	    prior_withdrawals: Sequence[Withdrawal],
+//	) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, uint64]:
 //	    withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
 //	    assert len(prior_withdrawals) <= withdrawals_limit
-//	    processed_count = 0
-//	    withdrawals = []
+//
+//	    processed_count: uint64 = 0
+//	    withdrawals: List[Withdrawal] = []
 //	    for withdrawal in state.builder_pending_withdrawals:
-//	        if len(prior_withdrawals + withdrawals) >= withdrawals_limit:
+//	        all_withdrawals = prior_withdrawals + withdrawals
+//	        has_reached_limit = len(all_withdrawals) >= withdrawals_limit
+//	        if has_reached_limit:
 //	            break
-//	        withdrawals.append(Withdrawal(
-//	            index=withdrawal_index,
-//	            validator_index=convert_builder_index_to_validator_index(withdrawal.builder_index),
-//	            address=withdrawal.fee_recipient,
-//	            amount=withdrawal.amount,
-//	        ))
-//	        withdrawal_index += 1
+//
+//	        builder_index = withdrawal.builder_index
+//	        withdrawals.append(
+//	            Withdrawal(
+//	                index=withdrawal_index,
+//	                validator_index=convert_builder_index_to_validator_index(builder_index),
+//	                address=withdrawal.fee_recipient,
+//	                amount=withdrawal.amount,
+//	            )
+//	        )
+//	        withdrawal_index += WithdrawalIndex(1)
 //	        processed_count += 1
+//
 //	    return withdrawals, withdrawal_index, processed_count
+//	</spec>
 func (b *BeaconState) appendBuilderWithdrawals(withdrawalIndex uint64, withdrawals *[]*enginev1.Withdrawal) (uint64, uint64, error) {
 	cfg := params.BeaconConfig()
 	withdrawalsLimit := int(cfg.MaxWithdrawalsPerPayload - 1)
@@ -471,31 +485,45 @@ func (b *BeaconState) appendBuilderWithdrawals(withdrawalIndex uint64, withdrawa
 }
 
 // appendBuildersSweepWithdrawals returns builder sweep withdrawals, the updated withdrawal index,
-// and the processed count, following spec v1.7.0-alpha.2:
+// and the processed count.
 //
-//	def get_builders_sweep_withdrawals(state, withdrawal_index, prior_withdrawals):
+//	<spec fn="get_builders_sweep_withdrawals" fork="gloas" hash="04c1cb10">
+//	def get_builders_sweep_withdrawals(
+//	    state: BeaconState,
+//	    withdrawal_index: WithdrawalIndex,
+//	    prior_withdrawals: Sequence[Withdrawal],
+//	) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, uint64]:
 //	    epoch = get_current_epoch(state)
 //	    builders_limit = min(len(state.builders), MAX_BUILDERS_PER_WITHDRAWALS_SWEEP)
 //	    withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
 //	    assert len(prior_withdrawals) <= withdrawals_limit
-//	    processed_count = 0
-//	    withdrawals = []
+//
+//	    processed_count: uint64 = 0
+//	    withdrawals: List[Withdrawal] = []
 //	    builder_index = state.next_withdrawal_builder_index
 //	    for _ in range(builders_limit):
-//	        if len(prior_withdrawals + withdrawals) >= withdrawals_limit:
+//	        all_withdrawals = prior_withdrawals + withdrawals
+//	        has_reached_limit = len(all_withdrawals) >= withdrawals_limit
+//	        if has_reached_limit:
 //	            break
+//
 //	        builder = state.builders[builder_index]
 //	        if builder.withdrawable_epoch <= epoch and builder.balance > 0:
-//	            withdrawals.append(Withdrawal(
-//	                index=withdrawal_index,
-//	                validator_index=convert_builder_index_to_validator_index(builder_index),
-//	                address=builder.execution_address,
-//	                amount=builder.balance,
-//	            ))
-//	            withdrawal_index += 1
+//	            withdrawals.append(
+//	                Withdrawal(
+//	                    index=withdrawal_index,
+//	                    validator_index=convert_builder_index_to_validator_index(builder_index),
+//	                    address=builder.execution_address,
+//	                    amount=builder.balance,
+//	                )
+//	            )
+//	            withdrawal_index += WithdrawalIndex(1)
+//
 //	        builder_index = BuilderIndex((builder_index + 1) % len(state.builders))
 //	        processed_count += 1
+//
 //	    return withdrawals, withdrawal_index, processed_count
+//	</spec>
 func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, withdrawals *[]*enginev1.Withdrawal) (uint64, primitives.BuilderIndex, error) {
 	cfg := params.BeaconConfig()
 	withdrawalsLimit := int(cfg.MaxWithdrawalsPerPayload - 1)
