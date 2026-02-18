@@ -1078,7 +1078,8 @@ func (s *Server) computeProposerDuties(ctx context.Context, w http.ResponseWrite
 	}
 }
 
-// GetProposerDuties requests beacon node to provide all validators that are scheduled to propose a block in the given epoch.
+// Deprecated: GetProposerDuties requests beacon node to provide all validators that are scheduled to propose a block in the given epoch.
+// Use GetProposerDutiesV2 instead, which computes a fork-aware dependent root.
 func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.GetProposerDuties")
 	defer span.End()

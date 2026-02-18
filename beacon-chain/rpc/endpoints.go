@@ -320,7 +320,7 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
-			template: "/eth/v1/validator/duties/proposer/{epoch}",
+			template: "/eth/v1/validator/duties/proposer/{epoch}", // Deprecated: use /eth/v2/validator/duties/proposer/{epoch}
 			name:     namespace + ".GetProposerDuties",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
