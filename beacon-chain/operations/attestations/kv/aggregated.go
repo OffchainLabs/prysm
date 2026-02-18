@@ -280,6 +280,10 @@ func (c *AttCaches) DeleteAggregatedAttestation(att ethpb.Att) error {
 		}
 
 		if contains {
+			if err := c.insertSeenAggregatedAtt(a); err != nil {
+				return fmt.Errorf("insert aggregated att: %w", err)
+			}
+
 			continue
 		}
 
@@ -317,6 +321,16 @@ func (c *AttCaches) HasAggregatedAttestation(att ethpb.Att) (bool, error) {
 	}
 
 	if has {
+		return true, nil
+	}
+
+	has, err = c.hasSeenAggregatedAtt(att)
+	if err != nil {
+		return false, fmt.Errorf("has seen aggregated att: %w", err)
+	}
+
+	if has {
+		savedBySeenAggregatedCache.Inc()
 		return true, nil
 	}
 
@@ -381,9 +395,93 @@ func (c *AttCaches) hasBlockAtt(att ethpb.Att) (bool, error) {
 	return false, nil
 }
 
+// hasSeenAggregatedAtt checks if the attestation bits are contained in the seen aggregated cache.
+func (c *AttCaches) hasSeenAggregatedAtt(att ethpb.Att) (bool, error) {
+	id, err := attestation.NewId(att, attestation.Data)
+	if err != nil {
+		return false, fmt.Errorf("could not create attestation ID: %w", err)
+	}
+
+	c.seenAggregatedAttLock.RLock()
+	defer c.seenAggregatedAttLock.RUnlock()
+
+	cacheAtts, ok := c.seenAggregatedAtt[id]
+	if !ok {
+		return false, nil
+	}
+
+	for _, cacheAtt := range cacheAtts {
+		contains, err := cacheAtt.GetAggregationBits().Contains(att.GetAggregationBits())
+		if err != nil {
+			return false, fmt.Errorf("aggregation bits contains: %w", err)
+		}
+
+		if contains {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // AggregatedAttestationCount returns the number of aggregated attestations key in the pool.
 func (c *AttCaches) AggregatedAttestationCount() int {
 	c.aggregatedAttLock.RLock()
 	defer c.aggregatedAttLock.RUnlock()
 	return len(c.aggregatedAtt)
+}
+
+// insertSeenAggregatedAtt inserts an attestation into the seen aggregated cache.
+func (c *AttCaches) insertSeenAggregatedAtt(att ethpb.Att) error {
+	id, err := attestation.NewId(att, attestation.Data)
+	if err != nil {
+		return fmt.Errorf("new ID: %w", err)
+	}
+
+	c.seenAggregatedAttLock.Lock()
+	defer c.seenAggregatedAttLock.Unlock()
+
+	cacheAtts, ok := c.seenAggregatedAtt[id]
+	if !ok {
+		c.seenAggregatedAtt[id] = []ethpb.Att{att.Clone()}
+		return nil
+	}
+
+	// Check if attestation is already contained
+	for _, cacheAtt := range cacheAtts {
+		contains, err := cacheAtt.GetAggregationBits().Contains(att.GetAggregationBits())
+		if err != nil {
+			return fmt.Errorf("aggregation bits contains: %w", err)
+		}
+
+		if contains {
+			return nil
+		}
+	}
+
+	c.seenAggregatedAtt[id] = append(cacheAtts, att.Clone())
+	return nil
+}
+
+// SeenAggregatedAttestationCount returns the number of keys in the seen aggregated cache.
+func (c *AttCaches) SeenAggregatedAttestationCount() int {
+	c.seenAggregatedAttLock.RLock()
+	defer c.seenAggregatedAttLock.RUnlock()
+	return len(c.seenAggregatedAtt)
+}
+
+// DeleteSeenAggregatedAttestationsBefore deletes all attestations from the seen cache
+// with a slot less than the provided slot.
+func (c *AttCaches) DeleteSeenAggregatedAttestationsBefore(expirySlot primitives.Slot) {
+	c.seenAggregatedAttLock.Lock()
+	defer c.seenAggregatedAttLock.Unlock()
+
+	// The attestation ID contains the slot, so all attestations under the same ID
+	// share the same slot. We only need to check the first attestation's slot
+	// to determine whether to delete the entire entry.
+	for id, atts := range c.seenAggregatedAtt {
+		if len(atts) == 0 || atts[0].GetData().Slot < expirySlot {
+			delete(c.seenAggregatedAtt, id)
+		}
+	}
 }
