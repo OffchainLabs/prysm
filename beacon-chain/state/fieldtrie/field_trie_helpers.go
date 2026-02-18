@@ -96,12 +96,12 @@ func convertEth1DataVotes(indices []uint64, elements any, convertAll bool) ([][3
 
 func convertValidators(indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	switch casted := elements.(type) {
-	case []*ethpb.Validator:
-		return handleValidatorMVSlice(multi_value_slice.BuildEmptyCompositeSlice[*ethpb.Validator](casted), indices, convertAll)
-	case multi_value_slice.MultiValueSliceComposite[*ethpb.Validator]:
+	case []stateutil.CompactValidator:
+		return handleValidatorMVSlice(multi_value_slice.BuildEmptyCompositeSlice[stateutil.CompactValidator](casted), indices, convertAll)
+	case multi_value_slice.MultiValueSliceComposite[stateutil.CompactValidator]:
 		return handleValidatorMVSlice(casted, indices, convertAll)
 	default:
-		return nil, errors.Errorf("Wanted type of %T but got %T", []*ethpb.Validator{}, elements)
+		return nil, errors.Errorf("Wanted type of CompactValidator but got %T", elements)
 	}
 }
 
@@ -160,34 +160,27 @@ func handle32ByteMVslice(mv multi_value_slice.MultiValueSliceComposite[[32]byte]
 }
 
 // handleValidatorMVSlice returns the validator indices in a slice of root format.
-func handleValidatorMVSlice(mv multi_value_slice.MultiValueSliceComposite[*ethpb.Validator], indices []uint64, convertAll bool) ([][32]byte, error) {
+func handleValidatorMVSlice(mv multi_value_slice.MultiValueSliceComposite[stateutil.CompactValidator], indices []uint64, convertAll bool) ([][32]byte, error) {
 	length := len(indices)
 	if convertAll {
 		return stateutil.OptimizedValidatorRoots(mv.Value(mv.State()))
 	}
 	roots := make([][32]byte, 0, length)
-	rootCreator := func(input *ethpb.Validator) error {
-		newRoot, err := stateutil.ValidatorRootWithHasher(input)
-		if err != nil {
-			return err
-		}
-		roots = append(roots, newRoot)
-		return nil
-	}
 	totalLen := mv.Len(mv.State())
 	if totalLen > 0 {
 		for _, idx := range indices {
 			if idx > uint64(totalLen)-1 {
 				return nil, fmt.Errorf("index %d greater than number of validators %d", idx, totalLen)
 			}
-			val, err := mv.At(mv.State(), idx)
+			cv, err := mv.At(mv.State(), idx)
 			if err != nil {
 				return nil, err
 			}
-			err = rootCreator(val)
+			newRoot, err := stateutil.CompactValidatorRootWithHasher(&cv)
 			if err != nil {
 				return nil, err
 			}
+			roots = append(roots, newRoot)
 		}
 	}
 	return roots, nil

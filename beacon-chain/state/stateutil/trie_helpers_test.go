@@ -60,7 +60,7 @@ func BenchmarkReturnTrieLayer_VectorizedAlgorithm(b *testing.B) {
 
 func TestReturnTrieLayerVariable_OK(t *testing.T) {
 	newState, _ := util.DeterministicGenesisState(t, 32)
-	root, err := stateutil.ValidatorRegistryRoot(newState.Validators())
+	root, err := stateutil.ValidatorRegistryRoot(stateutil.CompactValidatorsFromProto(newState.Validators()))
 	require.NoError(t, err)
 	validators := newState.Validators()
 	roots := make([][32]byte, 0, len(validators))
@@ -85,7 +85,7 @@ func TestReturnTrieLayerVariable_OK(t *testing.T) {
 
 func BenchmarkReturnTrieLayerVariable_NormalAlgorithm(b *testing.B) {
 	newState, _ := util.DeterministicGenesisState(b, 16000)
-	root, err := stateutil.ValidatorRegistryRoot(newState.Validators())
+	root, err := stateutil.ValidatorRegistryRoot(stateutil.CompactValidatorsFromProto(newState.Validators()))
 	require.NoError(b, err)
 	validators := newState.Validators()
 	roots := make([][32]byte, 0, len(validators))
@@ -107,7 +107,7 @@ func BenchmarkReturnTrieLayerVariable_NormalAlgorithm(b *testing.B) {
 func BenchmarkReturnTrieLayerVariable_VectorizedAlgorithm(b *testing.B) {
 
 	newState, _ := util.DeterministicGenesisState(b, 16000)
-	root, err := stateutil.ValidatorRegistryRoot(newState.Validators())
+	root, err := stateutil.ValidatorRegistryRoot(stateutil.CompactValidatorsFromProto(newState.Validators()))
 	require.NoError(b, err)
 	validators := newState.Validators()
 	roots := make([][32]byte, 0, len(validators))
@@ -171,7 +171,7 @@ func TestRecomputeFromLayer_VariableSizedArray(t *testing.T) {
 	require.NoError(t, newState.UpdateValidatorAtIndex(primitives.ValidatorIndex(changedIdx[0]), changedVals[0]))
 	require.NoError(t, newState.UpdateValidatorAtIndex(primitives.ValidatorIndex(changedIdx[1]), changedVals[1]))
 
-	expectedRoot, err := stateutil.ValidatorRegistryRoot(newState.Validators())
+	expectedRoot, err := stateutil.ValidatorRegistryRoot(stateutil.CompactValidatorsFromProto(newState.Validators()))
 	require.NoError(t, err)
 	roots = make([][32]byte, 0, len(changedVals))
 	for _, val := range changedVals {

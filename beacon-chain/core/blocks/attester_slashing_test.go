@@ -209,9 +209,11 @@ func TestProcessAttesterSlashings_AppliesCorrectStatus(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			for _, vv := range tc.st.Validators() {
+			vals := tc.st.Validators()
+			for _, vv := range vals {
 				vv.WithdrawableEpoch = primitives.Epoch(params.BeaconConfig().SlotsPerEpoch)
 			}
+			require.NoError(t, tc.st.SetValidators(vals))
 
 			domain, err := signing.Domain(tc.st.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, tc.st.GenesisValidatorsRoot())
 			require.NoError(t, err)

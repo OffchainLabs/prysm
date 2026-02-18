@@ -1,6 +1,7 @@
 package electra_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -21,27 +22,36 @@ import (
 
 func TestProcessPendingDepositsMultiplesSameDeposits(t *testing.T) {
 	st := stateWithActiveBalanceETH(t, 1000)
-	deps := make([]*eth.PendingDeposit, 2) // Make same deposit twice
-	validators := st.Validators()
+	// Create 2 pending deposits for the same key, targeting validator[0]
 	sk, err := bls.RandKey()
 	require.NoError(t, err)
-	for i := 0; i < len(deps); i += 1 {
-		wc := make([]byte, 32)
-		wc[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
-		wc[31] = byte(i)
-		validators[i].PublicKey = sk.PublicKey().Marshal()
-		validators[i].WithdrawalCredentials = wc
+	wc := make([]byte, 32)
+	wc[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+
+	// Set validator[0]'s pubkey to match the deposits
+	validators := st.Validators()
+	validators[0].PublicKey = sk.PublicKey().Marshal()
+	validators[0].WithdrawalCredentials = wc
+	require.NoError(t, st.SetValidators(validators))
+
+	deps := make([]*eth.PendingDeposit, 2)
+	for i := range deps {
 		deps[i] = stateTesting.GeneratePendingDeposit(t, sk, 32, bytesutil.ToBytes32(wc), 0)
 	}
 	require.NoError(t, st.SetPendingDeposits(deps))
 
+	numValsBefore := len(st.Validators())
 	err = electra.ProcessPendingDeposits(context.TODO(), st, 10000)
 	require.NoError(t, err)
 
 	val := st.Validators()
+	// Both deposits should top up the existing validator, not create new ones
+	require.Equal(t, numValsBefore, len(val), "no new validators should be created for duplicate deposits")
+
+	zeroPubkey := make([]byte, fieldparams.BLSPubkeyLength)
 	seenPubkeys := make(map[string]struct{})
 	for i := 0; i < len(val); i += 1 {
-		if len(val[i].PublicKey) == 0 {
+		if bytes.Equal(val[i].PublicKey, zeroPubkey) {
 			continue
 		}
 		_, ok := seenPubkeys[string(val[i].PublicKey)]

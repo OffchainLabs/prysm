@@ -60,8 +60,9 @@ func TestFieldTrie_RecomputeTrie(t *testing.T) {
 func runRecomputeTrie(t *testing.T) {
 	newState, _ := util.DeterministicGenesisState(t, 32)
 
-	mvRoots := buildTestCompositeSlice[*ethpb.Validator](newState.Validators())
-	elements := mvslice.MultiValueSliceComposite[*ethpb.Validator]{
+	compactVals := stateutil.CompactValidatorsFromProto(newState.Validators())
+	mvRoots := buildTestCompositeSlice[stateutil.CompactValidator](compactVals)
+	elements := mvslice.MultiValueSliceComposite[stateutil.CompactValidator]{
 		Identifiable:    mockIdentifier{},
 		MultiValueSlice: mvRoots,
 	}
@@ -88,9 +89,9 @@ func runRecomputeTrie(t *testing.T) {
 	require.NoError(t, newState.UpdateValidatorAtIndex(primitives.ValidatorIndex(changedIdx[0]), changedVals[0]))
 	require.NoError(t, newState.UpdateValidatorAtIndex(primitives.ValidatorIndex(changedIdx[1]), changedVals[1]))
 
-	expectedRoot, err := stateutil.ValidatorRegistryRoot(newState.Validators())
+	expectedRoot, err := stateutil.ValidatorRegistryRoot(stateutil.CompactValidatorsFromProto(newState.Validators()))
 	require.NoError(t, err)
-	root, err := trie.RecomputeTrie(changedIdx, newState.Validators())
+	root, err := trie.RecomputeTrie(changedIdx, stateutil.CompactValidatorsFromProto(newState.Validators()))
 	require.NoError(t, err)
 	assert.Equal(t, expectedRoot, root)
 }

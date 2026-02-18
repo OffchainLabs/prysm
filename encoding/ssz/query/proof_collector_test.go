@@ -394,10 +394,11 @@ func TestProofCollector_MixinLengthAndCollect(t *testing.T) {
 }
 
 func BenchmarkOptimizedValidatorRoots(b *testing.B) {
-	validators := make([]*ethpb.Validator, 1000)
-	for i := range validators {
-		validators[i] = makeTestValidator(i)
+	protoValidators := make([]*ethpb.Validator, 1000)
+	for i := range protoValidators {
+		protoValidators[i] = makeTestValidator(i)
 	}
+	validators := stateutil.CompactValidatorsFromProto(protoValidators)
 
 	b.ResetTimer()
 	for b.Loop() {

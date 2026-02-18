@@ -2,6 +2,7 @@ package state_native
 
 import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -16,21 +17,31 @@ var (
 
 // readOnlyValidator returns a wrapper that only allows fields from a validator
 // to be read, and prevents any modification of internal validator fields.
+// It wraps a CompactValidator by value (128 bytes, zero pointers) rather than
+// a *ethpb.Validator pointer.
 type readOnlyValidator struct {
-	validator *ethpb.Validator
+	validator stateutil.CompactValidator
+	isNil     bool
 }
 
 var _ = state.ReadOnlyValidator(readOnlyValidator{})
 
-// NewValidator initializes the read only wrapper for validator.
+// NewValidator initializes the read only wrapper for validator from a proto.
 func NewValidator(v *ethpb.Validator) (state.ReadOnlyValidator, error) {
 	if v == nil {
 		return nil, ErrNilWrappedValidator
 	}
 	rov := readOnlyValidator{
-		validator: v,
+		validator: stateutil.CompactValidatorFromProto(v),
 	}
 	return rov, nil
+}
+
+// NewValidatorFromCompact initializes the read only wrapper from a CompactValidator.
+func NewValidatorFromCompact(cv stateutil.CompactValidator) state.ReadOnlyValidator {
+	return readOnlyValidator{
+		validator: cv,
+	}
 }
 
 // EffectiveBalance returns the effective balance of the
@@ -66,16 +77,14 @@ func (v readOnlyValidator) ExitEpoch() primitives.Epoch {
 // PublicKey returns the public key of the
 // read only validator.
 func (v readOnlyValidator) PublicKey() [fieldparams.BLSPubkeyLength]byte {
-	var pubkey [fieldparams.BLSPubkeyLength]byte
-	copy(pubkey[:], v.validator.PublicKey)
-	return pubkey
+	return v.validator.PublicKey
 }
 
 // WithdrawalCredentials returns the withdrawal credentials of the
 // read only validator.
 func (v readOnlyValidator) GetWithdrawalCredentials() []byte {
-	creds := make([]byte, len(v.validator.WithdrawalCredentials))
-	copy(creds, v.validator.WithdrawalCredentials)
+	creds := make([]byte, 32)
+	copy(creds, v.validator.WithdrawalCredentials[:])
 	return creds
 }
 
@@ -86,7 +95,7 @@ func (v readOnlyValidator) Slashed() bool {
 
 // IsNil returns true if the validator is nil.
 func (v readOnlyValidator) IsNil() bool {
-	return v.validator == nil
+	return v.isNil
 }
 
 // HasETH1WithdrawalCredentials returns true if the validator has an ETH1 withdrawal credentials.
@@ -112,16 +121,5 @@ func (v readOnlyValidator) HasExecutionWithdrawalCredentials() bool {
 
 // Copy returns a new validator from the read only validator
 func (v readOnlyValidator) Copy() *ethpb.Validator {
-	pubKey := v.PublicKey()
-	withdrawalCreds := v.GetWithdrawalCredentials()
-	return &ethpb.Validator{
-		PublicKey:                  pubKey[:],
-		WithdrawalCredentials:      withdrawalCreds,
-		EffectiveBalance:           v.EffectiveBalance(),
-		Slashed:                    v.Slashed(),
-		ActivationEligibilityEpoch: v.ActivationEligibilityEpoch(),
-		ActivationEpoch:            v.ActivationEpoch(),
-		ExitEpoch:                  v.ExitEpoch(),
-		WithdrawableEpoch:          v.WithdrawableEpoch(),
-	}
+	return v.validator.ToProto()
 }

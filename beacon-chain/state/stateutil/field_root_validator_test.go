@@ -29,24 +29,25 @@ func TestValidatorConstants(t *testing.T) {
 	assert.Equal(t, validatorFieldRoots, numOfValFields)
 	assert.Equal(t, uint64(validatorFieldRoots), mathutil.PowerOf2(validatorTreeDepth))
 
-	_, err := ValidatorRegistryRoot([]*ethpb.Validator{v})
+	cv := CompactValidatorFromProto(v)
+	_, err := ValidatorRegistryRoot([]CompactValidator{cv})
 	assert.NoError(t, err)
 }
 
-func TestHashValidatorHelper(t *testing.T) {
+func TestHashCompactValidatorHelper(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	v := &ethpb.Validator{}
-	valList := make([]*ethpb.Validator, 10*validatorFieldRoots)
+	cv := CompactValidator{}
+	valList := make([]CompactValidator, 10*validatorFieldRoots)
 	for i := range valList {
-		valList[i] = v
+		valList[i] = cv
 	}
 	roots := make([][32]byte, len(valList))
-	hashValidatorHelper(valList, roots, 2, 2, &wg)
+	hashCompactValidatorHelper(valList, roots, 2, 2, &wg)
 	for i := range 4 * validatorFieldRoots {
 		require.Equal(t, [32]byte{}, roots[i])
 	}
-	emptyValRoots, err := ValidatorFieldRoots(v)
+	emptyValRoots, err := CompactValidatorFieldRoots(&cv)
 	require.NoError(t, err)
 	for i := 4; i < 6; i++ {
 		for j := range validatorFieldRoots {

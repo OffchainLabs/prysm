@@ -9,7 +9,6 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -26,13 +25,13 @@ const (
 )
 
 // ValidatorRegistryRoot computes the HashTreeRoot Merkleization of
-// a list of validator structs according to the Ethereum
+// a list of compact validator structs according to the Ethereum
 // Simple Serialize specification.
-func ValidatorRegistryRoot(vals []*ethpb.Validator) ([32]byte, error) {
+func ValidatorRegistryRoot(vals []CompactValidator) ([32]byte, error) {
 	return validatorRegistryRoot(vals)
 }
 
-func validatorRegistryRoot(validators []*ethpb.Validator) ([32]byte, error) {
+func validatorRegistryRoot(validators []CompactValidator) ([32]byte, error) {
 	roots, err := OptimizedValidatorRoots(validators)
 	if err != nil {
 		return [32]byte{}, err
@@ -54,10 +53,10 @@ func validatorRegistryRoot(validators []*ethpb.Validator) ([32]byte, error) {
 	return res, nil
 }
 
-func hashValidatorHelper(validators []*ethpb.Validator, roots [][32]byte, j int, groupSize int, wg *sync.WaitGroup) {
+func hashCompactValidatorHelper(validators []CompactValidator, roots [][32]byte, j int, groupSize int, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for i := range groupSize {
-		fRoots, err := ValidatorFieldRoots(validators[j*groupSize+i])
+		fRoots, err := CompactValidatorFieldRoots(&validators[j*groupSize+i])
 		if err != nil {
 			logrus.WithError(err).Error("Could not get validator field roots")
 			return
@@ -69,8 +68,8 @@ func hashValidatorHelper(validators []*ethpb.Validator, roots [][32]byte, j int,
 }
 
 // OptimizedValidatorRoots uses an optimized routine with gohashtree in order to
-// derive a list of validator roots from a list of validator objects.
-func OptimizedValidatorRoots(validators []*ethpb.Validator) ([][32]byte, error) {
+// derive a list of validator roots from a list of compact validator objects.
+func OptimizedValidatorRoots(validators []CompactValidator) ([][32]byte, error) {
 	// Exit early if no validators are provided.
 	if len(validators) == 0 {
 		return [][32]byte{}, nil
@@ -82,10 +81,10 @@ func OptimizedValidatorRoots(validators []*ethpb.Validator) ([][32]byte, error) 
 	roots := make([][32]byte, rootsSize)
 	wg.Add(n - 1)
 	for j := 0; j < n-1; j++ {
-		go hashValidatorHelper(validators, roots, j, groupSize, &wg)
+		go hashCompactValidatorHelper(validators, roots, j, groupSize, &wg)
 	}
 	for i := (n - 1) * groupSize; i < len(validators); i++ {
-		fRoots, err := ValidatorFieldRoots(validators[i])
+		fRoots, err := CompactValidatorFieldRoots(&validators[i])
 		if err != nil {
 			return [][32]byte{}, errors.Wrap(err, "could not compute validators merkleization")
 		}
