@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"sync"
 
@@ -273,18 +274,25 @@ func (c *AttCaches) DeleteAggregatedAttestation(att ethpb.Att) error {
 
 	filtered := make([]ethpb.Att, 0)
 	for _, a := range attList {
-		if c, err := att.GetAggregationBits().Contains(a.GetAggregationBits()); err != nil {
-			return err
-		} else if !c {
-			filtered = append(filtered, a)
+		contains, err := att.GetAggregationBits().Contains(a.GetAggregationBits())
+		if err != nil {
+			return fmt.Errorf("aggregation bits contain: %w", err)
 		}
-	}
-	if len(filtered) == 0 {
-		delete(c.aggregatedAtt, id)
-	} else {
-		c.aggregatedAtt[id] = filtered
+
+		if contains {
+			continue
+		}
+
+		// If the attestation in the cache doesn't contain the bits of the attestation to delete, we keep it in the cache.
+		filtered = append(filtered, a)
 	}
 
+	if len(filtered) == 0 {
+		delete(c.aggregatedAtt, id)
+		return nil
+	}
+
+	c.aggregatedAtt[id] = filtered
 	return nil
 }
 
@@ -294,32 +302,79 @@ func (c *AttCaches) HasAggregatedAttestation(att ethpb.Att) (bool, error) {
 		return false, err
 	}
 
+	has, err := c.hasAggregatedAtt(att)
+	if err != nil {
+		return false, fmt.Errorf("has aggregated att: %w", err)
+	}
+
+	if has {
+		return true, nil
+	}
+
+	has, err = c.hasBlockAtt(att)
+	if err != nil {
+		return false, fmt.Errorf("has block att: %w", err)
+	}
+
+	if has {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// hasAggregatedAtt checks if the attestation bits are contained in the aggregated attestation cache.
+func (c *AttCaches) hasAggregatedAtt(att ethpb.Att) (bool, error) {
 	id, err := attestation.NewId(att, attestation.Data)
 	if err != nil {
-		return false, errors.Wrap(err, "could not create attestation ID")
+		return false, fmt.Errorf("could not create attestation ID: %w", err)
 	}
 
 	c.aggregatedAttLock.RLock()
 	defer c.aggregatedAttLock.RUnlock()
-	if atts, ok := c.aggregatedAtt[id]; ok {
-		for _, a := range atts {
-			if c, err := a.GetAggregationBits().Contains(att.GetAggregationBits()); err != nil {
-				return false, err
-			} else if c {
-				return true, nil
-			}
+
+	cacheAtts, ok := c.aggregatedAtt[id]
+	if !ok {
+		return false, nil
+	}
+
+	for _, cacheAtt := range cacheAtts {
+		contains, err := cacheAtt.GetAggregationBits().Contains(att.GetAggregationBits())
+		if err != nil {
+			return false, fmt.Errorf("aggregation bits contains: %w", err)
 		}
+
+		if contains {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// hasBlockAtt checks if the attestation bits are contained in the block attestation cache.
+func (c *AttCaches) hasBlockAtt(att ethpb.Att) (bool, error) {
+	id, err := attestation.NewId(att, attestation.Data)
+	if err != nil {
+		return false, fmt.Errorf("could not create attestation ID: %w", err)
 	}
 
 	c.blockAttLock.RLock()
 	defer c.blockAttLock.RUnlock()
-	if atts, ok := c.blockAtt[id]; ok {
-		for _, a := range atts {
-			if c, err := a.GetAggregationBits().Contains(att.GetAggregationBits()); err != nil {
-				return false, err
-			} else if c {
-				return true, nil
-			}
+
+	cacheAtts, ok := c.blockAtt[id]
+	if !ok {
+		return false, nil
+	}
+
+	for _, cacheAtt := range cacheAtts {
+		contains, err := cacheAtt.GetAggregationBits().Contains(att.GetAggregationBits())
+		if err != nil {
+			return false, fmt.Errorf("aggregation bits contains: %w", err)
+		}
+
+		if contains {
+			return true, nil
 		}
 	}
 
