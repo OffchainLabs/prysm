@@ -34,8 +34,17 @@ func SemanticVersion() string {
 	return gitTag
 }
 
+// GitCommit returns the current build commit hash.
+func GitCommit() string {
+	return resolvedGitCommit()
+}
+
 // BuildData returns the git tag and commit of the current build.
 func BuildData() string {
+	return fmt.Sprintf("Prysm/%s/%s", gitTag, resolvedGitCommit())
+}
+
+func resolvedGitCommit() string {
 	// if doing a local build, these values are not interpolated
 	if gitCommit == "{STABLE_GIT_COMMIT}" {
 		commit, err := exec.Command("git", "rev-parse", "HEAD").Output()
@@ -45,7 +54,7 @@ func BuildData() string {
 			gitCommit = strings.TrimRight(string(commit), "\r\n")
 		}
 	}
-	return fmt.Sprintf("Prysm/%s/%s", gitTag, gitCommit)
+	return gitCommit
 }
 
 // GetCommitPrefix returns the first 4 characters of the git commit.
