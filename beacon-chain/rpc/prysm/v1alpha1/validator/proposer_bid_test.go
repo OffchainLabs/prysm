@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
@@ -12,7 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
-func TestSetGloasExecutionData(t *testing.T) {
+func TestSetSelfBuildExecutionPayloadBid(t *testing.T) {
 	parentRoot := [32]byte{1, 2, 3}
 	slot := primitives.Slot(100)
 	proposerIndex := primitives.ValidatorIndex(42)
@@ -68,13 +69,13 @@ func TestSetGloasExecutionData(t *testing.T) {
 	// Verify bid fields.
 	bid := signedBid.Message
 	require.Equal(t, slot, bid.Slot)
-	require.Equal(t, primitives.BuilderIndex(proposerIndex), bid.BuilderIndex)
+	require.Equal(t, params.BeaconConfig().BuilderIndexSelfBuild, bid.BuilderIndex)
 	require.DeepEqual(t, parentRoot[:], bid.ParentBlockRoot)
-	require.Equal(t, primitives.Gwei(5), bid.Value)
+	require.Equal(t, primitives.Gwei(0), bid.Value)
 	require.Equal(t, primitives.Gwei(0), bid.ExecutionPayment)
 }
 
-func TestSetGloasExecutionData_NilPayload(t *testing.T) {
+func TestSetSelfBuildExecutionPayloadBid_NilPayload(t *testing.T) {
 	sBlk, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
 		Block: &ethpb.BeaconBlockGloas{
 			Slot:       1,
