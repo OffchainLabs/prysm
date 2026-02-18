@@ -184,6 +184,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.DeepEqual(t, expected.DenebForkVersion, actual.DenebForkVersion, "%s: DenebForkVersion", name)
 	assert.DeepEqual(t, expected.ElectraForkVersion, actual.ElectraForkVersion, "%s: ElectraForkVersion", name)
 	assert.DeepEqual(t, expected.FuluForkVersion, actual.FuluForkVersion, "%s: FuluForkVersion", name)
+	assert.DeepEqual(t, expected.GloasForkVersion, actual.GloasForkVersion, "%s: GloasForkVersion", name)
 
 	assertYamlFieldsMatch(t, name, fields, expected, actual)
 }
