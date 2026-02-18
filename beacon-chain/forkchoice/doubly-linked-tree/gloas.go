@@ -290,7 +290,7 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 }
 
 // InsertPayload inserts a full node into forkchoice after the Gloas fork.
-func (f *ForkChoice) InsertPayload(ctx context.Context, pe interfaces.ROExecutionPayloadEnvelope) error {
+func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) error {
 	if pe.IsNil() {
 		return errors.New("cannot insert nil payload")
 	}

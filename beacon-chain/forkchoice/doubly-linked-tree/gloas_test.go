@@ -149,7 +149,7 @@ func TestInsertPayload_CreatesFullNode(t *testing.T) {
 
 	pe, err := prepareGloasForkchoicePayload(root)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertPayload(ctx, pe))
+	require.NoError(t, f.InsertPayload(pe))
 	require.Equal(t, 2, len(f.store.fullNodeByRoot))
 
 	fn := f.store.fullNodeByRoot[root]
@@ -176,27 +176,26 @@ func TestInsertPayload_DuplicateIsNoop(t *testing.T) {
 
 	pe, err := prepareGloasForkchoicePayload(root)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertPayload(ctx, pe))
+	require.NoError(t, f.InsertPayload(pe))
 	require.Equal(t, 2, len(f.store.fullNodeByRoot))
 
 	fn := f.store.fullNodeByRoot[root]
 	require.NotNil(t, fn)
 
 	// Insert again — should be a no-op.
-	require.NoError(t, f.InsertPayload(ctx, pe))
+	require.NoError(t, f.InsertPayload(pe))
 	assert.Equal(t, fn, f.store.fullNodeByRoot[root])
 	require.Equal(t, 2, len(f.store.fullNodeByRoot))
 }
 
 func TestInsertPayload_WithoutEmptyNode_Errors(t *testing.T) {
 	f := setup(0, 0)
-	ctx := t.Context()
 
 	root := indexToHash(99)
 	pe, err := prepareGloasForkchoicePayload(root)
 	require.NoError(t, err)
 
-	err = f.InsertPayload(ctx, pe)
+	err = f.InsertPayload(pe)
 	require.ErrorContains(t, ErrNilNode.Error(), err)
 }
 
@@ -239,7 +238,7 @@ func TestGloasBlock_ChildrenOfEmptyAndFull(t *testing.T) {
 	// Insert payload for A
 	pe, err := prepareGloasForkchoicePayload(rootA)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertPayload(ctx, pe))
+	require.NoError(t, f.InsertPayload(pe))
 
 	// Insert Gloas block B as child of (A, empty)
 	rootB := indexToHash(2)
@@ -282,7 +281,7 @@ func TestGloasBlock_ChildBuildsOnFull(t *testing.T) {
 	// Insert payload for A → creates the full node.
 	pe, err := prepareGloasForkchoicePayload(rootA)
 	require.NoError(t, err)
-	require.NoError(t, f.InsertPayload(ctx, pe))
+	require.NoError(t, f.InsertPayload(pe))
 
 	fullA := f.store.fullNodeByRoot[rootA]
 	require.NotNil(t, fullA)

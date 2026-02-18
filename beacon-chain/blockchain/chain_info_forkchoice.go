@@ -57,10 +57,10 @@ func (s *Service) InsertNode(ctx context.Context, st state.BeaconState, block co
 }
 
 // InsertPayload is a wrapper for payload insertion which is self locked
-func (s *Service) InsertPayload(ctx context.Context, pe interfaces.ROExecutionPayloadEnvelope) error {
+func (s *Service) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) error {
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
-	return s.cfg.ForkChoiceStore.InsertPayload(ctx, pe)
+	return s.cfg.ForkChoiceStore.InsertPayload(pe)
 }
 
 // ForkChoiceDump returns the corresponding value from forkchoice

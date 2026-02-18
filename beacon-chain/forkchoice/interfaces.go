@@ -51,7 +51,7 @@ type BlockProcessor interface {
 
 // PayloadProcessor processes a payload envelope
 type PayloadProcessor interface {
-	InsertPayload(context.Context, interfaces.ROExecutionPayloadEnvelope) error
+	InsertPayload(interfaces.ROExecutionPayloadEnvelope) error
 }
 
 // AttestationProcessor processes the attestation that's used for accounting fork choice.

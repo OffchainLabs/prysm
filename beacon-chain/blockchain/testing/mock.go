@@ -701,9 +701,9 @@ func (s *ChainService) InsertNode(ctx context.Context, st state.BeaconState, blo
 }
 
 // InsertPayload mocks the same method in the chain service
-func (s *ChainService) InsertPayload(ctx context.Context, pe interfaces.ROExecutionPayloadEnvelope) error {
+func (s *ChainService) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) error {
 	if s.ForkChoiceStore != nil {
-		return s.ForkChoiceStore.InsertPayload(ctx, pe)
+		return s.ForkChoiceStore.InsertPayload(pe)
 	}
 	return nil
 }
