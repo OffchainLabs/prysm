@@ -67,13 +67,11 @@ type FastGetter interface {
 	HasNode([32]byte) bool
 	HighestReceivedBlockSlot() primitives.Slot
 	HighestReceivedBlockRoot() [32]byte
-	HighestReceivedBlockDelay() primitives.Slot
 	IsCanonical(root [32]byte) bool
 	IsOptimistic(root [32]byte) (bool, error)
 	IsViableForCheckpoint(*forkchoicetypes.Checkpoint) (bool, error)
 	JustifiedCheckpoint() *forkchoicetypes.Checkpoint
 	JustifiedPayloadBlockHash() [32]byte
-	LastRoot(primitives.Epoch) [32]byte
 	NodeCount() int
 	PreviousJustifiedCheckpoint() *forkchoicetypes.Checkpoint
 	ProposerBoost() [fieldparams.RootLength]byte
@@ -91,7 +89,7 @@ type FastGetter interface {
 // Setter allows to set forkchoice information
 type Setter interface {
 	SetOptimisticToValid(context.Context, [fieldparams.RootLength]byte) error
-	SetOptimisticToInvalid(context.Context, [fieldparams.RootLength]byte, [fieldparams.RootLength]byte, [fieldparams.RootLength]byte) ([][32]byte, error)
+	SetOptimisticToInvalid(context.Context, [32]byte, [32]byte, [32]byte, [32]byte) ([][32]byte, error)
 	UpdateJustifiedCheckpoint(context.Context, *forkchoicetypes.Checkpoint) error
 	UpdateFinalizedCheckpoint(*forkchoicetypes.Checkpoint) error
 	SetGenesisTime(time.Time)

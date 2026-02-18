@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -75,7 +76,11 @@ func ProcessAttestationNoVerifySignature(
 		return nil, err
 	}
 
-	return SetParticipationAndRewardProposer(ctx, beaconState, att.GetData().Target.Epoch, indices, participatedFlags, totalBalance)
+	if err := beaconState.UpdatePendingPaymentWeight(att, indices, participatedFlags); err != nil {
+		return nil, errors.Wrap(err, "failed to update pending payment weight")
+	}
+
+	return SetParticipationAndRewardProposer(ctx, beaconState, att.GetData().Target.Epoch, indices, participatedFlags, totalBalance, att)
 }
 
 // SetParticipationAndRewardProposer retrieves and sets the epoch participation bits in state. Based on the epoch participation, it rewards
@@ -105,7 +110,9 @@ func SetParticipationAndRewardProposer(
 	beaconState state.BeaconState,
 	targetEpoch primitives.Epoch,
 	indices []uint64,
-	participatedFlags map[uint8]bool, totalBalance uint64) (state.BeaconState, error) {
+	participatedFlags map[uint8]bool,
+	totalBalance uint64,
+	att ethpb.Att) (state.BeaconState, error) {
 	var proposerRewardNumerator uint64
 	currentEpoch := time.CurrentEpoch(beaconState)
 	var stateErr error
@@ -299,6 +306,19 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 		participatedFlags[targetFlagIndex] = true
 	}
 	matchedSrcTgtHead := matchedHead && matchedSrcTgt
+
+	var beaconBlockRoot [32]byte
+	copy(beaconBlockRoot[:], data.BeaconBlockRoot)
+	matchingPayload, err := gloas.MatchingPayload(
+		beaconState,
+		beaconBlockRoot,
+		data.Slot,
+		uint64(data.CommitteeIndex),
+	)
+	if err != nil {
+		return nil, err
+	}
+	matchedSrcTgtHead = matchedSrcTgtHead && matchingPayload
 	if matchedSrcTgtHead && delay == cfg.MinAttestationInclusionDelay {
 		participatedFlags[headFlagIndex] = true
 	}

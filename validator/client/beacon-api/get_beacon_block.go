@@ -26,7 +26,7 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 		queryParams.Add("graffiti", hexutil.Encode(graffiti))
 	}
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v3/validator/blocks/%d", slot), queryParams)
-	data, header, err := c.jsonRestHandler.GetSSZ(ctx, queryUrl)
+	data, header, err := c.handler.GetSSZ(ctx, queryUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -55,112 +55,151 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 	}
 }
 
+// sszBlockCodec defines SSZ unmarshalers for a fork's block and blinded block types.
+type sszBlockCodec struct {
+	unmarshalBlock   func([]byte) (*ethpb.GenericBeaconBlock, error)
+	unmarshalBlinded func([]byte) (*ethpb.GenericBeaconBlock, error) // nil for Phase0/Altair
+}
+
+type sszCodecEntry struct {
+	minVersion int
+	codec      sszBlockCodec
+}
+
+// sszCodecs is ordered descending by version so that unknown future versions
+// fall through to the latest known fork (matching the original if-cascade).
+var sszCodecs = []sszCodecEntry{
+	{
+		minVersion: version.Fulu,
+		codec: sszBlockCodec{
+			unmarshalBlock: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				block := &ethpb.BeaconBlockContentsFulu{}
+				if err := block.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Fulu{Fulu: block}}, nil
+			},
+			unmarshalBlinded: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				blindedBlock := &ethpb.BlindedBeaconBlockFulu{}
+				if err := blindedBlock.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_BlindedFulu{BlindedFulu: blindedBlock}, IsBlinded: true}, nil
+			},
+		},
+	},
+	{
+		minVersion: version.Electra,
+		codec: sszBlockCodec{
+			unmarshalBlock: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				block := &ethpb.BeaconBlockContentsElectra{}
+				if err := block.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Electra{Electra: block}}, nil
+			},
+			unmarshalBlinded: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				blindedBlock := &ethpb.BlindedBeaconBlockElectra{}
+				if err := blindedBlock.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_BlindedElectra{BlindedElectra: blindedBlock}, IsBlinded: true}, nil
+			},
+		},
+	},
+	{
+		minVersion: version.Deneb,
+		codec: sszBlockCodec{
+			unmarshalBlock: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				block := &ethpb.BeaconBlockContentsDeneb{}
+				if err := block.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Deneb{Deneb: block}}, nil
+			},
+			unmarshalBlinded: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				blindedBlock := &ethpb.BlindedBeaconBlockDeneb{}
+				if err := blindedBlock.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_BlindedDeneb{BlindedDeneb: blindedBlock}, IsBlinded: true}, nil
+			},
+		},
+	},
+	{
+		minVersion: version.Capella,
+		codec: sszBlockCodec{
+			unmarshalBlock: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				block := &ethpb.BeaconBlockCapella{}
+				if err := block.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Capella{Capella: block}}, nil
+			},
+			unmarshalBlinded: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				blindedBlock := &ethpb.BlindedBeaconBlockCapella{}
+				if err := blindedBlock.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_BlindedCapella{BlindedCapella: blindedBlock}, IsBlinded: true}, nil
+			},
+		},
+	},
+	{
+		minVersion: version.Bellatrix,
+		codec: sszBlockCodec{
+			unmarshalBlock: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				block := &ethpb.BeaconBlockBellatrix{}
+				if err := block.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Bellatrix{Bellatrix: block}}, nil
+			},
+			unmarshalBlinded: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				blindedBlock := &ethpb.BlindedBeaconBlockBellatrix{}
+				if err := blindedBlock.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_BlindedBellatrix{BlindedBellatrix: blindedBlock}, IsBlinded: true}, nil
+			},
+		},
+	},
+	{
+		minVersion: version.Altair,
+		codec: sszBlockCodec{
+			unmarshalBlock: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				block := &ethpb.BeaconBlockAltair{}
+				if err := block.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Altair{Altair: block}}, nil
+			},
+		},
+	},
+	{
+		minVersion: version.Phase0,
+		codec: sszBlockCodec{
+			unmarshalBlock: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				block := &ethpb.BeaconBlock{}
+				if err := block.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Phase0{Phase0: block}}, nil
+			},
+		},
+	},
+}
+
 func processBlockSSZResponse(ver int, data []byte, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
-	if ver >= version.Fulu {
-		return processBlockSSZResponseFulu(data, isBlinded)
-	}
-	if ver >= version.Electra {
-		return processBlockSSZResponseElectra(data, isBlinded)
-	}
-	if ver >= version.Deneb {
-		return processBlockSSZResponseDeneb(data, isBlinded)
-	}
-	if ver >= version.Capella {
-		return processBlockSSZResponseCapella(data, isBlinded)
-	}
-	if ver >= version.Bellatrix {
-		return processBlockSSZResponseBellatrix(data, isBlinded)
-	}
-	if ver >= version.Altair {
-		block := &ethpb.BeaconBlockAltair{}
-		if err := block.UnmarshalSSZ(data); err != nil {
-			return nil, err
+	for _, entry := range sszCodecs {
+		if ver >= entry.minVersion {
+			if isBlinded && entry.codec.unmarshalBlinded != nil {
+				return entry.codec.unmarshalBlinded(data)
+			}
+			return entry.codec.unmarshalBlock(data)
 		}
-		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Altair{Altair: block}}, nil
-	}
-	if ver >= version.Phase0 {
-		block := &ethpb.BeaconBlock{}
-		if err := block.UnmarshalSSZ(data); err != nil {
-			return nil, err
-		}
-		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Phase0{Phase0: block}}, nil
 	}
 	return nil, fmt.Errorf("unsupported block version %s", version.String(ver))
-}
-
-func processBlockSSZResponseFulu(data []byte, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
-	if isBlinded {
-		blindedBlock := &ethpb.BlindedBeaconBlockFulu{}
-		if err := blindedBlock.UnmarshalSSZ(data); err != nil {
-			return nil, err
-		}
-		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_BlindedFulu{BlindedFulu: blindedBlock}, IsBlinded: true}, nil
-	}
-	block := &ethpb.BeaconBlockContentsFulu{}
-	if err := block.UnmarshalSSZ(data); err != nil {
-		return nil, err
-	}
-	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Fulu{Fulu: block}}, nil
-}
-
-func processBlockSSZResponseElectra(data []byte, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
-	if isBlinded {
-		blindedBlock := &ethpb.BlindedBeaconBlockElectra{}
-		if err := blindedBlock.UnmarshalSSZ(data); err != nil {
-			return nil, err
-		}
-		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_BlindedElectra{BlindedElectra: blindedBlock}, IsBlinded: true}, nil
-	}
-	block := &ethpb.BeaconBlockContentsElectra{}
-	if err := block.UnmarshalSSZ(data); err != nil {
-		return nil, err
-	}
-	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Electra{Electra: block}}, nil
-}
-
-func processBlockSSZResponseDeneb(data []byte, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
-	if isBlinded {
-		blindedBlock := &ethpb.BlindedBeaconBlockDeneb{}
-		if err := blindedBlock.UnmarshalSSZ(data); err != nil {
-			return nil, err
-		}
-		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_BlindedDeneb{BlindedDeneb: blindedBlock}, IsBlinded: true}, nil
-	}
-	block := &ethpb.BeaconBlockContentsDeneb{}
-	if err := block.UnmarshalSSZ(data); err != nil {
-		return nil, err
-	}
-	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Deneb{Deneb: block}}, nil
-}
-
-func processBlockSSZResponseCapella(data []byte, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
-	if isBlinded {
-		blindedBlock := &ethpb.BlindedBeaconBlockCapella{}
-		if err := blindedBlock.UnmarshalSSZ(data); err != nil {
-			return nil, err
-		}
-		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_BlindedCapella{BlindedCapella: blindedBlock}, IsBlinded: true}, nil
-	}
-	block := &ethpb.BeaconBlockCapella{}
-	if err := block.UnmarshalSSZ(data); err != nil {
-		return nil, err
-	}
-	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Capella{Capella: block}}, nil
-}
-
-func processBlockSSZResponseBellatrix(data []byte, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
-	if isBlinded {
-		blindedBlock := &ethpb.BlindedBeaconBlockBellatrix{}
-		if err := blindedBlock.UnmarshalSSZ(data); err != nil {
-			return nil, err
-		}
-		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_BlindedBellatrix{BlindedBellatrix: blindedBlock}, IsBlinded: true}, nil
-	}
-	block := &ethpb.BeaconBlockBellatrix{}
-	if err := block.UnmarshalSSZ(data); err != nil {
-		return nil, err
-	}
-	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Bellatrix{Bellatrix: block}}, nil
 }
 
 func convertBlockToGeneric(decoder *json.Decoder, dest ethpb.GenericConverter, version string, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
@@ -180,69 +219,52 @@ func convertBlockToGeneric(decoder *json.Decoder, dest ethpb.GenericConverter, v
 	return genericBlock, nil
 }
 
+// jsonBlockTypes defines factory functions for creating block and blinded block structs for JSON decoding.
+type jsonBlockTypes struct {
+	newBlock   func() ethpb.GenericConverter
+	newBlinded func() ethpb.GenericConverter // nil for Phase0/Altair
+}
+
+var jsonBlockFactories = map[string]jsonBlockTypes{
+	version.String(version.Phase0): {
+		newBlock: func() ethpb.GenericConverter { return &structs.BeaconBlock{} },
+	},
+	version.String(version.Altair): {
+		newBlock: func() ethpb.GenericConverter { return &structs.BeaconBlockAltair{} },
+	},
+	version.String(version.Bellatrix): {
+		newBlock:   func() ethpb.GenericConverter { return &structs.BeaconBlockBellatrix{} },
+		newBlinded: func() ethpb.GenericConverter { return &structs.BlindedBeaconBlockBellatrix{} },
+	},
+	version.String(version.Capella): {
+		newBlock:   func() ethpb.GenericConverter { return &structs.BeaconBlockCapella{} },
+		newBlinded: func() ethpb.GenericConverter { return &structs.BlindedBeaconBlockCapella{} },
+	},
+	version.String(version.Deneb): {
+		newBlock:   func() ethpb.GenericConverter { return &structs.BeaconBlockContentsDeneb{} },
+		newBlinded: func() ethpb.GenericConverter { return &structs.BlindedBeaconBlockDeneb{} },
+	},
+	version.String(version.Electra): {
+		newBlock:   func() ethpb.GenericConverter { return &structs.BeaconBlockContentsElectra{} },
+		newBlinded: func() ethpb.GenericConverter { return &structs.BlindedBeaconBlockElectra{} },
+	},
+	version.String(version.Fulu): {
+		newBlock:   func() ethpb.GenericConverter { return &structs.BeaconBlockContentsFulu{} },
+		newBlinded: func() ethpb.GenericConverter { return &structs.BlindedBeaconBlockFulu{} },
+	},
+}
+
 func processBlockJSONResponse(ver string, isBlinded bool, decoder *json.Decoder) (*ethpb.GenericBeaconBlock, error) {
 	if decoder == nil {
 		return nil, errors.New("no produce block json decoder found")
 	}
 
-	switch ver {
-	case version.String(version.Phase0):
-		return convertBlockToGeneric(decoder, &structs.BeaconBlock{}, version.String(version.Phase0), false)
-
-	case version.String(version.Altair):
-		return convertBlockToGeneric(decoder, &structs.BeaconBlockAltair{}, "altair", false)
-
-	case version.String(version.Bellatrix):
-		return processBellatrixBlock(decoder, isBlinded)
-
-	case version.String(version.Capella):
-		return processCapellaBlock(decoder, isBlinded)
-
-	case version.String(version.Deneb):
-		return processDenebBlock(decoder, isBlinded)
-
-	case version.String(version.Electra):
-		return processElectraBlock(decoder, isBlinded)
-
-	case version.String(version.Fulu):
-		return processFuluBlock(decoder, isBlinded)
-
-	default:
+	factory, ok := jsonBlockFactories[ver]
+	if !ok {
 		return nil, errors.Errorf("unsupported consensus version `%s`", ver)
 	}
-}
-
-func processBellatrixBlock(decoder *json.Decoder, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
-	if isBlinded {
-		return convertBlockToGeneric(decoder, &structs.BlindedBeaconBlockBellatrix{}, "bellatrix", true)
+	if isBlinded && factory.newBlinded != nil {
+		return convertBlockToGeneric(decoder, factory.newBlinded(), ver, true)
 	}
-	return convertBlockToGeneric(decoder, &structs.BeaconBlockBellatrix{}, "bellatrix", false)
-}
-
-func processCapellaBlock(decoder *json.Decoder, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
-	if isBlinded {
-		return convertBlockToGeneric(decoder, &structs.BlindedBeaconBlockCapella{}, "capella", true)
-	}
-	return convertBlockToGeneric(decoder, &structs.BeaconBlockCapella{}, "capella", false)
-}
-
-func processDenebBlock(decoder *json.Decoder, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
-	if isBlinded {
-		return convertBlockToGeneric(decoder, &structs.BlindedBeaconBlockDeneb{}, "deneb", true)
-	}
-	return convertBlockToGeneric(decoder, &structs.BeaconBlockContentsDeneb{}, "deneb", false)
-}
-
-func processElectraBlock(decoder *json.Decoder, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
-	if isBlinded {
-		return convertBlockToGeneric(decoder, &structs.BlindedBeaconBlockElectra{}, "electra", true)
-	}
-	return convertBlockToGeneric(decoder, &structs.BeaconBlockContentsElectra{}, "electra", false)
-}
-
-func processFuluBlock(decoder *json.Decoder, isBlinded bool) (*ethpb.GenericBeaconBlock, error) {
-	if isBlinded {
-		return convertBlockToGeneric(decoder, &structs.BlindedBeaconBlockFulu{}, "fulu", true)
-	}
-	return convertBlockToGeneric(decoder, &structs.BeaconBlockContentsFulu{}, "fulu", false)
+	return convertBlockToGeneric(decoder, factory.newBlock(), ver, false)
 }

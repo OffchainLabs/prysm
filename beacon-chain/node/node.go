@@ -134,9 +134,19 @@ type BeaconNode struct {
 
 // New creates a new node instance, sets up configuration options, and registers
 // every required service to the node.
-func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*BeaconNode, error) {
+func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Context) ([]Option, error), opts ...Option) (*BeaconNode, error) {
 	if err := configureBeacon(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not set beacon configuration options")
+	}
+
+	for _, of := range optFuncs {
+		ofo, err := of(cliCtx)
+		if err != nil {
+			return nil, err
+		}
+		if ofo != nil {
+			opts = append(opts, ofo...)
+		}
 	}
 	ctx := cliCtx.Context
 
@@ -775,6 +785,9 @@ func (b *BeaconNode) registerPOWChainService() error {
 		return err
 	}
 
+	// Create GraffitiInfo for client version tracking in block graffiti
+	graffitiInfo := execution.NewGraffitiInfo()
+
 	// skipcq: CRT-D0001
 	opts := append(
 		b.serviceFlagOpts.executionChainFlagOpts,
@@ -787,6 +800,7 @@ func (b *BeaconNode) registerPOWChainService() error {
 		execution.WithFinalizedStateAtStartup(b.finalizedStateAtStartUp),
 		execution.WithJwtId(b.cliCtx.String(flags.JwtId.Name)),
 		execution.WithVerifierWaiter(b.verifyInitWaiter),
+		execution.WithGraffitiInfo(graffitiInfo),
 	)
 	web3Service, err := execution.NewService(b.ctx, opts...)
 	if err != nil {
@@ -993,6 +1007,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
 		PayloadIDCache:            b.payloadIDCache,
 		LCStore:                   b.lcStore,
+		GraffitiInfo:              web3Service.GraffitiInfo(),
 	})
 
 	return b.services.RegisterService(rpcService)

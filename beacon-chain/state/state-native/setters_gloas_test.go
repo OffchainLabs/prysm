@@ -11,20 +11,21 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 type testExecutionPayloadBid struct {
-	parentBlockHash        [32]byte
-	parentBlockRoot        [32]byte
-	blockHash              [32]byte
-	prevRandao             [32]byte
-	blobKzgCommitmentsRoot [32]byte
-	feeRecipient           [20]byte
-	gasLimit               uint64
-	builderIndex           primitives.BuilderIndex
-	slot                   primitives.Slot
-	value                  primitives.Gwei
-	executionPayment       primitives.Gwei
+	parentBlockHash    [32]byte
+	parentBlockRoot    [32]byte
+	blockHash          [32]byte
+	prevRandao         [32]byte
+	blobKzgCommitments [][]byte
+	feeRecipient       [20]byte
+	gasLimit           uint64
+	builderIndex       primitives.BuilderIndex
+	slot               primitives.Slot
+	value              primitives.Gwei
+	executionPayment   primitives.Gwei
 }
 
 func (t testExecutionPayloadBid) ParentBlockHash() [32]byte { return t.parentBlockHash }
@@ -40,9 +41,12 @@ func (t testExecutionPayloadBid) Value() primitives.Gwei { return t.value }
 func (t testExecutionPayloadBid) ExecutionPayment() primitives.Gwei {
 	return t.executionPayment
 }
-func (t testExecutionPayloadBid) BlobKzgCommitmentsRoot() [32]byte { return t.blobKzgCommitmentsRoot }
-func (t testExecutionPayloadBid) FeeRecipient() [20]byte           { return t.feeRecipient }
-func (t testExecutionPayloadBid) IsNil() bool                      { return false }
+func (t testExecutionPayloadBid) BlobKzgCommitments() [][]byte { return t.blobKzgCommitments }
+func (t testExecutionPayloadBid) BlobKzgCommitmentCount() uint64 {
+	return uint64(len(t.blobKzgCommitments))
+}
+func (t testExecutionPayloadBid) FeeRecipient() [20]byte { return t.feeRecipient }
+func (t testExecutionPayloadBid) IsNil() bool            { return false }
 
 func TestSetExecutionPayloadBid(t *testing.T) {
 	t.Run("previous fork returns expected error", func(t *testing.T) {
@@ -57,7 +61,7 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 			parentBlockRoot = [32]byte(bytes.Repeat([]byte{0xCD}, 32))
 			blockHash       = [32]byte(bytes.Repeat([]byte{0xEF}, 32))
 			prevRandao      = [32]byte(bytes.Repeat([]byte{0x11}, 32))
-			blobRoot        = [32]byte(bytes.Repeat([]byte{0x22}, 32))
+			blobCommitments = [][]byte{bytes.Repeat([]byte{0x22}, 48)}
 			feeRecipient    [20]byte
 		)
 		copy(feeRecipient[:], bytes.Repeat([]byte{0x33}, len(feeRecipient)))
@@ -66,17 +70,17 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 			dirtyFields: make(map[types.FieldIndex]bool),
 		}
 		bid := testExecutionPayloadBid{
-			parentBlockHash:        parentBlockHash,
-			parentBlockRoot:        parentBlockRoot,
-			blockHash:              blockHash,
-			prevRandao:             prevRandao,
-			blobKzgCommitmentsRoot: blobRoot,
-			feeRecipient:           feeRecipient,
-			gasLimit:               123,
-			builderIndex:           7,
-			slot:                   9,
-			value:                  11,
-			executionPayment:       22,
+			parentBlockHash:    parentBlockHash,
+			parentBlockRoot:    parentBlockRoot,
+			blockHash:          blockHash,
+			prevRandao:         prevRandao,
+			blobKzgCommitments: blobCommitments,
+			feeRecipient:       feeRecipient,
+			gasLimit:           123,
+			builderIndex:       7,
+			slot:               9,
+			value:              11,
+			executionPayment:   22,
 		}
 
 		require.NoError(t, st.SetExecutionPayloadBid(bid))
@@ -86,7 +90,7 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 		require.DeepEqual(t, parentBlockRoot[:], st.latestExecutionPayloadBid.ParentBlockRoot)
 		require.DeepEqual(t, blockHash[:], st.latestExecutionPayloadBid.BlockHash)
 		require.DeepEqual(t, prevRandao[:], st.latestExecutionPayloadBid.PrevRandao)
-		require.DeepEqual(t, blobRoot[:], st.latestExecutionPayloadBid.BlobKzgCommitmentsRoot)
+		require.DeepEqual(t, blobCommitments, st.latestExecutionPayloadBid.BlobKzgCommitments)
 		require.DeepEqual(t, feeRecipient[:], st.latestExecutionPayloadBid.FeeRecipient)
 		require.Equal(t, uint64(123), st.latestExecutionPayloadBid.GasLimit)
 		require.Equal(t, primitives.BuilderIndex(7), st.latestExecutionPayloadBid.BuilderIndex)
@@ -163,7 +167,7 @@ func TestClearBuilderPendingPayment(t *testing.T) {
 		}
 
 		require.NoError(t, st.ClearBuilderPendingPayment(1))
-		require.Equal(t, emptyBuilderPendingPayment, st.builderPendingPayments[1])
+		require.DeepEqual(t, emptyBuilderPendingPayment, st.builderPendingPayments[1])
 		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
 	})
 
@@ -179,6 +183,173 @@ func TestClearBuilderPendingPayment(t *testing.T) {
 		require.ErrorContains(t, "out of range", err)
 		require.Equal(t, false, st.dirtyFields[types.BuilderPendingPayments])
 	})
+}
+
+func TestQueueBuilderPayment(t *testing.T) {
+	t.Run("previous fork returns expected error", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.QueueBuilderPayment()
+		require.ErrorContains(t, "is not supported", err)
+	})
+
+	t.Run("appends withdrawal, clears payment, and marks dirty", func(t *testing.T) {
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+		slot := primitives.Slot(3)
+		paymentIndex := slotsPerEpoch + (slot % slotsPerEpoch)
+
+		st := &BeaconState{
+			version:                   version.Gloas,
+			slot:                      slot,
+			dirtyFields:               make(map[types.FieldIndex]bool),
+			rebuildTrie:               make(map[types.FieldIndex]bool),
+			sharedFieldReferences:     make(map[types.FieldIndex]*stateutil.Reference),
+			builderPendingPayments:    make([]*ethpb.BuilderPendingPayment, slotsPerEpoch*2),
+			builderPendingWithdrawals: []*ethpb.BuilderPendingWithdrawal{},
+		}
+		st.builderPendingPayments[paymentIndex] = &ethpb.BuilderPendingPayment{
+			Weight: 1,
+			Withdrawal: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: bytes.Repeat([]byte{0xAB}, 20),
+				Amount:       99,
+				BuilderIndex: 1,
+			},
+		}
+
+		require.NoError(t, st.QueueBuilderPayment())
+		require.DeepEqual(t, emptyBuilderPendingPayment, st.builderPendingPayments[paymentIndex])
+		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
+		require.Equal(t, true, st.dirtyFields[types.BuilderPendingWithdrawals])
+		require.Equal(t, 1, len(st.builderPendingWithdrawals))
+		require.DeepEqual(t, bytes.Repeat([]byte{0xAB}, 20), st.builderPendingWithdrawals[0].FeeRecipient)
+		require.Equal(t, primitives.Gwei(99), st.builderPendingWithdrawals[0].Amount)
+
+		// Ensure copied withdrawal is not aliased.
+		st.builderPendingPayments[paymentIndex].Withdrawal.FeeRecipient[0] = 0x01
+		require.Equal(t, byte(0xAB), st.builderPendingWithdrawals[0].FeeRecipient[0])
+	})
+
+	t.Run("zero amount does not append withdrawal", func(t *testing.T) {
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+		slot := primitives.Slot(3)
+		paymentIndex := slotsPerEpoch + (slot % slotsPerEpoch)
+
+		st := &BeaconState{
+			version:                   version.Gloas,
+			slot:                      slot,
+			dirtyFields:               make(map[types.FieldIndex]bool),
+			rebuildTrie:               make(map[types.FieldIndex]bool),
+			sharedFieldReferences:     make(map[types.FieldIndex]*stateutil.Reference),
+			builderPendingPayments:    make([]*ethpb.BuilderPendingPayment, slotsPerEpoch*2),
+			builderPendingWithdrawals: []*ethpb.BuilderPendingWithdrawal{},
+		}
+		st.builderPendingPayments[paymentIndex] = &ethpb.BuilderPendingPayment{
+			Weight: 1,
+			Withdrawal: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: bytes.Repeat([]byte{0xAB}, 20),
+				Amount:       0,
+				BuilderIndex: 1,
+			},
+		}
+
+		require.NoError(t, st.QueueBuilderPayment())
+		require.DeepEqual(t, emptyBuilderPendingPayment, st.builderPendingPayments[paymentIndex])
+		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
+		require.Equal(t, false, st.dirtyFields[types.BuilderPendingWithdrawals])
+		require.Equal(t, 0, len(st.builderPendingWithdrawals))
+	})
+}
+
+func TestUpdatePendingPaymentWeight(t *testing.T) {
+	cfg := params.BeaconConfig()
+	slotsPerEpoch := cfg.SlotsPerEpoch
+	slot := primitives.Slot(4)
+	stateSlot := slot + 1
+	stateEpoch := slots.ToEpoch(stateSlot)
+
+	rootA := bytes.Repeat([]byte{0xAA}, 32)
+	rootB := bytes.Repeat([]byte{0xBB}, 32)
+
+	tests := []struct {
+		name          string
+		targetEpoch   primitives.Epoch
+		blockRoot     []byte
+		initialAmount primitives.Gwei
+		initialWeight primitives.Gwei
+		wantWeight    primitives.Gwei
+	}{
+		{
+			name:          "same slot current epoch adds weight",
+			targetEpoch:   stateEpoch,
+			blockRoot:     rootA,
+			initialAmount: 1,
+			initialWeight: 0,
+			wantWeight:    primitives.Gwei(cfg.MinActivationBalance),
+		},
+		{
+			name:          "same slot zero amount no weight change",
+			targetEpoch:   stateEpoch,
+			blockRoot:     rootA,
+			initialAmount: 0,
+			initialWeight: 5,
+			wantWeight:    5,
+		},
+		{
+			name:          "non matching block root no change",
+			targetEpoch:   stateEpoch,
+			blockRoot:     rootB,
+			initialAmount: 1,
+			initialWeight: 7,
+			wantWeight:    7,
+		},
+		{
+			name:          "previous epoch target uses earlier slot",
+			targetEpoch:   stateEpoch - 1,
+			blockRoot:     rootA,
+			initialAmount: 1,
+			initialWeight: 0,
+			wantWeight:    primitives.Gwei(cfg.MinActivationBalance),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var paymentIdx int
+			if tt.targetEpoch == stateEpoch {
+				paymentIdx = int(slotsPerEpoch + (slot % slotsPerEpoch))
+			} else {
+				paymentIdx = int(slot % slotsPerEpoch)
+			}
+			state := buildGloasStateForPaymentWeightTest(t, stateSlot, paymentIdx, tt.initialAmount, tt.initialWeight, map[primitives.Slot][]byte{
+				slot:     tt.blockRoot,
+				slot - 1: rootB,
+			})
+
+			att := &ethpb.Attestation{
+				Data: &ethpb.AttestationData{
+					Slot:            slot,
+					CommitteeIndex:  0,
+					BeaconBlockRoot: tt.blockRoot,
+					Source:          &ethpb.Checkpoint{},
+					Target: &ethpb.Checkpoint{
+						Epoch: tt.targetEpoch,
+					},
+				},
+			}
+
+			participatedFlags := map[uint8]bool{
+				cfg.TimelySourceFlagIndex: true,
+				cfg.TimelyTargetFlagIndex: true,
+				cfg.TimelyHeadFlagIndex:   true,
+			}
+			indices := []uint64{0}
+
+			require.NoError(t, state.UpdatePendingPaymentWeight(att, indices, participatedFlags))
+
+			payment, err := state.BuilderPendingPayment(uint64(paymentIdx))
+			require.NoError(t, err)
+			require.Equal(t, tt.wantWeight, payment.Weight)
+		})
+	}
 }
 
 func TestRotateBuilderPendingPayments(t *testing.T) {
@@ -318,6 +489,79 @@ func TestUpdateExecutionPayloadAvailabilityAtIndex_OutOfRange(t *testing.T) {
 	}
 }
 
+func buildGloasStateForPaymentWeightTest(
+	t *testing.T,
+	stateSlot primitives.Slot,
+	paymentIdx int,
+	amount primitives.Gwei,
+	weight primitives.Gwei,
+	roots map[primitives.Slot][]byte,
+) *BeaconState {
+	t.Helper()
+
+	cfg := params.BeaconConfig()
+	blockRoots := make([][]byte, cfg.SlotsPerHistoricalRoot)
+	for slot, root := range roots {
+		blockRoots[slot%cfg.SlotsPerHistoricalRoot] = root
+	}
+
+	stateRoots := make([][]byte, cfg.SlotsPerHistoricalRoot)
+	for i := range stateRoots {
+		stateRoots[i] = bytes.Repeat([]byte{0x44}, 32)
+	}
+	randaoMixes := make([][]byte, cfg.EpochsPerHistoricalVector)
+	for i := range randaoMixes {
+		randaoMixes[i] = bytes.Repeat([]byte{0x55}, 32)
+	}
+
+	validator := &ethpb.Validator{
+		PublicKey:             bytes.Repeat([]byte{0x01}, 48),
+		WithdrawalCredentials: append([]byte{cfg.ETH1AddressWithdrawalPrefixByte}, bytes.Repeat([]byte{0x02}, 31)...),
+		EffectiveBalance:      cfg.MinActivationBalance,
+	}
+
+	payments := make([]*ethpb.BuilderPendingPayment, cfg.SlotsPerEpoch*2)
+	for i := range payments {
+		payments[i] = &ethpb.BuilderPendingPayment{
+			Withdrawal: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: make([]byte, 20),
+			},
+		}
+	}
+	payments[paymentIdx] = &ethpb.BuilderPendingPayment{
+		Weight: weight,
+		Withdrawal: &ethpb.BuilderPendingWithdrawal{
+			FeeRecipient: make([]byte, 20),
+			Amount:       amount,
+		},
+	}
+
+	execPayloadAvailability := make([]byte, cfg.SlotsPerHistoricalRoot/8)
+
+	stProto := &ethpb.BeaconStateGloas{
+		Slot:                         stateSlot,
+		GenesisValidatorsRoot:        bytes.Repeat([]byte{0x33}, 32),
+		BlockRoots:                   blockRoots,
+		StateRoots:                   stateRoots,
+		RandaoMixes:                  randaoMixes,
+		ExecutionPayloadAvailability: execPayloadAvailability,
+		Validators:                   []*ethpb.Validator{validator},
+		Balances:                     []uint64{cfg.MinActivationBalance},
+		CurrentEpochParticipation:    []byte{0},
+		PreviousEpochParticipation:   []byte{0},
+		BuilderPendingPayments:       payments,
+		Fork: &ethpb.Fork{
+			CurrentVersion:  bytes.Repeat([]byte{0x66}, 4),
+			PreviousVersion: bytes.Repeat([]byte{0x66}, 4),
+			Epoch:           0,
+		},
+	}
+
+	statePb, err := InitializeFromProtoGloas(stProto)
+	require.NoError(t, err)
+	return statePb.(*BeaconState)
+}
+
 func newGloasStateWithAvailability(t *testing.T, availability []byte) *BeaconState {
 	t.Helper()
 
@@ -327,4 +571,242 @@ func newGloasStateWithAvailability(t *testing.T, availability []byte) *BeaconSta
 	require.NoError(t, err)
 
 	return st.(*BeaconState)
+}
+
+func TestSetLatestBlockHash(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		var hash [32]byte
+		st := &BeaconState{version: version.Fulu}
+		err := st.SetLatestBlockHash(hash)
+		require.ErrorContains(t, "SetLatestBlockHash", err)
+	})
+
+	var hash [32]byte
+	copy(hash[:], []byte("latest-block-hash"))
+
+	state := &BeaconState{
+		version:     version.Gloas,
+		dirtyFields: make(map[types.FieldIndex]bool),
+	}
+
+	require.NoError(t, state.SetLatestBlockHash(hash))
+	require.Equal(t, true, state.dirtyFields[types.LatestBlockHash])
+	require.DeepEqual(t, hash[:], state.latestBlockHash)
+}
+
+func TestSetExecutionPayloadAvailability(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.SetExecutionPayloadAvailability(0, true)
+		require.ErrorContains(t, "SetExecutionPayloadAvailability", err)
+	})
+
+	state := &BeaconState{
+		version:                      version.Gloas,
+		executionPayloadAvailability: make([]byte, params.BeaconConfig().SlotsPerHistoricalRoot/8),
+		dirtyFields:                  make(map[types.FieldIndex]bool),
+	}
+
+	slot := primitives.Slot(10)
+	bitIndex := slot % params.BeaconConfig().SlotsPerHistoricalRoot
+	byteIndex := bitIndex / 8
+	bitPosition := bitIndex % 8
+
+	require.NoError(t, state.SetExecutionPayloadAvailability(slot, true))
+	require.Equal(t, true, state.dirtyFields[types.ExecutionPayloadAvailability])
+	require.Equal(t, byte(1<<bitPosition), state.executionPayloadAvailability[byteIndex]&(1<<bitPosition))
+
+	require.NoError(t, state.SetExecutionPayloadAvailability(slot, false))
+	require.Equal(t, byte(0), state.executionPayloadAvailability[byteIndex]&(1<<bitPosition))
+}
+
+func TestSetExecutionPayloadAvailability_OutOfRange(t *testing.T) {
+	state := &BeaconState{
+		version:                      version.Gloas,
+		executionPayloadAvailability: []byte{},
+		dirtyFields:                  make(map[types.FieldIndex]bool),
+	}
+
+	err := state.SetExecutionPayloadAvailability(0, true)
+	require.ErrorContains(t, "out of range", err)
+	require.Equal(t, false, state.dirtyFields[types.ExecutionPayloadAvailability])
+}
+
+func TestIncreaseBuilderBalance(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.IncreaseBuilderBalance(0, 1)
+		require.ErrorContains(t, "IncreaseBuilderBalance", err)
+	})
+
+	t.Run("out of bounds returns error", func(t *testing.T) {
+		st := &BeaconState{
+			version:     version.Gloas,
+			dirtyFields: make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
+			builders: []*ethpb.Builder{},
+		}
+
+		err := st.IncreaseBuilderBalance(0, 1)
+		require.ErrorContains(t, "out of bounds", err)
+		require.Equal(t, false, st.dirtyFields[types.Builders])
+	})
+
+	t.Run("nil builder returns error", func(t *testing.T) {
+		st := &BeaconState{
+			version:     version.Gloas,
+			dirtyFields: make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
+			builders: []*ethpb.Builder{nil},
+		}
+
+		err := st.IncreaseBuilderBalance(0, 1)
+		require.ErrorContains(t, "is nil", err)
+		require.Equal(t, false, st.dirtyFields[types.Builders])
+	})
+
+	t.Run("increments and marks dirty", func(t *testing.T) {
+		orig := &ethpb.Builder{Balance: 10}
+		st := &BeaconState{
+			version:     version.Gloas,
+			dirtyFields: make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
+			builders: []*ethpb.Builder{orig},
+		}
+
+		require.NoError(t, st.IncreaseBuilderBalance(0, 5))
+		require.Equal(t, primitives.Gwei(15), st.builders[0].Balance)
+		require.Equal(t, true, st.dirtyFields[types.Builders])
+		// Copy-on-write semantics: builder pointer replaced.
+		require.NotEqual(t, orig, st.builders[0])
+	})
+}
+
+func TestIncreaseBuilderBalance_CopyOnWrite(t *testing.T) {
+	orig := &ethpb.Builder{Balance: 10}
+	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		Builders: []*ethpb.Builder{orig},
+	})
+	require.NoError(t, err)
+
+	st, ok := statePb.(*BeaconState)
+	require.Equal(t, true, ok)
+
+	copied := st.Copy().(*BeaconState)
+	require.Equal(t, uint(2), st.sharedFieldReferences[types.Builders].Refs())
+
+	require.NoError(t, copied.IncreaseBuilderBalance(0, 5))
+	require.Equal(t, primitives.Gwei(10), st.builders[0].Balance)
+	require.Equal(t, primitives.Gwei(15), copied.builders[0].Balance)
+	require.Equal(t, uint(1), st.sharedFieldReferences[types.Builders].Refs())
+	require.Equal(t, uint(1), copied.sharedFieldReferences[types.Builders].Refs())
+}
+
+func TestAddBuilderFromDeposit(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		var pubkey [48]byte
+		var wc [32]byte
+		st := &BeaconState{version: version.Fulu}
+		err := st.AddBuilderFromDeposit(pubkey, wc, 1)
+		require.ErrorContains(t, "AddBuilderFromDeposit", err)
+	})
+
+	t.Run("reuses empty withdrawable slot", func(t *testing.T) {
+		var pubkey [48]byte
+		copy(pubkey[:], bytes.Repeat([]byte{0xAA}, 48))
+		var wc [32]byte
+		copy(wc[:], bytes.Repeat([]byte{0xBB}, 32))
+		wc[0] = 0x42 // version byte
+
+		st := &BeaconState{
+			version:     version.Gloas,
+			slot:        0, // epoch 0
+			dirtyFields: make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
+			builders: []*ethpb.Builder{
+				{
+					WithdrawableEpoch: 0,
+					Balance:           0,
+				},
+			},
+		}
+
+		require.NoError(t, st.AddBuilderFromDeposit(pubkey, wc, 123))
+		require.Equal(t, 1, len(st.builders))
+		got := st.builders[0]
+		require.NotNil(t, got)
+		require.DeepEqual(t, pubkey[:], got.Pubkey)
+		require.DeepEqual(t, []byte{0x42}, got.Version)
+		require.DeepEqual(t, wc[12:], got.ExecutionAddress)
+		require.Equal(t, primitives.Gwei(123), got.Balance)
+		require.Equal(t, primitives.Epoch(0), got.DepositEpoch)
+		require.Equal(t, params.BeaconConfig().FarFutureEpoch, got.WithdrawableEpoch)
+		require.Equal(t, true, st.dirtyFields[types.Builders])
+	})
+
+	t.Run("appends new builder when no reusable slot", func(t *testing.T) {
+		var pubkey [48]byte
+		copy(pubkey[:], bytes.Repeat([]byte{0xAA}, 48))
+		var wc [32]byte
+		copy(wc[:], bytes.Repeat([]byte{0xBB}, 32))
+
+		st := &BeaconState{
+			version:     version.Gloas,
+			slot:        0,
+			dirtyFields: make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
+			builders: []*ethpb.Builder{
+				{
+					WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch,
+					Balance:           1,
+				},
+			},
+		}
+
+		require.NoError(t, st.AddBuilderFromDeposit(pubkey, wc, 5))
+		require.Equal(t, 2, len(st.builders))
+		require.NotNil(t, st.builders[1])
+		require.Equal(t, primitives.Gwei(5), st.builders[1].Balance)
+	})
+}
+
+func TestAddBuilderFromDeposit_CopyOnWrite(t *testing.T) {
+	var pubkey [48]byte
+	copy(pubkey[:], bytes.Repeat([]byte{0xAA}, 48))
+	var wc [32]byte
+	copy(wc[:], bytes.Repeat([]byte{0xBB}, 32))
+	wc[0] = 0x42 // version byte
+
+	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		Slot: 0,
+		Builders: []*ethpb.Builder{
+			{
+				WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch,
+				Balance:           1,
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	st, ok := statePb.(*BeaconState)
+	require.Equal(t, true, ok)
+
+	copied := st.Copy().(*BeaconState)
+	require.Equal(t, uint(2), st.sharedFieldReferences[types.Builders].Refs())
+
+	require.NoError(t, copied.AddBuilderFromDeposit(pubkey, wc, 5))
+	require.Equal(t, 1, len(st.builders))
+	require.Equal(t, 2, len(copied.builders))
+	require.Equal(t, uint(1), st.sharedFieldReferences[types.Builders].Refs())
+	require.Equal(t, uint(1), copied.sharedFieldReferences[types.Builders].Refs())
 }

@@ -26,4 +26,5 @@ type Server struct {
 	GenesisTimeFetcher        blockchain.TimeFetcher
 	HeadFetcher               blockchain.HeadFetcher
 	ExecutionChainInfoFetcher execution.ChainInfoFetcher
+	ExecutionEngineCaller     execution.EngineCaller
 }

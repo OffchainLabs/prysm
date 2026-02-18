@@ -87,3 +87,10 @@ func hasFuluBlindKey(enc []byte) bool {
 	}
 	return bytes.Equal(enc[:len(fuluBlindKey)], fuluBlindKey)
 }
+
+func hasGloasKey(enc []byte) bool {
+	if len(gloasKey) >= len(enc) {
+		return false
+	}
+	return bytes.Equal(enc[:len(gloasKey)], gloasKey)
+}

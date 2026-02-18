@@ -12,6 +12,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/forkchoice",
     visibility = ["//testing/spectest:__subpackages__"],
     deps = [
+        "//api/server/structs:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/blockchain/testing:go_default_library",

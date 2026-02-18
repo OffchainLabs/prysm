@@ -42,7 +42,7 @@ func TestNewNodeConnection(t *testing.T) {
 
 		assert.Equal(t, grpcProvider, conn.GetGrpcConnectionProvider())
 		assert.Equal(t, (rest.RestConnectionProvider)(nil), conn.GetRestConnectionProvider())
-		assert.Equal(t, (rest.RestHandler)(nil), conn.GetRestHandler())
+		assert.Equal(t, (rest.Handler)(nil), conn.GetRestHandler())
 	})
 
 	t.Run("with no providers returns error", func(t *testing.T) {
@@ -84,7 +84,7 @@ func TestNodeConnection_GetGrpcClientConn(t *testing.T) {
 
 func TestNodeConnection_GetRestHandler(t *testing.T) {
 	t.Run("delegates to provider", func(t *testing.T) {
-		mockHandler := &rest.MockRestHandler{}
+		mockHandler := &rest.MockHandler{}
 		restProvider := &rest.MockRestProvider{MockHandler: mockHandler, MockHosts: []string{"http://localhost:3500"}}
 		conn, err := NewNodeConnection(WithRestProvider(restProvider))
 		require.NoError(t, err)
@@ -96,6 +96,6 @@ func TestNodeConnection_GetRestHandler(t *testing.T) {
 		grpcProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000"}}
 		conn, err := NewNodeConnection(WithGRPCProvider(grpcProvider))
 		require.NoError(t, err)
-		assert.Equal(t, (rest.RestHandler)(nil), conn.GetRestHandler())
+		assert.Equal(t, (rest.Handler)(nil), conn.GetRestHandler())
 	})
 }

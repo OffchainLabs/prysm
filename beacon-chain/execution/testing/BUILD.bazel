@@ -13,6 +13,7 @@ go_library(
         "//visibility:public",
     ],
     deps = [
+        "//api/server/structs:go_default_library",
         "//async/event:go_default_library",
         "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/execution/types:go_default_library",

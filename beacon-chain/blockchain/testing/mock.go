@@ -758,6 +758,16 @@ func (c *ChainService) ReceiveDataColumns(dcs []blocks.VerifiedRODataColumn) err
 	return nil
 }
 
+// ReceivePayloadAttestationMessage implements the same method in the chain service.
+func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *ethpb.PayloadAttestationMessage) error {
+	return nil
+}
+
+// ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
+func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
+	return nil
+}
+
 // DependentRootForEpoch mocks the same method in the chain service
 func (c *ChainService) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
 	if c.DependentRootCB != nil {

@@ -1,4 +1,4 @@
-- name: BlobParameters
+- name: BlobParameters#fulu
   sources: []
   spec: |
     <spec dataclass="BlobParameters" fork="fulu" hash="a4575aa8">
@@ -51,6 +51,20 @@
         withdrawals: Sequence[Withdrawal]
         # [New in Electra:EIP7251]
         processed_partial_withdrawals_count: uint64
+        processed_sweep_withdrawals_count: uint64
+    </spec>
+
+- name: ExpectedWithdrawals#gloas
+  sources: []
+  spec: |
+    <spec dataclass="ExpectedWithdrawals" fork="gloas" hash="b32cc9c9">
+    class ExpectedWithdrawals(object):
+        withdrawals: Sequence[Withdrawal]
+        # [New in Gloas:EIP7732]
+        processed_builder_withdrawals_count: uint64
+        processed_partial_withdrawals_count: uint64
+        # [New in Gloas:EIP7732]
+        processed_builders_sweep_count: uint64
         processed_sweep_withdrawals_count: uint64
     </spec>
 
@@ -126,7 +140,7 @@
         execution_requests: Sequence[bytes]
     </spec>
 
-- name: LatestMessage
+- name: LatestMessage#phase0
   sources: []
   spec: |
     <spec dataclass="LatestMessage" fork="phase0" hash="44e832d0">
@@ -136,7 +150,18 @@
         root: Root
     </spec>
 
-- name: LightClientStore
+- name: LatestMessage#gloas
+  sources: []
+  spec: |
+    <spec dataclass="LatestMessage" fork="gloas" hash="a0030894">
+    @dataclass(eq=True, frozen=True)
+    class LatestMessage(object):
+        slot: Slot
+        root: Root
+        payload_present: boolean
+    </spec>
+
+- name: LightClientStore#altair
   sources: []
   spec: |
     <spec dataclass="LightClientStore" fork="altair" hash="24725cec">
@@ -151,6 +176,23 @@
         # Most recent available reasonably-safe header
         optimistic_header: LightClientHeader
         # Max number of active participants in a sync committee (used to calculate safety threshold)
+        previous_max_active_participants: uint64
+        current_max_active_participants: uint64
+    </spec>
+
+- name: LightClientStore#capella
+  sources: []
+  spec: |
+    <spec dataclass="LightClientStore" fork="capella" hash="04b41062">
+    class LightClientStore(object):
+        # [Modified in Capella]
+        finalized_header: LightClientHeader
+        current_sync_committee: SyncCommittee
+        next_sync_committee: SyncCommittee
+        # [Modified in Capella]
+        best_valid_update: Optional[LightClientUpdate]
+        # [Modified in Capella]
+        optimistic_header: LightClientHeader
         previous_max_active_participants: uint64
         current_max_active_participants: uint64
     </spec>
@@ -191,7 +233,7 @@
         execution_requests: ExecutionRequests
     </spec>
 
-- name: OptimisticStore
+- name: OptimisticStore#bellatrix
   sources: []
   spec: |
     <spec dataclass="OptimisticStore" fork="bellatrix" hash="a2b2182c">
@@ -246,7 +288,7 @@
         parent_beacon_block_root: Root
     </spec>
 
-- name: Store
+- name: Store#phase0
   sources: []
   spec: |
     <spec dataclass="Store" fork="phase0" hash="abe525d6">
@@ -265,4 +307,31 @@
         checkpoint_states: Dict[Checkpoint, BeaconState] = field(default_factory=dict)
         latest_messages: Dict[ValidatorIndex, LatestMessage] = field(default_factory=dict)
         unrealized_justifications: Dict[Root, Checkpoint] = field(default_factory=dict)
+    </spec>
+
+- name: Store#gloas
+  sources: []
+  spec: |
+    <spec dataclass="Store" fork="gloas" hash="4dbfec46">
+    class Store(object):
+        time: uint64
+        genesis_time: uint64
+        justified_checkpoint: Checkpoint
+        finalized_checkpoint: Checkpoint
+        unrealized_justified_checkpoint: Checkpoint
+        unrealized_finalized_checkpoint: Checkpoint
+        proposer_boost_root: Root
+        equivocating_indices: Set[ValidatorIndex]
+        blocks: Dict[Root, BeaconBlock] = field(default_factory=dict)
+        block_states: Dict[Root, BeaconState] = field(default_factory=dict)
+        block_timeliness: Dict[Root, Vector[boolean, NUM_BLOCK_TIMELINESS_DEADLINES]] = field(
+            default_factory=dict
+        )
+        checkpoint_states: Dict[Checkpoint, BeaconState] = field(default_factory=dict)
+        latest_messages: Dict[ValidatorIndex, LatestMessage] = field(default_factory=dict)
+        unrealized_justifications: Dict[Root, Checkpoint] = field(default_factory=dict)
+        # [New in Gloas:EIP7732]
+        execution_payload_states: Dict[Root, BeaconState] = field(default_factory=dict)
+        # [New in Gloas:EIP7732]
+        ptc_vote: Dict[Root, Vector[boolean, PTC_SIZE]] = field(default_factory=dict)
     </spec>
