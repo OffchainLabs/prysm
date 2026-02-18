@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
@@ -61,7 +62,17 @@ var (
 	}
 )
 
+// ClientVersionV1 represents the response from engine_getClientVersionV1.
+type ClientVersionV1 struct {
+	Code    string `json:"code"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+}
+
 const (
+	// GetClientVersionMethod is the engine_getClientVersionV1 method for JSON-RPC.
+	GetClientVersionMethod = "engine_getClientVersionV1"
 	// NewPayloadMethod v1 request string for JSON-RPC.
 	NewPayloadMethod = "engine_newPayloadV1"
 	// NewPayloadMethodV2 v2 request string for JSON-RPC.
@@ -99,6 +110,8 @@ const (
 	GetBlobsV1 = "engine_getBlobsV1"
 	// GetBlobsV2 request string for JSON-RPC.
 	GetBlobsV2 = "engine_getBlobsV2"
+	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
+	GetClientVersionV1 = "engine_getClientVersionV1"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
 	defaultEngineTimeout = time.Second
 )
@@ -135,6 +148,7 @@ type EngineCaller interface {
 	GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error)
 	ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error)
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
+	GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error)
 }
 
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
@@ -350,6 +364,24 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	return elSupportedEndpointsSlice, nil
 }
 
+// GetClientVersion calls engine_getClientVersionV1 to retrieve EL client information.
+func (s *Service) GetClientVersion(ctx context.Context) ([]ClientVersionV1, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersion")
+	defer span.End()
+
+	// Per spec, we send our own client info as the parameter
+	clVersion := ClientVersionV1{
+		Code:    CLCode,
+		Name:    Name,
+		Version: version.SemanticVersion(),
+		Commit:  version.GetCommitPrefix(),
+	}
+
+	var result []ClientVersionV1
+	err := s.rpcClient.CallContext(ctx, &result, GetClientVersionMethod, clVersion)
+	return result, handleRPCError(err)
+}
+
 // GetTerminalBlockHash returns the valid terminal block hash based on total difficulty.
 //
 // Spec code:
@@ -551,6 +583,39 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 	}
 
 	return result, handleRPCError(err)
+}
+
+func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionV1")
+	defer span.End()
+
+	commit := version.GitCommit()
+	if len(commit) >= 8 {
+		commit = commit[:8]
+	}
+
+	var result []*structs.ClientVersionV1
+	err := s.rpcClient.CallContext(
+		ctx,
+		&result,
+		GetClientVersionV1,
+		structs.ClientVersionV1{
+			Code:    "PM",
+			Name:    "Prysm",
+			Version: version.SemanticVersion(),
+			Commit:  commit,
+		},
+	)
+
+	if err != nil {
+		return nil, handleRPCError(err)
+	}
+
+	if len(result) == 0 {
+		return nil, errors.New("execution client returned no result")
+	}
+
+	return result, nil
 }
 
 // ReconstructFullBlock takes in a blinded beacon block and reconstructs

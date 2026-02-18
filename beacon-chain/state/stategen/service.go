@@ -27,6 +27,13 @@ var defaultHotStateDBInterval primitives.Slot = 128
 
 var populatePubkeyCacheOnce sync.Once
 
+// NilCheckableReadOnlyBalances adds the IsNil method to ReadOnlyBalances
+// to allow checking if the underlying state value is nil.
+type NilCheckableReadOnlyBalances interface {
+	state.ReadOnlyBalances
+	IsNil() bool
+}
+
 // StateManager represents a management object that handles the internal
 // logic of maintaining both hot and cold states in DB.
 type StateManager interface {
@@ -43,6 +50,7 @@ type StateManager interface {
 	ActiveNonSlashedBalancesByRoot(context.Context, [32]byte) ([]uint64, error)
 	StateByRootIfCachedNoCopy(blockRoot [32]byte) state.BeaconState
 	StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
+	FinalizedReadOnlyBalances() NilCheckableReadOnlyBalances
 }
 
 // State is a concrete implementation of StateManager.
@@ -200,4 +208,9 @@ func (s *State) FinalizedState() state.BeaconState {
 	s.finalizedInfo.lock.RLock()
 	defer s.finalizedInfo.lock.RUnlock()
 	return s.finalizedInfo.state.Copy()
+}
+
+// Returns the finalized state as a ReadOnlyBalances so that it can be used read-only without copying.
+func (s *State) FinalizedReadOnlyBalances() NilCheckableReadOnlyBalances {
+	return s.finalizedInfo.state
 }

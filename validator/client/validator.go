@@ -38,6 +38,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/db"
 	dbCommon "github.com/OffchainLabs/prysm/v7/validator/db/common"
 	"github.com/OffchainLabs/prysm/v7/validator/graffiti"
+	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
@@ -101,9 +102,9 @@ type validator struct {
 	pubkeyToStatus                     map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	wallet                             *wallet.Wallet
 	walletInitializedChan              chan *wallet.Wallet
-	currentHostIndex                   uint64
 	walletInitializedFeed              *event.Feed
 	graffitiOrderedIndex               uint64
+	conn                               validatorHelpers.NodeConnection
 	submittedAtts                      map[submittedAttKey]*submittedAtt
 	validatorsRegBatchSize             int
 	validatorClient                    iface.ValidatorClient
@@ -114,7 +115,6 @@ type validator struct {
 	km                                 keymanager.IKeymanager
 	accountChangedSub                  event.Subscription
 	ticker                             slots.Ticker
-	beaconNodeHosts                    []string
 	genesisTime                        time.Time
 	graffiti                           []byte
 	voteStats                          voteStats
@@ -1310,35 +1310,8 @@ func (v *validator) Host() string {
 	return v.validatorClient.Host()
 }
 
-func (v *validator) changeHost() {
-	next := (v.currentHostIndex + 1) % uint64(len(v.beaconNodeHosts))
-	log.WithFields(logrus.Fields{
-		"currentHost": v.beaconNodeHosts[v.currentHostIndex],
-		"nextHost":    v.beaconNodeHosts[next],
-	}).Warn("Beacon node is not responding, switching host")
-	v.validatorClient.SetHost(v.beaconNodeHosts[next])
-	v.currentHostIndex = next
-}
-
-func (v *validator) FindHealthyHost(ctx context.Context) bool {
-	// Tail-recursive closure keeps retry count private.
-	var check func(remaining int) bool
-	check = func(remaining int) bool {
-		if v.nodeClient.IsReady(ctx) { // ready → done
-			return true
-		}
-		if len(v.beaconNodeHosts) == 1 && features.Get().EnableBeaconRESTApi {
-			log.WithField("host", v.Host()).Warn("Beacon node is not responding, no backup node configured")
-			return false
-		}
-		if remaining == 0 || !features.Get().EnableBeaconRESTApi {
-			return false // exhausted or REST disabled
-		}
-		v.changeHost()
-		return check(remaining - 1) // recurse
-	}
-
-	return check(len(v.beaconNodeHosts))
+func (v *validator) EnsureReady(ctx context.Context) bool {
+	return v.validatorClient.EnsureReady(ctx)
 }
 
 func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {

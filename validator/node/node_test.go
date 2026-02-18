@@ -41,6 +41,8 @@ func TestNode_Builds(t *testing.T) {
 	set.String("wallet-password-file", passwordFile, "path to wallet password")
 	set.String("keymanager-kind", "imported", "keymanager kind")
 	set.String("verbosity", "debug", "log verbosity")
+	set.String("beacon-rpc-provider", "localhost:4000", "beacon node RPC endpoint")
+	set.String("beacon-rest-api-provider", "http://localhost:3500", "beacon node REST API endpoint")
 	require.NoError(t, set.Set(flags.WalletPasswordFileFlag.Name, passwordFile))
 	ctx := cli.NewContext(&app, set, nil)
 	opts := []accounts.Option{

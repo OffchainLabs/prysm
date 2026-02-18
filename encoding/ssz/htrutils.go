@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -140,4 +141,25 @@ func withdrawalRoot(w *enginev1.Withdrawal) ([32]byte, error) {
 		return BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
 	}
 	return w.HashTreeRoot()
+}
+
+// KzgCommitmentsRoot computes the HTR for a list of KZG commitments
+func KzgCommitmentsRoot(commitments [][]byte) ([32]byte, error) {
+	roots := make([][32]byte, len(commitments))
+	for i, commitment := range commitments {
+		chunks, err := PackByChunk([][]byte{commitment})
+		if err != nil {
+			return [32]byte{}, err
+		}
+		roots[i] = htr.VectorizedSha256(chunks)[0]
+	}
+
+	commitmentsRoot, err := BitwiseMerkleize(roots, uint64(len(roots)), fieldparams.MaxBlobCommitmentsPerBlock)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not compute merkleization")
+	}
+
+	length := make([]byte, 32)
+	binary.LittleEndian.PutUint64(length[:8], uint64(len(roots)))
+	return MixInLength(commitmentsRoot, length), nil
 }
