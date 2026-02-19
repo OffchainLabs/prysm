@@ -161,10 +161,10 @@ func (s *Service) setSeenValidProof(roSignedProof *blocks.ROSignedExecutionProof
 func computeProofCacheKey(roSignedProof *blocks.ROSignedExecutionProof) []byte {
 	executionProof := roSignedProof.Message
 
-	key := make([]byte, 0, 81)
+	key := make([]byte, 0, 41)
 	key = append(key, executionProof.PublicInput.NewPayloadRequestRoot...)
 	key = append(key, executionProof.ProofType...)
-	key = append(key, roSignedProof.ProverPubkey...)
+	key = append(key, bytesutil.Uint64ToBytesBigEndian(uint64(roSignedProof.GetValidatorIndex()))...)
 
 	return key
 }

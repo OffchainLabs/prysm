@@ -11,7 +11,6 @@ import (
 
 var (
 	errNilExecutionProof          = errors.New("execution proof is nil")
-	errEmptyProverPubkey          = errors.New("prover pubkey is empty")
 	errEmptyProofData             = errors.New("proof data is empty")
 	errEmptyNewPayloadRequestRoot = errors.New("new payload request root is empty")
 )
@@ -26,10 +25,6 @@ type ROSignedExecutionProof struct {
 func roSignedExecutionProofNilCheck(sep *ethpb.SignedExecutionProof) error {
 	if sep == nil {
 		return errNilExecutionProof
-	}
-
-	if len(sep.ProverPubkey) == 0 {
-		return errEmptyProverPubkey
 	}
 
 	ep := sep.Message

@@ -1,9 +1,9 @@
 package structs
 
 type SignedExecutionProof struct {
-	Message      *ExecutionProof `json:"message"`
-	ProverPubkey []byte          `json:"prover_pubkey"`
-	Signature    []byte          `json:"signature"`
+	Message        *ExecutionProof `json:"message"`
+	ValidatorIndex uint64          `json:"validator_index"`
+	Signature      []byte          `json:"signature"`
 }
 
 type ExecutionProof struct {

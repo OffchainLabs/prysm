@@ -2374,7 +2374,7 @@ func (s *SignedExecutionProof) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the SignedExecutionProof object to a target array
 func (s *SignedExecutionProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(148)
+	offset := int(108)
 
 	// Offset (0) 'Message'
 	dst = ssz.WriteOffset(dst, offset)
@@ -2383,12 +2383,8 @@ func (s *SignedExecutionProof) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 	}
 	offset += s.Message.SizeSSZ()
 
-	// Field (1) 'ProverPubkey'
-	if size := len(s.ProverPubkey); size != 48 {
-		err = ssz.ErrBytesLengthFn("--.ProverPubkey", size, 48)
-		return
-	}
-	dst = append(dst, s.ProverPubkey...)
+	// Field (1) 'ValidatorIndex'
+	dst = ssz.MarshalUint64(dst, uint64(s.ValidatorIndex))
 
 	// Field (2) 'Signature'
 	if size := len(s.Signature); size != 96 {
@@ -2409,7 +2405,7 @@ func (s *SignedExecutionProof) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 func (s *SignedExecutionProof) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 148 {
+	if size < 108 {
 		return ssz.ErrSize
 	}
 
@@ -2421,21 +2417,18 @@ func (s *SignedExecutionProof) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o0 != 148 {
+	if o0 != 108 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
-	// Field (1) 'ProverPubkey'
-	if cap(s.ProverPubkey) == 0 {
-		s.ProverPubkey = make([]byte, 0, len(buf[4:52]))
-	}
-	s.ProverPubkey = append(s.ProverPubkey, buf[4:52]...)
+	// Field (1) 'ValidatorIndex'
+	s.ValidatorIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[4:12]))
 
 	// Field (2) 'Signature'
 	if cap(s.Signature) == 0 {
-		s.Signature = make([]byte, 0, len(buf[52:148]))
+		s.Signature = make([]byte, 0, len(buf[12:108]))
 	}
-	s.Signature = append(s.Signature, buf[52:148]...)
+	s.Signature = append(s.Signature, buf[12:108]...)
 
 	// Field (0) 'Message'
 	{
@@ -2452,7 +2445,7 @@ func (s *SignedExecutionProof) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the SignedExecutionProof object
 func (s *SignedExecutionProof) SizeSSZ() (size int) {
-	size = 148
+	size = 108
 
 	// Field (0) 'Message'
 	if s.Message == nil {
@@ -2477,12 +2470,8 @@ func (s *SignedExecutionProof) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		return
 	}
 
-	// Field (1) 'ProverPubkey'
-	if size := len(s.ProverPubkey); size != 48 {
-		err = ssz.ErrBytesLengthFn("--.ProverPubkey", size, 48)
-		return
-	}
-	hh.PutBytes(s.ProverPubkey)
+	// Field (1) 'ValidatorIndex'
+	hh.PutUint64(uint64(s.ValidatorIndex))
 
 	// Field (2) 'Signature'
 	if size := len(s.Signature); size != 96 {

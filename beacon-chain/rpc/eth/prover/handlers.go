@@ -34,7 +34,7 @@ func (s *Server) SubmitExecutionProof(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.WithFields(map[string]any{
-		"proverPubkey":          hexutil.Encode(proof.ProverPubkey),
+		"validatorIndex":        proof.GetValidatorIndex(),
 		"proofType":             hexutil.Encode(proof.Message.ProofType),
 		"proofDataSize":         len(proof.Message.ProofData),
 		"newPayloadRequestRoot": hexutil.Encode(proof.Message.PublicInput.NewPayloadRequestRoot),

@@ -1579,9 +1579,9 @@ func (s *SignedExecutionProof) ToConsensus() (*eth.SignedExecutionProof, error) 
 		return nil, server.NewDecodeError(err, "Message")
 	}
 	return &eth.SignedExecutionProof{
-		Message:      message,
-		ProverPubkey: s.ProverPubkey,
-		Signature:    s.Signature,
+		Message:        message,
+		ValidatorIndex: primitives.ValidatorIndex(s.ValidatorIndex),
+		Signature:      s.Signature,
 	}, nil
 }
 

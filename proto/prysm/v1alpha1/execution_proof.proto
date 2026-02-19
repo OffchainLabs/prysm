@@ -14,7 +14,7 @@ option php_namespace = "Ethereum\\Eth\\v1alpha1";
 // https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8025/beacon-chain.md#new-signedexecutionproof
 message SignedExecutionProof {
     ExecutionProof message = 1;
-    bytes prover_pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
+    uint64 validator_index = 2 [(ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/prysm/v7/consensus-types/" "primitives.ValidatorIndex" ];
     bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
