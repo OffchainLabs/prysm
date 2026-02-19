@@ -1455,14 +1455,10 @@ func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements any) (
 	}
 
 	if fTrie.FieldReference().Refs() > 1 {
-		var newTrie *fieldtrie.FieldTrie
-		// We choose to only copy the validator
-		// trie as it is pretty expensive to regenerate.
-		if index == types.Validators {
-			newTrie = fTrie.CopyTrie()
-		} else {
-			newTrie = fTrie.TransferTrie()
-		}
+		// CopyTrie creates a lightweight overlay (O(1)) instead of
+		// deep-copying layers. This replaces the old Validators-only
+		// CopyTrie + TransferTrie-for-everything-else pattern.
+		newTrie := fTrie.CopyTrie()
 		fTrie.FieldReference().MinusRef()
 		b.stateFieldLeaves[index] = newTrie
 		fTrie = newTrie
@@ -1473,6 +1469,19 @@ func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements any) (
 	b.dirtyIndices[index] = slice.SetUint64(b.dirtyIndices[index])
 	// sort indexes again
 	slices.Sort(b.dirtyIndices[index])
+
+	// For overlays with large dirty sets (e.g. epoch boundaries during initial
+	// sync), a from-scratch rebuild using vectorized hashing is faster and uses
+	// less memory than promote → per-leaf walk-up recomputation.
+	if fTrie.IsOverlay() && len(b.dirtyIndices[index]) > fieldtrie.OverlayPromotionThreshold {
+		fTrie.ReleaseBase()
+		fTrie.FieldReference().MinusRef()
+		if err := b.resetFieldTrie(index, elements, fTrie.Length()); err != nil {
+			return [32]byte{}, err
+		}
+		return b.stateFieldLeaves[index].TrieRoot()
+	}
+
 	root, err := fTrie.RecomputeTrie(b.dirtyIndices[index], elements)
 	if err != nil {
 		return [32]byte{}, err
@@ -1496,8 +1505,14 @@ func finalizerCleanup(b *BeaconState) {
 	defer b.lock.Unlock()
 	for field, v := range b.sharedFieldReferences {
 		v.MinusRef()
-		if b.stateFieldLeaves[field].FieldReference() != nil {
-			b.stateFieldLeaves[field].FieldReference().MinusRef()
+		t := b.stateFieldLeaves[field]
+		if t.FieldReference() != nil {
+			t.FieldReference().MinusRef()
+		}
+		// Release overlay base reference so the base can be GC'd
+		// when no overlays reference it.
+		if t.IsOverlay() {
+			t.ReleaseBase()
 		}
 	}
 	for i := range b.dirtyFields {

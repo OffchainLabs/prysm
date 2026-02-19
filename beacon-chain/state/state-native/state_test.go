@@ -54,7 +54,7 @@ func TestBeaconState_NoDeadlock_Phase0(t *testing.T) {
 			for _, f := range st.stateFieldLeaves {
 				f.Lock()
 				if f.Empty() {
-					f.InsertFieldLayer(make([][]*[32]byte, 10))
+					f.InsertFlatLayers(make([][32]byte, 10), []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 				}
 				f.Unlock()
 				f.FieldReference().AddRef()
@@ -108,7 +108,7 @@ func TestBeaconState_NoDeadlock_Altair(t *testing.T) {
 			for _, f := range s.stateFieldLeaves {
 				f.Lock()
 				if f.Empty() {
-					f.InsertFieldLayer(make([][]*[32]byte, 10))
+					f.InsertFlatLayers(make([][32]byte, 10), []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 				}
 				f.Unlock()
 				f.FieldReference().AddRef()
@@ -162,7 +162,7 @@ func TestBeaconState_NoDeadlock_Bellatrix(t *testing.T) {
 			for _, f := range s.stateFieldLeaves {
 				f.Lock()
 				if f.Empty() {
-					f.InsertFieldLayer(make([][]*[32]byte, 10))
+					f.InsertFlatLayers(make([][32]byte, 10), []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 				}
 				f.Unlock()
 				f.FieldReference().AddRef()
@@ -216,7 +216,7 @@ func TestBeaconState_NoDeadlock_Capella(t *testing.T) {
 			for _, f := range s.stateFieldLeaves {
 				f.Lock()
 				if f.Empty() {
-					f.InsertFieldLayer(make([][]*[32]byte, 10))
+					f.InsertFlatLayers(make([][32]byte, 10), []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 				}
 				f.Unlock()
 				f.FieldReference().AddRef()
@@ -270,7 +270,7 @@ func TestBeaconState_NoDeadlock_Deneb(t *testing.T) {
 			for _, f := range s.stateFieldLeaves {
 				f.Lock()
 				if f.Empty() {
-					f.InsertFieldLayer(make([][]*[32]byte, 10))
+					f.InsertFlatLayers(make([][32]byte, 10), []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 				}
 				f.Unlock()
 				f.FieldReference().AddRef()
