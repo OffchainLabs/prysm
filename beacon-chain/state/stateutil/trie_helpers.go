@@ -1,162 +1,234 @@
 package stateutil
 
 import (
-	"bytes"
 	"encoding/binary"
+	"math/bits"
 
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
-	"github.com/OffchainLabs/prysm/v7/math"
+	pmath "github.com/OffchainLabs/prysm/v7/math"
 	"github.com/pkg/errors"
 )
 
-// ReturnTrieLayer returns the representation of a merkle trie when
-// provided with the elements of a fixed sized trie and the corresponding depth of
-// it.
-func ReturnTrieLayer(elements [][32]byte, length uint64) ([][]*[32]byte, error) {
-	leaves := elements
-
-	if len(leaves) == 1 {
-		return [][]*[32]byte{{&leaves[0]}}, nil
+// NextPow2 returns the smallest power of 2 >= n. Returns 1 for n <= 1.
+func NextPow2(n int) int {
+	if n <= 1 {
+		return 1
 	}
-	hashLayer := leaves
-	layers := make([][][32]byte, ssz.Depth(length)+1)
-	layers[0] = hashLayer
-	var err error
-	layers, _, err = MerkleizeTrieLeaves(layers, hashLayer)
-	if err != nil {
-		return nil, err
-	}
-	refLayers := make([][]*[32]byte, len(layers))
-	for i, val := range layers {
-		refLayers[i] = make([]*[32]byte, len(val))
-		for j, innerVal := range val {
-			newVal := innerVal
-			refLayers[i][j] = &newVal
-		}
-	}
-	return refLayers, nil
+	return 1 << bits.Len(uint(n-1))
 }
 
-// ReturnTrieLayerVariable returns the representation of a merkle trie when
-// provided with the elements of a variable sized trie and the corresponding depth of
-// it.
-func ReturnTrieLayerVariable(elements [][32]byte, length uint64) [][]*[32]byte {
-	depth := ssz.Depth(length)
-	layers := make([][]*[32]byte, depth+1)
-	// Return zerohash at depth
-	if len(elements) == 0 {
-		zerohash := trie.ZeroHashes[depth]
-		layers[len(layers)-1] = []*[32]byte{&zerohash}
-		return layers
-	}
-	transformedLeaves := make([]*[32]byte, len(elements))
-	for i := range elements {
-		arr := elements[i]
-		transformedLeaves[i] = &arr
-	}
-	layers[0] = transformedLeaves
-	buffer := bytes.NewBuffer([]byte{})
-	buffer.Grow(64)
-
-	for i := range depth {
-		layerLen := len(layers[i])
-		oddNodeLength := layerLen%2 == 1
-		if oddNodeLength {
-			zerohash := trie.ZeroHashes[i]
-			elements = append(elements, zerohash)
-			layerLen++
-		}
-
-		layers[i+1] = make([]*[32]byte, layerLen/2)
-		elements = htr.VectorizedSha256(elements)
-		for j := range elements {
-			layers[i+1][j] = &elements[j]
+// computeOffsets builds the offset table for a flat trie buffer with pow2 level sizes.
+// Used for fixed-size (BasicArray) tries where elements are already pow2-aligned.
+// offsets[i] = start index of level i in the nodes slice.
+// offsets[depth+1] = total number of nodes.
+func computeOffsets(depth int, leafCap int) []int {
+	offsets := make([]int, depth+2)
+	total, size := 0, leafCap
+	for i := 0; i <= depth; i++ {
+		offsets[i] = total
+		total += size
+		if size > 1 {
+			size /= 2
 		}
 	}
-	return layers
+	offsets[depth+1] = total
+	return offsets
 }
 
-// RecomputeFromLayer recomputes specific branches of a fixed sized trie depending on the provided changed indexes.
-func RecomputeFromLayer(changedLeaves [][32]byte, changedIdx []uint64, layer [][]*[32]byte) ([32]byte, [][]*[32]byte, error) {
+// ComputeOffsetsVariable builds the offset table for a variable-size trie.
+// Unlike computeOffsets, this uses exact level sizes (ceil division for parents)
+// instead of pow2 padding. This eliminates ~61 MB of wasted padding per validator trie.
+func ComputeOffsetsVariable(depth int, leafCount int) []int {
+	offsets := make([]int, depth+2)
+	total, size := 0, leafCount
+	for i := 0; i <= depth; i++ {
+		offsets[i] = total
+		total += size
+		if size > 1 {
+			size = (size + 1) / 2
+		}
+	}
+	offsets[depth+1] = total
+	return offsets
+}
+
+// ReturnTrieLayer returns a flat contiguous merkle trie for a fixed-size array.
+// All levels are packed into a single [][32]byte buffer with offsets for each level.
+func ReturnTrieLayer(elements [][32]byte, length uint64) ([][32]byte, []int, error) {
+	N := len(elements)
+	depth := int(ssz.Depth(length)) // lint:ignore uintcast -- ssz.Depth returns uint8, always fits in int.
+
+	if N == 1 {
+		return [][32]byte{elements[0]}, []int{0, 1}, nil
+	}
+
+	if !pmath.IsPowerOf2(uint64(N)) {
+		return nil, nil, errors.Errorf("elements length is not a power of 2: %d", N)
+	}
+
+	offsets := computeOffsets(depth, N)
+	nodes := make([][32]byte, offsets[depth+1])
+	copy(nodes[:N], elements)
+
+	// Build upper levels using vectorized hashing.
+	for level := range depth {
+		levelSize := offsets[level+1] - offsets[level]
+		src := nodes[offsets[level]:offsets[level+1]]
+		if levelSize == 1 {
+			// Single node at this level: hash with ZeroHashes[level].
+			hasher := hash.CustomSHA256Hasher()
+			var combined [64]byte
+			copy(combined[:32], src[0][:])
+			copy(combined[32:], trie.ZeroHashes[level][:])
+			nodes[offsets[level+1]] = hasher(combined[:])
+		} else {
+			result := htr.VectorizedSha256(src)
+			copy(nodes[offsets[level+1]:offsets[level+2]], result)
+		}
+	}
+	return nodes, offsets, nil
+}
+
+// HashUpFromLeaves computes all upper levels of a flat trie buffer from level 0.
+// nodes[offsets[0]:offsets[1]] must be pre-filled with leaf data.
+// Odd-length levels are handled by hashing the last element with ZeroHashes[level].
+func HashUpFromLeaves(nodes [][32]byte, offsets []int) {
+	depth := len(offsets) - 2
 	hasher := hash.CustomSHA256Hasher()
+	var combined [64]byte
+
+	for level := range depth {
+		levelSize := offsets[level+1] - offsets[level]
+		src := nodes[offsets[level]:offsets[level+1]]
+		nextStart := offsets[level+1]
+
+		if levelSize == 1 {
+			copy(combined[:32], src[0][:])
+			copy(combined[32:], trie.ZeroHashes[level][:])
+			nodes[nextStart] = hasher(combined[:])
+		} else if levelSize%2 == 0 {
+			result := htr.VectorizedSha256(src)
+			copy(nodes[nextStart:], result)
+		} else {
+			evenPart := levelSize - 1
+			result := htr.VectorizedSha256(src[:evenPart])
+			copy(nodes[nextStart:], result)
+			copy(combined[:32], src[levelSize-1][:])
+			copy(combined[32:], trie.ZeroHashes[level][:])
+			nodes[nextStart+len(result)] = hasher(combined[:])
+		}
+	}
+}
+
+// ReturnTrieLayerVariable returns a flat contiguous merkle trie for a variable-size array.
+// Uses exact level sizes (no pow2 padding) to minimize memory. Odd-length levels
+// are handled by hashing the last element with ZeroHashes[level] separately.
+func ReturnTrieLayerVariable(elements [][32]byte, length uint64) ([][32]byte, []int) {
+	depth := int(ssz.Depth(length)) // lint:ignore uintcast -- ssz.Depth returns uint8, always fits in int.
+	N := len(elements)
+
+	if N == 0 {
+		nodes := [][32]byte{trie.ZeroHashes[depth]}
+		offsets := make([]int, depth+2)
+		for i := 0; i <= depth; i++ {
+			offsets[i] = 0
+		}
+		offsets[depth+1] = 1
+		return nodes, offsets
+	}
+
+	offsets := ComputeOffsetsVariable(depth, N)
+	nodes := make([][32]byte, offsets[depth+1])
+	copy(nodes[:N], elements)
+	HashUpFromLeaves(nodes, offsets)
+	return nodes, offsets
+}
+
+// RecomputeFromLayer recomputes specific branches of a fixed-size trie.
+// Modifies nodes in-place. BasicArray never grows, so nodes/offsets are stable.
+func RecomputeFromLayer(changedLeaves [][32]byte, changedIdx []uint64, nodes [][32]byte, offsets []int) ([32]byte, error) {
+	// Write changed leaves into level 0.
 	for i, idx := range changedIdx {
-		layer[0][idx] = &changedLeaves[i]
+		nodes[offsets[0]+int(idx)] = changedLeaves[i] // lint:ignore uintcast -- idx is bounded by trie level size.
 	}
 
+	depth := len(offsets) - 2
 	if len(changedIdx) == 0 {
-		return *layer[0][0], layer, nil
+		return nodes[offsets[depth]], nil
 	}
 
-	leaves := layer[0]
-
-	// We need to ensure we recompute indices of the Merkle tree which
-	// changed in-between calls to this function. This check adds an offset
-	// to the recomputed indices to ensure we do so evenly.
+	// Even-neighbor offset check: ensure we recompute sibling pairs evenly.
+	levelSize0 := offsets[1] - offsets[0]
 	maxChangedIndex := changedIdx[len(changedIdx)-1]
-	if int(maxChangedIndex+2) == len(leaves) && maxChangedIndex%2 != 0 {
+	if int(maxChangedIndex+2) == levelSize0 && maxChangedIndex%2 != 0 {
 		changedIdx = append(changedIdx, maxChangedIndex+1)
 	}
 
-	root := *layer[0][0]
-
-	for _, idx := range changedIdx {
-		ii, err := math.Int(idx)
-		if err != nil {
-			return [32]byte{}, nil, err
-		}
-		root, layer, err = recomputeRootFromLayer(ii, layer, leaves, hasher)
-		if err != nil {
-			return [32]byte{}, nil, err
-		}
-	}
-	return root, layer, nil
-}
-
-// RecomputeFromLayerVariable recomputes specific branches of a variable sized trie depending on the provided changed indexes.
-func RecomputeFromLayerVariable(changedLeaves [][32]byte, changedIdx []uint64, layer [][]*[32]byte) ([32]byte, [][]*[32]byte, error) {
 	hasher := hash.CustomSHA256Hasher()
-	if len(changedIdx) == 0 {
-		return *layer[0][0], layer, nil
+	var root [32]byte
+	for _, idx := range changedIdx {
+		ii, err := pmath.Int(idx)
+		if err != nil {
+			return [32]byte{}, err
+		}
+		root = recomputeBranch(ii, nodes, offsets, depth, hasher)
 	}
-	root := *layer[len(layer)-1][0]
 
-	for i, idx := range changedIdx {
-		ii, err := math.Int(idx)
-		if err != nil {
-			return [32]byte{}, nil, err
-		}
-		root, layer, err = recomputeRootFromLayerVariable(ii, changedLeaves[i], layer, hasher)
-		if err != nil {
-			return [32]byte{}, nil, err
-		}
+	// Single leaf identity case.
+	if levelSize0 == 1 {
+		return nodes[offsets[0]], nil
 	}
-	return root, layer, nil
+	return root, nil
 }
 
-// this method assumes that the provided trie already has all its elements included
-// in the base depth.
-func recomputeRootFromLayer(idx int, layers [][]*[32]byte, chunks []*[32]byte,
-	hasher func([]byte) [32]byte) ([32]byte, [][]*[32]byte, error) {
-	root := *chunks[idx]
-	layers[0] = chunks
-	// The merkle tree structure looks as follows:
-	// [[r1, r2, r3, r4], [parent1, parent2], [root]]
-	// Using information about the index which changed, idx, we recompute
-	// only its branch up the tree.
+// RecomputeFromLayerVariable recomputes specific branches of a variable-size trie.
+// Returns potentially-grown nodes/offsets (growth is extremely rare with pow2 allocation).
+func RecomputeFromLayerVariable(changedLeaves [][32]byte, changedIdx []uint64, nodes [][32]byte, offsets []int) ([32]byte, [][32]byte, []int, error) {
+	depth := len(offsets) - 2
+	if len(changedIdx) == 0 {
+		return nodes[offsets[depth]], nodes, offsets, nil
+	}
+
+	hasher := hash.CustomSHA256Hasher()
+	var root [32]byte
+	for i, idx := range changedIdx {
+		ii, err := pmath.Int(idx)
+		if err != nil {
+			return [32]byte{}, nil, nil, err
+		}
+		// Check if growth is needed (extremely rare with pow2 allocation).
+		levelSize0 := offsets[1] - offsets[0]
+		if ii >= levelSize0 {
+			nodes, offsets = GrowFlatBuffer(nodes, offsets, ii+1)
+		}
+		nodes[offsets[0]+ii] = changedLeaves[i]
+		root = recomputeBranch(ii, nodes, offsets, depth, hasher)
+	}
+	return root, nodes, offsets, nil
+}
+
+// recomputeBranch walks from a leaf index up to the root, recomputing parent hashes.
+// Zero heap allocations per call — all writes go directly into the flat buffer.
+func recomputeBranch(idx int, nodes [][32]byte, offsets []int, depth int, hasher func([]byte) [32]byte) [32]byte {
+	root := nodes[offsets[0]+idx]
 	currentIndex := idx
-	// Allocate only once.
 	var combinedChunks [64]byte
-	for i := 0; i < len(layers)-1; i++ {
+
+	for level := range depth {
 		isLeft := currentIndex%2 == 0
 		neighborIdx := currentIndex ^ 1
+		levelSize := offsets[level+1] - offsets[level]
 
 		var neighbor [32]byte
-		if layers[i] != nil && len(layers[i]) != 0 && neighborIdx < len(layers[i]) {
-			neighbor = *layers[i][neighborIdx]
+		if neighborIdx < levelSize {
+			neighbor = nodes[offsets[level]+neighborIdx]
+		} else {
+			neighbor = trie.ZeroHashes[level]
 		}
+
 		if isLeft {
 			copy(combinedChunks[:32], root[:])
 			copy(combinedChunks[32:], neighbor[:])
@@ -165,74 +237,38 @@ func recomputeRootFromLayer(idx int, layers [][]*[32]byte, chunks []*[32]byte,
 			copy(combinedChunks[32:], root[:])
 		}
 
-		parentHash := hasher(combinedChunks[:])
-		root = parentHash
-
+		root = hasher(combinedChunks[:])
 		parentIdx := currentIndex / 2
-		// Update the cached layers at the parent index.
-		rootVal := root
-		if len(layers[i+1]) == 0 {
-			layers[i+1] = append(layers[i+1], &rootVal)
-		} else {
-			layers[i+1][parentIdx] = &rootVal
-		}
+		nodes[offsets[level+1]+parentIdx] = root
 		currentIndex = parentIdx
 	}
-	// If there is only a single leaf, we return it (the identity element).
-	if len(layers[0]) == 1 {
-		return *layers[0][0], layers, nil
-	}
-	return root, layers, nil
+	return root
 }
 
-// this method assumes that the base branch does not consist of all leaves of the
-// trie. Instead missing leaves are assumed to be zerohashes, following the structure
-// of a sparse merkle trie.
-func recomputeRootFromLayerVariable(idx int, item [32]byte, layers [][]*[32]byte,
-	hasher func([]byte) [32]byte) ([32]byte, [][]*[32]byte, error) {
-	for idx >= len(layers[0]) {
-		zerohash := trie.ZeroHashes[0]
-		layers[0] = append(layers[0], &zerohash)
+// GrowFlatBuffer grows the flat trie buffer to accommodate at least minLeafCount leaves.
+// Called extremely rarely — only when validator count exceeds current capacity.
+func GrowFlatBuffer(nodes [][32]byte, offsets []int, minLeafCount int) ([][32]byte, []int) {
+	depth := len(offsets) - 2
+	newOffsets := ComputeOffsetsVariable(depth, minLeafCount)
+	newNodes := make([][32]byte, newOffsets[depth+1])
+
+	for level := 0; level <= depth; level++ {
+		oldSize := offsets[level+1] - offsets[level]
+		newSize := newOffsets[level+1] - newOffsets[level]
+		if oldSize > 0 {
+			copy(newNodes[newOffsets[level]:], nodes[offsets[level]:offsets[level]+oldSize])
+		}
+		// Initialize new entries with ZeroHashes[level]. An uncomputed node
+		// at level L represents an empty subtree whose root is ZeroHashes[L],
+		// not the zero value ([32]byte{}). Level 0 is skipped because
+		// ZeroHashes[0] == [32]byte{} (already zero-filled by make).
+		if level > 0 {
+			for i := oldSize; i < newSize; i++ {
+				newNodes[newOffsets[level]+i] = trie.ZeroHashes[level]
+			}
+		}
 	}
-	layers[0][idx] = &item
-
-	currentIndex := idx
-	root := item
-	// Allocate only once.
-	var neighbor [32]byte
-	var combinedChunks [64]byte
-
-	for i := 0; i < len(layers)-1; i++ {
-		isLeft := currentIndex%2 == 0
-		neighborIdx := currentIndex ^ 1
-
-		if neighborIdx >= len(layers[i]) {
-			neighbor = trie.ZeroHashes[i]
-		} else {
-			neighbor = *layers[i][neighborIdx]
-		}
-		if isLeft {
-			copy(combinedChunks[:32], root[:])
-			copy(combinedChunks[32:], neighbor[:])
-		} else {
-			copy(combinedChunks[:32], neighbor[:])
-			copy(combinedChunks[32:], root[:])
-		}
-
-		parentHash := hasher(combinedChunks[:])
-		root = parentHash
-
-		parentIdx := currentIndex / 2
-		if len(layers[i+1]) == 0 || parentIdx >= len(layers[i+1]) {
-			newItem := root
-			layers[i+1] = append(layers[i+1], &newItem)
-		} else {
-			newItem := root
-			layers[i+1][parentIdx] = &newItem
-		}
-		currentIndex = parentIdx
-	}
-	return root, layers, nil
+	return newNodes, newOffsets
 }
 
 // AddInMixin describes a method from which a length mixin is added to the
@@ -282,10 +318,8 @@ func MerkleizeTrieLeaves(layers [][][32]byte, hashLayer [][32]byte) ([][][32]byt
 	//    [E]       [F]   -> This layer has length 2.
 	// [A]  [B]  [C]  [D] -> The bottom layer has length 4 (needs to be a power of two).
 	i := 1
-	chunkBuffer := bytes.NewBuffer([]byte{})
-	chunkBuffer.Grow(64)
 	for len(hashLayer) > 1 && i < len(layers) {
-		if !math.IsPowerOf2(uint64(len(hashLayer))) {
+		if !pmath.IsPowerOf2(uint64(len(hashLayer))) {
 			return nil, nil, errors.Errorf("hash layer is a non power of 2: %d", len(hashLayer))
 		}
 		hashLayer = htr.VectorizedSha256(hashLayer)

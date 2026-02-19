@@ -74,13 +74,12 @@ func TestBalancesSlice_CorrectRoots_Some(t *testing.T) {
 
 func TestValidateIndices_CompressedField(t *testing.T) {
 	fakeTrie := &FieldTrie{
-		RWMutex:     new(sync.RWMutex),
-		reference:   stateutil.NewRef(0),
-		fieldLayers: nil,
-		field:       types.Balances,
-		dataType:    types.CompressedArray,
-		length:      params.BeaconConfig().ValidatorRegistryLimit / 4,
-		numOfElems:  0,
+		RWMutex:    new(sync.RWMutex),
+		reference:  stateutil.NewRef(0),
+		field:      types.Balances,
+		dataType:   types.CompressedArray,
+		length:     params.BeaconConfig().ValidatorRegistryLimit / 4,
+		numOfElems: 0,
 	}
 	goodIdx := params.BeaconConfig().ValidatorRegistryLimit - 1
 	assert.NoError(t, fakeTrie.validateIndices([]uint64{goodIdx}))

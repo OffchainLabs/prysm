@@ -108,7 +108,7 @@ func TestState_MVSlice_UnrealizedCheckpointBalances(t *testing.T) {
 	}
 
 	mv := &multi_value_slice.Slice[CompactValidator]{}
-	mv.Init(validators)
+	mv.Init(validators, 0)
 
 	cp := make([]byte, len(validators))
 	pp := make([]byte, len(validators))
