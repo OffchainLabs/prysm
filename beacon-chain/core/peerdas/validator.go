@@ -59,6 +59,7 @@ type (
 
 	PartialDataColumnHeaderReconstructionSource struct {
 		*ethpb.PartialDataColumnHeader
+		root [fieldparams.RootLength]byte
 	}
 
 	blockInfo struct {
@@ -78,9 +79,17 @@ func PopulateFromSidecar(sidecar blocks.VerifiedRODataColumn) *SidecarReconstruc
 	return &SidecarReconstructionSource{VerifiedRODataColumn: sidecar}
 }
 
-// PopulateFromPartialHeader creates a PartialDataColumnHeaderReconstructionSource from a partial header
-func PopulateFromPartialHeader(header *ethpb.PartialDataColumnHeader) *PartialDataColumnHeaderReconstructionSource {
-	return &PartialDataColumnHeaderReconstructionSource{PartialDataColumnHeader: header}
+// PopulateFromPartialHeader creates a PartialDataColumnHeaderReconstructionSource from a partial header.
+// It eagerly computes and validates the hash tree root of the block header.
+func PopulateFromPartialHeader(header *ethpb.PartialDataColumnHeader) (*PartialDataColumnHeaderReconstructionSource, error) {
+	if header.SignedBlockHeader == nil || header.SignedBlockHeader.Header == nil {
+		return nil, errors.New("nil signed block header or header")
+	}
+	root, err := header.SignedBlockHeader.Header.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "hash tree root")
+	}
+	return &PartialDataColumnHeaderReconstructionSource{PartialDataColumnHeader: header, root: root}, nil
 }
 
 // ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
@@ -308,11 +317,7 @@ func (p *PartialDataColumnHeaderReconstructionSource) Slot() primitives.Slot {
 
 // Root returns the block root computed from the header
 func (p *PartialDataColumnHeaderReconstructionSource) Root() [fieldparams.RootLength]byte {
-	root, err := p.SignedBlockHeader.Header.HashTreeRoot()
-	if err != nil {
-		return [fieldparams.RootLength]byte{}
-	}
-	return root
+	return p.root
 }
 
 // ProposerIndex returns the proposer index from the header
