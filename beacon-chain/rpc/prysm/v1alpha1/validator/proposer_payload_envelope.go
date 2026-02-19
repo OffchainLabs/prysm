@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -65,8 +66,8 @@ func (vs *Server) setExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEn
 		return
 	}
 	vs.executionPayloadEnvelopeMu.Lock()
+	defer vs.executionPayloadEnvelopeMu.Unlock()
 	vs.executionPayloadEnvelope = envelope
-	vs.executionPayloadEnvelopeMu.Unlock()
 }
 
 func (vs *Server) getExecutionPayloadEnvelope(slot primitives.Slot, builderIndex primitives.BuilderIndex) (*ethpb.ExecutionPayloadEnvelope, bool) {
@@ -109,17 +110,20 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 		)
 	}
 
-	roEnvelope, err := consensusblocks.WrappedROExecutionPayloadEnvelope(envelope)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "could not wrap envelope: %v", err)
+	if bytes.Equal(envelope.StateRoot, make([]byte, 32)) {
+		// Lazily set the state root in the envelope by applying the payload evelope on the post block state
+		roEnvelope, err := consensusblocks.WrappedROExecutionPayloadEnvelope(envelope)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "could not wrap envelope: %v", err)
+		}
+		stateRoot, err := vs.computePostPayloadStateRoot(ctx, roEnvelope)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "could not compute post-payload state root: %v", err)
+		}
+		vs.executionPayloadEnvelopeMu.Lock()
+		envelope.StateRoot = stateRoot
+		vs.executionPayloadEnvelopeMu.Unlock()
 	}
-	stateRoot, err := vs.computePostPayloadStateRoot(ctx, roEnvelope)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "could not compute post-payload state root: %v", err)
-	}
-	vs.executionPayloadEnvelopeMu.Lock()
-	envelope.StateRoot = stateRoot
-	vs.executionPayloadEnvelopeMu.Unlock()
 
 	return &ethpb.ExecutionPayloadEnvelopeResponse{
 		Envelope: envelope,
