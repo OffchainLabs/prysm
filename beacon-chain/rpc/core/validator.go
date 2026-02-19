@@ -66,7 +66,7 @@ func (s *Service) ComputeValidatorPerformance(
 			return nil, &RpcError{Err: errors.Wrapf(err, "could not process slots up to %d", currSlot), Reason: Internal}
 		}
 	}
-	var validatorSummary []*precompute.Validator
+	var validatorSummary []precompute.Validator
 	if headState.Version() == version.Phase0 {
 		vp, bp, err := precompute.New(ctx, headState)
 		if err != nil {
@@ -240,7 +240,7 @@ func (s *Service) IndividualVotes(
 	}
 	slices.Sort(filteredIndices)
 
-	var v []*precompute.Validator
+	var v []precompute.Validator
 	var bal *precompute.Balance
 	if st.Version() == version.Phase0 {
 		v, bal, err = precompute.New(ctx, st)
@@ -800,7 +800,7 @@ func (s *Service) ValidatorParticipation(
 	if err != nil {
 		return nil, &RpcError{Reason: Internal, Err: errors.Wrapf(err, "error replaying blocks for state at slot %d", endSlot)}
 	}
-	var v []*precompute.Validator
+	var v []precompute.Validator
 	var b *precompute.Balance
 
 	if beaconSt.Version() == version.Phase0 {

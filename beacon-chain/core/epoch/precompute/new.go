@@ -18,40 +18,37 @@ import (
 // New gets called at the beginning of process epoch cycle to return
 // pre computed instances of validators attesting records and total
 // balances attested in an epoch.
-func New(ctx context.Context, s state.BeaconState) ([]*Validator, *Balance, error) {
+func New(ctx context.Context, s state.BeaconState) ([]Validator, *Balance, error) {
 	_, span := trace.StartSpan(ctx, "precomputeEpoch.New")
 	defer span.End()
 
-	pValidators := make([]*Validator, s.NumValidators())
+	pValidators := make([]Validator, s.NumValidators())
 	pBal := &Balance{}
 
 	currentEpoch := time.CurrentEpoch(s)
 	prevEpoch := time.PrevEpoch(s)
+	farFutureSlot := params.BeaconConfig().FarFutureSlot
 
 	if err := s.ForEachValidator(func(idx int, val *stateutil.CompactValidator) error {
 		// Was validator withdrawable or slashed
 		withdrawable := prevEpoch+1 >= val.WithdrawableEpoch
-		pVal := &Validator{
+		pValidators[idx] = Validator{
 			IsSlashed:                    val.Slashed,
 			IsWithdrawableCurrentEpoch:   withdrawable,
 			CurrentEpochEffectiveBalance: val.EffectiveBalance,
+			InclusionSlot:                farFutureSlot,
+			InclusionDistance:             farFutureSlot,
 		}
 		// Was validator active current epoch
 		if helpers.IsActiveCompactValidator(val, currentEpoch) {
-			pVal.IsActiveCurrentEpoch = true
+			pValidators[idx].IsActiveCurrentEpoch = true
 			pBal.ActiveCurrentEpoch += val.EffectiveBalance
 		}
 		// Was validator active previous epoch
 		if helpers.IsActiveCompactValidator(val, prevEpoch) {
-			pVal.IsActivePrevEpoch = true
+			pValidators[idx].IsActivePrevEpoch = true
 			pBal.ActivePrevEpoch += val.EffectiveBalance
 		}
-		// Set inclusion slot and inclusion distance to be max, they will be compared and replaced
-		// with the lower values
-		pVal.InclusionSlot = params.BeaconConfig().FarFutureSlot
-		pVal.InclusionDistance = params.BeaconConfig().FarFutureSlot
-
-		pValidators[idx] = pVal
 		return nil
 	}); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to initialize precompute")

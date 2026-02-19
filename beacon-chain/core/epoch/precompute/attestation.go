@@ -22,9 +22,9 @@ import (
 func ProcessAttestations(
 	ctx context.Context,
 	state state.ReadOnlyBeaconState,
-	vp []*Validator,
+	vp []Validator,
 	pBal *Balance,
-) ([]*Validator, *Balance, error) {
+) ([]Validator, *Balance, error) {
 	ctx, span := trace.StartSpan(ctx, "precomputeEpoch.ProcessAttestations")
 	defer span.End()
 
@@ -141,7 +141,7 @@ func SameHead(state state.ReadOnlyBeaconState, a *ethpb.PendingAttestation) (boo
 }
 
 // UpdateValidator updates pre computed validator store.
-func UpdateValidator(vp []*Validator, record *Validator, indices []uint64, a *ethpb.PendingAttestation, aSlot primitives.Slot) []*Validator {
+func UpdateValidator(vp []Validator, record *Validator, indices []uint64, a *ethpb.PendingAttestation, aSlot primitives.Slot) []Validator {
 	inclusionSlot := aSlot + a.InclusionDelay
 
 	for _, i := range indices {
@@ -171,7 +171,7 @@ func UpdateValidator(vp []*Validator, record *Validator, indices []uint64, a *et
 }
 
 // UpdateBalance updates pre computed balance store.
-func UpdateBalance(vp []*Validator, bBal *Balance, stateVersion int) *Balance {
+func UpdateBalance(vp []Validator, bBal *Balance, stateVersion int) *Balance {
 	for _, v := range vp {
 		if !v.IsSlashed {
 			if v.IsCurrentEpochAttester {
