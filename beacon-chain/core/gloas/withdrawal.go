@@ -11,31 +11,35 @@ import (
 //
 // <spec fn="process_withdrawals" fork="gloas" hash="16d9ad2a">
 // def process_withdrawals(
-//     state: BeaconState,
-//     # [Modified in Gloas:EIP7732]
-//     # Removed `payload`
+//
+//	state: BeaconState,
+//	# [Modified in Gloas:EIP7732]
+//	# Removed `payload`
+//
 // ) -> None:
-//     # [New in Gloas:EIP7732]
-//     # Return early if the parent block is empty
-//     if not is_parent_block_full(state):
-//         return
 //
-//     # Get expected withdrawals
-//     expected = get_expected_withdrawals(state)
+//	# [New in Gloas:EIP7732]
+//	# Return early if the parent block is empty
+//	if not is_parent_block_full(state):
+//	    return
 //
-//     # Apply expected withdrawals
-//     apply_withdrawals(state, expected.withdrawals)
+//	# Get expected withdrawals
+//	expected = get_expected_withdrawals(state)
 //
-//     # Update withdrawals fields in the state
-//     update_next_withdrawal_index(state, expected.withdrawals)
-//     # [New in Gloas:EIP7732]
-//     update_payload_expected_withdrawals(state, expected.withdrawals)
-//     # [New in Gloas:EIP7732]
-//     update_builder_pending_withdrawals(state, expected.processed_builder_withdrawals_count)
-//     update_pending_partial_withdrawals(state, expected.processed_partial_withdrawals_count)
-//     # [New in Gloas:EIP7732]
-//     update_next_withdrawal_builder_index(state, expected.processed_builders_sweep_count)
-//     update_next_withdrawal_validator_index(state, expected.withdrawals)
+//	# Apply expected withdrawals
+//	apply_withdrawals(state, expected.withdrawals)
+//
+//	# Update withdrawals fields in the state
+//	update_next_withdrawal_index(state, expected.withdrawals)
+//	# [New in Gloas:EIP7732]
+//	update_payload_expected_withdrawals(state, expected.withdrawals)
+//	# [New in Gloas:EIP7732]
+//	update_builder_pending_withdrawals(state, expected.processed_builder_withdrawals_count)
+//	update_pending_partial_withdrawals(state, expected.processed_partial_withdrawals_count)
+//	# [New in Gloas:EIP7732]
+//	update_next_withdrawal_builder_index(state, expected.processed_builders_sweep_count)
+//	update_next_withdrawal_validator_index(state, expected.withdrawals)
+//
 // </spec>
 func ProcessWithdrawals(st state.BeaconState) error {
 	full, err := st.IsParentBlockFull()

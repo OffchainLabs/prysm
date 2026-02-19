@@ -533,7 +533,8 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 
 	ws := *withdrawals
 
-	buildersLimit := min(len(b.builders), int(cfg.MaxBuildersPerWithdrawalsSweep))
+	buildersCount := len(b.builders)
+	buildersLimit := min(buildersCount, int(cfg.MaxBuildersPerWithdrawalsSweep))
 
 	builderIndex := b.nextWithdrawalBuilderIndex
 	epoch := slots.ToEpoch(b.slot)
@@ -542,6 +543,9 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 			break
 		}
 
+		if uint64(builderIndex) >= uint64(buildersCount) {
+			return withdrawalIndex, builderIndex, fmt.Errorf("builder index %d out of range (builders length %d)", builderIndex, buildersCount)
+		}
 		builder := b.builders[builderIndex]
 		if builder == nil {
 			return withdrawalIndex, 0, fmt.Errorf("builder at index %d is nil", builderIndex)
@@ -556,7 +560,7 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 			withdrawalIndex++
 		}
 
-		builderIndex = primitives.BuilderIndex((uint64(builderIndex) + 1) % uint64(len(b.builders)))
+		builderIndex = primitives.BuilderIndex((uint64(builderIndex) + 1) % uint64(buildersCount))
 	}
 
 	*withdrawals = ws
