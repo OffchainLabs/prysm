@@ -549,14 +549,14 @@ func (p *PartialColumnBroadcaster) Publish(topic string, c blocks.PartialDataCol
 }
 
 func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataColumn, getBlobsCalled bool) error {
-	groupId := string(c.GroupID())
+	groupIDBytes := c.GroupID()
 	topicStore, ok := p.partialMsgStore[topic]
 	if !ok {
 		topicStore = make(map[string]*blocks.PartialDataColumn)
 		p.partialMsgStore[topic] = topicStore
 	}
 
-	existing := topicStore[groupId]
+	existing := topicStore[string(groupIDBytes)]
 	if existing != nil {
 		var extended bool
 		// Extend the existing column with cells being published here.
@@ -577,15 +577,15 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 			}
 		}
 	} else {
-		topicStore[groupId] = &c
+		topicStore[string(groupIDBytes)] = &c
 		existing = &c
 	}
 
-	p.groupTTL[groupId] = TTLInSlots
+	p.groupTTL[string(groupIDBytes)] = TTLInSlots
 
 	err := p.ps.PublishPartialMessage(topic, existing, partialmessages.PublishOptions{})
 	if err == nil {
-		p.getBlobsCalled[groupId] = getBlobsCalled
+		p.getBlobsCalled[string(groupIDBytes)] = getBlobsCalled
 	}
 	return err
 }
