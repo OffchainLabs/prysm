@@ -52,6 +52,7 @@ go_test(
     srcs = [
         "ffg_update_test.go",
         "forkchoice_test.go",
+        "gloas_test.go",
         "no_vote_test.go",
         "node_test.go",
         "on_tick_test.go",
@@ -71,6 +72,7 @@ go_test(
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/forkchoice:go_default_library",
+        "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",
