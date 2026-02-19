@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/backfill/coverage"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -168,16 +169,15 @@ func populatePubkeyCache(ctx context.Context, st state.ReadOnlyBeaconState) {
 	go populatePubkeyCacheOnce.Do(func() {
 		log.Debug("Populating pubkey cache")
 		start := time.Now()
-		if err := st.ReadFromEveryValidator(func(_ int, val state.ReadOnlyValidator) error {
+		if err := st.ForEachValidator(func(_ int, val *stateutil.CompactValidator) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
 			// Do not cache for non-active validators.
-			if !helpers.IsActiveValidatorUsingTrie(val, epoch) {
+			if !helpers.IsActiveCompactValidator(val, epoch) {
 				return nil
 			}
-			pub := val.PublicKey()
-			_, err := bls.PublicKeyFromBytes(pub[:])
+			_, err := bls.PublicKeyFromBytes(val.PublicKey[:])
 			return err
 		}); err != nil {
 			log.WithError(err).Error("Failed to populate pubkey cache")
