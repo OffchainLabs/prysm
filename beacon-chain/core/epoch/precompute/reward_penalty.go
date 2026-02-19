@@ -10,15 +10,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-type attesterRewardsFunc func(state.ReadOnlyBeaconState, *Balance, []*Validator) ([]uint64, []uint64, error)
-type proposerRewardsFunc func(state.ReadOnlyBeaconState, *Balance, []*Validator) ([]uint64, error)
+type attesterRewardsFunc func(state.ReadOnlyBeaconState, *Balance, []Validator) ([]uint64, []uint64, error)
+type proposerRewardsFunc func(state.ReadOnlyBeaconState, *Balance, []Validator) ([]uint64, error)
 
 // ProcessRewardsAndPenaltiesPrecompute processes the rewards and penalties of individual validator.
 // This is an optimized version by passing in precomputed validator attesting records and total epoch balances.
 func ProcessRewardsAndPenaltiesPrecompute(
 	state state.BeaconState,
 	pBal *Balance,
-	vp []*Validator,
+	vp []Validator,
 	attRewardsFunc attesterRewardsFunc,
 	proRewardsFunc proposerRewardsFunc,
 ) (state.BeaconState, error) {
@@ -65,7 +65,7 @@ func ProcessRewardsAndPenaltiesPrecompute(
 
 // AttestationsDelta computes and returns the rewards and penalties differences for individual validators based on the
 // voting records.
-func AttestationsDelta(state state.ReadOnlyBeaconState, pBal *Balance, vp []*Validator) ([]uint64, []uint64, error) {
+func AttestationsDelta(state state.ReadOnlyBeaconState, pBal *Balance, vp []Validator) ([]uint64, []uint64, error) {
 	numOfVals := state.NumValidators()
 	rewards := make([]uint64, numOfVals)
 	penalties := make([]uint64, numOfVals)
@@ -73,8 +73,8 @@ func AttestationsDelta(state state.ReadOnlyBeaconState, pBal *Balance, vp []*Val
 	finalizedEpoch := state.FinalizedCheckpointEpoch()
 
 	sqrtActiveCurrentEpoch := math.CachedSquareRoot(pBal.ActiveCurrentEpoch)
-	for i, v := range vp {
-		rewards[i], penalties[i] = attestationDelta(pBal, sqrtActiveCurrentEpoch, v, prevEpoch, finalizedEpoch)
+	for i := range vp {
+		rewards[i], penalties[i] = attestationDelta(pBal, sqrtActiveCurrentEpoch, &vp[i], prevEpoch, finalizedEpoch)
 	}
 	return rewards, penalties, nil
 }
@@ -155,7 +155,7 @@ func attestationDelta(pBal *Balance, sqrtActiveCurrentEpoch uint64, v *Validator
 
 // ProposersDelta computes and returns the rewards and penalties differences for individual validators based on the
 // proposer inclusion records.
-func ProposersDelta(state state.ReadOnlyBeaconState, pBal *Balance, vp []*Validator) ([]uint64, error) {
+func ProposersDelta(state state.ReadOnlyBeaconState, pBal *Balance, vp []Validator) ([]uint64, error) {
 	numofVals := state.NumValidators()
 	rewards := make([]uint64, numofVals)
 

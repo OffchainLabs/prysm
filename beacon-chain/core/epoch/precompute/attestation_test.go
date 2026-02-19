@@ -17,7 +17,7 @@ import (
 
 func TestUpdateValidator_Works(t *testing.T) {
 	e := params.BeaconConfig().FarFutureSlot
-	vp := []*precompute.Validator{{}, {InclusionSlot: e}, {}, {InclusionSlot: e}, {}, {InclusionSlot: e}}
+	vp := []precompute.Validator{{}, {InclusionSlot: e}, {}, {InclusionSlot: e}, {}, {InclusionSlot: e}}
 	record := &precompute.Validator{IsCurrentEpochAttester: true, IsCurrentEpochTargetAttester: true,
 		IsPrevEpochAttester: true, IsPrevEpochTargetAttester: true, IsPrevEpochHeadAttester: true}
 	a := &ethpb.PendingAttestation{InclusionDelay: 1, ProposerIndex: 2}
@@ -25,28 +25,28 @@ func TestUpdateValidator_Works(t *testing.T) {
 	// Indices 1 3 and 5 attested
 	vp = precompute.UpdateValidator(vp, record, []uint64{1, 3, 5}, a, 100)
 
-	wanted := &precompute.Validator{IsCurrentEpochAttester: true, IsCurrentEpochTargetAttester: true,
+	wanted := precompute.Validator{IsCurrentEpochAttester: true, IsCurrentEpochTargetAttester: true,
 		IsPrevEpochAttester: true, IsPrevEpochTargetAttester: true, IsPrevEpochHeadAttester: true,
 		ProposerIndex: 2, InclusionDistance: 1, InclusionSlot: 101}
-	wantedVp := []*precompute.Validator{{}, wanted, {}, wanted, {}, wanted}
+	wantedVp := []precompute.Validator{{}, wanted, {}, wanted, {}, wanted}
 	assert.DeepEqual(t, wantedVp, vp, "Incorrect attesting validator calculations")
 }
 
 func TestUpdateValidator_InclusionOnlyCountsPrevEpoch(t *testing.T) {
 	e := params.BeaconConfig().FarFutureSlot
-	vp := []*precompute.Validator{{InclusionSlot: e}}
+	vp := []precompute.Validator{{InclusionSlot: e}}
 	record := &precompute.Validator{IsCurrentEpochAttester: true, IsCurrentEpochTargetAttester: true}
 	a := &ethpb.PendingAttestation{InclusionDelay: 1, ProposerIndex: 2}
 
 	// Verify inclusion info doesn't get updated.
 	vp = precompute.UpdateValidator(vp, record, []uint64{0}, a, 100)
-	wanted := &precompute.Validator{IsCurrentEpochAttester: true, IsCurrentEpochTargetAttester: true, InclusionSlot: e}
-	wantedVp := []*precompute.Validator{wanted}
+	wanted := precompute.Validator{IsCurrentEpochAttester: true, IsCurrentEpochTargetAttester: true, InclusionSlot: e}
+	wantedVp := []precompute.Validator{wanted}
 	assert.DeepEqual(t, wantedVp, vp, "Incorrect attesting validator calculations")
 }
 
 func TestUpdateBalance(t *testing.T) {
-	vp := []*precompute.Validator{
+	vp := []precompute.Validator{
 		{IsCurrentEpochAttester: true, CurrentEpochEffectiveBalance: 100 * params.BeaconConfig().EffectiveBalanceIncrement},
 		{IsCurrentEpochTargetAttester: true, IsCurrentEpochAttester: true, CurrentEpochEffectiveBalance: 100 * params.BeaconConfig().EffectiveBalanceIncrement},
 		{IsCurrentEpochTargetAttester: true, CurrentEpochEffectiveBalance: 100 * params.BeaconConfig().EffectiveBalanceIncrement},
@@ -70,7 +70,7 @@ func TestUpdateBalance(t *testing.T) {
 }
 
 func TestUpdateBalanceDifferentVersions(t *testing.T) {
-	vp := []*precompute.Validator{
+	vp := []precompute.Validator{
 		{IsCurrentEpochAttester: true, CurrentEpochEffectiveBalance: 100 * params.BeaconConfig().EffectiveBalanceIncrement},
 		{IsCurrentEpochTargetAttester: true, IsCurrentEpochAttester: true, CurrentEpochEffectiveBalance: 100 * params.BeaconConfig().EffectiveBalanceIncrement},
 		{IsCurrentEpochTargetAttester: true, CurrentEpochEffectiveBalance: 100 * params.BeaconConfig().EffectiveBalanceIncrement},
@@ -201,9 +201,9 @@ func TestProcessAttestations(t *testing.T) {
 	err = beaconState.AppendCurrentEpochAttestations(&ethpb.PendingAttestation{Data: att2.Data, AggregationBits: bf, InclusionDelay: 1})
 	require.NoError(t, err)
 
-	pVals := make([]*precompute.Validator, validators)
+	pVals := make([]precompute.Validator, validators)
 	for i := 0; i < len(pVals); i++ {
-		pVals[i] = &precompute.Validator{CurrentEpochEffectiveBalance: 100}
+		pVals[i] = precompute.Validator{CurrentEpochEffectiveBalance: 100}
 	}
 	pVals, _, err = precompute.ProcessAttestations(t.Context(), beaconState, pVals, &precompute.Balance{})
 	require.NoError(t, err)
