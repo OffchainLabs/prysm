@@ -107,6 +107,36 @@ func marshalPartsMetadata(meta *ethpb.PartialDataColumnPartsMetadata) (partialme
 	return partialmessages.PartsMetadata(b), nil
 }
 
+// ClonePeerState creates a deep copy of the given PeerState. It clones the
+// RecvdState and SentState fields if they are of type *PartialDataColumnPartsMetadata,
+// ensuring that modifications to the returned state do not affect the original.
+func ClonePeerState(peerState partialmessages.PeerState) partialmessages.PeerState {
+	clonePartsMetadataF := func(meta *ethpb.PartialDataColumnPartsMetadata) *ethpb.PartialDataColumnPartsMetadata {
+		return &ethpb.PartialDataColumnPartsMetadata{
+			Available: slices.Clone(meta.Available),
+			Requests:  slices.Clone(meta.Requests),
+		}
+	}
+
+	nextPeerState := peerState
+	if recvdMeta, ok := nextPeerState.RecvdState.(*ethpb.PartialDataColumnPartsMetadata); ok {
+		nextPeerState.RecvdState = clonePartsMetadataF(recvdMeta)
+	}
+	if sentMeta, ok := nextPeerState.SentState.(*ethpb.PartialDataColumnPartsMetadata); ok {
+		nextPeerState.SentState = clonePartsMetadataF(sentMeta)
+	}
+	return nextPeerState
+}
+
+// partsMetadataEqual reports whether two PartialDataColumnPartsMetadata values
+// represent the same Available and Requests bitfields.
+func partsMetadataEqual(a, b *ethpb.PartialDataColumnPartsMetadata) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return bytes.Equal(a.Available, b.Available) && bytes.Equal(a.Requests, b.Requests)
+}
+
 // NKzgCommitments returns the number of commitments in the block header for this column which
 // in turn will be equal to the number of cells in this column.
 func (p *PartialDataColumn) NKzgCommitments() uint64 {
@@ -186,9 +216,8 @@ func (p *PartialDataColumn) PartsMetadata() (partialmessages.PartsMetadata, erro
 	return marshalPartsMetadata(meta)
 }
 
-// MergeAvailableIntoPartsMetadata merges additional availabe cells into the base partsmetadata's available cells and
-// returns the marshaled metadata.
-func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata, additionalAvailable bitfield.Bitlist) (partialmessages.PartsMetadata, error) {
+// MergeAvailableIntoPartsMetadata merges additional available cells into the base partsmetadata's available cells.
+func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata, additionalAvailable bitfield.Bitlist) (*ethpb.PartialDataColumnPartsMetadata, error) {
 	if base == nil {
 		return nil, errors.New("base is nil")
 	}
@@ -200,24 +229,14 @@ func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata,
 		return nil, err
 	}
 	base.Available = merged
-	return marshalPartsMetadata(base)
-}
-
-// merge available, keep request unchanged, if my parts are different, simply over write with myparts
-func (p *PartialDataColumn) updateReceivedStateOutgoing(receivedMeta partialmessages.PartsMetadata, cellsSent bitfield.Bitlist) (partialmessages.PartsMetadata, error) {
-	if len(receivedMeta) == 0 {
-		return nil, errors.New("receivedMeta is empty")
-	}
-	peerMeta, err := ParsePartsMetadata(receivedMeta, p.Included.Len())
-	if err != nil {
-		return nil, err
-	}
-	return MergeAvailableIntoPartsMetadata(peerMeta, cellsSent)
+	return base, nil
 }
 
 // ForPeer implements partialmessages.Message.
 func (p *PartialDataColumn) ForPeer(remote peer.ID, requestedMessage bool, peerState partialmessages.PeerState) (partialmessages.PeerState, []byte,
 	partialmessages.PartsMetadata, error) {
+	peerState = ClonePeerState(peerState)
+
 	// Eager push header - we don't know what the peer has and message has been requested.
 	// Set RecvdState so subsequent calls skip the eager push path.
 	if requestedMessage && peerState.RecvdState == nil {
@@ -225,48 +244,39 @@ func (p *PartialDataColumn) ForPeer(remote peer.ID, requestedMessage bool, peerS
 		if err != nil {
 			return peerState, nil, nil, err
 		}
-		noAvailNoReq := NewPartsMetaWithNoAvailableAndNoRequests(p.NKzgCommitments())
-		recvdMeta, err := marshalPartsMetadata(noAvailNoReq)
-		if err != nil {
-			return peerState, nil, nil, err
-		}
-		peerState.RecvdState = recvdMeta
+		peerState.RecvdState = NewPartsMetaWithNoAvailableAndNoRequests(p.NKzgCommitments())
 		return peerState, encoded, nil, nil
 	}
 
-	var encodedMsg []byte
 	var cellsSent bitfield.Bitlist
-	var sentMeta partialmessages.PartsMetadata
-	var recvdMeta partialmessages.PartsMetadata
+	var sentMeta *ethpb.PartialDataColumnPartsMetadata
+	var recvdMeta *ethpb.PartialDataColumnPartsMetadata
+	var encodedMsg []byte
 	if peerState.SentState != nil {
 		var ok bool
-		sentMeta, ok = peerState.SentState.(partialmessages.PartsMetadata)
+		sentMeta, ok = peerState.SentState.(*ethpb.PartialDataColumnPartsMetadata)
 		// should never happen but checking this for safety
 		if !ok {
-			return peerState, nil, nil, errors.New("SentState is not PartsMetadata")
+			return peerState, nil, nil, errors.New("SentState is not *PartialDataColumnPartsMetadata")
 		}
 	}
 	if peerState.RecvdState != nil {
 		var ok bool
-		recvdMeta, ok = peerState.RecvdState.(partialmessages.PartsMetadata)
+		recvdMeta, ok = peerState.RecvdState.(*ethpb.PartialDataColumnPartsMetadata)
 		if !ok {
-			return peerState, nil, nil, errors.New("RecvdState is not PartsMetadata")
+			return peerState, nil, nil, errors.New("RecvdState is not *PartialDataColumnPartsMetadata")
 		}
 	}
 
 	//  Normal - message requested and we have RecvdState.
-	if requestedMessage && peerState.RecvdState != nil {
-		peerMeta, err := ParsePartsMetadata(recvdMeta, p.Included.Len())
-		if err != nil {
-			return peerState, nil, nil, err
-		}
-
-		encodedMsg, cellsSent, err = p.cellsToSendForPeer(peerMeta)
+	if requestedMessage && recvdMeta != nil {
+		var err error
+		encodedMsg, cellsSent, err = p.cellsToSendForPeer(recvdMeta)
 		if err != nil {
 			return peerState, nil, nil, err
 		}
 		if cellsSent != nil && cellsSent.Count() != 0 {
-			newRecvd, err := p.updateReceivedStateOutgoing(recvdMeta, cellsSent)
+			newRecvd, err := MergeAvailableIntoPartsMetadata(recvdMeta, cellsSent)
 			if err != nil {
 				return peerState, nil, nil, err
 			}
@@ -276,15 +286,15 @@ func (p *PartialDataColumn) ForPeer(remote peer.ID, requestedMessage bool, peerS
 
 	//  Check if we need to send partsMetadata.
 	var partsMetadataToSend partialmessages.PartsMetadata
-	myPartsMetadata, err := p.PartsMetadata()
-	if err != nil {
-		return peerState, nil, nil, err
-	}
+	myPartsMeta := p.newPartsMetadata()
 
-	if !bytes.Equal(myPartsMetadata, sentMeta) {
-		partsMetadataToSend = myPartsMetadata
-		sentMeta = partialmessages.PartsMetadata(slices.Clone([]byte(myPartsMetadata)))
-		peerState.SentState = sentMeta
+	if !partsMetadataEqual(myPartsMeta, sentMeta) {
+		var err error
+		partsMetadataToSend, err = marshalPartsMetadata(myPartsMeta)
+		if err != nil {
+			return peerState, nil, nil, err
+		}
+		peerState.SentState = myPartsMeta
 	}
 
 	return peerState, encodedMsg, partsMetadataToSend, nil

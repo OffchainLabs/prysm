@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"log/slog"
 	"regexp"
-	"slices"
 	"strconv"
 	"time"
 
@@ -339,44 +338,37 @@ func parsePartsMetadataFromPeerState(state any, expectedLength uint64) (*ethpb.P
 	if state == nil {
 		return blocks.NewPartsMetaWithNoAvailableAndNoRequests(expectedLength), nil
 	}
-	pb, ok := state.(partialmessages.PartsMetadata)
+	meta, ok := state.(*ethpb.PartialDataColumnPartsMetadata)
 	if !ok {
-		return nil, errors.New("state is not PartsMetadata")
+		return nil, errors.New("state is not *PartialDataColumnPartsMetadata")
 	}
-	return blocks.ParsePartsMetadata(pb, expectedLength)
+	return meta, nil
 }
 
 func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pubsub_pb.PartialMessagesExtension) (partialmessages.PeerState, error) {
-	nextPeerState := peerState
+	peerState = blocks.ClonePeerState(peerState)
 	hasIncomingPartsMetadata := len(rpc.PartsMetadata) > 0
 	hasMessage := len(rpc.PartialMessage) > 0
-	var recievedMeta *ethpb.PartialDataColumnPartsMetadata
 
 	if hasIncomingPartsMetadata {
-		var err error
-		// if the peer has sent us a partsMetadata and we don't have a recvdState for that peer,
-		// simply overwrite our existing view of that peer with the parts Metadata they have sent.
-		if nextPeerState.RecvdState == nil {
-			nextPeerState.RecvdState = partialmessages.PartsMetadata(slices.Clone(rpc.PartsMetadata))
+		incomingMeta := &ethpb.PartialDataColumnPartsMetadata{}
+		if err := incomingMeta.UnmarshalSSZ(rpc.PartsMetadata); err != nil {
+			return peerState, errors.Wrap(err, "failed to unmarshal incoming parts metadata")
+		}
+		if incomingMeta.Available.Len() == 0 {
+			return peerState, errors.New("incoming parts metadata has 0 length availability")
+		}
+
+		if peerState.RecvdState == nil {
+			peerState.RecvdState = incomingMeta
 		} else {
-			incomingMeta := &ethpb.PartialDataColumnPartsMetadata{}
-			if err := incomingMeta.UnmarshalSSZ(rpc.PartsMetadata); err != nil {
-				return peerState, errors.Wrap(err, "failed to unmarshal incoming parts metadata")
-			}
-			nKzgCommitments := incomingMeta.Available.Len()
-			if nKzgCommitments == 0 {
-				return peerState, errors.New("incoming parts metadata has 0 length availability")
-			}
-			pb, ok := nextPeerState.RecvdState.(partialmessages.PartsMetadata)
+			existingMeta, ok := peerState.RecvdState.(*ethpb.PartialDataColumnPartsMetadata)
 			if !ok {
-				return peerState, errors.New("recvdState is not PartsMetadata")
+				return peerState, errors.New("recvdState is not *PartialDataColumnPartsMetadata")
 			}
-			recievedMeta, err = blocks.ParsePartsMetadata(pb, nKzgCommitments)
-			if err != nil {
-				return peerState, errors.Wrap(err, "failed to parse recvdState parts metadata")
-			}
-			recievedMeta.Requests = incomingMeta.Requests
-			nextPeerState.RecvdState, err = blocks.MergeAvailableIntoPartsMetadata(recievedMeta, incomingMeta.Available)
+			existingMeta.Requests = incomingMeta.Requests
+			var err error
+			peerState.RecvdState, err = blocks.MergeAvailableIntoPartsMetadata(existingMeta, incomingMeta.Available)
 			if err != nil {
 				return peerState, errors.Wrap(err, "failed to merge available cells into recvdState parts metadata")
 			}
@@ -389,16 +381,17 @@ func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pu
 			return peerState, errors.Wrap(err, "failed to unmarshal partial message data")
 		}
 		if len(message.CellsPresentBitmap) == 0 {
-			return nextPeerState, nil
+			return peerState, nil
 		}
 
 		nKzgCommitments := message.CellsPresentBitmap.Len()
 		if nKzgCommitments == 0 {
-			return nextPeerState, errors.New("length of cells present bitmap is 0")
+			return peerState, errors.New("length of cells present bitmap is 0")
 		}
 
+		// only update RecvdState using the incoming partial message if the peer did not send us their parts metadata
 		if !hasIncomingPartsMetadata {
-			recievedMeta, err := parsePartsMetadataFromPeerState(nextPeerState.RecvdState, nKzgCommitments)
+			recievedMeta, err := parsePartsMetadataFromPeerState(peerState.RecvdState, nKzgCommitments)
 			if err != nil {
 				return peerState, errors.Wrap(err, "received")
 			}
@@ -406,10 +399,10 @@ func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pu
 			if err != nil {
 				return peerState, err
 			}
-			nextPeerState.RecvdState = recvdState
+			peerState.RecvdState = recvdState
 		}
 
-		sentMeta, err := parsePartsMetadataFromPeerState(nextPeerState.SentState, nKzgCommitments)
+		sentMeta, err := parsePartsMetadataFromPeerState(peerState.SentState, nKzgCommitments)
 		if err != nil {
 			return peerState, errors.Wrap(err, "sent")
 		}
@@ -418,10 +411,10 @@ func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pu
 		if err != nil {
 			return peerState, err
 		}
-		nextPeerState.SentState = sentState
+		peerState.SentState = sentState
 	}
 
-	return nextPeerState, nil
+	return peerState, nil
 }
 
 func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) error {
