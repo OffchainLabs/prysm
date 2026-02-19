@@ -124,7 +124,8 @@ type unsubscribe struct {
 
 type rpcWithFrom struct {
 	*pubsub_pb.PartialMessagesExtension
-	from peer.ID
+	from    peer.ID
+	message *ethpb.PartialDataColumnSidecar
 }
 
 type cellsValidated struct {
@@ -196,14 +197,14 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 				if rpc == nil {
 					return peerState, errors.New("rpc is nil")
 				}
-				nextPeerState, err := updatePeerStateFromIncomingRPC(peerState, rpc)
+				nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerState, rpc)
 				if err != nil {
 					return peerState, err
 				}
 				select {
 				case p.incomingReq <- request{
 					kind:        requestKindHandleIncomingRPC,
-					incomingRPC: rpcWithFrom{rpc, from},
+					incomingRPC: rpcWithFrom{rpc, from, message},
 				}:
 				default:
 					p.logger.Warn("Dropping incoming partial RPC", "rpc", rpc)
@@ -345,7 +346,8 @@ func parsePartsMetadataFromPeerState(state any, expectedLength uint64) (*ethpb.P
 	return meta, nil
 }
 
-func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pubsub_pb.PartialMessagesExtension) (partialmessages.PeerState, error) {
+func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pubsub_pb.PartialMessagesExtension) (partialmessages.PeerState,
+	*ethpb.PartialDataColumnSidecar, error) {
 	peerState = blocks.ClonePeerState(peerState)
 	hasIncomingPartsMetadata := len(rpc.PartsMetadata) > 0
 	hasMessage := len(rpc.PartialMessage) > 0
@@ -353,10 +355,10 @@ func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pu
 	if hasIncomingPartsMetadata {
 		incomingMeta := &ethpb.PartialDataColumnPartsMetadata{}
 		if err := incomingMeta.UnmarshalSSZ(rpc.PartsMetadata); err != nil {
-			return peerState, errors.Wrap(err, "failed to unmarshal incoming parts metadata")
+			return peerState, nil, errors.Wrap(err, "failed to unmarshal incoming parts metadata")
 		}
 		if incomingMeta.Available.Len() == 0 {
-			return peerState, errors.New("incoming parts metadata has 0 length availability")
+			return peerState, nil, errors.New("incoming parts metadata has 0 length availability")
 		}
 
 		if peerState.RecvdState == nil {
@@ -364,57 +366,61 @@ func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pu
 		} else {
 			existingMeta, ok := peerState.RecvdState.(*ethpb.PartialDataColumnPartsMetadata)
 			if !ok {
-				return peerState, errors.New("recvdState is not *PartialDataColumnPartsMetadata")
+				return peerState, nil, errors.New("recvdState is not *PartialDataColumnPartsMetadata")
 			}
 			existingMeta.Requests = incomingMeta.Requests
 			var err error
 			peerState.RecvdState, err = blocks.MergeAvailableIntoPartsMetadata(existingMeta, incomingMeta.Available)
 			if err != nil {
-				return peerState, errors.Wrap(err, "failed to merge available cells into recvdState parts metadata")
+				return peerState, nil, errors.Wrap(err, "failed to merge available cells into recvdState parts metadata")
 			}
 		}
 	}
 
-	if hasMessage {
-		var message ethpb.PartialDataColumnSidecar
-		if err := message.UnmarshalSSZ(rpc.PartialMessage); err != nil {
-			return peerState, errors.Wrap(err, "failed to unmarshal partial message data")
-		}
-		if len(message.CellsPresentBitmap) == 0 {
-			return peerState, nil
-		}
-
-		nKzgCommitments := message.CellsPresentBitmap.Len()
-		if nKzgCommitments == 0 {
-			return peerState, errors.New("length of cells present bitmap is 0")
-		}
-
-		// only update RecvdState using the incoming partial message if the peer did not send us their parts metadata
-		if !hasIncomingPartsMetadata {
-			recievedMeta, err := parsePartsMetadataFromPeerState(peerState.RecvdState, nKzgCommitments)
-			if err != nil {
-				return peerState, errors.Wrap(err, "received")
-			}
-			recvdState, err := blocks.MergeAvailableIntoPartsMetadata(recievedMeta, message.CellsPresentBitmap)
-			if err != nil {
-				return peerState, err
-			}
-			peerState.RecvdState = recvdState
-		}
-
-		sentMeta, err := parsePartsMetadataFromPeerState(peerState.SentState, nKzgCommitments)
-		if err != nil {
-			return peerState, errors.Wrap(err, "sent")
-		}
-
-		sentState, err := blocks.MergeAvailableIntoPartsMetadata(sentMeta, message.CellsPresentBitmap)
-		if err != nil {
-			return peerState, err
-		}
-		peerState.SentState = sentState
+	// we've already handled the update to the peer state based on the incoming parts metadata,
+	// so we can return early if there's no message to process.
+	if !hasMessage {
+		return peerState, nil, nil
 	}
 
-	return peerState, nil
+	var message ethpb.PartialDataColumnSidecar
+	if err := message.UnmarshalSSZ(rpc.PartialMessage); err != nil {
+		return peerState, nil, errors.Wrap(err, "failed to unmarshal partial message data")
+	}
+	if len(message.CellsPresentBitmap) == 0 {
+		return peerState, &message, nil
+	}
+
+	nKzgCommitments := message.CellsPresentBitmap.Len()
+	if nKzgCommitments == 0 {
+		return peerState, nil, errors.New("length of cells present bitmap is 0")
+	}
+
+	// only update RecvdState using the incoming partial message if the peer did not send us their parts metadata
+	if !hasIncomingPartsMetadata {
+		recievedMeta, err := parsePartsMetadataFromPeerState(peerState.RecvdState, nKzgCommitments)
+		if err != nil {
+			return peerState, nil, errors.Wrap(err, "received")
+		}
+		recvdState, err := blocks.MergeAvailableIntoPartsMetadata(recievedMeta, message.CellsPresentBitmap)
+		if err != nil {
+			return peerState, nil, err
+		}
+		peerState.RecvdState = recvdState
+	}
+
+	sentMeta, err := parsePartsMetadataFromPeerState(peerState.SentState, nKzgCommitments)
+	if err != nil {
+		return peerState, nil, errors.Wrap(err, "sent")
+	}
+
+	sentState, err := blocks.MergeAvailableIntoPartsMetadata(sentMeta, message.CellsPresentBitmap)
+	if err != nil {
+		return peerState, nil, err
+	}
+	peerState.SentState = sentState
+
+	return peerState, &message, nil
 }
 
 func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) error {
@@ -422,15 +428,8 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		return errors.New("pubsub not initialized")
 	}
 
-	hasMessage := len(rpcWithFrom.PartialMessage) > 0
-
-	var message ethpb.PartialDataColumnSidecar
-	if hasMessage {
-		err := message.UnmarshalSSZ(rpcWithFrom.PartialMessage)
-		if err != nil {
-			return errors.Wrap(err, "failed to unmarshal partial message data")
-		}
-	}
+	message := rpcWithFrom.message
+	hasMessage := message != nil
 
 	topicID := rpcWithFrom.GetTopicID()
 	groupID := rpcWithFrom.GroupID
@@ -517,12 +516,12 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		"group": groupID,
 	})
 
-	if len(rpcWithFrom.PartialMessage) > 0 {
+	if hasMessage {
 		// TODO: is there any penalty we want to consider for giving us data we didn't request?
 		// Note that we need to be careful around race conditions and eager data.
 		// Also note that protobufs by design allow extra data that we don't parse.
 		// Marco's thoughts. No, we don't need to do anything else here.
-		cellIndices, cellsToVerify, err := ourDataColumn.CellsToVerifyFromPartialMessage(&message)
+		cellIndices, cellsToVerify, err := ourDataColumn.CellsToVerifyFromPartialMessage(message)
 		if err != nil {
 			return err
 		}
