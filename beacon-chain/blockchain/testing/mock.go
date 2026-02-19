@@ -700,6 +700,14 @@ func (s *ChainService) InsertNode(ctx context.Context, st state.BeaconState, blo
 	return nil
 }
 
+// InsertPayload mocks the same method in the chain service
+func (s *ChainService) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) error {
+	if s.ForkChoiceStore != nil {
+		return s.ForkChoiceStore.InsertPayload(pe)
+	}
+	return nil
+}
+
 // ForkChoiceDump mocks the same method in the chain service
 func (s *ChainService) ForkChoiceDump(ctx context.Context) (*forkchoice2.Dump, error) {
 	if s.ForkChoiceStore != nil {
