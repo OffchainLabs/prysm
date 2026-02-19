@@ -480,6 +480,65 @@ func (s *Slice[V]) Reset(obj Identifiable) *Slice[V] {
 	return reset
 }
 
+// ForEach iterates over every element for the given object, calling f with a
+// pointer to each value. The pointer points directly into the underlying
+// storage (shared or individual) so no slice allocation is needed.
+//
+// This is dramatically more efficient than Value() for read-only iteration
+// because it avoids allocating and copying the full materialized slice.
+// For ~1M validators this eliminates ~128 MB of allocation per call.
+//
+// The pointer passed to f is only valid for the duration of the callback.
+// Callers must not retain or modify through it.
+func (s *Slice[V]) ForEach(obj Identifiable, f func(idx int, val *V) error) error {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	// Pre-resolve overrides: scan the sparse individualItems map (typically
+	// a few hundred entries) and build a small index→*V map for this object.
+	overrides := make(map[uint64]*V, len(s.individualItems))
+	objId := obj.Id()
+	for idx, item := range s.individualItems {
+		for _, v := range item.Values {
+			if slices.Contains(v.ids, objId) {
+				overrides[idx] = &v.val
+				break
+			}
+		}
+	}
+
+	// Iterate shared items with fast override lookup.
+	for i := range s.sharedItems {
+		v := &s.sharedItems[i]
+		if ov, ok := overrides[uint64(i)]; ok {
+			v = ov
+		}
+		if err := f(i, v); err != nil {
+			return err
+		}
+	}
+
+	// Iterate appended items.
+	sharedLen := len(s.sharedItems)
+	for i, item := range s.appendedItems {
+		found := false
+		for _, v := range item.Values {
+			if slices.Contains(v.ids, objId) {
+				if err := f(sharedLen+i, &v.val); err != nil {
+					return err
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			break
+		}
+	}
+
+	return nil
+}
+
 func (s *Slice[V]) fillOriginalItems(obj Identifiable, items *[]V) {
 	for i, item := range s.sharedItems {
 		ind, ok := s.individualItems[uint64(i)]

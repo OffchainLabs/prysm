@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
@@ -48,19 +49,20 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 	eligibleForEjection := make([]primitives.ValidatorIndex, 0)
 	eligibleForActivation := make([]primitives.ValidatorIndex, 0)
 
-	if err := st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	finalizedEpoch := st.FinalizedCheckpointEpoch()
+	if err := st.ForEachValidator(func(idx int, val *stateutil.CompactValidator) error {
 		// Collect validators eligible to enter the activation queue.
-		if helpers.IsEligibleForActivationQueue(val, currentEpoch) {
+		if helpers.IsEligibleForActivationQueueCompact(val, currentEpoch) {
 			eligibleForActivationQ = append(eligibleForActivationQ, primitives.ValidatorIndex(idx))
 		}
 
 		// Collect validators to eject.
-		if val.EffectiveBalance() <= ejectionBal && helpers.IsActiveValidatorUsingTrie(val, currentEpoch) {
+		if val.EffectiveBalance <= ejectionBal && helpers.IsActiveCompactValidator(val, currentEpoch) {
 			eligibleForEjection = append(eligibleForEjection, primitives.ValidatorIndex(idx))
 		}
 
 		// Collect validators eligible for activation and not yet dequeued for activation.
-		if helpers.IsEligibleForActivationUsingROVal(st, val) {
+		if helpers.IsEligibleForActivationCompact(val, finalizedEpoch) {
 			eligibleForActivation = append(eligibleForActivation, primitives.ValidatorIndex(idx))
 		}
 

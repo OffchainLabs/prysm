@@ -223,6 +223,44 @@ func (b *BeaconState) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyV
 	return nil
 }
 
+// ForEachValidator iterates over every validator, passing a pointer to the
+// underlying CompactValidator directly. This avoids interface boxing and heap
+// allocation per validator that ReadFromEveryValidator incurs.
+// The pointer is only valid for the duration of the callback; callers must not
+// retain it.
+//
+// Internally this uses MultiValueSlice.ForEach which iterates in-place over
+// the shared storage, resolving the sparse individual overrides without
+// materializing a full copy of the validator slice. For ~1M validators this
+// eliminates ~128 MB of allocation per call.
+func (b *BeaconState) ForEachValidator(f func(idx int, val *stateutil.CompactValidator) error) error {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	if b.validatorsMultiValue == nil {
+		return state.ErrNilValidatorsInState
+	}
+	return b.validatorsMultiValue.ForEach(b, func(idx int, val *stateutil.CompactValidator) error {
+		return f(idx, val)
+	})
+}
+
+// EffectiveBalanceAtIndex returns the effective balance of the validator at the
+// given index without allocating a full validator object or boxing into an interface.
+func (b *BeaconState) EffectiveBalanceAtIndex(idx primitives.ValidatorIndex) (uint64, error) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	if b.validatorsMultiValue == nil {
+		return 0, state.ErrNilValidatorsInState
+	}
+	cv, err := b.validatorsMultiValue.At(b, uint64(idx))
+	if err != nil {
+		return 0, err
+	}
+	return cv.EffectiveBalance, nil
+}
+
 // Balances of validators participating in consensus on the beacon chain.
 func (b *BeaconState) Balances() []uint64 {
 	b.lock.RLock()

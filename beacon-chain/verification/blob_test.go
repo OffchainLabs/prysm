@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -854,6 +855,17 @@ func (v *validxStateOverride) ReadFromEveryValidator(f func(idx int, val state.R
 			return err
 		}
 		if err := f(i, rov); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (v *validxStateOverride) ForEachValidator(f func(idx int, val *stateutil.CompactValidator) error) error {
+	validators := v.Validators()
+	for i, val := range validators {
+		cv := stateutil.CompactValidatorFromProto(val)
+		if err := f(i, &cv); err != nil {
 			return err
 		}
 	}

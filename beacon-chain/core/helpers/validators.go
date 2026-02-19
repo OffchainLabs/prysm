@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -137,8 +138,8 @@ func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, ep
 	}()
 
 	var indices []primitives.ValidatorIndex
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		if IsActiveValidatorUsingTrie(val, epoch) {
+	if err := s.ForEachValidator(func(idx int, val *stateutil.CompactValidator) error {
+		if IsActiveCompactValidator(val, epoch) {
 			indices = append(indices, primitives.ValidatorIndex(idx))
 		}
 		return nil
@@ -190,8 +191,8 @@ func ActiveValidatorCount(ctx context.Context, s state.ReadOnlyBeaconState, epoc
 	}()
 
 	count := uint64(0)
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		if IsActiveValidatorUsingTrie(val, epoch) {
+	if err := s.ForEachValidator(func(idx int, val *stateutil.CompactValidator) error {
+		if IsActiveCompactValidator(val, epoch) {
 			count++
 		}
 		return nil
@@ -521,6 +522,32 @@ func IsEligibleForActivationUsingROVal(state state.ReadOnlyCheckpoint, validator
 func isEligibleForActivation(activationEligibilityEpoch, activationEpoch, finalizedEpoch primitives.Epoch) bool {
 	return activationEligibilityEpoch <= finalizedEpoch &&
 		activationEpoch == params.BeaconConfig().FarFutureEpoch
+}
+
+// --- CompactValidator direct-access helpers (zero-alloc) ---
+
+// IsActiveCompactValidator checks if a compact validator is active at the given epoch.
+func IsActiveCompactValidator(cv *stateutil.CompactValidator, epoch primitives.Epoch) bool {
+	return checkValidatorActiveStatus(cv.ActivationEpoch, cv.ExitEpoch, epoch)
+}
+
+// IsEligibleForActivationQueueCompact checks if a compact validator is eligible
+// to be placed into the activation queue.
+func IsEligibleForActivationQueueCompact(cv *stateutil.CompactValidator, currentEpoch primitives.Epoch) bool {
+	if currentEpoch >= params.BeaconConfig().ElectraForkEpoch {
+		return isEligibleForActivationQueueElectra(cv.ActivationEligibilityEpoch, cv.EffectiveBalance)
+	}
+	return isEligibleForActivationQueue(cv.ActivationEligibilityEpoch, cv.EffectiveBalance)
+}
+
+// IsEligibleForActivationCompact checks if a compact validator is eligible for activation.
+func IsEligibleForActivationCompact(cv *stateutil.CompactValidator, finalizedEpoch primitives.Epoch) bool {
+	return isEligibleForActivation(cv.ActivationEligibilityEpoch, cv.ActivationEpoch, finalizedEpoch)
+}
+
+// IsActiveNonSlashedCompactValidator checks if a compact validator is active and not slashed.
+func IsActiveNonSlashedCompactValidator(cv *stateutil.CompactValidator, epoch primitives.Epoch) bool {
+	return checkValidatorActiveStatus(cv.ActivationEpoch, cv.ExitEpoch, epoch) && !cv.Slashed
 }
 
 // LastActivatedValidatorIndex provides the last activated validator given a state

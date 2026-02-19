@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -143,6 +144,8 @@ type ReadOnlyValidators interface {
 	AggregateKeyFromIndices(idxs []uint64) (bls.PublicKey, error)
 	NumValidators() int
 	ReadFromEveryValidator(f func(idx int, val ReadOnlyValidator) error) error
+	ForEachValidator(f func(idx int, val *stateutil.CompactValidator) error) error
+	EffectiveBalanceAtIndex(idx primitives.ValidatorIndex) (uint64, error)
 }
 
 // ReadOnlyBalances defines a struct which only has read access to balances methods.
@@ -279,6 +282,7 @@ type WriteOnlyEth1Data interface {
 type WriteOnlyValidators interface {
 	SetValidators(val []*ethpb.Validator) error
 	ApplyToEveryValidator(f func(idx int, val ReadOnlyValidator) (*ethpb.Validator, error)) error
+	ApplyToEveryCompactValidator(f func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error)) error
 	UpdateValidatorAtIndex(idx primitives.ValidatorIndex, val *ethpb.Validator) error
 	AppendValidator(val *ethpb.Validator) error
 }

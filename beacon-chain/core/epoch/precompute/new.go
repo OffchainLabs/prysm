@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/pkg/errors"
@@ -27,23 +28,23 @@ func New(ctx context.Context, s state.BeaconState) ([]*Validator, *Balance, erro
 	currentEpoch := time.CurrentEpoch(s)
 	prevEpoch := time.PrevEpoch(s)
 
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	if err := s.ForEachValidator(func(idx int, val *stateutil.CompactValidator) error {
 		// Was validator withdrawable or slashed
-		withdrawable := prevEpoch+1 >= val.WithdrawableEpoch()
+		withdrawable := prevEpoch+1 >= val.WithdrawableEpoch
 		pVal := &Validator{
-			IsSlashed:                    val.Slashed(),
+			IsSlashed:                    val.Slashed,
 			IsWithdrawableCurrentEpoch:   withdrawable,
-			CurrentEpochEffectiveBalance: val.EffectiveBalance(),
+			CurrentEpochEffectiveBalance: val.EffectiveBalance,
 		}
 		// Was validator active current epoch
-		if helpers.IsActiveValidatorUsingTrie(val, currentEpoch) {
+		if helpers.IsActiveCompactValidator(val, currentEpoch) {
 			pVal.IsActiveCurrentEpoch = true
-			pBal.ActiveCurrentEpoch += val.EffectiveBalance()
+			pBal.ActiveCurrentEpoch += val.EffectiveBalance
 		}
 		// Was validator active previous epoch
-		if helpers.IsActiveValidatorUsingTrie(val, prevEpoch) {
+		if helpers.IsActiveCompactValidator(val, prevEpoch) {
 			pVal.IsActivePrevEpoch = true
-			pBal.ActivePrevEpoch += val.EffectiveBalance()
+			pBal.ActivePrevEpoch += val.EffectiveBalance
 		}
 		// Set inclusion slot and inclusion distance to be max, they will be compared and replaced
 		// with the lower values

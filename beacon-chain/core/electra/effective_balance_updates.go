@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // ProcessEffectiveBalanceUpdates processes effective balance updates during epoch processing.
@@ -30,34 +30,36 @@ import (
 //	        ):
 //	            validator.effective_balance = min(balance - balance % EFFECTIVE_BALANCE_INCREMENT, EFFECTIVE_BALANCE_LIMIT)
 func ProcessEffectiveBalanceUpdates(st state.BeaconState) error {
-	effBalanceInc := params.BeaconConfig().EffectiveBalanceIncrement
-	hysteresisInc := effBalanceInc / params.BeaconConfig().HysteresisQuotient
-	downwardThreshold := hysteresisInc * params.BeaconConfig().HysteresisDownwardMultiplier
-	upwardThreshold := hysteresisInc * params.BeaconConfig().HysteresisUpwardMultiplier
+	cfg := params.BeaconConfig()
+	effBalanceInc := cfg.EffectiveBalanceIncrement
+	hysteresisInc := effBalanceInc / cfg.HysteresisQuotient
+	downwardThreshold := hysteresisInc * cfg.HysteresisDownwardMultiplier
+	upwardThreshold := hysteresisInc * cfg.HysteresisUpwardMultiplier
+	minActivationBalance := cfg.MinActivationBalance
+	maxEffBalanceElectra := cfg.MaxEffectiveBalanceElectra
+	compoundingPrefix := cfg.CompoundingWithdrawalPrefixByte
 
 	bals := st.Balances()
 
-	// Update effective balances with hysteresis.
-	validatorFunc := func(idx int, val state.ReadOnlyValidator) (newVal *ethpb.Validator, err error) {
+	return st.ApplyToEveryCompactValidator(func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error) {
 		if idx >= len(bals) {
-			return nil, fmt.Errorf("validator index exceeds validator length in state %d >= %d", idx, len(st.Balances()))
+			return stateutil.CompactValidator{}, false, fmt.Errorf("validator index exceeds validator length in state %d >= %d", idx, len(bals))
 		}
 		balance := bals[idx]
 
-		effectiveBalanceLimit := params.BeaconConfig().MinActivationBalance
-		if val.HasCompoundingWithdrawalCredentials() {
-			effectiveBalanceLimit = params.BeaconConfig().MaxEffectiveBalanceElectra
+		effectiveBalanceLimit := minActivationBalance
+		if val.WithdrawalCredentials[0] == compoundingPrefix {
+			effectiveBalanceLimit = maxEffBalanceElectra
 		}
 
-		if balance+downwardThreshold < val.EffectiveBalance() || val.EffectiveBalance()+upwardThreshold < balance {
+		if balance+downwardThreshold < val.EffectiveBalance || val.EffectiveBalance+upwardThreshold < balance {
 			effectiveBal := min(balance-balance%effBalanceInc, effectiveBalanceLimit)
-			if effectiveBal != val.EffectiveBalance() {
-				newVal = val.Copy()
-				newVal.EffectiveBalance = effectiveBal
+			if effectiveBal != val.EffectiveBalance {
+				updated := *val
+				updated.EffectiveBalance = effectiveBal
+				return updated, true, nil
 			}
 		}
-		return newVal, nil
-	}
-
-	return st.ApplyToEveryValidator(validatorFunc)
+		return stateutil.CompactValidator{}, false, nil
+	})
 }
