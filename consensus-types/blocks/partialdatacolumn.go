@@ -200,9 +200,6 @@ func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata,
 	if base == nil {
 		return nil, errors.New("base is nil")
 	}
-	if base.Available.Len() != additionalAvailable.Len() {
-		return nil, errors.New("available length mismatch")
-	}
 	if base.Requests.Len() != additionalAvailable.Len() {
 		return nil, errors.New("requests length mismatch")
 	}

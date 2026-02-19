@@ -494,11 +494,11 @@ func TestMergeAvailableIntoPartsMetadata(t *testing.T) {
 		{
 			name: "available length mismatch",
 			base: &ethpb.PartialDataColumnPartsMetadata{
-				Available: bitfield.NewBitlist(4),
+				Available: bitfield.NewBitlist(3),
 				Requests:  bitfield.NewBitlist(4),
 			},
-			add:       bitfield.NewBitlist(3),
-			expectErr: "available length mismatch",
+			add:       bitfield.NewBitlist(4),
+			expectErr: "bitlists are different lengths",
 		},
 		{
 			name: "requests length mismatch",
@@ -564,7 +564,7 @@ func TestPartialDataColumn_updateReceivedStateOutgoing(t *testing.T) {
 			run: func(t *testing.T, p *PartialDataColumn) {
 				recvd := mustMarshalMeta(t, testPeerMeta(4, nil, allSet(4)))
 				_, err := p.updateReceivedStateOutgoing(recvd, testBitlist(3, 1))
-				require.ErrorContains(t, "available length mismatch", err)
+				require.ErrorContains(t, "requests length mismatch", err)
 			},
 		},
 		{
