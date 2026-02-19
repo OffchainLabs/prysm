@@ -338,13 +338,13 @@ func (p *PartialColumnBroadcaster) handleGossipForPeer(req gossipForPeer) (parti
 	return partialColumn.ForPeer(req.remote, false, req.peerState)
 }
 
-func parsePartsMetadataFromPeerState(state any, expectedLength uint64, stateKind string) (*ethpb.PartialDataColumnPartsMetadata, error) {
+func parsePartsMetadataFromPeerState(state any, expectedLength uint64) (*ethpb.PartialDataColumnPartsMetadata, error) {
 	if state == nil {
 		return blocks.NewPartsMetaWithNoAvailableAndNoRequests(expectedLength), nil
 	}
 	pb, ok := state.(partialmessages.PartsMetadata)
 	if !ok {
-		return nil, errors.Errorf("%s state is not PartsMetadata", stateKind)
+		return nil, errors.New("state is not PartsMetadata")
 	}
 	return blocks.ParsePartsMetadata(pb, expectedLength)
 }
@@ -374,13 +374,13 @@ func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pu
 		return nextPeerState, errors.New("length of cells present bitmap is 0")
 	}
 
-	recievedMeta, err := parsePartsMetadataFromPeerState(nextPeerState.RecvdState, nKzgCommitments, "received")
+	recievedMeta, err := parsePartsMetadataFromPeerState(nextPeerState.RecvdState, nKzgCommitments)
 	if err != nil {
-		return peerState, err
+		return peerState, errors.Wrap(err, "received")
 	}
-	sentMeta, err := parsePartsMetadataFromPeerState(nextPeerState.SentState, nKzgCommitments, "sent")
+	sentMeta, err := parsePartsMetadataFromPeerState(nextPeerState.SentState, nKzgCommitments)
 	if err != nil {
-		return peerState, err
+		return peerState, errors.Wrap(err, "sent")
 	}
 	recvdState, err := blocks.MergeAvailableIntoPartsMetadata(recievedMeta, message.CellsPresentBitmap)
 	if err != nil {
