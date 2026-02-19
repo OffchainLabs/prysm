@@ -348,47 +348,79 @@ func parsePartsMetadataFromPeerState(state any, expectedLength uint64) (*ethpb.P
 
 func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pubsub_pb.PartialMessagesExtension) (partialmessages.PeerState, error) {
 	nextPeerState := peerState
+	hasIncomingPartsMetadata := len(rpc.PartsMetadata) > 0
+	hasMessage := len(rpc.PartialMessage) > 0
+	var recievedMeta *ethpb.PartialDataColumnPartsMetadata
 
-	// if the peer has sent us a partsMetadata, simply overwrite our existing view of that peer with the parts Metadata they have sent.
-	if len(rpc.PartsMetadata) > 0 {
-		nextPeerState.RecvdState = partialmessages.PartsMetadata(slices.Clone(rpc.PartsMetadata))
+	if hasIncomingPartsMetadata {
+		var err error
+		// if the peer has sent us a partsMetadata and we don't have a recvdState for that peer,
+		// simply overwrite our existing view of that peer with the parts Metadata they have sent.
+		if nextPeerState.RecvdState == nil {
+			nextPeerState.RecvdState = partialmessages.PartsMetadata(slices.Clone(rpc.PartsMetadata))
+		} else {
+			incomingMeta := &ethpb.PartialDataColumnPartsMetadata{}
+			if err := incomingMeta.UnmarshalSSZ(rpc.PartsMetadata); err != nil {
+				return peerState, errors.Wrap(err, "failed to unmarshal incoming parts metadata")
+			}
+			nKzgCommitments := incomingMeta.Available.Len()
+			if nKzgCommitments == 0 {
+				return peerState, errors.New("incoming parts metadata has 0 length availability")
+			}
+			pb, ok := nextPeerState.RecvdState.(partialmessages.PartsMetadata)
+			if !ok {
+				return peerState, errors.New("recvdState is not PartsMetadata")
+			}
+			recievedMeta, err = blocks.ParsePartsMetadata(pb, nKzgCommitments)
+			if err != nil {
+				return peerState, errors.Wrap(err, "failed to parse recvdState parts metadata")
+			}
+			recievedMeta.Requests = incomingMeta.Requests
+			nextPeerState.RecvdState, err = blocks.MergeAvailableIntoPartsMetadata(recievedMeta, incomingMeta.Available)
+			if err != nil {
+				return peerState, errors.Wrap(err, "failed to merge available cells into recvdState parts metadata")
+			}
+		}
 	}
 
-	// we can not update anything else unless the peer has also sent us cells.
-	if len(rpc.PartialMessage) == 0 {
-		return nextPeerState, nil
-	}
-	var message ethpb.PartialDataColumnSidecar
-	if err := message.UnmarshalSSZ(rpc.PartialMessage); err != nil {
-		return peerState, errors.Wrap(err, "failed to unmarshal partial message data")
-	}
-	if len(message.CellsPresentBitmap) == 0 {
-		return nextPeerState, nil
+	if hasMessage {
+		var message ethpb.PartialDataColumnSidecar
+		if err := message.UnmarshalSSZ(rpc.PartialMessage); err != nil {
+			return peerState, errors.Wrap(err, "failed to unmarshal partial message data")
+		}
+		if len(message.CellsPresentBitmap) == 0 {
+			return nextPeerState, nil
+		}
+
+		nKzgCommitments := message.CellsPresentBitmap.Len()
+		if nKzgCommitments == 0 {
+			return nextPeerState, errors.New("length of cells present bitmap is 0")
+		}
+
+		if !hasIncomingPartsMetadata {
+			recievedMeta, err := parsePartsMetadataFromPeerState(nextPeerState.RecvdState, nKzgCommitments)
+			if err != nil {
+				return peerState, errors.Wrap(err, "received")
+			}
+			recvdState, err := blocks.MergeAvailableIntoPartsMetadata(recievedMeta, message.CellsPresentBitmap)
+			if err != nil {
+				return peerState, err
+			}
+			nextPeerState.RecvdState = recvdState
+		}
+
+		sentMeta, err := parsePartsMetadataFromPeerState(nextPeerState.SentState, nKzgCommitments)
+		if err != nil {
+			return peerState, errors.Wrap(err, "sent")
+		}
+
+		sentState, err := blocks.MergeAvailableIntoPartsMetadata(sentMeta, message.CellsPresentBitmap)
+		if err != nil {
+			return peerState, err
+		}
+		nextPeerState.SentState = sentState
 	}
 
-	nKzgCommitments := message.CellsPresentBitmap.Len()
-	if nKzgCommitments == 0 {
-		return nextPeerState, errors.New("length of cells present bitmap is 0")
-	}
-
-	recievedMeta, err := parsePartsMetadataFromPeerState(nextPeerState.RecvdState, nKzgCommitments)
-	if err != nil {
-		return peerState, errors.Wrap(err, "received")
-	}
-	sentMeta, err := parsePartsMetadataFromPeerState(nextPeerState.SentState, nKzgCommitments)
-	if err != nil {
-		return peerState, errors.Wrap(err, "sent")
-	}
-	recvdState, err := blocks.MergeAvailableIntoPartsMetadata(recievedMeta, message.CellsPresentBitmap)
-	if err != nil {
-		return peerState, err
-	}
-	sentState, err := blocks.MergeAvailableIntoPartsMetadata(sentMeta, message.CellsPresentBitmap)
-	if err != nil {
-		return peerState, err
-	}
-	nextPeerState.RecvdState = recvdState
-	nextPeerState.SentState = sentState
 	return nextPeerState, nil
 }
 
