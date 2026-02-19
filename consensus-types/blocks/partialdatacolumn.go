@@ -105,17 +105,12 @@ func (p *PartialDataColumn) newPartsMetadata() *ethpb.PartialDataColumnPartsMeta
 	}
 }
 
-// NewPartsMetaWithNoAvailableAndAllRequests creates metadata for n parts where
-// all requests are set and no parts are marked as available.
-func NewPartsMetaWithNoAvailableAndAllRequests(n uint64) *ethpb.PartialDataColumnPartsMetadata {
-	available := bitfield.NewBitlist(n)
-	requests := bitfield.NewBitlist(n)
-	for i := range n {
-		requests.SetBitAt(i, true)
-	}
+// NewPartsMetaWithNoAvailableAndNoRequests creates metadata for n parts where
+// no parts are marked as available and no requests are set.
+func NewPartsMetaWithNoAvailableAndNoRequests(n uint64) *ethpb.PartialDataColumnPartsMetadata {
 	return &ethpb.PartialDataColumnPartsMetadata{
-		Available: available,
-		Requests:  requests,
+		Available: bitfield.NewBitlist(n),
+		Requests:  bitfield.NewBitlist(n),
 	}
 }
 

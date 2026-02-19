@@ -202,7 +202,7 @@ func TestPartialDataColumn_newPartsMetadata(t *testing.T) {
 	}
 }
 
-func TestNewPartsMetaWithNoAvailableAndAllRequests(t *testing.T) {
+func TestNewPartsMetaWithNoAvailableAndNoRequests(t *testing.T) {
 	tests := []struct {
 		name string
 		n    uint64
@@ -213,13 +213,11 @@ func TestNewPartsMetaWithNoAvailableAndAllRequests(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			meta := NewPartsMetaWithNoAvailableAndAllRequests(tt.n)
+			meta := NewPartsMetaWithNoAvailableAndNoRequests(tt.n)
 			require.Equal(t, tt.n, bitfield.Bitlist(meta.Available).Len())
 			require.Equal(t, uint64(0), bitfield.Bitlist(meta.Available).Count())
 			require.Equal(t, tt.n, bitfield.Bitlist(meta.Requests).Len())
-			for i := uint64(0); i < tt.n; i++ {
-				require.Equal(t, true, bitfield.Bitlist(meta.Requests).BitAt(i))
-			}
+			require.Equal(t, uint64(0), bitfield.Bitlist(meta.Requests).Count())
 		})
 	}
 }
@@ -551,7 +549,7 @@ func TestPartialDataColumn_updateReceivedStateOutgoing(t *testing.T) {
 			name: "nil receivedMeta",
 			run: func(t *testing.T, p *PartialDataColumn) {
 				_, err := p.updateReceivedStateOutgoing(nil, testBitlist(4, 1))
-				require.ErrorContains(t, "recievedMeta is nil", err)
+				require.ErrorContains(t, "receivedMeta is empty", err)
 			},
 		},
 		{
@@ -564,7 +562,7 @@ func TestPartialDataColumn_updateReceivedStateOutgoing(t *testing.T) {
 		{
 			name: "cellsSent length mismatch",
 			run: func(t *testing.T, p *PartialDataColumn) {
-				recvd := mustMarshalMeta(t, NewPartsMetaWithNoAvailableAndAllRequests(4))
+				recvd := mustMarshalMeta(t, testPeerMeta(4, nil, allSet(4)))
 				_, err := p.updateReceivedStateOutgoing(recvd, testBitlist(3, 1))
 				require.ErrorContains(t, "available length mismatch", err)
 			},
@@ -675,7 +673,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 			name: "requested true sends missing cells and updates recvd state",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 4, 0, 2)
-				initialMeta := mustMarshalMeta(t, NewPartsMetaWithNoAvailableAndAllRequests(4))
+				initialMeta := mustMarshalMeta(t, testPeerMeta(4, nil, allSet(4)))
 				next, encoded, meta, err := p.ForPeer(peer.ID("peer-a"), true, partialmessages.PeerState{
 					RecvdState: initialMeta,
 				})

@@ -340,7 +340,7 @@ func (p *PartialColumnBroadcaster) handleGossipForPeer(req gossipForPeer) (parti
 
 func parsePartsMetadataFromPeerState(state any, expectedLength uint64, stateKind string) (*ethpb.PartialDataColumnPartsMetadata, error) {
 	if state == nil {
-		return blocks.NewPartsMetaWithNoAvailableAndAllRequests(expectedLength), nil
+		return blocks.NewPartsMetaWithNoAvailableAndNoRequests(expectedLength), nil
 	}
 	pb, ok := state.(partialmessages.PartsMetadata)
 	if !ok {
