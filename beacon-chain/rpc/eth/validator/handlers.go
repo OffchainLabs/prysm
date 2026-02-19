@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"slices"
-	"sort"
 	"strconv"
 	"time"
 
@@ -29,7 +28,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	validator2 "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -909,47 +907,22 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	assignments, err := helpers.CommitteeAssignments(ctx, st, requestedEpoch, requestedValIndices)
-	if err != nil {
-		httputil.HandleError(w, "Could not compute committee assignments: "+err.Error(), http.StatusInternalServerError)
+	coreDuties, rpcErr := s.CoreService.AttesterDuties(ctx, st, requestedEpoch, requestedValIndices)
+	if rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 		return
 	}
-	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, st, requestedEpoch)
-	if err != nil {
-		httputil.HandleError(w, "Could not get active validator count: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	committeesAtSlot := helpers.SlotCommitteeCount(activeValidatorCount)
 
-	duties := make([]*structs.AttesterDuty, 0, len(requestedValIndices))
-	for _, index := range requestedValIndices {
-		pubkey := st.PubkeyAtIndex(index)
-		var zeroPubkey [fieldparams.BLSPubkeyLength]byte
-		if bytes.Equal(pubkey[:], zeroPubkey[:]) {
-			httputil.HandleError(w, fmt.Sprintf("Invalid validator index %d", index), http.StatusBadRequest)
-			return
-		}
-		committee := assignments[index]
-		if committee == nil {
-			continue
-		}
-		var valIndexInCommittee int
-		// valIndexInCommittee will be 0 in case we don't get a match. This is a potential false positive,
-		// however it's an impossible condition because every validator must be assigned to a committee.
-		for cIndex, vIndex := range committee.Committee {
-			if vIndex == index {
-				valIndexInCommittee = cIndex
-				break
-			}
-		}
+	duties := make([]*structs.AttesterDuty, 0, len(coreDuties))
+	for _, d := range coreDuties {
 		duties = append(duties, &structs.AttesterDuty{
-			Pubkey:                  hexutil.Encode(pubkey[:]),
-			ValidatorIndex:          strconv.FormatUint(uint64(index), 10),
-			CommitteeIndex:          strconv.FormatUint(uint64(committee.CommitteeIndex), 10),
-			CommitteeLength:         strconv.Itoa(len(committee.Committee)),
-			CommitteesAtSlot:        strconv.FormatUint(committeesAtSlot, 10),
-			ValidatorCommitteeIndex: strconv.Itoa(valIndexInCommittee),
-			Slot:                    strconv.FormatUint(uint64(committee.AttesterSlot), 10),
+			Pubkey:                  hexutil.Encode(d.Pubkey[:]),
+			ValidatorIndex:          strconv.FormatUint(uint64(d.ValidatorIndex), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(d.CommitteeIndex), 10),
+			CommitteeLength:         strconv.FormatUint(d.CommitteeLength, 10),
+			CommitteesAtSlot:        strconv.FormatUint(d.CommitteesAtSlot, 10),
+			ValidatorCommitteeIndex: strconv.FormatUint(d.ValidatorCommitteeIndex, 10),
+			Slot:                    strconv.FormatUint(uint64(d.Slot), 10),
 		})
 	}
 
@@ -1020,33 +993,23 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var assignments map[primitives.ValidatorIndex][]primitives.Slot
+	dutyEpoch := requestedEpoch
 	if nextEpochLookahead {
-		assignments, err = helpers.ProposerAssignments(ctx, st, nextEpoch)
-	} else {
-		assignments, err = helpers.ProposerAssignments(ctx, st, requestedEpoch)
+		dutyEpoch = nextEpoch
 	}
-	if err != nil {
-		httputil.HandleError(w, "Could not compute committee assignments: "+err.Error(), http.StatusInternalServerError)
+	coreDuties, rpcErr := s.CoreService.ProposerDuties(ctx, st, dutyEpoch)
+	if rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 		return
 	}
 
-	duties := make([]*structs.ProposerDuty, 0)
-	for index, proposalSlots := range assignments {
-		val, err := st.ValidatorAtIndexReadOnly(index)
-		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %v", index, err), http.StatusInternalServerError)
-			return
-		}
-		pubkey48 := val.PublicKey()
-		pubkey := pubkey48[:]
-		for _, slot := range proposalSlots {
-			duties = append(duties, &structs.ProposerDuty{
-				Pubkey:         hexutil.Encode(pubkey),
-				ValidatorIndex: strconv.FormatUint(uint64(index), 10),
-				Slot:           strconv.FormatUint(uint64(slot), 10),
-			})
-		}
+	duties := make([]*structs.ProposerDuty, 0, len(coreDuties))
+	for _, d := range coreDuties {
+		duties = append(duties, &structs.ProposerDuty{
+			Pubkey:         hexutil.Encode(d.Pubkey[:]),
+			ValidatorIndex: strconv.FormatUint(uint64(d.ValidatorIndex), 10),
+			Slot:           strconv.FormatUint(uint64(d.Slot), 10),
+		})
 	}
 
 	var dependentRoot []byte
@@ -1067,10 +1030,6 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
 		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if err = sortProposerDuties(duties); err != nil {
-		httputil.HandleError(w, "Could not sort proposer duties: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1134,7 +1093,7 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 	}
 
 	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
-	lastValidEpoch := syncCommitteeDutiesLastValidEpoch(currentEpoch)
+	lastValidEpoch := core.SyncCommitteeDutiesLastValidEpoch(currentEpoch)
 	if requestedEpoch > lastValidEpoch {
 		httputil.HandleError(w, fmt.Sprintf("Epoch is too far in the future, maximum valid epoch is %d", lastValidEpoch), http.StatusBadRequest)
 		return
@@ -1148,55 +1107,23 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	currentSyncCommitteeFirstEpoch, err := slots.SyncCommitteePeriodStartEpoch(startingEpoch)
-	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee period start epoch: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	nextSyncCommitteeFirstEpoch := currentSyncCommitteeFirstEpoch + params.BeaconConfig().EpochsPerSyncCommitteePeriod
-	isCurrentCommitteeRequested := requestedEpoch < nextSyncCommitteeFirstEpoch
-	var committee *ethpbalpha.SyncCommittee
-	if isCurrentCommitteeRequested {
-		committee, err = st.CurrentSyncCommittee()
-		if err != nil {
-			httputil.HandleError(w, "Could not get sync committee: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	} else {
-		committee, err = st.NextSyncCommittee()
-		if err != nil {
-			httputil.HandleError(w, "Could not get sync committee: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-	committeePubkeys := make(map[[fieldparams.BLSPubkeyLength]byte][]string)
-	for j, pubkey := range committee.Pubkeys {
-		pubkey48 := bytesutil.ToBytes48(pubkey)
-		committeePubkeys[pubkey48] = append(committeePubkeys[pubkey48], strconv.FormatUint(uint64(j), 10))
-	}
-	duties, vals, err := syncCommitteeDutiesAndVals(st, requestedValIndices, committeePubkeys)
-	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+	coreDuties, rpcErr := s.CoreService.SyncCommitteeDuties(ctx, st, requestedEpoch, currentEpoch, requestedValIndices)
+	if rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 		return
 	}
 
-	var registerSyncSubnet func(state.BeaconState, primitives.Epoch, []byte, validator2.Status) error
-	if isCurrentCommitteeRequested {
-		registerSyncSubnet = core.RegisterSyncSubnetCurrentPeriod
-	} else {
-		registerSyncSubnet = core.RegisterSyncSubnetNextPeriod
-	}
-	for _, v := range vals {
-		pk := v.PublicKey()
-		valStatus, err := rpchelpers.ValidatorStatus(v, requestedEpoch)
-		if err != nil {
-			httputil.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
-			return
+	duties := make([]*structs.SyncCommitteeDuty, 0, len(coreDuties))
+	for _, d := range coreDuties {
+		syncIndices := make([]string, len(d.ValidatorSyncCommitteeIndices))
+		for i, idx := range d.ValidatorSyncCommitteeIndices {
+			syncIndices[i] = strconv.FormatUint(idx, 10)
 		}
-		if err := registerSyncSubnet(st, requestedEpoch, pk[:], valStatus); err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not register sync subnet for pubkey %#x", pk), http.StatusInternalServerError)
-			return
-		}
+		duties = append(duties, &structs.SyncCommitteeDuty{
+			Pubkey:                        hexutil.Encode(d.Pubkey[:]),
+			ValidatorIndex:                strconv.FormatUint(uint64(d.ValidatorIndex), 10),
+			ValidatorSyncCommitteeIndices: syncIndices,
+		})
 	}
 
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
@@ -1367,63 +1294,4 @@ func proposalDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte,
 		return nil, errors.Wrap(err, "could not get block root")
 	}
 	return root, nil
-}
-
-func syncCommitteeDutiesLastValidEpoch(currentEpoch primitives.Epoch) primitives.Epoch {
-	currentSyncPeriodIndex := currentEpoch / params.BeaconConfig().EpochsPerSyncCommitteePeriod
-	// Return the last epoch of the next sync committee.
-	// To do this we go two periods ahead to find the first invalid epoch, and then subtract 1.
-	return (currentSyncPeriodIndex+2)*params.BeaconConfig().EpochsPerSyncCommitteePeriod - 1
-}
-
-// syncCommitteeDutiesAndVals takes a list of requested validator indices and the actual sync committee pubkeys.
-// It returns duties for the validator indices that are part of the sync committee.
-// Additionally, it returns read-only validator objects for these validator indices.
-func syncCommitteeDutiesAndVals(
-	st state.BeaconState,
-	requestedValIndices []primitives.ValidatorIndex,
-	committeePubkeys map[[fieldparams.BLSPubkeyLength]byte][]string,
-) ([]*structs.SyncCommitteeDuty, []state.ReadOnlyValidator, error) {
-	duties := make([]*structs.SyncCommitteeDuty, 0)
-	vals := make([]state.ReadOnlyValidator, 0)
-	for _, index := range requestedValIndices {
-		duty := &structs.SyncCommitteeDuty{
-			ValidatorIndex: strconv.FormatUint(uint64(index), 10),
-		}
-		valPubkey := st.PubkeyAtIndex(index)
-		var zeroPubkey [fieldparams.BLSPubkeyLength]byte
-		if bytes.Equal(valPubkey[:], zeroPubkey[:]) {
-			return nil, nil, errors.Errorf("Invalid validator index %d", index)
-		}
-		duty.Pubkey = hexutil.Encode(valPubkey[:])
-		indices, ok := committeePubkeys[valPubkey]
-		if ok {
-			duty.ValidatorSyncCommitteeIndices = indices
-			duties = append(duties, duty)
-			v, err := st.ValidatorAtIndexReadOnly(index)
-			if err != nil {
-				return nil, nil, fmt.Errorf("could not get validator at index %d", index)
-			}
-			vals = append(vals, v)
-		}
-	}
-	return duties, vals, nil
-}
-
-func sortProposerDuties(duties []*structs.ProposerDuty) error {
-	var err error
-	sort.Slice(duties, func(i, j int) bool {
-		si, parseErr := strconv.ParseUint(duties[i].Slot, 10, 64)
-		if parseErr != nil {
-			err = errors.Wrap(parseErr, "could not parse slot")
-			return false
-		}
-		sj, parseErr := strconv.ParseUint(duties[j].Slot, 10, 64)
-		if parseErr != nil {
-			err = errors.Wrap(parseErr, "could not parse slot")
-			return false
-		}
-		return si < sj
-	})
-	return err
 }

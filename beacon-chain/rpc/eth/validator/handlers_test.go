@@ -2009,6 +2009,7 @@ func TestGetAttesterDuties(t *testing.T) {
 		OptimisticModeFetcher: chain,
 		HeadFetcher:           chain,
 		BeaconDB:              db,
+		CoreService:           &core.Service{},
 	}
 
 	t.Run("single validator", func(t *testing.T) {
@@ -2327,6 +2328,7 @@ func TestGetProposerDuties(t *testing.T) {
 			PayloadIDCache:         cache.NewPayloadIDCache(),
 			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 			BeaconDB:               db,
+			CoreService:            &core.Service{},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
@@ -2369,6 +2371,7 @@ func TestGetProposerDuties(t *testing.T) {
 			PayloadIDCache:         cache.NewPayloadIDCache(),
 			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 			BeaconDB:               db,
+			CoreService:            &core.Service{},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
@@ -2412,6 +2415,7 @@ func TestGetProposerDuties(t *testing.T) {
 			PayloadIDCache:         cache.NewPayloadIDCache(),
 			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 			BeaconDB:               db,
+			CoreService:            &core.Service{},
 		}
 
 		currentEpoch := slots.ToEpoch(bs.Slot())
@@ -2451,6 +2455,7 @@ func TestGetProposerDuties(t *testing.T) {
 			PayloadIDCache:         cache.NewPayloadIDCache(),
 			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 			BeaconDB:               db,
+			CoreService:            &core.Service{},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
@@ -2577,6 +2582,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 		TimeFetcher:           mockChainService,
 		HeadFetcher:           mockChainService,
 		OptimisticModeFetcher: mockChainService,
+		CoreService:           &core.Service{},
 	}
 
 	t.Run("single validator", func(t *testing.T) {
@@ -2768,6 +2774,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 			TimeFetcher:           mockChainService,
 			HeadFetcher:           mockChainService,
 			OptimisticModeFetcher: mockChainService,
+			CoreService:           &core.Service{},
 		}
 
 		var body bytes.Buffer
@@ -2863,6 +2870,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 			OptimisticModeFetcher: mockChainService,
 			ChainInfoFetcher:      mockChainService,
 			BeaconDB:              db,
+			CoreService:           &core.Service{},
 		}
 
 		var body bytes.Buffer
