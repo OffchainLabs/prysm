@@ -89,16 +89,9 @@ func (p *PartialDataColumn) ClearEagerPushSent() {
 
 func (p *PartialDataColumn) newPartsMetadata() *ethpb.PartialDataColumnPartsMetadata {
 	n := uint64(len(p.KzgCommitments))
-	available := bitfield.NewBitlist(n)
-	for i := range n {
-		if p.Included.BitAt(i) {
-			available.SetBitAt(i, true)
-		}
-	}
+	available := slices.Clone(p.Included)
 	requests := bitfield.NewBitlist(n)
-	for i := range n {
-		requests.SetBitAt(i, true)
-	}
+	requests = requests.Not()
 	return &ethpb.PartialDataColumnPartsMetadata{
 		Available: available,
 		Requests:  requests,
