@@ -5,12 +5,14 @@ import (
 	"testing"
 
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	mockstategen "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestExtractExecutionPayloadDeneb(t *testing.T) {
@@ -170,6 +172,89 @@ func TestPublishExecutionPayloadEnvelope_PreFork(t *testing.T) {
 		},
 	})
 	require.ErrorContains(t, "not supported before Gloas fork", err)
+}
+
+func TestGetExecutionPayloadEnvelopeRPC_StateRootAlreadySet(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	stateRoot := make([]byte, 32)
+	stateRoot[0] = 0xAB // Non-zero state root
+
+	envelope := &ethpb.ExecutionPayloadEnvelope{
+		Payload: &enginev1.ExecutionPayloadDeneb{
+			ParentHash:    make([]byte, 32),
+			FeeRecipient:  make([]byte, 20),
+			StateRoot:     make([]byte, 32),
+			ReceiptsRoot:  make([]byte, 32),
+			LogsBloom:     make([]byte, 256),
+			PrevRandao:    make([]byte, 32),
+			BaseFeePerGas: make([]byte, 32),
+			BlockHash:     make([]byte, 32),
+		},
+		BuilderIndex:    primitives.BuilderIndex(0),
+		BeaconBlockRoot: make([]byte, 32),
+		Slot:            1,
+		StateRoot:       stateRoot,
+	}
+
+	vs := &Server{}
+	vs.setExecutionPayloadEnvelope(envelope)
+
+	resp, err := vs.GetExecutionPayloadEnvelope(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{
+		Slot:         1,
+		BuilderIndex: 0,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.DeepEqual(t, envelope, resp.Envelope)
+	require.DeepEqual(t, stateRoot, resp.Envelope.StateRoot)
+}
+
+func TestGetExecutionPayloadEnvelopeRPC_ZeroStateRootComputesRoot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	envelope := &ethpb.ExecutionPayloadEnvelope{
+		Payload: &enginev1.ExecutionPayloadDeneb{
+			ParentHash:    make([]byte, 32),
+			FeeRecipient:  make([]byte, 20),
+			StateRoot:     make([]byte, 32),
+			ReceiptsRoot:  make([]byte, 32),
+			LogsBloom:     make([]byte, 256),
+			PrevRandao:    make([]byte, 32),
+			BaseFeePerGas: make([]byte, 32),
+			BlockHash:     make([]byte, 32),
+		},
+		BuilderIndex:    primitives.BuilderIndex(0),
+		BeaconBlockRoot: make([]byte, 32),
+		Slot:            1,
+		StateRoot:       make([]byte, 32), // Zero state root triggers computation
+	}
+
+	// Set up a mock state gen with a Gloas state for the beacon block root.
+	sg := mockstategen.NewService()
+	st, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+	sg.AddStateForRoot(st, [32]byte{}) // envelope.BeaconBlockRoot is all zeros
+
+	vs := &Server{
+		StateGen: sg,
+	}
+	vs.setExecutionPayloadEnvelope(envelope)
+
+	// The call should enter the lazy computation path. It will fail during
+	// ApplyExecutionPayload because the mock state doesn't satisfy all consistency
+	// checks, but that proves we entered the zero-state-root branch.
+	_, err = vs.GetExecutionPayloadEnvelope(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{
+		Slot:         1,
+		BuilderIndex: 0,
+	})
+	require.ErrorContains(t, "could not compute post-payload state root", err)
 }
 
 func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
