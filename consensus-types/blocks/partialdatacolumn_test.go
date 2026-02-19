@@ -721,6 +721,181 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				require.DeepEqual(t, myMeta.Requests, nextSent.Requests)
 			},
 		},
+		{
+			name: "sentMeta available superset of ours suppresses resend",
+			run: func(t *testing.T) {
+				// We have cell 0. SentState already has cells 0 and 1
+				// (superset of our available). Requests match. No resend needed.
+				p := mustNewPartialColumn(t, 3, 0)
+				sentMeta := &ethpb.PartialDataColumnPartsMetadata{
+					Available: testBitlist(3, 0, 1),
+					Requests:  testBitlist(3, allSet(3)...), // all requested, same as newPartsMetadata
+				}
+				next, encoded, meta, err := p.ForPeer(peer.ID("peer-a"), false, partialmessages.PeerState{
+					SentState: sentMeta,
+				})
+				require.NoError(t, err)
+				require.IsNil(t, encoded)
+				require.IsNil(t, meta) // no resend because sentMeta.Available contains ours
+				nextSent, ok := next.SentState.(*ethpb.PartialDataColumnPartsMetadata)
+				require.Equal(t, true, ok)
+				// SentState unchanged because we didn't resend.
+				require.DeepEqual(t, sentMeta.Available, nextSent.Available)
+			},
+		},
+		{
+			name: "sentMeta available subset triggers resend with merged available",
+			run: func(t *testing.T) {
+				// We have cells 0, 2. SentState only has cell 0.
+				// Our available has cell 2 which isn't in sentMeta, so we resend.
+				p := mustNewPartialColumn(t, 3, 0, 2)
+				sentMeta := &ethpb.PartialDataColumnPartsMetadata{
+					Available: testBitlist(3, 0),
+					Requests:  testBitlist(3, allSet(3)...),
+				}
+				next, encoded, meta, err := p.ForPeer(peer.ID("peer-a"), false, partialmessages.PeerState{
+					SentState: sentMeta,
+				})
+				require.NoError(t, err)
+				require.IsNil(t, encoded) // not requested, no cells
+				require.NotNil(t, meta)   // metadata resent because available changed
+				nextSent, ok := next.SentState.(*ethpb.PartialDataColumnPartsMetadata)
+				require.Equal(t, true, ok)
+				// SentState should be merged: old {0} | new {0,2} = {0,2}
+				require.Equal(t, true, bitfield.Bitlist(nextSent.Available).BitAt(0))
+				require.Equal(t, false, bitfield.Bitlist(nextSent.Available).BitAt(1))
+				require.Equal(t, true, bitfield.Bitlist(nextSent.Available).BitAt(2))
+			},
+		},
+		{
+			name: "sentMeta available merge is cumulative across calls",
+			run: func(t *testing.T) {
+				// First call: we have cell 0 only, SentState is nil.
+				p := mustNewPartialColumn(t, 3, 0)
+				state1, _, meta1, err := p.ForPeer(peer.ID("peer-a"), false, partialmessages.PeerState{})
+				require.NoError(t, err)
+				require.NotNil(t, meta1)
+				sent1, ok := state1.SentState.(*ethpb.PartialDataColumnPartsMetadata)
+				require.Equal(t, true, ok)
+				require.Equal(t, true, bitfield.Bitlist(sent1.Available).BitAt(0))
+				require.Equal(t, false, bitfield.Bitlist(sent1.Available).BitAt(1))
+
+				// Acquire cell 1 between calls.
+				p.ExtendFromVerifiedCell(1, []byte{0xAA}, []byte{0xBB})
+
+				// Second call: SentState has {0}, we now have {0,1}. Should trigger resend.
+				state2, _, meta2, err := p.ForPeer(peer.ID("peer-a"), false, state1)
+				require.NoError(t, err)
+				require.NotNil(t, meta2)
+				sent2, ok := state2.SentState.(*ethpb.PartialDataColumnPartsMetadata)
+				require.Equal(t, true, ok)
+				// Merged: {0} | {0,1} = {0,1}
+				require.Equal(t, true, bitfield.Bitlist(sent2.Available).BitAt(0))
+				require.Equal(t, true, bitfield.Bitlist(sent2.Available).BitAt(1))
+				require.Equal(t, false, bitfield.Bitlist(sent2.Available).BitAt(2))
+
+				// Third call: SentState has {0,1}, we still have {0,1}. No resend.
+				_, _, meta3, err := p.ForPeer(peer.ID("peer-a"), false, state2)
+				require.NoError(t, err)
+				require.IsNil(t, meta3)
+			},
+		},
+		{
+			name: "sentMeta requests mismatch triggers resend then converges",
+			run: func(t *testing.T) {
+				// We have cell 0. Our newPartsMetadata requests all 3 cells.
+				// SentState has matching available {0} but requests only {0,1} (not all 3).
+				p := mustNewPartialColumn(t, 3, 0)
+				sentMeta := &ethpb.PartialDataColumnPartsMetadata{
+					Available: testBitlist(3, 0),
+					Requests:  testBitlist(3, 0, 1), // mismatch: we request all 3
+				}
+				state1, _, meta1, err := p.ForPeer(peer.ID("peer-a"), false, partialmessages.PeerState{
+					SentState: sentMeta,
+				})
+				require.NoError(t, err)
+				require.NotNil(t, meta1) // resent because Requests differ
+				sent1, ok := state1.SentState.(*ethpb.PartialDataColumnPartsMetadata)
+				require.Equal(t, true, ok)
+				// Requests should now match our current requests (all 3).
+				for i := range uint64(3) {
+					require.Equal(t, true, bitfield.Bitlist(sent1.Requests).BitAt(i))
+				}
+				// Available should be merged: old {0} | new {0} = {0}
+				require.Equal(t, true, bitfield.Bitlist(sent1.Available).BitAt(0))
+				require.Equal(t, false, bitfield.Bitlist(sent1.Available).BitAt(1))
+
+				// Second call with corrected SentState should converge (no resend).
+				_, _, meta2, err := p.ForPeer(peer.ID("peer-a"), false, state1)
+				require.NoError(t, err)
+				require.IsNil(t, meta2) // converged, no resend
+			},
+		},
+		{
+			name: "sentMeta with mismatched available length returns error",
+			run: func(t *testing.T) {
+				// SentState.Available has length 2, but our column has 3 commitments.
+				// Contains() should error on length mismatch.
+				p := mustNewPartialColumn(t, 3, 0)
+				sentMeta := &ethpb.PartialDataColumnPartsMetadata{
+					Available: testBitlist(2, 0),
+					Requests:  testBitlist(3, allSet(3)...), // Requests match length so we reach Contains check
+				}
+				_, _, _, err := p.ForPeer(peer.ID("peer-a"), false, partialmessages.PeerState{
+					SentState: sentMeta,
+				})
+				require.ErrorContains(t, "different lengths", err)
+			},
+		},
+		{
+			name: "requested true with existing sentMeta merges available on resend",
+			run: func(t *testing.T) {
+				// We have cells 0,1,2. SentState has available {0} and all requests.
+				// recvdMeta peer has nothing and requests everything.
+				// This tests that both cell sending and metadata resending work together,
+				// and that SentState merges correctly when cells are also being sent.
+				p := mustNewPartialColumn(t, 3, 0, 1, 2)
+				sentMeta := &ethpb.PartialDataColumnPartsMetadata{
+					Available: testBitlist(3, 0),
+					Requests:  testBitlist(3, allSet(3)...),
+				}
+				recvdMeta := testPeerMeta(3, nil, allSet(3))
+				next, encoded, meta, err := p.ForPeer(peer.ID("peer-a"), true, partialmessages.PeerState{
+					SentState:  sentMeta,
+					RecvdState: recvdMeta,
+				})
+				require.NoError(t, err)
+				require.NotNil(t, encoded) // cells sent to peer
+				require.NotNil(t, meta)    // metadata resent because available changed
+
+				msg := mustDecodeSidecar(t, encoded)
+				require.Equal(t, 3, len(msg.PartialColumn))
+
+				nextSent, ok := next.SentState.(*ethpb.PartialDataColumnPartsMetadata)
+				require.Equal(t, true, ok)
+				// Merged available: {0} | {0,1,2} = {0,1,2}
+				for i := range uint64(3) {
+					require.Equal(t, true, bitfield.Bitlist(nextSent.Available).BitAt(i))
+				}
+			},
+		},
+		{
+			name: "sentMeta with equal available but subset requests triggers resend",
+			run: func(t *testing.T) {
+				// Available matches exactly, but Requests differ.
+				// This isolates the Requests-mismatch branch from the Available branch.
+				p := mustNewPartialColumn(t, 4, 0, 1)
+				sentMeta := &ethpb.PartialDataColumnPartsMetadata{
+					Available: testBitlist(4, 0, 1),                // same as ours
+					Requests:  testBitlist(4, 0, 1),                // only 2 requests
+				}
+				_, _, meta, err := p.ForPeer(peer.ID("peer-a"), false, partialmessages.PeerState{
+					SentState: sentMeta,
+				})
+				require.NoError(t, err)
+				require.NotNil(t, meta) // resent because Requests differ (we request all 4)
+			},
+		},
 	}
 
 	for _, tt := range tests {
