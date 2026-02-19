@@ -59,21 +59,22 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 	eligibleForActivation := make([]primitives.ValidatorIndex, 0)
 	eligibleForEjection := make([]primitives.ValidatorIndex, 0)
 
-	if err := st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	finalizedEpoch := st.FinalizedCheckpointEpoch()
+	if err := st.ForEachValidator(func(idx int, val *stateutil.CompactValidator) error {
 		// Collect validators eligible to enter the activation queue.
-		if helpers.IsEligibleForActivationQueue(val, currentEpoch) {
+		if helpers.IsEligibleForActivationQueueCompact(val, currentEpoch) {
 			eligibleForActivationQ = append(eligibleForActivationQ, primitives.ValidatorIndex(idx))
 		}
 
 		// Collect validators to eject.
-		isActive := helpers.IsActiveValidatorUsingTrie(val, currentEpoch)
-		belowEjectionBalance := val.EffectiveBalance() <= ejectionBal
+		isActive := helpers.IsActiveCompactValidator(val, currentEpoch)
+		belowEjectionBalance := val.EffectiveBalance <= ejectionBal
 		if isActive && belowEjectionBalance {
 			eligibleForEjection = append(eligibleForEjection, primitives.ValidatorIndex(idx))
 		}
 
 		// Collect validators eligible for activation and not yet dequeued for activation.
-		if helpers.IsEligibleForActivationUsingROVal(st, val) {
+		if helpers.IsEligibleForActivationCompact(val, finalizedEpoch) {
 			eligibleForActivation = append(eligibleForActivation, primitives.ValidatorIndex(idx))
 		}
 
@@ -243,15 +244,15 @@ func ProcessSlashings(st state.BeaconState) error {
 
 	bals := st.Balances()
 	changed := false
-	err = st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		correctEpoch := (currentEpoch + exitLength/2) == val.WithdrawableEpoch()
-		if val.Slashed() && correctEpoch {
+	err = st.ForEachValidator(func(idx int, val *stateutil.CompactValidator) error {
+		correctEpoch := (currentEpoch + exitLength/2) == val.WithdrawableEpoch
+		if val.Slashed && correctEpoch {
 			var penalty uint64
 			if st.Version() >= version.Electra {
-				effectiveBalanceIncrements := val.EffectiveBalance() / increment
+				effectiveBalanceIncrements := val.EffectiveBalance / increment
 				penalty = penaltyPerEffectiveBalanceIncrement * effectiveBalanceIncrements
 			} else {
-				penaltyNumerator := val.EffectiveBalance() / increment * minSlashing
+				penaltyNumerator := val.EffectiveBalance / increment * minSlashing
 				penalty = penaltyNumerator / totalBalance * increment
 			}
 			bals[idx] = helpers.DecreaseBalanceWithVal(bals[idx], penalty)
@@ -310,35 +311,31 @@ func ProcessEth1DataReset(state state.BeaconState) (state.BeaconState, error) {
 //	      ):
 //	          validator.effective_balance = min(balance - balance % EFFECTIVE_BALANCE_INCREMENT, MAX_EFFECTIVE_BALANCE)
 func ProcessEffectiveBalanceUpdates(st state.BeaconState) (state.BeaconState, error) {
-	effBalanceInc := params.BeaconConfig().EffectiveBalanceIncrement
-	maxEffBalance := params.BeaconConfig().MaxEffectiveBalance
-	hysteresisInc := effBalanceInc / params.BeaconConfig().HysteresisQuotient
-	downwardThreshold := hysteresisInc * params.BeaconConfig().HysteresisDownwardMultiplier
-	upwardThreshold := hysteresisInc * params.BeaconConfig().HysteresisUpwardMultiplier
+	cfg := params.BeaconConfig()
+	effBalanceInc := cfg.EffectiveBalanceIncrement
+	maxEffBalance := cfg.MaxEffectiveBalance
+	hysteresisInc := effBalanceInc / cfg.HysteresisQuotient
+	downwardThreshold := hysteresisInc * cfg.HysteresisDownwardMultiplier
+	upwardThreshold := hysteresisInc * cfg.HysteresisUpwardMultiplier
 
 	bals := st.Balances()
 
-	// Update effective balances with hysteresis.
-	validatorFunc := func(idx int, val state.ReadOnlyValidator) (newVal *ethpb.Validator, err error) {
-		if val == nil {
-			return nil, fmt.Errorf("validator %d is nil in state", idx)
-		}
+	if err := st.ApplyToEveryCompactValidator(func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error) {
 		if idx >= len(bals) {
-			return nil, fmt.Errorf("validator index exceeds validator length in state %d >= %d", idx, len(st.Balances()))
+			return stateutil.CompactValidator{}, false, fmt.Errorf("validator index exceeds validator length in state %d >= %d", idx, len(bals))
 		}
 		balance := bals[idx]
 
-		if balance+downwardThreshold < val.EffectiveBalance() || val.EffectiveBalance()+upwardThreshold < balance {
+		if balance+downwardThreshold < val.EffectiveBalance || val.EffectiveBalance+upwardThreshold < balance {
 			effectiveBal := min(maxEffBalance, balance-balance%effBalanceInc)
-			if effectiveBal != val.EffectiveBalance() {
-				newVal = val.Copy()
-				newVal.EffectiveBalance = effectiveBal
+			if effectiveBal != val.EffectiveBalance {
+				updated := *val
+				updated.EffectiveBalance = effectiveBal
+				return updated, true, nil
 			}
 		}
-		return
-	}
-
-	if err := st.ApplyToEveryValidator(validatorFunc); err != nil {
+		return stateutil.CompactValidator{}, false, nil
+	}); err != nil {
 		return nil, err
 	}
 

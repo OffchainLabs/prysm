@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/math"
@@ -38,8 +39,8 @@ func ExitInformation(s state.BeaconState) *ExitInfo {
 	currentEpoch := slots.ToEpoch(s.Slot())
 	totalActiveBalance := uint64(0)
 
-	err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		e := val.ExitEpoch()
+	err := s.ForEachValidator(func(idx int, val *stateutil.CompactValidator) error {
+		e := val.ExitEpoch
 		if e != farFutureEpoch {
 			if e > exitInfo.HighestExitEpoch {
 				exitInfo.HighestExitEpoch = e
@@ -50,8 +51,8 @@ func ExitInformation(s state.BeaconState) *ExitInfo {
 		}
 
 		// Calculate total active balance in the same loop
-		if helpers.IsActiveValidatorUsingTrie(val, currentEpoch) {
-			totalActiveBalance += val.EffectiveBalance()
+		if helpers.IsActiveCompactValidator(val, currentEpoch) {
+			totalActiveBalance += val.EffectiveBalance
 		}
 
 		return nil

@@ -61,6 +61,49 @@ func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyVa
 	return nil
 }
 
+// ApplyToEveryCompactValidator iterates all validators using zero-alloc ForEach,
+// calling the provided function with a read pointer to each CompactValidator.
+// If the function returns (newVal, true, nil), the validator at that index is
+// updated to newVal. This avoids the proto round-trip and interface boxing that
+// ApplyToEveryValidator incurs.
+func (b *BeaconState) ApplyToEveryCompactValidator(f func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error)) error {
+	type mutation struct {
+		idx uint64
+		val stateutil.CompactValidator
+	}
+	var mutations []mutation
+
+	err := b.validatorsMultiValue.ForEach(b, func(idx int, val *stateutil.CompactValidator) error {
+		newVal, changed, fErr := f(idx, val)
+		if fErr != nil {
+			return fErr
+		}
+		if changed {
+			mutations = append(mutations, mutation{idx: uint64(idx), val: newVal})
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if len(mutations) > 0 {
+		changedVals := make([]uint64, len(mutations))
+		for i, m := range mutations {
+			if err := b.validatorsMultiValue.UpdateAt(b, m.idx, m.val); err != nil {
+				return errors.Wrapf(err, "could not update validator at index %d", m.idx)
+			}
+			changedVals[i] = m.idx
+		}
+
+		b.lock.Lock()
+		defer b.lock.Unlock()
+		b.markFieldAsDirty(types.Validators)
+		b.addDirtyIndices(types.Validators, changedVals)
+	}
+	return nil
+}
+
 // UpdateValidatorAtIndex for the beacon state. Updates the validator
 // at a specific index to a new value.
 func (b *BeaconState) UpdateValidatorAtIndex(idx primitives.ValidatorIndex, val *ethpb.Validator) error {

@@ -69,16 +69,16 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 	}
 
 	bid := &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:        parentHash,
-		ParentBlockRoot:        bytes.Repeat([]byte{0xDD}, 32),
-		BlockHash:              blockHash,
-		PrevRandao:             randao,
-		GasLimit:               1,
-		BuilderIndex:           builderIdx,
-		Slot:                   slot,
-		Value:                  0,
-		ExecutionPayment:       0,
-		FeeRecipient:           bytes.Repeat([]byte{0xEE}, 20),
+		ParentBlockHash:  parentHash,
+		ParentBlockRoot:  bytes.Repeat([]byte{0xDD}, 32),
+		BlockHash:        blockHash,
+		PrevRandao:       randao,
+		GasLimit:         1,
+		BuilderIndex:     builderIdx,
+		Slot:             slot,
+		Value:            0,
+		ExecutionPayment: 0,
+		FeeRecipient:     bytes.Repeat([]byte{0xEE}, 20),
 	}
 
 	header := &ethpb.BeaconBlockHeader{
@@ -91,11 +91,11 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 	require.NoError(t, err)
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Slot:               slot,
-		BuilderIndex:       builderIdx,
-		BeaconBlockRoot:    headerRoot[:],
-		Payload:            payload,
-		ExecutionRequests:  &enginev1.ExecutionRequests{},
+		Slot:              slot,
+		BuilderIndex:      builderIdx,
+		BeaconBlockRoot:   headerRoot[:],
+		Payload:           payload,
+		ExecutionRequests: &enginev1.ExecutionRequests{},
 	}
 
 	if mutate != nil {

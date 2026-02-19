@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -41,26 +42,26 @@ func InitializePrecomputeValidators(ctx context.Context, beaconState state.Beaco
 	if beaconState.NumValidators() != len(inactivityScores) {
 		return nil, nil, errors.New("num of validators is different than num of inactivity scores")
 	}
-	if err := beaconState.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	if err := beaconState.ForEachValidator(func(idx int, val *stateutil.CompactValidator) error {
 		// Set validator's balance, inactivity score and slashed/withdrawable status.
 		v := &precompute.Validator{
-			CurrentEpochEffectiveBalance: val.EffectiveBalance(),
+			CurrentEpochEffectiveBalance: val.EffectiveBalance,
 			InactivityScore:              inactivityScores[idx],
-			IsSlashed:                    val.Slashed(),
-			IsWithdrawableCurrentEpoch:   currentEpoch >= val.WithdrawableEpoch(),
+			IsSlashed:                    val.Slashed,
+			IsWithdrawableCurrentEpoch:   currentEpoch >= val.WithdrawableEpoch,
 		}
 		// Set validator's active status for current epoch.
-		if helpers.IsActiveValidatorUsingTrie(val, currentEpoch) {
+		if helpers.IsActiveCompactValidator(val, currentEpoch) {
 			v.IsActiveCurrentEpoch = true
-			bal.ActiveCurrentEpoch, err = math.Add64(bal.ActiveCurrentEpoch, val.EffectiveBalance())
+			bal.ActiveCurrentEpoch, err = math.Add64(bal.ActiveCurrentEpoch, val.EffectiveBalance)
 			if err != nil {
 				return err
 			}
 		}
 		// Set validator's active status for previous epoch.
-		if helpers.IsActiveValidatorUsingTrie(val, prevEpoch) {
+		if helpers.IsActiveCompactValidator(val, prevEpoch) {
 			v.IsActivePrevEpoch = true
-			bal.ActivePrevEpoch, err = math.Add64(bal.ActivePrevEpoch, val.EffectiveBalance())
+			bal.ActivePrevEpoch, err = math.Add64(bal.ActivePrevEpoch, val.EffectiveBalance)
 			if err != nil {
 				return err
 			}

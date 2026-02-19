@@ -4,6 +4,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 )
 
@@ -25,9 +26,9 @@ func ProcessSlashingsPrecompute(s state.BeaconState, pBal *Balance) error {
 
 	var hasSlashing bool
 	// Iterate through validator list in state, stop until a validator satisfies slashing condition of current epoch.
-	err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		correctEpoch := epochToWithdraw == val.WithdrawableEpoch()
-		if val.Slashed() && correctEpoch {
+	err := s.ForEachValidator(func(idx int, val *stateutil.CompactValidator) error {
+		correctEpoch := epochToWithdraw == val.WithdrawableEpoch
+		if val.Slashed && correctEpoch {
 			hasSlashing = true
 		}
 		return nil
@@ -42,16 +43,16 @@ func ProcessSlashingsPrecompute(s state.BeaconState, pBal *Balance) error {
 
 	increment := params.BeaconConfig().EffectiveBalanceIncrement
 	bals := s.Balances()
-	validatorFunc := func(idx int, val state.ReadOnlyValidator) error {
-		correctEpoch := epochToWithdraw == val.WithdrawableEpoch()
-		if val.Slashed() && correctEpoch {
-			penaltyNumerator := val.EffectiveBalance() / increment * minSlashing
+	validatorFunc := func(idx int, val *stateutil.CompactValidator) error {
+		correctEpoch := epochToWithdraw == val.WithdrawableEpoch
+		if val.Slashed && correctEpoch {
+			penaltyNumerator := val.EffectiveBalance / increment * minSlashing
 			penalty := penaltyNumerator / pBal.ActiveCurrentEpoch * increment
 			bals[idx] = helpers.DecreaseBalanceWithVal(bals[idx], penalty)
 		}
 		return nil
 	}
-	if err := s.ReadFromEveryValidator(validatorFunc); err != nil {
+	if err := s.ForEachValidator(validatorFunc); err != nil {
 		return err
 	}
 	return s.SetBalances(bals)

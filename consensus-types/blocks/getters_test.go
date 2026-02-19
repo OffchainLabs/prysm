@@ -666,12 +666,12 @@ func hydrateBeaconBlockBodyGloas() *eth.BeaconBlockBodyGloas {
 		},
 		SignedExecutionPayloadBid: &eth.SignedExecutionPayloadBid{
 			Message: &eth.ExecutionPayloadBid{
-				ParentBlockHash:        make([]byte, fieldparams.RootLength),
-				ParentBlockRoot:        make([]byte, fieldparams.RootLength),
-				BlockHash:              make([]byte, fieldparams.RootLength),
-				PrevRandao:             make([]byte, fieldparams.RootLength),
-				FeeRecipient:           make([]byte, 20),
-				BlobKzgCommitments:     [][]byte{make([]byte, fieldparams.BLSPubkeyLength)},
+				ParentBlockHash:    make([]byte, fieldparams.RootLength),
+				ParentBlockRoot:    make([]byte, fieldparams.RootLength),
+				BlockHash:          make([]byte, fieldparams.RootLength),
+				PrevRandao:         make([]byte, fieldparams.RootLength),
+				FeeRecipient:       make([]byte, 20),
+				BlobKzgCommitments: [][]byte{make([]byte, fieldparams.BLSPubkeyLength)},
 			},
 			Signature: make([]byte, fieldparams.BLSSignatureLength),
 		},
