@@ -185,7 +185,7 @@ func (s *Service) validatorsCustodyRequirement() (uint64, error) {
 	}
 
 	// Retrieve the finalized state.
-	finalizedState := s.cfg.stateGen.FinalizedState()
+	finalizedState := s.cfg.stateGen.FinalizedReadOnlyBalances()
 	if finalizedState == nil || finalizedState.IsNil() {
 		return 0, nilFinalizedStateError
 	}
