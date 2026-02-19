@@ -31,8 +31,7 @@ type PartialDataColumn struct {
 	root    [fieldparams.RootLength]byte
 	groupID []byte
 
-	Included      bitfield.Bitlist
-	eagerPushSent map[peer.ID]struct{}
+	Included bitfield.Bitlist
 }
 
 // NewPartialDataColumn creates a new Partial Data Column for the given block.
@@ -71,7 +70,6 @@ func NewPartialDataColumn(
 		root:              root,
 		groupID:           groupID,
 		Included:          bitfield.NewBitlist(uint64(len(sidecar.KzgCommitments))),
-		eagerPushSent:     make(map[peer.ID]struct{}),
 	}
 	return c, nil
 }
@@ -79,12 +77,6 @@ func NewPartialDataColumn(
 // GroupID returns the libp2p partial-messages group identifier.
 func (p *PartialDataColumn) GroupID() []byte {
 	return p.groupID
-}
-
-// ClearEagerPushSent resets the set of peers that have received the eager push
-// header.
-func (p *PartialDataColumn) ClearEagerPushSent() {
-	p.eagerPushSent = make(map[peer.ID]struct{})
 }
 
 func (p *PartialDataColumn) newPartsMetadata() *ethpb.PartialDataColumnPartsMetadata {
@@ -227,17 +219,19 @@ func (p *PartialDataColumn) updateReceivedStateOutgoing(receivedMeta partialmess
 func (p *PartialDataColumn) ForPeer(remote peer.ID, requestedMessage bool, peerState partialmessages.PeerState) (partialmessages.PeerState, []byte,
 	partialmessages.PartsMetadata, error) {
 	// Eager push header - we don't know what the peer has and message has been requested.
-	// Only send the header once per peer.
+	// Set RecvdState so subsequent calls skip the eager push path.
 	if requestedMessage && peerState.RecvdState == nil {
-		if _, sent := p.eagerPushSent[remote]; !sent {
-			encoded, err := p.eagerPushBytes()
-			if err != nil {
-				return peerState, nil, nil, err
-			}
-			p.eagerPushSent[remote] = struct{}{}
-			return peerState, encoded, nil, nil
+		encoded, err := p.eagerPushBytes()
+		if err != nil {
+			return peerState, nil, nil, err
 		}
-		return peerState, nil, nil, nil
+		noAvailNoReq := NewPartsMetaWithNoAvailableAndNoRequests(p.NKzgCommitments())
+		recvdMeta, err := marshalPartsMetadata(noAvailNoReq)
+		if err != nil {
+			return peerState, nil, nil, err
+		}
+		peerState.RecvdState = recvdMeta
+		return peerState, encoded, nil, nil
 	}
 
 	var encodedMsg []byte

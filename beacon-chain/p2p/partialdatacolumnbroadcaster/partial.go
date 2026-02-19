@@ -269,9 +269,6 @@ func (p *PartialColumnBroadcaster) loop() {
 				delete(p.validHeaderCache, groupID)
 				delete(p.getBlobsCalled, groupID)
 				for topic, msgStore := range p.partialMsgStore {
-					if col, ok := msgStore[groupID]; ok {
-						col.ClearEagerPushSent()
-					}
 					delete(msgStore, groupID)
 					if len(msgStore) == 0 {
 						delete(p.partialMsgStore, topic)

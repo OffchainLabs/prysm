@@ -154,25 +154,6 @@ func TestNewPartialDataColumn(t *testing.T) {
 	}
 }
 
-func TestPartialDataColumn_ClearEagerPushSent(t *testing.T) {
-	tests := []struct {
-		name string
-		m    map[peer.ID]struct{}
-	}{
-		{name: "already nil", m: nil},
-		{name: "non-empty map", m: map[peer.ID]struct{}{peer.ID("p1"): {}}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &PartialDataColumn{eagerPushSent: tt.m}
-			p.ClearEagerPushSent()
-			require.NotNil(t, p.eagerPushSent)
-			require.Equal(t, 0, len(p.eagerPushSent))
-		})
-	}
-}
-
 func TestPartialDataColumn_newPartsMetadata(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -607,27 +588,31 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, encoded)
 				require.IsNil(t, meta)
-				require.IsNil(t, next.RecvdState)
+				require.NotNil(t, next.RecvdState)
 				require.IsNil(t, next.SentState)
-				_, seen := p.eagerPushSent[peer.ID("peer-a")]
-				require.Equal(t, true, seen)
+				// RecvdState should be no-available, no-requests metadata.
+				recvdMeta, parseErr := ParsePartsMetadata(next.RecvdState.(partialmessages.PartsMetadata), 2)
+				require.NoError(t, parseErr)
+				require.Equal(t, uint64(0), bitfield.Bitlist(recvdMeta.Available).Count())
+				require.Equal(t, uint64(0), bitfield.Bitlist(recvdMeta.Requests).Count())
 				decoded := mustDecodeSidecar(t, encoded)
 				require.Equal(t, 1, len(decoded.Header))
 				require.Equal(t, 0, len(decoded.PartialColumn))
 			},
 		},
 		{
-			name: "eager push not repeated",
+			name: "eager push not repeated when peerState preserved",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
-				_, _, _, err := p.ForPeer(peer.ID("peer-a"), true, partialmessages.PeerState{})
+				state, _, _, err := p.ForPeer(peer.ID("peer-a"), true, partialmessages.PeerState{})
 				require.NoError(t, err)
-				next, encoded, meta, err := p.ForPeer(peer.ID("peer-a"), true, partialmessages.PeerState{})
+				require.NotNil(t, state.RecvdState)
+				// Second call with the returned state should not send eager push again.
+				next, encoded, meta, err := p.ForPeer(peer.ID("peer-a"), true, state)
 				require.NoError(t, err)
-				require.IsNil(t, encoded)
-				require.IsNil(t, meta)
-				require.IsNil(t, next.RecvdState)
-				require.IsNil(t, next.SentState)
+				require.IsNil(t, encoded) // no cells to send (peer has no requests)
+				require.NotNil(t, meta)   // partsMetadata is sent since SentState differs
+				require.NotNil(t, next.RecvdState)
 			},
 		},
 		{
