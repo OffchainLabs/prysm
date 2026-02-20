@@ -180,16 +180,10 @@ func PTCDuties(
 		return nil, err
 	}
 
-	// Track remaining validators to find.
-	remaining := make(map[primitives.ValidatorIndex]struct{}, len(validators))
-	for v := range validators {
-		remaining[v] = struct{}{}
-	}
-
 	var duties []PTCDuty
 	endSlot := startSlot + params.BeaconConfig().SlotsPerEpoch
 
-	for slot := startSlot; slot < endSlot && len(remaining) > 0; slot++ {
+	for slot := startSlot; slot < endSlot; slot++ {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -200,15 +194,20 @@ func PTCDuties(
 			return nil, errors.Wrapf(err, "failed to get PTC for slot %d", slot)
 		}
 
-		// Check which remaining validators are in this PTC.
+		// Check which requested validators are in this PTC, deduplicating within the slot.
+		seen := make(map[primitives.ValidatorIndex]struct{})
 		for _, valIdx := range ptc {
-			if _, ok := remaining[valIdx]; ok {
-				duties = append(duties, PTCDuty{
-					ValidatorIndex: valIdx,
-					Slot:           slot,
-				})
-				delete(remaining, valIdx)
+			if _, ok := validators[valIdx]; !ok {
+				continue
 			}
+			if _, already := seen[valIdx]; already {
+				continue
+			}
+			seen[valIdx] = struct{}{}
+			duties = append(duties, PTCDuty{
+				ValidatorIndex: valIdx,
+				Slot:           slot,
+			})
 		}
 	}
 
