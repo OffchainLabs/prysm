@@ -15,6 +15,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // AttesterDutyResult is a transport-agnostic representation of attester duty.
@@ -211,4 +213,44 @@ func syncDutyStatus(st state.BeaconState, idx primitives.ValidatorIndex) validat
 		return validator.Active
 	}
 	return validator.Pending
+}
+
+// AttestationDependentRoot returns the block root at (epoch-1 start - 1),
+// which is the dependent root for attester duties at the given epoch.
+func AttestationDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+	var dependentRootSlot primitives.Slot
+	if epoch <= 1 {
+		dependentRootSlot = 0
+	} else {
+		prevEpochStartSlot, err := slots.EpochStart(epoch.Sub(1))
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
+		}
+		dependentRootSlot = prevEpochStartSlot.Sub(1)
+	}
+	root, err := helpers.BlockRootAtSlot(s, dependentRootSlot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get block root")
+	}
+	return root, nil
+}
+
+// ProposalDependentRoot returns the block root at (epoch start - 1),
+// which is the dependent root for proposer duties at the given epoch.
+func ProposalDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+	var dependentRootSlot primitives.Slot
+	if epoch == 0 {
+		dependentRootSlot = 0
+	} else {
+		epochStartSlot, err := slots.EpochStart(epoch)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
+		}
+		dependentRootSlot = epochStartSlot.Sub(1)
+	}
+	root, err := helpers.BlockRootAtSlot(s, dependentRootSlot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get block root")
+	}
+	return root, nil
 }

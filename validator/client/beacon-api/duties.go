@@ -228,6 +228,132 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 	return nil
 }
 
+func (c *beaconApiValidatorClient) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.AttesterDutiesResponse, error) {
+	resp, err := c.dutiesProvider.AttesterDuties(ctx, epoch, validatorIndices)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get attester duties")
+	}
+	dependentRoot, err := hexutil.Decode(resp.DependentRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode dependent root")
+	}
+	duties := make([]*ethpb.AttesterDuty, len(resp.Data))
+	for i, d := range resp.Data {
+		pubkey, err := hexutil.Decode(d.Pubkey)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to decode pubkey %s", d.Pubkey)
+		}
+		valIdx, err := strconv.ParseUint(d.ValidatorIndex, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator index %s", d.ValidatorIndex)
+		}
+		commIdx, err := strconv.ParseUint(d.CommitteeIndex, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse committee index %s", d.CommitteeIndex)
+		}
+		commLen, err := strconv.ParseUint(d.CommitteeLength, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse committee length %s", d.CommitteeLength)
+		}
+		commsAtSlot, err := strconv.ParseUint(d.CommitteesAtSlot, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse committees at slot %s", d.CommitteesAtSlot)
+		}
+		valCommIdx, err := strconv.ParseUint(d.ValidatorCommitteeIndex, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator committee index %s", d.ValidatorCommitteeIndex)
+		}
+		slot, err := strconv.ParseUint(d.Slot, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse slot %s", d.Slot)
+		}
+		duties[i] = &ethpb.AttesterDuty{
+			Pubkey:                  pubkey,
+			ValidatorIndex:          primitives.ValidatorIndex(valIdx),
+			CommitteeIndex:          primitives.CommitteeIndex(commIdx),
+			CommitteeLength:         commLen,
+			CommitteesAtSlot:        commsAtSlot,
+			ValidatorCommitteeIndex: valCommIdx,
+			Slot:                    primitives.Slot(slot),
+		}
+	}
+	return &ethpb.AttesterDutiesResponse{
+		DependentRoot:       dependentRoot,
+		ExecutionOptimistic: resp.ExecutionOptimistic,
+		Duties:              duties,
+	}, nil
+}
+
+func (c *beaconApiValidatorClient) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*ethpb.ProposerDutiesResponse, error) {
+	resp, err := c.dutiesProvider.ProposerDuties(ctx, epoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get proposer duties")
+	}
+	dependentRoot, err := hexutil.Decode(resp.DependentRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode dependent root")
+	}
+	duties := make([]*ethpb.ProposerDutyV2, len(resp.Data))
+	for i, d := range resp.Data {
+		pubkey, err := hexutil.Decode(d.Pubkey)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to decode pubkey %s", d.Pubkey)
+		}
+		valIdx, err := strconv.ParseUint(d.ValidatorIndex, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator index %s", d.ValidatorIndex)
+		}
+		slot, err := strconv.ParseUint(d.Slot, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse slot %s", d.Slot)
+		}
+		duties[i] = &ethpb.ProposerDutyV2{
+			Pubkey:         pubkey,
+			ValidatorIndex: primitives.ValidatorIndex(valIdx),
+			Slot:           primitives.Slot(slot),
+		}
+	}
+	return &ethpb.ProposerDutiesResponse{
+		DependentRoot:       dependentRoot,
+		ExecutionOptimistic: resp.ExecutionOptimistic,
+		Duties:              duties,
+	}, nil
+}
+
+func (c *beaconApiValidatorClient) SyncCommitteeDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.SyncCommitteeDutiesResponse, error) {
+	syncDuties, err := c.dutiesProvider.SyncDuties(ctx, epoch, validatorIndices)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get sync committee duties")
+	}
+	duties := make([]*ethpb.SyncCommitteeDuty, len(syncDuties))
+	for i, d := range syncDuties {
+		pubkey, err := hexutil.Decode(d.Pubkey)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to decode pubkey %s", d.Pubkey)
+		}
+		valIdx, err := strconv.ParseUint(d.ValidatorIndex, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator index %s", d.ValidatorIndex)
+		}
+		indices := make([]uint64, len(d.ValidatorSyncCommitteeIndices))
+		for j, idx := range d.ValidatorSyncCommitteeIndices {
+			parsed, err := strconv.ParseUint(idx, 10, 64)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to parse sync committee index %s", idx)
+			}
+			indices[j] = parsed
+		}
+		duties[i] = &ethpb.SyncCommitteeDuty{
+			Pubkey:                        pubkey,
+			ValidatorIndex:                primitives.ValidatorIndex(valIdx),
+			ValidatorSyncCommitteeIndices: indices,
+		}
+	}
+	return &ethpb.SyncCommitteeDutiesResponse{
+		Duties: duties,
+	}, nil
+}
+
 func (c *beaconApiValidatorClient) validatorsForDuties(ctx context.Context, pubkeys [][]byte) ([]validatorForDuty, error) {
 	vals := make([]validatorForDuty, 0, len(pubkeys))
 	stringPubkeysToPubkeys := make(map[string][]byte, len(pubkeys))

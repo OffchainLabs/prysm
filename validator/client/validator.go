@@ -71,6 +71,7 @@ type validator struct {
 	enableAPI                          bool
 	disableDutiesPolling               bool
 	emitAccountMetrics                 bool
+	splitDutiesEnabled                 bool
 	aggregatedSlotCommitteeIDCacheLock sync.Mutex
 	attLogsLock                        sync.Mutex
 	attSelectionLock                   sync.Mutex
@@ -93,6 +94,9 @@ type validator struct {
 	attSelections                      map[attSelectionKey]iface.BeaconCommitteeSelection
 	interopKeysConfig                  *local.InteropKeymanagerConfig
 	duties                             *ethpb.ValidatorDutiesContainer
+	attesterDutiesCache                *attesterDutiesCacheEntry
+	proposerDutiesCache                *proposerDutiesCacheEntry
+	syncDutiesCache                    *syncDutiesCacheEntry
 	signedValidatorRegistrations       map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
 	proposerSettings                   *proposer.Settings
 	web3SignerConfig                   *remoteweb3signer.SetupConfig
@@ -124,6 +128,22 @@ type validatorStatus struct {
 	publicKey []byte
 	status    *ethpb.ValidatorStatusResponse
 	index     primitives.ValidatorIndex
+}
+
+type attesterDutiesCacheEntry struct {
+	current, next *ethpb.AttesterDutiesResponse
+	epoch         primitives.Epoch
+}
+
+type proposerDutiesCacheEntry struct {
+	current *ethpb.ProposerDutiesResponse
+	epoch   primitives.Epoch
+}
+
+type syncDutiesCacheEntry struct {
+	current, next *ethpb.SyncCommitteeDutiesResponse
+	epoch         primitives.Epoch
+	period        uint64
 }
 
 type attSelectionKey struct {
@@ -562,16 +582,40 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	}
 	v.blacklistedPubkeysLock.RUnlock()
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
+
+	// Try split duty endpoints first; fall back to legacy Duties() if unimplemented.
+	resp, err := v.updateDutiesSplit(ctx, epoch, filteredKeys)
+	if err != nil {
+		return err
+	}
+	if resp == nil {
+		// Split endpoints not available — use legacy path.
+		return v.updateDutiesLegacy(ctx, epoch, filteredKeys)
+	}
+
+	ss, err := slots.EpochStart(epoch)
+	if err != nil {
+		return err
+	}
+	v.dutiesLock.Lock()
+	v.duties = resp
+	v.logDuties(ss, v.duties.CurrentEpochDuties, v.duties.NextEpochDuties)
+	v.dutiesLock.Unlock()
+
+	return v.finalizeDuties(ctx, resp)
+}
+
+// updateDutiesLegacy uses the combined Duties() endpoint for backward compat.
+func (v *validator) updateDutiesLegacy(ctx context.Context, epoch primitives.Epoch, filteredKeys [][fieldparams.BLSPubkeyLength]byte) error {
 	req := &ethpb.DutiesRequest{
 		Epoch:      epoch,
 		PublicKeys: bytesutil.FromBytes48Array(filteredKeys),
 	}
 
-	// If duties is nil it means we have had no prior duties and just started up.
 	resp, err := v.validatorClient.Duties(ctx, req)
 	if err != nil || resp == nil {
 		v.dutiesLock.Lock()
-		v.duties = nil // Clear assignments so we know to retry the request.
+		v.duties = nil
 		v.dutiesLock.Unlock()
 		log.WithError(err).Error("Error getting validator duties")
 		return err
@@ -586,6 +630,11 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	v.logDuties(ss, v.duties.CurrentEpochDuties, v.duties.NextEpochDuties)
 	v.dutiesLock.Unlock()
 
+	return v.finalizeDuties(ctx, resp)
+}
+
+// finalizeDuties checks for all-exited validators and starts subnet subscriptions.
+func (v *validator) finalizeDuties(ctx context.Context, resp *ethpb.ValidatorDutiesContainer) error {
 	allExitedCounter := 0
 	for i := range resp.CurrentEpochDuties {
 		if resp.CurrentEpochDuties[i].Status == ethpb.ValidatorStatus_EXITED {
@@ -597,7 +646,6 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	}
 
 	// Non-blocking call for beacon node to start subscriptions for aggregators.
-	// Make sure to copy metadata into a new context
 	md, exists := metadata.FromOutgoingContext(ctx)
 	ctx = context.Background()
 	if exists {
@@ -610,6 +658,308 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	}()
 
 	return nil
+}
+
+// updateDutiesSplit fetches duties from the split V3 endpoints with per-duty caching.
+// Returns nil, nil when the split endpoints are not supported (caller should fall back).
+func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoch, filteredKeys [][fieldparams.BLSPubkeyLength]byte) (*ethpb.ValidatorDutiesContainer, error) {
+	// Resolve pubkeys → indices via pubkeyToStatus (populated in WaitForActivation).
+	indices := make([]primitives.ValidatorIndex, 0, len(filteredKeys))
+	indexToPubkey := make(map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte, len(filteredKeys))
+	for _, pk := range filteredKeys {
+		if st, ok := v.pubkeyToStatus[pk]; ok && st.status != nil && st.status.Status != ethpb.ValidatorStatus_UNKNOWN_STATUS {
+			indices = append(indices, st.index)
+			indexToPubkey[st.index] = pk
+		}
+	}
+	if len(indices) == 0 {
+		return nil, nil // No known validators — fall back to legacy which handles pubkey-based lookup.
+	}
+
+	// Check if split endpoints are enabled.
+	if !v.splitDutiesEnabled {
+		return nil, nil
+	}
+
+	// Probe split endpoint availability with a proposer duties call (no validator indices needed).
+	propResp, err := v.validatorClient.ProposerDuties(ctx, epoch)
+	if err != nil {
+		if isUnimplemented(err) {
+			v.splitDutiesEnabled = false
+			log.Info("Split duty endpoints not available, falling back to combined Duties()")
+			return nil, nil
+		}
+		v.dutiesLock.Lock()
+		v.duties = nil
+		v.dutiesLock.Unlock()
+		log.WithError(err).Error("Error getting proposer duties")
+		return nil, err
+	}
+
+	// -- Attester duties with dependent root skip --
+	var attCurrent, attNext *ethpb.AttesterDutiesResponse
+	attSkipped := false
+	v.dutiesLock.RLock()
+	cachedAtt := v.attesterDutiesCache
+	v.dutiesLock.RUnlock()
+
+	if cachedAtt != nil && cachedAtt.epoch == epoch && len(indices) > 0 {
+		// Probe with 1 validator to get dependent root cheaply.
+		probe, err := v.validatorClient.AttesterDuties(ctx, epoch, indices[:1])
+		if err != nil {
+			if isUnimplemented(err) {
+				return nil, nil
+			}
+			// Non-fatal: just refetch.
+		} else if bytes.Equal(probe.DependentRoot, cachedAtt.current.DependentRoot) {
+			attCurrent = cachedAtt.current
+			attNext = cachedAtt.next
+			attSkipped = true
+		}
+	}
+
+	// -- Sync committee period skip --
+	var syncCurrent, syncNext *ethpb.SyncCommitteeDutiesResponse
+	syncSkipped := false
+	currentPeriod := uint64(epoch) / uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod)
+
+	v.dutiesLock.RLock()
+	cachedSync := v.syncDutiesCache
+	v.dutiesLock.RUnlock()
+
+	if cachedSync != nil && cachedSync.period == currentPeriod {
+		syncCurrent = cachedSync.current
+		syncNext = cachedSync.next
+		syncSkipped = true
+	}
+
+	// -- Fetch remaining duties in parallel --
+	var fetchErr error
+
+	type result struct {
+		attCurr, attNextR *ethpb.AttesterDutiesResponse
+		syncCurr, syncN   *ethpb.SyncCommitteeDutiesResponse
+	}
+	var res result
+
+	var wg sync.WaitGroup
+
+	if !attSkipped {
+		wg.Go(func() {
+			resp, err := v.validatorClient.AttesterDuties(ctx, epoch, indices)
+			if err != nil {
+				fetchErr = err
+				return
+			}
+			res.attCurr = resp
+		})
+		wg.Go(func() {
+			resp, err := v.validatorClient.AttesterDuties(ctx, epoch+1, indices)
+			if err != nil {
+				fetchErr = err
+				return
+			}
+			res.attNextR = resp
+		})
+	}
+
+	if !syncSkipped && epoch >= params.BeaconConfig().AltairForkEpoch {
+		wg.Go(func() {
+			resp, err := v.validatorClient.SyncCommitteeDuties(ctx, epoch, indices)
+			if err != nil {
+				fetchErr = err
+				return
+			}
+			res.syncCurr = resp
+		})
+		wg.Go(func() {
+			nextEpoch := epoch + 1
+			resp, err := v.validatorClient.SyncCommitteeDuties(ctx, nextEpoch, indices)
+			if err != nil {
+				// Next epoch sync may fail if beyond valid range — that's OK.
+				log.WithError(err).Debug("Could not get next epoch sync committee duties")
+				return
+			}
+			res.syncN = resp
+		})
+	}
+
+	wg.Wait()
+
+	if fetchErr != nil {
+		v.dutiesLock.Lock()
+		v.duties = nil
+		v.dutiesLock.Unlock()
+		log.WithError(fetchErr).Error("Error getting validator duties (split)")
+		return nil, fetchErr
+	}
+
+	if !attSkipped {
+		attCurrent = res.attCurr
+		attNext = res.attNextR
+	}
+	if !syncSkipped {
+		syncCurrent = res.syncCurr
+		syncNext = res.syncN
+	}
+
+	if attCurrent == nil {
+		v.dutiesLock.Lock()
+		v.duties = nil
+		v.dutiesLock.Unlock()
+		return nil, errors.New("incomplete duty response from beacon node")
+	}
+
+	// Update per-duty caches.
+	v.dutiesLock.Lock()
+	v.attesterDutiesCache = &attesterDutiesCacheEntry{
+		current: attCurrent,
+		next:    attNext,
+		epoch:   epoch,
+	}
+	v.proposerDutiesCache = &proposerDutiesCacheEntry{
+		current: propResp,
+		epoch:   epoch,
+	}
+	if syncCurrent != nil {
+		v.syncDutiesCache = &syncDutiesCacheEntry{
+			current: syncCurrent,
+			next:    syncNext,
+			epoch:   epoch,
+			period:  currentPeriod,
+		}
+	}
+	v.dutiesLock.Unlock()
+
+	// Assemble the unified container for RolesAt / logDuties / subscribeToSubnets compat.
+	container := assembleDutiesContainer(attCurrent, attNext, propResp, syncCurrent, syncNext, indexToPubkey, v.pubkeyToStatus)
+	return container, nil
+}
+
+// assembleDutiesContainer merges split duty responses into a ValidatorDutiesContainer
+// for backward compatibility with RolesAt, logDuties, and subscribeToSubnets.
+func assembleDutiesContainer(
+	attCurrent, attNext *ethpb.AttesterDutiesResponse,
+	prop *ethpb.ProposerDutiesResponse,
+	syncCurrent, syncNext *ethpb.SyncCommitteeDutiesResponse,
+	indexToPubkey map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte,
+	pubkeyToStatus map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus,
+) *ethpb.ValidatorDutiesContainer {
+	// Build proposer slots map: index -> []slot.
+	proposerSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
+	if prop != nil {
+		for _, d := range prop.Duties {
+			proposerSlots[d.ValidatorIndex] = append(proposerSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+
+	// Build sync committee maps: index -> bool.
+	syncCurrentMap := make(map[primitives.ValidatorIndex]bool)
+	if syncCurrent != nil {
+		for _, d := range syncCurrent.Duties {
+			syncCurrentMap[d.ValidatorIndex] = true
+		}
+	}
+	syncNextMap := make(map[primitives.ValidatorIndex]bool)
+	if syncNext != nil {
+		for _, d := range syncNext.Duties {
+			syncNextMap[d.ValidatorIndex] = true
+		}
+	}
+
+	// Build current epoch duties from attester duties.
+	currentDuties := make([]*ethpb.ValidatorDuty, 0)
+	currentIndexSet := make(map[primitives.ValidatorIndex]bool)
+	if attCurrent != nil {
+		for _, d := range attCurrent.Duties {
+			currentIndexSet[d.ValidatorIndex] = true
+			pk := indexToPubkey[d.ValidatorIndex]
+			st := statusForDuty(pk, pubkeyToStatus)
+			currentDuties = append(currentDuties, &ethpb.ValidatorDuty{
+				PublicKey:               pk[:],
+				ValidatorIndex:          d.ValidatorIndex,
+				CommitteeIndex:          d.CommitteeIndex,
+				CommitteeLength:         d.CommitteeLength,
+				CommitteesAtSlot:        d.CommitteesAtSlot,
+				ValidatorCommitteeIndex: d.ValidatorCommitteeIndex,
+				AttesterSlot:            d.Slot,
+				ProposerSlots:           proposerSlots[d.ValidatorIndex],
+				Status:                  st,
+				IsSyncCommittee:         syncCurrentMap[d.ValidatorIndex],
+			})
+		}
+	}
+	// Add proposer-only validators not in attester list.
+	for idx, pSlots := range proposerSlots {
+		if currentIndexSet[idx] {
+			continue
+		}
+		pk := indexToPubkey[idx]
+		st := statusForDuty(pk, pubkeyToStatus)
+		currentDuties = append(currentDuties, &ethpb.ValidatorDuty{
+			PublicKey:       pk[:],
+			ValidatorIndex:  idx,
+			ProposerSlots:   pSlots,
+			Status:          st,
+			IsSyncCommittee: syncCurrentMap[idx],
+		})
+		currentIndexSet[idx] = true
+	}
+
+	// Build next epoch duties from next attester duties.
+	nextDuties := make([]*ethpb.ValidatorDuty, 0)
+	if attNext != nil {
+		for _, d := range attNext.Duties {
+			pk := indexToPubkey[d.ValidatorIndex]
+			st := statusForDuty(pk, pubkeyToStatus)
+			nextDuties = append(nextDuties, &ethpb.ValidatorDuty{
+				PublicKey:               pk[:],
+				ValidatorIndex:          d.ValidatorIndex,
+				CommitteeIndex:          d.CommitteeIndex,
+				CommitteeLength:         d.CommitteeLength,
+				CommitteesAtSlot:        d.CommitteesAtSlot,
+				ValidatorCommitteeIndex: d.ValidatorCommitteeIndex,
+				AttesterSlot:            d.Slot,
+				Status:                  st,
+				IsSyncCommittee:         syncNextMap[d.ValidatorIndex],
+			})
+		}
+	}
+
+	// Use attester dependent root as PrevDependentRoot, proposer dependent root as CurrDependentRoot.
+	var prevRoot, currRoot []byte
+	if attCurrent != nil {
+		prevRoot = attCurrent.DependentRoot
+	}
+	if prop != nil {
+		currRoot = prop.DependentRoot
+	}
+
+	return &ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot:  prevRoot,
+		CurrDependentRoot:  currRoot,
+		CurrentEpochDuties: currentDuties,
+		NextEpochDuties:    nextDuties,
+	}
+}
+
+// statusForDuty returns the validator status for a given pubkey, or ACTIVE by default.
+func statusForDuty(pk [fieldparams.BLSPubkeyLength]byte, pubkeyToStatus map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus) ethpb.ValidatorStatus {
+	if st, ok := pubkeyToStatus[pk]; ok && st.status != nil {
+		return st.status.Status
+	}
+	return ethpb.ValidatorStatus_ACTIVE
+}
+
+// isUnimplemented checks if the error indicates a gRPC Unimplemented status.
+func isUnimplemented(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "Unimplemented") ||
+		strings.Contains(err.Error(), "unimplemented") ||
+		strings.Contains(err.Error(), "not implemented") ||
+		strings.Contains(err.Error(), "unknown method")
 }
 
 // subscribeToSubnets iterates through each validator duty, signs each slot, and asks beacon node

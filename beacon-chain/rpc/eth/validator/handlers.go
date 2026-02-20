@@ -37,8 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // GetAggregateAttestationV2 aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
@@ -935,7 +933,7 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = r[:]
 	} else {
-		dependentRoot, err = attestationDependentRoot(st, requestedEpoch)
+		dependentRoot, err = core.AttestationDependentRoot(st, requestedEpoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -1021,7 +1019,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = r[:]
 	} else {
-		dependentRoot, err = proposalDependentRoot(st, requestedEpoch)
+		dependentRoot, err = core.ProposalDependentRoot(st, requestedEpoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -1254,44 +1252,4 @@ func (s *Server) BeaconCommitteeSelections(w http.ResponseWriter, _ *http.Reques
 // https://ethereum.github.io/beacon-APIs/#/Validator/submitSyncCommitteeSelections.
 func (s *Server) SyncCommitteeSelections(w http.ResponseWriter, _ *http.Request) {
 	httputil.HandleError(w, "Endpoint not implemented", 501)
-}
-
-// attestationDependentRoot is get_block_root_at_slot(state, compute_start_slot_at_epoch(epoch - 1) - 1)
-// or the genesis block root in the case of underflow.
-func attestationDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
-	var dependentRootSlot primitives.Slot
-	if epoch <= 1 {
-		dependentRootSlot = 0
-	} else {
-		prevEpochStartSlot, err := slots.EpochStart(epoch.Sub(1))
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
-		}
-		dependentRootSlot = prevEpochStartSlot.Sub(1)
-	}
-	root, err := helpers.BlockRootAtSlot(s, dependentRootSlot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get block root")
-	}
-	return root, nil
-}
-
-// proposalDependentRoot is get_block_root_at_slot(state, compute_start_slot_at_epoch(epoch) - 1)
-// or the genesis block root in the case of underflow.
-func proposalDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
-	var dependentRootSlot primitives.Slot
-	if epoch == 0 {
-		dependentRootSlot = 0
-	} else {
-		epochStartSlot, err := slots.EpochStart(epoch)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
-		}
-		dependentRootSlot = epochStartSlot.Sub(1)
-	}
-	root, err := helpers.BlockRootAtSlot(s, dependentRootSlot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get block root")
-	}
-	return root, nil
 }
