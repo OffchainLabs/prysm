@@ -12,7 +12,6 @@ go_library(
     deps = [
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
-        "//internal/logrusadapter:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
         "@com_github_libp2p_go_libp2p_pubsub//:go_default_library",

@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sirupsen/logrus"
 )
 
 func testSignedHeader(validRoots bool, sigLen int) *ethpb.SignedBeaconBlockHeader {
@@ -1201,7 +1200,7 @@ func TestPartialDataColumn_Complete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := tt.p.Complete(logrus.New())
+			got, ok := tt.p.Complete()
 			require.Equal(t, tt.wantOK, ok)
 			if tt.wantOK {
 				require.NotNil(t, got.DataColumnSidecar)

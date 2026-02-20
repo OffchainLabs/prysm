@@ -9,7 +9,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v7/internal/logrusadapter"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
@@ -50,8 +49,6 @@ type HeaderHandler func(header *ethpb.PartialDataColumnHeader, groupID string)
 type ColumnValidator func(cells []blocks.CellProofBundle) error
 
 type PartialColumnBroadcaster struct {
-	logger *logrus.Logger
-
 	ps   *pubsub.PubSub
 	stop chan struct{}
 
@@ -145,7 +142,7 @@ type gossipForPeerResponse struct {
 	err                 error
 }
 
-func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
+func NewBroadcaster() *PartialColumnBroadcaster {
 	return &PartialColumnBroadcaster{
 		topics:           make(map[string]*pubsub.Topic),
 		partialMsgStore:  make(map[string]map[string]*blocks.PartialDataColumn),
@@ -155,7 +152,6 @@ func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 		// GossipSub sends the messages to this channel. The buffer should be
 		// big enough to avoid dropping messages. We don't want to block the gossipsub event loop for this.
 		incomingReq: make(chan request, 128*16),
-		logger:      logger,
 
 		concurrentValidatorSemaphore:     make(chan struct{}, maxConcurrentValidators),
 		concurrentHeaderHandlerSemaphore: make(chan struct{}, maxConcurrentHeaderHandlers),
@@ -164,10 +160,9 @@ func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 
 // AppendPubSubOpts adds the necessary pubsub options to enable partial messages.
 func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubsub.Option {
-	slogger := slog.New(logrusadapter.Handler{Logger: p.logger})
 	opts = append(opts,
 		pubsub.WithPartialMessagesExtension(&partialmessages.PartialMessagesExtension{
-			Logger: slogger,
+			Logger: slog.Default().With("package", "beacon-chain/p2p/partialdatacolumnbroadcaster"),
 			GossipForPeer: func(topic string, groupID string, remote peer.ID, peerState partialmessages.PeerState) (partialmessages.PeerState, []byte, partialmessages.PartsMetadata, error) {
 				respCh := make(chan gossipForPeerResponse, 1)
 				p.incomingReq <- request{
@@ -201,7 +196,7 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 					incomingRPC: rpcWithFrom{rpc, from, message},
 				}:
 				default:
-					p.logger.Warn("Dropping incoming partial RPC", "rpc", rpc)
+					log.WithField("rpc", rpc).Warn("Dropping incoming partial RPC")
 					return nextPeerState, errors.New("incomingReq channel is full, dropping RPC")
 				}
 				return nextPeerState, nil
@@ -288,15 +283,15 @@ func (p *PartialColumnBroadcaster) loop() {
 			case requestKindHandleIncomingRPC:
 				err := p.handleIncomingRPC(req.incomingRPC)
 				if err != nil {
-					p.logger.Error("Failed to handle incoming partial RPC", "err", err)
+					log.WithError(err).Error("Failed to handle incoming partial RPC")
 				}
 			case requestKindCellsValidated:
 				err := p.handleCellsValidated(req.cellsValidated)
 				if err != nil {
-					p.logger.Error("Failed to handle cells validated", "err", err)
+					log.WithError(err).Error("Failed to handle cells validated")
 				}
 			default:
-				p.logger.Error("Unknown request kind", "kind", req.kind)
+				log.WithField("kind", req.kind).Error("Unknown request kind")
 			}
 		}
 	}
@@ -436,14 +431,14 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		} else {
 			// We haven't seen this group before. Check if we have a valid header.
 			if len(message.Header) == 0 {
-				p.logger.Debug("No partial column found and no header in message, ignoring")
+				log.Debug("No partial column found and no header in message, ignoring")
 				return nil
 			}
 
 			header = message.Header[0]
 			reject, err := p.validateHeader(header)
 			if err != nil {
-				p.logger.Debug("Header validation failed", "err", err, "reject", reject)
+				log.WithError(err).WithField("reject", reject).Debug("Header validation failed")
 				if reject {
 					// REJECT case: penalize the peer
 					_ = p.ps.PeerFeedback(topicID, rpcWithFrom.from, pubsub.PeerFeedbackInvalidMessage)
@@ -463,7 +458,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 					p.handleHeader(header, string(groupID))
 				}()
 			default:
-				p.logger.WithFields(logrus.Fields{
+				log.WithFields(logrus.Fields{
 					"topic": topicID,
 					"group": groupID,
 				}).Warn("Dropping header handler, max concurrent header handlers reached")
@@ -482,7 +477,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			header.KzgCommitmentsInclusionProof,
 		)
 		if err != nil {
-			p.logger.WithError(err).WithFields(logrus.Fields{
+			log.WithError(err).WithFields(logrus.Fields{
 				"topic":          topicID,
 				"columnIndex":    columnIndex,
 				"numCommitments": len(header.KzgCommitments),
@@ -509,7 +504,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		return nil
 	}
 
-	logger := p.logger.WithFields(logrus.Fields{
+	logger := log.WithFields(logrus.Fields{
 		"from":  rpcWithFrom.from,
 		"topic": topicID,
 		"group": groupID,
@@ -538,7 +533,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 				start := time.Now()
 				err := p.validateColumn(cellsToVerify)
 				if err != nil {
-					logger.Error("failed to validate cells", "err", err)
+					logger.WithError(err).Error("Failed to validate cells")
 					_ = p.ps.PeerFeedback(topicID, rpcWithFrom.from, pubsub.PeerFeedbackInvalidMessage)
 					return
 				}
@@ -559,7 +554,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 
 	getBlobsCalled := p.getBlobsCalled[string(groupID)]
 	if !getBlobsCalled {
-		p.logger.Debug("GetBlobs not called, skipping republish", "topic", topicID, "group", groupID)
+		log.WithFields(logrus.Fields{"topic": topicID, "group": groupID}).Debug("GetBlobs not called, skipping republish")
 		return nil
 	}
 
@@ -589,7 +584,7 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 		return errors.New("data column not found for verified cells")
 	}
 	extended := ourDataColumn.ExtendFromVerifiedCells(cells.cellIndices, cells.cells)
-	p.logger.Debug("Extended partial message", "duration", cells.validationTook, "extended", extended)
+	log.WithFields(logrus.Fields{"duration": cells.validationTook, "extended": extended}).Debug("Extended partial message")
 
 	columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
 	if extended {
@@ -600,18 +595,18 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 		// useful to us, it's likely useful to our peers and we should
 		// republish eagerly
 
-		if col, ok := ourDataColumn.Complete(p.logger); ok {
-			p.logger.Info("Completed partial column", "topic", cells.topic, "group", cells.group)
+		if col, ok := ourDataColumn.Complete(); ok {
+			log.WithFields(logrus.Fields{"topic": cells.topic, "group": cells.group}).Info("Completed partial column")
 			if p.handleColumn != nil {
 				go p.handleColumn(cells.topic, col)
 			}
 		} else {
-			p.logger.Info("Extended partial column", "topic", cells.topic, "group", cells.group)
+			log.WithFields(logrus.Fields{"topic": cells.topic, "group": cells.group}).Info("Extended partial column")
 		}
 
 		getBlobsCalled := p.getBlobsCalled[string(ourDataColumn.GroupID())]
 		if !getBlobsCalled {
-			p.logger.Debug("GetBlobs not called, skipping republish", "topic", cells.topic, "group", cells.group)
+			log.WithFields(logrus.Fields{"topic": cells.topic, "group": cells.group}).Debug("GetBlobs not called, skipping republish")
 			return nil
 		}
 
@@ -668,8 +663,8 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 			}
 		}
 		if extended {
-			if col, ok := existing.Complete(p.logger); ok {
-				p.logger.Info("Completed partial column", "topic", topic, "group", existing.GroupID())
+			if col, ok := existing.Complete(); ok {
+				log.WithFields(logrus.Fields{"topic": topic, "group": existing.GroupID()}).Info("Completed partial column")
 				if p.handleColumn != nil {
 					go p.handleColumn(topic, col)
 				}

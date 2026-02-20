@@ -10,7 +10,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sirupsen/logrus"
 )
 
 var _ partialmessages.Message = (*PartialDataColumn)(nil)
@@ -391,7 +390,7 @@ func (p *PartialDataColumn) ExtendFromVerifiedCells(cellIndices []uint64, cells 
 }
 
 // Complete returns a verified read-only column if all cells are now present in this column.
-func (p *PartialDataColumn) Complete(logger *logrus.Logger) (VerifiedRODataColumn, bool) {
+func (p *PartialDataColumn) Complete() (VerifiedRODataColumn, bool) {
 	if uint64(len(p.KzgCommitments)) != p.Included.Count() {
 		return VerifiedRODataColumn{}, false
 	}
@@ -400,7 +399,7 @@ func (p *PartialDataColumn) Complete(logger *logrus.Logger) (VerifiedRODataColum
 	if err != nil {
 		// We shouldn't get an error, as we check the hash root when creating
 		// the partial column
-		logger.Error("failed to create RODataColumn", "err", err)
+		log.WithError(err).Error("Failed to create RODataColumn")
 		return VerifiedRODataColumn{}, false
 	}
 

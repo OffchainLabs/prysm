@@ -23,7 +23,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	simlibp2p "github.com/libp2p/go-libp2p/x/simlibp2p"
 	"github.com/marcopolo/simnet"
-	"github.com/sirupsen/logrus"
 )
 
 // TestTwoNodePartialColumnExchange tests that two nodes can exchange partial columns
@@ -56,10 +55,8 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		h1 := meta.Nodes[0]
 		h2 := meta.Nodes[1]
 
-		logger := logrus.New()
-		logger.SetLevel(logrus.DebugLevel)
-		broadcaster1 := partialdatacolumnbroadcaster.NewBroadcaster(logger)
-		broadcaster2 := partialdatacolumnbroadcaster.NewBroadcaster(logger)
+		broadcaster1 := partialdatacolumnbroadcaster.NewBroadcaster()
+		broadcaster2 := partialdatacolumnbroadcaster.NewBroadcaster()
 
 		opts1 := broadcaster1.AppendPubSubOpts([]pubsub.Option{
 			pubsub.WithMessageSigning(false),
