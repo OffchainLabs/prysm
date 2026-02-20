@@ -39,9 +39,18 @@ func (vs *Server) GetAttesterDuties(ctx context.Context, req *ethpb.AttesterDuti
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
 
-	dependentRoot, err := core.AttestationDependentRoot(s, req.Epoch)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+	var dependentRoot []byte
+	if req.Epoch <= 1 {
+		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get genesis block root: %v", err)
+		}
+		dependentRoot = r[:]
+	} else {
+		dependentRoot, err = core.AttestationDependentRoot(s, req.Epoch)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+		}
 	}
 
 	optimistic, err := vs.OptimisticModeFetcher.IsOptimistic(ctx)
@@ -97,9 +106,18 @@ func (vs *Server) GetProposerDutiesV2(ctx context.Context, req *ethpb.ProposerDu
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
 
-	dependentRoot, err := core.ProposalDependentRoot(s, req.Epoch)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+	var dependentRoot []byte
+	if req.Epoch == 0 {
+		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get genesis block root: %v", err)
+		}
+		dependentRoot = r[:]
+	} else {
+		dependentRoot, err = core.ProposalDependentRoot(s, req.Epoch)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+		}
 	}
 
 	optimistic, err := vs.OptimisticModeFetcher.IsOptimistic(ctx)

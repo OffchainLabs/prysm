@@ -5,6 +5,9 @@ go_library(
     srcs = [
         "aggregate.go",
         "attest.go",
+        "duties.go",
+        "duty_store.go",
+        "subnets.go",
         "health_monitor.go",
         "key_reload.go",
         "log.go",
@@ -102,6 +105,7 @@ go_test(
     srcs = [
         "aggregate_test.go",
         "attest_test.go",
+        "duty_store_test.go",
         "health_monitor_test.go",
         "key_reload_test.go",
         "log_test.go",

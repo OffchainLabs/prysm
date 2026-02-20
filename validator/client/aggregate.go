@@ -32,7 +32,7 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 	fmtKey := fmt.Sprintf("%#x", pubKey[:])
 
-	duty, err := v.duty(pubKey)
+	duty, err := v.attesterDuty(pubKey)
 	if err != nil {
 		log.WithError(err).Error("Could not fetch validator assignment")
 		if v.emitAccountMetrics {

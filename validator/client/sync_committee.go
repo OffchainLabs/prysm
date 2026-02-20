@@ -38,7 +38,7 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 		return
 	}
 
-	duty, err := v.duty(pubKey)
+	duty, err := v.attesterDuty(pubKey)
 	if err != nil {
 		log.WithError(err).Error("Could not fetch validator assignment")
 		return
@@ -102,7 +102,7 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 
-	duty, err := v.duty(pubKey)
+	duty, err := v.attesterDuty(pubKey)
 	if err != nil {
 		log.WithError(err).Error("Could not fetch validator assignment")
 		return
