@@ -396,3 +396,11 @@ func (v *ValidatorService) DeleteGraffiti(ctx context.Context, pubKey [fieldpara
 	}
 	return v.validator.DeleteGraffiti(ctx, pubKey)
 }
+
+// RandomActiveValidator returns a randomly selected active validator's public key and index.
+func (v *ValidatorService) RandomActiveValidator() ([fieldparams.BLSPubkeyLength]byte, primitives.ValidatorIndex, error) {
+	if v.validator == nil {
+		return [fieldparams.BLSPubkeyLength]byte{}, 0, errors.New("validator is unavailable")
+	}
+	return v.validator.RandomActiveValidator()
+}

@@ -28,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -1623,4 +1624,28 @@ type voteStats struct {
 // This tracks all validators' submissions for sync committees.
 type syncCommitteeStats struct {
 	totalMessagesSubmitted atomic.Uint64
+}
+
+// RandomActiveValidator returns a randomly selected active validator's public key and index.
+// Returns an error if no active validators are available.
+func (v *validator) RandomActiveValidator() ([fieldparams.BLSPubkeyLength]byte, primitives.ValidatorIndex, error) {
+	// Collect active validators
+	var activeValidators [][fieldparams.BLSPubkeyLength]byte
+	for pubkey, status := range v.pubkeyToStatus {
+		if status.status.Status == ethpb.ValidatorStatus_ACTIVE ||
+			status.status.Status == ethpb.ValidatorStatus_EXITING {
+			activeValidators = append(activeValidators, pubkey)
+		}
+	}
+
+	if len(activeValidators) == 0 {
+		return [fieldparams.BLSPubkeyLength]byte{}, 0, errors.New("no active validators available")
+	}
+
+	// Select random validator using CSPRNG
+	randGen := rand.NewGenerator()
+	randomIdx := randGen.Intn(len(activeValidators))
+
+	selectedPubkey := activeValidators[randomIdx]
+	return selectedPubkey, v.pubkeyToStatus[selectedPubkey].index, nil
 }

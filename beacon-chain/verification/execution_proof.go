@@ -1,9 +1,12 @@
 package verification
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"github.com/pkg/errors"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
 // GossipSignedExecutionProofRequirements defines the set of requirements that SignedExecutionProofs received on gossip
@@ -14,6 +17,20 @@ var GossipSignedExecutionProofRequirements = []Requirement{
 	RequireProofDataNonEmpty,
 	RequireProofDataNotTooLarge,
 	RequireProofVerified,
+}
+
+func proofToSignatureData(proof blocks.ROSignedExecutionProof) (executionProofSignatureData, error) {
+	proofRoot, err := proof.Message.HashTreeRoot()
+	if err != nil {
+		return executionProofSignatureData{}, fmt.Errorf("hash tree root: %w", err)
+	}
+
+	return executionProofSignatureData{
+		ProofRoot:      proofRoot,
+		Signature:      bytesutil.ToBytes96(proof.Signature),
+		ValidatorIndex: proof.GetValidatorIndex(),
+		Epoch:          proof.Epoch(),
+	}, nil
 }
 
 // ROSignedExecutionProofsVerifier verifies execution proofs.
@@ -66,14 +83,55 @@ func (v *ROSignedExecutionProofsVerifier) IsFromActiveValidator() (err error) {
 	return nil
 }
 
-func (v *ROSignedExecutionProofsVerifier) ValidProverSignature() (err error) {
+func (v *ROSignedExecutionProofsVerifier) ValidProverSignature(ctx context.Context) (err error) {
 	if ok, err := v.results.cached(RequireValidProverSignature); ok {
 		return err
 	}
 
 	defer v.recordResult(RequireValidProverSignature, &err)
 
-	// TODO: To implement
+	// Get the head state once to access validator public keys.
+	headState, err := v.hsp.HeadStateReadOnly(ctx)
+	if err != nil {
+		return fmt.Errorf("%w: could not get head state: %w", ErrInvalidProverSignature, err)
+	}
+
+	for _, proof := range v.proofs {
+		// Extract signature data from the proof.
+		signatureData, err := proofToSignatureData(proof)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrInvalidProverSignature, err)
+		}
+
+		// First check if there is a cached verification that can be reused.
+		seen, err := v.sc.ExecutionProofSignatureVerified(signatureData)
+		if err != nil {
+			executionProofSignatureCache.WithLabelValues("hit-invalid").Inc()
+			return fmt.Errorf("%w: %w", ErrInvalidProverSignature, err)
+		}
+
+		// If yes, we can skip the full verification.
+		if seen {
+			executionProofSignatureCache.WithLabelValues("hit-valid").Inc()
+			continue
+		}
+
+		// Ensure the expensive signature verification is only performed once for
+		// concurrent requests for the same signature data.
+		if _, err, _ = v.sg.Do(signatureData.concat(), func() (any, error) {
+			executionProofSignatureCache.WithLabelValues("miss").Inc()
+
+			// Full verification, which will subsequently be cached.
+			if err = v.sc.VerifyExecutionProofSignature(signatureData, headState); err != nil {
+				return nil, fmt.Errorf("verify signature: %w", err)
+			}
+
+			return nil, nil
+		}); err != nil {
+			return fmt.Errorf("%w: %w", ErrInvalidProverSignature, err)
+		}
+	}
+
 	return nil
 }
 
@@ -125,5 +183,5 @@ func (v *ROSignedExecutionProofsVerifier) ProofVerified() (err error) {
 }
 
 func proofErrBuilder(baseErr error) error {
-	return errors.Wrap(baseErr, errProofsInvalid.Error())
+	return fmt.Errorf("%w: %w", errProofsInvalid, baseErr)
 }

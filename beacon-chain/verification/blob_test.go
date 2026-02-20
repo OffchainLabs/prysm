@@ -619,6 +619,16 @@ func (m *mockSignatureCache) VerifySignature(sig signatureData, v validatorAtInd
 	return m.vscb(sig, v)
 }
 
+// ExecutionProofSignatureVerified implements signatureCache.
+func (m *mockSignatureCache) ExecutionProofSignatureVerified(_ executionProofSignatureData) (bool, error) {
+	return false, nil
+}
+
+// VerifyExecutionProofSignature implements signatureCache.
+func (m *mockSignatureCache) VerifyExecutionProofSignature(_ executionProofSignatureData, _ validatorAtIndexer) error {
+	return nil
+}
+
 var _ signatureCache = &mockSignatureCache{}
 
 type sbrfunc func(context.Context, [32]byte) (state.BeaconState, error)

@@ -91,6 +91,9 @@ var (
 	// ErrProofSizeTooLarge means RequireProofSizeLimits failed.
 	ErrProofSizeTooLarge = errors.Join(ErrProofInvalid, errors.New("proof data exceeds maximum size"))
 
+	// ErrInvalidProverSignature means RequireValidProverSignature failed.
+	ErrInvalidProverSignature = errors.Join(ErrProofInvalid, errors.New("prover signature could not be verified"))
+
 	// errProofsInvalid is a general error for proof verification failures.
 	errProofsInvalid = errors.New("execution proofs failed verification")
 )

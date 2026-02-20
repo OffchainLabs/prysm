@@ -88,7 +88,7 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 	}
 
 	// [REJECT] `proof.signature` is valid with respect to the prover's public key.
-	if err := verifier.ValidProverSignature(); err != nil {
+	if err := verifier.ValidProverSignature(ctx); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
@@ -123,6 +123,7 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 	log.WithFields(logrus.Fields{
 		"blockRoot": fmt.Sprintf("%#x", roSignedProof.BlockRoot()),
 		"type":      roSignedProof.Message.ProofType,
+		"signature": fmt.Sprintf("%#x", roSignedProof.Signature),
 	}).Debug("Accepted execution proof")
 
 	// Set validator data to the verified proof.

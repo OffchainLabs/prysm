@@ -336,3 +336,11 @@ func (fv *FakeValidator) FindHealthyHost(_ context.Context) bool {
 
 func (fv *FakeValidator) SetTicker() {
 }
+
+// RandomActiveValidator for mocking - returns the first validator from the map
+func (fv *FakeValidator) RandomActiveValidator() ([fieldparams.BLSPubkeyLength]byte, primitives.ValidatorIndex, error) {
+	for pubkey, idx := range fv.PubkeyToIndexMap {
+		return pubkey, primitives.ValidatorIndex(idx), nil
+	}
+	return [fieldparams.BLSPubkeyLength]byte{}, 0, errors.New("no active validators available")
+}

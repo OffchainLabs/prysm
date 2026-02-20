@@ -10,6 +10,7 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
@@ -38,6 +39,10 @@ type signatureCache interface {
 	VerifySignature(sig signatureData, v validatorAtIndexer) (err error)
 	// SignatureVerified accesses the result of a previous signature verification.
 	SignatureVerified(sig signatureData) (bool, error)
+	// VerifyExecutionProofSignature verifies an execution proof signature and caches the result.
+	VerifyExecutionProofSignature(sig executionProofSignatureData, v validatorAtIndexer) (err error)
+	// ExecutionProofSignatureVerified accesses the result of a previous execution proof signature verification.
+	ExecutionProofSignatureVerified(sig executionProofSignatureData) (bool, error)
 }
 
 // signatureData represents the set of parameters that together uniquely identify a signature observed on
@@ -145,6 +150,92 @@ func (c *sigCache) SignatureVerified(sig signatureData) (bool, error) {
 	if verified {
 		return true, nil
 	}
+	return true, signing.ErrSigFailedToVerify
+}
+
+// executionProofSignatureData for caching execution proof signatures.
+// This is separate from signatureData because execution proofs use different
+// domain (DomainExecutionProof) and sign over different data (ExecutionProof message root).
+type executionProofSignatureData struct {
+	ProofRoot      [fieldparams.RootLength]byte         // HashTreeRoot of ExecutionProof message
+	Signature      [fieldparams.BLSSignatureLength]byte // The BLS signature
+	ValidatorIndex primitives.ValidatorIndex            // Prover's validator index
+	Epoch          primitives.Epoch                     // Epoch for domain computation
+}
+
+func (d executionProofSignatureData) concat() string {
+	return string(d.ProofRoot[:]) + string(d.Signature[:])
+}
+
+// VerifyExecutionProofSignature verifies an execution proof signature and caches the result.
+// This uses DomainExecutionProof instead of DomainBeaconProposer.
+func (c *sigCache) VerifyExecutionProofSignature(signatureData executionProofSignatureData, state validatorAtIndexer) (err error) {
+	defer func() {
+		if err == nil {
+			c.Add(signatureData, true)
+			return
+		}
+
+		c.Add(signatureData, false)
+	}()
+
+	fork, err := c.getFork(signatureData.Epoch)
+	if err != nil {
+		return fmt.Errorf("failed to get fork for epoch %d: %w", signatureData.Epoch, err)
+	}
+
+	domain, err := signing.Domain(fork, signatureData.Epoch, params.BeaconConfig().DomainExecutionProof, c.valRoot)
+	if err != nil {
+		return fmt.Errorf("failed to compute domain: %w", err)
+	}
+
+	validator, err := state.ValidatorAtIndex(signatureData.ValidatorIndex)
+	if err != nil {
+		return fmt.Errorf("failed to get validator at index %d: %w", signatureData.ValidatorIndex, err)
+	}
+
+	publicKey, err := bls.PublicKeyFromBytes(validator.PublicKey)
+	if err != nil {
+		return fmt.Errorf("failed to parse public key: %w", err)
+	}
+
+	signature, err := bls.SignatureFromBytes(signatureData.Signature[:])
+	if err != nil {
+		return fmt.Errorf("failed to parse signature: %w", err)
+	}
+
+	signingRoot, err := signing.ComputeSigningRootForRoot(signatureData.ProofRoot, domain)
+	if err != nil {
+		return fmt.Errorf("failed to compute signing root: %w", err)
+	}
+
+	if !signature.Verify(publicKey, signingRoot[:]) {
+		return signing.ErrSigFailedToVerify
+	}
+
+	return nil
+}
+
+// ExecutionProofSignatureVerified checks the cache for the given execution proof signature data.
+// Returns (true, nil) if previously verified successfully, (true, error) if previously failed,
+// or (false, nil) on cache miss.
+func (c *sigCache) ExecutionProofSignatureVerified(signatureData executionProofSignatureData) (bool, error) {
+	val, seen := c.Get(signatureData)
+	if !seen {
+		return false, nil
+	}
+
+	verified, ok := val.(bool)
+	if !ok {
+		// This shouldn't happen, and if it does, the caller should treat it as a cache miss
+		// and run verification again to correctly populate the cache key.
+		return false, nil
+	}
+
+	if verified {
+		return true, nil
+	}
+
 	return true, signing.ErrSigFailedToVerify
 }
 

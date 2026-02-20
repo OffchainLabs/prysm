@@ -61,7 +61,7 @@ type SignedExecutionProofsVerifier interface {
 	SatisfyRequirement(Requirement)
 
 	IsFromActiveValidator() error
-	ValidProverSignature() error
+	ValidProverSignature(ctx context.Context) error
 	ProofDataNonEmpty() error
 	ProofDataNotTooLarge() error
 	ProofVerified() error

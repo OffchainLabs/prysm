@@ -71,6 +71,7 @@ type Validator interface {
 	Host() string
 	FindHealthyHost(ctx context.Context) bool
 	SetTicker()
+	RandomActiveValidator() ([fieldparams.BLSPubkeyLength]byte, primitives.ValidatorIndex, error)
 }
 
 // SigningFunc interface defines a type for the function that signs a message

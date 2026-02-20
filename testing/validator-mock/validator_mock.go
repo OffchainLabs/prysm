@@ -545,3 +545,19 @@ func (mr *MockValidatorMockRecorder) WaitForSync(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForSync", reflect.TypeOf((*MockValidator)(nil).WaitForSync), arg0)
 }
+
+// RandomActiveValidator mocks base method.
+func (m *MockValidator) RandomActiveValidator() ([48]byte, primitives.ValidatorIndex, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RandomActiveValidator")
+	ret0, _ := ret[0].([48]byte)
+	ret1, _ := ret[1].(primitives.ValidatorIndex)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// RandomActiveValidator indicates an expected call of RandomActiveValidator.
+func (mr *MockValidatorMockRecorder) RandomActiveValidator() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RandomActiveValidator", reflect.TypeOf((*MockValidator)(nil).RandomActiveValidator))
+}
