@@ -438,15 +438,16 @@ func (s *Service) startPartialColumnBroadcaster(broadcaster *partialdatacolumnbr
 		func(header *ethpb.PartialDataColumnHeader, groupID string) {
 			ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
 			defer cancel()
-			source := peerdas.PopulateFromPartialHeader(header)
+			source, err := peerdas.PopulateFromPartialHeader(header)
+			if err != nil {
+				log.WithError(err).Error("Failed to populate from partial data column header")
+				return
+			}
 			log.WithField("slot", source.Slot()).Info("Received data column header")
-			err := s.processDataColumnSidecarsFromExecution(ctx, source)
+			err = s.processDataColumnSidecarsFromExecution(ctx, source)
 			if err != nil {
 				log.WithError(err).Error("Failed to process partial data column header")
 				return
-			}
-			if err := broadcaster.GetBlobsCalled(groupID); err != nil {
-				log.WithError(err).Error("Failed to call getBlobs called on broadcaster")
 			}
 		},
 	)

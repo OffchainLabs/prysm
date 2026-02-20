@@ -89,7 +89,6 @@ const (
 	requestKindGossipForPeer
 	requestKindHandleIncomingRPC
 	requestKindCellsValidated
-	requestKindGetBlobsCalled
 )
 
 type request struct {
@@ -100,12 +99,7 @@ type request struct {
 	incomingRPC    rpcWithFrom
 	sub            subscribe
 	publish        publish
-	getBlobsCalled getBlobsCalled
 	gossipForPeer  gossipForPeer
-}
-
-type getBlobsCalled struct {
-	groupID string
 }
 
 type publish struct {
@@ -301,8 +295,6 @@ func (p *PartialColumnBroadcaster) loop() {
 				if err != nil {
 					p.logger.Error("Failed to handle cells validated", "err", err)
 				}
-			case requestKindGetBlobsCalled:
-				p.handleGetBlobsCalled(req.getBlobsCalled.groupID)
 			default:
 				p.logger.Error("Unknown request kind", "kind", req.kind)
 			}
@@ -462,13 +454,20 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			// Cache the valid header
 			p.validHeaderCache[string(groupID)] = header
 
-			p.concurrentHeaderHandlerSemaphore <- struct{}{}
-			go func() {
-				defer func() {
-					<-p.concurrentHeaderHandlerSemaphore
+			select {
+			case p.concurrentHeaderHandlerSemaphore <- struct{}{}:
+				go func() {
+					defer func() {
+						<-p.concurrentHeaderHandlerSemaphore
+					}()
+					p.handleHeader(header, string(groupID))
 				}()
-				p.handleHeader(header, string(groupID))
-			}()
+			default:
+				p.logger.WithFields(logrus.Fields{
+					"topic": topicID,
+					"group": groupID,
+				}).Warn("Dropping header handler, max concurrent header handlers reached")
+			}
 		}
 
 		columnIndex, err := extractColumnIndexFromTopic(topicID)
@@ -624,43 +623,10 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 	return nil
 }
 
-func (p *PartialColumnBroadcaster) handleGetBlobsCalled(groupID string) {
-	p.getBlobsCalled[groupID] = true
-	for topic, topicStore := range p.partialMsgStore {
-		col, ok := topicStore[groupID]
-		if !ok {
-			continue
-		}
-		err := p.ps.PublishPartialMessage(topic, col, partialmessages.PublishOptions{})
-		if err != nil {
-			p.logger.WithError(err).Error("Failed to republish after getBlobs called", "topic", topic, "groupID", groupID)
-		}
-	}
-}
-
 func (p *PartialColumnBroadcaster) Stop() {
 	if p.stop != nil {
 		close(p.stop)
 	}
-}
-
-// GetBlobsCalled notifies the event loop that getBlobs has been called,
-// triggering republishing of all columns in the store for the given groupID.
-func (p *PartialColumnBroadcaster) GetBlobsCalled(groupID string) error {
-	if p.ps == nil {
-		return errors.New("pubsub not initialized")
-	}
-	select {
-	case p.incomingReq <- request{
-		kind: requestKindGetBlobsCalled,
-		getBlobsCalled: getBlobsCalled{
-			groupID: groupID,
-		},
-	}:
-	default:
-		return errors.Errorf("dropping getBlobs called message as incomingReq channel is full, groupID: %s", groupID)
-	}
-	return nil
 }
 
 // Publish publishes the partial column.
@@ -682,14 +648,14 @@ func (p *PartialColumnBroadcaster) Publish(topic string, c blocks.PartialDataCol
 }
 
 func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataColumn, getBlobsCalled bool) error {
-	groupId := string(c.GroupID())
+	groupIDBytes := c.GroupID()
 	topicStore, ok := p.partialMsgStore[topic]
 	if !ok {
 		topicStore = make(map[string]*blocks.PartialDataColumn)
 		p.partialMsgStore[topic] = topicStore
 	}
 
-	existing := topicStore[groupId]
+	existing := topicStore[string(groupIDBytes)]
 	if existing != nil {
 		var extended bool
 		// Extend the existing column with cells being published here.
@@ -710,15 +676,15 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 			}
 		}
 	} else {
-		topicStore[groupId] = &c
+		topicStore[string(groupIDBytes)] = &c
 		existing = &c
 	}
 
-	p.groupTTL[groupId] = TTLInSlots
+	p.groupTTL[string(groupIDBytes)] = TTLInSlots
 
 	err := p.ps.PublishPartialMessage(topic, existing, partialmessages.PublishOptions{})
 	if err == nil {
-		p.getBlobsCalled[groupId] = getBlobsCalled
+		p.getBlobsCalled[string(groupIDBytes)] = getBlobsCalled
 	}
 	return err
 }

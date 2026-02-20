@@ -276,7 +276,8 @@ func TestReconstructionSource(t *testing.T) {
 			KzgCommitmentsInclusionProof: referenceSidecar.KzgCommitmentsInclusionProof,
 		}
 
-		src := peerdas.PopulateFromPartialHeader(partialHeader)
+		src, err := peerdas.PopulateFromPartialHeader(partialHeader)
+		require.NoError(t, err)
 		require.Equal(t, referenceSidecar.SignedBlockHeader.Header.Slot, src.Slot())
 
 		// Compute expected root
