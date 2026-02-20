@@ -1213,6 +1213,62 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 	httputil.WriteJson(w, resp)
 }
 
+// ptcDuty represents a validator's PTC assignment for a slot.
+type ptcDuty struct {
+	validatorIndex primitives.ValidatorIndex
+	slot           primitives.Slot
+}
+
+// ptcDuties returns PTC slot assignments for the requested validators in the epoch derived from the state's slot.
+// Validators not in any PTC for the epoch will not appear in the result.
+func ptcDuties(
+	ctx context.Context,
+	st state.ReadOnlyBeaconState,
+	validators map[primitives.ValidatorIndex]struct{},
+) ([]ptcDuty, error) {
+	if len(validators) == 0 {
+		return nil, nil
+	}
+
+	epoch := slots.ToEpoch(st.Slot())
+	startSlot, err := slots.EpochStart(epoch)
+	if err != nil {
+		return nil, err
+	}
+
+	var duties []ptcDuty
+	endSlot := startSlot + params.BeaconConfig().SlotsPerEpoch
+
+	for slot := startSlot; slot < endSlot; slot++ {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		ptc, err := gloas.PayloadCommittee(ctx, st, slot)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get PTC for slot %d", slot)
+		}
+
+		// Check which requested validators are in this PTC, deduplicating within the slot.
+		seen := make(map[primitives.ValidatorIndex]struct{})
+		for _, valIdx := range ptc {
+			if _, ok := validators[valIdx]; !ok {
+				continue
+			}
+			if _, already := seen[valIdx]; already {
+				continue
+			}
+			seen[valIdx] = struct{}{}
+			duties = append(duties, ptcDuty{
+				validatorIndex: valIdx,
+				slot:           slot,
+			})
+		}
+	}
+
+	return duties, nil
+}
+
 // GetPTCDuties retrieves the payload timeliness committee (PTC) duties for the requested epoch.
 // The PTC is responsible for attesting to payload timeliness in ePBS (Gloas fork and later).
 func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
@@ -1302,22 +1358,21 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		requestedSet[idx] = struct{}{}
 	}
 
-	// Compute PTC duties using the optimized batch function.
-	// This exits early once all requested validators are found.
-	ptcDuties, err := gloas.PTCDuties(ctx, st, requestedSet)
+	// Compute PTC duties.
+	computedDuties, err := ptcDuties(ctx, st, requestedSet)
 	if err != nil {
 		httputil.HandleError(w, "Could not compute PTC duties: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Convert to response format.
-	duties := make([]*structs.PTCDuty, 0, len(ptcDuties))
-	for _, duty := range ptcDuties {
-		pubkey := st.PubkeyAtIndex(duty.ValidatorIndex)
+	duties := make([]*structs.PTCDuty, 0, len(computedDuties))
+	for _, duty := range computedDuties {
+		pubkey := st.PubkeyAtIndex(duty.validatorIndex)
 		duties = append(duties, &structs.PTCDuty{
 			Pubkey:         hexutil.Encode(pubkey[:]),
-			ValidatorIndex: strconv.FormatUint(uint64(duty.ValidatorIndex), 10),
-			Slot:           strconv.FormatUint(uint64(duty.Slot), 10),
+			ValidatorIndex: strconv.FormatUint(uint64(duty.validatorIndex), 10),
+			Slot:           strconv.FormatUint(uint64(duty.slot), 10),
 		})
 	}
 

@@ -156,64 +156,6 @@ func PayloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot pr
 	return selected, nil
 }
 
-// PTCDuty represents a validator's PTC assignment for a slot.
-type PTCDuty struct {
-	ValidatorIndex primitives.ValidatorIndex
-	Slot           primitives.Slot
-}
-
-// PTCDuties returns PTC slot assignments for the requested validators in the epoch derived from the state's slot.
-// It's optimized for batch lookups with early exit once all validators are found.
-// Validators not in any PTC for the epoch will not appear in the result.
-func PTCDuties(
-	ctx context.Context,
-	st state.ReadOnlyBeaconState,
-	validators map[primitives.ValidatorIndex]struct{},
-) ([]PTCDuty, error) {
-	if len(validators) == 0 {
-		return nil, nil
-	}
-
-	epoch := slots.ToEpoch(st.Slot())
-	startSlot, err := slots.EpochStart(epoch)
-	if err != nil {
-		return nil, err
-	}
-
-	var duties []PTCDuty
-	endSlot := startSlot + params.BeaconConfig().SlotsPerEpoch
-
-	for slot := startSlot; slot < endSlot; slot++ {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-
-		// Compute PTC for this slot.
-		ptc, err := PayloadCommittee(ctx, st, slot)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get PTC for slot %d", slot)
-		}
-
-		// Check which requested validators are in this PTC, deduplicating within the slot.
-		seen := make(map[primitives.ValidatorIndex]struct{})
-		for _, valIdx := range ptc {
-			if _, ok := validators[valIdx]; !ok {
-				continue
-			}
-			if _, already := seen[valIdx]; already {
-				continue
-			}
-			seen[valIdx] = struct{}{}
-			duties = append(duties, PTCDuty{
-				ValidatorIndex: valIdx,
-				Slot:           slot,
-			})
-		}
-	}
-
-	return duties, nil
-}
-
 // ptcSeed computes the seed for the payload timeliness committee.
 func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitives.Slot) ([32]byte, error) {
 	seed, err := helpers.Seed(st, epoch, params.BeaconConfig().DomainPTCAttester)

@@ -17,7 +17,6 @@ import (
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -3019,8 +3018,8 @@ func TestGetPTCDuties(t *testing.T) {
 			requestedSet[primitives.ValidatorIndex(i)] = struct{}{}
 		}
 
-		// Test PTCDuties directly.
-		directDuties, err := gloas.PTCDuties(t.Context(), st, requestedSet)
+		// Test ptcDuties directly.
+		directDuties, err := ptcDuties(t.Context(), st, requestedSet)
 		require.NoError(t, err)
 		// Should return some duties (not necessarily all 100, depends on PTC selection).
 		require.NotEmpty(t, directDuties, "Should return at least some duties")
@@ -3028,13 +3027,13 @@ func TestGetPTCDuties(t *testing.T) {
 		// All returned duties should be for slots within epoch 0.
 		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 		for _, duty := range directDuties {
-			if uint64(duty.Slot) >= uint64(slotsPerEpoch) {
-				t.Errorf("Duty slot %d should be within epoch 0 (< %d)", duty.Slot, slotsPerEpoch)
+			if uint64(duty.slot) >= uint64(slotsPerEpoch) {
+				t.Errorf("Duty slot %d should be within epoch 0 (< %d)", duty.slot, slotsPerEpoch)
 			}
 			// Verify returned validator was in the request.
-			_, ok := requestedSet[duty.ValidatorIndex]
+			_, ok := requestedSet[duty.validatorIndex]
 			if !ok {
-				t.Errorf("Returned validator %d should be in requested set", duty.ValidatorIndex)
+				t.Errorf("Returned validator %d should be in requested set", duty.validatorIndex)
 			}
 		}
 
