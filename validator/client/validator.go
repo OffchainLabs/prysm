@@ -71,7 +71,6 @@ type validator struct {
 	enableAPI                          bool
 	disableDutiesPolling               bool
 	emitAccountMetrics                 bool
-	splitDutiesEnabled                 bool
 	aggregatedSlotCommitteeIDCacheLock sync.Mutex
 	attLogsLock                        sync.Mutex
 	attSelectionLock                   sync.Mutex
@@ -676,8 +675,8 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 		return nil, nil // No known validators — fall back to legacy which handles pubkey-based lookup.
 	}
 
-	// Check if split endpoints are enabled.
-	if !v.splitDutiesEnabled {
+	// Split duty endpoints are only available post-Gloas; use DutiesV2 for Fulu and earlier.
+	if epoch < params.BeaconConfig().GloasForkEpoch {
 		return nil, nil
 	}
 
@@ -685,7 +684,6 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 	propResp, err := v.validatorClient.ProposerDuties(ctx, epoch)
 	if err != nil {
 		if isUnimplemented(err) {
-			v.splitDutiesEnabled = false
 			log.Info("Split duty endpoints not available, falling back to combined Duties()")
 			return nil, nil
 		}
