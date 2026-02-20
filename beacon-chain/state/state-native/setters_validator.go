@@ -24,7 +24,7 @@ func (b *BeaconState) SetValidators(val []*ethpb.Validator) error {
 
 	b.markFieldAsDirty(types.Validators)
 	b.rebuildTrie[types.Validators] = true
-	b.valMapHandler = stateutil.NewValMapHandler(val)
+	b.valMapHandler = stateutil.GlobalValMapHandler(val)
 	return nil
 }
 

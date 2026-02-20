@@ -61,6 +61,7 @@ go_test(
         "state_root_test.go",
         "trie_helpers_test.go",
         "unrealized_justification_test.go",
+        "validator_map_handler_test.go",
         "validator_root_test.go",
     ],
     embed = [":go_default_library"],

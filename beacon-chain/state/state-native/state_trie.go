@@ -228,7 +228,7 @@ func InitializeFromProtoUnsafePhase0(st *ethpb.BeaconState) (state.BeaconState, 
 		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
 		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
-		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
+		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
 	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
@@ -302,7 +302,7 @@ func InitializeFromProtoUnsafeAltair(st *ethpb.BeaconStateAltair) (state.BeaconS
 		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
 		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
-		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
+		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
 	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
@@ -378,7 +378,7 @@ func InitializeFromProtoUnsafeBellatrix(st *ethpb.BeaconStateBellatrix) (state.B
 		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
 		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
-		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
+		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
 	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
@@ -458,7 +458,7 @@ func InitializeFromProtoUnsafeCapella(st *ethpb.BeaconStateCapella) (state.Beaco
 		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
 		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
-		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
+		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
 	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
@@ -537,7 +537,7 @@ func InitializeFromProtoUnsafeDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconSta
 		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
 		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
-		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
+		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
 	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
@@ -625,7 +625,7 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
 		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
-		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
+		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
 	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
@@ -726,7 +726,7 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 		dirtyIndices:     make(map[types.FieldIndex][]uint64, fieldCount),
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
 		rebuildTrie:      make(map[types.FieldIndex]bool, fieldCount),
-		valMapHandler:    stateutil.NewValMapHandler(st.Validators),
+		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
 	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
@@ -830,7 +830,7 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 		dirtyIndices:                  make(map[types.FieldIndex][]uint64, fieldCount),
 		stateFieldLeaves:              make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
 		rebuildTrie:                   make(map[types.FieldIndex]bool, fieldCount),
-		valMapHandler:                 stateutil.NewValMapHandler(st.Validators),
+		valMapHandler:                 stateutil.GlobalValMapHandler(st.Validators),
 	}
 
 	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
