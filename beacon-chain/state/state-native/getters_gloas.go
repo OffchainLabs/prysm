@@ -7,7 +7,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
@@ -214,6 +217,52 @@ func (b *BeaconState) BuilderPendingPayment(index uint64) (*ethpb.BuilderPending
 	return ethpb.CopyBuilderPendingPayment(b.builderPendingPayments[index]), nil
 }
 
+// LatestExecutionPayloadBid returns the cached latest execution payload bid for Gloas.
+func (b *BeaconState) LatestExecutionPayloadBid() (interfaces.ROExecutionPayloadBid, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("LatestExecutionPayloadBid", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	if b.latestExecutionPayloadBid == nil {
+		return nil, nil
+	}
+
+	return blocks.WrappedROExecutionPayloadBid(b.latestExecutionPayloadBid.Copy())
+}
+
+// WithdrawalsMatchPayloadExpected returns true if the given withdrawals root matches the state's
+// payload_expected_withdrawals root.
+func (b *BeaconState) WithdrawalsMatchPayloadExpected(withdrawals []*enginev1.Withdrawal) (bool, error) {
+	if b.version < version.Gloas {
+		return false, errNotSupported("WithdrawalsMatchPayloadExpected", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return withdrawalsEqual(withdrawals, b.payloadExpectedWithdrawals), nil
+}
+
+func withdrawalsEqual(a, b []*enginev1.Withdrawal) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		wa := a[i]
+		wb := b[i]
+		if wa.Index != wb.Index ||
+			wa.ValidatorIndex != wb.ValidatorIndex ||
+			wa.Amount != wb.Amount ||
+			!bytes.Equal(wa.Address, wb.Address) {
+			return false
+		}
+	}
+	return true
+}
+
 // ExecutionPayloadAvailability returns the execution payload availability bit for the given slot.
 func (b *BeaconState) ExecutionPayloadAvailability(slot primitives.Slot) (uint64, error) {
 	if b.version < version.Gloas {
@@ -230,4 +279,38 @@ func (b *BeaconState) ExecutionPayloadAvailability(slot primitives.Slot) (uint64
 	bit := (b.executionPayloadAvailability[byteIndex] >> bitIndex) & 1
 
 	return uint64(bit), nil
+}
+
+// Builder returns the builder at the given index.
+func (b *BeaconState) Builder(index primitives.BuilderIndex) (*ethpb.Builder, error) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	if b.builders == nil {
+		return nil, nil
+	}
+	if uint64(index) >= uint64(len(b.builders)) {
+		return nil, fmt.Errorf("builder index %d out of bounds", index)
+	}
+	if b.builders[index] == nil {
+		return nil, nil
+	}
+
+	return ethpb.CopyBuilder(b.builders[index]), nil
+}
+
+// BuilderIndexByPubkey returns the builder index for the given pubkey, if present.
+func (b *BeaconState) BuilderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]byte) (primitives.BuilderIndex, bool) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	for i, builder := range b.builders {
+		if builder == nil {
+			continue
+		}
+		if bytes.Equal(builder.Pubkey, pubkey[:]) {
+			return primitives.BuilderIndex(i), true
+		}
+	}
+	return 0, false
 }

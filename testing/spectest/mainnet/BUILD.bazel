@@ -203,6 +203,7 @@ go_test(
         "gloas__epoch_processing__process_builder_pending_payments_test.go",
         "gloas__operations__attestation_test.go",
         "gloas__operations__execution_payload_header_test.go",
+        "gloas__operations__execution_payload_test.go",
         "gloas__operations__payload_attestation_test.go",
         "gloas__operations__proposer_slashing_test.go",
         "gloas__sanity__slots_test.go",

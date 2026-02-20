@@ -38,23 +38,26 @@ func (s *Service) CurrentSlot() primitives.Slot {
 }
 
 // getFCUArgs returns the arguments to call forkchoice update
-func (s *Service) getFCUArgs(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
-	if err := s.getFCUArgsEarlyBlock(cfg, fcuArgs); err != nil {
-		return err
+func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) (*fcuConfig, error) {
+
+	fcuArgs, err := s.getFCUArgsEarlyBlock(cfg)
+	if err != nil {
+		return nil, err
 	}
 	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:])
-	return nil
+	return fcuArgs, nil
 }
 
-func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
+func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
 	if cfg.roblock.Root() == cfg.headRoot {
-		fcuArgs.headState = cfg.postState
-		fcuArgs.headBlock = cfg.roblock
-		fcuArgs.headRoot = cfg.headRoot
-		fcuArgs.proposingSlot = s.CurrentSlot() + 1
-		return nil
+		return &fcuConfig{
+			headState:     cfg.postState,
+			headBlock:     cfg.roblock,
+			headRoot:      cfg.headRoot,
+			proposingSlot: s.CurrentSlot() + 1,
+		}, nil
 	}
-	return s.fcuArgsNonCanonicalBlock(cfg, fcuArgs)
+	return s.fcuArgsNonCanonicalBlock(cfg)
 }
 
 // logNonCanonicalBlockReceived prints a message informing that the received
@@ -79,16 +82,17 @@ func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]
 
 // fcuArgsNonCanonicalBlock returns the arguments to the FCU call when the
 // incoming block is non-canonical, that is, based on the head root.
-func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
+func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
 	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fcuArgs.headState = headState
-	fcuArgs.headBlock = headBlock
-	fcuArgs.headRoot = cfg.headRoot
-	fcuArgs.proposingSlot = s.CurrentSlot() + 1
-	return nil
+	return &fcuConfig{
+		headState:     headState,
+		headBlock:     headBlock,
+		headRoot:      cfg.headRoot,
+		proposingSlot: s.CurrentSlot() + 1,
+	}, nil
 }
 
 // sendStateFeedOnBlock sends an event that a new block has been synced

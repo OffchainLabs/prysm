@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -42,6 +43,8 @@ type EngineClient struct {
 	ErrorBlobSidecars           error
 	DataColumnSidecars          []blocks.VerifiedRODataColumn
 	ErrorDataColumnSidecars     error
+	ClientVersion               []*structs.ClientVersionV1
+	ErrorClientVersion          error
 }
 
 // NewPayload --
@@ -172,4 +175,9 @@ func (e *EngineClient) GetTerminalBlockHash(ctx context.Context, transitionTime 
 		}
 		blk = parentBlk
 	}
+}
+
+// GetClientVersionV1 --
+func (e *EngineClient) GetClientVersionV1(context.Context) ([]*structs.ClientVersionV1, error) {
+	return e.ClientVersion, e.ErrorClientVersion
 }

@@ -86,6 +86,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/node/peers/{peer_id}": {http.MethodGet},
 		"/eth/v1/node/peer_count":      {http.MethodGet},
 		"/eth/v1/node/version":         {http.MethodGet},
+		"/eth/v2/node/version":         {http.MethodGet},
 		"/eth/v1/node/syncing":         {http.MethodGet},
 		"/eth/v1/node/health":          {http.MethodGet},
 	}

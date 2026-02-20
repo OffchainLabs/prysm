@@ -5,6 +5,9 @@ go_library(
     srcs = [
         "attestation.go",
         "bid.go",
+        "deposit_request.go",
+        "log.go",
+        "payload.go",
         "payload_attestation.go",
         "pending_payment.go",
         "proposer_slashing.go",
@@ -13,6 +16,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/requests:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/state:go_default_library",
@@ -26,10 +30,12 @@ go_library(
         "//crypto/bls/common:go_default_library",
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
+        "@com_github_sirupsen_logrus//:go_default_library",
     ],
 )
 
@@ -38,7 +44,9 @@ go_test(
     srcs = [
         "attestation_test.go",
         "bid_test.go",
+        "deposit_request_test.go",
         "payload_attestation_test.go",
+        "payload_test.go",
         "pending_payment_test.go",
         "proposer_slashing_test.go",
     ],
@@ -48,6 +56,7 @@ go_test(
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
+        "//beacon-chain/state/testing:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",

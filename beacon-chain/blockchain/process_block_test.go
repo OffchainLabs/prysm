@@ -2006,6 +2006,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	// Check that we have justified the second epoch
 	jc := service.cfg.ForkChoiceStore.JustifiedCheckpoint()
 	require.Equal(t, primitives.Epoch(2), jc.Epoch)
+	time.Sleep(20 * time.Millisecond) // wait for async forkchoice update to be processed
 
 	// import block 19 to find out that the whole chain 13--18 was in fact
 	// invalid
@@ -2416,14 +2417,12 @@ func Test_getFCUArgs(t *testing.T) {
 		isValidPayload: true,
 	}
 	// error branch
-	fcuArgs := &fcuConfig{}
-	err = s.getFCUArgs(cfg, fcuArgs)
+	_, err = s.getFCUArgs(cfg)
 	require.ErrorContains(t, "block does not exist", err)
 
 	// canonical branch
 	cfg.headRoot = cfg.roblock.Root()
-	fcuArgs = &fcuConfig{}
-	err = s.getFCUArgs(cfg, fcuArgs)
+	fcuArgs, err := s.getFCUArgs(cfg)
 	require.NoError(t, err)
 	require.Equal(t, cfg.roblock.Root(), fcuArgs.headRoot)
 }

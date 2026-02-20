@@ -127,6 +127,9 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Received block with an invalid parent")
 		return pubsub.ValidationReject, err
 	}
+	if res, err := s.validateExecutionPayloadBidParentValid(ctx, blk.Block()); err != nil {
+		return res, err
+	}
 
 	s.pendingQueueLock.RLock()
 	if s.seenPendingBlocks[blockRoot] {
@@ -197,6 +200,16 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		err := errors.Errorf("unknown parent for block with slot %d and parent root %#x", blk.Block().Slot(), blk.Block().ParentRoot())
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not identify parent for block")
 		return pubsub.ValidationIgnore, err
+	}
+	if res, err := s.validateExecutionPayloadBidParentSeen(ctx, blk.Block()); err != nil {
+		return res, err
+	}
+
+	if res, err := s.validateExecutionPayloadBid(ctx, blk.Block()); err != nil {
+		if res == pubsub.ValidationReject {
+			s.setBadBlock(ctx, blockRoot)
+		}
+		return res, err
 	}
 
 	err = s.validateBeaconBlock(ctx, blk, blockRoot)
@@ -365,7 +378,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 }
 
 func validateDenebBeaconBlock(blk interfaces.ReadOnlyBeaconBlock) error {
-	if blk.Version() < version.Deneb {
+	if blk.Version() < version.Deneb || blk.Version() >= version.Gloas {
 		return nil
 	}
 	commits, err := blk.Body().BlobKzgCommitments()
@@ -398,6 +411,10 @@ func validateDenebBeaconBlock(blk interfaces.ReadOnlyBeaconBlock) error {
 //	      [IGNORE] The block's parent (defined by block.parent_root) passes all validation (including execution
 //	       node verification of the block.body.execution_payload).
 func (s *Service) validateBellatrixBeaconBlock(ctx context.Context, verifyingState state.ReadOnlyBeaconState, blk interfaces.ReadOnlyBeaconBlock) error {
+	if blk.Version() >= version.Gloas {
+		return nil
+	}
+
 	// Error if block and state are not the same version
 	if verifyingState.Version() != blk.Version() {
 		return errors.New("block and state are not the same version")

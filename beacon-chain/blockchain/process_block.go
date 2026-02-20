@@ -64,7 +64,6 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		return invalidBlock{error: err}
 	}
 	startTime := time.Now()
-	fcuArgs := &fcuConfig{}
 
 	if features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
 		defer s.processLightClientUpdates(cfg)
@@ -102,7 +101,9 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
 	}
-	s.sendFCU(cfg, fcuArgs)
+	if cfg.roblock.Version() <= version.Gloas {
+		s.sendFCU(cfg)
+	}
 
 	// Pre-Fulu the caches are updated when computing the payload attributes
 	if cfg.postState.Version() >= version.Fulu {
@@ -232,7 +233,8 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			postVersionAndHeaders[i].version,
 			postVersionAndHeaders[i].header, b)
 		if err != nil {
-			return s.handleInvalidExecutionError(ctx, err, root, b.Block().ParentRoot())
+			// this call does not have the root in forkchoice yet.
+			return s.handleInvalidExecutionError(ctx, err, root, b.Block().ParentRoot(), [32]byte(postVersionAndHeaders[i].header.ParentHash()))
 		}
 		if isValidPayload {
 			if err := s.validateMergeTransitionBlock(ctx, preVersionAndHeaders[i].version,
@@ -992,9 +994,9 @@ func (s *Service) waitForSync() error {
 	}
 }
 
-func (s *Service) handleInvalidExecutionError(ctx context.Context, err error, blockRoot, parentRoot [fieldparams.RootLength]byte) error {
+func (s *Service) handleInvalidExecutionError(ctx context.Context, err error, blockRoot, parentRoot [32]byte, parentHash [32]byte) error {
 	if IsInvalidBlock(err) && InvalidBlockLVH(err) != [32]byte{} {
-		return s.pruneInvalidBlock(ctx, blockRoot, parentRoot, InvalidBlockLVH(err))
+		return s.pruneInvalidBlock(ctx, blockRoot, parentRoot, parentHash, InvalidBlockLVH(err))
 	}
 	return err
 }
