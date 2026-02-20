@@ -6,8 +6,11 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -809,4 +812,183 @@ func TestAddBuilderFromDeposit_CopyOnWrite(t *testing.T) {
 	require.Equal(t, 2, len(copied.builders))
 	require.Equal(t, uint(1), st.sharedFieldReferences[types.Builders].Refs())
 	require.Equal(t, uint(1), copied.sharedFieldReferences[types.Builders].Refs())
+}
+
+func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.OnboardBuildersFromPendingDeposits()
+		require.ErrorContains(t, "OnboardBuildersFromPendingDeposits", err)
+	})
+
+	t.Run("keeps pending deposits for existing validator", func(t *testing.T) {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		pubkey := sk.PublicKey().Marshal()
+		validator := &ethpb.Validator{PublicKey: pubkey}
+		builderCreds := builderWithdrawalCredentials(0xAB)
+		deposit := &ethpb.PendingDeposit{
+			PublicKey:             pubkey,
+			WithdrawalCredentials: builderCreds,
+			Amount:                10,
+			Signature:             make([]byte, fieldparams.BLSSignatureLength),
+			Slot:                  0,
+		}
+
+		st := newGloasState(t, []*ethpb.Validator{validator}, nil, []*ethpb.PendingDeposit{deposit}, 0)
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.Equal(t, 1, len(st.pendingDeposits))
+		require.Equal(t, 0, len(st.builders))
+	})
+
+	t.Run("creates builder for valid builder deposit", func(t *testing.T) {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		builderCreds := builderWithdrawalCredentials(0xCC)
+		amount := uint64(42)
+		depSlot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch*2 + 1)
+		deposit := newPendingDeposit(t, sk, builderCreds, amount, depSlot, true)
+
+		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{deposit}, 0)
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.Equal(t, 0, len(st.pendingDeposits))
+		require.Equal(t, 1, len(st.builders))
+
+		builder := st.builders[0]
+		require.DeepEqual(t, sk.PublicKey().Marshal(), builder.Pubkey)
+		require.DeepEqual(t, builderCreds[12:], builder.ExecutionAddress)
+		require.Equal(t, primitives.Gwei(amount), builder.Balance)
+		require.Equal(t, slots.ToEpoch(depSlot), builder.DepositEpoch)
+	})
+
+	t.Run("increases balance for existing builder", func(t *testing.T) {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		pubkey := sk.PublicKey().Marshal()
+		builder := &ethpb.Builder{
+			Pubkey:            pubkey,
+			Balance:           10,
+			WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch,
+		}
+		nonBuilderCreds := nonBuilderWithdrawalCredentials()
+		deposit := newPendingDeposit(t, sk, nonBuilderCreds, 5, 0, false)
+
+		st := newGloasState(t, nil, []*ethpb.Builder{builder}, []*ethpb.PendingDeposit{deposit}, 0)
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.Equal(t, 0, len(st.pendingDeposits))
+		require.Equal(t, 1, len(st.builders))
+		require.Equal(t, primitives.Gwei(15), st.builders[0].Balance)
+	})
+
+	t.Run("drops invalid builder deposit", func(t *testing.T) {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		builderCreds := builderWithdrawalCredentials(0xDD)
+		deposit := newPendingDeposit(t, sk, builderCreds, 10, 0, false)
+
+		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{deposit}, 0)
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.Equal(t, 0, len(st.pendingDeposits))
+		require.Equal(t, 0, len(st.builders))
+	})
+
+	t.Run("validator deposit blocks later builder deposit for same pubkey", func(t *testing.T) {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		validatorCreds := nonBuilderWithdrawalCredentials()
+		builderCreds := builderWithdrawalCredentials(0xEE)
+
+		depositValidator := newPendingDeposit(t, sk, validatorCreds, 5, 0, true)
+		depositBuilder := newPendingDeposit(t, sk, builderCreds, 7, 0, true)
+
+		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{depositValidator, depositBuilder}, 0)
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.Equal(t, 2, len(st.pendingDeposits))
+		require.Equal(t, 0, len(st.builders))
+	})
+
+	t.Run("drops invalid non-builder deposit", func(t *testing.T) {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		validatorCreds := nonBuilderWithdrawalCredentials()
+		deposit := newPendingDeposit(t, sk, validatorCreds, 5, 0, false)
+
+		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{deposit}, 0)
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.Equal(t, 0, len(st.pendingDeposits))
+		require.Equal(t, 0, len(st.builders))
+	})
+}
+
+func newGloasState(
+	t *testing.T,
+	validators []*ethpb.Validator,
+	builders []*ethpb.Builder,
+	pendingDeposits []*ethpb.PendingDeposit,
+	slot primitives.Slot,
+) *BeaconState {
+	t.Helper()
+	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		Slot:            slot,
+		Validators:      validators,
+		Builders:        builders,
+		PendingDeposits: pendingDeposits,
+	})
+	require.NoError(t, err)
+
+	st, ok := statePb.(*BeaconState)
+	require.Equal(t, true, ok)
+	return st
+}
+
+func builderWithdrawalCredentials(addrByte byte) []byte {
+	wc := make([]byte, fieldparams.RootLength)
+	wc[0] = params.BeaconConfig().BuilderWithdrawalPrefixByte
+	for i := 12; i < len(wc); i++ {
+		wc[i] = addrByte
+	}
+	return wc
+}
+
+func nonBuilderWithdrawalCredentials() []byte {
+	wc := make([]byte, fieldparams.RootLength)
+	wc[0] = params.BeaconConfig().BLSWithdrawalPrefixByte
+	return wc
+}
+
+func newPendingDeposit(
+	t *testing.T,
+	sk bls.SecretKey,
+	withdrawalCredentials []byte,
+	amount uint64,
+	slot primitives.Slot,
+	valid bool,
+) *ethpb.PendingDeposit {
+	t.Helper()
+	signature := make([]byte, fieldparams.BLSSignatureLength)
+	if valid {
+		signature = signDeposit(t, sk, withdrawalCredentials, amount)
+	}
+	return &ethpb.PendingDeposit{
+		PublicKey:             sk.PublicKey().Marshal(),
+		WithdrawalCredentials: withdrawalCredentials,
+		Amount:                amount,
+		Signature:             signature,
+		Slot:                  slot,
+	}
+}
+
+func signDeposit(t *testing.T, sk bls.SecretKey, withdrawalCredentials []byte, amount uint64) []byte {
+	t.Helper()
+	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
+	require.NoError(t, err)
+	msg := &ethpb.DepositMessage{
+		PublicKey:             sk.PublicKey().Marshal(),
+		WithdrawalCredentials: withdrawalCredentials,
+		Amount:                amount,
+	}
+	signingRoot, err := signing.ComputeSigningRoot(msg, domain)
+	require.NoError(t, err)
+	sig := sk.Sign(signingRoot[:])
+	return sig.Marshal()
 }
