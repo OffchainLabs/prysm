@@ -521,7 +521,7 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 
 	pendingDeposits := b.pendingDeposits
 	newPendingDeposits := make([]*ethpb.PendingDeposit, 0, len(pendingDeposits))
-	newValidatorPubkeys := make(map[[fieldparams.BLSPubkeyLength]byte]struct{})
+	newValidatorPubkeys := make(map[[fieldparams.BLSPubkeyLength]byte]bool)
 
 	for _, deposit := range pendingDeposits {
 		pubkey := bytesutil.ToBytes48(deposit.PublicKey)
@@ -571,11 +571,13 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 			Signature:             deposit.Signature,
 		})
 		if err != nil {
-			return fmt.Errorf("could not verify deposit signature: %w", err)
+			logrus.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Error("Could not verify validator deposit signature")
 		}
 		if valid {
-			newValidatorPubkeys[pubkey] = struct{}{}
+			newValidatorPubkeys[pubkey] = true
 			newPendingDeposits = append(newPendingDeposits, deposit)
+		} else {
+			logrus.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Error("Invalid signature for validator deposit")
 		}
 	}
 
