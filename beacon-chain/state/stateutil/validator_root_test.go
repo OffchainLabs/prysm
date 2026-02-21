@@ -20,3 +20,26 @@ func BenchmarkUint64ListRootWithRegistryLimit(b *testing.B) {
 		}
 	})
 }
+
+func BenchmarkUint64ListRootWithRegistryLimitForEach(b *testing.B) {
+	balances := make([]uint64, 100000)
+	for i := range balances {
+		balances[i] = uint64(i)
+	}
+	forEach := func(f func(int, *uint64) error) error {
+		for i := range balances {
+			if err := f(i, &balances[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	b.Run("100k balances", func(b *testing.B) {
+		for b.Loop() {
+			_, err := stateutil.Uint64ListRootWithRegistryLimitForEach(len(balances), forEach)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}

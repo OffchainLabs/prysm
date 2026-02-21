@@ -1292,7 +1292,12 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.FinalizedCheckpoint:
 		return ssz.CheckpointRoot(b.finalizedCheckpoint)
 	case types.InactivityScores:
-		return stateutil.Uint64ListRootWithRegistryLimit(b.inactivityScoresMultiValue.Value(b))
+		return stateutil.Uint64ListRootWithRegistryLimitForEach(
+			b.inactivityScoresMultiValue.Len(b),
+			func(f func(int, *uint64) error) error {
+				return b.inactivityScoresMultiValue.ForEach(b, f)
+			},
+		)
 	case types.CurrentSyncCommittee:
 		return stateutil.SyncCommitteeRoot(b.currentSyncCommittee)
 	case types.NextSyncCommittee:

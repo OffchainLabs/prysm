@@ -117,6 +117,7 @@ type MultiValueSlice[V comparable] interface {
 	Len(obj Identifiable) int
 	At(obj Identifiable, index uint64) (V, error)
 	Value(obj Identifiable) []V
+	ForEach(obj Identifiable, f func(idx int, val *V) error) error
 }
 
 // MultiValueSliceComposite describes a struct for which we have access to a multivalue
@@ -671,6 +672,15 @@ func (e EmptyMVSlice[V]) At(_ Identifiable, index uint64) (V, error) {
 
 func (e EmptyMVSlice[V]) Value(_ Identifiable) []V {
 	return e.fullSlice
+}
+
+func (e EmptyMVSlice[V]) ForEach(_ Identifiable, f func(idx int, val *V) error) error {
+	for i := range e.fullSlice {
+		if err := f(i, &e.fullSlice[i]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // BuildEmptyCompositeSlice builds a composite multivalue object with a native
