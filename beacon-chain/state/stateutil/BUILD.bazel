@@ -72,6 +72,7 @@ go_test(
         "//consensus-types/primitives:go_default_library",
         "//container/multi-value-slice:go_default_library",
         "//crypto/hash:go_default_library",
+        "//encoding/bytesutil:go_default_library",
         "//encoding/ssz:go_default_library",
         "//math:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",

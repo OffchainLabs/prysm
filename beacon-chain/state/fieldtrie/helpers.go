@@ -390,8 +390,10 @@ func handlePendingAttestationSlice(val []*ethpb.PendingAttestation, indices []ui
 
 func handleBalanceMVSlice(mv multi_value_slice.MultiValueSliceComposite[uint64], indices []uint64) ([][32]byte, error) {
 	if len(indices) == 0 {
-		val := mv.Value(mv.State())
-		return stateutil.PackUint64IntoChunks(val)
+		length := mv.Len(mv.State())
+		return stateutil.PackUint64IntoChunksForEach(length, func(f func(int, *uint64) error) error {
+			return mv.ForEach(mv.State(), f)
+		})
 	}
 	totalLen := mv.Len(mv.State())
 	if totalLen > 0 {

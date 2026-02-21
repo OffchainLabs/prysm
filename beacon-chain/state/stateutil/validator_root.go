@@ -83,6 +83,48 @@ func ValidatorLimitForBalancesChunks() uint64 {
 	return (maxValidatorLimit*bytesInUint64 + 31) / 32 // round to nearest chunk
 }
 
+// Uint64ListRootWithRegistryLimitForEach computes the HashTreeRoot Merkleization of
+// a list of uint64 using an iterator instead of a materialized slice.
+// This avoids the ~8 MB allocation from MVSlice.Value() for ~1M validators.
+func Uint64ListRootWithRegistryLimitForEach(length int, forEach func(func(int, *uint64) error) error) ([32]byte, error) {
+	chunks, err := PackUint64IntoChunksForEach(length, forEach)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not pack balances into chunks")
+	}
+	chunksRoot, err := ssz.BitwiseMerkleize(chunks, uint64(len(chunks)), ValidatorLimitForBalancesChunks())
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not compute balances merkleization")
+	}
+
+	lengthRoot := make([]byte, 32)
+	binary.LittleEndian.PutUint64(lengthRoot, uint64(length))
+	return ssz.MixInLength(chunksRoot, lengthRoot), nil
+}
+
+// PackUint64IntoChunksForEach packs uint64 values into 32 byte roots using an
+// iterator callback instead of a materialized slice. Each chunk holds 4 uint64
+// values (4 * 8 = 32 bytes).
+func PackUint64IntoChunksForEach(length int, forEach func(func(int, *uint64) error) error) ([][32]byte, error) {
+	numOfElems := 4
+	sizeOfElem := 32 / numOfElems
+	numOfChunks := length / numOfElems
+	if length%numOfElems != 0 {
+		numOfChunks++
+	}
+	chunkList := make([][32]byte, numOfChunks)
+	err := forEach(func(idx int, val *uint64) error {
+		chunkIdx := idx / numOfElems
+		idxInChunk := idx % numOfElems
+		chunkPos := idxInChunk * sizeOfElem
+		binary.LittleEndian.PutUint64(chunkList[chunkIdx][chunkPos:chunkPos+sizeOfElem], *val)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return chunkList, nil
+}
+
 // PackUint64IntoChunks packs a list of uint64 values into 32 byte roots.
 func PackUint64IntoChunks(vals []uint64) ([][32]byte, error) {
 	// Initialize how many uint64 values we can pack
