@@ -288,6 +288,56 @@ func (s *Slice[V]) At(obj Identifiable, index uint64) (V, error) {
 	}
 }
 
+// AtList returns the values at the specified indices for the input object.
+// It acquires the lock once for all lookups, making it more efficient than
+// calling At individually for each index.
+func (s *Slice[V]) AtList(obj Identifiable, indices []uint64) ([]V, error) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	totalLen := uint64(len(s.sharedItems) + len(s.appendedItems))
+	result := make([]V, len(indices))
+	objId := obj.Id()
+
+	for i, index := range indices {
+		if index >= totalLen {
+			return nil, fmt.Errorf("index %d %w", index, ErrOutOfBounds)
+		}
+		if index < uint64(len(s.sharedItems)) {
+			ind, ok := s.individualItems[index]
+			if !ok {
+				result[i] = s.sharedItems[index]
+				continue
+			}
+			found := false
+			for _, v := range ind.Values {
+				if slices.Contains(v.ids, objId) {
+					result[i] = v.val
+					found = true
+					break
+				}
+			}
+			if !found {
+				result[i] = s.sharedItems[index]
+			}
+		} else {
+			item := s.appendedItems[index-uint64(len(s.sharedItems))]
+			found := false
+			for _, v := range item.Values {
+				if slices.Contains(v.ids, objId) {
+					result[i] = v.val
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, fmt.Errorf("index %d %w", index, ErrOutOfBounds)
+			}
+		}
+	}
+	return result, nil
+}
+
 // UpdateAt updates the item at the required index for the input object to the passed in value.
 func (s *Slice[V]) UpdateAt(obj Identifiable, index uint64, val V) error {
 	s.lock.Lock()
