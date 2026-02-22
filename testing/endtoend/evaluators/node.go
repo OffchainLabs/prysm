@@ -159,7 +159,7 @@ func waitForMidEpoch(conn *grpc.ClientConn) error {
 func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	// Wait until we're at least halfway into the epoch to avoid race conditions
 	// at epoch boundaries where nodes may report different epochs.
-	if err := waitForMidEpoch(conns[0]); err != nil {
+	if err := waitForAllMidEpoch(conns...); err != nil {
 		return errors.Wrap(err, "failed waiting for mid-epoch")
 	}
 
@@ -239,4 +239,15 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 	}
 
 	return nil
+}
+
+func waitForAllMidEpoch(conns ...*grpc.ClientConn) error {
+	g, _ := errgroup.WithContext(context.Background())
+	for _, conn := range conns {
+		currConn := conn
+		g.Go(func() error {
+			return waitForMidEpoch(currConn)
+		})
+	}
+	return g.Wait()
 }
