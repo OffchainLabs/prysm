@@ -242,11 +242,11 @@ func InitializeFromProtoUnsafePhase0(st *ethpb.BeaconState) (state.BeaconState, 
 		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
-	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots, b.Id())
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots, b.Id())
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes, b.Id())
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances, b.Id())
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators, b.Id())
 	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, phase0SharedFieldRefCount)
 
 	for _, f := range phase0Fields {
@@ -320,12 +320,12 @@ func InitializeFromProtoUnsafeAltair(st *ethpb.BeaconStateAltair) (state.BeaconS
 		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
-	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots, b.Id())
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots, b.Id())
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes, b.Id())
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances, b.Id())
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators, b.Id())
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores, b.Id())
 	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, altairSharedFieldRefCount)
 
 	for _, f := range altairFields {
@@ -400,12 +400,12 @@ func InitializeFromProtoUnsafeBellatrix(st *ethpb.BeaconStateBellatrix) (state.B
 		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
-	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots, b.Id())
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots, b.Id())
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes, b.Id())
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances, b.Id())
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators, b.Id())
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores, b.Id())
 	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, bellatrixSharedFieldRefCount)
 
 	for _, f := range bellatrixFields {
@@ -484,12 +484,12 @@ func InitializeFromProtoUnsafeCapella(st *ethpb.BeaconStateCapella) (state.Beaco
 		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
-	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots, b.Id())
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots, b.Id())
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes, b.Id())
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances, b.Id())
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators, b.Id())
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores, b.Id())
 	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, capellaSharedFieldRefCount)
 
 	for _, f := range capellaFields {
@@ -567,12 +567,12 @@ func InitializeFromProtoUnsafeDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconSta
 		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
-	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots, b.Id())
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots, b.Id())
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes, b.Id())
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances, b.Id())
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators, b.Id())
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores, b.Id())
 	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, denebSharedFieldRefCount)
 
 	for _, f := range denebFields {
@@ -659,12 +659,12 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
-	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots, b.Id())
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots, b.Id())
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes, b.Id())
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances, b.Id())
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators, b.Id())
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores, b.Id())
 	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, electraSharedFieldRefCount)
 
 	for _, f := range electraFields {
@@ -764,12 +764,12 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 		valMapHandler:    stateutil.GlobalValMapHandler(st.Validators),
 	}
 
-	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots, b.Id())
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots, b.Id())
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes, b.Id())
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances, b.Id())
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators, b.Id())
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores, b.Id())
 	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, fuluSharedFieldRefCount)
 
 	for _, f := range fuluFields {
@@ -873,12 +873,12 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 		valMapHandler:                 stateutil.GlobalValMapHandler(st.Validators),
 	}
 
-	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
-	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots)
-	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes)
-	b.balancesMultiValue = NewMultiValueBalances(st.Balances)
-	b.validatorsMultiValue = NewMultiValueValidators(st.Validators)
-	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores)
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots, b.Id())
+	b.stateRootsMultiValue = NewMultiValueStateRoots(st.StateRoots, b.Id())
+	b.randaoMixesMultiValue = NewMultiValueRandaoMixes(st.RandaoMixes, b.Id())
+	b.balancesMultiValue = NewMultiValueBalances(st.Balances, b.Id())
+	b.validatorsMultiValue = NewMultiValueValidators(st.Validators, b.Id())
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(st.InactivityScores, b.Id())
 	b.sharedFieldReferences = make(map[types.FieldIndex]*stateutil.Reference, gloasSharedFieldRefCount)
 
 	for _, f := range gloasFields {

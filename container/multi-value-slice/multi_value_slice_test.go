@@ -2,6 +2,7 @@ package mvslice
 
 import (
 	"math/rand"
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -22,7 +23,7 @@ func (o *testObject) SetId(id uint64) {
 
 func TestLen(t *testing.T) {
 	s := &Slice[int]{}
-	s.Init([]int{1, 2, 3})
+	s.Init([]int{1, 2, 3}, 0)
 	s.cachedLengths[1] = 123
 	t.Run("cached", func(t *testing.T) {
 		assert.Equal(t, 123, s.Len(&testObject{id: 1}))
@@ -94,7 +95,7 @@ func TestValue(t *testing.T) {
 	assert.Equal(t, 2, v[7])
 
 	s = &Slice[int]{}
-	s.Init([]int{1, 2, 3})
+	s.Init([]int{1, 2, 3}, 0)
 
 	v = s.Value(&testObject{id: 999})
 
@@ -247,7 +248,7 @@ func TestAppend(t *testing.T) {
 
 	// we want to start with the simplest slice possible
 	s := &Slice[int]{}
-	s.Init([]int{0})
+	s.Init([]int{0}, 0)
 	first := &testObject{id: 1}
 	second := &testObject{id: 2}
 
@@ -326,161 +327,11 @@ func TestDetach(t *testing.T) {
 	assert.Equal(t, false, ok)
 }
 
-func TestReset(t *testing.T) {
-	s := setup()
-	obj := &testObject{id: 2}
-
-	reset := s.Reset(obj)
-
-	assert.Equal(t, 8, len(reset.sharedItems))
-	assert.Equal(t, 123, reset.sharedItems[0])
-	assert.Equal(t, 2, reset.sharedItems[1])
-	assert.Equal(t, 3, reset.sharedItems[2])
-	assert.Equal(t, 123, reset.sharedItems[3])
-	assert.Equal(t, 2, reset.sharedItems[4])
-	assert.Equal(t, 2, reset.sharedItems[5])
-	assert.Equal(t, 3, reset.sharedItems[6])
-	assert.Equal(t, 2, reset.sharedItems[7])
-	assert.Equal(t, 0, len(reset.individualItems))
-	assert.Equal(t, 0, len(reset.appendedItems))
-}
-
-func TestFragmentation_IndividualReferences(t *testing.T) {
-	s := &Slice[int]{}
-	s.Init([]int{123, 123, 123, 123, 123})
-	s.individualItems[1] = &MultiValueItem[int]{
-		Values: []*Value[int]{
-			{
-				val: 1,
-				ids: []uint64{1},
-			},
-			{
-				val: 2,
-				ids: []uint64{2},
-			},
-		},
-	}
-	s.individualItems[2] = &MultiValueItem[int]{
-		Values: []*Value[int]{
-			{
-				val: 3,
-				ids: []uint64{1, 2},
-			},
-		},
-	}
-
-	numOfRefs := fragmentationLimit / 2
-	for i := 3; i < numOfRefs; i++ {
-		obj := &testObject{id: uint64(i)}
-		s.Copy(&testObject{id: 1}, obj)
-	}
-
-	assert.Equal(t, false, s.IsFragmented())
-
-	// Add more references to hit fragmentation limit. Id 1
-	// has 2 references above.
-	for i := numOfRefs; i < numOfRefs+3; i++ {
-		obj := &testObject{id: uint64(i)}
-		s.Copy(&testObject{id: 1}, obj)
-	}
-	assert.Equal(t, true, s.IsFragmented())
-}
-
-func TestFragmentation_AppendedReferences(t *testing.T) {
-	s := &Slice[int]{}
-	s.Init([]int{123, 123, 123, 123, 123})
-	s.appendedItems = []*MultiValueItem[int]{
-		{
-			Values: []*Value[int]{
-				{
-					val: 1,
-					ids: []uint64{1},
-				},
-				{
-					val: 2,
-					ids: []uint64{2},
-				},
-			},
-		},
-		{
-			Values: []*Value[int]{
-				{
-					val: 3,
-					ids: []uint64{1, 2},
-				},
-			},
-		},
-	}
-	s.cachedLengths[1] = 7
-	s.cachedLengths[2] = 8
-
-	numOfRefs := fragmentationLimit / 2
-	for i := 3; i < numOfRefs; i++ {
-		obj := &testObject{id: uint64(i)}
-		s.Copy(&testObject{id: 1}, obj)
-	}
-
-	assert.Equal(t, false, s.IsFragmented())
-
-	// Add more references to hit fragmentation limit. Id 1
-	// has 2 references above.
-	for i := numOfRefs; i < numOfRefs+3; i++ {
-		obj := &testObject{id: uint64(i)}
-		s.Copy(&testObject{id: 1}, obj)
-	}
-	assert.Equal(t, true, s.IsFragmented())
-}
-
-func TestFragmentation_IndividualAndAppendedReferences(t *testing.T) {
-	s := &Slice[int]{}
-	s.Init([]int{123, 123, 123, 123, 123})
-	s.individualItems[2] = &MultiValueItem[int]{
-		Values: []*Value[int]{
-			{
-				val: 3,
-				ids: []uint64{1, 2},
-			},
-		},
-	}
-	s.appendedItems = []*MultiValueItem[int]{
-		{
-			Values: []*Value[int]{
-				{
-					val: 1,
-					ids: []uint64{1},
-				},
-				{
-					val: 2,
-					ids: []uint64{2},
-				},
-			},
-		},
-	}
-	s.cachedLengths[1] = 7
-	s.cachedLengths[2] = 8
-
-	numOfRefs := fragmentationLimit / 2
-	for i := 3; i < numOfRefs; i++ {
-		obj := &testObject{id: uint64(i)}
-		s.Copy(&testObject{id: 1}, obj)
-	}
-
-	assert.Equal(t, false, s.IsFragmented())
-
-	// Add more references to hit fragmentation limit. Id 1
-	// has 2 references above.
-	for i := numOfRefs; i < numOfRefs+3; i++ {
-		obj := &testObject{id: uint64(i)}
-		s.Copy(&testObject{id: 1}, obj)
-	}
-	assert.Equal(t, true, s.IsFragmented())
-}
-
 func TestNil(t *testing.T) {
 	obj := &testObject{}
 
 	s := &Slice[int]{}
-	s.Init(nil)
+	s.Init(nil, 0)
 	assert.Equal(t, 0, s.Len(obj))
 	assert.DeepEqual(t, []int{}, s.Value(obj))
 	_, err := s.At(obj, 0)
@@ -501,7 +352,7 @@ func TestNil(t *testing.T) {
 // Index 7: Appended value ONLY for the second object
 func setup() *Slice[int] {
 	s := &Slice[int]{}
-	s.Init([]int{123, 123, 123, 123, 123})
+	s.Init([]int{123, 123, 123, 123, 123}, 0)
 	s.individualItems[1] = &MultiValueItem[int]{
 		Values: []*Value[int]{
 			{
@@ -624,6 +475,324 @@ func assertAppendedNotFound(t *testing.T, slice *Slice[int], id uint64, itemInde
 	assert.Equal(t, false, found)
 }
 
+func TestActiveIds_InitCopyDetach(t *testing.T) {
+	o1 := &testObject{id: 10}
+	o2 := &testObject{id: 20}
+
+	// Init registers the owner ID.
+	s := &Slice[int]{}
+	s.Init([]int{1, 2, 3}, o1.id)
+	_, ok := s.activeIds[10]
+	assert.Equal(t, true, ok)
+
+	// Copy adds both src and dst.
+	s.Copy(o1, o2)
+	_, ok = s.activeIds[10]
+	assert.Equal(t, true, ok)
+	_, ok = s.activeIds[20]
+	assert.Equal(t, true, ok)
+
+	// Detach removes ID.
+	s.Detach(o2)
+	_, ok = s.activeIds[20]
+	assert.Equal(t, false, ok)
+	// Owner still present.
+	_, ok = s.activeIds[10]
+	assert.Equal(t, true, ok)
+}
+
+func TestPromoteToHead_NoOp(t *testing.T) {
+	// Head has no overrides - nothing should change.
+	head := &testObject{id: 1}
+	other := &testObject{id: 2}
+	s := &Slice[int]{}
+	s.Init([]int{10, 20, 30}, head.id)
+	s.Copy(head, other)
+
+	s.PromoteToHead(head)
+
+	assert.DeepEqual(t, []int{10, 20, 30}, s.sharedItems)
+	assert.Equal(t, 0, len(s.individualItems))
+	assert.Equal(t, 0, len(s.appendedItems))
+}
+
+func TestPromoteToHead_Basic(t *testing.T) {
+	// Head has overrides at indices 0 and 2. After promotion,
+	// sharedItems should reflect head's values.
+	head := &testObject{id: 1}
+	s := &Slice[int]{}
+	s.Init([]int{10, 20, 30}, head.id)
+
+	require.NoError(t, s.UpdateAt(head, 0, 99))
+	require.NoError(t, s.UpdateAt(head, 2, 77))
+
+	s.PromoteToHead(head)
+
+	// Shared items should now have head's values.
+	assert.Equal(t, 99, s.sharedItems[0])
+	assert.Equal(t, 20, s.sharedItems[1])
+	assert.Equal(t, 77, s.sharedItems[2])
+
+	// Head should have no individual items.
+	for _, item := range s.individualItems {
+		for _, v := range item.Values {
+			assert.Equal(t, false, slices.Contains(v.ids, head.id))
+		}
+	}
+
+	// Head should read correct values directly.
+	v, err := s.At(head, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 99, v)
+	v, err = s.At(head, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 20, v)
+	v, err = s.At(head, 2)
+	require.NoError(t, err)
+	assert.Equal(t, 77, v)
+}
+
+func TestPromoteToHead_ReverseOverrides(t *testing.T) {
+	// Two states share a slice. Head modifies index 0.
+	// After promotion, other state should still read the old value.
+	head := &testObject{id: 1}
+	other := &testObject{id: 2}
+	s := &Slice[int]{}
+	s.Init([]int{10, 20, 30}, head.id)
+	s.Copy(head, other)
+
+	require.NoError(t, s.UpdateAt(head, 0, 99))
+
+	// Before promotion: head reads 99, other reads 10.
+	v, err := s.At(head, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 99, v)
+	v, err = s.At(other, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 10, v)
+
+	s.PromoteToHead(head)
+
+	// After promotion: head still reads 99, other still reads 10.
+	v, err = s.At(head, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 99, v)
+	v, err = s.At(other, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 10, v)
+
+	// sharedItems[0] should now be 99.
+	assert.Equal(t, 99, s.sharedItems[0])
+
+	// other should have a reverse-override at index 0.
+	assertIndividualFound(t, s, other.id, 0, 10)
+}
+
+func TestPromoteToHead_MultipleStatesWithOverrides(t *testing.T) {
+	// Three states: head, s2, s3.
+	// Head overrides index 1. s2 overrides index 1 with a different value. s3 reads shared.
+	head := &testObject{id: 1}
+	s2 := &testObject{id: 2}
+	s3 := &testObject{id: 3}
+	s := &Slice[int]{}
+	s.Init([]int{10, 20, 30}, head.id)
+	s.Copy(head, s2)
+	s.Copy(head, s3)
+
+	require.NoError(t, s.UpdateAt(head, 1, 99))
+	require.NoError(t, s.UpdateAt(s2, 1, 55))
+
+	// Before promotion:
+	// head reads 99, s2 reads 55, s3 reads 20 (shared).
+	v, _ := s.At(head, 1)
+	assert.Equal(t, 99, v)
+	v, _ = s.At(s2, 1)
+	assert.Equal(t, 55, v)
+	v, _ = s.At(s3, 1)
+	assert.Equal(t, 20, v)
+
+	s.PromoteToHead(head)
+
+	// After promotion: same values visible.
+	v, _ = s.At(head, 1)
+	assert.Equal(t, 99, v)
+	v, _ = s.At(s2, 1)
+	assert.Equal(t, 55, v)
+	v, _ = s.At(s3, 1)
+	assert.Equal(t, 20, v)
+
+	// sharedItems[1] should be 99 now.
+	assert.Equal(t, 99, s.sharedItems[1])
+}
+
+func TestPromoteToHead_AppendedItemsIgnored(t *testing.T) {
+	// PromoteToHead only promotes individual overrides, not appended items.
+	// Appended items stay in appendedItems.
+	head := &testObject{id: 1}
+	other := &testObject{id: 2}
+	s := &Slice[int]{}
+	s.Init([]int{10, 20}, head.id)
+	s.Copy(head, other)
+
+	s.Append(head, 100)
+	s.Append(head, 200)
+
+	// Head also overrides an individual item.
+	require.NoError(t, s.UpdateAt(head, 0, 99))
+
+	// Before promotion: head has length 4, other has length 2.
+	assert.Equal(t, 4, s.Len(head))
+	assert.Equal(t, 2, s.Len(other))
+
+	s.PromoteToHead(head)
+
+	// sharedItems should NOT include appended values (only individual overrides promoted).
+	assert.Equal(t, 2, len(s.sharedItems))
+	assert.Equal(t, 99, s.sharedItems[0]) // individual override promoted
+	assert.Equal(t, 20, s.sharedItems[1]) // unchanged
+
+	// Head still reads all values correctly.
+	v, err := s.At(head, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 99, v)
+	v, err = s.At(head, 2)
+	require.NoError(t, err)
+	assert.Equal(t, 100, v)
+	v, err = s.At(head, 3)
+	require.NoError(t, err)
+	assert.Equal(t, 200, v)
+
+	// Other state reads correctly.
+	v, err = s.At(other, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 10, v) // reverse-override from promotion
+}
+
+func TestPromoteToHead_Correctness(t *testing.T) {
+	// Comprehensive correctness: snapshot all values before promotion,
+	// verify they match after promotion via At() and Value().
+	s := setup()
+	s.activeIds = map[uint64]struct{}{1: {}, 2: {}}
+
+	first := &testObject{id: 1}
+	second := &testObject{id: 2}
+
+	// Snapshot values before promotion.
+	valsBefore1 := s.Value(first)
+	valsBefore2 := s.Value(second)
+
+	s.PromoteToHead(first)
+
+	// Verify all values match via Value().
+	valsAfter1 := s.Value(first)
+	valsAfter2 := s.Value(second)
+	assert.DeepEqual(t, valsBefore1, valsAfter1)
+	assert.DeepEqual(t, valsBefore2, valsAfter2)
+
+	// Verify via At().
+	for i, expected := range valsBefore1 {
+		v, err := s.At(first, uint64(i))
+		require.NoError(t, err)
+		assert.Equal(t, expected, v)
+	}
+	for i, expected := range valsBefore2 {
+		v, err := s.At(second, uint64(i))
+		require.NoError(t, err)
+		assert.Equal(t, expected, v)
+	}
+
+	// Verify via ForEach.
+	idx := 0
+	err := s.ForEach(first, func(i int, val *int) error {
+		assert.Equal(t, valsBefore1[i], *val)
+		idx++
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, len(valsBefore1), idx)
+}
+
+func TestPromoteToHead_ThenCopy(t *testing.T) {
+	// After promotion, copying the head should work correctly.
+	head := &testObject{id: 1}
+	s := &Slice[int]{}
+	s.Init([]int{10, 20, 30}, head.id)
+
+	require.NoError(t, s.UpdateAt(head, 0, 99))
+
+	s.PromoteToHead(head)
+
+	// Now copy head to a new state.
+	newState := &testObject{id: 3}
+	s.Copy(head, newState)
+
+	// New state should read same values as head (from shared).
+	v, err := s.At(newState, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 99, v)
+	v, err = s.At(newState, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 20, v)
+}
+
+func TestPromoteToHead_ThenDetach(t *testing.T) {
+	// After promotion, detaching non-head states cleans up reverse-overrides.
+	head := &testObject{id: 1}
+	other := &testObject{id: 2}
+	s := &Slice[int]{}
+	s.Init([]int{10, 20, 30}, head.id)
+	s.Copy(head, other)
+
+	require.NoError(t, s.UpdateAt(head, 0, 99))
+
+	s.PromoteToHead(head)
+
+	// other has a reverse-override at index 0.
+	assertIndividualFound(t, s, other.id, 0, 10)
+
+	// Detach other.
+	s.Detach(other)
+
+	// No individual items should remain (head has none, other was detached).
+	assert.Equal(t, 0, len(s.individualItems))
+
+	// Head still works.
+	v, err := s.At(head, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 99, v)
+}
+
+func TestPromoteToHead_AppendedWithBothStates(t *testing.T) {
+	// Both head and other have appended items. PromoteToHead only
+	// promotes individual overrides, appended items stay untouched.
+	head := &testObject{id: 1}
+	other := &testObject{id: 2}
+	s := &Slice[int]{}
+	s.Init([]int{10}, head.id)
+	s.Copy(head, other)
+
+	s.Append(head, 100)
+	s.Append(other, 200)
+
+	// Also add an individual override for head.
+	require.NoError(t, s.UpdateAt(head, 0, 99))
+
+	// Before: head sees [99, 100], other sees [10, 200].
+	assert.DeepEqual(t, []int{99, 100}, s.Value(head))
+	assert.DeepEqual(t, []int{10, 200}, s.Value(other))
+
+	s.PromoteToHead(head)
+
+	// sharedItems should reflect head's individual override only.
+	assert.Equal(t, 1, len(s.sharedItems))
+	assert.Equal(t, 99, s.sharedItems[0])
+
+	// After: head still sees [99, 100].
+	assert.DeepEqual(t, []int{99, 100}, s.Value(head))
+	// Other still sees [10, 200].
+	assert.DeepEqual(t, []int{10, 200}, s.Value(other))
+}
+
 func BenchmarkValue(b *testing.B) {
 	const _100k = 100000
 	const _1m = 1000000
@@ -631,14 +800,14 @@ func BenchmarkValue(b *testing.B) {
 
 	b.Run("100,000 shared items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _100k))
+		s.Init(make([]int, _100k), 0)
 		for b.Loop() {
 			s.Value(&testObject{})
 		}
 	})
 	b.Run("100,000 equal individual items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _100k))
+		s.Init(make([]int, _100k), 0)
 		s.individualItems[0] = &MultiValueItem[int]{Values: []*Value[int]{{val: 999, ids: []uint64{}}}}
 		objs := make([]*testObject, _100k)
 		for i := range objs {
@@ -651,7 +820,7 @@ func BenchmarkValue(b *testing.B) {
 	})
 	b.Run("100,000 different individual items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _100k))
+		s.Init(make([]int, _100k), 0)
 		objs := make([]*testObject, _100k)
 		for i := range objs {
 			objs[i] = &testObject{id: uint64(i)}
@@ -663,7 +832,7 @@ func BenchmarkValue(b *testing.B) {
 	})
 	b.Run("100,000 shared items and 100,000 equal appended items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _100k))
+		s.Init(make([]int, _100k), 0)
 		s.appendedItems = []*MultiValueItem[int]{{Values: []*Value[int]{{val: 999, ids: []uint64{}}}}}
 		objs := make([]*testObject, _100k)
 		for i := range objs {
@@ -676,7 +845,7 @@ func BenchmarkValue(b *testing.B) {
 	})
 	b.Run("100,000 shared items and 100,000 different appended items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _100k))
+		s.Init(make([]int, _100k), 0)
 		s.appendedItems = []*MultiValueItem[int]{}
 		objs := make([]*testObject, _100k)
 		for i := range objs {
@@ -689,14 +858,14 @@ func BenchmarkValue(b *testing.B) {
 	})
 	b.Run("1,000,000 shared items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _1m))
+		s.Init(make([]int, _1m), 0)
 		for b.Loop() {
 			s.Value(&testObject{})
 		}
 	})
 	b.Run("1,000,000 equal individual items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _1m))
+		s.Init(make([]int, _1m), 0)
 		s.individualItems[0] = &MultiValueItem[int]{Values: []*Value[int]{{val: 999, ids: []uint64{}}}}
 		objs := make([]*testObject, _1m)
 		for i := range objs {
@@ -709,7 +878,7 @@ func BenchmarkValue(b *testing.B) {
 	})
 	b.Run("1,000,000 different individual items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _1m))
+		s.Init(make([]int, _1m), 0)
 		objs := make([]*testObject, _1m)
 		for i := range objs {
 			objs[i] = &testObject{id: uint64(i)}
@@ -721,7 +890,7 @@ func BenchmarkValue(b *testing.B) {
 	})
 	b.Run("1,000,000 shared items and 1,000,000 equal appended items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _1m))
+		s.Init(make([]int, _1m), 0)
 		s.appendedItems = []*MultiValueItem[int]{{Values: []*Value[int]{{val: 999, ids: []uint64{}}}}}
 		objs := make([]*testObject, _1m)
 		for i := range objs {
@@ -734,7 +903,7 @@ func BenchmarkValue(b *testing.B) {
 	})
 	b.Run("1,000,000 shared items and 1,000,000 different appended items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _1m))
+		s.Init(make([]int, _1m), 0)
 		s.appendedItems = []*MultiValueItem[int]{}
 		objs := make([]*testObject, _1m)
 		for i := range objs {
@@ -747,14 +916,14 @@ func BenchmarkValue(b *testing.B) {
 	})
 	b.Run("10,000,000 shared items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _10m))
+		s.Init(make([]int, _10m), 0)
 		for b.Loop() {
 			s.Value(&testObject{})
 		}
 	})
 	b.Run("10,000,000 equal individual items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _10m))
+		s.Init(make([]int, _10m), 0)
 		s.individualItems[0] = &MultiValueItem[int]{Values: []*Value[int]{{val: 999, ids: []uint64{}}}}
 		objs := make([]*testObject, _10m)
 		for i := range objs {
@@ -767,7 +936,7 @@ func BenchmarkValue(b *testing.B) {
 	})
 	b.Run("10,000,000 different individual items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _10m))
+		s.Init(make([]int, _10m), 0)
 		objs := make([]*testObject, _10m)
 		for i := range objs {
 			objs[i] = &testObject{id: uint64(i)}
@@ -779,7 +948,7 @@ func BenchmarkValue(b *testing.B) {
 	})
 	b.Run("10,000,000 shared items and 10,000,000 equal appended items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _10m))
+		s.Init(make([]int, _10m), 0)
 		s.appendedItems = []*MultiValueItem[int]{{Values: []*Value[int]{{val: 999, ids: []uint64{}}}}}
 		objs := make([]*testObject, _10m)
 		for i := range objs {
@@ -792,7 +961,7 @@ func BenchmarkValue(b *testing.B) {
 	})
 	b.Run("10,000,000 shared items and 10,000,000 different appended items", func(b *testing.B) {
 		s := &Slice[int]{}
-		s.Init(make([]int, _10m))
+		s.Init(make([]int, _10m), 0)
 		s.appendedItems = []*MultiValueItem[int]{}
 		objs := make([]*testObject, _10m)
 		for i := range objs {

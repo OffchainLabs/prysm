@@ -7,17 +7,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-var stateDefragmentationTime = promauto.NewSummary(prometheus.SummaryOpts{
-	Name: "head_state_defragmentation_milliseconds",
-	Help: "Milliseconds it takes to defragment the head state",
+var promoteToHeadTime = promauto.NewSummary(prometheus.SummaryOpts{
+	Name: "head_state_promote_to_head_milliseconds",
+	Help: "Milliseconds it takes to promote the head state's overrides to the shared base",
 })
 
-// This method defragments our state, so that any specific fields which have
-// a higher number of fragmented indexes are reallocated to a new separate slice for
-// that field.
-func (s *Service) defragmentState(st state.BeaconState) {
+// promoteHeadState promotes the head state's MVSlice overrides into the shared
+// base so that subsequent reads avoid override lookups.
+func (s *Service) promoteHeadState(st state.BeaconState) {
 	startTime := time.Now()
-	st.Defragment()
+	st.PromoteToHead()
 	elapsedTime := time.Since(startTime)
-	stateDefragmentationTime.Observe(float64(elapsedTime.Milliseconds()))
+	promoteToHeadTime.Observe(float64(elapsedTime.Milliseconds()))
 }

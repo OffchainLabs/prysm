@@ -25,7 +25,7 @@ func (b *BeaconState) SetBlockRoots(val [][]byte) error {
 	if b.blockRootsMultiValue != nil {
 		b.blockRootsMultiValue.Detach(b)
 	}
-	b.blockRootsMultiValue = NewMultiValueBlockRoots(val)
+	b.blockRootsMultiValue = NewMultiValueBlockRoots(val, b.Id())
 
 	b.markFieldAsDirty(types.BlockRoots)
 	b.rebuildTrie[types.BlockRoots] = true

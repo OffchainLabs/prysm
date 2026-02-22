@@ -20,7 +20,7 @@ func (b *BeaconState) SetValidators(val []*ethpb.Validator) error {
 	if b.validatorsMultiValue != nil {
 		b.validatorsMultiValue.Detach(b)
 	}
-	b.validatorsMultiValue = NewMultiValueValidators(val)
+	b.validatorsMultiValue = NewMultiValueValidators(val, b.Id())
 
 	b.markFieldAsDirty(types.Validators)
 	b.rebuildTrie[types.Validators] = true
@@ -130,7 +130,7 @@ func (b *BeaconState) SetBalances(val []uint64) error {
 	if b.balancesMultiValue != nil {
 		b.balancesMultiValue.Detach(b)
 	}
-	b.balancesMultiValue = NewMultiValueBalances(val)
+	b.balancesMultiValue = NewMultiValueBalances(val, b.Id())
 
 	b.markFieldAsDirty(types.Balances)
 	b.rebuildTrie[types.Balances] = true
@@ -248,7 +248,7 @@ func (b *BeaconState) SetInactivityScores(val []uint64) error {
 	if b.inactivityScoresMultiValue != nil {
 		b.inactivityScoresMultiValue.Detach(b)
 	}
-	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(val)
+	b.inactivityScoresMultiValue = NewMultiValueInactivityScores(val, b.Id())
 
 	b.markFieldAsDirty(types.InactivityScores)
 	return nil
