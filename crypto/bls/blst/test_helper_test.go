@@ -1,13 +1,15 @@
 package blst
 
+import "github.com/OffchainLabs/prysm/v7/crypto/bls/common"
+
 // Note: These functions are for tests to access private globals, such as pubkeyCache.
 
-// DisableCaches sets the cache sizes to 0.
+// DisableCaches clears the pubkey cache.
 func DisableCaches() {
-	pubkeyCache.Resize(0)
+	pubkeyCache.mu.Lock()
+	pubkeyCache.items = make(map[[48]byte]common.PublicKey)
+	pubkeyCache.mu.Unlock()
 }
 
-// EnableCaches sets the cache sizes to the default values.
-func EnableCaches() {
-	pubkeyCache.Resize(maxKeys)
-}
+// EnableCaches is a no-op since the map-based cache has no size limit.
+func EnableCaches() {}
