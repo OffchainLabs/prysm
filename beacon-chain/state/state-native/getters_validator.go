@@ -161,15 +161,14 @@ func (b *BeaconState) PubkeyAtIndex(idx primitives.ValidatorIndex) [fieldparams.
 // validator indices.
 func (b *BeaconState) AggregateKeyFromIndices(idxs []uint64) (bls.PublicKey, error) {
 	b.lock.RLock()
-	defer b.lock.RUnlock()
-
-	pubKeys := make([][]byte, len(idxs))
-	for i, idx := range idxs {
-		v, err := b.validatorsMultiValue.At(b, idx)
-		if err != nil {
-			return nil, err
-		}
-		pubKeys[i] = v.PublicKey[:]
+	vals, err := b.validatorsMultiValue.AtList(b, idxs)
+	b.lock.RUnlock()
+	if err != nil {
+		return nil, err
+	}
+	pubKeys := make([][]byte, len(vals))
+	for i := range vals {
+		pubKeys[i] = vals[i].PublicKey[:]
 	}
 	return bls.AggregatePublicKeys(pubKeys)
 }

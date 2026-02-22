@@ -973,3 +973,70 @@ func BenchmarkValue(b *testing.B) {
 		}
 	})
 }
+
+func TestAtList(t *testing.T) {
+	s := setup()
+	first := &testObject{id: 1}
+	second := &testObject{id: 2}
+
+	t.Run("shared and individual values", func(t *testing.T) {
+		// First object: idx 0=123(shared), 1=1(individual), 2=3(individual), 3=1(individual), 4=123(shared)
+		vals, err := s.AtList(first, []uint64{0, 1, 2, 3, 4})
+		require.NoError(t, err)
+		assert.Equal(t, 123, vals[0])
+		assert.Equal(t, 1, vals[1])
+		assert.Equal(t, 3, vals[2])
+		assert.Equal(t, 1, vals[3])
+		assert.Equal(t, 123, vals[4])
+	})
+
+	t.Run("second object values", func(t *testing.T) {
+		// Second object: idx 0=123(shared), 1=2(individual), 2=3(individual), 3=123(shared), 4=2(individual)
+		vals, err := s.AtList(second, []uint64{0, 1, 2, 3, 4})
+		require.NoError(t, err)
+		assert.Equal(t, 123, vals[0])
+		assert.Equal(t, 2, vals[1])
+		assert.Equal(t, 3, vals[2])
+		assert.Equal(t, 123, vals[3])
+		assert.Equal(t, 2, vals[4])
+	})
+
+	t.Run("appended values", func(t *testing.T) {
+		// First object: idx 5=1(appended), 6=3(appended)
+		vals, err := s.AtList(first, []uint64{5, 6})
+		require.NoError(t, err)
+		assert.Equal(t, 1, vals[0])
+		assert.Equal(t, 3, vals[1])
+	})
+
+	t.Run("mix of shared individual and appended", func(t *testing.T) {
+		vals, err := s.AtList(first, []uint64{0, 2, 5})
+		require.NoError(t, err)
+		assert.Equal(t, 123, vals[0])
+		assert.Equal(t, 3, vals[1])
+		assert.Equal(t, 1, vals[2])
+	})
+
+	t.Run("out of bounds", func(t *testing.T) {
+		_, err := s.AtList(first, []uint64{0, 7})
+		assert.ErrorContains(t, "index 7 out of bounds", err)
+	})
+
+	t.Run("empty indices", func(t *testing.T) {
+		vals, err := s.AtList(first, []uint64{})
+		require.NoError(t, err)
+		assert.Equal(t, 0, len(vals))
+	})
+
+	t.Run("consistency with At", func(t *testing.T) {
+		// Verify AtList returns same values as individual At calls
+		indices := []uint64{0, 1, 2, 3, 4, 5, 6}
+		vals, err := s.AtList(first, indices)
+		require.NoError(t, err)
+		for i, idx := range indices {
+			v, err := s.At(first, idx)
+			require.NoError(t, err)
+			assert.Equal(t, v, vals[i])
+		}
+	})
+}
