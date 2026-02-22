@@ -37,7 +37,7 @@ func New(ctx context.Context, s state.BeaconState) ([]Validator, *Balance, error
 			IsWithdrawableCurrentEpoch:   withdrawable,
 			CurrentEpochEffectiveBalance: val.EffectiveBalance,
 			InclusionSlot:                farFutureSlot,
-			InclusionDistance:             farFutureSlot,
+			InclusionDistance:            farFutureSlot,
 		}
 		// Was validator active current epoch
 		if helpers.IsActiveCompactValidator(val, currentEpoch) {

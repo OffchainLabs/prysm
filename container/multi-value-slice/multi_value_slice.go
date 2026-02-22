@@ -8,7 +8,7 @@
 // Calling Copy is required in most circumstances (an exception is when the source object has only shared values).
 //
 //	s := &Slice[int, *testObject]{}
-//	s.Init([]int{1, 2, 3})
+//	s.Init([]int{1, 2, 3}, id1)
 //	src := &testObject{id: id1, slice: s} // id1 is some UUID
 //	dst := &testObject{id: id2, slice: s} // id2 is some UUID
 //	s.Copy(src, dst)
@@ -97,10 +97,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Amount of references beyond which a multivalue object is considered
-// fragmented.
-const fragmentationLimit = 50000
-
 // ErrOutOfBounds happens when the provided index is higher than the largest index of the slice.
 var ErrOutOfBounds = errors.New("out of bounds")
 
@@ -154,15 +150,18 @@ type Slice[V comparable] struct {
 	individualItems map[uint64]*MultiValueItem[V]
 	appendedItems   []*MultiValueItem[V]
 	cachedLengths   map[uint64]int
+	activeIds       map[uint64]struct{}
 	lock            sync.RWMutex
 }
 
 // Init initializes the slice with sensible defaults. Input values are assigned to shared items.
-func (s *Slice[V]) Init(items []V) {
+// The ownerID is the ID of the state that initially owns this slice.
+func (s *Slice[V]) Init(items []V, ownerID Id) {
 	s.sharedItems = items
 	s.individualItems = map[uint64]*MultiValueItem[V]{}
 	s.appendedItems = []*MultiValueItem[V]{}
 	s.cachedLengths = map[uint64]int{}
+	s.activeIds = map[uint64]struct{}{ownerID: {}}
 }
 
 // Len returns the number of items for the input object.
@@ -181,6 +180,9 @@ func (s *Slice[V]) Len(obj Identifiable) int {
 func (s *Slice[V]) Copy(src, dst Identifiable) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
+	s.activeIds[src.Id()] = struct{}{}
+	s.activeIds[dst.Id()] = struct{}{}
 
 	for _, item := range s.individualItems {
 		for _, v := range item.Values {
@@ -397,6 +399,7 @@ func (s *Slice[V]) Detach(obj Identifiable) {
 	}
 
 	delete(s.cachedLengths, obj.Id())
+	delete(s.activeIds, obj.Id())
 }
 
 // MultiValueStatistics generates the multi-value stats object for the respective
@@ -429,56 +432,134 @@ func (s *Slice[V]) MultiValueStatistics() MultiValueStatistics {
 	return stats
 }
 
-// IsFragmented checks if our mutlivalue object is fragmented (individual references held).
-// If the number of references is higher than our threshold we return true.
-func (s *Slice[V]) IsFragmented() bool {
-	stats := s.MultiValueStatistics()
-	return stats.TotalIndividualElemReferences+stats.TotalAppendedElemReferences >= fragmentationLimit
+// PromoteToHead makes the given object's values the new shared base.
+// After promotion, the head object reads directly from sharedItems with zero
+// override lookups. Other active states that were reading the old shared values
+// get reverse-overrides so they continue to read correct values.
+func (s *Slice[V]) PromoteToHead(obj Identifiable) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	headId := obj.Id()
+
+	// Step 1: Promote individual item overrides.
+	// Collect indices where head has overrides.
+	headOverrides := make(map[uint64]V, len(s.individualItems))
+	for idx, item := range s.individualItems {
+		for _, v := range item.Values {
+			if slices.Contains(v.ids, headId) {
+				headOverrides[idx] = v.val
+				break
+			}
+		}
+	}
+
+	if len(headOverrides) == 0 {
+		return
+	}
+
+	// For each head override, swap shared value and create reverse-overrides.
+	for idx, headVal := range headOverrides {
+		oldShared := s.sharedItems[idx]
+		s.sharedItems[idx] = headVal
+
+		// Rebuild the individual item at this index.
+		s.rebuildIndividualAtIndex(idx, headId, oldShared)
+	}
 }
 
-// Reset builds a new multivalue object with respect to the
-// provided object's id. The base slice will be based on this
-// particular id.
-func (s *Slice[V]) Reset(obj Identifiable) *Slice[V] {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	l, ok := s.cachedLengths[obj.Id()]
+// rebuildIndividualAtIndex rebuilds the override entry at one index after swapping
+// the shared value. The head's override is removed, and other active states that
+// were reading the old shared value get reverse-overrides.
+func (s *Slice[V]) rebuildIndividualAtIndex(idx uint64, headId uint64, oldShared V) {
+	item, ok := s.individualItems[idx]
 	if !ok {
-		l = len(s.sharedItems)
+		// Head had no override here (shouldn't happen since we only call this for head overrides),
+		// but if oldShared != newShared we'd need reverse overrides. Handle defensively.
+		if oldShared != s.sharedItems[idx] {
+			s.createReverseOverrides(idx, headId, oldShared)
+		}
+		return
 	}
 
-	items := make([]V, l)
-	copy(items, s.sharedItems)
-	for i, ind := range s.individualItems {
-		for _, v := range ind.Values {
-			_, found := containsId(v.ids, obj.Id())
-			if found {
-				items[i] = v.val
+	// Remove head from this index's overrides.
+	newValues := make([]*Value[V], 0, len(item.Values))
+	for _, v := range item.Values {
+		foundIndex, found := containsId(v.ids, headId)
+		if found {
+			if len(v.ids) > 1 {
+				v.ids = deleteElemFromSlice(v.ids, foundIndex)
+				newValues = append(newValues, v)
+			}
+			// If len(v.ids) == 1 and it's the head, skip it entirely.
+		} else {
+			newValues = append(newValues, v)
+		}
+	}
+
+	// Now check: do we need reverse-overrides for active states without any override?
+	if oldShared != s.sharedItems[idx] {
+		// Find which active states already have an override at this index.
+		hasOverride := make(map[uint64]struct{})
+		hasOverride[headId] = struct{}{} // Head is handled.
+		for _, v := range newValues {
+			for _, id := range v.ids {
+				hasOverride[id] = struct{}{}
+			}
+		}
+
+		// Create reverse-overrides for active states reading old shared value.
+		// Try to merge into existing Value with same oldShared.
+		var reverseValue *Value[V]
+		for _, v := range newValues {
+			if v.val == oldShared {
+				reverseValue = v
 				break
+			}
+		}
+
+		for activeId := range s.activeIds {
+			if _, has := hasOverride[activeId]; has {
+				continue
+			}
+			// This state was reading oldShared, now needs a reverse-override.
+			if reverseValue == nil {
+				reverseValue = &Value[V]{val: oldShared, ids: []uint64{activeId}}
+				newValues = append(newValues, reverseValue)
+			} else {
+				reverseValue.ids = append(reverseValue.ids, activeId)
 			}
 		}
 	}
 
-	index := len(s.sharedItems)
-	for _, app := range s.appendedItems {
-		found := true
-		for _, v := range app.Values {
-			_, found = containsId(v.ids, obj.Id())
-			if found {
-				items[index] = v.val
-				index++
-				break
-			}
+	if len(newValues) == 0 {
+		delete(s.individualItems, idx)
+	} else {
+		item.Values = newValues
+	}
+}
+
+// createReverseOverrides creates override entries for active states that were
+// reading oldShared at the given index (excluding headId).
+func (s *Slice[V]) createReverseOverrides(idx uint64, headId uint64, oldShared V) {
+	var reverseValue *Value[V]
+	var newValues []*Value[V]
+
+	for activeId := range s.activeIds {
+		if activeId == headId {
+			continue
 		}
-		if !found {
-			break
+		if reverseValue == nil {
+			reverseValue = &Value[V]{val: oldShared, ids: []uint64{activeId}}
+			newValues = append(newValues, reverseValue)
+		} else {
+			reverseValue.ids = append(reverseValue.ids, activeId)
 		}
 	}
 
-	reset := &Slice[V]{}
-	reset.Init(items)
-	return reset
+	if len(newValues) > 0 {
+		s.individualItems[idx] = &MultiValueItem[V]{Values: newValues}
+	}
 }
 
 // ForEach iterates over every element for the given object, calling f with a

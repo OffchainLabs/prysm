@@ -150,6 +150,10 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 		reorgCount.Inc()
 	}
 
+	// Promote the head state's MVSlice overrides into the shared base
+	// so the subsequent Copy() in setHead reads directly from sharedItems.
+	s.promoteHeadState(headState)
+
 	// Cache the new head info.
 	newHead := &head{
 		root:       newHeadRoot,

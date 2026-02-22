@@ -40,13 +40,13 @@ var (
 type MultiValueRandaoMixes = multi_value_slice.Slice[[32]byte]
 
 // NewMultiValueRandaoMixes creates a new slice whose shared items will be populated with copies of input values.
-func NewMultiValueRandaoMixes(mixes [][]byte) *MultiValueRandaoMixes {
+func NewMultiValueRandaoMixes(mixes [][]byte, ownerID multi_value_slice.Id) *MultiValueRandaoMixes {
 	items := make([][32]byte, fieldparams.RandaoMixesLength)
 	for i, v := range mixes {
 		items[i] = [32]byte(bytesutil.PadTo(v, 32))
 	}
 	mv := &MultiValueRandaoMixes{}
-	mv.Init(items)
+	mv.Init(items, ownerID)
 	multiValueCountGauge.WithLabelValues(types.RandaoMixes.String()).Inc()
 	runtime.SetFinalizer(mv, randaoMixesFinalizer)
 	return mv
@@ -56,13 +56,13 @@ func NewMultiValueRandaoMixes(mixes [][]byte) *MultiValueRandaoMixes {
 type MultiValueBlockRoots = multi_value_slice.Slice[[32]byte]
 
 // NewMultiValueBlockRoots creates a new slice whose shared items will be populated with copies of input values.
-func NewMultiValueBlockRoots(roots [][]byte) *MultiValueBlockRoots {
+func NewMultiValueBlockRoots(roots [][]byte, ownerID multi_value_slice.Id) *MultiValueBlockRoots {
 	items := make([][32]byte, fieldparams.BlockRootsLength)
 	for i, v := range roots {
 		items[i] = [32]byte(bytesutil.PadTo(v, 32))
 	}
 	mv := &MultiValueBlockRoots{}
-	mv.Init(items)
+	mv.Init(items, ownerID)
 	multiValueCountGauge.WithLabelValues(types.BlockRoots.String()).Inc()
 	runtime.SetFinalizer(mv, blockRootsFinalizer)
 	return mv
@@ -72,13 +72,13 @@ func NewMultiValueBlockRoots(roots [][]byte) *MultiValueBlockRoots {
 type MultiValueStateRoots = multi_value_slice.Slice[[32]byte]
 
 // NewMultiValueStateRoots creates a new slice whose shared items will be populated with copies of input values.
-func NewMultiValueStateRoots(roots [][]byte) *MultiValueStateRoots {
+func NewMultiValueStateRoots(roots [][]byte, ownerID multi_value_slice.Id) *MultiValueStateRoots {
 	items := make([][32]byte, fieldparams.StateRootsLength)
 	for i, v := range roots {
 		items[i] = [32]byte(bytesutil.PadTo(v, 32))
 	}
 	mv := &MultiValueStateRoots{}
-	mv.Init(items)
+	mv.Init(items, ownerID)
 	multiValueCountGauge.WithLabelValues(types.StateRoots.String()).Inc()
 	runtime.SetFinalizer(mv, stateRootsFinalizer)
 	return mv
@@ -88,11 +88,11 @@ func NewMultiValueStateRoots(roots [][]byte) *MultiValueStateRoots {
 type MultiValueBalances = multi_value_slice.Slice[uint64]
 
 // NewMultiValueBalances creates a new slice whose shared items will be populated with copies of input values.
-func NewMultiValueBalances(balances []uint64) *MultiValueBalances {
+func NewMultiValueBalances(balances []uint64, ownerID multi_value_slice.Id) *MultiValueBalances {
 	items := make([]uint64, len(balances))
 	copy(items, balances)
 	mv := &MultiValueBalances{}
-	mv.Init(items)
+	mv.Init(items, ownerID)
 	multiValueCountGauge.WithLabelValues(types.Balances.String()).Inc()
 	runtime.SetFinalizer(mv, balancesFinalizer)
 	return mv
@@ -102,11 +102,11 @@ func NewMultiValueBalances(balances []uint64) *MultiValueBalances {
 type MultiValueInactivityScores = multi_value_slice.Slice[uint64]
 
 // NewMultiValueInactivityScores creates a new slice whose shared items will be populated with copies of input values.
-func NewMultiValueInactivityScores(scores []uint64) *MultiValueInactivityScores {
+func NewMultiValueInactivityScores(scores []uint64, ownerID multi_value_slice.Id) *MultiValueInactivityScores {
 	items := make([]uint64, len(scores))
 	copy(items, scores)
 	mv := &MultiValueInactivityScores{}
-	mv.Init(items)
+	mv.Init(items, ownerID)
 	multiValueCountGauge.WithLabelValues(types.InactivityScores.String()).Inc()
 	runtime.SetFinalizer(mv, inactivityScoresFinalizer)
 	return mv
@@ -117,61 +117,32 @@ type MultiValueValidators = multi_value_slice.Slice[stateutil.CompactValidator]
 
 // NewMultiValueValidators creates a new slice whose shared items will be populated with input values.
 // It converts the protobuf validators to compact representation internally.
-func NewMultiValueValidators(vals []*ethpb.Validator) *MultiValueValidators {
+func NewMultiValueValidators(vals []*ethpb.Validator, ownerID multi_value_slice.Id) *MultiValueValidators {
 	items := stateutil.CompactValidatorsFromProto(vals)
 	mv := &MultiValueValidators{}
-	mv.Init(items)
+	mv.Init(items, ownerID)
 	multiValueCountGauge.WithLabelValues(types.Validators.String()).Inc()
 	runtime.SetFinalizer(mv, validatorsFinalizer)
 	return mv
 }
 
-// Defragment checks whether each individual multi-value field in our state is fragmented
-// and if it is, it will 'reset' the field to create a new multivalue object.
-func (b *BeaconState) Defragment() {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-	if b.blockRootsMultiValue != nil && b.blockRootsMultiValue.IsFragmented() {
-		initialMVslice := b.blockRootsMultiValue
-		b.blockRootsMultiValue = b.blockRootsMultiValue.Reset(b)
-		initialMVslice.Detach(b)
-		multiValueCountGauge.WithLabelValues(types.BlockRoots.String()).Inc()
-		runtime.SetFinalizer(b.blockRootsMultiValue, blockRootsFinalizer)
-	}
-	if b.stateRootsMultiValue != nil && b.stateRootsMultiValue.IsFragmented() {
-		initialMVslice := b.stateRootsMultiValue
-		b.stateRootsMultiValue = b.stateRootsMultiValue.Reset(b)
-		initialMVslice.Detach(b)
-		multiValueCountGauge.WithLabelValues(types.StateRoots.String()).Inc()
-		runtime.SetFinalizer(b.stateRootsMultiValue, stateRootsFinalizer)
-	}
-	if b.randaoMixesMultiValue != nil && b.randaoMixesMultiValue.IsFragmented() {
-		initialMVslice := b.randaoMixesMultiValue
-		b.randaoMixesMultiValue = b.randaoMixesMultiValue.Reset(b)
-		initialMVslice.Detach(b)
-		multiValueCountGauge.WithLabelValues(types.RandaoMixes.String()).Inc()
-		runtime.SetFinalizer(b.randaoMixesMultiValue, randaoMixesFinalizer)
-	}
-	if b.balancesMultiValue != nil && b.balancesMultiValue.IsFragmented() {
-		initialMVslice := b.balancesMultiValue
-		b.balancesMultiValue = b.balancesMultiValue.Reset(b)
-		initialMVslice.Detach(b)
-		multiValueCountGauge.WithLabelValues(types.Balances.String()).Inc()
-		runtime.SetFinalizer(b.balancesMultiValue, balancesFinalizer)
-	}
-	if b.validatorsMultiValue != nil && b.validatorsMultiValue.IsFragmented() {
-		initialMVslice := b.validatorsMultiValue
-		b.validatorsMultiValue = b.validatorsMultiValue.Reset(b)
-		initialMVslice.Detach(b)
-		multiValueCountGauge.WithLabelValues(types.Validators.String()).Inc()
-		runtime.SetFinalizer(b.validatorsMultiValue, validatorsFinalizer)
-	}
-	if b.inactivityScoresMultiValue != nil && b.inactivityScoresMultiValue.IsFragmented() {
-		initialMVslice := b.inactivityScoresMultiValue
-		b.inactivityScoresMultiValue = b.inactivityScoresMultiValue.Reset(b)
-		initialMVslice.Detach(b)
-		multiValueCountGauge.WithLabelValues(types.InactivityScores.String()).Inc()
-		runtime.SetFinalizer(b.inactivityScoresMultiValue, inactivityScoresFinalizer)
+// Defragment is a no-op. PromoteToHead supersedes the old fragmentation-based
+// Reset approach by continuously keeping the head state's values in sharedItems.
+func (b *BeaconState) Defragment() {}
+
+// PromoteToHead promotes the current state's override values to the shared
+// base of each MVSlice. After promotion, reads for this state go directly to
+// sharedItems with zero override lookups. Other states that were reading the
+// old shared value get reverse-overrides so they continue to read correct values.
+// No state lock is needed because each MVSlice has its own internal lock.
+func (b *BeaconState) PromoteToHead() {
+	b.blockRootsMultiValue.PromoteToHead(b)
+	b.stateRootsMultiValue.PromoteToHead(b)
+	b.randaoMixesMultiValue.PromoteToHead(b)
+	b.balancesMultiValue.PromoteToHead(b)
+	b.validatorsMultiValue.PromoteToHead(b)
+	if b.inactivityScoresMultiValue != nil {
+		b.inactivityScoresMultiValue.PromoteToHead(b)
 	}
 }
 
