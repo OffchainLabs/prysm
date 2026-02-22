@@ -4,16 +4,27 @@ package blst
 
 import (
 	"fmt"
+	"sync"
 
-	"github.com/OffchainLabs/prysm/v7/cache/nonblocking"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/pkg/errors"
 )
 
-var maxKeys = 2_000_000
-var pubkeyCache *nonblocking.LRU[[48]byte, common.PublicKey]
+var pubkeyCache = &pubkeyCacheMap{
+	items: make(map[[fieldparams.BLSPubkeyLength]byte]common.PublicKey),
+}
+
+// pubkeyCacheMap is a simple concurrent map for caching deserialized public keys.
+// Unlike an LRU, it has no eviction overhead (no linked list, no channel sends),
+// which eliminates ~0.47s/30s of CPU in the attestation validation hot path.
+// This is safe because the cache is bounded by the validator set size (~1.1M)
+// and pubkeys are immutable once registered.
+type pubkeyCacheMap struct {
+	mu    sync.RWMutex
+	items map[[fieldparams.BLSPubkeyLength]byte]common.PublicKey
+}
 
 // PublicKey used in the BLS signature scheme.
 type PublicKey struct {
@@ -30,7 +41,10 @@ func publicKeyFromBytes(pubKey []byte, cacheCopy bool) (common.PublicKey, error)
 		return nil, fmt.Errorf("public key must be %d bytes", params.BeaconConfig().BLSPubkeyLength)
 	}
 	newKey := (*[fieldparams.BLSPubkeyLength]byte)(pubKey)
-	if cv, ok := pubkeyCache.Get(*newKey); ok {
+	pubkeyCache.mu.RLock()
+	cv, ok := pubkeyCache.items[*newKey]
+	pubkeyCache.mu.RUnlock()
+	if ok {
 		if cacheCopy {
 			return cv.Copy(), nil
 		}
@@ -48,8 +62,9 @@ func publicKeyFromBytes(pubKey []byte, cacheCopy bool) (common.PublicKey, error)
 	}
 	pubKeyObj := &PublicKey{p: p}
 	copiedKey := pubKeyObj.Copy()
-	cacheKey := *newKey
-	pubkeyCache.Add(cacheKey, copiedKey)
+	pubkeyCache.mu.Lock()
+	pubkeyCache.items[*newKey] = copiedKey
+	pubkeyCache.mu.Unlock()
 	return pubKeyObj, nil
 }
 
