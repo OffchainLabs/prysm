@@ -236,7 +236,11 @@ func (p *PartialDataColumn) ForPeer(remote peer.ID, requestedMessage bool, peerS
 			return peerState, nil, nil, err
 		}
 		peerState.RecvdState = NewPartsMetaWithNoAvailableAndNoRequests(p.NKzgCommitments())
-		return peerState, encoded, nil, nil
+		myPartsMeta, err := marshalPartsMetadata(p.newPartsMetadata())
+		if err != nil {
+			return peerState, nil, nil, err
+		}
+		return peerState, encoded, myPartsMeta, nil
 	}
 
 	var cellsSent bitfield.Bitlist

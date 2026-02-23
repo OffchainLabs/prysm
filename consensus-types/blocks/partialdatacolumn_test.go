@@ -533,7 +533,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				next, encoded, meta, err := p.ForPeer(peer.ID("peer-a"), true, initial)
 				require.NoError(t, err)
 				require.NotNil(t, encoded)
-				require.IsNil(t, meta)
+				require.NotNil(t, meta)
 				require.NotNil(t, next.RecvdState)
 				require.IsNil(t, next.SentState)
 				// RecvdState should be no-available, no-requests metadata.
@@ -886,8 +886,8 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				// This isolates the Requests-mismatch branch from the Available branch.
 				p := mustNewPartialColumn(t, 4, 0, 1)
 				sentMeta := &ethpb.PartialDataColumnPartsMetadata{
-					Available: testBitlist(4, 0, 1),                // same as ours
-					Requests:  testBitlist(4, 0, 1),                // only 2 requests
+					Available: testBitlist(4, 0, 1), // same as ours
+					Requests:  testBitlist(4, 0, 1), // only 2 requests
 				}
 				_, _, meta, err := p.ForPeer(peer.ID("peer-a"), false, partialmessages.PeerState{
 					SentState: sentMeta,
