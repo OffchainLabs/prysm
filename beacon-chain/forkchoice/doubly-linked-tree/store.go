@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -107,14 +108,16 @@ func (s *Store) insert(ctx context.Context,
 	}
 
 	n := &Node{
-		slot:                     slot,
-		root:                     root,
-		parent:                   parent,
-		justifiedEpoch:           justifiedEpoch,
-		unrealizedJustifiedEpoch: justifiedEpoch,
-		finalizedEpoch:           finalizedEpoch,
-		unrealizedFinalizedEpoch: finalizedEpoch,
-		blockHash:                *blockHash,
+		slot:                        slot,
+		root:                        root,
+		parent:                      parent,
+		justifiedEpoch:              justifiedEpoch,
+		unrealizedJustifiedEpoch:    justifiedEpoch,
+		finalizedEpoch:              finalizedEpoch,
+		unrealizedFinalizedEpoch:    finalizedEpoch,
+		blockHash:                   *blockHash,
+		payloadAvailabilityVote:     bitfield.NewBitvector512(),
+		payloadDataAvailabilityVote: bitfield.NewBitvector512(),
 	}
 	// Set the node's target checkpoint
 	if slot%params.BeaconConfig().SlotsPerEpoch == 0 {

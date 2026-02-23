@@ -328,3 +328,50 @@ func TestGloasBlock_ChildBuildsOnFull(t *testing.T) {
 	require.NotNil(t, nodeB)
 	assert.Equal(t, fullA, nodeB.node.parent)
 }
+
+func TestGloasHeadComputation(t *testing.T) {
+	f := setup(1, 1)
+	ctx := t.Context()
+	balances := make([]uint64, 64)
+	for i := range balances {
+		balances[i] = 10
+	}
+	f.justifiedBalances = balances
+	f.store.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	// Head starts at finalized (genesis).
+	headRoot, err := f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, zeroHash, headRoot)
+
+	// Insert block A at slot 32, building on genesis.
+	//   genesis(full)
+	//       |
+	//      A(empty) <- head
+	slotA := primitives.Slot(32)
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	driftGenesisTime(f, slotA, 0)
+	st, blk, err := prepareGloasForkchoiceState(ctx, slotA, rootA, zeroHash, blockHashA, zeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootA, headRoot)
+
+	// Insert payload for A, head is still A.
+	//   genesis(full)
+	//       |
+	//      A(empty)
+	//       |
+	//      A(full) <- head
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootA, headRoot)
+}
