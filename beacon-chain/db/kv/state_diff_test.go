@@ -67,11 +67,13 @@ func TestStateDiff_EncodeDecodeExponents(t *testing.T) {
 	t.Run("encode-negative", func(t *testing.T) {
 		_, err := encodeStateDiffExponents([]int{21, -1})
 		require.ErrorContains(t, "out of range", err)
+		require.ErrorContains(t, "between 2 and", err)
 	})
 
 	t.Run("encode-too-large", func(t *testing.T) {
 		_, err := encodeStateDiffExponents([]int{flags.MaxStateDiffExponent + 1})
 		require.ErrorContains(t, "out of range", err)
+		require.ErrorContains(t, "between 2 and", err)
 	})
 
 	t.Run("decode-empty", func(t *testing.T) {

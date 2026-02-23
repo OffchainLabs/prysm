@@ -38,7 +38,7 @@ func encodeStateDiffExponents(exponents []int) ([]byte, error) {
 	encoded[0] = byte(len(exponents))
 	for i, exp := range exponents {
 		if exp < 2 || exp > flags.MaxStateDiffExponent {
-			return nil, fmt.Errorf("state diff exponent %d out of range for encoding", exp)
+			return nil, fmt.Errorf("state diff exponent out of range for encoding: got %d, expected between 2 and %d", exp, flags.MaxStateDiffExponent)
 		}
 		encoded[i+1] = byte(exp)
 	}
