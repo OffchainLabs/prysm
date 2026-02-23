@@ -354,7 +354,7 @@ func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pu
 		}
 
 		if peerState.RecvdState == nil {
-			peerState.RecvdState = incomingMeta
+			peerState.RecvdState = &incomingMeta
 		} else {
 			existingMeta, ok := peerState.RecvdState.(*ethpb.PartialDataColumnPartsMetadata)
 			if !ok {
