@@ -394,3 +394,46 @@ func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 	}
 	return en.node.blockHash, nil
 }
+
+func (s *Store) shouldApplyProposerBoost() bool {
+	if s.proposerBoostRoot == [32]byte{} {
+		return false
+	}
+	en := s.emptyNodeByRoot[s.proposerBoostRoot]
+	if en == nil {
+		return false
+	}
+	n := en.node
+	p := n.parent
+	if p == nil {
+		return true
+	}
+
+	if p.node.slot+1 != n.slot {
+		return true
+	}
+	return p.weight*100 >= s.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold
+}
+
+// removeProposerBoostFromParent removes the proposer boost that must have been applied to the parent of the current proposer boost node
+// in some circumstances.
+func (s *Store) removeProposerBoostFromParent() {
+	if s.proposerBoostRoot == [32]byte{} {
+		return
+	}
+	pn := s.emptyNodeByRoot[s.proposerBoostRoot]
+	if pn == nil {
+		return
+	}
+	n := pn.node
+	p := n.parent
+	if p.node.slot+1 != s.currentSlot() {
+		return
+	}
+	if p.weight < s.previousProposerBoostScore {
+		p.weight = 0
+	} else {
+		p.weight -= s.previousProposerBoostScore
+	}
+	return
+}
