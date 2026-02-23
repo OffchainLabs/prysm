@@ -4,8 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -374,4 +376,151 @@ func TestGloasHeadComputation(t *testing.T) {
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, rootA, headRoot)
+}
+
+func TestShouldExtendPayload(t *testing.T) {
+	f := setup(0, 0)
+	ctx := t.Context()
+
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	fn := f.store.fullNodeByRoot[rootA]
+	require.NotNil(t, fn)
+	n := fn.node
+
+	t.Run("nil full node returns false", func(t *testing.T) {
+		assert.Equal(t, false, f.store.shouldExtendPayload(nil))
+	})
+
+	t.Run("no votes and no proposer boost returns true", func(t *testing.T) {
+		f.store.proposerBoostRoot = [32]byte{}
+		assert.Equal(t, true, f.store.shouldExtendPayload(fn))
+	})
+
+	t.Run("quorum met returns true", func(t *testing.T) {
+		for i := uint64(0); i <= fieldparams.PTCSize/2; i++ {
+			n.setPayloadAvailabilityVote(i)
+			n.setPayloadDataAvailabilityVote(i)
+		}
+		assert.Equal(t, true, f.store.shouldExtendPayload(fn))
+		n.payloadAvailabilityVote = bitfield.NewBitvector512()
+		n.payloadDataAvailabilityVote = bitfield.NewBitvector512()
+	})
+
+	t.Run("only availability quorum not enough", func(t *testing.T) {
+		for i := uint64(0); i <= fieldparams.PTCSize/2; i++ {
+			n.setPayloadAvailabilityVote(i)
+		}
+		// Set a proposer boost so we don't short-circuit on empty boost root.
+		rootB := indexToHash(2)
+		f.store.proposerBoostRoot = rootB
+		// No empty node for boost root -> returns true.
+		assert.Equal(t, true, f.store.shouldExtendPayload(fn))
+		n.payloadAvailabilityVote = bitfield.NewBitvector512()
+	})
+
+	t.Run("proposer boost root has no empty node returns true", func(t *testing.T) {
+		f.store.proposerBoostRoot = indexToHash(99)
+		assert.Equal(t, true, f.store.shouldExtendPayload(fn))
+	})
+
+	t.Run("boost child parent differs from fn returns true", func(t *testing.T) {
+		rootB := indexToHash(2)
+		blockHashB := indexToHash(200)
+		st, roblock, err := prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, blockHashA, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+		f.store.proposerBoostRoot = rootB
+		boostNode := f.store.emptyNodeByRoot[rootB]
+		require.NotNil(t, boostNode)
+		// B's parent is full A, so parent.node == fn.node -> condition is false, falls through.
+		assert.Equal(t, boostNode.node.parent.full, f.store.shouldExtendPayload(fn))
+	})
+
+	t.Run("boost child parent is fn and full returns true", func(t *testing.T) {
+		rootB := indexToHash(2)
+		f.store.proposerBoostRoot = rootB
+		boostNode := f.store.emptyNodeByRoot[rootB]
+		require.NotNil(t, boostNode)
+		require.Equal(t, fn, boostNode.node.parent)
+		assert.Equal(t, true, f.store.shouldExtendPayload(fn))
+	})
+
+	t.Run("boost child parent is fn but empty returns false", func(t *testing.T) {
+		rootC := indexToHash(3)
+		blockHashC := indexToHash(300)
+		nonMatchingHash := indexToHash(999)
+		st, roblock, err := prepareGloasForkchoiceState(ctx, 2, rootC, rootA, blockHashC, nonMatchingHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+		f.store.proposerBoostRoot = rootC
+		boostNode := f.store.emptyNodeByRoot[rootC]
+		require.NotNil(t, boostNode)
+		emptyA := f.store.emptyNodeByRoot[rootA]
+		require.Equal(t, emptyA, boostNode.node.parent)
+		assert.Equal(t, false, f.store.shouldExtendPayload(fn))
+	})
+}
+
+func TestChoosePayloadContent(t *testing.T) {
+	f := setup(0, 0)
+	ctx := t.Context()
+
+	t.Run("nil node returns nil", func(t *testing.T) {
+		assert.Equal(t, (*PayloadNode)(nil), f.store.choosePayloadContent(nil))
+	})
+
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	emptyA := f.store.emptyNodeByRoot[rootA]
+	require.NotNil(t, emptyA)
+	n := emptyA.node
+
+	t.Run("no full node returns empty", func(t *testing.T) {
+		driftGenesisTime(f, 2, 0)
+		assert.Equal(t, emptyA, f.store.choosePayloadContent(n))
+	})
+
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+	fullA := f.store.fullNodeByRoot[rootA]
+	require.NotNil(t, fullA)
+
+	t.Run("not previous slot returns full", func(t *testing.T) {
+		driftGenesisTime(f, 3, 0)
+		assert.Equal(t, fullA, f.store.choosePayloadContent(n))
+	})
+
+	t.Run("previous slot with extend returns full", func(t *testing.T) {
+		driftGenesisTime(f, 2, 0)
+		f.store.proposerBoostRoot = [32]byte{}
+		assert.Equal(t, fullA, f.store.choosePayloadContent(n))
+	})
+
+	t.Run("previous slot without extend returns empty", func(t *testing.T) {
+		driftGenesisTime(f, 2, 0)
+		// Build a child on empty A so shouldExtendPayload returns false.
+		rootB := indexToHash(2)
+		blockHashB := indexToHash(200)
+		nonMatchingHash := indexToHash(999)
+		st, roblock, err := prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, nonMatchingHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, roblock))
+		f.store.proposerBoostRoot = rootB
+		assert.Equal(t, emptyA, f.store.choosePayloadContent(n))
+	})
 }
