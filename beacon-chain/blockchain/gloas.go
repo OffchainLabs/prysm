@@ -16,7 +16,7 @@ func (s *Service) getLookupParentRoot(b consensus_blocks.ROBlock) ([32]byte, err
 	if b.Version() < version.Gloas {
 		return parentRoot, nil
 	}
-	bidHash, err := s.cfg.ForkChoiceStore.BlockHash(parentRoot)
+	blockHash, err := s.cfg.ForkChoiceStore.BlockHash(parentRoot)
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "failed to get block hash for parent root")
 	}
@@ -28,7 +28,7 @@ func (s *Service) getLookupParentRoot(b consensus_blocks.ROBlock) ([32]byte, err
 		return [32]byte{}, errors.New("invalid signed execution payload bid message")
 	}
 	parentHash := [32]byte(bid.Message.ParentBlockHash)
-	if bidHash == parentHash {
+	if blockHash == parentHash {
 		return parentHash, nil
 	}
 	return parentRoot, nil
