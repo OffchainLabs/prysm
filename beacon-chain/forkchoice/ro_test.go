@@ -38,6 +38,7 @@ const (
 	lastRootCalled
 	targetRootForEpochCalled
 	parentRootCalled
+	blockHashCalled
 	dependentRootCalled
 	dependentRootForEpochCalled
 )
@@ -299,5 +300,10 @@ func (ro *mockROForkchoice) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) (
 
 func (ro *mockROForkchoice) ParentRoot(_ [32]byte) ([32]byte, error) {
 	ro.calls = append(ro.calls, parentRootCalled)
+	return [32]byte{}, nil
+}
+
+func (ro *mockROForkchoice) BlockHash(_ [32]byte) ([32]byte, error) {
+	ro.calls = append(ro.calls, blockHashCalled)
 	return [32]byte{}, nil
 }

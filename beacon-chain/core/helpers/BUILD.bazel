@@ -6,6 +6,7 @@ go_library(
         "attestation.go",
         "beacon_committee.go",
         "block.go",
+        "builder.go",
         "deposit.go",
         "genesis.go",
         "legacy.go",

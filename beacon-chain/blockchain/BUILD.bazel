@@ -10,6 +10,7 @@ go_library(
         "error.go",
         "execution_engine.go",
         "forkchoice_update_execution.go",
+        "gloas.go",
         "head.go",
         "head_sync_committee_info.go",
         "init_sync_process_block.go",

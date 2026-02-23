@@ -83,6 +83,7 @@ func TestGetSpec(t *testing.T) {
 	config.ElectraForkEpoch = 107
 	config.FuluForkVersion = []byte("FuluForkVersion")
 	config.FuluForkEpoch = 109
+	config.GloasForkVersion = []byte("GloasForkVersion")
 	config.GloasForkEpoch = 110
 	config.BLSWithdrawalPrefixByte = byte('b')
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
@@ -221,7 +222,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 192, len(data))
+	assert.Equal(t, 193, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -301,6 +302,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x"+hex.EncodeToString([]byte("FuluForkVersion")), v)
 			case "FULU_FORK_EPOCH":
 				assert.Equal(t, "109", v)
+			case "GLOAS_FORK_VERSION":
+				assert.Equal(t, "0x"+hex.EncodeToString([]byte("GloasForkVersion")), v)
 			case "GLOAS_FORK_EPOCH":
 				assert.Equal(t, "110", v)
 			case "MIN_ANCHOR_POW_BLOCK_DIFFICULTY":
