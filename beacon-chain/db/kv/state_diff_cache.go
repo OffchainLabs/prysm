@@ -82,6 +82,8 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 }
 
 func validateStateDiffCache(ctx context.Context, s *Store, cache *stateDiffCache) error {
+	// Copy level flags under lock, then release before validation work.
+	// stateByDiff may consult cache metadata and should never be called while holding cache locks.
 	cache.RLock()
 	levels := make([]bool, len(cache.levelsWithData))
 	copy(levels, cache.levelsWithData)
