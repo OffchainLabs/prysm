@@ -709,7 +709,6 @@ func TestForkchoice_UpdateJustifiedBalances(t *testing.T) {
 		return balances, nil
 	}
 	require.NoError(t, f.updateJustifiedBalances(t.Context(), [32]byte{}))
-	require.Equal(t, uint64(7), f.numActiveValidators)
 	require.Equal(t, uint64(430)/32, f.store.committeeWeight)
 	require.DeepEqual(t, balances, f.justifiedBalances)
 }

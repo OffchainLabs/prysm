@@ -38,7 +38,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		f := setup(jEpoch, fEpoch)
 		f.justifiedBalances = balances
 		f.store.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
-		f.numActiveValidators = uint64(len(balances))
+
 
 		// The head should always start at the finalized block.
 		headRoot, err := f.Head(ctx)
@@ -331,7 +331,7 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		f := setup(jEpoch, fEpoch)
 		f.justifiedBalances = balances
 		f.store.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
-		f.numActiveValidators = uint64(len(balances))
+
 		a := zeroHash
 
 		// The head should always start at the finalized block.

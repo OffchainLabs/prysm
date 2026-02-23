@@ -17,8 +17,7 @@ type ForkChoice struct {
 	votes               []Vote                      // tracks individual validator's last vote.
 	balances            []uint64                    // tracks individual validator's balances last accounted in votes.
 	justifiedBalances   []uint64                    // tracks individual validator's last justified balances.
-	numActiveValidators uint64                      // tracks the total number of active validators.
-	balancesByRoot      forkchoice.BalancesByRooter // handler to obtain balances for the state with a given root
+	balancesByRoot forkchoice.BalancesByRooter // handler to obtain balances for the state with a given root
 }
 
 var _ forkchoice.ForkChoicer = (*ForkChoice)(nil)

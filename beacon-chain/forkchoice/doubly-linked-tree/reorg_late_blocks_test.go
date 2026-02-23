@@ -10,8 +10,8 @@ import (
 
 func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 	f := setup(0, 0)
-	f.numActiveValidators = 640
-	f.justifiedBalances = make([]uint64, f.numActiveValidators)
+	numValidators := uint64(640)
+	f.justifiedBalances = make([]uint64, numValidators)
 	for i := range f.justifiedBalances {
 		f.justifiedBalances[i] = uint64(10)
 		f.store.committeeWeight += uint64(10)
@@ -22,7 +22,7 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 	st, blk, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, [32]byte{}, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
-	attesters := make([]uint64, f.numActiveValidators-64)
+	attesters := make([]uint64, numValidators-64)
 	for i := range attesters {
 		attesters[i] = uint64(i + 64)
 	}
@@ -107,8 +107,8 @@ func TestForkChoice_ShouldOverrideFCU(t *testing.T) {
 
 func TestForkChoice_GetProposerHead(t *testing.T) {
 	f := setup(0, 0)
-	f.numActiveValidators = 640
-	f.justifiedBalances = make([]uint64, f.numActiveValidators)
+	numValidators := uint64(640)
+	f.justifiedBalances = make([]uint64, numValidators)
 	for i := range f.justifiedBalances {
 		f.justifiedBalances[i] = uint64(10)
 		f.store.committeeWeight += uint64(10)
@@ -120,7 +120,7 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 	st, blk, err := prepareForkchoiceState(ctx, 1, parentRoot, [32]byte{}, [32]byte{'A'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, blk))
-	attesters := make([]uint64, f.numActiveValidators-64)
+	attesters := make([]uint64, numValidators-64)
 	for i := range attesters {
 		attesters[i] = uint64(i + 64)
 	}

@@ -640,11 +640,9 @@ func (f *ForkChoice) updateJustifiedBalances(ctx context.Context, root [32]byte)
 	}
 	f.justifiedBalances = balances
 	f.store.committeeWeight = 0
-	f.numActiveValidators = 0
 	for _, val := range balances {
 		if val > 0 {
 			f.store.committeeWeight += val
-			f.numActiveValidators++
 		}
 	}
 	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)
