@@ -78,7 +78,10 @@ type PayloadNode struct {
 
 // Vote defines an individual validator's vote.
 type Vote struct {
-	currentRoot [fieldparams.RootLength]byte // current voting root.
-	nextRoot    [fieldparams.RootLength]byte // next voting root.
-	nextEpoch   primitives.Epoch             // epoch of next voting period.
+	currentRoot          [fieldparams.RootLength]byte // current voting root.
+	nextRoot             [fieldparams.RootLength]byte // next voting root.
+	nextSlot             primitives.Slot              // slot of the next voting period.
+	currentSlot          primitives.Slot              // slot of the current voting period.
+	nextPayloadStatus    bool                         // whether the next vote is for a full or empty payload
+	currentPayloadStatus bool                         // whether the current vote is for a full or empty payload
 }

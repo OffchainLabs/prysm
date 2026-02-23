@@ -56,7 +56,7 @@ type PayloadProcessor interface {
 
 // AttestationProcessor processes the attestation that's used for accounting fork choice.
 type AttestationProcessor interface {
-	ProcessAttestation(context.Context, []uint64, [32]byte, primitives.Epoch)
+	ProcessAttestation(context.Context, []uint64, [32]byte, primitives.Slot, bool)
 }
 
 // Getter returns fork choice related information.

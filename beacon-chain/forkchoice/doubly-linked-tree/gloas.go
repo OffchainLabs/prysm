@@ -312,5 +312,28 @@ func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) err
 		children:   make([]*Node, 0),
 	}
 	s.fullNodeByRoot[root] = fn
+	f.updateNewFullNodeWeight(fn)
 	return nil
+}
+
+func (f *ForkChoice) updateNewFullNodeWeight(fn *PayloadNode) {
+	for index, vote := range f.votes {
+		if vote.currentRoot == fn.node.root && vote.nextPayloadStatus && index < len(f.balances) {
+			fn.balance += f.balances[index]
+		}
+	}
+	fn.weight = fn.balance
+}
+
+// resolveVoteNode returns the node that should receive the balance of a vote. It returns always a PayloadNode, but the boolean indicates
+// whether the vote should be applied to the pending node (true) or not.
+func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus bool) (*PayloadNode, bool) {
+	en := s.emptyNodeByRoot[r]
+	if en == nil {
+		return nil, true
+	}
+	if payloadStatus {
+		return s.fullNodeByRoot[r], false
+	}
+	return en, slot == en.node.slot
 }

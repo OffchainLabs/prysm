@@ -80,24 +80,25 @@ func (f *ForkChoice) Head(
 
 // ProcessAttestation processes attestation for vote accounting, it iterates around validator indices
 // and update their votes accordingly.
-func (f *ForkChoice) ProcessAttestation(ctx context.Context, validatorIndices []uint64, blockRoot [32]byte, targetEpoch primitives.Epoch) {
+func (f *ForkChoice) ProcessAttestation(ctx context.Context, validatorIndices []uint64, blockRoot [32]byte, slot primitives.Slot, payloadStatus bool) {
 	_, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.ProcessAttestation")
 	defer span.End()
 
 	for _, index := range validatorIndices {
 		// Validator indices will grow the vote cache.
+		newVote := false
 		for index >= uint64(len(f.votes)) {
 			f.votes = append(f.votes, Vote{currentRoot: params.BeaconConfig().ZeroHash, nextRoot: params.BeaconConfig().ZeroHash})
+			newVote = true
 		}
 
-		// Newly allocated vote if the root fields are untouched.
-		newVote := f.votes[index].nextRoot == params.BeaconConfig().ZeroHash &&
-			f.votes[index].currentRoot == params.BeaconConfig().ZeroHash
-
 		// Vote gets updated if it's newly allocated or high target epoch.
-		if newVote || targetEpoch > f.votes[index].nextEpoch {
-			f.votes[index].nextEpoch = targetEpoch
+		targetEpoch := slots.ToEpoch(slot)
+		nextEpoch := slots.ToEpoch(f.votes[index].nextSlot)
+		if newVote || targetEpoch > nextEpoch {
+			f.votes[index].nextSlot = slot
 			f.votes[index].nextRoot = blockRoot
+			f.votes[index].nextPayloadStatus = payloadStatus
 		}
 	}
 
@@ -308,43 +309,57 @@ func (f *ForkChoice) updateBalances() error {
 		}
 
 		// Update only if the validator's balance or vote has changed.
-		if vote.currentRoot != vote.nextRoot || oldBalance != newBalance {
-			// Ignore the vote if the root is not in fork choice
-			// store, that means we have not seen the block before.
-			nextNode, ok := f.store.emptyNodeByRoot[vote.nextRoot]
-			if ok && vote.nextRoot != zHash {
-				// Protection against nil node
-				if nextNode == nil {
-					return errors.Wrap(ErrNilNode, "could not update balances")
+		if vote.currentRoot != vote.nextRoot || oldBalance != newBalance || vote.currentPayloadStatus != vote.nextPayloadStatus {
+			// Add new balance to the next vote target if the root is known.
+			pn, pending := f.store.resolveVoteNode(vote.nextRoot, vote.nextSlot, vote.nextPayloadStatus)
+			if pn != nil && vote.nextRoot != zHash {
+				if pending {
+					pn.node.balance += newBalance
+				} else {
+					pn.balance += newBalance
 				}
-				nextNode.balance += newBalance
 			}
 
-			currentNode, ok := f.store.emptyNodeByRoot[vote.currentRoot]
-			if ok && vote.currentRoot != zHash {
-				// Protection against nil node
-				if currentNode == nil {
-					return errors.Wrap(ErrNilNode, "could not update balances")
-				}
-				if currentNode.balance < oldBalance {
-					log.WithFields(logrus.Fields{
-						"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
-						"oldBalance":                 oldBalance,
-						"nodeBalance":                currentNode.balance,
-						"nodeWeight":                 currentNode.weight,
-						"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
-						"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
-						"previousProposerBoostScore": f.store.previousProposerBoostScore,
-					}).Warning("node with invalid balance, setting it to zero")
-					currentNode.balance = 0
+			// Subtract old balance from the current vote target if the root is known.
+			pn, pending = f.store.resolveVoteNode(vote.currentRoot, vote.currentSlot, vote.currentPayloadStatus)
+			if pn != nil && vote.currentRoot != zHash {
+				if pending {
+					if pn.node.balance < oldBalance {
+						log.WithFields(logrus.Fields{
+							"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
+							"oldBalance":                 oldBalance,
+							"nodeBalance":                pn.node.balance,
+							"nodeWeight":                 pn.node.weight,
+							"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
+							"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
+							"previousProposerBoostScore": f.store.previousProposerBoostScore,
+						}).Warning("node with invalid balance, setting it to zero")
+						pn.node.balance = 0
+					} else {
+						pn.node.balance -= oldBalance
+					}
 				} else {
-					currentNode.balance -= oldBalance
+					if pn.balance < oldBalance {
+						log.WithFields(logrus.Fields{
+							"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
+							"oldBalance":                 oldBalance,
+							"nodeBalance":                pn.balance,
+							"nodeWeight":                 pn.weight,
+							"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
+							"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
+							"previousProposerBoostScore": f.store.previousProposerBoostScore,
+						}).Warning("node with invalid balance, setting it to zero")
+						pn.balance = 0
+					} else {
+						pn.balance -= oldBalance
+					}
 				}
 			}
 		}
-
 		// Rotate the validator vote.
 		f.votes[index].currentRoot = vote.nextRoot
+		f.votes[index].currentSlot = vote.nextSlot
+		f.votes[index].currentPayloadStatus = vote.nextPayloadStatus
 	}
 	f.balances = newBalances
 	return nil
@@ -410,15 +425,23 @@ func (f *ForkChoice) InsertSlashedIndex(_ context.Context, index primitives.Vali
 		return
 	}
 
-	node, ok := f.store.emptyNodeByRoot[f.votes[index].currentRoot]
-	if !ok || node == nil {
+	v := f.votes[index]
+	pn, pending := f.store.resolveVoteNode(v.currentRoot, v.currentSlot, v.currentPayloadStatus)
+	if pn == nil {
 		return
 	}
-
-	if node.balance < f.balances[index] {
-		node.balance = 0
+	if pending {
+		if pn.node.balance < f.balances[index] {
+			pn.node.balance = 0
+		} else {
+			pn.node.balance -= f.balances[index]
+		}
+		return
+	}
+	if pn.balance < f.balances[index] {
+		pn.balance = 0
 	} else {
-		node.balance -= f.balances[index]
+		pn.balance -= f.balances[index]
 	}
 }
 
