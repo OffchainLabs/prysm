@@ -345,7 +345,7 @@ func updatePeerStateFromIncomingRPC(peerState partialmessages.PeerState, rpc *pu
 	hasMessage := len(rpc.PartialMessage) > 0
 
 	if hasIncomingPartsMetadata {
-		incomingMeta := &ethpb.PartialDataColumnPartsMetadata{}
+		var incomingMeta ethpb.PartialDataColumnPartsMetadata
 		if err := incomingMeta.UnmarshalSSZ(rpc.PartsMetadata); err != nil {
 			return peerState, nil, errors.Wrap(err, "failed to unmarshal incoming parts metadata")
 		}
