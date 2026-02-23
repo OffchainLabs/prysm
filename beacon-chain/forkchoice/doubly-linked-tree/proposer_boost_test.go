@@ -39,7 +39,6 @@ func TestForkChoice_BoostProposerRoot_PreventsExAnteAttack(t *testing.T) {
 		f.justifiedBalances = balances
 		f.store.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
 
-
 		// The head should always start at the finalized block.
 		headRoot, err := f.Head(ctx)
 		require.NoError(t, err)
