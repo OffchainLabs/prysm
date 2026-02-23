@@ -37,8 +37,8 @@ func encodeStateDiffExponents(exponents []int) ([]byte, error) {
 	encoded := make([]byte, len(exponents)+1)
 	encoded[0] = byte(len(exponents))
 	for i, exp := range exponents {
-		if exp < 2 || exp > flags.MaxStateDiffExponent {
-			return nil, fmt.Errorf("state diff exponent out of range for encoding: got %d, expected between 2 and %d", exp, flags.MaxStateDiffExponent)
+		if exp < flags.MinStateDiffExponent || exp > flags.MaxStateDiffExponent {
+			return nil, fmt.Errorf("state diff exponent out of range for encoding: got %d, expected between %d and %d", exp, flags.MinStateDiffExponent, flags.MaxStateDiffExponent)
 		}
 		encoded[i+1] = byte(exp)
 	}
@@ -112,7 +112,7 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 	}
 	relSlot := uint64(slot) - offset
 	prevExp := flags.Get().StateDiffExponents[lvl-1]
-	if prevExp < 2 || prevExp >= 64 {
+	if prevExp < flags.MinStateDiffExponent || prevExp >= 64 {
 		return nil, fmt.Errorf("state diff exponent %d out of range for uint64", prevExp)
 	}
 	span := math.PowerOf2(uint64(prevExp))
@@ -151,7 +151,7 @@ func computeLevel(offset uint64, slot primitives.Slot) int {
 	}
 	rel := uint64(slot) - offset
 	for i, exp := range flags.Get().StateDiffExponents {
-		if exp < 2 || exp >= 64 {
+		if exp < flags.MinStateDiffExponent || exp >= 64 {
 			return -1
 		}
 		span := math.PowerOf2(uint64(exp))

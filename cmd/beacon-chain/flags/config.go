@@ -9,7 +9,10 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const MaxStateDiffExponent = 30
+const (
+	MinStateDiffExponent = 2
+	MaxStateDiffExponent = 30
+)
 
 // GlobalFlags specifies all the global flags for the
 // beacon node.
