@@ -80,3 +80,51 @@ func TestEpochBoundaryStateCache_CanTrim(t *testing.T) {
 		}
 	}
 }
+
+func TestEpochBoundaryStateCache_ExpandAndCompress(t *testing.T) {
+	e := newBoundaryStateCache()
+
+	// Reset maxCacheSize to default at the start (in case other tests modified it).
+	maxCacheSize = defaultEpochBoundaryCacheSize
+	t.Cleanup(func() { maxCacheSize = defaultEpochBoundaryCacheSize })
+
+	// Fill with more entries than default but less than expanded.
+	for i := primitives.Slot(0); i < primitives.Slot(expandedEpochBoundaryCacheSize); i++ {
+		s, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, s.SetSlot(i))
+		r := [32]byte{byte(i)}
+		require.NoError(t, e.put(r, s))
+	}
+
+	// Default size should trim to defaultEpochBoundaryCacheSize.
+	assert.Equal(t, int(defaultEpochBoundaryCacheSize), len(e.rootStateCache.ListKeys()))
+
+	// Expand the cache.
+	e.ExpandEpochBoundaryCache()
+	assert.Equal(t, expandedEpochBoundaryCacheSize, maxCacheSize)
+
+	// Calling expand again is a no-op.
+	e.ExpandEpochBoundaryCache()
+	assert.Equal(t, expandedEpochBoundaryCacheSize, maxCacheSize)
+
+	// Now fill to expanded size.
+	for i := primitives.Slot(0); i < primitives.Slot(expandedEpochBoundaryCacheSize); i++ {
+		s, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, s.SetSlot(100+i))
+		r := [32]byte{byte(100 + i)}
+		require.NoError(t, e.put(r, s))
+	}
+	assert.Equal(t, int(expandedEpochBoundaryCacheSize), len(e.rootStateCache.ListKeys()))
+
+	// Compress should trim back to default.
+	e.CompressEpochBoundaryCache()
+	assert.Equal(t, defaultEpochBoundaryCacheSize, maxCacheSize)
+	assert.Equal(t, int(defaultEpochBoundaryCacheSize), len(e.rootStateCache.ListKeys()))
+	assert.Equal(t, int(defaultEpochBoundaryCacheSize), len(e.slotRootCache.ListKeys()))
+
+	// Calling compress again is a no-op.
+	e.CompressEpochBoundaryCache()
+	assert.Equal(t, defaultEpochBoundaryCacheSize, maxCacheSize)
+}
