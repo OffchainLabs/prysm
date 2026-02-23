@@ -325,6 +325,8 @@ func (f *ForkChoice) updateNewFullNodeWeight(fn *PayloadNode) {
 	fn.weight = fn.balance
 }
 
+// resolveVoteNode returns the node that should receive the balance of a vote. It returns always a PayloadNode, but the boolean indicates
+// whether the vote should be applied to the pending node (true) or not.
 func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus bool) (*PayloadNode, bool) {
 	en := s.emptyNodeByRoot[r]
 	if en == nil {
