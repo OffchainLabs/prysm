@@ -309,7 +309,7 @@ func (f *ForkChoice) updateBalances() error {
 		}
 
 		// Update only if the validator's balance or vote has changed.
-		if vote.currentRoot != vote.nextRoot || oldBalance != newBalance {
+		if vote.currentRoot != vote.nextRoot || oldBalance != newBalance || vote.currentPayloadStatus != vote.nextPayloadStatus {
 			// Add new balance to the next vote target if the root is known.
 			pn, pending := f.store.resolveVoteNode(vote.nextRoot, vote.nextSlot, vote.nextPayloadStatus)
 			if pn != nil && vote.nextRoot != zHash {
