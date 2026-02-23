@@ -1075,15 +1075,14 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 		return nil, err
 	}
 	if blk == nil || blk.IsNil() {
-		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Warn("Block not found for state-diff root verification")
-	} else {
-		stateRoot, err := st.HashTreeRoot(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if stateRoot != blk.Block().StateRoot() {
-			return nil, errors.Wrap(ErrNotFoundState, "state root mismatch for block")
-		}
+		return nil, errors.Wrap(ErrNotFoundState, "block not found for state-diff root verification")
+	}
+	stateRoot, err := st.HashTreeRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if stateRoot != blk.Block().StateRoot() {
+		return nil, errors.Wrap(ErrNotFoundState, "state root mismatch for block")
 	}
 
 	return st, nil
