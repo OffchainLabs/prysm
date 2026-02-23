@@ -337,3 +337,13 @@ func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus 
 	}
 	return en, slot == en.node.slot
 }
+
+// BlockHash returns the hash committed in the given block
+func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
+	s := f.store
+	en := s.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return [32]byte{}, errors.Wrap(ErrNilNode, "could not get block hash for root")
+	}
+	return en.node.blockHash, nil
+}

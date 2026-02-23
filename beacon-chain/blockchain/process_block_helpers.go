@@ -196,33 +196,37 @@ func reportProcessingTime(startTime time.Time) {
 // getBlockPreState returns the pre state of an incoming block. It uses the parent root of the block
 // to retrieve the state in DB. It verifies the pre state's validity and the incoming block
 // is in the correct time window.
-func (s *Service) getBlockPreState(ctx context.Context, b interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+func (s *Service) getBlockPreState(ctx context.Context, b consensus_blocks.ROBlock) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.getBlockPreState")
 	defer span.End()
 
+	accessRoot, err := s.getLookupParentRoot(b)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get lookup parent root")
+	}
 	// Verify incoming block has a valid pre state.
-	if err := s.verifyBlkPreState(ctx, b.ParentRoot()); err != nil {
+	if err := s.verifyBlkPreState(ctx, accessRoot); err != nil {
 		return nil, err
 	}
 
-	preState, err := s.cfg.StateGen.StateByRoot(ctx, b.ParentRoot())
+	bl := b.Block()
+	preState, err := s.cfg.StateGen.StateByRoot(ctx, accessRoot)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not get pre state for slot %d", b.Slot())
+		return nil, errors.Wrapf(err, "could not get pre state for slot %d", bl.Slot())
 	}
 	if preState == nil || preState.IsNil() {
-		return nil, errors.Wrapf(err, "nil pre state for slot %d", b.Slot())
+		return nil, errors.Wrapf(err, "nil pre state for slot %d", bl.Slot())
 	}
 
 	// Verify block slot time is not from the future.
-	if err := slots.VerifyTime(s.genesisTime, b.Slot(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
+	if err := slots.VerifyTime(s.genesisTime, bl.Slot(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
 		return nil, err
 	}
 
 	// Verify block is later than the finalized epoch slot.
-	if err := s.verifyBlkFinalizedSlot(b); err != nil {
+	if err := s.verifyBlkFinalizedSlot(bl); err != nil {
 		return nil, err
 	}
-
 	return preState, nil
 }
 
