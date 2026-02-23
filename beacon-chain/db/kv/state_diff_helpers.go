@@ -394,11 +394,11 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 	}
 
 	var diffChainItems []diffItem
-	lastSeenAnchorRelSlot := baseAnchorSlot - offset
+	lastSeenDiffRelSlot := baseAnchorSlot - offset
 	for i, exp := range exponents[1 : lvl+1] {
 		span := math.PowerOf2(uint64(exp))
 		diffSlot := rel / span * span
-		if diffSlot == lastSeenAnchorRelSlot {
+		if diffSlot == lastSeenDiffRelSlot {
 			continue
 		}
 		level := i + 1
@@ -406,7 +406,7 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 			continue
 		}
 		diffChainItems = append(diffChainItems, diffItem{level: level, slot: diffSlot + offset})
-		lastSeenAnchorRelSlot = diffSlot
+		lastSeenDiffRelSlot = diffSlot
 	}
 
 	baseSnapshot, err := s.getFullSnapshot(baseAnchorSlot)
