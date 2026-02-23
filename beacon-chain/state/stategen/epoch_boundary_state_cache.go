@@ -10,10 +10,17 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+const (
+	// defaultEpochBoundaryCacheSize is the default number of epoch boundary states
+	// to cache during normal finality.
+	defaultEpochBoundaryCacheSize = uint64(4)
+	// expandedEpochBoundaryCacheSize is the expanded number of epoch boundary states
+	// to cache during periods of non-finality (4+ epochs since finality).
+	expandedEpochBoundaryCacheSize = uint64(8)
+)
+
 var (
-	// maxCacheSize is 8. That means 8 epochs and roughly an hour
-	// of no finality can be endured.
-	maxCacheSize        = uint64(8)
+	maxCacheSize        = defaultEpochBoundaryCacheSize
 	errNotSlotRootInfo  = errors.New("not slot root info type")
 	errNotRootStateInfo = errors.New("not root state info type")
 )
@@ -186,6 +193,34 @@ func trim(queue *cache.FIFO, maxSize uint64) {
 // popProcessNoopFunc is a no-op function that never returns an error.
 func popProcessNoopFunc(_ any, _ bool) error {
 	return nil
+}
+
+// ExpandEpochBoundaryCache expands the epoch boundary state cache to the
+// expanded size for non-finality periods.
+func (e *epochBoundaryState) ExpandEpochBoundaryCache() {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+
+	if maxCacheSize == expandedEpochBoundaryCacheSize {
+		return
+	}
+	maxCacheSize = expandedEpochBoundaryCacheSize
+	log.Warnf("Expanding epoch boundary state cache size from %d to %d", defaultEpochBoundaryCacheSize, expandedEpochBoundaryCacheSize)
+}
+
+// CompressEpochBoundaryCache compresses the epoch boundary state cache back to
+// the default size for normal finality periods. Excess entries are trimmed.
+func (e *epochBoundaryState) CompressEpochBoundaryCache() {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+
+	if maxCacheSize == defaultEpochBoundaryCacheSize {
+		return
+	}
+	maxCacheSize = defaultEpochBoundaryCacheSize
+	trim(e.rootStateCache, maxCacheSize)
+	trim(e.slotRootCache, maxCacheSize)
+	log.Warnf("Compressing epoch boundary state cache size from %d to %d", expandedEpochBoundaryCacheSize, defaultEpochBoundaryCacheSize)
 }
 
 // Converts input uint64 to string. To be used as key for slot to get root.

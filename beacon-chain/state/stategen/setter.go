@@ -147,6 +147,16 @@ func (s *State) EnableSaveHotStateToDB(_ context.Context) {
 	}).Warn("Entering mode to save hot states in DB")
 }
 
+// ExpandEpochBoundaryCache expands the epoch boundary state cache for non-finality periods.
+func (s *State) ExpandEpochBoundaryCache() {
+	s.epochBoundaryStateCache.ExpandEpochBoundaryCache()
+}
+
+// CompressEpochBoundaryCache compresses the epoch boundary state cache back to the default size.
+func (s *State) CompressEpochBoundaryCache() {
+	s.epochBoundaryStateCache.CompressEpochBoundaryCache()
+}
+
 // DisableSaveHotStateToDB exits the mode that saves beacon state to DB for the hot states.
 // This usually gets triggered once there's finality after long duration since finality.
 func (s *State) DisableSaveHotStateToDB(ctx context.Context) error {

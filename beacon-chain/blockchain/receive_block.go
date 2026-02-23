@@ -517,10 +517,14 @@ func (s *Service) handleCaches() error {
 
 	if sinceFinality >= epochsSinceFinalityExpandCache {
 		helpers.ExpandCommitteeCache()
+		s.cfg.StateGen.ExpandEpochBoundaryCache()
+		s.checkpointStateCache.ExpandCheckpointStateCache()
 		return nil
 	}
 
 	helpers.CompressCommitteeCache()
+	s.cfg.StateGen.CompressEpochBoundaryCache()
+	s.checkpointStateCache.CompressCheckpointStateCache()
 	return nil
 }
 
