@@ -81,6 +81,7 @@ func (v *validator) proposeSelfBuildEnvelope(
 		return errors.New("no execution payload bid found in block body")
 	}
 	if bid.Message.BuilderIndex != params.BeaconConfig().BuilderIndexSelfBuild {
+		// only used for self build
 		return nil
 	}
 

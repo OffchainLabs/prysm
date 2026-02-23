@@ -71,6 +71,6 @@ func (vs *Server) createSelfBuildExecutionPayloadBid(
 		Slot:               block.Slot(),
 		Value:              0,
 		ExecutionPayment:   0,
-		BlobKzgCommitments: [][]byte{},
+		BlobKzgCommitments: [][]byte{}, // TODO: handle DA in gloas
 	}, nil
 }
