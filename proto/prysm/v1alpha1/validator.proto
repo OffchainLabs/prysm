@@ -455,7 +455,7 @@ service BeaconNodeValidator {
       returns (ExecutionPayloadEnvelopeResponse) {
     option deprecated = true;
     option (google.api.http) = {
-      get : "/eth/v1alpha1/validator/execution_payload_envelope/{slot}/{builder_index}"
+      get : "/eth/v1alpha1/validator/execution_payload_envelope/{slot}"
     };
   }
 
@@ -1174,7 +1174,8 @@ message AggregatedSigAndAggregationBitsResponse {
 // =============================================================================
 
 // ExecutionPayloadEnvelopeRequest is the request for retrieving a cached
-// execution payload envelope from the beacon node.
+// execution payload envelope from the beacon node. This is only used for
+// self-build envelopes.
 message ExecutionPayloadEnvelopeRequest {
   option deprecated = true;
 
@@ -1182,12 +1183,6 @@ message ExecutionPayloadEnvelopeRequest {
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
-  ];
-
-  // The builder index that created the payload envelope.
-  uint64 builder_index = 2 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.BuilderIndex"
   ];
 }
 

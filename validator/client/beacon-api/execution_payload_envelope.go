@@ -11,11 +11,10 @@ import (
 
 // TODO: Implement Gloas beacon API client methods.
 
-// getExecutionPayloadEnvelope retrieves the execution payload envelope for the given slot and builder index.
+// getExecutionPayloadEnvelope retrieves the execution payload envelope for the given slot.
 func (c *beaconApiValidatorClient) getExecutionPayloadEnvelope(
 	ctx context.Context,
 	slot primitives.Slot,
-	builderIndex primitives.BuilderIndex,
 ) (*ethpb.ExecutionPayloadEnvelope, error) {
 	return nil, errors.New("getExecutionPayloadEnvelope not yet implemented")
 }

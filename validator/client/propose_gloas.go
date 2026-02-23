@@ -85,7 +85,7 @@ func (v *validator) proposeSelfBuildEnvelope(
 		return nil
 	}
 
-	envelope, err := v.validatorClient.GetExecutionPayloadEnvelope(ctx, slot, params.BeaconConfig().BuilderIndexSelfBuild)
+	envelope, err := v.validatorClient.GetExecutionPayloadEnvelope(ctx, slot)
 	if err != nil {
 		return errors.Wrap(err, "failed to get execution payload envelope for self-build")
 	}

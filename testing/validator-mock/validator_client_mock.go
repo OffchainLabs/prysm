@@ -194,18 +194,18 @@ func (mr *MockValidatorClientMockRecorder) FeeRecipientByPubKey(ctx, in any) *go
 }
 
 // GetExecutionPayloadEnvelope mocks base method.
-func (m *MockValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot, builderIndex primitives.BuilderIndex) (*eth.ExecutionPayloadEnvelope, error) {
+func (m *MockValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot) (*eth.ExecutionPayloadEnvelope, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetExecutionPayloadEnvelope", ctx, slot, builderIndex)
+	ret := m.ctrl.Call(m, "GetExecutionPayloadEnvelope", ctx, slot)
 	ret0, _ := ret[0].(*eth.ExecutionPayloadEnvelope)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetExecutionPayloadEnvelope indicates an expected call of GetExecutionPayloadEnvelope.
-func (mr *MockValidatorClientMockRecorder) GetExecutionPayloadEnvelope(ctx, slot, builderIndex any) *gomock.Call {
+func (mr *MockValidatorClientMockRecorder) GetExecutionPayloadEnvelope(ctx, slot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).GetExecutionPayloadEnvelope), ctx, slot, builderIndex)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).GetExecutionPayloadEnvelope), ctx, slot)
 }
 
 // Host mocks base method.

@@ -47,7 +47,6 @@ func TestExtractExecutionPayloadDeneb_Nil(t *testing.T) {
 
 func TestSetGetExecutionPayloadEnvelope(t *testing.T) {
 	slot := primitives.Slot(42)
-	builderIndex := primitives.BuilderIndex(7)
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
 		Payload: &enginev1.ExecutionPayloadDeneb{
@@ -60,7 +59,7 @@ func TestSetGetExecutionPayloadEnvelope(t *testing.T) {
 			BaseFeePerGas: make([]byte, 32),
 			BlockHash:     make([]byte, 32),
 		},
-		BuilderIndex:    builderIndex,
+		BuilderIndex:    primitives.BuilderIndex(7),
 		BeaconBlockRoot: make([]byte, 32),
 		Slot:            slot,
 		StateRoot:       make([]byte, 32),
@@ -69,7 +68,7 @@ func TestSetGetExecutionPayloadEnvelope(t *testing.T) {
 	vs := &Server{}
 	vs.setExecutionPayloadEnvelope(envelope)
 
-	got, found := vs.getExecutionPayloadEnvelope(slot, builderIndex)
+	got, found := vs.getExecutionPayloadEnvelope(slot)
 	require.Equal(t, true, found)
 	require.DeepEqual(t, envelope, got)
 }
@@ -95,38 +94,13 @@ func TestGetExecutionPayloadEnvelope_SlotMismatch(t *testing.T) {
 	vs := &Server{}
 	vs.setExecutionPayloadEnvelope(envelope)
 
-	_, found := vs.getExecutionPayloadEnvelope(999, primitives.BuilderIndex(7))
-	require.Equal(t, false, found)
-}
-
-func TestGetExecutionPayloadEnvelope_BuilderMismatch(t *testing.T) {
-	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
-			ParentHash:    make([]byte, 32),
-			FeeRecipient:  make([]byte, 20),
-			StateRoot:     make([]byte, 32),
-			ReceiptsRoot:  make([]byte, 32),
-			LogsBloom:     make([]byte, 256),
-			PrevRandao:    make([]byte, 32),
-			BaseFeePerGas: make([]byte, 32),
-			BlockHash:     make([]byte, 32),
-		},
-		BuilderIndex:    primitives.BuilderIndex(7),
-		BeaconBlockRoot: make([]byte, 32),
-		Slot:            42,
-		StateRoot:       make([]byte, 32),
-	}
-
-	vs := &Server{}
-	vs.setExecutionPayloadEnvelope(envelope)
-
-	_, found := vs.getExecutionPayloadEnvelope(42, primitives.BuilderIndex(99))
+	_, found := vs.getExecutionPayloadEnvelope(999)
 	require.Equal(t, false, found)
 }
 
 func TestGetExecutionPayloadEnvelope_Nil(t *testing.T) {
 	vs := &Server{}
-	_, found := vs.getExecutionPayloadEnvelope(1, primitives.BuilderIndex(0))
+	_, found := vs.getExecutionPayloadEnvelope(1)
 	require.Equal(t, false, found)
 }
 
@@ -144,8 +118,7 @@ func TestGetExecutionPayloadEnvelopeRPC_PreFork(t *testing.T) {
 
 	vs := &Server{}
 	_, err := vs.GetExecutionPayloadEnvelope(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{
-		Slot:         0, // epoch 0, before GloasForkEpoch 10
-		BuilderIndex: 0,
+		Slot: 0, // epoch 0, before GloasForkEpoch 10
 	})
 	require.ErrorContains(t, "not supported before Gloas fork", err)
 }
@@ -204,8 +177,7 @@ func TestGetExecutionPayloadEnvelopeRPC_StateRootAlreadySet(t *testing.T) {
 	vs.setExecutionPayloadEnvelope(envelope)
 
 	resp, err := vs.GetExecutionPayloadEnvelope(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{
-		Slot:         1,
-		BuilderIndex: 0,
+		Slot: 1,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -251,8 +223,7 @@ func TestGetExecutionPayloadEnvelopeRPC_ZeroStateRootComputesRoot(t *testing.T) 
 	// ApplyExecutionPayload because the mock state doesn't satisfy all consistency
 	// checks, but that proves we entered the zero-state-root branch.
 	_, err = vs.GetExecutionPayloadEnvelope(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{
-		Slot:         1,
-		BuilderIndex: 0,
+		Slot: 1,
 	})
 	require.ErrorContains(t, "could not compute post-payload state root", err)
 }

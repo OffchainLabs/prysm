@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -27,7 +28,6 @@ import (
 // GetExecutionPayloadEnvelope once the block has been submitted and the post-block
 // state is available via StateGen.
 func (vs *Server) storeExecutionPayloadEnvelope(
-	ctx context.Context,
 	sBlk interfaces.SignedBeaconBlock,
 	local *consensusblocks.GetPayloadResponse,
 ) error {
@@ -70,14 +70,14 @@ func (vs *Server) setExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEn
 	vs.executionPayloadEnvelope = envelope
 }
 
-func (vs *Server) getExecutionPayloadEnvelope(slot primitives.Slot, builderIndex primitives.BuilderIndex) (*ethpb.ExecutionPayloadEnvelope, bool) {
+func (vs *Server) getExecutionPayloadEnvelope(slot primitives.Slot) (*ethpb.ExecutionPayloadEnvelope, bool) {
 	vs.executionPayloadEnvelopeMu.RLock()
 	envelope := vs.executionPayloadEnvelope
 	vs.executionPayloadEnvelopeMu.RUnlock()
 	if envelope == nil {
 		return nil, false
 	}
-	if envelope.Slot != slot || envelope.BuilderIndex != builderIndex {
+	if envelope.Slot != slot {
 		return nil, false
 	}
 	return envelope, true
@@ -91,23 +91,23 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 	ctx context.Context,
 	req *ethpb.ExecutionPayloadEnvelopeRequest,
 ) (*ethpb.ExecutionPayloadEnvelopeResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "ProposerServer.GetExecutionPayloadEnvelope")
+	defer span.End()
+
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request cannot be nil")
 	}
+	span.SetAttributes(trace.Int64Attribute("slot", int64(req.Slot)))
 
 	if slots.ToEpoch(req.Slot) < params.BeaconConfig().GloasForkEpoch {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"execution payload envelopes are not supported before Gloas fork (slot %d)", req.Slot)
 	}
 
-	envelope, found := vs.getExecutionPayloadEnvelope(req.Slot, req.BuilderIndex)
+	envelope, found := vs.getExecutionPayloadEnvelope(req.Slot)
 	if !found {
-		return nil, status.Errorf(
-			codes.NotFound,
-			"execution payload envelope not found for slot %d builder %d",
-			req.Slot,
-			req.BuilderIndex,
-		)
+		return nil, status.Errorf(codes.NotFound,
+			"execution payload envelope not found for slot %d", req.Slot)
 	}
 
 	if bytes.Equal(envelope.StateRoot, make([]byte, 32)) {
@@ -134,6 +134,9 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 // been submitted and processed) and applies the execution payload state mutations
 // to compute the post-payload state root for the envelope.
 func (vs *Server) computePostPayloadStateRoot(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) ([]byte, error) {
+	ctx, span := trace.StartSpan(ctx, "ProposerServer.computePostPayloadStateRoot")
+	defer span.End()
+
 	beaconState, err := vs.StateGen.StateByRoot(ctx, envelope.BeaconBlockRoot())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve post-block state")
@@ -157,6 +160,9 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	ctx context.Context,
 	req *ethpb.SignedExecutionPayloadEnvelope,
 ) (*emptypb.Empty, error) {
+	ctx, span := trace.StartSpan(ctx, "ProposerServer.PublishExecutionPayloadEnvelope")
+	defer span.End()
+
 	if req == nil || req.Message == nil {
 		return nil, status.Error(codes.InvalidArgument, "signed envelope cannot be nil")
 	}
@@ -167,6 +173,11 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	}
 
 	beaconBlockRoot := bytesutil.ToBytes32(req.Message.BeaconBlockRoot)
+	span.SetAttributes(
+		trace.Int64Attribute("slot", int64(req.Message.Slot)),
+		trace.Int64Attribute("builderIndex", int64(req.Message.BuilderIndex)),
+		trace.StringAttribute("beaconBlockRoot", fmt.Sprintf("%#x", beaconBlockRoot[:8])),
+	)
 
 	log := log.WithFields(logrus.Fields{
 		"slot":            req.Message.Slot,
