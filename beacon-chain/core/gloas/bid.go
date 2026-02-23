@@ -18,7 +18,7 @@ import (
 
 // ProcessExecutionPayloadBid processes a signed execution payload bid in the Gloas fork.
 //
-//	<spec fn="process_execution_payload_bid" fork="gloas" hash="6dc696bb">
+//	<spec fn="process_execution_payload_bid" fork="gloas" hash="823c9f3a">
 //	def process_execution_payload_bid(state: BeaconState, block: BeaconBlock) -> None:
 //	    signed_bid = block.body.signed_execution_payload_bid
 //	    bid = signed_bid.message
@@ -36,6 +36,12 @@ import (
 //	        assert can_builder_cover_bid(state, builder_index, amount)
 //	        # Verify that the bid signature is valid
 //	        assert verify_execution_payload_bid_signature(state, signed_bid)
+//
+//	    # Verify commitments are under limit
+//	    assert (
+//	        len(bid.blob_kzg_commitments)
+//	        <= get_blob_parameters(get_current_epoch(state)).max_blobs_per_block
+//	    )
 //
 //	    # Verify that the bid is for the current slot
 //	    assert bid.slot == block.slot
@@ -107,6 +113,12 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 		if err := validatePayloadBidSignature(st, wrappedBid); err != nil {
 			return errors.Wrap(err, "bid signature validation failed")
 		}
+	}
+
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(block.Slot()))
+	commitmentCount := bid.BlobKzgCommitmentCount()
+	if commitmentCount > uint64(maxBlobsPerBlock) {
+		return fmt.Errorf("bid has %d blob KZG commitments over max %d", commitmentCount, maxBlobsPerBlock)
 	}
 
 	if err := validateBidConsistency(st, bid, block); err != nil {

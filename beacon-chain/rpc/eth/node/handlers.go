@@ -103,6 +103,8 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 
 // GetVersion requests that the beacon node identify information about its implementation in a
 // format similar to a HTTP User-Agent field.
+//
+// Deprecated: in favour of GetVersionV2.
 func (*Server) GetVersion(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "node.GetVersion")
 	defer span.End()
@@ -111,6 +113,38 @@ func (*Server) GetVersion(w http.ResponseWriter, r *http.Request) {
 	resp := &structs.GetVersionResponse{
 		Data: &structs.Version{
 			Version: v,
+		},
+	}
+	httputil.WriteJson(w, resp)
+}
+
+// GetVersionV2 Retrieves structured information about the version of the beacon node and its attached
+// execution client in the same format as used on the Engine API
+func (s *Server) GetVersionV2(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "node.GetVersionV2")
+	defer span.End()
+
+	var elData *structs.ClientVersionV1
+	elDataList, err := s.ExecutionEngineCaller.GetClientVersionV1(ctx)
+	if err != nil {
+		log.WithError(err).WithField("endpoint", "GetVersionV2").Debug("Could not get execution client version")
+	} else if len(elDataList) > 0 {
+		elData = elDataList[0]
+	}
+
+	commit := version.GitCommit()
+	if len(commit) >= 8 {
+		commit = commit[:8]
+	}
+	resp := &structs.GetVersionV2Response{
+		Data: &structs.VersionV2{
+			BeaconNode: &structs.ClientVersionV1{
+				Code:    "PM",
+				Name:    "Prysm",
+				Version: version.SemanticVersion(),
+				Commit:  commit,
+			},
+			ExecutionClient: elData,
 		},
 	}
 	httputil.WriteJson(w, resp)

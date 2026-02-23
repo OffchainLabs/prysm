@@ -8,7 +8,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -17,6 +19,9 @@ import (
 
 func runExecutionPayloadBidTest(t *testing.T, config string, fork string, objName string, block blockWithSSZObject, sszToState SSZToState, operationFn BlockOperation) {
 	require.NoError(t, utils.SetConfig(t, config))
+	cfg := params.BeaconConfig()
+	params.SetGenesisFork(t, cfg, version.Fulu)
+
 	testFolders, testsFolderPath := utils.TestFolders(t, config, fork, "operations/"+objName+"/pyspec_tests")
 	if len(testFolders) == 0 {
 		t.Fatalf("No test folders found for %s/%s/%s", config, fork, "operations/"+objName+"/pyspec_tests")

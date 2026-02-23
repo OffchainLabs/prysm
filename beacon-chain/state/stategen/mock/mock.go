@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
@@ -13,6 +14,8 @@ type StateManager struct {
 	StatesByRoot map[[32]byte]state.BeaconState
 	StatesBySlot map[primitives.Slot]state.BeaconState
 }
+
+var _ stategen.StateManager = (*StateManager)(nil)
 
 // NewService --
 func NewService() *StateManager {
@@ -100,4 +103,9 @@ func (m *StateManager) AddStateForSlot(state state.BeaconState, slot primitives.
 // DeleteStateFromCaches --
 func (m *StateManager) DeleteStateFromCaches(context.Context, [32]byte) error {
 	return nil
+}
+
+// FinalizedReadOnlyBalances --
+func (m *StateManager) FinalizedReadOnlyBalances() stategen.NilCheckableReadOnlyBalances {
+	panic("unimplemented")
 }

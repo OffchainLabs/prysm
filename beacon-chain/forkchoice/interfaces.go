@@ -9,6 +9,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
@@ -23,6 +24,7 @@ type ForkChoicer interface {
 	Unlock()
 	HeadRetriever        // to compute head.
 	BlockProcessor       // to track new block for fork choice.
+	PayloadProcessor     // to track new payloads for fork choice.
 	AttestationProcessor // to track new attestation for fork choice.
 	Getter               // to retrieve fork choice information.
 	Setter               // to set fork choice information.
@@ -47,6 +49,11 @@ type BlockProcessor interface {
 	InsertChain(context.Context, []*forkchoicetypes.BlockAndCheckpoints) error
 }
 
+// PayloadProcessor processes a payload envelope
+type PayloadProcessor interface {
+	InsertPayload(interfaces.ROExecutionPayloadEnvelope) error
+}
+
 // AttestationProcessor processes the attestation that's used for accounting fork choice.
 type AttestationProcessor interface {
 	ProcessAttestation(context.Context, []uint64, [32]byte, primitives.Epoch)
@@ -67,13 +74,11 @@ type FastGetter interface {
 	HasNode([32]byte) bool
 	HighestReceivedBlockSlot() primitives.Slot
 	HighestReceivedBlockRoot() [32]byte
-	HighestReceivedBlockDelay() primitives.Slot
 	IsCanonical(root [32]byte) bool
 	IsOptimistic(root [32]byte) (bool, error)
 	IsViableForCheckpoint(*forkchoicetypes.Checkpoint) (bool, error)
 	JustifiedCheckpoint() *forkchoicetypes.Checkpoint
 	JustifiedPayloadBlockHash() [32]byte
-	LastRoot(primitives.Epoch) [32]byte
 	NodeCount() int
 	PreviousJustifiedCheckpoint() *forkchoicetypes.Checkpoint
 	ProposerBoost() [fieldparams.RootLength]byte
@@ -91,7 +96,7 @@ type FastGetter interface {
 // Setter allows to set forkchoice information
 type Setter interface {
 	SetOptimisticToValid(context.Context, [fieldparams.RootLength]byte) error
-	SetOptimisticToInvalid(context.Context, [fieldparams.RootLength]byte, [fieldparams.RootLength]byte, [fieldparams.RootLength]byte) ([][32]byte, error)
+	SetOptimisticToInvalid(context.Context, [32]byte, [32]byte, [32]byte, [32]byte) ([][32]byte, error)
 	UpdateJustifiedCheckpoint(context.Context, *forkchoicetypes.Checkpoint) error
 	UpdateFinalizedCheckpoint(*forkchoicetypes.Checkpoint) error
 	SetGenesisTime(time.Time)

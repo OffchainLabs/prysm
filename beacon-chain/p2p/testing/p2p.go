@@ -138,6 +138,9 @@ func connect(a, b host.Host) error {
 func (p *TestP2P) ReceiveRPC(topic string, msg proto.Message) {
 	h, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}))
 	require.NoError(p.t, err)
+	p.t.Cleanup(func() {
+		require.NoError(p.t, h.Close())
+	})
 	if err := connect(h, p.BHost); err != nil {
 		p.t.Fatalf("Failed to connect two peers for RPC: %v", err)
 	}
@@ -169,6 +172,9 @@ func (p *TestP2P) ReceiveRPC(topic string, msg proto.Message) {
 func (p *TestP2P) ReceivePubSub(topic string, msg proto.Message) {
 	h, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}))
 	require.NoError(p.t, err)
+	p.t.Cleanup(func() {
+		require.NoError(p.t, h.Close())
+	})
 	ps, err := pubsub.NewFloodSub(context.Background(), h,
 		pubsub.WithMessageSigning(false),
 		pubsub.WithStrictSignatureVerification(false),

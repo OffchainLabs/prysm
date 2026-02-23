@@ -63,6 +63,19 @@ type PeerCount struct {
 	Connected     string `json:"connected"`
 	Disconnecting string `json:"disconnecting"`
 }
+type GetVersionV2Response struct {
+	Data *VersionV2 `json:"data"`
+}
+type VersionV2 struct {
+	BeaconNode      *ClientVersionV1 `json:"beacon_node"`
+	ExecutionClient *ClientVersionV1 `json:"execution_client,omitempty"`
+}
+type ClientVersionV1 struct {
+	Code    string `json:"code"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+}
 
 type GetVersionResponse struct {
 	Data *Version `json:"data"`

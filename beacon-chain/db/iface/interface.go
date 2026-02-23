@@ -66,6 +66,10 @@ type ReadOnlyDatabase interface {
 	OriginCheckpointBlockRoot(ctx context.Context) ([32]byte, error)
 	BackfillStatus(context.Context) (*dbval.BackfillStatus, error)
 
+	// Execution payload envelope operations (Gloas+).
+	ExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error)
+	HasExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) bool
+
 	// P2P Metadata operations.
 	MetadataSeqNum(ctx context.Context) (uint64, error)
 }
@@ -114,6 +118,10 @@ type NoHeadAccessDatabase interface {
 	// light client operations
 	SaveLightClientUpdate(ctx context.Context, period uint64, update interfaces.LightClientUpdate) error
 	SaveLightClientBootstrap(ctx context.Context, blockRoot []byte, bootstrap interfaces.LightClientBootstrap) error
+
+	// Execution payload envelope operations (Gloas+).
+	SaveExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedExecutionPayloadEnvelope) error
+	DeleteExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) error
 
 	CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error
 	DeleteHistoricalDataBeforeSlot(ctx context.Context, slot primitives.Slot, batchSize int) (int, error)
