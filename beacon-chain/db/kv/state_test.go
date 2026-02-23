@@ -1411,7 +1411,7 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 		require.IsNil(t, st)
 	})
 
-	t.Run("block missing for summary root", func(t *testing.T) {
+	t.Run("block missing for summary root returns unverified state", func(t *testing.T) {
 		db := setupDB(t)
 		featCfg := &features.Flags{}
 		featCfg.EnableStateDiff = true
@@ -1432,9 +1432,8 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 		require.NoError(t, err)
 
 		got, err := db.getStateUsingStateDiff(t.Context(), r)
-		require.ErrorContains(t, "block not found for state-diff root verification", err)
-		require.ErrorIs(t, err, ErrNotFoundState)
-		require.IsNil(t, got)
+		require.NoError(t, err)
+		require.NotNil(t, got)
 	})
 
 	t.Run("Full state snapshot", func(t *testing.T) {

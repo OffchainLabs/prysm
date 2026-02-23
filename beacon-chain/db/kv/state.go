@@ -1075,7 +1075,10 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 		return nil, err
 	}
 	if blk == nil || blk.IsNil() {
-		return nil, errors.Wrap(ErrNotFoundState, "block not found for state-diff root verification")
+		// Existing databases may have state summaries without corresponding blocks.
+		// In that case we return the slot-derived state but mark the verification gap.
+		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Warn("Block not found for state-diff root verification; returning unverified state")
+		return st, nil
 	}
 	stateRoot, err := st.HashTreeRoot(ctx)
 	if err != nil {
