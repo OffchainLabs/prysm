@@ -64,7 +64,6 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		return invalidBlock{error: err}
 	}
 	startTime := time.Now()
-	fcuArgs := &fcuConfig{}
 
 	if features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
 		defer s.processLightClientUpdates(cfg)
@@ -102,7 +101,9 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
 	}
-	s.sendFCU(cfg, fcuArgs)
+	if cfg.roblock.Version() <= version.Gloas {
+		s.sendFCU(cfg)
+	}
 
 	// Pre-Fulu the caches are updated when computing the payload attributes
 	if cfg.postState.Version() >= version.Fulu {
