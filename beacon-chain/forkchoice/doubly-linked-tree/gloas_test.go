@@ -3,6 +3,7 @@ package doublylinkedtree
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -333,6 +334,7 @@ func TestGloasBlock_ChildBuildsOnFull(t *testing.T) {
 
 func TestGloasHeadComputation(t *testing.T) {
 	f := setup(1, 1)
+	s := f.store
 	ctx := t.Context()
 	balances := make([]uint64, 64)
 	for i := range balances {
@@ -362,6 +364,13 @@ func TestGloasHeadComputation(t *testing.T) {
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, rootA, headRoot)
+	hn := s.choosePayloadContent(s.headNode)
+	require.NotNil(t, hn)
+	require.Equal(t, false, hn.full)
+	assert.Equal(t, uint64(8), s.headNode.weight)
+	assert.Equal(t, uint64(8), s.headNode.balance)
+	assert.Equal(t, uint64(0), hn.balance)
+	assert.Equal(t, uint64(0), hn.weight)
 
 	// Insert payload for A, head is still A.
 	//   genesis(full)
@@ -369,6 +378,8 @@ func TestGloasHeadComputation(t *testing.T) {
 	//      A(empty)
 	//       |
 	//      A(full) <- head
+	payloadDelay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+	driftGenesisTime(f, slotA, payloadDelay)
 	pe, err := prepareGloasForkchoicePayload(rootA)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertPayload(pe))
@@ -376,6 +387,55 @@ func TestGloasHeadComputation(t *testing.T) {
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, rootA, headRoot)
+	hn = s.choosePayloadContent(s.headNode)
+	require.NotNil(t, hn)
+	require.Equal(t, true, hn.full)
+
+	// We move to the next slot. full remains head
+	slotB := slotA + 1
+	driftGenesisTime(f, slotB, 0)
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootA, headRoot)
+	hn = s.choosePayloadContent(s.headNode)
+	require.NotNil(t, hn)
+	require.Equal(t, true, hn.full)
+
+	// Insert block B at slotB, building on full A.
+	//   genesis(full)
+	//       |
+	//      A(empty)
+	//       |
+	//      A(full)
+	//       |
+	//      B(empty) <- head
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotB, rootB, rootA, blockHashB, blockHashA, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootB, headRoot)
+	hn = s.choosePayloadContent(s.headNode)
+	require.NotNil(t, hn)
+	require.Equal(t, false, hn.full)
+
+	// Process an attestation for rootA at slotB, voting empty (payloadStatus=false).
+	attesters := []uint64{0}
+	f.ProcessAttestation(ctx, attesters, rootA, slotB, false)
+	_, err = f.Head(ctx)
+	require.NoError(t, err)
+
+	emptyA := s.emptyNodeByRoot[rootA]
+	require.NotNil(t, emptyA)
+	fullA := s.fullNodeByRoot[rootA]
+	require.NotNil(t, fullA)
+	assert.Equal(t, uint64(10), emptyA.balance)
+	assert.NotEqual(t, uint64(0), emptyA.weight)
+	assert.Equal(t, uint64(0), fullA.balance)
+	assert.Equal(t, uint64(0), fullA.weight)
 }
 
 func TestShouldExtendPayload(t *testing.T) {
