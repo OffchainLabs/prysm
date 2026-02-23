@@ -129,6 +129,12 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 	if anchor != nil && anchor.Slot() == anchorSlot {
 		return anchor, nil
 	}
+	if anchor != nil {
+		log.WithField("level", anchorLvl).
+			WithField("expectedSlot", anchorSlot).
+			WithField("cachedSlot", anchor.Slot()).
+			Warn("Cached state-diff anchor slot mismatch; reloading anchor from database")
+	}
 
 	// If not, load it from the database.
 	anchor, err = s.stateByDiff(ctx, anchorSlot)
