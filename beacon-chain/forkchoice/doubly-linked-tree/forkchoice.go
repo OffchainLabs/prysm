@@ -166,8 +166,8 @@ func (f *ForkChoice) HasNode(root [32]byte) bool {
 
 // HasFullPayload returns true if a full payload node exists for the given root.
 func (f *ForkChoice) HasFullPayload(root [32]byte) bool {
-	_, ok := f.store.fullNodeByRoot[root]
-	return ok
+	fn := f.store.fullNodeByRoot[root]
+	return fn != nil
 }
 
 // IsCanonical returns true if the given root is part of the canonical chain.
