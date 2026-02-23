@@ -14,7 +14,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/sirupsen/logrus"
 )
 
 // RotateBuilderPendingPayments rotates the queue by dropping slots per epoch payments from the
@@ -549,17 +548,17 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 				Signature:             deposit.Signature,
 			})
 			if err != nil {
-				logrus.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Error("Could not verify builder deposit signature")
+				log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Could not verify builder deposit signature")
 				continue
 			}
 			if valid {
-				depositEpoch := slots.ToEpoch(primitives.Slot(deposit.Slot))
+				depositEpoch := slots.ToEpoch(deposit.Slot)
 				if err := b.addBuilderFromDepositAtEpoch(pubkey, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch); err != nil {
-					logrus.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Error("Failed to apply builder deposit")
+					log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Failed to apply builder deposit")
 					continue
 				}
 			} else {
-				logrus.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Error("Invalid signature for builder deposit")
+				log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Debug("Invalid signature for builder deposit")
 			}
 			continue
 		}
@@ -571,13 +570,13 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 			Signature:             deposit.Signature,
 		})
 		if err != nil {
-			logrus.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Error("Could not verify validator deposit signature")
+			log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Could not verify validator deposit signature")
 		}
 		if valid {
 			newValidatorPubkeys[pubkey] = true
 			newPendingDeposits = append(newPendingDeposits, deposit)
 		} else {
-			logrus.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Error("Invalid signature for validator deposit")
+			log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Debug("Invalid signature for validator deposit")
 		}
 	}
 
