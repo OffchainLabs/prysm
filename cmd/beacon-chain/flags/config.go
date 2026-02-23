@@ -84,7 +84,8 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 
 	// State-diff-exponents
 	cfg.StateDiffExponents = ctx.IntSlice(StateDiffExponents.Name)
-	cfg.StateDiffValidateOnStartup = !ctx.Bool(StateDiffValidateOnStartup.Name)
+	disableStateDiffValidateOnStartup := ctx.Bool(DisableStateDiffValidateOnStartup.Name)
+	cfg.StateDiffValidateOnStartup = !disableStateDiffValidateOnStartup
 	if features.Get().EnableStateDiff {
 		if err := validateStateDiffExponents(cfg.StateDiffExponents); err != nil {
 			return err
@@ -93,7 +94,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 		if ctx.IsSet(StateDiffExponents.Name) {
 			log.Warn("--state-diff-exponents is set but --enable-state-diff is not; the value will be ignored.")
 		}
-		if ctx.IsSet(StateDiffValidateOnStartup.Name) {
+		if ctx.IsSet(DisableStateDiffValidateOnStartup.Name) {
 			log.Warn("--disable-hdiff-validate-on-startup is set but --enable-state-diff is not; the value will be ignored.")
 		}
 	}
