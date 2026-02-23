@@ -279,7 +279,13 @@ func TestStateDiff_PopulateStateDiffCacheFromDB(t *testing.T) {
 			return bbolt.ErrBucketNotFound
 		}
 		key := makeKeyForStateDiffTree(2, math.PowerOf2(16))
-		return bucket.Put(append(key, stateSuffix...), []byte{1})
+		if err := bucket.Put(append(key, stateSuffix...), []byte{1}); err != nil {
+			return err
+		}
+		if err := bucket.Put(append(key, validatorSuffix...), []byte{1}); err != nil {
+			return err
+		}
+		return bucket.Put(append(key, balancesSuffix...), []byte{1})
 	})
 	require.NoError(t, err)
 
@@ -322,6 +328,27 @@ func TestStateDiff_PopulateStateDiffCacheFromDB_InvalidLevelKey(t *testing.T) {
 			return bbolt.ErrBucketNotFound
 		}
 		key := makeKeyForStateDiffTree(2, 1)
+		return bucket.Put(append(key, stateSuffix...), []byte{1})
+	}))
+
+	_, err := populateStateDiffCacheFromDB(db, 0)
+	require.ErrorIs(t, ErrStateDiffCorrupted, err)
+}
+
+func TestStateDiff_PopulateStateDiffCacheFromDB_MissingLevelSuffixes(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	db := setupDB(t)
+	st, _ := createState(t, 0, version.Phase0)
+	require.NoError(t, setOffsetInDB(db, 0))
+	require.NoError(t, db.saveStateByDiff(context.Background(), st))
+
+	require.NoError(t, db.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		key := makeKeyForStateDiffTree(2, math.PowerOf2(16))
 		return bucket.Put(append(key, stateSuffix...), []byte{1})
 	}))
 

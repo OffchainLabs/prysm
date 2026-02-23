@@ -53,6 +53,9 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 				if computeLevel(offset, primitives.Slot(slot)) != level {
 					return ErrStateDiffCorrupted
 				}
+				if !hasCompleteDiffAtLevelSlot(bucket, level, slot) {
+					return ErrStateDiffCorrupted
+				}
 				cache.levelsWithData[level] = true
 			}
 		}
@@ -135,6 +138,14 @@ func slotFromStateDiffKey(key []byte) (uint64, bool) {
 		return 0, false
 	}
 	return binary.LittleEndian.Uint64(key[1:9]), true
+}
+
+func hasCompleteDiffAtLevelSlot(bucket *bbolt.Bucket, level int, slot uint64) bool {
+	key := makeKeyForStateDiffTree(level, slot)
+	stateKey := append(append([]byte{}, key...), stateSuffix...)
+	validatorKey := append(append([]byte{}, key...), validatorSuffix...)
+	balancesKey := append(append([]byte{}, key...), balancesSuffix...)
+	return bucket.Get(stateKey) != nil && bucket.Get(validatorKey) != nil && bucket.Get(balancesKey) != nil
 }
 
 func newStateDiffCache(s *Store) (*stateDiffCache, error) {
