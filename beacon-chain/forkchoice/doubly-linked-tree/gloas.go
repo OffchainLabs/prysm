@@ -334,9 +334,6 @@ func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus 
 	}
 	if payloadStatus {
 		return s.fullNodeByRoot[r], false
-	} else if slot == en.node.slot {
-		return en, true
-	} else {
-		return en, false
 	}
+	return en, slot == en.node.slot
 }
