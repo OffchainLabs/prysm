@@ -90,6 +90,28 @@ func TestStateDiff_EncodeDecodeExponents(t *testing.T) {
 		_, err := decodeStateDiffExponents([]byte{2, 10})
 		require.ErrorContains(t, "length mismatch", err)
 	})
+
+	t.Run("decode-too-many-exponents", func(t *testing.T) {
+		encoded := make([]byte, 17)
+		encoded[0] = 16
+		_, err := decodeStateDiffExponents(encoded)
+		require.ErrorContains(t, "exceeds max 15", err)
+	})
+
+	t.Run("decode-out-of-range", func(t *testing.T) {
+		_, err := decodeStateDiffExponents([]byte{1, byte(flags.MaxStateDiffExponent + 1)})
+		require.ErrorContains(t, "out of range when decoding", err)
+	})
+
+	t.Run("decode-not-decreasing", func(t *testing.T) {
+		_, err := decodeStateDiffExponents([]byte{2, 10, 10})
+		require.ErrorContains(t, "strictly decreasing", err)
+	})
+
+	t.Run("decode-last-too-small", func(t *testing.T) {
+		_, err := decodeStateDiffExponents([]byte{2, 10, 4})
+		require.ErrorContains(t, "last state diff exponent must be at least 5", err)
+	})
 }
 
 func TestStateDiff_InitializeStoresExponents(t *testing.T) {

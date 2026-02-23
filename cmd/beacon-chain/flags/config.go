@@ -95,7 +95,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 			log.Warn("--state-diff-exponents is set but --enable-state-diff is not; the value will be ignored.")
 		}
 		if ctx.IsSet(DisableStateDiffValidateOnStartup.Name) {
-			log.Warn("--disable-hdiff-validate-on-startup is set but --enable-state-diff is not; the value will be ignored.")
+			log.Warn("--disable-state-diff-validate-on-startup is set but --enable-state-diff is not; the value will be ignored.")
 		}
 	}
 

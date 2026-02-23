@@ -1052,11 +1052,19 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 	if err != nil {
 		return nil, err
 	}
+	var slot primitives.Slot
 	if stateSummary == nil {
-		return nil, ErrNotFoundState
+		blk, err := s.Block(ctx, blockRoot)
+		if err != nil {
+			return nil, err
+		}
+		if blk == nil || blk.IsNil() {
+			return nil, ErrNotFoundState
+		}
+		slot = blk.Block().Slot()
+	} else {
+		slot = stateSummary.Slot
 	}
-
-	slot := stateSummary.Slot
 
 	if uint64(slot) < s.getOffset() {
 		return nil, ErrSlotBeforeOffset
@@ -1096,11 +1104,19 @@ func (s *Store) hasStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 	if err != nil {
 		return false, err
 	}
+	var slot primitives.Slot
 	if stateSummary == nil {
-		return false, nil
+		blk, err := s.Block(ctx, blockRoot)
+		if err != nil {
+			return false, err
+		}
+		if blk == nil || blk.IsNil() {
+			return false, nil
+		}
+		slot = blk.Block().Slot()
+	} else {
+		slot = stateSummary.Slot
 	}
-
-	slot := stateSummary.Slot
 
 	if uint64(slot) < s.getOffset() {
 		return false, ErrSlotBeforeOffset

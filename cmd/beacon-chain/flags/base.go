@@ -358,8 +358,9 @@ var (
 	}
 	// DisableStateDiffValidateOnStartup controls state-diff startup validation; when set, validation is disabled.
 	DisableStateDiffValidateOnStartup = &cli.BoolFlag{
-		Name:  "disable-hdiff-validate-on-startup",
-		Usage: "Disables state-diff validation on startup (enabled by default).",
+		Name:    "disable-state-diff-validate-on-startup",
+		Aliases: []string{"disable-hdiff-validate-on-startup"},
+		Usage:   "Disables state-diff validation on startup (enabled by default).",
 	}
 	// DisableEphemeralLogFile disables the 24 hour debug log file.
 	DisableEphemeralLogFile = &cli.BoolFlag{

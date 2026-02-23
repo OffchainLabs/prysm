@@ -53,12 +53,27 @@ func decodeStateDiffExponents(encoded []byte) ([]int, error) {
 	if count == 0 {
 		return nil, errors.New("state diff exponents length cannot be zero")
 	}
+	if count > 15 {
+		return nil, fmt.Errorf("state diff exponents length %d exceeds max 15", count)
+	}
 	if len(encoded) != count+1 {
 		return nil, fmt.Errorf("state diff exponents length mismatch: expected %d got %d", count, len(encoded)-1)
 	}
 	exponents := make([]int, count)
+	prev := flags.MaxStateDiffExponent + 1
 	for i := range count {
-		exponents[i] = int(encoded[i+1])
+		exp := int(encoded[i+1])
+		if exp < flags.MinStateDiffExponent || exp > flags.MaxStateDiffExponent {
+			return nil, fmt.Errorf("state diff exponent out of range when decoding: got %d, expected between %d and %d", exp, flags.MinStateDiffExponent, flags.MaxStateDiffExponent)
+		}
+		if exp >= prev {
+			return nil, errors.New("state diff exponents must be in strictly decreasing order, and each exponent must be <= 30")
+		}
+		exponents[i] = exp
+		prev = exp
+	}
+	if exponents[count-1] < 5 {
+		return nil, errors.New("the last state diff exponent must be at least 5")
 	}
 	return exponents, nil
 }

@@ -1436,6 +1436,33 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 		require.NotNil(t, got)
 	})
 
+	t.Run("state summary missing falls back to block slot", func(t *testing.T) {
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		require.NoError(t, setOffsetInDB(db, 0))
+
+		st, _ := createState(t, 0, version.Phase0)
+		require.NoError(t, db.saveStateByDiff(t.Context(), st))
+
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = 0
+		signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.NoError(t, db.SaveBlock(t.Context(), signedBlk))
+		r, err := signedBlk.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		got, err := db.getStateUsingStateDiff(t.Context(), r)
+		require.ErrorContains(t, "state root mismatch for block", err)
+		require.ErrorIs(t, err, ErrNotFoundState)
+		require.IsNil(t, got)
+	})
+
 	t.Run("Full state snapshot", func(t *testing.T) {
 		t.Run("using state summary", func(t *testing.T) {
 			for v := range version.All() {
@@ -1670,5 +1697,27 @@ func TestStore_HasStateUsingStateDiff(t *testing.T) {
 		hasState, err := db.hasStateUsingStateDiff(t.Context(), r)
 		require.ErrorIs(t, err, ErrSlotBeforeOffset)
 		require.Equal(t, false, hasState)
+	})
+
+	t.Run("falls back to block when summary missing", func(t *testing.T) {
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		require.NoError(t, setOffsetInDB(db, 0))
+
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = 32
+		signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.NoError(t, db.SaveBlock(t.Context(), signedBlk))
+		r, err := signedBlk.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		hasSt := db.HasState(t.Context(), r)
+		require.Equal(t, true, hasSt)
 	})
 }
