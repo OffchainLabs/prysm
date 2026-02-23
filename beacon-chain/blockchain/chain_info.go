@@ -82,6 +82,7 @@ type HeadFetcher interface {
 	ChainHeads() ([][32]byte, []primitives.Slot)
 	DependentRootForEpoch([32]byte, primitives.Epoch) ([32]byte, error)
 	TargetRootForEpoch([32]byte, primitives.Epoch) ([32]byte, error)
+	HasFullPayload([32]byte) bool
 	HeadSyncCommitteeFetcher
 	HeadDomainFetcher
 }
@@ -484,6 +485,13 @@ func (s *Service) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.TargetRootForEpoch(root, epoch)
+}
+
+// HasFullPayload wraps the corresponding method in forkchoice
+func (s *Service) HasFullPayload(root [32]byte) bool {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.HasFullPayload(root)
 }
 
 // Ancestor returns the block root of an ancestry block from the input block root.

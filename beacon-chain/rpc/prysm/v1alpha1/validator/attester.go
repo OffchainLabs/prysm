@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -184,12 +185,26 @@ func (vs *Server) proposeAtt(
 		return nil, status.Errorf(codes.Internal, "Could not get attestation root: %v", err)
 	}
 
-	if att.Version() < version.Electra && slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
+	currentEpoch := slots.ToEpoch(vs.TimeFetcher.CurrentSlot())
+	if att.Version() < version.Electra && currentEpoch >= params.BeaconConfig().ElectraForkEpoch {
 		return nil, status.Error(codes.InvalidArgument, "old attestation format, ProposeAttestationElectra should be called post Electra")
 	}
-
-	if att.Version() >= version.Electra && slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) < params.BeaconConfig().ElectraForkEpoch {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("ProposeAttestationElectra not supported yet. The current epoch is %d supported starting epoch is %d", slots.ToEpoch(vs.TimeFetcher.CurrentSlot()), params.BeaconConfig().ElectraForkEpoch))
+	if att.Version() >= version.Electra {
+		if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
+			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("ProposeAttestationElectra not supported yet. The current epoch is %d supported starting epoch is %d", currentEpoch, params.BeaconConfig().ElectraForkEpoch))
+		}
+		data := att.GetData()
+		if slots.ToEpoch(data.Slot) >= params.BeaconConfig().GloasForkEpoch {
+			if data.CommitteeIndex >= 2 {
+				return nil, status.Error(codes.InvalidArgument, "committee index must be < 2 post-Gloas")
+			}
+			if data.CommitteeIndex != 0 {
+				blockSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(bytesutil.ToBytes32(data.BeaconBlockRoot))
+				if err == nil && blockSlot == data.Slot {
+					return nil, status.Error(codes.InvalidArgument, "same slot attestations must use committee index 0")
+				}
+			}
+		}
 	}
 
 	// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node

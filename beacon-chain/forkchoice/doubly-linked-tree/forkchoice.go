@@ -164,6 +164,12 @@ func (f *ForkChoice) HasNode(root [32]byte) bool {
 	return ok
 }
 
+// HasFullPayload returns true if a full payload node exists for the given root.
+func (f *ForkChoice) HasFullPayload(root [32]byte) bool {
+	_, ok := f.store.fullNodeByRoot[root]
+	return ok
+}
+
 // IsCanonical returns true if the given root is part of the canonical chain.
 func (f *ForkChoice) IsCanonical(root [32]byte) bool {
 	// It is fine to pick empty node here since we only check if the beacon block is canonical.

@@ -475,18 +475,13 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: BadRequest, Err: errors.Errorf("invalid request: %v", err)}
 	}
 
-	committeeIndex := primitives.CommitteeIndex(0)
-	if slots.ToEpoch(req.Slot) < params.BeaconConfig().ElectraForkEpoch {
-		committeeIndex = req.CommitteeIndex
-	}
-
 	s.AttestationCache.RLock()
 	res := s.AttestationCache.Get()
 	if res != nil && res.Slot == req.Slot {
 		s.AttestationCache.RUnlock()
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
-			CommitteeIndex:  committeeIndex,
+			CommitteeIndex:  s.attestationCommitteeIndex(req, res.HeadRoot),
 			BeaconBlockRoot: res.HeadRoot,
 			Source: &ethpb.Checkpoint{
 				Epoch: res.Source.Epoch,
@@ -510,7 +505,7 @@ func (s *Service) GetAttestationData(
 	if res != nil && res.Slot == req.Slot {
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
-			CommitteeIndex:  committeeIndex,
+			CommitteeIndex:  s.attestationCommitteeIndex(req, res.HeadRoot),
 			BeaconBlockRoot: res.HeadRoot,
 			Source: &ethpb.Checkpoint{
 				Epoch: res.Source.Epoch,
@@ -570,7 +565,7 @@ func (s *Service) GetAttestationData(
 
 	return &ethpb.AttestationData{
 		Slot:            req.Slot,
-		CommitteeIndex:  committeeIndex,
+		CommitteeIndex:  s.attestationCommitteeIndex(req, headRoot),
 		BeaconBlockRoot: headRoot,
 		Source: &ethpb.Checkpoint{
 			Epoch: justifiedCheckpoint.Epoch,
@@ -581,6 +576,30 @@ func (s *Service) GetAttestationData(
 			Root:  targetRoot[:],
 		},
 	}, nil
+}
+
+// attestationCommitteeIndex returns the committee index for attestation data.
+// Pre-Electra: uses the requested committee index.
+// Electra to GLOAS: always 0.
+// Post-GLOAS: signals payload status of the attested head block.
+func (s *Service) attestationCommitteeIndex(req *ethpb.AttestationDataRequest, headRoot []byte) primitives.CommitteeIndex {
+	epoch := slots.ToEpoch(req.Slot)
+	if epoch < params.BeaconConfig().ElectraForkEpoch {
+		return req.CommitteeIndex
+	}
+	if epoch < params.BeaconConfig().GloasForkEpoch {
+		// eip-7549 moves index outside
+		return 0
+	}
+	// Attestation deadline precedes the payload in the same slot,
+	// so payload status is unknown — only signal it for prior slots.
+	if s.HeadFetcher.HeadSlot() == req.Slot {
+		return 0
+	}
+	if s.HeadFetcher.HasFullPayload(bytesutil.ToBytes32(headRoot)) {
+		return 1
+	}
+	return 0
 }
 
 // SubmitSyncMessage submits the sync committee message to the network.
