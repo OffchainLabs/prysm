@@ -131,8 +131,8 @@ type attesterDutiesCacheEntry struct {
 }
 
 type proposerDutiesCacheEntry struct {
-	current *ethpb.ProposerDutiesResponse
-	epoch   primitives.Epoch
+	current, next *ethpb.ProposerDutiesResponse
+	epoch         primitives.Epoch
 }
 
 type syncDutiesCacheEntry struct {

@@ -361,8 +361,13 @@ func (ds *dutyStore) SetSplit(
 	}
 
 	// Build next epoch views.
-	emptyProp := make(map[primitives.ValidatorIndex][]primitives.Slot)
-	ds.nextDuties = buildDutyViews(att.next, emptyProp, ds.syncNextMap, indexToPubkey, pubkeyToStatus)
+	var nextPropSlots map[primitives.ValidatorIndex][]primitives.Slot
+	if prop != nil && prop.next != nil {
+		nextPropSlots = proposerSlotsMap(prop.next)
+	} else {
+		nextPropSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
+	}
+	ds.nextDuties = buildDutyViews(att.next, nextPropSlots, ds.syncNextMap, indexToPubkey, pubkeyToStatus)
 
 	ds.initialized = true
 }

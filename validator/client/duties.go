@@ -224,6 +224,44 @@ func (v *validator) fetchSyncDuties(
 	return &syncDutiesCacheEntry{current: current, next: next, epoch: epoch, period: currentPeriod}, nil
 }
 
+// fetchProposerDuties fetches proposer duties, using the cache when the epoch matches.
+// Post-Fulu, also fetches next-epoch duties (deterministic via proposer_lookahead).
+func (v *validator) fetchProposerDuties(
+	ctx context.Context, epoch primitives.Epoch,
+) (*proposerDutiesCacheEntry, error) {
+	// Check cache.
+	v.dutiesLock.RLock()
+	var cached *proposerDutiesCacheEntry
+	if v.duties != nil {
+		cached = v.duties.ProposerDutiesCache()
+	}
+	v.dutiesLock.RUnlock()
+
+	if cached != nil && cached.epoch == epoch {
+		return cached, nil
+	}
+
+	// Cache miss — fetch current epoch.
+	current, err := v.validatorClient.ProposerDuties(ctx, epoch)
+	if err != nil {
+		return nil, err
+	}
+
+	entry := &proposerDutiesCacheEntry{current: current, epoch: epoch}
+
+	// Post-Fulu: next-epoch proposer schedule is deterministic.
+	if epoch >= params.BeaconConfig().FuluForkEpoch {
+		next, nextErr := v.validatorClient.ProposerDuties(ctx, epoch+1)
+		if nextErr != nil {
+			log.WithError(nextErr).Debug("Could not get next epoch proposer duties")
+		} else {
+			entry.next = next
+		}
+	}
+
+	return entry, nil
+}
+
 // updateDutiesSplit fetches duties from the split V3 endpoints with per-duty caching.
 func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoch, filteredKeys [][fieldparams.BLSPubkeyLength]byte) error {
 	// Resolve pubkeys → indices via pubkeyToStatus (populated in WaitForActivation).
@@ -241,7 +279,7 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 
 	// Fetch all three duty types in parallel.
 	var (
-		propResp  *ethpb.ProposerDutiesResponse
+		propCache *proposerDutiesCacheEntry
 		attCache  *attesterDutiesCacheEntry
 		syncCache *syncDutiesCacheEntry
 		propErr   error
@@ -249,7 +287,7 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 		syncErr   error
 		wg        sync.WaitGroup
 	)
-	wg.Go(func() { propResp, propErr = v.validatorClient.ProposerDuties(ctx, epoch) })
+	wg.Go(func() { propCache, propErr = v.fetchProposerDuties(ctx, epoch) })
 	wg.Go(func() { attCache, attErr = v.fetchAttesterDuties(ctx, epoch, indices) })
 	wg.Go(func() { syncCache, syncErr = v.fetchSyncDuties(ctx, epoch, indices) })
 	wg.Wait()
@@ -275,8 +313,6 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 		}
 		v.dutiesLock.RUnlock()
 	}
-
-	propCache := &proposerDutiesCacheEntry{current: propResp, epoch: epoch}
 
 	v.dutiesLock.Lock()
 	if v.duties == nil {

@@ -253,3 +253,161 @@ func TestUpdateDutiesSplit_AttesterFailureFatal(t *testing.T) {
 	// Duties should be cleared.
 	assert.Equal(t, false, v.duties.IsInitialized())
 }
+
+func TestFetchProposerDuties_CacheHit(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	epoch := primitives.Epoch(10)
+	cached := &proposerDutiesCacheEntry{
+		current: &ethpb.ProposerDutiesResponse{Duties: []*ethpb.ProposerDutyV2{{ValidatorIndex: 1, Slot: 320}}},
+		epoch:   epoch,
+	}
+
+	v := &validator{
+		validatorClient: client,
+		duties: &dutyStore{
+			proposer:    cached,
+			initialized: true,
+		},
+	}
+
+	// No RPC calls expected — cache hit.
+	result, err := v.fetchProposerDuties(t.Context(), epoch)
+	require.NoError(t, err)
+	assert.Equal(t, cached, result)
+}
+
+func TestFetchProposerDuties_CacheMiss(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	epoch := primitives.Epoch(10)
+
+	v := &validator{
+		validatorClient: client,
+		duties: &dutyStore{
+			proposer: &proposerDutiesCacheEntry{
+				current: &ethpb.ProposerDutiesResponse{},
+				epoch:   epoch - 1, // different epoch
+			},
+			initialized: true,
+		},
+	}
+
+	resp := &ethpb.ProposerDutiesResponse{
+		DependentRoot: make([]byte, 32),
+		Duties:        []*ethpb.ProposerDutyV2{{ValidatorIndex: 1, Slot: 320}},
+	}
+	client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(resp, nil)
+
+	result, err := v.fetchProposerDuties(t.Context(), epoch)
+	require.NoError(t, err)
+	assert.Equal(t, resp, result.current)
+	assert.Equal(t, (*ethpb.ProposerDutiesResponse)(nil), result.next)
+	assert.Equal(t, epoch, result.epoch)
+}
+
+func TestFetchProposerDuties_PostFulu(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 5
+	params.OverrideBeaconConfig(cfg)
+
+	epoch := primitives.Epoch(10)
+
+	v := &validator{
+		validatorClient: client,
+		duties:          &dutyStore{},
+	}
+
+	currentResp := &ethpb.ProposerDutiesResponse{
+		DependentRoot: make([]byte, 32),
+		Duties:        []*ethpb.ProposerDutyV2{{ValidatorIndex: 1, Slot: 320}},
+	}
+	nextResp := &ethpb.ProposerDutiesResponse{
+		DependentRoot: make([]byte, 32),
+		Duties:        []*ethpb.ProposerDutyV2{{ValidatorIndex: 2, Slot: 352}},
+	}
+
+	client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(currentResp, nil)
+	client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(nextResp, nil)
+
+	result, err := v.fetchProposerDuties(t.Context(), epoch)
+	require.NoError(t, err)
+	assert.Equal(t, currentResp, result.current)
+	assert.Equal(t, nextResp, result.next)
+	assert.Equal(t, epoch, result.epoch)
+}
+
+func TestFetchProposerDuties_PreFulu(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 100
+	params.OverrideBeaconConfig(cfg)
+
+	epoch := primitives.Epoch(10)
+
+	v := &validator{
+		validatorClient: client,
+		duties:          &dutyStore{},
+	}
+
+	resp := &ethpb.ProposerDutiesResponse{
+		DependentRoot: make([]byte, 32),
+		Duties:        []*ethpb.ProposerDutyV2{{ValidatorIndex: 1, Slot: 320}},
+	}
+
+	// Only current epoch fetched, no next.
+	client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(resp, nil)
+
+	result, err := v.fetchProposerDuties(t.Context(), epoch)
+	require.NoError(t, err)
+	assert.Equal(t, resp, result.current)
+	assert.Equal(t, (*ethpb.ProposerDutiesResponse)(nil), result.next)
+	assert.Equal(t, epoch, result.epoch)
+}
+
+func TestFetchProposerDuties_PostFulu_NextEpochFailureNonFatal(t *testing.T) {
+	hook := logTest.NewGlobal()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 5
+	params.OverrideBeaconConfig(cfg)
+
+	epoch := primitives.Epoch(10)
+
+	v := &validator{
+		validatorClient: client,
+		duties:          &dutyStore{},
+	}
+
+	currentResp := &ethpb.ProposerDutiesResponse{
+		DependentRoot: make([]byte, 32),
+		Duties:        []*ethpb.ProposerDutyV2{{ValidatorIndex: 1, Slot: 320}},
+	}
+
+	client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(currentResp, nil)
+	client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(nil, errors.New("next epoch failed"))
+
+	result, err := v.fetchProposerDuties(t.Context(), epoch)
+	require.NoError(t, err)
+	assert.Equal(t, currentResp, result.current)
+	assert.Equal(t, (*ethpb.ProposerDutiesResponse)(nil), result.next)
+	assert.Equal(t, epoch, result.epoch)
+	assert.LogsContain(t, hook, "Could not get next epoch proposer duties")
+}

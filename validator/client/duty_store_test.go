@@ -222,6 +222,7 @@ func TestDutyStore_ProposerSlots_Legacy(t *testing.T) {
 }
 
 func TestDutyStore_ProposerSlots_Split(t *testing.T) {
+	pk1 := testPubkey(1)
 	ds := &dutyStore{}
 	ds.SetSplit(
 		&attesterDutiesCacheEntry{current: &ethpb.AttesterDutiesResponse{}},
@@ -232,7 +233,9 @@ func TestDutyStore_ProposerSlots_Split(t *testing.T) {
 				},
 			},
 		},
-		nil, nil, nil,
+		nil,
+		map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{10: pk1},
+		nil,
 	)
 	assert.DeepEqual(t, []primitives.Slot{3}, ds.ProposerSlots(10))
 	assert.Equal(t, 0, len(ds.ProposerSlots(99)))
@@ -321,32 +324,63 @@ func TestDutyStore_AllCurrentExitedCount(t *testing.T) {
 }
 
 func TestDutyStore_NextEpochDuties_Split(t *testing.T) {
-	pk1 := testPubkey(1)
-	ds := &dutyStore{}
-	ds.SetSplit(
-		&attesterDutiesCacheEntry{
-			current: &ethpb.AttesterDutiesResponse{},
-			next: &ethpb.AttesterDutiesResponse{
-				Duties: []*ethpb.AttesterDuty{
-					{ValidatorIndex: 10, Slot: 40},
+	t.Run("without next proposer", func(t *testing.T) {
+		pk1 := testPubkey(1)
+		ds := &dutyStore{}
+		ds.SetSplit(
+			&attesterDutiesCacheEntry{
+				current: &ethpb.AttesterDutiesResponse{},
+				next: &ethpb.AttesterDutiesResponse{
+					Duties: []*ethpb.AttesterDuty{
+						{ValidatorIndex: 10, Slot: 40},
+					},
 				},
 			},
-		},
-		nil,
-		&syncDutiesCacheEntry{
-			next: &ethpb.SyncCommitteeDutiesResponse{
-				Duties: []*ethpb.SyncCommitteeDuty{{ValidatorIndex: 10}},
+			nil,
+			&syncDutiesCacheEntry{
+				next: &ethpb.SyncCommitteeDutiesResponse{
+					Duties: []*ethpb.SyncCommitteeDuty{{ValidatorIndex: 10}},
+				},
 			},
-		},
-		map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{10: pk1},
-		nil,
-	)
-	duties := ds.NextEpochDuties()
-	require.Equal(t, 1, len(duties))
-	assert.Equal(t, primitives.Slot(40), duties[0].Slot)
-	assert.Equal(t, true, duties[0].IsSyncCommittee)
-	// Next epoch should have no proposer slots.
-	assert.Equal(t, 0, len(duties[0].ProposerSlots))
+			map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{10: pk1},
+			nil,
+		)
+		duties := ds.NextEpochDuties()
+		require.Equal(t, 1, len(duties))
+		assert.Equal(t, primitives.Slot(40), duties[0].Slot)
+		assert.Equal(t, true, duties[0].IsSyncCommittee)
+		assert.Equal(t, 0, len(duties[0].ProposerSlots))
+	})
+
+	t.Run("with next proposer (post-Fulu)", func(t *testing.T) {
+		pk1 := testPubkey(1)
+		ds := &dutyStore{}
+		ds.SetSplit(
+			&attesterDutiesCacheEntry{
+				current: &ethpb.AttesterDutiesResponse{},
+				next: &ethpb.AttesterDutiesResponse{
+					Duties: []*ethpb.AttesterDuty{
+						{ValidatorIndex: 10, Slot: 40},
+					},
+				},
+			},
+			&proposerDutiesCacheEntry{
+				current: &ethpb.ProposerDutiesResponse{},
+				next: &ethpb.ProposerDutiesResponse{
+					Duties: []*ethpb.ProposerDutyV2{
+						{ValidatorIndex: 10, Slot: 42},
+					},
+				},
+			},
+			nil,
+			map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{10: pk1},
+			nil,
+		)
+		duties := ds.NextEpochDuties()
+		require.Equal(t, 1, len(duties))
+		assert.Equal(t, primitives.Slot(40), duties[0].Slot)
+		assert.DeepEqual(t, []primitives.Slot{42}, duties[0].ProposerSlots)
+	})
 }
 
 func TestDutyStore_SetLegacy_ClearsSplit(t *testing.T) {
