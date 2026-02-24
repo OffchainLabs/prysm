@@ -60,18 +60,22 @@ import (
 var _ runtime.Service = (*Service)(nil)
 
 const (
-	rangeLimit               uint64 = 1024
-	seenBlockSize                   = 1000
-	seenPayloadEnvelopeSize         = 1000
-	seenDataColumnSize              = seenBlockSize * 128 // Each block can have max 128 data columns.
-	seenUnaggregatedAttSize         = 20000
-	seenAggregatedAttSize           = 16384
-	seenSyncMsgSize                 = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
-	seenSyncContributionSize        = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
-	seenExitSize                    = 100
-	seenProposerSlashingSize        = 100
-	badBlockSize                    = 1000
-	syncMetricsInterval             = 10 * time.Second
+	rangeLimit                        uint64 = 1024
+	seenBlockSize                            = 1000
+	seenPayloadEnvelopeSize                  = 1000
+	// executionPayloadEnvelopeCacheSize is the number of full execution payload envelopes to keep in memory
+	// for serving ExecutionPayloadEnvelopesByRoot RPC requests.
+	// When persistent full-envelope storage will be added, this cache becomes a fast-path optimization.
+	executionPayloadEnvelopeCacheSize        = 512
+	seenDataColumnSize                       = seenBlockSize * 128 // Each block can have max 128 data columns.
+	seenUnaggregatedAttSize                  = 20000
+	seenAggregatedAttSize                    = 16384
+	seenSyncMsgSize                          = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
+	seenSyncContributionSize                 = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
+	seenExitSize                             = 100
+	seenProposerSlashingSize                 = 100
+	badBlockSize                             = 1000
+	syncMetricsInterval                      = 10 * time.Second
 )
 
 var (
@@ -151,6 +155,7 @@ type Service struct {
 	seenBlockLock                       sync.RWMutex
 	seenBlockCache                      *lru.Cache
 	seenPayloadEnvelopeCache            *lru.Cache
+	executionPayloadEnvelopeCache       *lru.Cache
 	seenBlobLock                        sync.RWMutex
 	seenBlobCache                       *lru.Cache
 	seenDataColumnCache                 *slotAwareCache
@@ -364,6 +369,7 @@ func (s *Service) Status() error {
 func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
 	s.seenPayloadEnvelopeCache = lruwrpr.New(seenPayloadEnvelopeSize)
+	s.executionPayloadEnvelopeCache = lruwrpr.New(executionPayloadEnvelopeCacheSize)
 	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
 	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)

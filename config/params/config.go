@@ -302,6 +302,7 @@ type BeaconChainConfig struct {
 	// Values introduced in Gloas upgrade
 	BuilderPaymentThresholdNumerator   uint64 `yaml:"BUILDER_PAYMENT_THRESHOLD_NUMERATOR" spec:"true"`   // BuilderPaymentThresholdNumerator is the numerator for builder payment quorum threshold calculation.
 	BuilderPaymentThresholdDenominator uint64 `yaml:"BUILDER_PAYMENT_THRESHOLD_DENOMINATOR" spec:"true"` // BuilderPaymentThresholdDenominator is the denominator for builder payment quorum threshold calculation.
+	MaxRequestPayloads                 uint64 `yaml:"MAX_REQUEST_PAYLOADS" spec:"true"`                   // MaxRequestPayloads is the maximum number of execution payload envelopes in a single request.
 
 	// Networking Specific Parameters
 	MaxPayloadSize                  uint64          `yaml:"MAX_PAYLOAD_SIZE" spec:"true"`                   // MAX_PAYLOAD_SIZE is the maximum allowed size of uncompressed payload in gossip messages and rpc chunks.
