@@ -1260,14 +1260,19 @@ func (b *BeaconBlockBody) BLSToExecutionChanges() ([]*eth.SignedBLSToExecutionCh
 
 // BlobKzgCommitments returns the blob kzg commitments in the block.
 func (b *BeaconBlockBody) BlobKzgCommitments() ([][]byte, error) {
+	if b.version >= version.Gloas {
+		signedBid, err := b.SignedExecutionPayloadBid()
+		if err != nil {
+			return nil, err
+		}
+		return signedBid.Message.BlobKzgCommitments, nil
+	}
 	if b.version >= version.Deneb {
 		return b.blobKzgCommitments, nil
 	}
-
 	if b.version >= version.Phase0 {
 		return nil, consensus_types.ErrNotSupported("BlobKzgCommitments", b.version)
 	}
-
 	return nil, errIncorrectBlockVersion
 }
 
