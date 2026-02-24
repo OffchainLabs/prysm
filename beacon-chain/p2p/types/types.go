@@ -232,8 +232,8 @@ func (r *ExecutionPayloadEnvelopesByRootReq) MarshalSSZ() ([]byte, error) {
 		return nil, errors.Errorf("execution payload envelopes by roots request exceeds max size: %d > %d", len(*r), params.BeaconConfig().MaxRequestPayloads)
 	}
 	buf := make([]byte, 0, r.SizeSSZ())
-	for _, r := range *r {
-		buf = append(buf, r[:]...)
+	for _, root := range *r {
+		buf = append(buf, root[:]...)
 	}
 	return buf, nil
 }

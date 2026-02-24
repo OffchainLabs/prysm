@@ -72,6 +72,9 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 		s.rateLimiter.add(stream, 1)
 
 		// Look up the full envelope from the in-memory cache.
+		// TODO: Add a fallback DB lookup path once persistent full-envelope storage is implemented.
+		// Currently only the gossip-populated cache is checked, which means envelopes may be
+		// unavailable after restart, during initial sync, or after LRU eviction.
 		val, ok := s.executionPayloadEnvelopeCache.Get(root)
 		if !ok {
 			log.WithField("root", root).Trace("Peer requested execution payload envelope by root not found in cache")
