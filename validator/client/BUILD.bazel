@@ -105,6 +105,7 @@ go_test(
     srcs = [
         "aggregate_test.go",
         "attest_test.go",
+        "duties_test.go",
         "duty_store_test.go",
         "health_monitor_test.go",
         "key_reload_test.go",

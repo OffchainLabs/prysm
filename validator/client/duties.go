@@ -133,11 +133,11 @@ func (v *validator) onDutiesUpdated(ctx context.Context) error {
 	return nil
 }
 
-// cachedAttesterDuties checks if the attester cache is still valid by probing the dependent root.
-// Returns cached current/next responses and ok=true if the cache hit, ok=false to signal refetch.
-func (v *validator) cachedAttesterDuties(
+// fetchAttesterDuties fetches attester duties, using the cache when the dependent root matches.
+func (v *validator) fetchAttesterDuties(
 	ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex,
-) (current, next *ethpb.AttesterDutiesResponse, ok bool) {
+) (*attesterDutiesCacheEntry, error) {
+	// Check cache.
 	v.dutiesLock.RLock()
 	var cached *attesterDutiesCacheEntry
 	if v.duties != nil {
@@ -145,34 +145,83 @@ func (v *validator) cachedAttesterDuties(
 	}
 	v.dutiesLock.RUnlock()
 
-	if cached == nil || cached.epoch != epoch {
-		return nil, nil, false
+	if cached != nil && cached.epoch == epoch {
+		probe, err := v.validatorClient.AttesterDuties(ctx, epoch, indices[:1])
+		if err == nil && bytes.Equal(probe.DependentRoot, cached.current.DependentRoot) {
+			return cached, nil
+		}
 	}
-	probe, err := v.validatorClient.AttesterDuties(ctx, epoch, indices[:1])
-	if err != nil {
-		return nil, nil, false
+
+	// Cache miss — fetch current and next in parallel.
+	var (
+		current, next *ethpb.AttesterDutiesResponse
+		currErr       error
+		nextErr       error
+		wg            sync.WaitGroup
+	)
+	wg.Go(func() {
+		current, currErr = v.validatorClient.AttesterDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		next, nextErr = v.validatorClient.AttesterDuties(ctx, epoch+1, indices)
+	})
+	wg.Wait()
+
+	if currErr != nil {
+		return nil, currErr
 	}
-	if !bytes.Equal(probe.DependentRoot, cached.current.DependentRoot) {
-		return nil, nil, false
+	if nextErr != nil {
+		return nil, nextErr
 	}
-	return cached.current, cached.next, true
+	return &attesterDutiesCacheEntry{current: current, next: next, epoch: epoch}, nil
 }
 
-// cachedSyncDuties returns cached sync committee duties if still in the same period.
-func (v *validator) cachedSyncDuties(epoch primitives.Epoch) (*syncDutiesCacheEntry, bool) {
+// fetchSyncDuties fetches sync committee duties, using the cache when still in the same period.
+// Returns nil, nil for pre-Altair epochs.
+func (v *validator) fetchSyncDuties(
+	ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex,
+) (*syncDutiesCacheEntry, error) {
+	if epoch < params.BeaconConfig().AltairForkEpoch {
+		return nil, nil
+	}
+
 	currentPeriod := uint64(epoch) / uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod)
 
+	// Check cache.
 	v.dutiesLock.RLock()
-	var entry *syncDutiesCacheEntry
+	var cached *syncDutiesCacheEntry
 	if v.duties != nil {
-		entry = v.duties.SyncDutiesCache()
+		cached = v.duties.SyncDutiesCache()
 	}
 	v.dutiesLock.RUnlock()
 
-	if entry != nil && entry.period == currentPeriod {
-		return entry, true
+	if cached != nil && cached.period == currentPeriod {
+		return cached, nil
 	}
-	return nil, false
+
+	// Cache miss — fetch current and next in parallel.
+	var (
+		current, next *ethpb.SyncCommitteeDutiesResponse
+		currErr       error
+		nextErr       error
+		wg            sync.WaitGroup
+	)
+	wg.Go(func() {
+		current, currErr = v.validatorClient.SyncCommitteeDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		next, nextErr = v.validatorClient.SyncCommitteeDuties(ctx, epoch+1, indices)
+		if nextErr != nil {
+			log.WithError(nextErr).Debug("Could not get next epoch sync committee duties")
+			nextErr = nil // non-fatal
+		}
+	})
+	wg.Wait()
+
+	if currErr != nil {
+		return nil, currErr
+	}
+	return &syncDutiesCacheEntry{current: current, next: next, epoch: epoch, period: currentPeriod}, nil
 }
 
 // updateDutiesSplit fetches duties from the split V3 endpoints with per-duty caching.
@@ -190,90 +239,44 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 		return nil
 	}
 
-	propResp, err := v.validatorClient.ProposerDuties(ctx, epoch)
-	if err != nil {
-		v.clearDuties()
-		log.WithError(err).Error("Error getting proposer duties")
-		return err
-	}
-
-	// Check attester and sync caches.
-	attCurrent, attNext, attSkipped := v.cachedAttesterDuties(ctx, epoch, indices)
-	cachedSync, syncSkipped := v.cachedSyncDuties(epoch)
-	var syncCurrent, syncNext *ethpb.SyncCommitteeDutiesResponse
-	if syncSkipped {
-		syncCurrent, syncNext = cachedSync.current, cachedSync.next
-	}
-
-	// Fetch missing duties in parallel.
+	// Fetch all three duty types in parallel.
 	var (
-		fetchErr error
-		errOnce  sync.Once
+		propResp  *ethpb.ProposerDutiesResponse
+		attCache  *attesterDutiesCacheEntry
+		syncCache *syncDutiesCacheEntry
+		propErr   error
+		attErr    error
+		syncErr   error
+		wg        sync.WaitGroup
 	)
-	setErr := func(err error) { errOnce.Do(func() { fetchErr = err }) }
-
-	var wg sync.WaitGroup
-
-	if !attSkipped {
-		wg.Go(func() {
-			resp, err := v.validatorClient.AttesterDuties(ctx, epoch, indices)
-			if err != nil {
-				setErr(err)
-				return
-			}
-			attCurrent = resp
-		})
-		wg.Go(func() {
-			resp, err := v.validatorClient.AttesterDuties(ctx, epoch+1, indices)
-			if err != nil {
-				setErr(err)
-				return
-			}
-			attNext = resp
-		})
-	}
-
-	if !syncSkipped && epoch >= params.BeaconConfig().AltairForkEpoch {
-		wg.Go(func() {
-			resp, err := v.validatorClient.SyncCommitteeDuties(ctx, epoch, indices)
-			if err != nil {
-				setErr(err)
-				return
-			}
-			syncCurrent = resp
-		})
-		wg.Go(func() {
-			resp, err := v.validatorClient.SyncCommitteeDuties(ctx, epoch+1, indices)
-			if err != nil {
-				log.WithError(err).Debug("Could not get next epoch sync committee duties")
-				return
-			}
-			syncNext = resp
-		})
-	}
-
+	wg.Go(func() { propResp, propErr = v.validatorClient.ProposerDuties(ctx, epoch) })
+	wg.Go(func() { attCache, attErr = v.fetchAttesterDuties(ctx, epoch, indices) })
+	wg.Go(func() { syncCache, syncErr = v.fetchSyncDuties(ctx, epoch, indices) })
 	wg.Wait()
 
-	if fetchErr != nil {
+	// Proposer or attester failure is fatal.
+	if propErr != nil {
 		v.clearDuties()
-		log.WithError(fetchErr).Error("Error getting validator duties (split)")
-		return fetchErr
+		log.WithError(propErr).Error("Error getting proposer duties")
+		return propErr
 	}
-	if attCurrent == nil {
+	if attErr != nil {
 		v.clearDuties()
-		return errors.New("incomplete duty response from beacon node")
+		log.WithError(attErr).Error("Error getting attester duties")
+		return attErr
 	}
 
-	// Build cache entries and store.
-	currentPeriod := uint64(epoch) / uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod)
-	attCache := &attesterDutiesCacheEntry{current: attCurrent, next: attNext, epoch: epoch}
-	propCache := &proposerDutiesCacheEntry{current: propResp, epoch: epoch}
-	var syncCache *syncDutiesCacheEntry
-	if syncSkipped {
-		syncCache = cachedSync
-	} else if syncCurrent != nil {
-		syncCache = &syncDutiesCacheEntry{current: syncCurrent, next: syncNext, epoch: epoch, period: currentPeriod}
+	// Sync failure is non-fatal — reuse cached sync data.
+	if syncErr != nil {
+		log.WithError(syncErr).Warn("Error getting sync committee duties, reusing cached data")
+		v.dutiesLock.RLock()
+		if v.duties != nil {
+			syncCache = v.duties.SyncDutiesCache()
+		}
+		v.dutiesLock.RUnlock()
 	}
+
+	propCache := &proposerDutiesCacheEntry{current: propResp, epoch: epoch}
 
 	v.dutiesLock.Lock()
 	if v.duties == nil {
