@@ -587,18 +587,18 @@ func (b *BeaconState) decreaseBuilderBalanceLockFree(builderIndex primitives.Bui
 		return fmt.Errorf("builder index %d out of range (len=%d)", builderIndex, len(b.builders))
 	}
 
+	builders := b.builders
 	if b.sharedFieldReferences[types.Builders].Refs() > 1 {
-		builders := make([]*ethpb.Builder, len(b.builders))
+		builders = make([]*ethpb.Builder, len(b.builders))
 		copy(builders, b.builders)
-		builder := ethpb.CopyBuilder(builders[idx])
-		builders[idx] = builder
-		b.builders = builders
 		b.sharedFieldReferences[types.Builders].MinusRef()
 		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
 	}
 
-	builder := b.builders[idx]
+	builder := ethpb.CopyBuilder(builders[idx])
 	builder.Balance = decreaseBalanceWithVal(builder.Balance, primitives.Gwei(amount))
+	builders[idx] = builder
+	b.builders = builders
 
 	return nil
 }

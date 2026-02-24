@@ -267,7 +267,10 @@ func withdrawalsEqual(a, b []*enginev1.Withdrawal) bool {
 
 // IsParentBlockFull returns true if the last committed payload bid was fulfilled with a payload,
 // which can only happen when both beacon block and payload were present.
-// This function must be called on a beacon state before processing the bid in the block.
+//
+// WARNING: This must be called on a beacon state before processing the bid for the current block
+// (process_execution_payload_bid), otherwise it will compare against the in-flight bid and produce
+// incorrect results.
 //
 //	<spec fn="is_parent_block_full" fork="gloas" hash="b59640c9">
 //	def is_parent_block_full(state: BeaconState) -> bool:
@@ -541,15 +544,15 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 	buildersLimit := min(buildersCount, int(cfg.MaxBuildersPerWithdrawalsSweep))
 
 	builderIndex := b.nextWithdrawalBuilderIndex
+	if uint64(builderIndex) >= uint64(buildersCount) {
+		return withdrawalIndex, builderIndex, fmt.Errorf("builder index %d out of range (builders length %d)", builderIndex, buildersCount)
+	}
 	epoch := slots.ToEpoch(b.slot)
 	for range buildersLimit {
 		if len(ws) >= withdrawalsLimit {
 			break
 		}
 
-		if uint64(builderIndex) >= uint64(buildersCount) {
-			return withdrawalIndex, builderIndex, fmt.Errorf("builder index %d out of range (builders length %d)", builderIndex, buildersCount)
-		}
 		builder := b.builders[builderIndex]
 		if builder == nil {
 			return withdrawalIndex, 0, fmt.Errorf("builder at index %d is nil", builderIndex)

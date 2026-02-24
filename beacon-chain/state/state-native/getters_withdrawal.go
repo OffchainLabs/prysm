@@ -134,15 +134,10 @@ func (b *BeaconState) appendPendingPartialWithdrawals(withdrawalIndex uint64, wi
 	}
 
 	cfg := params.BeaconConfig()
-	var withdrawalsLimit int
-	if b.version >= version.Gloas {
-		withdrawalsLimit = min(
-			len(*withdrawals)+int(cfg.MaxPendingPartialsPerWithdrawalsSweep),
-			int(cfg.MaxWithdrawalsPerPayload-1),
-		)
-	} else {
-		withdrawalsLimit = int(cfg.MaxPendingPartialsPerWithdrawalsSweep)
-	}
+	withdrawalsLimit := min(
+		len(*withdrawals)+int(cfg.MaxPendingPartialsPerWithdrawalsSweep),
+		int(cfg.MaxWithdrawalsPerPayload-1),
+	)
 
 	ws := *withdrawals
 	epoch := slots.ToEpoch(b.slot)

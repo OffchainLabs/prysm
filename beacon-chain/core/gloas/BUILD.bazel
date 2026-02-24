@@ -12,7 +12,7 @@ go_library(
         "pending_payment.go",
         "proposer_slashing.go",
         "upgrade.go",
-        "withdrawal.go",
+        "withdrawals.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas",
     visibility = ["//visibility:public"],
@@ -53,7 +53,7 @@ go_test(
         "pending_payment_test.go",
         "proposer_slashing_test.go",
         "upgrade_test.go",
-        "withdrawal_test.go",
+        "withdrawals_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
