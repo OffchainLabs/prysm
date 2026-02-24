@@ -56,7 +56,7 @@ type PayloadProcessor interface {
 
 // AttestationProcessor processes the attestation that's used for accounting fork choice.
 type AttestationProcessor interface {
-	ProcessAttestation(context.Context, []uint64, [32]byte, primitives.Epoch)
+	ProcessAttestation(context.Context, []uint64, [32]byte, primitives.Slot, bool)
 }
 
 // Getter returns fork choice related information.
@@ -91,6 +91,7 @@ type FastGetter interface {
 	UnrealizedJustifiedPayloadBlockHash() [32]byte
 	Weight(root [32]byte) (uint64, error)
 	ParentRoot(root [32]byte) ([32]byte, error)
+	BlockHash(root [32]byte) ([32]byte, error)
 }
 
 // Setter allows to set forkchoice information

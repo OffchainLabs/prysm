@@ -183,3 +183,10 @@ func (ro *ROForkChoice) ParentRoot(root [32]byte) ([32]byte, error) {
 	defer ro.l.RUnlock()
 	return ro.getter.ParentRoot(root)
 }
+
+// BlockHash delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.BlockHash(root)
+}

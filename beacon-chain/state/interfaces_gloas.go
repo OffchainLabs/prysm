@@ -30,6 +30,7 @@ type writeOnlyGloasFields interface {
 	IncreaseBuilderBalance(index primitives.BuilderIndex, amount uint64) error
 	AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64) error
 	UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64, participatedFlags map[uint8]bool) error
+	OnboardBuildersFromPendingDeposits() error
 }
 
 type readOnlyGloasFields interface {

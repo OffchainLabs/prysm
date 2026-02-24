@@ -3,6 +3,7 @@ package state_native
 import (
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -251,6 +252,10 @@ func (b *BeaconState) IncreaseBuilderBalance(index primitives.BuilderIndex, amou
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
+	return b.increaseBuilderBalance(index, amount)
+}
+
+func (b *BeaconState) increaseBuilderBalance(index primitives.BuilderIndex, amount uint64) error {
 	if b.builders == nil || uint64(index) >= uint64(len(b.builders)) {
 		return fmt.Errorf("builder index %d out of bounds", index)
 	}
@@ -284,6 +289,14 @@ func (b *BeaconState) AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
+	return b.addBuilderFromDepositAtEpoch(pubkey, withdrawalCredentials, amount, slots.ToEpoch(b.slot))
+}
+
+func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkeyLength]byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64, depositEpoch primitives.Epoch) error {
+	if b.version < version.Gloas {
+		return errNotSupported("AddBuilderFromDeposit", b.version)
+	}
+
 	currentEpoch := slots.ToEpoch(b.slot)
 	index := b.builderInsertionIndex(currentEpoch)
 
@@ -292,7 +305,7 @@ func (b *BeaconState) AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]
 		Version:           []byte{withdrawalCredentials[0]},
 		ExecutionAddress:  bytesutil.SafeCopyBytes(withdrawalCredentials[12:]),
 		Balance:           primitives.Gwei(amount),
-		DepositEpoch:      currentEpoch,
+		DepositEpoch:      depositEpoch,
 		WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch,
 	}
 
@@ -442,6 +455,135 @@ func (b *BeaconState) UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64
 	newPayment.Weight += weight
 	b.builderPendingPayments[paymentSlot] = newPayment
 	b.markFieldAsDirty(types.BuilderPendingPayments)
+
+	return nil
+}
+
+// OnboardBuildersFromPendingDeposits applies any pending builder deposits at the fork.
+// It mutates the state and prunes pending deposits accordingly.
+//
+//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas">
+//	def onboard_builders_from_pending_deposits(state: BeaconState) -> None:
+//	    """
+//	    Applies any pending deposit for builders, effectively
+//	    onboarding builders at the fork.
+//	    """
+//	    validator_pubkeys = [v.pubkey for v in state.validators]
+//
+//	    pending_deposits = []
+//	    for deposit in state.pending_deposits:
+//	        # Deposits for existing validators stay in pending queue
+//	        if deposit.pubkey in validator_pubkeys:
+//	            pending_deposits.append(deposit)
+//	            continue
+//
+//	        # If the pubkey is associated with a builder that was created in a
+//	        # previous iteration or it is a builder deposit, try to apply the
+//	        # deposit to the new/existing builder. Note that the function
+//	        # apply_deposit_for_builder can mutate the state and may add a builder
+//	        # to the registry. For this reason, the list of builder pubkeys must
+//	        # be recomputed each iteration.
+//	        builder_pubkeys = [b.pubkey for b in state.builders]
+//	        is_existing_builder = deposit.pubkey in builder_pubkeys
+//	        has_builder_credentials = is_builder_withdrawal_credential(deposit.withdrawal_credentials)
+//	        if is_existing_builder or has_builder_credentials:
+//	            apply_deposit_for_builder(
+//	                state,
+//	                deposit.pubkey,
+//	                deposit.withdrawal_credentials,
+//	                deposit.amount,
+//	                deposit.signature,
+//	                deposit.slot,
+//	            )
+//	            continue
+//
+//	        # If there is a pending deposit for a new validator that has a valid
+//	        # signature, track the pubkey so that subsequent builder deposits for
+//	        # the same pubkey stay in pending (applied to the validator later)
+//	        # rather than creating a builder. Deposits with invalid signatures are
+//	        # dropped here since they would fail in apply_pending_deposit anyway.
+//	        if is_valid_deposit_signature(
+//	            deposit.pubkey, deposit.withdrawal_credentials, deposit.amount, deposit.signature
+//	        ):
+//	            validator_pubkeys.append(deposit.pubkey)
+//	            pending_deposits.append(deposit)
+//
+//	    state.pending_deposits = pending_deposits
+//	</spec>
+func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
+	if b.version < version.Gloas {
+		return errNotSupported("OnboardBuildersFromPendingDeposits", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	pendingDeposits := b.pendingDeposits
+	newPendingDeposits := make([]*ethpb.PendingDeposit, 0, len(pendingDeposits))
+	newValidatorPubkeys := make(map[[fieldparams.BLSPubkeyLength]byte]bool)
+
+	for _, deposit := range pendingDeposits {
+		pubkey := bytesutil.ToBytes48(deposit.PublicKey)
+		if _, ok := newValidatorPubkeys[pubkey]; ok {
+			newPendingDeposits = append(newPendingDeposits, deposit)
+			continue
+		}
+		if _, ok := b.validatorIndexByPubkey(pubkey); ok {
+			newPendingDeposits = append(newPendingDeposits, deposit)
+			continue
+		}
+
+		if idx, ok := b.builderIndexByPubkey(pubkey); ok {
+			if err := b.increaseBuilderBalance(idx, deposit.Amount); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if helpers.IsBuilderWithdrawalCredential(deposit.WithdrawalCredentials) {
+			valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
+				PublicKey:             deposit.PublicKey,
+				WithdrawalCredentials: deposit.WithdrawalCredentials,
+				Amount:                deposit.Amount,
+				Signature:             deposit.Signature,
+			})
+			if err != nil {
+				log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Could not verify builder deposit signature")
+				continue
+			}
+			if valid {
+				depositEpoch := slots.ToEpoch(deposit.Slot)
+				if err := b.addBuilderFromDepositAtEpoch(pubkey, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch); err != nil {
+					log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Failed to apply builder deposit")
+					continue
+				}
+			} else {
+				log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Debug("Invalid signature for builder deposit")
+			}
+			continue
+		}
+
+		valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
+			PublicKey:             deposit.PublicKey,
+			WithdrawalCredentials: deposit.WithdrawalCredentials,
+			Amount:                deposit.Amount,
+			Signature:             deposit.Signature,
+		})
+		if err != nil {
+			log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Could not verify validator deposit signature")
+		}
+		if valid {
+			newValidatorPubkeys[pubkey] = true
+			newPendingDeposits = append(newPendingDeposits, deposit)
+		} else {
+			log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Debug("Invalid signature for validator deposit")
+		}
+	}
+
+	b.sharedFieldReferences[types.PendingDeposits].MinusRef()
+	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)
+	b.pendingDeposits = newPendingDeposits
+	b.markFieldAsDirty(types.PendingDeposits)
 
 	return nil
 }

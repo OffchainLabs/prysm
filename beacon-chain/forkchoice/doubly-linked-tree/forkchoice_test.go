@@ -93,9 +93,9 @@ func TestForkChoice_UpdateBalancesPositiveChange(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	f.votes = []Vote{
-		{indexToHash(1), indexToHash(1), 0},
-		{indexToHash(2), indexToHash(2), 0},
-		{indexToHash(3), indexToHash(3), 0},
+		{indexToHash(1), indexToHash(1), 0, 0, true, true},
+		{indexToHash(2), indexToHash(2), 0, 0, true, true},
+		{indexToHash(3), indexToHash(3), 0, 0, true, true},
 	}
 
 	// Each node gets one unique vote. The weight should look like 103 <- 102 <- 101 because
@@ -103,9 +103,9 @@ func TestForkChoice_UpdateBalancesPositiveChange(t *testing.T) {
 	f.justifiedBalances = []uint64{10, 20, 30}
 	require.NoError(t, f.updateBalances())
 	s := f.store
-	assert.Equal(t, uint64(10), s.emptyNodeByRoot[indexToHash(1)].balance)
-	assert.Equal(t, uint64(20), s.emptyNodeByRoot[indexToHash(2)].balance)
-	assert.Equal(t, uint64(30), s.emptyNodeByRoot[indexToHash(3)].balance)
+	assert.Equal(t, uint64(10), s.fullNodeByRoot[indexToHash(1)].balance)
+	assert.Equal(t, uint64(20), s.fullNodeByRoot[indexToHash(2)].balance)
+	assert.Equal(t, uint64(30), s.fullNodeByRoot[indexToHash(3)].balance)
 }
 
 func TestForkChoice_UpdateBalancesNegativeChange(t *testing.T) {
@@ -121,22 +121,22 @@ func TestForkChoice_UpdateBalancesNegativeChange(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 	s := f.store
-	s.emptyNodeByRoot[indexToHash(1)].balance = 100
-	s.emptyNodeByRoot[indexToHash(2)].balance = 100
-	s.emptyNodeByRoot[indexToHash(3)].balance = 100
+	s.fullNodeByRoot[indexToHash(1)].balance = 100
+	s.fullNodeByRoot[indexToHash(2)].balance = 100
+	s.fullNodeByRoot[indexToHash(3)].balance = 100
 
 	f.balances = []uint64{100, 100, 100}
 	f.votes = []Vote{
-		{indexToHash(1), indexToHash(1), 0},
-		{indexToHash(2), indexToHash(2), 0},
-		{indexToHash(3), indexToHash(3), 0},
+		{indexToHash(1), indexToHash(1), 0, 0, true, true},
+		{indexToHash(2), indexToHash(2), 0, 0, true, true},
+		{indexToHash(3), indexToHash(3), 0, 0, true, true},
 	}
 
 	f.justifiedBalances = []uint64{10, 20, 30}
 	require.NoError(t, f.updateBalances())
-	assert.Equal(t, uint64(10), s.emptyNodeByRoot[indexToHash(1)].balance)
-	assert.Equal(t, uint64(20), s.emptyNodeByRoot[indexToHash(2)].balance)
-	assert.Equal(t, uint64(30), s.emptyNodeByRoot[indexToHash(3)].balance)
+	assert.Equal(t, uint64(10), s.fullNodeByRoot[indexToHash(1)].balance)
+	assert.Equal(t, uint64(20), s.fullNodeByRoot[indexToHash(2)].balance)
+	assert.Equal(t, uint64(30), s.fullNodeByRoot[indexToHash(3)].balance)
 }
 
 func TestForkChoice_UpdateBalancesUnderflow(t *testing.T) {
@@ -152,22 +152,22 @@ func TestForkChoice_UpdateBalancesUnderflow(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 	s := f.store
-	s.emptyNodeByRoot[indexToHash(1)].balance = 100
-	s.emptyNodeByRoot[indexToHash(2)].balance = 100
-	s.emptyNodeByRoot[indexToHash(3)].balance = 100
+	s.fullNodeByRoot[indexToHash(1)].balance = 100
+	s.fullNodeByRoot[indexToHash(2)].balance = 100
+	s.fullNodeByRoot[indexToHash(3)].balance = 100
 
 	f.balances = []uint64{125, 125, 125}
 	f.votes = []Vote{
-		{indexToHash(1), indexToHash(1), 0},
-		{indexToHash(2), indexToHash(2), 0},
-		{indexToHash(3), indexToHash(3), 0},
+		{indexToHash(1), indexToHash(1), 0, 0, true, true},
+		{indexToHash(2), indexToHash(2), 0, 0, true, true},
+		{indexToHash(3), indexToHash(3), 0, 0, true, true},
 	}
 
 	f.justifiedBalances = []uint64{10, 20, 30}
 	require.NoError(t, f.updateBalances())
-	assert.Equal(t, uint64(0), s.emptyNodeByRoot[indexToHash(1)].balance)
-	assert.Equal(t, uint64(0), s.emptyNodeByRoot[indexToHash(2)].balance)
-	assert.Equal(t, uint64(5), s.emptyNodeByRoot[indexToHash(3)].balance)
+	assert.Equal(t, uint64(0), s.fullNodeByRoot[indexToHash(1)].balance)
+	assert.Equal(t, uint64(0), s.fullNodeByRoot[indexToHash(2)].balance)
+	assert.Equal(t, uint64(5), s.fullNodeByRoot[indexToHash(3)].balance)
 }
 
 func TestForkChoice_IsCanonical(t *testing.T) {
@@ -332,8 +332,8 @@ func TestForkChoice_RemoveEquivocating(t *testing.T) {
 	require.Equal(t, [32]byte{'c'}, head)
 
 	// Insert two attestations for block b, one for c it becomes head
-	f.ProcessAttestation(ctx, []uint64{1, 2}, [32]byte{'b'}, 1)
-	f.ProcessAttestation(ctx, []uint64{3}, [32]byte{'c'}, 1)
+	f.ProcessAttestation(ctx, []uint64{1, 2}, [32]byte{'b'}, params.BeaconConfig().SlotsPerEpoch, true)
+	f.ProcessAttestation(ctx, []uint64{3}, [32]byte{'c'}, params.BeaconConfig().SlotsPerEpoch, true)
 	f.justifiedBalances = []uint64{100, 200, 200, 300}
 	head, err = f.Head(ctx)
 	require.NoError(t, err)
@@ -341,21 +341,21 @@ func TestForkChoice_RemoveEquivocating(t *testing.T) {
 
 	// Process b's slashing, c is now head
 	f.InsertSlashedIndex(ctx, 1)
-	require.Equal(t, uint64(200), f.store.emptyNodeByRoot[[32]byte{'b'}].balance)
+	require.Equal(t, uint64(200), f.store.fullNodeByRoot[[32]byte{'b'}].balance)
 	f.justifiedBalances = []uint64{100, 200, 200, 300}
 	head, err = f.Head(ctx)
-	require.Equal(t, uint64(200), f.store.emptyNodeByRoot[[32]byte{'b'}].weight)
-	require.Equal(t, uint64(300), f.store.emptyNodeByRoot[[32]byte{'c'}].weight)
+	require.Equal(t, uint64(200), f.store.fullNodeByRoot[[32]byte{'b'}].weight)
+	require.Equal(t, uint64(300), f.store.fullNodeByRoot[[32]byte{'c'}].weight)
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{'c'}, head)
 
 	// Process b's slashing again, should be a noop
 	f.InsertSlashedIndex(ctx, 1)
-	require.Equal(t, uint64(200), f.store.emptyNodeByRoot[[32]byte{'b'}].balance)
+	require.Equal(t, uint64(200), f.store.fullNodeByRoot[[32]byte{'b'}].balance)
 	f.justifiedBalances = []uint64{100, 200, 200, 300}
 	head, err = f.Head(ctx)
-	require.Equal(t, uint64(200), f.store.emptyNodeByRoot[[32]byte{'b'}].weight)
-	require.Equal(t, uint64(300), f.store.emptyNodeByRoot[[32]byte{'c'}].weight)
+	require.Equal(t, uint64(200), f.store.fullNodeByRoot[[32]byte{'b'}].weight)
+	require.Equal(t, uint64(300), f.store.fullNodeByRoot[[32]byte{'c'}].weight)
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{'c'}, head)
 
@@ -709,7 +709,6 @@ func TestForkchoice_UpdateJustifiedBalances(t *testing.T) {
 		return balances, nil
 	}
 	require.NoError(t, f.updateJustifiedBalances(t.Context(), [32]byte{}))
-	require.Equal(t, uint64(7), f.numActiveValidators)
 	require.Equal(t, uint64(430)/32, f.store.committeeWeight)
 	require.DeepEqual(t, balances, f.justifiedBalances)
 }
