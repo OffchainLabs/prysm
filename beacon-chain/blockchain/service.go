@@ -62,6 +62,7 @@ type Service struct {
 	syncComplete                   chan struct{}
 	blobNotifiers                  *blobNotifierMap
 	blockBeingSynced               *currentlySyncingBlock
+	payloadBeingSynced             *currentlySyncingBlock
 	blobStorage                    *filesystem.BlobStorage
 	dataColumnStorage              *filesystem.DataColumnStorage
 	slasherEnabled                 bool
@@ -186,6 +187,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		blobNotifiers:          bn,
 		cfg:                    &config{},
 		blockBeingSynced:       &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
+		payloadBeingSynced:     &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
 		syncCommitteeHeadState: cache.NewSyncCommitteeHeadState(),
 	}
 	for _, opt := range opts {

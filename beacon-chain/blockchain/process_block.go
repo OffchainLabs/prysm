@@ -1001,6 +1001,7 @@ func (s *Service) waitForSync() error {
 	}
 }
 
+// the caller of this function must hold a write lock in forkchoice store.
 func (s *Service) handleInvalidExecutionError(ctx context.Context, err error, blockRoot, parentRoot [32]byte, parentHash [32]byte) error {
 	if IsInvalidBlock(err) && InvalidBlockLVH(err) != [32]byte{} {
 		return s.pruneInvalidBlock(ctx, blockRoot, parentRoot, parentHash, InvalidBlockLVH(err))
