@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -106,8 +107,12 @@ func (vs *Server) GetProposerDutiesV2(ctx context.Context, req *ethpb.ProposerDu
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
 
+	// Epoch 0 always needs genesis root from DB. Epoch 1 also needs it
+	// post-Fulu because V2 uses AttestationDependentRoot which requires epoch > 1.
+	// Pre-Fulu epoch 1 can be computed normally via ProposalDependentRoot.
+	useGenesisRoot := req.Epoch == 0 || (req.Epoch == 1 && s.Version() >= version.Fulu)
 	var dependentRoot []byte
-	if req.Epoch <= 1 {
+	if useGenesisRoot {
 		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get genesis block root: %v", err)
