@@ -1075,7 +1075,7 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 		return nil, err
 	}
 	if st == nil || st.IsNil() {
-		return nil, errors.New("state not found")
+		return nil, errors.Wrap(ErrNotFoundState, "state not found")
 	}
 
 	blk, err := s.Block(ctx, blockRoot)
