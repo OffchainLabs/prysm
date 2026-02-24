@@ -114,7 +114,7 @@ func (vs *Server) GetProposerDutiesV2(ctx context.Context, req *ethpb.ProposerDu
 		}
 		dependentRoot = r[:]
 	} else {
-		dependentRoot, err = core.ProposalDependentRoot(s, req.Epoch)
+		dependentRoot, err = core.ProposalDependentRootV2(s, req.Epoch)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
 		}

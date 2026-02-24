@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
@@ -237,6 +238,7 @@ func AttestationDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]by
 
 // ProposalDependentRoot returns the block root at (epoch start - 1),
 // which is the dependent root for proposer duties at the given epoch.
+// This is the pre-Fulu (v1) calculation used by the REST /eth/v1 endpoint.
 func ProposalDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
 	var dependentRootSlot primitives.Slot
 	if epoch == 0 {
@@ -253,4 +255,16 @@ func ProposalDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte,
 		return nil, errors.Wrap(err, "could not get block root")
 	}
 	return root, nil
+}
+
+// ProposalDependentRootV2 returns the dependent root for proposer duties.
+func ProposalDependentRootV2(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+	if s.Version() >= version.Fulu {
+		// Post-Fulu (EIP-7917) the proposer schedule is deterministic from the
+		// previous epoch's state, so the dependent root is (prev_epoch_start - 1),
+		// matching AttestationDependentRoot. Pre-Fulu it falls back to (epoch_start - 1).
+		// See https://github.com/ethereum/beacon-APIs/pull/563.
+		return AttestationDependentRoot(s, epoch)
+	}
+	return ProposalDependentRoot(s, epoch)
 }
