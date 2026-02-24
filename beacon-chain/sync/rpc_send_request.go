@@ -843,10 +843,7 @@ func SendExecutionPayloadEnvelopesByRootRequest(
 	}
 	defer closeStream(stream, log)
 
-	max := params.BeaconConfig().MaxRequestPayloads
-	if uint64(len(*req)) < max {
-		max = uint64(len(*req))
-	}
+	max := min(uint64(len(*req)), params.BeaconConfig().MaxRequestPayloads)
 
 	// Build multiset of requested roots for validation (tracks remaining expected count per root).
 	pendingRoots := make(map[[32]byte]int, len(*req))
