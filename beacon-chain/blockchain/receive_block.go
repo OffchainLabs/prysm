@@ -95,18 +95,17 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err != nil {
 		return errors.Wrap(err, "block copy")
 	}
-
-	preState, err := s.getBlockPreState(ctx, blockCopy.Block())
-	if err != nil {
-		return errors.Wrap(err, "could not get block's prestate")
-	}
-
-	currentCheckpoints := s.saveCurrentCheckpoints(preState)
 	roblock, err := blocks.NewROBlockWithRoot(blockCopy, blockRoot)
 	if err != nil {
 		return errors.Wrap(err, "new ro block with root")
 	}
 
+	preState, err := s.getBlockPreState(ctx, roblock)
+	if err != nil {
+		return errors.Wrap(err, "could not get block's prestate")
+	}
+
+	currentCheckpoints := s.saveCurrentCheckpoints(preState)
 	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
 	if err != nil {
 		return errors.Wrap(err, "validator execution and consensus")

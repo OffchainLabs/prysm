@@ -19,6 +19,7 @@ go_library(
         "//beacon-chain/builder:go_default_library",
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/feed/operation:go_default_library",
+        "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/operations/attestations:go_default_library",
