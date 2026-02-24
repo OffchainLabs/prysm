@@ -23,29 +23,36 @@ import (
 // UpdateDuties checks the slot number to determine if the validator's
 // list of upcoming assignments needs to be updated. For example, at the
 // beginning of a new epoch.
-func (v *validator) UpdateDuties(ctx context.Context) error {
-	ctx, span := trace.StartSpan(ctx, "validator.UpdateDuties")
-	defer span.End()
-
+// filterBlacklistedKeys returns validating keys with slashable keys removed.
+func (v *validator) filterBlacklistedKeys(ctx context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
 	validatingKeys, err := v.km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	// Filter out the slashable public keys from the duties request.
-	filteredKeys := make([][fieldparams.BLSPubkeyLength]byte, 0, len(validatingKeys))
+	filtered := make([][fieldparams.BLSPubkeyLength]byte, 0, len(validatingKeys))
 	v.blacklistedPubkeysLock.RLock()
+	defer v.blacklistedPubkeysLock.RUnlock()
 	for _, pubKey := range validatingKeys {
-		if ok := v.blacklistedPubkeys[pubKey]; !ok {
-			filteredKeys = append(filteredKeys, pubKey)
-		} else {
+		if v.blacklistedPubkeys[pubKey] {
 			log.WithField(
 				"pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:])),
 			).Warn("Not including slashable public key from slashing protection import " +
 				"in request to update validator duties")
+			continue
 		}
+		filtered = append(filtered, pubKey)
 	}
-	v.blacklistedPubkeysLock.RUnlock()
+	return filtered, nil
+}
+
+func (v *validator) UpdateDuties(ctx context.Context) error {
+	ctx, span := trace.StartSpan(ctx, "validator.UpdateDuties")
+	defer span.End()
+
+	filteredKeys, err := v.filterBlacklistedKeys(ctx)
+	if err != nil {
+		return err
+	}
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
 
 	if epoch >= params.BeaconConfig().GloasForkEpoch {
@@ -241,24 +248,32 @@ func (v *validator) fetchProposerDuties(
 		return cached, nil
 	}
 
-	// Cache miss — fetch current epoch.
-	current, err := v.validatorClient.ProposerDuties(ctx, epoch)
-	if err != nil {
-		return nil, err
-	}
-
-	entry := &proposerDutiesCacheEntry{current: current, epoch: epoch}
-
-	// Post-Fulu: next-epoch proposer schedule is deterministic.
+	// Cache miss — fetch current (and next post-Fulu) in parallel.
+	var (
+		current, next *ethpb.ProposerDutiesResponse
+		currErr       error
+		nextErr       error
+		wg            sync.WaitGroup
+	)
+	wg.Go(func() {
+		current, currErr = v.validatorClient.ProposerDuties(ctx, epoch)
+	})
 	if epoch >= params.BeaconConfig().FuluForkEpoch {
-		next, nextErr := v.validatorClient.ProposerDuties(ctx, epoch+1)
-		if nextErr != nil {
-			log.WithError(nextErr).Debug("Could not get next epoch proposer duties")
-		} else {
-			entry.next = next
-		}
+		wg.Go(func() {
+			next, nextErr = v.validatorClient.ProposerDuties(ctx, epoch+1)
+		})
 	}
+	wg.Wait()
 
+	if currErr != nil {
+		return nil, currErr
+	}
+	entry := &proposerDutiesCacheEntry{current: current, epoch: epoch}
+	if nextErr != nil {
+		log.WithError(nextErr).Debug("Could not get next epoch proposer duties")
+	} else {
+		entry.next = next
+	}
 	return entry, nil
 }
 
