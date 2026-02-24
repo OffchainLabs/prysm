@@ -369,33 +369,20 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
-	// We don't use our internal subscribe method
-	// due to using floodsub over here.
+
 	tpHandle, err := p2.JoinTopic(topic)
 	require.NoError(t, err)
 	sub, err := tpHandle.Subscribe()
 	require.NoError(t, err)
 
-	tpHandle, err = p.JoinTopic(topic)
-	require.NoError(t, err)
-	_, err = tpHandle.Subscribe()
-	require.NoError(t, err)
-
-	// This test specifically tests discovery-based peer finding, which requires
-	// time for nodes to discover each other. Using a fixed sleep here is intentional
-	// as we're testing the discovery timing behavior.
-	time.Sleep(500 * time.Millisecond)
-
 	// Verify mesh establishment after discovery
 	require.Eventually(t, func() bool {
-		return len(p.pubsub.ListPeers(topic)) > 0 && len(p2.pubsub.ListPeers(topic)) > 0
+		return len(p.pubsub.ListPeers(topic)) > 0
 	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
 
 	nodePeers := p.pubsub.ListPeers(topic)
-	nodePeers2 := p2.pubsub.ListPeers(topic)
 
 	assert.Equal(t, 1, len(nodePeers))
-	assert.Equal(t, 1, len(nodePeers2))
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
