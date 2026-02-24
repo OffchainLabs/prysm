@@ -223,6 +223,14 @@ func TestService_BroadcastAttestation(t *testing.T) {
 	}
 }
 
+func getEventHandler(t *testing.T, s *Service, topic string) *pubsub.TopicEventHandler {
+	th, err := s.JoinTopic(topic)
+	require.NoError(t, err)
+	ev, err := th.EventHandler()
+	require.NoError(t, err)
+	return ev
+}
+
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	const port = uint(2000)
 
@@ -370,19 +378,17 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
 
+	ev := getEventHandler(t, p, topic)
+
 	tpHandle, err := p2.JoinTopic(topic)
 	require.NoError(t, err)
 	sub, err := tpHandle.Subscribe()
 	require.NoError(t, err)
 
-	// Verify mesh establishment after discovery
-	require.Eventually(t, func() bool {
-		return len(p.pubsub.ListPeers(topic)) > 0
-	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
-
-	nodePeers := p.pubsub.ListPeers(topic)
-
-	assert.Equal(t, 1, len(nodePeers))
+	pe, err := ev.NextPeerEvent(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, pe.Peer, p2.PeerID())
+	require.Equal(t, pe.Type, pubsub.PeerJoin)
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
