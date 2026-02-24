@@ -210,9 +210,7 @@ func (s BlobSidecarsByRootReq) Len() int {
 	return len(s)
 }
 
-// ================================================
 // ExecutionPayloadEnvelopesByRootReq section
-// ================================================
 
 // ExecutionPayloadEnvelopesByRootReq specifies the execution payload envelopes by roots request type.
 type ExecutionPayloadEnvelopesByRootReq [][fieldparams.RootLength]byte
@@ -263,6 +261,11 @@ func (r *ExecutionPayloadEnvelopesByRootReq) UnmarshalSSZ(buf []byte) error {
 	}
 	*r = roots
 	return nil
+}
+
+// Len returns the number of roots in the request.
+func (r ExecutionPayloadEnvelopesByRootReq) Len() int {
+	return len(r)
 }
 
 // ====================================

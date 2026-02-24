@@ -1,3 +1,3 @@
 ### Added
 
-- Added ExecutionPayloadByRoot in gloas
+- Added ExecutionPayloadEnvelopesByRoot RPC method for Gloas
