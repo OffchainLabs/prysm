@@ -60,9 +60,9 @@ import (
 var _ runtime.Service = (*Service)(nil)
 
 const (
-	rangeLimit                        uint64 = 1024
-	seenBlockSize                     uint64 = 1000
-	seenPayloadEnvelopeSize           uint64 = 1000
+	rangeLimit                               = 1024
+	seenBlockSize                            = 1000
+	seenPayloadEnvelopeSize                  = 1000
 	// executionPayloadEnvelopeCacheSize is the number of full execution payload envelopes to keep in memory
 	// for serving ExecutionPayloadEnvelopesByRoot RPC requests.
 	// When persistent full-envelope storage will be added, this cache becomes a fast-path optimization.
