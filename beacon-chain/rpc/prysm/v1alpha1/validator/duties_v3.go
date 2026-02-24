@@ -107,7 +107,7 @@ func (vs *Server) GetProposerDutiesV2(ctx context.Context, req *ethpb.ProposerDu
 	}
 
 	var dependentRoot []byte
-	if req.Epoch == 0 {
+	if req.Epoch <= 1 {
 		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get genesis block root: %v", err)

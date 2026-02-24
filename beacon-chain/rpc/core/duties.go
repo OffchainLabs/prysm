@@ -218,18 +218,16 @@ func syncDutyStatus(st state.BeaconState, idx primitives.ValidatorIndex) validat
 
 // AttestationDependentRoot returns the block root at (epoch-1 start - 1),
 // which is the dependent root for attester duties at the given epoch.
+// Callers must handle epoch <= 1 separately (e.g. using the genesis block root from the DB).
 func AttestationDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
-	var dependentRootSlot primitives.Slot
 	if epoch <= 1 {
-		dependentRootSlot = 0
-	} else {
-		prevEpochStartSlot, err := slots.EpochStart(epoch.Sub(1))
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
-		}
-		dependentRootSlot = prevEpochStartSlot.Sub(1)
+		return nil, errors.New("epoch <= 1 requires genesis block root from DB")
 	}
-	root, err := helpers.BlockRootAtSlot(s, dependentRootSlot)
+	prevEpochStartSlot, err := slots.EpochStart(epoch.Sub(1))
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
+	}
+	root, err := helpers.BlockRootAtSlot(s, prevEpochStartSlot.Sub(1))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get block root")
 	}
@@ -239,18 +237,16 @@ func AttestationDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]by
 // ProposalDependentRoot returns the block root at (epoch start - 1),
 // which is the dependent root for proposer duties at the given epoch.
 // This is the pre-Fulu (v1) calculation used by the REST /eth/v1 endpoint.
+// Callers must handle epoch 0 separately (e.g. using the genesis block root from the DB).
 func ProposalDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
-	var dependentRootSlot primitives.Slot
 	if epoch == 0 {
-		dependentRootSlot = 0
-	} else {
-		epochStartSlot, err := slots.EpochStart(epoch)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
-		}
-		dependentRootSlot = epochStartSlot.Sub(1)
+		return nil, errors.New("epoch 0 requires genesis block root from DB")
 	}
-	root, err := helpers.BlockRootAtSlot(s, dependentRootSlot)
+	epochStartSlot, err := slots.EpochStart(epoch)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
+	}
+	root, err := helpers.BlockRootAtSlot(s, epochStartSlot.Sub(1))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get block root")
 	}
