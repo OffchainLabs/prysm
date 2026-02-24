@@ -501,8 +501,11 @@ func TestFilterSubnetPeers(t *testing.T) {
 	p.Connect(p2)
 	p.Connect(p3)
 
-	// Sleep a while to allow peers to connect.
-	time.Sleep(100 * time.Millisecond)
+	// wait for these newly connected peers to be registered against their topics in pubsub.
+	require.Eventually(t, func() bool {
+		return len(p.PubSub().ListPeers(subnet10)) == 2 &&
+			len(p.PubSub().ListPeers(subnet20)) == 1
+	}, 1*time.Second, 100*time.Millisecond)
 
 	wantedPeers := []peer.ID{p1.PeerID(), p2.PeerID(), p3.PeerID()}
 	// Expect Peer 3 to be marked as suitable.
@@ -516,7 +519,9 @@ func TestFilterSubnetPeers(t *testing.T) {
 		nPeer := createPeer(t, subnet20)
 		p.Connect(nPeer)
 		wantedPeers = append(wantedPeers, nPeer.BHost.ID())
-		time.Sleep(100 * time.Millisecond)
+		require.Eventually(t, func() bool {
+			return len(p.PubSub().ListPeers(subnet20)) == 1+i
+		}, 1*time.Second, 100*time.Millisecond)
 	}
 
 	recPeers = r.filterNeededPeers(wantedPeers)

@@ -227,7 +227,7 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 	require.Eventually(t, func() bool {
 		nodes = lastListener.Lookup(bootNode.ID())
 		return len(nodes) > 4
-	}, 5*time.Second, 10*time.Millisecond, fmt.Errorf("The node's local table doesn't have the expected number of nodes. "+
+	}, 10*time.Second, 100*time.Millisecond, fmt.Errorf("The node's local table doesn't have the expected number of nodes. "+
 		"Expected more than or equal to %d but got %d", 4, len(nodes)))
 }
 
