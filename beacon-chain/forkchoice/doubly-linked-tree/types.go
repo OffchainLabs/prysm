@@ -13,12 +13,11 @@ import (
 // ForkChoice defines the overall fork choice store which includes all block nodes, validator's latest votes and balances.
 type ForkChoice struct {
 	sync.RWMutex
-	store               *Store
-	votes               []Vote                      // tracks individual validator's last vote.
-	balances            []uint64                    // tracks individual validator's balances last accounted in votes.
-	justifiedBalances   []uint64                    // tracks individual validator's last justified balances.
-	numActiveValidators uint64                      // tracks the total number of active validators.
-	balancesByRoot      forkchoice.BalancesByRooter // handler to obtain balances for the state with a given root
+	store             *Store
+	votes             []Vote                      // tracks individual validator's last vote.
+	balances          []uint64                    // tracks individual validator's balances last accounted in votes.
+	justifiedBalances []uint64                    // tracks individual validator's last justified balances.
+	balancesByRoot    forkchoice.BalancesByRooter // handler to obtain balances for the state with a given root
 }
 
 var _ forkchoice.ForkChoicer = (*ForkChoice)(nil)
@@ -78,7 +77,10 @@ type PayloadNode struct {
 
 // Vote defines an individual validator's vote.
 type Vote struct {
-	currentRoot [fieldparams.RootLength]byte // current voting root.
-	nextRoot    [fieldparams.RootLength]byte // next voting root.
-	nextEpoch   primitives.Epoch             // epoch of next voting period.
+	currentRoot          [fieldparams.RootLength]byte // current voting root.
+	nextRoot             [fieldparams.RootLength]byte // next voting root.
+	nextSlot             primitives.Slot              // slot of the next voting period.
+	currentSlot          primitives.Slot              // slot of the current voting period.
+	nextPayloadStatus    bool                         // whether the next vote is for a full or empty payload
+	currentPayloadStatus bool                         // whether the current vote is for a full or empty payload
 }

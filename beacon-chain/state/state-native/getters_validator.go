@@ -139,6 +139,11 @@ func (b *BeaconState) ValidatorIndexByPubkey(key [fieldparams.BLSPubkeyLength]by
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
+	return b.validatorIndexByPubkey(key)
+}
+
+// Lock free version of ValidatorIndexByPubkey. This assumes that a lock is already held on BeaconState.
+func (b *BeaconState) validatorIndexByPubkey(key [fieldparams.BLSPubkeyLength]byte) (primitives.ValidatorIndex, bool) {
 	numOfVals := b.validatorsMultiValue.Len(b)
 
 	idx, ok := b.valMapHandler.Get(key)

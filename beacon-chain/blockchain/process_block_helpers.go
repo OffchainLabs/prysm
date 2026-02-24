@@ -38,23 +38,26 @@ func (s *Service) CurrentSlot() primitives.Slot {
 }
 
 // getFCUArgs returns the arguments to call forkchoice update
-func (s *Service) getFCUArgs(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
-	if err := s.getFCUArgsEarlyBlock(cfg, fcuArgs); err != nil {
-		return err
+func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) (*fcuConfig, error) {
+
+	fcuArgs, err := s.getFCUArgsEarlyBlock(cfg)
+	if err != nil {
+		return nil, err
 	}
 	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:])
-	return nil
+	return fcuArgs, nil
 }
 
-func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
+func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
 	if cfg.roblock.Root() == cfg.headRoot {
-		fcuArgs.headState = cfg.postState
-		fcuArgs.headBlock = cfg.roblock
-		fcuArgs.headRoot = cfg.headRoot
-		fcuArgs.proposingSlot = s.CurrentSlot() + 1
-		return nil
+		return &fcuConfig{
+			headState:     cfg.postState,
+			headBlock:     cfg.roblock,
+			headRoot:      cfg.headRoot,
+			proposingSlot: s.CurrentSlot() + 1,
+		}, nil
 	}
-	return s.fcuArgsNonCanonicalBlock(cfg, fcuArgs)
+	return s.fcuArgsNonCanonicalBlock(cfg)
 }
 
 // logNonCanonicalBlockReceived prints a message informing that the received
@@ -79,16 +82,17 @@ func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]
 
 // fcuArgsNonCanonicalBlock returns the arguments to the FCU call when the
 // incoming block is non-canonical, that is, based on the head root.
-func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
+func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
 	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fcuArgs.headState = headState
-	fcuArgs.headBlock = headBlock
-	fcuArgs.headRoot = cfg.headRoot
-	fcuArgs.proposingSlot = s.CurrentSlot() + 1
-	return nil
+	return &fcuConfig{
+		headState:     headState,
+		headBlock:     headBlock,
+		headRoot:      cfg.headRoot,
+		proposingSlot: s.CurrentSlot() + 1,
+	}, nil
 }
 
 // sendStateFeedOnBlock sends an event that a new block has been synced
@@ -192,33 +196,37 @@ func reportProcessingTime(startTime time.Time) {
 // getBlockPreState returns the pre state of an incoming block. It uses the parent root of the block
 // to retrieve the state in DB. It verifies the pre state's validity and the incoming block
 // is in the correct time window.
-func (s *Service) getBlockPreState(ctx context.Context, b interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+func (s *Service) getBlockPreState(ctx context.Context, b consensus_blocks.ROBlock) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.getBlockPreState")
 	defer span.End()
 
+	accessRoot, err := s.getLookupParentRoot(b)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get lookup parent root")
+	}
 	// Verify incoming block has a valid pre state.
-	if err := s.verifyBlkPreState(ctx, b.ParentRoot()); err != nil {
+	if err := s.verifyBlkPreState(ctx, accessRoot); err != nil {
 		return nil, err
 	}
 
-	preState, err := s.cfg.StateGen.StateByRoot(ctx, b.ParentRoot())
+	bl := b.Block()
+	preState, err := s.cfg.StateGen.StateByRoot(ctx, accessRoot)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not get pre state for slot %d", b.Slot())
+		return nil, errors.Wrapf(err, "could not get pre state for slot %d", bl.Slot())
 	}
 	if preState == nil || preState.IsNil() {
-		return nil, errors.Wrapf(err, "nil pre state for slot %d", b.Slot())
+		return nil, errors.Wrapf(err, "nil pre state for slot %d", bl.Slot())
 	}
 
 	// Verify block slot time is not from the future.
-	if err := slots.VerifyTime(s.genesisTime, b.Slot(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
+	if err := slots.VerifyTime(s.genesisTime, bl.Slot(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
 		return nil, err
 	}
 
 	// Verify block is later than the finalized epoch slot.
-	if err := s.verifyBlkFinalizedSlot(b); err != nil {
+	if err := s.verifyBlkFinalizedSlot(bl); err != nil {
 		return nil, err
 	}
-
 	return preState, nil
 }
 

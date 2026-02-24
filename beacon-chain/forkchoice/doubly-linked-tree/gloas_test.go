@@ -267,6 +267,37 @@ func TestGloasBlock_ChildrenOfEmptyAndFull(t *testing.T) {
 	require.Equal(t, fullA, nodeC.node.parent)
 }
 
+func TestBlockHash_ReturnsBlockHash(t *testing.T) {
+	f := setup(0, 0)
+	ctx := t.Context()
+
+	root := indexToHash(1)
+	blockHash := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, root, params.BeaconConfig().ZeroHash, blockHash, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	got, err := f.BlockHash(root)
+	require.NoError(t, err)
+	assert.Equal(t, blockHash, got)
+}
+
+func TestBlockHash_UnknownRoot(t *testing.T) {
+	f := setup(0, 0)
+
+	unknownRoot := indexToHash(999)
+	_, err := f.BlockHash(unknownRoot)
+	require.ErrorContains(t, ErrNilNode.Error(), err)
+}
+
+func TestBlockHash_GenesisRoot(t *testing.T) {
+	f := setup(0, 0)
+
+	got, err := f.BlockHash(params.BeaconConfig().ZeroHash)
+	require.NoError(t, err)
+	assert.Equal(t, [32]byte{}, got)
+}
+
 func TestGloasBlock_ChildBuildsOnFull(t *testing.T) {
 	f := setup(0, 0)
 	ctx := t.Context()
