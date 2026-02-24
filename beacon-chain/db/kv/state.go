@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/genesis"
@@ -1053,8 +1054,9 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 		return nil, err
 	}
 	var slot primitives.Slot
+	var blk interfaces.ReadOnlySignedBeaconBlock
 	if stateSummary == nil {
-		blk, err := s.Block(ctx, blockRoot)
+		blk, err = s.Block(ctx, blockRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -1078,9 +1080,11 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 		return nil, errors.Wrap(ErrNotFoundState, "state not found")
 	}
 
-	blk, err := s.Block(ctx, blockRoot)
-	if err != nil {
-		return nil, err
+	if blk == nil {
+		blk, err = s.Block(ctx, blockRoot)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if blk == nil || blk.IsNil() {
 		// Existing databases may have state summaries without corresponding blocks.
