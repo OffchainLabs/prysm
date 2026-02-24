@@ -337,6 +337,7 @@ func TestGloasHeadComputation(t *testing.T) {
 	s := f.store
 	ctx := t.Context()
 	balances := make([]uint64, 64)
+	// 10 validators with balance 10: proposer boost = 8
 	for i := range balances {
 		balances[i] = 10
 	}
@@ -364,18 +365,18 @@ func TestGloasHeadComputation(t *testing.T) {
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, rootA, headRoot)
-	hn := s.choosePayloadContent(s.headNode)
-	require.NotNil(t, hn)
-	require.Equal(t, false, hn.full)
-	assert.Equal(t, uint64(8), s.headNode.weight)
+	emptyA := s.choosePayloadContent(s.headNode)
+	require.NotNil(t, emptyA)
+	require.Equal(t, false, emptyA.full)
+	assert.Equal(t, uint64(8), s.headNode.weight) // head node has proposer boost
 	assert.Equal(t, uint64(8), s.headNode.balance)
-	assert.Equal(t, uint64(0), hn.balance)
-	assert.Equal(t, uint64(0), hn.weight)
+	assert.Equal(t, uint64(0), emptyA.balance) // The empty node does not get proposer boost, just the pending one
+	assert.Equal(t, uint64(0), emptyA.weight)
 
 	// Insert payload for A, head is still A.
 	//   genesis(full)
 	//       |
-	//      A(empty)
+	//      A(pending)
 	//       |
 	//      A(full) <- head
 	payloadDelay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
@@ -387,24 +388,33 @@ func TestGloasHeadComputation(t *testing.T) {
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, rootA, headRoot)
-	hn = s.choosePayloadContent(s.headNode)
-	require.NotNil(t, hn)
-	require.Equal(t, true, hn.full)
+	fullA := s.choosePayloadContent(s.headNode)
+	require.NotNil(t, fullA)
+	require.Equal(t, true, fullA.full)
+	assert.Equal(t, uint64(8), s.headNode.weight) // head node still has proposer boost
+	assert.Equal(t, uint64(8), s.headNode.balance)
+	assert.Equal(t, uint64(0), fullA.balance) // The full node does not get proposer boost, just the pending one
+	assert.Equal(t, uint64(0), fullA.weight)
 
 	// We move to the next slot. full remains head
 	slotB := slotA + 1
 	driftGenesisTime(f, slotB, 0)
+	require.NoError(t, f.NewSlot(ctx, slotB))
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, rootA, headRoot)
-	hn = s.choosePayloadContent(s.headNode)
-	require.NotNil(t, hn)
-	require.Equal(t, true, hn.full)
+	fullA = s.choosePayloadContent(s.headNode)
+	require.NotNil(t, fullA)
+	require.Equal(t, true, fullA.full)
+	assert.Equal(t, uint64(0), s.headNode.weight) // head node no longer has proposer boost
+	assert.Equal(t, uint64(0), s.headNode.balance)
+	assert.Equal(t, uint64(0), fullA.balance)
+	assert.Equal(t, uint64(0), fullA.weight)
 
 	// Insert block B at slotB, building on full A.
 	//   genesis(full)
 	//       |
-	//      A(empty)
+	//      A(pending)
 	//       |
 	//      A(full)
 	//       |
@@ -418,24 +428,189 @@ func TestGloasHeadComputation(t *testing.T) {
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, rootB, headRoot)
-	hn = s.choosePayloadContent(s.headNode)
-	require.NotNil(t, hn)
-	require.Equal(t, false, hn.full)
+	emptyB := s.choosePayloadContent(s.headNode)
+	require.NotNil(t, emptyB)
+	require.Equal(t, false, emptyB.full)
+	assert.Equal(t, uint64(8), s.headNode.weight) // head node has now proposer boost
+	assert.Equal(t, uint64(8), s.headNode.balance)
+	assert.Equal(t, uint64(0), emptyB.balance)
+	assert.Equal(t, uint64(0), emptyB.weight)
+	assert.Equal(t, s.headNode.parent, fullA) // parent of head is full A
+	assert.Equal(t, uint64(0), fullA.weight)  // the parent does not inherit proposer boost
+	assert.Equal(t, uint64(0), fullA.balance)
+	assert.Equal(t, uint64(0), fullA.node.balance)
+	assert.Equal(t, uint64(0), emptyA.weight)     // neither does the empty block of A
+	assert.Equal(t, uint64(8), fullA.node.weight) // The pending parent does get proposer boost
 
 	// Process an attestation for rootA at slotB, voting empty (payloadStatus=false).
 	attesters := []uint64{0}
 	f.ProcessAttestation(ctx, attesters, rootA, slotB, false)
-	_, err = f.Head(ctx)
+	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
+	assert.Equal(t, rootA, headRoot) // head should now switch back to A since it has the attestation vote
+	hn := s.choosePayloadContent(s.headNode)
+	assert.Equal(t, emptyA, hn)
 
-	emptyA := s.emptyNodeByRoot[rootA]
-	require.NotNil(t, emptyA)
-	fullA := s.fullNodeByRoot[rootA]
-	require.NotNil(t, fullA)
 	assert.Equal(t, uint64(10), emptyA.balance)
-	assert.NotEqual(t, uint64(0), emptyA.weight)
+	assert.Equal(t, uint64(10), emptyA.weight)
 	assert.Equal(t, uint64(0), fullA.balance)
 	assert.Equal(t, uint64(0), fullA.weight)
+	assert.Equal(t, uint64(18), emptyA.node.weight) // Pending node of A has proposer boost and 1 vote supporting it.
+	assert.Equal(t, uint64(0), emptyA.node.balance)
+	assert.Equal(t, uint64(0), fullA.weight)  // Full node of A has no proposer boost and no votes.
+	assert.Equal(t, uint64(0), fullA.balance) // Full node of A has no proposer boost and no votes.
+
+	// Process an attestation for rootA at slotB, voting full (payloadStatus=true).
+	attesters = []uint64{1}
+	f.ProcessAttestation(ctx, attesters, rootA, slotB, true)
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, rootB, headRoot) // head now switches to B pending
+	hn = s.choosePayloadContent(s.headNode)
+	assert.Equal(t, emptyB, hn)
+
+	assert.Equal(t, uint64(10), emptyA.balance)
+	assert.Equal(t, uint64(10), emptyA.weight)
+	assert.Equal(t, uint64(10), fullA.balance)
+	assert.Equal(t, uint64(10), fullA.weight)
+	assert.Equal(t, uint64(28), emptyA.node.weight)
+	assert.Equal(t, uint64(0), emptyA.node.balance)
+	assert.Equal(t, uint64(8), emptyB.node.weight) // empty B has proposer boost but no votes
+
+	// Move to next slot, head should still be B but without proposer boost.
+	slotC := slotB + 1
+	driftGenesisTime(f, slotC, 0)
+	require.NoError(t, f.NewSlot(ctx, slotC))
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootB, headRoot)
+	hn = s.choosePayloadContent(s.headNode)
+	require.Equal(t, emptyB, hn)
+
+	assert.Equal(t, uint64(0), emptyB.node.weight) // head node no longer has proposer boost
+	assert.Equal(t, uint64(0), emptyB.node.balance)
+
+	assert.Equal(t, uint64(10), emptyA.balance) // empty A still has the vote from the attestation
+	assert.Equal(t, uint64(10), emptyA.weight)
+	assert.Equal(t, uint64(10), fullA.balance)
+	assert.Equal(t, uint64(10), fullA.weight)
+	assert.Equal(t, uint64(20), emptyA.node.weight)
+	assert.Equal(t, uint64(0), emptyA.node.balance)
+
+	// Insert block C at slotC, building on empty B (no full B exists).
+	//   genesis(full)
+	//       |
+	//      A(pending)
+	//      /       \
+	//   A(empty)  A(full)
+	//              |
+	//            B(pending)
+	//              |
+	//            B(empty)
+	//              |
+	//            C(pending)
+	//              |
+	//            C(empty) <- head
+	rootC := indexToHash(3)
+	blockHashC := indexToHash(300)
+	nonMatchingHash := indexToHash(999)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotC, rootC, rootB, blockHashC, nonMatchingHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootC, headRoot)
+	emptyC := s.choosePayloadContent(s.headNode)
+	require.NotNil(t, emptyC)
+	require.Equal(t, false, emptyC.full)
+	assert.Equal(t, uint64(8), s.headNode.weight)
+
+	assert.Equal(t, uint64(0), emptyB.weight)
+	assert.Equal(t, uint64(8), emptyB.node.weight)
+
+	assert.Equal(t, uint64(10), emptyA.weight)
+	assert.Equal(t, uint64(18), fullA.weight)
+	assert.Equal(t, uint64(28), emptyA.node.weight)
+
+	// Insert payload for C, head should be C full.
+	pe, err = prepareGloasForkchoicePayload(rootC)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootC, headRoot)
+	fullC := s.choosePayloadContent(s.headNode)
+	require.NotNil(t, fullC)
+	require.Equal(t, true, fullC.full)
+
+	// Move to slot D, insert block D building on C empty (not C full).
+	// D has proposer boost but C full should still be head because
+	// shouldExtendPayload returns true (D builds on empty C, not full C).
+	slotD := slotC + 1
+	driftGenesisTime(f, slotD, 0)
+	require.NoError(t, f.NewSlot(ctx, slotD))
+	rootD := indexToHash(4)
+	blockHashD := indexToHash(400)
+	nonMatchingHashD := indexToHash(998)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotD, rootD, rootC, blockHashD, nonMatchingHashD, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, rootD, headRoot)
+	emptyD := s.emptyNodeByRoot[rootD]
+	require.NotNil(t, emptyD)
+	hn = s.choosePayloadContent(s.headNode)
+	assert.Equal(t, emptyD, hn)
+
+	assert.Equal(t, uint64(0), emptyD.weight)
+	assert.Equal(t, uint64(8), emptyD.node.weight)
+
+	assert.Equal(t, uint64(0), emptyC.weight)
+	assert.Equal(t, uint64(0), fullC.weight)
+	assert.Equal(t, uint64(8), emptyC.node.weight)
+
+	// Set full PTC votes for C's payload. Head is still D
+	for i := range uint64(fieldparams.PTCSize) {
+		emptyC.node.setPayloadAvailabilityVote(i)
+	}
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootD, headRoot)
+
+	// Set data availability votes now for C, head should become C full
+	for i := range uint64(fieldparams.PTCSize) {
+		emptyC.node.setPayloadDataAvailabilityVote(i)
+	}
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, rootC, headRoot)
+	hn = s.choosePayloadContent(s.headNode)
+	assert.Equal(t, fullC, hn) // C full is head, D cannot reorg the payload even though it has proposer boost.
+
+	// Process an attestations for rootD this is the current slot. Three evil validators and 4 honest ones for full C.
+	attesters = []uint64{2, 3, 4}
+	f.ProcessAttestation(ctx, attesters, rootD, slotD, false)
+	attesters = []uint64{5, 6, 7, 8}
+	f.ProcessAttestation(ctx, attesters, rootC, slotD, true)
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, rootC, headRoot) // C is still head, D cannot reorg the payload even with the attestation votes.
+	hn = s.choosePayloadContent(s.headNode)
+	require.Equal(t, fullC, hn)
+
+	assert.Equal(t, uint64(0), emptyD.weight)
+	assert.Equal(t, uint64(38), emptyD.node.weight)
+
+	assert.Equal(t, uint64(30), emptyC.weight) // No PB to the empty and full nodes, just the pending one
+	assert.Equal(t, uint64(40), fullC.weight)
+	assert.Equal(t, uint64(78), emptyC.node.weight)
+
+	assert.Equal(t, uint64(78), emptyB.weight)
 }
 
 func TestShouldExtendPayload(t *testing.T) {
@@ -560,20 +735,35 @@ func TestChoosePayloadContent(t *testing.T) {
 	fullA := f.store.fullNodeByRoot[rootA]
 	require.NotNil(t, fullA)
 
-	t.Run("not previous slot returns full", func(t *testing.T) {
+	t.Run("full has more weight returns full", func(t *testing.T) {
+		fullA.weight = 10
+		emptyA.weight = 5
+		assert.Equal(t, fullA, f.store.choosePayloadContent(n))
+		fullA.weight = 0
+		emptyA.weight = 0
+	})
+
+	t.Run("empty has more weight returns empty", func(t *testing.T) {
+		fullA.weight = 5
+		emptyA.weight = 10
+		assert.Equal(t, emptyA, f.store.choosePayloadContent(n))
+		fullA.weight = 0
+		emptyA.weight = 0
+	})
+
+	t.Run("equal weight not previous slot returns full", func(t *testing.T) {
 		driftGenesisTime(f, 3, 0)
 		assert.Equal(t, fullA, f.store.choosePayloadContent(n))
 	})
 
-	t.Run("previous slot with extend returns full", func(t *testing.T) {
+	t.Run("equal weight previous slot with extend returns full", func(t *testing.T) {
 		driftGenesisTime(f, 2, 0)
 		f.store.proposerBoostRoot = [32]byte{}
 		assert.Equal(t, fullA, f.store.choosePayloadContent(n))
 	})
 
-	t.Run("previous slot without extend returns empty", func(t *testing.T) {
+	t.Run("equal weight previous slot without extend returns empty", func(t *testing.T) {
 		driftGenesisTime(f, 2, 0)
-		// Build a child on empty A so shouldExtendPayload returns false.
 		rootB := indexToHash(2)
 		blockHashB := indexToHash(200)
 		nonMatchingHash := indexToHash(999)

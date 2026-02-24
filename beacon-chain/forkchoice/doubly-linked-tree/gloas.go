@@ -257,6 +257,11 @@ func (s *Store) choosePayloadContent(n *Node) *PayloadNode {
 	if fn == nil {
 		return en
 	}
+	if fn.weight > en.weight {
+		return fn
+	} else if fn.weight < en.weight {
+		return en
+	}
 	if !previousSlot || s.shouldExtendPayload(fn) {
 		return fn
 	}
