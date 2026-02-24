@@ -196,6 +196,7 @@ go_test(
         "construct_generic_block_test.go",
         "duties_test.go",
         "duties_v2_test.go",
+        "duties_v3_test.go",
         "exit_test.go",
         "proposer_altair_test.go",
         "proposer_attestations_electra_test.go",
