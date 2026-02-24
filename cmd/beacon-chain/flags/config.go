@@ -144,7 +144,7 @@ func validateStateDiffExponents(exponents []int) error {
 	prev := MaxStateDiffExponent + 1
 	for _, exp := range exponents {
 		if exp >= prev {
-			return errors.New("state diff exponents must be in strictly decreasing order, and each exponent must be <= 30")
+			return fmt.Errorf("state diff exponents must be in strictly decreasing order, and each exponent must be <= %d", MaxStateDiffExponent)
 		}
 		prev = exp
 	}
