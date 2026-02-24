@@ -67,7 +67,7 @@ func decodeStateDiffExponents(encoded []byte) ([]int, error) {
 			return nil, fmt.Errorf("state diff exponent out of range when decoding: got %d, expected between %d and %d", exp, flags.MinStateDiffExponent, flags.MaxStateDiffExponent)
 		}
 		if exp >= prev {
-			return nil, errors.New("state diff exponents must be in strictly decreasing order, and each exponent must be <= 30")
+			return nil, fmt.Errorf("state diff exponents must be in strictly decreasing order, and each exponent must be <= %d", flags.MaxStateDiffExponent)
 		}
 		exponents[i] = exp
 		prev = exp
