@@ -1313,7 +1313,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = r[:]
 	} else {
-		dependentRoot, err = attestationDependentRoot(st, requestedEpoch)
+		dependentRoot, err = core.AttestationDependentRoot(st, requestedEpoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
