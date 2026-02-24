@@ -41,17 +41,17 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 	// Gloas: https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/p2p-interface.md#messages
 	if forkIndex >= version.Gloas {
 		return map[string]rpcHandler{
-			p2p.RPCStatusTopicV2:                              s.statusRPCHandler,
-			p2p.RPCGoodByeTopicV1:                             s.goodbyeRPCHandler,
-			p2p.RPCBlocksByRangeTopicV2:                       s.beaconBlocksByRangeRPCHandler,
-			p2p.RPCBlocksByRootTopicV2:                        s.beaconBlocksRootRPCHandler,
-			p2p.RPCPingTopicV1:                                s.pingHandler,
-			p2p.RPCMetaDataTopicV3:                            s.metaDataHandler,
-			p2p.RPCBlobSidecarsByRootTopicV1:                  s.blobSidecarByRootRPCHandler,
-			p2p.RPCBlobSidecarsByRangeTopicV1:                 s.blobSidecarsByRangeRPCHandler,
-			p2p.RPCDataColumnSidecarsByRootTopicV1:            s.dataColumnSidecarByRootRPCHandler,
-			p2p.RPCDataColumnSidecarsByRangeTopicV1:           s.dataColumnSidecarsByRangeRPCHandler,
-			p2p.RPCExecutionPayloadEnvelopesByRootTopicV1:     s.executionPayloadEnvelopesByRootRPCHandler, // Added in Gloas
+			p2p.RPCStatusTopicV2:                          s.statusRPCHandler,
+			p2p.RPCGoodByeTopicV1:                         s.goodbyeRPCHandler,
+			p2p.RPCBlocksByRangeTopicV2:                   s.beaconBlocksByRangeRPCHandler,
+			p2p.RPCBlocksByRootTopicV2:                    s.beaconBlocksRootRPCHandler,
+			p2p.RPCPingTopicV1:                            s.pingHandler,
+			p2p.RPCMetaDataTopicV3:                        s.metaDataHandler,
+			p2p.RPCBlobSidecarsByRootTopicV1:              s.blobSidecarByRootRPCHandler,
+			p2p.RPCBlobSidecarsByRangeTopicV1:             s.blobSidecarsByRangeRPCHandler,
+			p2p.RPCDataColumnSidecarsByRootTopicV1:        s.dataColumnSidecarByRootRPCHandler,
+			p2p.RPCDataColumnSidecarsByRangeTopicV1:       s.dataColumnSidecarsByRangeRPCHandler,
+			p2p.RPCExecutionPayloadEnvelopesByRootTopicV1: s.executionPayloadEnvelopesByRootRPCHandler, // Added in Gloas
 		}, nil
 	}
 

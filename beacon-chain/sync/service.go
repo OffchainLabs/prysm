@@ -60,22 +60,22 @@ import (
 var _ runtime.Service = (*Service)(nil)
 
 const (
-	rangeLimit                               = 1024
-	seenBlockSize                            = 1000
-	seenPayloadEnvelopeSize                  = 1000
+	rangeLimit              = 1024
+	seenBlockSize           = 1000
+	seenPayloadEnvelopeSize = 1000
 	// executionPayloadEnvelopeCacheSize is the number of full execution payload envelopes to keep in memory
 	// for serving ExecutionPayloadEnvelopesByRoot RPC requests.
 	// When persistent full-envelope storage will be added, this cache becomes a fast-path optimization.
-	executionPayloadEnvelopeCacheSize        = 512
-	seenDataColumnSize                       = seenBlockSize * 128 // Each block can have max 128 data columns.
-	seenUnaggregatedAttSize                  = 20000
-	seenAggregatedAttSize                    = 16384
-	seenSyncMsgSize                          = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
-	seenSyncContributionSize                 = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
-	seenExitSize                             = 100
-	seenProposerSlashingSize                 = 100
-	badBlockSize                             = 1000
-	syncMetricsInterval                      = 10 * time.Second
+	executionPayloadEnvelopeCacheSize = 512
+	seenDataColumnSize                = seenBlockSize * 128 // Each block can have max 128 data columns.
+	seenUnaggregatedAttSize           = 20000
+	seenAggregatedAttSize             = 16384
+	seenSyncMsgSize                   = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
+	seenSyncContributionSize          = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
+	seenExitSize                      = 100
+	seenProposerSlashingSize          = 100
+	badBlockSize                      = 1000
+	syncMetricsInterval               = 10 * time.Second
 )
 
 var (
