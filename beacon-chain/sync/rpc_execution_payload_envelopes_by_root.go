@@ -105,6 +105,9 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 
 // validateExecutionPayloadEnvelopeByRootRequest checks if the request for execution payload envelopes is valid.
 func validateExecutionPayloadEnvelopeByRootRequest(count int) error {
+	if count == 0 {
+		return types.ErrInvalidRequest
+	}
 	if uint64(count) > params.BeaconConfig().MaxRequestPayloads {
 		return types.ErrMaxPayloadEnvelopeReqExceeded
 	}
