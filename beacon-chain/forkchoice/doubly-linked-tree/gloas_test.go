@@ -774,3 +774,342 @@ func TestChoosePayloadContent(t *testing.T) {
 		assert.Equal(t, emptyA, f.store.choosePayloadContent(n))
 	})
 }
+
+func TestGloasForkedBranches(t *testing.T) {
+	f := setup(1, 1)
+	s := f.store
+	ctx := t.Context()
+	balances := make([]uint64, 64)
+	for i := range balances {
+		balances[i] = 10
+	}
+	f.justifiedBalances = balances
+	s.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	// Build:
+	//   genesis(full)
+	//       |
+	//     A(pending) -- slot 32
+	//     /        \
+	//   A(empty)  A(full)
+	//     |          |
+	//   B(pending) C(pending) -- slot 33
+	//     |          |
+	//   B(empty)  C(empty) + C(full)
+
+	slotA := primitives.Slot(32)
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	driftGenesisTime(f, slotA, 0)
+	st, blk, err := prepareGloasForkchoiceState(ctx, slotA, rootA, zeroHash, blockHashA, zeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	slotB := slotA + 1
+	driftGenesisTime(f, slotB, 0)
+	require.NoError(t, f.NewSlot(ctx, slotB))
+
+	// B builds on A(empty) — non-matching parent hash. Gets proposer boost.
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	nonMatchingHash := indexToHash(999)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotB, rootB, rootA, blockHashB, nonMatchingHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	// C builds on A(full) — matching blockHashA.
+	rootC := indexToHash(3)
+	blockHashC := indexToHash(300)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotB, rootC, rootA, blockHashC, blockHashA, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	pe, err = prepareGloasForkchoicePayload(rootC)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	emptyA := s.emptyNodeByRoot[rootA]
+	fullA := s.fullNodeByRoot[rootA]
+	emptyB := s.emptyNodeByRoot[rootB]
+	emptyC := s.emptyNodeByRoot[rootC]
+	fullC := s.fullNodeByRoot[rootC]
+
+	// B wins via proposer boost. And no payload attestations for A's payload yet, so A(empty) wins over A(full).
+	headRoot, err := f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootB, headRoot)
+
+	assert.Equal(t, uint64(0), emptyB.weight)
+	assert.Equal(t, uint64(8), emptyB.node.weight)
+	assert.Equal(t, uint64(0), emptyC.weight)
+	assert.Equal(t, uint64(0), fullC.weight)
+	assert.Equal(t, uint64(0), emptyC.node.weight)
+	assert.Equal(t, uint64(0), emptyA.weight)
+	assert.Equal(t, uint64(0), fullA.weight)
+	assert.Equal(t, uint64(8), emptyA.node.weight)
+
+	// Attestations shift head to C.
+	// Validators 0,1 vote for B (payloadStatus=false → pending B).
+	f.ProcessAttestation(ctx, []uint64{0, 1}, rootB, slotB, false)
+	// Validators 2,3,4 vote for C (payloadStatus=false → pendingC).
+	f.ProcessAttestation(ctx, []uint64{2, 3, 4}, rootC, slotB, false)
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootC, headRoot)
+
+	assert.Equal(t, uint64(0), emptyB.weight)
+	assert.Equal(t, uint64(28), emptyB.node.weight)
+	assert.Equal(t, uint64(0), fullC.weight)
+	assert.Equal(t, uint64(0), emptyC.weight)
+	assert.Equal(t, uint64(30), emptyC.node.weight)
+	assert.Equal(t, uint64(20), emptyA.weight)
+	assert.Equal(t, uint64(30), fullA.weight)
+
+	// Move to slot 34, boost clears.
+	slot34 := slotB + 1
+	driftGenesisTime(f, slot34, 0)
+	require.NoError(t, f.NewSlot(ctx, slot34))
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootC, headRoot)
+
+	assert.Equal(t, uint64(20), emptyB.node.weight)
+	assert.Equal(t, uint64(30), emptyC.node.weight)
+	assert.Equal(t, uint64(20), emptyA.weight)
+	assert.Equal(t, uint64(30), fullA.weight)
+
+	// More attestations for B overtake C.
+	f.ProcessAttestation(ctx, []uint64{5, 6, 7, 8}, rootB, slot34, false)
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootB, headRoot)
+
+	assert.Equal(t, uint64(60), emptyB.node.weight)
+	assert.Equal(t, uint64(30), emptyC.node.weight)
+	assert.Equal(t, uint64(60), emptyA.weight)
+	assert.Equal(t, uint64(30), fullA.weight)
+}
+
+func TestGloasPTCOverridesProposerBoost(t *testing.T) {
+	f := setup(1, 1)
+	s := f.store
+	ctx := t.Context()
+	balances := make([]uint64, 64)
+	for i := range balances {
+		balances[i] = 10
+	}
+	f.justifiedBalances = balances
+	s.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	slotA := primitives.Slot(32)
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	driftGenesisTime(f, slotA, 0)
+	st, blk, err := prepareGloasForkchoiceState(ctx, slotA, rootA, zeroHash, blockHashA, zeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// PTC quorum for A's payload.
+	emptyA := s.emptyNodeByRoot[rootA]
+	for i := range uint64(fieldparams.PTCSize) {
+		emptyA.node.setPayloadAvailabilityVote(i)
+		emptyA.node.setPayloadDataAvailabilityVote(i)
+	}
+
+	slotB := slotA + 1
+	driftGenesisTime(f, slotB, 0)
+	require.NoError(t, f.NewSlot(ctx, slotB))
+
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	nonMatchingHash := indexToHash(999)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotB, rootB, rootA, blockHashB, nonMatchingHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	rootC := indexToHash(3)
+	blockHashC := indexToHash(300)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotB, rootC, rootA, blockHashC, blockHashA, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	fullA := s.fullNodeByRoot[rootA]
+	emptyB := s.emptyNodeByRoot[rootB]
+	emptyC := s.emptyNodeByRoot[rootC]
+
+	// C wins despite B having proposer boost.
+	// After boost removal weights tie at 0; PTC quorum on A makes
+	// shouldExtendPayload return true, so choosePayloadContent picks fullA → C.
+	headRoot, err := f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootC, headRoot)
+
+	assert.Equal(t, uint64(8), emptyB.node.weight)
+	assert.Equal(t, uint64(0), emptyC.node.weight)
+	assert.Equal(t, uint64(0), emptyA.weight)
+	assert.Equal(t, uint64(0), fullA.weight)
+
+	// Equal attestations on both sides, PTC still tips to C.
+	f.ProcessAttestation(ctx, []uint64{0, 1}, rootB, slotB, false)
+	f.ProcessAttestation(ctx, []uint64{2, 3}, rootC, slotB, false)
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootC, headRoot)
+
+	// emptyA.weight = 28 (B) - 8 (boost removal) = 20, fullA.weight = 20 (C) → tied, PTC wins.
+	assert.Equal(t, uint64(28), emptyB.node.weight)
+	assert.Equal(t, uint64(20), emptyC.node.weight)
+	assert.Equal(t, uint64(20), emptyA.weight)
+	assert.Equal(t, uint64(20), fullA.weight)
+
+	// One more attestation for B breaks the tie.
+	f.ProcessAttestation(ctx, []uint64{4}, rootB, slotB, false)
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootB, headRoot)
+
+	assert.Equal(t, uint64(38), emptyB.node.weight)
+	assert.Equal(t, uint64(20), emptyC.node.weight)
+	assert.Equal(t, uint64(30), emptyA.weight)
+	assert.Equal(t, uint64(20), fullA.weight)
+}
+
+func TestGloasDeepForkWeightPropagation(t *testing.T) {
+	f := setup(1, 1)
+	s := f.store
+	ctx := t.Context()
+	balances := make([]uint64, 64)
+	for i := range balances {
+		balances[i] = 10
+	}
+	f.justifiedBalances = balances
+	s.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	// Build:
+	//   genesis(full)
+	//       |
+	//     A(pending) -- slot 32
+	//       |
+	//     A(full)
+	//       |
+	//     B(pending) -- slot 33
+	//     /        \
+	//   B(empty)  B(full)
+	//     |          |
+	//   C(pending) D(pending) -- slot 34
+	//     |          |
+	//   C(empty)  D(empty) + D(full)
+
+	slotA := primitives.Slot(32)
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	driftGenesisTime(f, slotA, 0)
+	st, blk, err := prepareGloasForkchoiceState(ctx, slotA, rootA, zeroHash, blockHashA, zeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	slotB := slotA + 1
+	driftGenesisTime(f, slotB, 0)
+	require.NoError(t, f.NewSlot(ctx, slotB))
+
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotB, rootB, rootA, blockHashB, blockHashA, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	pe, err = prepareGloasForkchoicePayload(rootB)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	slotC := slotB + 1
+	driftGenesisTime(f, slotC, 0)
+	require.NoError(t, f.NewSlot(ctx, slotC))
+
+	// C builds on B(empty) — non-matching hash. Gets proposer boost.
+	rootC := indexToHash(3)
+	blockHashC := indexToHash(300)
+	nonMatchingHash := indexToHash(999)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotC, rootC, rootB, blockHashC, nonMatchingHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	// D builds on B(full) — matching blockHashB.
+	rootD := indexToHash(4)
+	blockHashD := indexToHash(400)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotC, rootD, rootB, blockHashD, blockHashB, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	pe, err = prepareGloasForkchoicePayload(rootD)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	emptyB := s.emptyNodeByRoot[rootB]
+	fullB := s.fullNodeByRoot[rootB]
+	emptyC := s.emptyNodeByRoot[rootC]
+	emptyD := s.emptyNodeByRoot[rootD]
+	fullD := s.fullNodeByRoot[rootD]
+
+	// C wins via proposer boost.
+	headRoot, err := f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootC, headRoot)
+
+	assert.Equal(t, uint64(8), emptyC.node.weight)
+	assert.Equal(t, uint64(0), emptyD.node.weight)
+	assert.Equal(t, uint64(0), emptyB.weight)
+	assert.Equal(t, uint64(0), fullB.weight)
+	assert.Equal(t, uint64(8), emptyB.node.weight)
+
+	// Attestations at different levels.
+	// Validators 0,1 vote for C (payloadStatus=false → pending C).
+	f.ProcessAttestation(ctx, []uint64{0, 1}, rootC, slotC, false)
+	// Validators 2,3,4 vote for D (payloadStatus=true → fullD).
+	f.ProcessAttestation(ctx, []uint64{2, 3, 4}, rootD, slotC, true)
+	// Validators 5,6 vote for B (payloadStatus=true → fullB).
+	f.ProcessAttestation(ctx, []uint64{5, 6}, rootB, slotC, true)
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootD, headRoot)
+
+	assert.Equal(t, uint64(28), emptyC.node.weight)
+	assert.Equal(t, uint64(30), fullD.weight)
+	assert.Equal(t, uint64(30), emptyD.node.weight)
+	assert.Equal(t, uint64(20), emptyB.weight)
+	assert.Equal(t, uint64(50), fullB.weight)
+	assert.Equal(t, uint64(78), emptyB.node.weight)
+
+	// Heavy votes for C branch flip the head back.
+	f.ProcessAttestation(ctx, []uint64{7, 8, 9, 10, 11}, rootC, slotC, false)
+
+	headRoot, err = f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootC, headRoot)
+
+	assert.Equal(t, uint64(78), emptyC.node.weight)
+	assert.Equal(t, uint64(30), emptyD.node.weight)
+	assert.Equal(t, uint64(70), emptyB.weight)
+	assert.Equal(t, uint64(50), fullB.weight)
+}
