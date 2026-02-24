@@ -36,6 +36,7 @@ type writeOnlyGloasFields interface {
 	DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdrawal) error
 	DequeueBuilderPendingWithdrawals(num uint64) error
 	SetNextWithdrawalBuilderIndex(idx primitives.BuilderIndex) error
+	OnboardBuildersFromPendingDeposits() error
 }
 
 type readOnlyGloasFields interface {

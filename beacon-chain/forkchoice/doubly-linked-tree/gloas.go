@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"slices"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -286,4 +287,63 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 		}
 	}
 	return nodes, nil
+}
+
+// InsertPayload inserts a full node into forkchoice after the Gloas fork.
+func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) error {
+	if pe.IsNil() {
+		return errors.New("cannot insert nil payload")
+	}
+	s := f.store
+	root := pe.BeaconBlockRoot()
+	en := s.emptyNodeByRoot[root]
+	if en == nil {
+		return errors.Wrap(ErrNilNode, "cannot insert full node without an empty one")
+	}
+	if _, ok := s.fullNodeByRoot[root]; ok {
+		// We don't import two payloads for the same root
+		return nil
+	}
+	fn := &PayloadNode{
+		node:       en.node,
+		optimistic: true,
+		timestamp:  time.Now(),
+		full:       true,
+		children:   make([]*Node, 0),
+	}
+	s.fullNodeByRoot[root] = fn
+	f.updateNewFullNodeWeight(fn)
+	return nil
+}
+
+func (f *ForkChoice) updateNewFullNodeWeight(fn *PayloadNode) {
+	for index, vote := range f.votes {
+		if vote.currentRoot == fn.node.root && vote.nextPayloadStatus && index < len(f.balances) {
+			fn.balance += f.balances[index]
+		}
+	}
+	fn.weight = fn.balance
+}
+
+// resolveVoteNode returns the node that should receive the balance of a vote. It returns always a PayloadNode, but the boolean indicates
+// whether the vote should be applied to the pending node (true) or not.
+func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus bool) (*PayloadNode, bool) {
+	en := s.emptyNodeByRoot[r]
+	if en == nil {
+		return nil, true
+	}
+	if payloadStatus {
+		return s.fullNodeByRoot[r], false
+	}
+	return en, slot == en.node.slot
+}
+
+// BlockHash returns the hash committed in the given block
+func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
+	s := f.store
+	en := s.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return [32]byte{}, errors.Wrap(ErrNilNode, "could not get block hash for root")
+	}
+	return en.node.blockHash, nil
 }

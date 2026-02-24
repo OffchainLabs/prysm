@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
@@ -109,6 +110,8 @@ const (
 	GetBlobsV1 = "engine_getBlobsV1"
 	// GetBlobsV2 request string for JSON-RPC.
 	GetBlobsV2 = "engine_getBlobsV2"
+	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
+	GetClientVersionV1 = "engine_getClientVersionV1"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
 	defaultEngineTimeout = time.Second
 )
@@ -145,6 +148,7 @@ type EngineCaller interface {
 	GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error)
 	ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error)
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
+	GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error)
 }
 
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
@@ -579,6 +583,39 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 	}
 
 	return result, handleRPCError(err)
+}
+
+func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionV1")
+	defer span.End()
+
+	commit := version.GitCommit()
+	if len(commit) >= 8 {
+		commit = commit[:8]
+	}
+
+	var result []*structs.ClientVersionV1
+	err := s.rpcClient.CallContext(
+		ctx,
+		&result,
+		GetClientVersionV1,
+		structs.ClientVersionV1{
+			Code:    "PM",
+			Name:    "Prysm",
+			Version: version.SemanticVersion(),
+			Commit:  commit,
+		},
+	)
+
+	if err != nil {
+		return nil, handleRPCError(err)
+	}
+
+	if len(result) == 0 {
+		return nil, errors.New("execution client returned no result")
+	}
+
+	return result, nil
 }
 
 // ReconstructFullBlock takes in a blinded beacon block and reconstructs

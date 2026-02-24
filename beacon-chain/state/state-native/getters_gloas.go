@@ -326,6 +326,10 @@ func (b *BeaconState) BuilderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]b
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
+	return b.builderIndexByPubkey(pubkey)
+}
+
+func (b *BeaconState) builderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]byte) (primitives.BuilderIndex, bool) {
 	for i, builder := range b.builders {
 		if builder == nil {
 			continue
