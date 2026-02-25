@@ -614,6 +614,20 @@ func TestAppendBuildersSweepWithdrawals(t *testing.T) {
 		require.Equal(t, int(limit+1), len(withdrawals))
 	})
 
+	t.Run("no builders returns without error", func(t *testing.T) {
+		st := &BeaconState{
+			nextWithdrawalBuilderIndex: 3,
+			builders:                   nil,
+		}
+		withdrawals := []*enginev1.Withdrawal{}
+
+		nextIndex, nextBuilderIndex, err := st.appendBuildersSweepWithdrawals(5, &withdrawals)
+		require.NoError(t, err)
+		require.Equal(t, uint64(5), nextIndex)
+		require.Equal(t, primitives.BuilderIndex(3), nextBuilderIndex)
+		require.Equal(t, 0, len(withdrawals))
+	})
+
 	t.Run("appends eligible builders, skips ineligible", func(t *testing.T) {
 		epoch := primitives.Epoch(3)
 		st := &BeaconState{
