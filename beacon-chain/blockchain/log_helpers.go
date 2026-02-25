@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -41,7 +40,7 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 		}
 		log = log.WithField("syncBitsCount", agg.SyncCommitteeBits.Count())
 	}
-	if b.Version() >= version.Bellatrix {
+	if b.Version() >= version.Bellatrix && b.Version() < version.Gloas {
 		p, err := b.Body().Execution()
 		if err != nil {
 			return err
@@ -57,7 +56,7 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 			txsPerSlotCount.Set(float64(len(txs)))
 		}
 	}
-	if b.Version() >= version.Deneb {
+	if b.Version() >= version.Deneb && b.Version() < version.Gloas {
 		kzgs, err := b.Body().BlobKzgCommitments()
 		if err != nil {
 			log.WithError(err).Error("Failed to get blob KZG commitments")
@@ -65,7 +64,7 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 			log = log.WithField("kzgCommitmentCount", len(kzgs))
 		}
 	}
-	if b.Version() >= version.Electra {
+	if b.Version() >= version.Electra && b.Version() < version.Gloas {
 		eReqs, err := b.Body().ExecutionRequests()
 		if err != nil {
 			log.WithError(err).Error("Failed to get execution requests")
@@ -79,6 +78,20 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 			if len(eReqs.Withdrawals) > 0 {
 				log = log.WithField("withdrawalRequestCount", len(eReqs.Withdrawals))
 			}
+		}
+	}
+	if b.Version() >= version.Gloas {
+		signedBid, err := b.Body().SignedExecutionPayloadBid()
+		if err != nil {
+			log.WithError(err).Error("Failed to get signed execution payload bid")
+		} else {
+			bid := signedBid.Message
+			log = log.WithFields(logrus.Fields{
+				"blobKzgCommitmentCount": len(bid.BlobKzgCommitments),
+				"payloadHash":            fmt.Sprintf("%#x", bytesutil.Trunc(bid.BlockHash)),
+				"parentHash":             fmt.Sprintf("%#x", bytesutil.Trunc(bid.ParentBlockHash)),
+				"builderIndex":           bid.BuilderIndex,
+			})
 		}
 	}
 	log.Info("Finished applying state transition")
@@ -104,19 +117,21 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 		"sinceSlotStartTime": sinceSlotStartTime,
 	}
 	moreFields := logrus.Fields{
-		"slot":                       block.Slot(),
-		"slotInEpoch":                block.Slot() % params.BeaconConfig().SlotsPerEpoch,
-		"block":                      blkRoot,
-		"epoch":                      slots.ToEpoch(block.Slot()),
-		"justifiedEpoch":             justified.Epoch,
-		"justifiedRoot":              fmt.Sprintf("0x%s...", hex.EncodeToString(justified.Root)[:8]),
-		"finalizedEpoch":             finalized.Epoch,
-		"finalizedRoot":              finalizedRoot,
-		"parentRoot":                 fmt.Sprintf("0x%s...", hex.EncodeToString(parentRoot[:])[:8]),
-		"version":                    version.String(block.Version()),
-		"sinceSlotStartTime":         sinceSlotStartTime,
-		"chainServiceProcessedTime":  prysmTime.Now().Sub(receivedTime) - daWaitedTime,
-		"dataAvailabilityWaitedTime": daWaitedTime,
+		"slot":                      block.Slot(),
+		"slotInEpoch":               block.Slot() % params.BeaconConfig().SlotsPerEpoch,
+		"block":                     blkRoot,
+		"epoch":                     slots.ToEpoch(block.Slot()),
+		"justifiedEpoch":            justified.Epoch,
+		"justifiedRoot":             fmt.Sprintf("0x%s...", hex.EncodeToString(justified.Root)[:8]),
+		"finalizedEpoch":            finalized.Epoch,
+		"finalizedRoot":             finalizedRoot,
+		"parentRoot":                fmt.Sprintf("0x%s...", hex.EncodeToString(parentRoot[:])[:8]),
+		"version":                   version.String(block.Version()),
+		"sinceSlotStartTime":        sinceSlotStartTime,
+		"chainServiceProcessedTime": prysmTime.Now().Sub(receivedTime) - daWaitedTime,
+	}
+	if block.Version() < version.Gloas {
+		moreFields["dataAvailabilityWaitedTime"] = daWaitedTime
 	}
 
 	level := logs.PackageVerbosity("beacon-chain/blockchain")
@@ -132,11 +147,7 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 
 // logs payload related data every slot.
 func logPayload(block interfaces.ReadOnlyBeaconBlock) error {
-	isExecutionBlk, err := blocks.IsExecutionBlock(block.Body())
-	if err != nil {
-		return errors.Wrap(err, "could not determine if block is execution block")
-	}
-	if !isExecutionBlk {
+	if block.Version() < version.Bellatrix || block.Version() >= version.Gloas {
 		return nil
 	}
 	payload, err := block.Body().Execution()

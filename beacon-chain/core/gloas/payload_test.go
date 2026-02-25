@@ -69,16 +69,16 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 	}
 
 	bid := &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:        parentHash,
-		ParentBlockRoot:        bytes.Repeat([]byte{0xDD}, 32),
-		BlockHash:              blockHash,
-		PrevRandao:             randao,
-		GasLimit:               1,
-		BuilderIndex:           builderIdx,
-		Slot:                   slot,
-		Value:                  0,
-		ExecutionPayment:       0,
-		FeeRecipient:           bytes.Repeat([]byte{0xEE}, 20),
+		ParentBlockHash:  parentHash,
+		ParentBlockRoot:  bytes.Repeat([]byte{0xDD}, 32),
+		BlockHash:        blockHash,
+		PrevRandao:       randao,
+		GasLimit:         1,
+		BuilderIndex:     builderIdx,
+		Slot:             slot,
+		Value:            0,
+		ExecutionPayment: 0,
+		FeeRecipient:     bytes.Repeat([]byte{0xEE}, 20),
 	}
 
 	header := &ethpb.BeaconBlockHeader{
@@ -91,11 +91,11 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 	require.NoError(t, err)
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Slot:               slot,
-		BuilderIndex:       builderIdx,
-		BeaconBlockRoot:    headerRoot[:],
-		Payload:            payload,
-		ExecutionRequests:  &enginev1.ExecutionRequests{},
+		Slot:              slot,
+		BuilderIndex:      builderIdx,
+		BeaconBlockRoot:   headerRoot[:],
+		Payload:           payload,
+		ExecutionRequests: &enginev1.ExecutionRequests{},
 	}
 
 	if mutate != nil {
@@ -297,14 +297,14 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 		signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
 		require.NoError(t, err)
 
-		require.NoError(t, verifyExecutionPayloadEnvelopeSignature(st, signed))
+		require.NoError(t, VerifyExecutionPayloadEnvelopeSignature(st, signed))
 	})
 
 	t.Run("builder", func(t *testing.T) {
 		signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(fixture.signedProto)
 		require.NoError(t, err)
 
-		require.NoError(t, verifyExecutionPayloadEnvelopeSignature(fixture.state, signed))
+		require.NoError(t, VerifyExecutionPayloadEnvelopeSignature(fixture.state, signed))
 	})
 
 	t.Run("invalid signature", func(t *testing.T) {
@@ -330,7 +330,7 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 			badSigned, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
 			require.NoError(t, err)
 
-			err = verifyExecutionPayloadEnvelopeSignature(st, badSigned)
+			err = VerifyExecutionPayloadEnvelopeSignature(st, badSigned)
 			require.ErrorContains(t, "invalid signature format", err)
 		})
 
@@ -342,7 +342,7 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 			badSigned, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
 			require.NoError(t, err)
 
-			err = verifyExecutionPayloadEnvelopeSignature(fixture.state, badSigned)
+			err = VerifyExecutionPayloadEnvelopeSignature(fixture.state, badSigned)
 			require.ErrorContains(t, "invalid signature format", err)
 		})
 	})
