@@ -212,7 +212,7 @@ func (s *Store) updateBestDescendantConsensusNode(ctx context.Context, n *Node, 
 		n.bestDescendant = en.bestDescendant
 		return nil
 	}
-	// TODO GLOAS: pick between full or empty
+	// TODO Gloas: pick between full or empty
 	if err := s.updateBestDescendantPayloadNode(ctx, fn, justifiedEpoch, finalizedEpoch, currentEpoch); err != nil {
 		return err
 	}

@@ -237,7 +237,7 @@ func (s *Store) pruneFinalizedNodeByRootMap(ctx context.Context, node, finalized
 
 // prune prunes the fork choice store. It removes all nodes that compete with the finalized root.
 // This function does not prune for invalid optimistically synced nodes, it deals only with pruning upon finalization
-// TODO: GLOAS, to ensure that chains up to a full node are found, we may want to consider pruning only up to the latest full block that was finalized
+// TODO: Gloas, to ensure that chains up to a full node are found, we may want to consider pruning only up to the latest full block that was finalized
 func (s *Store) prune(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.Prune")
 	defer span.End()
