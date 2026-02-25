@@ -243,46 +243,6 @@ func (mr *MockBeaconChainClientMockRecorder) GetValidatorQueue(ctx, in any, opts
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidatorQueue", reflect.TypeOf((*MockBeaconChainClient)(nil).GetValidatorQueue), varargs...)
 }
 
-// ListAttestations mocks base method.
-func (m *MockBeaconChainClient) ListAttestations(ctx context.Context, in *eth.ListAttestationsRequest, opts ...grpc.CallOption) (*eth.ListAttestationsResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, in}
-	for _, a := range opts {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "ListAttestations", varargs...)
-	ret0, _ := ret[0].(*eth.ListAttestationsResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListAttestations indicates an expected call of ListAttestations.
-func (mr *MockBeaconChainClientMockRecorder) ListAttestations(ctx, in any, opts ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, in}, opts...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAttestations", reflect.TypeOf((*MockBeaconChainClient)(nil).ListAttestations), varargs...)
-}
-
-// ListAttestationsElectra mocks base method.
-func (m *MockBeaconChainClient) ListAttestationsElectra(ctx context.Context, in *eth.ListAttestationsRequest, opts ...grpc.CallOption) (*eth.ListAttestationsElectraResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, in}
-	for _, a := range opts {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "ListAttestationsElectra", varargs...)
-	ret0, _ := ret[0].(*eth.ListAttestationsElectraResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListAttestationsElectra indicates an expected call of ListAttestationsElectra.
-func (mr *MockBeaconChainClientMockRecorder) ListAttestationsElectra(ctx, in any, opts ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, in}, opts...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAttestationsElectra", reflect.TypeOf((*MockBeaconChainClient)(nil).ListAttestationsElectra), varargs...)
-}
-
 // ListBeaconBlocks mocks base method.
 func (m *MockBeaconChainClient) ListBeaconBlocks(ctx context.Context, in *eth.ListBlocksRequest, opts ...grpc.CallOption) (*eth.ListBeaconBlocksResponse, error) {
 	m.ctrl.T.Helper()
