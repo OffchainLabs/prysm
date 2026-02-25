@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"runtime"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -13,6 +14,21 @@ import (
 )
 
 const signatureVerificationInterval = 5 * time.Millisecond
+
+// numVerifierRoutines returns the number of parallel batch verifier goroutines
+// to run. Multiple routines reduce backpressure on the signature channel by
+// allowing one routine to drain new items while others are blocked in CGo
+// performing BLS pairing operations.
+func numVerifierRoutines() int {
+	n := runtime.NumCPU() / 2
+	if n < 2 {
+		return 2
+	}
+	if n > 4 {
+		return 4
+	}
+	return n
+}
 
 type signatureVerifier struct {
 	set     *bls.SignatureBatch

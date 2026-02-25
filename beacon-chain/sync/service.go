@@ -277,7 +277,9 @@ func (s *Service) Start() {
 	s.newPayloadAttestationVerifier = newPayloadAttestationMessageFromInitializer(v)
 	s.newExecutionPayloadEnvelopeVerifier = newPayloadVerifierFromInitializer(v)
 
-	go s.verifierRoutine()
+	for range numVerifierRoutines() {
+		go s.verifierRoutine()
+	}
 	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
 
