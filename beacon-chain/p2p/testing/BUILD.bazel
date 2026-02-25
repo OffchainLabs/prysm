@@ -5,6 +5,7 @@ go_library(
     testonly = True,
     srcs = [
         "fuzz_p2p.go",
+        "gossiptracer.go",
         "mock_broadcaster.go",
         "mock_host.go",
         "mock_listener.go",

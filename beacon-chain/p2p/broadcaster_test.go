@@ -223,14 +223,6 @@ func TestService_BroadcastAttestation(t *testing.T) {
 	}
 }
 
-func getEventHandler(t *testing.T, s *Service, topic string) *pubsub.TopicEventHandler {
-	th, err := s.JoinTopic(topic)
-	require.NoError(t, err)
-	ev, err := th.EventHandler()
-	require.NoError(t, err)
-	return ev
-}
-
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	const port = uint(2000)
 
@@ -323,9 +315,12 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		}
 	}()
 
+	tracer := p2ptest.NewGossipTracer()
+
 	ps1, err := pubsub.NewGossipSub(t.Context(), hosts[0],
 		pubsub.WithMessageSigning(false),
 		pubsub.WithStrictSignatureVerification(false),
+		pubsub.WithRawTracer(tracer),
 	)
 	require.NoError(t, err)
 
@@ -378,17 +373,17 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
 
-	ev := getEventHandler(t, p, topic)
+	pTopic, err := p.JoinTopic(topic)
+	require.NoError(t, err)
+	require.NoError(t, tracer.WatchTopic(t.Context(), pTopic))
 
 	tpHandle, err := p2.JoinTopic(topic)
 	require.NoError(t, err)
 	sub, err := tpHandle.Subscribe()
 	require.NoError(t, err)
 
-	pe, err := ev.NextPeerEvent(t.Context())
-	require.NoError(t, err)
-	require.Equal(t, pe.Peer, p2.PeerID())
-	require.Equal(t, pe.Type, pubsub.PeerJoin)
+	// Block until gossipsub is ready to deliver a published message to p2.
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), topic, p2.PeerID()))
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
@@ -399,10 +394,10 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		defer cancel()
 
 		incomingMessage, err := sub.Next(ctx)
-		require.NoError(t, err)
+		require.NoError(tt, err)
 
 		result := &ethpb.Attestation{}
-		require.NoError(t, p.Encoding().DecodeGossip(incomingMessage.Data, result))
+		require.NoError(tt, p.Encoding().DecodeGossip(incomingMessage.Data, result))
 		if !proto.Equal(result, msg) {
 			tt.Errorf("Did not receive expected message, got %+v, wanted %+v", result, msg)
 		}

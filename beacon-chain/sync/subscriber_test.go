@@ -440,22 +440,6 @@ func Test_wrapAndReportValidation(t *testing.T) {
 	}
 }
 
-func connectToPeerAndEnsureSubscribed(t *testing.T, from *p2ptest.TestP2P, to *p2ptest.TestP2P, handle *pubsub.TopicEventHandler) {
-	from.Connect(to)
-	p1e, err := handle.NextPeerEvent(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, pubsub.PeerJoin, p1e.Type)
-	assert.Equal(t, p1e.Peer, to.PeerID())
-}
-
-func getEventHandler(t *testing.T, p *p2ptest.TestP2P, topic string) *pubsub.TopicEventHandler {
-	th, err := p.PubSub().Join(topic)
-	require.NoError(t, err)
-	ev, err := th.EventHandler()
-	require.NoError(t, err)
-	return ev
-}
-
 func TestFilterSubnetPeers(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.MainnetConfig()
@@ -467,7 +451,10 @@ func TestFilterSubnetPeers(t *testing.T) {
 	flags.Init(gFlags)
 	// Reset config.
 	defer flags.Init(new(flags.GlobalFlags))
-	p := p2ptest.NewTestP2P(t)
+
+	tracer := p2ptest.NewGossipTracer()
+	p := p2ptest.NewTestP2PWithPubsubOptions(t, []pubsub.Option{pubsub.WithRawTracer(tracer)})
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	currSlot := primitives.Slot(100)
@@ -508,22 +495,25 @@ func TestFilterSubnetPeers(t *testing.T) {
 	subnet20 := r.addDigestAndIndexToTopic(defaultTopic, digest, 20)
 	cache.SubnetIDs.AddAttesterSubnetID(currSlot, 20)
 
+	topic10, err := p.JoinTopic(subnet10)
+	require.NoError(t, err)
+	require.NoError(t, tracer.WatchTopic(t.Context(), topic10))
+
+	topic20, err := p.JoinTopic(subnet20)
+	require.NoError(t, err)
+	require.NoError(t, tracer.WatchTopic(t.Context(), topic20))
+
 	p1 := createPeer(t, subnet10)
 	p2 := createPeer(t, subnet10, subnet20)
 	p3 := createPeer(t)
 
-	ev10 := getEventHandler(t, p, subnet10)
-	ev20 := getEventHandler(t, p, subnet20)
-
-	connectToPeerAndEnsureSubscribed(t, p, p1, ev10)
-	connectToPeerAndEnsureSubscribed(t, p, p2, ev20)
+	p.Connect(p1)
+	p.Connect(p2)
 	p.Connect(p3)
 
-	// wait for these newly connected peers to be registered against their topics in pubsub.
-	require.Eventually(t, func() bool {
-		return len(p.PubSub().ListPeers(subnet10)) == 2 &&
-			len(p.PubSub().ListPeers(subnet20)) == 1
-	}, 1*time.Second, 100*time.Millisecond)
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet10, p1.PeerID()))
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet10, p2.PeerID()))
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet20, p2.PeerID()))
 
 	wantedPeers := []peer.ID{p1.PeerID(), p2.PeerID(), p3.PeerID()}
 	// Expect Peer 3 to be marked as suitable.
@@ -535,7 +525,8 @@ func TestFilterSubnetPeers(t *testing.T) {
 	// Connect an excess amount of peers in the particular subnet.
 	for i := 1; i <= flags.Get().MinimumPeersPerSubnet; i++ {
 		nPeer := createPeer(t, subnet20)
-		connectToPeerAndEnsureSubscribed(t, p, nPeer, ev20)
+		p.Connect(nPeer)
+		require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet20, nPeer.PeerID()))
 
 		wantedPeers = append(wantedPeers, nPeer.BHost.ID())
 	}
