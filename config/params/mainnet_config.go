@@ -176,6 +176,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MaxWithdrawalsPerPayload:         16,
 	MaxBlsToExecutionChanges:         16,
 	MaxValidatorsPerWithdrawalsSweep: 16384,
+	MaxBuildersPerWithdrawalsSweep:   16384,
 
 	// BLS domain values.
 	DomainBeaconProposer:              bytesutil.Uint32ToBytes4(0x00000000),
