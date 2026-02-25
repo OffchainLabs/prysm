@@ -306,7 +306,15 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 	slot := block.Slot()
 
 	if blockVersion >= version.Fulu {
-		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), block); err != nil {
+		body := block.Body()
+		if body == nil {
+			return errors.New("invalid nil beacon block body")
+		}
+		kzgCommitments, err := body.BlobKzgCommitments()
+		if err != nil {
+			return errors.Wrap(err, "blob KZG commitments")
+		}
+		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), slot, kzgCommitments); err != nil {
 			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
 		}
 
@@ -673,7 +681,15 @@ func (s *Service) isDataAvailable(
 	root := roBlock.Root()
 	blockVersion := block.Version()
 	if blockVersion >= version.Fulu {
-		return s.areDataColumnsAvailable(ctx, root, block)
+		body := block.Body()
+		if body == nil {
+			return errors.New("invalid nil beacon block body")
+		}
+		kzgCommitments, err := body.BlobKzgCommitments()
+		if err != nil {
+			return errors.Wrap(err, "blob KZG commitments")
+		}
+		return s.areDataColumnsAvailable(ctx, root, block.Slot(), kzgCommitments)
 	}
 
 	if blockVersion >= version.Deneb {
@@ -688,23 +704,14 @@ func (s *Service) isDataAvailable(
 func (s *Service) areDataColumnsAvailable(
 	ctx context.Context,
 	root [fieldparams.RootLength]byte,
-	block interfaces.ReadOnlyBeaconBlock,
+	slot primitives.Slot,
+	kzgCommitments [][]byte,
 ) error {
 	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
-	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
+	blockSlot, currentSlot := slot, s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
 	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
 		return nil
-	}
-
-	body := block.Body()
-	if body == nil {
-		return errors.New("invalid nil beacon block body")
-	}
-
-	kzgCommitments, err := body.BlobKzgCommitments()
-	if err != nil {
-		return errors.Wrap(err, "blob KZG commitments")
 	}
 
 	// If block has not commitments there is nothing to wait for.
@@ -765,7 +772,7 @@ func (s *Service) areDataColumnsAvailable(
 	}
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot, err := slots.StartTime(s.genesisTime, block.Slot()+1)
+	nextSlot, err := slots.StartTime(s.genesisTime, slot+1)
 	if err != nil {
 		return fmt.Errorf("unable to determine slot start time: %w", err)
 	}
@@ -780,7 +787,7 @@ func (s *Service) areDataColumnsAvailable(
 			}
 
 			log.WithFields(logrus.Fields{
-				"slot":            block.Slot(),
+				"slot":            slot,
 				"root":            fmt.Sprintf("%#x", root),
 				"columnsExpected": helpers.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
 				"columnsWaiting":  helpers.SortedPrettySliceFromMap(missing),
@@ -826,7 +833,7 @@ func (s *Service) areDataColumnsAvailable(
 				missingIndices = helpers.SortedPrettySliceFromMap(missing)
 			}
 
-			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", block.Slot(), root, missingIndices)
+			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", slot, root, missingIndices)
 		}
 	}
 }

@@ -68,6 +68,15 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
+	// DA check: verify data columns are available before inserting payload.
+	bid, err := preState.LatestExecutionPayloadBid()
+	if err != nil {
+		return errors.Wrap(err, "could not get latest execution payload bid")
+	}
+	if err := s.areDataColumnsAvailable(ctx, root, envelope.Slot(), bid.BlobKzgCommitments()); err != nil {
+		return errors.Wrap(err, "data availability check failed for payload envelope")
+	}
+
 	if err := s.savePostPayload(ctx, signed, preState); err != nil {
 		return err
 	}
