@@ -404,6 +404,9 @@ func (s *Store) shouldApplyProposerBoost() bool {
 	if s.proposerBoostRoot == [32]byte{} {
 		return false
 	}
+	if slots.ToEpoch(s.currentSlot()) < params.BeaconConfig().GloasForkEpoch {
+		return true
+	}
 	en := s.emptyNodeByRoot[s.proposerBoostRoot]
 	if en == nil {
 		return false
