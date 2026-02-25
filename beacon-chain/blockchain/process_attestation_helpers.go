@@ -46,9 +46,19 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 
 	// If the head state alone is enough, we can return it directly read only.
 	if c.Epoch <= headEpoch {
+		cachedState, err := s.checkpointStateCache.StateByCheckpoint(c)
+		if err != nil {
+			return nil
+		}
+		if cachedState != nil && !cachedState.IsNil() {
+			return cachedState
+		}
 		st, err := s.HeadStateReadOnly(ctx)
 		if err != nil {
 			return nil
+		}
+		if err := s.checkpointStateCache.AddCheckpointState(c, st); err != nil {
+			log.WithError(err).Error("Could not save checkpoint state to cache")
 		}
 		return st
 	}

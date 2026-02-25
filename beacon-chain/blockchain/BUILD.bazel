@@ -132,6 +132,7 @@ go_test(
         "metrics_test.go",
         "mock_test.go",
         "pow_block_test.go",
+        "process_attestation_memory_test.go",
         "process_attestation_test.go",
         "process_block_test.go",
         "receive_attestation_test.go",
