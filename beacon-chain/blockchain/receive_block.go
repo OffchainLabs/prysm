@@ -210,6 +210,16 @@ func (s *Service) validateExecutionAndConsensus(
 	preState state.BeaconState,
 	block blocks.ROBlock,
 ) (state.BeaconState, bool, error) {
+	if block.Version() >= version.Gloas {
+		postState, err := s.validateStateTransition(ctx, preState, block)
+		if errors.Is(err, ErrNotDescendantOfFinalized) {
+			return nil, false, invalidBlock{error: err, root: block.Root()}
+		}
+		if err != nil {
+			return nil, false, errors.Wrap(err, "failed to validate consensus state transition function")
+		}
+		return postState, false, nil
+	}
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	if err != nil {
 		return nil, false, err
@@ -243,6 +253,10 @@ func (s *Service) validateExecutionAndConsensus(
 }
 
 func (s *Service) handleDA(ctx context.Context, avs das.AvailabilityChecker, block blocks.ROBlock) (time.Duration, error) {
+	// Gloas DA is handled on the payload enevelope.
+	if block.Version() >= version.Gloas {
+		return 0, nil
+	}
 	var err error
 	start := time.Now()
 	if avs != nil {

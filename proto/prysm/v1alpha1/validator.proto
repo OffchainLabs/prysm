@@ -25,6 +25,7 @@ import "proto/prysm/v1alpha1/beacon_block.proto";
 import "proto/prysm/v1alpha1/beacon_core_types.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
+import "proto/prysm/v1alpha1/gloas.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1";
 option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
@@ -461,6 +462,39 @@ service BeaconNodeValidator {
     option deprecated = true;
     option (google.api.http) = {
       get : "/eth/v1alpha1/validator/blocks/aggregated_sig_and_aggregation_bits"
+    };
+  }
+
+  // ==========================================================================
+  // Gloas Fork Endpoints
+  // ==========================================================================
+
+  // GetExecutionPayloadEnvelope retrieves a cached execution payload envelope
+  // for the given slot and builder index. This is called by validators after
+  // receiving a Gloas block to get the envelope they need to sign and broadcast.
+  //
+  // The envelope is cached by the beacon node during block production and
+  // contains the full execution payload that corresponds to the bid in the block.
+  rpc GetExecutionPayloadEnvelope(ExecutionPayloadEnvelopeRequest)
+      returns (ExecutionPayloadEnvelopeResponse) {
+    option deprecated = true;
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/execution_payload_envelope/{slot}"
+    };
+  }
+
+  // PublishExecutionPayloadEnvelope broadcasts a signed execution payload envelope
+  // to the P2P network. This is called by validators after signing the envelope
+  // retrieved from GetExecutionPayloadEnvelope.
+  //
+  // The beacon node validates the envelope signature and broadcasts it to peers
+  // via the execution_payload_envelope gossip topic.
+  rpc PublishExecutionPayloadEnvelope(SignedExecutionPayloadEnvelope)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/execution_payload_envelope"
+      body : "*"
     };
   }
 }
@@ -1263,9 +1297,6 @@ message ProposerDutyV2 {
 
   // The slot at which the validator must propose a block.
   uint64 slot = 3 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
-  ];
 }
 
 // SyncCommitteeDutiesRequest is the request for GetSyncCommitteeDuties.
@@ -1310,4 +1341,30 @@ message SyncCommitteeDuty {
 
   // The indices of the validator in the sync committee.
   repeated uint64 validator_sync_committee_indices = 3;
+}
+
+// =============================================================================
+// Gloas Fork Messages
+// =============================================================================
+
+// ExecutionPayloadEnvelopeRequest is the request for retrieving a cached
+// execution payload envelope from the beacon node. This is only used for
+// self-build envelopes.
+message ExecutionPayloadEnvelopeRequest {
+  option deprecated = true;
+
+  // The slot for which to retrieve the execution payload envelope.
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+}
+
+// ExecutionPayloadEnvelopeResponse is the response containing the cached
+// execution payload envelope.
+message ExecutionPayloadEnvelopeResponse {
+  option deprecated = true;
+
+  // The execution payload envelope for the requested slot and builder.
+  ExecutionPayloadEnvelope envelope = 1;
 }

@@ -160,8 +160,9 @@ func (b *SignedBeaconBlock) PbGenericBlock() (*eth.GenericSignedBeaconBlock, err
 			Block: &eth.GenericSignedBeaconBlock_Fulu{Fulu: bc},
 		}, nil
 	case version.Gloas:
-		// Gloas doesn't support GenericSignedBeaconBlock yet
-		return nil, errors.New("Gloas blocks don't support GenericSignedBeaconBlock conversion")
+		return &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Gloas{Gloas: pb.(*eth.SignedBeaconBlockGloas)},
+		}, nil
 	default:
 		return nil, errIncorrectBlockVersion
 	}
@@ -1146,6 +1147,8 @@ func (b *BeaconBlock) AsSignRequestObject() (validatorpb.SignRequestObject, erro
 			return &validatorpb.SignRequest_BlindedBlockFulu{BlindedBlockFulu: pb.(*eth.BlindedBeaconBlockFulu)}, nil
 		}
 		return &validatorpb.SignRequest_BlockFulu{BlockFulu: pb.(*eth.BeaconBlockElectra)}, nil
+	case version.Gloas:
+		return &validatorpb.SignRequest_BlockGloas{BlockGloas: pb.(*eth.BeaconBlockGloas)}, nil
 	default:
 		return nil, errIncorrectBlockVersion
 	}
@@ -1260,14 +1263,19 @@ func (b *BeaconBlockBody) BLSToExecutionChanges() ([]*eth.SignedBLSToExecutionCh
 
 // BlobKzgCommitments returns the blob kzg commitments in the block.
 func (b *BeaconBlockBody) BlobKzgCommitments() ([][]byte, error) {
+	if b.version >= version.Gloas {
+		signedBid, err := b.SignedExecutionPayloadBid()
+		if err != nil {
+			return nil, err
+		}
+		return signedBid.Message.BlobKzgCommitments, nil
+	}
 	if b.version >= version.Deneb {
 		return b.blobKzgCommitments, nil
 	}
-
 	if b.version >= version.Phase0 {
 		return nil, consensus_types.ErrNotSupported("BlobKzgCommitments", b.version)
 	}
-
 	return nil, errIncorrectBlockVersion
 }
 

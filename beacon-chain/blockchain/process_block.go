@@ -101,7 +101,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
 	}
-	if cfg.roblock.Version() <= version.Gloas {
+	if cfg.roblock.Version() < version.Gloas {
 		s.sendFCU(cfg)
 	}
 
@@ -547,6 +547,9 @@ func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState
 func (s *Service) validateMergeTransitionBlock(ctx context.Context, stateVersion int, stateHeader interfaces.ExecutionData, blk interfaces.ReadOnlySignedBeaconBlock) error {
 	// Skip validation if block is older than Bellatrix.
 	if blocks.IsPreBellatrixVersion(blk.Block().Version()) {
+		return nil
+	}
+	if blk.Block().Version() >= version.Gloas {
 		return nil
 	}
 

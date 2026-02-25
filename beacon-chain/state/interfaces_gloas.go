@@ -30,6 +30,12 @@ type writeOnlyGloasFields interface {
 	IncreaseBuilderBalance(index primitives.BuilderIndex, amount uint64) error
 	AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64) error
 	UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64, participatedFlags map[uint8]bool) error
+
+	// Withdrawals.
+	SetPayloadExpectedWithdrawals(withdrawals []*enginev1.Withdrawal) error
+	DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdrawal) error
+	DequeueBuilderPendingWithdrawals(num uint64) error
+	SetNextWithdrawalBuilderIndex(idx primitives.BuilderIndex) error
 	OnboardBuildersFromPendingDeposits() error
 }
 
@@ -53,4 +59,17 @@ type readOnlyGloasFields interface {
 	IsAttestationSameSlot(blockRoot [32]byte, slot primitives.Slot) (bool, error)
 	BuilderPendingPayment(index uint64) (*ethpb.BuilderPendingPayment, error)
 	ExecutionPayloadAvailability(slot primitives.Slot) (uint64, error)
+
+	// Withdrawals
+	IsParentBlockFull() (bool, error)
+	ExpectedWithdrawalsGloas() (ExpectedWithdrawalsGloasResult, error)
+}
+
+// ExpectedWithdrawalsGloasResult bundles the expected withdrawals and related counters
+// for the Gloas fork to avoid positional return mistakes.
+type ExpectedWithdrawalsGloasResult struct {
+	Withdrawals                      []*enginev1.Withdrawal
+	ProcessedBuilderWithdrawalsCount uint64
+	ProcessedPartialWithdrawalsCount uint64
+	NextWithdrawalBuilderIndex       primitives.BuilderIndex
 }
