@@ -135,8 +135,8 @@ func (vs *Server) getLocalPayloadFromEngine(
 		return nil, err
 	}
 	var attr payloadattribute.Attributer
-	switch st.Version() {
-	case version.Deneb, version.Electra, version.Fulu:
+	switch {
+	case st.Version() >= version.Deneb:
 		withdrawals, _, err := st.ExpectedWithdrawals()
 		if err != nil {
 			return nil, err
@@ -151,7 +151,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		if err != nil {
 			return nil, err
 		}
-	case version.Capella:
+	case st.Version() == version.Capella:
 		withdrawals, _, err := st.ExpectedWithdrawals()
 		if err != nil {
 			return nil, err
@@ -165,7 +165,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		if err != nil {
 			return nil, err
 		}
-	case version.Bellatrix:
+	case st.Version() == version.Bellatrix:
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributes{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,

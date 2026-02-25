@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "handlers.go",
         "handlers_block.go",
+        "handlers_gloas.go",
         "log.go",
         "server.go",
     ],

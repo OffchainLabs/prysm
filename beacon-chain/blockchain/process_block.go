@@ -101,7 +101,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
 	}
-	if cfg.roblock.Version() <= version.Gloas {
+	if cfg.roblock.Version() < version.Gloas {
 		s.sendFCU(cfg)
 	}
 
@@ -547,6 +547,9 @@ func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState
 func (s *Service) validateMergeTransitionBlock(ctx context.Context, stateVersion int, stateHeader interfaces.ExecutionData, blk interfaces.ReadOnlySignedBeaconBlock) error {
 	// Skip validation if block is older than Bellatrix.
 	if blocks.IsPreBellatrixVersion(blk.Block().Version()) {
+		return nil
+	}
+	if blk.Block().Version() >= version.Gloas {
 		return nil
 	}
 
@@ -998,6 +1001,7 @@ func (s *Service) waitForSync() error {
 	}
 }
 
+// the caller of this function must hold a write lock in forkchoice store.
 func (s *Service) handleInvalidExecutionError(ctx context.Context, err error, blockRoot, parentRoot [32]byte, parentHash [32]byte) error {
 	if IsInvalidBlock(err) && InvalidBlockLVH(err) != [32]byte{} {
 		return s.pruneInvalidBlock(ctx, blockRoot, parentRoot, parentHash, InvalidBlockLVH(err))
