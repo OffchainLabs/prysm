@@ -2,51 +2,17 @@ package beacon
 
 import (
 	"context"
-	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api/pagination"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/config/features"
-	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-// sortableAttestations implements the Sort interface to sort attestations
-// by slot as the canonical sorting attribute.
-type sortableAttestations []ethpb.Att
-
-// Len is the number of elements in the collection.
-func (s sortableAttestations) Len() int { return len(s) }
-
-// Swap swaps the elements with indexes i and j.
-func (s sortableAttestations) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-
-// Less reports whether the element with index i must sort before the element with index j.
-func (s sortableAttestations) Less(i, j int) bool {
-	return s[i].GetData().Slot < s[j].GetData().Slot
-}
-
-func mapAttestationsByTargetRoot(atts []ethpb.Att) map[[32]byte][]ethpb.Att {
-	attsMap := make(map[[32]byte][]ethpb.Att, len(atts))
-	if len(atts) == 0 {
-		return attsMap
-	}
-	for _, att := range atts {
-		attsMap[bytesutil.ToBytes32(att.GetData().Target.Root)] = append(attsMap[bytesutil.ToBytes32(att.GetData().Target.Root)], att)
-	}
-	return attsMap
-}
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
@@ -127,92 +93,6 @@ func (bs *Server) AttestationPoolElectra(_ context.Context, req *ethpb.Attestati
 		TotalSize:     int32(len(atts)),
 		NextPageToken: nextPageToken,
 	}, nil
-}
-
-func blockAttestations[T ethpb.Att](blocks []interfaces.ReadOnlySignedBeaconBlock) ([]T, error) {
-	blockAtts := make([]ethpb.Att, 0, params.BeaconConfig().MaxAttestations*uint64(len(blocks)))
-	for _, blk := range blocks {
-		blockAtts = append(blockAtts, blk.Block().Body().Attestations()...)
-	}
-	// We sort attestations according to the Sortable interface.
-	sort.Sort(sortableAttestations(blockAtts))
-	numAttestations := len(blockAtts)
-	if numAttestations == 0 {
-		return []T{}, nil
-	}
-
-	atts := make([]T, 0, len(blockAtts))
-	for _, att := range blockAtts {
-		a, ok := att.(T)
-		if !ok {
-			var expected T
-			return nil, status.Errorf(codes.Internal, "Attestation is of the wrong type (expected %T, got %T)", expected, att)
-		}
-		atts = append(atts, a)
-	}
-
-	return atts, nil
-}
-
-func blockIndexedAttestations[T ethpb.IndexedAtt](
-	ctx context.Context,
-	blocks []interfaces.ReadOnlySignedBeaconBlock,
-	stateGen stategen.StateManager,
-) ([]T, error) {
-	attsArray := make([]ethpb.Att, 0, params.BeaconConfig().MaxAttestations*uint64(len(blocks)))
-	for _, b := range blocks {
-		attsArray = append(attsArray, b.Block().Body().Attestations()...)
-	}
-
-	// We sort attestations according to the Sortable interface.
-	sort.Sort(sortableAttestations(attsArray))
-	numAttestations := len(attsArray)
-	if numAttestations == 0 {
-		return []T{}, nil
-	}
-
-	// We use the retrieved committees for the b root to convert all attestations
-	// into indexed form effectively.
-	mappedAttestations := mapAttestationsByTargetRoot(attsArray)
-	indexed := make([]T, 0, numAttestations)
-	for targetRoot, atts := range mappedAttestations {
-		attState, err := stateGen.StateByRoot(ctx, targetRoot)
-		if err != nil && strings.Contains(err.Error(), "unknown state summary") {
-			// We shouldn't stop the request if we encounter an attestation we don't have the state for.
-			log.Debugf("Could not get state for attestation target root %#x", targetRoot)
-			continue
-		} else if err != nil {
-			return nil, status.Errorf(
-				codes.Internal,
-				"Could not retrieve state for attestation target root %#x: %v",
-				targetRoot,
-				err,
-			)
-		}
-		for i := range atts {
-			att := atts[i]
-			committee, err := helpers.BeaconCommitteeFromState(ctx, attState, att.GetData().Slot, att.GetData().CommitteeIndex)
-			if err != nil {
-				return nil, status.Errorf(
-					codes.Internal,
-					"Could not retrieve committee from state %v",
-					err,
-				)
-			}
-			idxAtt, err := attestation.ConvertToIndexed(ctx, att, committee)
-			if err != nil {
-				return nil, err
-			}
-			a, ok := idxAtt.(T)
-			if !ok {
-				var expected T
-				return nil, status.Errorf(codes.Internal, "Indexed attestation is of the wrong type (expected %T, got %T)", expected, idxAtt)
-			}
-			indexed = append(indexed, a)
-		}
-	}
-
-	return indexed, nil
 }
 
 func attestationsFromPool[T ethpb.Att](pageSize int32, pool attestations.Pool) ([]T, error) {

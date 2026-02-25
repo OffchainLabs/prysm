@@ -18,37 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
-func TestServer_mapAttestationToTargetRoot(t *testing.T) {
-	count := primitives.Slot(100)
-	atts := make([]ethpb.Att, count)
-	targetRoot1 := bytesutil.ToBytes32([]byte("root1"))
-	targetRoot2 := bytesutil.ToBytes32([]byte("root2"))
-
-	for i := range count {
-		var targetRoot [32]byte
-		if i%2 == 0 {
-			targetRoot = targetRoot1
-		} else {
-			targetRoot = targetRoot2
-		}
-		atts[i] = &ethpb.Attestation{
-			Data: &ethpb.AttestationData{
-				Target: &ethpb.Checkpoint{
-					Root: targetRoot[:],
-				},
-			},
-			AggregationBits: bitfield.Bitlist{0b11},
-		}
-
-	}
-	mappedAtts := mapAttestationsByTargetRoot(atts)
-	wantedMapLen := 2
-	wantedMapNumberOfElements := 50
-	assert.Equal(t, wantedMapLen, len(mappedAtts), "Unexpected mapped attestations length")
-	assert.Equal(t, wantedMapNumberOfElements, len(mappedAtts[targetRoot1]), "Unexpected number of attestations per block root")
-	assert.Equal(t, wantedMapNumberOfElements, len(mappedAtts[targetRoot2]), "Unexpected number of attestations per block root")
-}
-
 func TestServer_AttestationPool_Pagination_ExceedsMaxPageSize(t *testing.T) {
 	ctx := t.Context()
 	bs := &Server{}
