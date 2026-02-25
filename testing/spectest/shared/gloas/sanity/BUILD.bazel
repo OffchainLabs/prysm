@@ -5,7 +5,6 @@ go_library(
     testonly = True,
     srcs = [
         "block_processing.go",
-        "block_processing.yaml.go",
         "slot_processing.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/gloas/sanity",

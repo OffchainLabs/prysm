@@ -29,6 +29,11 @@ func init() {
 	transition.SkipSlotCache.Disable()
 }
 
+// Config is the schema for meta.yaml in sanity/blocks tests.
+type Config struct {
+	BlocksCount int `json:"blocks_count"`
+}
+
 // RunBlockProcessingTest executes "sanity/blocks" tests.
 func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 	require.NoError(t, utils.SetConfig(t, config))
