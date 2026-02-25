@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
@@ -146,21 +146,48 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 		gasPrice = expectedPrice
 	}
 
-	// Check if we're post-Fulu fork
-	clock := startup.NewClock(e2e.TestParams.CLGenesisTime, [32]byte{})
-	isPostFulu := clock.CurrentEpoch() >= params.BeaconConfig().FuluForkEpoch
+	// Use the EL-side Osaka fork timestamp to decide sidecar version.
+	// geth v1.17.0's fillTransactions filters blob txs by BlobVersion:
+	//   pre-Osaka  → BlobSidecarVersion0 (KZG proofs)
+	//   post-Osaka → BlobSidecarVersion1 (cell proofs)
+	// We must match this exactly, using the same timestamp derivation
+	// (interop.GethOsakaTime) that configures the geth genesis.
+	osakaTime := interop.GethOsakaTime(e2e.TestParams.Eth1GenesisTime, params.BeaconConfig())
+	isPostOsaka := osakaTime != nil && uint64(time.Now().Unix()) >= *osakaTime
 
 	g, _ := errgroup.WithContext(context.Background())
 	txs := make([]*types.Transaction, 10)
 
 	// Send blob transactions - use different versions pre/post Fulu
-	if isPostFulu {
-		logrus.Info("Sending blob transactions with cell proofs")
+	if isPostOsaka {
+		// Post-Osaka blocks only include V1 (cell proof) blob txs. Any
+		// unconfirmed V0 txs remaining in geth's blobpool are orphaned and
+		// block V1 txs for the same account — geth's blobpool.Pending breaks
+		// on version mismatch during nonce-ordered iteration rather than
+		// skipping. Use the confirmed nonce so V1 txs can replace orphaned
+		// V0 txs, with a fee bump to satisfy the blobpool's 100% replacement
+		// requirement.
+		confirmedNonce, cErr := backend.NonceAt(context.Background(), fundedAccount.Address, nil)
+		if cErr != nil {
+			return cErr
+		}
+		blobNonce := nonce
+		blobGasPrice := gasPrice
+		if confirmedNonce < nonce {
+			blobNonce = confirmedNonce
+			blobGasPrice = new(big.Int).Mul(gasPrice, big.NewInt(3))
+		}
+		logrus.WithFields(logrus.Fields{
+			"confirmedNonce": confirmedNonce,
+			"pendingNonce":   nonce,
+			"blobNonce":      blobNonce,
+			"replacing":      confirmedNonce < nonce,
+		}).Info("Sending blob transactions with cell proofs")
 		// Reduced from 10 to 5 to reduce load and prevent builder/EL timeouts
 		for index := range uint64(5) {
 
 			g.Go(func() error {
-				tx, err := RandomBlobCellTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
+				tx, err := RandomBlobCellTx(client, fundedAccount.Address, blobNonce+index, blobGasPrice, chainid, al, useLargeBlobs)
 				if err != nil {
 					return errors.Wrap(err, "Could not create blob cell tx")
 				}
@@ -337,7 +364,7 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 			return nil, errors.Wrap(err, "getBlobData")
 		}
 
-		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, make(types.AccessList, 0))
+		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(3000000), data, make(types.AccessList, 0))
 	case 1:
 		// Blob transaction with cell proofs and access list
 		tx := types.NewTx(&types.LegacyTx{
@@ -374,7 +401,7 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 			return nil, errors.Wrap(err, "getBlobData")
 		}
 
-		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, *al)
+		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(3000000), data, *al)
 	}
 
 	return nil, nil
