@@ -776,7 +776,6 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()]
 
-	// Build a set of pruning candidates for quick lookup.
 	pidSet := make(map[peer.ID]bool, len(pids))
 	for _, pid := range pids {
 		pidSet[pid] = true

@@ -495,13 +495,10 @@ func TestFilterSubnetPeers(t *testing.T) {
 	subnet20 := r.addDigestAndIndexToTopic(defaultTopic, digest, 20)
 	cache.SubnetIDs.AddAttesterSubnetID(currSlot, 20)
 
-	topic10, err := p.JoinTopic(subnet10)
+	_, err = tracer.JoinAndWatchTopic(subnet10, p)
 	require.NoError(t, err)
-	require.NoError(t, tracer.WatchTopic(t.Context(), topic10))
-
-	topic20, err := p.JoinTopic(subnet20)
+	_, err = tracer.JoinAndWatchTopic(subnet20, p)
 	require.NoError(t, err)
-	require.NoError(t, tracer.WatchTopic(t.Context(), topic20))
 
 	p1 := createPeer(t, subnet10)
 	p2 := createPeer(t, subnet10, subnet20)

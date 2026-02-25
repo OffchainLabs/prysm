@@ -315,12 +315,12 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		}
 	}()
 
-	tracer := p2ptest.NewGossipTracer()
+	ps1Tracer := p2ptest.NewGossipTracer()
 
 	ps1, err := pubsub.NewGossipSub(t.Context(), hosts[0],
 		pubsub.WithMessageSigning(false),
 		pubsub.WithStrictSignatureVerification(false),
-		pubsub.WithRawTracer(tracer),
+		pubsub.WithRawTracer(ps1Tracer),
 	)
 	require.NoError(t, err)
 
@@ -373,9 +373,8 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
 
-	pTopic, err := p.JoinTopic(topic)
+	_, err = ps1Tracer.JoinAndWatchTopic(topic, p)
 	require.NoError(t, err)
-	require.NoError(t, tracer.WatchTopic(t.Context(), pTopic))
 
 	tpHandle, err := p2.JoinTopic(topic)
 	require.NoError(t, err)
@@ -383,7 +382,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	require.NoError(t, err)
 
 	// Block until gossipsub is ready to deliver a published message to p2.
-	require.NoError(t, tracer.CanPublishToPeer(t.Context(), topic, p2.PeerID()))
+	require.NoError(t, ps1Tracer.CanPublishToPeer(t.Context(), topic, p2.PeerID()))
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
