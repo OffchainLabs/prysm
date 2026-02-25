@@ -114,6 +114,10 @@ func prepareGloasForkchoicePayload(
 }
 
 func TestInsertGloasBlock_EmptyNodeOnly(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 	ctx := t.Context()
 
@@ -139,6 +143,10 @@ func TestInsertGloasBlock_EmptyNodeOnly(t *testing.T) {
 }
 
 func TestInsertPayload_CreatesFullNode(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 	ctx := t.Context()
 
@@ -168,6 +176,10 @@ func TestInsertPayload_CreatesFullNode(t *testing.T) {
 }
 
 func TestInsertPayload_DuplicateIsNoop(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 	ctx := t.Context()
 
@@ -192,6 +204,10 @@ func TestInsertPayload_DuplicateIsNoop(t *testing.T) {
 }
 
 func TestInsertPayload_WithoutEmptyNode_Errors(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 
 	root := indexToHash(99)
@@ -203,6 +219,10 @@ func TestInsertPayload_WithoutEmptyNode_Errors(t *testing.T) {
 }
 
 func TestGloasBlock_ChildBuildsOnEmpty(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 	ctx := t.Context()
 
@@ -229,6 +249,10 @@ func TestGloasBlock_ChildBuildsOnEmpty(t *testing.T) {
 }
 
 func TestGloasBlock_ChildrenOfEmptyAndFull(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 	ctx := t.Context()
 
@@ -271,6 +295,10 @@ func TestGloasBlock_ChildrenOfEmptyAndFull(t *testing.T) {
 }
 
 func TestBlockHash_ReturnsBlockHash(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 	ctx := t.Context()
 
@@ -286,6 +314,10 @@ func TestBlockHash_ReturnsBlockHash(t *testing.T) {
 }
 
 func TestBlockHash_UnknownRoot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 
 	unknownRoot := indexToHash(999)
@@ -294,6 +326,10 @@ func TestBlockHash_UnknownRoot(t *testing.T) {
 }
 
 func TestBlockHash_GenesisRoot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 
 	got, err := f.BlockHash(params.BeaconConfig().ZeroHash)
@@ -302,6 +338,10 @@ func TestBlockHash_GenesisRoot(t *testing.T) {
 }
 
 func TestGloasBlock_ChildBuildsOnFull(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 	ctx := t.Context()
 
@@ -333,6 +373,10 @@ func TestGloasBlock_ChildBuildsOnFull(t *testing.T) {
 }
 
 func TestGloasHeadComputation(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(1, 1)
 	s := f.store
 	ctx := t.Context()
@@ -617,6 +661,10 @@ func TestGloasHeadComputation(t *testing.T) {
 // but adds an attestation on the parent so that shouldApplyProposerBoost
 // passes at consecutive slots (parent.weight >= committeeWeight * threshold / 100).
 func TestGloasProposerBoostWithParentWeight(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(1, 1)
 	s := f.store
 	ctx := t.Context()
@@ -737,6 +785,10 @@ func TestGloasProposerBoostWithParentWeight(t *testing.T) {
 }
 
 func TestShouldExtendPayload(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 	ctx := t.Context()
 
@@ -830,6 +882,10 @@ func TestShouldExtendPayload(t *testing.T) {
 }
 
 func TestChoosePayloadContent(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(0, 0)
 	ctx := t.Context()
 
@@ -899,6 +955,10 @@ func TestChoosePayloadContent(t *testing.T) {
 }
 
 func TestGloasForkedBranches(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(1, 1)
 	s := f.store
 	ctx := t.Context()
@@ -1022,6 +1082,10 @@ func TestGloasForkedBranches(t *testing.T) {
 }
 
 func TestGloasPTCOverridesProposerBoost(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(1, 1)
 	s := f.store
 	ctx := t.Context()
@@ -1113,6 +1177,10 @@ func TestGloasPTCOverridesProposerBoost(t *testing.T) {
 }
 
 func TestGloasDeepForkWeightPropagation(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	f := setup(1, 1)
 	s := f.store
 	ctx := t.Context()
