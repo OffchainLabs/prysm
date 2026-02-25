@@ -592,11 +592,22 @@ func (s *Service) runLateBlockTasks() {
 		return
 	}
 
-	attThreshold := params.BeaconConfig().SecondsPerSlot / 3
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, time.Duration(attThreshold)*time.Second, params.BeaconConfig().SecondsPerSlot)
+	cfg := params.BeaconConfig()
+	attDueBPS := cfg.AttestationDueBPS
+	if slots.ToEpoch(s.CurrentSlot()) >= cfg.GloasForkEpoch {
+		attDueBPS = cfg.AttestationDueBPSGloas
+	}
+	attThreshold := cfg.SlotComponentDuration(attDueBPS)
+	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
 	for {
 		select {
-		case <-ticker.C():
+		case slot := <-ticker.C():
+			if attDueBPS != cfg.AttestationDueBPSGloas && slots.ToEpoch(slot) >= cfg.GloasForkEpoch {
+				ticker.Done()
+				attDueBPS = cfg.AttestationDueBPSGloas
+				attThreshold = cfg.SlotComponentDuration(attDueBPS)
+				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
+			}
 			s.lateBlockTasks(s.ctx)
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting routine")
@@ -968,26 +979,38 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		return
 	}
 
-	s.headLock.RLock()
-	headBlock, err := s.headBlock()
-	if err != nil {
+	if headState.Version() >= version.Gloas {
+		bh, err := headState.LatestBlockHash()
+		if err != nil {
+			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve latest block hash")
+			return
+		}
+		_, err = s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
+		if err != nil {
+			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
+		}
+	} else {
+		s.headLock.RLock()
+		headBlock, err := s.headBlock()
+		if err != nil {
+			s.headLock.RUnlock()
+			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve head block")
+			return
+		}
 		s.headLock.RUnlock()
-		log.WithError(err).Debug("could not perform late block tasks: failed to retrieve head block")
-		return
-	}
-	s.headLock.RUnlock()
 
-	fcuArgs := &fcuConfig{
-		headState:  headState,
-		headRoot:   headRoot,
-		headBlock:  headBlock,
-		attributes: attribute,
-	}
-	s.cfg.ForkChoiceStore.Lock()
-	defer s.cfg.ForkChoiceStore.Unlock()
-	_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
-	if err != nil {
-		log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
+		fcuArgs := &fcuConfig{
+			headState:  headState,
+			headRoot:   headRoot,
+			headBlock:  headBlock,
+			attributes: attribute,
+		}
+		s.cfg.ForkChoiceStore.Lock()
+		defer s.cfg.ForkChoiceStore.Unlock()
+		_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
+		if err != nil {
+			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
+		}
 	}
 }
 
