@@ -130,7 +130,10 @@ func TestExecutionPayloadEnvelopeSubscriber_WrongMessage(t *testing.T) {
 }
 
 func TestExecutionPayloadEnvelopeSubscriber_HappyPath(t *testing.T) {
-	s := &Service{cfg: &config{chain: &mock.ChainService{}}}
+	s := &Service{
+		cfg:                           &config{chain: &mock.ChainService{}},
+		executionPayloadEnvelopeCache: lruwrpr.New(executionPayloadEnvelopeCacheSize),
+	}
 	root := [32]byte{0x01}
 	blockHash := [32]byte{0x02}
 	env := testSignedExecutionPayloadEnvelope(t, 1, 2, root, blockHash)
