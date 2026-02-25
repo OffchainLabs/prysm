@@ -68,6 +68,15 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
+	// DA check: verify data columns are available before inserting payload.
+	blk, err := s.cfg.BeaconDB.Block(ctx, root)
+	if err != nil {
+		return errors.Wrap(err, "could not retrieve block for DA check")
+	}
+	if err := s.areDataColumnsAvailable(ctx, root, blk.Block()); err != nil {
+		return errors.Wrap(err, "data availability check failed for payload envelope")
+	}
+
 	if err := s.savePostPayload(ctx, signed, preState); err != nil {
 		return err
 	}
