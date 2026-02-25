@@ -34,7 +34,7 @@ func SprintfAssertionLoggerFn(s *string) assertionLoggerFn {
 
 // Equal compares values using comparison operator.
 func Equal(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
-	if expected != actual {
+	if !safeEqual(expected, actual) {
 		errMsg := parseMsg("Values are not equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
 		loggerFn("%s:%d %s, want: %[4]v (%[4]T), got: %[5]v (%[5]T)", filepath.Base(file), line, errMsg, expected, actual)
@@ -43,11 +43,22 @@ func Equal(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
 
 // NotEqual compares values using comparison operator.
 func NotEqual(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
-	if expected == actual {
+	if safeEqual(expected, actual) {
 		errMsg := parseMsg("Values are equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
 		loggerFn("%s:%d %s, both values are equal: %[4]v (%[4]T)", filepath.Base(file), line, errMsg, expected)
 	}
+}
+
+// safeEqual compares two values with ==, falling back to reflect.DeepEqual
+// if the underlying types are not comparable (Go 1.26+ panics on such comparisons).
+func safeEqual(a, b any) (equal bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			equal = reflect.DeepEqual(a, b)
+		}
+	}()
+	return a == b
 }
 
 // DeepEqual compares values using DeepEqual.

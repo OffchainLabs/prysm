@@ -28,10 +28,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set up Go 1.24
+      - name: Set up Go 1.26.0
         uses: actions/setup-go@v4
         with:
-          go-version: '1.25.1'
+          go-version: '1.26.0'
       - name: Run Gosec Security Scanner
         run: | # https://github.com/securego/gosec/issues/469
           export PATH=$PATH:$(go env GOPATH)/bin
@@ -47,24 +47,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go 1.25.1
+      - name: Set up Go 1.26.0
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.1'
+          go-version: '1.26.0'
 
       - name: Golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.4
+          version: v2.10.1
 
   build:
     name: Build
     runs-on: ubuntu-4
     steps:
-      - name: Set up Go 1.25.1
+      - name: Set up Go 1.26.0
         uses: actions/setup-go@v4
         with:
-          go-version: '1.25.1'
+          go-version: '1.26.0'
         id: go
 
       - name: Check out code into the Go module directory
