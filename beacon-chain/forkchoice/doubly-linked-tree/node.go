@@ -3,8 +3,10 @@ package doublylinkedtree
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -110,8 +112,31 @@ func (n *Node) leadsToViableHead(justifiedEpoch, currentEpoch primitives.Epoch) 
 	return n.bestDescendant.viableForHead(justifiedEpoch, currentEpoch)
 }
 
-// setNodeAndParentValidated sets the current node and all the ancestors as validated (i.e. non-optimistic).
-func (n *Node) setNodeAndParentValidated(ctx context.Context) error {
+// isNodeReady returns true if this node's local conditions for being
+// non-optimistic are met (EL-validated AND has enough proofs when required).
+func (n *Node) isNodeReady() (bool, error) {
+	if !n.elValidated {
+		return false, nil
+	}
+	if !features.Get().EnableZkvm {
+		return true, nil
+	}
+
+	fuluStart, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
+	if err != nil {
+		return false, fmt.Errorf("could not compute Fulu epoch start: %w", err)
+	}
+
+	if n.slot >= fuluStart && !n.hasEnoughProofs {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// tryMarkValid transitions this node from optimistic to valid if it is locally
+// ready and its parent is non-optimistic, then propagates to children.
+func (n *Node) tryMarkValid(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -119,12 +144,50 @@ func (n *Node) setNodeAndParentValidated(ctx context.Context) error {
 	if !n.optimistic {
 		return nil
 	}
-	n.optimistic = false
 
-	if n.parent == nil {
+	ready, err := n.isNodeReady()
+	if err != nil {
+		return fmt.Errorf("is node ready: %w", err)
+	}
+
+	if !ready {
 		return nil
 	}
-	return n.parent.setNodeAndParentValidated(ctx)
+
+	if n.parent != nil && n.parent.optimistic {
+		return nil
+	}
+
+	n.optimistic = false
+	for _, child := range n.children {
+		if err := child.tryMarkValid(ctx); err != nil {
+			return fmt.Errorf("try mark valid child: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// setELValidatedWithParents sets elValidated = true on this node and all
+// ancestors (stopping at the first already-EL-validated node), then propagates
+// optimistic status changes downward.
+func (n *Node) setELValidatedWithParents(ctx context.Context) error {
+	topChanged, node := n, n
+	for node != nil && !node.elValidated {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		node.elValidated = true
+		topChanged = node
+		node = node.parent
+	}
+
+	if err := topChanged.tryMarkValid(ctx); err != nil {
+		return fmt.Errorf("try mark valid after EL validation: %w", err)
+	}
+
+	return nil
 }
 
 // arrivedEarly returns whether this node was inserted before the first

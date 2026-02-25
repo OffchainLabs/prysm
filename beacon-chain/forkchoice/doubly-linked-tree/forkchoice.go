@@ -338,15 +338,6 @@ func (f *ForkChoice) ProposerBoost() [fieldparams.RootLength]byte {
 	return f.store.proposerBoost()
 }
 
-// SetOptimisticToValid sets the node with the given root as a fully validated node
-func (f *ForkChoice) SetOptimisticToValid(ctx context.Context, root [fieldparams.RootLength]byte) error {
-	node, ok := f.store.nodeByRoot[root]
-	if !ok || node == nil {
-		return errors.Wrap(ErrNilNode, "could not set node to valid")
-	}
-	return node.setNodeAndParentValidated(ctx)
-}
-
 // PreviousJustifiedCheckpoint of fork choice store.
 func (f *ForkChoice) PreviousJustifiedCheckpoint() *forkchoicetypes.Checkpoint {
 	return f.store.prevJustifiedCheckpoint
@@ -688,6 +679,38 @@ func (f *ForkChoice) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) (
 		}
 	}
 	return f.TargetRootForEpoch(targetNode.root, epoch)
+}
+
+// MarkELValidated marks the node with the given root as EL-validated and walks
+// parents to set elValidated (since EL validation of a child implies ancestor
+// payloads are valid).
+func (f *ForkChoice) MarkELValidated(ctx context.Context, root [32]byte) error {
+	node, ok := f.store.nodeByRoot[root]
+	if !ok || node == nil {
+		return fmt.Errorf("mark EL validated: %w", ErrNilNode)
+	}
+
+	if err := node.setELValidatedWithParents(ctx); err != nil {
+		return fmt.Errorf("set EL validated with parents: %w", err)
+	}
+
+	return nil
+}
+
+// MarkHasEnoughProofs marks the node with the given root as having enough
+// execution proofs and propagates optimistic status changes.
+func (f *ForkChoice) MarkHasEnoughProofs(ctx context.Context, root [32]byte) error {
+	node, ok := f.store.nodeByRoot[root]
+	if !ok || node == nil {
+		return fmt.Errorf("mark has enough proofs: %w", ErrNilNode)
+	}
+
+	node.hasEnoughProofs = true
+	if err := node.tryMarkValid(ctx); err != nil {
+		return fmt.Errorf("try mark valid: %w", err)
+	}
+
+	return nil
 }
 
 // ParentRoot returns the block root of the parent node if it is in forkchoice.

@@ -137,8 +137,11 @@ func (s *Service) setupForkchoiceRoot(st state.BeaconState) error {
 			return errors.Wrap(err, "could not get last validated checkpoint")
 		}
 		if bytes.Equal(fRoot[:], lastValidatedCheckpoint.Root) {
-			if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(s.ctx, fRoot); err != nil {
-				return errors.Wrap(err, "could not set finalized block as validated")
+			if err := s.cfg.ForkChoiceStore.MarkELValidated(s.ctx, fRoot); err != nil {
+				return fmt.Errorf("mark EL validated: %w", err)
+			}
+			if err := s.cfg.ForkChoiceStore.MarkHasEnoughProofs(s.ctx, fRoot); err != nil {
+				return fmt.Errorf("mark has enough proofs: %w", err)
 			}
 		}
 	}

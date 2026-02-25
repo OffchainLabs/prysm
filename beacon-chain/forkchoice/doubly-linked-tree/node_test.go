@@ -196,12 +196,14 @@ func TestNode_SetFullyValidated(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
 	storeNodes[1] = f.store.nodeByRoot[blk.Root()]
-	require.NoError(t, f.SetOptimisticToValid(ctx, params.BeaconConfig().ZeroHash))
+	require.NoError(t, f.MarkELValidated(ctx, params.BeaconConfig().ZeroHash))
+	require.NoError(t, f.MarkHasEnoughProofs(ctx, params.BeaconConfig().ZeroHash))
 	state, blk, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
 	storeNodes[2] = f.store.nodeByRoot[blk.Root()]
-	require.NoError(t, f.SetOptimisticToValid(ctx, indexToHash(1)))
+	require.NoError(t, f.MarkELValidated(ctx, indexToHash(1)))
+	require.NoError(t, f.MarkHasEnoughProofs(ctx, indexToHash(1)))
 	state, blk, err = prepareForkchoiceState(ctx, 3, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
@@ -223,7 +225,7 @@ func TestNode_SetFullyValidated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, true, opt)
 
-	require.NoError(t, f.store.nodeByRoot[indexToHash(4)].setNodeAndParentValidated(ctx))
+	require.NoError(t, f.store.nodeByRoot[indexToHash(4)].setELValidatedWithParents(ctx))
 
 	// block 5 should still be optimistic
 	opt, err = f.IsOptimistic(indexToHash(5))

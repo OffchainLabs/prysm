@@ -588,7 +588,6 @@ func TestStore_CommonAncestor(t *testing.T) {
 		unrealizedJustifiedEpoch: 1,
 		finalizedEpoch:           1,
 		unrealizedFinalizedEpoch: 1,
-		optimistic:               true,
 	}
 
 	f.store.nodeByRoot[[32]byte{'y'}] = n

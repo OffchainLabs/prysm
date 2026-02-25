@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/sirupsen/logrus"
 )
@@ -81,8 +80,8 @@ func (m *healthMonitor) performHealthCheck() {
 
 func (m *healthMonitor) loop() {
 	log.Debug("Starting health check routine for beacon node apis")
-	interval := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-	ticker := time.NewTicker(interval)
+	// Changed to second because in case of late proofs, the node can switch from unhealthy to healthy in a short time.
+	ticker := time.NewTicker(time.Second)
 
 	for ; true; <-ticker.C { // check immediately
 		if m.ctx.Err() != nil {

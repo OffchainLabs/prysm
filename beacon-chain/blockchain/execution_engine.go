@@ -157,8 +157,8 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 		}
 	}
 	forkchoiceUpdatedValidNodeCount.Inc()
-	if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, arg.headRoot); err != nil {
-		log.WithError(err).Error("Could not set head root to valid")
+	if err := s.cfg.ForkChoiceStore.MarkELValidated(ctx, arg.headRoot); err != nil {
+		log.WithError(err).Error("Could not mark EL validated")
 		return nil, nil
 	}
 	// If the forkchoice update call has an attribute, update the payload ID cache.

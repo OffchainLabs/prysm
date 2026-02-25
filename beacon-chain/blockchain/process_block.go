@@ -86,8 +86,8 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 
 	s.InsertSlashingsToForkChoiceStore(ctx, cfg.roblock.Block().Body().AttesterSlashings())
 	if cfg.isValidPayload {
-		if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, cfg.roblock.Root()); err != nil {
-			return errors.Wrap(err, "could not set optimistic block to valid")
+		if err := s.cfg.ForkChoiceStore.MarkELValidated(ctx, cfg.roblock.Root()); err != nil {
+			return errors.Wrap(err, "mark EL validated")
 		}
 	}
 
@@ -292,8 +292,8 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	}
 	// Set their optimistic status
 	if isValidPayload {
-		if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, lastBR); err != nil {
-			return errors.Wrap(err, "could not set optimistic block to valid")
+		if err := s.cfg.ForkChoiceStore.MarkELValidated(ctx, lastBR); err != nil {
+			return fmt.Errorf("mark EL validated: %w", err)
 		}
 	}
 	return s.saveHeadNoDB(ctx, lastB, lastBR, preState, !isValidPayload)
@@ -664,10 +664,6 @@ func (s *Service) isDataAvailable(
 
 	root, blockVersion := roBlock.Root(), roBlock.Version()
 	if blockVersion >= version.Fulu {
-		if err := s.areExecutionProofsAvailable(ctx, roBlock); err != nil {
-			return fmt.Errorf("are execution proofs available: %w", err)
-		}
-
 		if err := s.areDataColumnsAvailable(ctx, root, block); err != nil {
 			return fmt.Errorf("are data columns available: %w", err)
 		}
@@ -680,77 +676,6 @@ func (s *Service) isDataAvailable(
 	}
 
 	return nil
-}
-
-// areExecutionProofsAvailable blocks until we have enough execution proofs to import the block,
-// or an error or context cancellation occurs.
-// This check is only performed for lightweight verifier nodes that need zkVM proofs
-// to validate block execution (nodes without execution layer + proof generation capability).
-// A nil result means that the data availability check is successful.
-func (s *Service) areExecutionProofsAvailable(ctx context.Context, roBlock consensusblocks.ROBlock) error {
-	// Return early if zkVM features are disabled (no need to check for execution proofs),
-	// or if the generation proof is enabled (we will generate proofs ourselves).
-	if !features.Get().EnableZkvm {
-		return nil
-	}
-
-	root, slot := roBlock.Root(), roBlock.Block().Slot()
-
-	requiredProofCount := params.BeaconConfig().MinProofsRequired
-	log := log.WithFields(logrus.Fields{
-		"root":               fmt.Sprintf("%#x", root),
-		"slot":               slot,
-		"requiredProofCount": requiredProofCount,
-	})
-
-	// Subscribe to newly execution proofs stored in the database.
-	subscription, identChan := s.proofStorage.Subscribe()
-	defer subscription.Unsubscribe()
-
-	// Return early if we already have enough proofs.
-	if actualProofCount := uint64(s.proofStorage.Summary(root).Count()); actualProofCount >= requiredProofCount {
-		log.WithField("actualProofCount", actualProofCount).Debug("Already have enough execution proofs")
-		return nil
-	}
-
-	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot, err := slots.StartTime(s.genesisTime, roBlock.Block().Slot()+1)
-	if err != nil {
-		return fmt.Errorf("start time: %w", err)
-	}
-
-	// Avoid logging if DA check is called after next slot start.
-	if nextSlot.After(time.Now()) {
-		timer := time.AfterFunc(time.Until(nextSlot), func() {
-			actualCount := uint64(s.proofStorage.Summary(root).Count())
-			if actualCount >= requiredProofCount {
-				return
-			}
-
-			log.WithField("proofsRetrieved", actualCount).Warning("Execution proofs still missing at slot end")
-		})
-
-		defer timer.Stop()
-	}
-
-	// Some proofs are missing; wait for them.
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case proofIdent := <-identChan:
-			// Skip if the proof is for a different block.
-			if proofIdent.BlockRoot != root {
-				continue
-			}
-
-			// Return if we have enough proofs.
-			if actualProofCount := uint64(s.proofStorage.Summary(root).Count()); actualProofCount >= requiredProofCount {
-				log.WithField("actualProofCount", actualProofCount).Debug("Got enough execution proofs")
-				return nil
-			}
-		}
-	}
 }
 
 // areDataColumnsAvailable blocks until all data columns committed to in the block are available,

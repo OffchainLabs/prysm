@@ -422,8 +422,11 @@ func (s *Service) saveGenesisData(ctx context.Context, genesisState state.Beacon
 	}
 	s.cfg.ForkChoiceStore.SetOriginRoot(genesisBlkRoot)
 	// Set genesis as fully validated
-	if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, genesisBlkRoot); err != nil {
-		return errors.Wrap(err, "Could not set optimistic status of genesis block to false")
+	if err := s.cfg.ForkChoiceStore.MarkELValidated(ctx, genesisBlkRoot); err != nil {
+		return errors.Wrap(err, "Could not mark genesis block as EL validated")
+	}
+	if err := s.cfg.ForkChoiceStore.MarkHasEnoughProofs(ctx, genesisBlkRoot); err != nil {
+		return errors.Wrap(err, "Could not mark genesis block as having enough proofs")
 	}
 	s.cfg.ForkChoiceStore.SetGenesisTime(s.genesisTime)
 
