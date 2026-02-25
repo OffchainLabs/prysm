@@ -37,34 +37,6 @@ option php_namespace = "Ethereum\\Eth\\v1alpha1";
 // Beacon Chain.
 service BeaconChain {
 
-  // Retrieve indexed attestations by block root, slot, or epoch.
-  //
-  // The server may return an empty list when no indexed attestations match the
-  // given filter criteria. This RPC should not return NOT_FOUND. Only one
-  // filter criteria should be used. This endpoint allows for retrieval of
-  // genesis information via a boolean query filter.
-  rpc ListIndexedAttestations(ListIndexedAttestationsRequest)
-      returns (ListIndexedAttestationsResponse) {
-    option deprecated = true;
-    option (google.api.http) = {
-      get : "/eth/v1alpha1/beacon/attestations/indexed"
-    };
-  }
-
-  // Retrieve indexed attestations by block root, slot, or epoch.
-  //
-  // The server may return an empty list when no indexed attestations match the
-  // given filter criteria. This RPC should not return NOT_FOUND. Only one
-  // filter criteria should be used. This endpoint allows for retrieval of
-  // genesis information via a boolean query filter.
-  rpc ListIndexedAttestationsElectra(ListIndexedAttestationsRequest)
-      returns (ListIndexedAttestationsElectraResponse) {
-    option deprecated = true;
-    option (google.api.http) = {
-      get : "/eth/v1alpha1/beacon/attestations/indexed_electra"
-    };
-  }
-
   // Retrieve attestations from pool.
   //
   // The server returns a list of attestations that have been seen but not
@@ -276,59 +248,6 @@ service BeaconChain {
       get : "/eth/v1alpha1/beacon/individual_votes"
     };
   }
-}
-
-// Request for indexed attestations by target epoch.
-message ListIndexedAttestationsRequest {
-  option deprecated = true;
-
-  oneof query_filter {
-    // Retrieve attestations by epoch processed.
-    uint64 epoch = 1 [
-      (ethereum.eth.ext.cast_type) =
-          "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
-    ];
-
-    // Optional criteria to retrieve genesis epoch attestations.
-    bool genesis_epoch = 2;
-  }
-
-  // The maximum number of IndexedAttestations to return in the response.
-  // This field is optional.
-  int32 page_size = 3;
-
-  // A pagination token returned from a previous call to
-  // `ListIndexedAttestations` that indicates where this listing should continue
-  // from. This field is optional.
-  string page_token = 4;
-}
-
-message ListIndexedAttestationsResponse {
-  option deprecated = true;
-
-  repeated IndexedAttestation indexed_attestations = 1;
-
-  // A pagination token returned from a previous call to
-  // `ListIndexedAttestations` that indicates from where listing should
-  // continue. This field is optional.
-  string next_page_token = 2;
-
-  // Total count of Attestations matching the request filter.
-  int32 total_size = 3;
-}
-
-message ListIndexedAttestationsElectraResponse {
-  option deprecated = true;
-
-  repeated IndexedAttestationElectra indexed_attestations = 1;
-
-  // A pagination token returned from a previous call to
-  // `ListIndexedAttestations` that indicates from where listing should
-  // continue. This field is optional.
-  string next_page_token = 2;
-
-  // Total count of Attestations matching the request filter.
-  int32 total_size = 3;
 }
 
 message ListBlocksRequest {

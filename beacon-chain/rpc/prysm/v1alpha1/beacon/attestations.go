@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/pagination"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/cmd"
@@ -47,131 +46,6 @@ func mapAttestationsByTargetRoot(atts []ethpb.Att) map[[32]byte][]ethpb.Att {
 		attsMap[bytesutil.ToBytes32(att.GetData().Target.Root)] = append(attsMap[bytesutil.ToBytes32(att.GetData().Target.Root)], att)
 	}
 	return attsMap
-}
-
-// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
-//
-// ListIndexedAttestations retrieves indexed attestations by block root.
-// IndexedAttestationsForEpoch are sorted by data slot by default. Start-end epoch
-// filter is used to retrieve blocks with.
-//
-// The server may return an empty list when no attestations match the given
-// filter criteria. This RPC should not return NOT_FOUND.
-func (bs *Server) ListIndexedAttestations(
-	ctx context.Context, req *ethpb.ListIndexedAttestationsRequest,
-) (*ethpb.ListIndexedAttestationsResponse, error) {
-	var blocks []interfaces.ReadOnlySignedBeaconBlock
-	var err error
-	switch q := req.QueryFilter.(type) {
-	case *ethpb.ListIndexedAttestationsRequest_GenesisEpoch:
-		blocks, _, err = bs.BeaconDB.Blocks(ctx, filters.NewFilter().SetStartEpoch(0).SetEndEpoch(0))
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not fetch attestations: %v", err)
-		}
-	case *ethpb.ListIndexedAttestationsRequest_Epoch:
-		if q.Epoch >= params.BeaconConfig().ElectraForkEpoch {
-			return &ethpb.ListIndexedAttestationsResponse{
-				IndexedAttestations: make([]*ethpb.IndexedAttestation, 0),
-				TotalSize:           int32(0),
-				NextPageToken:       strconv.Itoa(0),
-			}, nil
-		}
-		blocks, _, err = bs.BeaconDB.Blocks(ctx, filters.NewFilter().SetStartEpoch(q.Epoch).SetEndEpoch(q.Epoch))
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not fetch attestations: %v", err)
-		}
-	default:
-		return nil, status.Error(codes.InvalidArgument, "Must specify a filter criteria for fetching attestations")
-	}
-
-	indexedAtts, err := blockIndexedAttestations[*ethpb.IndexedAttestation](ctx, blocks, bs.StateGen)
-	if err != nil {
-		return nil, err
-	}
-
-	// If there are no attestations, we simply return a response specifying this.
-	// Otherwise, attempting to paginate 0 attestations below would result in an error.
-	if len(indexedAtts) == 0 {
-		return &ethpb.ListIndexedAttestationsResponse{
-			IndexedAttestations: make([]*ethpb.IndexedAttestation, 0),
-			TotalSize:           int32(0),
-			NextPageToken:       strconv.Itoa(0),
-		}, nil
-	}
-
-	start, end, nextPageToken, err := pagination.StartAndEndPage(req.PageToken, int(req.PageSize), len(indexedAtts))
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not paginate attestations: %v", err)
-	}
-
-	return &ethpb.ListIndexedAttestationsResponse{
-		IndexedAttestations: indexedAtts[start:end],
-		TotalSize:           int32(len(indexedAtts)),
-		NextPageToken:       nextPageToken,
-	}, nil
-}
-
-// Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
-//
-// ListIndexedAttestationsElectra retrieves indexed attestations by block root.
-// IndexedAttestationsForEpoch are sorted by data slot by default. Start-end epoch
-// filter is used to retrieve blocks with.
-//
-// The server may return an empty list when no attestations match the given
-// filter criteria. This RPC should not return NOT_FOUND.
-func (bs *Server) ListIndexedAttestationsElectra(
-	ctx context.Context,
-	req *ethpb.ListIndexedAttestationsRequest,
-) (*ethpb.ListIndexedAttestationsElectraResponse, error) {
-	var blocks []interfaces.ReadOnlySignedBeaconBlock
-	var err error
-	switch q := req.QueryFilter.(type) {
-	case *ethpb.ListIndexedAttestationsRequest_GenesisEpoch:
-		return &ethpb.ListIndexedAttestationsElectraResponse{
-			IndexedAttestations: make([]*ethpb.IndexedAttestationElectra, 0),
-			TotalSize:           int32(0),
-			NextPageToken:       strconv.Itoa(0),
-		}, nil
-	case *ethpb.ListIndexedAttestationsRequest_Epoch:
-		if q.Epoch < params.BeaconConfig().ElectraForkEpoch {
-			return &ethpb.ListIndexedAttestationsElectraResponse{
-				IndexedAttestations: make([]*ethpb.IndexedAttestationElectra, 0),
-				TotalSize:           int32(0),
-				NextPageToken:       strconv.Itoa(0),
-			}, nil
-		}
-		blocks, _, err = bs.BeaconDB.Blocks(ctx, filters.NewFilter().SetStartEpoch(q.Epoch).SetEndEpoch(q.Epoch))
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not fetch attestations: %v", err)
-		}
-	default:
-		return nil, status.Error(codes.InvalidArgument, "Must specify a filter criteria for fetching attestations")
-	}
-
-	indexedAtts, err := blockIndexedAttestations[*ethpb.IndexedAttestationElectra](ctx, blocks, bs.StateGen)
-	if err != nil {
-		return nil, err
-	}
-	// If there are no attestations, we simply return a response specifying this.
-	// Otherwise, attempting to paginate 0 attestations below would result in an error.
-	if len(indexedAtts) == 0 {
-		return &ethpb.ListIndexedAttestationsElectraResponse{
-			IndexedAttestations: make([]*ethpb.IndexedAttestationElectra, 0),
-			TotalSize:           int32(0),
-			NextPageToken:       strconv.Itoa(0),
-		}, nil
-	}
-
-	start, end, nextPageToken, err := pagination.StartAndEndPage(req.PageToken, int(req.PageSize), len(indexedAtts))
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not paginate attestations: %v", err)
-	}
-
-	return &ethpb.ListIndexedAttestationsElectraResponse{
-		IndexedAttestations: indexedAtts[start:end],
-		TotalSize:           int32(len(indexedAtts)),
-		NextPageToken:       nextPageToken,
-	}, nil
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
