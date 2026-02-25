@@ -251,7 +251,6 @@ func (s *Store) choosePayloadContent(n *Node) *PayloadNode {
 	if n == nil {
 		return nil
 	}
-	previousSlot := n.slot+1 == s.currentSlot()
 	fn := s.fullNodeByRoot[n.root]
 	en := s.emptyNodeByRoot[n.root]
 	if fn == nil {
@@ -262,6 +261,7 @@ func (s *Store) choosePayloadContent(n *Node) *PayloadNode {
 	} else if fn.weight < en.weight {
 		return en
 	}
+	previousSlot := n.slot+1 == s.currentSlot()
 	if !previousSlot || s.shouldExtendPayload(fn) {
 		return fn
 	}
