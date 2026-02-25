@@ -109,6 +109,7 @@ func (t *GossipTracer) isSubscribed(topic string) bool {
 //
 // A TopicEventWaiter must have been set up for the topic via WatchTopic before
 // calling this method when not subscribed, otherwise PeerJoin cannot be observed.
+// Note: You must call WatchTopic first before calling this method.
 func (t *GossipTracer) CanPublishToPeer(ctx context.Context, topic string, pid peer.ID) error {
 	if t.isSubscribed(topic) {
 		return t.waitForGraft(ctx, topic, pid)

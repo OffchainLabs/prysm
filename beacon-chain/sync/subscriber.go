@@ -747,9 +747,9 @@ func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Sl
 	return mapFromSlice(persistentSubnetIndices, aggregatorSubnetIndices)
 }
 
-// filterNeededPeers filters out the minimum set of peers required to maintain
+// filterNeededPeers filters out the set of peers required to maintain
 // at least minimumPeersPerSubnet in each wanted subnet. Peers that participate
-// in multiple subnets count toward all of them, so fewer peers need protection.
+// in multiple subnets count toward all of them.
 func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	currentSlot := s.cfg.clock.CurrentSlot()
