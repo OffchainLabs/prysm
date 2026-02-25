@@ -4,7 +4,6 @@ go_library(
     name = "go_default_library",
     srcs = [
         "assignments.go",
-        "attestations.go",
         "blocks.go",
         "committees.go",
         "config.go",
@@ -58,7 +57,6 @@ go_test(
     name = "go_default_test",
     srcs = [
         "assignments_test.go",
-        "attestations_test.go",
         "beacon_test.go",
         "blocks_test.go",
         "committees_test.go",
@@ -81,7 +79,6 @@ go_test(
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/testing:go_default_library",
         "//beacon-chain/forkchoice/doubly-linked-tree:go_default_library",
-        "//beacon-chain/operations/attestations:go_default_library",
         "//beacon-chain/operations/slashings:go_default_library",
         "//beacon-chain/p2p/testing:go_default_library",
         "//beacon-chain/rpc/core:go_default_library",

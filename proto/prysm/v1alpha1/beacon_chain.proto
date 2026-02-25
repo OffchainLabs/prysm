@@ -37,40 +37,6 @@ option php_namespace = "Ethereum\\Eth\\v1alpha1";
 // Beacon Chain.
 service BeaconChain {
 
-  // Retrieve attestations from pool.
-  //
-  // The server returns a list of attestations that have been seen but not
-  // yet processed. Pool attestations eventually expire as the slot
-  // advances, so an attestation missing from this request does not imply
-  // that it was included in a block. The attestation may have expired.
-  // Refer to the Ethereum Beacon Chain specification for more details on how
-  // attestations are processed and when they are no longer valid.
-  // https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/beacon-chain.md#attestations
-  rpc AttestationPool(AttestationPoolRequest)
-      returns (AttestationPoolResponse) {
-    option deprecated = true;
-    option (google.api.http) = {
-      get : "/eth/v1alpha1/beacon/attestations/pool"
-    };
-  }
-
-  // Retrieve attestations from pool.
-  //
-  // The server returns a list of attestations that have been seen but not
-  // yet processed. Pool attestations eventually expire as the slot
-  // advances, so an attestation missing from this request does not imply
-  // that it was included in a block. The attestation may have expired.
-  // Refer to the Ethereum Beacon Chain specification for more details on how
-  // attestations are processed and when they are no longer valid.
-  // https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/beacon-chain.md#attestations
-  rpc AttestationPoolElectra(AttestationPoolRequest)
-      returns (AttestationPoolElectraResponse) {
-    option deprecated = true;
-    option (google.api.http) = {
-      get : "/eth/v1alpha1/beacon/attestations/pool_electra"
-    };
-  }
-
   // Retrieve blocks by root, slot, or epoch.
   //
   // The server may return multiple blocks in the case that a slot or epoch is
@@ -903,49 +869,6 @@ message ValidatorParticipationResponse {
 
   // The actual validator participation metrics.
   ValidatorParticipation participation = 3;
-}
-
-message AttestationPoolRequest {
-  option deprecated = true;
-
-  // The maximum number of objects to return in the response.
-  // This field is optional.
-  int32 page_size = 1;
-
-  // A pagination token returned from a previous call
-  // that indicates where this listing should continue from.
-  // This field is optional.
-  string page_token = 2;
-}
-
-message AttestationPoolResponse {
-  option deprecated = true;
-
-  // List of attestations currently in the pool of the beacon chain.
-  repeated Attestation attestations = 1;
-
-  // A pagination token returned from a previous call
-  // that indicates where this listing should continue from.
-  // This field is optional.
-  string next_page_token = 2;
-
-  // Total count of objects matching the request filter.
-  int32 total_size = 3;
-}
-
-message AttestationPoolElectraResponse {
-  option deprecated = true;
-
-  // List of attestations currently in the pool of the beacon chain.
-  repeated AttestationElectra attestations = 1;
-
-  // A pagination token returned from a previous call
-  // that indicates where this listing should continue from.
-  // This field is optional.
-  string next_page_token = 2;
-
-  // Total count of objects matching the request filter.
-  int32 total_size = 3;
 }
 
 // Information about the configuration parameters of the beacon node, such

@@ -43,46 +43,6 @@ func (m *MockBeaconChainClient) EXPECT() *MockBeaconChainClientMockRecorder {
 	return m.recorder
 }
 
-// AttestationPool mocks base method.
-func (m *MockBeaconChainClient) AttestationPool(ctx context.Context, in *eth.AttestationPoolRequest, opts ...grpc.CallOption) (*eth.AttestationPoolResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, in}
-	for _, a := range opts {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "AttestationPool", varargs...)
-	ret0, _ := ret[0].(*eth.AttestationPoolResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// AttestationPool indicates an expected call of AttestationPool.
-func (mr *MockBeaconChainClientMockRecorder) AttestationPool(ctx, in any, opts ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, in}, opts...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttestationPool", reflect.TypeOf((*MockBeaconChainClient)(nil).AttestationPool), varargs...)
-}
-
-// AttestationPoolElectra mocks base method.
-func (m *MockBeaconChainClient) AttestationPoolElectra(ctx context.Context, in *eth.AttestationPoolRequest, opts ...grpc.CallOption) (*eth.AttestationPoolElectraResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, in}
-	for _, a := range opts {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "AttestationPoolElectra", varargs...)
-	ret0, _ := ret[0].(*eth.AttestationPoolElectraResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// AttestationPoolElectra indicates an expected call of AttestationPoolElectra.
-func (mr *MockBeaconChainClientMockRecorder) AttestationPoolElectra(ctx, in any, opts ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, in}, opts...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttestationPoolElectra", reflect.TypeOf((*MockBeaconChainClient)(nil).AttestationPoolElectra), varargs...)
-}
-
 // GetBeaconConfig mocks base method.
 func (m *MockBeaconChainClient) GetBeaconConfig(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*eth.BeaconConfig, error) {
 	m.ctrl.T.Helper()
