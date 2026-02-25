@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -77,7 +78,7 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 		// unavailable after restart, during initial sync, or after LRU eviction.
 		val, ok := s.executionPayloadEnvelopeCache.Get(root)
 		if !ok {
-			log.WithField("root", root).Trace("Peer requested execution payload envelope by root not found in cache")
+			log.WithField("root", fmt.Sprintf("%#x", root)).Trace("Peer requested execution payload envelope by root not found in cache")
 			continue
 		}
 
@@ -86,7 +87,9 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 			continue
 		}
 
-		// Filter out envelopes that are too old.
+		// Silently skip envelopes older than the finalized epoch.
+		// The spec requires serving envelopes since the latest finalized epoch;
+		// pre-finalization envelopes are omitted from the response rather than erroring.
 		if envelope.Message.Slot < minReqSlot {
 			continue
 		}
