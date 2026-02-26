@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -57,6 +58,17 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	// [IGNORE] The envelope's block root envelope.block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue payload for processing once the block is retrieved).
 	if err := v.VerifyBlockRootSeen(func(root [32]byte) bool { return s.cfg.chain.HasBlock(ctx, root) }); err != nil {
+		s.pendingEnvelopeLock.Lock()
+		root := env.BeaconBlockRoot()
+		if _, exists := s.pendingPayloadEnvelopes[root]; !exists {
+			s.pendingPayloadEnvelopes[root] = signedEnvelope
+		}
+		s.pendingEnvelopeLock.Unlock()
+		go func() {
+			if err := s.sendBatchRootRequest(ctx, [][32]byte{root}, rand.NewGenerator()); err != nil {
+				log.WithError(err).Debug("Could not request beacon block for pending payload envelope")
+			}
+		}()
 		return pubsub.ValidationIgnore, err
 	}
 	root := env.BeaconBlockRoot()

@@ -60,6 +60,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 
 	// Remove old blocks from our expiration cache.
 	s.deleteExpiredBlocksFromCache()
+	s.prunePendingPayloadEnvelopes()
 
 	// Validate pending slots before processing.
 	if err := s.validatePendingSlots(); err != nil {
@@ -153,6 +154,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			}
 			cancelFunction()
 
+			go s.processPendingPayloadEnvelope(ctx, b, blkRoot)
 			blkRoots = append(blkRoots, blkRoot)
 
 			// Remove the processed block from the queue.

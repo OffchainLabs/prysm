@@ -42,6 +42,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -192,6 +193,8 @@ type Service struct {
 	digestActions                       perDigestSet
 	subscriptionSpawner                 func(func()) // see Service.spawn for details
 	newExecutionPayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
+	pendingPayloadEnvelopes             map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope
+	pendingEnvelopeLock                 sync.RWMutex
 }
 
 // NewService initializes new regular sync service.
@@ -208,6 +211,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		dataColumnLogCh:         make(chan dataColumnLogEntry, 1000),
 		reconstructionRandGen:   rand.NewGenerator(),
 		payloadAttestationCache: &cache.PayloadAttestationCache{},
+		pendingPayloadEnvelopes: make(map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope),
 	}
 
 	for _, opt := range opts {

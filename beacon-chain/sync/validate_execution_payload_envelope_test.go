@@ -202,6 +202,7 @@ func setupExecutionPayloadEnvelopeService(t *testing.T, envelopeSlot, blockSlot 
 	stateGen := stategen.New(db, doublylinkedtree.New())
 	s := &Service{
 		seenPayloadEnvelopeCache: lruwrpr.New(10),
+		pendingPayloadEnvelopes:  make(map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope),
 		cfg: &config{
 			p2p:         p,
 			initialSync: &mockSync.Sync{},
