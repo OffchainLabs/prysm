@@ -197,7 +197,7 @@ func (s *Service) notifyNewEnvelope(ctx context.Context, st state.BeaconState, e
 	parentRoot := common.Hash(bytesutil.ToBytes32(st.LatestBlockHeader().ParentRoot))
 	requests := envelope.ExecutionRequests()
 
-	_, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)
+	_, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests, envelope.Slot())
 	if err == nil {
 		return true, nil
 	}

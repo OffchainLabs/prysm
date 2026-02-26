@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 	"time"
@@ -56,6 +57,11 @@ var (
 		GetPayloadMethodV4,
 	}
 
+	gloasEngineEndpoints = []string{
+		NewPayloadMethodV5,
+		GetPayloadMethodV5,
+	}
+
 	fuluEngineEndpoints = []string{
 		GetPayloadMethodV5,
 		GetBlobsV2,
@@ -80,6 +86,8 @@ const (
 	NewPayloadMethodV3 = "engine_newPayloadV3"
 	// NewPayloadMethodV4 is the engine_newPayloadVX method added at Electra.
 	NewPayloadMethodV4 = "engine_newPayloadV4"
+	// NewPayloadMethodV5 is the engine_newPayloadVX method added at Gloas.
+	NewPayloadMethodV5 = "engine_newPayloadV5"
 	// ForkchoiceUpdatedMethod v1 request string for JSON-RPC.
 	ForkchoiceUpdatedMethod = "engine_forkchoiceUpdatedV1"
 	// ForkchoiceUpdatedMethodV2 v2 request string for JSON-RPC.
@@ -147,7 +155,7 @@ type Reconstructor interface {
 // EngineCaller defines a client that can interact with an Ethereum
 // execution node's engine service via JSON-RPC.
 type EngineCaller interface {
-	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error)
+	NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests, slot primitives.Slot) ([]byte, error)
 	ForkchoiceUpdated(
 		ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
 	) (*pb.PayloadIDBytes, []byte, error)
@@ -160,7 +168,7 @@ type EngineCaller interface {
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 
 // NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
-func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
+func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests, slot primitives.Slot) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
 	defer span.End()
 	defer func(start time.Time) {
@@ -194,7 +202,11 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to encode execution requests")
 			}
-			err = s.rpcClient.CallContext(ctx, result, NewPayloadMethodV4, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
+			method := NewPayloadMethodV4
+			if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+				method = NewPayloadMethodV5
+			}
+			err = s.rpcClient.CallContext(ctx, result, method, payloadPb, versionedHashes, parentBlockRoot, flattenedRequests)
 			if err != nil {
 				return nil, handleRPCError(err)
 			}
@@ -260,7 +272,7 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
-	case version.Deneb, version.Electra, version.Fulu:
+	case version.Deneb, version.Electra, version.Gloas, version.Fulu:
 		a, err := attrs.PbV3()
 		if err != nil {
 			return nil, nil, err
@@ -294,7 +306,7 @@ func (s *Service) ForkchoiceUpdated(
 
 func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
 	epoch := slots.ToEpoch(slot)
-	if epoch >= params.BeaconConfig().FuluForkEpoch {
+	if epoch >= params.BeaconConfig().FuluForkEpoch || epoch >= params.BeaconConfig().GloasForkEpoch {
 		return GetPayloadMethodV5, &pb.ExecutionBundleFulu{}
 	}
 	if epoch >= params.BeaconConfig().ElectraForkEpoch {
@@ -340,6 +352,10 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 
 	if params.ElectraEnabled() {
 		supportedEngineEndpoints = append(supportedEngineEndpoints, electraEngineEndpoints...)
+	}
+
+	if params.BeaconConfig().GloasForkEpoch < math.MaxUint64 {
+		supportedEngineEndpoints = append(supportedEngineEndpoints, gloasEngineEndpoints...)
 	}
 
 	if params.FuluEnabled() {

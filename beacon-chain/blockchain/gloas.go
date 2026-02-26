@@ -15,12 +15,15 @@ import (
 func (s *Service) getLookupParentRoot(b consensus_blocks.ROBlock) ([32]byte, error) {
 	bl := b.Block()
 	parentRoot := bl.ParentRoot()
-	if b.Version() < version.Gloas {
-		return parentRoot, nil
-	}
 	parentSlot, err := s.cfg.ForkChoiceStore.Slot(parentRoot)
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "failed to get slot for parent root")
+	}
+	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
+		return parentRoot, nil
+	}
+	if b.Version() < version.Gloas {
+		return parentRoot, nil
 	}
 
 	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
