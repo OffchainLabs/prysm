@@ -34,6 +34,9 @@ func (s *Service) processPendingPayloadEnvelope(ctx context.Context, block inter
 		return
 	}
 	v := s.newExecutionPayloadEnvelopeVerifier(e, verification.GossipExecutionPayloadEnvelopeRequirements)
+	// Signature was verified before queueing, block root is seen because the block just arrived.
+	v.SatisfyRequirement(verification.RequireBuilderSignatureValid)
+	v.SatisfyRequirement(verification.RequireBlockRootSeen)
 
 	if s.hasSeenPayloadEnvelope(root, env.BuilderIndex()) {
 		return
@@ -67,14 +70,6 @@ func (s *Service) processPendingPayloadEnvelope(ctx context.Context, block inter
 		return
 	}
 	if err := v.VerifyPayloadHash(bid); err != nil {
-		return
-	}
-	st, err := s.blockVerifyingState(ctx, block)
-	if err != nil {
-		log.WithError(err).Debug("Could not get state for pending payload envelope signature verification")
-		return
-	}
-	if err := v.VerifySignature(st); err != nil {
 		return
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())

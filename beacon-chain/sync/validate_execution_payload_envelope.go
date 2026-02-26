@@ -58,6 +58,14 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	// [IGNORE] The envelope's block root envelope.block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue payload for processing once the block is retrieved).
 	if err := v.VerifyBlockRootSeen(func(root [32]byte) bool { return s.cfg.chain.HasBlock(ctx, root) }); err != nil {
+		// Verify the builder's signature before queueing to prevent spam.
+		st, stErr := s.cfg.chain.HeadStateReadOnly(ctx)
+		if stErr != nil {
+			return pubsub.ValidationIgnore, stErr
+		}
+		if stErr := v.VerifySignature(st); stErr != nil {
+			return pubsub.ValidationReject, stErr
+		}
 		s.pendingEnvelopeLock.Lock()
 		root := env.BeaconBlockRoot()
 		if _, exists := s.pendingPayloadEnvelopes[root]; !exists {

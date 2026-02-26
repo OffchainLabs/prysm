@@ -202,6 +202,23 @@ func TestPrunePendingPayloadEnvelopes(t *testing.T) {
 	require.Equal(t, true, ok)
 }
 
+func TestValidateExecutionPayloadEnvelope_RejectBadSignatureBeforeQueue(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(
+		mockExecutionPayloadEnvelopeVerifier{
+			errBlockRootSeen: errors.New("not seen"),
+			errSignature:     errors.New("bad signature"),
+		},
+	)
+
+	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+	require.NotNil(t, err)
+	require.Equal(t, result, pubsub.ValidationReject)
+	// Envelope should NOT be queued when signature is invalid.
+	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
+}
+
 func TestValidateExecutionPayloadEnvelope_QueueOnUnknownBlock(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
