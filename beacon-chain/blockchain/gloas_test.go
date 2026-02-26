@@ -3,12 +3,14 @@ package blockchain
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
@@ -19,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func prepareGloasForkchoiceState(
@@ -541,4 +544,35 @@ func TestGetLookupParentRoot_GloasBuildsOnFull(t *testing.T) {
 	require.NoError(t, err)
 	// parentBlockHash == parentNodeBlockHash, so it builds on full => returns parentBlockHash
 	require.Equal(t, parentNodeBlockHash, got)
+}
+
+func TestLateBlockTasks_GloasFCU(t *testing.T) {
+	logHook := logTest.NewGlobal()
+	resetCfg := features.InitWithReset(&features.Flags{
+		PrepareAllPayloads: true,
+	})
+	defer resetCfg()
+
+	pid := &enginev1.PayloadIDBytes{1, 2, 3, 4, 5, 6, 7, 8}
+	service, tr := setupGloasService(t, &mockExecution.EngineClient{PayloadIDBytes: pid})
+
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+	base, _ := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
+	base.LatestBlockHash = blockHash[:]
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+
+	headRoot := bytesutil.ToBytes32([]byte("headroot"))
+	service.head = &head{
+		root:  headRoot,
+		state: st,
+		slot:  1,
+	}
+
+	// Set genesis time so CurrentSlot > HeadSlot, triggering late block logic.
+	service.SetGenesisTime(time.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second))
+	service.SetForkChoiceGenesisTime(service.genesisTime)
+
+	service.lateBlockTasks(tr.ctx)
+	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
 }
