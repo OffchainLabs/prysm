@@ -16,6 +16,25 @@ import (
 	"github.com/pkg/errors"
 )
 
+// CanonicalNodeAtSlot returns the full node that exists at the given slot in the canonical chain.
+// The boolean indicates whether the payload was present for the returned blockroot.
+// If the slot for the given blockroot is the current wall clock slot, it returns the pending node, that is, it sets the boolean to false.
+// If the slot is in the past the boolean indicates between full or empty.
+func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) {
+	s := f.store
+	n := s.headNode
+	for ; n != nil && n.slot > slot; n = n.parent.node {
+	}
+	if n == nil {
+		return [32]byte{}, false
+	}
+	if n.slot == s.currentSlot() {
+		return n.root, false
+	}
+	pn := s.choosePayloadContent(n)
+	return pn.node.root, pn.full
+}
+
 func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte) error {
 	sb, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {

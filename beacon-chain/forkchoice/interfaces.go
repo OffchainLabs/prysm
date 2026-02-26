@@ -92,6 +92,7 @@ type FastGetter interface {
 	Weight(root [32]byte) (uint64, error)
 	ParentRoot(root [32]byte) ([32]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
+	CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool)
 }
 
 // Setter allows to set forkchoice information

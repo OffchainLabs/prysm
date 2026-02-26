@@ -1292,3 +1292,91 @@ func TestGloasDeepForkWeightPropagation(t *testing.T) {
 	assert.Equal(t, uint64(70), emptyB.weight)
 	assert.Equal(t, uint64(50), fullB.weight)
 }
+
+func TestCanonicalNodeAtSlot(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	// Insert block A at slot 1 building on genesis.
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, blk, err := prepareGloasForkchoiceState(ctx, 1, rootA, zeroHash, blockHashA, zeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	// Insert payload for A.
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// Insert block B at slot 2 building on A(full).
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(101)
+	driftGenesisTime(f, 2, 0)
+	require.NoError(t, f.NewSlot(ctx, 2))
+	st, blk, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	// Compute head so headNode is set.
+	headRoot, err := f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootB, headRoot)
+
+	// Slot 0 (genesis): should return the genesis root.
+	root, full := f.CanonicalNodeAtSlot(0)
+	assert.Equal(t, zeroHash, root)
+	assert.Equal(t, true, full)
+
+	// Slot 1: A has a payload, should return full=true.
+	root, full = f.CanonicalNodeAtSlot(1)
+	assert.Equal(t, rootA, root)
+	assert.Equal(t, true, full)
+
+	// Slot 2 is the current wall clock slot, so it returns the pending node (full=false).
+	root, full = f.CanonicalNodeAtSlot(2)
+	assert.Equal(t, rootB, root)
+	assert.Equal(t, false, full)
+}
+
+func TestCanonicalNodeAtSlot_EmptyPayload(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	// Insert block A at slot 1 without a payload.
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, blk, err := prepareGloasForkchoiceState(ctx, 1, rootA, zeroHash, blockHashA, zeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	// Insert block B at slot 2 building on A(empty).
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(101)
+	driftGenesisTime(f, 2, 0)
+	require.NoError(t, f.NewSlot(ctx, 2))
+	st, blk, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, zeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	headRoot, err := f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootB, headRoot)
+
+	// Slot 1: A has no payload, so full should be false.
+	root, full := f.CanonicalNodeAtSlot(1)
+	assert.Equal(t, rootA, root)
+	assert.Equal(t, false, full)
+}
+
+func TestCanonicalNodeAtSlot_NilHead(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+
+	// headNode is nil before calling Head.
+	f.store.headNode = nil
+	root, full := f.CanonicalNodeAtSlot(0)
+	assert.Equal(t, [32]byte{}, root)
+	assert.Equal(t, false, full)
+}
