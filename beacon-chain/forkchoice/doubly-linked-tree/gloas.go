@@ -404,6 +404,12 @@ func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus 
 	return en, slot == en.node.slot
 }
 
+// HasFullNode returns true if a full (payload) node exists for the given beacon block root.
+func (f *ForkChoice) HasFullNode(root [32]byte) bool {
+	_, ok := f.store.fullNodeByRoot[root]
+	return ok
+}
+
 // BlockHash returns the hash committed in the given block
 func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 	s := f.store
