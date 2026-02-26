@@ -10,10 +10,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
