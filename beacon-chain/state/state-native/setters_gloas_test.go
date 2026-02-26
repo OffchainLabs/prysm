@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -401,6 +402,235 @@ func TestRotateBuilderPendingPayments_UnsupportedVersion(t *testing.T) {
 	st := &BeaconState{version: version.Electra}
 	err := st.RotateBuilderPendingPayments()
 	require.ErrorContains(t, "RotateBuilderPendingPayments", err)
+}
+
+func TestSetPayloadExpectedWithdrawals(t *testing.T) {
+	t.Run("previous fork returns expected error", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.SetPayloadExpectedWithdrawals([]*enginev1.Withdrawal{})
+		require.ErrorContains(t, "SetPayloadExpectedWithdrawals", err)
+	})
+
+	t.Run("allows nil input and marks dirty", func(t *testing.T) {
+		st := &BeaconState{
+			version:     version.Gloas,
+			dirtyFields: make(map[types.FieldIndex]bool),
+		}
+
+		require.NoError(t, st.SetPayloadExpectedWithdrawals(nil))
+		require.Equal(t, true, st.payloadExpectedWithdrawals == nil)
+		require.Equal(t, true, st.dirtyFields[types.PayloadExpectedWithdrawals])
+	})
+
+	t.Run("sets and marks dirty", func(t *testing.T) {
+		st := &BeaconState{
+			version:                    version.Gloas,
+			dirtyFields:                make(map[types.FieldIndex]bool),
+			payloadExpectedWithdrawals: []*enginev1.Withdrawal{{Index: 1}, {Index: 2}},
+		}
+
+		withdrawals := []*enginev1.Withdrawal{{Index: 3}}
+		require.NoError(t, st.SetPayloadExpectedWithdrawals(withdrawals))
+
+		require.DeepEqual(t, withdrawals, st.payloadExpectedWithdrawals)
+		require.Equal(t, true, st.dirtyFields[types.PayloadExpectedWithdrawals])
+	})
+}
+
+func TestDecreaseWithdrawalBalances(t *testing.T) {
+	t.Run("previous fork returns expected error", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.DecreaseWithdrawalBalances([]*enginev1.Withdrawal{{}})
+		require.ErrorContains(t, "DecreaseWithdrawalBalances", err)
+	})
+
+	t.Run("rejects nil withdrawal", func(t *testing.T) {
+		st := &BeaconState{version: version.Gloas}
+		err := st.DecreaseWithdrawalBalances([]*enginev1.Withdrawal{nil})
+		require.ErrorContains(t, "withdrawal is nil", err)
+	})
+
+	t.Run("no-op on empty input", func(t *testing.T) {
+		st := &BeaconState{
+			version:      version.Gloas,
+			dirtyFields:  make(map[types.FieldIndex]bool),
+			dirtyIndices: make(map[types.FieldIndex][]uint64),
+			rebuildTrie:  make(map[types.FieldIndex]bool),
+		}
+
+		require.NoError(t, st.DecreaseWithdrawalBalances(nil))
+		require.Equal(t, 0, len(st.dirtyFields))
+		require.Equal(t, 0, len(st.dirtyIndices))
+	})
+
+	t.Run("updates validator and builder balances and tracks dirty indices", func(t *testing.T) {
+		st := &BeaconState{
+			version:      version.Gloas,
+			dirtyFields:  make(map[types.FieldIndex]bool),
+			dirtyIndices: make(map[types.FieldIndex][]uint64),
+			rebuildTrie:  make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
+			balancesMultiValue: NewMultiValueBalances([]uint64{100, 200, 300}),
+			builders: []*ethpb.Builder{
+				{Balance: 1000},
+				{Balance: 50},
+			},
+		}
+
+		withdrawals := []*enginev1.Withdrawal{
+			{ValidatorIndex: primitives.ValidatorIndex(1), Amount: 20},
+			{ValidatorIndex: primitives.BuilderIndex(1).ToValidatorIndex(), Amount: 30},
+			{ValidatorIndex: primitives.ValidatorIndex(2), Amount: 400},
+			{ValidatorIndex: primitives.BuilderIndex(0).ToValidatorIndex(), Amount: 2000},
+			{ValidatorIndex: primitives.ValidatorIndex(0), Amount: 0},
+		}
+
+		require.NoError(t, st.DecreaseWithdrawalBalances(withdrawals))
+
+		require.DeepEqual(t, []uint64{100, 180, 0}, st.Balances())
+		require.Equal(t, primitives.Gwei(0), st.builders[0].Balance)
+		require.Equal(t, primitives.Gwei(20), st.builders[1].Balance)
+
+		require.Equal(t, true, st.dirtyFields[types.Balances])
+		require.Equal(t, true, st.dirtyFields[types.Builders])
+		require.DeepEqual(t, []uint64{1, 2}, st.dirtyIndices[types.Balances])
+		require.DeepEqual(t, []uint64{1, 0}, st.dirtyIndices[types.Builders])
+	})
+
+	t.Run("returns error on builder index out of range", func(t *testing.T) {
+		st := &BeaconState{
+			version:      version.Gloas,
+			dirtyFields:  make(map[types.FieldIndex]bool),
+			dirtyIndices: make(map[types.FieldIndex][]uint64),
+			rebuildTrie:  make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
+			builders: []*ethpb.Builder{{Balance: 5}},
+		}
+
+		err := st.DecreaseWithdrawalBalances([]*enginev1.Withdrawal{
+			{ValidatorIndex: primitives.BuilderIndex(2).ToValidatorIndex(), Amount: 1},
+		})
+		require.ErrorContains(t, "out of range", err)
+		require.Equal(t, false, st.dirtyFields[types.Builders])
+		require.Equal(t, 0, len(st.dirtyIndices[types.Builders]))
+	})
+}
+
+func TestDequeueBuilderPendingWithdrawals(t *testing.T) {
+	t.Run("previous fork returns expected error", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.DequeueBuilderPendingWithdrawals(1)
+		require.ErrorContains(t, "DequeueBuilderPendingWithdrawals", err)
+	})
+
+	t.Run("returns error when dequeueing more than length", func(t *testing.T) {
+		st := &BeaconState{
+			version:     version.Gloas,
+			dirtyFields: make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.BuilderPendingWithdrawals: stateutil.NewRef(1),
+			},
+			builderPendingWithdrawals: []*ethpb.BuilderPendingWithdrawal{{Amount: 1}},
+		}
+
+		err := st.DequeueBuilderPendingWithdrawals(2)
+		require.ErrorContains(t, "cannot dequeue more builder withdrawals", err)
+		require.Equal(t, 1, len(st.builderPendingWithdrawals))
+		require.Equal(t, false, st.dirtyFields[types.BuilderPendingWithdrawals])
+	})
+
+	t.Run("no-op on zero", func(t *testing.T) {
+		st := &BeaconState{
+			version:     version.Gloas,
+			dirtyFields: make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.BuilderPendingWithdrawals: stateutil.NewRef(1),
+			},
+			builderPendingWithdrawals: []*ethpb.BuilderPendingWithdrawal{{Amount: 1}},
+		}
+
+		require.NoError(t, st.DequeueBuilderPendingWithdrawals(0))
+		require.Equal(t, 1, len(st.builderPendingWithdrawals))
+		require.Equal(t, false, st.dirtyFields[types.BuilderPendingWithdrawals])
+		require.Equal(t, false, st.rebuildTrie[types.BuilderPendingWithdrawals])
+	})
+
+	t.Run("dequeues and marks dirty", func(t *testing.T) {
+		st := &BeaconState{
+			version:     version.Gloas,
+			dirtyFields: make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.BuilderPendingWithdrawals: stateutil.NewRef(1),
+			},
+			builderPendingWithdrawals: []*ethpb.BuilderPendingWithdrawal{
+				{Amount: 1},
+				{Amount: 2},
+				{Amount: 3},
+			},
+			rebuildTrie: make(map[types.FieldIndex]bool),
+		}
+
+		require.NoError(t, st.DequeueBuilderPendingWithdrawals(2))
+		require.Equal(t, 1, len(st.builderPendingWithdrawals))
+		require.Equal(t, primitives.Gwei(3), st.builderPendingWithdrawals[0].Amount)
+		require.Equal(t, true, st.dirtyFields[types.BuilderPendingWithdrawals])
+		require.Equal(t, true, st.rebuildTrie[types.BuilderPendingWithdrawals])
+	})
+
+	t.Run("copy-on-write preserves shared state", func(t *testing.T) {
+		sharedRef := stateutil.NewRef(2)
+		sharedWithdrawals := []*ethpb.BuilderPendingWithdrawal{
+			{Amount: 1},
+			{Amount: 2},
+			{Amount: 3},
+		}
+
+		st1 := &BeaconState{
+			version:     version.Gloas,
+			dirtyFields: make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.BuilderPendingWithdrawals: sharedRef,
+			},
+			builderPendingWithdrawals: sharedWithdrawals,
+			rebuildTrie:               make(map[types.FieldIndex]bool),
+		}
+		st2 := &BeaconState{
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.BuilderPendingWithdrawals: sharedRef,
+			},
+			builderPendingWithdrawals: sharedWithdrawals,
+		}
+
+		require.NoError(t, st1.DequeueBuilderPendingWithdrawals(2))
+		require.Equal(t, primitives.Gwei(3), st1.builderPendingWithdrawals[0].Amount)
+		require.Equal(t, 3, len(st2.builderPendingWithdrawals))
+		require.Equal(t, primitives.Gwei(1), st2.builderPendingWithdrawals[0].Amount)
+		require.Equal(t, uint(1), st1.sharedFieldReferences[types.BuilderPendingWithdrawals].Refs())
+		require.Equal(t, uint(1), st2.sharedFieldReferences[types.BuilderPendingWithdrawals].Refs())
+	})
+}
+
+func TestSetNextWithdrawalBuilderIndex(t *testing.T) {
+	t.Run("previous fork returns expected error", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.SetNextWithdrawalBuilderIndex(1)
+		require.ErrorContains(t, "SetNextWithdrawalBuilderIndex", err)
+	})
+
+	t.Run("sets and marks dirty", func(t *testing.T) {
+		st := &BeaconState{
+			version:     version.Gloas,
+			dirtyFields: make(map[types.FieldIndex]bool),
+		}
+
+		require.NoError(t, st.SetNextWithdrawalBuilderIndex(7))
+		require.Equal(t, primitives.BuilderIndex(7), st.nextWithdrawalBuilderIndex)
+		require.Equal(t, true, st.dirtyFields[types.NextWithdrawalBuilderIndex])
+	})
 }
 
 func TestAppendBuilderPendingWithdrawal_CopyOnWrite(t *testing.T) {
