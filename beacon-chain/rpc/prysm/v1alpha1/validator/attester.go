@@ -200,7 +200,10 @@ func (vs *Server) proposeAtt(
 			}
 			if data.CommitteeIndex != 0 {
 				blockSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(bytesutil.ToBytes32(data.BeaconBlockRoot))
-				if err == nil && blockSlot == data.Slot {
+				if err != nil {
+					return nil, status.Error(codes.Internal, "could not determine block slot")
+				}
+				if blockSlot == data.Slot {
 					return nil, status.Error(codes.InvalidArgument, "same slot attestations must use committee index 0")
 				}
 			}

@@ -235,7 +235,14 @@ func (s *Server) handleAttestationsElectra(
 			}
 			if att.Data.CommitteeIndex != 0 {
 				blockSlot, err := s.ForkchoiceFetcher.RecentBlockSlot(bytesutil.ToBytes32(att.Data.BeaconBlockRoot))
-				if err == nil && blockSlot == att.Data.Slot {
+				if err != nil {
+					attFailures = append(attFailures, &server.IndexedError{
+						Index:   i,
+						Message: "Could not determine block slot: " + err.Error(),
+					})
+					continue
+				}
+				if blockSlot == att.Data.Slot {
 					attFailures = append(attFailures, &server.IndexedError{
 						Index:   i,
 						Message: "Same slot attestations must use committee index 0",
