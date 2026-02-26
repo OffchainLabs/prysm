@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
@@ -81,6 +82,9 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	}
 	if err := s.handleBlockAttestations(ctx, cfg.roblock.Block(), cfg.postState); err != nil {
 		return errors.Wrap(err, "could not handle block's attestations")
+	}
+	if err := s.handleBlockPayloadAttestations(ctx, cfg.roblock.Block(), cfg.postState); err != nil {
+		return errors.Wrap(err, "could not handle block's payload attestations")
 	}
 
 	s.InsertSlashingsToForkChoiceStore(ctx, cfg.roblock.Block().Body().AttesterSlashings())
@@ -414,6 +418,36 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 			}
 		} else if err = s.cfg.AttPool.SaveBlockAttestation(a); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// handleBlockPayloadAttestations feeds payload attestations included in a Gloas block into forkchoice.
+func (s *Service) handleBlockPayloadAttestations(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, st state.BeaconState) error {
+	if blk.Version() < version.Gloas {
+		return nil
+	}
+	atts, err := blk.Body().PayloadAttestations()
+	if err != nil {
+		return err
+	}
+	if len(atts) == 0 {
+		return nil
+	}
+	committee, err := gloas.PayloadCommittee(ctx, st, blk.Slot()-1)
+	if err != nil {
+		return err
+	}
+	for _, att := range atts {
+		root := bytesutil.ToBytes32(att.Data.BeaconBlockRoot)
+		if !s.cfg.ForkChoiceStore.HasNode(root) {
+			continue
+		}
+		for i := range committee {
+			if att.AggregationBits.BitAt(uint64(i)) {
+				s.cfg.ForkChoiceStore.SetPTCVote(root, uint64(i), att.Data.PayloadPresent, att.Data.BlobDataAvailable)
+			}
 		}
 	}
 	return nil
