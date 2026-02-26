@@ -126,55 +126,77 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 	if s.cfg.blobStorage == nil {
 		return
 	}
-	summary := s.cfg.blobStorage.Summary(blockRoot)
 	cmts, err := block.Block().Body().BlobKzgCommitments()
 	if err != nil {
 		log.WithError(err).Error("Failed to read commitments from block")
 		return
 	}
+	summary := s.cfg.blobStorage.Summary(blockRoot)
 	for i := range cmts {
 		if summary.HasIndex(uint64(i)) {
 			blobExistedInDBTotal.Inc()
 		}
 	}
 
-	// Reconstruct blob sidecars from the EL
-	blobSidecars, err := s.cfg.executionReconstructor.ReconstructBlobSidecars(ctx, block, blockRoot, summary.HasIndex)
-	if err != nil {
-		log.WithError(err).Error("Failed to reconstruct blob sidecars")
-		return
-	}
-	if len(blobSidecars) == 0 {
-		return
-	}
+	key := fmt.Sprintf("%#x", blockRoot)
+	if _, err, _ := s.blobSidecarsExecSingleFlight.Do(key, func() (any, error) {
+		const delay = 250 * time.Millisecond
+		for iteration := uint64(0); ; iteration++ {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 
-	// Refresh indices as new blobs may have been added to the db
-	summary = s.cfg.blobStorage.Summary(blockRoot)
+			// Re-fetch summary inside loop (blobs may arrive via gossip between retries).
+			summary = s.cfg.blobStorage.Summary(blockRoot)
+			blobSidecars, err := s.cfg.executionReconstructor.ReconstructBlobSidecars(ctx, block, blockRoot, summary.HasIndex)
+			if err != nil {
+				log.WithError(err).WithFields(logrus.Fields{
+					"root":      key,
+					"slot":      block.Block().Slot(),
+					"iteration": iteration,
+				}).Debug("Failed to reconstruct blob sidecars, retrying")
+				time.Sleep(delay)
+				continue
+			}
+			if len(blobSidecars) == 0 {
+				return nil, nil
+			}
 
-	// Broadcast blob sidecars first than save them to the db
-	for _, sidecar := range blobSidecars {
-		// Don't broadcast the blob if it has appeared on disk.
-		if summary.HasIndex(sidecar.Index) {
-			continue
-		}
-		if err := s.cfg.p2p.BroadcastBlob(ctx, sidecar.Index, sidecar.BlobSidecar); err != nil {
-			log.WithFields(blobFields(sidecar.ROBlob)).WithError(err).Error("Failed to broadcast blob sidecar")
-		}
-	}
+			// Refresh indices as new blobs may have been added to the db.
+			summary = s.cfg.blobStorage.Summary(blockRoot)
 
-	for _, sidecar := range blobSidecars {
-		if summary.HasIndex(sidecar.Index) {
-			continue
-		}
-		if err := s.subscribeBlob(ctx, sidecar); err != nil {
-			log.WithFields(blobFields(sidecar.ROBlob)).WithError(err).Error("Failed to receive blob")
-			continue
-		}
+			// Broadcast blob sidecars first then save them to the db.
+			for _, sidecar := range blobSidecars {
+				// Don't broadcast the blob if it has appeared on disk.
+				if summary.HasIndex(sidecar.Index) {
+					continue
+				}
+				if err := s.cfg.p2p.BroadcastBlob(ctx, sidecar.Index, sidecar.BlobSidecar); err != nil {
+					log.WithFields(blobFields(sidecar.ROBlob)).WithError(err).Error("Failed to broadcast blob sidecar")
+				}
+			}
 
-		blobRecoveredFromELTotal.Inc()
-		fields := blobFields(sidecar.ROBlob)
-		fields["sinceSlotStartTime"] = s.cfg.clock.Now().Sub(startTime)
-		log.WithFields(fields).Debug("Processed blob sidecar from EL")
+			for _, sidecar := range blobSidecars {
+				if summary.HasIndex(sidecar.Index) {
+					continue
+				}
+				if err := s.subscribeBlob(ctx, sidecar); err != nil {
+					log.WithFields(blobFields(sidecar.ROBlob)).WithError(err).Error("Failed to receive blob")
+					continue
+				}
+
+				blobRecoveredFromELTotal.Inc()
+				fields := blobFields(sidecar.ROBlob)
+				fields["sinceSlotStartTime"] = s.cfg.clock.Now().Sub(startTime)
+				log.WithFields(fields).Debug("Processed blob sidecar from EL")
+			}
+
+			return nil, nil
+		}
+	}); err != nil {
+		if !errors.Is(err, context.Canceled) {
+			log.WithError(err).Error("Failed to reconstruct blob sidecars")
+		}
 	}
 }
 
