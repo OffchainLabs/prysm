@@ -545,7 +545,6 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 
 	builderIndex := b.nextWithdrawalBuilderIndex
 	if buildersLimit == 0 {
-		*withdrawals = ws
 		return withdrawalIndex, builderIndex, nil
 	}
 	if uint64(builderIndex) >= uint64(buildersCount) {
