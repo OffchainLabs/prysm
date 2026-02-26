@@ -73,10 +73,11 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	if err != nil {
 		return errors.Wrap(err, "could not get latest execution payload bid")
 	}
-	if err := s.areDataColumnsAvailable(ctx, root, envelope.Slot(), bid.BlobKzgCommitments()); err != nil {
-		return errors.Wrap(err, "data availability check failed for payload envelope")
+	if len(bid.BlobKzgCommitments()) > 0 {
+		if err := s.areDataColumnsAvailable(ctx, root, envelope.Slot()); err != nil {
+			return errors.Wrap(err, "data availability check failed for payload envelope")
+		}
 	}
-
 	if err := s.savePostPayload(ctx, signed, preState); err != nil {
 		return err
 	}

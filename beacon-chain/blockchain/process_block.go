@@ -314,7 +314,10 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 		if err != nil {
 			return errors.Wrap(err, "blob KZG commitments")
 		}
-		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), slot, kzgCommitments); err != nil {
+		if len(kzgCommitments) == 0 {
+			return nil
+		}
+		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), slot); err != nil {
 			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
 		}
 
@@ -689,7 +692,10 @@ func (s *Service) isDataAvailable(
 		if err != nil {
 			return errors.Wrap(err, "blob KZG commitments")
 		}
-		return s.areDataColumnsAvailable(ctx, root, block.Slot(), kzgCommitments)
+		if len(kzgCommitments) == 0 {
+			return nil
+		}
+		return s.areDataColumnsAvailable(ctx, root, block.Slot())
 	}
 
 	if blockVersion >= version.Deneb {
@@ -705,17 +711,11 @@ func (s *Service) areDataColumnsAvailable(
 	ctx context.Context,
 	root [fieldparams.RootLength]byte,
 	slot primitives.Slot,
-	kzgCommitments [][]byte,
 ) error {
 	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
 	blockSlot, currentSlot := slot, s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
 	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
-		return nil
-	}
-
-	// If block has not commitments there is nothing to wait for.
-	if len(kzgCommitments) == 0 {
 		return nil
 	}
 
