@@ -141,6 +141,9 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			if !isParentBlockInDB {
 				continue
 			}
+			if !s.cfg.chain.ParentPayloadReady(b.Block()) {
+				continue
+			}
 
 			// Calculate the deadline time by adding three slots duration to the current time
 			secondsPerSlot := params.BeaconConfig().SecondsPerSlot
