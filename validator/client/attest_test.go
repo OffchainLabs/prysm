@@ -33,7 +33,7 @@ func TestRequestAttestation_ValidatorDutiesRequestFailure(t *testing.T) {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			hook := logTest.NewGlobal()
 			validator, _, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{}}
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{}})
 			defer finish()
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
@@ -53,12 +53,12 @@ func TestAttestToBlockHead_SubmitAttestation_EmptyCommittee(t *testing.T) {
 			defer finish()
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					PublicKey:      validatorKey.PublicKey().Marshal(),
 					CommitteeIndex: 0,
 					ValidatorIndex: 0,
-				}}}
+				}}})
 			validator.SubmitAttestation(t.Context(), 0, pubKey)
 			require.LogsContain(t, hook, "Empty committee")
 		})
@@ -72,13 +72,13 @@ func TestAttestToBlockHead_SubmitAttestation_RequestFailure(t *testing.T) {
 
 			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					PublicKey:       validatorKey.PublicKey().Marshal(),
 					CommitteeIndex:  5,
 					CommitteeLength: 111,
 					ValidatorIndex:  0,
-				}}}
+				}}})
 			m.validatorClient.EXPECT().AttestationData(
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
@@ -145,14 +145,14 @@ func TestSubmitAttestation_ElectraCommitteeIndex(t *testing.T) {
 				committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
 				var pubKey [fieldparams.BLSPubkeyLength]byte
 				copy(pubKey[:], validatorKey.PublicKey().Marshal())
-				validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						PublicKey:       validatorKey.PublicKey().Marshal(),
 						CommitteeIndex:  tt.assignedCommitteeIndex,
 						CommitteeLength: uint64(len(committee)),
 						ValidatorIndex:  validatorIndex,
 					},
-				}}
+				}})
 
 				var capturedRequest *ethpb.AttestationDataRequest
 				// Capture the actual request to verify committee index
@@ -207,7 +207,7 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					PublicKey:               validatorKey.PublicKey().Marshal(),
 					CommitteeIndex:          5,
@@ -215,7 +215,7 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 					ValidatorCommitteeIndex: 4,
 					ValidatorIndex:          validatorIndex,
 				},
-			}}
+			}})
 
 			beaconBlockRoot := bytesutil.ToBytes32([]byte("A"))
 			targetRoot := bytesutil.ToBytes32([]byte("B"))
@@ -288,14 +288,14 @@ func TestAttestToBlockHead_AttestsCorrectly(t *testing.T) {
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					PublicKey:       validatorKey.PublicKey().Marshal(),
 					CommitteeIndex:  5,
 					CommitteeLength: uint64(len(committee)),
 					ValidatorIndex:  validatorIndex,
 				},
-			}}
+			}})
 
 			beaconBlockRoot := bytesutil.ToBytes32([]byte("A"))
 			targetRoot := bytesutil.ToBytes32([]byte("B"))
@@ -368,14 +368,14 @@ func TestAttestToBlockHead_BlocksDoubleAtt(t *testing.T) {
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					PublicKey:       validatorKey.PublicKey().Marshal(),
 					CommitteeIndex:  5,
 					CommitteeLength: uint64(len(committee)),
 					ValidatorIndex:  validatorIndex,
 				},
-			}}
+			}})
 			beaconBlockRoot := bytesutil.ToBytes32([]byte("A"))
 			targetRoot := bytesutil.ToBytes32([]byte("B"))
 			sourceRoot := bytesutil.ToBytes32([]byte("C"))
@@ -424,14 +424,14 @@ func TestAttestToBlockHead_BlocksSurroundAtt(t *testing.T) {
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					PublicKey:       validatorKey.PublicKey().Marshal(),
 					CommitteeIndex:  5,
 					CommitteeLength: uint64(len(committee)),
 					ValidatorIndex:  validatorIndex,
 				},
-			}}
+			}})
 			beaconBlockRoot := bytesutil.ToBytes32([]byte("A"))
 			targetRoot := bytesutil.ToBytes32([]byte("B"))
 			sourceRoot := bytesutil.ToBytes32([]byte("C"))
@@ -480,14 +480,14 @@ func TestAttestToBlockHead_BlocksSurroundedAtt(t *testing.T) {
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					PublicKey:       validatorKey.PublicKey().Marshal(),
 					CommitteeIndex:  5,
 					CommitteeLength: uint64(len(committee)),
 					ValidatorIndex:  validatorIndex,
 				},
-			}}
+			}})
 			beaconBlockRoot := bytesutil.ToBytes32([]byte("A"))
 			targetRoot := bytesutil.ToBytes32([]byte("B"))
 			sourceRoot := bytesutil.ToBytes32([]byte("C"))
@@ -575,13 +575,13 @@ func TestAttestToBlockHead_DoesAttestAfterDelay(t *testing.T) {
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					PublicKey:       validatorKey.PublicKey().Marshal(),
 					CommitteeIndex:  5,
 					CommitteeLength: uint64(len(committee)),
 					ValidatorIndex:  validatorIndex,
-				}}}
+				}}})
 
 			m.validatorClient.EXPECT().AttestationData(
 				gomock.Any(), // ctx
@@ -618,13 +618,13 @@ func TestAttestToBlockHead_CorrectBitfieldLength(t *testing.T) {
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					PublicKey:       validatorKey.PublicKey().Marshal(),
 					CommitteeIndex:  5,
 					CommitteeLength: uint64(len(committee)),
 					ValidatorIndex:  validatorIndex,
-				}}}
+				}}})
 			m.validatorClient.EXPECT().AttestationData(
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),

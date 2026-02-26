@@ -26,7 +26,7 @@ func TestSubmitAggregateAndProof_GetDutiesRequestFailure(t *testing.T) {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			hook := logTest.NewGlobal()
 			validator, _, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{}}
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{}})
 			defer finish()
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
@@ -45,13 +45,13 @@ func TestSubmitAggregateAndProof_SignFails(t *testing.T) {
 			defer finish()
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.duties = &ethpb.ValidatorDutiesContainer{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{
 				CurrentEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						PublicKey: validatorKey.PublicKey().Marshal(),
 					},
 				},
-			}
+			})
 
 			m.validatorClient.EXPECT().DomainData(
 				gomock.Any(), // ctx
@@ -90,13 +90,13 @@ func TestSubmitAggregateAndProof_Ok(t *testing.T) {
 			defer finish()
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.duties = &ethpb.ValidatorDutiesContainer{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{
 				CurrentEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						PublicKey: validatorKey.PublicKey().Marshal(),
 					},
 				},
-			}
+			})
 
 			m.validatorClient.EXPECT().DomainData(
 				gomock.Any(), // ctx
@@ -143,13 +143,13 @@ func TestSubmitAggregateAndProof_Ok(t *testing.T) {
 			defer finish()
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.duties = &ethpb.ValidatorDutiesContainer{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{
 				CurrentEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						PublicKey: validatorKey.PublicKey().Marshal(),
 					},
 				},
-			}
+			})
 
 			m.validatorClient.EXPECT().DomainData(
 				gomock.Any(), // ctx
@@ -197,7 +197,7 @@ func TestSubmitAggregateAndProof_Distributed(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.duties = &ethpb.ValidatorDutiesContainer{
+			validator.duties = newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{
 				CurrentEpochDuties: []*ethpb.ValidatorDuty{
 					{
 						PublicKey:      validatorKey.PublicKey().Marshal(),
@@ -205,7 +205,7 @@ func TestSubmitAggregateAndProof_Distributed(t *testing.T) {
 						AttesterSlot:   slot,
 					},
 				},
-			}
+			})
 
 			validator.distributed = true
 			validator.attSelections = make(map[attSelectionKey]iface.BeaconCommitteeSelection)

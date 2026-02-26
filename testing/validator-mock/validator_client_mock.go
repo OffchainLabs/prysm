@@ -150,6 +150,54 @@ func (mr *MockValidatorClientMockRecorder) Duties(ctx, in any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Duties", reflect.TypeOf((*MockValidatorClient)(nil).Duties), ctx, in)
 }
 
+<<<<<<< Updated upstream
+=======
+// AttesterDuties mocks base method.
+func (m *MockValidatorClient) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*eth.AttesterDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AttesterDuties", ctx, epoch, validatorIndices)
+	ret0, _ := ret[0].(*eth.AttesterDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AttesterDuties indicates an expected call of AttesterDuties.
+func (mr *MockValidatorClientMockRecorder) AttesterDuties(ctx, epoch, validatorIndices any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttesterDuties", reflect.TypeOf((*MockValidatorClient)(nil).AttesterDuties), ctx, epoch, validatorIndices)
+}
+
+// ProposerDuties mocks base method.
+func (m *MockValidatorClient) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*eth.ProposerDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ProposerDuties", ctx, epoch)
+	ret0, _ := ret[0].(*eth.ProposerDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ProposerDuties indicates an expected call of ProposerDuties.
+func (mr *MockValidatorClientMockRecorder) ProposerDuties(ctx, epoch any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposerDuties", reflect.TypeOf((*MockValidatorClient)(nil).ProposerDuties), ctx, epoch)
+}
+
+// SyncCommitteeDuties mocks base method.
+func (m *MockValidatorClient) SyncCommitteeDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*eth.SyncCommitteeDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SyncCommitteeDuties", ctx, epoch, validatorIndices)
+	ret0, _ := ret[0].(*eth.SyncCommitteeDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SyncCommitteeDuties indicates an expected call of SyncCommitteeDuties.
+func (mr *MockValidatorClientMockRecorder) SyncCommitteeDuties(ctx, epoch, validatorIndices any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncCommitteeDuties", reflect.TypeOf((*MockValidatorClient)(nil).SyncCommitteeDuties), ctx, epoch, validatorIndices)
+}
+
+>>>>>>> Stashed changes
 // EnsureReady mocks base method.
 func (m *MockValidatorClient) EnsureReady(ctx context.Context) bool {
 	m.ctrl.T.Helper()
@@ -445,18 +493,18 @@ func (mr *MockValidatorClientMockRecorder) SubmitValidatorRegistrations(ctx, in 
 }
 
 // SubscribeCommitteeSubnets mocks base method.
-func (m *MockValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *eth.CommitteeSubnetsSubscribeRequest, duties []*eth.ValidatorDuty) (*empty.Empty, error) {
+func (m *MockValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *eth.CommitteeSubnetsSubscribeRequest, validatorIndices []primitives.ValidatorIndex, committeesAtSlot []uint64) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubscribeCommitteeSubnets", ctx, in, duties)
+	ret := m.ctrl.Call(m, "SubscribeCommitteeSubnets", ctx, in, validatorIndices, committeesAtSlot)
 	ret0, _ := ret[0].(*empty.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SubscribeCommitteeSubnets indicates an expected call of SubscribeCommitteeSubnets.
-func (mr *MockValidatorClientMockRecorder) SubscribeCommitteeSubnets(ctx, in, duties any) *gomock.Call {
+func (mr *MockValidatorClientMockRecorder) SubscribeCommitteeSubnets(ctx, in, validatorIndices, committeesAtSlot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeCommitteeSubnets", reflect.TypeOf((*MockValidatorClient)(nil).SubscribeCommitteeSubnets), ctx, in, duties)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeCommitteeSubnets", reflect.TypeOf((*MockValidatorClient)(nil).SubscribeCommitteeSubnets), ctx, in, validatorIndices, committeesAtSlot)
 }
 
 // SyncCommitteeContribution mocks base method.

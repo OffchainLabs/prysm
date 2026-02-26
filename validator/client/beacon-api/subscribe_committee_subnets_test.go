@@ -55,16 +55,6 @@ func TestSubscribeCommitteeSubnets_Valid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	duties := make([]*structs.AttesterDuty, len(subscribeSlots))
-	for index := range duties {
-		duties[index] = &structs.AttesterDuty{
-			ValidatorIndex:   strconv.FormatUint(uint64(validatorIndices[index]), 10),
-			CommitteeIndex:   strconv.FormatUint(uint64(committeeIndices[index]), 10),
-			CommitteesAtSlot: strconv.FormatUint(committeesAtSlot[index], 10),
-			Slot:             strconv.FormatUint(uint64(subscribeSlots[index]), 10),
-		}
-	}
-
 	validatorClient := &beaconApiValidatorClient{
 		handler: handler,
 	}
@@ -75,31 +65,20 @@ func TestSubscribeCommitteeSubnets_Valid(t *testing.T) {
 			CommitteeIds: committeeIndices,
 			IsAggregator: isAggregator,
 		},
-		[]*ethpb.ValidatorDuty{
-			{
-				ValidatorIndex:   validatorIndices[0],
-				CommitteesAtSlot: committeesAtSlot[0],
-			},
-			{
-				ValidatorIndex:   validatorIndices[1],
-				CommitteesAtSlot: committeesAtSlot[1],
-			},
-			{
-				ValidatorIndex:   validatorIndices[2],
-				CommitteesAtSlot: committeesAtSlot[2],
-			},
-		},
+		validatorIndices,
+		committeesAtSlot,
 	)
 	require.NoError(t, err)
 }
 
 func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
-	const arraySizeMismatchErrorMessage = "arrays `in.CommitteeIds`, `in.Slots`, `in.IsAggregator` and `duties` don't have the same length"
+	const arraySizeMismatchErrorMessage = "arrays `in.CommitteeIds`, `in.Slots`, `in.IsAggregator`, `validatorIndices` and `committeesAtSlot` don't have the same length"
 
 	testCases := []struct {
 		name                    string
 		subscribeRequest        *ethpb.CommitteeSubnetsSubscribeRequest
-		duties                  []*ethpb.ValidatorDuty
+		validatorIndices        []primitives.ValidatorIndex
+		committeesAtSlot        []uint64
 		expectSubscribeRestCall bool
 		expectedErrorMessage    string
 	}{
@@ -115,16 +94,8 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				Slots:        []primitives.Slot{1, 2},
 				IsAggregator: []bool{false, true},
 			},
-			duties: []*ethpb.ValidatorDuty{
-				{
-					ValidatorIndex:   1,
-					CommitteesAtSlot: 1,
-				},
-				{
-					ValidatorIndex:   2,
-					CommitteesAtSlot: 2,
-				},
-			},
+			validatorIndices:     []primitives.ValidatorIndex{1, 2},
+			committeesAtSlot:     []uint64{1, 2},
 			expectedErrorMessage: arraySizeMismatchErrorMessage,
 		},
 		{
@@ -134,16 +105,8 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				Slots:        []primitives.Slot{1},
 				IsAggregator: []bool{false, true},
 			},
-			duties: []*ethpb.ValidatorDuty{
-				{
-					ValidatorIndex:   1,
-					CommitteesAtSlot: 1,
-				},
-				{
-					ValidatorIndex:   2,
-					CommitteesAtSlot: 2,
-				},
-			},
+			validatorIndices:     []primitives.ValidatorIndex{1, 2},
+			committeesAtSlot:     []uint64{1, 2},
 			expectedErrorMessage: arraySizeMismatchErrorMessage,
 		},
 		{
@@ -153,31 +116,19 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				Slots:        []primitives.Slot{1, 2},
 				IsAggregator: []bool{false},
 			},
-			duties: []*ethpb.ValidatorDuty{
-				{
-					ValidatorIndex:   1,
-					CommitteesAtSlot: 1,
-				},
-				{
-					ValidatorIndex:   2,
-					CommitteesAtSlot: 2,
-				},
-			},
+			validatorIndices:     []primitives.ValidatorIndex{1, 2},
+			committeesAtSlot:     []uint64{1, 2},
 			expectedErrorMessage: arraySizeMismatchErrorMessage,
 		},
 		{
-			name: "duties size mismatch",
+			name: "validatorIndices size mismatch",
 			subscribeRequest: &ethpb.CommitteeSubnetsSubscribeRequest{
 				CommitteeIds: []primitives.CommitteeIndex{1, 2},
 				Slots:        []primitives.Slot{1, 2},
 				IsAggregator: []bool{false, true},
 			},
-			duties: []*ethpb.ValidatorDuty{
-				{
-					ValidatorIndex:   1,
-					CommitteesAtSlot: 1,
-				},
-			},
+			validatorIndices:     []primitives.ValidatorIndex{1},
+			committeesAtSlot:     []uint64{1, 2},
 			expectedErrorMessage: arraySizeMismatchErrorMessage,
 		},
 		{
@@ -187,12 +138,8 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 				CommitteeIds: []primitives.CommitteeIndex{2},
 				IsAggregator: []bool{false},
 			},
-			duties: []*ethpb.ValidatorDuty{
-				{
-					ValidatorIndex:   1,
-					CommitteesAtSlot: 1,
-				},
-			},
+			validatorIndices:        []primitives.ValidatorIndex{1},
+			committeesAtSlot:        []uint64{1},
 			expectSubscribeRestCall: true,
 			expectedErrorMessage:    "foo error",
 		},
@@ -221,7 +168,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 			validatorClient := &beaconApiValidatorClient{
 				handler: handler,
 			}
-			err := validatorClient.subscribeCommitteeSubnets(ctx, testCase.subscribeRequest, testCase.duties)
+			err := validatorClient.subscribeCommitteeSubnets(ctx, testCase.subscribeRequest, testCase.validatorIndices, testCase.committeesAtSlot)
 			assert.ErrorContains(t, testCase.expectedErrorMessage, err)
 		})
 	}
