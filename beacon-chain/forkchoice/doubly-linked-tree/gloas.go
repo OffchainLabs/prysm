@@ -361,6 +361,20 @@ func (f *ForkChoice) updateNewFullNodeWeight(fn *PayloadNode) {
 	fn.weight = fn.balance
 }
 
+// SetPTCVote sets the PTC vote bits on the consensus node identified by root.
+func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool) {
+	n := f.store.emptyNodeByRoot[root]
+	if n == nil {
+		return
+	}
+	if payloadPresent {
+		n.node.setPayloadAvailabilityVote(ptcIdx)
+	}
+	if blobDataAvailable {
+		n.node.setPayloadDataAvailabilityVote(ptcIdx)
+	}
+}
+
 func (n *Node) setPayloadAvailabilityVote(idx uint64) {
 	n.payloadAvailabilityVote.SetBitAt(idx, true)
 }
