@@ -237,34 +237,49 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 		// Set bls to execution change. New in Capella.
 		vs.setBlsToExecData(sBlk, head)
+
+		// Set payload attestations. New in Gloas.
+		if sBlk.Version() >= version.Gloas {
+			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head)); err != nil {
+				log.WithError(err).Error("Could not set payload attestations")
+			}
+		}
 	})
 
 	winningBid := primitives.ZeroWei()
 	var bundle enginev1.BlobsBundler
+	var local *blocks.GetPayloadResponse
 	if sBlk.Version() >= version.Bellatrix {
-		local, err := vs.getLocalPayload(ctx, sBlk.Block(), head)
+		var err error
+		local, err = vs.getLocalPayload(ctx, sBlk.Block(), head)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
 		}
 
-		// There's no reason to try to get a builder bid if local override is true.
-		var builderBid builderapi.Bid
-		if !(local.OverrideBuilder || skipMevBoost) {
-			latestHeader, err := head.LatestExecutionPayloadHeader()
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
+		if sBlk.Version() < version.Gloas {
+			// There's no reason to try to get a builder bid if local override is true.
+			var builderBid builderapi.Bid
+			if !(local.OverrideBuilder || skipMevBoost) {
+				latestHeader, err := head.LatestExecutionPayloadHeader()
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
+				}
+				parentGasLimit := latestHeader.GasLimit()
+				builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
+				if err != nil {
+					builderGetPayloadMissCount.Inc()
+					log.WithError(err).Error("Could not get builder payload")
+				}
 			}
-			parentGasLimit := latestHeader.GasLimit()
-			builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
-			if err != nil {
-				builderGetPayloadMissCount.Inc()
-				log.WithError(err).Error("Could not get builder payload")
-			}
-		}
 
-		winningBid, bundle, err = setExecutionData(ctx, sBlk, local, builderBid, builderBoostFactor)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
+			winningBid, bundle, err = setExecutionData(ctx, sBlk, local, builderBid, builderBoostFactor)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
+			}
+		} else {
+			if err := vs.setSelfBuildExecutionPayloadBid(ctx, sBlk, local); err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
+			}
 		}
 	}
 
@@ -275,6 +290,15 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		return nil, status.Errorf(codes.Internal, "Could not compute state root: %v", err)
 	}
 	sBlk.SetStateRoot(sr)
+
+	// For Gloas, build and cache the execution payload envelope now that the block
+	// is fully built (state root set). The envelope needs the final block HTR as
+	// BeaconBlockRoot and the post-payload state root as StateRoot.
+	if sBlk.Version() >= version.Gloas {
+		if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
+		}
+	}
 
 	return vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
 }
@@ -320,7 +344,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 			log.WithError(err).Info("Optimistically proposed block - builder relay temporarily unavailable, block may arrive over P2P")
 			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 		}
-	} else if block.Version() >= version.Deneb {
+	} else if block.Version() >= version.Deneb && block.Version() < version.Gloas {
 		blobSidecars, dataColumnSidecars, err = vs.handleUnblindedBlock(rob, req)
 	}
 	if err != nil {
@@ -341,8 +365,10 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 
 	wg.Wait()
 
-	if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
+	if block.Version() < version.Gloas {
+		if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
+		}
 	}
 	if err := <-errChan; err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)

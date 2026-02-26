@@ -6,13 +6,39 @@ import (
 	"slices"
 	"time"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
+
+// CanonicalNodeAtSlot returns the full node that exists at the given slot in the canonical chain.
+// The boolean indicates whether the payload was present for the returned blockroot.
+// If the slot for the given blockroot is the current wall clock slot, it returns the pending node, that is, it sets the boolean to false.
+// If the slot is in the past the boolean indicates between full or empty.
+func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) {
+	s := f.store
+	n := s.headNode
+	for n != nil && n.slot > slot {
+		if n.parent == nil {
+			n = nil
+		} else {
+			n = n.parent.node
+		}
+	}
+	if n == nil {
+		return [32]byte{}, false
+	}
+	if n.slot == s.currentSlot() {
+		return n.root, false
+	}
+	pn := s.choosePayloadContent(n)
+	return pn.node.root, pn.full
+}
 
 func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte) error {
 	sb, err := block.Body().SignedExecutionPayloadBid()
@@ -212,24 +238,58 @@ func (s *Store) updateBestDescendantConsensusNode(ctx context.Context, n *Node, 
 		n.bestDescendant = en.bestDescendant
 		return nil
 	}
-	// TODO GLOAS: pick between full or empty
 	if err := s.updateBestDescendantPayloadNode(ctx, fn, justifiedEpoch, finalizedEpoch, currentEpoch); err != nil {
 		return err
 	}
-	n.bestDescendant = fn.bestDescendant
+	n.bestDescendant = s.choosePayloadContent(n).bestDescendant
 	return nil
 }
 
-// choosePayloadContent chooses between empty or full for the passed consensus node. TODO Gloas: use PTC to choose.
+func (s *Store) currentSlot() primitives.Slot {
+	return slots.CurrentSlot(s.genesisTime)
+}
+
+func (s *Store) shouldExtendPayload(fn *PayloadNode) bool {
+	if fn == nil {
+		return false
+	}
+	n := fn.node
+	if n.payloadAvailabilityVote.Count() > fieldparams.PTCSize/2 && n.payloadDataAvailabilityVote.Count() > fieldparams.PTCSize/2 {
+		return true
+	}
+	if s.proposerBoostRoot == [32]byte{} {
+		return true
+	}
+	pn := s.emptyNodeByRoot[s.proposerBoostRoot]
+	if pn == nil {
+		return true
+	}
+	if pn.node.parent.node != fn.node {
+		return true
+	}
+	return pn.node.parent.full
+}
+
+// choosePayloadContent chooses between empty or full for the passed consensus node.
 func (s *Store) choosePayloadContent(n *Node) *PayloadNode {
 	if n == nil {
 		return nil
 	}
 	fn := s.fullNodeByRoot[n.root]
-	if fn != nil {
+	en := s.emptyNodeByRoot[n.root]
+	if fn == nil {
+		return en
+	}
+	if fn.weight > en.weight {
+		return fn
+	} else if fn.weight < en.weight {
+		return en
+	}
+	previousSlot := n.slot+1 == s.currentSlot()
+	if !previousSlot || s.shouldExtendPayload(fn) {
 		return fn
 	}
-	return s.emptyNodeByRoot[n.root]
+	return en
 }
 
 // nodeTreeDump appends to the given list all the nodes descending from this one
@@ -325,6 +385,36 @@ func (f *ForkChoice) updateNewFullNodeWeight(fn *PayloadNode) {
 	fn.weight = fn.balance
 }
 
+// SetPTCVote sets the PTC vote bits on the consensus node identified by root.
+func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool) {
+	n := f.store.emptyNodeByRoot[root]
+	if n == nil {
+		return
+	}
+	if payloadPresent {
+		n.node.setPayloadAvailabilityVote(ptcIdx)
+	}
+	if blobDataAvailable {
+		n.node.setPayloadDataAvailabilityVote(ptcIdx)
+	}
+}
+
+func (n *Node) setPayloadAvailabilityVote(idx uint64) {
+	n.payloadAvailabilityVote.SetBitAt(idx, true)
+}
+
+func (n *Node) setPayloadDataAvailabilityVote(idx uint64) {
+	n.payloadDataAvailabilityVote.SetBitAt(idx, true)
+}
+
+func (n *Node) payloadAvailabilityVoteCount() uint64 {
+	return n.payloadAvailabilityVote.Count()
+}
+
+func (n *Node) payloadDataAvailabilityVoteCount() uint64 {
+	return n.payloadDataAvailabilityVote.Count()
+}
+
 // resolveVoteNode returns the node that should receive the balance of a vote. It returns always a PayloadNode, but the boolean indicates
 // whether the vote should be applied to the pending node (true) or not.
 func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus bool) (*PayloadNode, bool) {
@@ -346,4 +436,50 @@ func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 		return [32]byte{}, errors.Wrap(ErrNilNode, "could not get block hash for root")
 	}
 	return en.node.blockHash, nil
+}
+
+func (s *Store) shouldApplyProposerBoost() bool {
+	if s.proposerBoostRoot == [32]byte{} {
+		return false
+	}
+	if slots.ToEpoch(s.currentSlot()) < params.BeaconConfig().GloasForkEpoch {
+		return true
+	}
+	en := s.emptyNodeByRoot[s.proposerBoostRoot]
+	if en == nil {
+		return false
+	}
+	n := en.node
+	p := n.parent
+	if p == nil {
+		return true
+	}
+
+	if p.node.slot+1 != n.slot {
+		return true
+	}
+	return p.weight*100 >= s.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold
+}
+
+// removeProposerBoostFromParent removes the proposer boost that must have been applied to the parent of the current proposer boost node
+// in some circumstances.
+func (s *Store) removeProposerBoostFromParent() {
+	if s.proposerBoostRoot == [32]byte{} {
+		return
+	}
+	pn := s.emptyNodeByRoot[s.proposerBoostRoot]
+	if pn == nil {
+		return
+	}
+	n := pn.node
+	p := n.parent
+	if p.node.slot+1 != s.currentSlot() {
+		return
+	}
+	if p.weight < s.previousProposerBoostScore {
+		p.weight = 0
+	} else {
+		p.weight -= s.previousProposerBoostScore
+	}
+	return
 }

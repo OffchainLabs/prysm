@@ -68,6 +68,7 @@ func (f *ForkChoice) Head(
 	if err := f.store.applyWeightChangesConsensusNode(ctx, f.store.treeRootNode); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not apply weight changes")
 	}
+	f.store.removeProposerBoostFromParent()
 
 	jc := f.JustifiedCheckpoint()
 	fc := f.FinalizedCheckpoint()

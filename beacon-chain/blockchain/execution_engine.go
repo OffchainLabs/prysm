@@ -233,6 +233,9 @@ func (s *Service) notifyNewPayload(ctx context.Context, stVersion int, header in
 	if stVersion < version.Bellatrix {
 		return true, nil
 	}
+	if blk.Version() >= version.Gloas {
+		return false, nil
+	}
 	body := blk.Block().Body()
 	enabled, err := blocks.IsExecutionEnabledUsingHeader(header, body)
 	if err != nil {

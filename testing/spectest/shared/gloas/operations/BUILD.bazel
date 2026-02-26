@@ -10,6 +10,7 @@ go_library(
         "helpers.go",
         "payload_attestation.go",
         "proposer_slashing.go",
+        "withdrawals.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/gloas/operations",
     visibility = ["//visibility:public"],

@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
@@ -82,6 +83,9 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	if err := s.handleBlockAttestations(ctx, cfg.roblock.Block(), cfg.postState); err != nil {
 		return errors.Wrap(err, "could not handle block's attestations")
 	}
+	if err := s.handleBlockPayloadAttestations(ctx, cfg.roblock.Block(), cfg.postState); err != nil {
+		return errors.Wrap(err, "could not handle block's payload attestations")
+	}
 
 	s.InsertSlashingsToForkChoiceStore(ctx, cfg.roblock.Block().Body().AttesterSlashings())
 	if cfg.isValidPayload {
@@ -101,7 +105,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
 	}
-	if cfg.roblock.Version() <= version.Gloas {
+	if cfg.roblock.Version() < version.Gloas {
 		s.sendFCU(cfg)
 	}
 
@@ -306,7 +310,18 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 	slot := block.Slot()
 
 	if blockVersion >= version.Fulu {
-		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), block); err != nil {
+		body := block.Body()
+		if body == nil {
+			return errors.New("invalid nil beacon block body")
+		}
+		kzgCommitments, err := body.BlobKzgCommitments()
+		if err != nil {
+			return errors.Wrap(err, "blob KZG commitments")
+		}
+		if len(kzgCommitments) == 0 {
+			return nil
+		}
+		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), slot); err != nil {
 			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
 		}
 
@@ -414,6 +429,36 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 			}
 		} else if err = s.cfg.AttPool.SaveBlockAttestation(a); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// handleBlockPayloadAttestations feeds payload attestations included in a Gloas block into forkchoice.
+func (s *Service) handleBlockPayloadAttestations(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, st state.BeaconState) error {
+	if blk.Version() < version.Gloas {
+		return nil
+	}
+	atts, err := blk.Body().PayloadAttestations()
+	if err != nil {
+		return err
+	}
+	if len(atts) == 0 {
+		return nil
+	}
+	committee, err := gloas.PayloadCommittee(ctx, st, blk.Slot()-1)
+	if err != nil {
+		return err
+	}
+	for _, att := range atts {
+		root := bytesutil.ToBytes32(att.Data.BeaconBlockRoot)
+		if !s.cfg.ForkChoiceStore.HasNode(root) {
+			continue
+		}
+		for i := range committee {
+			if att.AggregationBits.BitAt(uint64(i)) {
+				s.cfg.ForkChoiceStore.SetPTCVote(root, uint64(i), att.Data.PayloadPresent, att.Data.BlobDataAvailable)
+			}
 		}
 	}
 	return nil
@@ -549,6 +594,9 @@ func (s *Service) validateMergeTransitionBlock(ctx context.Context, stateVersion
 	if blocks.IsPreBellatrixVersion(blk.Block().Version()) {
 		return nil
 	}
+	if blk.Block().Version() >= version.Gloas {
+		return nil
+	}
 
 	// Skip validation if block has an empty payload.
 	payload, err := blk.Block().Body().Execution()
@@ -589,11 +637,22 @@ func (s *Service) runLateBlockTasks() {
 		return
 	}
 
-	attThreshold := params.BeaconConfig().SecondsPerSlot / 3
-	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, time.Duration(attThreshold)*time.Second, params.BeaconConfig().SecondsPerSlot)
+	cfg := params.BeaconConfig()
+	attDueBPS := cfg.AttestationDueBPS
+	if slots.ToEpoch(s.CurrentSlot()) >= cfg.GloasForkEpoch {
+		attDueBPS = cfg.AttestationDueBPSGloas
+	}
+	attThreshold := cfg.SlotComponentDuration(attDueBPS)
+	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
 	for {
 		select {
-		case <-ticker.C():
+		case slot := <-ticker.C():
+			if attDueBPS != cfg.AttestationDueBPSGloas && slots.ToEpoch(slot) >= cfg.GloasForkEpoch {
+				ticker.Done()
+				attDueBPS = cfg.AttestationDueBPSGloas
+				attThreshold = cfg.SlotComponentDuration(attDueBPS)
+				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
+			}
 			s.lateBlockTasks(s.ctx)
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting routine")
@@ -670,7 +729,18 @@ func (s *Service) isDataAvailable(
 	root := roBlock.Root()
 	blockVersion := block.Version()
 	if blockVersion >= version.Fulu {
-		return s.areDataColumnsAvailable(ctx, root, block)
+		body := block.Body()
+		if body == nil {
+			return errors.New("invalid nil beacon block body")
+		}
+		kzgCommitments, err := body.BlobKzgCommitments()
+		if err != nil {
+			return errors.Wrap(err, "blob KZG commitments")
+		}
+		if len(kzgCommitments) == 0 {
+			return nil
+		}
+		return s.areDataColumnsAvailable(ctx, root, block.Slot())
 	}
 
 	if blockVersion >= version.Deneb {
@@ -685,27 +755,12 @@ func (s *Service) isDataAvailable(
 func (s *Service) areDataColumnsAvailable(
 	ctx context.Context,
 	root [fieldparams.RootLength]byte,
-	block interfaces.ReadOnlyBeaconBlock,
+	slot primitives.Slot,
 ) error {
 	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
-	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
-	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
+	currentSlot := s.CurrentSlot()
+	blockEpoch, currentEpoch := slots.ToEpoch(slot), slots.ToEpoch(currentSlot)
 	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
-		return nil
-	}
-
-	body := block.Body()
-	if body == nil {
-		return errors.New("invalid nil beacon block body")
-	}
-
-	kzgCommitments, err := body.BlobKzgCommitments()
-	if err != nil {
-		return errors.Wrap(err, "blob KZG commitments")
-	}
-
-	// If block has not commitments there is nothing to wait for.
-	if len(kzgCommitments) == 0 {
 		return nil
 	}
 
@@ -762,7 +817,7 @@ func (s *Service) areDataColumnsAvailable(
 	}
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot, err := slots.StartTime(s.genesisTime, block.Slot()+1)
+	nextSlot, err := slots.StartTime(s.genesisTime, slot+1)
 	if err != nil {
 		return fmt.Errorf("unable to determine slot start time: %w", err)
 	}
@@ -777,7 +832,7 @@ func (s *Service) areDataColumnsAvailable(
 			}
 
 			log.WithFields(logrus.Fields{
-				"slot":            block.Slot(),
+				"slot":            slot,
 				"root":            fmt.Sprintf("%#x", root),
 				"columnsExpected": helpers.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
 				"columnsWaiting":  helpers.SortedPrettySliceFromMap(missing),
@@ -823,7 +878,7 @@ func (s *Service) areDataColumnsAvailable(
 				missingIndices = helpers.SortedPrettySliceFromMap(missing)
 			}
 
-			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", block.Slot(), root, missingIndices)
+			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", slot, root, missingIndices)
 		}
 	}
 }
@@ -965,26 +1020,38 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		return
 	}
 
-	s.headLock.RLock()
-	headBlock, err := s.headBlock()
-	if err != nil {
+	if headState.Version() >= version.Gloas {
+		bh, err := headState.LatestBlockHash()
+		if err != nil {
+			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve latest block hash")
+			return
+		}
+		_, err = s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
+		if err != nil {
+			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
+		}
+	} else {
+		s.headLock.RLock()
+		headBlock, err := s.headBlock()
+		if err != nil {
+			s.headLock.RUnlock()
+			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve head block")
+			return
+		}
 		s.headLock.RUnlock()
-		log.WithError(err).Debug("could not perform late block tasks: failed to retrieve head block")
-		return
-	}
-	s.headLock.RUnlock()
 
-	fcuArgs := &fcuConfig{
-		headState:  headState,
-		headRoot:   headRoot,
-		headBlock:  headBlock,
-		attributes: attribute,
-	}
-	s.cfg.ForkChoiceStore.Lock()
-	defer s.cfg.ForkChoiceStore.Unlock()
-	_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
-	if err != nil {
-		log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
+		fcuArgs := &fcuConfig{
+			headState:  headState,
+			headRoot:   headRoot,
+			headBlock:  headBlock,
+			attributes: attribute,
+		}
+		s.cfg.ForkChoiceStore.Lock()
+		defer s.cfg.ForkChoiceStore.Unlock()
+		_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
+		if err != nil {
+			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
+		}
 	}
 }
 
@@ -998,6 +1065,7 @@ func (s *Service) waitForSync() error {
 	}
 }
 
+// the caller of this function must hold a write lock in forkchoice store.
 func (s *Service) handleInvalidExecutionError(ctx context.Context, err error, blockRoot, parentRoot [32]byte, parentHash [32]byte) error {
 	if IsInvalidBlock(err) && InvalidBlockLVH(err) != [32]byte{} {
 		return s.pruneInvalidBlock(ctx, blockRoot, parentRoot, parentHash, InvalidBlockLVH(err))
