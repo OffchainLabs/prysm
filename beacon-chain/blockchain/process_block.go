@@ -713,8 +713,8 @@ func (s *Service) areDataColumnsAvailable(
 	slot primitives.Slot,
 ) error {
 	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
-	blockSlot, currentSlot := slot, s.CurrentSlot()
-	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
+	currentSlot := s.CurrentSlot()
+	blockEpoch, currentEpoch := slots.ToEpoch(slot), slots.ToEpoch(currentSlot)
 	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
 		return nil
 	}
