@@ -23,7 +23,12 @@ import (
 func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) {
 	s := f.store
 	n := s.headNode
-	for ; n != nil && n.slot > slot; n = n.parent.node {
+	for n != nil && n.slot > slot {
+		if n.parent == nil {
+			n = nil
+		} else {
+			n = n.parent.node
+		}
 	}
 	if n == nil {
 		return [32]byte{}, false

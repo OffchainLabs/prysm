@@ -1380,3 +1380,22 @@ func TestCanonicalNodeAtSlot_NilHead(t *testing.T) {
 	assert.Equal(t, [32]byte{}, root)
 	assert.Equal(t, false, full)
 }
+
+func TestCanonicalNodeAtSlot_NilParent(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	// Compute head so headNode is set to genesis.
+	_, err := f.Head(ctx)
+	require.NoError(t, err)
+
+	// Simulate a checkpoint-synced tree where the root is at a nonzero slot.
+	// The genesis node's parent is nil, so walking past it must not panic.
+	genesisNode := f.store.emptyNodeByRoot[zeroHash].node
+	genesisNode.slot = 5
+	f.store.headNode = genesisNode
+	root, full := f.CanonicalNodeAtSlot(3)
+	assert.Equal(t, [32]byte{}, root)
+	assert.Equal(t, false, full)
+}
