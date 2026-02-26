@@ -785,6 +785,11 @@ func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ inte
 	return nil
 }
 
+// ParentPayloadReady mocks the same method in the chain service.
+func (*ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool {
+	return true
+}
+
 // DependentRootForEpoch mocks the same method in the chain service
 func (c *ChainService) DependentRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
 	return c.TargetRoot, nil

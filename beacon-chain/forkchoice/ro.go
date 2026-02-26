@@ -30,6 +30,13 @@ func NewROForkChoice(w ROWrappable) *ROForkChoice {
 	return &ROForkChoice{getter: w, l: w}
 }
 
+// HasFullNode delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) HasFullNode(root [32]byte) bool {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.HasFullNode(root)
+}
+
 // HasNode delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) HasNode(root [32]byte) bool {
 	ro.l.RLock()
