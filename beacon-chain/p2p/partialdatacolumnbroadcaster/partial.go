@@ -47,9 +47,13 @@ func extractColumnIndexFromTopic(topic string) (uint64, error) {
 type HeaderValidator func(header *ethpb.PartialDataColumnHeader) (reject bool, err error)
 type HeaderHandler func(header *ethpb.PartialDataColumnHeader, groupID string)
 type ColumnValidator func(cells []blocks.CellProofBundle) error
+type partialColumnPubSub interface {
+	PeerFeedback(topic string, peer peer.ID, kind pubsub.PeerFeedbackKind) error
+	PublishPartialMessage(topic string, partialMessage partialmessages.Message, opts partialmessages.PublishOptions) error
+}
 
 type PartialColumnBroadcaster struct {
-	ps   *pubsub.PubSub
+	ps   partialColumnPubSub
 	stop chan struct{}
 
 	validateHeader HeaderValidator
@@ -103,6 +107,12 @@ type publish struct {
 	topic          string
 	c              blocks.PartialDataColumn
 	getBlobsCalled bool
+	publishRespCh  chan publishResponse
+}
+
+type publishResponse struct {
+	err             error
+	columnCompleted bool
 }
 
 type subscribe struct {
@@ -267,7 +277,9 @@ func (p *PartialColumnBroadcaster) loop() {
 		case req := <-p.incomingReq:
 			switch req.kind {
 			case requestKindPublish:
-				req.response <- p.publish(req.publish.topic, req.publish.c, req.publish.getBlobsCalled)
+				var pr publishResponse
+				pr.columnCompleted, pr.err = p.publish(req.publish.topic, req.publish.c, req.publish.getBlobsCalled)
+				req.publish.publishRespCh <- pr
 			case requestKindSubscribe:
 				req.response <- p.subscribe(req.sub.t)
 			case requestKindUnsubscribe:
@@ -625,24 +637,26 @@ func (p *PartialColumnBroadcaster) Stop() {
 }
 
 // Publish publishes the partial column.
-func (p *PartialColumnBroadcaster) Publish(topic string, c blocks.PartialDataColumn, getBlobsCalled bool) error {
+func (p *PartialColumnBroadcaster) Publish(topic string, c blocks.PartialDataColumn, getBlobsCalled bool) (bool, error) {
 	if p.ps == nil {
-		return errors.New("pubsub not initialized")
+		return false, errors.New("pubsub not initialized")
 	}
-	respCh := make(chan error)
+	respCh := make(chan publishResponse, 1)
 	p.incomingReq <- request{
-		kind:     requestKindPublish,
-		response: respCh,
+		kind: requestKindPublish,
 		publish: publish{
 			topic:          topic,
 			c:              c,
 			getBlobsCalled: getBlobsCalled,
+			publishRespCh:  respCh,
 		},
 	}
-	return <-respCh
+	resp := <-respCh
+	return resp.columnCompleted, resp.err
 }
 
-func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataColumn, getBlobsCalled bool) error {
+func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataColumn, getBlobsCalled bool) (bool, error) {
+	var columnCompleted bool
 	groupIDBytes := c.GroupID()
 	topicStore, ok := p.partialMsgStore[topic]
 	if !ok {
@@ -666,6 +680,7 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 			if col, ok := existing.Complete(); ok {
 				log.WithFields(logrus.Fields{"topic": topic, "group": existing.GroupID()}).Info("Completed partial column")
 				if p.handleColumn != nil {
+					columnCompleted = true
 					go p.handleColumn(topic, col)
 				}
 			}
@@ -681,7 +696,7 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 	if err == nil {
 		p.getBlobsCalled[string(groupIDBytes)] = getBlobsCalled
 	}
-	return err
+	return columnCompleted, err
 }
 
 type SubHandler func(topic string, col blocks.VerifiedRODataColumn)

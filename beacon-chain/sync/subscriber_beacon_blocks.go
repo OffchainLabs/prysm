@@ -253,7 +253,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 					// Publish the partial column. This is idempotent if we republish the same data twice.
 					// Note, the "partial column" may indeed be complete. We still
 					// should publish to help our peers.
-					err = partialBroadcaster.Publish(topic, partialColumns[i], true)
+					_, err = partialBroadcaster.Publish(topic, partialColumns[i], true)
 					if err != nil {
 						log.WithError(err).Warn("Failed to publish partial column")
 					}
