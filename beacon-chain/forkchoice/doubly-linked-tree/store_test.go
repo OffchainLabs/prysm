@@ -67,14 +67,6 @@ func TestForkChoice_HasNode(t *testing.T) {
 	require.Equal(t, true, f.HasNode(indexToHash(1)))
 }
 
-func TestForkChoice_HasFullPayload(t *testing.T) {
-	f := setup(0, 0)
-	root := indexToHash(1)
-	require.Equal(t, false, f.HasFullPayload(root))
-	f.store.fullNodeByRoot[root] = &PayloadNode{}
-	require.Equal(t, true, f.HasFullPayload(root))
-}
-
 func TestStore_Head_UnknownJustifiedRoot(t *testing.T) {
 	f := setup(0, 0)
 

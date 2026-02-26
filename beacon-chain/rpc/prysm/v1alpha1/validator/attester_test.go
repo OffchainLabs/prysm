@@ -622,11 +622,10 @@ func TestGetAttestationData_CommitteeIndexGloas(t *testing.T) {
 			TimeFetcher:           &mock.ChainService{Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second)},
 			CoreService: &core.Service{
 				HeadFetcher: &mock.ChainService{
-					TargetRoot:       targetRoot,
-					Root:             blockRoot[:],
-					State:            beaconState,
-					MockHeadSlot:     &headSlot,
-					FullPayloadRoots: map[[32]byte]bool{bytesutil.ToBytes32(blockRoot[:]): true},
+					TargetRoot:   targetRoot,
+					Root:         blockRoot[:],
+					State:        beaconState,
+					MockHeadSlot: &headSlot,
 				},
 				GenesisTimeFetcher: &mock.ChainService{
 					Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second),
