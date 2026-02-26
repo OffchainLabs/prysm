@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"time"
 
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
@@ -97,6 +98,9 @@ func (s *Service) forkchoiceUpdateWithExecution(ctx context.Context, args *fcuCo
 	ctx = trace.NewContext(s.ctx, span)
 	s.ForkChoicer().Lock()
 	defer s.ForkChoicer().Unlock()
+
+	runtime.GC()
+
 	_, err := s.notifyForkchoiceUpdate(ctx, args)
 	if err != nil {
 		log.WithError(err).Error("Could not notify forkchoice update")
