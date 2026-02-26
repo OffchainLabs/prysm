@@ -186,6 +186,7 @@ go_test(
         "pending_attestations_queue_bucket_test.go",
         "pending_attestations_queue_test.go",
         "pending_blocks_queue_test.go",
+        "pending_payload_envelope_test.go",
         "rate_limiter_test.go",
         "rpc_beacon_blocks_by_range_test.go",
         "rpc_beacon_blocks_by_root_test.go",
