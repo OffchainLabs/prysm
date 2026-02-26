@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/fulu"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -316,7 +317,11 @@ func ProcessSlotsCore(ctx context.Context, span trace.Span, state state.BeaconSt
 func ProcessEpoch(ctx context.Context, state state.BeaconState) (state.BeaconState, error) {
 	var err error
 	if time.CanProcessEpoch(state) {
-		if state.Version() >= version.Fulu {
+		if state.Version() >= version.Gloas {
+			if err = processEpochGloas(ctx, state); err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("could not process %s epoch", version.String(state.Version())))
+			}
+		} else if state.Version() >= version.Fulu {
 			if err = fulu.ProcessEpoch(ctx, state); err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("could not process %s epoch", version.String(state.Version())))
 			}
@@ -395,6 +400,15 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 
 	if time.CanUpgradeToFulu(slot) {
 		state, err = fulu.UpgradeToFulu(ctx, state)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return nil, err
+		}
+		upgraded = true
+	}
+
+	if time.CanUpgradeToGloas(slot) {
+		state, err = gloas.UpgradeToGloas(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			return nil, err

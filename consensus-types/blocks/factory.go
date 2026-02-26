@@ -140,6 +140,8 @@ func NewBeaconBlock(i any) (interfaces.ReadOnlyBeaconBlock, error) {
 		return initBlindedBlockFromProtoFulu(b)
 	case *eth.GenericBeaconBlock_BlindedFulu:
 		return initBlindedBlockFromProtoFulu(b.BlindedFulu)
+	case *eth.GenericBeaconBlock_Gloas:
+		return initBlockFromProtoGloas(b.Gloas)
 	case *eth.BeaconBlockGloas:
 		return initBlockFromProtoGloas(b)
 	default:

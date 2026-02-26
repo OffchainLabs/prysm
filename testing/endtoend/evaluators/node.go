@@ -132,14 +132,17 @@ func finishedSyncing(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) e
 // waitForMidEpoch waits until we're at least halfway into the current epoch
 // and 3/4 into the current slot. This prevents race conditions at epoch
 // boundaries and slot boundaries where different nodes may report different heads.
-func waitForMidEpoch(conn *grpc.ClientConn) error {
+func waitForMidEpoch(ctx context.Context, conn *grpc.ClientConn) error {
 	beaconClient := eth.NewBeaconChainClient(conn)
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
 	midEpochSlot := slotsPerEpoch / 2
 
 	for {
-		chainHead, err := beaconClient.GetChainHead(context.Background(), &emptypb.Empty{})
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		chainHead, err := beaconClient.GetChainHead(ctx, &emptypb.Empty{})
 		if err != nil {
 			return err
 		}
@@ -147,18 +150,34 @@ func waitForMidEpoch(conn *grpc.ClientConn) error {
 		// If we're at least halfway into the epoch, we're safe
 		if slotInEpoch >= midEpochSlot {
 			// Wait 3/4 into the slot to ensure block propagation
-			time.Sleep(time.Duration(secondsPerSlot) * time.Second * 3 / 4)
+			if err := sleepWithContext(ctx, time.Duration(secondsPerSlot)*time.Second*3/4); err != nil {
+				return err
+			}
 			return nil
 		}
 		// Wait for the remaining slots until mid-epoch
 		slotsToWait := midEpochSlot - slotInEpoch
-		time.Sleep(time.Duration(slotsToWait) * time.Duration(secondsPerSlot) * time.Second)
+		if err := sleepWithContext(ctx, time.Duration(slotsToWait)*time.Duration(secondsPerSlot)*time.Second); err != nil {
+			return err
+		}
 	}
 }
 
-// getHeadEpochs fetches the head epoch from all beacon nodes concurrently.
-func getHeadEpochs(conns []*grpc.ClientConn) ([]primitives.Epoch, error) {
-	epochs := make([]primitives.Epoch, len(conns))
+func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
+	ctx, cancel := context.WithTimeout(context.Background(), params.EpochsDuration(2, params.BeaconConfig()))
+	defer cancel()
+	// Wait until we're at least halfway into the epoch to avoid race conditions
+	// at epoch boundaries where nodes may report different epochs.
+	if err := waitForAllMidEpoch(ctx, conns...); err != nil {
+		return errors.Wrap(err, "failed waiting for mid-epoch")
+	}
+
+	headEpochs := make([]primitives.Epoch, len(conns))
+	headBlockRoots := make([][]byte, len(conns))
+	justifiedRoots := make([][]byte, len(conns))
+	prevJustifiedRoots := make([][]byte, len(conns))
+	finalizedRoots := make([][]byte, len(conns))
+	chainHeads := make([]*eth.ChainHead, len(conns))
 	g, _ := errgroup.WithContext(context.Background())
 
 	for i, conn := range conns {
@@ -311,4 +330,26 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 	}
 
 	return lastErr
+}
+
+func waitForAllMidEpoch(ctx context.Context, conns ...*grpc.ClientConn) error {
+	g, gctx := errgroup.WithContext(ctx)
+	for _, conn := range conns {
+		currConn := conn
+		g.Go(func() error {
+			return waitForMidEpoch(gctx, currConn)
+		})
+	}
+	return g.Wait()
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

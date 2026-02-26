@@ -6,8 +6,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -122,7 +120,7 @@ func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1
 	pubkey := bytesutil.ToBytes48(request.Pubkey)
 	_, isValidator := beaconState.ValidatorIndexByPubkey(pubkey)
 	idx, isBuilder := beaconState.BuilderIndexByPubkey(pubkey)
-	isBuilderPrefix := IsBuilderWithdrawalCredential(request.WithdrawalCredentials)
+	isBuilderPrefix := helpers.IsBuilderWithdrawalCredential(request.WithdrawalCredentials)
 	if !isBuilder && (!isBuilderPrefix || isValidator) {
 		return false, nil
 	}
@@ -172,9 +170,4 @@ func applyDepositForNewBuilder(
 
 	withdrawalCredBytes := bytesutil.ToBytes32(withdrawalCredentials)
 	return beaconState.AddBuilderFromDeposit(pubkeyBytes, withdrawalCredBytes, amount)
-}
-
-func IsBuilderWithdrawalCredential(withdrawalCredentials []byte) bool {
-	return len(withdrawalCredentials) == fieldparams.RootLength &&
-		withdrawalCredentials[0] == params.BeaconConfig().BuilderWithdrawalPrefixByte
 }

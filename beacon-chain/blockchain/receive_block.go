@@ -95,18 +95,17 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err != nil {
 		return errors.Wrap(err, "block copy")
 	}
-
-	preState, err := s.getBlockPreState(ctx, blockCopy.Block())
-	if err != nil {
-		return errors.Wrap(err, "could not get block's prestate")
-	}
-
-	currentCheckpoints := s.saveCurrentCheckpoints(preState)
 	roblock, err := blocks.NewROBlockWithRoot(blockCopy, blockRoot)
 	if err != nil {
 		return errors.Wrap(err, "new ro block with root")
 	}
 
+	preState, err := s.getBlockPreState(ctx, roblock)
+	if err != nil {
+		return errors.Wrap(err, "could not get block's prestate")
+	}
+
+	currentCheckpoints := s.saveCurrentCheckpoints(preState)
 	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
 	if err != nil {
 		return errors.Wrap(err, "validator execution and consensus")
@@ -211,6 +210,16 @@ func (s *Service) validateExecutionAndConsensus(
 	preState state.BeaconState,
 	block blocks.ROBlock,
 ) (state.BeaconState, bool, error) {
+	if block.Version() >= version.Gloas {
+		postState, err := s.validateStateTransition(ctx, preState, block)
+		if errors.Is(err, ErrNotDescendantOfFinalized) {
+			return nil, false, invalidBlock{error: err, root: block.Root()}
+		}
+		if err != nil {
+			return nil, false, errors.Wrap(err, "failed to validate consensus state transition function")
+		}
+		return postState, false, nil
+	}
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	if err != nil {
 		return nil, false, err
@@ -244,6 +253,10 @@ func (s *Service) validateExecutionAndConsensus(
 }
 
 func (s *Service) handleDA(ctx context.Context, avs das.AvailabilityChecker, block blocks.ROBlock) (time.Duration, error) {
+	// Gloas DA is handled on the payload enevelope.
+	if block.Version() >= version.Gloas {
+		return 0, nil
+	}
 	var err error
 	start := time.Now()
 	if avs != nil {
