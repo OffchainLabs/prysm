@@ -71,9 +71,9 @@ func DeleteAndCreatePath(fp string) (*os.File, error) {
 	return os.Create(filepath.Clean(fp))
 }
 
-// WaitForTextInFile checks a file every polling interval for the text requested.
-func WaitForTextInFile(src *os.File, match string) error {
-	d := time.Now().Add(maxPollingWaitTime)
+// WaitForTextInFileWithTimeout checks a file every polling interval for the text requested with a configurable timeout.
+func WaitForTextInFileWithTimeout(src *os.File, match string, timeout time.Duration) error {
+	d := time.Now().Add(timeout)
 	ctx, cancel := context.WithDeadline(context.Background(), d)
 	defer cancel()
 
@@ -138,6 +138,11 @@ func WaitForTextInFile(src *os.File, match string) error {
 	case err = <-errChan:
 		return errors.Wrapf(err, "received error while scanning %s for %s", f.Name(), match)
 	}
+}
+
+// WaitForTextInFile checks a file every polling interval for the text requested.
+func WaitForTextInFile(src *os.File, match string) error {
+	return WaitForTextInFileWithTimeout(src, match, maxPollingWaitTime)
 }
 
 // FindFollowingTextInFile checks a file every polling interval for the  following text requested.
