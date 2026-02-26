@@ -265,7 +265,25 @@ func (s *Service) notifyNewEnvelope(ctx context.Context, st state.BeaconState, e
 	for i, c := range commitments {
 		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
 	}
-	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(bytesutil.ToBytes32(st.LatestBlockHeader().ParentRoot)), envelope.ExecutionRequests(), envelope.Slot())
+
+	parentRoot := common.Hash(bytesutil.ToBytes32(st.LatestBlockHeader().ParentRoot))
+	requests := envelope.ExecutionRequests()
+
+	_, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests, envelope.Slot())
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus) {
+		log.WithFields(logrus.Fields{
+			"slot":             envelope.Slot(),
+			"payloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
+		}).Info("Called new payload with optimistic envelope")
+		return false, nil
+	}
+	if errors.Is(err, execution.ErrInvalidPayloadStatus) {
+		return false, invalidBlock{error: ErrInvalidPayload}
+	}
+	return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 }
 
 func (s *Service) validateExecutionOnEnvelope(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) (bool, error) {

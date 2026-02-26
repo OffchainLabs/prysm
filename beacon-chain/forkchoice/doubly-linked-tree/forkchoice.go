@@ -646,7 +646,7 @@ func (f *ForkChoice) Weight(root [32]byte) (uint64, error) {
 	if !ok || n == nil {
 		return 0, ErrNilNode
 	}
-	return n.weight, nil
+	return n.node.weight, nil
 }
 
 // ConsensusNodeWeight returns the consensus-node weight for the given root if found on the store.
