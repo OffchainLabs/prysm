@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	b "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
@@ -356,8 +357,13 @@ func ProcessOperationsNoVerifyAttsSigs(
 		if err != nil {
 			return nil, err
 		}
-	} else {
+	} else if beaconBlock.Version() < version.Gloas {
 		state, err = electraOperations(ctx, state, beaconBlock)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		state, err = gloasOperations(ctx, state, beaconBlock)
 		if err != nil {
 			return nil, err
 		}
@@ -403,23 +409,47 @@ func ProcessBlockForStateRoot(
 		return nil, errors.Wrap(err, "could not process block header")
 	}
 
-	enabled, err := b.IsExecutionEnabled(state, blk.Body())
-	if err != nil {
-		return nil, errors.Wrap(err, "could not check if execution is enabled")
-	}
-	if enabled {
-		executionData, err := blk.Body().Execution()
+	if state.Version() >= version.Gloas {
+		// <spec fn="process_block" fork="gloas" hash="cc0f05ee">
+		// def process_block(state: BeaconState, block: BeaconBlock) -> None:
+		//     process_block_header(state, block)
+		//     # [Modified in Gloas:EIP7732]
+		//     process_withdrawals(state)
+		//     # [Modified in Gloas:EIP7732]
+		//     # Removed `process_execution_payload`
+		//     # [New in Gloas:EIP7732]
+		//     process_execution_payload_bid(state, block)
+		//     process_randao(state, block.body)
+		//     process_eth1_data(state, block.body)
+		//     # [Modified in Gloas:EIP7732]
+		//     process_operations(state, block.body)
+		//     process_sync_aggregate(state, block.body.sync_aggregate)
+		// </spec>
+		if err := gloas.ProcessWithdrawals(state); err != nil {
+			return nil, errors.Wrap(ErrProcessWithdrawalsFailed, err.Error())
+		}
+		if err := gloas.ProcessExecutionPayloadBid(state, blk); err != nil {
+			return nil, errors.Wrap(err, "could not process execution payload bid")
+		}
+	} else {
+		enabled, err := b.IsExecutionEnabled(state, blk.Body())
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "could not check if execution is enabled")
 		}
-		if state.Version() >= version.Capella {
-			state, err = b.ProcessWithdrawals(state, executionData)
+		if enabled {
+			executionData, err := blk.Body().Execution()
 			if err != nil {
-				return nil, errors.Wrap(ErrProcessWithdrawalsFailed, err.Error())
+				return nil, err
 			}
-		}
-		if err = b.ProcessPayload(state, blk.Body()); err != nil {
-			return nil, errors.Wrap(err, "could not process execution data")
+			if state.Version() >= version.Capella {
+				state, err = b.ProcessWithdrawals(state, executionData)
+				if err != nil {
+					return nil, errors.Wrap(ErrProcessWithdrawalsFailed, err.Error())
+				}
+			}
+			if err = b.ProcessPayload(state, blk.Body()); err != nil {
+				return nil, errors.Wrap(err, "could not process execution data")
+			}
 		}
 	}
 
