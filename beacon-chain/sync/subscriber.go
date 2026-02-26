@@ -509,7 +509,7 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			return pubsub.ValidationIgnore
 		}
 		if currDigest != retDigest {
-			log.WithField("topic", topic).Debugf("Received message from outdated fork digest %#x", retDigest)
+			log.WithField("topic", topic).Tracef("Received message from outdated fork digest %#x", retDigest)
 			return pubsub.ValidationIgnore
 		}
 		b, err := v(ctx, pid, msg)

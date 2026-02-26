@@ -643,6 +643,30 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedB
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve beacon state")
 	}
+	if block.Version() >= version.Gloas && beaconState.Version() >= version.Gloas {
+		bid, err := block.Block().Body().SignedExecutionPayloadBid()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not retrieve signed execution payload bid")
+		}
+
+		parentHash := [32]byte{}
+		copy(parentHash[:], bid.Message.ParentBlockHash)
+		parentBid, err := beaconState.LatestExecutionPayloadBid()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not retrieve latest block hash")
+		}
+		parentBidHash := parentBid.BlockHash()
+		log.WithFields(logrus.Fields{
+			"parentHash":   fmt.Sprintf("%#x", parentHash),
+			"parentBidHash": fmt.Sprintf("%#x", parentBidHash),
+		}).Info("Comparing parent block hash to parent bid hash")
+		if parentHash == parentBidHash {
+			beaconState, err = vs.StateGen.StateByRoot(ctx, parentHash)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not retrieve beacon state by parent block hash")
+			}
+		}
+	}
 	root, err := transition.CalculateStateRoot(
 		ctx,
 		beaconState,

@@ -112,7 +112,7 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 				"topic":            topic,
 				"peerCount":        len(peers),
 				"minimumPeerCount": minimumPeerCount,
-			}).Debug("Insufficient peers for data column sidecar topic to maintain custody count")
+			}).Trace("Insufficient peers for data column sidecar topic to maintain custody count")
 			enoughPeers = false
 		}
 	}
