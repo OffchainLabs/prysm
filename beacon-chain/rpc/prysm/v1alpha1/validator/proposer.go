@@ -670,7 +670,7 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedB
 		}
 		parentBidHash := parentBid.BlockHash()
 		log.WithFields(logrus.Fields{
-			"parentHash":   fmt.Sprintf("%#x", parentHash),
+			"parentHash":    fmt.Sprintf("%#x", parentHash),
 			"parentBidHash": fmt.Sprintf("%#x", parentBidHash),
 		}).Info("Comparing parent block hash to parent bid hash")
 		if parentHash == parentBidHash {
@@ -678,6 +678,18 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedB
 			if err != nil {
 				return nil, errors.Wrap(err, "could not retrieve beacon state by parent block hash")
 			}
+			// For Gloas blocks, compute the state root without using the
+			// NextSlotCache. The NSC is keyed by beacon block root and may
+			// contain the post-beacon-block state (without execution payload
+			// effects). Using it would overwrite the correct post-execution-
+			// payload state we just fetched, causing a latestBlockHash
+			// mismatch during bid validation.
+			root, err := calculateStateRootWithoutNSC(ctx, beaconState, block)
+			if err != nil {
+				return vs.handleStateRootError(ctx, block, err)
+			}
+			log.WithField("beaconStateRoot", fmt.Sprintf("%#x", root)).Debugf("Computed state root")
+			return root[:], nil
 		}
 	}
 	root, err := transition.CalculateStateRoot(
@@ -691,6 +703,29 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedB
 
 	log.WithField("beaconStateRoot", fmt.Sprintf("%#x", root)).Debugf("Computed state root")
 	return root[:], nil
+}
+
+// calculateStateRootWithoutNSC computes the state root for a Gloas block
+// without using the NextSlotCache. This is necessary because in Gloas the
+// execution payload is processed separately from the beacon block, and the
+// NSC may hold a stale post-beacon-block state (keyed by beacon block root)
+// that lacks execution payload effects (e.g. updated latestBlockHash).
+func calculateStateRootWithoutNSC(
+	ctx context.Context,
+	st state.BeaconState,
+	signed interfaces.SignedBeaconBlock,
+) ([32]byte, error) {
+	st = st.Copy()
+	var err error
+	st, err = transition.ProcessSlots(ctx, st, signed.Block().Slot())
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not process slots")
+	}
+	st, err = transition.ProcessBlockForStateRoot(ctx, st, signed)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not process block")
+	}
+	return st.HashTreeRoot(ctx)
 }
 
 type computeStateRootAttemptsKeyType string
