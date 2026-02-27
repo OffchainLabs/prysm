@@ -82,6 +82,8 @@ func NewSignedBeaconBlock(i any) (interfaces.SignedBeaconBlock, error) {
 		return initBlindedSignedBlockFromProtoFulu(b)
 	case *eth.GenericSignedBeaconBlock_BlindedFulu:
 		return initBlindedSignedBlockFromProtoFulu(b.BlindedFulu)
+	case *eth.GenericSignedBeaconBlock_Gloas:
+		return initSignedBlockFromProtoGloas(b.Gloas)
 	case *eth.SignedBeaconBlockGloas:
 		return initSignedBlockFromProtoGloas(b)
 	default:
