@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
@@ -101,6 +103,14 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	if err := s.postPayloadHeadUpdate(ctx, envelope, preState, root, headRoot); err != nil {
 		return err
 	}
+
+	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
+		Type: statefeed.PayloadProcessed,
+		Data: &statefeed.PayloadProcessedData{
+			Slot:      envelope.Slot(),
+			BlockRoot: root,
+		},
+	})
 
 	log.WithFields(logrus.Fields{
 		"slot":      envelope.Slot(),

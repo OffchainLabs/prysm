@@ -136,6 +136,7 @@ type Reconstructor interface {
 	) ([]interfaces.SignedBeaconBlock, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
 	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error)
+	ReconstructExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, error)
 }
 
 // EngineCaller defines a client that can interact with an Ethereum
@@ -644,6 +645,75 @@ func (s *Service) ReconstructFullBellatrixBlockBatch(
 	}
 	reconstructedExecutionPayloadCount.Add(float64(len(unb)))
 	return unb, nil
+}
+
+// ReconstructExecutionPayloadEnvelope takes a blinded execution payload envelope and
+// reconstructs the full envelope by fetching the execution payload from the EL via
+// eth_getBlockByHash.
+func (s *Service) ReconstructExecutionPayloadEnvelope(
+	ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope,
+) (*ethpb.SignedExecutionPayloadEnvelope, error) {
+	if envelope == nil || envelope.Message == nil {
+		return nil, errors.New("nil blinded execution payload envelope")
+	}
+	blockHash := common.BytesToHash(envelope.Message.BlockHash)
+	block, err := s.ExecutionBlockByHash(ctx, blockHash, true /* withTxs */)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not fetch execution block by hash")
+	}
+	txs := make([][]byte, len(block.Transactions))
+	for i, tx := range block.Transactions {
+		txs[i], err = tx.MarshalBinary()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not marshal transaction")
+		}
+	}
+	baseFeeBytes := bytesutil.PadTo(bytesutil.ReverseByteOrder(block.BaseFee.Bytes()), fieldparams.RootLength)
+	var blobGasUsed, excessBlobGas uint64
+	if block.BlobGasUsed != nil {
+		blobGasUsed = *block.BlobGasUsed
+	}
+	if block.ExcessBlobGas != nil {
+		excessBlobGas = *block.ExcessBlobGas
+	}
+	withdrawals := make([]*pb.Withdrawal, len(block.Withdrawals))
+	for i, w := range block.Withdrawals {
+		withdrawals[i] = &pb.Withdrawal{
+			Index:          w.Index,
+			ValidatorIndex: primitives.ValidatorIndex(w.ValidatorIndex),
+			Address:        w.Address,
+			Amount:         w.Amount,
+		}
+	}
+	return &ethpb.SignedExecutionPayloadEnvelope{
+		Message: &ethpb.ExecutionPayloadEnvelope{
+			Payload: &pb.ExecutionPayloadDeneb{
+				ParentHash:    block.ParentHash.Bytes(),
+				FeeRecipient:  block.Coinbase.Bytes(),
+				StateRoot:     block.Root.Bytes(),
+				ReceiptsRoot:  block.ReceiptHash.Bytes(),
+				LogsBloom:     block.Bloom.Bytes(),
+				PrevRandao:    block.MixDigest.Bytes(),
+				BlockNumber:   block.Number.Uint64(),
+				GasLimit:      block.GasLimit,
+				GasUsed:       block.GasUsed,
+				Timestamp:     block.Time,
+				ExtraData:     block.Extra,
+				BaseFeePerGas: baseFeeBytes,
+				BlockHash:     blockHash.Bytes(),
+				Transactions:  txs,
+				Withdrawals:   withdrawals,
+				BlobGasUsed:   blobGasUsed,
+				ExcessBlobGas: excessBlobGas,
+			},
+			ExecutionRequests: envelope.Message.ExecutionRequests,
+			BuilderIndex:      envelope.Message.BuilderIndex,
+			BeaconBlockRoot:   envelope.Message.BeaconBlockRoot,
+			Slot:              envelope.Message.Slot,
+			StateRoot:         envelope.Message.StateRoot,
+		},
+		Signature: envelope.Signature,
+	}, nil
 }
 
 // ReconstructBlobSidecars reconstructs the verified blob sidecars for a given beacon block.
