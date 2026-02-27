@@ -1,4 +1,4 @@
-load("@prysm//tools/go:def.bzl", "go_library")
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
@@ -25,4 +25,11 @@ go_library(
         "@org_golang_google_grpc//:go_default_library",
         "@org_golang_x_sync//errgroup:go_default_library",
     ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["helpers_test.go"],
+    embed = [":go_default_library"],
+    deps = ["//testing/require:go_default_library"],
 )
