@@ -59,6 +59,7 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 	var ticker *time.Ticker
 	if len(requestedRoots) > batchSize {
 		ticker = time.NewTicker(time.Second)
+		defer ticker.Stop()
 	}
 
 	defer closeStream(stream, log)
@@ -67,90 +68,97 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 		root [32]byte
 		env  *ethpb.SignedBlindedExecutionPayloadEnvelope
 	}
-	requestedEnvs := make([]requestedEnvelope, 0, len(requestedRoots))
-	batchHashes := make([][32]byte, 0, len(requestedRoots))
-	hashSeen := make(map[[32]byte]struct{}, len(requestedRoots))
 	if s.cfg.executionReconstructor == nil {
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 		return errors.New("execution reconstructor is nil")
 	}
 
-	for i, root := range requestedRoots {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		// Throttle request processing.
-		if i != 0 && i%batchSize == 0 && ticker != nil {
+	for start := 0; start < len(requestedRoots); start += batchSize {
+		if start != 0 && ticker != nil {
 			<-ticker.C
 		}
-		s.rateLimiter.add(stream, 1)
+		end := start + batchSize
+		if end > len(requestedRoots) {
+			end = len(requestedRoots)
+		}
+		rootsBatch := requestedRoots[start:end]
 
-		blindedEnvelope, err := s.cfg.beaconDB.ExecutionPayloadEnvelope(ctx, root)
-		if err != nil {
-			if errors.Is(err, db.ErrNotFound) {
-				log.WithField("root", fmt.Sprintf("%#x", root)).Trace("Peer requested execution payload envelope by root not found")
+		requestedEnvs := make([]requestedEnvelope, 0, len(rootsBatch))
+		batchHashes := make([][32]byte, 0, len(rootsBatch))
+		hashSeen := make(map[[32]byte]struct{}, len(rootsBatch))
+
+		for _, root := range rootsBatch {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			s.rateLimiter.add(stream, 1)
+
+			blindedEnvelope, err := s.cfg.beaconDB.ExecutionPayloadEnvelope(ctx, root)
+			if err != nil {
+				if errors.Is(err, db.ErrNotFound) {
+					log.WithField("root", fmt.Sprintf("%#x", root)).Trace("Peer requested execution payload envelope by root not found")
+					continue
+				}
+				log.WithError(err).Debug("Could not fetch blinded execution payload envelope")
+				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
+				return err
+			}
+			if blindedEnvelope == nil || blindedEnvelope.Message == nil {
 				continue
 			}
-			log.WithError(err).Debug("Could not fetch blinded execution payload envelope")
+
+			// Silently skip envelopes older than the finalized epoch.
+			// The spec requires serving envelopes since the latest finalized epoch;
+			// pre-finalization envelopes are omitted from the response rather than erroring.
+			if blindedEnvelope.Message.Slot < minReqSlot {
+				continue
+			}
+
+			requestedEnvs = append(requestedEnvs, requestedEnvelope{root: root, env: blindedEnvelope})
+			blockHash := bytesutil.ToBytes32(blindedEnvelope.Message.BlockHash)
+			if _, ok := hashSeen[blockHash]; !ok {
+				hashSeen[blockHash] = struct{}{}
+				batchHashes = append(batchHashes, blockHash)
+			}
+		}
+
+		if len(requestedEnvs) == 0 {
+			continue
+		}
+
+		payloadByHash, batchErr := s.cfg.executionReconstructor.ReconstructFullExecutionPayloadsByHash(ctx, batchHashes)
+		if batchErr != nil {
+			log.WithError(batchErr).Debug("Could not batch reconstruct full execution payload envelopes")
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
-			return err
-		}
-		if blindedEnvelope == nil || blindedEnvelope.Message == nil {
-			continue
+			return batchErr
 		}
 
-		// Silently skip envelopes older than the finalized epoch.
-		// The spec requires serving envelopes since the latest finalized epoch;
-		// pre-finalization envelopes are omitted from the response rather than erroring.
-		if blindedEnvelope.Message.Slot < minReqSlot {
-			continue
-		}
+		for _, req := range requestedEnvs {
+			blockHash := bytesutil.ToBytes32(req.env.Message.BlockHash)
 
-		requestedEnvs = append(requestedEnvs, requestedEnvelope{root: root, env: blindedEnvelope})
-		blockHash := bytesutil.ToBytes32(blindedEnvelope.Message.BlockHash)
-		if _, ok := hashSeen[blockHash]; !ok {
-			hashSeen[blockHash] = struct{}{}
-			batchHashes = append(batchHashes, blockHash)
-		}
-	}
-
-	if len(requestedEnvs) == 0 {
-		return nil
-	}
-
-	payloadByHash, batchErr := s.cfg.executionReconstructor.ReconstructFullExecutionPayloadsByHash(ctx, batchHashes)
-	if batchErr != nil {
-		log.WithError(batchErr).Debug("Could not batch reconstruct full execution payload envelopes")
-		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
-		return batchErr
-	}
-
-	for _, req := range requestedEnvs {
-		blockHash := bytesutil.ToBytes32(req.env.Message.BlockHash)
-
-		payload := payloadByHash[blockHash]
-		if payload == nil {
-			log.WithField("root", fmt.Sprintf("%#x", req.root)).Debug("Missing reconstructed payload after successful batch call")
-			continue
-		}
-		envelope := &ethpb.SignedExecutionPayloadEnvelope{
-			Message: &ethpb.ExecutionPayloadEnvelope{
-				Payload:           payload,
-				ExecutionRequests: req.env.Message.ExecutionRequests,
-				BuilderIndex:      req.env.Message.BuilderIndex,
-				BeaconBlockRoot:   req.env.Message.BeaconBlockRoot,
-				Slot:              req.env.Message.Slot,
-				StateRoot:         req.env.Message.StateRoot,
-			},
-			Signature: req.env.Signature,
-		}
-		SetStreamWriteDeadline(stream, defaultWriteDuration)
-		if chunkErr := WriteExecutionPayloadEnvelopeChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), envelope); chunkErr != nil {
-			log.WithError(chunkErr).Debug("Could not send a chunked response")
-			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
-			tracing.AnnotateError(span, chunkErr)
-			return chunkErr
+			payload := payloadByHash[blockHash]
+			if payload == nil {
+				log.WithField("root", fmt.Sprintf("%#x", req.root)).Debug("Missing reconstructed payload after successful batch call")
+				continue
+			}
+			envelope := &ethpb.SignedExecutionPayloadEnvelope{
+				Message: &ethpb.ExecutionPayloadEnvelope{
+					Payload:           payload,
+					ExecutionRequests: req.env.Message.ExecutionRequests,
+					BuilderIndex:      req.env.Message.BuilderIndex,
+					BeaconBlockRoot:   req.env.Message.BeaconBlockRoot,
+					Slot:              req.env.Message.Slot,
+					StateRoot:         req.env.Message.StateRoot,
+				},
+				Signature: req.env.Signature,
+			}
+			SetStreamWriteDeadline(stream, defaultWriteDuration)
+			if chunkErr := WriteExecutionPayloadEnvelopeChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), envelope); chunkErr != nil {
+				log.WithError(chunkErr).Debug("Could not send a chunked response")
+				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
+				tracing.AnnotateError(span, chunkErr)
+				return chunkErr
+			}
 		}
 	}
 
