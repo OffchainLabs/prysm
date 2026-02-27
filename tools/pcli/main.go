@@ -59,6 +59,7 @@ var prettyCommand = &cli.Command{
 				"signed_block_header|" +
 				"signed_voluntary_exit|" +
 				"voluntary_exit|" +
+				"signed_execution_payload_envelope|" +
 				"state_capella",
 			Required:    true,
 			Destination: &sszType,
@@ -89,6 +90,8 @@ var prettyCommand = &cli.Command{
 			data = &ethpb.SignedVoluntaryExit{}
 		case "voluntary_exit":
 			data = &ethpb.VoluntaryExit{}
+		case "signed_execution_payload_envelope":
+			data = &ethpb.SignedExecutionPayloadEnvelope{}
 		case "state_capella":
 			data = &ethpb.BeaconStateCapella{}
 		default:
