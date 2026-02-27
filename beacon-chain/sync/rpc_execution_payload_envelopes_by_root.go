@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -61,6 +63,18 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 
 	defer closeStream(stream, log)
 
+	type requestedEnvelope struct {
+		root [32]byte
+		env  *ethpb.SignedBlindedExecutionPayloadEnvelope
+	}
+	requestedEnvs := make([]requestedEnvelope, 0, len(requestedRoots))
+	batchHashes := make([][32]byte, 0, len(requestedRoots))
+	hashSeen := make(map[[32]byte]struct{}, len(requestedRoots))
+	if s.cfg.executionReconstructor == nil {
+		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
+		return errors.New("execution reconstructor is nil")
+	}
+
 	for i, root := range requestedRoots {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -72,28 +86,68 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 		}
 		s.rateLimiter.add(stream, 1)
 
-		// Look up the full envelope from the in-memory cache.
-		// TODO: Add a fallback DB lookup path once persistent full-envelope storage is implemented.
-		// Currently only the gossip-populated cache is checked, which means envelopes may be
-		// unavailable after restart, during initial sync, or after LRU eviction.
-		val, ok := s.executionPayloadEnvelopeCache.Get(root)
-		if !ok {
-			log.WithField("root", fmt.Sprintf("%#x", root)).Trace("Peer requested execution payload envelope by root not found in cache")
-			continue
+		blindedEnvelope, err := s.cfg.beaconDB.ExecutionPayloadEnvelope(ctx, root)
+		if err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				log.WithField("root", fmt.Sprintf("%#x", root)).Trace("Peer requested execution payload envelope by root not found")
+				continue
+			}
+			log.WithError(err).Debug("Could not fetch blinded execution payload envelope")
+			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
+			return err
 		}
-
-		envelope, ok := val.(*ethpb.SignedExecutionPayloadEnvelope)
-		if !ok || envelope == nil || envelope.Message == nil {
+		if blindedEnvelope == nil || blindedEnvelope.Message == nil {
 			continue
 		}
 
 		// Silently skip envelopes older than the finalized epoch.
 		// The spec requires serving envelopes since the latest finalized epoch;
 		// pre-finalization envelopes are omitted from the response rather than erroring.
-		if envelope.Message.Slot < minReqSlot {
+		if blindedEnvelope.Message.Slot < minReqSlot {
 			continue
 		}
 
+		requestedEnvs = append(requestedEnvs, requestedEnvelope{root: root, env: blindedEnvelope})
+		blockHash := bytesutil.ToBytes32(blindedEnvelope.Message.BlockHash)
+		if _, ok := hashSeen[blockHash]; !ok {
+			hashSeen[blockHash] = struct{}{}
+			batchHashes = append(batchHashes, blockHash)
+		}
+	}
+
+	if len(requestedEnvs) == 0 {
+		return nil
+	}
+
+	payloadByHash, batchErr := s.cfg.executionReconstructor.ReconstructFullExecutionPayloadsByHash(ctx, batchHashes)
+	if batchErr != nil {
+		log.WithError(batchErr).Debug("Could not batch reconstruct full execution payload envelopes")
+		payloadByHash = nil
+	}
+
+	for i := range requestedEnvs {
+		req := requestedEnvs[i]
+		blockHash := bytesutil.ToBytes32(req.env.Message.BlockHash)
+
+		payload := payloadByHash[blockHash]
+		if payload == nil {
+			payload, err = s.cfg.executionReconstructor.ReconstructFullExecutionPayloadByHash(ctx, blockHash)
+			if err != nil {
+				log.WithError(err).WithField("root", fmt.Sprintf("%#x", req.root)).Debug("Could not reconstruct full execution payload envelope")
+				continue
+			}
+		}
+		envelope := &ethpb.SignedExecutionPayloadEnvelope{
+			Message: &ethpb.ExecutionPayloadEnvelope{
+				Payload:           payload,
+				ExecutionRequests: req.env.Message.ExecutionRequests,
+				BuilderIndex:      req.env.Message.BuilderIndex,
+				BeaconBlockRoot:   req.env.Message.BeaconBlockRoot,
+				Slot:              req.env.Message.Slot,
+				StateRoot:         req.env.Message.StateRoot,
+			},
+			Signature: req.env.Signature,
+		}
 		SetStreamWriteDeadline(stream, defaultWriteDuration)
 		if chunkErr := WriteExecutionPayloadEnvelopeChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), envelope); chunkErr != nil {
 			log.WithError(chunkErr).Debug("Could not send a chunked response")

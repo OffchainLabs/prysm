@@ -131,13 +131,6 @@ func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg pr
 	if !ok {
 		return errWrongMessage
 	}
-	// Cache the full envelope for RPC serving (ExecutionPayloadEnvelopesByRoot).
-	// Currently gossip is the only ingestion path for full envelopes. When non-gossip import
-	// paths are added (e.g. initial sync, reconstruction), they should also populate this cache.
-	if e.Message != nil {
-		root := bytesutil.ToBytes32(e.Message.BeaconBlockRoot)
-		s.executionPayloadEnvelopeCache.Add(root, e)
-	}
 	env, err := blocks.WrappedROSignedExecutionPayloadEnvelope(e)
 	if err != nil {
 		return errors.Wrap(err, "could not wrap signed execution payload envelope")
