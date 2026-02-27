@@ -9,13 +9,18 @@ import (
 )
 
 func ROExecutionPayloadBidFromConsensus(b interfaces.ROExecutionPayloadBid) *ExecutionPayloadBid {
+	if b == nil {
+		return nil
+	}
+
 	pbh := b.ParentBlockHash()
 	pbr := b.ParentBlockRoot()
 	bh := b.BlockHash()
 	pr := b.PrevRandao()
 	fr := b.FeeRecipient()
-	var blobKzgCommitments []string
-	for _, commitment := range b.BlobKzgCommitments() {
+	commitments := b.BlobKzgCommitments()
+	blobKzgCommitments := make([]string, 0, len(commitments))
+	for _, commitment := range commitments {
 		blobKzgCommitments = append(blobKzgCommitments, hexutil.Encode(commitment))
 	}
 	return &ExecutionPayloadBid{

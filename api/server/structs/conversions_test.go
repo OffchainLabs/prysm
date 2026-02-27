@@ -361,42 +361,78 @@ func TestIndexedAttestation_ToConsensus(t *testing.T) {
 }
 
 func TestROExecutionPayloadBidFromConsensus(t *testing.T) {
-	bid := &eth.ExecutionPayloadBid{
-		ParentBlockHash:    bytes.Repeat([]byte{0x01}, 32),
-		ParentBlockRoot:    bytes.Repeat([]byte{0x02}, 32),
-		BlockHash:          bytes.Repeat([]byte{0x03}, 32),
-		PrevRandao:         bytes.Repeat([]byte{0x04}, 32),
-		FeeRecipient:       bytes.Repeat([]byte{0x05}, 20),
-		GasLimit:           100,
-		BuilderIndex:       7,
-		Slot:               9,
-		Value:              11,
-		ExecutionPayment:   22,
-		BlobKzgCommitments: [][]byte{bytes.Repeat([]byte{0x06}, 48)},
-	}
-	roBid, err := blocks.WrappedROExecutionPayloadBid(bid)
-	require.NoError(t, err)
+	t.Run("empty blobkzg commitments", func(t *testing.T) {
+		bid := &eth.ExecutionPayloadBid{
+			ParentBlockHash:    bytes.Repeat([]byte{0x01}, 32),
+			ParentBlockRoot:    bytes.Repeat([]byte{0x02}, 32),
+			BlockHash:          bytes.Repeat([]byte{0x03}, 32),
+			PrevRandao:         bytes.Repeat([]byte{0x04}, 32),
+			FeeRecipient:       bytes.Repeat([]byte{0x05}, 20),
+			GasLimit:           100,
+			BuilderIndex:       7,
+			Slot:               9,
+			Value:              11,
+			ExecutionPayment:   22,
+			BlobKzgCommitments: [][]byte{},
+		}
+		roBid, err := blocks.WrappedROExecutionPayloadBid(bid)
+		require.NoError(t, err)
 
-	var bkcs []string
-	for _, commitment := range roBid.BlobKzgCommitments() {
-		bkcs = append(bkcs, hexutil.Encode(commitment))
-	}
+		got := ROExecutionPayloadBidFromConsensus(roBid)
+		want := &ExecutionPayloadBid{
+			ParentBlockHash:    hexutil.Encode(bid.ParentBlockHash),
+			ParentBlockRoot:    hexutil.Encode(bid.ParentBlockRoot),
+			BlockHash:          hexutil.Encode(bid.BlockHash),
+			PrevRandao:         hexutil.Encode(bid.PrevRandao),
+			FeeRecipient:       hexutil.Encode(bid.FeeRecipient),
+			GasLimit:           "100",
+			BuilderIndex:       "7",
+			Slot:               "9",
+			Value:              "11",
+			ExecutionPayment:   "22",
+			BlobKzgCommitments: []string{},
+		}
+		assert.DeepEqual(t, want, got)
+	})
 
-	got := ROExecutionPayloadBidFromConsensus(roBid)
-	want := &ExecutionPayloadBid{
-		ParentBlockHash:    hexutil.Encode(bid.ParentBlockHash),
-		ParentBlockRoot:    hexutil.Encode(bid.ParentBlockRoot),
-		BlockHash:          hexutil.Encode(bid.BlockHash),
-		PrevRandao:         hexutil.Encode(bid.PrevRandao),
-		FeeRecipient:       hexutil.Encode(bid.FeeRecipient),
-		GasLimit:           "100",
-		BuilderIndex:       "7",
-		Slot:               "9",
-		Value:              "11",
-		ExecutionPayment:   "22",
-		BlobKzgCommitments: bkcs,
-	}
-	assert.DeepEqual(t, want, got)
+	t.Run("default", func(t *testing.T) {
+		bid := &eth.ExecutionPayloadBid{
+			ParentBlockHash:    bytes.Repeat([]byte{0x01}, 32),
+			ParentBlockRoot:    bytes.Repeat([]byte{0x02}, 32),
+			BlockHash:          bytes.Repeat([]byte{0x03}, 32),
+			PrevRandao:         bytes.Repeat([]byte{0x04}, 32),
+			FeeRecipient:       bytes.Repeat([]byte{0x05}, 20),
+			GasLimit:           100,
+			BuilderIndex:       7,
+			Slot:               9,
+			Value:              11,
+			ExecutionPayment:   22,
+			BlobKzgCommitments: [][]byte{bytes.Repeat([]byte{0x06}, 48)},
+		}
+		roBid, err := blocks.WrappedROExecutionPayloadBid(bid)
+		require.NoError(t, err)
+
+		var bkcs []string
+		for _, commitment := range roBid.BlobKzgCommitments() {
+			bkcs = append(bkcs, hexutil.Encode(commitment))
+		}
+
+		got := ROExecutionPayloadBidFromConsensus(roBid)
+		want := &ExecutionPayloadBid{
+			ParentBlockHash:    hexutil.Encode(bid.ParentBlockHash),
+			ParentBlockRoot:    hexutil.Encode(bid.ParentBlockRoot),
+			BlockHash:          hexutil.Encode(bid.BlockHash),
+			PrevRandao:         hexutil.Encode(bid.PrevRandao),
+			FeeRecipient:       hexutil.Encode(bid.FeeRecipient),
+			GasLimit:           "100",
+			BuilderIndex:       "7",
+			Slot:               "9",
+			Value:              "11",
+			ExecutionPayment:   "22",
+			BlobKzgCommitments: bkcs,
+		}
+		assert.DeepEqual(t, want, got)
+	})
 }
 
 func TestBuilderConversionsFromConsensus(t *testing.T) {

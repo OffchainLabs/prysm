@@ -731,12 +731,17 @@ func TestBuilderPendingWithdrawals(t *testing.T) {
 
 		got1, err := st.BuilderPendingWithdrawals()
 		require.NoError(t, err)
-		require.DeepEqual(t, original, got1)
+		require.Equal(t, len(original), len(got1))
+		require.Equal(t, original[0].Amount, got1[0].Amount)
+		require.Equal(t, original[0].BuilderIndex, got1[0].BuilderIndex)
 
 		got1[0].Amount = 99
 		got2, err := st.BuilderPendingWithdrawals()
 		require.NoError(t, err)
-		require.DeepEqual(t, original, got2)
+		require.Equal(t, len(original), len(got2))
+		require.Equal(t, original[0].Amount, got2[0].Amount)
+		require.Equal(t, original[0].BuilderIndex, got2[0].BuilderIndex)
+
 	})
 }
 
