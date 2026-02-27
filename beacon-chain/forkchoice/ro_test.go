@@ -32,6 +32,7 @@ const (
 	highestReceivedBlockRootCalled
 	receivedBlocksLastEpochCalled
 	weightCalled
+	consensusNodeWeightCalled
 	isOptimisticCalled
 	shouldOverrideFCUCalled
 	slotCalled
@@ -128,6 +129,11 @@ func TestROLocking(t *testing.T) {
 			name: "weightCalled",
 			call: weightCalled,
 			cb:   func(g FastGetter) { _, err := g.Weight([32]byte{}); _discard(t, err) },
+		},
+		{
+			name: "consensusNodeWeightCalled",
+			call: consensusNodeWeightCalled,
+			cb:   func(g FastGetter) { _, err := g.ConsensusNodeWeight([32]byte{}); _discard(t, err) },
 		},
 		{
 			name: "isOptimisticCalled",
@@ -268,6 +274,11 @@ func (ro *mockROForkchoice) ReceivedBlocksLastEpoch() (uint64, error) {
 
 func (ro *mockROForkchoice) Weight(_ [32]byte) (uint64, error) {
 	ro.calls = append(ro.calls, weightCalled)
+	return 0, nil
+}
+
+func (ro *mockROForkchoice) ConsensusNodeWeight(_ [32]byte) (uint64, error) {
+	ro.calls = append(ro.calls, consensusNodeWeightCalled)
 	return 0, nil
 }
 
