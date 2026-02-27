@@ -852,7 +852,7 @@ func SendExecutionPayloadEnvelopesByRootRequest(
 	}
 
 	envelopes := make([]*ethpb.SignedExecutionPayloadEnvelope, 0, len(*req))
-	for i := uint64(0); i < max+1; i++ {
+	for i := range max + 1 {
 		envelope, err := readChunkedExecutionPayloadEnvelope(stream, p2pApi.Encoding(), ctxMap)
 		if errors.Is(err, io.EOF) {
 			break
