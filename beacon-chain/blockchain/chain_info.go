@@ -31,6 +31,7 @@ type ChainInfoFetcher interface {
 	ForkFetcher
 	HeadDomainFetcher
 	ForkchoiceFetcher
+	LookupParentRootFetcher
 }
 
 // ForkchoiceFetcher defines a common interface for methods that access directly
@@ -120,6 +121,12 @@ type FinalizationFetcher interface {
 type OptimisticModeFetcher interface {
 	IsOptimistic(ctx context.Context) (bool, error)
 	IsOptimisticForRoot(ctx context.Context, root [32]byte) (bool, error)
+}
+
+// LookupParentRootFetcher defines a minimal interface for retrieving the lookup parent root
+// for a given block (used to select the correct pre-state for Gloas blocks).
+type LookupParentRootFetcher interface {
+	GetLookupParentRoot(consensus_blocks.ROBlock) ([32]byte, error)
 }
 
 // FinalizedCheckpt returns the latest finalized checkpoint from chain store.

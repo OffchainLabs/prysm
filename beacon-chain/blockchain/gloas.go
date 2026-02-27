@@ -6,11 +6,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-// getLookupParentRoot returns the root that serves as key to generate the parent state for the passed beacon block.
+// GetLookupParentRoot returns the root that serves as key to generate the parent state for the passed beacon block.
 // if it is based on empty or it is pre-Gloas, it is the parent root of the block, otherwise if it is based on full it is
 // the parent hash.
 // The caller of this function should not hold a lock on forkchoice.
-func (s *Service) getLookupParentRoot(b consensus_blocks.ROBlock) ([32]byte, error) {
+func (s *Service) GetLookupParentRoot(b consensus_blocks.ROBlock) ([32]byte, error) {
 	bl := b.Block()
 	parentRoot := bl.ParentRoot()
 	if b.Version() < version.Gloas {

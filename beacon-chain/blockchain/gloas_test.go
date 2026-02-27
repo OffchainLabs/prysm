@@ -459,7 +459,7 @@ func TestGetLookupParentRoot_PreGloas(t *testing.T) {
 	roblock, err := blocks.NewROBlock(wsb)
 	require.NoError(t, err)
 
-	got, err := service.getLookupParentRoot(roblock)
+	got, err := service.GetLookupParentRoot(roblock)
 	require.NoError(t, err)
 	require.Equal(t, parentRoot, got)
 }
@@ -499,7 +499,7 @@ func TestGetLookupParentRoot_GloasBuildsOnEmpty(t *testing.T) {
 	roblock, err := blocks.NewROBlock(wsb)
 	require.NoError(t, err)
 
-	got, err := service.getLookupParentRoot(roblock)
+	got, err := service.GetLookupParentRoot(roblock)
 	require.NoError(t, err)
 	// parentBlockHash != parentNodeBlockHash, so it builds on empty => returns parentRoot
 	require.Equal(t, parentRoot, got)
@@ -540,7 +540,7 @@ func TestGetLookupParentRoot_GloasBuildsOnFull(t *testing.T) {
 	roblock, err := blocks.NewROBlock(wsb)
 	require.NoError(t, err)
 
-	got, err := service.getLookupParentRoot(roblock)
+	got, err := service.GetLookupParentRoot(roblock)
 	require.NoError(t, err)
 	// parentBlockHash == parentNodeBlockHash, so it builds on full => returns parentBlockHash
 	require.Equal(t, parentNodeBlockHash, got)

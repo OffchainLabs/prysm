@@ -640,23 +640,17 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedB
 		return nil, errors.Wrap(err, "could not retrieve beacon state")
 	}
 	if block.Version() >= version.Gloas && beaconState.Version() >= version.Gloas {
-		bid, err := block.Block().Body().SignedExecutionPayloadBid()
+		roBlock, err := blocks.NewROBlock(block)
 		if err != nil {
-			return nil, errors.Wrap(err, "could not retrieve signed execution payload bid")
+			return nil, errors.Wrap(err, "could not create read-only block")
 		}
-
-		parentHash := [32]byte{}
-		copy(parentHash[:], bid.Message.ParentBlockHash)
-		parentBid, err := beaconState.LatestExecutionPayloadBid()
+		r, err := vs.ChainInfoFetcher.GetLookupParentRoot(roBlock)
 		if err != nil {
-			return nil, errors.Wrap(err, "could not retrieve latest block hash")
+			return nil, errors.Wrap(err, "could not determine lookup parent root")
 		}
-		parentBidHash := parentBid.BlockHash()
-		if parentHash == parentBidHash {
-			beaconState, err = vs.StateGen.StateByRoot(ctx, parentHash)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not retrieve beacon state by parent block hash")
-			}
+		beaconState, err = vs.StateGen.StateByRoot(ctx, r)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not retrieve beacon state by lookup parent root")
 		}
 	}
 	root, err := transition.CalculateStateRoot(

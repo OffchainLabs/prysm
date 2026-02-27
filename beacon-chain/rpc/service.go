@@ -81,6 +81,7 @@ type Config struct {
 	BeaconMonitoringPort      int
 	BeaconDB                  db.HeadAccessDatabase
 	ChainInfoFetcher          blockchain.ChainInfoFetcher
+	LookupParentRootFetcher   blockchain.LookupParentRootFetcher
 	HeadFetcher               blockchain.HeadFetcher
 	CanonicalFetcher          blockchain.CanonicalFetcher
 	ForkFetcher               blockchain.ForkFetcher
@@ -223,6 +224,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		AttPool:                 s.cfg.AttestationsPool,
 		ExitPool:                s.cfg.ExitPool,
 		HeadFetcher:             s.cfg.HeadFetcher,
+		ChainInfoFetcher:        s.cfg.ChainInfoFetcher,
 		ForkFetcher:             s.cfg.ForkFetcher,
 		ForkchoiceFetcher:       s.cfg.ForkchoiceFetcher,
 		GenesisFetcher:          s.cfg.GenesisFetcher,
@@ -258,6 +260,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		PayloadIDCache:          s.cfg.PayloadIDCache,
 		AttestationStateFetcher: s.cfg.AttestationReceiver,
 		GraffitiInfo:            s.cfg.GraffitiInfo,
+		LookupParentRootFetcher: s.cfg.LookupParentRootFetcher,
 	}
 	s.validatorServer = validatorServer
 	nodeServer := &nodev1alpha1.Server{

@@ -84,6 +84,10 @@ func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitive
 	return r[:], err
 }
 
+func (s *ChainService) GetLookupParentRoot(b blocks.ROBlock) ([32]byte, error) {
+	return b.Block().ParentRoot(), nil
+}
+
 // StateNotifier mocks the same method in the chain service.
 func (s *ChainService) StateNotifier() statefeed.Notifier {
 	if s.stateNotifier == nil {

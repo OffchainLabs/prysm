@@ -200,7 +200,7 @@ func (s *Service) getBlockPreState(ctx context.Context, b consensus_blocks.ROBlo
 	ctx, span := trace.StartSpan(ctx, "blockChain.getBlockPreState")
 	defer span.End()
 
-	accessRoot, err := s.getLookupParentRoot(b)
+	accessRoot, err := s.GetLookupParentRoot(b)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get lookup parent root")
 	}

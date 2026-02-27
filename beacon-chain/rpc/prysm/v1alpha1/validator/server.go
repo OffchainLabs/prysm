@@ -52,6 +52,7 @@ type Server struct {
 	executionPayloadEnvelope   *ethpb.ExecutionPayloadEnvelope
 	HeadFetcher                blockchain.HeadFetcher
 	ForkFetcher                blockchain.ForkFetcher
+	ChainInfoFetcher           blockchain.ChainInfoFetcher
 	ForkchoiceFetcher          blockchain.ForkchoiceFetcher
 	GenesisFetcher             blockchain.GenesisFetcher
 	FinalizationFetcher        blockchain.FinalizationFetcher
@@ -86,6 +87,7 @@ type Server struct {
 	ClockWaiter                startup.ClockWaiter
 	CoreService                *core.Service
 	AttestationStateFetcher    blockchain.AttestationStateFetcher
+	LookupParentRootFetcher    blockchain.LookupParentRootFetcher
 	GraffitiInfo               *execution.GraffitiInfo
 }
 
