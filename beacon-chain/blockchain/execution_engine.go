@@ -57,15 +57,29 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	if !isExecutionBlk {
 		return nil, nil
 	}
-	headPayload, err := headBlk.Body().Execution()
-	if err != nil {
-		log.WithError(err).Error("Could not get execution payload for head block")
-		return nil, nil
+	var headBlockHash []byte
+	var headParentHash []byte
+	if headBlk.Version() >= version.Gloas {
+		h, err := arg.headState.LatestBlockHash()
+		if err != nil {
+			log.WithError(err).Error("Could not get latest block hash for head state")
+			return nil, nil
+		}
+		headBlockHash = h[:]
+	} else {
+		headPayload, err := headBlk.Body().Execution()
+		if err != nil {
+			log.WithError(err).Error("Could not get execution payload for head block")
+			return nil, nil
+		}
+		headBlockHash = headPayload.BlockHash()
+		headParentHash = headPayload.ParentHash()
 	}
+
 	finalizedHash := s.cfg.ForkChoiceStore.FinalizedPayloadBlockHash()
 	justifiedHash := s.cfg.ForkChoiceStore.UnrealizedJustifiedPayloadBlockHash()
 	fcs := &enginev1.ForkchoiceState{
-		HeadBlockHash:      headPayload.BlockHash(),
+		HeadBlockHash:      headBlockHash,
 		SafeBlockHash:      justifiedHash[:],
 		FinalizedBlockHash: finalizedHash[:],
 	}
@@ -91,7 +105,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 			forkchoiceUpdatedOptimisticNodeCount.Inc()
 			log.WithFields(logrus.Fields{
 				"headSlot":                  headBlk.Slot(),
-				"headPayloadBlockHash":      fmt.Sprintf("%#x", bytesutil.Trunc(headPayload.BlockHash())),
+				"headPayloadBlockHash":      fmt.Sprintf("%#x", bytesutil.Trunc(headBlockHash)),
 				"finalizedPayloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(finalizedHash[:])),
 			}).Info("Called fork choice updated with optimistic block")
 			return payloadID, nil
@@ -102,7 +116,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 				lastValidHash = defaultLatestValidHash
 			}
 			// this call has guaranteed to have the `headRoot` with its payload in forkchoice.
-			invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, headRoot, headBlk.ParentRoot(), bytesutil.ToBytes32(headPayload.ParentHash()), bytesutil.ToBytes32(lastValidHash))
+			invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, headRoot, headBlk.ParentRoot(), bytesutil.ToBytes32(headParentHash), bytesutil.ToBytes32(lastValidHash))
 			if err != nil {
 				log.WithError(err).Error("Could not set head root to invalid")
 				return nil, nil
@@ -182,7 +196,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), arg.headBlock, arg.headRoot, nextSlot)
 	} else if hasAttr && payloadID == nil && !features.Get().PrepareAllPayloads {
 		log.WithFields(logrus.Fields{
-			"blockHash": fmt.Sprintf("%#x", headPayload.BlockHash()),
+			"blockHash": fmt.Sprintf("%#x", headBlockHash),
 			"slot":      headBlk.Slot(),
 			"nextSlot":  nextSlot,
 		}).Error("Received nil payload ID on VALID engine response")
