@@ -193,10 +193,10 @@ func reportProcessingTime(startTime time.Time) {
 	onBlockProcessingTime.Observe(float64(time.Since(startTime).Milliseconds()))
 }
 
-// getBlockPreState returns the pre state of an incoming block. It uses the parent root of the block
+// GetBlockPreState returns the pre state of an incoming block. It uses the parent root of the block
 // to retrieve the state in DB. It verifies the pre state's validity and the incoming block
 // is in the correct time window.
-func (s *Service) getBlockPreState(ctx context.Context, b consensus_blocks.ROBlock) (state.BeaconState, error) {
+func (s *Service) GetBlockPreState(ctx context.Context, b consensus_blocks.ROBlock) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.getBlockPreState")
 	defer span.End()
 

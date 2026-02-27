@@ -45,6 +45,7 @@ type BlockReceiver interface {
 	HasBlock(ctx context.Context, root [32]byte) bool
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
 	BlockBeingSynced([32]byte) bool
+	GetBlockPreState(ctx context.Context, b blocks.ROBlock) (state.BeaconState, error)
 }
 
 // BlobReceiver interface defines the methods of chain service for receiving new
@@ -100,7 +101,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 		return errors.Wrap(err, "new ro block with root")
 	}
 
-	preState, err := s.getBlockPreState(ctx, roblock)
+	preState, err := s.GetBlockPreState(ctx, roblock)
 	if err != nil {
 		return errors.Wrap(err, "could not get block's prestate")
 	}
