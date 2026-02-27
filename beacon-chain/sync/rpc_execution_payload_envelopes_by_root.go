@@ -77,10 +77,7 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 		if start != 0 && ticker != nil {
 			<-ticker.C
 		}
-		end := start + batchSize
-		if end > len(requestedRoots) {
-			end = len(requestedRoots)
-		}
+		end := min(start+batchSize, len(requestedRoots))
 		rootsBatch := requestedRoots[start:end]
 
 		requestedEnvs := make([]requestedEnvelope, 0, len(rootsBatch))
