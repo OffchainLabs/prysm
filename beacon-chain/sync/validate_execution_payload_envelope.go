@@ -123,6 +123,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		return pubsub.ValidationReject, err
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
+	msg.ValidatorData = signedEnvelope
 	return pubsub.ValidationAccept, nil
 }
 
