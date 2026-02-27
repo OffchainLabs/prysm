@@ -359,12 +359,6 @@ def prysm_deps():
         version = "v2.2.1+incompatible",
     )
     go_repository(
-        name = "com_github_cenkalti_backoff_v4",
-        importpath = "github.com/cenkalti/backoff/v4",
-        sum = "h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=",
-        version = "v4.3.0",
-    )
-    go_repository(
         name = "com_github_cenkalti_backoff_v5",
         importpath = "github.com/cenkalti/backoff/v5",
         sum = "h1:ZN+IMa753KfX5hd8vVaMixjnqRZ3y8CuJKRKj1xcsSM=",
@@ -571,12 +565,6 @@ def prysm_deps():
         importpath = "github.com/crate-crypto/go-eth-kzg",
         sum = "h1:WzDGjHk4gFg6YzV0rJOAsTK4z3Qkz5jd4RE3DAvPFkg=",
         version = "v1.4.0",
-    )
-    go_repository(
-        name = "com_github_crate_crypto_go_ipa",
-        importpath = "github.com/crate-crypto/go-ipa",
-        sum = "h1:W8mUrRp6NOVl3J+MYp5kPMoUZPp7aOYHtaua31lwRHg=",
-        version = "v0.0.0-20240724233137-53bbb0ceb27a",
     )
     go_repository(
         name = "com_github_crate_crypto_go_kzg_4844",
@@ -818,12 +806,6 @@ def prysm_deps():
         ],
         sum = "h1:2D+1Fe23CwZ5tQoAS5DfwKFNI1HGcTwi65/kRlAVxes=",
         version = "v1.17.0",
-    )
-    go_repository(
-        name = "com_github_ethereum_go_verkle",
-        importpath = "github.com/ethereum/go-verkle",
-        sum = "h1:I2W0WjnrFUIzzVPwm8ykY+7pL2d4VhlsePn4j7cnFk8=",
-        version = "v0.2.2",
     )
     go_repository(
         name = "com_github_evanphx_json_patch",
@@ -2451,8 +2433,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_olekukonko_tablewriter",
         importpath = "github.com/olekukonko/tablewriter",
-        sum = "h1:P2Ga83D34wi1o9J6Wh1mRuqd4mF/x/lgBS7N7AbDhec=",
-        version = "v0.0.5",
+        sum = "h1:58+kh9C6jJVXYjt8IE48G2eWl6BjwU5Gj0gqY84fy78=",
+        version = "v0.0.0-20170122224234-a0225b3f23b5",
     )
     go_repository(
         name = "com_github_onsi_ginkgo",
