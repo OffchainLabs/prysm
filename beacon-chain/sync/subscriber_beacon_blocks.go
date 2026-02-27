@@ -141,7 +141,8 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 	key := fmt.Sprintf("%#x", blockRoot)
 	if _, err, _ := s.blobSidecarsExecSingleFlight.Do(key, func() (any, error) {
 		const delay = 250 * time.Millisecond
-		for iteration := uint64(0); ; iteration++ {
+		const maxIterations = 120 // ~30s safety cap; should never be reached with reasonable context deadlines.
+		for iteration := range uint64(maxIterations) {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
@@ -193,6 +194,7 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 
 			return nil, nil
 		}
+		return nil, fmt.Errorf("failed to reconstruct blob sidecars after %d attempts", maxIterations)
 	}); err != nil {
 		if !errors.Is(err, context.Canceled) {
 			log.WithError(err).Error("Failed to reconstruct blob sidecars")
