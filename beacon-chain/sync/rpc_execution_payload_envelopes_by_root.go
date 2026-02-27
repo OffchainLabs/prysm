@@ -122,20 +122,17 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 	payloadByHash, batchErr := s.cfg.executionReconstructor.ReconstructFullExecutionPayloadsByHash(ctx, batchHashes)
 	if batchErr != nil {
 		log.WithError(batchErr).Debug("Could not batch reconstruct full execution payload envelopes")
-		payloadByHash = nil
+		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
+		return batchErr
 	}
 
-	for i := range requestedEnvs {
-		req := requestedEnvs[i]
+	for _, req := range requestedEnvs {
 		blockHash := bytesutil.ToBytes32(req.env.Message.BlockHash)
 
 		payload := payloadByHash[blockHash]
 		if payload == nil {
-			payload, err = s.cfg.executionReconstructor.ReconstructFullExecutionPayloadByHash(ctx, blockHash)
-			if err != nil {
-				log.WithError(err).WithField("root", fmt.Sprintf("%#x", req.root)).Debug("Could not reconstruct full execution payload envelope")
-				continue
-			}
+			log.WithField("root", fmt.Sprintf("%#x", req.root)).Debug("Missing reconstructed payload after successful batch call")
+			continue
 		}
 		envelope := &ethpb.SignedExecutionPayloadEnvelope{
 			Message: &ethpb.ExecutionPayloadEnvelope{

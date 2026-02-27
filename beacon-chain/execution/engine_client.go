@@ -770,13 +770,15 @@ func executionPayloadDenebFromExecutionBlock(
 	}
 
 	var blobGasUsed uint64
-	if blk.BlobGasUsed != nil {
-		blobGasUsed = *blk.BlobGasUsed
+	if blk.BlobGasUsed == nil {
+		return nil, errors.New("execution block blob gas used is nil")
 	}
+	blobGasUsed = *blk.BlobGasUsed
 	var excessBlobGas uint64
-	if blk.ExcessBlobGas != nil {
-		excessBlobGas = *blk.ExcessBlobGas
+	if blk.ExcessBlobGas == nil {
+		return nil, errors.New("execution block excess blob gas is nil")
 	}
+	excessBlobGas = *blk.ExcessBlobGas
 	withdrawals := blk.Withdrawals
 	if withdrawals == nil {
 		withdrawals = make([]*pb.Withdrawal, 0)
