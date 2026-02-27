@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"slices"
-	"sort"
 	"testing"
 	"time"
 
@@ -298,9 +297,7 @@ func buildValidatedCells(columnIndex uint64, cellsByIndex map[uint64][]byte) ([]
 	for idx := range cellsByIndex {
 		indices = append(indices, idx)
 	}
-	sort.Slice(indices, func(i, j int) bool {
-		return indices[i] < indices[j]
-	})
+	slices.Sort(indices)
 
 	cells := make([]blocks.CellProofBundle, 0, len(indices))
 	for _, idx := range indices {
@@ -334,9 +331,7 @@ func buildSidecarWithCells(nCells uint64, cellsByIndex map[uint64][]byte) *ethpb
 	for idx := range cellsByIndex {
 		indices = append(indices, idx)
 	}
-	sort.Slice(indices, func(i, j int) bool {
-		return indices[i] < indices[j]
-	})
+	slices.Sort(indices)
 
 	msg := &ethpb.PartialDataColumnSidecar{
 		CellsPresentBitmap: testBitlist(nCells, indices...),
@@ -369,9 +364,7 @@ func buildExpectedCellsToVerify(c *blocks.PartialDataColumn, cellsByIndex map[ui
 	for idx := range cellsByIndex {
 		indices = append(indices, idx)
 	}
-	sort.Slice(indices, func(i, j int) bool {
-		return indices[i] < indices[j]
-	})
+	slices.Sort(indices)
 
 	cells := make([]blocks.CellProofBundle, 0, len(indices))
 	for _, idx := range indices {
@@ -681,20 +674,20 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 	}
 
 	tests := []struct {
-		expectedErrContains      string
-		name                     string
-		validateColumnErr        error
-		validateHeaderErr        error
-		setup                    func(t *testing.T, b *PartialColumnBroadcaster) testSetup
 		validateHeaderReject     bool
-		expectHeaderValidateCall bool
-		expectHeaderHandleCall   bool
-		expectPublish            bool
-		expectValidateColumnCall bool
-		expectPeerFeedback       pubsub.PeerFeedbackKind
-		expectPeerFeedbackCall   bool
 		expectCellsValidatedReq  bool
+		expectPeerFeedbackCall   bool
+		expectHeaderHandleCall   bool
+		expectValidateColumnCall bool
+		expectPublish            bool
+		expectHeaderValidateCall bool
 		expectedStoreColumn      func(t *testing.T) *blocks.PartialDataColumn
+		setup                    func(t *testing.T, b *PartialColumnBroadcaster) testSetup
+		expectPeerFeedback       pubsub.PeerFeedbackKind
+		expectedErrContains      string
+		validateHeaderErr        error
+		validateColumnErr        error
+		name                     string
 	}{
 		{
 			name:                "pubsub not initialized returns error",
