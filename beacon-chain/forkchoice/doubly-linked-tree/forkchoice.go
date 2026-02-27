@@ -624,9 +624,19 @@ func (f *ForkChoice) SetBalancesByRooter(handler forkchoice.BalancesByRooter) {
 	f.balancesByRoot = handler
 }
 
-// Weight returns the weight of the given root if found on the store.
-// For Gloas blocks, the consensus node weight is returned (which includes both empty and full payload node weights).
+// Weight returns the payload-node weight of the given root if found on the store.
+// For Gloas, this is the node weight used for forkchoice on the payload tree.
 func (f *ForkChoice) Weight(root [32]byte) (uint64, error) {
+	n, ok := f.store.emptyNodeByRoot[root]
+	if !ok || n == nil {
+		return 0, ErrNilNode
+	}
+	return n.weight, nil
+}
+
+// ConsensusNodeWeight returns the consensus-node weight for the given root if found on the store.
+// For Gloas blocks, this includes both empty and full payload node weights.
+func (f *ForkChoice) ConsensusNodeWeight(root [32]byte) (uint64, error) {
 	n, ok := f.store.emptyNodeByRoot[root]
 	if !ok || n == nil {
 		return 0, ErrNilNode
