@@ -153,7 +153,7 @@ func (s *Service) getPayloadEnvelopePrestate(ctx context.Context, envelope inter
 	if !s.InForkchoice(root) {
 		return nil, fmt.Errorf("beacon block root %#x not found in forkchoice", root)
 	}
-	if err := s.verifyBlkPreState(ctx, root); err != nil {
+	if err := s.verifyBlkPreState(ctx, root, root); err != nil {
 		return nil, errors.Wrap(err, "could not verify pre-state")
 	}
 	preState, err := s.cfg.StateGen.StateByRoot(ctx, root)

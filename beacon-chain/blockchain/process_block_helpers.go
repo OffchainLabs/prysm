@@ -205,7 +205,8 @@ func (s *Service) getBlockPreState(ctx context.Context, b consensus_blocks.ROBlo
 		return nil, errors.Wrap(err, "could not get lookup parent root")
 	}
 	// Verify incoming block has a valid pre state.
-	if err := s.verifyBlkPreState(ctx, accessRoot); err != nil {
+	blockParentRoot := b.Block().ParentRoot()
+	if err := s.verifyBlkPreState(ctx, accessRoot, blockParentRoot); err != nil {
 		return nil, err
 	}
 
@@ -231,18 +232,18 @@ func (s *Service) getBlockPreState(ctx context.Context, b consensus_blocks.ROBlo
 }
 
 // verifyBlkPreState validates input block has a valid pre-state.
-func (s *Service) verifyBlkPreState(ctx context.Context, parentRoot [field_params.RootLength]byte) error {
+func (s *Service) verifyBlkPreState(ctx context.Context, accessRoot [field_params.RootLength]byte, blockParentRoot [field_params.RootLength]byte) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.verifyBlkPreState")
 	defer span.End()
 
 	// Loosen the check to HasBlock because state summary gets saved in batches
 	// during initial syncing. There's no risk given a state summary object is just a
 	// subset of the block object.
-	if !s.cfg.BeaconDB.HasStateSummary(ctx, parentRoot) && !s.cfg.BeaconDB.HasBlock(ctx, parentRoot) {
+	if !s.cfg.BeaconDB.HasStateSummary(ctx, blockParentRoot) && !s.cfg.BeaconDB.HasBlock(ctx, blockParentRoot) {
 		return errors.New("could not reconstruct parent state")
 	}
 
-	has, err := s.cfg.StateGen.HasState(ctx, parentRoot)
+	has, err := s.cfg.StateGen.HasState(ctx, accessRoot)
 	if err != nil {
 		return err
 	}

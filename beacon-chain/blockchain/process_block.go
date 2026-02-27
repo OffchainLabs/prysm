@@ -153,10 +153,14 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	b := blks[0].Block()
 
 	// Retrieve incoming block's pre state.
-	if err := s.verifyBlkPreState(ctx, b.ParentRoot()); err != nil {
+	accessRoot, err := s.getLookupParentRoot(blks[0])
+	if err != nil {
+		return errors.Wrap(err, "could not get lookup parent root")
+	}
+	if err := s.verifyBlkPreState(ctx, accessRoot, b.ParentRoot()); err != nil {
 		return err
 	}
-	preState, err := s.cfg.StateGen.StateByRootInitialSync(ctx, b.ParentRoot())
+	preState, err := s.cfg.StateGen.StateByRootInitialSync(ctx, accessRoot)
 	if err != nil {
 		return err
 	}
