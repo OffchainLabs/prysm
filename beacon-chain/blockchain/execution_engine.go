@@ -60,13 +60,12 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	var headBlockHash []byte
 	var headParentHash []byte
 	if headBlk.Version() >= version.Gloas {
-		bid, err := headBlk.Body().SignedExecutionPayloadBid()
+		h, err := arg.headState.LatestBlockHash()
 		if err != nil {
-			log.WithError(err).Error("Could not get signed execution payload bid for head block")
+			log.WithError(err).Error("Could not get latest block hash for head state")
 			return nil, nil
 		}
-		headBlockHash = bid.Message.BlockHash
-		headParentHash = bid.Message.ParentBlockHash
+		headBlockHash = h[:]
 	} else {
 		headPayload, err := headBlk.Body().Execution()
 		if err != nil {
