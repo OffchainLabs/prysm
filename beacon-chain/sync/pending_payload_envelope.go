@@ -95,12 +95,7 @@ func (s *Service) processPendingPayloadEnvelopes(ctx context.Context) {
 		if !s.cfg.chain.InForkchoice(root) {
 			continue
 		}
-		block, err := s.cfg.beaconDB.Block(ctx, root)
-		if err != nil {
-			log.WithError(err).Debug("Could not retrieve block for pending payload envelope")
-			continue
-		}
-		s.processPendingPayloadEnvelope(ctx, block, root)
+		s.processPendingPayloadEnvelope(ctx, root)
 	}
 }
 
