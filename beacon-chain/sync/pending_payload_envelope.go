@@ -46,30 +46,38 @@ func (s *Service) processPendingPayloadEnvelope(ctx context.Context, block inter
 		return
 	}
 	if err := v.VerifySlotAboveFinalized(finalized.Epoch); err != nil {
+		log.WithError(err).Debug("Pending payload envelope failed slot above finalized check")
 		return
 	}
 	if err := v.VerifyBlockRootValid(s.hasBadBlock); err != nil {
+		log.WithError(err).Debug("Pending payload envelope has bad block root")
 		return
 	}
 	if err := v.VerifySlotMatchesBlock(block.Block().Slot()); err != nil {
+		log.WithError(err).Debug("Pending payload envelope slot does not match block")
 		return
 	}
 	signedBid, err := block.Block().Body().SignedExecutionPayloadBid()
 	if err != nil {
+		log.WithError(err).Debug("Could not get signed bid from block for pending payload envelope")
 		return
 	}
 	wrappedBid, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
 	if err != nil {
+		log.WithError(err).Debug("Could not wrap signed bid for pending payload envelope")
 		return
 	}
 	bid, err := wrappedBid.Bid()
 	if err != nil {
+		log.WithError(err).Debug("Could not get bid for pending payload envelope")
 		return
 	}
 	if err := v.VerifyBuilderValid(bid); err != nil {
+		log.WithError(err).Debug("Pending payload envelope has invalid builder")
 		return
 	}
 	if err := v.VerifyPayloadHash(bid); err != nil {
+		log.WithError(err).Debug("Pending payload envelope has invalid payload hash")
 		return
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
