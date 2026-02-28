@@ -202,6 +202,66 @@ func TestPrunePendingPayloadEnvelopes(t *testing.T) {
 	require.Equal(t, true, ok)
 }
 
+func TestQueuePendingPayloadEnvelope_RejectBadSignature(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+
+	blockHash := [32]byte{0x02}
+	signedEnv := testSignedExecutionPayloadEnvelope(t, 1, 1, root, blockHash)
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedEnv)
+	require.NoError(t, err)
+	env, err := e.Envelope()
+	require.NoError(t, err)
+
+	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
+	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	require.NotNil(t, err)
+	require.Equal(t, pubsub.ValidationReject, result)
+	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
+}
+
+func TestQueuePendingPayloadEnvelope_QueuesNewRoot(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+
+	blockHash := [32]byte{0x02}
+	signedEnv := testSignedExecutionPayloadEnvelope(t, 1, 1, root, blockHash)
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedEnv)
+	require.NoError(t, err)
+	env, err := e.Envelope()
+	require.NoError(t, err)
+
+	v := &mockExecutionPayloadEnvelopeVerifier{}
+	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, 1, len(s.pendingPayloadEnvelopes))
+	_, ok := s.pendingPayloadEnvelopes[root]
+	require.Equal(t, true, ok)
+}
+
+func TestQueuePendingPayloadEnvelope_DoesNotOverwrite(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+
+	blockHash := [32]byte{0x02}
+	first := testSignedExecutionPayloadEnvelope(t, 1, 1, root, blockHash)
+	s.pendingPayloadEnvelopes[root] = first
+
+	second := testSignedExecutionPayloadEnvelope(t, 1, 1, root, blockHash)
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(second)
+	require.NoError(t, err)
+	env, err := e.Envelope()
+	require.NoError(t, err)
+
+	v := &mockExecutionPayloadEnvelopeVerifier{}
+	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, second)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, 1, len(s.pendingPayloadEnvelopes))
+	require.Equal(t, first, s.pendingPayloadEnvelopes[root])
+}
+
 func TestValidateExecutionPayloadEnvelope_RejectBadSignatureBeforeQueue(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)
