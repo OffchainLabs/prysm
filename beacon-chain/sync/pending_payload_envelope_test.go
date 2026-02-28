@@ -159,6 +159,79 @@ func TestProcessPendingPayloadEnvelope_HappyPath(t *testing.T) {
 	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
 }
 
+func TestProcessPendingPayloadEnvelopes_Sweep(t *testing.T) {
+	ctx := context.Background()
+	db := dbtest.SetupDB(t)
+	chainService := &mock.ChainService{
+		Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+		FinalizedCheckPoint: &ethpb.Checkpoint{},
+		DB:                  db,
+	}
+	stateGen := stategen.New(db, doublylinkedtree.New())
+	s := &Service{
+		pendingPayloadEnvelopes:  make(map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope),
+		seenPayloadEnvelopeCache: lruwrpr.New(10),
+		cfg: &config{
+			chain:    chainService,
+			beaconDB: db,
+			stateGen: stateGen,
+			clock:    startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+		},
+	}
+
+	bid := util.GenerateTestSignedExecutionPayloadBid(1)
+	sb := util.NewBeaconBlockGloas()
+	sb.Block.Slot = 1
+	sb.Block.Body.SignedExecutionPayloadBid = bid
+	signedBlock, err := blocks.NewSignedBeaconBlock(sb)
+	require.NoError(t, err)
+	root, err := signedBlock.Block().HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(ctx, signedBlock))
+
+	st, err := util.NewBeaconStateFulu()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveState(ctx, st, root))
+
+	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
+	env := testSignedExecutionPayloadEnvelope(t, 1, primitives.BuilderIndex(bid.Message.BuilderIndex), root, blockHash)
+	s.pendingPayloadEnvelopes[root] = env
+	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
+
+	builderIdx := primitives.BuilderIndex(bid.Message.BuilderIndex)
+	require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
+
+	// Block root is in forkchoice (mock default), sweep should process it.
+	s.processPendingPayloadEnvelopes(ctx)
+	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
+	require.Equal(t, true, s.hasSeenPayloadEnvelope(root, builderIdx))
+}
+
+func TestProcessPendingPayloadEnvelopes_SkipsUnknownRoot(t *testing.T) {
+	ctx := context.Background()
+	db := dbtest.SetupDB(t)
+	chainService := &mock.ChainService{
+		Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+		FinalizedCheckPoint: &ethpb.Checkpoint{},
+		DB:                  db,
+		NotFinalized:        true, // InForkchoice returns false
+	}
+	s := &Service{
+		pendingPayloadEnvelopes:  make(map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope),
+		seenPayloadEnvelopeCache: lruwrpr.New(10),
+		cfg:                      &config{chain: chainService, beaconDB: db},
+	}
+
+	root := [32]byte{0x01}
+	blockHash := [32]byte{0x02}
+	env := testSignedExecutionPayloadEnvelope(t, 1, 1, root, blockHash)
+	s.pendingPayloadEnvelopes[root] = env
+
+	// Root not in forkchoice, sweep should leave it in the map.
+	s.processPendingPayloadEnvelopes(ctx)
+	require.Equal(t, 1, len(s.pendingPayloadEnvelopes))
+}
+
 func TestPrunePendingPayloadEnvelopes(t *testing.T) {
 	finalizedEpoch := primitives.Epoch(3)
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
