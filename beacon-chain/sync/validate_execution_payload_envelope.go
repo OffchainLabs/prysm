@@ -73,7 +73,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		}
 		s.pendingEnvelopeLock.Unlock()
 		go func() {
-			if err := s.sendBatchRootRequest(ctx, [][32]byte{root}, rand.NewGenerator()); err != nil {
+			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{root}, rand.NewGenerator()); err != nil {
 				log.WithError(err).Debug("Could not request beacon block for pending payload envelope")
 			}
 		}()
