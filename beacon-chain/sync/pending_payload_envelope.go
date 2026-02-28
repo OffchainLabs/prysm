@@ -87,7 +87,7 @@ func (s *Service) prunePendingPayloadEnvelopes() {
 
 	finalizedEpoch := s.cfg.chain.FinalizedCheckpt().Epoch
 	for root, env := range s.pendingPayloadEnvelopes {
-		if slots.ToEpoch(env.Message.Slot) <= finalizedEpoch {
+		if slots.ToEpoch(env.Message.Slot) < finalizedEpoch {
 			delete(s.pendingPayloadEnvelopes, root)
 		}
 	}
