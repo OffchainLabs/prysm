@@ -295,6 +295,7 @@ func (s *Service) Start() {
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
 
 	s.processPendingBlocksQueue()
+	s.processPendingPayloadEnvelopeQueue()
 	s.maintainPeerStatuses()
 	s.resyncIfBehind()
 

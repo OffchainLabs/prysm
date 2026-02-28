@@ -3,11 +3,24 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
+
+// processPendingPayloadEnvelopeQueue sweeps the pending envelope map at
+// mid-slot to recover envelopes orphaned by the race between
+// queuePendingPayloadEnvelope and beaconBlockSubscriber.
+func (s *Service) processPendingPayloadEnvelopeQueue() {
+	async.RunEvery(s.ctx, slots.DivideSlotBy(2), func() {
+		if !s.chainIsStarted() {
+			return
+		}
+		s.processPendingPayloadEnvelopes(s.ctx)
+	})
+}
 
 // processPendingPayloadEnvelope retrieves a queued payload envelope for the
 // given block root, runs the full set of gossip validation checks, and if
@@ -84,6 +97,29 @@ func (s *Service) processPendingPayloadEnvelope(ctx context.Context, block inter
 
 	if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, e); err != nil {
 		log.WithError(err).Debug("Could not process pending payload envelope")
+	}
+}
+
+// processPendingPayloadEnvelopes iterates the pending envelope map and
+// processes any entry whose beacon block is now in forkchoice.
+func (s *Service) processPendingPayloadEnvelopes(ctx context.Context) {
+	s.pendingEnvelopeLock.RLock()
+	roots := make([][32]byte, 0, len(s.pendingPayloadEnvelopes))
+	for root := range s.pendingPayloadEnvelopes {
+		roots = append(roots, root)
+	}
+	s.pendingEnvelopeLock.RUnlock()
+
+	for _, root := range roots {
+		if !s.cfg.chain.InForkchoice(root) {
+			continue
+		}
+		block, err := s.cfg.beaconDB.Block(ctx, root)
+		if err != nil {
+			log.WithError(err).Debug("Could not retrieve block for pending payload envelope")
+			continue
+		}
+		s.processPendingPayloadEnvelope(ctx, block, root)
 	}
 }
 
