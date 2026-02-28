@@ -66,17 +66,18 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		if stErr := v.VerifySignature(st); stErr != nil {
 			return pubsub.ValidationReject, stErr
 		}
-		s.pendingEnvelopeLock.Lock()
 		root := env.BeaconBlockRoot()
-		if _, exists := s.pendingPayloadEnvelopes[root]; !exists {
+		s.pendingEnvelopeLock.Lock()
+		_, exists := s.pendingPayloadEnvelopes[root]
+		if !exists {
 			s.pendingPayloadEnvelopes[root] = signedEnvelope
+			go func() {
+				if err := s.sendBatchRootRequest(s.ctx, [][32]byte{root}, rand.NewGenerator()); err != nil {
+					log.WithError(err).Debug("Could not request beacon block for pending payload envelope")
+				}
+			}()
 		}
 		s.pendingEnvelopeLock.Unlock()
-		go func() {
-			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{root}, rand.NewGenerator()); err != nil {
-				log.WithError(err).Debug("Could not request beacon block for pending payload envelope")
-			}
-		}()
 		return pubsub.ValidationIgnore, err
 	}
 	root := env.BeaconBlockRoot()
