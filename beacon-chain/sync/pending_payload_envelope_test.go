@@ -174,10 +174,19 @@ func TestPrunePendingPayloadEnvelopes(t *testing.T) {
 	oldRoot := [32]byte{0x01}
 	oldEnv := &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Slot:            primitives.Slot(finalizedEpoch) * slotsPerEpoch, // exactly at finalized epoch
+			Slot:            primitives.Slot(finalizedEpoch-1) * slotsPerEpoch, // below finalized epoch
 			BeaconBlockRoot: oldRoot[:],
 		},
 		Signature: bytes.Repeat([]byte{0xAA}, 96),
+	}
+
+	atFinalizedRoot := [32]byte{0x03}
+	atFinalizedEnv := &ethpb.SignedExecutionPayloadEnvelope{
+		Message: &ethpb.ExecutionPayloadEnvelope{
+			Slot:            primitives.Slot(finalizedEpoch) * slotsPerEpoch, // exactly at finalized epoch
+			BeaconBlockRoot: atFinalizedRoot[:],
+		},
+		Signature: bytes.Repeat([]byte{0xCC}, 96),
 	}
 
 	freshRoot := [32]byte{0x02}
@@ -190,14 +199,17 @@ func TestPrunePendingPayloadEnvelopes(t *testing.T) {
 	}
 
 	s.pendingPayloadEnvelopes[oldRoot] = oldEnv
+	s.pendingPayloadEnvelopes[atFinalizedRoot] = atFinalizedEnv
 	s.pendingPayloadEnvelopes[freshRoot] = freshEnv
-	require.Equal(t, 2, len(s.pendingPayloadEnvelopes))
+	require.Equal(t, 3, len(s.pendingPayloadEnvelopes))
 
 	s.prunePendingPayloadEnvelopes()
 
-	require.Equal(t, 1, len(s.pendingPayloadEnvelopes))
+	require.Equal(t, 2, len(s.pendingPayloadEnvelopes))
 	_, ok := s.pendingPayloadEnvelopes[oldRoot]
 	require.Equal(t, false, ok)
+	_, ok = s.pendingPayloadEnvelopes[atFinalizedRoot]
+	require.Equal(t, true, ok)
 	_, ok = s.pendingPayloadEnvelopes[freshRoot]
 	require.Equal(t, true, ok)
 }
@@ -288,7 +300,7 @@ func TestValidateExecutionPayloadEnvelope_QueueOnUnknownBlock(t *testing.T) {
 
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
 	result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
-	require.NotNil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, result, pubsub.ValidationIgnore)
 	// Envelope should be queued.
 	require.Equal(t, 1, len(s.pendingPayloadEnvelopes))
