@@ -81,6 +81,29 @@ func (s *Service) processPendingPayloadEnvelopes(ctx context.Context) {
 	}
 }
 
+// processPendingPayloadEnvelopes iterates the pending envelope map and
+// processes any entry whose beacon block is now in forkchoice.
+func (s *Service) processPendingPayloadEnvelopes(ctx context.Context) {
+	s.pendingEnvelopeLock.RLock()
+	roots := make([][32]byte, 0, len(s.pendingPayloadEnvelopes))
+	for root := range s.pendingPayloadEnvelopes {
+		roots = append(roots, root)
+	}
+	s.pendingEnvelopeLock.RUnlock()
+
+	for _, root := range roots {
+		if !s.cfg.chain.InForkchoice(root) {
+			continue
+		}
+		block, err := s.cfg.beaconDB.Block(ctx, root)
+		if err != nil {
+			log.WithError(err).Debug("Could not retrieve block for pending payload envelope")
+			continue
+		}
+		s.processPendingPayloadEnvelope(ctx, block, root)
+	}
+}
+
 // prunePendingPayloadEnvelopes removes entries whose slot is at or below the
 // finalized epoch start slot, following the same pattern as validatePendingSlots.
 func (s *Service) prunePendingPayloadEnvelopes() {
