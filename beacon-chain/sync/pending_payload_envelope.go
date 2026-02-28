@@ -4,9 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/async"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
@@ -23,10 +21,10 @@ func (s *Service) processPendingPayloadEnvelopeQueue() {
 }
 
 // processPendingPayloadEnvelope retrieves a queued payload envelope for the
-// given block root, runs the full set of gossip validation checks, and if
-// valid calls ReceiveExecutionPayloadEnvelope. The caller must pass the
-// already-known block so we avoid a redundant DB lookup.
-func (s *Service) processPendingPayloadEnvelope(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, root [32]byte) {
+// given block root and calls ReceiveExecutionPayloadEnvelope. Signature was
+// already verified before queueing; slot, builder and payload hash checks are
+// performed inside ReceiveExecutionPayloadEnvelope → ProcessExecutionPayload.
+func (s *Service) processPendingPayloadEnvelope(ctx context.Context, root [32]byte) {
 	s.pendingEnvelopeLock.Lock()
 	signedEnvelope, ok := s.pendingPayloadEnvelopes[root]
 	if !ok {
@@ -46,51 +44,11 @@ func (s *Service) processPendingPayloadEnvelope(ctx context.Context, block inter
 		log.WithError(err).Debug("Could not get pending execution payload envelope")
 		return
 	}
-	v := s.newExecutionPayloadEnvelopeVerifier(e, verification.GossipExecutionPayloadEnvelopeRequirements)
-	// Signature was verified before queueing, block root is seen because the block just arrived.
-	v.SatisfyRequirement(verification.RequireBuilderSignatureValid)
-	v.SatisfyRequirement(verification.RequireBlockRootSeen)
-
 	if s.hasSeenPayloadEnvelope(root, env.BuilderIndex()) {
 		return
 	}
-	finalized := s.cfg.chain.FinalizedCheckpt()
-	if finalized == nil {
-		return
-	}
-	if err := v.VerifySlotAboveFinalized(finalized.Epoch); err != nil {
-		log.WithError(err).Debug("Pending payload envelope failed slot above finalized check")
-		return
-	}
-	if err := v.VerifyBlockRootValid(s.hasBadBlock); err != nil {
-		log.WithError(err).Debug("Pending payload envelope has bad block root")
-		return
-	}
-	if err := v.VerifySlotMatchesBlock(block.Block().Slot()); err != nil {
-		log.WithError(err).Debug("Pending payload envelope slot does not match block")
-		return
-	}
-	signedBid, err := block.Block().Body().SignedExecutionPayloadBid()
-	if err != nil {
-		log.WithError(err).Debug("Could not get signed bid from block for pending payload envelope")
-		return
-	}
-	wrappedBid, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
-	if err != nil {
-		log.WithError(err).Debug("Could not wrap signed bid for pending payload envelope")
-		return
-	}
-	bid, err := wrappedBid.Bid()
-	if err != nil {
-		log.WithError(err).Debug("Could not get bid for pending payload envelope")
-		return
-	}
-	if err := v.VerifyBuilderValid(bid); err != nil {
-		log.WithError(err).Debug("Pending payload envelope has invalid builder")
-		return
-	}
-	if err := v.VerifyPayloadHash(bid); err != nil {
-		log.WithError(err).Debug("Pending payload envelope has invalid payload hash")
+	if s.hasBadBlock(root) {
+		s.setSeenPayloadEnvelope(root, env.BuilderIndex())
 		return
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
@@ -114,12 +72,7 @@ func (s *Service) processPendingPayloadEnvelopes(ctx context.Context) {
 		if !s.cfg.chain.InForkchoice(root) {
 			continue
 		}
-		block, err := s.cfg.beaconDB.Block(ctx, root)
-		if err != nil {
-			log.WithError(err).Debug("Could not retrieve block for pending payload envelope")
-			continue
-		}
-		s.processPendingPayloadEnvelope(ctx, block, root)
+		s.processPendingPayloadEnvelope(ctx, root)
 	}
 }
 

@@ -154,7 +154,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			}
 			cancelFunction()
 
-			go s.processPendingPayloadEnvelope(s.ctx, b, blkRoot)
+			go s.processPendingPayloadEnvelope(s.ctx, blkRoot)
 			blkRoots = append(blkRoots, blkRoot)
 
 			// Remove the processed block from the queue.
