@@ -27,14 +27,12 @@ func TestProcessPendingPayloadEnvelope_NoPendingEnvelope(t *testing.T) {
 	s := &Service{
 		pendingPayloadEnvelopes:  make(map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope),
 		seenPayloadEnvelopeCache: lruwrpr.New(10),
+		badBlockCache:            lruwrpr.New(10),
 		cfg:                      &config{chain: &mock.ChainService{}},
 	}
 	root := [32]byte{0x01}
-	sb := util.NewBeaconBlockGloas()
-	signedBlock, err := blocks.NewSignedBeaconBlock(sb)
-	require.NoError(t, err)
 	// Should return immediately without error when no envelope is queued.
-	s.processPendingPayloadEnvelope(context.Background(), signedBlock, root)
+	s.processPendingPayloadEnvelope(context.Background(), root)
 }
 
 func TestProcessPendingPayloadEnvelope_AlreadySeen(t *testing.T) {
@@ -48,6 +46,7 @@ func TestProcessPendingPayloadEnvelope_AlreadySeen(t *testing.T) {
 	s := &Service{
 		pendingPayloadEnvelopes:  make(map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope),
 		seenPayloadEnvelopeCache: lruwrpr.New(10),
+		badBlockCache:            lruwrpr.New(10),
 		cfg:                      &config{chain: chainService, beaconDB: db},
 	}
 
@@ -63,52 +62,13 @@ func TestProcessPendingPayloadEnvelope_AlreadySeen(t *testing.T) {
 	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
 	env := testSignedExecutionPayloadEnvelope(t, 1, primitives.BuilderIndex(bid.Message.BuilderIndex), root, blockHash)
 	s.pendingPayloadEnvelopes[root] = env
-	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
 
 	// Mark it as already seen, the function should remove the envelope from
 	// the queue but not process it further.
 	s.setSeenPayloadEnvelope(root, primitives.BuilderIndex(bid.Message.BuilderIndex))
-	s.processPendingPayloadEnvelope(ctx, signedBlock, root)
+	s.processPendingPayloadEnvelope(ctx, root)
 	// Queue should be drained.
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
-}
-
-func TestProcessPendingPayloadEnvelope_ValidationFailure(t *testing.T) {
-	ctx := context.Background()
-	db := dbtest.SetupDB(t)
-	chainService := &mock.ChainService{
-		Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
-		FinalizedCheckPoint: &ethpb.Checkpoint{},
-		DB:                  db,
-	}
-	s := &Service{
-		pendingPayloadEnvelopes:  make(map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope),
-		seenPayloadEnvelopeCache: lruwrpr.New(10),
-		cfg:                      &config{chain: chainService, beaconDB: db},
-	}
-
-	bid := util.GenerateTestSignedExecutionPayloadBid(1)
-	sb := util.NewBeaconBlockGloas()
-	sb.Block.Slot = 1
-	sb.Block.Body.SignedExecutionPayloadBid = bid
-	signedBlock, err := blocks.NewSignedBeaconBlock(sb)
-	require.NoError(t, err)
-	root, err := signedBlock.Block().HashTreeRoot()
-	require.NoError(t, err)
-
-	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
-	env := testSignedExecutionPayloadEnvelope(t, 1, primitives.BuilderIndex(bid.Message.BuilderIndex), root, blockHash)
-	s.pendingPayloadEnvelopes[root] = env
-
-	// Inject a verifier that fails on builder validation.
-	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(
-		mockExecutionPayloadEnvelopeVerifier{errBuilderValid: errors.New("bad builder")},
-	)
-	s.processPendingPayloadEnvelope(ctx, signedBlock, root)
-	// Queue should be drained even though validation failed.
-	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
-	// Should NOT be marked as seen since validation failed.
-	require.Equal(t, false, s.hasSeenPayloadEnvelope(root, primitives.BuilderIndex(bid.Message.BuilderIndex)))
 }
 
 func TestProcessPendingPayloadEnvelope_HappyPath(t *testing.T) {
@@ -123,6 +83,7 @@ func TestProcessPendingPayloadEnvelope_HappyPath(t *testing.T) {
 	s := &Service{
 		pendingPayloadEnvelopes:  make(map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope),
 		seenPayloadEnvelopeCache: lruwrpr.New(10),
+		badBlockCache:            lruwrpr.New(10),
 		cfg: &config{
 			chain:    chainService,
 			beaconDB: db,
@@ -148,11 +109,10 @@ func TestProcessPendingPayloadEnvelope_HappyPath(t *testing.T) {
 	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
 	env := testSignedExecutionPayloadEnvelope(t, 1, primitives.BuilderIndex(bid.Message.BuilderIndex), root, blockHash)
 	s.pendingPayloadEnvelopes[root] = env
-	s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{})
 
 	builderIdx := primitives.BuilderIndex(bid.Message.BuilderIndex)
 	require.Equal(t, false, s.hasSeenPayloadEnvelope(root, builderIdx))
-	s.processPendingPayloadEnvelope(ctx, signedBlock, root)
+	s.processPendingPayloadEnvelope(ctx, root)
 	// Queue drained.
 	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
 	// Marked as seen after successful processing.
@@ -171,6 +131,7 @@ func TestProcessPendingPayloadEnvelopes_Sweep(t *testing.T) {
 	s := &Service{
 		pendingPayloadEnvelopes:  make(map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope),
 		seenPayloadEnvelopeCache: lruwrpr.New(10),
+		badBlockCache:            lruwrpr.New(10),
 		cfg: &config{
 			chain:    chainService,
 			beaconDB: db,
@@ -219,6 +180,7 @@ func TestProcessPendingPayloadEnvelopes_SkipsUnknownRoot(t *testing.T) {
 	s := &Service{
 		pendingPayloadEnvelopes:  make(map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope),
 		seenPayloadEnvelopeCache: lruwrpr.New(10),
+		badBlockCache:            lruwrpr.New(10),
 		cfg:                      &config{chain: chainService, beaconDB: db},
 	}
 
