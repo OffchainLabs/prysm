@@ -600,6 +600,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "4096", v)
 			case "MAX_BLOB_COMMITMENTS_PER_BLOCK":
 				assert.Equal(t, "94", v)
+			case "MAX_REQUEST_PAYLOADS":
+				assert.Equal(t, fmt.Sprintf("%d", config.MaxRequestPayloads), v)
 			case "MAX_BYTES_PER_TRANSACTION":
 				assert.Equal(t, "95", v)
 			case "MAX_EXTRA_DATA_BYTES":
@@ -622,8 +624,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "104", v)
 			case "BUILDER_PAYMENT_THRESHOLD_DENOMINATOR":
 				assert.Equal(t, "105", v)
-			case "MAX_REQUEST_PAYLOADS":
-				assert.Equal(t, "106", v)
 			case "BLOB_SCHEDULE":
 				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)
