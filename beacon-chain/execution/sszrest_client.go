@@ -159,9 +159,20 @@ func sszRestAvailableURL(channels []*structs.CommunicationChannel) string {
 
 // refreshCommunicationChannels re-fetches communication channels from the EL
 // and updates the SSZ-REST client state accordingly.
+// Prefers engine_exchangeCapabilitiesV2 (EIP-8160), falls back to V1 channels method.
 func (s *Service) refreshCommunicationChannels() {
 	ctx, cancel := context.WithTimeout(s.ctx, defaultEngineTimeout)
 	defer cancel()
+
+	// Try V2 first.
+	var v2Result structs.ExchangeCapabilitiesV2Response
+	if err := s.rpcClient.CallContext(ctx, &v2Result, ExchangeCapabilitiesV2, supportedEngineEndpoints); err == nil && len(v2Result.SupportedProtocols) > 0 {
+		s.communicationChannels = v2Result.SupportedProtocols
+		s.setupSSZRestClient()
+		return
+	}
+
+	// Fall back to old method.
 	channels, err := s.GetClientCommunicationChannelsV1(ctx)
 	if err != nil {
 		log.WithError(err).Debug("Could not refresh execution client communication channels")

@@ -77,11 +77,16 @@ type ClientVersionV1 struct {
 	Commit  string `json:"commit"`
 }
 
-// CommunicationChannel represents a protocol endpoint advertised by the execution layer
-// as part of engine_getClientCommunicationChannelsV1 (EIP-8160).
+// CommunicationChannel represents a protocol endpoint advertised by the execution layer (EIP-8160).
 type CommunicationChannel struct {
 	Protocol string `json:"protocol"`
 	URL      string `json:"url"`
+}
+
+// ExchangeCapabilitiesV2Response is the response for engine_exchangeCapabilitiesV2 (EIP-8160).
+type ExchangeCapabilitiesV2Response struct {
+	Capabilities       []string                `json:"capabilities"`
+	SupportedProtocols []*CommunicationChannel `json:"supportedProtocols"`
 }
 
 type GetVersionResponse struct {

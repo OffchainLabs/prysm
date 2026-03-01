@@ -114,7 +114,10 @@ const (
 	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
 	GetClientVersionV1 = "engine_getClientVersionV1"
 	// GetClientCommunicationChannelsV1 is the engine_getClientCommunicationChannelsV1 method (EIP-8160).
+	// Deprecated: Use ExchangeCapabilitiesV2 instead. Kept for backward compatibility.
 	GetClientCommunicationChannelsV1 = "engine_getClientCommunicationChannelsV1"
+	// ExchangeCapabilitiesV2 is the engine_exchangeCapabilitiesV2 method (EIP-8160).
+	ExchangeCapabilitiesV2 = "engine_exchangeCapabilitiesV2"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
 	defaultEngineTimeout = time.Second
 )
@@ -364,8 +367,9 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	return res, nil
 }
 
-// ExchangeCapabilities calls engine_exchangeCapabilities.
-// Per EIP-8161, it prefers SSZ-REST transport when available, falling back to JSON-RPC.
+// ExchangeCapabilities calls engine_exchangeCapabilitiesV2 (EIP-8160) first,
+// falling back to engine_exchangeCapabilities (V1) if V2 is not supported.
+// V2 also returns supportedProtocols, which we use to discover SSZ-REST endpoints.
 func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
@@ -393,9 +397,22 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	}
 
 	if elSupportedEndpointsSlice == nil {
-		elSupportedEndpointsSlice = make([]string, len(supportedEngineEndpoints))
-		if err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints); err != nil {
-			return nil, handleRPCError(err)
+		// Try V2 first (EIP-8160) — returns capabilities + supportedProtocols.
+		var v2Result structs.ExchangeCapabilitiesV2Response
+		if err := s.rpcClient.CallContext(ctx, &v2Result, ExchangeCapabilitiesV2, supportedEngineEndpoints); err == nil {
+			elSupportedEndpointsSlice = v2Result.Capabilities
+			// Use supportedProtocols to discover SSZ-REST.
+			if len(v2Result.SupportedProtocols) > 0 {
+				s.communicationChannels = v2Result.SupportedProtocols
+				s.setupSSZRestClient()
+			}
+		} else {
+			// Fall back to V1.
+			log.WithError(err).Debug("engine_exchangeCapabilitiesV2 not supported, falling back to V1")
+			elSupportedEndpointsSlice = make([]string, len(supportedEngineEndpoints))
+			if err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints); err != nil {
+				return nil, handleRPCError(err)
+			}
 		}
 	}
 
