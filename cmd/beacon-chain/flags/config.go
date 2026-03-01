@@ -18,6 +18,7 @@ type GlobalFlags struct {
 	Supernode                       bool
 	SemiSupernode                   bool
 	DisableGetBlobsV2               bool
+	DisableSSZRest                  bool
 	MinimumSyncPeers                int
 	MinimumPeersPerSubnet           int
 	MaxConcurrentDials              int
@@ -76,6 +77,11 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	if ctx.Bool(DisableGetBlobsV2.Name) {
 		log.Warning("Disabling `engine_getBlobsV2` API")
 		cfg.DisableGetBlobsV2 = true
+	}
+
+	if ctx.Bool(DisableSSZRest.Name) {
+		log.Warning("Disabling SSZ-REST Engine API transport (EIP-8161)")
+		cfg.DisableSSZRest = true
 	}
 
 	// State-diff-exponents

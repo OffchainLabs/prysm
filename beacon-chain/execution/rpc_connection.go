@@ -85,6 +85,16 @@ func (s *Service) pollConnectionStatus(ctx context.Context) {
 			}
 			s.capabilityCache.save(c)
 
+			// EIP-8160: Discover communication channels supported by the execution client.
+			channels, err := s.GetClientCommunicationChannelsV1(ctx)
+			if err != nil {
+				log.WithError(err).Debug("Could not get execution client communication channels")
+			} else {
+				s.communicationChannels = channels
+				// EIP-8161: Set up SSZ-REST client if the EL advertises ssz_rest support.
+				s.setupSSZRestClient()
+			}
+
 			return
 		case <-s.ctx.Done():
 			log.Debug("Received cancelled context,closing existing powchain service")

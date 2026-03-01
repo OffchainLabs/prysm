@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -162,6 +163,8 @@ type Service struct {
 	verifierWaiter          *verification.InitializerWaiter
 	blobVerifier            verification.NewBlobVerifier
 	capabilityCache         *capabilityCache
+	communicationChannels   []*structs.CommunicationChannel
+	sszRestClient           *sszRestClient
 	graffitiInfo            *GraffitiInfo
 }
 
@@ -304,6 +307,11 @@ func (s *Service) ExecutionClientEndpoint() string {
 // ExecutionClientConnectionErr returns the error (if any) of the current connection.
 func (s *Service) ExecutionClientConnectionErr() error {
 	return s.runError
+}
+
+// CommunicationChannels returns the communication channels discovered from the execution layer (EIP-8160).
+func (s *Service) CommunicationChannels() []*structs.CommunicationChannel {
+	return s.communicationChannels
 }
 
 func (s *Service) updateBeaconNodeStats() {
@@ -627,6 +635,10 @@ func (s *Service) run(done <-chan struct{}) {
 	// Initial update
 	s.updateGraffitiInfo()
 
+	// EIP-8161: Periodically refresh communication channels to keep SSZ-REST state up to date.
+	channelRefreshTicker := time.NewTicker(channelRefreshInterval)
+	defer channelRefreshTicker.Stop()
+
 	for {
 		select {
 		case <-done:
@@ -653,6 +665,8 @@ func (s *Service) run(done <-chan struct{}) {
 			s.logTillChainStart(context.Background())
 		case <-graffitiTicker.C:
 			s.updateGraffitiInfo()
+		case <-channelRefreshTicker.C:
+			s.refreshCommunicationChannels()
 		}
 	}
 }
