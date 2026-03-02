@@ -744,14 +744,14 @@ func executionPayloadDenebFromExecutionBlock(
 	if blk == nil {
 		return nil, errors.New("execution block not found")
 	}
-	if blk.Number == nil {
-		return nil, errors.New("execution block number is nil")
+	if blk.Hash == (common.Hash{}) {
+		return nil, errors.New("execution block not found")
 	}
 	if blk.Hash != requestedHash {
 		return nil, errors.New("execution block hash mismatch")
 	}
-	if blk.Hash == (common.Hash{}) {
-		return nil, errors.New("execution block hash is empty")
+	if blk.Number == nil {
+		return nil, errors.New("execution block number is nil")
 	}
 	if blk.BaseFee == nil {
 		return nil, errors.New("execution block base fee is nil")

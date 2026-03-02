@@ -165,7 +165,7 @@ func WriteLightClientFinalityUpdateChunk(stream libp2pcore.Stream, tor blockchai
 
 // WriteExecutionPayloadEnvelopeChunk writes execution payload envelope chunk object to stream.
 // response_chunk  ::= <result> | <context-bytes> | <encoding-dependent-header> | <encoded-payload>
-func WriteExecutionPayloadEnvelopeChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, envelope *ethpb.SignedExecutionPayloadEnvelope) error {
+func WriteExecutionPayloadEnvelopeChunk(stream libp2pcore.Stream, encoding encoder.NetworkEncoding, envelope *ethpb.SignedExecutionPayloadEnvelope) error {
 	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
 		return err
 	}

@@ -78,7 +78,7 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 			assert.NoError(t, p2p2.Encoding().DecodeWithMaxLength(stream, req))
 
 			// Only respond with envelope A (skip B).
-			err := WriteExecutionPayloadEnvelopeChunk(stream, clock, p2p2.Encoding(), envelopeA)
+			err := WriteExecutionPayloadEnvelopeChunk(stream, p2p2.Encoding(), envelopeA)
 			assert.NoError(t, err)
 
 			assert.NoError(t, stream.CloseWrite())
@@ -111,8 +111,8 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 			assert.NoError(t, p2p2.Encoding().DecodeWithMaxLength(stream, req))
 
 			// Respond with A twice.
-			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, clock, p2p2.Encoding(), envelopeA))
-			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, clock, p2p2.Encoding(), envelopeA))
+			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2p2.Encoding(), envelopeA))
+			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2p2.Encoding(), envelopeA))
 
 			assert.NoError(t, stream.CloseWrite())
 		})
@@ -142,7 +142,7 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 			assert.NoError(t, p2p2.Encoding().DecodeWithMaxLength(stream, req))
 
 			// Respond with envelope for rootC, which was not requested.
-			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, clock, p2p2.Encoding(), envelopeC))
+			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2p2.Encoding(), envelopeC))
 
 			assert.NoError(t, stream.CloseWrite())
 		})
@@ -173,9 +173,9 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 			assert.NoError(t, p2p2.Encoding().DecodeWithMaxLength(stream, req))
 
 			// Respond with 3 envelopes for a request of 2.
-			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, clock, p2p2.Encoding(), envelopeA))
-			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, clock, p2p2.Encoding(), envelopeB))
-			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, clock, p2p2.Encoding(), envelopeA))
+			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2p2.Encoding(), envelopeA))
+			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2p2.Encoding(), envelopeB))
+			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2p2.Encoding(), envelopeA))
 
 			assert.NoError(t, stream.CloseWrite())
 		})
@@ -205,8 +205,8 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 			req := new(p2ptypes.ExecutionPayloadEnvelopesByRootReq)
 			assert.NoError(t, p2p2.Encoding().DecodeWithMaxLength(stream, req))
 
-			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, clock, p2p2.Encoding(), envelopeA))
-			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, clock, p2p2.Encoding(), envelopeB))
+			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2p2.Encoding(), envelopeA))
+			assert.NoError(t, WriteExecutionPayloadEnvelopeChunk(stream, p2p2.Encoding(), envelopeB))
 
 			assert.NoError(t, stream.CloseWrite())
 		})
