@@ -788,10 +788,14 @@ func (c *ChainService) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]b
 }
 
 func (c *ChainService) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) {
+	var root [32]byte
 	if c.MockCanonicalRoots != nil {
-		return c.MockCanonicalRoots[slot], c.MockCanonicalFull[slot]
+		root = c.MockCanonicalRoots[slot]
 	}
-	return [32]byte{}, false
+	if c.MockCanonicalFull != nil {
+		return root, c.MockCanonicalFull[slot]
+	}
+	return root, false
 }
 
 // MockSyncChecker is a mock implementation of blockchain.Checker.
