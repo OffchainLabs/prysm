@@ -193,7 +193,7 @@ type Service struct {
 	digestActions                       perDigestSet
 	subscriptionSpawner                 func(func()) // see Service.spawn for details
 	newExecutionPayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
-	pendingPayloadEnvelopes             map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope
+	pendingPayloadEnvelopes             map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
 	pendingEnvelopeLock                 sync.RWMutex
 }
 
@@ -211,7 +211,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		dataColumnLogCh:         make(chan dataColumnLogEntry, 1000),
 		reconstructionRandGen:   rand.NewGenerator(),
 		payloadAttestationCache: &cache.PayloadAttestationCache{},
-		pendingPayloadEnvelopes: make(map[[32]byte]*ethpb.SignedExecutionPayloadEnvelope),
+		pendingPayloadEnvelopes: make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
 	}
 
 	for _, opt := range opts {

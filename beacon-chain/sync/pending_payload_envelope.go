@@ -8,6 +8,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
+const (
+	maxPendingPayloadRoots    = 128
+	maxPendingBuildersPerRoot = 2
+)
+
 // processPendingPayloadEnvelopeQueue sweeps the pending envelope map at
 // mid-slot to recover envelopes orphaned by the race between
 // queuePendingPayloadEnvelope and beaconBlockSubscriber.
@@ -20,13 +25,11 @@ func (s *Service) processPendingPayloadEnvelopeQueue() {
 	})
 }
 
-// processPendingPayloadEnvelope retrieves a queued payload envelope for the
-// given block root and calls ReceiveExecutionPayloadEnvelope. Signature was
-// already verified before queueing; slot, builder and payload hash checks are
-// performed inside ReceiveExecutionPayloadEnvelope → ProcessExecutionPayload.
+// processPendingPayloadEnvelope retrieves all queued payload envelopes for the
+// given block root and calls ReceiveExecutionPayloadEnvelope on each.
 func (s *Service) processPendingPayloadEnvelope(ctx context.Context, root [32]byte) {
 	s.pendingEnvelopeLock.Lock()
-	signedEnvelope, ok := s.pendingPayloadEnvelopes[root]
+	inner, ok := s.pendingPayloadEnvelopes[root]
 	if !ok {
 		s.pendingEnvelopeLock.Unlock()
 		return
@@ -34,27 +37,28 @@ func (s *Service) processPendingPayloadEnvelope(ctx context.Context, root [32]by
 	delete(s.pendingPayloadEnvelopes, root)
 	s.pendingEnvelopeLock.Unlock()
 
-	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedEnvelope)
-	if err != nil {
-		log.WithError(err).Debug("Could not wrap pending signed execution payload envelope")
-		return
-	}
-	env, err := e.Envelope()
-	if err != nil {
-		log.WithError(err).Debug("Could not get pending execution payload envelope")
-		return
-	}
-	if s.hasSeenPayloadEnvelope(root, env.BuilderIndex()) {
-		return
-	}
-	if s.hasBadBlock(root) {
+	for _, signedEnvelope := range inner {
+		e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedEnvelope)
+		if err != nil {
+			log.WithError(err).Debug("Could not wrap pending signed execution payload envelope")
+			continue
+		}
+		env, err := e.Envelope()
+		if err != nil {
+			log.WithError(err).Debug("Could not get pending execution payload envelope")
+			continue
+		}
+		if s.hasSeenPayloadEnvelope(root, env.BuilderIndex()) {
+			continue
+		}
+		if s.hasBadBlock(root) {
+			s.setSeenPayloadEnvelope(root, env.BuilderIndex())
+			continue
+		}
 		s.setSeenPayloadEnvelope(root, env.BuilderIndex())
-		return
-	}
-	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
-
-	if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, e); err != nil {
-		log.WithError(err).Debug("Could not process pending payload envelope")
+		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, e); err != nil {
+			log.WithError(err).Debug("Could not process pending payload envelope")
+		}
 	}
 }
 
@@ -83,9 +87,12 @@ func (s *Service) prunePendingPayloadEnvelopes() {
 	defer s.pendingEnvelopeLock.Unlock()
 
 	finalizedEpoch := s.cfg.chain.FinalizedCheckpt().Epoch
-	for root, env := range s.pendingPayloadEnvelopes {
-		if slots.ToEpoch(env.Message.Slot) < finalizedEpoch {
-			delete(s.pendingPayloadEnvelopes, root)
+	for root, inner := range s.pendingPayloadEnvelopes {
+		for _, env := range inner {
+			if slots.ToEpoch(env.Message.Slot) < finalizedEpoch {
+				delete(s.pendingPayloadEnvelopes, root)
+			}
+			break // only need one envelope per root; admission enforces current-slot
 		}
 	}
 }

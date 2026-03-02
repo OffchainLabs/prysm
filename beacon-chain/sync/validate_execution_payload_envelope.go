@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -136,6 +137,9 @@ func (s *Service) queuePendingPayloadEnvelope(
 	env interfaces.ROExecutionPayloadEnvelope,
 	signedEnvelope *ethpb.SignedExecutionPayloadEnvelope,
 ) (pubsub.ValidationResult, error) {
+	if env.Slot() != s.cfg.clock.CurrentSlot() {
+		return pubsub.ValidationIgnore, nil
+	}
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
@@ -144,17 +148,45 @@ func (s *Service) queuePendingPayloadEnvelope(
 		return pubsub.ValidationReject, err
 	}
 	root := env.BeaconBlockRoot()
+	builderIdx := uint64(env.BuilderIndex())
+	isSelfBuild := builderIdx == uint64(params.BeaconConfig().BuilderIndexSelfBuild)
+
 	s.pendingEnvelopeLock.Lock()
-	_, exists := s.pendingPayloadEnvelopes[root]
-	if !exists {
-		s.pendingPayloadEnvelopes[root] = signedEnvelope
+	inner, rootExists := s.pendingPayloadEnvelopes[root]
+	if !rootExists {
+		if !isSelfBuild && len(s.pendingPayloadEnvelopes) >= maxPendingPayloadRoots {
+			s.pendingEnvelopeLock.Unlock()
+			return pubsub.ValidationIgnore, nil
+		}
+		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
+		s.pendingPayloadEnvelopes[root] = inner
+	} else {
+		for _, existing := range inner {
+			if existing.Message.Slot != signedEnvelope.Message.Slot {
+				s.pendingEnvelopeLock.Unlock()
+				return pubsub.ValidationIgnore, nil
+			}
+			break
+		}
+	}
+	if _, exists := inner[builderIdx]; exists {
+		s.pendingEnvelopeLock.Unlock()
+		return pubsub.ValidationIgnore, nil
+	}
+	if !isSelfBuild && len(inner) >= maxPendingBuildersPerRoot {
+		s.pendingEnvelopeLock.Unlock()
+		return pubsub.ValidationIgnore, nil
+	}
+	inner[builderIdx] = signedEnvelope
+	s.pendingEnvelopeLock.Unlock()
+
+	if !rootExists {
 		go func() {
 			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{root}, rand.NewGenerator()); err != nil {
 				log.WithError(err).Debug("Could not request beacon block for pending payload envelope")
 			}
 		}()
 	}
-	s.pendingEnvelopeLock.Unlock()
 	return pubsub.ValidationIgnore, nil
 }
 
