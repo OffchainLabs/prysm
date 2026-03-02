@@ -163,6 +163,20 @@ func WriteLightClientFinalityUpdateChunk(stream libp2pcore.Stream, tor blockchai
 	return err
 }
 
+// WriteExecutionPayloadEnvelopeChunk writes execution payload envelope chunk object to stream.
+// response_chunk  ::= <result> | <context-bytes> | <encoding-dependent-header> | <encoded-payload>
+func WriteExecutionPayloadEnvelopeChunk(stream libp2pcore.Stream, encoding encoder.NetworkEncoding, envelope *ethpb.SignedExecutionPayloadEnvelope) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+	ctxBytes := params.ForkDigest(slots.ToEpoch(envelope.Message.Slot))
+	if err := writeContextToStream(ctxBytes[:], stream); err != nil {
+		return err
+	}
+	_, err := encoding.EncodeWithMaxLength(stream, envelope)
+	return err
+}
+
 // WriteDataColumnSidecarChunk writes data column chunk object to stream.
 // response_chunk  ::= <result> | <context-bytes> | <encoding-dependent-header> | <encoded-payload>
 func WriteDataColumnSidecarChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, sidecar *ethpb.DataColumnSidecar) error {

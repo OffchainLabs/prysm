@@ -48,7 +48,6 @@ var placeholderFields = []string{
 	"MAX_BYTES_PER_INCLUSION_LIST",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_INCLUSION_LIST",
-	"MAX_REQUEST_PAYLOADS", // Compile time constant on BeaconBlockBody.ExecutionRequests
 	"MIN_BUILDER_WITHDRAWABILITY_DELAY",
 	"NUMBER_OF_COLUMNS", // Configured as a constant in config/fieldparams/mainnet.go
 	"PAYLOAD_ATTESTATION_DUE_BPS",

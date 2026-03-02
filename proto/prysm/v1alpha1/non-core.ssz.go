@@ -937,6 +937,66 @@ func (d *DataColumnSidecarsByRangeRequest) HashTreeRootWith(hh *ssz.Hasher) (err
 	return
 }
 
+// MarshalSSZ ssz marshals the ExecutionPayloadEnvelopesByRangeRequest object
+func (e *ExecutionPayloadEnvelopesByRangeRequest) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(e)
+}
+
+// MarshalSSZTo ssz marshals the ExecutionPayloadEnvelopesByRangeRequest object to a target array
+func (e *ExecutionPayloadEnvelopesByRangeRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'StartSlot'
+	dst = ssz.MarshalUint64(dst, uint64(e.StartSlot))
+
+	// Field (1) 'Count'
+	dst = ssz.MarshalUint64(dst, e.Count)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ExecutionPayloadEnvelopesByRangeRequest object
+func (e *ExecutionPayloadEnvelopesByRangeRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 16 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'StartSlot'
+	e.StartSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+
+	// Field (1) 'Count'
+	e.Count = ssz.UnmarshallUint64(buf[8:16])
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayloadEnvelopesByRangeRequest object
+func (e *ExecutionPayloadEnvelopesByRangeRequest) SizeSSZ() (size int) {
+	size = 16
+	return
+}
+
+// HashTreeRoot ssz hashes the ExecutionPayloadEnvelopesByRangeRequest object
+func (e *ExecutionPayloadEnvelopesByRangeRequest) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(e)
+}
+
+// HashTreeRootWith ssz hashes the ExecutionPayloadEnvelopesByRangeRequest object with a hasher
+func (e *ExecutionPayloadEnvelopesByRangeRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'StartSlot'
+	hh.PutUint64(uint64(e.StartSlot))
+
+	// Field (1) 'Count'
+	hh.PutUint64(e.Count)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the DepositSnapshot object
 func (d *DepositSnapshot) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(d)
