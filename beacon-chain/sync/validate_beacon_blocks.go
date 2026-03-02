@@ -213,7 +213,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			return pubsub.ValidationIgnore, qErr
 		}
 		s.pendingQueueLock.Unlock()
-		// TODO(#16394): request payload envelope over RPC
+		go s.requestPayloadEnvelope(blk.Block().ParentRoot())
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Parent payload not yet available, queuing block")
 		return pubsub.ValidationIgnore, err
 	}
