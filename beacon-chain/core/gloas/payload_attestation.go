@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -122,6 +123,37 @@ func PayloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot pr
 		return nil, err
 	}
 
+	// Check cache.
+	cached, err := helpers.PayloadCommitteeFromCache(ctx, seed)
+	if err != nil {
+		return nil, err
+	}
+	if cached != nil {
+		return cached, nil
+	}
+
+	// Mark as in progress to prevent duplicate computation.
+	if err := helpers.MarkPayloadCommitteeInProgress(seed); err != nil {
+		if !errors.Is(err, cache.ErrAlreadyInProgress) {
+			return nil, err
+		}
+		// Another goroutine is computing this seed. Wait for it via the
+		// cache's checkInProgress backoff, then use the result if available.
+		cached, err = helpers.PayloadCommitteeFromCache(ctx, seed)
+		if err != nil {
+			return nil, err
+		}
+		if cached != nil {
+			return cached, nil
+		}
+		// The other goroutine failed without populating the cache.
+		// Fall through to compute ourselves.
+	} else {
+		defer func() {
+			_ = helpers.MarkPayloadCommitteeNotInProgress(seed)
+		}()
+	}
+
 	activeCount, err := helpers.ActiveValidatorCount(ctx, st, epoch)
 	if err != nil {
 		return nil, err
@@ -152,6 +184,8 @@ func PayloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot pr
 			}
 		}
 	}
+
+	helpers.AddPayloadCommittee(seed, selected)
 
 	return selected, nil
 }
