@@ -96,6 +96,17 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	return v.onDutiesUpdated(ctx)
 }
 
+func filterSlice[T any](s []*T, include func(*T) bool) []*T {
+	n := 0
+	for _, v := range s {
+		if v != nil && include(v) {
+			s[n] = v
+			n++
+		}
+	}
+	return s[:n]
+}
+
 // clearDuties resets the duty store under lock, used on fetch errors.
 func (v *validator) clearDuties() {
 	v.dutiesLock.Lock()
@@ -120,11 +131,18 @@ func (v *validator) updateDutiesLegacy(ctx context.Context, epoch primitives.Epo
 		return err
 	}
 
+	resp.CurrentEpochDuties = filterSlice(resp.CurrentEpochDuties, func(d *ethpb.ValidatorDuty) bool {
+		return v.isActiveOrExiting(d.PublicKey)
+	})
+	resp.NextEpochDuties = filterSlice(resp.NextEpochDuties, func(d *ethpb.ValidatorDuty) bool {
+		return v.isActiveOrExiting(d.PublicKey)
+	})
+
 	v.dutiesLock.Lock()
 	if v.duties == nil {
 		v.duties = &dutyStore{}
 	}
-	v.duties.SetLegacy(resp, v.isActiveOrExiting)
+	v.duties.SetLegacy(resp)
 	v.dutiesLock.Unlock()
 	return nil
 }
@@ -307,25 +325,59 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 		return attErr
 	}
 
-	v.dutiesLock.Lock()
-	if v.duties == nil {
-		v.duties = &dutyStore{}
+	// Filter attester duties to active/exiting validators.
+	includeAtt := func(d *ethpb.AttesterDuty) bool { return v.isActiveOrExiting(d.Pubkey) }
+	if attCurr != nil {
+		attCurr.Duties = filterSlice(attCurr.Duties, includeAtt)
+	}
+	if attNext != nil {
+		attNext.Duties = filterSlice(attNext.Duties, includeAtt)
 	}
 
+	// Build proposer slots (merge current + next epoch).
+	propSlots := proposerSlotsMap(propCurr)
+	if propNext != nil {
+		for _, d := range propNext.Duties {
+			propSlots[d.ValidatorIndex] = append(propSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+
+	var propDepRoot []byte
+	if propCurr != nil {
+		propDepRoot = propCurr.DependentRoot
+	}
+
+	v.dutiesLock.Lock()
 	// Sync failure is non-fatal — reuse cached sync data.
 	if syncErr != nil {
 		log.WithError(syncErr).Warn("Error getting sync committee duties, reusing cached data")
-		syncCurr = v.duties.syncCurrentResp
-		syncNext = v.duties.syncNextResp
-		syncPeriod = v.duties.syncPeriod
+		if v.duties != nil {
+			syncCurr = v.duties.syncCurrentResp
+			syncNext = v.duties.syncNextResp
+			syncPeriod = v.duties.syncPeriod
+		}
 	} else if syncCurr == nil {
 		// Sync cache hit — reuse existing.
-		syncCurr = v.duties.syncCurrentResp
-		syncNext = v.duties.syncNextResp
-		syncPeriod = v.duties.syncPeriod
+		if v.duties != nil {
+			syncCurr = v.duties.syncCurrentResp
+			syncNext = v.duties.syncNextResp
+			syncPeriod = v.duties.syncPeriod
+		}
 	}
 
-	v.duties.SetSplit(attCurr, attNext, propCurr, propNext, syncCurr, syncNext, syncPeriod, v.isActiveOrExiting)
+	v.duties = &dutyStore{
+		currentDuties:         attesterMap(attCurr),
+		nextDuties:            attesterMap(attNext),
+		attesterDependentRoot: attCurr.DependentRoot,
+		proposerDependentRoot: propDepRoot,
+		proposerSlots:         propSlots,
+		syncCurrentMap:        syncMap(syncCurr),
+		syncNextMap:           syncMap(syncNext),
+		syncPeriod:            syncPeriod,
+		syncCurrentResp:       syncCurr,
+		syncNextResp:          syncNext,
+		initialized:           true,
+	}
 	v.dutiesLock.Unlock()
 
 	return nil

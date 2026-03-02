@@ -89,10 +89,9 @@ func TestSubscribeToSubnets_IncludesNextEpochDuties(t *testing.T) {
 	kp := randKeypair(t)
 	km := newMockKeymanager(t, kp)
 
-	ds := &dutyStore{}
-	ds.SetSplit(
-		&ethpb.AttesterDutiesResponse{},
-		&ethpb.AttesterDutiesResponse{
+	ds := &dutyStore{
+		currentDuties: attesterMap(&ethpb.AttesterDutiesResponse{}),
+		nextDuties: attesterMap(&ethpb.AttesterDutiesResponse{
 			Duties: []*ethpb.AttesterDuty{
 				{
 					Pubkey:          kp.pub[:],
@@ -102,11 +101,9 @@ func TestSubscribeToSubnets_IncludesNextEpochDuties(t *testing.T) {
 					CommitteeLength: 64,
 				},
 			},
-		},
-		nil, nil, nil, nil,
-		0,
-		nil,
-	)
+		}),
+		initialized: true,
+	}
 	v := &validator{
 		validatorClient: client,
 		km:              km,

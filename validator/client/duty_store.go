@@ -103,9 +103,8 @@ func (ds *dutyStore) IsNextSyncCommittee(idx primitives.ValidatorIndex) bool {
 }
 
 // SetLegacy stores a legacy combined duties response by decomposing it into
-// attester duties, proposer slots, sync committee, and status maps.
-// If include is non-nil, only duties where include(pubkey) returns true are stored.
-func (ds *dutyStore) SetLegacy(container *ethpb.ValidatorDutiesContainer, include func([]byte) bool) {
+// attester duties, proposer slots, and sync committee maps.
+func (ds *dutyStore) SetLegacy(container *ethpb.ValidatorDutiesContainer) {
 	if container == nil {
 		ds.Reset()
 		return
@@ -118,7 +117,7 @@ func (ds *dutyStore) SetLegacy(container *ethpb.ValidatorDutiesContainer, includ
 	// Convert current epoch duties.
 	ds.currentDuties = make(map[pubkey]*ethpb.AttesterDuty, len(container.CurrentEpochDuties))
 	for _, d := range container.CurrentEpochDuties {
-		if d == nil || (include != nil && !include(d.PublicKey)) {
+		if d == nil {
 			continue
 		}
 		ds.currentDuties[bytesutil.ToBytes48(d.PublicKey)] = &ethpb.AttesterDuty{
@@ -141,7 +140,7 @@ func (ds *dutyStore) SetLegacy(container *ethpb.ValidatorDutiesContainer, includ
 	// Convert next epoch duties.
 	ds.nextDuties = make(map[pubkey]*ethpb.AttesterDuty, len(container.NextEpochDuties))
 	for _, d := range container.NextEpochDuties {
-		if d == nil || (include != nil && !include(d.PublicKey)) {
+		if d == nil {
 			continue
 		}
 		ds.nextDuties[bytesutil.ToBytes48(d.PublicKey)] = &ethpb.AttesterDuty{
@@ -161,6 +160,18 @@ func (ds *dutyStore) SetLegacy(container *ethpb.ValidatorDutiesContainer, includ
 	ds.attesterDependentRoot = container.PrevDependentRoot
 	ds.proposerDependentRoot = container.CurrDependentRoot
 	ds.initialized = true
+}
+
+// attesterMap converts an attester duties response into a pubkey-keyed map.
+func attesterMap(resp *ethpb.AttesterDutiesResponse) map[pubkey]*ethpb.AttesterDuty {
+	if resp == nil {
+		return nil
+	}
+	m := make(map[pubkey]*ethpb.AttesterDuty, len(resp.Duties))
+	for _, d := range resp.Duties {
+		m[bytesutil.ToBytes48(d.Pubkey)] = d
+	}
+	return m
 }
 
 // proposerSlotsMap builds a map of validator index to proposer slots from a proposer duties response.
@@ -190,81 +201,10 @@ func (ds *dutyStore) SyncCacheValid(period uint64) bool {
 	return ds.syncCurrentResp != nil && ds.syncPeriod == period
 }
 
-// SetSplit stores split per-duty responses directly.
-// If include is non-nil, only attester duties where include(pubkey) returns true are stored.
-func (ds *dutyStore) SetSplit(
-	attCurr, attNext *ethpb.AttesterDutiesResponse,
-	propCurr, propNext *ethpb.ProposerDutiesResponse,
-	syncCurr, syncNext *ethpb.SyncCommitteeDutiesResponse,
-	syncPeriod uint64,
-	include func([]byte) bool,
-) {
-	if attCurr == nil {
-		ds.Reset()
-		return
-	}
-
-	// Store sync responses + validity fields.
-	ds.syncCurrentResp = syncCurr
-	ds.syncNextResp = syncNext
-	ds.syncPeriod = syncPeriod
-
-	// Dependent roots.
-	ds.attesterDependentRoot = attCurr.DependentRoot
-	if propCurr != nil {
-		ds.proposerDependentRoot = propCurr.DependentRoot
-	} else {
-		ds.proposerDependentRoot = nil
-	}
-
-	// Sync membership maps.
-	if syncCurr != nil || syncNext != nil {
-		ds.syncCurrentMap = syncMap(syncCurr)
-		ds.syncNextMap = syncMap(syncNext)
-	} else {
-		ds.syncCurrentMap = make(map[primitives.ValidatorIndex]bool)
-		ds.syncNextMap = make(map[primitives.ValidatorIndex]bool)
-	}
-
-	// Proposer slots.
-	if propCurr != nil {
-		ds.proposerSlots = proposerSlotsMap(propCurr)
-	} else {
-		ds.proposerSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
-	}
-	if propNext != nil {
-		for _, d := range propNext.Duties {
-			ds.proposerSlots[d.ValidatorIndex] = append(ds.proposerSlots[d.ValidatorIndex], d.Slot)
-		}
-	}
-
-	// Store attester duties keyed by pubkey.
-	ds.currentDuties = make(map[pubkey]*ethpb.AttesterDuty, len(attCurr.Duties))
-	for _, d := range attCurr.Duties {
-		if include != nil && !include(d.Pubkey) {
-			continue
-		}
-		ds.currentDuties[bytesutil.ToBytes48(d.Pubkey)] = d
-	}
-	if attNext != nil {
-		ds.nextDuties = make(map[pubkey]*ethpb.AttesterDuty, len(attNext.Duties))
-		for _, d := range attNext.Duties {
-			if include != nil && !include(d.Pubkey) {
-				continue
-			}
-			ds.nextDuties[bytesutil.ToBytes48(d.Pubkey)] = d
-		}
-	} else {
-		ds.nextDuties = nil
-	}
-
-	ds.initialized = true
-}
-
 // newDutyStoreFromLegacy creates a dutyStore from a legacy ValidatorDutiesContainer.
 // This is a convenience helper primarily used in tests.
 func newDutyStoreFromLegacy(container *ethpb.ValidatorDutiesContainer) *dutyStore {
 	ds := &dutyStore{}
-	ds.SetLegacy(container, nil)
+	ds.SetLegacy(container)
 	return ds
 }
