@@ -268,7 +268,8 @@ func (c *grpcValidatorClient) SubmitValidatorRegistrations(ctx context.Context, 
 	return c.getClient().SubmitValidatorRegistrations(ctx, in)
 }
 
-func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*empty.Empty, error) {
+func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []primitives.ValidatorIndex, _ []uint64) (*empty.Empty, error) {
+	// TODO: change gRPC endpoint to accept validatorIndices, committeesAtSlot
 	return c.getClient().SubscribeCommitteeSubnets(ctx, in)
 }
 

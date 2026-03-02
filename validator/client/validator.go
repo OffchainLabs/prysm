@@ -125,6 +125,7 @@ type validatorStatus struct {
 	index     primitives.ValidatorIndex
 }
 
+<<<<<<< Updated upstream
 type attesterDutiesCacheEntry struct {
 	current, next *ethpb.AttesterDutiesResponse
 	epoch         primitives.Epoch
@@ -146,6 +147,8 @@ type attSelectionKey struct {
 	index primitives.ValidatorIndex
 }
 
+=======
+>>>>>>> Stashed changes
 // Done cleans up the validator.
 func (v *validator) Done() {
 	if v.accountChangedSub != nil {
@@ -578,8 +581,11 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		if duty == nil {
 			continue
 		}
-		if len(duty.ProposerSlots) > 0 {
-			for _, proposerSlot := range duty.ProposerSlots {
+		pk := bytesutil.ToBytes48(duty.Pubkey)
+
+		proposerSlots := v.duties.ProposerSlots(duty.ValidatorIndex)
+		if len(proposerSlots) > 0 {
+			for _, proposerSlot := range proposerSlots {
 				if proposerSlot != 0 && proposerSlot == slot {
 					roles = append(roles, iface.RoleProposer)
 					break
@@ -590,10 +596,17 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		if duty.Slot == slot {
 			roles = append(roles, iface.RoleAttester)
 
+<<<<<<< Updated upstream
 			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, duty.Pubkey, duty.ValidatorIndex)
 			if err != nil {
 				aggregator = false
 				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(duty.Pubkey[:]))
+=======
+			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, pk, duty.ValidatorIndex)
+			if err != nil {
+				aggregator = false
+				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(pk[:]))
+>>>>>>> Stashed changes
 			}
 			if aggregator {
 				roles = append(roles, iface.RoleAggregator)
@@ -610,21 +623,29 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 				inSyncCommittee = true
 			}
 		} else {
-			if duty.IsSyncCommittee {
+			if v.duties.IsSyncCommittee(duty.ValidatorIndex) {
 				roles = append(roles, iface.RoleSyncCommittee)
 				inSyncCommittee = true
 			}
 		}
 
 		if inSyncCommittee {
+<<<<<<< Updated upstream
 			syncCommitteeValidators[duty.ValidatorIndex] = duty.Pubkey
+=======
+			syncCommitteeValidators[duty.ValidatorIndex] = pk
+>>>>>>> Stashed changes
 		}
 
 		if len(roles) == 0 {
 			roles = append(roles, iface.RoleUnknown)
 		}
 
+<<<<<<< Updated upstream
 		rolesAt[duty.Pubkey] = roles
+=======
+		rolesAt[pk] = roles
+>>>>>>> Stashed changes
 	}
 
 	aggregator, err := v.isSyncCommitteeAggregator(
@@ -1211,6 +1232,7 @@ func (v *validator) buildSignedRegReqs(
 	return signedValRegRequests
 }
 
+<<<<<<< Updated upstream
 func (v *validator) attSelection(key attSelectionKey) ([]byte, error) {
 	v.attSelectionLock.Lock()
 	defer v.attSelectionLock.Unlock()
@@ -1223,6 +1245,8 @@ func (v *validator) attSelection(key attSelectionKey) ([]byte, error) {
 	return s.SelectionProof, nil
 }
 
+=======
+>>>>>>> Stashed changes
 // This tracks all validators' voting status.
 type voteStats struct {
 	startEpoch          primitives.Epoch

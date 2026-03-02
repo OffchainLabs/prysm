@@ -5,6 +5,10 @@ go_library(
     srcs = [
         "aggregate.go",
         "attest.go",
+<<<<<<< Updated upstream
+=======
+        "distributed.go",
+>>>>>>> Stashed changes
         "duties.go",
         "duty_store.go",
         "health_monitor.go",
@@ -106,6 +110,10 @@ go_test(
     srcs = [
         "aggregate_test.go",
         "attest_test.go",
+<<<<<<< Updated upstream
+=======
+        "distributed_test.go",
+>>>>>>> Stashed changes
         "duties_test.go",
         "duty_store_test.go",
         "health_monitor_test.go",
@@ -118,6 +126,7 @@ go_test(
         "runner_test.go",
         "service_test.go",
         "slashing_protection_interchange_test.go",
+        "subnets_test.go",
         "sync_committee_test.go",
         "validator_test.go",
         "wait_for_activation_test.go",

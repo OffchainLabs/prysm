@@ -193,8 +193,6 @@ func (m *MockValidatorClient) SyncCommitteeDuties(ctx context.Context, epoch pri
 func (mr *MockValidatorClientMockRecorder) SyncCommitteeDuties(ctx, epoch, validatorIndices any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncCommitteeDuties", reflect.TypeOf((*MockValidatorClient)(nil).SyncCommitteeDuties), ctx, epoch, validatorIndices)
-  ret0, _ := ret[0].(bool)
-	return ret0
 }
 
 // EnsureReady mocks base method.
@@ -492,18 +490,18 @@ func (mr *MockValidatorClientMockRecorder) SubmitValidatorRegistrations(ctx, in 
 }
 
 // SubscribeCommitteeSubnets mocks base method.
-func (m *MockValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *eth.CommitteeSubnetsSubscribeRequest, duties []*eth.ValidatorDuty) (*empty.Empty, error) {
+func (m *MockValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *eth.CommitteeSubnetsSubscribeRequest, validatorIndices []primitives.ValidatorIndex, committeesAtSlot []uint64) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubscribeCommitteeSubnets", ctx, in, duties)
+	ret := m.ctrl.Call(m, "SubscribeCommitteeSubnets", ctx, in, validatorIndices, committeesAtSlot)
 	ret0, _ := ret[0].(*empty.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SubscribeCommitteeSubnets indicates an expected call of SubscribeCommitteeSubnets.
-func (mr *MockValidatorClientMockRecorder) SubscribeCommitteeSubnets(ctx, in, duties any) *gomock.Call {
+func (mr *MockValidatorClientMockRecorder) SubscribeCommitteeSubnets(ctx, in, validatorIndices, committeesAtSlot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeCommitteeSubnets", reflect.TypeOf((*MockValidatorClient)(nil).SubscribeCommitteeSubnets), ctx, in, duties)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeCommitteeSubnets", reflect.TypeOf((*MockValidatorClient)(nil).SubscribeCommitteeSubnets), ctx, in, validatorIndices, committeesAtSlot)
 }
 
 // SyncCommitteeContribution mocks base method.

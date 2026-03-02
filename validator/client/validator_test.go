@@ -419,6 +419,7 @@ func TestUpdateDuties_OK(t *testing.T) {
 	defer ctrl.Finish()
 	client := validatormock.NewMockValidatorClient(ctrl)
 
+	kp := randKeypair(t)
 	resp := &ethpb.ValidatorDutiesContainer{
 		CurrentEpochDuties: []*ethpb.ValidatorDuty{
 			{
@@ -426,19 +427,26 @@ func TestUpdateDuties_OK(t *testing.T) {
 				ValidatorIndex:  200,
 				CommitteeIndex:  100,
 				CommitteeLength: 4,
-				PublicKey:       []byte("testPubKey_1"),
+				PublicKey:       kp.pub[:],
 				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
 			},
 		},
 	}
 	v := validator{
-		km:              newMockKeymanager(t, randKeypair(t)),
+		km:              newMockKeymanager(t, kp),
 		validatorClient: client,
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			kp.pub: {status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
+		},
 	}
 	client.EXPECT().Duties(
 		gomock.Any(),
 		gomock.Any(),
 	).Return(resp, nil)
+
+	client.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(
+		&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil,
+	)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -447,7 +455,8 @@ func TestUpdateDuties_OK(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+		gomock.Any(),
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []primitives.ValidatorIndex, _ []uint64) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -456,11 +465,21 @@ func TestUpdateDuties_OK(t *testing.T) {
 
 	util.WaitTimeout(&wg, 2*time.Second)
 
+<<<<<<< Updated upstream
 	currentDuties := v.duties.CurrentEpochDuties()
 	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch+1, currentDuties[0].ProposerSlots[0], "Unexpected validator assignments")
 	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch, currentDuties[0].Slot, "Unexpected validator assignments")
 	assert.Equal(t, resp.CurrentEpochDuties[0].CommitteeIndex, currentDuties[0].CommitteeIndex, "Unexpected validator assignments")
 	assert.Equal(t, resp.CurrentEpochDuties[0].ValidatorIndex, currentDuties[0].ValidatorIndex, "Unexpected validator assignments")
+=======
+	duty := v.duties.CurrentEpochDuties()[kp.pub]
+	require.NotNil(t, duty)
+	proposerSlots := v.duties.ProposerSlots(duty.ValidatorIndex)
+	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch+1, proposerSlots[0], "Unexpected validator assignments")
+	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch, duty.Slot, "Unexpected validator assignments")
+	assert.Equal(t, resp.CurrentEpochDuties[0].CommitteeIndex, duty.CommitteeIndex, "Unexpected validator assignments")
+	assert.Equal(t, resp.CurrentEpochDuties[0].ValidatorIndex, duty.ValidatorIndex, "Unexpected validator assignments")
+>>>>>>> Stashed changes
 }
 
 func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
@@ -495,7 +514,8 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+		gomock.Any(),
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []primitives.ValidatorIndex, _ []uint64) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -514,6 +534,8 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 	defer ctrl.Finish()
 	client := validatormock.NewMockValidatorClient(ctrl)
 
+	kp1 := randKeypair(t)
+	kp2 := randKeypair(t)
 	resp := &ethpb.ValidatorDutiesContainer{
 		CurrentEpochDuties: []*ethpb.ValidatorDuty{
 			{
@@ -521,7 +543,7 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 				ValidatorIndex:  200,
 				CommitteeIndex:  100,
 				CommitteeLength: 4,
-				PublicKey:       []byte("testPubKey_1"),
+				PublicKey:       kp1.pub[:],
 				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
 				Status:          ethpb.ValidatorStatus_EXITED,
 			},
@@ -530,15 +552,19 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 				ValidatorIndex:  201,
 				CommitteeIndex:  101,
 				CommitteeLength: 4,
-				PublicKey:       []byte("testPubKey_2"),
+				PublicKey:       kp2.pub[:],
 				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
 				Status:          ethpb.ValidatorStatus_EXITED,
 			},
 		},
 	}
 	v := validator{
-		km:              newMockKeymanager(t, randKeypair(t)),
+		km:              newMockKeymanager(t, kp1),
 		validatorClient: client,
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			kp1.pub: {status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_EXITED}},
+			kp2.pub: {status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_EXITED}},
+		},
 	}
 	client.EXPECT().Duties(
 		gomock.Any(),
@@ -547,7 +573,6 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 
 	err := v.UpdateDuties(t.Context())
 	require.ErrorContains(t, ErrValidatorsAllExited.Error(), err)
-
 }
 
 func TestUpdateDuties_Distributed(t *testing.T) {
@@ -583,6 +608,9 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		km:              newMockKeymanager(t, keys),
 		validatorClient: client,
 		distributed:     true,
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			keys.pub: {status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
+		},
 	}
 
 	sigDomain := make([]byte, 32)
@@ -626,7 +654,8 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+		gomock.Any(),
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []primitives.ValidatorIndex, _ []uint64) (*emptypb.Empty, error) {
 		wg.Done()
 		return nil, nil
 	})
@@ -2923,7 +2952,8 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 			gomock.Any(),
 			gomock.Any(),
 			gomock.Any(),
-		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+			gomock.Any(),
+		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []primitives.ValidatorIndex, _ []uint64) (*emptypb.Empty, error) {
 			return nil, nil
 		}).AnyTimes()
 		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(dutiesResp, nil)
@@ -2945,7 +2975,8 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 			gomock.Any(),
 			gomock.Any(),
 			gomock.Any(),
-		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+			gomock.Any(),
+		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []primitives.ValidatorIndex, _ []uint64) (*emptypb.Empty, error) {
 			wg.Done()
 			return nil, nil
 		}).AnyTimes()

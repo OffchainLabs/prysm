@@ -190,11 +190,16 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 }
 
 // Given the validator public key, this gets the validator assignment.
+<<<<<<< Updated upstream
 // attesterDuty returns the current epoch attester duty for the given pubkey.
 // Other duty types (sync committee, aggregation) also use this because every
 // active validator has exactly one attester duty per epoch, making it a
 // reliable source for ValidatorIndex and committee assignment.
 func (v *validator) attesterDuty(pubKey [fieldparams.BLSPubkeyLength]byte) (*ethpb.ValidatorDuty, error) {
+=======
+// attesterDuty returns the current epoch duty for the given pubkey.
+func (v *validator) attesterDuty(pubKey [fieldparams.BLSPubkeyLength]byte) (*ethpb.AttesterDuty, error) {
+>>>>>>> Stashed changes
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
 	if v.duties == nil || !v.duties.IsInitialized() {
@@ -206,7 +211,11 @@ func (v *validator) attesterDuty(pubKey [fieldparams.BLSPubkeyLength]byte) (*eth
 		return nil, fmt.Errorf("pubkey %#x not in duties", bytesutil.Trunc(pubKey[:]))
 	}
 
+<<<<<<< Updated upstream
 	return dutyViewToProto(dv), nil
+=======
+	return dv, nil
+>>>>>>> Stashed changes
 }
 
 // Given validator's public key, this function returns the signature of an attestation data and its signing root.
