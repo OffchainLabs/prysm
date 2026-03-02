@@ -132,6 +132,15 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 	}
 	if block.Version() < version.Gloas {
 		moreFields["dataAvailabilityWaitedTime"] = daWaitedTime
+	} else {
+		signedBid, err := block.Body().SignedExecutionPayloadBid()
+		if err != nil {
+			log.WithError(err).Error("Failed to get signed execution payload bid for logging")
+		} else {
+			moreFields["blockHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(signedBid.Message.BlockHash))
+			moreFields["parentHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(signedBid.Message.ParentBlockHash))
+			moreFields["builderIndex"] = signedBid.Message.BuilderIndex
+		}
 	}
 
 	level := logs.PackageVerbosity("beacon-chain/blockchain")

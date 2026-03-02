@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -3479,4 +3480,162 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestHandleBlockPayloadAttestations(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	t.Run("pre-Gloas block is no-op", func(t *testing.T) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		blk := util.NewBeaconBlockElectra()
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		st, err := util.NewBeaconStateElectra()
+		require.NoError(t, err)
+		require.NoError(t, s.handleBlockPayloadAttestations(t.Context(), wsb.Block(), st))
+	})
+
+	t.Run("empty payload attestations", func(t *testing.T) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		blk := util.NewBeaconBlockGloas()
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		st, err := util.NewBeaconStateGloas()
+		require.NoError(t, err)
+		require.NoError(t, s.handleBlockPayloadAttestations(t.Context(), wsb.Block(), st))
+	})
+
+	t.Run("unknown root is skipped", func(t *testing.T) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		ctx := t.Context()
+
+		numVals := 2048
+		headState := gloasStateWithValidators(t, 2, numVals)
+
+		unknownRoot := bytesutil.ToBytes32([]byte("unknown"))
+		bits := bitfield.NewBitvector512()
+		bits.SetBitAt(0, true)
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot: 2,
+				Body: &ethpb.BeaconBlockBodyGloas{
+					PayloadAttestations: []*ethpb.PayloadAttestation{
+						{
+							AggregationBits: bits,
+							Data: &ethpb.PayloadAttestationData{
+								BeaconBlockRoot:   unknownRoot[:],
+								Slot:              1,
+								PayloadPresent:    true,
+								BlobDataAvailable: true,
+							},
+							Signature: make([]byte, 96),
+						},
+					},
+				},
+			},
+		})
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.NoError(t, s.handleBlockPayloadAttestations(ctx, wsb.Block(), headState))
+	})
+
+	t.Run("known root sets PTC votes", func(t *testing.T) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		ctx := t.Context()
+
+		blockRoot := bytesutil.ToBytes32([]byte("root1"))
+		parentRoot := params.BeaconConfig().ZeroHash
+		blockHash := bytesutil.ToBytes32([]byte("hash1"))
+
+		numVals := 2048
+		headState := gloasStateWithValidators(t, 2, numVals)
+
+		base, insertBlk := testGloasState(t, 1, parentRoot, blockHash)
+		insertGloasBlock(t, s, base, insertBlk, blockRoot)
+
+		ptc, err := gloas.PayloadCommittee(ctx, headState, 1)
+		require.NoError(t, err)
+		require.NotEqual(t, 0, len(ptc))
+
+		bits := bitfield.NewBitvector512()
+		bits.SetBitAt(0, true)
+		bits.SetBitAt(2, true)
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot: 2,
+				Body: &ethpb.BeaconBlockBodyGloas{
+					PayloadAttestations: []*ethpb.PayloadAttestation{
+						{
+							AggregationBits: bits,
+							Data: &ethpb.PayloadAttestationData{
+								BeaconBlockRoot:   blockRoot[:],
+								Slot:              1,
+								PayloadPresent:    true,
+								BlobDataAvailable: true,
+							},
+							Signature: make([]byte, 96),
+						},
+					},
+				},
+			},
+		})
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.NoError(t, s.handleBlockPayloadAttestations(ctx, wsb.Block(), headState))
+	})
+
+	t.Run("multiple attestations", func(t *testing.T) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		ctx := t.Context()
+
+		blockRoot := bytesutil.ToBytes32([]byte("root1"))
+		parentRoot := params.BeaconConfig().ZeroHash
+		blockHash := bytesutil.ToBytes32([]byte("hash1"))
+
+		numVals := 2048
+		headState := gloasStateWithValidators(t, 2, numVals)
+
+		base, insertBlk := testGloasState(t, 1, parentRoot, blockHash)
+		insertGloasBlock(t, s, base, insertBlk, blockRoot)
+
+		bits1 := bitfield.NewBitvector512()
+		bits1.SetBitAt(0, true)
+		bits2 := bitfield.NewBitvector512()
+		bits2.SetBitAt(1, true)
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot: 2,
+				Body: &ethpb.BeaconBlockBodyGloas{
+					PayloadAttestations: []*ethpb.PayloadAttestation{
+						{
+							AggregationBits: bits1,
+							Data: &ethpb.PayloadAttestationData{
+								BeaconBlockRoot:   blockRoot[:],
+								Slot:              1,
+								PayloadPresent:    true,
+								BlobDataAvailable: false,
+							},
+							Signature: make([]byte, 96),
+						},
+						{
+							AggregationBits: bits2,
+							Data: &ethpb.PayloadAttestationData{
+								BeaconBlockRoot:   blockRoot[:],
+								Slot:              1,
+								PayloadPresent:    false,
+								BlobDataAvailable: true,
+							},
+							Signature: make([]byte, 96),
+						},
+					},
+				},
+			},
+		})
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.NoError(t, s.handleBlockPayloadAttestations(ctx, wsb.Block(), headState))
+	})
 }
