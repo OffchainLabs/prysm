@@ -60,18 +60,18 @@ import (
 var _ runtime.Service = (*Service)(nil)
 
 const (
-	rangeLimit               uint64 = 1024
-	seenBlockSize                   = 1000
-	seenPayloadEnvelopeSize         = 1000
-	seenDataColumnSize              = seenBlockSize * 128 // Each block can have max 128 data columns.
-	seenUnaggregatedAttSize         = 20000
-	seenAggregatedAttSize           = 16384
-	seenSyncMsgSize                 = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
-	seenSyncContributionSize        = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
-	seenExitSize                    = 100
-	seenProposerSlashingSize        = 100
-	badBlockSize                    = 1000
-	syncMetricsInterval             = 10 * time.Second
+	rangeLimit               = 1024
+	seenBlockSize            = 1000
+	seenPayloadEnvelopeSize  = 1000
+	seenDataColumnSize       = seenBlockSize * 128 // Each block can have max 128 data columns.
+	seenUnaggregatedAttSize  = 20000
+	seenAggregatedAttSize    = 16384
+	seenSyncMsgSize          = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
+	seenSyncContributionSize = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
+	seenExitSize             = 100
+	seenProposerSlashingSize = 100
+	badBlockSize             = 1000
+	syncMetricsInterval      = 10 * time.Second
 )
 
 var (
