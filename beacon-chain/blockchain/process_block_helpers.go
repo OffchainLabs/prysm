@@ -64,11 +64,11 @@ func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig) (*fcuConfig,
 // block is not the head of the chain. It requires the caller holds a lock on
 // Forkchoice.
 func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]byte) {
-	receivedWeight, err := s.cfg.ForkChoiceStore.Weight(blockRoot)
+	receivedWeight, err := s.cfg.ForkChoiceStore.ConsensusNodeWeight(blockRoot)
 	if err != nil {
 		log.WithField("root", fmt.Sprintf("%#x", blockRoot)).Warn("Could not determine node weight")
 	}
-	headWeight, err := s.cfg.ForkChoiceStore.Weight(headRoot)
+	headWeight, err := s.cfg.ForkChoiceStore.ConsensusNodeWeight(headRoot)
 	if err != nil {
 		log.WithField("root", fmt.Sprintf("%#x", headRoot)).Warn("Could not determine node weight")
 	}

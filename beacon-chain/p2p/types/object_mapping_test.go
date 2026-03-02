@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -85,4 +86,30 @@ func TestInitializeDataMaps(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInitializeDataMaps_Gloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	InitializeDataMaps()
+
+	gloasVersion := bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion)
+	bFunc, ok := BlockMap[gloasVersion]
+	require.Equal(t, true, ok)
+
+	b, err := bFunc()
+	require.NoError(t, err)
+	assert.Equal(t, version.Gloas, b.Version())
+
+	mdFunc, ok := MetaDataMap[gloasVersion]
+	require.Equal(t, true, ok)
+	md, err := mdFunc()
+	require.NoError(t, err)
+	assert.NotNil(t, md.MetadataObjV1())
+
+	attFunc, ok := AttestationMap[gloasVersion]
+	require.Equal(t, true, ok)
+	att, err := attFunc()
+	require.NoError(t, err)
+	_, ok = att.(*ethpb.SingleAttestation)
+	assert.Equal(t, true, ok)
 }
