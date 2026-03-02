@@ -3,9 +3,11 @@ package sync
 import (
 	"context"
 
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -68,4 +70,31 @@ func (s *Service) validateExecutionPayloadBidParentValid(_ context.Context, blk 
 		return pubsub.ValidationReject, errors.New("parent payload is invalid")
 	}
 	return pubsub.ValidationAccept, nil
+}
+
+// requestPayloadEnvelope asks a random peer for the execution payload
+// envelope identified by root and feeds any response through
+// ReceiveExecutionPayloadEnvelope.
+func (s *Service) requestPayloadEnvelope(root [32]byte) {
+	bestPeers := s.getBestPeers()
+	if len(bestPeers) == 0 {
+		return
+	}
+	pid := bestPeers[rand.NewGenerator().Int()%len(bestPeers)]
+	req := p2ptypes.ExecutionPayloadEnvelopesByRootReq{root}
+	envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(s.ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &req)
+	if err != nil {
+		log.WithError(err).Debug("Could not request payload envelope by root")
+		return
+	}
+	for _, env := range envelopes {
+		wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(env)
+		if err != nil {
+			log.WithError(err).Debug("Could not wrap requested payload envelope")
+			continue
+		}
+		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
+			log.WithError(err).Debug("Could not process requested payload envelope")
+		}
+	}
 }
