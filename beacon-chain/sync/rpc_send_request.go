@@ -28,6 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var errMaxRequestEnvelopesExceeded = errors.New("peer returned more execution payload envelopes than requested")
 var errBlobChunkedReadFailure = errors.New("failed to read stream of chunk-encoded blobs")
 var errBlobUnmarshal = errors.New("Could not unmarshal chunk-encoded blob")
 
@@ -918,4 +919,60 @@ func DataColumnSidecarsByRangeRequest(columns []uint64, start, end primitives.Sl
 		Count:     uint64(end-start) + 1,
 		Columns:   columns,
 	}, nil
+}
+
+// SendExecutionPayloadEnvelopesByRangeRequest sends ExecutionPayloadEnvelopesByRange and returns fetched envelopes, if any.
+func SendExecutionPayloadEnvelopesByRangeRequest(
+	ctx context.Context,
+	tor blockchain.TemporalOracle,
+	p2pProvider p2p.SenderEncoder,
+	pid peer.ID,
+	ctxMap ContextByteVersions,
+	req *ethpb.ExecutionPayloadEnvelopesByRangeRequest,
+) ([]*ethpb.SignedExecutionPayloadEnvelope, error) {
+	topic, err := p2p.TopicFromMessage(p2p.ExecutionPayloadEnvelopesByRangeName, slots.ToEpoch(tor.CurrentSlot()))
+	if err != nil {
+		return nil, err
+	}
+	log.WithFields(logrus.Fields{
+		"topic":     topic,
+		"startSlot": req.StartSlot,
+		"count":     req.Count,
+	}).Debug("Sending execution payload envelopes by range request")
+	stream, err := p2pProvider.Send(ctx, req, topic, pid)
+	if err != nil {
+		return nil, err
+	}
+	defer closeStream(stream, log)
+
+	max := min(req.Count, params.BeaconConfig().MaxRequestPayloads)
+
+	envelopes := make([]*ethpb.SignedExecutionPayloadEnvelope, 0, max)
+	var prevSlot primitives.Slot
+	for i := uint64(0); i < max+1; i++ {
+		env, err := readChunkedExecutionPayloadEnvelope(stream, p2pProvider.Encoding(), ctxMap)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if i == max {
+			return nil, errMaxRequestEnvelopesExceeded
+		}
+		// Validate slot is within requested range.
+		envSlot := env.Message.Slot
+		endSlot := req.StartSlot.Add(req.Count)
+		if envSlot < req.StartSlot || envSlot >= endSlot {
+			return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d outside requested range [%d, %d)", envSlot, req.StartSlot, endSlot)
+		}
+		// Validate slots are strictly increasing.
+		if i > 0 && envSlot <= prevSlot {
+			return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d not greater than previous slot %d", envSlot, prevSlot)
+		}
+		prevSlot = envSlot
+		envelopes = append(envelopes, env)
+	}
+
+	return envelopes, nil
 }
