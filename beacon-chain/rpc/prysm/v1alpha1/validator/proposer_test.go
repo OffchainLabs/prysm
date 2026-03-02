@@ -413,6 +413,14 @@ func TestServer_GetBeaconBlock_Capella(t *testing.T) {
 	}
 
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
+	advancedState := beaconState.Copy()
+	advancedState, err = transition.ProcessSlots(ctx, advancedState, capellaSlot)
+	require.NoError(t, err)
+	proposerServer.BlockReceiver = &mock.ChainService{
+		State:           advancedState,
+		Root:            parentRoot[:],
+		ForkChoiceStore: doublylinkedtree.New(),
+	}
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
@@ -536,6 +544,14 @@ func TestServer_GetBeaconBlock_Deneb(t *testing.T) {
 	blobs := [][]byte{[]byte("blob"), []byte("blob1"), []byte("blob2")}
 	bundle := &enginev1.BlobsBundle{KzgCommitments: kc, Proofs: proofs, Blobs: blobs}
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
+	advancedState := beaconState.Copy()
+	advancedState, err = transition.ProcessSlots(ctx, advancedState, denebSlot)
+	require.NoError(t, err)
+	proposerServer.BlockReceiver = &mock.ChainService{
+		State:           advancedState,
+		Root:            parentRoot[:],
+		ForkChoiceStore: doublylinkedtree.New(),
+	}
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
 		PayloadIDBytes: &enginev1.PayloadIDBytes{1},
 		GetPayloadResponse: &blocks.GetPayloadResponse{
@@ -669,6 +685,14 @@ func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 		BlockHash:     make([]byte, fieldparams.RootLength),
 	}
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
+	advancedState := beaconState.Copy()
+	advancedState, err = transition.ProcessSlots(ctx, advancedState, electraSlot)
+	require.NoError(t, err)
+	proposerServer.BlockReceiver = &mock.ChainService{
+		State:           advancedState,
+		Root:            parentRoot[:],
+		ForkChoiceStore: doublylinkedtree.New(),
+	}
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
@@ -798,6 +822,14 @@ func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 		BlockHash:     make([]byte, fieldparams.RootLength),
 	}
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
+	advancedState := beaconState.Copy()
+	advancedState, err = transition.ProcessSlots(ctx, advancedState, fuluSlot)
+	require.NoError(t, err)
+	proposerServer.BlockReceiver = &mock.ChainService{
+		State:           advancedState,
+		Root:            parentRoot[:],
+		ForkChoiceStore: doublylinkedtree.New(),
+	}
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
@@ -1299,6 +1331,11 @@ func TestProposer_ComputeStateRoot_OK(t *testing.T) {
 		Eth1InfoFetcher:   &mockExecution.Chain{},
 		Eth1BlockFetcher:  &mockExecution.Chain{},
 		StateGen:          stategen.New(db, doublylinkedtree.New()),
+		BlockReceiver: &mock.ChainService{
+			State:           beaconState.Copy(),
+			Root:            parentRoot[:],
+			ForkChoiceStore: doublylinkedtree.New(),
+		},
 	}
 	req := util.NewBeaconBlock()
 	req.Block.ProposerIndex = 84
