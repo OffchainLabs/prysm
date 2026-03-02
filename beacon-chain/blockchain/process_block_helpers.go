@@ -72,12 +72,18 @@ func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]
 	if err != nil {
 		log.WithField("root", fmt.Sprintf("%#x", headRoot)).Warn("Could not determine node weight")
 	}
-	log.WithFields(logrus.Fields{
+	fields := logrus.Fields{
 		"receivedRoot":   fmt.Sprintf("%#x", blockRoot),
 		"receivedWeight": receivedWeight,
 		"headRoot":       fmt.Sprintf("%#x", headRoot),
 		"headWeight":     headWeight,
-	}).Debug("Head block is not the received block")
+	}
+	headEmpty, headFull, err := s.cfg.ForkChoiceStore.PayloadWeights(headRoot)
+	if err == nil {
+		fields["headEmptyWeight"] = headEmpty
+		fields["headFullWeight"] = headFull
+	}
+	log.WithFields(fields).Debug("Head block is not the received block")
 }
 
 // fcuArgsNonCanonicalBlock returns the arguments to the FCU call when the

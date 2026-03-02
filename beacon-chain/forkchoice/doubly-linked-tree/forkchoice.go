@@ -644,6 +644,20 @@ func (f *ForkChoice) ConsensusNodeWeight(root [32]byte) (uint64, error) {
 	return n.node.weight, nil
 }
 
+// PayloadWeights returns the empty and full payload node weights for the given root.
+func (f *ForkChoice) PayloadWeights(root [32]byte) (emptyWeight, fullWeight uint64, err error) {
+	en, ok := f.store.emptyNodeByRoot[root]
+	if !ok || en == nil {
+		return 0, 0, ErrNilNode
+	}
+	emptyWeight = en.weight
+	fn := f.store.fullNodeByRoot[root]
+	if fn != nil {
+		fullWeight = fn.weight
+	}
+	return emptyWeight, fullWeight, nil
+}
+
 // updateJustifiedBalances updates the validators balances on the justified checkpoint pointed by root.
 func (f *ForkChoice) updateJustifiedBalances(ctx context.Context, root [32]byte) error {
 	balances, err := f.balancesByRoot(ctx, root)
