@@ -55,9 +55,9 @@ func (s signedExecutionPayloadEnvelope) IsNil() bool {
 	if len(s.s.Signature) != field_params.BLSSignatureLength {
 		return true
 	}
-    if s.s.Message == nil {
-        return true
-    }
+	if s.s.Message == nil {
+		return true
+	}
 	if len(s.s.Message.BeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
