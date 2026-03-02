@@ -23,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -223,6 +224,32 @@ func (s *Server) handleAttestationsElectra(
 				Message: "Incorrect attestation signature: " + err.Error(),
 			})
 			continue
+		}
+		if slots.ToEpoch(att.Data.Slot) >= params.BeaconConfig().GloasForkEpoch {
+			if att.Data.CommitteeIndex >= 2 {
+				attFailures = append(attFailures, &server.IndexedError{
+					Index:   i,
+					Message: "Committee index must be < 2 post-Gloas",
+				})
+				continue
+			}
+			if att.Data.CommitteeIndex != 0 {
+				blockSlot, err := s.ForkchoiceFetcher.RecentBlockSlot(bytesutil.ToBytes32(att.Data.BeaconBlockRoot))
+				if err != nil {
+					attFailures = append(attFailures, &server.IndexedError{
+						Index:   i,
+						Message: "Could not determine block slot: " + err.Error(),
+					})
+					continue
+				}
+				if blockSlot == att.Data.Slot {
+					attFailures = append(attFailures, &server.IndexedError{
+						Index:   i,
+						Message: "Same slot attestations must use committee index 0",
+					})
+					continue
+				}
+			}
 		}
 		validAttestations = append(validAttestations, att)
 	}
