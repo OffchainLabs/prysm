@@ -94,6 +94,14 @@ func TestServer_GetBeaconBlock_Phase0(t *testing.T) {
 	require.NoError(t, db.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
 
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
+	// Use a separate mock for BlockReceiver with an independent state copy.
+	// This mirrors production where computeStateRoot calls StateByRoot (fresh from DB),
+	// not the same head state object mutated by the getSlashings goroutine.
+	proposerServer.BlockReceiver = &mock.ChainService{
+		State:           beaconState.Copy(),
+		Root:            parentRoot[:],
+		ForkChoiceStore: doublylinkedtree.New(),
+	}
 
 	randaoReveal, err := util.RandaoReveal(beaconState, 0, privKeys)
 	require.NoError(t, err)
