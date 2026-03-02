@@ -269,7 +269,7 @@ func TestExecutionPayloadEnvelopesByRangeRPCHandler(t *testing.T) {
 		remoteP2P.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
 			defer wg.Done()
 			for {
-				env, readErr := readChunkedEnvelope(stream, remoteP2P.Encoding(), ctxMap)
+				env, readErr := readChunkedExecutionPayloadEnvelope(stream, remoteP2P.Encoding(), ctxMap)
 				if errors.Is(readErr, io.EOF) {
 					break
 				}

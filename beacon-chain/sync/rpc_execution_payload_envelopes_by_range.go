@@ -56,14 +56,22 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 	}
 	available := s.validateRangeAvailability(rp)
 	if !available {
+		currentSlot := s.cfg.clock.CurrentSlot()
+		unavailableErr := errors.Wrapf(
+			p2ptypes.ErrResourceUnavailable,
+			"execution payload envelope range unavailable start=%d end=%d current=%d",
+			rp.start,
+			rp.end,
+			currentSlot,
+		)
 		log.WithFields(logrus.Fields{
 			"startSlot": rp.start,
 			"endSlot":   rp.end,
 			"size":      rp.size,
-			"current":   s.cfg.clock.CurrentSlot(),
-		}).Debug("Error in validating range availability for envelopes")
+			"current":   currentSlot,
+		}).WithError(unavailableErr).Debug("Execution payload envelope range unavailable")
 		s.writeErrorResponseToStream(responseCodeResourceUnavailable, p2ptypes.ErrResourceUnavailable.Error(), stream)
-		tracing.AnnotateError(span, err)
+		tracing.AnnotateError(span, unavailableErr)
 		return nil
 	}
 

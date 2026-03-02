@@ -28,7 +28,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var errEnvelopeChunkedReadFailure = errors.New("failed to read stream of chunk-encoded execution payload envelopes")
 var errMaxRequestEnvelopesExceeded = errors.New("peer returned more execution payload envelopes than requested")
 var errBlobChunkedReadFailure = errors.New("failed to read stream of chunk-encoded blobs")
 var errBlobUnmarshal = errors.New("Could not unmarshal chunk-encoded blob")
@@ -951,7 +950,7 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 	envelopes := make([]*ethpb.SignedExecutionPayloadEnvelope, 0, max)
 	var prevSlot primitives.Slot
 	for i := uint64(0); i < max+1; i++ {
-		env, err := readChunkedEnvelope(stream, p2pProvider.Encoding(), ctxMap)
+		env, err := readChunkedExecutionPayloadEnvelope(stream, p2pProvider.Encoding(), ctxMap)
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -976,30 +975,4 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 	}
 
 	return envelopes, nil
-}
-
-func readChunkedEnvelope(stream network.Stream, encoding encoder.NetworkEncoding, ctxMap ContextByteVersions) (*ethpb.SignedExecutionPayloadEnvelope, error) {
-	code, msg, err := ReadStatusCode(stream, encoding)
-	if err != nil {
-		return nil, err
-	}
-	if code != 0 {
-		return nil, errors.Wrap(errEnvelopeChunkedReadFailure, msg)
-	}
-	ctxb, err := readContextFromStream(stream)
-	if err != nil {
-		return nil, errors.Wrap(err, "error reading chunk context bytes from stream")
-	}
-	v, found := ctxMap[bytesutil.ToBytes4(ctxb)]
-	if !found {
-		return nil, errors.Wrapf(errEnvelopeChunkedReadFailure, "unrecognized fork digest %#x", ctxb)
-	}
-	if v < version.Gloas {
-		return nil, fmt.Errorf("unexpected context bytes for ExecutionPayloadEnvelope, ctx=%#x, v=%s", ctxb, version.String(v))
-	}
-	env := &ethpb.SignedExecutionPayloadEnvelope{}
-	if err := encoding.DecodeWithMaxLength(stream, env); err != nil {
-		return nil, errors.Wrap(err, "failed to decode SignedExecutionPayloadEnvelope from RPC chunk stream")
-	}
-	return env, nil
 }
