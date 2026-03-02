@@ -639,7 +639,7 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedB
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create ROBlock")
 	}
-	beaconState, err := vs.BlockReceiver.GetBlockPreState(ctx, roblock)
+	beaconState, err := vs.BlockReceiver.GetPrestateToPropose(ctx, roblock)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve beacon state")
 	}
