@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -981,19 +982,39 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	headRoot := s.headRoot()
 	headState := s.headState(ctx)
 	s.headLock.RUnlock()
+	var accessRoot [32]byte
+	isFull, err := headState.IsParentBlockFull()
+	if err != nil || !isFull {
+		accessRoot = headRoot
+	} else {
+		accessRoot, err = headState.LatestBlockHash()
+		if err != nil {
+			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve latest block hash, using head root as access root")
+			accessRoot = headRoot
+		}
+	}
 	lastRoot, lastState := transition.LastCachedState()
 	if lastState == nil {
 		lastRoot, lastState = headRoot[:], headState
 	}
 	// Before Fulu we need to process the next slot to find out if we are proposing.
 	if lastState.Version() < version.Fulu {
-		// Copy all the field tries in our cached state in the event of late
-		// blocks.
-		lastState.CopyAllTries()
-		if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
-			log.WithError(err).Debug("Could not update next slot state cache")
+		if bytes.Equal(lastRoot, accessRoot[:]) {
+			// Happy case, the last advanced state is head, we thus keep it
+			// Copy all the field tries in our cached state in the event of late
+			// blocks.
+			lastState.CopyAllTries()
+			if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
+				log.WithError(err).Debug("Could not update next slot state cache")
+			}
+		} else {
+			// Last advanced state was not head, we do not advance this but rather use headstate
+			headState.CopyAllTries()
+			if err := transition.UpdateNextSlotCache(ctx, accessRoot[:], headState); err != nil {
+				log.WithError(err).Debug("Could not update next slot state cache")
+			}
 		}
-		if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
+		if err := s.handleEpochBoundary(ctx, currentSlot, headState, accessRoot[:]); err != nil {
 			log.WithError(err).Error("Could not update epoch boundary caches")
 		}
 	} else {
@@ -1002,11 +1023,21 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 			go func() {
 				ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
 				defer cancel()
-				lastState.CopyAllTries()
-				if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
-					log.WithError(err).Debug("Could not update next slot state cache")
+				if bytes.Equal(lastRoot, accessRoot[:]) {
+					// Happy case, the last advanced state is head, we thus keep it
+					// Copy all the field tries in our cached state in the event of late
+					lastState.CopyAllTries()
+					if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
+						log.WithError(err).Debug("Could not update next slot state cache")
+					}
+				} else {
+					// Last advanced state was not head, we do not advance this but rather use headstate
+					headState.CopyAllTries()
+					if err := transition.UpdateNextSlotCache(ctx, accessRoot[:], headState); err != nil {
+						log.WithError(err).Debug("Could not update next slot state cache")
+					}
 				}
-				if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
+				if err := s.handleEpochBoundary(ctx, currentSlot, headState, accessRoot[:]); err != nil {
 					log.WithError(err).Error("Could not update epoch boundary caches")
 				}
 			}()
