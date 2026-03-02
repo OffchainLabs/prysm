@@ -180,6 +180,7 @@ func TestGetSpec(t *testing.T) {
 	config.BuilderIndexSelfBuild = primitives.BuilderIndex(125)
 	config.BuilderPaymentThresholdNumerator = 104
 	config.BuilderPaymentThresholdDenominator = 105
+	config.MaxRequestPayloads = 106
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -223,7 +224,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 194, len(data))
+	assert.Equal(t, 195, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -599,6 +600,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "4096", v)
 			case "MAX_BLOB_COMMITMENTS_PER_BLOCK":
 				assert.Equal(t, "94", v)
+			case "MAX_REQUEST_PAYLOADS":
+				assert.Equal(t, fmt.Sprintf("%d", config.MaxRequestPayloads), v)
 			case "MAX_BYTES_PER_TRANSACTION":
 				assert.Equal(t, "95", v)
 			case "MAX_EXTRA_DATA_BYTES":

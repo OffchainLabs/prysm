@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
@@ -8,6 +9,7 @@ import (
 	mockstategen "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -235,16 +237,30 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	broadcaster := &mockp2p.MockBroadcaster{}
+	receiver := &mockExecutionPayloadEnvelopeReceiver{}
 	vs := &Server{
-		P2P: broadcaster,
+		P2P:                              broadcaster,
+		ExecutionPayloadEnvelopeReceiver: receiver,
 	}
 
 	req := &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Slot:            1,
-			BuilderIndex:    0,
-			BeaconBlockRoot: make([]byte, 32),
-			StateRoot:       make([]byte, 32),
+			Payload: &enginev1.ExecutionPayloadDeneb{
+				ParentHash:    make([]byte, 32),
+				FeeRecipient:  make([]byte, 20),
+				StateRoot:     make([]byte, 32),
+				ReceiptsRoot:  make([]byte, 32),
+				LogsBloom:     make([]byte, 256),
+				PrevRandao:    make([]byte, 32),
+				BaseFeePerGas: make([]byte, 32),
+				BlockHash:     make([]byte, 32),
+				ExtraData:     make([]byte, 0),
+			},
+			ExecutionRequests: &enginev1.ExecutionRequests{},
+			Slot:              1,
+			BuilderIndex:      0,
+			BeaconBlockRoot:   make([]byte, 32),
+			StateRoot:         make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	}
@@ -254,4 +270,14 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 	require.NotNil(t, resp)
 	require.Equal(t, true, broadcaster.BroadcastCalled.Load())
 	require.Equal(t, 1, len(broadcaster.BroadcastMessages))
+	require.Equal(t, 1, receiver.calls)
+}
+
+type mockExecutionPayloadEnvelopeReceiver struct {
+	calls int
+}
+
+func (m *mockExecutionPayloadEnvelopeReceiver) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
+	m.calls++
+	return nil
 }

@@ -176,6 +176,20 @@ func TestServer_getExecutionPayload(t *testing.T) {
 	}
 }
 
+func TestServer_getParentBlockHash_Gloas(t *testing.T) {
+	want := bytesutil.ToBytes32([]byte("gloas-parent-hash"))
+	st, err := util.NewBeaconStateGloas(func(state *ethpb.BeaconStateGloas) error {
+		state.LatestBlockHash = want[:]
+		return nil
+	})
+	require.NoError(t, err)
+
+	vs := &Server{}
+	got, err := vs.getParentBlockHash(context.Background(), st, 0)
+	require.NoError(t, err)
+	require.DeepEqual(t, want[:], got)
+}
+
 func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
 	nonTransitionSt, _ := util.DeterministicGenesisStateBellatrix(t, 1)
