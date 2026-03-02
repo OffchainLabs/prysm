@@ -175,6 +175,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MaxWithdrawalsPerPayload:         16,
 	MaxBlsToExecutionChanges:         16,
 	MaxValidatorsPerWithdrawalsSweep: 16384,
+	MaxBuildersPerWithdrawalsSweep:   16384,
 
 	// BLS domain values.
 	DomainBeaconProposer:              bytesutil.Uint32ToBytes4(0x00000000),
@@ -344,6 +345,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Values related to gloas
 	BuilderPaymentThresholdNumerator:   6,
 	BuilderPaymentThresholdDenominator: 10,
+	MaxRequestPayloads:                 128,
 
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB

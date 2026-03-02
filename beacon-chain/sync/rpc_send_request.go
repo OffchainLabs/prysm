@@ -818,6 +818,97 @@ func downscorePeer(p2p p2p.P2P, peerID peer.ID, reason string, fields ...logrus.
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
 
+// ---------------------------------
+// Execution payload envelopes
+// ---------------------------------
+
+// SendExecutionPayloadEnvelopesByRootRequest sends ExecutionPayloadEnvelopesByRoot
+// and returns fetched envelopes, if any.
+func SendExecutionPayloadEnvelopesByRootRequest(
+	ctx context.Context, tor blockchain.TemporalOracle, p2pApi p2p.P2P, pid peer.ID,
+	ctxMap ContextByteVersions, req *p2ptypes.ExecutionPayloadEnvelopesByRootReq,
+) ([]*ethpb.SignedExecutionPayloadEnvelope, error) {
+	if uint64(len(*req)) > params.BeaconConfig().MaxRequestPayloads {
+		return nil, errors.Wrapf(p2ptypes.ErrMaxPayloadEnvelopeReqExceeded, "length=%d", len(*req))
+	}
+
+	topic, err := p2p.TopicFromMessage(p2p.ExecutionPayloadEnvelopesByRootName, slots.ToEpoch(tor.CurrentSlot()))
+	if err != nil {
+		return nil, err
+	}
+	log.WithField("topic", topic).Debug("Sending execution payload envelopes by root request")
+	stream, err := p2pApi.Send(ctx, req, topic, pid)
+	if err != nil {
+		return nil, err
+	}
+	defer closeStream(stream, log)
+
+	max := min(uint64(len(*req)), params.BeaconConfig().MaxRequestPayloads)
+
+	// Build multiset of requested roots for validation (tracks remaining expected count per root).
+	pendingRoots := make(map[[32]byte]int, len(*req))
+	for _, root := range *req {
+		pendingRoots[root]++
+	}
+
+	envelopes := make([]*ethpb.SignedExecutionPayloadEnvelope, 0, len(*req))
+	for i := range max + 1 {
+		envelope, err := readChunkedExecutionPayloadEnvelope(stream, p2pApi.Encoding(), ctxMap)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if i == max {
+			return nil, errors.New("peer returned more execution payload envelopes than requested")
+		}
+		// Validate that the returned envelope was actually requested and not a duplicate.
+		if envelope.Message != nil {
+			root := bytesutil.ToBytes32(envelope.Message.BeaconBlockRoot)
+			remaining, ok := pendingRoots[root]
+			if !ok || remaining <= 0 {
+				return nil, errors.Errorf("received unrequested or duplicate execution payload envelope for root %#x", root)
+			}
+			pendingRoots[root] = remaining - 1
+		}
+		envelopes = append(envelopes, envelope)
+	}
+
+	return envelopes, nil
+}
+
+func readChunkedExecutionPayloadEnvelope(
+	stream network.Stream,
+	encoding encoder.NetworkEncoding,
+	ctxMap ContextByteVersions,
+) (*ethpb.SignedExecutionPayloadEnvelope, error) {
+	code, msg, err := ReadStatusCode(stream, encoding)
+	if err != nil {
+		return nil, err
+	}
+	if code != 0 {
+		return nil, errors.New(msg)
+	}
+	ctxb, err := readContextFromStream(stream)
+	if err != nil {
+		return nil, errors.Wrap(err, "error reading chunk context bytes from stream")
+	}
+	v, found := ctxMap[bytesutil.ToBytes4(ctxb)]
+	if !found {
+		return nil, errors.Errorf("unrecognized fork digest %#x for execution payload envelope", ctxb)
+	}
+
+	if v < version.Gloas {
+		return nil, errors.Errorf("unexpected context bytes for ExecutionPayloadEnvelope, ctx=%#x, v=%s", ctxb, version.String(v))
+	}
+	envelope := &ethpb.SignedExecutionPayloadEnvelope{}
+	if err := encoding.DecodeWithMaxLength(stream, envelope); err != nil {
+		return nil, errors.Wrap(err, "failed to decode execution payload envelope from RPC chunk stream")
+	}
+	return envelope, nil
+}
+
 func DataColumnSidecarsByRangeRequest(columns []uint64, start, end primitives.Slot) (*ethpb.DataColumnSidecarsByRangeRequest, error) {
 	if end < start {
 		return nil, errors.Errorf("end slot %d is before start slot %d", end, start)

@@ -135,6 +135,13 @@ func (ro *ROForkChoice) Weight(root [32]byte) (uint64, error) {
 	return ro.getter.Weight(root)
 }
 
+// ConsensusNodeWeight delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) ConsensusNodeWeight(root [32]byte) (uint64, error) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.ConsensusNodeWeight(root)
+}
+
 // IsOptimistic delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) IsOptimistic(root [32]byte) (bool, error) {
 	ro.l.RLock()
@@ -189,4 +196,11 @@ func (ro *ROForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 	ro.l.RLock()
 	defer ro.l.RUnlock()
 	return ro.getter.BlockHash(root)
+}
+
+// CanonicalNodeAtSlot delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.CanonicalNodeAtSlot(slot)
 }

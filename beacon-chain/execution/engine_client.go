@@ -134,6 +134,12 @@ type Reconstructor interface {
 	ReconstructFullBellatrixBlockBatch(
 		ctx context.Context, blindedBlocks []interfaces.ReadOnlySignedBeaconBlock,
 	) ([]interfaces.SignedBeaconBlock, error)
+	ReconstructFullExecutionPayloadByHash(
+		ctx context.Context, blockHash [32]byte,
+	) (*pb.ExecutionPayloadDeneb, error)
+	ReconstructFullExecutionPayloadsByHash(
+		ctx context.Context, blockHashes [][32]byte,
+	) (map[[32]byte]*pb.ExecutionPayloadDeneb, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
 	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error)
 }
@@ -644,6 +650,159 @@ func (s *Service) ReconstructFullBellatrixBlockBatch(
 	}
 	reconstructedExecutionPayloadCount.Add(float64(len(unb)))
 	return unb, nil
+}
+
+// ReconstructFullExecutionPayloadByHash reconstructs a full deneb payload from EL data by block hash.
+func (s *Service) ReconstructFullExecutionPayloadByHash(
+	ctx context.Context, blockHash [32]byte,
+) (*pb.ExecutionPayloadDeneb, error) {
+	payloads, err := s.ReconstructFullExecutionPayloadsByHash(ctx, [][32]byte{blockHash})
+	if err != nil {
+		return nil, err
+	}
+	payload, ok := payloads[blockHash]
+	if !ok || payload == nil {
+		return nil, errors.New("execution payload not found")
+	}
+	return payload, nil
+}
+
+// ReconstructFullExecutionPayloadsByHash reconstructs full deneb payloads from EL data by block hashes.
+func (s *Service) ReconstructFullExecutionPayloadsByHash(
+	ctx context.Context, blockHashes [][32]byte,
+) (map[[32]byte]*pb.ExecutionPayloadDeneb, error) {
+	payloads := make(map[[32]byte]*pb.ExecutionPayloadDeneb, len(blockHashes))
+	if len(blockHashes) == 0 {
+		return payloads, nil
+	}
+
+	uniqueSet := make(map[[32]byte]struct{}, len(blockHashes))
+	uniqueHashes := make([][32]byte, 0, len(blockHashes))
+	for i := range blockHashes {
+		h := blockHashes[i]
+		if _, ok := uniqueSet[h]; ok {
+			continue
+		}
+		uniqueSet[h] = struct{}{}
+		uniqueHashes = append(uniqueHashes, h)
+	}
+
+	requestHashes := make([]common.Hash, 0, len(uniqueHashes))
+	for i := range uniqueHashes {
+		if uniqueHashes[i] == params.BeaconConfig().ZeroHash {
+			// Empty execution payload.
+			payloads[uniqueHashes[i]] = &pb.ExecutionPayloadDeneb{
+				ParentHash:    make([]byte, fieldparams.RootLength),
+				FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:     make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:  make([]byte, fieldparams.RootLength),
+				LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:    make([]byte, fieldparams.RootLength),
+				BaseFeePerGas: make([]byte, fieldparams.RootLength),
+				BlockHash:     make([]byte, fieldparams.RootLength),
+				Transactions:  make([][]byte, 0),
+				Withdrawals:   make([]*pb.Withdrawal, 0),
+			}
+			continue
+		}
+		requestHashes = append(requestHashes, uniqueHashes[i])
+	}
+
+	blocksByHash := make(map[[32]byte]*pb.ExecutionBlock, len(requestHashes))
+	if len(requestHashes) > 0 {
+		execBlocks, err := s.ExecutionBlocksByHashes(ctx, requestHashes, true) // with txs
+		if err != nil {
+			return nil, err
+		}
+		for i := range requestHashes {
+			blocksByHash[requestHashes[i]] = execBlocks[i]
+		}
+	}
+
+	for i := range uniqueHashes {
+		h := uniqueHashes[i]
+		if _, ok := payloads[h]; ok {
+			continue
+		}
+		blk := blocksByHash[h]
+		payload, err := executionPayloadDenebFromExecutionBlock(h, blk)
+		if err != nil {
+			return nil, err
+		}
+		payloads[h] = payload
+	}
+
+	return payloads, nil
+}
+
+func executionPayloadDenebFromExecutionBlock(
+	requestedHash [32]byte, blk *pb.ExecutionBlock,
+) (*pb.ExecutionPayloadDeneb, error) {
+	if requestedHash == params.BeaconConfig().ZeroHash {
+		return nil, errors.New("zero hash must be handled before block conversion")
+	}
+	if blk == nil {
+		return nil, errors.New("execution block not found")
+	}
+	if blk.Hash == (common.Hash{}) {
+		return nil, errors.New("execution block not found")
+	}
+	if blk.Hash != requestedHash {
+		return nil, errors.New("execution block hash mismatch")
+	}
+	if blk.Number == nil {
+		return nil, errors.New("execution block number is nil")
+	}
+	if blk.BaseFee == nil {
+		return nil, errors.New("execution block base fee is nil")
+	}
+
+	txs := make([][]byte, 0, len(blk.Transactions))
+	for i := range blk.Transactions {
+		if blk.Transactions[i] == nil {
+			return nil, errors.New("nil transaction in execution block")
+		}
+		txBytes, err := blk.Transactions[i].MarshalBinary()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not marshal execution transaction")
+		}
+		txs = append(txs, txBytes)
+	}
+
+	var blobGasUsed uint64
+	if blk.BlobGasUsed == nil {
+		return nil, errors.New("execution block blob gas used is nil")
+	}
+	blobGasUsed = *blk.BlobGasUsed
+	var excessBlobGas uint64
+	if blk.ExcessBlobGas == nil {
+		return nil, errors.New("execution block excess blob gas is nil")
+	}
+	excessBlobGas = *blk.ExcessBlobGas
+	withdrawals := blk.Withdrawals
+	if withdrawals == nil {
+		withdrawals = make([]*pb.Withdrawal, 0)
+	}
+
+	return &pb.ExecutionPayloadDeneb{
+		ParentHash:    blk.ParentHash.Bytes(),
+		FeeRecipient:  blk.Coinbase.Bytes(),
+		StateRoot:     blk.Root.Bytes(),
+		ReceiptsRoot:  blk.ReceiptHash.Bytes(),
+		LogsBloom:     blk.Bloom.Bytes(),
+		PrevRandao:    blk.MixDigest.Bytes(),
+		BlockNumber:   blk.Number.Uint64(),
+		GasLimit:      blk.GasLimit,
+		GasUsed:       blk.GasUsed,
+		Timestamp:     blk.Time,
+		ExtraData:     blk.Extra,
+		BaseFeePerGas: bytesutil.PadTo(bytesutil.ReverseByteOrder(blk.BaseFee.Bytes()), fieldparams.RootLength),
+		BlockHash:     blk.Hash.Bytes(),
+		Transactions:  txs,
+		Withdrawals:   withdrawals,
+		BlobGasUsed:   blobGasUsed,
+		ExcessBlobGas: excessBlobGas,
+	}, nil
 }
 
 // ReconstructBlobSidecars reconstructs the verified blob sidecars for a given beacon block.
