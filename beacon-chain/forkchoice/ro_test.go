@@ -43,6 +43,7 @@ const (
 	dependentRootCalled
 	dependentRootForEpochCalled
 	canonicalNodeAtSlotCalled
+	payloadWeightsCalled
 )
 
 func _discard(t *testing.T, e error) {
@@ -280,6 +281,11 @@ func (ro *mockROForkchoice) Weight(_ [32]byte) (uint64, error) {
 func (ro *mockROForkchoice) ConsensusNodeWeight(_ [32]byte) (uint64, error) {
 	ro.calls = append(ro.calls, consensusNodeWeightCalled)
 	return 0, nil
+}
+
+func (ro *mockROForkchoice) PayloadWeights(_ [32]byte) (uint64, uint64, error) {
+	ro.calls = append(ro.calls, payloadWeightsCalled)
+	return 0, 0, nil
 }
 
 func (ro *mockROForkchoice) IsOptimistic(_ [32]byte) (bool, error) {
