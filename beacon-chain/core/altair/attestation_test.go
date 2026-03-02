@@ -321,7 +321,7 @@ func TestProcessAttestationNoVerify_SourceTargetHead(t *testing.T) {
 	p, err := beaconState.CurrentEpochParticipation()
 	require.NoError(t, err)
 
-	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.Index)
 	require.NoError(t, err)
 	indices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -789,7 +789,7 @@ func TestAttestationParticipationFlagIndices(t *testing.T) {
 			}(),
 			inputData: &ethpb.AttestationData{
 				Slot:            3,
-				CommitteeIndex:  1, // invalid for same-slot
+				Index:           1, // invalid for same-slot
 				BeaconBlockRoot: bytes.Repeat([]byte{0xBB}, 32),
 				Source:          &ethpb.Checkpoint{Root: bytes.Repeat([]byte{0xDD}, 32)},
 				Target: &ethpb.Checkpoint{
@@ -812,7 +812,7 @@ func TestAttestationParticipationFlagIndices(t *testing.T) {
 			}(),
 			inputData: &ethpb.AttestationData{
 				Slot:            3,
-				CommitteeIndex:  1,
+				Index:           1,
 				BeaconBlockRoot: bytes.Repeat([]byte{0xBB}, 32),
 				Source:          &ethpb.Checkpoint{Root: bytes.Repeat([]byte{0xDD}, 32)},
 				Target: &ethpb.Checkpoint{

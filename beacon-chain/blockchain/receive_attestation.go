@@ -218,7 +218,7 @@ func (s *Service) processAttestations(ctx context.Context, disparity time.Durati
 			} else {
 				fields = logrus.Fields{
 					"slot":            a.GetData().Slot,
-					"committeeIndex":  a.GetData().CommitteeIndex,
+					"committeeIndex":  a.GetData().Index,
 					"beaconBlockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(a.GetData().BeaconBlockRoot)),
 					"targetRoot":      fmt.Sprintf("%#x", bytesutil.Trunc(a.GetData().Target.Root)),
 					"aggregatedCount": a.GetAggregationBits().Count(),

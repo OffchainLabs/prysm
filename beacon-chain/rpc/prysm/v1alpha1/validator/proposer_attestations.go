@@ -251,7 +251,7 @@ func (a proposerAtts) sortBySlotAndCommittee() (proposerAtts, error) {
 	attsBySlot := map[primitives.Slot]*slotAtts{}
 	for _, att := range a {
 		slot := att.GetData().Slot
-		ci := att.GetData().CommitteeIndex
+		ci := att.GetData().Index
 		if _, ok := attsBySlot[slot]; !ok {
 			attsBySlot[slot] = &slotAtts{}
 			attsBySlot[slot].candidates = make(map[primitives.CommitteeIndex]proposerAtts)
@@ -637,7 +637,7 @@ func (a proposerAtts) filterIndividualSignature(ctx context.Context, st state.Be
 func attestationFields(att ethpb.Att) logrus.Fields {
 	return logrus.Fields{
 		"slot":            att.GetData().Slot,
-		"index":           att.GetData().CommitteeIndex,
+		"index":           att.GetData().Index,
 		"targetRoot":      fmt.Sprintf("%x", att.GetData().Target.Root),
 		"targetEpoch":     att.GetData().Target.Epoch,
 		"beaconBlockRoot": fmt.Sprintf("%x", att.GetData().BeaconBlockRoot),

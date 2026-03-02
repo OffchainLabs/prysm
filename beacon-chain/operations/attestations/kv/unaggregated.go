@@ -87,7 +87,7 @@ func (c *AttCaches) UnaggregatedAttestationsBySlotIndex(
 
 	unAggregatedAtts := c.unAggregatedAtt
 	for _, a := range unAggregatedAtts {
-		if a.Version() == version.Phase0 && slot == a.GetData().Slot && committeeIndex == a.GetData().CommitteeIndex {
+		if a.Version() == version.Phase0 && slot == a.GetData().Slot && committeeIndex == a.GetData().Index {
 			att, ok := a.(*ethpb.Attestation)
 			// This will never fail in practice because we asserted the version
 			if ok {

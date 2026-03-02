@@ -99,7 +99,7 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 	attData := a.GetData()
 	payloadStatus := true
 	if attData.Target.Epoch >= params.BeaconConfig().GloasForkEpoch {
-		payloadStatus = attData.CommitteeIndex == 1
+		payloadStatus = attData.Index == 1
 	}
 	s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indexedAtt.GetAttestingIndices(), bytesutil.ToBytes32(attData.BeaconBlockRoot), attData.Slot, payloadStatus)
 	return nil

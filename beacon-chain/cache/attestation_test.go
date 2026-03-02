@@ -339,15 +339,15 @@ func TestAggregateIsRedundant(t *testing.T) {
 
 func TestGetBySlotAndCommitteeIndex(t *testing.T) {
 	c := NewAttestationCache()
-	c.atts[bytesutil.ToBytes32([]byte("id1"))] = &attGroup{slot: 1, atts: []ethpb.Att{&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, CommitteeIndex: 1}}, &ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, CommitteeIndex: 1}}}}
-	c.atts[bytesutil.ToBytes32([]byte("id2"))] = &attGroup{slot: 2, atts: []ethpb.Att{&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2, CommitteeIndex: 2}}}}
-	c.atts[bytesutil.ToBytes32([]byte("id3"))] = &attGroup{slot: 1, atts: []ethpb.Att{&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2, CommitteeIndex: 2}}}}
+	c.atts[bytesutil.ToBytes32([]byte("id1"))] = &attGroup{slot: 1, atts: []ethpb.Att{&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, Index: 1}}, &ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, Index: 1}}}}
+	c.atts[bytesutil.ToBytes32([]byte("id2"))] = &attGroup{slot: 2, atts: []ethpb.Att{&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2, Index: 2}}}}
+	c.atts[bytesutil.ToBytes32([]byte("id3"))] = &attGroup{slot: 1, atts: []ethpb.Att{&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2, Index: 2}}}}
 
 	// committeeIndex has to be small enough to fit in the bitvector
 	atts := GetBySlotAndCommitteeIndex[*ethpb.Attestation](c, 1, 1)
 	require.Equal(t, 2, len(atts))
 	assert.Equal(t, primitives.Slot(1), atts[0].Data.Slot)
 	assert.Equal(t, primitives.Slot(1), atts[1].Data.Slot)
-	assert.Equal(t, primitives.CommitteeIndex(1), atts[0].Data.CommitteeIndex)
-	assert.Equal(t, primitives.CommitteeIndex(1), atts[1].Data.CommitteeIndex)
+	assert.Equal(t, primitives.CommitteeIndex(1), atts[0].Data.Index)
+	assert.Equal(t, primitives.CommitteeIndex(1), atts[1].Data.Index)
 }

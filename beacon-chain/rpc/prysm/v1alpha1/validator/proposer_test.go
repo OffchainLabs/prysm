@@ -2965,7 +2965,7 @@ func TestProposer_FilterAttestation(t *testing.T) {
 				for i := range atts {
 					atts[i] = util.HydrateAttestation(&ethpb.Attestation{
 						Data: &ethpb.AttestationData{
-							CommitteeIndex: primitives.CommitteeIndex(i),
+							Index: primitives.CommitteeIndex(i),
 						},
 					})
 				}
@@ -2982,12 +2982,12 @@ func TestProposer_FilterAttestation(t *testing.T) {
 				for i := range atts {
 					atts[i] = util.HydrateAttestation(&ethpb.Attestation{
 						Data: &ethpb.AttestationData{
-							CommitteeIndex: primitives.CommitteeIndex(i),
-							Source:         &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]},
+							Index:  primitives.CommitteeIndex(i),
+							Source: &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]},
 						},
 						AggregationBits: bitfield.Bitlist{0b00010010},
 					})
-					committee, err := helpers.BeaconCommitteeFromState(t.Context(), st, atts[i].GetData().Slot, atts[i].GetData().CommitteeIndex)
+					committee, err := helpers.BeaconCommitteeFromState(t.Context(), st, atts[i].GetData().Slot, atts[i].GetData().Index)
 					assert.NoError(t, err)
 					attestingIndices, err := attestation.AttestingIndices(atts[i], committee)
 					require.NoError(t, err)

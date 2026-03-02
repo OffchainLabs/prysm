@@ -458,7 +458,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 		ckpt := &ethpb.Checkpoint{Root: root2, Epoch: slots.ToEpoch(req.Slot)}
 		return &ethpb.AttestationData{
 			Slot:            req.Slot,
-			CommitteeIndex:  req.CommitteeIndex,
+			Index:           req.CommitteeIndex,
 			BeaconBlockRoot: root,
 			Target:          ckpt,
 			Source:          ckpt,

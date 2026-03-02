@@ -279,7 +279,7 @@ func (s *Service) validateCommitteeIndexAndCount(
 			}
 		} else {
 			// [REJECT] attestation.data.index == 0 (New in Electra, removed in Gloas)
-			if data.CommitteeIndex != 0 {
+			if data.Index != 0 {
 				return 0, 0, pubsub.ValidationReject, errors.New("attestation data's committee index must be 0")
 			}
 		}
@@ -373,12 +373,12 @@ func validateAttestingIndex(
 // [REJECT] attestation.data.index < 2. (New in Gloas)
 // [REJECT] attestation.data.index == 0 if block.slot == attestation.data.slot. (New in Gloas)
 func (s *Service) validateGloasCommitteeIndex(data *eth.AttestationData) (pubsub.ValidationResult, error) {
-	if data.CommitteeIndex >= 2 {
+	if data.Index >= 2 {
 		return pubsub.ValidationReject, errors.New("attestation data's committee index must be < 2")
 	}
 
 	// Same-slot attestations must use committee index 0
-	if data.CommitteeIndex != 0 {
+	if data.Index != 0 {
 		blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
 		slot, err := s.cfg.chain.RecentBlockSlot(blockRoot)
 		if err != nil {
@@ -452,7 +452,7 @@ func wrapAttestationError(err error, att eth.Att) error {
 	attData := att.GetData()
 	slot := attData.Slot
 	slotInEpoch := slot % slotsPerEpoch
-	oldCommitteeIndex := attData.CommitteeIndex
+	oldCommitteeIndex := attData.Index
 	blockRoot := fmt.Sprintf("%#x", attData.BeaconBlockRoot)
 	sourceRoot := fmt.Sprintf("%#x", attData.Source.Root)
 	sourceEpoch := attData.Source.Epoch

@@ -448,7 +448,7 @@ func blockIndexedAttestations[T ethpb.IndexedAtt](
 		}
 		for i := range atts {
 			att := atts[i]
-			committee, err := helpers.BeaconCommitteeFromState(ctx, attState, att.GetData().Slot, att.GetData().CommitteeIndex)
+			committee, err := helpers.BeaconCommitteeFromState(ctx, attState, att.GetData().Slot, att.GetData().Index)
 			if err != nil {
 				return nil, status.Errorf(
 					codes.Internal,

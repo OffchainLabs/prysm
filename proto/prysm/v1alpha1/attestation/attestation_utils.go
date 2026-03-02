@@ -225,7 +225,7 @@ func AttDataIsEqual(attData1, attData2 *ethpb.AttestationData) bool {
 	if attData1.Slot != attData2.Slot {
 		return false
 	}
-	if attData1.CommitteeIndex != attData2.CommitteeIndex {
+	if attData1.Index != attData2.Index {
 		return false
 	}
 	if !bytes.Equal(attData1.BeaconBlockRoot, attData2.BeaconBlockRoot) {

@@ -657,7 +657,7 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 	response := &structs.GetAttestationDataResponse{
 		Data: &structs.AttestationData{
 			Slot:            strconv.FormatUint(uint64(attestationData.Slot), 10),
-			CommitteeIndex:  strconv.FormatUint(uint64(attestationData.CommitteeIndex), 10),
+			Index:           strconv.FormatUint(uint64(attestationData.Index), 10),
 			BeaconBlockRoot: hexutil.Encode(attestationData.BeaconBlockRoot),
 			Source: &structs.Checkpoint{
 				Epoch: strconv.FormatUint(uint64(attestationData.Source.Epoch), 10),

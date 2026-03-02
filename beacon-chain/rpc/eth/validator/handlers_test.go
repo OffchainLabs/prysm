@@ -110,7 +110,7 @@ func TestGetAggregateAttestationV2(t *testing.T) {
 			assert.Equal(t, expectedAggregationBits, attestation.AggregationBits, "Unexpected aggregation bits in attestation")
 			assert.Equal(t, hexutil.Encode(expectedSig), attestation.Signature, "Signature mismatch")
 			assert.Equal(t, expectedSlot, attestation.Data.Slot, "Slot mismatch in attestation data")
-			assert.Equal(t, "0", attestation.Data.CommitteeIndex, "Committee index mismatch")
+			assert.Equal(t, "0", attestation.Data.Index, "Committee index mismatch")
 			assert.Equal(t, hexutil.Encode(expectedRoot), attestation.Data.BeaconBlockRoot, "Beacon block root mismatch")
 
 			// Source checkpoint checks
@@ -248,7 +248,7 @@ func TestGetAggregateAttestationV2(t *testing.T) {
 			assert.Equal(t, expectedCommitteeBits, attestation.CommitteeBits)
 			assert.Equal(t, hexutil.Encode(expectedSig), attestation.Signature, "Signature mismatch")
 			assert.Equal(t, expectedSlot, attestation.Data.Slot, "Slot mismatch in attestation data")
-			assert.Equal(t, "0", attestation.Data.CommitteeIndex, "Committee index mismatch")
+			assert.Equal(t, "0", attestation.Data.Index, "Committee index mismatch")
 			assert.Equal(t, hexutil.Encode(expectedRoot), attestation.Data.BeaconBlockRoot, "Beacon block root mismatch")
 
 			// Source checkpoint checks
@@ -459,7 +459,7 @@ func TestGetAggregateAttestationV2(t *testing.T) {
 func createAttestationData(slot primitives.Slot, committeeIndex primitives.CommitteeIndex, root []byte) *ethpbalpha.AttestationData {
 	return &ethpbalpha.AttestationData{
 		Slot:            slot,
-		CommitteeIndex:  committeeIndex,
+		Index:           committeeIndex,
 		BeaconBlockRoot: root,
 		Source: &ethpbalpha.Checkpoint{
 			Epoch: 1,
@@ -1143,7 +1143,7 @@ func TestGetAttestationData(t *testing.T) {
 			Data: &structs.AttestationData{
 				Slot:            strconv.FormatUint(uint64(slot), 10),
 				BeaconBlockRoot: hexutil.Encode(blockRoot[:]),
-				CommitteeIndex:  strconv.FormatUint(0, 10),
+				Index:           strconv.FormatUint(0, 10),
 				Source: &structs.Checkpoint{
 					Epoch: strconv.FormatUint(2, 10),
 					Root:  hexutil.Encode(justifiedRoot[:]),
@@ -1209,7 +1209,7 @@ func TestGetAttestationData(t *testing.T) {
 		expectedAttData := &ethpbalpha.AttestationData{
 			Slot:            slot,
 			BeaconBlockRoot: blockRoot[:],
-			CommitteeIndex:  0,
+			Index:           0,
 			Source: &ethpbalpha.Checkpoint{
 				Epoch: 2,
 				Root:  justifiedRoot[:],
@@ -1461,7 +1461,7 @@ func TestGetAttestationData(t *testing.T) {
 			Data: &structs.AttestationData{
 				Slot:            strconv.FormatUint(uint64(slot), 10),
 				BeaconBlockRoot: hexutil.Encode(blockRoot[:]),
-				CommitteeIndex:  strconv.FormatUint(0, 10),
+				Index:           strconv.FormatUint(0, 10),
 				Source: &structs.Checkpoint{
 					Epoch: strconv.FormatUint(0, 10),
 					Root:  hexutil.Encode(justifiedRoot[:]),
@@ -1528,7 +1528,7 @@ func TestGetAttestationData(t *testing.T) {
 		expectedAttData := &ethpbalpha.AttestationData{
 			Slot:            slot,
 			BeaconBlockRoot: blockRoot[:],
-			CommitteeIndex:  0,
+			Index:           0,
 			Source: &ethpbalpha.Checkpoint{
 				Epoch: 0,
 				Root:  justifiedRoot[:],
@@ -1631,7 +1631,7 @@ func TestGetAttestationData(t *testing.T) {
 			Data: &structs.AttestationData{
 				Slot:            strconv.FormatUint(uint64(slot), 10),
 				BeaconBlockRoot: hexutil.Encode(blockRoot[:]),
-				CommitteeIndex:  strconv.FormatUint(0, 10),
+				Index:           strconv.FormatUint(0, 10),
 				Source: &structs.Checkpoint{
 					Epoch: strconv.FormatUint(uint64(slots.ToEpoch(1500)), 10),
 					Root:  hexutil.Encode(justifiedBlockRoot[:]),
@@ -1717,7 +1717,7 @@ func TestGetAttestationData(t *testing.T) {
 		expectedAttData := &ethpbalpha.AttestationData{
 			Slot:            slot,
 			BeaconBlockRoot: blockRoot[:],
-			CommitteeIndex:  0,
+			Index:           0,
 			Source: &ethpbalpha.Checkpoint{
 				Epoch: slots.ToEpoch(1500),
 				Root:  justifiedBlockRoot[:],

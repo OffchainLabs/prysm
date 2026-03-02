@@ -89,7 +89,7 @@ func TestBeaconBlockJsonHelpers_JsonifyAttestations(t *testing.T) {
 			AggregationBits: []byte{1},
 			Data: &ethpb.AttestationData{
 				Slot:            2,
-				CommitteeIndex:  3,
+				Index:           3,
 				BeaconBlockRoot: []byte{4},
 				Source: &ethpb.Checkpoint{
 					Epoch: 5,
@@ -106,7 +106,7 @@ func TestBeaconBlockJsonHelpers_JsonifyAttestations(t *testing.T) {
 			AggregationBits: []byte{10},
 			Data: &ethpb.AttestationData{
 				Slot:            11,
-				CommitteeIndex:  12,
+				Index:           12,
 				BeaconBlockRoot: []byte{13},
 				Source: &ethpb.Checkpoint{
 					Epoch: 14,
@@ -126,7 +126,7 @@ func TestBeaconBlockJsonHelpers_JsonifyAttestations(t *testing.T) {
 			AggregationBits: hexutil.Encode([]byte{1}),
 			Data: &structs.AttestationData{
 				Slot:            "2",
-				CommitteeIndex:  "3",
+				Index:           "3",
 				BeaconBlockRoot: hexutil.Encode([]byte{4}),
 				Source: &structs.Checkpoint{
 					Epoch: "5",
@@ -143,7 +143,7 @@ func TestBeaconBlockJsonHelpers_JsonifyAttestations(t *testing.T) {
 			AggregationBits: hexutil.Encode([]byte{10}),
 			Data: &structs.AttestationData{
 				Slot:            "11",
-				CommitteeIndex:  "12",
+				Index:           "12",
 				BeaconBlockRoot: hexutil.Encode([]byte{13}),
 				Source: &structs.Checkpoint{
 					Epoch: "14",
@@ -233,7 +233,7 @@ func TestBeaconBlockJsonHelpers_JsonifyIndexedAttestation(t *testing.T) {
 		AttestingIndices: []uint64{1, 2},
 		Data: &ethpb.AttestationData{
 			Slot:            3,
-			CommitteeIndex:  4,
+			Index:           4,
 			BeaconBlockRoot: []byte{5},
 			Source: &ethpb.Checkpoint{
 				Epoch: 6,
@@ -251,7 +251,7 @@ func TestBeaconBlockJsonHelpers_JsonifyIndexedAttestation(t *testing.T) {
 		AttestingIndices: []string{"1", "2"},
 		Data: &structs.AttestationData{
 			Slot:            "3",
-			CommitteeIndex:  "4",
+			Index:           "4",
 			BeaconBlockRoot: hexutil.Encode([]byte{5}),
 			Source: &structs.Checkpoint{
 				Epoch: "6",
@@ -272,7 +272,7 @@ func TestBeaconBlockJsonHelpers_JsonifyIndexedAttestation(t *testing.T) {
 func TestBeaconBlockJsonHelpers_JsonifyAttestationData(t *testing.T) {
 	input := &ethpb.AttestationData{
 		Slot:            1,
-		CommitteeIndex:  2,
+		Index:           2,
 		BeaconBlockRoot: []byte{3},
 		Source: &ethpb.Checkpoint{
 			Epoch: 4,
@@ -286,7 +286,7 @@ func TestBeaconBlockJsonHelpers_JsonifyAttestationData(t *testing.T) {
 
 	expectedResult := &structs.AttestationData{
 		Slot:            "1",
-		CommitteeIndex:  "2",
+		Index:           "2",
 		BeaconBlockRoot: hexutil.Encode([]byte{3}),
 		Source: &structs.Checkpoint{
 			Epoch: "4",

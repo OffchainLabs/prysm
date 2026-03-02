@@ -41,7 +41,7 @@ func (s *Simulator) generateAttestationsForSlot(ctx context.Context, ver int, sl
 	for c := primitives.CommitteeIndex(0); uint64(c) < committeesPerSlot; c++ {
 		attData := &ethpb.AttestationData{
 			Slot:            slot,
-			CommitteeIndex:  c,
+			Index:           c,
 			BeaconBlockRoot: bytesutil.PadTo([]byte("block"), 32),
 			Source: &ethpb.Checkpoint{
 				Epoch: sourceEpoch,
@@ -193,7 +193,7 @@ func makeSlashableFromAtt(att ethpb.IndexedAtt, indices []uint64) ethpb.IndexedA
 	}
 	attData := &ethpb.AttestationData{
 		Slot:            att.GetData().Slot,
-		CommitteeIndex:  att.GetData().CommitteeIndex,
+		Index:           att.GetData().Index,
 		BeaconBlockRoot: att.GetData().BeaconBlockRoot,
 		Source: &ethpb.Checkpoint{
 			Epoch: att.GetData().Source.Epoch - 3,
@@ -223,7 +223,7 @@ func makeSlashableFromAtt(att ethpb.IndexedAtt, indices []uint64) ethpb.IndexedA
 func makeDoubleVoteFromAtt(att ethpb.IndexedAtt, indices []uint64) ethpb.IndexedAtt {
 	attData := &ethpb.AttestationData{
 		Slot:            att.GetData().Slot,
-		CommitteeIndex:  att.GetData().CommitteeIndex,
+		Index:           att.GetData().Index,
 		BeaconBlockRoot: bytesutil.PadTo([]byte("slash me"), 32),
 		Source: &ethpb.Checkpoint{
 			Epoch: att.GetData().Source.Epoch,

@@ -203,7 +203,7 @@ func (c *AttCaches) AggregatedAttestationsBySlotIndex(
 	c.aggregatedAttLock.RLock()
 	defer c.aggregatedAttLock.RUnlock()
 	for _, as := range c.aggregatedAtt {
-		if as[0].Version() == version.Phase0 && slot == as[0].GetData().Slot && committeeIndex == as[0].GetData().CommitteeIndex {
+		if as[0].Version() == version.Phase0 && slot == as[0].GetData().Slot && committeeIndex == as[0].GetData().Index {
 			for _, a := range as {
 				att, ok := a.(*ethpb.Attestation)
 				// This will never fail in practice because we asserted the version

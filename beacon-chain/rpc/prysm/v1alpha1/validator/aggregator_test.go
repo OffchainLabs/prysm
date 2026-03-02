@@ -219,10 +219,10 @@ func generateAtt(state state.ReadOnlyBeaconState, index uint64, privKeys []bls.S
 	aggBits.SetBitAt(index, true)
 	aggBits.SetBitAt(index+1, true)
 	att := util.HydrateAttestation(&ethpb.Attestation{
-		Data:            &ethpb.AttestationData{CommitteeIndex: 1},
+		Data:            &ethpb.AttestationData{Index: 1},
 		AggregationBits: aggBits,
 	})
-	committee, err := helpers.BeaconCommitteeFromState(context.TODO(), state, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(context.TODO(), state, att.Data.Slot, att.Data.Index)
 	if err != nil {
 		return nil, err
 	}
@@ -257,11 +257,11 @@ func generateUnaggregatedAtt(state state.ReadOnlyBeaconState, index uint64, priv
 	aggBits.SetBitAt(index, true)
 	att := util.HydrateAttestation(&ethpb.Attestation{
 		Data: &ethpb.AttestationData{
-			CommitteeIndex: 1,
+			Index: 1,
 		},
 		AggregationBits: aggBits,
 	})
-	committee, err := helpers.BeaconCommitteeFromState(context.TODO(), state, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(context.TODO(), state, att.Data.Slot, att.Data.Index)
 	if err != nil {
 		return nil, err
 	}
@@ -541,15 +541,15 @@ func Test_bestAggregate(t *testing.T) {
 		atts: []*ethpb.Attestation{
 			{
 				AggregationBits: bitfield.Bitlist{0b10001},
-				Data:            &ethpb.AttestationData{CommitteeIndex: 0},
+				Data:            &ethpb.AttestationData{Index: 0},
 			},
 			{
 				AggregationBits: bitfield.Bitlist{0b11111},
-				Data:            &ethpb.AttestationData{CommitteeIndex: 0},
+				Data:            &ethpb.AttestationData{Index: 0},
 			},
 			{
 				AggregationBits: bitfield.Bitlist{0b10101},
-				Data:            &ethpb.AttestationData{CommitteeIndex: 0},
+				Data:            &ethpb.AttestationData{Index: 0},
 			},
 		},
 	}
@@ -561,15 +561,15 @@ func Test_bestAggregate(t *testing.T) {
 		atts: []*ethpb.Attestation{
 			{
 				AggregationBits: bitfield.Bitlist{0b10001},
-				Data:            &ethpb.AttestationData{CommitteeIndex: 0},
+				Data:            &ethpb.AttestationData{Index: 0},
 			},
 			{
 				AggregationBits: bitfield.Bitlist{0b11111},
-				Data:            &ethpb.AttestationData{CommitteeIndex: 1},
+				Data:            &ethpb.AttestationData{Index: 1},
 			},
 			{
 				AggregationBits: bitfield.Bitlist{0b10101},
-				Data:            &ethpb.AttestationData{CommitteeIndex: 0},
+				Data:            &ethpb.AttestationData{Index: 0},
 			},
 		},
 	}
@@ -581,15 +581,15 @@ func Test_bestAggregate(t *testing.T) {
 		atts: []*ethpb.Attestation{
 			{
 				AggregationBits: bitfield.Bitlist{0b10001},
-				Data:            &ethpb.AttestationData{CommitteeIndex: 0},
+				Data:            &ethpb.AttestationData{Index: 0},
 			},
 			{
 				AggregationBits: bitfield.Bitlist{0b11110},
-				Data:            &ethpb.AttestationData{CommitteeIndex: 0},
+				Data:            &ethpb.AttestationData{Index: 0},
 			},
 			{
 				AggregationBits: bitfield.Bitlist{0b10101},
-				Data:            &ethpb.AttestationData{CommitteeIndex: 0},
+				Data:            &ethpb.AttestationData{Index: 0},
 			},
 		},
 	}
@@ -601,15 +601,15 @@ func Test_bestAggregate(t *testing.T) {
 		atts: []*ethpb.Attestation{
 			{
 				AggregationBits: bitfield.Bitlist{0b11000},
-				Data:            &ethpb.AttestationData{CommitteeIndex: 0},
+				Data:            &ethpb.AttestationData{Index: 0},
 			},
 			{
 				AggregationBits: bitfield.Bitlist{0b11110},
-				Data:            &ethpb.AttestationData{CommitteeIndex: 0},
+				Data:            &ethpb.AttestationData{Index: 0},
 			},
 			{
 				AggregationBits: bitfield.Bitlist{0b10110},
-				Data:            &ethpb.AttestationData{CommitteeIndex: 0},
+				Data:            &ethpb.AttestationData{Index: 0},
 			},
 		},
 	}

@@ -313,7 +313,7 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 		beaconState,
 		beaconBlockRoot,
 		data.Slot,
-		uint64(data.CommitteeIndex),
+		uint64(data.Index),
 	)
 	if err != nil {
 		return nil, err

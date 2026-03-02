@@ -77,8 +77,8 @@ func TestServer_ListAttestations_Genesis(t *testing.T) {
 	att := util.HydrateAttestation(&ethpb.Attestation{
 		AggregationBits: bitfield.NewBitlist(0),
 		Data: &ethpb.AttestationData{
-			Slot:           2,
-			CommitteeIndex: 1,
+			Slot:  2,
+			Index: 1,
 		},
 	})
 
@@ -270,8 +270,8 @@ func TestServer_ListAttestations_Pagination_CustomPageParameters(t *testing.T) {
 			blockExample.Block.Body.Attestations = []*ethpb.Attestation{
 				util.HydrateAttestation(&ethpb.Attestation{
 					Data: &ethpb.AttestationData{
-						CommitteeIndex: s,
-						Slot:           i,
+						Index: s,
+						Slot:  i,
 					},
 					AggregationBits: bitfield.Bitlist{0b11},
 				}),
@@ -575,8 +575,8 @@ func TestServer_ListIndexedAttestations_GenesisEpoch(t *testing.T) {
 					Source: &ethpb.Checkpoint{
 						Root: make([]byte, fieldparams.RootLength),
 					},
-					Slot:           i,
-					CommitteeIndex: 0,
+					Slot:  i,
+					Index: 0,
 				},
 				AggregationBits: bitfield.NewBitlist(128 / uint64(params.BeaconConfig().SlotsPerEpoch)),
 			},
@@ -598,7 +598,7 @@ func TestServer_ListIndexedAttestations_GenesisEpoch(t *testing.T) {
 	indexedAtts := make([]*ethpb.IndexedAttestation, len(atts)+len(atts2))
 	for i := 0; i < len(atts); i++ {
 		att := atts[i]
-		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, att.Data.Slot, att.Data.CommitteeIndex)
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, att.Data.Slot, att.Data.Index)
 		require.NoError(t, err)
 		idxAtt, err := attestation.ConvertToIndexed(ctx, atts[i], committee)
 		require.NoError(t, err, "Could not convert attestation to indexed")
@@ -608,7 +608,7 @@ func TestServer_ListIndexedAttestations_GenesisEpoch(t *testing.T) {
 	}
 	for i := 0; i < len(atts2); i++ {
 		att := atts2[i]
-		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, att.Data.Slot, att.Data.CommitteeIndex)
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, att.Data.Slot, att.Data.Index)
 		require.NoError(t, err)
 		idxAtt, err := attestation.ConvertToIndexed(ctx, atts2[i], committee)
 		require.NoError(t, err, "Could not convert attestation to indexed")
@@ -676,7 +676,7 @@ func TestServer_ListIndexedAttestations_OldEpoch(t *testing.T) {
 							Data: &ethpb.AttestationData{
 								BeaconBlockRoot: blockRoot[:],
 								Slot:            i,
-								CommitteeIndex:  0,
+								Index:           0,
 								Target: &ethpb.Checkpoint{
 									Epoch: epoch,
 									Root:  make([]byte, fieldparams.RootLength),
@@ -707,7 +707,7 @@ func TestServer_ListIndexedAttestations_OldEpoch(t *testing.T) {
 	indexedAtts := make([]*ethpb.IndexedAttestation, len(atts))
 	for i := 0; i < len(atts); i++ {
 		att := atts[i]
-		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, att.Data.Slot, att.Data.CommitteeIndex)
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, att.Data.Slot, att.Data.Index)
 		require.NoError(t, err)
 		idxAtt, err := attestation.ConvertToIndexed(ctx, atts[i], committee)
 		require.NoError(t, err, "Could not convert attestation to indexed")

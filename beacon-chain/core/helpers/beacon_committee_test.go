@@ -344,8 +344,8 @@ func TestVerifyAttestationBitfieldLengths_OK(t *testing.T) {
 			attestation: &ethpb.Attestation{
 				AggregationBits: bitfield.Bitlist{0x05},
 				Data: &ethpb.AttestationData{
-					CommitteeIndex: 5,
-					Target:         &ethpb.Checkpoint{Root: make([]byte, 32)},
+					Index:  5,
+					Target: &ethpb.Checkpoint{Root: make([]byte, 32)},
 				},
 			},
 			stateSlot: 5,
@@ -355,8 +355,8 @@ func TestVerifyAttestationBitfieldLengths_OK(t *testing.T) {
 			attestation: &ethpb.Attestation{
 				AggregationBits: bitfield.Bitlist{0x06},
 				Data: &ethpb.AttestationData{
-					CommitteeIndex: 10,
-					Target:         &ethpb.Checkpoint{Root: make([]byte, 32)},
+					Index:  10,
+					Target: &ethpb.Checkpoint{Root: make([]byte, 32)},
 				},
 			},
 			stateSlot: 10,
@@ -365,8 +365,8 @@ func TestVerifyAttestationBitfieldLengths_OK(t *testing.T) {
 			attestation: &ethpb.Attestation{
 				AggregationBits: bitfield.Bitlist{0x06},
 				Data: &ethpb.AttestationData{
-					CommitteeIndex: 20,
-					Target:         &ethpb.Checkpoint{Root: make([]byte, 32)},
+					Index:  20,
+					Target: &ethpb.Checkpoint{Root: make([]byte, 32)},
 				},
 			},
 			stateSlot: 20,
@@ -375,8 +375,8 @@ func TestVerifyAttestationBitfieldLengths_OK(t *testing.T) {
 			attestation: &ethpb.Attestation{
 				AggregationBits: bitfield.Bitlist{0x06},
 				Data: &ethpb.AttestationData{
-					CommitteeIndex: 20,
-					Target:         &ethpb.Checkpoint{Root: make([]byte, 32)},
+					Index:  20,
+					Target: &ethpb.Checkpoint{Root: make([]byte, 32)},
 				},
 			},
 			stateSlot: 20,
@@ -385,8 +385,8 @@ func TestVerifyAttestationBitfieldLengths_OK(t *testing.T) {
 			attestation: &ethpb.Attestation{
 				AggregationBits: bitfield.Bitlist{0xFF, 0xC0, 0x01},
 				Data: &ethpb.AttestationData{
-					CommitteeIndex: 5,
-					Target:         &ethpb.Checkpoint{Root: make([]byte, 32)},
+					Index:  5,
+					Target: &ethpb.Checkpoint{Root: make([]byte, 32)},
 				},
 			},
 			stateSlot:           5,
@@ -396,8 +396,8 @@ func TestVerifyAttestationBitfieldLengths_OK(t *testing.T) {
 			attestation: &ethpb.Attestation{
 				AggregationBits: bitfield.Bitlist{0xFF, 0x01},
 				Data: &ethpb.AttestationData{
-					CommitteeIndex: 20,
-					Target:         &ethpb.Checkpoint{Root: make([]byte, 32)},
+					Index:  20,
+					Target: &ethpb.Checkpoint{Root: make([]byte, 32)},
 				},
 			},
 			stateSlot:           20,
@@ -411,7 +411,7 @@ func TestVerifyAttestationBitfieldLengths_OK(t *testing.T) {
 		require.NoError(t, state.SetSlot(tt.stateSlot))
 		att := tt.attestation
 		// Verify attesting indices are correct.
-		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, att.GetData().Slot, att.GetData().CommitteeIndex)
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, att.GetData().Slot, att.GetData().Index)
 		require.NoError(t, err)
 		require.NotNil(t, committee)
 		err = helpers.VerifyBitfieldLength(att.GetAggregationBits(), uint64(len(committee)))
@@ -743,7 +743,7 @@ func TestAttestationCommitteesFromState(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("pre-Electra", func(t *testing.T) {
-		att := &ethpb.Attestation{Data: &ethpb.AttestationData{CommitteeIndex: 0}}
+		att := &ethpb.Attestation{Data: &ethpb.AttestationData{Index: 0}}
 		committees, err := helpers.AttestationCommitteesFromState(ctx, state, att)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(committees))
@@ -780,7 +780,7 @@ func TestAttestationCommitteesFromCache(t *testing.T) {
 
 	t.Run("pre-Electra", func(t *testing.T) {
 		helpers.ClearCache()
-		att := &ethpb.Attestation{Data: &ethpb.AttestationData{CommitteeIndex: 0}}
+		att := &ethpb.Attestation{Data: &ethpb.AttestationData{Index: 0}}
 		ok, _, err := helpers.AttestationCommitteesFromCache(ctx, state, att)
 		require.NoError(t, err)
 		require.Equal(t, false, ok)

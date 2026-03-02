@@ -79,7 +79,7 @@ func TestProcessAttestationBucket(t *testing.T) {
 				Epoch: 1,
 				Root:  bytesutil.PadTo([]byte("blockroot"), 32),
 			},
-			CommitteeIndex: 999999,
+			Index: 999999,
 		}
 
 		att := util.NewAttestation()
@@ -175,7 +175,7 @@ func TestProcessAttestationBucket(t *testing.T) {
 			hook.Reset() // Reset logs before test
 			phase0Att := util.NewAttestation()
 			phase0Att.Data.Slot = 1
-			phase0Att.Data.CommitteeIndex = 0
+			phase0Att.Data.Index = 0
 
 			bucket := &attestationBucket{
 				data:         phase0Att.GetData(),
@@ -190,7 +190,7 @@ func TestProcessAttestationBucket(t *testing.T) {
 			hook.Reset() // Reset logs before test
 			attData := &ethpb.AttestationData{
 				Slot:            1,
-				CommitteeIndex:  0,
+				Index:           0,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot"), 32),
 				Source: &ethpb.Checkpoint{
 					Epoch: 0,
@@ -235,7 +235,7 @@ func TestBucketAttestationsByData(t *testing.T) {
 		hook := logTest.NewGlobal()
 		att := util.NewAttestation()
 		att.Data.Slot = 1
-		att.Data.CommitteeIndex = 0
+		att.Data.Index = 0
 
 		buckets := bucketAttestationsByData([]ethpb.Att{att})
 
@@ -257,7 +257,7 @@ func TestBucketAttestationsByData(t *testing.T) {
 
 		att1 := util.NewAttestation()
 		att1.Data.Slot = 1
-		att1.Data.CommitteeIndex = 0
+		att1.Data.Index = 0
 
 		att2 := util.NewAttestation()
 		att2.Data = att1.Data             // Same data
@@ -282,11 +282,11 @@ func TestBucketAttestationsByData(t *testing.T) {
 
 		att1 := util.NewAttestation()
 		att1.Data.Slot = 1
-		att1.Data.CommitteeIndex = 0
+		att1.Data.Index = 0
 
 		att2 := util.NewAttestation()
 		att2.Data.Slot = 2 // Different slot
-		att2.Data.CommitteeIndex = 1
+		att2.Data.Index = 1
 
 		buckets := bucketAttestationsByData([]ethpb.Att{att1, att2})
 
@@ -306,7 +306,7 @@ func TestBucketAttestationsByData(t *testing.T) {
 		// Create Phase0 attestation
 		phase0Att := util.NewAttestation()
 		phase0Att.Data.Slot = 1
-		phase0Att.Data.CommitteeIndex = 0
+		phase0Att.Data.Index = 0
 
 		electraAtt := &ethpb.SingleAttestation{
 			CommitteeId:   0,

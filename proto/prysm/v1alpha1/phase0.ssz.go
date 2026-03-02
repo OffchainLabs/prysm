@@ -374,8 +374,8 @@ func (a *AttestationData) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	// Field (0) 'Slot'
 	dst = ssz.MarshalUint64(dst, uint64(a.Slot))
 
-	// Field (1) 'CommitteeIndex'
-	dst = ssz.MarshalUint64(dst, uint64(a.CommitteeIndex))
+	// Field (1) 'Index'
+	dst = ssz.MarshalUint64(dst, uint64(a.Index))
 
 	// Field (2) 'BeaconBlockRoot'
 	if size := len(a.BeaconBlockRoot); size != 32 {
@@ -414,8 +414,8 @@ func (a *AttestationData) UnmarshalSSZ(buf []byte) error {
 	// Field (0) 'Slot'
 	a.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
-	// Field (1) 'CommitteeIndex'
-	a.CommitteeIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.CommitteeIndex(ssz.UnmarshallUint64(buf[8:16]))
+	// Field (1) 'Index'
+	a.Index = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.CommitteeIndex(ssz.UnmarshallUint64(buf[8:16]))
 
 	// Field (2) 'BeaconBlockRoot'
 	if cap(a.BeaconBlockRoot) == 0 {
@@ -460,8 +460,8 @@ func (a *AttestationData) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	// Field (0) 'Slot'
 	hh.PutUint64(uint64(a.Slot))
 
-	// Field (1) 'CommitteeIndex'
-	hh.PutUint64(uint64(a.CommitteeIndex))
+	// Field (1) 'Index'
+	hh.PutUint64(uint64(a.Index))
 
 	// Field (2) 'BeaconBlockRoot'
 	if size := len(a.BeaconBlockRoot); size != 32 {

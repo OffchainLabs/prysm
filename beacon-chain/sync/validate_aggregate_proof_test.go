@@ -46,7 +46,7 @@ func TestVerifyIndexInCommittee_CanVerify(t *testing.T) {
 	bf.SetBitAt(0, true)
 	att := &ethpb.Attestation{Data: &ethpb.AttestationData{}, AggregationBits: bf}
 
-	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.Index)
 	assert.NoError(t, err)
 	indices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
 
 	att := &ethpb.Attestation{Data: &ethpb.AttestationData{}}
 
-	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.Index)
 	require.NoError(t, err)
 
 	bl := bitfield.NewBitlist(uint64(len(committee)))
@@ -96,7 +96,7 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
 
 	// Test the edge case where committee index equals count (should be rejected)
 	// With 64 validators and minimal config, count = 2, so valid indices are 0 and 1
-	att.Data.CommitteeIndex = 2
+	att.Data.Index = 2
 	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
 	require.ErrorContains(t, "committee index 2 >= 2", err)
 	assert.Equal(t, pubsub.ValidationReject, result)
@@ -113,7 +113,7 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee_Electra(t *testing.T) {
 
 	att := &ethpb.AttestationElectra{Data: &ethpb.AttestationData{}}
 
-	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.Index)
 	require.NoError(t, err)
 
 	bl := bitfield.NewBitlist(uint64(len(committee)))
@@ -122,12 +122,12 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee_Electra(t *testing.T) {
 
 	service := &Service{}
 
-	att.Data.CommitteeIndex = 1
+	att.Data.Index = 1
 	_, _, result, err := service.validateCommitteeIndexAndCount(ctx, att, s)
 	require.ErrorContains(t, "attestation data's committee index must be 0", err)
 	assert.Equal(t, pubsub.ValidationReject, result)
 
-	att.Data.CommitteeIndex = 0
+	att.Data.Index = 0
 	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
 	require.ErrorContains(t, "committee bits have no bit set", err)
 	assert.Equal(t, pubsub.ValidationReject, result)
@@ -148,12 +148,12 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee_Electra(t *testing.T) {
 
 	newAtt := &ethpb.SingleAttestation{Data: &ethpb.AttestationData{}, CommitteeId: 1}
 
-	newAtt.Data.CommitteeIndex = 1
+	newAtt.Data.Index = 1
 	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, newAtt, s)
 	require.ErrorContains(t, "attestation data's committee index must be 0", err)
 	assert.Equal(t, pubsub.ValidationReject, result)
 
-	newAtt.Data.CommitteeIndex = 0
+	newAtt.Data.Index = 0
 	ci, _, result, err = service.validateCommitteeIndexAndCount(ctx, newAtt, s)
 	require.NoError(t, err)
 	assert.Equal(t, pubsub.ValidationAccept, result)
@@ -167,7 +167,7 @@ func TestVerifyIndexInCommittee_Electra(t *testing.T) {
 	cb := primitives.NewAttestationCommitteeBits()
 	cb.SetBitAt(0, true)
 	att := &ethpb.AttestationElectra{Data: &ethpb.AttestationData{}, CommitteeBits: cb}
-	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), s, att.Data.Slot, att.Data.Index)
 	require.NoError(t, err)
 	bl := bitfield.NewBitlist(uint64(len(committee)))
 	bl.SetBitAt(0, true)
@@ -187,7 +187,7 @@ func TestVerifySelection_NotAnAggregator(t *testing.T) {
 
 	sig := privKeys[0].Sign([]byte{'A'})
 	data := util.HydrateAttestationData(&ethpb.AttestationData{})
-	committee, err := helpers.BeaconCommitteeFromState(ctx, beaconState, data.Slot, data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(ctx, beaconState, data.Slot, data.Index)
 	require.NoError(t, err)
 	_, err = validateSelectionIndex(ctx, beaconState, data.Slot, committee, 0, sig.Marshal())
 	wanted := "validator is not an aggregator for slot"
@@ -424,7 +424,7 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 		AggregationBits: aggBits,
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.Index)
 	assert.NoError(t, err)
 	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -528,7 +528,7 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 		AggregationBits: aggBits,
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.Index)
 	require.NoError(t, err)
 	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -646,7 +646,7 @@ func TestValidateAggregateAndProof_BadBlock(t *testing.T) {
 		AggregationBits: aggBits,
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.Index)
 	assert.NoError(t, err)
 	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)
@@ -737,7 +737,7 @@ func TestValidateAggregateAndProof_RejectWhenAttEpochDoesntEqualTargetEpoch(t *t
 		AggregationBits: aggBits,
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.Index)
 	assert.NoError(t, err)
 	attestingIndices, err := attestation.AttestingIndices(att, committee)
 	require.NoError(t, err)

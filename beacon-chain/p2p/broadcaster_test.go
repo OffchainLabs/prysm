@@ -122,8 +122,8 @@ func TestService_Attestation_Subnet(t *testing.T) {
 		{
 			att: &ethpb.Attestation{
 				Data: &ethpb.AttestationData{
-					CommitteeIndex: 0,
-					Slot:           2,
+					Index: 0,
+					Slot:  2,
 				},
 			},
 			topic: "/eth2/00000000/beacon_attestation_2",
@@ -131,8 +131,8 @@ func TestService_Attestation_Subnet(t *testing.T) {
 		{
 			att: &ethpb.Attestation{
 				Data: &ethpb.AttestationData{
-					CommitteeIndex: 11,
-					Slot:           10,
+					Index: 11,
+					Slot:  10,
 				},
 			},
 			topic: "/eth2/00000000/beacon_attestation_21",
@@ -140,15 +140,15 @@ func TestService_Attestation_Subnet(t *testing.T) {
 		{
 			att: &ethpb.Attestation{
 				Data: &ethpb.AttestationData{
-					CommitteeIndex: 55,
-					Slot:           529,
+					Index: 55,
+					Slot:  529,
 				},
 			},
 			topic: "/eth2/00000000/beacon_attestation_8",
 		},
 	}
 	for _, tt := range tests {
-		subnet := helpers.ComputeSubnetFromCommitteeAndSlot(100, tt.att.Data.CommitteeIndex, tt.att.Data.Slot)
+		subnet := helpers.ComputeSubnetFromCommitteeAndSlot(100, tt.att.Data.Index, tt.att.Data.Slot)
 		assert.Equal(t, tt.topic, attestationToTopic(subnet, [4]byte{} /* fork digest */), "Wrong topic")
 	}
 }

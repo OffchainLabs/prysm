@@ -367,7 +367,7 @@ func pendingAttestation(prefix string) *ethpb.PendingAttestation {
 		AggregationBits: bitfield.Bitlist{0x00, 0xFF, 0xFF, 0xFF},
 		Data: &ethpb.AttestationData{
 			Slot:            123,
-			CommitteeIndex:  123,
+			Index:           123,
 			BeaconBlockRoot: bbr[:],
 			Source: &ethpb.Checkpoint{
 				Epoch: 123,

@@ -665,7 +665,7 @@ func TestGetBlockAttestationsV2(t *testing.T) {
 			AggregationBits: bitfield.Bitlist{0x00},
 			Data: &eth.AttestationData{
 				Slot:            123,
-				CommitteeIndex:  123,
+				Index:           123,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("root1"), 32),
 				Source: &eth.Checkpoint{
 					Epoch: 123,
@@ -682,7 +682,7 @@ func TestGetBlockAttestationsV2(t *testing.T) {
 			AggregationBits: bitfield.Bitlist{0x01},
 			Data: &eth.AttestationData{
 				Slot:            456,
-				CommitteeIndex:  456,
+				Index:           456,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("root2"), 32),
 				Source: &eth.Checkpoint{
 					Epoch: 456,
@@ -701,7 +701,7 @@ func TestGetBlockAttestationsV2(t *testing.T) {
 			AggregationBits: bitfield.Bitlist{0x00},
 			Data: &eth.AttestationData{
 				Slot:            123,
-				CommitteeIndex:  123,
+				Index:           123,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("root1"), 32),
 				Source: &eth.Checkpoint{
 					Epoch: 123,
@@ -719,7 +719,7 @@ func TestGetBlockAttestationsV2(t *testing.T) {
 			AggregationBits: bitfield.Bitlist{0x01},
 			Data: &eth.AttestationData{
 				Slot:            456,
-				CommitteeIndex:  456,
+				Index:           456,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("root2"), 32),
 				Source: &eth.Checkpoint{
 					Epoch: 456,

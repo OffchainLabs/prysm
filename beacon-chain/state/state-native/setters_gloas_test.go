@@ -331,7 +331,7 @@ func TestUpdatePendingPaymentWeight(t *testing.T) {
 			att := &ethpb.Attestation{
 				Data: &ethpb.AttestationData{
 					Slot:            slot,
-					CommitteeIndex:  0,
+					Index:           0,
 					BeaconBlockRoot: tt.blockRoot,
 					Source:          &ethpb.Checkpoint{},
 					Target: &ethpb.Checkpoint{

@@ -75,8 +75,9 @@ message AttestationData {
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
 
-  // The committee index that submitted this attestation.
-  uint64 committee_index = 2
+  // Prior to electra this is the committee index, electra to fulu the value is 0 due to EIP-7549,
+  // post gloas index is used to track payload full or empty in EIP-7732
+  uint64 index = 2
       [ (ethereum.eth.ext.cast_type) =
             "github.com/OffchainLabs/prysm/v7/consensus-types/"
             "primitives.CommitteeIndex" ];

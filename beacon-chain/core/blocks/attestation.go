@@ -111,13 +111,10 @@ func VerifyAttestationNoVerifySignature(
 	var indexedAtt ethpb.IndexedAtt
 
 	if att.Version() >= version.Electra {
-		ci := att.GetData().CommitteeIndex
-		// Spec v1.7.0-alpha pseudocode:
-		//
-		//	# [Modified in Gloas:EIP7732]
-		//	assert data.index < 2
-		//
+		ci := att.GetData().Index
 		if beaconState.Version() >= version.Gloas {
+			//	# [Modified in Gloas:EIP7732]
+			//	assert data.index < 2
 			if ci >= 2 {
 				return fmt.Errorf("incorrect committee index %d", ci)
 			}
@@ -165,12 +162,12 @@ func VerifyAttestationNoVerifySignature(
 			return err
 		}
 	} else {
-		if uint64(att.GetData().CommitteeIndex) >= committeeCount {
-			return fmt.Errorf("committee index %d >= committee count %d", att.GetData().CommitteeIndex, committeeCount)
+		if uint64(att.GetData().Index) >= committeeCount {
+			return fmt.Errorf("committee index %d >= committee count %d", att.GetData().Index, committeeCount)
 		}
 
 		// Verify attesting indices are correct.
-		committee, err := helpers.BeaconCommitteeFromState(ctx, beaconState, att.GetData().Slot, att.GetData().CommitteeIndex)
+		committee, err := helpers.BeaconCommitteeFromState(ctx, beaconState, att.GetData().Slot, att.GetData().Index)
 		if err != nil {
 			return err
 		}

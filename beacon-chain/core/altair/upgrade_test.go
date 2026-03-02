@@ -36,7 +36,7 @@ func TestTranslateParticipation(t *testing.T) {
 	for i := range 3 {
 		pendingAtts = append(pendingAtts, &ethpb.PendingAttestation{
 			Data: &ethpb.AttestationData{
-				CommitteeIndex:  primitives.CommitteeIndex(i),
+				Index:           primitives.CommitteeIndex(i),
 				BeaconBlockRoot: r,
 				Source:          &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
 				Target:          &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
@@ -52,7 +52,7 @@ func TestTranslateParticipation(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepNotSSZEqual(t, make([]byte, 64), participation)
 
-	committee, err := helpers.BeaconCommitteeFromState(ctx, s, pendingAtts[0].Data.Slot, pendingAtts[0].Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(ctx, s, pendingAtts[0].Data.Slot, pendingAtts[0].Data.Index)
 	require.NoError(t, err)
 	indices, err := attestation.AttestingIndices(pendingAtts[0], committee)
 	require.NoError(t, err)

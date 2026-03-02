@@ -181,7 +181,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		span.SetAttributes(trace.Int64Attribute("committeeIndex", int64(duty.CommitteeIndex)))
 	} else {
 		span.SetAttributes(trace.StringAttribute("aggregationBitfield", fmt.Sprintf("%#x", aggregationBitfield)))
-		span.SetAttributes(trace.Int64Attribute("committeeIndex", int64(data.CommitteeIndex)))
+		span.SetAttributes(trace.Int64Attribute("committeeIndex", int64(data.Index)))
 	}
 
 	if v.emitAccountMetrics {
@@ -317,7 +317,7 @@ func attestationLogFields(pubKey [fieldparams.BLSPubkeyLength]byte, indexedAtt e
 	return logrus.Fields{
 		"pubkey":         fmt.Sprintf("%#x", pubKey),
 		"slot":           indexedAtt.GetData().Slot,
-		"committeeIndex": indexedAtt.GetData().CommitteeIndex,
+		"committeeIndex": indexedAtt.GetData().Index,
 		"blockRoot":      fmt.Sprintf("%#x", indexedAtt.GetData().BeaconBlockRoot),
 		"sourceEpoch":    indexedAtt.GetData().Source.Epoch,
 		"sourceRoot":     fmt.Sprintf("%#x", indexedAtt.GetData().Source.Root),

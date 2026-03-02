@@ -198,7 +198,7 @@ func TestAttesterSlashing_FromConsensus(t *testing.T) {
 				AttestingIndices: []uint64{1, 2},
 				Data: &eth.AttestationData{
 					Slot:            3,
-					CommitteeIndex:  4,
+					Index:           4,
 					BeaconBlockRoot: []byte{5},
 					Source: &eth.Checkpoint{
 						Epoch: 6,
@@ -215,7 +215,7 @@ func TestAttesterSlashing_FromConsensus(t *testing.T) {
 				AttestingIndices: []uint64{11, 12},
 				Data: &eth.AttestationData{
 					Slot:            13,
-					CommitteeIndex:  14,
+					Index:           14,
 					BeaconBlockRoot: []byte{15},
 					Source: &eth.Checkpoint{
 						Epoch: 16,
@@ -234,7 +234,7 @@ func TestAttesterSlashing_FromConsensus(t *testing.T) {
 				AttestingIndices: []uint64{21, 22},
 				Data: &eth.AttestationData{
 					Slot:            23,
-					CommitteeIndex:  24,
+					Index:           24,
 					BeaconBlockRoot: []byte{25},
 					Source: &eth.Checkpoint{
 						Epoch: 26,
@@ -251,7 +251,7 @@ func TestAttesterSlashing_FromConsensus(t *testing.T) {
 				AttestingIndices: []uint64{31, 32},
 				Data: &eth.AttestationData{
 					Slot:            33,
-					CommitteeIndex:  34,
+					Index:           34,
 					BeaconBlockRoot: []byte{35},
 					Source: &eth.Checkpoint{
 						Epoch: 36,
@@ -273,7 +273,7 @@ func TestAttesterSlashing_FromConsensus(t *testing.T) {
 				AttestingIndices: []string{"1", "2"},
 				Data: &AttestationData{
 					Slot:            "3",
-					CommitteeIndex:  "4",
+					Index:           "4",
 					BeaconBlockRoot: hexutil.Encode([]byte{5}),
 					Source: &Checkpoint{
 						Epoch: "6",
@@ -290,7 +290,7 @@ func TestAttesterSlashing_FromConsensus(t *testing.T) {
 				AttestingIndices: []string{"11", "12"},
 				Data: &AttestationData{
 					Slot:            "13",
-					CommitteeIndex:  "14",
+					Index:           "14",
 					BeaconBlockRoot: hexutil.Encode([]byte{15}),
 					Source: &Checkpoint{
 						Epoch: "16",
@@ -309,7 +309,7 @@ func TestAttesterSlashing_FromConsensus(t *testing.T) {
 				AttestingIndices: []string{"21", "22"},
 				Data: &AttestationData{
 					Slot:            "23",
-					CommitteeIndex:  "24",
+					Index:           "24",
 					BeaconBlockRoot: hexutil.Encode([]byte{25}),
 					Source: &Checkpoint{
 						Epoch: "26",
@@ -326,7 +326,7 @@ func TestAttesterSlashing_FromConsensus(t *testing.T) {
 				AttestingIndices: []string{"31", "32"},
 				Data: &AttestationData{
 					Slot:            "33",
-					CommitteeIndex:  "34",
+					Index:           "34",
 					BeaconBlockRoot: hexutil.Encode([]byte{35}),
 					Source: &Checkpoint{
 						Epoch: "36",

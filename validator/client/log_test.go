@@ -19,7 +19,7 @@ func TestLogSubmittedAtts(t *testing.T) {
 			submittedAtts: make(map[submittedAttKey]*submittedAtt),
 		}
 		att := util.HydrateAttestation(&ethpb.Attestation{})
-		att.Data.CommitteeIndex = 12
+		att.Data.Index = 12
 		require.NoError(t, v.saveSubmittedAtt(att, make([]byte, field_params.BLSPubkeyLength), false))
 		v.LogSubmittedAtts(0)
 		assert.LogsContain(t, logHook, "committeeIndices=\"[12]\"")
@@ -30,7 +30,7 @@ func TestLogSubmittedAtts(t *testing.T) {
 			submittedAtts: make(map[submittedAttKey]*submittedAtt),
 		}
 		att := util.HydrateAttestationElectra(&ethpb.AttestationElectra{})
-		att.Data.CommitteeIndex = 0
+		att.Data.Index = 0
 		att.CommitteeBits = primitives.NewAttestationCommitteeBits()
 		att.CommitteeBits.SetBitAt(44, true)
 		require.NoError(t, v.saveSubmittedAtt(att, make([]byte, field_params.BLSPubkeyLength), false))
@@ -43,12 +43,12 @@ func TestLogSubmittedAtts(t *testing.T) {
 			submittedAtts: make(map[submittedAttKey]*submittedAtt),
 		}
 		att := util.HydrateAttestationElectra(&ethpb.AttestationElectra{})
-		att.Data.CommitteeIndex = 0
+		att.Data.Index = 0
 		att.CommitteeBits = primitives.NewAttestationCommitteeBits()
 		att.CommitteeBits.SetBitAt(23, true)
 		require.NoError(t, v.saveSubmittedAtt(att, make([]byte, field_params.BLSPubkeyLength), false))
 		att2 := util.HydrateAttestationElectra(&ethpb.AttestationElectra{})
-		att2.Data.CommitteeIndex = 0
+		att2.Data.Index = 0
 		att2.CommitteeBits = primitives.NewAttestationCommitteeBits()
 		att2.CommitteeBits.SetBitAt(2, true)
 		require.NoError(t, v.saveSubmittedAtt(att2, make([]byte, field_params.BLSPubkeyLength), false))
@@ -62,7 +62,7 @@ func TestLogSubmittedAtts(t *testing.T) {
 		}
 		agg := &ethpb.AggregateAttestationAndProof{}
 		agg.Aggregate = util.HydrateAttestation(&ethpb.Attestation{})
-		agg.Aggregate.Data.CommitteeIndex = 12
+		agg.Aggregate.Data.Index = 12
 		require.NoError(t, v.saveSubmittedAtt(agg.AggregateVal(), make([]byte, field_params.BLSPubkeyLength), true))
 		v.LogSubmittedAtts(0)
 		assert.LogsContain(t, logHook, "committeeIndices=\"[12]\"")
@@ -74,7 +74,7 @@ func TestLogSubmittedAtts(t *testing.T) {
 		}
 		agg := &ethpb.AggregateAttestationAndProofElectra{}
 		agg.Aggregate = util.HydrateAttestationElectra(&ethpb.AttestationElectra{})
-		agg.Aggregate.Data.CommitteeIndex = 0
+		agg.Aggregate.Data.Index = 0
 		agg.Aggregate.CommitteeBits = primitives.NewAttestationCommitteeBits()
 		agg.Aggregate.CommitteeBits.SetBitAt(63, true)
 		require.NoError(t, v.saveSubmittedAtt(agg.AggregateVal(), make([]byte, field_params.BLSPubkeyLength), true))

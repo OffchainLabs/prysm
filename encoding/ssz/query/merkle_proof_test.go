@@ -67,7 +67,7 @@ func TestProve_BeaconBlock(t *testing.T) {
 		AggregationBits: bitfield.Bitlist{0x01},
 		Data: &eth.AttestationData{
 			Slot:            1,
-			CommitteeIndex:  1,
+			Index:           1,
 			BeaconBlockRoot: root32,
 			Source: &eth.Checkpoint{
 				Epoch: 1,

@@ -35,9 +35,9 @@ func (c *beaconApiValidatorClient) attestationData(
 	}
 
 	attestationData := produceAttestationDataResponseJson.Data
-	committeeIndex, err := strconv.ParseUint(attestationData.CommitteeIndex, 10, 64)
+	committeeIndex, err := strconv.ParseUint(attestationData.Index, 10, 64)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to parse attestation committee index: %s", attestationData.CommitteeIndex)
+		return nil, errors.Wrapf(err, "failed to parse attestation committee index: %s", attestationData.Index)
 	}
 
 	beaconBlockRoot, err := bytesutil.DecodeHexWithLength(attestationData.BeaconBlockRoot, fieldparams.RootLength)
@@ -80,7 +80,7 @@ func (c *beaconApiValidatorClient) attestationData(
 
 	response := &ethpb.AttestationData{
 		BeaconBlockRoot: beaconBlockRoot,
-		CommitteeIndex:  primitives.CommitteeIndex(committeeIndex),
+		Index:           primitives.CommitteeIndex(committeeIndex),
 		Slot:            primitives.Slot(slot),
 		Source: &ethpb.Checkpoint{
 			Epoch: primitives.Epoch(sourceEpoch),

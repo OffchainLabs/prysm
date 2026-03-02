@@ -258,9 +258,9 @@ func convertAttestationDataToProto(jsonAttestationData *structs.AttestationData)
 		return nil, errors.Wrapf(err, "failed to parse attestation slot `%s`", jsonAttestationData.Slot)
 	}
 
-	committeeIndex, err := strconv.ParseUint(jsonAttestationData.CommitteeIndex, 10, 64)
+	committeeIndex, err := strconv.ParseUint(jsonAttestationData.Index, 10, 64)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to parse attestation committee index `%s`", jsonAttestationData.CommitteeIndex)
+		return nil, errors.Wrapf(err, "failed to parse attestation committee index `%s`", jsonAttestationData.Index)
 	}
 
 	beaconBlockRoot, err := hexutil.Decode(jsonAttestationData.BeaconBlockRoot)
@@ -280,7 +280,7 @@ func convertAttestationDataToProto(jsonAttestationData *structs.AttestationData)
 
 	return &ethpb.AttestationData{
 		Slot:            primitives.Slot(slot),
-		CommitteeIndex:  primitives.CommitteeIndex(committeeIndex),
+		Index:           primitives.CommitteeIndex(committeeIndex),
 		BeaconBlockRoot: beaconBlockRoot,
 		Source:          sourceCheckpoint,
 		Target:          targetCheckpoint,

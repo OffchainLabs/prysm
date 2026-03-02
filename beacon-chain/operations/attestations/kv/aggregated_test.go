@@ -502,9 +502,9 @@ func TestKV_Aggregated_DuplicateAggregatedAttestations(t *testing.T) {
 func TestKV_Aggregated_AggregatedAttestationsBySlotIndex(t *testing.T) {
 	cache := NewAttCaches()
 
-	att1 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, CommitteeIndex: 1}, AggregationBits: bitfield.Bitlist{0b1011}})
-	att2 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, CommitteeIndex: 2}, AggregationBits: bitfield.Bitlist{0b1101}})
-	att3 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2, CommitteeIndex: 1}, AggregationBits: bitfield.Bitlist{0b1101}})
+	att1 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, Index: 1}, AggregationBits: bitfield.Bitlist{0b1011}})
+	att2 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, Index: 2}, AggregationBits: bitfield.Bitlist{0b1101}})
+	att3 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2, Index: 1}, AggregationBits: bitfield.Bitlist{0b1101}})
 	atts := []*ethpb.Attestation{att1, att2, att3}
 
 	for _, att := range atts {

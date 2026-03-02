@@ -256,7 +256,7 @@ func TestAttDataIsEqual(t *testing.T) {
 			name: "same",
 			attData1: &eth.AttestationData{
 				Slot:            5,
-				CommitteeIndex:  2,
+				Index:           2,
 				BeaconBlockRoot: []byte("great block"),
 				Source: &eth.Checkpoint{
 					Epoch: 4,
@@ -269,7 +269,7 @@ func TestAttDataIsEqual(t *testing.T) {
 			},
 			attData2: &eth.AttestationData{
 				Slot:            5,
-				CommitteeIndex:  2,
+				Index:           2,
 				BeaconBlockRoot: []byte("great block"),
 				Source: &eth.Checkpoint{
 					Epoch: 4,
@@ -286,7 +286,7 @@ func TestAttDataIsEqual(t *testing.T) {
 			name: "diff slot",
 			attData1: &eth.AttestationData{
 				Slot:            5,
-				CommitteeIndex:  2,
+				Index:           2,
 				BeaconBlockRoot: []byte("great block"),
 				Source: &eth.Checkpoint{
 					Epoch: 4,
@@ -299,7 +299,7 @@ func TestAttDataIsEqual(t *testing.T) {
 			},
 			attData2: &eth.AttestationData{
 				Slot:            4,
-				CommitteeIndex:  2,
+				Index:           2,
 				BeaconBlockRoot: []byte("great block"),
 				Source: &eth.Checkpoint{
 					Epoch: 4,
@@ -315,7 +315,7 @@ func TestAttDataIsEqual(t *testing.T) {
 			name: "diff block",
 			attData1: &eth.AttestationData{
 				Slot:            5,
-				CommitteeIndex:  2,
+				Index:           2,
 				BeaconBlockRoot: []byte("good block"),
 				Source: &eth.Checkpoint{
 					Epoch: 4,
@@ -328,7 +328,7 @@ func TestAttDataIsEqual(t *testing.T) {
 			},
 			attData2: &eth.AttestationData{
 				Slot:            5,
-				CommitteeIndex:  2,
+				Index:           2,
 				BeaconBlockRoot: []byte("great block"),
 				Source: &eth.Checkpoint{
 					Epoch: 4,
@@ -344,7 +344,7 @@ func TestAttDataIsEqual(t *testing.T) {
 			name: "diff source root",
 			attData1: &eth.AttestationData{
 				Slot:            5,
-				CommitteeIndex:  2,
+				Index:           2,
 				BeaconBlockRoot: []byte("great block"),
 				Source: &eth.Checkpoint{
 					Epoch: 4,
@@ -357,7 +357,7 @@ func TestAttDataIsEqual(t *testing.T) {
 			},
 			attData2: &eth.AttestationData{
 				Slot:            5,
-				CommitteeIndex:  2,
+				Index:           2,
 				BeaconBlockRoot: []byte("great block"),
 				Source: &eth.Checkpoint{
 					Epoch: 4,
@@ -432,7 +432,7 @@ func TestCheckPtIsEqual(t *testing.T) {
 func BenchmarkAttDataIsEqual(b *testing.B) {
 	attData1 := &eth.AttestationData{
 		Slot:            5,
-		CommitteeIndex:  2,
+		Index:           2,
 		BeaconBlockRoot: []byte("great block"),
 		Source: &eth.Checkpoint{
 			Epoch: 4,
@@ -445,7 +445,7 @@ func BenchmarkAttDataIsEqual(b *testing.B) {
 	}
 	attData2 := &eth.AttestationData{
 		Slot:            5,
-		CommitteeIndex:  2,
+		Index:           2,
 		BeaconBlockRoot: []byte("great block"),
 		Source: &eth.Checkpoint{
 			Epoch: 4,

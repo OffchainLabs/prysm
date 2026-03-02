@@ -305,7 +305,7 @@ func GenerateAttesterSlashingForValidator(
 		att1 := &ethpb.IndexedAttestationElectra{
 			Data: &ethpb.AttestationData{
 				Slot:            bState.Slot(),
-				CommitteeIndex:  0,
+				Index:           0,
 				BeaconBlockRoot: make([]byte, fieldparams.RootLength),
 				Target: &ethpb.Checkpoint{
 					Epoch: currentEpoch,
@@ -327,7 +327,7 @@ func GenerateAttesterSlashingForValidator(
 		att2 := &ethpb.IndexedAttestationElectra{
 			Data: &ethpb.AttestationData{
 				Slot:            bState.Slot(),
-				CommitteeIndex:  0,
+				Index:           0,
 				BeaconBlockRoot: make([]byte, fieldparams.RootLength),
 				Target: &ethpb.Checkpoint{
 					Epoch: currentEpoch,
@@ -354,7 +354,7 @@ func GenerateAttesterSlashingForValidator(
 	att1 := &ethpb.IndexedAttestation{
 		Data: &ethpb.AttestationData{
 			Slot:            bState.Slot(),
-			CommitteeIndex:  0,
+			Index:           0,
 			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
 			Target: &ethpb.Checkpoint{
 				Epoch: currentEpoch,
@@ -376,7 +376,7 @@ func GenerateAttesterSlashingForValidator(
 	att2 := &ethpb.IndexedAttestation{
 		Data: &ethpb.AttestationData{
 			Slot:            bState.Slot(),
-			CommitteeIndex:  0,
+			Index:           0,
 			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
 			Target: &ethpb.Checkpoint{
 				Epoch: currentEpoch,

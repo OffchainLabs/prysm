@@ -97,7 +97,7 @@ func (attData *AttestationData) Copy() *AttestationData {
 	}
 	return &AttestationData{
 		Slot:            attData.Slot,
-		CommitteeIndex:  attData.CommitteeIndex,
+		Index:           attData.Index,
 		BeaconBlockRoot: bytesutil.SafeCopyBytes(attData.BeaconBlockRoot),
 		Source:          attData.Source.Copy(),
 		Target:          attData.Target.Copy(),
@@ -149,7 +149,7 @@ func (*Attestation) GetAttestingIndex() primitives.ValidatorIndex {
 // CommitteeBitsVal --
 func (a *Attestation) CommitteeBitsVal() bitfield.Bitfield {
 	cb := primitives.NewAttestationCommitteeBits()
-	cb.SetBitAt(uint64(a.Data.CommitteeIndex), true)
+	cb.SetBitAt(uint64(a.Data.Index), true)
 	return cb
 }
 
@@ -163,7 +163,7 @@ func (a *Attestation) GetCommitteeIndex() primitives.CommitteeIndex {
 	if a == nil || a.Data == nil {
 		return 0
 	}
-	return a.Data.CommitteeIndex
+	return a.Data.Index
 }
 
 // Version --
@@ -227,7 +227,7 @@ func (a *PendingAttestation) GetCommitteeIndex() primitives.CommitteeIndex {
 	if a == nil || a.Data == nil {
 		return 0
 	}
-	return a.Data.CommitteeIndex
+	return a.Data.Index
 }
 
 // Version --

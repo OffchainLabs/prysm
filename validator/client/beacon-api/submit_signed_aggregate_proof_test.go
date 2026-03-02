@@ -193,7 +193,7 @@ func generateSignedAggregateAndProofJson() *ethpb.SignedAggregateAttestationAndP
 				AggregationBits: testhelpers.FillByteSlice(4, 74),
 				Data: &ethpb.AttestationData{
 					Slot:            75,
-					CommitteeIndex:  76,
+					Index:           76,
 					BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
 					Source: &ethpb.Checkpoint{
 						Epoch: 78,
@@ -220,7 +220,7 @@ func generateSignedAggregateAndProofElectraJson() *ethpb.SignedAggregateAttestat
 				AggregationBits: testhelpers.FillByteSlice(4, 74),
 				Data: &ethpb.AttestationData{
 					Slot:            75,
-					CommitteeIndex:  76,
+					Index:           76,
 					BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
 					Source: &ethpb.Checkpoint{
 						Epoch: 78,

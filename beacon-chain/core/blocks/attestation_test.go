@@ -43,7 +43,7 @@ func TestProcessAggregatedAttestation_OverlappingBits(t *testing.T) {
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(cfc))
 	require.NoError(t, beaconState.AppendCurrentEpochAttestations(&ethpb.PendingAttestation{}))
 
-	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att1.Data.Slot, att1.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att1.Data.Slot, att1.Data.Index)
 	require.NoError(t, err)
 	attestingIndices1, err := attestation.AttestingIndices(att1, committee)
 	require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestProcessAggregatedAttestation_OverlappingBits(t *testing.T) {
 		AggregationBits: aggBits2,
 	}
 
-	committee, err = helpers.BeaconCommitteeFromState(t.Context(), beaconState, att2.Data.Slot, att2.Data.CommitteeIndex)
+	committee, err = helpers.BeaconCommitteeFromState(t.Context(), beaconState, att2.Data.Slot, att2.Data.Index)
 	require.NoError(t, err)
 	attestingIndices2, err := attestation.AttestingIndices(att2, committee)
 	require.NoError(t, err)
@@ -205,9 +205,9 @@ func TestVerifyAttestationNoVerifySignature_BadAttIdx(t *testing.T) {
 	copy(mockRoot[:], "hello-world")
 	att := &ethpb.Attestation{
 		Data: &ethpb.AttestationData{
-			CommitteeIndex: 100,
-			Source:         &ethpb.Checkpoint{Epoch: 0, Root: mockRoot[:]},
-			Target:         &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+			Index:  100,
+			Source: &ethpb.Checkpoint{Epoch: 0, Root: mockRoot[:]},
+			Target: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
 		},
 		AggregationBits: aggBits,
 	}
@@ -255,9 +255,9 @@ func TestVerifyAttestationNoVerifySignature_Electra(t *testing.T) {
 	t.Run("non-zero committee index", func(t *testing.T) {
 		att := &ethpb.AttestationElectra{
 			Data: &ethpb.AttestationData{
-				Source:         &ethpb.Checkpoint{Epoch: 0, Root: mockRoot[:]},
-				Target:         &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
-				CommitteeIndex: 1,
+				Source: &ethpb.Checkpoint{Epoch: 0, Root: mockRoot[:]},
+				Target: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+				Index:  1,
 			},
 			AggregationBits: bitfield.NewBitlist(1),
 			CommitteeBits:   bitfield.NewBitvector64(),
@@ -370,7 +370,7 @@ func TestVerifyAttestationNoVerifySignature_GloasCommitteeIndexLimit(t *testing.
 	att := &ethpb.AttestationElectra{
 		Data: &ethpb.AttestationData{
 			Slot:            0,
-			CommitteeIndex:  2, // invalid for Gloas (must be <2)
+			Index:           2, // invalid for Gloas (must be <2)
 			BeaconBlockRoot: blockRoots[0],
 			Source:          justified,
 			Target:          justified,
@@ -430,7 +430,7 @@ func TestConvertToIndexed_OK(t *testing.T) {
 			Signature:        att.Signature,
 		}
 
-		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, att.Data.Slot, att.Data.CommitteeIndex)
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, att.Data.Slot, att.Data.Index)
 		require.NoError(t, err)
 		ia, err := attestation.ConvertToIndexed(t.Context(), att, committee)
 		require.NoError(t, err)
@@ -554,8 +554,8 @@ func TestValidateIndexedAttestation_BadAttestationsSignatureSet(t *testing.T) {
 	for range uint64(1000) {
 		atts = append(atts, &ethpb.Attestation{
 			Data: &ethpb.AttestationData{
-				CommitteeIndex: 1,
-				Slot:           1,
+				Index: 1,
+				Slot:  1,
 			},
 			Signature:       sig.Marshal(),
 			AggregationBits: list,
@@ -571,8 +571,8 @@ func TestValidateIndexedAttestation_BadAttestationsSignatureSet(t *testing.T) {
 	for range uint64(1000) {
 		atts = append(atts, &ethpb.Attestation{
 			Data: &ethpb.AttestationData{
-				CommitteeIndex: 1,
-				Slot:           1,
+				Index: 1,
+				Slot:  1,
 				Target: &ethpb.Checkpoint{
 					Root: []byte{},
 				},
@@ -636,8 +636,8 @@ func TestVerifyAttestations_HandlesPlannedFork(t *testing.T) {
 	att2 := util.HydrateAttestation(&ethpb.Attestation{
 		AggregationBits: bitfield.NewBitlist(uint64(len(comm2))),
 		Data: &ethpb.AttestationData{
-			Slot:           1*params.BeaconConfig().SlotsPerEpoch + 1,
-			CommitteeIndex: 1,
+			Slot:  1*params.BeaconConfig().SlotsPerEpoch + 1,
+			Index: 1,
 		},
 	})
 	currDomain, err := signing.Domain(st.Fork(), st.Fork().Epoch, params.BeaconConfig().DomainBeaconAttester, st.GenesisValidatorsRoot())
@@ -697,8 +697,8 @@ func TestRetrieveAttestationSignatureSet_VerifiesMultipleAttestations(t *testing
 		att2 := util.HydrateAttestation(&ethpb.Attestation{
 			AggregationBits: bitfield.NewBitlist(uint64(len(comm2))),
 			Data: &ethpb.AttestationData{
-				Slot:           1,
-				CommitteeIndex: 1,
+				Slot:  1,
+				Index: 1,
 			},
 		})
 		root, err = signing.ComputeSigningRoot(att2.Data, domain)
@@ -816,8 +816,8 @@ func TestRetrieveAttestationSignatureSet_AcrossFork(t *testing.T) {
 	att2 := util.HydrateAttestation(&ethpb.Attestation{
 		AggregationBits: bitfield.NewBitlist(uint64(len(comm2))),
 		Data: &ethpb.AttestationData{
-			Slot:           1,
-			CommitteeIndex: 1,
+			Slot:  1,
+			Index: 1,
 		},
 	})
 	root, err = signing.ComputeSigningRoot(att2.Data, domain)

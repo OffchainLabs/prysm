@@ -74,7 +74,7 @@ func GenerateProtoElectraBeaconBlockContents() *ethpb.BeaconBlockContentsElectra
 							AttestingIndices: []uint64{34, 35},
 							Data: &ethpb.AttestationData{
 								Slot:            36,
-								CommitteeIndex:  37,
+								Index:           37,
 								BeaconBlockRoot: FillByteSlice(32, 38),
 								Source: &ethpb.Checkpoint{
 									Epoch: 39,
@@ -91,7 +91,7 @@ func GenerateProtoElectraBeaconBlockContents() *ethpb.BeaconBlockContentsElectra
 							AttestingIndices: []uint64{44, 45},
 							Data: &ethpb.AttestationData{
 								Slot:            46,
-								CommitteeIndex:  47,
+								Index:           47,
 								BeaconBlockRoot: FillByteSlice(32, 38),
 								Source: &ethpb.Checkpoint{
 									Epoch: 49,
@@ -111,7 +111,7 @@ func GenerateProtoElectraBeaconBlockContents() *ethpb.BeaconBlockContentsElectra
 						AggregationBits: FillByteSlice(4, 74),
 						Data: &ethpb.AttestationData{
 							Slot:            75,
-							CommitteeIndex:  76,
+							Index:           76,
 							BeaconBlockRoot: FillByteSlice(32, 38),
 							Source: &ethpb.Checkpoint{
 								Epoch: 78,
@@ -129,7 +129,7 @@ func GenerateProtoElectraBeaconBlockContents() *ethpb.BeaconBlockContentsElectra
 						AggregationBits: FillByteSlice(4, 83),
 						Data: &ethpb.AttestationData{
 							Slot:            84,
-							CommitteeIndex:  85,
+							Index:           85,
 							BeaconBlockRoot: FillByteSlice(32, 38),
 							Source: &ethpb.Checkpoint{
 								Epoch: 87,
@@ -334,7 +334,7 @@ func GenerateProtoBlindedElectraBeaconBlock() *ethpb.BlindedBeaconBlockElectra {
 						AttestingIndices: []uint64{34, 35},
 						Data: &ethpb.AttestationData{
 							Slot:            36,
-							CommitteeIndex:  37,
+							Index:           37,
 							BeaconBlockRoot: FillByteSlice(32, 38),
 							Source: &ethpb.Checkpoint{
 								Epoch: 39,
@@ -351,7 +351,7 @@ func GenerateProtoBlindedElectraBeaconBlock() *ethpb.BlindedBeaconBlockElectra {
 						AttestingIndices: []uint64{44, 45},
 						Data: &ethpb.AttestationData{
 							Slot:            46,
-							CommitteeIndex:  47,
+							Index:           47,
 							BeaconBlockRoot: FillByteSlice(32, 38),
 							Source: &ethpb.Checkpoint{
 								Epoch: 49,
@@ -371,7 +371,7 @@ func GenerateProtoBlindedElectraBeaconBlock() *ethpb.BlindedBeaconBlockElectra {
 					AggregationBits: FillByteSlice(4, 74),
 					Data: &ethpb.AttestationData{
 						Slot:            75,
-						CommitteeIndex:  76,
+						Index:           76,
 						BeaconBlockRoot: FillByteSlice(32, 38),
 						Source: &ethpb.Checkpoint{
 							Epoch: 78,
@@ -389,7 +389,7 @@ func GenerateProtoBlindedElectraBeaconBlock() *ethpb.BlindedBeaconBlockElectra {
 					AggregationBits: FillByteSlice(4, 83),
 					Data: &ethpb.AttestationData{
 						Slot:            84,
-						CommitteeIndex:  85,
+						Index:           85,
 						BeaconBlockRoot: FillByteSlice(32, 38),
 						Source: &ethpb.Checkpoint{
 							Epoch: 87,
@@ -576,7 +576,7 @@ func GenerateJsonElectraBeaconBlockContents() *structs.BeaconBlockContentsElectr
 							AttestingIndices: []string{"34", "35"},
 							Data: &structs.AttestationData{
 								Slot:            "36",
-								CommitteeIndex:  "37",
+								Index:           "37",
 								BeaconBlockRoot: FillEncodedByteSlice(32, 38),
 								Source: &structs.Checkpoint{
 									Epoch: "39",
@@ -593,7 +593,7 @@ func GenerateJsonElectraBeaconBlockContents() *structs.BeaconBlockContentsElectr
 							AttestingIndices: []string{"44", "45"},
 							Data: &structs.AttestationData{
 								Slot:            "46",
-								CommitteeIndex:  "47",
+								Index:           "47",
 								BeaconBlockRoot: FillEncodedByteSlice(32, 38),
 								Source: &structs.Checkpoint{
 									Epoch: "49",
@@ -613,7 +613,7 @@ func GenerateJsonElectraBeaconBlockContents() *structs.BeaconBlockContentsElectr
 						AggregationBits: FillEncodedByteSlice(4, 74),
 						Data: &structs.AttestationData{
 							Slot:            "75",
-							CommitteeIndex:  "76",
+							Index:           "76",
 							BeaconBlockRoot: FillEncodedByteSlice(32, 38),
 							Source: &structs.Checkpoint{
 								Epoch: "78",
@@ -631,7 +631,7 @@ func GenerateJsonElectraBeaconBlockContents() *structs.BeaconBlockContentsElectr
 						AggregationBits: FillEncodedByteSlice(4, 83),
 						Data: &structs.AttestationData{
 							Slot:            "84",
-							CommitteeIndex:  "85",
+							Index:           "85",
 							BeaconBlockRoot: FillEncodedByteSlice(32, 38),
 							Source: &structs.Checkpoint{
 								Epoch: "87",
@@ -836,7 +836,7 @@ func GenerateJsonBlindedElectraBeaconBlock() *structs.BlindedBeaconBlockElectra 
 						AttestingIndices: []string{"34", "35"},
 						Data: &structs.AttestationData{
 							Slot:            "36",
-							CommitteeIndex:  "37",
+							Index:           "37",
 							BeaconBlockRoot: FillEncodedByteSlice(32, 38),
 							Source: &structs.Checkpoint{
 								Epoch: "39",
@@ -853,7 +853,7 @@ func GenerateJsonBlindedElectraBeaconBlock() *structs.BlindedBeaconBlockElectra 
 						AttestingIndices: []string{"44", "45"},
 						Data: &structs.AttestationData{
 							Slot:            "46",
-							CommitteeIndex:  "47",
+							Index:           "47",
 							BeaconBlockRoot: FillEncodedByteSlice(32, 38),
 							Source: &structs.Checkpoint{
 								Epoch: "49",
@@ -873,7 +873,7 @@ func GenerateJsonBlindedElectraBeaconBlock() *structs.BlindedBeaconBlockElectra 
 					AggregationBits: FillEncodedByteSlice(4, 74),
 					Data: &structs.AttestationData{
 						Slot:            "75",
-						CommitteeIndex:  "76",
+						Index:           "76",
 						BeaconBlockRoot: FillEncodedByteSlice(32, 38),
 						Source: &structs.Checkpoint{
 							Epoch: "78",
@@ -891,7 +891,7 @@ func GenerateJsonBlindedElectraBeaconBlock() *structs.BlindedBeaconBlockElectra 
 					AggregationBits: FillEncodedByteSlice(4, 83),
 					Data: &structs.AttestationData{
 						Slot:            "84",
-						CommitteeIndex:  "85",
+						Index:           "85",
 						BeaconBlockRoot: FillEncodedByteSlice(32, 38),
 						Source: &structs.Checkpoint{
 							Epoch: "87",

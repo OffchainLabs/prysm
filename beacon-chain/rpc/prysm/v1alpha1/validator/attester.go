@@ -56,7 +56,7 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
 
-	resp, err := vs.proposeAtt(ctx, att, att.GetData().CommitteeIndex)
+	resp, err := vs.proposeAtt(ctx, att, att.GetData().Index)
 	if err != nil {
 		return nil, err
 	}
