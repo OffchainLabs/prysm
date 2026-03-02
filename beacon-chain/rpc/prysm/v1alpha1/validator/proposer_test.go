@@ -1389,7 +1389,8 @@ func TestHandleStateRootError_IncrementsAttempts(t *testing.T) {
 
 	stateGen := stategen.New(db, doublylinkedtree.New())
 	vs := &Server{
-		StateGen: stateGen,
+		StateGen:      stateGen,
+		BlockReceiver: &mock.ChainService{State: beaconState},
 	}
 
 	// Create a block that will trigger retries
