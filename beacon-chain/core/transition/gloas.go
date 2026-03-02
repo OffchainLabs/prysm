@@ -18,10 +18,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-// NSCPRocessSlotToValidate advances the given state to the slot of the given block using the NSC.
+// ProcessSlotsForBlock advances the given state to the slot of the given block.
 // This function assumes that the parent state is the latest state that has been processed before the given block.
 // In particular, all that it is needed to get the blocks's prestate is to advance slots and possible epoch transitions.
-func NSCProcessSlotToValidate(
+func ProcessSlotsForBlock(
 	ctx context.Context,
 	st state.BeaconState,
 	b interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
