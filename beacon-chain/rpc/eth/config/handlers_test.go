@@ -180,6 +180,7 @@ func TestGetSpec(t *testing.T) {
 	config.BuilderIndexSelfBuild = primitives.BuilderIndex(125)
 	config.BuilderPaymentThresholdNumerator = 104
 	config.BuilderPaymentThresholdDenominator = 105
+	config.MaxRequestPayloads = 106
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -223,7 +224,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 194, len(data))
+	assert.Equal(t, 195, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -621,6 +622,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "104", v)
 			case "BUILDER_PAYMENT_THRESHOLD_DENOMINATOR":
 				assert.Equal(t, "105", v)
+			case "MAX_REQUEST_PAYLOADS":
+				assert.Equal(t, "106", v)
 			case "BLOB_SCHEDULE":
 				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)
