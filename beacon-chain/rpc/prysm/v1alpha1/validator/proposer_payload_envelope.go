@@ -190,7 +190,13 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		return nil, status.Errorf(codes.Internal, "failed to broadcast execution payload envelope: %v", err)
 	}
 
-	// TODO: Receive the envelope locally following the broadcastReceiveBlock pattern.
+	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(req)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "could not wrap signed envelope: %v", err)
+	}
+	if err := vs.ExecutionPayloadEnvelopeReceiver.ReceiveExecutionPayloadEnvelope(ctx, roSigned); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to receive execution payload envelope: %v", err)
+	}
 
 	// TODO: Build and broadcast data column sidecars from the cached blobs bundle.
 	// In Gloas, blob data is delivered alongside the execution payload envelope

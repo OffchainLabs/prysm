@@ -37,6 +37,9 @@ func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 		if epoch >= params.BeaconConfig().FuluForkEpoch {
 			return &ethpb.SignedBeaconBlockFulu{}
 		}
+		if epoch >= params.BeaconConfig().GloasForkEpoch {
+			return &ethpb.SignedBeaconBlockGloas{}
+		}
 		if epoch >= params.BeaconConfig().ElectraForkEpoch {
 			return &ethpb.SignedBeaconBlockElectra{}
 		}
@@ -146,6 +149,8 @@ func init() {
 
 	// Specially handle Fulu objects.
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockFulu]()] = BlockSubnetTopicFormat
+	// Specially handle Gloas objects.
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockGloas]()] = BlockSubnetTopicFormat
 
 	// Payload attestation messages.
 	GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestationMessage]()] = PayloadAttestationMessageTopicFormat
