@@ -37,7 +37,7 @@ func TestPayloadCommitteeCache_LRUEviction(t *testing.T) {
 	c := NewPayloadCommitteeCache()
 
 	// Fill beyond capacity.
-	for i := 0; i < maxPayloadCommitteeCacheSize+10; i++ {
+	for i := range maxPayloadCommitteeCacheSize + 10 {
 		s := bytesutil.ToBytes32([]byte(strconv.Itoa(i)))
 		c.Add(s, []primitives.ValidatorIndex{primitives.ValidatorIndex(i)})
 	}

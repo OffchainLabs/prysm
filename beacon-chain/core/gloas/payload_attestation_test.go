@@ -406,7 +406,7 @@ func TestPayloadCommittee_ParallelCallers(t *testing.T) {
 	errs := make([]error, numCallers)
 	results := make([][]primitives.ValidatorIndex, numCallers)
 
-	for i := 0; i < numCallers; i++ {
+	for i := range numCallers {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -415,7 +415,7 @@ func TestPayloadCommittee_ParallelCallers(t *testing.T) {
 	}
 
 	wg.Wait()
-	for i := 0; i < numCallers; i++ {
+	for i := range numCallers {
 		require.NoError(t, errs[i], "caller %d returned error", i)
 		assert.DeepEqual(t, expected, results[i], "caller %d got wrong result", i)
 	}
