@@ -59,13 +59,9 @@ func (vs *Server) GetAttesterDuties(ctx context.Context, req *ethpb.AttesterDuti
 		return nil, status.Errorf(codes.Internal, "Could not determine optimistic status: %v", err)
 	}
 
-	resp := &ethpb.AttesterDutiesResponse{
-		DependentRoot:       dependentRoot,
-		ExecutionOptimistic: optimistic,
-		Duties:              make([]*ethpb.AttesterDuty, len(duties)),
-	}
+	dutiesResponses := make([]*ethpb.AttesterDuty, len(duties))
 	for i, d := range duties {
-		resp.Duties[i] = &ethpb.AttesterDuty{
+		dutiesResponses[i] = &ethpb.AttesterDuty{
 			Pubkey:                  d.Pubkey[:],
 			ValidatorIndex:          d.ValidatorIndex,
 			CommitteeIndex:          d.CommitteeIndex,
@@ -76,7 +72,11 @@ func (vs *Server) GetAttesterDuties(ctx context.Context, req *ethpb.AttesterDuti
 		}
 	}
 
-	return resp, nil
+	return &ethpb.AttesterDutiesResponse{
+		DependentRoot:       dependentRoot,
+		ExecutionOptimistic: optimistic,
+		Duties:              dutiesResponses,
+	}, nil
 }
 
 // GetProposerDutiesV2 returns proposer duties for the given epoch.
@@ -130,20 +130,20 @@ func (vs *Server) GetProposerDutiesV2(ctx context.Context, req *ethpb.ProposerDu
 		return nil, status.Errorf(codes.Internal, "Could not determine optimistic status: %v", err)
 	}
 
-	resp := &ethpb.ProposerDutiesResponse{
-		DependentRoot:       dependentRoot,
-		ExecutionOptimistic: optimistic,
-		Duties:              make([]*ethpb.ProposerDutyV2, len(duties)),
-	}
+	dutiesResponses := make([]*ethpb.ProposerDutyV2, len(duties))
 	for i, d := range duties {
-		resp.Duties[i] = &ethpb.ProposerDutyV2{
+		dutiesResponses[i] = &ethpb.ProposerDutyV2{
 			Pubkey:         d.Pubkey[:],
 			ValidatorIndex: d.ValidatorIndex,
 			Slot:           d.Slot,
 		}
 	}
 
-	return resp, nil
+	return &ethpb.ProposerDutiesResponse{
+		DependentRoot:       dependentRoot,
+		ExecutionOptimistic: optimistic,
+		Duties:              dutiesResponses,
+	}, nil
 }
 
 // GetSyncCommitteeDuties returns sync committee duties for the requested validators at the given epoch.
@@ -180,17 +180,17 @@ func (vs *Server) GetSyncCommitteeDuties(ctx context.Context, req *ethpb.SyncCom
 		return nil, status.Errorf(codes.Internal, "Could not determine optimistic status: %v", err)
 	}
 
-	resp := &ethpb.SyncCommitteeDutiesResponse{
-		ExecutionOptimistic: optimistic,
-		Duties:              make([]*ethpb.SyncCommitteeDuty, len(duties)),
-	}
+	dutiesResponses := make([]*ethpb.SyncCommitteeDuty, len(duties))
 	for i, d := range duties {
-		resp.Duties[i] = &ethpb.SyncCommitteeDuty{
+		dutiesResponses[i] = &ethpb.SyncCommitteeDuty{
 			Pubkey:                        d.Pubkey[:],
 			ValidatorIndex:                d.ValidatorIndex,
 			ValidatorSyncCommitteeIndices: d.ValidatorSyncCommitteeIndices,
 		}
 	}
 
-	return resp, nil
+	return &ethpb.SyncCommitteeDutiesResponse{
+		ExecutionOptimistic: optimistic,
+		Duties:              make([]*ethpb.SyncCommitteeDuty, len(duties)),
+	}, nil
 }
