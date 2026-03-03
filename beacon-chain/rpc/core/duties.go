@@ -96,7 +96,7 @@ func (s *Service) ProposerDuties(ctx context.Context, st state.BeaconState, epoc
 		return nil, &RpcError{Err: errors.Wrap(err, "could not compute proposer assignments"), Reason: Internal}
 	}
 
-	duties := make([]*ProposerDutyResult, 0)
+	duties := make([]*ProposerDutyResult, 0, params.BeaconConfig().SlotsPerEpoch)
 	for index, proposalSlots := range assignments {
 		pubkey := st.PubkeyAtIndex(index)
 		for _, slot := range proposalSlots {
