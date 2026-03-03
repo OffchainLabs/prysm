@@ -5,8 +5,11 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -57,7 +60,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	// [IGNORE] The envelope's block root envelope.block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue payload for processing once the block is retrieved).
 	if err := v.VerifyBlockRootSeen(func(root [32]byte) bool { return s.cfg.chain.HasBlock(ctx, root) }); err != nil {
-		return pubsub.ValidationIgnore, err
+		return s.queuePendingPayloadEnvelope(ctx, v, env, signedEnvelope)
 	}
 	root := env.BeaconBlockRoot()
 	// [IGNORE] The node has not seen another valid SignedExecutionPayloadEnvelope for this block root from this builder.
@@ -124,6 +127,67 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
 	return pubsub.ValidationAccept, nil
+}
+
+// queuePendingPayloadEnvelope verifies the builder signature and queues the
+// envelope for processing once the corresponding block arrives.
+func (s *Service) queuePendingPayloadEnvelope(
+	ctx context.Context,
+	v verification.ExecutionPayloadEnvelopeVerifier,
+	env interfaces.ROExecutionPayloadEnvelope,
+	signedEnvelope *ethpb.SignedExecutionPayloadEnvelope,
+) (pubsub.ValidationResult, error) {
+	if env.Slot() != s.cfg.clock.CurrentSlot() {
+		return pubsub.ValidationIgnore, nil
+	}
+	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	if err := v.VerifySignature(st); err != nil {
+		return pubsub.ValidationReject, err
+	}
+	root := env.BeaconBlockRoot()
+	builderIdx := uint64(env.BuilderIndex())
+	isSelfBuild := builderIdx == uint64(params.BeaconConfig().BuilderIndexSelfBuild)
+
+	s.pendingEnvelopeLock.Lock()
+	inner, rootExists := s.pendingPayloadEnvelopes[root]
+	if !rootExists {
+		if !isSelfBuild && len(s.pendingPayloadEnvelopes) >= maxPendingPayloadRoots {
+			s.pendingEnvelopeLock.Unlock()
+			return pubsub.ValidationIgnore, nil
+		}
+		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
+		s.pendingPayloadEnvelopes[root] = inner
+	} else {
+		for _, existing := range inner {
+			if existing.Message.Slot != signedEnvelope.Message.Slot {
+				s.pendingEnvelopeLock.Unlock()
+				return pubsub.ValidationIgnore, nil
+			}
+			break
+		}
+	}
+	if _, exists := inner[builderIdx]; exists {
+		s.pendingEnvelopeLock.Unlock()
+		return pubsub.ValidationIgnore, nil
+	}
+	if !isSelfBuild && len(inner) >= maxPendingBuildersPerRoot {
+		s.pendingEnvelopeLock.Unlock()
+		return pubsub.ValidationIgnore, nil
+	}
+	inner[builderIdx] = signedEnvelope
+	s.pendingEnvelopeLock.Unlock()
+
+	if !rootExists {
+		go func() {
+			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{root}, rand.NewGenerator()); err != nil {
+				log.WithError(err).Debug("Could not request beacon block for pending payload envelope")
+			}
+		}()
+	}
+	return pubsub.ValidationIgnore, nil
 }
 
 func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg proto.Message) error {

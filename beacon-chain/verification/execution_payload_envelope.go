@@ -1,8 +1,10 @@
 package verification
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -188,11 +190,11 @@ func validatePayloadEnvelopeSignature(st state.ReadOnlyBeaconState, e interfaces
 	}
 	var pubkey []byte
 	if env.BuilderIndex() == params.BeaconConfig().BuilderIndexSelfBuild {
-		header := st.LatestBlockHeader()
-		if header == nil {
-			return errors.New("latest block header is nil")
+		proposerIdx, err := helpers.BeaconProposerIndexAtSlot(context.TODO(), st, env.Slot())
+		if err != nil {
+			return errors.Wrap(err, "failed to get proposer index at slot")
 		}
-		val, err := st.ValidatorAtIndex(primitives.ValidatorIndex(header.ProposerIndex))
+		val, err := st.ValidatorAtIndex(proposerIdx)
 		if err != nil {
 			return errors.Wrap(err, "failed to get proposer validator")
 		}
