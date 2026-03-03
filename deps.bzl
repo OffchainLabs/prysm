@@ -804,8 +804,8 @@ def prysm_deps():
         patches = [
             "//third_party:com_github_ethereum_go_ethereum_secp256k1.patch",
         ],
-        sum = "h1:2D+1Fe23CwZ5tQoAS5DfwKFNI1HGcTwi65/kRlAVxes=",
-        version = "v1.17.0",
+        sum = "h1:IjlQDjgxg2uL+GzPRkygGULPMLzcYWncEI7wbaizvho=",
+        version = "v1.17.1",
     )
     go_repository(
         name = "com_github_evanphx_json_patch",
