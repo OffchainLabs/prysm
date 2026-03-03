@@ -980,7 +980,7 @@ func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, doma
 }
 
 // getAttestationData fetches attestation data from the beacon node with caching for Electra.
-// During Electra (pre-GLOAS), attestation data is identical for all validators in the same slot
+// During Electra (pre-Gloas), attestation data is identical for all validators in the same slot
 // (committee index is always 0), so we cache it to avoid redundant beacon node requests.
 func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot, committeeIndex primitives.CommitteeIndex) (*ethpb.AttestationData, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.getAttestationData")
@@ -991,7 +991,7 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 	postGloas := epoch >= params.BeaconConfig().GloasForkEpoch
 
 	// Pre-Electra: committee index varies per validator.
-	// Post-GLOAS: committee index signals payload status, which can change within a slot.
+	// Post-Gloas: committee index signals payload status, which can change within a slot.
 	// Neither case is safe to cache.
 	if !postElectra || postGloas {
 		return v.validatorClient.AttestationData(ctx, &ethpb.AttestationDataRequest{
@@ -1000,7 +1000,7 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 		})
 	}
 
-	// Electra to GLOAS: committee index is always 0, safe to cache
+	// Electra to Gloas: committee index is always 0, safe to cache
 	v.cachedAttestationDataLock.RLock()
 	if v.cachedAttestationData != nil && v.cachedAttestationData.Slot == slot {
 		data := v.cachedAttestationData

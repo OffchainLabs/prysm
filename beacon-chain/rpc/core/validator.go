@@ -580,8 +580,8 @@ func (s *Service) GetAttestationData(
 
 // attestationIndex returns the committee index for attestation data.
 // Pre-Electra: uses the requested committee index.
-// Electra to GLOAS: always 0.
-// Post-GLOAS: signals payload status of the attested head block.
+// Electra to Gloas: always 0.
+// Post-Gloas: signals payload status of the attested head block.
 func (s *Service) attestationIndex(req *ethpb.AttestationDataRequest, headRoot []byte) primitives.CommitteeIndex {
 	epoch := slots.ToEpoch(req.Slot)
 	if epoch < params.BeaconConfig().ElectraForkEpoch {
