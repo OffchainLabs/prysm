@@ -6,10 +6,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
 
@@ -20,18 +20,9 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetExecutionPayloadEnvelope")
 	defer span.End()
 
-	blockRoot := r.PathValue("block_root")
-	if blockRoot == "" {
-		httputil.HandleError(w, "block_root is required in URL params", http.StatusBadRequest)
-		return
-	}
-	rootBytes, err := hexutil.Decode(blockRoot)
+	rootBytes, err := bytesutil.DecodeHexWithLength(r.PathValue("block_root"), 32)
 	if err != nil {
-		httputil.HandleError(w, "invalid block_root: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if len(rootBytes) != 32 {
-		httputil.HandleError(w, "block_root must be 32 bytes", http.StatusBadRequest)
+		httputil.HandleError(w, "Could not decode block root: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	root := [32]byte(rootBytes)
