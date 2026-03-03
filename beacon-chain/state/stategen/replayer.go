@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -62,6 +64,10 @@ type chainer interface {
 	chainForSlot(ctx context.Context, target primitives.Slot) (state.BeaconState, []interfaces.ReadOnlySignedBeaconBlock, error)
 }
 
+type executionPayloadEnvelopeProvider interface {
+	executionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error)
+}
+
 type stateReplayer struct {
 	target  primitives.Slot
 	method  retrievalMethod
@@ -107,7 +113,20 @@ func (rs *stateReplayer) ReplayBlocks(ctx context.Context) (state.BeaconState, e
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		s, err = executeStateTransitionStateGen(ctx, s, b)
+
+		var envelope *ethpb.SignedBlindedExecutionPayloadEnvelope
+		if p, ok := rs.chainer.(executionPayloadEnvelopeProvider); ok {
+			root, err := b.Block().HashTreeRoot()
+			if err != nil {
+				return nil, errors.Wrap(err, "could not compute block root for execution payload envelope lookup")
+			}
+			envelope, err = p.executionPayloadEnvelope(ctx, root)
+			if err != nil && !errors.Is(err, db.ErrNotFound) {
+				return nil, errors.Wrap(err, "could not retrieve execution payload envelope")
+			}
+		}
+
+		s, err = executeStateTransitionStateGen(ctx, s, b, envelope)
 		if err != nil {
 			return nil, err
 		}

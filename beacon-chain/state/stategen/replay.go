@@ -1,23 +1,28 @@
 package stategen
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 // ReplayBlocks replays the input blocks on the input state until the target slot is reached.
-func (*State) replayBlocks(
+func (s *State) replayBlocks(
 	ctx context.Context,
 	state state.BeaconState,
 	signed []interfaces.ReadOnlySignedBeaconBlock,
@@ -46,7 +51,18 @@ func (*State) replayBlocks(
 		if state.Slot() >= blk.Block().Slot() {
 			continue
 		}
-		state, err = executeStateTransitionStateGen(ctx, state, blk)
+
+		var envelope *ethpb.SignedBlindedExecutionPayloadEnvelope
+		root, err := blk.Block().HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute block root for execution payload envelope lookup")
+		}
+		envelope, err = s.beaconDB.ExecutionPayloadEnvelope(ctx, root)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			return nil, errors.Wrap(err, "could not retrieve execution payload envelope")
+		}
+
+		state, err = executeStateTransitionStateGen(ctx, state, blk, envelope)
 		if err != nil {
 			return nil, err
 		}
@@ -95,6 +111,7 @@ func executeStateTransitionStateGen(
 	ctx context.Context,
 	state state.BeaconState,
 	signed interfaces.ReadOnlySignedBeaconBlock,
+	blindedEnvelope *ethpb.SignedBlindedExecutionPayloadEnvelope,
 ) (state.BeaconState, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -119,6 +136,29 @@ func executeStateTransitionStateGen(
 	state, err = transition.ProcessBlockForStateRoot(ctx, state, signed)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process block")
+	}
+
+	if state.Version() >= version.Gloas && blindedEnvelope != nil && blindedEnvelope.Message != nil {
+		latestHeader := state.LatestBlockHeader()
+		if len(latestHeader.StateRoot) == 0 || bytes.Equal(latestHeader.StateRoot, make([]byte, 32)) {
+			previousStateRoot, err := state.HashTreeRoot(ctx)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not compute state root")
+			}
+			latestHeader.StateRoot = previousStateRoot[:]
+			if err := state.SetLatestBlockHeader(latestHeader); err != nil {
+				return nil, errors.Wrap(err, "could not set latest block header")
+			}
+		}
+
+		if err := gloas.ApplyExecutionPayloadStateMutations(
+			ctx,
+			state,
+			blindedEnvelope.Message.ExecutionRequests,
+			[32]byte(blindedEnvelope.Message.BlockHash),
+		); err != nil {
+			return nil, errors.Wrap(err, "could not apply execution payload state mutations")
+		}
 	}
 	return state, nil
 }

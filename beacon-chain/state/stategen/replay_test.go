@@ -1,6 +1,9 @@
 package stategen
 
 import (
+	"context"
+	stderrors "errors"
+	"strings"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
@@ -23,6 +26,17 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"google.golang.org/protobuf/proto"
 )
+
+type envelopeLookupDB struct {
+	db.NoHeadAccessDatabase
+	envelopeErr error
+	calls       int
+}
+
+func (d *envelopeLookupDB) ExecutionPayloadEnvelope(_ context.Context, _ [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error) {
+	d.calls++
+	return nil, d.envelopeErr
+}
 
 func TestReplayBlocks_AllSkipSlots(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
@@ -114,6 +128,44 @@ func TestReplayBlocks_LowerSlotBlock(t *testing.T) {
 	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{wsb}, targetSlot)
 	require.NoError(t, err)
 	assert.Equal(t, targetSlot, newState.Slot(), "Did not advance slots")
+}
+
+func TestReplayBlocks_IgnoresMissingExecutionPayloadEnvelope(t *testing.T) {
+	wrappedDB := &envelopeLookupDB{
+		NoHeadAccessDatabase: testDB.SetupDB(t),
+		envelopeErr:          db.ErrNotFound,
+	}
+
+	service := New(wrappedDB, doublylinkedtree.New())
+	beaconState, _ := util.DeterministicGenesisState(t, 32)
+	b := util.NewBeaconBlock()
+	b.Block.Slot = 1
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+
+	_, err = service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{wsb}, 1)
+	require.Equal(t, 1, wrappedDB.calls)
+	if err != nil {
+		assert.Equal(t, false, strings.Contains(err.Error(), "could not retrieve execution payload envelope"))
+	}
+}
+
+func TestReplayBlocks_FailsOnExecutionPayloadEnvelopeLookupError(t *testing.T) {
+	wrappedDB := &envelopeLookupDB{
+		NoHeadAccessDatabase: testDB.SetupDB(t),
+		envelopeErr:          stderrors.New("db unavailable"),
+	}
+
+	service := New(wrappedDB, doublylinkedtree.New())
+	beaconState, _ := util.DeterministicGenesisState(t, 32)
+	b := util.NewBeaconBlock()
+	b.Block.Slot = 1
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+
+	_, err = service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{wsb}, 1)
+	require.Equal(t, 1, wrappedDB.calls)
+	require.ErrorContains(t, "could not retrieve execution payload envelope", err)
 }
 
 func TestReplayBlocks_ThroughForkBoundary(t *testing.T) {
