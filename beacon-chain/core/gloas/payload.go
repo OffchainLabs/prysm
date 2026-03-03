@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -239,6 +240,112 @@ func ApplyExecutionPayload(
 
 	if err := st.SetLatestBlockHash([32]byte(payload.BlockHash())); err != nil {
 		return errors.Wrap(err, "could not set latest block hash")
+	}
+
+	return nil
+}
+
+// ApplyBlindedExecutionPayloadEnvelopeForStateGen applies the post-bid state mutations from a
+// blinded execution payload envelope for replay/state-generation paths.
+//
+// This path uses the persisted blinded envelope data (keyed by beacon block root) and validates
+// the minimal consistency required to safely advance state.latest_block_hash and related fields.
+func ApplyBlindedExecutionPayloadEnvelopeForStateGen(
+	ctx context.Context,
+	st state.BeaconState,
+	signedEnvelope *ethpb.SignedBlindedExecutionPayloadEnvelope,
+) error {
+	if signedEnvelope == nil || signedEnvelope.Message == nil {
+		return errors.New("blinded execution payload envelope is nil")
+	}
+	envelope := signedEnvelope.Message
+
+	latestHeader := st.LatestBlockHeader()
+	if len(latestHeader.StateRoot) == 0 || bytes.Equal(latestHeader.StateRoot, make([]byte, 32)) {
+		previousStateRoot, err := st.HashTreeRoot(ctx)
+		if err != nil {
+			return errors.Wrap(err, "could not compute state root")
+		}
+		latestHeader.StateRoot = previousStateRoot[:]
+		if err := st.SetLatestBlockHeader(latestHeader); err != nil {
+			return errors.Wrap(err, "could not set latest block header")
+		}
+	}
+
+	blockHeaderRoot, err := latestHeader.HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not compute block header root")
+	}
+	if !bytes.Equal(envelope.BeaconBlockRoot, blockHeaderRoot[:]) {
+		return errors.Errorf(
+			"blinded envelope beacon block root does not match state latest block header root: envelope=%#x, header=%#x",
+			envelope.BeaconBlockRoot,
+			blockHeaderRoot,
+		)
+	}
+	if envelope.Slot != st.Slot() {
+		return errors.Errorf("blinded envelope slot does not match state slot: envelope=%d, state=%d", envelope.Slot, st.Slot())
+	}
+
+	latestBid, err := st.LatestExecutionPayloadBid()
+	if err != nil {
+		return errors.Wrap(err, "could not get latest execution payload bid")
+	}
+	if latestBid == nil {
+		return errors.New("latest execution payload bid is nil")
+	}
+	if primitives.BuilderIndex(envelope.BuilderIndex) != latestBid.BuilderIndex() {
+		return errors.Errorf(
+			"blinded envelope builder index does not match committed bid builder index: envelope=%d, bid=%d",
+			envelope.BuilderIndex,
+			latestBid.BuilderIndex(),
+		)
+	}
+
+	bidBlockHash := latestBid.BlockHash()
+	if !bytes.Equal(envelope.BlockHash, bidBlockHash[:]) {
+		return errors.Errorf(
+			"blinded envelope block hash does not match committed bid block hash: envelope=%#x, bid=%#x",
+			envelope.BlockHash,
+			bidBlockHash,
+		)
+	}
+
+	reqs := envelope.ExecutionRequests
+	if reqs == nil {
+		reqs = &enginev1.ExecutionRequests{}
+	}
+	if err := processExecutionRequests(ctx, st, reqs); err != nil {
+		return errors.Wrap(err, "could not process execution requests")
+	}
+
+	if err := st.QueueBuilderPayment(); err != nil {
+		return errors.Wrap(err, "could not queue builder payment")
+	}
+
+	if err := st.SetExecutionPayloadAvailability(st.Slot(), true); err != nil {
+		return errors.Wrap(err, "could not set execution payload availability")
+	}
+
+	if len(envelope.BlockHash) != 32 {
+		return errors.Errorf("invalid blinded envelope block hash length: %d", len(envelope.BlockHash))
+	}
+	var payloadBlockHash [32]byte
+	copy(payloadBlockHash[:], envelope.BlockHash)
+	if err := st.SetLatestBlockHash(payloadBlockHash); err != nil {
+		return errors.Wrap(err, "could not set latest block hash")
+	}
+
+	if len(envelope.StateRoot) == 32 {
+		gotRoot, err := st.HashTreeRoot(ctx)
+		if err != nil {
+			return errors.Wrap(err, "could not get hash tree root")
+		}
+		var expectedRoot [32]byte
+		copy(expectedRoot[:], envelope.StateRoot)
+		if gotRoot != expectedRoot {
+			return errors.Errorf("state root mismatch after applying blinded envelope: expected %#x, got %#x", expectedRoot, gotRoot)
+		}
 	}
 
 	return nil

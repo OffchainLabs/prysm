@@ -41,6 +41,7 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//container/leaky-bucket:go_default_library",
         "//crypto/rand:go_default_library",
+        "//encoding/bytesutil:go_default_library",
         "//math:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -12,12 +13,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 // ReplayBlocks replays the input blocks on the input state until the target slot is reached.
-func (*State) replayBlocks(
+func (s *State) replayBlocks(
 	ctx context.Context,
 	state state.BeaconState,
 	signed []interfaces.ReadOnlySignedBeaconBlock,
@@ -50,6 +52,12 @@ func (*State) replayBlocks(
 		if err != nil {
 			return nil, err
 		}
+		if blk.Block().Slot() < targetSlot {
+			state, err = s.applyBlindedExecutionPayloadEnvelopeStateGen(ctx, state, blk)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// If there are skip slots at the end.
@@ -68,6 +76,33 @@ func (*State) replayBlocks(
 	replayBlocksSummary.Observe(float64(duration.Milliseconds()))
 
 	return state, nil
+}
+
+func (s *State) applyBlindedExecutionPayloadEnvelopeStateGen(
+	ctx context.Context,
+	st state.BeaconState,
+	signed interfaces.ReadOnlySignedBeaconBlock,
+) (state.BeaconState, error) {
+	if st == nil || st.IsNil() || st.Version() < version.Gloas || signed.Block().Version() < version.Gloas {
+		return st, nil
+	}
+
+	blockRoot, err := signed.Block().HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compute block root for blinded envelope lookup")
+	}
+	if !s.beaconDB.HasExecutionPayloadEnvelope(ctx, blockRoot) {
+		return st, nil
+	}
+
+	blindedEnvelope, err := s.beaconDB.ExecutionPayloadEnvelope(ctx, blockRoot)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not load execution payload envelope for block %#x", blockRoot)
+	}
+	if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, st, blindedEnvelope); err != nil {
+		return nil, errors.Wrapf(err, "could not apply execution payload envelope for block %#x", blockRoot)
+	}
+	return st, nil
 }
 
 // loadBlocks loads the blocks between start slot and end slot by recursively fetching from end block root.
@@ -105,6 +140,7 @@ func executeStateTransitionStateGen(
 	ctx, span := trace.StartSpan(ctx, "stategen.executeStateTransitionStateGen")
 	defer span.End()
 	var err error
+	preTransitionState := state
 
 	// Execute per slots transition.
 	// Given this is for state gen, a node uses the version of process slots without skip slots cache.
@@ -118,6 +154,27 @@ func executeStateTransitionStateGen(
 	// and randao signature verifications.
 	state, err = transition.ProcessBlockForStateRoot(ctx, state, signed)
 	if err != nil {
+		fields := logrus.Fields{
+			"blockSlot":    signed.Block().Slot(),
+			"parentRoot":   fmt.Sprintf("%#x", signed.Block().ParentRoot()),
+			"blockVersion": signed.Block().Version(),
+		}
+		if preTransitionState != nil && !preTransitionState.IsNil() {
+			fields["stateSlot"] = preTransitionState.Slot()
+		}
+		if preTransitionState != nil && !preTransitionState.IsNil() && preTransitionState.Version() >= version.Gloas {
+			latestHash, hashErr := preTransitionState.LatestBlockHash()
+			if hashErr == nil {
+				fields["stateLatestBlockHash"] = fmt.Sprintf("%#x", latestHash)
+			}
+		}
+		if signed.Block().Version() >= version.Gloas {
+			signedBid, bidErr := signed.Block().Body().SignedExecutionPayloadBid()
+			if bidErr == nil && signedBid != nil && signedBid.Message != nil && len(signedBid.Message.ParentBlockHash) == 32 {
+				fields["bidParentBlockHash"] = fmt.Sprintf("%#x", [32]byte(signedBid.Message.ParentBlockHash))
+			}
+		}
+		log.WithError(err).WithFields(fields).Debug("Failed to process block during stategen replay")
 		return nil, errors.Wrap(err, "could not process block")
 	}
 	return state, nil

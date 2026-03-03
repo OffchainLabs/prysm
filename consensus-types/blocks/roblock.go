@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // ROBlock is a value that embeds a ReadOnlySignedBeaconBlock along with its block root ([32]byte).
@@ -99,9 +100,10 @@ func (s ROBlockSlice) Len() int {
 // BlockWithROSidecars is a wrapper that collects the block and blob values together.
 // This is helpful because these values are collated from separate RPC requests.
 type BlockWithROSidecars struct {
-	Block   ROBlock
-	Blobs   []ROBlob
-	Columns []VerifiedRODataColumn
+	Block                          ROBlock
+	Blobs                          []ROBlob
+	Columns                        []VerifiedRODataColumn
+	SignedExecutionPayloadEnvelope *ethpb.SignedExecutionPayloadEnvelope
 }
 
 // BlockWithROBlobsSlice gives convenient access to getting a slice of just the ROBlocks,

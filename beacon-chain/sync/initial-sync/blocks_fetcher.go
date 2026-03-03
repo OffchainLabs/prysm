@@ -26,6 +26,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	p2ppb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -342,8 +343,131 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 
 		response.blobsFrom = pid
 	}
+	if response.err == nil {
+		if err := f.fetchExecutionPayloadEnvelope(ctx, response.blocksFrom, peers, start, count, response.bwb); err != nil {
+			log.WithError(err).Error("Failed to fetch execution payload envelopes")
+			response.err = err
+		}
+	}
 
 	return response
+}
+
+// fetchExecutionPayloadEnvelope fetches execution payload envelopes by slot range for
+// Gloas-era blocks and mutates bwb by populating SignedExecutionPayloadEnvelope.
+// `pid` is the initial peer to request envelopes from (usually the peer from which blocks came).
+func (f *blocksFetcher) fetchExecutionPayloadEnvelope(
+	ctx context.Context,
+	pid peer.ID,
+	peers []peer.ID,
+	start primitives.Slot,
+	count uint64,
+	bwb []blocks.BlockWithROSidecars,
+) error {
+	if len(bwb) == 0 || count == 0 {
+		return nil
+	}
+
+	currentEpoch := slots.ToEpoch(f.clock.CurrentSlot())
+	if currentEpoch < params.BeaconConfig().GloasForkEpoch {
+		return nil
+	}
+
+	end, err := start.SafeAdd(count - 1)
+	if err != nil {
+		return errors.Wrap(err, "overflow start + count - 1 for execution payload envelopes by range")
+	}
+
+	gloasStart, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
+	if err != nil {
+		return errors.Wrap(err, "compute Gloas fork start slot")
+	}
+	if end < gloasStart {
+		return nil
+	}
+	if start < gloasStart {
+		start = gloasStart
+	}
+
+	req := &p2ppb.ExecutionPayloadEnvelopesByRangeRequest{
+		StartSlot: start,
+		Count:     uint64(end.FlooredSubSlot(start)) + 1,
+	}
+	log.WithFields(logrus.Fields{
+		"startSlot":  req.StartSlot,
+		"count":      req.Count,
+		"sourcePeer": pid,
+	}).Debug("Prepared execution payload envelopes by range request")
+
+	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
+	// Prefer requesting from the block-serving peer first.
+	peers = append([]peer.ID{pid}, peers...)
+	peers = f.hasSufficientBandwidth(peers, req.Count)
+	// Fallback to the initial peer even if bandwidth filtering excluded it.
+	peers = append(peers, pid)
+	peers = dedupPeers(peers)
+	log.WithFields(logrus.Fields{
+		"peerCount": len(peers),
+		"startSlot": req.StartSlot,
+		"count":     req.Count,
+	}).Debug("Attempting execution payload envelopes by range across candidate peers")
+
+	for _, p := range peers {
+		log.WithFields(logrus.Fields{
+			"peer":      p,
+			"startSlot": req.StartSlot,
+			"count":     req.Count,
+		}).Debug("Requesting execution payload envelopes by range from peer")
+		envelopes, err := f.requestExecutionPayloadEnvelopes(ctx, req, p)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"peer":      p,
+				"startSlot": req.StartSlot,
+				"count":     req.Count,
+			}).WithError(err).Debug("Could not request execution payload envelopes by range from peer")
+			if errors.Is(err, prysmsync.ErrInvalidFetchedData) {
+				f.downscorePeer(p, err)
+			}
+			continue
+		}
+
+		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
+		log.WithFields(logrus.Fields{
+			"peer":          p,
+			"returnedCount": len(envelopes),
+			"startSlot":     req.StartSlot,
+			"count":         req.Count,
+		}).Debug("Received execution payload envelopes by range response")
+
+		byRoot := make(map[[32]byte]*p2ppb.SignedExecutionPayloadEnvelope, len(envelopes))
+		for _, env := range envelopes {
+			if env == nil || env.Message == nil {
+				continue
+			}
+			byRoot[bytesutil.ToBytes32(env.Message.BeaconBlockRoot)] = env
+		}
+
+		populated := 0
+		for i := range bwb {
+			if bwb[i].Block.Version() < version.Gloas {
+				continue
+			}
+			if env, ok := byRoot[bwb[i].Block.Root()]; ok {
+				bwb[i].SignedExecutionPayloadEnvelope = env
+				populated++
+			}
+		}
+		log.WithFields(logrus.Fields{
+			"peer":             p,
+			"returnedCount":    len(envelopes),
+			"mappedByRoot":     len(byRoot),
+			"populatedInBatch": populated,
+			"batchSize":        len(bwb),
+		}).Debug("Populated execution payload envelopes into fetched block batch")
+		return nil
+	}
+
+	return errNoPeersAvailable
 }
 
 // fetchSidecars fetches sidecars corresponding to blocks in `response.bwb`.
@@ -781,6 +905,36 @@ func (f *blocksFetcher) requestBlobs(ctx context.Context, req *p2ppb.BlobSidecar
 	l.Unlock()
 
 	return prysmsync.SendBlobsByRangeRequest(ctx, f.clock, f.p2p, pid, f.ctxMap, req)
+}
+
+func (f *blocksFetcher) requestExecutionPayloadEnvelopes(
+	ctx context.Context,
+	req *p2ppb.ExecutionPayloadEnvelopesByRangeRequest,
+	pid peer.ID,
+) ([]*p2ppb.SignedExecutionPayloadEnvelope, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	l := f.peerLock(pid)
+	l.Lock()
+	log.WithFields(logrus.Fields{
+		"peer":     pid,
+		"start":    req.StartSlot,
+		"count":    req.Count,
+		"capacity": f.rateLimiter.Remaining(pid.String()),
+		"score":    f.p2p.Peers().Scorers().BlockProviderScorer().FormatScorePretty(pid),
+	}).Debug("Requesting execution payload envelopes")
+	// We intentionally use the same rate limiter accounting as block/blob requests.
+	if f.rateLimiter.Remaining(pid.String()) < int64(req.Count) {
+		if err := f.waitForBandwidth(pid, req.Count); err != nil {
+			l.Unlock()
+			return nil, err
+		}
+	}
+	f.rateLimiter.Add(pid.String(), int64(req.Count))
+	l.Unlock()
+
+	return prysmsync.SendExecutionPayloadEnvelopesByRangeRequest(ctx, f.clock, f.p2p, pid, f.ctxMap, req)
 }
 
 // requestBlocksByRoot is a wrapper for handling BeaconBlockByRootsReq requests/streams.

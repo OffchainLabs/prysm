@@ -242,6 +242,54 @@ func TestProcessExecutionPayload_Success(t *testing.T) {
 	require.Equal(t, primitives.Gwei(0), payment.Withdrawal.Amount)
 }
 
+func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_Success(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+	blinded := &ethpb.SignedBlindedExecutionPayloadEnvelope{
+		Message: &ethpb.BlindedExecutionPayloadEnvelope{
+			BlockHash:         fixture.signedProto.Message.Payload.BlockHash,
+			ExecutionRequests: fixture.signedProto.Message.ExecutionRequests,
+			BuilderIndex:      fixture.signedProto.Message.BuilderIndex,
+			BeaconBlockRoot:   fixture.signedProto.Message.BeaconBlockRoot,
+			Slot:              fixture.signedProto.Message.Slot,
+			StateRoot:         fixture.signedProto.Message.StateRoot,
+		},
+		Signature: fixture.signedProto.Signature,
+	}
+
+	require.NoError(t, ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, blinded))
+
+	latestHash, err := fixture.state.LatestBlockHash()
+	require.NoError(t, err)
+	var expectedHash [32]byte
+	copy(expectedHash[:], fixture.payload.BlockHash)
+	require.Equal(t, expectedHash, latestHash)
+
+	gotRoot, err := fixture.state.HashTreeRoot(t.Context())
+	require.NoError(t, err)
+	var expectedRoot [32]byte
+	copy(expectedRoot[:], fixture.signedProto.Message.StateRoot)
+	require.Equal(t, expectedRoot, gotRoot)
+}
+
+func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_BlockHashMismatch(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+	badHash := bytes.Repeat([]byte{0x99}, 32)
+	blinded := &ethpb.SignedBlindedExecutionPayloadEnvelope{
+		Message: &ethpb.BlindedExecutionPayloadEnvelope{
+			BlockHash:         badHash,
+			ExecutionRequests: fixture.signedProto.Message.ExecutionRequests,
+			BuilderIndex:      fixture.signedProto.Message.BuilderIndex,
+			BeaconBlockRoot:   fixture.signedProto.Message.BeaconBlockRoot,
+			Slot:              fixture.signedProto.Message.Slot,
+			StateRoot:         fixture.signedProto.Message.StateRoot,
+		},
+		Signature: fixture.signedProto.Signature,
+	}
+
+	err := ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, blinded)
+	require.ErrorContains(t, "block hash", err)
+}
+
 func TestProcessExecutionPayload_PrevRandaoMismatch(t *testing.T) {
 	fixture := buildPayloadFixture(t, func(_ *enginev1.ExecutionPayloadDeneb, bid *ethpb.ExecutionPayloadBid, _ *ethpb.ExecutionPayloadEnvelope) {
 		bid.PrevRandao = bytes.Repeat([]byte{0xFF}, 32)

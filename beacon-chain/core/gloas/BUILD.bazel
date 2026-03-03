@@ -7,6 +7,7 @@ go_library(
         "bid.go",
         "deposit_request.go",
         "log.go",
+        "lookup_root.go",
         "payload.go",
         "payload_attestation.go",
         "pending_payment.go",

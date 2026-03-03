@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -25,6 +26,8 @@ import (
 const (
 	// counterSeconds is an interval over which an average rate will be calculated.
 	counterSeconds = 20
+
+	envelopeFetchRetryInterval = time.Second
 )
 
 // blockReceiverFn defines block receiving function.
@@ -151,6 +154,15 @@ func (s *Service) processFetchedData(ctx context.Context, data *blocksQueueFetch
 	if err != nil {
 		log.WithError(err).Warn("Skip processing batched blocks")
 	}
+	if err == nil {
+		gloasCount, gloasErr := s.processBatchedBlocksGloas(ctx, data.bwb)
+		count += gloasCount
+		if gloasErr != nil {
+			log.WithError(gloasErr).Warn("Skip processing Gloas blocks")
+			err = gloasErr
+		}
+	}
+
 	s.updatePeerScorerStats(data, count, err)
 }
 
@@ -221,23 +233,125 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 		return 0, errors.Wrap(err, "save data column sidecars")
 	}
 
+	processedBeforeDataColumns := len(blocksWithBlobs)
 	for i, b := range blocksWithDataColumns {
-		logDataColumns := logDataColumns.WithFields(syncFields(b.Block))
+		blockLog := logDataColumns.WithFields(syncFields(b.Block))
 
 		if err := s.processBlock(ctx, s.genesisTime, b, s.cfg.Chain.ReceiveBlock, nil); err != nil {
 			switch {
 			case errors.Is(err, errParentDoesNotExist):
-				logDataColumns.
+				blockLog.
 					WithField("missingParent", fmt.Sprintf("%#x", b.Block.Block().ParentRoot())).
 					Debug("Could not process batch blocks due to missing parent")
-				return uint64(i), err
+				return uint64(processedBeforeDataColumns + i), err
 			default:
-				logDataColumns.WithError(err).Warning("Block processing failure")
-				return uint64(i), err
+				blockLog.WithError(err).Warning("Block processing failure")
+				return uint64(processedBeforeDataColumns + i), err
 			}
 		}
+		if b.Block.Version() >= version.Gloas {
+			attempt := 0
+			for {
+				attempt++
+				connected := s.cfg.P2P.Peers().Connected()
+				if len(connected) == 0 {
+					blockLog.WithField("attempt", attempt).Debug("No connected peers available for execution payload envelope fetch; retrying")
+					select {
+					case <-ctx.Done():
+						return uint64(processedBeforeDataColumns + i + 1), ctx.Err()
+					case <-time.After(envelopeFetchRetryInterval):
+					}
+					continue
+				}
+				selectedPeer := connected[0]
+				if err := s.fetchExecutionPayloadEnvelope(ctx, b.Block, selectedPeer); err != nil {
+					blockLog.WithError(err).WithFields(logrus.Fields{
+						"attempt": attempt,
+						"peer":    selectedPeer,
+					}).Debug("Could not fetch execution payload envelope for Gloas block, retrying")
+					select {
+					case <-ctx.Done():
+						return uint64(processedBeforeDataColumns + i + 1), ctx.Err()
+					case <-time.After(envelopeFetchRetryInterval):
+					}
+					continue
+				}
+				blockLog.WithFields(logrus.Fields{
+					"attempt": attempt,
+					"peer":    selectedPeer,
+				}).Debug("Execution payload envelope fetch path completed for block")
+				break
+			}
+		}
+
 	}
+
 	return uint64(len(bwb)), nil
+}
+
+func (s *Service) fetchExecutionPayloadEnvelope(
+	ctx context.Context,
+	roBlock blocks.ROBlock,
+	pid peer.ID,
+) error {
+	root := roBlock.Root()
+	if roBlock.Version() < version.Gloas {
+		return nil
+	}
+	if s.cfg.DB.HasExecutionPayloadEnvelope(ctx, root) {
+		log.WithFields(logrus.Fields{
+			"peer": pid,
+			"root": fmt.Sprintf("%#x", root),
+			"slot": roBlock.Block().Slot(),
+		}).Debug("Execution payload envelope already exists locally")
+		return nil
+	}
+
+	log.WithFields(logrus.Fields{
+		"peer": pid,
+		"root": fmt.Sprintf("%#x", root),
+	}).Debug("Fetching missing execution payload envelope by root")
+
+	req := p2ptypes.ExecutionPayloadEnvelopesByRootReq{root}
+	envelopes, err := sync.SendExecutionPayloadEnvelopesByRootRequest(
+		ctx, s.clock, s.cfg.P2P, pid, s.ctxMap, &req,
+	)
+	if err != nil {
+		return errors.Wrap(err, "send execution payload envelope by root request")
+	}
+
+	log.WithFields(logrus.Fields{
+		"peer":          pid,
+		"root":          fmt.Sprintf("%#x", root),
+		"returnedCount": len(envelopes),
+	}).Debug("Received execution payload envelopes by root response")
+
+	for _, env := range envelopes {
+		if env == nil || env.Message == nil {
+			continue
+		}
+		wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
+		if err != nil {
+			return errors.Wrap(err, "wrap fetched execution payload envelope")
+		}
+		if err := s.cfg.Chain.ReceiveExecutionPayloadEnvelope(ctx, wrapped); err != nil {
+			return errors.Wrap(err, "receive fetched execution payload envelope")
+		}
+		log.WithFields(logrus.Fields{
+			"peer": pid,
+			"root": fmt.Sprintf("%#x", root),
+			"slot": roBlock.Block().Slot(),
+		}).Debug("Received and processed execution payload envelope")
+		return nil
+	}
+
+	log.WithFields(logrus.Fields{
+		"peer":          pid,
+		"root":          fmt.Sprintf("%#x", root),
+		"slot":          roBlock.Block().Slot(),
+		"returnedCount": len(envelopes),
+	}).Debug("No usable execution payload envelope returned for block")
+	return nil
 }
 
 func syncFields(b blocks.ROBlock) logrus.Fields {
@@ -361,8 +475,7 @@ func validUnprocessed(ctx context.Context, bwb []blocks.BlockWithROSidecars, hea
 }
 
 func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWithROSidecars, bFunc batchBlockReceiverFn) (uint64, error) {
-	bwbCount := uint64(len(bwb))
-	if bwbCount == 0 {
+	if len(bwb) == 0 {
 		return 0, errors.New("0 blocks provided into method")
 	}
 
@@ -371,6 +484,33 @@ func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWi
 	if err != nil {
 		return 0, err
 	}
+	if len(bwb) == 0 {
+		return 0, nil
+	}
+
+	// Stop batch processing at the first Gloas block. Gloas-era blocks require
+	// execution payload envelope handling and are processed in the a different path.
+	firstGloas := len(bwb)
+	for i := range bwb {
+		if bwb[i].Block.Version() >= version.Gloas {
+			firstGloas = i
+			break
+		}
+	}
+	if firstGloas == 0 {
+		log.WithField("slot", bwb[0].Block.Block().Slot()).Debug("Encountered Gloas block in batched sync path, returning without processing")
+		return 0, nil
+	}
+	if firstGloas < len(bwb) {
+		log.WithFields(logrus.Fields{
+			"firstGloasSlot": bwb[firstGloas].Block.Block().Slot(),
+			"processedCount": firstGloas,
+			"batchCount":     len(bwb),
+		}).Debug("Stopping batch processing before first Gloas block")
+		bwb = bwb[:firstGloas]
+	}
+
+	bwbCount := uint64(len(bwb))
 
 	firstBlock := bwb[0].Block
 	if !s.cfg.Chain.HasBlock(ctx, firstBlock.Block().ParentRoot()) {
@@ -454,6 +594,89 @@ func (s *Service) processBlocksWithDataColumns(ctx context.Context, bwbs []block
 	}
 
 	return nil
+}
+
+// processBatchedBlocksGloas processes Gloas-era blocks in an interleaved sequence:
+// block -> payload envelope -> block -> payload envelope ...
+// It returns the number of processed Gloas blocks.
+func (s *Service) processBatchedBlocksGloas(ctx context.Context, bwb []blocks.BlockWithROSidecars) (uint64, error) {
+	if len(bwb) == 0 {
+		log.Debug("processBatchedBlocksGloas: empty batch")
+		return 0, nil
+	}
+
+	headSlot := s.cfg.Chain.HeadSlot()
+	log.WithFields(logrus.Fields{
+		"batchCount": len(bwb),
+		"headSlot":   headSlot,
+	}).Debug("processBatchedBlocksGloas: evaluating batch")
+
+	unprocessed, err := validUnprocessed(ctx, bwb, headSlot, s.isProcessedBlock)
+	if err != nil {
+		log.WithError(err).Debug("processBatchedBlocksGloas: validUnprocessed failed")
+		return 0, err
+	}
+	if len(unprocessed) == 0 {
+		log.Debug("processBatchedBlocksGloas: no unprocessed blocks")
+		return 0, nil
+	}
+
+	firstGloas := len(unprocessed)
+	for i := range unprocessed {
+		if unprocessed[i].Block.Version() >= version.Gloas {
+			firstGloas = i
+			break
+		}
+	}
+	if firstGloas == len(unprocessed) {
+		log.WithField("unprocessedCount", len(unprocessed)).Debug("processBatchedBlocksGloas: no Gloas blocks in unprocessed batch")
+		return 0, nil
+	}
+
+	gloasBwbs := unprocessed[firstGloas:]
+	log.WithFields(logrus.Fields{
+		"unprocessedCount": len(unprocessed),
+		"firstGloasIndex":  firstGloas,
+		"gloasCount":       len(gloasBwbs),
+		"firstGloasSlot":   gloasBwbs[0].Block.Block().Slot(),
+	}).Debug("processBatchedBlocksGloas: starting Gloas processing")
+
+	var processed uint64
+	for _, bw := range gloasBwbs {
+		blk := bw.Block
+		blkRoot := blk.Root()
+		slot := blk.Block().Slot()
+		log.WithFields(logrus.Fields{
+			"slot":        slot,
+			"root":        fmt.Sprintf("%#x", blkRoot),
+			"hasEnvelope": bw.SignedExecutionPayloadEnvelope != nil,
+		}).Debug("processBatchedBlocksGloas: processing block")
+
+		if !s.cfg.Chain.HasBlock(ctx, blk.Block().ParentRoot()) {
+			return processed, fmt.Errorf("%w: (in processBatchedBlocksGloas, slot=%d) %#x",
+				errParentDoesNotExist, slot, blk.Block().ParentRoot())
+		}
+		if err := s.cfg.Chain.ReceiveBlock(ctx, blk, blkRoot, nil); err != nil {
+			return processed, errors.Wrapf(err, "receive Gloas block at slot %d", slot)
+		}
+
+		protoEnvelope := bw.SignedExecutionPayloadEnvelope
+		if protoEnvelope != nil {
+			wrappedEnvelope, err := blocks.WrappedROSignedExecutionPayloadEnvelope(protoEnvelope)
+			if err != nil {
+				return processed, errors.Wrapf(err, "wrap execution payload envelope at slot %d", slot)
+			}
+			if err := s.cfg.Chain.ReceiveExecutionPayloadEnvelope(ctx, wrappedEnvelope); err != nil {
+				return processed, errors.Wrapf(err, "receive execution payload envelope at slot %d", slot)
+			}
+		} else {
+			log.WithField("slot", slot).Debug("processBatchedBlocksGloas: no payload envelope for block")
+		}
+		processed++
+	}
+	log.WithField("processed", processed).Debug("processBatchedBlocksGloas: completed")
+
+	return processed, nil
 }
 
 func isPunishableError(err error) bool {

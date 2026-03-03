@@ -3,16 +3,21 @@ package stategen
 import (
 	"context"
 	stderrors "errors"
+	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -290,18 +295,23 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 		if !s.slotAvailable(ps) {
 			return nil, errors.Wrapf(ErrNoDataForSlot, "slot %d not in db due to checkpoint sync", ps)
 		}
+		lookupRoot, err := s.lookupParentStateRoot(ctx, b.Block())
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to determine lookup parent root for block at slot %d", b.Block().Slot())
+		}
+
 		// Does the state exist in the hot state cache.
-		if s.hotStateCache.has(parentRoot) {
-			return s.hotStateCache.get(parentRoot), nil
+		if s.hotStateCache.has(lookupRoot) {
+			return s.hotStateCache.get(lookupRoot), nil
 		}
 
 		// Does the state exist in finalized info cache.
-		if s.isFinalizedRoot(parentRoot) {
+		if s.isFinalizedRoot(lookupRoot) {
 			return s.FinalizedState(), nil
 		}
 
 		// Does the state exist in epoch boundary cache.
-		cachedInfo, ok, err := s.epochBoundaryStateCache.getByBlockRoot(parentRoot)
+		cachedInfo, ok, err := s.epochBoundaryStateCache.getByBlockRoot(lookupRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -310,8 +320,8 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 		}
 
 		// Does the state exists in DB.
-		if s.beaconDB.HasState(ctx, parentRoot) {
-			s, err := s.beaconDB.State(ctx, parentRoot)
+		if s.beaconDB.HasState(ctx, lookupRoot) {
+			s, err := s.beaconDB.State(ctx, lookupRoot)
 			return s, errors.Wrap(err, "failed to retrieve state from db")
 		}
 
@@ -323,6 +333,89 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 			return nil, errUnknownBlock
 		}
 	}
+}
+
+func (s *State) lookupParentStateRoot(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock) ([32]byte, error) {
+	parentRoot := blk.ParentRoot()
+	if blk.Version() < version.Gloas {
+		return parentRoot, nil
+	}
+	if s.fc != nil {
+		parentSlot, err := s.fc.Slot(parentRoot)
+		if err == nil {
+			parentNodeBlockHash, err := s.fc.BlockHash(parentRoot)
+			if err == nil {
+				lookupRoot, err := gloas.LookupParentRoot(blk, parentSlot, parentNodeBlockHash)
+				if err != nil {
+					return [32]byte{}, errors.Wrap(err, "could not compute lookup parent root")
+				}
+				if lookupRoot != parentRoot {
+					log.WithFields(map[string]any{
+						"slot":       blk.Slot(),
+						"parentRoot": fmt.Sprintf("%#x", parentRoot),
+						"lookupRoot": fmt.Sprintf("%#x", lookupRoot),
+					}).Debug("Using parent block hash as state lookup root for Gloas block")
+				}
+				return lookupRoot, nil
+			}
+			log.WithError(err).WithField("parentRoot", fmt.Sprintf("%#x", parentRoot)).
+				Debug("Could not read parent block hash from forkchoice; trying DB fallback for state lookup")
+		} else {
+			log.WithError(err).WithField("parentRoot", fmt.Sprintf("%#x", parentRoot)).
+				Debug("Could not read parent slot from forkchoice; trying DB fallback for state lookup")
+		}
+	}
+
+	parentSignedBlock, err := s.beaconDB.Block(ctx, parentRoot)
+	if err != nil {
+		log.WithError(err).WithField("parentRoot", fmt.Sprintf("%#x", parentRoot)).
+			Debug("Could not read parent block from DB; falling back to parent root for state lookup")
+		return parentRoot, nil
+	}
+	if err := blocks.BeaconBlockIsNil(parentSignedBlock); err != nil {
+		log.WithError(err).WithField("parentRoot", fmt.Sprintf("%#x", parentRoot)).
+			Debug("Parent block from DB is nil; falling back to parent root for state lookup")
+		return parentRoot, nil
+	}
+
+	parentBlock := parentSignedBlock.Block()
+	parentSlot := parentBlock.Slot()
+	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
+		return parentRoot, nil
+	}
+
+	var parentNodeBlockHash [32]byte
+	switch {
+	case parentBlock.Version() >= version.Gloas:
+		parentBid, err := parentBlock.Body().SignedExecutionPayloadBid()
+		if err != nil || parentBid == nil || parentBid.Message == nil || len(parentBid.Message.BlockHash) != 32 {
+			log.WithError(err).WithField("parentRoot", fmt.Sprintf("%#x", parentRoot)).
+				Debug("Could not read parent bid block hash from DB; falling back to parent root for state lookup")
+			return parentRoot, nil
+		}
+		parentNodeBlockHash = [32]byte(parentBid.Message.BlockHash)
+	case parentBlock.Version() >= version.Bellatrix:
+		execPayload, err := parentBlock.Body().Execution()
+		if err != nil {
+			log.WithError(err).WithField("parentRoot", fmt.Sprintf("%#x", parentRoot)).
+				Debug("Could not read parent execution payload from DB; falling back to parent root for state lookup")
+			return parentRoot, nil
+		}
+		copy(parentNodeBlockHash[:], execPayload.BlockHash())
+	}
+
+	lookupRoot, err := gloas.LookupParentRoot(blk, parentSlot, parentNodeBlockHash)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not compute lookup parent root")
+	}
+	if lookupRoot != parentRoot {
+		log.WithFields(map[string]any{
+			"slot":       blk.Slot(),
+			"parentRoot": fmt.Sprintf("%#x", parentRoot),
+			"lookupRoot": fmt.Sprintf("%#x", lookupRoot),
+		}).Debug("Using parent block hash as state lookup root for Gloas block (DB fallback)")
+	}
+	return lookupRoot, nil
 }
 
 func (s *State) CombinedCache() *CombinedCache {

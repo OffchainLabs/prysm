@@ -102,6 +102,19 @@ func SendBeaconBlocksByRangeRequest(
 		if err != nil {
 			return nil, err
 		}
+		fields := logrus.Fields{
+			"peer":           pid,
+			"blockIndex":     i,
+			"blockSlot":      blk.Block().Slot(),
+			"requestedStart": req.StartSlot,
+			"requestedCount": req.Count,
+			"requestedStep":  req.Step,
+		}
+		if !isFirstChunk {
+			fields["prevSlot"] = prevSlot
+		}
+		log.WithFields(fields).Debug("Received block in BeaconBlocksByRange response")
+
 		// The response MUST contain no more than `count` blocks, and no more than
 		// MAX_REQUEST_BLOCKS blocks.
 		currentEpoch := slots.ToEpoch(tor.CurrentSlot())
