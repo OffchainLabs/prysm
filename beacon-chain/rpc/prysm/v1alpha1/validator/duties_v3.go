@@ -191,6 +191,6 @@ func (vs *Server) GetSyncCommitteeDuties(ctx context.Context, req *ethpb.SyncCom
 
 	return &ethpb.SyncCommitteeDutiesResponse{
 		ExecutionOptimistic: optimistic,
-		Duties:              make([]*ethpb.SyncCommitteeDuty, len(duties)),
+		Duties:              dutiesResponses,
 	}, nil
 }
