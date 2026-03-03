@@ -43,7 +43,6 @@ const (
 	blockHashCalled
 	dependentRootCalled
 	dependentRootForEpochCalled
-	canonicalNodeAtSlotCalled
 	payloadWeightsCalled
 	payloadContentLookupCalled
 )
