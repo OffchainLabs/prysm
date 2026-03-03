@@ -134,7 +134,7 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 
 	start = time.Now()
 	// return early if we haven't changed head
-	newHeadRoot, err := s.cfg.ForkChoiceStore.Head(ctx)
+	newHeadRoot, newHeadBlockHash, full, err := s.cfg.ForkChoiceStore.FullHead(ctx)
 	if err != nil {
 		log.WithError(err).Error("Could not compute head from new attestations")
 		return
@@ -143,29 +143,45 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		return
 	}
 	log.WithField("newHeadRoot", fmt.Sprintf("%#x", newHeadRoot)).Debug("Head changed due to attestations")
-	headState, headBlock, err := s.getStateAndBlock(ctx, newHeadRoot)
+	var accessRoot [32]byte
+	postGloas := slots.ToEpoch(proposingSlot) >= params.BeaconConfig().GloasForkEpoch
+	if full && postGloas {
+		accessRoot = newHeadBlockHash
+	} else {
+		accessRoot = newHeadRoot
+	}
+	headState, headBlock, err := s.getStateAndBlock(ctx, newHeadRoot, accessRoot)
 	if err != nil {
-		log.WithError(err).Error("Could not get head block")
+		log.WithError(err).Error("Could not get head block and state")
 		return
 	}
 	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
-	fcuArgs := &fcuConfig{
-		headState:     headState,
-		headRoot:      newHeadRoot,
-		headBlock:     headBlock,
-		proposingSlot: proposingSlot,
-	}
 	if s.inRegularSync() {
-		fcuArgs.attributes = s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:])
-		if fcuArgs.attributes != nil && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
+		attr := s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:], accessRoot[:])
+		if attr != nil && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
 			return
 		}
-		go s.forkchoiceUpdateWithExecution(s.ctx, fcuArgs)
+		if postGloas {
+			go func() {
+				if _, err := s.notifyForkchoiceUpdateGloas(s.ctx, newHeadBlockHash, attr); err != nil {
+					log.WithError(err).Error("Could not update forkchoice with engine")
+				}
+			}()
+		} else {
+			fcuArgs := &fcuConfig{
+				headState:     headState,
+				headRoot:      newHeadRoot,
+				headBlock:     headBlock,
+				proposingSlot: proposingSlot,
+				attributes:    attr,
+			}
+			go s.forkchoiceUpdateWithExecution(s.ctx, fcuArgs)
+		}
 	}
-	if err := s.saveHead(s.ctx, fcuArgs.headRoot, fcuArgs.headBlock, fcuArgs.headState); err != nil {
+	if err := s.saveHead(s.ctx, newHeadRoot, headBlock, headState); err != nil {
 		log.WithError(err).Error("Could not save head")
 	}
-	s.pruneAttsFromPool(s.ctx, fcuArgs.headState, fcuArgs.headBlock)
+	s.pruneAttsFromPool(s.ctx, headState, headBlock)
 }
 
 // This processes fork choice attestations from the pool to account for validator votes and fork choice.

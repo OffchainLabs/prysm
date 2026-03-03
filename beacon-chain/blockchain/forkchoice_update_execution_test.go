@@ -35,7 +35,7 @@ func TestService_isNewHead(t *testing.T) {
 func TestService_getHeadStateAndBlock(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
-	_, _, err := service.getStateAndBlock(t.Context(), [32]byte{})
+	_, _, err := service.getStateAndBlock(t.Context(), [32]byte{}, [32]byte{})
 	require.ErrorContains(t, "block does not exist", err)
 
 	blk, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlock(&ethpb.SignedBeaconBlock{Signature: []byte{1}}))
