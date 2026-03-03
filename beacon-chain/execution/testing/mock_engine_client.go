@@ -115,6 +115,52 @@ func (e *EngineClient) ReconstructFullBellatrixBlockBatch(
 	return fullBlocks, nil
 }
 
+// ReconstructFullExecutionPayloadByHash --
+func (e *EngineClient) ReconstructFullExecutionPayloadByHash(
+	_ context.Context, blockHash [32]byte,
+) (*pb.ExecutionPayloadDeneb, error) {
+	if p, ok := e.ExecutionPayloadByBlockHash[blockHash]; ok {
+		return &pb.ExecutionPayloadDeneb{
+			ParentHash:    p.ParentHash,
+			FeeRecipient:  p.FeeRecipient,
+			StateRoot:     p.StateRoot,
+			ReceiptsRoot:  p.ReceiptsRoot,
+			LogsBloom:     p.LogsBloom,
+			PrevRandao:    p.PrevRandao,
+			BlockNumber:   p.BlockNumber,
+			GasLimit:      p.GasLimit,
+			GasUsed:       p.GasUsed,
+			Timestamp:     p.Timestamp,
+			ExtraData:     p.ExtraData,
+			BaseFeePerGas: p.BaseFeePerGas,
+			BlockHash:     p.BlockHash,
+			Transactions:  p.Transactions,
+			Withdrawals:   []*pb.Withdrawal{},
+		}, nil
+	}
+	if e.GetPayloadResponse != nil && e.GetPayloadResponse.ExecutionData != nil {
+		if p, ok := e.GetPayloadResponse.ExecutionData.Proto().(*pb.ExecutionPayloadDeneb); ok {
+			return p, nil
+		}
+	}
+	return nil, errors.New("payload not found")
+}
+
+// ReconstructFullExecutionPayloadsByHash --
+func (e *EngineClient) ReconstructFullExecutionPayloadsByHash(
+	_ context.Context, blockHashes [][32]byte,
+) (map[[32]byte]*pb.ExecutionPayloadDeneb, error) {
+	payloads := make(map[[32]byte]*pb.ExecutionPayloadDeneb, len(blockHashes))
+	for i := range blockHashes {
+		p, err := e.ReconstructFullExecutionPayloadByHash(context.Background(), blockHashes[i])
+		if err != nil {
+			return nil, err
+		}
+		payloads[blockHashes[i]] = p
+	}
+	return payloads, nil
+}
+
 // ReconstructBlobSidecars is a mock implementation of the ReconstructBlobSidecars method.
 func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadOnlySignedBeaconBlock, [fieldparams.RootLength]byte, func(uint64) bool) ([]blocks.VerifiedROBlob, error) {
 	return e.BlobSidecars, e.ErrorBlobSidecars

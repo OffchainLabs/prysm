@@ -102,9 +102,17 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
+	execution, err := envelope.Execution()
+	if err != nil {
+		log.WithError(err).Error("Could not get execution payload from envelope for logging")
+		return nil
+	}
+
 	log.WithFields(logrus.Fields{
-		"slot":      envelope.Slot(),
-		"blockRoot": fmt.Sprintf("%#x", root),
+		"slot":       envelope.Slot(),
+		"blockRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
+		"blockHash":  fmt.Sprintf("%#x", bytesutil.Trunc(execution.BlockHash())),
+		"parentHash": fmt.Sprintf("%#x", bytesutil.Trunc(execution.ParentHash())),
 	}).Info("Processed execution payload envelope")
 	return nil
 }

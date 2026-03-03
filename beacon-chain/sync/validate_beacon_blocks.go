@@ -349,7 +349,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 		if err != nil {
 			return nil, err
 		}
-		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, blockSlot)
+		return transition.ProcessSlotsForBlock(ctx, headState, blk.Block())
 	}
 	// If head and block are in the same epoch and head is compatible with the parent's dependent root, then use head
 	if blockEpoch == headEpoch {
@@ -366,7 +366,11 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 		}
 	}
 	// Otherwise retrieve the the parent state and advance it to the block's slot
-	parentState, err := s.cfg.stateGen.StateByRoot(ctx, parentRoot)
+	roblock, err := consensusblocks.NewROBlockWithRoot(blk, [32]byte{}) // root is not used.
+	if err != nil {
+		return nil, err
+	}
+	parentState, err := s.cfg.chain.GetBlockPreState(ctx, roblock)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +378,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 	if blockEpoch == parentEpoch {
 		return parentState, nil
 	}
-	return transition.ProcessSlotsUsingNextSlotCache(ctx, parentState, parentRoot[:], blockSlot)
+	return transition.ProcessSlotsForBlock(ctx, parentState, blk.Block())
 }
 
 func validateDenebBeaconBlock(blk interfaces.ReadOnlyBeaconBlock) error {
