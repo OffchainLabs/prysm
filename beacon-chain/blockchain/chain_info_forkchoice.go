@@ -149,3 +149,10 @@ func (s *Service) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.DependentRoot(epoch)
 }
+
+// HasFullNode wraps the corresponding method in forkchoice
+func (s *Service) HasFullNode(root [32]byte) bool {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.HasFullNode(root)
+}

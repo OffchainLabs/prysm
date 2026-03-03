@@ -213,6 +213,7 @@ func (s *Service) Start() {
 	}
 	s.spawnProcessAttestationsRoutine()
 	go s.runLateBlockTasks()
+	go s.runLatePayloadTasks()
 }
 
 // Stop the blockchain service's main event loop and associated goroutines.
