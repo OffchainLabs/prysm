@@ -63,8 +63,7 @@ func ExecuteStateTransitionNoVerifyAnySig(
 	interop.WriteBlockToDisk(signed, false /* Has the block failed */)
 	interop.WriteStateToDisk(st)
 
-	parentRoot := signed.Block().ParentRoot()
-	st, err = ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())
+	st, err = ProcessSlotsForBlock(ctx, st, signed.Block())
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not process slots")
 	}
@@ -135,8 +134,7 @@ func CalculateStateRoot(
 
 	// Execute per slots transition.
 	var err error
-	parentRoot := signed.Block().ParentRoot()
-	state, err = ProcessSlotsUsingNextSlotCache(ctx, state, parentRoot[:], signed.Block().Slot())
+	state, err = ProcessSlotsForBlock(ctx, state, signed.Block())
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not process slots")
 	}
