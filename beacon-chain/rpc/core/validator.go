@@ -549,7 +549,11 @@ func (s *Service) GetAttestationData(
 	justifiedCheckpoint := headState.CurrentJustifiedCheckpoint()
 	var isPayloadFull bool
 	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
-		_, isPayloadFull = s.ChainInfoFetcher.CanonicalNodeAtSlot(req.Slot)
+		fcRoot, full := s.ChainInfoFetcher.CanonicalNodeAtSlot(req.Slot)
+		if fcRoot != bytesutil.ToBytes32(headRoot) {
+			return nil, &RpcError{Reason: Internal, Err: errors.New("forkchoice head root does not match head root")}
+		}
+		isPayloadFull = full
 	}
 
 	if err = s.AttestationCache.Put(&cache.AttestationConsensusData{
