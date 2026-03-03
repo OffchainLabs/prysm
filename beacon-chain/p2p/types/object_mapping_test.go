@@ -104,7 +104,7 @@ func TestInitializeDataMaps_Gloas(t *testing.T) {
 	require.Equal(t, true, ok)
 	md, err := mdFunc()
 	require.NoError(t, err)
-	assert.NotNil(t, md.MetadataObjV1())
+	assert.NotNil(t, md.MetadataObjV2())
 
 	attFunc, ok := AttestationMap[gloasVersion]
 	require.Equal(t, true, ok)
