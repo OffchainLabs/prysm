@@ -1744,6 +1744,85 @@ func TestGetAttestationData(t *testing.T) {
 		var att ethpbalpha.AttestationData
 		require.NoError(t, att.UnmarshalSSZ(writer.Body.Bytes()))
 	})
+
+	t.Run("committeeIndex omitted after gloas", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.GloasForkEpoch = 3
+		params.OverrideBeaconConfig(cfg)
+
+		block := util.NewBeaconBlock()
+		block.Block.Slot = 3*params.BeaconConfig().SlotsPerEpoch + 1
+		targetBlock := util.NewBeaconBlock()
+		targetBlock.Block.Slot = 1 * params.BeaconConfig().SlotsPerEpoch
+		justifiedBlock := util.NewBeaconBlock()
+		justifiedBlock.Block.Slot = 2 * params.BeaconConfig().SlotsPerEpoch
+		blockRoot, err := block.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not hash beacon block")
+		justifiedRoot, err := justifiedBlock.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not get signing root for justified block")
+		slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
+		beaconState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, beaconState.SetSlot(slot))
+		justifiedCheckpoint := &ethpbalpha.Checkpoint{
+			Epoch: 2,
+			Root:  justifiedRoot[:],
+		}
+		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
+		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		chain := &mockChain.ChainService{
+			Optimistic:                 false,
+			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Root:                       blockRoot[:],
+			CurrentJustifiedCheckPoint: justifiedCheckpoint,
+			TargetRoot:                 blockRoot,
+			State:                      beaconState,
+		}
+
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chain,
+			TimeFetcher:           chain,
+			OptimisticModeFetcher: chain,
+			CoreService: &core.Service{
+				HeadFetcher:           chain,
+				GenesisTimeFetcher:    chain,
+				FinalizedFetcher:      chain,
+				AttestationCache:      cache.NewAttestationDataCache(),
+				OptimisticModeFetcher: chain,
+			},
+		}
+
+		url := fmt.Sprintf("http://example.com?slot=%d", slot)
+		request := httptest.NewRequest(http.MethodGet, url, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetAttestationData(writer, request)
+
+		expectedResponse := &structs.GetAttestationDataResponse{
+			Data: &structs.AttestationData{
+				Slot:            strconv.FormatUint(uint64(slot), 10),
+				BeaconBlockRoot: hexutil.Encode(blockRoot[:]),
+				CommitteeIndex:  strconv.FormatUint(0, 10),
+				Source: &structs.Checkpoint{
+					Epoch: strconv.FormatUint(2, 10),
+					Root:  hexutil.Encode(justifiedRoot[:]),
+				},
+				Target: &structs.Checkpoint{
+					Epoch: strconv.FormatUint(3, 10),
+					Root:  hexutil.Encode(blockRoot[:]),
+				},
+			},
+		}
+
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetAttestationDataResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.NotNil(t, resp)
+		assert.DeepEqual(t, expectedResponse, resp)
+	})
 }
 
 func TestProduceSyncCommitteeContribution(t *testing.T) {
