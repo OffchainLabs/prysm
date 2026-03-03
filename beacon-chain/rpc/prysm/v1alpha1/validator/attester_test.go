@@ -686,7 +686,8 @@ func TestGetAttestationData_CommitteeIndexGloas(t *testing.T) {
 					MockHeadSlot: &headSlot,
 				},
 				ChainInfoFetcher: &mock.ChainService{
-					MockCanonicalFull: map[primitives.Slot]bool{slot: true},
+					MockCanonicalRoots: map[primitives.Slot][32]byte{slot: blockRoot},
+					MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
 				},
 				GenesisTimeFetcher: &mock.ChainService{
 					Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second),
@@ -717,7 +718,9 @@ func TestGetAttestationData_CommitteeIndexGloas(t *testing.T) {
 					State:        beaconState,
 					MockHeadSlot: &headSlot,
 				},
-				ChainInfoFetcher: &mock.ChainService{},
+				ChainInfoFetcher: &mock.ChainService{
+					MockCanonicalRoots: map[primitives.Slot][32]byte{slot: blockRoot},
+				},
 				GenesisTimeFetcher: &mock.ChainService{
 					Genesis: time.Now().Add(time.Duration(-1*offset) * time.Second),
 				},
