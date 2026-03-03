@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,29 +41,6 @@ func (m *failThenSucceedReconstructor) ReconstructBlobSidecars(
 	m.calls++
 	if m.calls <= m.failCount {
 		return nil, fmt.Errorf("EL temporarily unavailable")
-	}
-	return m.BlobSidecars, nil
-}
-
-// blockingReconstructor blocks ReconstructBlobSidecars until the release channel is closed.
-// Tracks the number of actual EL calls via an atomic counter.
-type blockingReconstructor struct {
-	mockExecution.EngineClient
-	calls   atomic.Int32
-	release chan struct{}
-}
-
-func (m *blockingReconstructor) ReconstructBlobSidecars(
-	ctx context.Context,
-	_ interfaces.ReadOnlySignedBeaconBlock,
-	_ [fieldparams.RootLength]byte,
-	_ func(uint64) bool,
-) ([]blocks.VerifiedROBlob, error) {
-	m.calls.Add(1)
-	select {
-	case <-m.release:
-	case <-ctx.Done():
-		return nil, ctx.Err()
 	}
 	return m.BlobSidecars, nil
 }
@@ -162,41 +138,3 @@ func TestProcessBlobSidecarsFromExecution_ContextCancelStopsRetry(t *testing.T) 
 	}
 }
 
-// TestProcessBlobSidecarsFromExecution_SingleFlightDedup verifies that concurrent calls
-// for the same block root are deduplicated via singleFlight, resulting in only one EL call.
-func TestProcessBlobSidecarsFromExecution_SingleFlightDedup(t *testing.T) {
-	mock := &blockingReconstructor{release: make(chan struct{})}
-
-	s := &Service{
-		cfg: &config{
-			p2p:                    mockp2p.NewTestP2P(t),
-			chain:                  &chainMock.ChainService{Genesis: time.Now()},
-			clock:                  startup.NewClock(time.Now(), [32]byte{}),
-			blobStorage:            filesystem.NewEphemeralBlobStorage(t),
-			executionReconstructor: mock,
-			operationNotifier:      &chainMock.MockOperationNotifier{},
-		},
-		seenBlobCache: lruwrpr.New(1),
-	}
-
-	// Use two separate-but-identical blocks to avoid sharing mutable state across goroutines.
-	sb1 := newDenebBlockWithCommitments(t, 1)
-	sb2 := newDenebBlockWithCommitments(t, 1)
-	r1, err := sb1.Block().HashTreeRoot()
-	require.NoError(t, err)
-	r2, err := sb2.Block().HashTreeRoot()
-	require.NoError(t, err)
-	require.Equal(t, r1, r2, "blocks must have the same root for singleFlight dedup")
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() { defer wg.Done(); s.processBlobSidecarsFromExecution(t.Context(), sb1) }()
-	go func() { defer wg.Done(); s.processBlobSidecarsFromExecution(t.Context(), sb2) }()
-
-	// Wait until at least one EL call is in flight before releasing.
-	require.Eventually(t, func() bool { return mock.calls.Load() >= 1 }, time.Second, 5*time.Millisecond)
-	close(mock.release)
-	wg.Wait()
-
-	require.Equal(t, int32(1), mock.calls.Load())
-}

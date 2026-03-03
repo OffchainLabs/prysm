@@ -179,7 +179,6 @@ type Service struct {
 	newBlobVerifier                     verification.NewBlobVerifier
 	newColumnsVerifier                  verification.NewDataColumnsVerifier
 	newPayloadAttestationVerifier       verification.NewPayloadAttestationMsgVerifier
-	blobSidecarsExecSingleFlight        singleflight.Group
 	columnSidecarsExecSingleFlight      singleflight.Group
 	reconstructionSingleFlight          singleflight.Group
 	availableBlocker                    coverage.AvailableBlocker

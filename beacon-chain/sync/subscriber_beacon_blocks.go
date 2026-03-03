@@ -138,68 +138,67 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 		}
 	}
 
-	key := fmt.Sprintf("%#x", blockRoot)
-	if _, err, _ := s.blobSidecarsExecSingleFlight.Do(key, func() (any, error) {
-		const delay = 250 * time.Millisecond
-		const maxIterations = 120 // ~30s safety cap; should never be reached with reasonable context deadlines.
-		for iteration := range uint64(maxIterations) {
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
+	const delay = 250 * time.Millisecond
+	const maxIterations = uint64(120) // ~30s safety cap; should never be reached with reasonable context deadlines.
+	for iteration := range maxIterations {
+		if ctx.Err() != nil {
+			if !errors.Is(ctx.Err(), context.Canceled) {
+				log.WithError(ctx.Err()).Error("Failed to reconstruct blob sidecars")
 			}
+			return
+		}
 
-			// Re-fetch summary inside loop (blobs may arrive via gossip between retries).
-			summary = s.cfg.blobStorage.Summary(blockRoot)
-			blobSidecars, err := s.cfg.executionReconstructor.ReconstructBlobSidecars(ctx, block, blockRoot, summary.HasIndex)
-			if err != nil {
-				log.WithError(err).WithFields(logrus.Fields{
-					"root":      key,
-					"slot":      block.Block().Slot(),
-					"iteration": iteration,
-				}).Debug("Failed to reconstruct blob sidecars, retrying")
-				time.Sleep(delay)
+		// Re-fetch summary inside loop (blobs may arrive via gossip between retries).
+		summary = s.cfg.blobStorage.Summary(blockRoot)
+		blobSidecars, err := s.cfg.executionReconstructor.ReconstructBlobSidecars(ctx, block, blockRoot, summary.HasIndex)
+		if err != nil {
+			log.WithError(err).WithFields(logrus.Fields{
+				"root":      fmt.Sprintf("%#x", blockRoot),
+				"slot":      block.Block().Slot(),
+				"iteration": iteration,
+			}).Debug("Failed to reconstruct blob sidecars, retrying")
+			time.Sleep(delay)
+			continue
+		}
+		if len(blobSidecars) == 0 {
+			// Unlike data columns, blobs are all-or-nothing from GetBlobs.
+			// A zero-length response means the EL blob pool lacks the data;
+			// retrying the same call is unlikely to help.
+			return
+		}
+
+		// Refresh indices as new blobs may have been added to the db.
+		summary = s.cfg.blobStorage.Summary(blockRoot)
+
+		// Broadcast blob sidecars first then save them to the db.
+		for _, sidecar := range blobSidecars {
+			// Don't broadcast the blob if it has appeared on disk.
+			if summary.HasIndex(sidecar.Index) {
 				continue
 			}
-			if len(blobSidecars) == 0 {
-				return nil, nil
+			if err := s.cfg.p2p.BroadcastBlob(ctx, sidecar.Index, sidecar.BlobSidecar); err != nil {
+				log.WithFields(blobFields(sidecar.ROBlob)).WithError(err).Error("Failed to broadcast blob sidecar")
 			}
-
-			// Refresh indices as new blobs may have been added to the db.
-			summary = s.cfg.blobStorage.Summary(blockRoot)
-
-			// Broadcast blob sidecars first then save them to the db.
-			for _, sidecar := range blobSidecars {
-				// Don't broadcast the blob if it has appeared on disk.
-				if summary.HasIndex(sidecar.Index) {
-					continue
-				}
-				if err := s.cfg.p2p.BroadcastBlob(ctx, sidecar.Index, sidecar.BlobSidecar); err != nil {
-					log.WithFields(blobFields(sidecar.ROBlob)).WithError(err).Error("Failed to broadcast blob sidecar")
-				}
-			}
-
-			for _, sidecar := range blobSidecars {
-				if summary.HasIndex(sidecar.Index) {
-					continue
-				}
-				if err := s.subscribeBlob(ctx, sidecar); err != nil {
-					log.WithFields(blobFields(sidecar.ROBlob)).WithError(err).Error("Failed to receive blob")
-					continue
-				}
-
-				blobRecoveredFromELTotal.Inc()
-				fields := blobFields(sidecar.ROBlob)
-				fields["sinceSlotStartTime"] = s.cfg.clock.Now().Sub(startTime)
-				log.WithFields(fields).Debug("Processed blob sidecar from EL")
-			}
-
-			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to reconstruct blob sidecars after %d attempts", maxIterations)
-	}); err != nil {
-		if !errors.Is(err, context.Canceled) {
-			log.WithError(err).Error("Failed to reconstruct blob sidecars")
+
+		for _, sidecar := range blobSidecars {
+			if summary.HasIndex(sidecar.Index) {
+				continue
+			}
+			if err := s.subscribeBlob(ctx, sidecar); err != nil {
+				log.WithFields(blobFields(sidecar.ROBlob)).WithError(err).Error("Failed to receive blob")
+				continue
+			}
+
+			blobRecoveredFromELTotal.Inc()
+			fields := blobFields(sidecar.ROBlob)
+			fields["sinceSlotStartTime"] = s.cfg.clock.Now().Sub(startTime)
+			log.WithFields(fields).Debug("Processed blob sidecar from EL")
 		}
+
+		return
 	}
+	log.Errorf("Failed to reconstruct blob sidecars after %d attempts", maxIterations)
 }
 
 // processDataColumnSidecarsFromExecution retrieves (if available) data column sidecars data from the execution client,
