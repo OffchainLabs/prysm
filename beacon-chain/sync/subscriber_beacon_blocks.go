@@ -81,6 +81,8 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "process pending atts for block")
 	}
 
+	go s.processPendingPayloadEnvelope(s.ctx, root)
+
 	return nil
 }
 
