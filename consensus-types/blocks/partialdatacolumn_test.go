@@ -635,10 +635,10 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				var initial PartialDataColumnPeerState
 				nextState, action, headerIncluded := p.forPeer(peer.ID("peer-a"), true, initial, true)
 				require.NoError(t, action.Err)
-				require.Equal(t, true, headerIncluded)
 				require.NotNil(t, action.EncodedPartialMessage)
 				require.NotNil(t, action.EncodedPartsMetadata)
 				require.NotNil(t, nextState.Recvd)
+				require.Equal(t, true, headerIncluded)
 				require.Equal(t, uint64(0), bitfield.Bitlist(nextState.Recvd.Available).Count())
 				require.Equal(t, uint64(0), bitfield.Bitlist(nextState.Recvd.Requests).Count())
 				decoded := mustDecodeSidecar(t, action.EncodedPartialMessage)
