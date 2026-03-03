@@ -139,6 +139,12 @@ func TestEnvelopeVerifier_VerifySignature_Builder(t *testing.T) {
 }
 
 func TestEnvelopeVerifier_VerifySignature_SelfBuild(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	slot := primitives.Slot(2)
 	root := bytesutil.ToBytes32(bytes.Repeat([]byte{0xAA}, 32))
 	blockHash := bytesutil.ToBytes32(bytes.Repeat([]byte{0xBB}, 32))
