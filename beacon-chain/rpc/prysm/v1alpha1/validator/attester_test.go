@@ -152,7 +152,7 @@ func TestProposeAttestation(t *testing.T) {
 			},
 		}
 		_, err = attesterServer.ProposeAttestationElectra(t.Context(), req)
-		assert.ErrorContains(t, "committee index must be < 2 post-Gloas", err)
+		assert.ErrorContains(t, "index must be < 2 post-Gloas", err)
 	})
 	t.Run("Gloas rejects index 1 for same slot", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
@@ -183,7 +183,7 @@ func TestProposeAttestation(t *testing.T) {
 			},
 		}
 		_, err = server.ProposeAttestationElectra(t.Context(), req)
-		assert.ErrorContains(t, "same slot attestations must use committee index 0", err)
+		assert.ErrorContains(t, "same slot attestations must use index 0 post-Gloas", err)
 	})
 	t.Run("Gloas allows index 1 for prior slot", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
