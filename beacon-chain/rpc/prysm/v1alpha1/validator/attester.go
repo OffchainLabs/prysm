@@ -82,6 +82,7 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 //
 // ProposeAttestationElectra is a function called by an attester to vote
 // on a block via an attestation object as defined in the Ethereum specification.
+// Used for Post Electra
 func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeAttestationElectra")
 	defer span.End()
@@ -194,9 +195,14 @@ func (vs *Server) proposeAtt(
 			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("ProposeAttestationElectra not supported yet. The current epoch is %d supported starting epoch is %d", currentEpoch, params.BeaconConfig().ElectraForkEpoch))
 		}
 		data := att.GetData()
-		if slots.ToEpoch(data.Slot) >= params.BeaconConfig().GloasForkEpoch {
+		attEpoch := slots.ToEpoch(data.Slot)
+		if attEpoch >= params.BeaconConfig().ElectraForkEpoch && attEpoch < params.BeaconConfig().GloasForkEpoch {
+			if data.CommitteeIndex != 0 {
+				return nil, status.Error(codes.InvalidArgument, "Committee index must be 0 in Electra and Fulu")
+			}
+		} else if attEpoch >= params.BeaconConfig().GloasForkEpoch {
 			if data.CommitteeIndex >= 2 {
-				return nil, status.Error(codes.InvalidArgument, "committee index must be < 2 post-Gloas")
+				return nil, status.Error(codes.InvalidArgument, "index must be < 2 post-Gloas")
 			}
 			if data.CommitteeIndex != 0 {
 				blockSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(bytesutil.ToBytes32(data.BeaconBlockRoot))
@@ -204,7 +210,7 @@ func (vs *Server) proposeAtt(
 					return nil, status.Error(codes.Internal, "could not determine block slot")
 				}
 				if blockSlot == data.Slot {
-					return nil, status.Error(codes.InvalidArgument, "same slot attestations must use committee index 0")
+					return nil, status.Error(codes.InvalidArgument, "same slot attestations must use index 0 post-Gloas")
 				}
 			}
 		}

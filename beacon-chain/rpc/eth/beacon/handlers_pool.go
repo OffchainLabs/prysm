@@ -161,7 +161,7 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	var failedBroadcasts []*server.IndexedError
 
 	if v >= version.Electra {
-		attFailures, failedBroadcasts, err = s.handleAttestationsElectra(ctx, req.Data)
+		attFailures, failedBroadcasts, err = s.handleAttestationsPostElectra(ctx, req.Data)
 	} else {
 		attFailures, failedBroadcasts, err = s.handleAttestations(ctx, req.Data)
 	}
@@ -190,7 +190,7 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleAttestationsElectra(
+func (s *Server) handleAttestationsPostElectra(
 	ctx context.Context,
 	data json.RawMessage,
 ) (attFailures []*server.IndexedError, failedBroadcasts []*server.IndexedError, err error) {
@@ -225,11 +225,20 @@ func (s *Server) handleAttestationsElectra(
 			})
 			continue
 		}
-		if slots.ToEpoch(att.Data.Slot) >= params.BeaconConfig().GloasForkEpoch {
+		attEpoch := slots.ToEpoch(att.Data.Slot)
+		if attEpoch >= params.BeaconConfig().ElectraForkEpoch && attEpoch < params.BeaconConfig().GloasForkEpoch {
+			if att.Data.CommitteeIndex != 0 {
+				attFailures = append(attFailures, &server.IndexedError{
+					Index:   i,
+					Message: "Committee index must be 0 in Electra and Fulu",
+				})
+				continue
+			}
+		} else if attEpoch >= params.BeaconConfig().GloasForkEpoch {
 			if att.Data.CommitteeIndex >= 2 {
 				attFailures = append(attFailures, &server.IndexedError{
 					Index:   i,
-					Message: "Committee index must be < 2 post-Gloas",
+					Message: "Index must be < 2 post-Gloas",
 				})
 				continue
 			}
@@ -245,7 +254,7 @@ func (s *Server) handleAttestationsElectra(
 				if blockSlot == att.Data.Slot {
 					attFailures = append(attFailures, &server.IndexedError{
 						Index:   i,
-						Message: "Same slot attestations must use committee index 0",
+						Message: "Same slot attestations must use index 0 post-Gloas",
 					})
 					continue
 				}

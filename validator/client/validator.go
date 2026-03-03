@@ -988,19 +988,17 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 
 	epoch := slots.ToEpoch(slot)
 	postElectra := epoch >= params.BeaconConfig().ElectraForkEpoch
-	postGloas := epoch >= params.BeaconConfig().GloasForkEpoch
 
 	// Pre-Electra: committee index varies per validator.
-	// Post-Gloas: committee index signals payload status, which can change within a slot.
-	// Neither case is safe to cache.
-	if !postElectra || postGloas {
+	// Post-Gloas: index signals payload status.
+	if !postElectra {
 		return v.validatorClient.AttestationData(ctx, &ethpb.AttestationDataRequest{
 			Slot:           slot,
 			CommitteeIndex: committeeIndex,
 		})
 	}
 
-	// Electra to Gloas: committee index is always 0, safe to cache
+	// Post Electra: committee index is always 0 or consistent payload status, safe to cache
 	v.cachedAttestationDataLock.RLock()
 	if v.cachedAttestationData != nil && v.cachedAttestationData.Slot == slot {
 		data := v.cachedAttestationData
