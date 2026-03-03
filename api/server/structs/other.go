@@ -262,3 +262,23 @@ type PendingConsolidation struct {
 	SourceIndex string `json:"source_index"`
 	TargetIndex string `json:"target_index"`
 }
+
+type Builder struct {
+	Pubkey            string `json:"pubkey"`
+	Version           string `json:"version"`
+	ExecutionAddress  string `json:"execution_address"`
+	Balance           string `json:"balance"`
+	DepositEpoch      string `json:"deposit_epoch"`
+	WithdrawableEpoch string `json:"withdrawable_epoch"`
+}
+
+type BuilderPendingPayment struct {
+	Weight     string                    `json:"weight"`
+	Withdrawal *BuilderPendingWithdrawal `json:"withdrawal"`
+}
+
+type BuilderPendingWithdrawal struct {
+	FeeRecipient string `json:"fee_recipient"`
+	Amount       string `json:"amount"`
+	BuilderIndex string `json:"builder_index"`
+}
