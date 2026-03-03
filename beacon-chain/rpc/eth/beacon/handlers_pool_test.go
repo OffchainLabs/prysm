@@ -898,7 +898,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			e := &server.IndexedErrorContainer{}
 			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 			require.Equal(t, 1, len(e.Failures))
-			assert.Equal(t, true, strings.Contains(e.Failures[0].Message, "Committee index must be < 2 post-Gloas"))
+			assert.Equal(t, true, strings.Contains(e.Failures[0].Message, "Index must be < 2 post-Gloas"))
 		})
 		t.Run("rejects index 1 for same slot", func(t *testing.T) {
 			broadcaster := &p2pMock.MockBroadcaster{}
@@ -919,7 +919,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			e := &server.IndexedErrorContainer{}
 			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 			require.Equal(t, 1, len(e.Failures))
-			assert.Equal(t, true, strings.Contains(e.Failures[0].Message, "Same slot attestations must use committee index 0"))
+			assert.Equal(t, true, strings.Contains(e.Failures[0].Message, "Same slot attestations must use index 0 post-Gloas"))
 		})
 	})
 	t.Run("syncing", func(t *testing.T) {
