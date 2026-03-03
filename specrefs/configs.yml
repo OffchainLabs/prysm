@@ -483,7 +483,10 @@
     </spec>
 
 - name: MAX_REQUEST_PAYLOADS#gloas
-  sources: []
+  sources:
+    - file: config/params/config.go
+      search: MaxRequestPayloads\s+uint64
+      regex: true
   spec: |
     <spec config_var="MAX_REQUEST_PAYLOADS" fork="gloas" hash="23399ee5">
     MAX_REQUEST_PAYLOADS = 128

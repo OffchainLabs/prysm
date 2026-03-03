@@ -346,6 +346,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Values related to gloas
 	BuilderPaymentThresholdNumerator:   6,
 	BuilderPaymentThresholdDenominator: 10,
+	MaxRequestPayloads:                 128,
 
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB

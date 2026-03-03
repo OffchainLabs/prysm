@@ -544,6 +544,9 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 	buildersLimit := min(buildersCount, int(cfg.MaxBuildersPerWithdrawalsSweep))
 
 	builderIndex := b.nextWithdrawalBuilderIndex
+	if buildersLimit == 0 {
+		return withdrawalIndex, builderIndex, nil
+	}
 	if uint64(builderIndex) >= uint64(buildersCount) {
 		return withdrawalIndex, builderIndex, fmt.Errorf("builder index %d out of range (builders length %d)", builderIndex, buildersCount)
 	}

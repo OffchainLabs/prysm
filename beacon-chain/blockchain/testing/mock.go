@@ -334,6 +334,16 @@ func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOn
 	return nil
 }
 
+// GetBlockPreState mocks the same method in the chain service.
+func (s *ChainService) GetBlockPreState(_ context.Context, _ blocks.ROBlock) (state.BeaconState, error) {
+	return s.State, nil
+}
+
+// GetPrestateToPropose mocks the same method in the chain service.
+func (s *ChainService) GetPrestateToPropose(_ context.Context, _ blocks.ROBlock) (state.BeaconState, error) {
+	return s.State.Copy(), nil
+}
+
 // HeadSlot mocks HeadSlot method in chain service.
 func (s *ChainService) HeadSlot() primitives.Slot {
 	if s.MockHeadSlot != nil {
