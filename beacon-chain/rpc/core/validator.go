@@ -481,7 +481,7 @@ func (s *Service) GetAttestationData(
 		s.AttestationCache.RUnlock()
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
-			CommitteeIndex:  s.attestationIndex(req, res.HeadRoot),
+			CommitteeIndex:  attestationDataIndex(req, res.IsPayloadFull),
 			BeaconBlockRoot: res.HeadRoot,
 			Source: &ethpb.Checkpoint{
 				Epoch: res.Source.Epoch,
@@ -505,7 +505,7 @@ func (s *Service) GetAttestationData(
 	if res != nil && res.Slot == req.Slot {
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
-			CommitteeIndex:  s.attestationIndex(req, res.HeadRoot),
+			CommitteeIndex:  attestationDataIndex(req, res.IsPayloadFull),
 			BeaconBlockRoot: res.HeadRoot,
 			Source: &ethpb.Checkpoint{
 				Epoch: res.Source.Epoch,
@@ -547,10 +547,15 @@ func (s *Service) GetAttestationData(
 		}
 	}
 	justifiedCheckpoint := headState.CurrentJustifiedCheckpoint()
+	var isPayloadFull bool
+	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
+		_, isPayloadFull = s.ChainInfoFetcher.CanonicalNodeAtSlot(req.Slot)
+	}
 
 	if err = s.AttestationCache.Put(&cache.AttestationConsensusData{
-		Slot:     req.Slot,
-		HeadRoot: headRoot,
+		Slot:          req.Slot,
+		HeadRoot:      headRoot,
+		IsPayloadFull: isPayloadFull,
 		Target: forkchoicetypes.Checkpoint{
 			Epoch: targetEpoch,
 			Root:  targetRoot,
@@ -565,7 +570,7 @@ func (s *Service) GetAttestationData(
 
 	return &ethpb.AttestationData{
 		Slot:            req.Slot,
-		CommitteeIndex:  s.attestationIndex(req, headRoot),
+		CommitteeIndex:  attestationDataIndex(req, isPayloadFull),
 		BeaconBlockRoot: headRoot,
 		Source: &ethpb.Checkpoint{
 			Epoch: justifiedCheckpoint.Epoch,
@@ -578,11 +583,11 @@ func (s *Service) GetAttestationData(
 	}, nil
 }
 
-// attestationIndex returns the committee index for attestation data.
+// attestationDataIndex returns the index for attestation data.
 // Pre-Electra: uses the requested committee index.
 // Electra to Gloas: always 0.
 // Post-Gloas: signals payload status of the attested head block.
-func (s *Service) attestationIndex(req *ethpb.AttestationDataRequest, headRoot []byte) primitives.CommitteeIndex {
+func attestationDataIndex(req *ethpb.AttestationDataRequest, isPayloadFull bool) primitives.CommitteeIndex {
 	epoch := slots.ToEpoch(req.Slot)
 	if epoch < params.BeaconConfig().ElectraForkEpoch {
 		return req.CommitteeIndex
@@ -591,8 +596,7 @@ func (s *Service) attestationIndex(req *ethpb.AttestationDataRequest, headRoot [
 		// eip-7549 moves index outside
 		return 0
 	}
-	_, full := s.ChainInfoFetcher.CanonicalNodeAtSlot(req.Slot)
-	if full {
+	if isPayloadFull {
 		return 1
 	}
 	return 0
