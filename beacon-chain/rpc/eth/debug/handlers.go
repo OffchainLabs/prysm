@@ -114,6 +114,13 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 			return
 		}
 	case version.Gloas:
+		if strings.ToLower(string(id)) == "head" {
+			st, err = s.Stater.State(ctx, []byte(strconv.FormatUint(uint64(s.HeadFetcher.HeadSlot()), 10)))
+			if err != nil {
+				shared.WriteStateFetchError(w, err)
+				return
+			}
+		}
 		respSt, err = structs.BeaconStateGloasFromConsensus(st)
 		if err != nil {
 			httputil.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
