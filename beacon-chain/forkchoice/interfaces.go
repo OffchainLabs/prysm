@@ -90,8 +90,11 @@ type FastGetter interface {
 	TargetRootForEpoch([32]byte, primitives.Epoch) ([32]byte, error)
 	UnrealizedJustifiedPayloadBlockHash() [32]byte
 	Weight(root [32]byte) (uint64, error)
+	ConsensusNodeWeight(root [32]byte) (uint64, error)
+	PayloadWeights(root [32]byte) (emptyWeight, fullWeight uint64, err error)
 	ParentRoot(root [32]byte) ([32]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
+	CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool)
 }
 
 // Setter allows to set forkchoice information
@@ -105,4 +108,5 @@ type Setter interface {
 	NewSlot(context.Context, primitives.Slot) error
 	SetBalancesByRooter(BalancesByRooter)
 	InsertSlashedIndex(context.Context, primitives.ValidatorIndex)
+	SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool)
 }

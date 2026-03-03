@@ -3,12 +3,14 @@ package blockchain
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
@@ -19,6 +21,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func prepareGloasForkchoiceState(
@@ -462,6 +466,12 @@ func TestGetLookupParentRoot_PreGloas(t *testing.T) {
 }
 
 func TestGetLookupParentRoot_GloasBuildsOnEmpty(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
 	service, req := minimalTestService(t)
 	ctx := t.Context()
 
@@ -503,6 +513,12 @@ func TestGetLookupParentRoot_GloasBuildsOnEmpty(t *testing.T) {
 }
 
 func TestGetLookupParentRoot_GloasBuildsOnFull(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
 	service, req := minimalTestService(t)
 	ctx := t.Context()
 
@@ -541,4 +557,92 @@ func TestGetLookupParentRoot_GloasBuildsOnFull(t *testing.T) {
 	require.NoError(t, err)
 	// parentBlockHash == parentNodeBlockHash, so it builds on full => returns parentBlockHash
 	require.Equal(t, parentNodeBlockHash, got)
+}
+
+func TestGetLookupParentRoot_GloasParentPreForkEpoch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 2
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
+	service, req := minimalTestService(t)
+	ctx := t.Context()
+
+	parentRoot := [32]byte{1}
+	parentNodeBlockHash := [32]byte{10}
+	parentSlot, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
+	require.NoError(t, err)
+	parentSlot = parentSlot - 1
+
+	st, parentROBlock, err := prepareGloasForkchoiceState(
+		ctx,
+		parentSlot,
+		parentRoot,
+		params.BeaconConfig().ZeroHash,
+		parentNodeBlockHash,
+		params.BeaconConfig().ZeroHash,
+		0,
+		0,
+	)
+	require.NoError(t, err)
+	require.NoError(t, req.fcs.InsertNode(ctx, st, parentROBlock))
+
+	blockHash := [32]byte{20}
+	bid := util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+		Message: &ethpb.ExecutionPayloadBid{
+			BlockHash:       blockHash[:],
+			ParentBlockHash: parentNodeBlockHash[:],
+		},
+	})
+
+	blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{
+			Slot:       parentSlot + 1,
+			ParentRoot: parentRoot[:],
+			Body: &ethpb.BeaconBlockBodyGloas{
+				SignedExecutionPayloadBid: bid,
+			},
+		},
+	})
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	roblock, err := blocks.NewROBlock(wsb)
+	require.NoError(t, err)
+
+	got, err := service.getLookupParentRoot(roblock)
+	require.NoError(t, err)
+	// Parent slot is pre-fork, so always return parentRoot.
+	require.Equal(t, parentRoot, got)
+}
+
+func TestLateBlockTasks_GloasFCU(t *testing.T) {
+	logHook := logTest.NewGlobal()
+	resetCfg := features.InitWithReset(&features.Flags{
+		PrepareAllPayloads: true,
+	})
+	defer resetCfg()
+
+	pid := &enginev1.PayloadIDBytes{1, 2, 3, 4, 5, 6, 7, 8}
+	service, tr := setupGloasService(t, &mockExecution.EngineClient{PayloadIDBytes: pid})
+
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+	base, _ := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
+	base.LatestBlockHash = blockHash[:]
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+
+	headRoot := bytesutil.ToBytes32([]byte("headroot"))
+	service.head = &head{
+		root:  headRoot,
+		state: st,
+		slot:  1,
+	}
+
+	// Set genesis time so CurrentSlot > HeadSlot, triggering late block logic.
+	service.SetGenesisTime(time.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second))
+	service.SetForkChoiceGenesisTime(service.genesisTime)
+
+	service.lateBlockTasks(tr.ctx)
+	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
 }
