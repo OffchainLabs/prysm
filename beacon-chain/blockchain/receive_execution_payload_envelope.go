@@ -152,7 +152,7 @@ func (s *Service) postPayloadHeadUpdate(ctx context.Context, envelope interfaces
 		}
 	}()
 
-	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot)
+	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot, blockHash[:])
 	if s.inRegularSync() {
 		go func() {
 			pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
