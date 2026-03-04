@@ -141,6 +141,8 @@ func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg pr
 			envelope, envErr := env.Envelope()
 			if envErr == nil {
 				s.setBadPayload(ctx, envelope.BeaconBlockRoot())
+			} else {
+				log.WithError(envErr).Error("failed to get envelope from signed execution payload envelope")
 			}
 		}
 		return err
