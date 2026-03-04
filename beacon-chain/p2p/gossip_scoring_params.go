@@ -145,6 +145,12 @@ func (s *Service) topicScoreParams(topic string) (*pubsub.TopicScoreParams, erro
 		return defaultLightClientOptimisticUpdateTopicParams(), nil
 	case strings.Contains(topic, GossipLightClientFinalityUpdateMessage):
 		return defaultLightClientFinalityUpdateTopicParams(), nil
+	case strings.Contains(topic, GossipPayloadAttestationMessageMessage):
+		// TODO: Revisit scoring params for payload attestation gossip.
+		return defaultBlockTopicParams(), nil
+	case strings.Contains(topic, GossipExecutionPayloadEnvelopeMessage):
+		// TODO: Revisit scoring params for execution payload envelope gossip.
+		return defaultBlockTopicParams(), nil
 	default:
 		return nil, errors.Errorf("unrecognized topic provided for parameter registration: %s", topic)
 	}

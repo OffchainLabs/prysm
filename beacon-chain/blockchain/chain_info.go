@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -114,6 +115,7 @@ type FinalizationFetcher interface {
 	FinalizedBlockHash() [32]byte
 	InForkchoice([32]byte) bool
 	IsFinalized(ctx context.Context, blockRoot [32]byte) bool
+	ParentPayloadReady(interfaces.ReadOnlyBeaconBlock) bool
 }
 
 // OptimisticModeFetcher retrieves information about optimistic status of the node.
@@ -401,6 +403,32 @@ func (s *Service) InForkchoice(root [32]byte) bool {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.HasNode(root)
+}
+
+// ParentPayloadReady returns true if the block's parent payload is available
+// in forkchoice. For pre-Gloas blocks or blocks building on empty, this always
+// returns true. For blocks building on full, it checks that the full node
+// exists.
+func (s *Service) ParentPayloadReady(blk interfaces.ReadOnlyBeaconBlock) bool {
+	if blk.Version() < version.Gloas {
+		return true
+	}
+	parentRoot := blk.ParentRoot()
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	blockHash, err := s.cfg.ForkChoiceStore.BlockHash(parentRoot)
+	if err != nil {
+		return false
+	}
+	bid, err := blk.Body().SignedExecutionPayloadBid()
+	if err != nil || bid == nil || bid.Message == nil {
+		return false
+	}
+	parentBlockHash := [32]byte(bid.Message.ParentBlockHash)
+	if parentBlockHash != blockHash {
+		return true // builds on empty, no full node needed
+	}
+	return s.cfg.ForkChoiceStore.HasFullNode(parentRoot)
 }
 
 // IsOptimisticForRoot takes the root as argument instead of the current head

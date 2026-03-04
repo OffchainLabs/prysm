@@ -77,6 +77,7 @@ type ChainService struct {
 	DataColumns                 []blocks.VerifiedRODataColumn
 	TargetRoot                  [32]byte
 	MockHeadSlot                *primitives.Slot
+	ParentPayloadReadyVal       *bool
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -332,6 +333,16 @@ func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOn
 	s.Root = signingRoot[:]
 	s.Block = block
 	return nil
+}
+
+// GetBlockPreState mocks the same method in the chain service.
+func (s *ChainService) GetBlockPreState(_ context.Context, _ blocks.ROBlock) (state.BeaconState, error) {
+	return s.State, nil
+}
+
+// GetPrestateToPropose mocks the same method in the chain service.
+func (s *ChainService) GetPrestateToPropose(_ context.Context, _ blocks.ROBlock) (state.BeaconState, error) {
+	return s.State.Copy(), nil
 }
 
 // HeadSlot mocks HeadSlot method in chain service.
@@ -773,6 +784,14 @@ func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *et
 // ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
 func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
 	return nil
+}
+
+// ParentPayloadReady mocks the same method in the chain service.
+func (s *ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool {
+	if s.ParentPayloadReadyVal != nil {
+		return *s.ParentPayloadReadyVal
+	}
+	return true
 }
 
 // DependentRootForEpoch mocks the same method in the chain service

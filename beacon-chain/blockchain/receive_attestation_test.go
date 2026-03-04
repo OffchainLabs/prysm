@@ -112,7 +112,7 @@ func TestService_ProcessAttestationsAndUpdateHead(t *testing.T) {
 
 	roblock, err := blocks.NewROBlockWithRoot(wsb, tRoot)
 	require.NoError(t, err)
-	preState, err := service.getBlockPreState(ctx, roblock)
+	preState, err := service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestService_UpdateHead_NoAtts(t *testing.T) {
 
 	roblock, err := blocks.NewROBlockWithRoot(wsb, tRoot)
 	require.NoError(t, err)
-	preState, err := service.getBlockPreState(ctx, roblock)
+	preState, err := service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)

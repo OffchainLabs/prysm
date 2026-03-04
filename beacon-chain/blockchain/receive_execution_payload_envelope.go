@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
@@ -68,6 +70,16 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
+	// DA check: verify data columns are available before inserting payload.
+	bid, err := preState.LatestExecutionPayloadBid()
+	if err != nil {
+		return errors.Wrap(err, "could not get latest execution payload bid")
+	}
+	if len(bid.BlobKzgCommitments()) > 0 {
+		if err := s.areDataColumnsAvailable(ctx, root, envelope.Slot()); err != nil {
+			return errors.Wrap(err, "data availability check failed for payload envelope")
+		}
+	}
 	if err := s.savePostPayload(ctx, signed, preState); err != nil {
 		return err
 	}
@@ -92,9 +104,25 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
+	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
+		Type: statefeed.PayloadProcessed,
+		Data: &statefeed.PayloadProcessedData{
+			Slot:      envelope.Slot(),
+			BlockRoot: root,
+		},
+	})
+
+	execution, err := envelope.Execution()
+	if err != nil {
+		log.WithError(err).Error("Could not get execution payload from envelope for logging")
+		return nil
+	}
+
 	log.WithFields(logrus.Fields{
-		"slot":      envelope.Slot(),
-		"blockRoot": fmt.Sprintf("%#x", root),
+		"slot":       envelope.Slot(),
+		"blockRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
+		"blockHash":  fmt.Sprintf("%#x", bytesutil.Trunc(execution.BlockHash())),
+		"parentHash": fmt.Sprintf("%#x", bytesutil.Trunc(execution.ParentHash())),
 	}).Info("Processed execution payload envelope")
 	return nil
 }

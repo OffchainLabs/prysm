@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -53,6 +54,7 @@ func TestGetDutiesV2_OK(t *testing.T) {
 		ForkchoiceFetcher: chain,
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 		PayloadIDCache:    cache.NewPayloadIDCache(),
+		CoreService:       &core.Service{},
 	}
 
 	// Test the first validator in registry.
@@ -140,6 +142,7 @@ func TestGetAltairDutiesV2_SyncCommitteeOK(t *testing.T) {
 		Eth1InfoFetcher:   &mockExecution.Chain{},
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 		PayloadIDCache:    cache.NewPayloadIDCache(),
+		CoreService:       &core.Service{},
 	}
 
 	// Test the first validator in registry.
@@ -247,6 +250,7 @@ func TestGetBellatrixDutiesV2_SyncCommitteeOK(t *testing.T) {
 		Eth1InfoFetcher:   &mockExecution.Chain{},
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 		PayloadIDCache:    cache.NewPayloadIDCache(),
+		CoreService:       &core.Service{},
 	}
 
 	// Test the first validator in registry.
@@ -341,6 +345,7 @@ func TestGetAltairDutiesV2_UnknownPubkey(t *testing.T) {
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 		DepositFetcher:    depositCache,
 		PayloadIDCache:    cache.NewPayloadIDCache(),
+		CoreService:       &core.Service{},
 	}
 
 	unknownPubkey := bytesutil.PadTo([]byte{'u'}, 48)
@@ -387,6 +392,7 @@ func TestGetDutiesV2_StateAdvancement(t *testing.T) {
 		TimeFetcher:       chain,
 		ForkchoiceFetcher: chain,
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		CoreService:       &core.Service{},
 	}
 
 	// Verify state processing occurs
@@ -442,6 +448,7 @@ func TestGetDutiesV2_CurrentEpoch_ShouldNotFail(t *testing.T) {
 		TimeFetcher:       chain,
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 		PayloadIDCache:    cache.NewPayloadIDCache(),
+		CoreService:       &core.Service{},
 	}
 
 	// Test the first validator in registry.
@@ -482,6 +489,7 @@ func TestGetDutiesV2_MultipleKeys_OK(t *testing.T) {
 		TimeFetcher:       chain,
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 		PayloadIDCache:    cache.NewPayloadIDCache(),
+		CoreService:       &core.Service{},
 	}
 
 	pubkey0 := deposits[0].Data.PublicKey
@@ -540,6 +548,7 @@ func TestGetDutiesV2_NextSyncCommitteePeriod(t *testing.T) {
 		TimeFetcher:       chain,
 		ForkchoiceFetcher: chain,
 		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		CoreService:       &core.Service{},
 	}
 
 	res, err := vs.GetDutiesV2(t.Context(), req)
@@ -558,36 +567,4 @@ func TestGetDutiesV2_SyncNotReady(t *testing.T) {
 	}
 	_, err := vs.GetDutiesV2(t.Context(), &ethpb.DutiesRequest{})
 	assert.ErrorContains(t, "Syncing to latest head", err)
-}
-
-func TestGetValidatorAssignment(t *testing.T) {
-	start := primitives.Slot(100)
-
-	// Test using CommitteeAssignments
-	committeeAssignments := map[primitives.ValidatorIndex]*helpers.CommitteeAssignment{
-		5: {
-			Committee:      []primitives.ValidatorIndex{4, 5, 6},
-			AttesterSlot:   start + 1,
-			CommitteeIndex: primitives.CommitteeIndex(0),
-		},
-	}
-
-	meta := &metadata{
-		committeeAssignments: committeeAssignments,
-	}
-
-	vs := &Server{}
-
-	// Test existing validator
-	assignment := vs.getValidatorAssignment(meta, primitives.ValidatorIndex(5))
-	require.NotNil(t, assignment)
-	assert.Equal(t, start+1, assignment.AttesterSlot)
-	assert.Equal(t, primitives.CommitteeIndex(0), assignment.CommitteeIndex)
-	assert.Equal(t, uint64(1), assignment.ValidatorCommitteeIndex)
-
-	// Test non-existent validator should return empty assignment
-	assignment = vs.getValidatorAssignment(meta, primitives.ValidatorIndex(99))
-	require.NotNil(t, assignment)
-	assert.Equal(t, primitives.Slot(0), assignment.AttesterSlot)
-	assert.Equal(t, primitives.CommitteeIndex(0), assignment.CommitteeIndex)
 }

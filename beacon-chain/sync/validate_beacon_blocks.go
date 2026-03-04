@@ -201,8 +201,21 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not identify parent for block")
 		return pubsub.ValidationIgnore, err
 	}
-	if res, err := s.validateExecutionPayloadBidParentSeen(ctx, blk.Block()); err != nil {
-		return res, err
+	if res, err := s.validateExecutionPayloadBidParentSeen(ctx, blk.Block()); res == pubsub.ValidationIgnore {
+		if sigRes, sigErr := s.verifyPendingBlockSignature(ctx, blk, blockRoot); sigErr != nil {
+			log.WithError(sigErr).WithFields(getBlockFields(blk)).Debug("Could not verify block signature")
+			return sigRes, sigErr
+		}
+		s.pendingQueueLock.Lock()
+		if qErr := s.insertBlockToPendingQueue(blk.Block().Slot(), blk, blockRoot); qErr != nil {
+			s.pendingQueueLock.Unlock()
+			log.WithError(qErr).WithFields(getBlockFields(blk)).Debug("Could not insert block to pending queue")
+			return pubsub.ValidationIgnore, qErr
+		}
+		s.pendingQueueLock.Unlock()
+		go s.requestPayloadEnvelope(blk.Block().ParentRoot())
+		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Parent payload not yet available, queuing block")
+		return pubsub.ValidationIgnore, err
 	}
 
 	if res, err := s.validateExecutionPayloadBid(ctx, blk.Block()); err != nil {
@@ -349,7 +362,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 		if err != nil {
 			return nil, err
 		}
-		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, blockSlot)
+		return transition.ProcessSlotsForBlock(ctx, headState, blk.Block())
 	}
 	// If head and block are in the same epoch and head is compatible with the parent's dependent root, then use head
 	if blockEpoch == headEpoch {
@@ -366,7 +379,11 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 		}
 	}
 	// Otherwise retrieve the the parent state and advance it to the block's slot
-	parentState, err := s.cfg.stateGen.StateByRoot(ctx, parentRoot)
+	roblock, err := consensusblocks.NewROBlockWithRoot(blk, [32]byte{}) // root is not used.
+	if err != nil {
+		return nil, err
+	}
+	parentState, err := s.cfg.chain.GetBlockPreState(ctx, roblock)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +391,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 	if blockEpoch == parentEpoch {
 		return parentState, nil
 	}
-	return transition.ProcessSlotsUsingNextSlotCache(ctx, parentState, parentRoot[:], blockSlot)
+	return transition.ProcessSlotsForBlock(ctx, parentState, blk.Block())
 }
 
 func validateDenebBeaconBlock(blk interfaces.ReadOnlyBeaconBlock) error {
@@ -498,6 +515,25 @@ func (s *Service) hasBadBlock(root [32]byte) bool {
 	defer s.badBlockLock.RUnlock()
 	_, seen := s.badBlockCache.Get(string(root[:]))
 	return seen
+}
+
+// Returns true if the payload for the given block root is marked as bad.
+func (s *Service) hasBadPayload(root [32]byte) bool {
+	s.badPayloadLock.RLock()
+	defer s.badPayloadLock.RUnlock()
+	_, seen := s.badPayloadCache.Get(string(root[:]))
+	return seen
+}
+
+// Set bad payload in the cache.
+func (s *Service) setBadPayload(ctx context.Context, root [32]byte) {
+	s.badPayloadLock.Lock()
+	defer s.badPayloadLock.Unlock()
+	if ctx.Err() != nil {
+		return
+	}
+	log.WithField("root", fmt.Sprintf("%#x", root)).Debug("Inserting in invalid payload cache")
+	s.badPayloadCache.Add(string(root[:]), true)
 }
 
 // Set bad block in the cache.
