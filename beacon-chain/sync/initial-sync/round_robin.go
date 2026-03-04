@@ -249,41 +249,19 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 				return uint64(processedBeforeDataColumns + i), err
 			}
 		}
-		if b.Block.Version() >= version.Gloas {
-			attempt := 0
-			for {
-				attempt++
-				connected := s.cfg.P2P.Peers().Connected()
-				if len(connected) == 0 {
-					blockLog.WithField("attempt", attempt).Debug("No connected peers available for execution payload envelope fetch; retrying")
-					select {
-					case <-ctx.Done():
-						return uint64(processedBeforeDataColumns + i + 1), ctx.Err()
-					case <-time.After(envelopeFetchRetryInterval):
-					}
-					continue
-				}
-				selectedPeer := connected[0]
-				if err := s.fetchExecutionPayloadEnvelope(ctx, b.Block, selectedPeer); err != nil {
-					blockLog.WithError(err).WithFields(logrus.Fields{
-						"attempt": attempt,
-						"peer":    selectedPeer,
-					}).Debug("Could not fetch execution payload envelope for Gloas block, retrying")
-					select {
-					case <-ctx.Done():
-						return uint64(processedBeforeDataColumns + i + 1), ctx.Err()
-					case <-time.After(envelopeFetchRetryInterval):
-					}
-					continue
-				}
-				blockLog.WithFields(logrus.Fields{
-					"attempt": attempt,
-					"peer":    selectedPeer,
-				}).Debug("Execution payload envelope fetch path completed for block")
-				break
-			}
-		}
 
+		protoEnvelope := b.SignedExecutionPayloadEnvelope
+		if protoEnvelope != nil {
+			wrappedEnvelope, err := blocks.WrappedROSignedExecutionPayloadEnvelope(protoEnvelope)
+			if err != nil {
+				return 0, errors.Wrapf(err, "wrap execution payload envelope at slot %d", b.Block.Block().Slot())
+			}
+			if err := s.cfg.Chain.ReceiveExecutionPayloadEnvelope(ctx, wrappedEnvelope); err != nil {
+				return 0, errors.Wrapf(err, "receive execution payload envelope at slot %d", b.Block.Block().Slot())
+			}
+		} else {
+			log.WithField("slot", b.Block.Block().Slot()).Debug("processBatchedBlocksGloas: no payload envelope for block")
+		}
 	}
 
 	return uint64(len(bwb)), nil
