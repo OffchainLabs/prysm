@@ -620,6 +620,121 @@ func TestService_IsFinalized(t *testing.T) {
 	require.Equal(t, false, c.IsFinalized(ctx, [32]byte{'c'}))
 }
 
+func TestParentPayloadReady(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
+	service, tr := minimalTestService(t)
+	ctx := t.Context()
+	fcs := tr.fcs
+
+	parentRoot := [32]byte{1}
+	parentBlockHash := [32]byte{10}
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	// Insert parent node into forkchoice.
+	st, parentROBlock, err := prepareGloasForkchoiceState(ctx, 1, parentRoot, zeroHash, parentBlockHash, zeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, st, parentROBlock))
+
+	t.Run("pre-Gloas always true", func(t *testing.T) {
+		blk := util.HydrateSignedBeaconBlockDeneb(&ethpb.SignedBeaconBlockDeneb{
+			Block: &ethpb.BeaconBlockDeneb{ParentRoot: parentRoot[:]},
+		})
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.Equal(t, true, service.ParentPayloadReady(wsb.Block()))
+	})
+
+	t.Run("parent not in forkchoice", func(t *testing.T) {
+		unknownParent := [32]byte{99}
+		bid := util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+			Message: &ethpb.ExecutionPayloadBid{
+				BlockHash:       []byte{20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+				ParentBlockHash: parentBlockHash[:],
+			},
+		})
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot:       2,
+				ParentRoot: unknownParent[:],
+				Body:       &ethpb.BeaconBlockBodyGloas{SignedExecutionPayloadBid: bid},
+			},
+		})
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.Equal(t, false, service.ParentPayloadReady(wsb.Block()))
+	})
+
+	t.Run("builds on empty", func(t *testing.T) {
+		differentHash := [32]byte{99}
+		bid := util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+			Message: &ethpb.ExecutionPayloadBid{
+				BlockHash:       []byte{20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+				ParentBlockHash: differentHash[:],
+			},
+		})
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot:       2,
+				ParentRoot: parentRoot[:],
+				Body:       &ethpb.BeaconBlockBodyGloas{SignedExecutionPayloadBid: bid},
+			},
+		})
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.Equal(t, true, service.ParentPayloadReady(wsb.Block()))
+	})
+
+	t.Run("builds on full without payload", func(t *testing.T) {
+		bid := util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+			Message: &ethpb.ExecutionPayloadBid{
+				BlockHash:       []byte{20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+				ParentBlockHash: parentBlockHash[:],
+			},
+		})
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot:       2,
+				ParentRoot: parentRoot[:],
+				Body:       &ethpb.BeaconBlockBodyGloas{SignedExecutionPayloadBid: bid},
+			},
+		})
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.Equal(t, false, service.ParentPayloadReady(wsb.Block()))
+	})
+
+	t.Run("builds on full with payload", func(t *testing.T) {
+		pe, err := blocks.WrappedROExecutionPayloadEnvelope(&ethpb.ExecutionPayloadEnvelope{
+			BeaconBlockRoot: parentRoot[:],
+			Payload:         &enginev1.ExecutionPayloadDeneb{},
+		})
+		require.NoError(t, err)
+		require.NoError(t, fcs.InsertPayload(pe))
+
+		bid := util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
+			Message: &ethpb.ExecutionPayloadBid{
+				BlockHash:       []byte{20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+				ParentBlockHash: parentBlockHash[:],
+			},
+		})
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot:       2,
+				ParentRoot: parentRoot[:],
+				Body:       &ethpb.BeaconBlockBodyGloas{SignedExecutionPayloadBid: bid},
+			},
+		})
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.Equal(t, true, service.ParentPayloadReady(wsb.Block()))
+	})
+}
+
 func Test_hashForGenesisRoot(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 	ctx := t.Context()

@@ -150,8 +150,6 @@ func (mr *MockValidatorClientMockRecorder) Duties(ctx, in any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Duties", reflect.TypeOf((*MockValidatorClient)(nil).Duties), ctx, in)
 }
 
-<<<<<<< Updated upstream
-=======
 // AttesterDuties mocks base method.
 func (m *MockValidatorClient) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*eth.AttesterDutiesResponse, error) {
 	m.ctrl.T.Helper()
@@ -197,7 +195,6 @@ func (mr *MockValidatorClientMockRecorder) SyncCommitteeDuties(ctx, epoch, valid
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncCommitteeDuties", reflect.TypeOf((*MockValidatorClient)(nil).SyncCommitteeDuties), ctx, epoch, validatorIndices)
 }
 
->>>>>>> Stashed changes
 // EnsureReady mocks base method.
 func (m *MockValidatorClient) EnsureReady(ctx context.Context) bool {
 	m.ctrl.T.Helper()

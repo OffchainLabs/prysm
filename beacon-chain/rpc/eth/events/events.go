@@ -74,6 +74,11 @@ const (
 	LightClientOptimisticUpdateTopic = "light_client_optimistic_update"
 	// DataColumnTopic represents a data column sidecar event topic
 	DataColumnTopic = "data_column_sidecar"
+	// ExecutionPayloadTopic represents a new execution payload envelope event topic
+	ExecutionPayloadTopic = "execution_payload_available"
+	// ExecutionPayloadBidTopic represents a new execution payload bid event topic.
+	// This topic is currently not triggered but is recognized to avoid client subscription errors.
+	ExecutionPayloadBidTopic = "execution_payload_bid"
 )
 
 var (
@@ -118,9 +123,14 @@ var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.Reorg:                       ChainReorgTopic,
 	statefeed.BlockProcessed:              BlockTopic,
 	statefeed.PayloadAttributes:           PayloadAttributesTopic,
+	statefeed.PayloadProcessed:            ExecutionPayloadTopic,
 }
 
-var topicsForStateFeed = topicsForFeed(stateFeedEventTopics)
+var topicsForStateFeed = func() map[string]bool {
+	m := topicsForFeed(stateFeedEventTopics)
+	m[ExecutionPayloadBidTopic] = true
+	return m
+}()
 var topicsForOpsFeed = topicsForFeed(opsFeedEventTopics)
 
 func topicsForFeed(em map[feed.EventType]string) map[string]bool {
@@ -466,6 +476,8 @@ func topicForEvent(event *feed.Event) string {
 		return PayloadAttributesTopic
 	case *operation.DataColumnReceivedData:
 		return DataColumnTopic
+	case *statefeed.PayloadProcessedData:
+		return ExecutionPayloadTopic
 	default:
 		return InvalidTopic
 	}
@@ -637,6 +649,13 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				ExecutionOptimistic: v.Optimistic,
 			}
 			return jsonMarshalReader(eventName, blk)
+		}, nil
+	case *statefeed.PayloadProcessedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.PayloadEvent{
+				Slot:      fmt.Sprintf("%d", v.Slot),
+				BlockRoot: hexutil.Encode(v.BlockRoot[:]),
+			})
 		}, nil
 	default:
 		return nil, errors.Wrapf(errUnhandledEventData, "event data type %T unsupported", v)
