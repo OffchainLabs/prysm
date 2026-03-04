@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -227,9 +228,21 @@ func (s *State) loadStateByRoot(ctx context.Context, blockRoot [32]byte) (state.
 	}
 	targetSlot := summary.Slot
 
+	// If blockRoot is not a beacon block root (e.g. it's a Gloas execution block hash
+	// used as state key after envelope processing), resolve it to the beacon block root
+	// so that latestAncestor and loadBlocks can walk the block chain.
+	replayRoot := blockRoot
+	if !s.beaconDB.HasBlock(ctx, blockRoot) {
+		resolved, err := s.blockRootForExecHash(ctx, blockRoot, targetSlot)
+		if err != nil {
+			return nil, errors.Wrapf(err, "could not resolve root %#x to beacon block root", blockRoot)
+		}
+		replayRoot = resolved
+	}
+
 	// Since the requested state is not in caches or DB, start replaying using the last
 	// available ancestor state which is retrieved using input block's root.
-	startState, err := s.latestAncestor(ctx, blockRoot)
+	startState, err := s.latestAncestor(ctx, replayRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get ancestor state")
 	}
@@ -241,7 +254,7 @@ func (s *State) loadStateByRoot(ctx context.Context, blockRoot [32]byte) (state.
 		return startState, nil
 	}
 
-	blks, err := s.loadBlocks(ctx, startState.Slot()+1, targetSlot, bytesutil.ToBytes32(summary.Root))
+	blks, err := s.loadBlocks(ctx, startState.Slot()+1, targetSlot, replayRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not load blocks for hot state using root")
 	}
@@ -249,6 +262,29 @@ func (s *State) loadStateByRoot(ctx context.Context, blockRoot [32]byte) (state.
 	replayBlockCount.Observe(float64(len(blks)))
 
 	return s.replayBlocks(ctx, startState, blks, targetSlot)
+}
+
+// blockRootForExecHash resolves a Gloas execution block hash to the corresponding
+// beacon block root by finding the block at the given slot whose bid commits to that hash.
+func (s *State) blockRootForExecHash(ctx context.Context, execHash [32]byte, slot primitives.Slot) ([32]byte, error) {
+	f := filters.NewFilter().SetStartSlot(slot).SetEndSlot(slot)
+	blks, roots, err := s.beaconDB.Blocks(ctx, f)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not query blocks by slot")
+	}
+	for i, blk := range blks {
+		if blk.Block().Version() < version.Gloas {
+			continue
+		}
+		bid, err := blk.Block().Body().SignedExecutionPayloadBid()
+		if err != nil || bid == nil || bid.Message == nil || len(bid.Message.BlockHash) != 32 {
+			continue
+		}
+		if [32]byte(bid.Message.BlockHash) == execHash {
+			return roots[i], nil
+		}
+	}
+	return [32]byte{}, fmt.Errorf("no block at slot %d with execution block hash %#x", slot, execHash)
 }
 
 // latestAncestor returns the highest available ancestor state of the input block root.
