@@ -242,6 +242,23 @@ func TestProcessExecutionPayload_Success(t *testing.T) {
 	require.Equal(t, primitives.Gwei(0), payment.Withdrawal.Amount)
 }
 
+func TestApplyExecutionPayloadStateMutations_UpdatesAvailabilityAndLatestHash(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+
+	newHash := [32]byte{}
+	newHash[0] = 0x99
+
+	require.NoError(t, ApplyExecutionPayloadStateMutations(t.Context(), fixture.state, fixture.envelope.ExecutionRequests, newHash))
+
+	latestHash, err := fixture.state.LatestBlockHash()
+	require.NoError(t, err)
+	require.Equal(t, newHash, latestHash)
+
+	available, err := fixture.state.ExecutionPayloadAvailability(fixture.slot)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), available)
+}
+
 func TestProcessExecutionPayload_PrevRandaoMismatch(t *testing.T) {
 	fixture := buildPayloadFixture(t, func(_ *enginev1.ExecutionPayloadDeneb, bid *ethpb.ExecutionPayloadBid, _ *ethpb.ExecutionPayloadEnvelope) {
 		bid.PrevRandao = bytes.Repeat([]byte{0xFF}, 32)
