@@ -130,7 +130,27 @@ func TestReplayBlocks_LowerSlotBlock(t *testing.T) {
 	assert.Equal(t, targetSlot, newState.Slot(), "Did not advance slots")
 }
 
-func TestReplayBlocks_IgnoresMissingExecutionPayloadEnvelope(t *testing.T) {
+func TestReplayBlocks_SkipsExecutionPayloadEnvelopeLookup_PreGloas(t *testing.T) {
+	wrappedDB := &envelopeLookupDB{
+		NoHeadAccessDatabase: testDB.SetupDB(t),
+		envelopeErr:          stderrors.New("db unavailable"),
+	}
+
+	service := New(wrappedDB, doublylinkedtree.New())
+	beaconState, _ := util.DeterministicGenesisState(t, 32)
+	b := util.NewBeaconBlock()
+	b.Block.Slot = 1
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+
+	_, err = service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{wsb}, 1)
+	require.Equal(t, 0, wrappedDB.calls)
+	if err != nil {
+		assert.Equal(t, false, strings.Contains(err.Error(), "could not retrieve execution payload envelope"))
+	}
+}
+
+func TestReplayBlocks_IgnoresMissingExecutionPayloadEnvelope_Gloas(t *testing.T) {
 	wrappedDB := &envelopeLookupDB{
 		NoHeadAccessDatabase: testDB.SetupDB(t),
 		envelopeErr:          db.ErrNotFound,
@@ -138,7 +158,7 @@ func TestReplayBlocks_IgnoresMissingExecutionPayloadEnvelope(t *testing.T) {
 
 	service := New(wrappedDB, doublylinkedtree.New())
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
-	b := util.NewBeaconBlock()
+	b := util.NewBeaconBlockGloas()
 	b.Block.Slot = 1
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -150,7 +170,7 @@ func TestReplayBlocks_IgnoresMissingExecutionPayloadEnvelope(t *testing.T) {
 	}
 }
 
-func TestReplayBlocks_FailsOnExecutionPayloadEnvelopeLookupError(t *testing.T) {
+func TestReplayBlocks_FailsOnExecutionPayloadEnvelopeLookupError_Gloas(t *testing.T) {
 	wrappedDB := &envelopeLookupDB{
 		NoHeadAccessDatabase: testDB.SetupDB(t),
 		envelopeErr:          stderrors.New("db unavailable"),
@@ -158,7 +178,7 @@ func TestReplayBlocks_FailsOnExecutionPayloadEnvelopeLookupError(t *testing.T) {
 
 	service := New(wrappedDB, doublylinkedtree.New())
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
-	b := util.NewBeaconBlock()
+	b := util.NewBeaconBlockGloas()
 	b.Block.Slot = 1
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)

@@ -53,13 +53,15 @@ func (s *State) replayBlocks(
 		}
 
 		var envelope *ethpb.SignedBlindedExecutionPayloadEnvelope
-		root, err := blk.Block().HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not compute block root for execution payload envelope lookup")
-		}
-		envelope, err = s.beaconDB.ExecutionPayloadEnvelope(ctx, root)
-		if err != nil && !errors.Is(err, db.ErrNotFound) {
-			return nil, errors.Wrap(err, "could not retrieve execution payload envelope")
+		if blk.Version() >= version.Gloas {
+			root, err := blk.Block().HashTreeRoot()
+			if err != nil {
+				return nil, errors.Wrap(err, "could not compute block root for execution payload envelope lookup")
+			}
+			envelope, err = s.beaconDB.ExecutionPayloadEnvelope(ctx, root)
+			if err != nil && !errors.Is(err, db.ErrNotFound) {
+				return nil, errors.Wrap(err, "could not retrieve execution payload envelope")
+			}
 		}
 
 		state, err = executeStateTransitionStateGen(ctx, state, blk, envelope)

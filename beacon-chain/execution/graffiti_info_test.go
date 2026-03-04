@@ -91,7 +91,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: []byte("1234567890123456789"), // 19 chars, leaves 13 bytes = full format + space
 			wantPrefix:   "1234567890123456789",
-			wantSuffix:   " GEabcdPR", 
+			wantSuffix:   " GEabcdPR",
 		},
 		{
 			name:         "With EL - reduced commits (24 char user, 8 bytes available) - no space, would reduce tier",
@@ -99,7 +99,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: []byte("123456789012345678901234"), // 24 chars, leaves exactly 8 bytes = reduced format, no room for space
 			wantPrefix:   "123456789012345678901234",
-			wantSuffix:   "GEabPR", 
+			wantSuffix:   "GEabPR",
 		},
 		{
 			name:         "With EL - reduced commits (23 char user, 9 bytes available) - space fits",
@@ -107,7 +107,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: []byte("12345678901234567890123"), // 23 chars, leaves 9 bytes = reduced format + space
 			wantPrefix:   "12345678901234567890123",
-			wantSuffix:   " GEabPR", 
+			wantSuffix:   " GEabPR",
 		},
 		{
 			name:         "With EL - codes only (28 char user, 4 bytes available) - no space, would reduce tier",
