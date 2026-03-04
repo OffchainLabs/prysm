@@ -77,6 +77,7 @@ type ChainService struct {
 	DataColumns                 []blocks.VerifiedRODataColumn
 	TargetRoot                  [32]byte
 	MockHeadSlot                *primitives.Slot
+	ParentPayloadReadyVal       *bool
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -776,7 +777,10 @@ func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ inte
 }
 
 // ParentPayloadReady mocks the same method in the chain service.
-func (*ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool {
+func (s *ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool {
+	if s.ParentPayloadReadyVal != nil {
+		return *s.ParentPayloadReadyVal
+	}
 	return true
 }
 
