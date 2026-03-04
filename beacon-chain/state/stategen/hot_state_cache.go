@@ -1,8 +1,6 @@
 package stategen
 
 import (
-	"sync"
-
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	lru "github.com/hashicorp/golang-lru"
@@ -27,7 +25,6 @@ var (
 // hotStateCache is used to store the processed beacon state after finalized check point.
 type hotStateCache struct {
 	cache *lru.Cache
-	lock  sync.RWMutex
 }
 
 // newHotStateCache initializes the map and underlying cache.
@@ -40,8 +37,6 @@ func newHotStateCache() *hotStateCache {
 // Get returns a cached response via input block root, if any.
 // The response is copied by default.
 func (c *hotStateCache) get(blockRoot [32]byte) state.BeaconState {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
 	item, exists := c.cache.Get(blockRoot)
 
 	if exists && item != nil {
@@ -62,8 +57,6 @@ func (c *hotStateCache) ByBlockRoot(r [32]byte) (state.BeaconState, error) {
 
 // GetWithoutCopy returns a non-copied cached response via input block root.
 func (c *hotStateCache) getWithoutCopy(blockRoot [32]byte) state.BeaconState {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
 	item, exists := c.cache.Get(blockRoot)
 	if exists && item != nil {
 		hotStateCacheHit.Inc()
@@ -75,21 +68,15 @@ func (c *hotStateCache) getWithoutCopy(blockRoot [32]byte) state.BeaconState {
 
 // put the response in the cache.
 func (c *hotStateCache) put(blockRoot [32]byte, state state.BeaconState) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
 	c.cache.Add(blockRoot, state)
 }
 
 // has returns true if the key exists in the cache.
 func (c *hotStateCache) has(blockRoot [32]byte) bool {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
 	return c.cache.Contains(blockRoot)
 }
 
 // delete deletes the key exists in the cache.
 func (c *hotStateCache) delete(blockRoot [32]byte) bool {
-	c.lock.Lock()
-	defer c.lock.Unlock()
 	return c.cache.Remove(blockRoot)
 }
