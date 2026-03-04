@@ -453,9 +453,11 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 
 	if ourVerifier == nil && hasMessage {
 		var header *ethpb.PartialDataColumnHeader
+		headerWasCached := false
 		// Check cache first for this group
 		if cachedHeader, ok := p.validHeaderCache[string(groupID)]; ok {
 			header = cachedHeader
+			headerWasCached = true
 		} else {
 			// We haven't seen this group before. Check if we have a valid header.
 			if len(message.Header) == 0 {
@@ -486,36 +488,48 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			return err
 		}
 
-		verifier, reject, err := p.partialVerifierFromHeader(&newColumn)
-		if err != nil {
-			log.WithError(err).WithField("reject", reject).Debug("Header validation failed")
-			if reject {
-				// REJECT case: penalize the peer
-				_ = p.ps.PeerFeedback(topicID, rpcWithFrom.from, pubsub.PeerFeedbackInvalidMessage)
+		var verifier *verification.PartialColumnVerifier
+		if headerWasCached {
+			verifier, err = p.partialVerifierFromTrustedColumn(&newColumn)
+			if err != nil {
+				return err
 			}
-			// Both REJECT and IGNORE: don't process further
-			return nil
+		} else {
+			var reject bool
+			verifier, reject, err = p.partialVerifierFromHeader(&newColumn)
+			if err != nil {
+				log.WithError(err).WithField("reject", reject).Debug("Header validation failed")
+				if reject {
+					// REJECT case: penalize the peer
+					_ = p.ps.PeerFeedback(topicID, rpcWithFrom.from, pubsub.PeerFeedbackInvalidMessage)
+				}
+				// Both REJECT and IGNORE: don't process further
+				return nil
+			}
 		}
 		if verifier == nil || verifier.Column == nil {
-			return errors.New("partial verifier from header is nil")
+			return errors.New("partial verifier is nil")
 		}
 
-		// Cache the valid header
-		p.validHeaderCache[string(groupID)] = header
+		if !headerWasCached {
+			log.Debug("Handling header as it was previously not cached for this group")
+			// Cache the valid header.
+			p.validHeaderCache[string(groupID)] = header
 
-		select {
-		case p.concurrentHeaderHandlerSemaphore <- struct{}{}:
-			go func() {
-				defer func() {
-					<-p.concurrentHeaderHandlerSemaphore
+			select {
+			case p.concurrentHeaderHandlerSemaphore <- struct{}{}:
+				go func() {
+					defer func() {
+						<-p.concurrentHeaderHandlerSemaphore
+					}()
+					p.handleHeader(header, string(groupID))
 				}()
-				p.handleHeader(header, string(groupID))
-			}()
-		default:
-			log.WithFields(logrus.Fields{
-				"topic": topicID,
-				"group": groupID,
-			}).Warn("Dropping header handler, max concurrent header handlers reached")
+			default:
+				log.WithFields(logrus.Fields{
+					"topic": topicID,
+					"group": groupID,
+				}).Warn("Dropping header handler, max concurrent header handlers reached")
+			}
 		}
 
 		// Save to store

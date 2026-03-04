@@ -214,6 +214,7 @@ go_test(
         "validate_bls_to_execution_change_test.go",
         "validate_data_column_test.go",
         "validate_light_client_test.go",
+        "validate_partial_header_test.go",
         "validate_proposer_slashing_test.go",
         "validate_sync_committee_message_test.go",
         "validate_sync_contribution_proof_test.go",
