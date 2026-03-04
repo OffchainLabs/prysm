@@ -197,6 +197,7 @@ type Service struct {
 	newExecutionPayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
 	pendingPayloadEnvelopes             map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
 	pendingEnvelopeLock                 sync.RWMutex
+	selfBuildSigFailures                int
 }
 
 // NewService initializes new regular sync service.

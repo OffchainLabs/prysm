@@ -165,9 +165,15 @@ func (s *Service) queuePendingPayloadEnvelope(
 		return pubsub.ValidationIgnore, nil
 	}
 
+	if isSelfBuild && s.selfBuildSigFailures >= maxSelfBuildSigFailures {
+		log.Debug("Ignoring self-built payload envelope because of too many signature failures")
+		return pubsub.ValidationIgnore, nil
+	}
+
 	if !isSelfBuild || proposerInLookahead {
 		if err := v.VerifySignature(st); err != nil {
 			if isSelfBuild {
+				s.selfBuildSigFailures++
 				log.WithError(err).Debug("Ignoring self-built payload with invalid signature")
 				return pubsub.ValidationIgnore, nil
 			} else {

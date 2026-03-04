@@ -11,6 +11,7 @@ import (
 const (
 	maxPendingPayloadRoots    = 128
 	maxPendingBuildersPerRoot = 2
+	maxSelfBuildSigFailures   = 3
 )
 
 // processPendingPayloadEnvelopeQueue sweeps the pending envelope map at
@@ -86,6 +87,7 @@ func (s *Service) prunePendingPayloadEnvelopes() {
 	s.pendingEnvelopeLock.Lock()
 	defer s.pendingEnvelopeLock.Unlock()
 
+	s.selfBuildSigFailures = 0
 	finalizedEpoch := s.cfg.chain.FinalizedCheckpt().Epoch
 	for root, inner := range s.pendingPayloadEnvelopes {
 		for _, env := range inner {

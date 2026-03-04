@@ -303,6 +303,14 @@ func TestQueuePendingPayloadEnvelope_SelfBuildInLookaheadVerifiesSignature(t *te
 	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, 1, s.selfBuildSigFailures)
+
+	// After maxSelfBuildSigFailures, skip the signature check entirely and queue the envelope.
+	s.selfBuildSigFailures = maxSelfBuildSigFailures
+	result, err = s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, maxSelfBuildSigFailures, s.selfBuildSigFailures)
 }
 
 func TestQueuePendingPayloadEnvelope_RejectBadSignature(t *testing.T) {
