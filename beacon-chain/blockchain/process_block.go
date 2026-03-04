@@ -399,12 +399,10 @@ func (s *Service) refreshCaches(ctx context.Context, currentSlot primitives.Slot
 	if lastState.Version() < version.Fulu {
 		s.updateCachesAndEpochBoundary(ctx, currentSlot, headState, accessRoot, lastRoot, lastState)
 	} else {
-		defer func() {
-			go func() {
-				ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
-				defer cancel()
-				s.updateCachesAndEpochBoundary(ctx, currentSlot, headState, accessRoot, lastRoot, lastState)
-			}()
+		go func() {
+			ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
+			defer cancel()
+			s.updateCachesAndEpochBoundary(ctx, currentSlot, headState, accessRoot, lastRoot, lastState)
 		}()
 	}
 }
