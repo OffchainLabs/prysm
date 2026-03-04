@@ -32,6 +32,7 @@ var _ types.ComponentRunner = &TracingSink{}
 type TracingSink struct {
 	cancel   context.CancelFunc
 	started  chan struct{}
+	done     chan struct{}
 	endpoint string
 	server   *http.Server
 }
@@ -40,6 +41,7 @@ type TracingSink struct {
 func NewTracingSink(endpoint string) *TracingSink {
 	return &TracingSink{
 		started:  make(chan struct{}, 1),
+		done:     make(chan struct{}),
 		endpoint: endpoint,
 	}
 }
@@ -74,11 +76,13 @@ func (ts *TracingSink) Resume() error {
 // Stop stops the component and its underlying process.
 func (ts *TracingSink) Stop() error {
 	ts.cancel()
+	<-ts.done
 	return nil
 }
 
 // Initialize an http handler that writes all requests to a file.
 func (ts *TracingSink) initializeSink(ctx context.Context) {
+	defer close(ts.done)
 	mux := &http.ServeMux{}
 	ts.server = &http.Server{
 		Addr:              ts.endpoint,

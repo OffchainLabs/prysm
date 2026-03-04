@@ -351,11 +351,13 @@ func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, 
 	}
 
 	syncEvaluators := []e2etypes.Evaluator{ev.FinishedSyncing, ev.AllNodesHaveSameHead}
-	for _, evaluator := range syncEvaluators {
-		r.t.Run(evaluator.Name, func(t *testing.T) {
-			assert.NoError(t, evaluator.Evaluation(nil, conns...), "Evaluation failed for sync node")
-		})
-	}
+	r.t.Run("checkpoint_sync", func(t *testing.T) {
+		for _, evaluator := range syncEvaluators {
+			t.Run(evaluator.Name, func(t *testing.T) {
+				assert.NoError(t, evaluator.Evaluation(nil, conns...), "Evaluation failed for sync node")
+			})
+		}
+	})
 	return nil
 }
 
@@ -412,11 +414,13 @@ func (r *testRunner) testBeaconChainSync(ctx context.Context, g *errgroup.Group,
 	ticker := helpers.NewEpochTicker(tickingStartTime, secondsPerEpoch)
 	<-ticker.C()
 	ticker.Done()
-	for _, evaluator := range syncEvaluators {
-		t.Run(evaluator.Name, func(t *testing.T) {
-			assert.NoError(t, evaluator.Evaluation(nil, conns...), "Evaluation failed for sync node")
-		})
-	}
+	t.Run("beacon_chain_sync", func(t *testing.T) {
+		for _, evaluator := range syncEvaluators {
+			t.Run(evaluator.Name, func(t *testing.T) {
+				assert.NoError(t, evaluator.Evaluation(nil, conns...), "Evaluation failed for sync node")
+			})
+		}
+	})
 	return nil
 }
 
