@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -199,7 +200,18 @@ func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg pr
 	if err != nil {
 		return errors.Wrap(err, "could not wrap signed execution payload envelope")
 	}
-	return s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, env)
+	if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, env); err != nil {
+		if blockchain.IsInvalidBlock(err) {
+			envelope, envErr := env.Envelope()
+			if envErr == nil {
+				s.setBadPayload(ctx, envelope.BeaconBlockRoot())
+			} else {
+				log.WithError(envErr).Error("failed to get envelope from signed execution payload envelope")
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Service) hasSeenPayloadEnvelope(root [32]byte, builderIdx primitives.BuilderIndex) bool {

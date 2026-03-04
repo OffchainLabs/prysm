@@ -171,6 +171,8 @@ type Service struct {
 	seenSyncContributionCache           *lru.Cache
 	badBlockCache                       *lru.Cache
 	badBlockLock                        sync.RWMutex
+	badPayloadCache                     *lru.Cache
+	badPayloadLock                      sync.RWMutex
 	syncContributionBitsOverlapLock     sync.RWMutex
 	syncContributionBitsOverlapCache    *lru.Cache
 	signatureChan                       chan *signatureVerifier
@@ -380,6 +382,7 @@ func (s *Service) initCaches() {
 	s.seenAttesterSlashingCache = make(map[uint64]bool)
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
+	s.badPayloadCache = lruwrpr.New(badBlockSize)
 }
 
 func (s *Service) waitForChainStart() {

@@ -79,6 +79,7 @@ type ChainService struct {
 	MockHeadSlot                *primitives.Slot
 	MockCanonicalRoots          map[primitives.Slot][32]byte
 	MockCanonicalFull           map[primitives.Slot]bool
+	ParentPayloadReadyVal       *bool
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -785,6 +786,14 @@ func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *et
 // ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
 func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
 	return nil
+}
+
+// ParentPayloadReady mocks the same method in the chain service.
+func (s *ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool {
+	if s.ParentPayloadReadyVal != nil {
+		return *s.ParentPayloadReadyVal
+	}
+	return true
 }
 
 // DependentRootForEpoch mocks the same method in the chain service

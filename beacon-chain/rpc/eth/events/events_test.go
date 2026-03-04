@@ -393,6 +393,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 			FinalizedCheckpointTopic,
 			ChainReorgTopic,
 			BlockTopic,
+			ExecutionPayloadTopic,
 		})
 		require.NoError(t, err)
 		request := topics.testHttpRequest(testSync.ctx, t)
@@ -443,6 +444,13 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					State:               make([]byte, 32),
 					Epoch:               0,
 					ExecutionOptimistic: false,
+				},
+			},
+			{
+				Type: statefeed.PayloadProcessed,
+				Data: &statefeed.PayloadProcessedData{
+					Slot:      10,
+					BlockRoot: [32]byte{0x9a},
 				},
 			},
 		}
