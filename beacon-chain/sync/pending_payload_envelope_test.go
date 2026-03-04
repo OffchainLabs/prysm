@@ -298,11 +298,11 @@ func TestQueuePendingPayloadEnvelope_SelfBuildInLookaheadVerifiesSignature(t *te
 	env, err := e.Envelope()
 	require.NoError(t, err)
 
-	// Self-build in the same epoch (lookahead) still verifies the signature.
+	// Self-build in the same epoch (lookahead) verifies the signature but ignores failures.
 	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
 	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
-	require.NotNil(t, err)
-	require.Equal(t, pubsub.ValidationReject, result)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
 func TestQueuePendingPayloadEnvelope_RejectBadSignature(t *testing.T) {

@@ -154,7 +154,12 @@ func (s *Service) queuePendingPayloadEnvelope(
 	isSelfBuild := builderIdx == uint64(params.BeaconConfig().BuilderIndexSelfBuild)
 	if !isSelfBuild || proposerInLookahead {
 		if err := v.VerifySignature(st); err != nil {
-			return pubsub.ValidationReject, err
+			if isSelfBuild {
+				log.WithError(err).Debug("Ignoring self-built payload with invalid signature")
+				return pubsub.ValidationIgnore, nil
+			} else {
+				return pubsub.ValidationReject, err
+			}
 		}
 	} else {
 		log.Debug("Ignoring payload envelope from self-build outside of the Lookahead window")
