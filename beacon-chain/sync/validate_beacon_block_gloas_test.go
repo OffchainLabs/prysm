@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -117,4 +118,49 @@ func TestValidateExecutionPayloadBidParentSeen_Ignore(t *testing.T) {
 	res, err := s.validateExecutionPayloadBidParentSeen(ctx, wsb.Block())
 	require.Error(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, res)
+}
+
+func TestValidateExecutionPayloadBidParentValid_PreGloas(t *testing.T) {
+	ctx := context.Background()
+	blk := util.HydrateSignedBeaconBlockDeneb(nil)
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	s := &Service{}
+	res, err := s.validateExecutionPayloadBidParentValid(ctx, wsb.Block())
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+}
+
+func TestValidateExecutionPayloadBidParentValid_Accept(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	ctx := context.Background()
+
+	s := &Service{badPayloadCache: lruwrpr.New(10)}
+
+	blk := util.NewBeaconBlockGloas()
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	res, err := s.validateExecutionPayloadBidParentValid(ctx, wsb.Block())
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+}
+
+func TestValidateExecutionPayloadBidParentValid_Reject(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	ctx := context.Background()
+
+	s := &Service{badPayloadCache: lruwrpr.New(10)}
+
+	blk := util.NewBeaconBlockGloas()
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	parentRoot := wsb.Block().ParentRoot()
+	s.badPayloadCache.Add(string(parentRoot[:]), true)
+
+	res, err := s.validateExecutionPayloadBidParentValid(ctx, wsb.Block())
+	require.Error(t, err)
+	require.Equal(t, pubsub.ValidationReject, res)
 }
