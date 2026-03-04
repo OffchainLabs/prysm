@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -138,20 +139,28 @@ func (s *Service) queuePendingPayloadEnvelope(
 	env interfaces.ROExecutionPayloadEnvelope,
 	signedEnvelope *ethpb.SignedExecutionPayloadEnvelope,
 ) (pubsub.ValidationResult, error) {
-	if env.Slot() != s.cfg.clock.CurrentSlot() {
+	currentSlot := s.cfg.clock.CurrentSlot()
+	if env.Slot() != currentSlot {
 		return pubsub.ValidationIgnore, nil
 	}
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	if err := v.VerifySignature(st); err != nil {
-		return pubsub.ValidationReject, err
-	}
-	root := env.BeaconBlockRoot()
+	currentEpoch := slots.ToEpoch(currentSlot)
+	stateEpoch := slots.ToEpoch(st.Slot())
+	proposerInLookahead := (stateEpoch == currentEpoch || stateEpoch+1 == currentEpoch)
 	builderIdx := uint64(env.BuilderIndex())
 	isSelfBuild := builderIdx == uint64(params.BeaconConfig().BuilderIndexSelfBuild)
-
+	if !isSelfBuild || proposerInLookahead {
+		if err := v.VerifySignature(st); err != nil {
+			return pubsub.ValidationReject, err
+		}
+	} else {
+		log.Debug("Ignoring payload envelope from self-build outside of the Lookahead window")
+		return pubsub.ValidationIgnore, nil
+	}
+	root := env.BeaconBlockRoot()
 	s.pendingEnvelopeLock.Lock()
 	inner, rootExists := s.pendingPayloadEnvelopes[root]
 	if !rootExists {

@@ -242,6 +242,69 @@ func TestPrunePendingPayloadEnvelopes(t *testing.T) {
 	require.Equal(t, true, ok)
 }
 
+func TestQueuePendingPayloadEnvelope_SelfBuildIgnoredOutsideLookahead(t *testing.T) {
+	ctx := context.Background()
+	cfg := params.BeaconConfig()
+	selfBuild := cfg.BuilderIndexSelfBuild
+	// Place the envelope in epoch 2 so the head state (epoch 0) is outside
+	// the proposer lookahead window.
+	envelopeSlot := primitives.Slot(2 * cfg.SlotsPerEpoch)
+
+	db := dbtest.SetupDB(t)
+	chainService := &mock.ChainService{
+		Genesis:             time.Unix(time.Now().Unix()-int64(uint64(envelopeSlot)*cfg.SecondsPerSlot), 0),
+		FinalizedCheckPoint: &ethpb.Checkpoint{},
+		DB:                  db,
+	}
+	st, err := util.NewBeaconStateFulu()
+	require.NoError(t, err)
+	chainService.State = st
+
+	s := &Service{
+		seenPayloadEnvelopeCache: lruwrpr.New(10),
+		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		cfg: &config{
+			chain: chainService,
+			clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+		},
+	}
+
+	root := [32]byte{0x01}
+	blockHash := [32]byte{0x02}
+	signedEnv := testSignedExecutionPayloadEnvelope(t, envelopeSlot, selfBuild, root, blockHash)
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedEnv)
+	require.NoError(t, err)
+	env, err := e.Envelope()
+	require.NoError(t, err)
+
+	// Signature verification would fail, but self-build outside the lookahead
+	// should skip it and return Ignore without queuing.
+	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
+	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, 0, len(s.pendingPayloadEnvelopes))
+}
+
+func TestQueuePendingPayloadEnvelope_SelfBuildInLookaheadVerifiesSignature(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+	selfBuild := params.BeaconConfig().BuilderIndexSelfBuild
+
+	blockHash := [32]byte{0x02}
+	signedEnv := testSignedExecutionPayloadEnvelope(t, 1, selfBuild, root, blockHash)
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedEnv)
+	require.NoError(t, err)
+	env, err := e.Envelope()
+	require.NoError(t, err)
+
+	// Self-build in the same epoch (lookahead) still verifies the signature.
+	v := &mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("bad signature")}
+	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, signedEnv)
+	require.NotNil(t, err)
+	require.Equal(t, pubsub.ValidationReject, result)
+}
+
 func TestQueuePendingPayloadEnvelope_RejectBadSignature(t *testing.T) {
 	ctx := context.Background()
 	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
