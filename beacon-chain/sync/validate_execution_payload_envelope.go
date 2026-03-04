@@ -152,6 +152,19 @@ func (s *Service) queuePendingPayloadEnvelope(
 	proposerInLookahead := (stateEpoch == currentEpoch || stateEpoch+1 == currentEpoch)
 	builderIdx := uint64(env.BuilderIndex())
 	isSelfBuild := builderIdx == uint64(params.BeaconConfig().BuilderIndexSelfBuild)
+	root := env.BeaconBlockRoot()
+	s.pendingEnvelopeLock.Lock()
+	defer s.pendingEnvelopeLock.Unlock()
+	inner, rootExists := s.pendingPayloadEnvelopes[root]
+	if !isSelfBuild && len(s.pendingPayloadEnvelopes) >= maxPendingPayloadRoots {
+		log.Debug("Too many pending payload roots, ignoring new payload envelope")
+		return pubsub.ValidationIgnore, nil
+	}
+	if !isSelfBuild && len(inner) >= maxPendingBuildersPerRoot {
+		log.Debug("Too many pending builders for root, ignoring new payload envelope")
+		return pubsub.ValidationIgnore, nil
+	}
+
 	if !isSelfBuild || proposerInLookahead {
 		if err := v.VerifySignature(st); err != nil {
 			if isSelfBuild {
@@ -165,35 +178,23 @@ func (s *Service) queuePendingPayloadEnvelope(
 		log.Debug("Ignoring payload envelope from self-build outside of the Lookahead window")
 		return pubsub.ValidationIgnore, nil
 	}
-	root := env.BeaconBlockRoot()
-	s.pendingEnvelopeLock.Lock()
-	inner, rootExists := s.pendingPayloadEnvelopes[root]
 	if !rootExists {
-		if !isSelfBuild && len(s.pendingPayloadEnvelopes) >= maxPendingPayloadRoots {
-			s.pendingEnvelopeLock.Unlock()
-			return pubsub.ValidationIgnore, nil
-		}
 		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
 		s.pendingPayloadEnvelopes[root] = inner
 	} else {
 		for _, existing := range inner {
 			if existing.Message.Slot != signedEnvelope.Message.Slot {
-				s.pendingEnvelopeLock.Unlock()
+				log.Debug("Ignoring payload envelope with mismatched slot")
 				return pubsub.ValidationIgnore, nil
 			}
 			break
 		}
 	}
 	if _, exists := inner[builderIdx]; exists {
-		s.pendingEnvelopeLock.Unlock()
-		return pubsub.ValidationIgnore, nil
-	}
-	if !isSelfBuild && len(inner) >= maxPendingBuildersPerRoot {
-		s.pendingEnvelopeLock.Unlock()
+		log.Debug("Already have a pending payload envelope for this builder and root, ignoring")
 		return pubsub.ValidationIgnore, nil
 	}
 	inner[builderIdx] = signedEnvelope
-	s.pendingEnvelopeLock.Unlock()
 
 	if !rootExists {
 		go func() {
