@@ -53,7 +53,7 @@ func (s *Service) validatePartialDataColumnHeader(ctx context.Context, col *bloc
 	}
 
 	if len(col.KzgCommitments) == 0 {
-		return nil, false, errHeaderEmptyCommitments
+		return nil, true, errHeaderEmptyCommitments
 	}
 
 	roDataColumn, err := blocks.NewRODataColumn(col.DataColumnSidecar)
