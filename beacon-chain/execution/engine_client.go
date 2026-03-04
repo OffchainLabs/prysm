@@ -142,6 +142,7 @@ type Reconstructor interface {
 	) (map[[32]byte]*pb.ExecutionPayloadDeneb, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
 	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error)
+	ReconstructExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, error)
 }
 
 // EngineCaller defines a client that can interact with an Ethereum
@@ -650,6 +651,33 @@ func (s *Service) ReconstructFullBellatrixBlockBatch(
 	}
 	reconstructedExecutionPayloadCount.Add(float64(len(unb)))
 	return unb, nil
+}
+
+// ReconstructExecutionPayloadEnvelope takes a blinded execution payload envelope and
+// reconstructs the full envelope by fetching the execution payload from the EL via
+// eth_getBlockByHash.
+func (s *Service) ReconstructExecutionPayloadEnvelope(
+	ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope,
+) (*ethpb.SignedExecutionPayloadEnvelope, error) {
+	if envelope == nil || envelope.Message == nil {
+		return nil, errors.New("nil blinded execution payload envelope")
+	}
+	blockHash := bytesutil.ToBytes32(envelope.Message.BlockHash)
+	payload, err := s.ReconstructFullExecutionPayloadByHash(ctx, blockHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not reconstruct execution payload")
+	}
+	return &ethpb.SignedExecutionPayloadEnvelope{
+		Message: &ethpb.ExecutionPayloadEnvelope{
+			Payload:           payload,
+			ExecutionRequests: envelope.Message.ExecutionRequests,
+			BuilderIndex:      envelope.Message.BuilderIndex,
+			BeaconBlockRoot:   envelope.Message.BeaconBlockRoot,
+			Slot:              envelope.Message.Slot,
+			StateRoot:         envelope.Message.StateRoot,
+		},
+		Signature: envelope.Signature,
+	}, nil
 }
 
 // ReconstructFullExecutionPayloadByHash reconstructs a full deneb payload from EL data by block hash.
