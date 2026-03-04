@@ -64,8 +64,7 @@ func newRunner(ctx context.Context, v iface.Validator, monitor *healthMonitor) (
 			" and will continue to use settings provided in the beacon node.")
 	}
 	if err := v.PushProposerSettings(ctx, currentSlot, true); err != nil {
-		v.Done()
-		return nil, errors.Wrap(err, "failed to update proposer settings")
+		log.WithError(err).Warn("Failed to push initial proposer settings, will retry on next slot")
 	}
 	return &runner{
 		validator:     v,
@@ -94,7 +93,7 @@ func (r *runner) run(ctx context.Context) {
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
 			if !r.healthMonitor.IsHealthy() {
-				log.Warn("Beacon node unhealthy, stopping runner")
+				log.WithField("url", r.validator.Host()).Warn("Beacon node unhealthy, stopping runner")
 				return
 			}
 

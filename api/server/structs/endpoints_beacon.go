@@ -290,6 +290,13 @@ type GetBlobsResponse struct {
 	Data                []string `json:"data"` //blobs
 }
 
+type GetExecutionPayloadEnvelopeResponse struct {
+	Version             string                          `json:"version"`
+	ExecutionOptimistic bool                            `json:"execution_optimistic"`
+	Finalized           bool                            `json:"finalized"`
+	Data                *SignedExecutionPayloadEnvelope `json:"data"`
+}
+
 type SSZQueryRequest struct {
 	Query        string `json:"query"`
 	IncludeProof bool   `json:"include_proof,omitempty"`

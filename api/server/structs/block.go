@@ -509,17 +509,17 @@ func (s *SignedBlindedBeaconBlockFulu) SigString() string {
 // ----------------------------------------------------------------------------
 
 type ExecutionPayloadBid struct {
-	ParentBlockHash        string `json:"parent_block_hash"`
-	ParentBlockRoot        string `json:"parent_block_root"`
-	BlockHash              string `json:"block_hash"`
-	PrevRandao             string `json:"prev_randao"`
-	FeeRecipient           string `json:"fee_recipient"`
-	GasLimit               string `json:"gas_limit"`
-	BuilderIndex           string `json:"builder_index"`
-	Slot                   string `json:"slot"`
-	Value                  string `json:"value"`
-	ExecutionPayment       string `json:"execution_payment"`
-	BlobKzgCommitmentsRoot string `json:"blob_kzg_commitments_root"`
+	ParentBlockHash    string   `json:"parent_block_hash"`
+	ParentBlockRoot    string   `json:"parent_block_root"`
+	BlockHash          string   `json:"block_hash"`
+	PrevRandao         string   `json:"prev_randao"`
+	FeeRecipient       string   `json:"fee_recipient"`
+	GasLimit           string   `json:"gas_limit"`
+	BuilderIndex       string   `json:"builder_index"`
+	Slot               string   `json:"slot"`
+	Value              string   `json:"value"`
+	ExecutionPayment   string   `json:"execution_payment"`
+	BlobKzgCommitments []string `json:"blob_kzg_commitments"`
 }
 
 type SignedExecutionPayloadBid struct {
@@ -582,4 +582,18 @@ func (s *SignedBeaconBlockGloas) MessageRawJson() ([]byte, error) {
 
 func (s *SignedBeaconBlockGloas) SigString() string {
 	return s.Signature
+}
+
+type ExecutionPayloadEnvelope struct {
+	Payload           *ExecutionPayloadDeneb `json:"payload"`
+	ExecutionRequests *ExecutionRequests     `json:"execution_requests"`
+	BuilderIndex      string                 `json:"builder_index"`
+	BeaconBlockRoot   string                 `json:"beacon_block_root"`
+	Slot              string                 `json:"slot"`
+	StateRoot         string                 `json:"state_root"`
+}
+
+type SignedExecutionPayloadEnvelope struct {
+	Message   *ExecutionPayloadEnvelope `json:"message"`
+	Signature string                    `json:"signature"`
 }

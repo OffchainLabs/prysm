@@ -268,10 +268,23 @@ func (s *Service) validateCommitteeIndexAndCount(
 	a eth.Att,
 	bs state.ReadOnlyBeaconState,
 ) (primitives.CommitteeIndex, uint64, pubsub.ValidationResult, error) {
-	// - [REJECT] attestation.data.index == 0
-	if a.Version() >= version.Electra && a.GetData().CommitteeIndex != 0 {
-		return 0, 0, pubsub.ValidationReject, errors.New("attestation data's committee index must be 0")
+	// Validate committee index based on fork.
+	if a.Version() >= version.Electra {
+		data := a.GetData()
+		attEpoch := slots.ToEpoch(data.Slot)
+		postGloas := attEpoch >= params.BeaconConfig().GloasForkEpoch
+		if postGloas {
+			if result, err := s.validateGloasCommitteeIndex(data); result != pubsub.ValidationAccept {
+				return 0, 0, result, err
+			}
+		} else {
+			// [REJECT] attestation.data.index == 0 (New in Electra, removed in Gloas)
+			if data.CommitteeIndex != 0 {
+				return 0, 0, pubsub.ValidationReject, errors.New("attestation data's committee index must be 0")
+			}
+		}
 	}
+
 	valCount, err := helpers.ActiveValidatorCount(ctx, bs, slots.ToEpoch(a.GetData().Slot))
 	if err != nil {
 		return 0, 0, pubsub.ValidationIgnore, err
@@ -351,6 +364,29 @@ func validateAttestingIndex(
 	inCommittee := slices.Contains(committee, attestingIndex)
 	if !inCommittee {
 		return pubsub.ValidationReject, errors.Errorf("attester %d is not a member of the committee", attestingIndex)
+	}
+
+	return pubsub.ValidationAccept, nil
+}
+
+// validateGloasCommitteeIndex validates committee index rules for Gloas fork.
+// [REJECT] attestation.data.index < 2. (New in Gloas)
+// [REJECT] attestation.data.index == 0 if block.slot == attestation.data.slot. (New in Gloas)
+func (s *Service) validateGloasCommitteeIndex(data *eth.AttestationData) (pubsub.ValidationResult, error) {
+	if data.CommitteeIndex >= 2 {
+		return pubsub.ValidationReject, errors.New("attestation data's committee index must be < 2")
+	}
+
+	// Same-slot attestations must use committee index 0
+	if data.CommitteeIndex != 0 {
+		blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
+		slot, err := s.cfg.chain.RecentBlockSlot(blockRoot)
+		if err != nil {
+			return pubsub.ValidationIgnore, err
+		}
+		if slot == data.Slot {
+			return pubsub.ValidationReject, errors.New("same slot attestations must use committee index 0")
+		}
 	}
 
 	return pubsub.ValidationAccept, nil

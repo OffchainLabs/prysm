@@ -22,6 +22,7 @@ proto_library(
         "health.proto",
         "node.proto",
         "p2p_messages.proto",
+        "p2p_messages_gloas.proto",
         "powchain.proto",
         "slasher.proto",
         "validator.proto",
@@ -195,6 +196,7 @@ ssz_fulu_objs = [
 ]
 
 ssz_gloas_objs = [
+    "BlindedExecutionPayloadEnvelope",
     "BuilderPendingPayment",
     "BuilderPendingWithdrawal",
     "DataColumnSidecarGloas",
@@ -204,6 +206,7 @@ ssz_gloas_objs = [
     "PayloadAttestationMessage",
     "ExecutionPayloadBid",
     "SignedExecutionPayloadBid",
+    "SignedBlindedExecutionPayloadEnvelope",
     "SignedExecutionPayloadEnvelope",
     "BeaconBlockGloas",
     "SignedBeaconBlockGloas",
@@ -326,6 +329,7 @@ ssz_gen_marshal(
         "BeaconBlocksByRangeRequest",
         "BlobSidecarsByRangeRequest",
         "DataColumnSidecarsByRangeRequest",
+        "ExecutionPayloadEnvelopesByRangeRequest",
         "MetaDataV0",
         "MetaDataV1",
         "MetaDataV2",

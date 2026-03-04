@@ -2939,18 +2939,22 @@ func SignedExecutionPayloadBidFromConsensus(b *eth.SignedExecutionPayloadBid) *S
 }
 
 func ExecutionPayloadBidFromConsensus(b *eth.ExecutionPayloadBid) *ExecutionPayloadBid {
+	blobKzgCommitments := make([]string, len(b.BlobKzgCommitments))
+	for i := range b.BlobKzgCommitments {
+		blobKzgCommitments[i] = hexutil.Encode(b.BlobKzgCommitments[i])
+	}
 	return &ExecutionPayloadBid{
-		ParentBlockHash:        hexutil.Encode(b.ParentBlockHash),
-		ParentBlockRoot:        hexutil.Encode(b.ParentBlockRoot),
-		BlockHash:              hexutil.Encode(b.BlockHash),
-		PrevRandao:             hexutil.Encode(b.PrevRandao),
-		FeeRecipient:           hexutil.Encode(b.FeeRecipient),
-		GasLimit:               fmt.Sprintf("%d", b.GasLimit),
-		BuilderIndex:           fmt.Sprintf("%d", b.BuilderIndex),
-		Slot:                   fmt.Sprintf("%d", b.Slot),
-		Value:                  fmt.Sprintf("%d", b.Value),
-		ExecutionPayment:       fmt.Sprintf("%d", b.ExecutionPayment),
-		BlobKzgCommitmentsRoot: hexutil.Encode(b.BlobKzgCommitmentsRoot),
+		ParentBlockHash:    hexutil.Encode(b.ParentBlockHash),
+		ParentBlockRoot:    hexutil.Encode(b.ParentBlockRoot),
+		BlockHash:          hexutil.Encode(b.BlockHash),
+		PrevRandao:         hexutil.Encode(b.PrevRandao),
+		FeeRecipient:       hexutil.Encode(b.FeeRecipient),
+		GasLimit:           fmt.Sprintf("%d", b.GasLimit),
+		BuilderIndex:       fmt.Sprintf("%d", b.BuilderIndex),
+		Slot:               fmt.Sprintf("%d", b.Slot),
+		Value:              fmt.Sprintf("%d", b.Value),
+		ExecutionPayment:   fmt.Sprintf("%d", b.ExecutionPayment),
+		BlobKzgCommitments: blobKzgCommitments,
 	}
 }
 
@@ -3187,22 +3191,30 @@ func (b *ExecutionPayloadBid) ToConsensus() (*eth.ExecutionPayloadBid, error) {
 	if err != nil {
 		return nil, server.NewDecodeError(err, "ExecutionPayment")
 	}
-	blobKzgCommitmentsRoot, err := bytesutil.DecodeHexWithLength(b.BlobKzgCommitmentsRoot, fieldparams.RootLength)
+	err = slice.VerifyMaxLength(b.BlobKzgCommitments, fieldparams.MaxBlobCommitmentsPerBlock)
 	if err != nil {
-		return nil, server.NewDecodeError(err, "BlobKzgCommitmentsRoot")
+		return nil, server.NewDecodeError(err, "BlobKzgCommitments")
+	}
+	blobKzgCommitments := make([][]byte, len(b.BlobKzgCommitments))
+	for i, commitment := range b.BlobKzgCommitments {
+		kzg, err := bytesutil.DecodeHexWithLength(commitment, fieldparams.BLSPubkeyLength)
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("BlobKzgCommitments[%d]", i))
+		}
+		blobKzgCommitments[i] = kzg
 	}
 	return &eth.ExecutionPayloadBid{
-		ParentBlockHash:        parentBlockHash,
-		ParentBlockRoot:        parentBlockRoot,
-		BlockHash:              blockHash,
-		PrevRandao:             prevRandao,
-		FeeRecipient:           feeRecipient,
-		GasLimit:               gasLimit,
-		BuilderIndex:           primitives.BuilderIndex(builderIndex),
-		Slot:                   primitives.Slot(slot),
-		Value:                  primitives.Gwei(value),
-		ExecutionPayment:       primitives.Gwei(executionPayment),
-		BlobKzgCommitmentsRoot: blobKzgCommitmentsRoot,
+		ParentBlockHash:    parentBlockHash,
+		ParentBlockRoot:    parentBlockRoot,
+		BlockHash:          blockHash,
+		PrevRandao:         prevRandao,
+		FeeRecipient:       feeRecipient,
+		GasLimit:           gasLimit,
+		BuilderIndex:       primitives.BuilderIndex(builderIndex),
+		Slot:               primitives.Slot(slot),
+		Value:              primitives.Gwei(value),
+		ExecutionPayment:   primitives.Gwei(executionPayment),
+		BlobKzgCommitments: blobKzgCommitments,
 	}, nil
 }
 
@@ -3292,5 +3304,27 @@ func (p *PayloadAttestationMessage) ToConsensus() (*eth.PayloadAttestationMessag
 		ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
 		Data:           data,
 		Signature:      sig,
+   }, nil
+}
+// SignedExecutionPayloadEnvelopeFromConsensus converts a proto envelope to the API struct.
+func SignedExecutionPayloadEnvelopeFromConsensus(e *eth.SignedExecutionPayloadEnvelope) (*SignedExecutionPayloadEnvelope, error) {
+	payload, err := ExecutionPayloadDenebFromConsensus(e.Message.Payload)
+	if err != nil {
+		return nil, err
+	}
+	var requests *ExecutionRequests
+	if e.Message.ExecutionRequests != nil {
+		requests = ExecutionRequestsFromConsensus(e.Message.ExecutionRequests)
+	}
+	return &SignedExecutionPayloadEnvelope{
+		Message: &ExecutionPayloadEnvelope{
+			Payload:           payload,
+			ExecutionRequests: requests,
+			BuilderIndex:      fmt.Sprintf("%d", e.Message.BuilderIndex),
+			BeaconBlockRoot:   hexutil.Encode(e.Message.BeaconBlockRoot),
+			Slot:              fmt.Sprintf("%d", e.Message.Slot),
+			StateRoot:         hexutil.Encode(e.Message.StateRoot),
+		},
+		Signature: hexutil.Encode(e.Signature),
 	}, nil
 }

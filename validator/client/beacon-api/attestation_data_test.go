@@ -28,10 +28,10 @@ func TestGetAttestationData_ValidAttestation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
 
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v1/validator/attestation_data?committee_index=%d&slot=%d", expectedCommitteeIndex, expectedSlot),
 		&produceAttestationDataResponseJson,
@@ -56,7 +56,7 @@ func TestGetAttestationData_ValidAttestation(t *testing.T) {
 		},
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	resp, err := validatorClient.attestationData(ctx, primitives.Slot(expectedSlot), primitives.CommitteeIndex(expectedCommitteeIndex))
 	assert.NoError(t, err)
 
@@ -180,8 +180,8 @@ func TestGetAttestationData_InvalidData(t *testing.T) {
 			defer ctrl.Finish()
 
 			produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-			jsonRestHandler.EXPECT().Get(
+			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v1/validator/attestation_data?committee_index=2&slot=1",
 				&produceAttestationDataResponseJson,
@@ -192,7 +192,7 @@ func TestGetAttestationData_InvalidData(t *testing.T) {
 				testCase.generateData(),
 			).Times(1)
 
-			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			validatorClient := &beaconApiValidatorClient{handler: handler}
 			_, err := validatorClient.attestationData(ctx, 1, 2)
 			assert.ErrorContains(t, testCase.expectedErrorMessage, err)
 		})
@@ -208,9 +208,9 @@ func TestGetAttestationData_JsonResponseError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v1/validator/attestation_data?committee_index=%d&slot=%d", committeeIndex, slot),
 		&produceAttestationDataResponseJson,
@@ -218,7 +218,7 @@ func TestGetAttestationData_JsonResponseError(t *testing.T) {
 		errors.New("some specific json response error"),
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	_, err := validatorClient.attestationData(ctx, slot, committeeIndex)
 	assert.ErrorContains(t, "some specific json response error", err)
 }

@@ -115,7 +115,6 @@ type validator struct {
 	km                                 keymanager.IKeymanager
 	accountChangedSub                  event.Subscription
 	ticker                             slots.Ticker
-	currentHostIndex                   uint64
 	genesisTime                        time.Time
 	graffiti                           []byte
 	voteStats                          voteStats
@@ -1311,65 +1310,8 @@ func (v *validator) Host() string {
 	return v.validatorClient.Host()
 }
 
-func (v *validator) changeHost() {
-	hosts := v.hosts()
-	if len(hosts) <= 1 {
-		return
-	}
-	next := (v.currentHostIndex + 1) % uint64(len(hosts))
-	log.WithFields(logrus.Fields{
-		"currentHost": hosts[v.currentHostIndex],
-		"nextHost":    hosts[next],
-	}).Warn("Beacon node is not responding, switching host")
-	v.validatorClient.SwitchHost(hosts[next])
-	v.currentHostIndex = next
-}
-
-// hosts returns the list of configured beacon node hosts.
-func (v *validator) hosts() []string {
-	if features.Get().EnableBeaconRESTApi {
-		return v.conn.GetRestConnectionProvider().Hosts()
-	}
-	return v.conn.GetGrpcConnectionProvider().Hosts()
-}
-
-// numHosts returns the number of configured beacon node hosts.
-func (v *validator) numHosts() int {
-	return len(v.hosts())
-}
-
-func (v *validator) FindHealthyHost(ctx context.Context) bool {
-	numHosts := v.numHosts()
-	startingHost := v.Host()
-	attemptedHosts := []string{}
-
-	// Check all hosts for a fully synced node
-	for i := range numHosts {
-		if v.nodeClient.IsReady(ctx) {
-			if len(attemptedHosts) > 0 {
-				log.WithFields(logrus.Fields{
-					"previousHost":   startingHost,
-					"newHost":        v.Host(),
-					"failedAttempts": attemptedHosts,
-				}).Info("Failover succeeded: connected to healthy beacon node")
-			}
-			return true
-		}
-		log.WithField("host", v.Host()).Debug("Beacon node not fully synced")
-		attemptedHosts = append(attemptedHosts, v.Host())
-
-		// Try next host if not the last iteration
-		if i < numHosts-1 {
-			v.changeHost()
-		}
-	}
-
-	if numHosts == 1 {
-		log.WithField("host", v.Host()).Warn("Beacon node is not fully synced, no backup node configured")
-	} else {
-		log.Warn("No fully synced beacon node found")
-	}
-	return false
+func (v *validator) EnsureReady(ctx context.Context) bool {
+	return v.validatorClient.EnsureReady(ctx)
 }
 
 func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {

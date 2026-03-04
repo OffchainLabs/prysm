@@ -29,7 +29,7 @@ func (c *beaconApiValidatorClient) fork(ctx context.Context) (*structs.GetStateF
 
 	stateForkResponseJson := &structs.GetStateForkResponse{}
 
-	if err := c.jsonRestHandler.Get(ctx, endpoint, stateForkResponseJson); err != nil {
+	if err := c.handler.Get(ctx, endpoint, stateForkResponseJson); err != nil {
 		return nil, err
 	}
 
@@ -41,7 +41,7 @@ func (c *beaconApiValidatorClient) headers(ctx context.Context) (*structs.GetBlo
 
 	blockHeadersResponseJson := &structs.GetBlockHeadersResponse{}
 
-	if err := c.jsonRestHandler.Get(ctx, endpoint, blockHeadersResponseJson); err != nil {
+	if err := c.handler.Get(ctx, endpoint, blockHeadersResponseJson); err != nil {
 		return nil, err
 	}
 
@@ -59,7 +59,7 @@ func (c *beaconApiValidatorClient) liveness(ctx context.Context, epoch primitive
 		return nil, errors.Wrapf(err, "failed to marshal validator indexes")
 	}
 
-	if err = c.jsonRestHandler.Post(ctx, url, nil, bytes.NewBuffer(marshalledJsonValidatorIndexes), livenessResponseJson); err != nil {
+	if err = c.handler.Post(ctx, url, nil, bytes.NewBuffer(marshalledJsonValidatorIndexes), livenessResponseJson); err != nil {
 		return nil, err
 	}
 
@@ -71,7 +71,7 @@ func (c *beaconApiValidatorClient) syncing(ctx context.Context) (*structs.SyncSt
 
 	syncingResponseJson := &structs.SyncStatusResponse{}
 
-	if err := c.jsonRestHandler.Get(ctx, endpoint, syncingResponseJson); err != nil {
+	if err := c.handler.Get(ctx, endpoint, syncingResponseJson); err != nil {
 		return nil, err
 	}
 

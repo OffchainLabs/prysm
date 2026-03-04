@@ -124,3 +124,11 @@ func WithVerifierWaiter(v *verification.InitializerWaiter) Option {
 		return nil
 	}
 }
+
+// WithGraffitiInfo sets the GraffitiInfo for client version tracking.
+func WithGraffitiInfo(g *GraffitiInfo) Option {
+	return func(s *Service) error {
+		s.graffitiInfo = g
+		return nil
+	}
+}

@@ -21,32 +21,35 @@ import (
 
 type reqOption func(*http.Request)
 
-// RestHandler defines the interface for making REST API requests.
-type RestHandler interface {
+// Handler defines the interface for making REST API requests.
+type Handler interface {
 	Get(ctx context.Context, endpoint string, resp any) error
 	GetStatusCode(ctx context.Context, endpoint string) (int, error)
 	GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error)
 	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error
 	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error)
-	HttpClient() *http.Client
 	Host() string
-	SwitchHost(host string)
 }
 
-type restHandler struct {
+type handler struct {
 	client       http.Client
 	host         string
 	reqOverrides []reqOption
 }
 
-// newRestHandler returns a RestHandler (internal use)
-func newRestHandler(client http.Client, host string) RestHandler {
-	return NewRestHandler(client, host)
+// newHandler returns a *handler for internal use within the rest package.
+func newHandler(client http.Client, host string) *handler {
+	rh := &handler{
+		client: client,
+		host:   host,
+	}
+	rh.appendAcceptOverride()
+	return rh
 }
 
-// NewRestHandler returns a RestHandler
-func NewRestHandler(client http.Client, host string) RestHandler {
-	rh := &restHandler{
+// NewHandler returns a Handler
+func NewHandler(client http.Client, host string) Handler {
+	rh := &handler{
 		client: client,
 		host:   host,
 	}
@@ -57,7 +60,7 @@ func NewRestHandler(client http.Client, host string) RestHandler {
 // appendAcceptOverride enables the Accept header to be customized at runtime via an environment variable.
 // This is specified as an env var because it is a niche option that prysm may use for performance testing or debugging
 // bug which users are unlikely to need. Using an env var keeps the set of user-facing flags cleaner.
-func (c *restHandler) appendAcceptOverride() {
+func (c *handler) appendAcceptOverride() {
 	if accept := os.Getenv(params.EnvNameOverrideAccept); accept != "" {
 		c.reqOverrides = append(c.reqOverrides, func(req *http.Request) {
 			req.Header.Set("Accept", accept)
@@ -66,18 +69,18 @@ func (c *restHandler) appendAcceptOverride() {
 }
 
 // HttpClient returns the underlying HTTP client of the handler
-func (c *restHandler) HttpClient() *http.Client {
+func (c *handler) HttpClient() *http.Client {
 	return &c.client
 }
 
 // Host returns the underlying HTTP host
-func (c *restHandler) Host() string {
+func (c *handler) Host() string {
 	return c.host
 }
 
 // Get sends a GET request and decodes the response body as a JSON object into the passed in object.
 // If an HTTP error is returned, the body is decoded as a DefaultJsonError JSON object and returned as the first return value.
-func (c *restHandler) Get(ctx context.Context, endpoint string, resp any) error {
+func (c *handler) Get(ctx context.Context, endpoint string, resp any) error {
 	url := c.host + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -100,7 +103,7 @@ func (c *restHandler) Get(ctx context.Context, endpoint string, resp any) error 
 // GetStatusCode sends a GET request and returns only the HTTP status code.
 // This is useful for endpoints like /eth/v1/node/health that communicate status via HTTP codes
 // (200 = ready, 206 = syncing, 503 = unavailable) rather than response bodies.
-func (c *restHandler) GetStatusCode(ctx context.Context, endpoint string) (int, error) {
+func (c *handler) GetStatusCode(ctx context.Context, endpoint string) (int, error) {
 	url := c.host + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -119,7 +122,7 @@ func (c *restHandler) GetStatusCode(ctx context.Context, endpoint string) (int, 
 	return httpResp.StatusCode, nil
 }
 
-func (c *restHandler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error) {
+func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error) {
 	url := c.host + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -174,7 +177,7 @@ func (c *restHandler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http
 
 // Post sends a POST request and decodes the response body as a JSON object into the passed in object.
 // If an HTTP error is returned, the body is decoded as a DefaultJsonError JSON object and returned as the first return value.
-func (c *restHandler) Post(
+func (c *handler) Post(
 	ctx context.Context,
 	apiEndpoint string,
 	headers map[string]string,
@@ -210,7 +213,7 @@ func (c *restHandler) Post(
 }
 
 // PostSSZ sends a POST request and prefers an SSZ (application/octet-stream) response body.
-func (c *restHandler) PostSSZ(
+func (c *handler) PostSSZ(
 	ctx context.Context,
 	apiEndpoint string,
 	headers map[string]string,
@@ -311,6 +314,6 @@ func decodeResp(httpResp *http.Response, resp any) error {
 	return nil
 }
 
-func (c *restHandler) SwitchHost(host string) {
+func (c *handler) SwitchHost(host string) {
 	c.host = host
 }

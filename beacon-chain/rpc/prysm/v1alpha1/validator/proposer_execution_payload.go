@@ -135,8 +135,8 @@ func (vs *Server) getLocalPayloadFromEngine(
 		return nil, err
 	}
 	var attr payloadattribute.Attributer
-	switch st.Version() {
-	case version.Deneb, version.Electra, version.Fulu:
+	switch {
+	case st.Version() >= version.Deneb:
 		withdrawals, _, err := st.ExpectedWithdrawals()
 		if err != nil {
 			return nil, err
@@ -151,7 +151,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		if err != nil {
 			return nil, err
 		}
-	case version.Capella:
+	case st.Version() == version.Capella:
 		withdrawals, _, err := st.ExpectedWithdrawals()
 		if err != nil {
 			return nil, err
@@ -165,7 +165,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		if err != nil {
 			return nil, err
 		}
-	case version.Bellatrix:
+	case st.Version() == version.Bellatrix:
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributes{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
@@ -273,6 +273,13 @@ var errNoTerminalBlockHash = errors.New("no terminal block hash")
 //
 // Otherwise, the terminal block hash is fetched based on the slot's time, and an error is returned if it doesn't exist.
 func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, slot primitives.Slot) ([]byte, error) {
+	if st.Version() >= version.Gloas {
+		latestBlockHash, err := st.LatestBlockHash()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get latest block hash")
+		}
+		return latestBlockHash[:], nil
+	}
 	if st.Version() >= version.Capella {
 		return getParentBlockHashPostCapella(st)
 	}
