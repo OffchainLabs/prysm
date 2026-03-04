@@ -113,7 +113,22 @@ func (s *Service) buildForkchoiceChain(ctx context.Context, head interfaces.Read
 			return nil, errors.New("head block is not a descendant of the finalized checkpoint")
 		}
 	}
+	// Prepend the finalized block so its insert (which returns early since
+	// it's already in forkchoice) still gets a full node created via HasPayload.
+	fBlk, err := s.cfg.BeaconDB.Block(s.ctx, fRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get finalized block")
+	}
+	fROBlock, err := blocks.NewROBlockWithRoot(fBlk, fRoot)
+	if err != nil {
+		return nil, err
+	}
+	chain = append(chain, &forkchoicetypes.BlockAndCheckpoints{Block: fROBlock, JustifiedCheckpoint: jp, FinalizedCheckpoint: cp})
 	slices.Reverse(chain)
+	// Set HasPayload for blocks whose envelope is in the DB.
+	for _, bcp := range chain {
+		bcp.HasPayload = s.cfg.BeaconDB.HasExecutionPayloadEnvelope(ctx, bcp.Block.Root())
+	}
 	return chain, nil
 }
 
