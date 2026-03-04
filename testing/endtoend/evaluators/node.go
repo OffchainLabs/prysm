@@ -172,68 +172,7 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 		return errors.Wrap(err, "failed waiting for mid-epoch")
 	}
 
-	headEpochs := make([]primitives.Epoch, len(conns))
-	headBlockRoots := make([][]byte, len(conns))
-	justifiedRoots := make([][]byte, len(conns))
-	prevJustifiedRoots := make([][]byte, len(conns))
-	finalizedRoots := make([][]byte, len(conns))
-	chainHeads := make([]*eth.ChainHead, len(conns))
-	g, _ := errgroup.WithContext(context.Background())
-
-	for i, conn := range conns {
-		conIdx := i
-		currConn := conn
-		g.Go(func() error {
-			beaconClient := eth.NewBeaconChainClient(currConn)
-			chainHead, err := beaconClient.GetChainHead(context.Background(), &emptypb.Empty{})
-			if err != nil {
-				return errors.Wrapf(err, "connection number=%d", conIdx)
-			}
-			epochs[conIdx] = chainHead.HeadEpoch
-			return nil
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-	return epochs, nil
-}
-
-func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	// Wait until we're at least halfway into the epoch to avoid race conditions
-	// at epoch boundaries where nodes may report different epochs.
-	if err := waitForMidEpoch(conns[0]); err != nil {
-		return errors.Wrap(err, "failed waiting for mid-epoch")
-	}
-
-	// First, wait for all nodes to reach the same epoch. Sync nodes may be
-	// behind and need time to catch up. We poll every 2 seconds with a
-	// 60 second timeout - this adapts to actual sync progress rather than
-	// using fixed delays.
-	const epochTimeout = 60 * time.Second
-	const epochPollInterval = 2 * time.Second
-	epochDeadline := time.Now().Add(epochTimeout)
-
-	for time.Now().Before(epochDeadline) {
-		epochs, err := getHeadEpochs(conns)
-		if err != nil {
-			return err
-		}
-		allSame := true
-		for i := 1; i < len(epochs); i++ {
-			if epochs[0] != epochs[i] {
-				allSame = false
-				break
-			}
-		}
-		if allSame {
-			break
-		}
-		time.Sleep(epochPollInterval)
-	}
-
-	// Now that epochs match (or timeout reached), do detailed head comparison
-	// with a few retries to handle block propagation delays.
+	// Detailed head comparison with a few retries to handle block propagation delays.
 	const maxRetries = 5
 	const retryDelay = 1 * time.Second
 	var lastErr error
