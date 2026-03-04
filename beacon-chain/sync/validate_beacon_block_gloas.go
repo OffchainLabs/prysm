@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -87,6 +88,13 @@ func (s *Service) requestPayloadEnvelope(root [32]byte) {
 		log.WithError(err).Debug("Could not request payload envelope by root")
 		return
 	}
+	if len(envelopes) == 0 {
+		log.Debug("No payload envelopes returned by peer")
+		return
+	}
+	if len(envelopes) > 1 {
+		log.Warn("Multiple payload envelopes returned by peer, expected at most one")
+	}
 	for _, env := range envelopes {
 		wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(env)
 		if err != nil {
@@ -94,6 +102,9 @@ func (s *Service) requestPayloadEnvelope(root [32]byte) {
 			continue
 		}
 		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
+			if blockchain.IsInvalidBlock(err) {
+				s.setBadPayload(s.ctx, root)
+			}
 			log.WithError(err).Debug("Could not process requested payload envelope")
 		}
 	}
