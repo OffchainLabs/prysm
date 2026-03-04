@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sirupsen/logrus"
 )
 
 func testSignedHeader(validRoots bool, sigLen int) *ethpb.SignedBeaconBlockHeader {
@@ -1192,20 +1191,12 @@ func TestPartialDataColumn_Complete(t *testing.T) {
 			p:      mustNewPartialColumn(t, 2, 0, 1),
 			wantOK: true,
 		},
-		{
-			name:   "complete but invalid signed header",
-			p:      mustNewPartialColumnWithSigLen(t, 2, 0, 0, 1),
-			wantOK: false,
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := tt.p.Complete(logrus.New())
+			ok := tt.p.IsComplete()
 			require.Equal(t, tt.wantOK, ok)
-			if tt.wantOK {
-				require.NotNil(t, got.DataColumnSidecar)
-			}
 		})
 	}
 }

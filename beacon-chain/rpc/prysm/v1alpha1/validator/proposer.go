@@ -457,6 +457,10 @@ func (vs *Server) handleUnblindedBlock(
 			return nil, nil, nil, errors.Wrap(err, "data column sidcars")
 		}
 
+		if len(cellsPerBlob) == 0 {
+			return nil, roDataColumnSidecars, nil, nil
+		}
+
 		included := bitfield.NewBitlist(uint64(len(cellsPerBlob)))
 		included = included.Not() // all bits set to 1
 		partialColumns, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))

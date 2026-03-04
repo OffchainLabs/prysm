@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -36,29 +37,38 @@ type broadcasterHarness struct {
 type callbackRecorder struct {
 	validateColumnCallCh chan []blocks.CellProofBundle
 	handleHeaderCallCh   chan headerHandlerCall
-	validateHeaderCallCh chan *ethpb.PartialDataColumnHeader
+	partialVerifierFromHeaderCallCh        chan *blocks.PartialDataColumn
+	partialVerifierFromTrustedColumnCallCh chan *blocks.PartialDataColumn
 	handleColumnCallCh   chan columnHandlerCall
 
-	validateColumnErr    error
-	validateHeaderErr    error
-	validateHeaderReject bool
+	validateColumnErr                 error
+	partialVerifierFromHeaderErr      error
+	partialVerifierFromHeaderReject   bool
+	partialVerifierFromTrustedColErr  error
 }
 
 func newCallbackRecorder(callBuffer int, validateHeaderReject bool, validateColumnErr, validateHeaderErr error) *callbackRecorder {
 	return &callbackRecorder{
 		validateColumnCallCh: make(chan []blocks.CellProofBundle, callBuffer),
 		handleHeaderCallCh:   make(chan headerHandlerCall, callBuffer),
-		validateHeaderCallCh: make(chan *ethpb.PartialDataColumnHeader, callBuffer),
+		partialVerifierFromHeaderCallCh:        make(chan *blocks.PartialDataColumn, callBuffer),
+		partialVerifierFromTrustedColumnCallCh: make(chan *blocks.PartialDataColumn, callBuffer),
 		handleColumnCallCh:   make(chan columnHandlerCall, callBuffer),
-		validateHeaderReject: validateHeaderReject,
-		validateHeaderErr:    validateHeaderErr,
-		validateColumnErr:    validateColumnErr,
+		partialVerifierFromHeaderReject: validateHeaderReject,
+		partialVerifierFromHeaderErr:    validateHeaderErr,
+		validateColumnErr:               validateColumnErr,
 	}
 }
 
-func (r *callbackRecorder) ValidateHeader(header *ethpb.PartialDataColumnHeader) (bool, error) {
-	r.validateHeaderCallCh <- header
-	return r.validateHeaderReject, r.validateHeaderErr
+func (r *callbackRecorder) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
+	r.partialVerifierFromHeaderCallCh <- col
+	return newMockPartialVerifier(col),
+		r.partialVerifierFromHeaderReject, r.partialVerifierFromHeaderErr
+}
+
+func (r *callbackRecorder) PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
+	r.partialVerifierFromTrustedColumnCallCh <- col
+	return newMockPartialVerifier(col), r.partialVerifierFromTrustedColErr
 }
 
 func (r *callbackRecorder) ValidateColumn(cells []blocks.CellProofBundle) error {
@@ -156,7 +166,8 @@ func (h *broadcasterHarness) start(cr *callbackRecorder) {
 	h.t.Helper()
 
 	err := h.broadcaster.Start(
-		cr.ValidateHeader,
+		cr.PartialVerifierFromHeader,
+		cr.PartialVerifierFromTrustedColumn,
 		cr.ValidateColumn,
 		cr.HandleColumn,
 		cr.HandleHeader,
@@ -229,6 +240,21 @@ func assertPartialColumnsEqual(t *testing.T, expected *blocks.PartialDataColumn,
 	require.DeepEqual(t, expected.GroupID(), actual.GroupID())
 	require.DeepEqual(t, expected.Included, actual.Included)
 	require.DeepEqual(t, expected.Column, actual.Column)
+}
+
+func newMockPartialVerifier(col *blocks.PartialDataColumn) *verification.PartialColumnVerifier {
+	mv := &verification.MockDataColumnsVerifier{}
+	ro, err := blocks.NewRODataColumn(col.DataColumnSidecar)
+	if err == nil {
+		mv.AppendRODataColumns(ro)
+	}
+	return verification.NewPartialColumnVerifier(mv, col)
+}
+
+func newMarkedVerifier(col *blocks.PartialDataColumn) *verification.PartialColumnVerifier {
+	v := newMockPartialVerifier(col)
+	v.MarkIncludedCellsVerified()
+	return v
 }
 
 func testBitlist(n uint64, set ...uint64) bitfield.Bitlist {
@@ -772,8 +798,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 					expectedHeader:  buildHeaderFromColumn(col),
 				}
 			},
-			expectHeaderValidateCall: true,
-			expectHeaderHandleCall:   true,
+			expectHeaderHandleCall: false,
 		},
 		{
 			name: "existing column with incoming cells calls validateColumn and enqueues cellsValidated request",
@@ -782,8 +807,8 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 					0: {0x11},
 				})
 				group := existing.GroupID()
-				b.partialMsgStore[validTopic] = map[string]*blocks.PartialDataColumn{
-					string(group): existing,
+				b.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
+					string(group): newMarkedVerifier(existing),
 				}
 				msg := buildSidecarWithCells(3, map[uint64][]byte{
 					1: {0x22},
@@ -820,8 +845,8 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 					0: {0x33},
 				})
 				group := existing.GroupID()
-				b.partialMsgStore[validTopic] = map[string]*blocks.PartialDataColumn{
-					string(group): existing,
+				b.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
+					string(group): newMarkedVerifier(existing),
 				}
 				msg := buildSidecarWithCells(3, map[uint64][]byte{
 					1: {0x44},
@@ -850,8 +875,8 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 					0: {0x55},
 				})
 				group := existing.GroupID()
-				b.partialMsgStore[validTopic] = map[string]*blocks.PartialDataColumn{
-					string(group): existing,
+				b.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
+					string(group): newMarkedVerifier(existing),
 				}
 				b.getBlobsCalled[string(group)] = true
 				return testSetup{
@@ -873,7 +898,8 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			recorder := newCallbackRecorder(8, tt.validateHeaderReject, tt.validateColumnErr, tt.validateHeaderErr)
 			h := newBroadcasterHarness(t, ps)
 
-			h.broadcaster.validateHeader = recorder.ValidateHeader
+			h.broadcaster.partialVerifierFromHeader = recorder.PartialVerifierFromHeader
+			h.broadcaster.partialVerifierFromTrustedColumn = recorder.PartialVerifierFromTrustedColumn
 			h.broadcaster.validateColumn = recorder.ValidateColumn
 			h.broadcaster.handleHeader = recorder.HandleHeader
 
@@ -888,7 +914,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 
 			if tt.expectHeaderValidateCall {
 				select {
-				case call := <-recorder.validateHeaderCallCh:
+				case call := <-recorder.partialVerifierFromHeaderCallCh:
 					require.DeepEqual(t, setup.expectedHeader.KzgCommitments, call.KzgCommitments)
 					require.DeepEqual(t, setup.expectedHeader.KzgCommitmentsInclusionProof, call.KzgCommitmentsInclusionProof)
 					require.DeepEqual(t, setup.expectedHeader.SignedBlockHeader, call.SignedBlockHeader)
@@ -1131,8 +1157,8 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 
 			setup := tt.setup(t)
 			if setup.column != nil {
-				h.broadcaster.partialMsgStore[topic] = map[string]*blocks.PartialDataColumn{
-					string(setup.group): setup.column,
+				h.broadcaster.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{
+					string(setup.group): newMarkedVerifier(setup.column),
 				}
 				h.broadcaster.getBlobsCalled[string(setup.group)] = setup.getBlobsCalled
 			}
@@ -1200,6 +1226,7 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 	tests := []struct {
 		expectGetBlobsValue bool
 		expectHandleColumn  bool
+		expectTrustedCall   bool
 		getBlobsCalled      bool
 		expectedErrContains string
 		publishErr          error
@@ -1212,12 +1239,14 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			name:                "new group stores and publishes",
 			getBlobsCalled:      true,
 			expectGetBlobsValue: true,
+			expectTrustedCall:   true,
 			publishColumn:       column1,
 			expectedStoreColumn: column1,
 		},
 		{
 			name:                "publish error is returned to caller",
 			getBlobsCalled:      true,
+			expectTrustedCall:   true,
 			publishErr:          errors.New("publish failed"),
 			expectedErrContains: "publish failed",
 			publishColumn:       column1,
@@ -1284,8 +1313,8 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			h := newBroadcasterHarness(t, ps)
 			if tt.existingColumn != nil {
 				existing := tt.existingColumn(t)
-				h.broadcaster.partialMsgStore[topic] = map[string]*blocks.PartialDataColumn{
-					groupID: existing,
+				h.broadcaster.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{
+					groupID: newMarkedVerifier(existing),
 				}
 			}
 
@@ -1318,6 +1347,15 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 				}
 			} else {
 				require.Equal(t, false, completed)
+			}
+
+			if tt.expectTrustedCall {
+				select {
+				case call := <-recorder.partialVerifierFromTrustedColumnCallCh:
+					assertPartialColumnsEqual(t, column, call)
+				case <-t.Context().Done():
+					t.Fatalf("trusted partial verifier call not received")
+				}
 			}
 
 		})
@@ -1416,9 +1454,13 @@ func TestPartialColumnBroadcaster_Unsubscribe(t *testing.T) {
 				h.broadcaster.topics[topicName] = topic
 			}
 			if tt.setupPartialStore {
-				h.broadcaster.partialMsgStore[topicName] = map[string]*blocks.PartialDataColumn{
-					"group1": createPartialColumn(t, 2, map[uint64][]byte{0: {0x10}}),
+				h.broadcaster.partialMsgStore[topicName] = map[string]*verification.PartialColumnVerifier{
+					"group1": verification.NewPartialColumnVerifier(
+						&verification.MockDataColumnsVerifier{},
+						createPartialColumn(t, 2, map[uint64][]byte{0: {0x10}}),
+					),
 				}
+				h.broadcaster.partialMsgStore[topicName]["group1"].MarkIncludedCellsVerified()
 			}
 
 			// Assert state exists before unsubscribe.
