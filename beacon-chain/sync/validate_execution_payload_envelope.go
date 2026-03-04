@@ -181,7 +181,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 	inner[builderIdx] = signedEnvelope
 	s.pendingEnvelopeLock.Unlock()
 
-	if !rootExists {
+	if !rootExists && !s.cfg.chain.InForkchoice(root) && !s.cfg.chain.BlockBeingSynced(root) {
 		go func() {
 			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{root}, rand.NewGenerator()); err != nil {
 				log.WithError(err).Debug("Could not request beacon block for pending payload envelope")
