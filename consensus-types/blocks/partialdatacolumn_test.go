@@ -1192,19 +1192,16 @@ func TestPartialDataColumn_Complete(t *testing.T) {
 			wantOK: true,
 		},
 		{
-			name:   "complete but invalid signed header",
+			name:   "complete with invalid signed header is still complete",
 			p:      mustNewPartialColumnWithSigLen(t, 2, 0, 0, 1),
-			wantOK: false,
+			wantOK: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := tt.p.Complete()
+			ok := tt.p.IsComplete()
 			require.Equal(t, tt.wantOK, ok)
-			if tt.wantOK {
-				require.NotNil(t, got.DataColumnSidecar)
-			}
 		})
 	}
 }

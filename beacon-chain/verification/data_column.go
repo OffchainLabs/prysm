@@ -40,6 +40,8 @@ var (
 		RequireSidecarProposerExpected,
 	}
 
+	PartialColumnRequirements = requirementList(GossipDataColumnSidecarRequirements).excluding(RequireCorrectSubnet)
+
 	// ByRangeRequestDataColumnSidecarRequirements defines the set of requirements that DataColumnSidecars received
 	// via the by range request must satisfy in order to upgrade an RODataColumn to a VerifiedRODataColumn.
 	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
@@ -72,6 +74,95 @@ type LazyHeadStateProvider struct {
 }
 
 var _ HeadStateProvider = &LazyHeadStateProvider{}
+
+type PartialColumnVerifier struct {
+	DataColumnsVerifier
+	Column              *blocks.PartialDataColumn
+	verifiedCellByIndex map[uint64]bool
+}
+
+func NewPartialColumnVerifier(dv DataColumnsVerifier, col *blocks.PartialDataColumn) *PartialColumnVerifier {
+	return &PartialColumnVerifier{
+		DataColumnsVerifier: dv,
+		Column:              col,
+		verifiedCellByIndex: make(map[uint64]bool),
+	}
+}
+
+func (pv *PartialColumnVerifier) Complete() (blocks.VerifiedRODataColumn, bool, error) {
+	if pv == nil || pv.Column == nil {
+		return blocks.VerifiedRODataColumn{}, false, errors.New("partial column verifier is nil")
+	}
+
+	if !pv.Column.IsComplete() {
+		return blocks.VerifiedRODataColumn{}, false, nil
+	}
+
+	// now that we have all the cells and proofs, the valid fields check should pass
+	if err := pv.ValidFields(); err != nil {
+		return blocks.VerifiedRODataColumn{}, false, err
+	}
+
+	if err := pv.SidecarKzgProofVerified(); err != nil {
+		return blocks.VerifiedRODataColumn{}, false, err
+	}
+
+	cols, err := pv.VerifiedRODataColumns()
+	if err != nil {
+		return blocks.VerifiedRODataColumn{}, false, err
+	}
+	if len(cols) != 1 {
+		return blocks.VerifiedRODataColumn{}, false, errors.New("unexpected number of verified data columns")
+	}
+	return cols[0], true, nil
+}
+
+func (pv *PartialColumnVerifier) SidecarKzgProofVerified() error {
+	if pv == nil || pv.Column == nil {
+		return errors.Wrap(ErrSidecarKzgProofInvalid, "partial column verifier is nil")
+	}
+	if pv.verifiedCellByIndex == nil {
+		pv.verifiedCellByIndex = make(map[uint64]bool)
+	}
+
+	nCells := uint64(len(pv.Column.KzgCommitments))
+	for i := range nCells {
+		if !pv.verifiedCellByIndex[i] {
+			return errors.Wrapf(ErrSidecarKzgProofInvalid, "missing verified cell at index %d", i)
+		}
+	}
+
+	pv.SatisfyRequirement(RequireSidecarKzgProofVerified)
+	return nil
+}
+
+func (pv *PartialColumnVerifier) ExtendFromVerifiedCell(cellIndex uint64, cell, proof []byte) bool {
+	if pv == nil || pv.Column == nil {
+		return false
+	}
+	if pv.verifiedCellByIndex == nil {
+		pv.verifiedCellByIndex = make(map[uint64]bool)
+	}
+	extended := pv.Column.ExtendFromVerifiedCell(cellIndex, cell, proof)
+	if extended {
+		pv.verifiedCellByIndex[cellIndex] = true
+	}
+	return extended
+}
+
+func (pv *PartialColumnVerifier) MarkIncludedCellsVerified() {
+	if pv == nil || pv.Column == nil {
+		return
+	}
+	if pv.verifiedCellByIndex == nil {
+		pv.verifiedCellByIndex = make(map[uint64]bool)
+	}
+	for i := range pv.Column.Included.Len() {
+		if pv.Column.Included.BitAt(i) {
+			pv.verifiedCellByIndex[i] = true
+		}
+	}
+}
 
 type (
 	RODataColumnsVerifier struct {
@@ -361,7 +452,7 @@ func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.
 		}
 
 		if !dv.fc.HasNode(parentRoot) {
-			return columnErrBuilder(errors.Wrapf(errSidecarParentNotSeen, "parent root: %#x", parentRoot))
+			return columnErrBuilder(errors.Wrapf(ErrSidecarParentNotSeen, "parent root: %#x", parentRoot))
 		}
 	}
 
@@ -395,7 +486,7 @@ func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
 		// Compute the slot of the parent block.
 		parentSlot, err := dv.fc.Slot(dataColumn.ParentRoot())
 		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "slot"))
+			return columnErrBuilder(errors.Wrap(ErrSidecarParentSlotUnavailable, err.Error()))
 		}
 
 		// Check if the data column slot is after the parent slot.

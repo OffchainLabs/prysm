@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -135,20 +136,42 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		topic2, err := ps2.Join(topicStr, pubsub.RequestPartialMessages())
 		require.NoError(t, err)
 
-		// Header validator
-		headerValidator := func(header *ethpb.PartialDataColumnHeader) (reject bool, err error) {
-			if header == nil {
-				return false, fmt.Errorf("nil header")
+		newVerifier := func(col *blocks.PartialDataColumn, markIncluded bool) (*verification.PartialColumnVerifier, error) {
+			mock := &verification.MockDataColumnsVerifier{}
+			roCol, err := blocks.NewRODataColumn(col.DataColumnSidecar)
+			if err != nil {
+				return nil, err
 			}
-			if header.SignedBlockHeader == nil || header.SignedBlockHeader.Header == nil {
-				return true, fmt.Errorf("nil signed block header")
+			mock.AppendRODataColumns(roCol)
+			verifier := verification.NewPartialColumnVerifier(mock, col)
+			if markIncluded {
+				verifier.MarkIncludedCellsVerified()
 			}
-			if len(header.KzgCommitments) == 0 {
-				return true, fmt.Errorf("empty kzg commitments")
-			}
+			return verifier, nil
+		}
 
-			t.Log("Header validation passed")
-			return false, nil
+		partialVerifierFromHeader := func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
+			if col == nil {
+				return nil, false, fmt.Errorf("nil partial column")
+			}
+			if col.SignedBlockHeader == nil || col.SignedBlockHeader.Header == nil {
+				return nil, true, fmt.Errorf("nil signed block header")
+			}
+			if len(col.KzgCommitments) == 0 {
+				return nil, true, fmt.Errorf("empty kzg commitments")
+			}
+			verifier, err := newVerifier(col, false)
+			if err != nil {
+				return nil, true, err
+			}
+			return verifier, false, nil
+		}
+
+		partialVerifierFromTrustedColumn := func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
+			if col == nil {
+				return nil, fmt.Errorf("nil partial column")
+			}
+			return newVerifier(col, true)
 		}
 
 		cellValidator := func(_ []blocks.CellProofBundle) error {
@@ -187,10 +210,10 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 
 		noopHeaderHandler := func(header *ethpb.PartialDataColumnHeader, groupID string) {}
 
-		err = broadcaster1.Start(headerValidator, cellValidator, handler1, noopHeaderHandler)
+		err = broadcaster1.Start(partialVerifierFromHeader, partialVerifierFromTrustedColumn, cellValidator, handler1, noopHeaderHandler)
 		require.NoError(t, err)
 
-		err = broadcaster2.Start(headerValidator, cellValidator, handler2, noopHeaderHandler)
+		err = broadcaster2.Start(partialVerifierFromHeader, partialVerifierFromTrustedColumn, cellValidator, handler2, noopHeaderHandler)
 		require.NoError(t, err)
 
 		err = broadcaster1.Subscribe(topic1)

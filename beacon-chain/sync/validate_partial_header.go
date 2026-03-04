@@ -2,142 +2,106 @@ package sync
 
 import (
 	"context"
+	stderrors "errors"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/pkg/errors"
 )
 
-var (
-	// REJECT errors - peer should be penalized
-	errHeaderEmptyCommitments       = errors.New("header has no kzg commitments")
-	errHeaderParentInvalid          = errors.New("header parent invalid")
-	errHeaderSlotNotAfterParent     = errors.New("header slot not after parent")
-	errHeaderNotFinalizedDescendant = errors.New("header not finalized descendant")
-	errHeaderInvalidInclusionProof  = errors.New("invalid inclusion proof")
-	errHeaderInvalidSignature       = errors.New("invalid proposer signature")
-	errHeaderUnexpectedProposer     = errors.New("unexpected proposer index")
+var errNilPartialDataColumn = errors.New("nil partial data column")
+var errHeaderEmptyCommitments = errors.New("header has no kzg commitments")
 
-	// IGNORE errors - don't penalize peer
-	errHeaderNil               = errors.New("nil header")
-	errHeaderFromFuture        = errors.New("header is from future slot")
-	errHeaderNotAboveFinalized = errors.New("header slot not above finalized")
-	errHeaderParentNotSeen     = errors.New("header parent not seen")
-)
-
-// validatePartialDataColumnHeader validates a PartialDataColumnHeader per the consensus spec.
-// Returns (reject, err) where reject=true means the peer should be penalized.
-// TODO: we should consolidate this with the existing DataColumn validation pipeline.
-func (s *Service) validatePartialDataColumnHeader(ctx context.Context, header *ethpb.PartialDataColumnHeader) (reject bool, err error) {
-	if header == nil || header.SignedBlockHeader == nil || header.SignedBlockHeader.Header == nil {
-		return false, errHeaderNil // IGNORE
+func (s *Service) partialVerifierFromTrustedColumn(ctx context.Context, col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier,
+	error) {
+	if col == nil || col.SignedBlockHeader == nil || col.SignedBlockHeader.Header == nil {
+		return nil, errNilPartialDataColumn
 	}
 
-	blockHeader := header.SignedBlockHeader.Header
-	headerSlot := blockHeader.Slot
-	parentRoot := bytesutil.ToBytes32(blockHeader.ParentRoot)
-
-	// [REJECT] kzg_commitments list is non-empty
-	if len(header.KzgCommitments) == 0 {
-		return true, errHeaderEmptyCommitments
+	if len(col.KzgCommitments) == 0 {
+		return nil, errHeaderEmptyCommitments
 	}
 
-	// [IGNORE] Not from future slot (with MAXIMUM_GOSSIP_CLOCK_DISPARITY allowance)
-	currentSlot := s.cfg.clock.CurrentSlot()
-	if headerSlot > currentSlot {
-		maxDisparity := params.BeaconConfig().MaximumGossipClockDisparityDuration()
-		slotStart, err := s.cfg.clock.SlotStart(headerSlot)
-		if err != nil {
-			return false, err
+	roDataColumn, err := blocks.NewRODataColumn(col.DataColumnSidecar)
+	if err != nil {
+		return nil, err
+	}
+
+	dcv := s.newColumnsVerifier([]blocks.RODataColumn{roDataColumn}, verification.PartialColumnRequirements)
+	verifier := verification.NewPartialColumnVerifier(dcv, col)
+	verifier.MarkIncludedCellsVerified()
+
+	// mark all header checks as completed
+	verifier.SatisfyRequirement(verification.RequireNotFromFutureSlot)
+	verifier.SatisfyRequirement(verification.RequireSlotAboveFinalized)
+	verifier.SatisfyRequirement(verification.RequireSidecarParentSeen)
+	verifier.SatisfyRequirement(verification.RequireSidecarParentValid)
+	verifier.SatisfyRequirement(verification.RequireSidecarParentSlotLower)
+	verifier.SatisfyRequirement(verification.RequireSidecarDescendsFromFinalized)
+	verifier.SatisfyRequirement(verification.RequireSidecarInclusionProven)
+	verifier.SatisfyRequirement(verification.RequireSidecarProposerExpected)
+	verifier.SatisfyRequirement(verification.RequireValidProposerSignature)
+
+	return verifier, nil
+}
+
+// validatePartialDataColumn validates only the header-applicable checks for a partial data column.
+func (s *Service) validatePartialDataColumnHeader(ctx context.Context, col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier,
+	bool, error) {
+	if col == nil || col.SignedBlockHeader == nil || col.SignedBlockHeader.Header == nil {
+		return nil, false, errNilPartialDataColumn
+	}
+
+	if len(col.KzgCommitments) == 0 {
+		return nil, false, errHeaderEmptyCommitments
+	}
+
+	roDataColumn, err := blocks.NewRODataColumn(col.DataColumnSidecar)
+	if err != nil {
+		return nil, false, err
+	}
+
+	dcv := s.newColumnsVerifier([]blocks.RODataColumn{roDataColumn}, verification.PartialColumnRequirements)
+	verifier := verification.NewPartialColumnVerifier(dcv, col)
+
+	if err := verifier.NotFromFutureSlot(); err != nil {
+		return verifier, false, err
+	}
+
+	if err := verifier.SlotAboveFinalized(); err != nil {
+		return verifier, false, err
+	}
+
+	if err := verifier.SidecarParentSeen(s.hasBadBlock); err != nil {
+		return verifier, false, err
+	}
+
+	if err := verifier.SidecarParentValid(s.hasBadBlock); err != nil {
+		return verifier, true, err
+	}
+
+	if err := verifier.SidecarParentSlotLower(); err != nil {
+		if stderrors.Is(err, verification.ErrSidecarParentSlotUnavailable) {
+			return verifier, false, err
 		}
-		if s.cfg.clock.Now().Before(slotStart.Add(-maxDisparity)) {
-			return false, errHeaderFromFuture // IGNORE
-		}
+		return verifier, true, err
 	}
 
-	// [IGNORE] Slot above finalized
-	finalizedCheckpoint := s.cfg.chain.FinalizedCheckpt()
-	startSlot, err := slots.EpochStart(finalizedCheckpoint.Epoch)
-	if err != nil {
-		return false, err
-	}
-	if headerSlot <= startSlot {
-		return false, errHeaderNotAboveFinalized // IGNORE
+	if err := verifier.SidecarDescendsFromFinalized(); err != nil {
+		return verifier, true, err
 	}
 
-	// [IGNORE] Parent has been seen
-	if !s.cfg.chain.HasBlock(ctx, parentRoot) {
-		return false, errHeaderParentNotSeen // IGNORE
+	if err := verifier.SidecarInclusionProven(); err != nil {
+		return verifier, true, err
 	}
 
-	// [REJECT] Parent passes validation (not a bad block)
-	if s.hasBadBlock(parentRoot) {
-		return true, errHeaderParentInvalid
+	if err := verifier.SidecarProposerExpected(ctx); err != nil {
+		return verifier, true, err
 	}
 
-	// [REJECT] Header slot > parent slot
-	parentSlot, err := s.cfg.chain.RecentBlockSlot(parentRoot)
-	if err != nil {
-		return false, errors.Wrap(err, "get parent slot")
-	}
-	if headerSlot <= parentSlot {
-		return true, errHeaderSlotNotAfterParent
+	if err := verifier.ValidProposerSignature(ctx); err != nil {
+		return verifier, true, err
 	}
 
-	// [REJECT] Finalized checkpoint is ancestor (parent is in forkchoice)
-	if !s.cfg.chain.InForkchoice(parentRoot) {
-		return true, errHeaderNotFinalizedDescendant
-	}
-
-	// [REJECT] Inclusion proof valid
-	if err := peerdas.VerifyPartialDataColumnHeaderInclusionProof(header); err != nil {
-		return true, errHeaderInvalidInclusionProof
-	}
-
-	// [REJECT] Valid proposer signature
-	parentState, err := s.cfg.stateGen.StateByRoot(ctx, parentRoot)
-	if err != nil {
-		return false, errors.Wrap(err, "get parent state")
-	}
-
-	proposerIdx := blockHeader.ProposerIndex
-	proposer, err := parentState.ValidatorAtIndex(proposerIdx)
-	if err != nil {
-		return false, errors.Wrap(err, "get proposer")
-	}
-
-	domain, err := signing.Domain(
-		parentState.Fork(),
-		slots.ToEpoch(headerSlot),
-		params.BeaconConfig().DomainBeaconProposer,
-		parentState.GenesisValidatorsRoot(),
-	)
-	if err != nil {
-		return false, errors.Wrap(err, "get domain")
-	}
-
-	if err := signing.VerifyBlockHeaderSigningRoot(
-		blockHeader,
-		proposer.PublicKey,
-		header.SignedBlockHeader.Signature,
-		domain,
-	); err != nil {
-		return true, errHeaderInvalidSignature
-	}
-
-	// [REJECT] Expected proposer for slot
-	expectedProposer, err := helpers.BeaconProposerIndexAtSlot(ctx, parentState, headerSlot)
-	if err != nil {
-		return false, errors.Wrap(err, "compute expected proposer")
-	}
-	if expectedProposer != proposerIdx {
-		return true, errHeaderUnexpectedProposer
-	}
-
-	return false, nil // Valid header
+	return verifier, false, nil
 }

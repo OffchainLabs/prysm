@@ -413,8 +413,11 @@ func (s *Service) waitForChainStart() {
 
 func (s *Service) startPartialColumnBroadcaster(broadcaster *partialdatacolumnbroadcaster.PartialColumnBroadcaster) error {
 	return broadcaster.Start(
-		func(header *ethpb.PartialDataColumnHeader) (bool, error) {
-			return s.validatePartialDataColumnHeader(s.ctx, header)
+		func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
+			return s.validatePartialDataColumnHeader(s.ctx, col)
+		},
+		func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
+			return s.partialVerifierFromTrustedColumn(s.ctx, col)
 		},
 		func(cellsToVerify []blocks.CellProofBundle) error {
 			return peerdas.VerifyDataColumnsCellsKZGProofs(len(cellsToVerify), slices.Values(cellsToVerify))

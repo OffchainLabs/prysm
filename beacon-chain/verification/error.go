@@ -40,6 +40,12 @@ var (
 
 	// errSidecarParentNotSeen means RequireSidecarParentSeen failed.
 	errSidecarParentNotSeen = errors.New("parent root has not been seen")
+	// ErrSidecarParentNotSeen is an exported marker used by callers that need to classify
+	// RequireSidecarParentSeen failures as IGNORE instead of REJECT.
+	ErrSidecarParentNotSeen = errSidecarParentNotSeen
+	// ErrSidecarParentSlotUnavailable is an exported marker used by callers that need to
+	// classify missing parent slot information as IGNORE instead of REJECT.
+	ErrSidecarParentSlotUnavailable = errors.New("parent slot unavailable")
 
 	// errSidecarParentInvalid means RequireSidecarParentValid failed.
 	errSidecarParentInvalid = errors.Join(ErrBlobInvalid, errors.New("parent block is not valid"))

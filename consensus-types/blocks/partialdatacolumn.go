@@ -389,19 +389,7 @@ func (p *PartialDataColumn) ExtendFromVerifiedCells(cellIndices []uint64, cells 
 	return extended
 }
 
-// Complete returns a verified read-only column if all cells are now present in this column.
-func (p *PartialDataColumn) Complete() (VerifiedRODataColumn, bool) {
-	if uint64(len(p.KzgCommitments)) != p.Included.Count() {
-		return VerifiedRODataColumn{}, false
-	}
-
-	rodc, err := NewRODataColumn(p.DataColumnSidecar)
-	if err != nil {
-		// We shouldn't get an error, as we check the hash root when creating
-		// the partial column
-		log.WithError(err).Error("Failed to create RODataColumn")
-		return VerifiedRODataColumn{}, false
-	}
-
-	return NewVerifiedRODataColumn(rodc), true
+// IsComplete returns true if all cells are now present in this column.
+func (p *PartialDataColumn) IsComplete() bool {
+	return uint64(len(p.KzgCommitments)) == p.Included.Count()
 }
