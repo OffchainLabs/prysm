@@ -244,6 +244,27 @@ func (p *BeaconDbStater) stateByRoot(ctx context.Context, stateRoot []byte) (sta
 		}
 	}
 
+	// this is to support fetching states by pre-payload state roots after gloas
+	if slots.ToEpoch(p.ChainInfoFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		blkRoots := headState.BlockRoots()
+		for i := len(blkRoots) - 1; i >= 0; i-- {
+			r := bytesutil.ToBytes32(blkRoots[i])
+
+			if r == params.BeaconConfig().ZeroHash {
+				continue
+			}
+
+			b, err := p.BeaconDB.Block(ctx, r)
+			if err != nil || b == nil || b.IsNil() {
+				continue
+			}
+
+			if b.Block().StateRoot() == [32]byte(stateRoot) {
+				return p.StateGenService.StateByRoot(ctx, r)
+			}
+		}
+	}
+
 	stateNotFoundErr := NewStateNotFoundError(len(headState.StateRoots()), stateRoot)
 	return nil, &stateNotFoundErr
 }
