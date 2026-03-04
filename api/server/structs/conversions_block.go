@@ -3304,8 +3304,9 @@ func (p *PayloadAttestationMessage) ToConsensus() (*eth.PayloadAttestationMessag
 		ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
 		Data:           data,
 		Signature:      sig,
-   }, nil
+	}, nil
 }
+
 // SignedExecutionPayloadEnvelopeFromConsensus converts a proto envelope to the API struct.
 func SignedExecutionPayloadEnvelopeFromConsensus(e *eth.SignedExecutionPayloadEnvelope) (*SignedExecutionPayloadEnvelope, error) {
 	payload, err := ExecutionPayloadDenebFromConsensus(e.Message.Payload)

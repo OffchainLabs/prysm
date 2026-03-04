@@ -924,7 +924,7 @@ func (s *Service) beaconEndpoints(
 			handler: server.SubmitPayloadAttestations,
 			methods: []string{http.MethodPost},
 		},
-    {
+		{
 			template: "/eth/v1/beacon/execution_payload_envelope/{block_root}",
 			name:     namespace + ".GetExecutionPayloadEnvelope",
 			middleware: []middleware.Middleware{
