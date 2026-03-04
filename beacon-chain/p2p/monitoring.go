@@ -196,12 +196,12 @@ var (
 	},
 		[]string{"topic"})
 	pubsubRPCPubSentSize = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "gossipsub_pubsub_rpc_sent_pub_size_total",
+		Name: "gossipsub_topic_msg_sent_bytes",
 		Help: "The total size of publish messages sent via rpc for a particular topic",
 	},
-		[]string{"topic", "is_partial"})
+		[]string{"topic", "partial"})
 	pubsubMeshPeers = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "gossipsub_mesh_peers",
+		Name: "gossipsub_mesh_peer_counts",
 		Help: "The number of capable peers in mesh",
 	},
 		[]string{"topic", "supports_partial"})
