@@ -75,6 +75,8 @@ type LazyHeadStateProvider struct {
 
 var _ HeadStateProvider = &LazyHeadStateProvider{}
 
+// PartialColumnVerifier is used to verify a partial data column before it can be used as a fully verified data column
+// Note: It is not thread safe and the caller is responsible for thread-safety
 type PartialColumnVerifier struct {
 	DataColumnsVerifier
 	Column              *blocks.PartialDataColumn
