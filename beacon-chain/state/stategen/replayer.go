@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -115,7 +116,7 @@ func (rs *stateReplayer) ReplayBlocks(ctx context.Context) (state.BeaconState, e
 			return nil, ctx.Err()
 		}
 
-		var envelope *ethpb.SignedBlindedExecutionPayloadEnvelope
+		var envelope *ethpb.SignedBlindedExecutionPayloadEnvelope = nil
 		if b.Version() >= version.Gloas {
 			if p, ok := rs.chainer.(executionPayloadEnvelopeProvider); ok {
 				root, err := b.Block().HashTreeRoot()
@@ -129,10 +130,14 @@ func (rs *stateReplayer) ReplayBlocks(ctx context.Context) (state.BeaconState, e
 			}
 		}
 
-		s, err = executeStateTransitionStateGen(ctx, s, b, envelope)
+		s, err = executeStateTransitionStateGen(ctx, s, b)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "could not execute state transition")
 		}
+		if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, s, b.Block().StateRoot(), envelope); err != nil {
+			return nil, errors.Wrap(err, "could not apply execution payload envelope")
+		}
+
 	}
 	if rs.target > s.Slot() {
 		s, err = ReplayProcessSlots(ctx, s, rs.target)

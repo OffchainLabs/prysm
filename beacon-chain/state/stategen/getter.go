@@ -155,8 +155,7 @@ func (s *State) StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) 
 	if err != nil {
 		return nil, errors.Wrap(err, "could not replay blocks")
 	}
-
-	return startState, nil
+	return ReplayProcessSlots(ctx, startState, summary.Slot)
 }
 
 // This returns the state summary object of a given block root. It first checks the cache, then checks the DB.
@@ -197,6 +196,30 @@ func (s *State) DeleteStateFromCaches(_ context.Context, blockRoot [32]byte) err
 	return s.epochBoundaryStateCache.delete(blockRoot)
 }
 
+// This function is a wrapper that loads the state by block hash, this function would error if the block hash is not in DB.
+func (s *State) loadStateByBlockHash(ctx context.Context, blockHash [32]byte, slot primitives.Slot) (state.BeaconState, error) {
+	blockRoot, err := s.blockRootForExecHash(ctx, blockHash, slot)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not resolve block hash %#x to beacon block root", blockHash)
+	}
+	blockState, err := s.loadStateByRoot(ctx, blockRoot)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not load state by resolved beacon block root %#x for execution block hash %#x", blockRoot, blockHash)
+	}
+	blk, err := s.beaconDB.Block(ctx, blockRoot)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not load block by resolved beacon block root %#x for execution block hash %#x", blockRoot, blockHash)
+	}
+	envelope, err := s.beaconDB.ExecutionPayloadEnvelope(ctx, blockRoot)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not retrieve execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
+	}
+	if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, blockState, blk.Block().StateRoot(), envelope); err != nil {
+		return nil, errors.Wrapf(err, "could not apply execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
+	}
+	return blockState, nil
+}
+
 // This loads a beacon state from either the cache or DB, then replays blocks up the slot of the requested block root.
 func (s *State) loadStateByRoot(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "stateGen.loadStateByRoot")
@@ -231,18 +254,13 @@ func (s *State) loadStateByRoot(ctx context.Context, blockRoot [32]byte) (state.
 	// If blockRoot is not a beacon block root (e.g. it's a Gloas execution block hash
 	// used as state key after envelope processing), resolve it to the beacon block root
 	// so that latestAncestor and loadBlocks can walk the block chain.
-	replayRoot := blockRoot
 	if !s.beaconDB.HasBlock(ctx, blockRoot) {
-		resolved, err := s.blockRootForExecHash(ctx, blockRoot, targetSlot)
-		if err != nil {
-			return nil, errors.Wrapf(err, "could not resolve root %#x to beacon block root", blockRoot)
-		}
-		replayRoot = resolved
+		return s.loadStateByBlockHash(ctx, blockRoot, targetSlot)
 	}
 
 	// Since the requested state is not in caches or DB, start replaying using the last
 	// available ancestor state which is retrieved using input block's root.
-	startState, err := s.latestAncestor(ctx, replayRoot)
+	startState, err := s.latestAncestor(ctx, blockRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get ancestor state")
 	}
@@ -254,14 +272,18 @@ func (s *State) loadStateByRoot(ctx context.Context, blockRoot [32]byte) (state.
 		return startState, nil
 	}
 
-	blks, err := s.loadBlocks(ctx, startState.Slot()+1, targetSlot, replayRoot)
+	blks, err := s.loadBlocks(ctx, startState.Slot()+1, targetSlot, blockRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not load blocks for hot state using root")
 	}
 
 	replayBlockCount.Observe(float64(len(blks)))
 
-	return s.replayBlocks(ctx, startState, blks, targetSlot)
+	startState, err = s.replayBlocks(ctx, startState, blks, targetSlot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not replay blocks")
+	}
+	return ReplayProcessSlots(ctx, startState, targetSlot)
 }
 
 // blockRootForExecHash resolves a Gloas execution block hash to the corresponding

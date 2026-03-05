@@ -266,36 +266,20 @@ func ApplyExecutionPayloadStateMutations(
 func ApplyBlindedExecutionPayloadEnvelopeForStateGen(
 	ctx context.Context,
 	st state.BeaconState,
+	previousStateRoot [32]byte,
 	signedEnvelope *ethpb.SignedBlindedExecutionPayloadEnvelope,
 ) error {
-	if signedEnvelope == nil || signedEnvelope.Message == nil {
-		return errors.New("blinded execution payload envelope is nil")
+	if signedEnvelope == nil {
+		return nil
 	}
 	envelope := signedEnvelope.Message
 
 	latestHeader := st.LatestBlockHeader()
-	if len(latestHeader.StateRoot) == 0 || bytes.Equal(latestHeader.StateRoot, make([]byte, 32)) {
-		previousStateRoot, err := st.HashTreeRoot(ctx)
-		if err != nil {
-			return errors.Wrap(err, "could not compute state root")
-		}
-		latestHeader.StateRoot = previousStateRoot[:]
-		if err := st.SetLatestBlockHeader(latestHeader); err != nil {
-			return errors.Wrap(err, "could not set latest block header")
-		}
+	latestHeader.StateRoot = previousStateRoot[:]
+	if err := st.SetLatestBlockHeader(latestHeader); err != nil {
+		return errors.Wrap(err, "could not set latest block header")
 	}
 
-	blockHeaderRoot, err := latestHeader.HashTreeRoot()
-	if err != nil {
-		return errors.Wrap(err, "could not compute block header root")
-	}
-	if !bytes.Equal(envelope.BeaconBlockRoot, blockHeaderRoot[:]) {
-		return errors.Errorf(
-			"blinded envelope beacon block root does not match state latest block header root: envelope=%#x, header=%#x",
-			envelope.BeaconBlockRoot,
-			blockHeaderRoot,
-		)
-	}
 	if envelope.Slot != st.Slot() {
 		return errors.Errorf("blinded envelope slot does not match state slot: envelope=%d, state=%d", envelope.Slot, st.Slot())
 	}
@@ -340,25 +324,9 @@ func ApplyBlindedExecutionPayloadEnvelopeForStateGen(
 		return errors.Wrap(err, "could not set execution payload availability")
 	}
 
-	if len(envelope.BlockHash) != 32 {
-		return errors.Errorf("invalid blinded envelope block hash length: %d", len(envelope.BlockHash))
-	}
-	var payloadBlockHash [32]byte
-	copy(payloadBlockHash[:], envelope.BlockHash)
+	payloadBlockHash := [32]byte(envelope.BlockHash)
 	if err := st.SetLatestBlockHash(payloadBlockHash); err != nil {
 		return errors.Wrap(err, "could not set latest block hash")
-	}
-
-	if len(envelope.StateRoot) == 32 {
-		gotRoot, err := st.HashTreeRoot(ctx)
-		if err != nil {
-			return errors.Wrap(err, "could not get hash tree root")
-		}
-		var expectedRoot [32]byte
-		copy(expectedRoot[:], envelope.StateRoot)
-		if gotRoot != expectedRoot {
-			return errors.Errorf("state root mismatch after applying blinded envelope: expected %#x, got %#x", expectedRoot, gotRoot)
-		}
 	}
 
 	return nil
