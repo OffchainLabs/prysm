@@ -316,10 +316,11 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
 			},
 		},
+		PrevDependentRoot: bytesutil.PadTo([]byte{0x01, 0x02, 0x03}, fieldparams.RootLength),
+		CurrDependentRoot: bytesutil.PadTo([]byte{0x04, 0x05, 0x06}, fieldparams.RootLength),
 	}
-	ds := testDutyStore(dutiesContainer.CurrentEpochDuties[0])
-	ds.prevDependentRoot = bytesutil.PadTo([]byte{0x01, 0x02, 0x03}, fieldparams.RootLength)
-	ds.currDependentRoot = bytesutil.PadTo([]byte{0x04, 0x05, 0x06}, fieldparams.RootLength)
+	ds := &dutyStore{}
+	ds.SetLegacy(dutiesContainer)
 	v := &validator{
 		km:              newMockKeymanager(t, randKeypair(t)),
 		validatorClient: client,
