@@ -343,7 +343,7 @@ func (p *PartialColumnBroadcaster) handleGossipForPeer(req gossipForPeer) (parti
 		return req.peerState, nil, nil, errors.New("not tracking topic for group")
 	}
 	verifier, ok := topicStore[req.groupID]
-	if !ok || verifier == nil || verifier.Column == nil {
+	if !ok || verifier == nil {
 		return req.peerState, nil, nil, errors.New("not tracking topic for group")
 	}
 	// we're not requesting a message here as this will be used to emit gossip. So, we pass requested message as false.
@@ -492,6 +492,11 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		if headerWasCached {
 			verifier, err = p.partialVerifierFromTrustedColumn(&newColumn)
 			if err != nil {
+				log.WithError(err).WithFields(logrus.Fields{
+					"topic":          topicID,
+					"columnIndex":    columnIndex,
+					"numCommitments": len(header.KzgCommitments),
+				}).Error("Failed to create partial column verifier from header")
 				return err
 			}
 		} else {
@@ -506,9 +511,6 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 				// Both REJECT and IGNORE: don't process further
 				return nil
 			}
-		}
-		if verifier == nil || verifier.Column == nil {
-			return errors.New("partial verifier is nil")
 		}
 
 		if !headerWasCached {
@@ -545,7 +547,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		shouldRepublish = true
 	}
 
-	if ourVerifier == nil || ourVerifier.Column == nil {
+	if ourVerifier == nil {
 		// We don't have a partial column for this. Can happen if we got cells
 		// without a header.
 		return nil
@@ -628,7 +630,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 
 func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) error {
 	ourVerifier := p.getPartialVerifier(cells.topic, cells.group)
-	if ourVerifier == nil || ourVerifier.Column == nil {
+	if ourVerifier == nil {
 		return errors.New("data column not found for verified cells")
 	}
 	ourDataColumn := ourVerifier.Column
@@ -715,7 +717,7 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 	}
 
 	existingVerifier := topicStore[string(groupIDBytes)]
-	if existingVerifier != nil && existingVerifier.Column != nil {
+	if existingVerifier != nil {
 		existing := existingVerifier.Column
 		var extended bool
 		// Extend the existing column with cells being published here.
@@ -745,9 +747,6 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 		verifier, err := p.partialVerifierFromTrustedColumn(&c)
 		if err != nil {
 			return columnCompleted, err
-		}
-		if verifier == nil || verifier.Column == nil {
-			return columnCompleted, errors.New("partial verifier from trusted column is nil")
 		}
 		topicStore[string(groupIDBytes)] = verifier
 		existingVerifier = verifier

@@ -1191,11 +1191,6 @@ func TestPartialDataColumn_Complete(t *testing.T) {
 			p:      mustNewPartialColumn(t, 2, 0, 1),
 			wantOK: true,
 		},
-		{
-			name:   "complete with invalid signed header is still complete",
-			p:      mustNewPartialColumnWithSigLen(t, 2, 0, 0, 1),
-			wantOK: true,
-		},
 	}
 
 	for _, tt := range tests {

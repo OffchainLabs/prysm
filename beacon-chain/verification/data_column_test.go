@@ -815,6 +815,193 @@ func TestDataColumnsSidecarKzgProofVerified(t *testing.T) {
 	}
 }
 
+func TestPartialColumnVerifierComplete(t *testing.T) {
+	validFieldsErr := errors.New("invalid fields")
+	testCases := []struct {
+		name           string
+		included       []uint64
+		markIncluded   bool
+		validFieldsErr error
+		verifiedCols   []blocks.RODataColumn
+		wantComplete   bool
+		wantErr        error
+	}{
+		{
+			name:         "incomplete column",
+			included:     []uint64{0},
+			wantComplete: false,
+		},
+		{
+			name:         "complete happy path",
+			included:     []uint64{0, 1},
+			markIncluded: true,
+			verifiedCols: []blocks.RODataColumn{
+				{},
+			},
+			wantComplete: true,
+		},
+		{
+			name:           "valid fields failure",
+			included:       []uint64{0, 1},
+			markIncluded:   true,
+			validFieldsErr: validFieldsErr,
+			wantComplete:   false,
+			wantErr:        validFieldsErr,
+		},
+		{
+			name:         "missing verified cell",
+			included:     []uint64{0, 1},
+			verifiedCols: []blocks.RODataColumn{{}},
+			wantComplete: false,
+			wantErr:      ErrSidecarKzgProofInvalid,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			verifier := &MockDataColumnsVerifier{
+				ErrValidFields: tc.validFieldsErr,
+			}
+			verifier.AppendRODataColumns(tc.verifiedCols...)
+
+			pv := NewPartialColumnVerifier(verifier, buildTestPartialColumnForVerifier(t, 2, tc.included))
+			if tc.markIncluded {
+				pv.MarkIncludedCellsVerified()
+			}
+
+			_, complete, err := pv.Complete()
+			require.Equal(t, tc.wantComplete, complete)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestPartialColumnVerifierSidecarKzgProofVerified(t *testing.T) {
+	testCases := []struct {
+		name            string
+		verifiedIndices []uint64
+		wantErr         bool
+		errContains     string
+	}{
+		{
+			name:            "happy path",
+			verifiedIndices: []uint64{0, 1},
+			wantErr:         false,
+		},
+		{
+			name:            "missing verified cell",
+			verifiedIndices: []uint64{0},
+			wantErr:         true,
+			errContains:     "missing verified cell at index 1",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pv := NewPartialColumnVerifier(&MockDataColumnsVerifier{}, buildTestPartialColumnForVerifier(t, 2, nil))
+			for _, index := range tc.verifiedIndices {
+				require.Equal(t, true, pv.ExtendFromVerifiedCell(index, []byte{byte(index + 1)}, []byte{byte(index + 2)}))
+			}
+
+			err := pv.SidecarKzgProofVerified()
+			if tc.wantErr {
+				require.ErrorIs(t, err, ErrSidecarKzgProofInvalid)
+				require.ErrorContains(t, tc.errContains, err)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestPartialColumnVerifierExtendFromVerifiedCell(t *testing.T) {
+	testCases := []struct {
+		name            string
+		initialIncluded []uint64
+		cellIndex       uint64
+		cell            []byte
+		proof           []byte
+		wantExtended    bool
+		wantMarked      bool
+		wantCell        []byte
+		wantProof       []byte
+	}{
+		{
+			name:            "happy path",
+			initialIncluded: nil,
+			cellIndex:       1,
+			cell:            []byte{9},
+			proof:           []byte{8},
+			wantExtended:    true,
+			wantMarked:      true,
+			wantCell:        []byte{9},
+			wantProof:       []byte{8},
+		},
+		{
+			name:            "already included cell",
+			initialIncluded: []uint64{1},
+			cellIndex:       1,
+			cell:            []byte{9},
+			proof:           []byte{8},
+			wantExtended:    false,
+			wantMarked:      false,
+			wantCell:        []byte{2},
+			wantProof:       []byte{3},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pv := NewPartialColumnVerifier(&MockDataColumnsVerifier{}, buildTestPartialColumnForVerifier(t, 2, tc.initialIncluded))
+
+			extended := pv.ExtendFromVerifiedCell(tc.cellIndex, tc.cell, tc.proof)
+			require.Equal(t, tc.wantExtended, extended)
+			require.Equal(t, tc.wantMarked, pv.verifiedCellByIndex[tc.cellIndex])
+
+			require.Equal(t, true, reflect.DeepEqual(tc.wantCell, pv.Column.Column[tc.cellIndex]))
+			require.Equal(t, true, reflect.DeepEqual(tc.wantProof, pv.Column.KzgProofs[tc.cellIndex]))
+		})
+	}
+}
+
+func TestPartialColumnVerifierMarkIncludedCellsVerified(t *testing.T) {
+	testCases := []struct {
+		name         string
+		included     []uint64
+		wantVerified map[uint64]bool
+	}{
+		{
+			name:     "happy path",
+			included: []uint64{1, 3},
+			wantVerified: map[uint64]bool{
+				1: true,
+				3: true,
+			},
+		},
+		{
+			name:         "no included cells",
+			included:     nil,
+			wantVerified: map[uint64]bool{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pv := NewPartialColumnVerifier(&MockDataColumnsVerifier{}, buildTestPartialColumnForVerifier(t, 4, tc.included))
+			pv.MarkIncludedCellsVerified()
+
+			for i := range uint64(4) {
+				require.Equal(t, tc.wantVerified[i], pv.verifiedCellByIndex[i])
+			}
+		})
+	}
+}
+
 func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 	const (
 		columnSlot = 1
@@ -905,6 +1092,45 @@ func generateTestDataColumnsWithProposer(t *testing.T, parent [fieldparams.RootL
 	require.NoError(t, err)
 
 	return roDataColumnSidecars
+}
+
+func buildTestPartialColumnForVerifier(t *testing.T, nCommitments int, included []uint64) *blocks.PartialDataColumn {
+	t.Helper()
+
+	commitments := make([][]byte, nCommitments)
+	for i := range nCommitments {
+		commitments[i] = make([]byte, fieldparams.KzgCommitmentSize)
+		commitments[i][0] = byte(i + 1)
+	}
+
+	inclusionProof := [][]byte{
+		make([]byte, fieldparams.RootLength),
+		make([]byte, fieldparams.RootLength),
+		make([]byte, fieldparams.RootLength),
+		make([]byte, fieldparams.RootLength),
+	}
+
+	col, err := blocks.NewPartialDataColumn(
+		&ethpb.SignedBeaconBlockHeader{
+			Header: &ethpb.BeaconBlockHeader{
+				ParentRoot: make([]byte, fieldparams.RootLength),
+				StateRoot:  make([]byte, fieldparams.RootLength),
+				BodyRoot:   make([]byte, fieldparams.RootLength),
+			},
+			Signature: make([]byte, fieldparams.BLSSignatureLength),
+		},
+		0,
+		commitments,
+		inclusionProof,
+	)
+	require.NoError(t, err)
+
+	for _, idx := range included {
+		extended := col.ExtendFromVerifiedCell(idx, []byte{byte(idx + 1)}, []byte{byte(idx + 2)})
+		require.Equal(t, true, extended)
+	}
+
+	return &col
 }
 
 func TestColumnRequirementSatisfaction(t *testing.T) {

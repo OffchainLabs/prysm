@@ -90,10 +90,6 @@ func NewPartialColumnVerifier(dv DataColumnsVerifier, col *blocks.PartialDataCol
 }
 
 func (pv *PartialColumnVerifier) Complete() (blocks.VerifiedRODataColumn, bool, error) {
-	if pv == nil || pv.Column == nil {
-		return blocks.VerifiedRODataColumn{}, false, errors.New("partial column verifier is nil")
-	}
-
 	if !pv.Column.IsComplete() {
 		return blocks.VerifiedRODataColumn{}, false, nil
 	}
@@ -118,13 +114,6 @@ func (pv *PartialColumnVerifier) Complete() (blocks.VerifiedRODataColumn, bool, 
 }
 
 func (pv *PartialColumnVerifier) SidecarKzgProofVerified() error {
-	if pv == nil || pv.Column == nil {
-		return errors.Wrap(ErrSidecarKzgProofInvalid, "partial column verifier is nil")
-	}
-	if pv.verifiedCellByIndex == nil {
-		pv.verifiedCellByIndex = make(map[uint64]bool)
-	}
-
 	nCells := uint64(len(pv.Column.KzgCommitments))
 	for i := range nCells {
 		if !pv.verifiedCellByIndex[i] {
@@ -137,12 +126,6 @@ func (pv *PartialColumnVerifier) SidecarKzgProofVerified() error {
 }
 
 func (pv *PartialColumnVerifier) ExtendFromVerifiedCell(cellIndex uint64, cell, proof []byte) bool {
-	if pv == nil || pv.Column == nil {
-		return false
-	}
-	if pv.verifiedCellByIndex == nil {
-		pv.verifiedCellByIndex = make(map[uint64]bool)
-	}
 	extended := pv.Column.ExtendFromVerifiedCell(cellIndex, cell, proof)
 	if extended {
 		pv.verifiedCellByIndex[cellIndex] = true
@@ -151,12 +134,6 @@ func (pv *PartialColumnVerifier) ExtendFromVerifiedCell(cellIndex uint64, cell, 
 }
 
 func (pv *PartialColumnVerifier) MarkIncludedCellsVerified() {
-	if pv == nil || pv.Column == nil {
-		return
-	}
-	if pv.verifiedCellByIndex == nil {
-		pv.verifiedCellByIndex = make(map[uint64]bool)
-	}
 	for i := range pv.Column.Included.Len() {
 		if pv.Column.Included.BitAt(i) {
 			pv.verifiedCellByIndex[i] = true
@@ -452,7 +429,7 @@ func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.
 		}
 
 		if !dv.fc.HasNode(parentRoot) {
-			return columnErrBuilder(errors.Wrapf(ErrSidecarParentNotSeen, "parent root: %#x", parentRoot))
+			return columnErrBuilder(errors.Wrapf(errSidecarParentNotSeen, "parent root: %#x", parentRoot))
 		}
 	}
 

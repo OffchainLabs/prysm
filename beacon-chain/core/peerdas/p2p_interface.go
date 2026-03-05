@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/pkg/errors"
 )
@@ -198,18 +197,6 @@ func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
 		sidecar.SignedBlockHeader.Header.BodyRoot,
 		sidecar.KzgCommitments,
 		sidecar.KzgCommitmentsInclusionProof,
-	)
-}
-
-// VerifyPartialDataColumnHeaderInclusionProof verifies if the KZG commitments are included in the beacon block.
-func VerifyPartialDataColumnHeaderInclusionProof(header *ethpb.PartialDataColumnHeader) error {
-	if header.SignedBlockHeader == nil || header.SignedBlockHeader.Header == nil {
-		return ErrNilBlockHeader
-	}
-	return verifyKzgCommitmentsInclusionProof(
-		header.SignedBlockHeader.Header.BodyRoot,
-		header.KzgCommitments,
-		header.KzgCommitmentsInclusionProof,
 	)
 }
 

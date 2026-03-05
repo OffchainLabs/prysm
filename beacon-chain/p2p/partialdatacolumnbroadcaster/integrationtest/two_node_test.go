@@ -151,9 +151,6 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		}
 
 		partialVerifierFromHeader := func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
-			if col == nil {
-				return nil, false, fmt.Errorf("nil partial column")
-			}
 			if col.SignedBlockHeader == nil || col.SignedBlockHeader.Header == nil {
 				return nil, true, fmt.Errorf("nil signed block header")
 			}
@@ -168,9 +165,6 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		}
 
 		partialVerifierFromTrustedColumn := func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
-			if col == nil {
-				return nil, fmt.Errorf("nil partial column")
-			}
 			return newVerifier(col, true)
 		}
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -26,12 +28,12 @@ func TestService_PartialVerifierFromTrustedColumn(t *testing.T) {
 		{
 			name:    "nil column",
 			col:     nil,
-			wantErr: errNilPartialDataColumn,
+			wantErr: errHeaderNil,
 		},
 		{
 			name:    "nil signed header",
 			col:     &blocks.PartialDataColumn{DataColumnSidecar: &ethpb.DataColumnSidecar{}},
-			wantErr: errNilPartialDataColumn,
+			wantErr: errHeaderNil,
 		},
 		{
 			name:    "empty commitments",
@@ -85,9 +87,27 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 	unavailableParentSlotErr := errors.Wrap(verification.ErrSidecarParentSlotUnavailable, "slot lookup failed")
 	invalidVerifierErr := errors.Wrap(verification.ErrInvalid, "invalid verification")
 
+	db := dbtest.SetupDB(t)
+
+	// chainWithParent returns a mock chain where HasBlock returns true for the zero parent root.
+	chainWithParent := func() *mock.ChainService {
+		return &mock.ChainService{
+			DB: db,
+			InitSyncBlockRoots: map[[32]byte]bool{
+				{}: true, // zero root matches buildPartialColumn's parent root
+			},
+		}
+	}
+
+	// chainWithoutParent returns a mock chain where HasBlock returns false.
+	chainWithoutParent := func() *mock.ChainService {
+		return &mock.ChainService{DB: db}
+	}
+
 	tests := []struct {
 		name         string
 		col          *blocks.PartialDataColumn
+		chain        *mock.ChainService
 		verifier     verification.MockDataColumnsVerifier
 		wantErr      error
 		wantReject   bool
@@ -96,7 +116,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 		{
 			name:       "nil column",
 			col:        nil,
-			wantErr:    errNilPartialDataColumn,
+			wantErr:    errHeaderNil,
 			wantReject: false,
 		},
 		{
@@ -122,8 +142,17 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 			expectResult: true,
 		},
 		{
+			name:         "parent not seen is ignore",
+			col:          buildPartialColumn(t, 1, nil),
+			chain:        chainWithoutParent(),
+			wantErr:      errHeaderParentNotSeen,
+			wantReject:   false,
+			expectResult: true,
+		},
+		{
 			name:         "parent seen is ignore",
 			col:          buildPartialColumn(t, 1, nil),
+			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrSidecarParentSeen: genericErr},
 			wantErr:      genericErr,
 			wantReject:   false,
@@ -132,6 +161,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 		{
 			name:         "parent valid is reject",
 			col:          buildPartialColumn(t, 1, nil),
+			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrSidecarParentValid: genericErr},
 			wantErr:      genericErr,
 			wantReject:   true,
@@ -140,6 +170,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 		{
 			name:         "parent slot unavailable is ignore",
 			col:          buildPartialColumn(t, 1, nil),
+			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrSidecarParentSlotLower: unavailableParentSlotErr},
 			wantErr:      unavailableParentSlotErr,
 			wantReject:   false,
@@ -148,6 +179,7 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 		{
 			name:         "parent slot lower invalid is reject",
 			col:          buildPartialColumn(t, 1, nil),
+			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrSidecarParentSlotLower: genericErr},
 			wantErr:      genericErr,
 			wantReject:   true,
@@ -156,38 +188,43 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 		{
 			name:         "proposer expected verification failure is reject",
 			col:          buildPartialColumn(t, 1, nil),
+			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrSidecarProposerExpected: invalidVerifierErr},
 			wantErr:      invalidVerifierErr,
 			wantReject:   true,
 			expectResult: true,
 		},
 		{
-			name:         "proposer expected non verification failure is ignore",
+			name:         "proposer expected non verification failure is reject",
 			col:          buildPartialColumn(t, 1, nil),
+			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrSidecarProposerExpected: genericErr},
 			wantErr:      genericErr,
-			wantReject:   false,
+			wantReject:   true,
 			expectResult: true,
 		},
 		{
 			name:         "invalid proposer signature is reject",
 			col:          buildPartialColumn(t, 1, nil),
+			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrValidProposerSignature: verification.ErrInvalidProposerSignature},
 			wantErr:      verification.ErrInvalidProposerSignature,
 			wantReject:   true,
 			expectResult: true,
 		},
 		{
-			name:         "signature infra failure is ignore",
+			name:         "signature infra failure is reject",
 			col:          buildPartialColumn(t, 1, nil),
+			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{ErrValidProposerSignature: genericErr},
 			wantErr:      genericErr,
-			wantReject:   false,
+			wantReject:   true,
 			expectResult: true,
 		},
 		{
 			name:         "nominal",
 			col:          buildPartialColumn(t, 1, nil),
+			chain:        chainWithParent(),
 			verifier:     verification.MockDataColumnsVerifier{},
 			wantErr:      nil,
 			wantReject:   false,
@@ -199,6 +236,9 @@ func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			service := &Service{
 				newColumnsVerifier: testNewColumnsVerifier(tc.verifier),
+			}
+			if tc.chain != nil {
+				service.cfg = &config{chain: tc.chain}
 			}
 			got, reject, err := service.validatePartialDataColumnHeader(ctx, tc.col)
 			require.ErrorIs(t, tc.wantErr, err)
