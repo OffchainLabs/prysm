@@ -153,7 +153,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 
 	// Have we been finalizing? Should we start saving hot states to db?
 	if err := s.checkSaveHotStateDB(ctx); err != nil {
-		return errors.Wrap(err, "check save hot state db")
+		log.WithError(err).Error("Could not check save hot state DB")
 	}
 
 	// We apply the same heuristic to some of our more important caches.
