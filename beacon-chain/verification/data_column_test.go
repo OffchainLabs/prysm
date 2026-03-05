@@ -818,13 +818,13 @@ func TestDataColumnsSidecarKzgProofVerified(t *testing.T) {
 func TestPartialColumnVerifierComplete(t *testing.T) {
 	validFieldsErr := errors.New("invalid fields")
 	testCases := []struct {
-		name           string
-		included       []uint64
-		markIncluded   bool
-		validFieldsErr error
-		verifiedCols   []blocks.RODataColumn
 		wantComplete   bool
+		markIncluded   bool
 		wantErr        error
+		validFieldsErr error
+		name           string
+		verifiedCols   []blocks.RODataColumn
+		included       []uint64
 	}{
 		{
 			name:         "incomplete column",
