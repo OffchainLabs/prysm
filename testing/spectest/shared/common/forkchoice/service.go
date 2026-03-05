@@ -147,6 +147,3 @@ func (m *engineMock) GetClientVersionV1(context.Context) ([]*structs.ClientVersi
 	return nil, nil
 }
 
-func (m *engineMock) GetClientCommunicationChannelsV1(context.Context) ([]*structs.CommunicationChannel, error) {
-	return nil, nil
-}

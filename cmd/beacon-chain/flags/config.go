@@ -18,7 +18,7 @@ type GlobalFlags struct {
 	Supernode                       bool
 	SemiSupernode                   bool
 	DisableGetBlobsV2               bool
-	DisableSSZRest                  bool
+	SszRestUrl                      string
 	MinimumSyncPeers                int
 	MinimumPeersPerSubnet           int
 	MaxConcurrentDials              int
@@ -79,9 +79,9 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 		cfg.DisableGetBlobsV2 = true
 	}
 
-	if ctx.Bool(DisableSSZRest.Name) {
-		log.Warning("Disabling SSZ-REST Engine API transport (EIP-8161)")
-		cfg.DisableSSZRest = true
+	if url := ctx.String(SszRestUrl.Name); url != "" {
+		log.WithField("url", url).Info("SSZ-REST Engine API transport URL configured (EIP-8161)")
+		cfg.SszRestUrl = url
 	}
 
 	// State-diff-exponents

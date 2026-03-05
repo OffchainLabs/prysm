@@ -49,7 +49,6 @@ var (
 		GetPayloadBodiesByHashV1,
 		GetPayloadBodiesByRangeV1,
 		GetBlobsV1,
-		GetClientCommunicationChannelsV1,
 	}
 
 	electraEngineEndpoints = []string{
@@ -113,11 +112,6 @@ const (
 	GetBlobsV2 = "engine_getBlobsV2"
 	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
 	GetClientVersionV1 = "engine_getClientVersionV1"
-	// GetClientCommunicationChannelsV1 is the engine_getClientCommunicationChannelsV1 method (EIP-8160).
-	// Deprecated: Use ExchangeCapabilitiesV2 instead. Kept for backward compatibility.
-	GetClientCommunicationChannelsV1 = "engine_getClientCommunicationChannelsV1"
-	// ExchangeCapabilitiesV2 is the engine_exchangeCapabilitiesV2 method (EIP-8160).
-	ExchangeCapabilitiesV2 = "engine_exchangeCapabilitiesV2"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
 	defaultEngineTimeout = time.Second
 )
@@ -155,7 +149,6 @@ type EngineCaller interface {
 	ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error)
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
 	GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error)
-	GetClientCommunicationChannelsV1(ctx context.Context) ([]*structs.CommunicationChannel, error)
 }
 
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
@@ -397,22 +390,10 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	}
 
 	if elSupportedEndpointsSlice == nil {
-		// Try V2 first (EIP-8160) — returns capabilities + supportedProtocols.
-		var v2Result structs.ExchangeCapabilitiesV2Response
-		if err := s.rpcClient.CallContext(ctx, &v2Result, ExchangeCapabilitiesV2, supportedEngineEndpoints); err == nil {
-			elSupportedEndpointsSlice = v2Result.Capabilities
-			// Use supportedProtocols to discover SSZ-REST.
-			if len(v2Result.SupportedProtocols) > 0 {
-				s.communicationChannels = v2Result.SupportedProtocols
-				s.setupSSZRestClient()
-			}
-		} else {
-			// Fall back to V1.
-			log.WithError(err).Debug("engine_exchangeCapabilitiesV2 not supported, falling back to V1")
-			elSupportedEndpointsSlice = make([]string, len(supportedEngineEndpoints))
-			if err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints); err != nil {
-				return nil, handleRPCError(err)
-			}
+		// Just use V1 exchange capabilities.
+		err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints)
+		if err != nil {
+			return nil, handleRPCError(err)
 		}
 	}
 
@@ -712,35 +693,6 @@ func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVers
 
 	if len(result) == 0 {
 		return nil, errors.New("execution client returned no result")
-	}
-
-	return result, nil
-}
-
-// GetClientCommunicationChannelsV1 calls engine_getClientCommunicationChannelsV1 (EIP-8160)
-// to discover supported communication protocols and endpoints from the execution layer.
-// Per EIP-8161, it prefers SSZ-REST transport when available, falling back to JSON-RPC.
-func (s *Service) GetClientCommunicationChannelsV1(ctx context.Context) ([]*structs.CommunicationChannel, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientCommunicationChannelsV1")
-	defer span.End()
-
-	// EIP-8161: Try SSZ-REST first if available.
-	if s.isSSZRestAvailable() {
-		result, err := s.getClientCommunicationChannelsSSZRest(ctx)
-		if err == nil {
-			return result, nil
-		}
-		if isNetworkError(err) {
-			log.WithError(err).Debug("SSZ-REST get_client_communication_channels failed, falling back to JSON-RPC")
-		} else {
-			return nil, err
-		}
-	}
-
-	var result []*structs.CommunicationChannel
-	err := s.rpcClient.CallContext(ctx, &result, GetClientCommunicationChannelsV1)
-	if err != nil {
-		return nil, handleRPCError(err)
 	}
 
 	return result, nil

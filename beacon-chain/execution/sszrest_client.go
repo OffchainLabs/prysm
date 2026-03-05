@@ -8,10 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -29,14 +27,8 @@ import (
 )
 
 const (
-	// sszRestProtocol is the protocol identifier for SSZ-REST in EIP-8160 communication channels.
-	sszRestProtocol = "ssz_rest"
-
 	// sszContentType is the Content-Type header used for SSZ-REST requests/responses.
 	sszContentType = "application/octet-stream"
-
-	// channelRefreshInterval is how often to refresh communication channels from the EL.
-	channelRefreshInterval = 5 * time.Minute
 
 	// maxResponseSize is the maximum allowed SSZ response body size (32 MB).
 	maxResponseSize = 32 * 1024 * 1024
@@ -143,99 +135,19 @@ func handleSSZRestError(e *sszRestError) error {
 	}
 }
 
-// sszRestAvailableURL returns the SSZ-REST base URL from the discovered communication channels,
-// or empty string if SSZ-REST is not available or disabled.
-func sszRestAvailableURL(channels []*structs.CommunicationChannel) string {
-	if flags.Get().DisableSSZRest {
-		return ""
-	}
-	for _, ch := range channels {
-		if ch.Protocol == sszRestProtocol {
-			return ch.URL
-		}
-	}
-	return ""
-}
-
-// refreshCommunicationChannels re-fetches communication channels from the EL
-// and updates the SSZ-REST client state accordingly.
-// Prefers engine_exchangeCapabilitiesV2 (EIP-8160), falls back to V1 channels method.
-func (s *Service) refreshCommunicationChannels() {
-	ctx, cancel := context.WithTimeout(s.ctx, defaultEngineTimeout)
-	defer cancel()
-
-	// Try V2 first.
-	var v2Result structs.ExchangeCapabilitiesV2Response
-	if err := s.rpcClient.CallContext(ctx, &v2Result, ExchangeCapabilitiesV2, supportedEngineEndpoints); err == nil && len(v2Result.SupportedProtocols) > 0 {
-		s.communicationChannels = v2Result.SupportedProtocols
-		s.setupSSZRestClient()
-		return
-	}
-
-	// Fall back to old method.
-	channels, err := s.GetClientCommunicationChannelsV1(ctx)
-	if err != nil {
-		log.WithError(err).Debug("Could not refresh execution client communication channels")
-		return
-	}
-	s.communicationChannels = channels
-	s.setupSSZRestClient()
-}
-
-// setupSSZRestClient checks the discovered communication channels for ssz_rest
-// and creates an HTTP client for SSZ-REST communication if available.
+// setupSSZRestClient checks the --ssz-rest-url flag and creates an HTTP client
+// for SSZ-REST communication if a URL is configured.
 func (s *Service) setupSSZRestClient() {
-	baseURL := sszRestAvailableURL(s.communicationChannels)
+	baseURL := flags.Get().SszRestUrl
 	if baseURL == "" {
 		s.sszRestClient = nil
 		return
 	}
 
-	// The EL advertises the SSZ-REST URL using its listen address (often 0.0.0.0).
-	// In containerized environments (Docker, Kurtosis), we need to replace the host
-	// with the one we already use for JSON-RPC (which routes correctly).
-	baseURL = s.resolveSSZRestURL(baseURL)
-
 	// Reuse the same JWT authentication as JSON-RPC.
 	httpClient := s.cfg.currHttpEndpoint.HttpClient()
 	s.sszRestClient = newSSZRestClient(baseURL, httpClient)
 	log.WithField("url", baseURL).Info("SSZ-REST Engine API transport enabled (EIP-8161)")
-}
-
-// resolveSSZRestURL replaces the host in the SSZ-REST URL with the host from the
-// current engine endpoint, keeping the port from the advertised URL. This handles
-// containerized environments where the EL advertises 0.0.0.0 as its listen address.
-func (s *Service) resolveSSZRestURL(advertisedURL string) string {
-	sszURL, err := url.Parse(advertisedURL)
-	if err != nil {
-		return advertisedURL
-	}
-
-	// Extract the engine endpoint host (e.g., "el-1-erigon-prysm" from "el-1-erigon-prysm:8551")
-	engineURL := s.cfg.currHttpEndpoint.Url
-	engineParsed, err := url.Parse(engineURL)
-	if err != nil {
-		return advertisedURL
-	}
-
-	engineHost := engineParsed.Hostname()
-	if engineHost == "" {
-		return advertisedURL
-	}
-
-	// Only replace if the advertised host is a wildcard address
-	sszHost := sszURL.Hostname()
-	if sszHost == "0.0.0.0" || sszHost == "::" || sszHost == "" {
-		sszPort := sszURL.Port()
-		if sszPort != "" {
-			sszURL.Host = engineHost + ":" + sszPort
-		} else {
-			sszURL.Host = engineHost
-		}
-		return sszURL.String()
-	}
-
-	return advertisedURL
 }
 
 // isSSZRestAvailable returns true if the SSZ-REST client is configured and ready to use.
@@ -502,17 +414,4 @@ func (s *Service) getClientVersionSSZRest(ctx context.Context) ([]*structs.Clien
 	return unmarshalClientVersionResponse(respBody)
 }
 
-// getClientCommunicationChannelsSSZRest sends a GetClientCommunicationChannels request via SSZ-REST.
-func (s *Service) getClientCommunicationChannelsSSZRest(ctx context.Context) ([]*structs.CommunicationChannel, error) {
-	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientCommunicationChannelsSSZRest")
-	defer span.End()
-
-	// Request body is empty per EIP-8161.
-	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v1/get_client_communication_channels", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return unmarshalCommunicationChannelsResponse(respBody)
-}
 

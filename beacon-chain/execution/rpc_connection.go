@@ -79,24 +79,12 @@ func (s *Service) pollConnectionStatus(ctx context.Context) {
 			}
 			log.WithField("endpoint", logs.MaskCredentialsLogging(s.cfg.currHttpEndpoint.Url)).Info("Connected to new endpoint")
 
-			// EIP-8160: ExchangeCapabilitiesV2 returns both capabilities and supportedProtocols.
-			// SSZ-REST client is set up inside ExchangeCapabilities if V2 returns protocols.
 			c, err := s.ExchangeCapabilities(ctx)
 			if err != nil {
 				errorLogger(err, "Could not exchange capabilities with execution client")
 			}
 			s.capabilityCache.save(c)
-
-			// If ExchangeCapabilitiesV2 didn't return protocols (V1 fallback), try the old method.
-			if s.sszRestClient == nil {
-				channels, err := s.GetClientCommunicationChannelsV1(ctx)
-				if err != nil {
-					log.WithError(err).Debug("Could not get execution client communication channels")
-				} else {
-					s.communicationChannels = channels
-					s.setupSSZRestClient()
-				}
-			}
+			s.setupSSZRestClient()
 
 			return
 		case <-s.ctx.Done():

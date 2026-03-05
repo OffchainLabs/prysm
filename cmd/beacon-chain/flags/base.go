@@ -368,10 +368,11 @@ var (
 		Usage:  "Disables the engine_getBlobsV2 usage.",
 		Hidden: true,
 	}
-	// DisableSSZRest disables the SSZ-REST Engine API transport (EIP-8161),
-	// forcing all Engine API calls to use JSON-RPC only.
-	DisableSSZRest = &cli.BoolFlag{
-		Name:  "disable-ssz-rest",
-		Usage: "Disables the SSZ-REST Engine API transport (EIP-8161), forcing JSON-RPC only.",
+	// SszRestUrl is the URL of the SSZ-REST Engine API server on the execution client.
+	// When set, enables SSZ-REST transport (EIP-8161).
+	SszRestUrl = &cli.StringFlag{
+		Name:  "ssz-rest-url",
+		Usage: "URL of the SSZ-REST Engine API server on the execution client (e.g., http://localhost:8552). When set, enables SSZ-REST transport (EIP-8161).",
+		Value: "",
 	}
 )

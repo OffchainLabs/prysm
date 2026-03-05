@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -19,43 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 )
-
-func TestSSZRestAvailableURL(t *testing.T) {
-	// Save and restore global flags state.
-	origFlags := flags.Get()
-	defer func() { flags.Init(origFlags) }()
-
-	t.Run("returns URL when ssz_rest channel exists", func(t *testing.T) {
-		flags.Init(&flags.GlobalFlags{DisableSSZRest: false})
-		channels := []*structs.CommunicationChannel{
-			{Protocol: "json_rpc", URL: "localhost:8551"},
-			{Protocol: "ssz_rest", URL: "http://localhost:6367"},
-		}
-		got := sszRestAvailableURL(channels)
-		assert.Equal(t, "http://localhost:6367", got)
-	})
-	t.Run("returns empty when no ssz_rest channel", func(t *testing.T) {
-		flags.Init(&flags.GlobalFlags{DisableSSZRest: false})
-		channels := []*structs.CommunicationChannel{
-			{Protocol: "json_rpc", URL: "localhost:8551"},
-		}
-		got := sszRestAvailableURL(channels)
-		assert.Equal(t, "", got)
-	})
-	t.Run("returns empty when disabled", func(t *testing.T) {
-		flags.Init(&flags.GlobalFlags{DisableSSZRest: true})
-		channels := []*structs.CommunicationChannel{
-			{Protocol: "ssz_rest", URL: "http://localhost:6367"},
-		}
-		got := sszRestAvailableURL(channels)
-		assert.Equal(t, "", got)
-	})
-	t.Run("returns empty on nil channels", func(t *testing.T) {
-		flags.Init(&flags.GlobalFlags{DisableSSZRest: false})
-		got := sszRestAvailableURL(nil)
-		assert.Equal(t, "", got)
-	})
-}
 
 func TestHandleSSZRestError(t *testing.T) {
 	tests := []struct {
@@ -846,92 +808,6 @@ func TestUnmarshalClientVersionResponseTooShort(t *testing.T) {
 	require.ErrorContains(t, "too short", err)
 }
 
-// Tests for communication_channels SSZ encoding/decoding.
-
-func buildCommunicationChannelsResponseSSZ(channels []structs.CommunicationChannel) []byte {
-	// Build each item's SSZ
-	items := make([][]byte, len(channels))
-	for i, ch := range channels {
-		items[i] = marshalCommunicationChannelSSZ(ch.Protocol, ch.URL)
-	}
-
-	// Outer container: offset(4) -> list data
-	const containerFixed = 4
-	listOffsetsSize := len(items) * 4
-	totalItemSize := 0
-	for _, item := range items {
-		totalItemSize += len(item)
-	}
-
-	buf := make([]byte, 0, containerFixed+listOffsetsSize+totalItemSize)
-	buf = binary.LittleEndian.AppendUint32(buf, uint32(containerFixed))
-
-	offset := uint32(listOffsetsSize)
-	for _, item := range items {
-		buf = binary.LittleEndian.AppendUint32(buf, offset)
-		offset += uint32(len(item))
-	}
-	for _, item := range items {
-		buf = append(buf, item...)
-	}
-	return buf
-}
-
-// marshalCommunicationChannelSSZ encodes a CommunicationChannel for testing.
-func marshalCommunicationChannelSSZ(protocol, url string) []byte {
-	const fixedSize = 8 // 2 offsets
-	protocolBytes := []byte(protocol)
-	urlBytes := []byte(url)
-
-	buf := make([]byte, 0, fixedSize+len(protocolBytes)+len(urlBytes))
-	offset := uint32(fixedSize)
-	buf = binary.LittleEndian.AppendUint32(buf, offset) // protocol offset
-	offset += uint32(len(protocolBytes))
-	buf = binary.LittleEndian.AppendUint32(buf, offset) // url offset
-	buf = append(buf, protocolBytes...)
-	buf = append(buf, urlBytes...)
-	return buf
-}
-
-func TestCommunicationChannelsRoundTrip(t *testing.T) {
-	channels := []structs.CommunicationChannel{
-		{Protocol: "json_rpc", URL: "http://localhost:8551"},
-		{Protocol: "ssz_rest", URL: "http://localhost:6367"},
-	}
-	data := buildCommunicationChannelsResponseSSZ(channels)
-	result, err := unmarshalCommunicationChannelsResponse(data)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(result))
-	assert.Equal(t, "json_rpc", result[0].Protocol)
-	assert.Equal(t, "http://localhost:8551", result[0].URL)
-	assert.Equal(t, "ssz_rest", result[1].Protocol)
-	assert.Equal(t, "http://localhost:6367", result[1].URL)
-}
-
-func TestCommunicationChannelsSingle(t *testing.T) {
-	channels := []structs.CommunicationChannel{
-		{Protocol: "ssz_rest", URL: "http://localhost:6367"},
-	}
-	data := buildCommunicationChannelsResponseSSZ(channels)
-	result, err := unmarshalCommunicationChannelsResponse(data)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(result))
-	assert.Equal(t, "ssz_rest", result[0].Protocol)
-	assert.Equal(t, "http://localhost:6367", result[0].URL)
-}
-
-func TestCommunicationChannelsEmpty(t *testing.T) {
-	// Empty list: container offset(4) + empty list
-	data := buildCommunicationChannelsResponseSSZ(nil)
-	result, err := unmarshalCommunicationChannelsResponse(data)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(result))
-}
-
-func TestUnmarshalCommunicationChannelsResponseTooShort(t *testing.T) {
-	_, err := unmarshalCommunicationChannelsResponse([]byte{0})
-	require.ErrorContains(t, "too short", err)
-}
 
 func TestParseCommitToBytes4(t *testing.T) {
 	t.Run("full hex string", func(t *testing.T) {
@@ -1055,34 +931,6 @@ func TestGetClientVersionSSZRestEndpoint(t *testing.T) {
 	require.Equal(t, 1, len(result))
 	assert.Equal(t, "GE", result[0].Code)
 	assert.Equal(t, "Geth", result[0].Name)
-}
-
-func TestGetClientCommunicationChannelsSSZRestEndpoint(t *testing.T) {
-	channels := []structs.CommunicationChannel{
-		{Protocol: "json_rpc", URL: "http://localhost:8551"},
-		{Protocol: "ssz_rest", URL: "http://localhost:6367"},
-	}
-	responseSSZ := buildCommunicationChannelsResponseSSZ(channels)
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/engine/v1/get_client_communication_channels", r.URL.Path)
-		// Verify empty body (per spec)
-		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		assert.Equal(t, 0, len(body))
-		w.WriteHeader(http.StatusOK)
-		_, err = w.Write(responseSSZ)
-		require.NoError(t, err)
-	}))
-	defer srv.Close()
-
-	s := &Service{sszRestClient: newSSZRestClient(srv.URL, srv.Client())}
-	result, err := s.getClientCommunicationChannelsSSZRest(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, 2, len(result))
-	assert.Equal(t, "json_rpc", result[0].Protocol)
-	assert.Equal(t, "ssz_rest", result[1].Protocol)
-	assert.Equal(t, "http://localhost:6367", result[1].URL)
 }
 
 func TestBlockValueToWei(t *testing.T) {

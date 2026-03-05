@@ -45,8 +45,6 @@ type EngineClient struct {
 	ErrorDataColumnSidecars     error
 	ClientVersion               []*structs.ClientVersionV1
 	ErrorClientVersion          error
-	CommunicationChannels       []*structs.CommunicationChannel
-	ErrorCommunicationChannels  error
 }
 
 // NewPayload --
@@ -184,7 +182,3 @@ func (e *EngineClient) GetClientVersionV1(context.Context) ([]*structs.ClientVer
 	return e.ClientVersion, e.ErrorClientVersion
 }
 
-// GetClientCommunicationChannelsV1 --
-func (e *EngineClient) GetClientCommunicationChannelsV1(context.Context) ([]*structs.CommunicationChannel, error) {
-	return e.CommunicationChannels, e.ErrorCommunicationChannels
-}
