@@ -85,17 +85,18 @@ func WaitForTextInFile(src *os.File, match string) error {
 	}
 	defer func() {
 		if ferr := f.Close(); ferr != nil {
-			if !errors.Is(err, os.ErrClosed) {
+			if !errors.Is(ferr, os.ErrClosed) {
 				log.WithError(ferr).Errorf("error calling .Close on the file handle for %s", f.Name())
 			}
 		}
 	}()
 
 	// spawn a goroutine to scan
-	errChan := make(chan error)
+	errChan := make(chan error, 1)
 	foundChan := make(chan struct{})
 	go func() {
 		t := time.NewTicker(filePollingInterval)
+		defer t.Stop()
 		// This needs to happen in a loop because, even though the other process is still appending to the log file,
 		// scanner will see EOF once it hits the end of what's been written so far.
 		for {
@@ -105,9 +106,8 @@ func WaitForTextInFile(src *os.File, match string) error {
 			case <-t.C:
 				// This is a paranoid check because I'm not sure if the underlying fd handle can be stuck mid-line
 				// when Scanner sees a partially written line at EOF. It's probably safest to just keep this.
-				_, err = f.Seek(0, io.SeekStart)
-				if err != nil {
-					errChan <- err
+				if _, serr := f.Seek(0, io.SeekStart); serr != nil {
+					errChan <- serr
 					return
 				}
 				lineScanner := bufio.NewScanner(f)
@@ -123,9 +123,10 @@ func WaitForTextInFile(src *os.File, match string) error {
 					}
 				}
 				// If Scan returned false for an error (except EOF), Err will return it.
-				if err = lineScanner.Err(); err != nil {
+				if serr := lineScanner.Err(); serr != nil {
 					// Bubble the error back up to the parent goroutine.
-					errChan <- err
+					errChan <- serr
+					return
 				}
 			}
 		}
@@ -136,8 +137,8 @@ func WaitForTextInFile(src *os.File, match string) error {
 		return fmt.Errorf("could not find requested text \"%s\" in %s before deadline", match, f.Name())
 	case <-foundChan:
 		return nil
-	case err = <-errChan:
-		return errors.Wrapf(err, "received error while scanning %s for %s", f.Name(), match)
+	case scanErr := <-errChan:
+		return errors.Wrapf(scanErr, "received error while scanning %s for %s", f.Name(), match)
 	}
 }
 
