@@ -623,19 +623,24 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 		// We treat epoch 1 differently from other epoch for two reasons:
 		// - this evaluator is not executed for epoch 0 so we have to calculate the first slot differently
 		// - for some reason the vote for the first slot in epoch 1 is 0x000... so we skip this slot
-		var isFirstSlotInVotingPeriod bool
 		if chainHead.HeadEpoch == 1 && slot%params.BeaconConfig().SlotsPerEpoch == 0 {
 			continue
 		}
-		// We skipped the first slot so we treat the second slot as the starting slot of epoch 1.
+
+		// Detect voting period boundary. Use period number instead of exact slot
+		// divisibility so that missed blocks at period boundaries don't prevent
+		// the expected vote from being reset.
+		currentPeriod := uint64(slot) / uint64(slotsPerVotingPeriod)
+		// For epoch 1, treat the second slot in the epoch as the period start
+		// (since we skip the first slot above).
+		isNewPeriod := currentPeriod != ec.ExpectedEth1DataVotePeriod || ec.ExpectedEth1DataVote == nil
 		if chainHead.HeadEpoch == 1 {
-			isFirstSlotInVotingPeriod = slot%params.BeaconConfig().SlotsPerEpoch == 1
-		} else {
-			isFirstSlotInVotingPeriod = slot%slotsPerVotingPeriod == 0
+			isNewPeriod = (slot%params.BeaconConfig().SlotsPerEpoch == 1) || ec.ExpectedEth1DataVote == nil
 		}
-		if isFirstSlotInVotingPeriod {
+		if isNewPeriod {
 			ec.ExpectedEth1DataVote = vote
-			ec.Eth1DataMismatchCount = 0 // Reset for new voting period
+			ec.ExpectedEth1DataVotePeriod = currentPeriod
+			ec.Eth1DataMismatchCount = 0
 			return nil
 		}
 
