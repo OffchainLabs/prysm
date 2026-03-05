@@ -588,6 +588,14 @@ func (s *ChainService) InForkchoice(root [32]byte) bool {
 	return !s.NotFinalized
 }
 
+// HasFullNode mocks the same method in the chain service.
+func (s *ChainService) HasFullNode(root [32]byte) bool {
+	if s.ForkChoiceStore != nil {
+		return s.ForkChoiceStore.HasFullNode(root)
+	}
+	return false
+}
+
 // IsOptimisticForRoot mocks the same method in the chain service.
 func (s *ChainService) IsOptimisticForRoot(_ context.Context, root [32]byte) (bool, error) {
 	s.OptimisticCheckRootReceived = root

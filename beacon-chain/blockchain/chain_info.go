@@ -54,6 +54,7 @@ type ForkchoiceFetcher interface {
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
 	IsCanonical(ctx context.Context, blockRoot [32]byte) (bool, error)
 	DependentRoot(primitives.Epoch) ([32]byte, error)
+	HasFullNode(root [32]byte) bool
 }
 
 // TimeFetcher retrieves the Ethereum consensus data that's related to time.
@@ -403,6 +404,14 @@ func (s *Service) InForkchoice(root [32]byte) bool {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.HasNode(root)
+}
+
+// HasFullNode returns true if the given root exists in forkchoice with a full
+// execution payload envelope.
+func (s *Service) HasFullNode(root [32]byte) bool {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.HasFullNode(root)
 }
 
 // ParentPayloadReady returns true if the block's parent payload is available

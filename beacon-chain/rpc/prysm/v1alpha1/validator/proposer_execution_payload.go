@@ -102,7 +102,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		}
 	}
 	log.WithFields(logFields).Debug("Payload ID cache miss")
-	parentHash, err := vs.getParentBlockHash(ctx, st, slot)
+	parentHash, err := vs.getParentBlockHash(ctx, st, slot, parentRoot)
 	switch {
 	case errors.Is(err, errActivationNotReached) || errors.Is(err, errNoTerminalBlockHash):
 		return consensusblocks.NewGetPayloadResponse(emptyPayload())
@@ -272,11 +272,22 @@ var errNoTerminalBlockHash = errors.New("no terminal block hash")
 // If the activation epoch has not been reached, an errActivationNotReached error is returned.
 //
 // Otherwise, the terminal block hash is fetched based on the slot's time, and an error is returned if it doesn't exist.
-func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, slot primitives.Slot) ([]byte, error) {
+func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, slot primitives.Slot, parentRoot [32]byte) ([]byte, error) {
 	if st.Version() >= version.Gloas {
 		latestBlockHash, err := st.LatestBlockHash()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get latest block hash")
+		}
+		blockSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get recent block slot")
+		}
+		if vs.ForkchoiceFetcher.HasFullNode(parentRoot) && slot + 1 < blockSlot {
+			bid, err := st.LatestExecutionPayloadBid()
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get latest execution payload bid")
+			}
+			latestBlockHash = bid.BlockHash()
 		}
 		return latestBlockHash[:], nil
 	}
