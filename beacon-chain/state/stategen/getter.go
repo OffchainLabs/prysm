@@ -155,7 +155,7 @@ func (s *State) StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) 
 	if err != nil {
 		return nil, errors.Wrap(err, "could not replay blocks")
 	}
-	return ReplayProcessSlots(ctx, startState, summary.Slot)
+	return startState, nil
 }
 
 // This returns the state summary object of a given block root. It first checks the cache, then checks the DB.

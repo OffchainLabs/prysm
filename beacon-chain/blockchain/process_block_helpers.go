@@ -424,6 +424,7 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 			}
 		}
 		root = b.Block().ParentRoot()
+		child = b
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
 			JustifiedCheckpoint: jCheckpoint,
 			FinalizedCheckpoint: fCheckpoint,

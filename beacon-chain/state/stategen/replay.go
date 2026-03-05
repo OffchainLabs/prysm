@@ -119,7 +119,7 @@ func (s *State) loadBlocks(ctx context.Context, startSlot, endSlot primitives.Sl
 // WARNING: This method should not be used on an unverified new block.
 func executeStateTransitionStateGen(
 	ctx context.Context,
-	state state.BeaconState,
+	st state.BeaconState,
 	signed interfaces.ReadOnlySignedBeaconBlock,
 ) (state.BeaconState, error) {
 	if ctx.Err() != nil {
@@ -131,11 +131,10 @@ func executeStateTransitionStateGen(
 	ctx, span := trace.StartSpan(ctx, "stategen.executeStateTransitionStateGen")
 	defer span.End()
 	var err error
-	preTransitionState := state
 
 	// Execute per slots transition.
 	// Given this is for state gen, a node uses the version of process slots without skip slots cache.
-	state, err = ReplayProcessSlots(ctx, state, signed.Block().Slot())
+	st, err = ReplayProcessSlots(ctx, st, signed.Block().Slot())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process slot")
 	}
@@ -143,20 +142,20 @@ func executeStateTransitionStateGen(
 	// Execute per block transition.
 	// Given this is for state gen, a node only cares about the post state without proposer
 	// and randao signature verifications.
-	state, err = transition.ProcessBlockForStateRoot(ctx, state, signed)
+	st, err = transition.ProcessBlockForStateRoot(ctx, st, signed)
 	if err == nil {
-		return state, nil
+		return st, nil
 	}
 	fields := logrus.Fields{
 		"blockSlot":    signed.Block().Slot(),
 		"parentRoot":   fmt.Sprintf("%#x", signed.Block().ParentRoot()),
 		"blockVersion": signed.Block().Version(),
 	}
-	if preTransitionState != nil && !preTransitionState.IsNil() {
-		fields["stateSlot"] = preTransitionState.Slot()
+	if st != nil && !st.IsNil() {
+		fields["stateSlot"] = st.Slot()
 	}
-	if preTransitionState != nil && !preTransitionState.IsNil() && preTransitionState.Version() >= version.Gloas {
-		latestHash, hashErr := preTransitionState.LatestBlockHash()
+	if st != nil && !st.IsNil() && st.Version() >= version.Gloas {
+		latestHash, hashErr := st.LatestBlockHash()
 		if hashErr == nil {
 			fields["stateLatestBlockHash"] = fmt.Sprintf("%#x", latestHash)
 		}
