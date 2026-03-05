@@ -12,6 +12,7 @@ import (
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
+	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 // EIP-8161 PayloadStatus SSZ status byte values.
@@ -506,12 +507,8 @@ func unmarshalGetBlobsResponseSSZ(data []byte) ([]*pb.BlobAndProof, error) {
 }
 
 // marshalExchangeCapabilitiesRequest creates the SSZ-encoded body for an exchange_capabilities request.
-// Layout (SSZ container):
-//
-//	capabilities: List[List[uint8, 64], 128]
-//
-// This is a list of variable-length byte strings, so encoded as:
-// container offset(4) -> list data: N offsets(4 each) + concatenated string bytes.
+// Layout: SSZ Container { capabilities: List[List[uint8, 64], 128] }
+// Wire format: container_offset(4) -> list_data = N * item_offset(4) + concatenated string bytes.
 func marshalExchangeCapabilitiesRequest(capabilities []string) []byte {
 	const containerFixedSize = 4 // offset for the capabilities list
 	n := len(capabilities)
@@ -523,32 +520,32 @@ func marshalExchangeCapabilitiesRequest(capabilities []string) []byte {
 		totalStrSize += len(c)
 	}
 
-	buf := make([]byte, 0, containerFixedSize+offsetsSize+totalStrSize)
+	dst := make([]byte, 0, containerFixedSize+offsetsSize+totalStrSize)
 	// Container offset pointing to start of list data
-	buf = binary.LittleEndian.AppendUint32(buf, uint32(containerFixedSize))
+	dst = ssz.WriteOffset(dst, containerFixedSize)
 
-	// List offsets
-	offset := uint32(offsetsSize)
+	// List item offsets (relative to start of list data)
+	itemOffset := offsetsSize
 	for _, c := range capabilities {
-		buf = binary.LittleEndian.AppendUint32(buf, offset)
-		offset += uint32(len(c))
+		dst = ssz.WriteOffset(dst, itemOffset)
+		itemOffset += len(c)
 	}
-	// List string data
+	// Concatenated string data
 	for _, c := range capabilities {
-		buf = append(buf, []byte(c)...)
+		dst = append(dst, []byte(c)...)
 	}
 
-	return buf
+	return dst
 }
 
-// unmarshalExchangeCapabilitiesResponse decodes an SSZ-encoded ExchangeCapabilitiesRequest/Response.
-// Same format as the request.
+// unmarshalExchangeCapabilitiesResponse decodes an SSZ ExchangeCapabilitiesRequest/Response.
+// Same format as the request: Container { capabilities: List[List[uint8, 64], 128] }
 func unmarshalExchangeCapabilitiesResponse(data []byte) ([]string, error) {
 	if len(data) < 4 {
 		return nil, fmt.Errorf("SSZ exchange_capabilities response too short: %d bytes", len(data))
 	}
 
-	listOffset := binary.LittleEndian.Uint32(data[0:4])
+	listOffset := uint32(ssz.ReadOffset(data[0:4]))
 	if listOffset > uint32(len(data)) {
 		return nil, fmt.Errorf("SSZ exchange_capabilities response truncated")
 	}
@@ -568,8 +565,7 @@ func unmarshalSSZStringList(listData []byte) ([]string, error) {
 		return []string{}, nil
 	}
 
-	// Read the first offset to determine the number of items.
-	firstOffset := binary.LittleEndian.Uint32(listData[0:4])
+	firstOffset := uint32(ssz.ReadOffset(listData[0:4]))
 	if firstOffset%4 != 0 {
 		return nil, fmt.Errorf("SSZ string list first offset %d not aligned to 4", firstOffset)
 	}
@@ -580,7 +576,7 @@ func unmarshalSSZStringList(listData []byte) ([]string, error) {
 
 	offsets := make([]uint32, count)
 	for i := range count {
-		offsets[i] = binary.LittleEndian.Uint32(listData[i*4 : i*4+4])
+		offsets[i] = uint32(ssz.ReadOffset(listData[i*4 : i*4+4]))
 	}
 
 	result := make([]string, count)
