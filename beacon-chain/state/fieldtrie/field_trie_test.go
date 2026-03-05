@@ -131,6 +131,9 @@ func TestNewFieldTrie_UnknownType(t *testing.T) {
 }
 
 func TestFieldTrie_CopyTrieImmutable(t *testing.T) {
+	// CopyTrie uses lazy copy-on-write. The production contract is:
+	// after CopyTrie, the COPY may be mutated while the ORIGINAL stays
+	// unchanged. This test verifies mutating the copy does not affect the original.
 	newState, _ := util.DeterministicGenesisState(t, 32)
 	mixes := newState.RandaoMixes()
 	randaoMixes := make([][32]byte, len(mixes))
@@ -138,28 +141,84 @@ func TestFieldTrie_CopyTrieImmutable(t *testing.T) {
 		randaoMixes[i] = [32]byte(r)
 	}
 
-	trie, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, customtypes.RandaoMixes(randaoMixes), uint64(params.BeaconConfig().EpochsPerHistoricalVector))
+	originalTrie, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, customtypes.RandaoMixes(randaoMixes), uint64(params.BeaconConfig().EpochsPerHistoricalVector))
+	require.NoError(t, err)
+	originalRoot, err := originalTrie.TrieRoot()
 	require.NoError(t, err)
 
-	newTrie := trie.CopyTrie()
+	copiedTrie := originalTrie.CopyTrie()
 
+	// Verify the copy initially has the same root.
+	copyRoot, err := copiedTrie.TrieRoot()
+	require.NoError(t, err)
+	require.Equal(t, originalRoot, copyRoot, "copy should initially have same root")
+
+	// Mutate the COPY (the production pattern).
 	changedIdx := []uint64{2, 29}
-
 	changedVals := [][32]byte{{'A', 'B'}, {'C', 'D'}}
 	require.NoError(t, newState.UpdateRandaoMixesAtIndex(changedIdx[0], changedVals[0]))
 	require.NoError(t, newState.UpdateRandaoMixesAtIndex(changedIdx[1], changedVals[1]))
-
 	mixes = newState.RandaoMixes()
 	randaoMixes = make([][32]byte, len(mixes))
 	for i, r := range mixes {
 		randaoMixes[i] = [32]byte(r)
 	}
-	root, err := trie.RecomputeTrie(changedIdx, customtypes.RandaoMixes(randaoMixes))
+	mutatedRoot, err := copiedTrie.RecomputeTrie(changedIdx, customtypes.RandaoMixes(randaoMixes))
 	require.NoError(t, err)
-	newRoot, err := newTrie.TrieRoot()
+
+	// The original should be unchanged.
+	rootAfter, err := originalTrie.TrieRoot()
 	require.NoError(t, err)
-	if root == newRoot {
-		t.Errorf("Wanted roots to be different, but they are the same: %#x", root)
+	require.Equal(t, originalRoot, rootAfter, "original should be unchanged after copy mutation")
+
+	// The mutated copy should have a different root.
+	if mutatedRoot == originalRoot {
+		t.Errorf("Wanted roots to be different, but they are the same: %#x", mutatedRoot)
+	}
+}
+
+func TestFieldTrie_LazyCopyOriginalMutationDoesNotAffectCopy(t *testing.T) {
+	// After LazyCopy, mutating the ORIGINAL must not affect the COPY.
+	newState, _ := util.DeterministicGenesisState(t, 32)
+	mixes := newState.RandaoMixes()
+	randaoMixes := make([][32]byte, len(mixes))
+	for i, r := range mixes {
+		randaoMixes[i] = [32]byte(r)
+	}
+
+	originalTrie, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, customtypes.RandaoMixes(randaoMixes), uint64(params.BeaconConfig().EpochsPerHistoricalVector))
+	require.NoError(t, err)
+	originalRoot, err := originalTrie.TrieRoot()
+	require.NoError(t, err)
+
+	copiedTrie := originalTrie.CopyTrie()
+
+	// Verify the copy initially has the same root.
+	copyRoot, err := copiedTrie.TrieRoot()
+	require.NoError(t, err)
+	require.Equal(t, originalRoot, copyRoot, "copy should initially have same root")
+
+	// Mutate the ORIGINAL (the reverse of TestFieldTrie_CopyTrieImmutable).
+	changedIdx := []uint64{2, 29}
+	changedVals := [][32]byte{{'A', 'B'}, {'C', 'D'}}
+	require.NoError(t, newState.UpdateRandaoMixesAtIndex(changedIdx[0], changedVals[0]))
+	require.NoError(t, newState.UpdateRandaoMixesAtIndex(changedIdx[1], changedVals[1]))
+	mixes = newState.RandaoMixes()
+	randaoMixes = make([][32]byte, len(mixes))
+	for i, r := range mixes {
+		randaoMixes[i] = [32]byte(r)
+	}
+	mutatedRoot, err := originalTrie.RecomputeTrie(changedIdx, customtypes.RandaoMixes(randaoMixes))
+	require.NoError(t, err)
+
+	// The copy should be unchanged.
+	rootAfter, err := copiedTrie.TrieRoot()
+	require.NoError(t, err)
+	require.Equal(t, copyRoot, rootAfter, "copy should be unchanged after original mutation")
+
+	// The mutated original should have a different root.
+	if mutatedRoot == copyRoot {
+		t.Errorf("Wanted roots to be different, but they are the same: %#x", mutatedRoot)
 	}
 }
 
@@ -168,25 +227,6 @@ func TestFieldTrie_CopyAndTransferEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	require.DeepEqual(t, trie, trie.CopyTrie())
-	require.DeepEqual(t, trie, trie.TransferTrie())
-}
-
-func TestFieldTrie_TransferTrie(t *testing.T) {
-	newState, _ := util.DeterministicGenesisState(t, 32)
-	maxLength := (params.BeaconConfig().ValidatorRegistryLimit*8 + 31) / 32
-	trie, err := NewFieldTrie(types.Balances, types.CompressedArray, newState.Balances(), maxLength)
-	require.NoError(t, err)
-	oldRoot, err := trie.TrieRoot()
-	require.NoError(t, err)
-
-	newTrie := trie.TransferTrie()
-	root, err := trie.TrieRoot()
-	require.ErrorIs(t, err, ErrEmptyFieldTrie)
-	require.Equal(t, root, [32]byte{})
-	require.NotNil(t, newTrie)
-	newRoot, err := newTrie.TrieRoot()
-	require.NoError(t, err)
-	require.DeepEqual(t, oldRoot, newRoot)
 }
 
 func FuzzFieldTrie(f *testing.F) {

@@ -9,9 +9,21 @@ import (
 	multi_value_slice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	pmath "github.com/OffchainLabs/prysm/v7/math"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 var (
+	fieldTrieLazyCopyCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "field_trie_lazy_copy_total",
+		Help: "Total number of CopyTrie calls that produced a lazy copy.",
+	})
+
+	fieldTrieMaterializeCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "field_trie_materialize_total",
+		Help: "Total number of lazy copies that were materialized due to mutation.",
+	})
+
 	ErrInvalidFieldTrie = errors.New("invalid field trie")
 	ErrEmptyFieldTrie   = errors.New("empty field trie")
 )
@@ -30,6 +42,7 @@ type FieldTrie struct {
 	*sync.RWMutex
 	reference     *stateutil.Reference
 	fieldLayers   [][]*[32]byte
+	sharedLayers  [][]*[32]byte
 	field         types.FieldIndex
 	dataType      types.DataType
 	length        uint64
@@ -107,6 +120,9 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, err
 		return f.TrieRoot()
 	}
 
+	// Materialize from shared layers if this is a lazy copy.
+	f.materialize()
+
 	fieldRoots, err := fieldConverters(f.field, indices, elements, false)
 	if err != nil {
 		return [32]byte{}, err
@@ -166,26 +182,20 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, err
 	}
 }
 
-// CopyTrie copies the references to the elements the trie
-// is built on.
+// CopyTrie creates a lazy copy of the trie. The underlying layers are not
+// copied immediately, they are shared via sharedLayers. A full copy is
+// deferred until RecomputeTrie needs to mutate the layers. If the trie is
+// only read with TrieRoot, the copy cost is avoided entirely.
 func (f *FieldTrie) CopyTrie() *FieldTrie {
-	if f.fieldLayers == nil {
-		return &FieldTrie{
-			field:      f.field,
-			dataType:   f.dataType,
-			reference:  stateutil.NewRef(1),
-			RWMutex:    new(sync.RWMutex),
-			length:     f.length,
-			numOfElems: f.numOfElems,
-		}
+	if f.fieldLayers != nil {
+		f.sharedLayers = f.fieldLayers
+		f.fieldLayers = nil
 	}
-	dstFieldTrie := make([][]*[32]byte, len(f.fieldLayers))
-	for i, layer := range f.fieldLayers {
-		dstFieldTrie[i] = make([]*[32]byte, len(layer))
-		copy(dstFieldTrie[i], layer)
-	}
+
+	fieldTrieLazyCopyCount.Inc()
+
 	return &FieldTrie{
-		fieldLayers:   dstFieldTrie,
+		sharedLayers:  f.sharedLayers,
 		field:         f.field,
 		dataType:      f.dataType,
 		reference:     stateutil.NewRef(1),
@@ -208,6 +218,9 @@ func (f *FieldTrie) Length() uint64 {
 // us save on a copy. Any caller of this method will need
 // to take care that this isn't called on an empty trie.
 func (f *FieldTrie) TransferTrie() *FieldTrie {
+	// Resolve any pending lazy copy.
+	f.materialize()
+
 	if f.fieldLayers == nil {
 		return &FieldTrie{
 			field:      f.field,
@@ -238,17 +251,23 @@ func (f *FieldTrie) TrieRoot() ([32]byte, error) {
 	if f.Empty() {
 		return [32]byte{}, ErrEmptyFieldTrie
 	}
-	if len(f.fieldLayers[len(f.fieldLayers)-1]) == 0 {
+
+	layers := f.sharedLayers
+	if f.fieldLayers != nil {
+		layers = f.fieldLayers
+	}
+
+	if len(layers[len(layers)-1]) == 0 {
 		return [32]byte{}, ErrInvalidFieldTrie
 	}
 	switch f.dataType {
 	case types.BasicArray:
-		return *f.fieldLayers[len(f.fieldLayers)-1][0], nil
+		return *layers[len(layers)-1][0], nil
 	case types.CompositeArray:
-		trieRoot := *f.fieldLayers[len(f.fieldLayers)-1][0]
-		return stateutil.AddInMixin(trieRoot, uint64(len(f.fieldLayers[0])))
+		trieRoot := *layers[len(layers)-1][0]
+		return stateutil.AddInMixin(trieRoot, uint64(len(layers[0])))
 	case types.CompressedArray:
-		trieRoot := *f.fieldLayers[len(f.fieldLayers)-1][0]
+		trieRoot := *layers[len(layers)-1][0]
 		return stateutil.AddInMixin(trieRoot, uint64(f.numOfElems))
 	default:
 		return [32]byte{}, errors.Errorf("unrecognized data type in field map: %v", reflect.TypeFor[types.DataType]().Name())
@@ -264,7 +283,19 @@ func (f *FieldTrie) FieldReference() *stateutil.Reference {
 // Empty checks whether the underlying field trie is
 // empty or not.
 func (f *FieldTrie) Empty() bool {
-	return f == nil || len(f.fieldLayers) == 0 || f.isTransferred
+	if f == nil {
+		return true
+	}
+
+	if len(f.fieldLayers) == 0 && len(f.sharedLayers) == 0 {
+		return true
+	}
+
+	if f.isTransferred {
+		return true
+	}
+
+	return false
 }
 
 // InsertFieldLayer manually inserts a field layer. This method
@@ -272,4 +303,25 @@ func (f *FieldTrie) Empty() bool {
 // meant to be used in tests.
 func (f *FieldTrie) InsertFieldLayer(layer [][]*[32]byte) {
 	f.fieldLayers = layer
+}
+
+// materialize performs the deferred deep copy from sharedLayers into
+// fieldLayers. This must be called before any mutation of the trie layers.
+// Caller must hold the write lock.
+func (f *FieldTrie) materialize() {
+	if f.fieldLayers != nil || f.sharedLayers == nil {
+		return
+	}
+
+	fieldTrieMaterializeCount.Inc()
+
+	dst := make([][]*[32]byte, 0, len(f.sharedLayers))
+	for _, layer := range f.sharedLayers {
+		copiedLayer := make([]*[32]byte, len(layer))
+		copy(copiedLayer, layer)
+		dst = append(dst, copiedLayer)
+	}
+
+	f.fieldLayers = dst
+	f.sharedLayers = nil
 }
