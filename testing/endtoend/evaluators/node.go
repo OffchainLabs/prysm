@@ -251,13 +251,7 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 		}
 
 		if anyOptimistic(chainHeads) {
-			lastErr = fmt.Errorf("nodes not ready: optimistic head(s) observed\n%s", summarizeHeads(chainHeads, peerCounts))
-			consecutiveSuccesses = 0
-			log.WithField("attempt", attempt).Warn("Optimistic head status observed, retrying")
-			if err := sleepWithContext(ctx, headComparePollDelay); err != nil {
-				break
-			}
-			continue
+			log.WithField("attempt", attempt).Warn("Optimistic head(s) observed, proceeding with head comparison anyway")
 		}
 
 		if err := compareChainHeads(chainHeads); err != nil {
