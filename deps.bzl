@@ -1350,6 +1350,18 @@ def prysm_deps():
         version = "v0.3.1-0.20210208050101-bfb5c8eec0e4",
     )
     go_repository(
+        name = "com_github_grafana_pyroscope_go",
+        importpath = "github.com/grafana/pyroscope-go",
+        sum = "h1:VWBBlqxjyR0Cwk2W6UrE8CdcdD80GOFNutj0Kb1T8ac=",
+        version = "v1.2.7",
+    )
+    go_repository(
+        name = "com_github_grafana_pyroscope_go_godeltaprof",
+        importpath = "github.com/grafana/pyroscope-go/godeltaprof",
+        sum = "h1:c1Us8i6eSmkW+Ez05d3co8kasnuOY813tbMN8i/a3Og=",
+        version = "v0.1.9",
+    )
+    go_repository(
         name = "com_github_graph_gophers_graphql_go",
         importpath = "github.com/graph-gophers/graphql-go",
         sum = "h1:Eb9x/q6MFpCLz7jBCiP/WTxjSDrYLR1QY41SORZyNJ0=",

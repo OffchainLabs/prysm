@@ -37,6 +37,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/grafana/pyroscope-go"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -77,6 +78,23 @@ var (
 	BlockProfileRateFlag = &cli.IntFlag{
 		Name:  "blockprofilerate",
 		Usage: "Turns on block profiling with the given rate.",
+	}
+	// PyroscopeFlag to enable Pyroscope continuous profiling.
+	PyroscopeFlag = &cli.BoolFlag{
+		Name:  "pyroscope",
+		Usage: "Enables Pyroscope continuous profiling.",
+	}
+	// PyroscopeServerFlag to specify the Pyroscope server URL.
+	PyroscopeServerFlag = &cli.StringFlag{
+		Name:  "pyroscope-server",
+		Usage: "Pyroscope server URL for continuous profiling.",
+		Value: "http://localhost:4040",
+	}
+	// PyroscopeAppNameFlag to specify the application name tag.
+	PyroscopeAppNameFlag = &cli.StringFlag{
+		Name:  "pyroscope-app-name",
+		Usage: "Application name tag for Pyroscope profiling.",
+		Value: "prysm.beacon-chain",
 	}
 )
 
@@ -323,7 +341,40 @@ func Setup(ctx *cli.Context) error {
 		address := fmt.Sprintf("%s:%d", ctx.String(PProfAddrFlag.Name), ctx.Int(PProfPortFlag.Name))
 		startPProf(address)
 	}
+	// Pyroscope continuous profiling
+	if ctx.Bool(PyroscopeFlag.Name) {
+		startPyroscope(ctx)
+	}
 	return nil
+}
+
+func startPyroscope(ctx *cli.Context) {
+	serverAddress := ctx.String(PyroscopeServerFlag.Name)
+	appName := ctx.String(PyroscopeAppNameFlag.Name)
+	_, err := pyroscope.Start(pyroscope.Config{
+		ApplicationName: appName,
+		ServerAddress:   serverAddress,
+		DisableGCRuns:   true,
+		ProfileTypes: []pyroscope.ProfileType{
+			pyroscope.ProfileCPU,
+			pyroscope.ProfileAllocObjects,
+			pyroscope.ProfileAllocSpace,
+			pyroscope.ProfileInuseObjects,
+			pyroscope.ProfileInuseSpace,
+			pyroscope.ProfileGoroutines,
+			pyroscope.ProfileMutexCount,
+			pyroscope.ProfileMutexDuration,
+			pyroscope.ProfileBlockCount,
+			pyroscope.ProfileBlockDuration,
+		},
+	})
+
+	if err != nil {
+		log.WithError(err).Error("Failed to start Pyroscope profiling")
+		return
+	}
+
+	log.WithField("server", serverAddress).WithField("app", appName).Info("Started Pyroscope continuous profiling")
 }
 
 func startPProf(address string) {
