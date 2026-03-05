@@ -401,7 +401,7 @@ func TestLoadStateByRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	// make state at slot 10 by transitioning a copy of st9 with ib10 (aka blk10)
-	st10, err = executeStateTransitionStateGen(t.Context(), st10, ib10, nil)
+	st10, err = executeStateTransitionStateGen(t.Context(), st10, ib10)
 	require.NoError(t, err)
 	st10Root, err := st10.HashTreeRoot(t.Context())
 	require.NoError(t, err)
@@ -424,7 +424,7 @@ func TestLoadStateByRoot(t *testing.T) {
 
 	// same steps as 9->10; stf 10->11, then block update
 	st11 := st10.Copy()
-	st11, err = executeStateTransitionStateGen(t.Context(), st11, ib11, nil)
+	st11, err = executeStateTransitionStateGen(t.Context(), st11, ib11)
 	require.NoError(t, err)
 	st11Root, err := st11.HashTreeRoot(t.Context())
 	require.NoError(t, err)
@@ -486,6 +486,58 @@ func TestLoadStateByRoot(t *testing.T) {
 			require.DeepSSZEqual(t, expect.ToProtoUnsafe(), got.ToProtoUnsafe())
 		})
 	}
+}
+
+func TestBlockRootForExecHash_Found(t *testing.T) {
+	ctx := t.Context()
+	beaconDB := testDB.SetupDB(t)
+	service := New(beaconDB, doublylinkedtree.New())
+
+	blockHash := bytesutil.PadTo([]byte{0xCC}, 32)
+	b := util.NewBeaconBlockGloas()
+	b.Block.Slot = 10
+	b.Block.Body.SignedExecutionPayloadBid.Message.BlockHash = blockHash
+	wsb, err := blt.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	require.NoError(t, beaconDB.SaveBlock(ctx, wsb))
+	expectedRoot, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	root, err := service.blockRootForExecHash(ctx, bytesutil.ToBytes32(blockHash), 10)
+	require.NoError(t, err)
+	require.Equal(t, expectedRoot, root)
+}
+
+func TestBlockRootForExecHash_NotFound(t *testing.T) {
+	ctx := t.Context()
+	beaconDB := testDB.SetupDB(t)
+	service := New(beaconDB, doublylinkedtree.New())
+
+	b := util.NewBeaconBlockGloas()
+	b.Block.Slot = 10
+	b.Block.Body.SignedExecutionPayloadBid.Message.BlockHash = bytesutil.PadTo([]byte{0xAA}, 32)
+	wsb, err := blt.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	require.NoError(t, beaconDB.SaveBlock(ctx, wsb))
+
+	wrongHash := bytesutil.ToBytes32(bytesutil.PadTo([]byte{0xBB}, 32))
+	_, err = service.blockRootForExecHash(ctx, wrongHash, 10)
+	require.ErrorContains(t, "no block at slot", err)
+}
+
+func TestBlockRootForExecHash_SkipsPreGloas(t *testing.T) {
+	ctx := t.Context()
+	beaconDB := testDB.SetupDB(t)
+	service := New(beaconDB, doublylinkedtree.New())
+
+	b := util.NewBeaconBlock()
+	b.Block.Slot = 10
+	wsb, err := blt.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	require.NoError(t, beaconDB.SaveBlock(ctx, wsb))
+
+	_, err = service.blockRootForExecHash(ctx, [32]byte{}, 10)
+	require.ErrorContains(t, "no block at slot", err)
 }
 
 func TestLastAncestorState_CanGetUsingDB(t *testing.T) {

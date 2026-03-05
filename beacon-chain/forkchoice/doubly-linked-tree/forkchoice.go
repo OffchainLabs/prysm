@@ -535,6 +535,19 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 			bcp.JustifiedCheckpoint.Epoch, bcp.FinalizedCheckpoint.Epoch); err != nil {
 			return err
 		}
+		if bcp.HasPayload {
+			root := bcp.Block.Root()
+			en := f.store.emptyNodeByRoot[root]
+			if en != nil && f.store.fullNodeByRoot[root] == nil {
+				f.store.fullNodeByRoot[root] = &PayloadNode{
+					node:       en.node,
+					optimistic: true,
+					timestamp:  time.Now(),
+					full:       true,
+					children:   make([]*Node, 0),
+				}
+			}
+		}
 		if err := f.updateCheckpoints(ctx, bcp.JustifiedCheckpoint, bcp.FinalizedCheckpoint); err != nil {
 			return err
 		}

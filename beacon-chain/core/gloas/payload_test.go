@@ -282,6 +282,82 @@ func TestQueueBuilderPayment_ZeroAmountClearsSlot(t *testing.T) {
 	require.Equal(t, primitives.Gwei(0), payment.Withdrawal.Amount)
 }
 
+func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_NilEnvelope(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+	require.NoError(t, ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, nil))
+}
+
+func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_Success(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+	st := fixture.state
+
+	blockHash := [32]byte(fixture.payload.BlockHash)
+	stateRoot := [32]byte{0xAA}
+	envelope := &ethpb.SignedBlindedExecutionPayloadEnvelope{
+		Message: &ethpb.BlindedExecutionPayloadEnvelope{
+			Slot:              fixture.slot,
+			BuilderIndex:      fixture.envelope.BuilderIndex,
+			BlockHash:         blockHash[:],
+			ExecutionRequests: fixture.envelope.ExecutionRequests,
+		},
+	}
+
+	require.NoError(t, ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), st, stateRoot, envelope))
+
+	latestHash, err := st.LatestBlockHash()
+	require.NoError(t, err)
+	require.Equal(t, blockHash, latestHash)
+
+	available, err := st.ExecutionPayloadAvailability(fixture.slot)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), available)
+
+	header := st.LatestBlockHeader()
+	require.DeepEqual(t, stateRoot[:], header.StateRoot)
+}
+
+func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_SlotMismatch(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+
+	envelope := &ethpb.SignedBlindedExecutionPayloadEnvelope{
+		Message: &ethpb.BlindedExecutionPayloadEnvelope{
+			Slot: fixture.slot + 1,
+		},
+	}
+	err := ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, envelope)
+	require.ErrorContains(t, "blinded envelope slot does not match state slot", err)
+}
+
+func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_BuilderIndexMismatch(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+
+	blockHash := [32]byte(fixture.payload.BlockHash)
+	envelope := &ethpb.SignedBlindedExecutionPayloadEnvelope{
+		Message: &ethpb.BlindedExecutionPayloadEnvelope{
+			Slot:         fixture.slot,
+			BuilderIndex: 999,
+			BlockHash:    blockHash[:],
+		},
+	}
+	err := ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, envelope)
+	require.ErrorContains(t, "builder index does not match", err)
+}
+
+func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_BlockHashMismatch(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+
+	wrongHash := bytes.Repeat([]byte{0xFF}, 32)
+	envelope := &ethpb.SignedBlindedExecutionPayloadEnvelope{
+		Message: &ethpb.BlindedExecutionPayloadEnvelope{
+			Slot:         fixture.slot,
+			BuilderIndex: fixture.envelope.BuilderIndex,
+			BlockHash:    wrongHash,
+		},
+	}
+	err := ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, envelope)
+	require.ErrorContains(t, "block hash does not match", err)
+}
+
 func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
 

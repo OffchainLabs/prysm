@@ -145,6 +145,43 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 	return preStateVersion, preStateHeader, nil
 }
 
+// applyPayloadIfNeeded applies the parent block's execution payload envelope to
+// preState when the current block's bid indicates it built on a full parent.
+func (s *Service) applyPayloadIfNeeded(ctx context.Context, b interfaces.ReadOnlyBeaconBlock, parentRoot [32]byte, preState state.BeaconState) error {
+	if b.Version() < version.Gloas || parentRoot == [32]byte{} {
+		return nil
+	}
+	parentBlock, err := s.cfg.BeaconDB.Block(ctx, parentRoot)
+	if err != nil {
+		return errors.Wrapf(err, "could not get parent block with root %#x", parentRoot)
+	}
+	if parentBlock.Version() < version.Gloas {
+		return nil
+	}
+	sb, err := b.Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return errors.Wrap(err, "could not get execution payload bid for block")
+	}
+	if sb == nil || sb.Message == nil {
+		return fmt.Errorf("missing execution payload bid for block at slot %d", b.Slot())
+	}
+	parentBid, err := parentBlock.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return errors.Wrapf(err, "could not get execution payload bid for parent block with root %#x", parentRoot)
+	}
+	if parentBid == nil || parentBid.Message == nil {
+		return fmt.Errorf("missing execution payload bid for parent block with root %#x", parentRoot)
+	}
+	if !bytes.Equal(sb.Message.ParentBlockHash, parentBid.Message.BlockHash) {
+		return nil
+	}
+	envelope, err := s.cfg.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
+	if err != nil {
+		return errors.Wrapf(err, "could not get execution payload envelope for parent block with root %#x", parentRoot)
+	}
+	return gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, preState, parentBlock.Block().StateRoot(), envelope)
+}
+
 func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlock, avs das.AvailabilityChecker) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.onBlockBatch")
 	defer span.End()
@@ -159,10 +196,12 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	b := blks[0].Block()
 
 	// Retrieve incoming block's pre state.
-	if err := s.verifyBlkPreState(ctx, b.ParentRoot()); err != nil {
+	parentRoot := b.ParentRoot()
+	if err := s.verifyBlkPreState(ctx, parentRoot); err != nil {
 		return err
 	}
-	preState, err := s.cfg.StateGen.StateByRootInitialSync(ctx, b.ParentRoot())
+
+	preState, err := s.cfg.StateGen.StateByRootInitialSync(ctx, parentRoot)
 	if err != nil {
 		return err
 	}
@@ -170,6 +209,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		return fmt.Errorf("nil pre state for slot %d", b.Slot())
 	}
 
+	if err := s.applyPayloadIfNeeded(ctx, b, parentRoot, preState); err != nil {
+		return err
+	}
 	// Fill in missing blocks
 	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], preState.FinalizedCheckpoint(), preState.CurrentJustifiedCheckpoint()); err != nil {
 		return errors.Wrap(err, "could not fill in missing blocks to forkchoice")
