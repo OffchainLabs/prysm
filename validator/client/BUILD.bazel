@@ -7,6 +7,7 @@ go_library(
         "attest.go",
         "distributed.go",
         "duties.go",
+        "duty_store.go",
         "health_monitor.go",
         "key_reload.go",
         "log.go",

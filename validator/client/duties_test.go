@@ -31,20 +31,11 @@ func TestUpdateDuties_DoesNothingWhenNotEpochStart_AlreadyExistingAssignments(t 
 	v := validator{
 		km:              newMockKeymanager(t, randKeypair(t)),
 		validatorClient: client,
-		duties: &ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					AttesterSlot:   10,
-					CommitteeIndex: 20,
-				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					AttesterSlot:   10,
-					CommitteeIndex: 20,
-				},
-			},
-		},
+		duties: func() *dutyStore {
+			ds := testDutyStore(&ethpb.ValidatorDuty{AttesterSlot: 10, CommitteeIndex: 20})
+			ds.nextDuties[pubkey{}] = &ethpb.ValidatorDuty{AttesterSlot: 10, CommitteeIndex: 20}
+			return ds
+		}(),
 	}
 	client.EXPECT().Duties(
 		gomock.Any(),
@@ -62,13 +53,7 @@ func TestUpdateDuties_ReturnsError(t *testing.T) {
 	v := validator{
 		validatorClient: client,
 		km:              newMockKeymanager(t, randKeypair(t)),
-		duties: &ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					CommitteeIndex: 1,
-				},
-			},
-		},
+		duties:          testDutyStore(&ethpb.ValidatorDuty{CommitteeIndex: 1}),
 	}
 
 	expected := errors.New("bad")
@@ -79,7 +64,7 @@ func TestUpdateDuties_ReturnsError(t *testing.T) {
 	).Return(nil, expected)
 
 	assert.ErrorContains(t, expected.Error(), v.UpdateDuties(t.Context()))
-	assert.Equal(t, (*ethpb.ValidatorDutiesContainer)(nil), v.duties, "Assignments should have been cleared on failure")
+	assert.Equal(t, false, v.duties.IsInitialized(), "Assignments should have been cleared on failure")
 }
 
 func TestUpdateDuties_OK(t *testing.T) {
@@ -102,6 +87,7 @@ func TestUpdateDuties_OK(t *testing.T) {
 	v := validator{
 		km:              newMockKeymanager(t, randKeypair(t)),
 		validatorClient: client,
+		duties:          &dutyStore{},
 	}
 	client.EXPECT().Duties(
 		gomock.Any(),
@@ -124,10 +110,16 @@ func TestUpdateDuties_OK(t *testing.T) {
 
 	util.WaitTimeout(&wg, 2*time.Second)
 
-	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch+1, v.duties.CurrentEpochDuties[0].ProposerSlots[0], "Unexpected validator assignments")
-	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch, v.duties.CurrentEpochDuties[0].AttesterSlot, "Unexpected validator assignments")
-	assert.Equal(t, resp.CurrentEpochDuties[0].CommitteeIndex, v.duties.CurrentEpochDuties[0].CommitteeIndex, "Unexpected validator assignments")
-	assert.Equal(t, resp.CurrentEpochDuties[0].ValidatorIndex, v.duties.CurrentEpochDuties[0].ValidatorIndex, "Unexpected validator assignments")
+	duties := v.duties.CurrentEpochDuties()
+	require.Equal(t, 1, len(duties), "Expected one duty")
+	var gotDuty *ethpb.ValidatorDuty
+	for _, d := range duties {
+		gotDuty = d
+	}
+	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch+1, gotDuty.ProposerSlots[0], "Unexpected validator assignments")
+	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch, gotDuty.AttesterSlot, "Unexpected validator assignments")
+	assert.Equal(t, resp.CurrentEpochDuties[0].CommitteeIndex, gotDuty.CommitteeIndex, "Unexpected validator assignments")
+	assert.Equal(t, resp.CurrentEpochDuties[0].ValidatorIndex, gotDuty.ValidatorIndex, "Unexpected validator assignments")
 }
 
 func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
@@ -146,6 +138,7 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 		km:                 km,
 		validatorClient:    client,
 		blacklistedPubkeys: blacklistedPublicKeys,
+		duties:             &dutyStore{},
 	}
 
 	resp := &ethpb.ValidatorDutiesContainer{
@@ -206,6 +199,7 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 	v := validator{
 		km:              newMockKeymanager(t, randKeypair(t)),
 		validatorClient: client,
+		duties:          &dutyStore{},
 	}
 	client.EXPECT().Duties(
 		gomock.Any(),
@@ -250,6 +244,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		km:              newMockKeymanager(t, keys),
 		validatorClient: client,
 		distributed:     true,
+		duties:          &dutyStore{},
 	}
 
 	sigDomain := make([]byte, 32)
@@ -310,23 +305,25 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 	ctx := t.Context()
 	client := validatormock.NewMockValidatorClient(ctrl)
 
+	dutiesContainer := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{
+				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+				ValidatorIndex:  200,
+				CommitteeIndex:  100,
+				CommitteeLength: 4,
+				PublicKey:       []byte("testPubKey_1"),
+				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+			},
+		},
+	}
+	ds := testDutyStore(dutiesContainer.CurrentEpochDuties[0])
+	ds.prevDependentRoot = bytesutil.PadTo([]byte{0x01, 0x02, 0x03}, fieldparams.RootLength)
+	ds.currDependentRoot = bytesutil.PadTo([]byte{0x04, 0x05, 0x06}, fieldparams.RootLength)
 	v := &validator{
 		km:              newMockKeymanager(t, randKeypair(t)),
 		validatorClient: client,
-		duties: &ethpb.ValidatorDutiesContainer{
-			PrevDependentRoot: bytesutil.PadTo([]byte{0x01, 0x02, 0x03}, fieldparams.RootLength),
-			CurrDependentRoot: bytesutil.PadTo([]byte{0x04, 0x05, 0x06}, fieldparams.RootLength),
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
-					ValidatorIndex:  200,
-					CommitteeIndex:  100,
-					CommitteeLength: 4,
-					PublicKey:       []byte("testPubKey_1"),
-					ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
-				},
-			},
-		},
+		duties:          ds,
 	}
 
 	t.Run("nil head event", func(t *testing.T) {
@@ -366,7 +363,7 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
 			return nil, nil
 		}).AnyTimes()
-		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(v.duties, nil)
+		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(dutiesContainer, nil)
 		err := v.checkDependentRoots(ctx, head)
 		require.NoError(t, err)
 	})
@@ -377,7 +374,7 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
 			CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
 		}
-		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(v.duties, nil)
+		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(dutiesContainer, nil)
 		var wg sync.WaitGroup
 		wg.Add(1)
 
@@ -401,7 +398,8 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		}
 		curr, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
 		require.NoError(t, err)
-		require.DeepEqual(t, curr, v.duties.CurrDependentRoot)
+		_, storedCurr := v.duties.DependentRoots()
+		require.DeepEqual(t, curr, storedCurr)
 		require.NoError(t, v.checkDependentRoots(ctx, head))
 	})
 }
