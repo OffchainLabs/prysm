@@ -237,6 +237,7 @@ func setupExecutionPayloadEnvelopeService(t *testing.T, envelopeSlot, blockSlot 
 	state, err := util.NewBeaconStateFulu()
 	require.NoError(t, err)
 	require.NoError(t, db.SaveState(ctx, state, root))
+	chainService.State = state
 
 	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
 	env := testSignedExecutionPayloadEnvelope(t, envelopeSlot, primitives.BuilderIndex(bid.Message.BuilderIndex), root, blockHash)

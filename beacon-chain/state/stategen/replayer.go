@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -115,14 +116,16 @@ func (rs *stateReplayer) ReplayBlocks(ctx context.Context) (state.BeaconState, e
 		}
 
 		var envelope *ethpb.SignedBlindedExecutionPayloadEnvelope
-		if p, ok := rs.chainer.(executionPayloadEnvelopeProvider); ok {
-			root, err := b.Block().HashTreeRoot()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not compute block root for execution payload envelope lookup")
-			}
-			envelope, err = p.executionPayloadEnvelope(ctx, root)
-			if err != nil && !errors.Is(err, db.ErrNotFound) {
-				return nil, errors.Wrap(err, "could not retrieve execution payload envelope")
+		if b.Version() >= version.Gloas {
+			if p, ok := rs.chainer.(executionPayloadEnvelopeProvider); ok {
+				root, err := b.Block().HashTreeRoot()
+				if err != nil {
+					return nil, errors.Wrap(err, "could not compute block root for execution payload envelope lookup")
+				}
+				envelope, err = p.executionPayloadEnvelope(ctx, root)
+				if err != nil && !errors.Is(err, db.ErrNotFound) {
+					return nil, errors.Wrap(err, "could not retrieve execution payload envelope")
+				}
 			}
 		}
 

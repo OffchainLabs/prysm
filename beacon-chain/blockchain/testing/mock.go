@@ -77,8 +77,8 @@ type ChainService struct {
 	DataColumns                 []blocks.VerifiedRODataColumn
 	TargetRoot                  [32]byte
 	MockHeadSlot                *primitives.Slot
-	MockCanonicalRoots          map[primitives.Slot][32]byte
-	MockCanonicalFull           map[primitives.Slot]bool
+	ParentPayloadReadyVal       *bool
+	ForkchoiceRoots             map[[32]byte]bool
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -581,7 +581,10 @@ func (s *ChainService) IsOptimistic(_ context.Context) (bool, error) {
 }
 
 // InForkchoice mocks the same method in the chain service
-func (s *ChainService) InForkchoice(_ [32]byte) bool {
+func (s *ChainService) InForkchoice(root [32]byte) bool {
+	if s.ForkchoiceRoots != nil {
+		return s.ForkchoiceRoots[root]
+	}
 	return !s.NotFinalized
 }
 
@@ -788,7 +791,10 @@ func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ inte
 }
 
 // ParentPayloadReady mocks the same method in the chain service.
-func (*ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool {
+func (s *ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool {
+	if s.ParentPayloadReadyVal != nil {
+		return *s.ParentPayloadReadyVal
+	}
 	return true
 }
 
@@ -800,17 +806,6 @@ func (c *ChainService) DependentRootForEpoch(_ [32]byte, _ primitives.Epoch) ([3
 // TargetRootForEpoch mocks the same method in the chain service
 func (c *ChainService) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
 	return c.TargetRoot, nil
-}
-
-func (c *ChainService) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) {
-	var root [32]byte
-	if c.MockCanonicalRoots != nil {
-		root = c.MockCanonicalRoots[slot]
-	}
-	if c.MockCanonicalFull != nil {
-		return root, c.MockCanonicalFull[slot]
-	}
-	return root, false
 }
 
 // MockSyncChecker is a mock implementation of blockchain.Checker.
