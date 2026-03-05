@@ -128,14 +128,6 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return nil
 	}
 
-	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
-		Type: statefeed.PayloadProcessed,
-		Data: &statefeed.PayloadProcessedData{
-			Slot:      envelope.Slot(),
-			BlockRoot: root,
-		},
-	})
-
 	log.WithFields(logrus.Fields{
 		"slot":       envelope.Slot(),
 		"blockRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),

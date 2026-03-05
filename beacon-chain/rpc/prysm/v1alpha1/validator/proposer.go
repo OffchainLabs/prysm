@@ -664,29 +664,6 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedB
 	return root[:], nil
 }
 
-// calculateStateRootWithoutNSC computes the state root for a Gloas block
-// without using the NextSlotCache. This is necessary because in Gloas the
-// execution payload is processed separately from the beacon block, and the
-// NSC may hold a stale post-beacon-block state (keyed by beacon block root)
-// that lacks execution payload effects (e.g. updated latestBlockHash).
-func calculateStateRootWithoutNSC(
-	ctx context.Context,
-	st state.BeaconState,
-	signed interfaces.SignedBeaconBlock,
-) ([32]byte, error) {
-	st = st.Copy()
-	var err error
-	st, err = transition.ProcessSlots(ctx, st, signed.Block().Slot())
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not process slots")
-	}
-	st, err = transition.ProcessBlockForStateRoot(ctx, st, signed)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not process block")
-	}
-	return st.HashTreeRoot(ctx)
-}
-
 type computeStateRootAttemptsKeyType string
 
 const computeStateRootAttemptsKey = computeStateRootAttemptsKeyType("compute-state-root-attempts")
