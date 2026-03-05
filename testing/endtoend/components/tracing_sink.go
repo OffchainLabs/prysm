@@ -113,19 +113,11 @@ func (ts *TracingSink) initializeSink(ctx context.Context) {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				cleanup()
-				return
-			case <-sigs:
-				cleanup()
-				return
-			default:
-				// Sleep for 100ms and do nothing while waiting for
-				// cancellation.
-				time.Sleep(100 * time.Millisecond)
-			}
+		select {
+		case <-ctx.Done():
+			cleanup()
+		case <-sigs:
+			cleanup()
 		}
 	}()
 	if err := ts.server.ListenAndServe(); err != http.ErrServerClosed {

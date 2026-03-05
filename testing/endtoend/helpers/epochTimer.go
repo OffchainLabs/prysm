@@ -25,16 +25,17 @@ func (s *EpochTicker) C() <-chan uint64 {
 
 // Done should be called to clean up the ticker.
 func (s *EpochTicker) Done() {
-	go func() {
-		s.done <- struct{}{}
-	}()
+	select {
+	case s.done <- struct{}{}:
+	default:
+	}
 }
 
 // NewEpochTicker starts the EpochTicker.
 func NewEpochTicker(genesisTime time.Time, secondsPerEpoch uint64) *EpochTicker {
 	ticker := &EpochTicker{
 		c:    make(chan uint64),
-		done: make(chan struct{}),
+		done: make(chan struct{}, 1),
 	}
 	ticker.start(genesisTime, secondsPerEpoch, prysmTime.Since, prysmTime.Until, time.After)
 	return ticker

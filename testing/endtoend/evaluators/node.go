@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -59,7 +61,7 @@ func healthzCheck(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) erro
 	for i := range count {
 		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/healthz", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i))
 		if err != nil {
-			// Continue if the connection fails, regular flake.
+			log.WithError(err).Warnf("Healthz check failed for beacon node %d, skipping", i)
 			continue
 		}
 		if resp.StatusCode != http.StatusOK {
@@ -78,7 +80,7 @@ func healthzCheck(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) erro
 	for i := range count {
 		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/healthz", e2e.TestParams.Ports.ValidatorMetricsPort+i))
 		if err != nil {
-			// Continue if the connection fails, regular flake.
+			log.WithError(err).Warnf("Healthz check failed for validator client %d, skipping", i)
 			continue
 		}
 		if resp.StatusCode != http.StatusOK {
