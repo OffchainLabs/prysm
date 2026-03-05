@@ -3,12 +3,14 @@ package client
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -79,18 +81,18 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 		return
 	}
 
-	// msgSlot := msg.Slot
-	// slotTime, err := slots.StartTime(v.genesisTime, msgSlot)
-	// if err != nil {
-	// 	log.WithError(err).Error("Failed to determine slot start time")
-	// }
-	// log.WithFields(logrus.Fields{
-	// 	"slot":               msg.Slot,
-	// 	"slotStartTime":      slotTime,
-	// 	"timeSinceSlotStart": time.Since(slotTime),
-	// 	"blockRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(msg.BlockRoot)),
-	// 	"validatorIndex":     msg.ValidatorIndex,
-	// }).Info("Submitted new sync message")
+	msgSlot := msg.Slot
+	slotTime, err := slots.StartTime(v.genesisTime, msgSlot)
+	if err != nil {
+		log.WithError(err).Error("Failed to determine slot start time")
+	}
+	log.WithFields(logrus.Fields{
+		"slot":               msg.Slot,
+		"slotStartTime":      slotTime,
+		"timeSinceSlotStart": time.Since(slotTime),
+		"blockRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(msg.BlockRoot)),
+		"validatorIndex":     msg.ValidatorIndex,
+	}).Trace("Submitted new sync message")
 	v.syncCommitteeStats.totalMessagesSubmitted.Add(1)
 }
 
@@ -187,20 +189,20 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 
 		coveredSubnets[subnet] = true
 
-		// contributionSlot := contributionAndProof.Contribution.Slot
-		// slotTime, err := slots.StartTime(v.genesisTime, contributionSlot)
-		// if err != nil {
-		// 	log.WithError(err).Error("Failed to determine slot start time")
-		// }
-		// log.WithFields(logrus.Fields{
-		// 	"slot":               contributionAndProof.Contribution.Slot,
-		// 	"slotStartTime":      slotTime,
-		// 	"timeSinceSlotStart": time.Since(slotTime),
-		// 	"blockRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(contributionAndProof.Contribution.BlockRoot)),
-		// 	"subcommitteeIndex":  contributionAndProof.Contribution.SubcommitteeIndex,
-		// 	"aggregatorIndex":    contributionAndProof.AggregatorIndex,
-		// 	"bitsCount":          contributionAndProof.Contribution.AggregationBits.Count(),
-		// }).Info("Submitted new sync contribution and proof")
+		contributionSlot := contributionAndProof.Contribution.Slot
+		slotTime, err := slots.StartTime(v.genesisTime, contributionSlot)
+		if err != nil {
+			log.WithError(err).Error("Failed to determine slot start time")
+		}
+		log.WithFields(logrus.Fields{
+			"slot":               contributionAndProof.Contribution.Slot,
+			"slotStartTime":      slotTime,
+			"timeSinceSlotStart": time.Since(slotTime),
+			"blockRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(contributionAndProof.Contribution.BlockRoot)),
+			"subcommitteeIndex":  contributionAndProof.Contribution.SubcommitteeIndex,
+			"aggregatorIndex":    contributionAndProof.AggregatorIndex,
+			"bitsCount":          contributionAndProof.Contribution.AggregationBits.Count(),
+		}).Trace("Submitted new sync contribution and proof")
 	}
 }
 
