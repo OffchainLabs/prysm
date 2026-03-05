@@ -82,9 +82,9 @@ func (c *CheckpointStateCache) AddCheckpointState(cp *ethpb.Checkpoint, s state.
 	return nil
 }
 
-// EvictFinalized removes all entries from the cache whose state epoch is at
-// or before the given finalized epoch. Returns the number of evicted entries.
-func (c *CheckpointStateCache) EvictFinalized(finalizedEpoch primitives.Epoch) int {
+// EvictUpTo removes all entries from the cache whose state epoch is at
+// or before the given epoch. Returns the number of evicted entries.
+func (c *CheckpointStateCache) EvictUpTo(epoch primitives.Epoch) int {
 	evicted := 0
 	for _, key := range c.cache.Keys() {
 		// Peek is used here to avoid updating the recency of the entry,
@@ -95,7 +95,7 @@ func (c *CheckpointStateCache) EvictFinalized(finalizedEpoch primitives.Epoch) i
 		}
 
 		st := v.(state.ReadOnlyBeaconState)
-		if slots.ToEpoch(st.Slot()) <= finalizedEpoch {
+		if slots.ToEpoch(st.Slot()) <= epoch {
 			c.cache.Remove(key)
 			evicted++
 		}

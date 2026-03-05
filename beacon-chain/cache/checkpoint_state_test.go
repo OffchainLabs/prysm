@@ -81,7 +81,7 @@ func TestCheckpointStateCache_EvictFinalized_FinalizedEntry(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, c.AddCheckpointState(cp, st))
 
-	evicted := c.EvictFinalized(1)
+	evicted := c.EvictUpTo(1)
 	assert.Equal(t, 1, evicted, "expected finalized entry to be evicted")
 
 	s, err := c.StateByCheckpoint(cp)
@@ -97,7 +97,7 @@ func TestCheckpointStateCache_EvictFinalized_NotFinalizedEntry(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, c.AddCheckpointState(cp, st))
 
-	evicted := c.EvictFinalized(3)
+	evicted := c.EvictUpTo(3)
 	assert.Equal(t, 0, evicted, "expected non-finalized entry NOT to be evicted")
 
 	s, err := c.StateByCheckpoint(cp)
@@ -124,7 +124,7 @@ func TestCheckpointStateCache_EvictFinalized_Mixed(t *testing.T) {
 	require.NoError(t, c.AddCheckpointState(cp2, st2))
 	require.NoError(t, c.AddCheckpointState(cp5, st5))
 
-	evicted := c.EvictFinalized(3)
+	evicted := c.EvictUpTo(3)
 	assert.Equal(t, 2, evicted, "expected epochs 1 and 2 to be evicted")
 
 	s, err := c.StateByCheckpoint(cp1)
@@ -142,6 +142,6 @@ func TestCheckpointStateCache_EvictFinalized_Mixed(t *testing.T) {
 
 func TestCheckpointStateCache_EvictFinalized_EmptyCache(t *testing.T) {
 	c := cache.NewCheckpointStateCache()
-	evicted := c.EvictFinalized(0)
+	evicted := c.EvictUpTo(0)
 	assert.Equal(t, 0, evicted, "expected no eviction from empty cache")
 }

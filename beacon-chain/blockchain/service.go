@@ -212,28 +212,7 @@ func (s *Service) Start() {
 		log.Fatal(err)
 	}
 	s.spawnProcessAttestationsRoutine()
-	s.spawnCheckpointStateCacheEvictionRoutine()
 	go s.runLateBlockTasks()
-}
-
-// spawnCheckpointStateCacheEvictionRoutine runs a background goroutine that
-// evicts finalized checkpoint state cache entries once per epoch at slot 5,
-// removing entries whose epoch is at or before the finalized epoch.
-func (s *Service) spawnCheckpointStateCacheEvictionRoutine() {
-	const evictionSlot = 5 // slot within an epoch at which eviction runs
-
-	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
-	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
-
-	ticker := slots.NewSlotTicker(s.genesisTime, secondsPerSlot)
-	go func() {
-		for slot := range ticker.C() {
-			if uint64(slot)%slotsPerEpoch == evictionSlot {
-				finalizedEpoch := s.FinalizedCheckpt().Epoch
-				s.checkpointStateCache.EvictFinalized(finalizedEpoch)
-			}
-		}
-	}()
 }
 
 // Stop the blockchain service's main event loop and associated goroutines.
