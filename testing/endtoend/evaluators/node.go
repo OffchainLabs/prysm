@@ -56,8 +56,12 @@ var FinishedSyncing = e2etypes.Evaluator{
 	Evaluation: finishedSyncing,
 }
 
-// AllNodesHaveSameHead ensures all nodes have the same head epoch. Checks finality and justification as well.
-// Not checking head block root as it may change irregularly for the validator connected nodes.
+// AllNodesHaveSameHead ensures all nodes converge on the same canonical head:
+// epoch, head block root, justified root, previous justified root, and finalized root.
+// We intentionally check head block root (unlike older behavior) because only comparing
+// epochs can hide real divergence where nodes are on different blocks in the same slot/epoch.
+// To avoid reintroducing flake, the evaluator now waits for readiness and requires
+// convergence across consecutive samples before passing.
 var AllNodesHaveSameHead = e2etypes.Evaluator{
 	Name:       "all_nodes_have_same_head_%d",
 	Policy:     policies.AllEpochs,
