@@ -1744,6 +1744,85 @@ func TestGetAttestationData(t *testing.T) {
 		var att ethpbalpha.AttestationData
 		require.NoError(t, att.UnmarshalSSZ(writer.Body.Bytes()))
 	})
+
+	t.Run("committeeIndex omitted after gloas", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.GloasForkEpoch = 3
+		params.OverrideBeaconConfig(cfg)
+
+		block := util.NewBeaconBlock()
+		block.Block.Slot = 3*params.BeaconConfig().SlotsPerEpoch + 1
+		targetBlock := util.NewBeaconBlock()
+		targetBlock.Block.Slot = 1 * params.BeaconConfig().SlotsPerEpoch
+		justifiedBlock := util.NewBeaconBlock()
+		justifiedBlock.Block.Slot = 2 * params.BeaconConfig().SlotsPerEpoch
+		blockRoot, err := block.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not hash beacon block")
+		justifiedRoot, err := justifiedBlock.Block.HashTreeRoot()
+		require.NoError(t, err, "Could not get signing root for justified block")
+		slot := 3*params.BeaconConfig().SlotsPerEpoch + 1
+		beaconState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, beaconState.SetSlot(slot))
+		justifiedCheckpoint := &ethpbalpha.Checkpoint{
+			Epoch: 2,
+			Root:  justifiedRoot[:],
+		}
+		require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(justifiedCheckpoint))
+		offset := int64(slot.Mul(params.BeaconConfig().SecondsPerSlot))
+		chain := &mockChain.ChainService{
+			Optimistic:                 false,
+			Genesis:                    time.Now().Add(time.Duration(-1*offset) * time.Second),
+			Root:                       blockRoot[:],
+			CurrentJustifiedCheckPoint: justifiedCheckpoint,
+			TargetRoot:                 blockRoot,
+			State:                      beaconState,
+		}
+
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chain,
+			TimeFetcher:           chain,
+			OptimisticModeFetcher: chain,
+			CoreService: &core.Service{
+				HeadFetcher:           chain,
+				GenesisTimeFetcher:    chain,
+				FinalizedFetcher:      chain,
+				AttestationCache:      cache.NewAttestationDataCache(),
+				OptimisticModeFetcher: chain,
+			},
+		}
+
+		url := fmt.Sprintf("http://example.com?slot=%d", slot)
+		request := httptest.NewRequest(http.MethodGet, url, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetAttestationData(writer, request)
+
+		expectedResponse := &structs.GetAttestationDataResponse{
+			Data: &structs.AttestationData{
+				Slot:            strconv.FormatUint(uint64(slot), 10),
+				BeaconBlockRoot: hexutil.Encode(blockRoot[:]),
+				CommitteeIndex:  strconv.FormatUint(0, 10),
+				Source: &structs.Checkpoint{
+					Epoch: strconv.FormatUint(2, 10),
+					Root:  hexutil.Encode(justifiedRoot[:]),
+				},
+				Target: &structs.Checkpoint{
+					Epoch: strconv.FormatUint(3, 10),
+					Root:  hexutil.Encode(blockRoot[:]),
+				},
+			},
+		}
+
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetAttestationDataResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.NotNil(t, resp)
+		assert.DeepEqual(t, expectedResponse, resp)
+	})
 }
 
 func TestProduceSyncCommitteeContribution(t *testing.T) {
@@ -2009,6 +2088,7 @@ func TestGetAttesterDuties(t *testing.T) {
 		OptimisticModeFetcher: chain,
 		HeadFetcher:           chain,
 		BeaconDB:              db,
+		CoreService:           &core.Service{},
 	}
 
 	t.Run("single validator", func(t *testing.T) {
@@ -2327,6 +2407,7 @@ func TestGetProposerDuties(t *testing.T) {
 			PayloadIDCache:         cache.NewPayloadIDCache(),
 			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 			BeaconDB:               db,
+			CoreService:            &core.Service{},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
@@ -2369,6 +2450,7 @@ func TestGetProposerDuties(t *testing.T) {
 			PayloadIDCache:         cache.NewPayloadIDCache(),
 			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 			BeaconDB:               db,
+			CoreService:            &core.Service{},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
@@ -2412,6 +2494,7 @@ func TestGetProposerDuties(t *testing.T) {
 			PayloadIDCache:         cache.NewPayloadIDCache(),
 			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 			BeaconDB:               db,
+			CoreService:            &core.Service{},
 		}
 
 		currentEpoch := slots.ToEpoch(bs.Slot())
@@ -2451,6 +2534,7 @@ func TestGetProposerDuties(t *testing.T) {
 			PayloadIDCache:         cache.NewPayloadIDCache(),
 			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 			BeaconDB:               db,
+			CoreService:            &core.Service{},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
@@ -2577,6 +2661,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 		TimeFetcher:           mockChainService,
 		HeadFetcher:           mockChainService,
 		OptimisticModeFetcher: mockChainService,
+		CoreService:           &core.Service{},
 	}
 
 	t.Run("single validator", func(t *testing.T) {
@@ -2768,6 +2853,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 			TimeFetcher:           mockChainService,
 			HeadFetcher:           mockChainService,
 			OptimisticModeFetcher: mockChainService,
+			CoreService:           &core.Service{},
 		}
 
 		var body bytes.Buffer
@@ -2863,6 +2949,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 			OptimisticModeFetcher: mockChainService,
 			ChainInfoFetcher:      mockChainService,
 			BeaconDB:              db,
+			CoreService:           &core.Service{},
 		}
 
 		var body bytes.Buffer
@@ -2956,6 +3043,250 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusInternalServerError, e.Code)
+	})
+}
+
+func TestGetPTCDuties(t *testing.T) {
+	helpers.ClearCache()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	// Use fixed slot 0 for deterministic tests.
+	slot := primitives.Slot(0)
+	genesisTime := time.Now()
+	// Need enough validators for PTC selection (PTC_SIZE is 512 on mainnet, 2 on minimal)
+	numVals := uint64(fieldparams.PTCSize * 2)
+	st, _ := util.DeterministicGenesisStateFulu(t, numVals)
+	require.NoError(t, st.SetGenesisTime(genesisTime))
+	// Initialize the committee cache for epoch 0.
+	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), st, 0))
+
+	// Set up a genesis block root for dependent_root calculation.
+	genesisRoot := [32]byte{1, 2, 3}
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
+
+	mockChainService := &mockChain.ChainService{Genesis: genesisTime, State: st, Slot: &slot}
+	s := &Server{
+		Stater:                &testutil.MockStater{BeaconState: st},
+		SyncChecker:           &mockSync.Sync{IsSyncing: false},
+		TimeFetcher:           mockChainService,
+		HeadFetcher:           mockChainService,
+		OptimisticModeFetcher: mockChainService,
+		BeaconDB:              db,
+	}
+
+	t.Run("single validator in PTC", func(t *testing.T) {
+		// Request duties for validator index 0
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"0\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", &body)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetPTCDutiesResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.NotEmpty(t, resp.DependentRoot)
+	})
+
+	t.Run("verifies PTC duties correctness", func(t *testing.T) {
+		// Request duties for a range of validators.
+		// Some will be in the PTC, some won't.
+		var indices []string
+		requestedSet := make(map[primitives.ValidatorIndex]struct{})
+		for i := range 100 {
+			indices = append(indices, strconv.Itoa(i))
+			requestedSet[primitives.ValidatorIndex(i)] = struct{}{}
+		}
+
+		// Test ptcDuties directly.
+		directDuties, err := ptcDuties(t.Context(), st, requestedSet)
+		require.NoError(t, err)
+		// Should return some duties (not necessarily all 100, depends on PTC selection).
+		require.NotEmpty(t, directDuties, "Should return at least some duties")
+
+		// All returned duties should be for slots within epoch 0.
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+		for _, duty := range directDuties {
+			if uint64(duty.slot) >= uint64(slotsPerEpoch) {
+				t.Errorf("Duty slot %d should be within epoch 0 (< %d)", duty.slot, slotsPerEpoch)
+			}
+			// Verify returned validator was in the request.
+			_, ok := requestedSet[duty.validatorIndex]
+			if !ok {
+				t.Errorf("Returned validator %d should be in requested set", duty.validatorIndex)
+			}
+		}
+
+		// Test via HTTP - should return same count.
+		indicesJSON, err := json.Marshal(indices)
+		require.NoError(t, err)
+
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", bytes.NewReader(indicesJSON))
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetPTCDutiesResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+
+		// HTTP response should match direct call.
+		assert.Equal(t, len(directDuties), len(resp.Data), "HTTP response should match direct PTCDuties call")
+	})
+
+	t.Run("multiple validators", func(t *testing.T) {
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"0\",\"1\",\"2\",\"3\",\"4\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", &body)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetPTCDutiesResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.NotEmpty(t, resp.DependentRoot)
+		// Verify any returned duties have correct structure
+		for _, duty := range resp.Data {
+			assert.NotEmpty(t, duty.Pubkey)
+			assert.NotEmpty(t, duty.ValidatorIndex)
+			assert.NotEmpty(t, duty.Slot)
+		}
+	})
+
+	t.Run("duplicate validator indices are deduplicated", func(t *testing.T) {
+		// Request the same validator multiple times - should be deduplicated.
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"0\",\"0\",\"0\",\"1\",\"1\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", &body)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetPTCDutiesResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		// Each validator should appear at most once in the response.
+		seen := make(map[string]bool)
+		for _, duty := range resp.Data {
+			if seen[duty.ValidatorIndex] {
+				t.Errorf("Validator %s appears multiple times in response", duty.ValidatorIndex)
+			}
+			seen[duty.ValidatorIndex] = true
+		}
+	})
+
+	t.Run("pre-Gloas epoch returns error", func(t *testing.T) {
+		// Temporarily set GloasForkEpoch to 10
+		cfg := params.BeaconConfig()
+		cfg.GloasForkEpoch = 10
+		params.OverrideBeaconConfig(cfg)
+		defer func() {
+			cfg.GloasForkEpoch = 0
+			params.OverrideBeaconConfig(cfg)
+		}()
+
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"0\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", &body)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.StringContains(t, "PTC duties are not available before Gloas fork", e.Message)
+	})
+
+	t.Run("no body", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", nil)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.StringContains(t, "No data submitted", e.Message)
+	})
+
+	t.Run("empty body", func(t *testing.T) {
+		var body bytes.Buffer
+		_, err := body.WriteString("[]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", &body)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.StringContains(t, "No data submitted", e.Message)
+	})
+
+	t.Run("invalid validator index string", func(t *testing.T) {
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"foo\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", &body)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+	})
+
+	t.Run("out of bounds validator index", func(t *testing.T) {
+		// Request a validator index that's way beyond the number of validators.
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"999999999\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", &body)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		// Invalid validator index should return 400, matching attester duties behavior.
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.StringContains(t, "Invalid validator index", e.Message)
+	})
+
+	t.Run("epoch too far in future", func(t *testing.T) {
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"0\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", &body)
+		request.SetPathValue("epoch", "100") // Far future epoch
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.StringContains(t, "can not be greater than next epoch", e.Message)
 	})
 }
 

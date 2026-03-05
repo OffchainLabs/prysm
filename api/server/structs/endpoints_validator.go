@@ -74,6 +74,18 @@ type SyncCommitteeDuty struct {
 	ValidatorSyncCommitteeIndices []string `json:"validator_sync_committee_indices"`
 }
 
+type GetPTCDutiesResponse struct {
+	DependentRoot       string     `json:"dependent_root"`
+	ExecutionOptimistic bool       `json:"execution_optimistic"`
+	Data                []*PTCDuty `json:"data"`
+}
+
+type PTCDuty struct {
+	Pubkey         string `json:"pubkey"`
+	ValidatorIndex string `json:"validator_index"`
+	Slot           string `json:"slot"`
+}
+
 // ProduceBlockV3Response is a wrapper json object for the returned block from the ProduceBlockV3 endpoint
 type ProduceBlockV3Response struct {
 	Version                 string          `json:"version"`

@@ -42,6 +42,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -60,18 +61,18 @@ import (
 var _ runtime.Service = (*Service)(nil)
 
 const (
-	rangeLimit               uint64 = 1024
-	seenBlockSize                   = 1000
-	seenPayloadEnvelopeSize         = 1000
-	seenDataColumnSize              = seenBlockSize * 128 // Each block can have max 128 data columns.
-	seenUnaggregatedAttSize         = 20000
-	seenAggregatedAttSize           = 16384
-	seenSyncMsgSize                 = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
-	seenSyncContributionSize        = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
-	seenExitSize                    = 100
-	seenProposerSlashingSize        = 100
-	badBlockSize                    = 1000
-	syncMetricsInterval             = 10 * time.Second
+	rangeLimit               = 1024
+	seenBlockSize            = 1000
+	seenPayloadEnvelopeSize  = 1000
+	seenDataColumnSize       = seenBlockSize * 128 // Each block can have max 128 data columns.
+	seenUnaggregatedAttSize  = 20000
+	seenAggregatedAttSize    = 16384
+	seenSyncMsgSize          = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
+	seenSyncContributionSize = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
+	seenExitSize             = 100
+	seenProposerSlashingSize = 100
+	badBlockSize             = 1000
+	syncMetricsInterval      = 10 * time.Second
 )
 
 var (
@@ -170,6 +171,8 @@ type Service struct {
 	seenSyncContributionCache           *lru.Cache
 	badBlockCache                       *lru.Cache
 	badBlockLock                        sync.RWMutex
+	badPayloadCache                     *lru.Cache
+	badPayloadLock                      sync.RWMutex
 	syncContributionBitsOverlapLock     sync.RWMutex
 	syncContributionBitsOverlapCache    *lru.Cache
 	signatureChan                       chan *signatureVerifier
@@ -192,6 +195,9 @@ type Service struct {
 	digestActions                       perDigestSet
 	subscriptionSpawner                 func(func()) // see Service.spawn for details
 	newExecutionPayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
+	pendingPayloadEnvelopes             map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
+	pendingEnvelopeLock                 sync.RWMutex
+	selfBuildSigFailures                int
 }
 
 // NewService initializes new regular sync service.
@@ -208,6 +214,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		dataColumnLogCh:         make(chan dataColumnLogEntry, 1000),
 		reconstructionRandGen:   rand.NewGenerator(),
 		payloadAttestationCache: &cache.PayloadAttestationCache{},
+		pendingPayloadEnvelopes: make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
 	}
 
 	for _, opt := range opts {
@@ -289,6 +296,7 @@ func (s *Service) Start() {
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
 
 	s.processPendingBlocksQueue()
+	s.processPendingPayloadEnvelopeQueue()
 	s.maintainPeerStatuses()
 	s.resyncIfBehind()
 
@@ -375,6 +383,7 @@ func (s *Service) initCaches() {
 	s.seenAttesterSlashingCache = make(map[uint64]bool)
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
+	s.badPayloadCache = lruwrpr.New(badBlockSize)
 }
 
 func (s *Service) waitForChainStart() {

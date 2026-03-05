@@ -22,11 +22,15 @@ func newGrpcClientManager[T any](
 	conn validatorHelpers.NodeConnection,
 	newClient func(grpc.ClientConnInterface) T,
 ) *grpcClientManager[T] {
+	var lastConnCounter uint64
+	if provider := conn.GetGrpcConnectionProvider(); provider != nil {
+		lastConnCounter = provider.ConnectionCounter()
+	}
 	return &grpcClientManager[T]{
 		conn:            conn,
 		newClient:       newClient,
 		client:          newClient(conn.GetGrpcClientConn()),
-		lastConnCounter: conn.GetGrpcConnectionProvider().ConnectionCounter(),
+		lastConnCounter: lastConnCounter,
 	}
 }
 
@@ -38,7 +42,11 @@ func (m *grpcClientManager[T]) getClient() T {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	currentCounter := m.conn.GetGrpcConnectionProvider().ConnectionCounter()
+	provider := m.conn.GetGrpcConnectionProvider()
+	if provider == nil {
+		return m.client
+	}
+	currentCounter := provider.ConnectionCounter()
 	if m.lastConnCounter != currentCounter {
 		m.client = m.newClient(m.conn.GetGrpcClientConn())
 		m.lastConnCounter = currentCounter

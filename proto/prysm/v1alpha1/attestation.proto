@@ -56,8 +56,7 @@ message Attestation {
   // the same vote and have been aggregated into this attestation.
   bytes aggregation_bits = 1 [
     (ethereum.eth.ext.ssz_max) = "2048",
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/go-bitfield.Bitlist"
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
 
   AttestationData data = 2;
@@ -129,7 +128,8 @@ message AggregateAttestationAndProofElectra {
   // The aggregated attestation that was submitted.
   AttestationElectra aggregate = 2;
 
-  // 96 byte selection proof signed by the aggregator, which is the signature of the slot to aggregate.
+  // 96 byte selection proof signed by the aggregator, which is the signature of
+  // the slot to aggregate.
   bytes selection_proof = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
@@ -138,8 +138,7 @@ message AttestationElectra {
   // the same vote and have been aggregated into this attestation.
   bytes aggregation_bits = 1 [
     (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size",
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/go-bitfield.Bitlist"
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
 
   AttestationData data = 2;

@@ -77,6 +77,8 @@ type ChainService struct {
 	DataColumns                 []blocks.VerifiedRODataColumn
 	TargetRoot                  [32]byte
 	MockHeadSlot                *primitives.Slot
+	ParentPayloadReadyVal       *bool
+	ForkchoiceRoots             map[[32]byte]bool
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -334,6 +336,16 @@ func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOn
 	return nil
 }
 
+// GetBlockPreState mocks the same method in the chain service.
+func (s *ChainService) GetBlockPreState(_ context.Context, _ blocks.ROBlock) (state.BeaconState, error) {
+	return s.State, nil
+}
+
+// GetPrestateToPropose mocks the same method in the chain service.
+func (s *ChainService) GetPrestateToPropose(_ context.Context, _ blocks.ROBlock) (state.BeaconState, error) {
+	return s.State.Copy(), nil
+}
+
 // HeadSlot mocks HeadSlot method in chain service.
 func (s *ChainService) HeadSlot() primitives.Slot {
 	if s.MockHeadSlot != nil {
@@ -569,7 +581,10 @@ func (s *ChainService) IsOptimistic(_ context.Context) (bool, error) {
 }
 
 // InForkchoice mocks the same method in the chain service
-func (s *ChainService) InForkchoice(_ [32]byte) bool {
+func (s *ChainService) InForkchoice(root [32]byte) bool {
+	if s.ForkchoiceRoots != nil {
+		return s.ForkchoiceRoots[root]
+	}
 	return !s.NotFinalized
 }
 
@@ -700,6 +715,14 @@ func (s *ChainService) InsertNode(ctx context.Context, st state.BeaconState, blo
 	return nil
 }
 
+// InsertPayload mocks the same method in the chain service
+func (s *ChainService) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) error {
+	if s.ForkChoiceStore != nil {
+		return s.ForkChoiceStore.InsertPayload(pe)
+	}
+	return nil
+}
+
 // ForkChoiceDump mocks the same method in the chain service
 func (s *ChainService) ForkChoiceDump(ctx context.Context) (*forkchoice2.Dump, error) {
 	if s.ForkChoiceStore != nil {
@@ -765,6 +788,14 @@ func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *et
 // ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
 func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
 	return nil
+}
+
+// ParentPayloadReady mocks the same method in the chain service.
+func (s *ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool {
+	if s.ParentPayloadReadyVal != nil {
+		return *s.ParentPayloadReadyVal
+	}
+	return true
 }
 
 // DependentRootForEpoch mocks the same method in the chain service
