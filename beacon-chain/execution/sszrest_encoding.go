@@ -146,10 +146,10 @@ func marshalNewPayloadRequest(
 }
 
 // unmarshalPayloadStatusSSZ decodes an SSZ-encoded PayloadStatusSSZ response.
-// Layout per EIP-8161:
+// Layout per execution-apis spec:
 //
 //	status: uint8 (1 byte fixed)
-//	latest_valid_hash: Union[None, Hash32] (variable, offset at bytes 1..5)
+//	latest_valid_hash: List[Hash32, 1] (variable, offset at bytes 1..5)
 //	validation_error: List[uint8, 1024] (variable, offset at bytes 5..9)
 func unmarshalPayloadStatusSSZ(data []byte) (*pb.PayloadStatus, error) {
 	const fixedSize = 1 + 4 + 4 // status + 2 offsets
@@ -181,12 +181,12 @@ func unmarshalPayloadStatusSSZ(data []byte) (*pb.PayloadStatus, error) {
 		return nil, fmt.Errorf("SSZ payload status truncated")
 	}
 
-	// latest_valid_hash: Union[None, Hash32]
+	// latest_valid_hash: List[Hash32, 1] — 0 bytes = absent, 32 bytes = present
 	if hashOffset < errorOffset {
 		hashData := data[hashOffset:errorOffset]
-		if len(hashData) > 0 && hashData[0] == 1 && len(hashData) >= 33 {
+		if len(hashData) == 32 {
 			status.LatestValidHash = make([]byte, 32)
-			copy(status.LatestValidHash, hashData[1:33])
+			copy(status.LatestValidHash, hashData)
 		}
 	}
 
@@ -211,7 +211,7 @@ type forkchoiceUpdatedResponseSSZ struct {
 // Layout (SSZ container):
 //
 //	forkchoice_state: ForkchoiceState (96 bytes, fixed)
-//	payload_attributes: Union[None, PayloadAttributes] (variable, offset at bytes 96..100)
+//	payload_attributes: List[PayloadAttributes, 1] (variable, offset at bytes 96..100)
 func marshalForkchoiceUpdatedRequest(
 	state *pb.ForkchoiceState,
 	attrs payloadattribute.Attributer,
@@ -220,13 +220,13 @@ func marshalForkchoiceUpdatedRequest(
 
 	hasAttrs := attrs != nil && !attrs.IsEmpty()
 
-	// Fixed part = 96 (state) + 4 (offset for union) = 100 bytes
+	// Fixed part = 96 (state) + 4 (offset for list) = 100 bytes
 	const fixedSize = 100
 
 	if !hasAttrs {
 		buf := make([]byte, 0, fixedSize)
 		buf = append(buf, stateSSZ...)
-		// Offset points to end of data (no union data)
+		// Offset points to end of data (empty list)
 		buf = binary.LittleEndian.AppendUint32(buf, fixedSize)
 		return buf, nil
 	}
@@ -237,15 +237,16 @@ func marshalForkchoiceUpdatedRequest(
 		return nil, err
 	}
 
-	// Union encoding: selector byte (1 = present) + data
-	unionData := make([]byte, 0, 1+len(attrsSSZ))
-	unionData = append(unionData, 1)
-	unionData = append(unionData, attrsSSZ...)
+	// List[PayloadAttributes, 1] with 1 element: offset(4) + element data
+	// (PayloadAttributes is variable-size, so the list uses a 4-byte item offset)
+	listData := make([]byte, 0, 4+len(attrsSSZ))
+	listData = binary.LittleEndian.AppendUint32(listData, 4) // offset to element data
+	listData = append(listData, attrsSSZ...)
 
-	buf := make([]byte, 0, fixedSize+len(unionData))
+	buf := make([]byte, 0, fixedSize+len(listData))
 	buf = append(buf, stateSSZ...)
 	buf = binary.LittleEndian.AppendUint32(buf, fixedSize)
-	buf = append(buf, unionData...)
+	buf = append(buf, listData...)
 
 	return buf, nil
 }
@@ -340,16 +341,14 @@ func marshalWithdrawalSSZ(buf []byte, w *pb.Withdrawal) []byte {
 // Layout (SSZ container):
 //
 //	payload_status: PayloadStatusSSZ (variable, offset at bytes 0..4)
-//	payload_id: Union[None, uint64] (variable, offset at bytes 4..8)
+//	payload_id: List[Bytes8, 1] (variable, offset at bytes 4..8)
 func unmarshalForkchoiceUpdatedResponseSSZ(data []byte) (*forkchoiceUpdatedResponseSSZ, error) {
-	log.WithField("len", len(data)).WithField("first20", fmt.Sprintf("%x", data[:min(20, len(data))])).Info("SSZ-REST: unmarshal FCU response raw bytes")
 	if len(data) < 8 {
 		return nil, fmt.Errorf("SSZ forkchoice updated response too short: %d bytes", len(data))
 	}
 
 	statusOffset := binary.LittleEndian.Uint32(data[0:4])
 	payloadIdOffset := binary.LittleEndian.Uint32(data[4:8])
-	log.WithField("statusOffset", statusOffset).WithField("payloadIdOffset", payloadIdOffset).WithField("dataLen", len(data)).Info("SSZ-REST: FCU response offsets")
 
 	if uint32(len(data)) < statusOffset || uint32(len(data)) < payloadIdOffset {
 		return nil, fmt.Errorf("SSZ forkchoice updated response truncated")
@@ -363,20 +362,12 @@ func unmarshalForkchoiceUpdatedResponseSSZ(data []byte) (*forkchoiceUpdatedRespo
 
 	resp := &forkchoiceUpdatedResponseSSZ{Status: status}
 
-	// payload_id: Union[None, uint64]
-	if payloadIdOffset < uint32(len(data)) {
-		pidData := data[payloadIdOffset:]
-		log.WithField("pidDataLen", len(pidData)).WithField("pidFirst5", fmt.Sprintf("%x", pidData[:min(5, len(pidData))])).Info("SSZ-REST: FCU payload ID union data")
-		if len(pidData) > 0 && pidData[0] == 1 && len(pidData) >= 9 {
-			var pid pb.PayloadIDBytes
-			copy(pid[:], pidData[1:9])
-			resp.PayloadId = &pid
-			log.WithField("payloadId", fmt.Sprintf("%x", pid[:])).Info("SSZ-REST: decoded payload ID")
-		} else {
-			log.WithField("selector", pidData[0]).Info("SSZ-REST: payload ID is None or invalid")
-		}
-	} else {
-		log.Info("SSZ-REST: no payload ID data (offset at end)")
+	// payload_id: List[Bytes8, 1] — 0 bytes = absent, 8 bytes = present
+	pidData := data[payloadIdOffset:]
+	if len(pidData) == 8 {
+		var pid pb.PayloadIDBytes
+		copy(pid[:], pidData)
+		resp.PayloadId = &pid
 	}
 
 	return resp, nil
