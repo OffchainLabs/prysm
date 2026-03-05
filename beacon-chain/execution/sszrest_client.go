@@ -3,8 +3,6 @@ package execution
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
