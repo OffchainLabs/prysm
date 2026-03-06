@@ -73,12 +73,12 @@ func newGloasState(t *testing.T, slot primitives.Slot, availability []byte) stat
 		ExecutionPayloadAvailability: availability,
 		BuilderPendingPayments:       make([]*ethpb.BuilderPendingPayment, int(cfg.SlotsPerEpoch*2)),
 		LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
-			ParentBlockHash:        make([]byte, 32),
-			ParentBlockRoot:        make([]byte, 32),
-			BlockHash:              make([]byte, 32),
-			PrevRandao:             make([]byte, 32),
-			FeeRecipient:           make([]byte, 20),
-			BlobKzgCommitments:     [][]byte{make([]byte, 48)},
+			ParentBlockHash:    make([]byte, 32),
+			ParentBlockRoot:    make([]byte, 32),
+			BlockHash:          make([]byte, 32),
+			PrevRandao:         make([]byte, 32),
+			FeeRecipient:       make([]byte, 20),
+			BlobKzgCommitments: [][]byte{make([]byte, 48)},
 		},
 		Eth1Data: &ethpb.Eth1Data{
 			DepositRoot: make([]byte, 32),

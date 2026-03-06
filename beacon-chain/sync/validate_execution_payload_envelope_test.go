@@ -237,6 +237,7 @@ func setupExecutionPayloadEnvelopeService(t *testing.T, envelopeSlot, blockSlot 
 	state, err := util.NewBeaconStateFulu()
 	require.NoError(t, err)
 	require.NoError(t, db.SaveState(ctx, state, root))
+	chainService.State = state
 
 	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
 	env := testSignedExecutionPayloadEnvelope(t, envelopeSlot, primitives.BuilderIndex(bid.Message.BuilderIndex), root, blockHash)
@@ -262,6 +263,68 @@ func envelopeToPubsub(t *testing.T, s *Service, p p2p.P2P, env *ethpb.SignedExec
 			Data:  buf.Bytes(),
 			Topic: &topic,
 		},
+	}
+}
+
+func TestQueuePendingPayloadEnvelope_SelfBuildInvalidSignature(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name       string
+		builderIdx primitives.BuilderIndex
+		result     pubsub.ValidationResult
+		wantError  bool
+	}{
+		{
+			name:       "self-build with invalid signature is ignored",
+			builderIdx: params.BeaconConfig().BuilderIndexSelfBuild,
+			result:     pubsub.ValidationIgnore,
+		},
+		{
+			name:       "non-self-build with invalid signature is rejected",
+			builderIdx: 42,
+			result:     pubsub.ValidationReject,
+			wantError:  true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := p2ptest.NewTestP2P(t)
+			chainService := &mock.ChainService{
+				Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+				FinalizedCheckPoint: &ethpb.Checkpoint{},
+			}
+			st, err := util.NewBeaconStateFulu()
+			require.NoError(t, err)
+			chainService.State = st
+
+			s := &Service{
+				seenPayloadEnvelopeCache: lruwrpr.New(10),
+				pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+				cfg: &config{
+					p2p:         p,
+					initialSync: &mockSync.Sync{},
+					chain:       chainService,
+					clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+				},
+			}
+			s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{
+				errBlockRootSeen: errors.New("not seen"),
+				errSignature:     errors.New("bad signature"),
+			})
+
+			root := [32]byte{0x01}
+			blockHash := [32]byte{0x02}
+			env := testSignedExecutionPayloadEnvelope(t, 1, tc.builderIdx, root, blockHash)
+			msg := envelopeToPubsub(t, s, p, env)
+
+			result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+			if tc.wantError {
+				require.NotNil(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.result, result)
+		})
 	}
 }
 

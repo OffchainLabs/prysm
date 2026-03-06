@@ -171,6 +171,8 @@ type Service struct {
 	seenSyncContributionCache           *lru.Cache
 	badBlockCache                       *lru.Cache
 	badBlockLock                        sync.RWMutex
+	badPayloadCache                     *lru.Cache
+	badPayloadLock                      sync.RWMutex
 	syncContributionBitsOverlapLock     sync.RWMutex
 	syncContributionBitsOverlapCache    *lru.Cache
 	signatureChan                       chan *signatureVerifier
@@ -195,6 +197,7 @@ type Service struct {
 	newExecutionPayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
 	pendingPayloadEnvelopes             map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
 	pendingEnvelopeLock                 sync.RWMutex
+	selfBuildSigFailures                int
 }
 
 // NewService initializes new regular sync service.
@@ -380,6 +383,7 @@ func (s *Service) initCaches() {
 	s.seenAttesterSlashingCache = make(map[uint64]bool)
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
+	s.badPayloadCache = lruwrpr.New(badBlockSize)
 }
 
 func (s *Service) waitForChainStart() {
