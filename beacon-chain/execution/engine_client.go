@@ -166,13 +166,13 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 	ctx, cancel := context.WithDeadline(ctx, d)
 	defer cancel()
 
-	// EIP-8161: Try SSZ-REST first if available.
+	// EIP-8161: Try SSZ-REST first if available, fall back to JSON-RPC on any error.
 	if s.isSSZRestAvailable() {
 		hash, err := s.newPayloadSSZRest(ctx, payload, versionedHashes, parentBlockRoot, executionRequests)
-		if err == nil || !isNetworkError(err) {
-			return hash, err
+		if err == nil {
+			return hash, nil
 		}
-		log.WithError(err).Debug("SSZ-REST new_payload failed, falling back to JSON-RPC")
+		log.WithError(err).Warn("SSZ-REST new_payload failed, falling back to JSON-RPC")
 	}
 
 	result := &pb.PayloadStatus{}
@@ -247,13 +247,13 @@ func (s *Service) ForkchoiceUpdated(
 		return nil, nil, errors.New("nil payload attributer")
 	}
 
-	// EIP-8161: Try SSZ-REST first if available.
+	// EIP-8161: Try SSZ-REST first if available, fall back to JSON-RPC on any error.
 	if s.isSSZRestAvailable() {
 		pid, hash, err := s.forkchoiceUpdatedSSZRest(ctx, state, attrs)
-		if err == nil || !isNetworkError(err) {
-			return pid, hash, err
+		if err == nil {
+			return pid, hash, nil
 		}
-		log.WithError(err).Debug("SSZ-REST forkchoice_updated failed, falling back to JSON-RPC")
+		log.WithError(err).Warn("SSZ-REST forkchoice_updated failed, falling back to JSON-RPC")
 	}
 
 	result := &ForkchoiceUpdatedResponse{}
@@ -339,13 +339,13 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	ctx, cancel := context.WithDeadline(ctx, d)
 	defer cancel()
 
-	// EIP-8161: Try SSZ-REST first if available.
+	// EIP-8161: Try SSZ-REST first if available, fall back to JSON-RPC on any error.
 	if s.isSSZRestAvailable() {
 		res, err := s.getPayloadSSZRest(ctx, payloadId, slot)
-		if err == nil || !isNetworkError(err) {
-			return res, err
+		if err == nil {
+			return res, nil
 		}
-		log.WithError(err).Debug("SSZ-REST get_payload failed, falling back to JSON-RPC")
+		log.WithError(err).Warn("SSZ-REST get_payload failed, falling back to JSON-RPC")
 	}
 
 	method, result := getPayloadMethodAndMessage(slot)
@@ -377,15 +377,13 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 
 	var elSupportedEndpointsSlice []string
 
-	// EIP-8161: Try SSZ-REST first if available.
+	// EIP-8161: Try SSZ-REST first if available, fall back to JSON-RPC on any error.
 	if s.isSSZRestAvailable() {
 		result, err := s.exchangeCapabilitiesSSZRest(ctx, supportedEngineEndpoints)
 		if err == nil {
 			elSupportedEndpointsSlice = result
-		} else if isNetworkError(err) {
-			log.WithError(err).Debug("SSZ-REST exchange_capabilities failed, falling back to JSON-RPC")
 		} else {
-			return nil, err
+			log.WithError(err).Warn("SSZ-REST exchange_capabilities failed, falling back to JSON-RPC")
 		}
 	}
 
@@ -609,13 +607,13 @@ func (s *Service) GetBlobs(ctx context.Context, versionedHashes []common.Hash) (
 		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV1))
 	}
 
-	// EIP-8161: Try SSZ-REST first if available.
+	// EIP-8161: Try SSZ-REST first if available, fall back to JSON-RPC on any error.
 	if s.isSSZRestAvailable() {
 		result, err := s.getBlobsSSZRest(ctx, versionedHashes)
-		if err == nil || !isNetworkError(err) {
-			return result, err
+		if err == nil {
+			return result, nil
 		}
-		log.WithError(err).Debug("SSZ-REST get_blobs failed, falling back to JSON-RPC")
+		log.WithError(err).Warn("SSZ-REST get_blobs failed, falling back to JSON-RPC")
 	}
 
 	result := make([]*pb.BlobAndProof, len(versionedHashes))
@@ -653,7 +651,7 @@ func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVers
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionV1")
 	defer span.End()
 
-	// EIP-8161: Try SSZ-REST first if available.
+	// EIP-8161: Try SSZ-REST first if available, fall back to JSON-RPC on any error.
 	if s.isSSZRestAvailable() {
 		result, err := s.getClientVersionSSZRest(ctx)
 		if err == nil {
@@ -662,11 +660,7 @@ func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVers
 			}
 			return result, nil
 		}
-		if isNetworkError(err) {
-			log.WithError(err).Debug("SSZ-REST get_client_version failed, falling back to JSON-RPC")
-		} else {
-			return nil, err
-		}
+		log.WithError(err).Warn("SSZ-REST get_client_version failed, falling back to JSON-RPC")
 	}
 
 	commit := version.GitCommit()
