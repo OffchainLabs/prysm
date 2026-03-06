@@ -80,6 +80,7 @@ type ChainService struct {
 	MockCanonicalRoots          map[primitives.Slot][32]byte
 	MockCanonicalFull           map[primitives.Slot]bool
 	ParentPayloadReadyVal       *bool
+	ForkchoiceRoots             map[[32]byte]bool
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -582,7 +583,10 @@ func (s *ChainService) IsOptimistic(_ context.Context) (bool, error) {
 }
 
 // InForkchoice mocks the same method in the chain service
-func (s *ChainService) InForkchoice(_ [32]byte) bool {
+func (s *ChainService) InForkchoice(root [32]byte) bool {
+	if s.ForkchoiceRoots != nil {
+		return s.ForkchoiceRoots[root]
+	}
 	return !s.NotFinalized
 }
 
