@@ -351,6 +351,8 @@ func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedSta
 			}
 		}()
 	}
+
+	go s.checkpointStateCache.EvictUpTo(finalized.Epoch)
 }
 
 // ReceiveBlockBatch processes the whole block batch at once, assuming the block batch is linear ,transitioning
