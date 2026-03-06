@@ -1,6 +1,7 @@
 package initialsync
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -176,6 +177,32 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 
 	if len(bwb) == 0 {
 		return 0, nil
+	}
+
+	// If the first unprocessed block is Gloas and its parent was filtered out,
+	// apply the parent's envelope if the parent slot was full.
+	if len(bwb) < len(data.bwb) && bwb[0].Block.Version() >= version.Gloas {
+		parentIdx := len(data.bwb) - len(bwb) - 1
+		parent := data.bwb[parentIdx]
+		if parent.Block.Version() >= version.Gloas && parent.SignedExecutionPayloadEnvelope != nil {
+			parentBid, err := parent.Block.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return 0, errors.Wrapf(err, "parent bid at slot %d", parent.Block.Block().Slot())
+			}
+			childBid, err := bwb[0].Block.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return 0, errors.Wrapf(err, "child bid at slot %d", bwb[0].Block.Block().Slot())
+			}
+			if bytes.Equal(childBid.Message.ParentBlockHash, parentBid.Message.BlockHash) {
+				env, err := blocks.WrappedROSignedExecutionPayloadEnvelope(parent.SignedExecutionPayloadEnvelope)
+				if err != nil {
+					return 0, errors.Wrapf(err, "wrap parent envelope at slot %d", parent.Block.Block().Slot())
+				}
+				if err := s.cfg.Chain.ReceiveExecutionPayloadEnvelope(ctx, env); err != nil {
+					return 0, errors.Wrapf(err, "receive parent envelope at slot %d", parent.Block.Block().Slot())
+				}
+			}
+		}
 	}
 
 	// Separate blocks with blobs from blocks with data columns.
@@ -612,6 +639,33 @@ func (s *Service) processBatchedBlocksGloas(ctx context.Context, bwb []blocks.Bl
 	}
 
 	gloasBwbs := unprocessed[firstGloas:]
+
+	// If the first unprocessed Gloas block's parent was filtered out (already processed),
+	// its envelope may not have been applied. Apply it now if the parent was full.
+	if firstGloas == 0 && len(unprocessed) < len(bwb) {
+		parentIdx := len(bwb) - len(unprocessed) - 1
+		parent := bwb[parentIdx]
+		if parent.Block.Version() >= version.Gloas && parent.SignedExecutionPayloadEnvelope != nil {
+			parentBid, err := parent.Block.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return 0, errors.Wrapf(err, "parent bid at slot %d", parent.Block.Block().Slot())
+			}
+			childBid, err := gloasBwbs[0].Block.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return 0, errors.Wrapf(err, "child bid at slot %d", gloasBwbs[0].Block.Block().Slot())
+			}
+			if bytes.Equal(childBid.Message.ParentBlockHash, parentBid.Message.BlockHash) {
+				env, err := blocks.WrappedROSignedExecutionPayloadEnvelope(parent.SignedExecutionPayloadEnvelope)
+				if err != nil {
+					return 0, errors.Wrapf(err, "wrap parent envelope at slot %d", parent.Block.Block().Slot())
+				}
+				if err := s.cfg.Chain.ReceiveExecutionPayloadEnvelope(ctx, env); err != nil {
+					return 0, errors.Wrapf(err, "receive parent envelope at slot %d", parent.Block.Block().Slot())
+				}
+			}
+		}
+	}
+
 	log.WithFields(logrus.Fields{
 		"unprocessedCount": len(unprocessed),
 		"firstGloasIndex":  firstGloas,
