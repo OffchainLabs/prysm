@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -551,7 +552,10 @@ func (s *Service) GetAttestationData(
 	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
 		fcRoot, full := s.ChainInfoFetcher.CanonicalNodeAtSlot(req.Slot)
 		if fcRoot != bytesutil.ToBytes32(headRoot) {
-			return nil, &RpcError{Reason: Internal, Err: errors.New("forkchoice head root does not match head root")}
+			log.WithFields(logrus.Fields{
+				"fcRoot":   hexutil.Encode(fcRoot[:]),
+				"headRoot": hexutil.Encode(headRoot[:]),
+			}).Error("forkchoice head root does not match head root")
 		}
 		isPayloadFull = full
 	}
