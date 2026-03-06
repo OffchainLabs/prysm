@@ -24,18 +24,16 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 
+	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+		return
+	}
+
 	v.waitUntilSlotComponent(ctx, slot, params.BeaconConfig().PayloadAttestationDueBPS)
 
 	data, err := v.validatorClient.PayloadAttestationData(ctx, slot)
 	if err != nil {
 		log.WithError(err).Error("Could not request payload attestation data")
 		tracing.AnnotateError(span, err)
-		return
-	}
-
-	duty, err := v.duty(pubKey)
-	if err != nil {
-		log.WithError(err).Error("Could not fetch validator assignment")
 		return
 	}
 
@@ -65,6 +63,12 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		return
 	}
 
+	duty, err := v.duty(pubKey)
+	if err != nil {
+		log.WithError(err).Error("Could not fetch validator assignment")
+		return
+	}
+
 	msg := &ethpb.PayloadAttestationMessage{
 		ValidatorIndex: duty.ValidatorIndex,
 		Data:           data,
@@ -85,6 +89,7 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		"timeSinceSlotStart": time.Since(slotTime),
 		"blockRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(data.BeaconBlockRoot)),
 		"payloadPresent":     data.PayloadPresent,
+		"blobDataAvailable":  data.BlobDataAvailable,
 		"validatorIndex":     duty.ValidatorIndex,
 	}).Info("Submitted new payload attestation")
 }
