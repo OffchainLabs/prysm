@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	payloadattestation "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -13,6 +15,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -85,10 +88,16 @@ func TestSubmitPayloadAttestation_OK(t *testing.T) {
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	slot := primitives.Slot(11)
+	slot := primitives.Slot(0)
 	root := bytesutil.PadTo([]byte{0xBB}, 32)
+	st, _ := util.DeterministicGenesisState(t, 64)
+	ptc, err := gloas.PayloadCommittee(t.Context(), st, slot)
+	require.NoError(t, err)
+	require.NotEqual(t, 0, len(ptc))
+
 	chain := &chainMock.ChainService{
 		Slot:      &slot,
+		State:     st,
 		BlockSlot: slot,
 	}
 	p2p := &p2pmock.MockBroadcaster{}
@@ -97,14 +106,16 @@ func TestSubmitPayloadAttestation_OK(t *testing.T) {
 	vs := &Server{
 		SyncChecker:                &mockSync.Sync{IsSyncing: false},
 		TimeFetcher:                chain,
+		HeadFetcher:                chain,
 		ForkchoiceFetcher:          chain,
 		P2P:                        p2p,
 		BlockReceiver:              receiver,
 		PayloadAttestationReceiver: receiver,
+		PayloadAttestationPool:     payloadattestation.NewPool(),
 	}
 
 	msg := &ethpb.PayloadAttestationMessage{
-		ValidatorIndex: 1,
+		ValidatorIndex: ptc[0],
 		Data: &ethpb.PayloadAttestationData{
 			BeaconBlockRoot: root,
 			Slot:            slot,

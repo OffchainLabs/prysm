@@ -58,7 +58,7 @@ func (vs *Server) PayloadAttestationData(
 		BeaconBlockRoot:   root[:],
 		Slot:              slot,
 		PayloadPresent:    payloadPresent,
-		BlobDataAvailable: payloadPresent,
+		BlobDataAvailable: payloadPresent, // TODO: Replace with real DA availability once DA paths are wired.
 	}, nil
 }
 
@@ -74,12 +74,12 @@ func (vs *Server) SubmitPayloadAttestation(
 		return nil, status.Errorf(codes.InvalidArgument, "payload attestation message is nil")
 	}
 
+	if vs.SyncChecker.Syncing() {
+		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
+	}
 	if slots.ToEpoch(msg.Data.Slot) < params.BeaconConfig().GloasForkEpoch {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"payload attestations are not supported before Gloas fork (slot %d)", msg.Data.Slot)
-	}
-	if vs.SyncChecker.Syncing() {
-		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
 
 	currentSlot := vs.TimeFetcher.CurrentSlot()
