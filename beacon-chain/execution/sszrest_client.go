@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -146,16 +145,18 @@ func handleSSZRestError(e *sszRestError) error {
 	}
 }
 
-// setupSSZRestClient checks the --ssz-rest-url flag and creates an HTTP client
-// for SSZ-REST communication if a URL is configured.
+// setupSSZRestClient creates an SSZ-REST client using the same URL as the
+// Engine API JSON-RPC endpoint. SSZ-REST routes are served on the same port
+// under /engine/* paths. Auto-probes availability on first use.
 func (s *Service) setupSSZRestClient() {
-	baseURL := flags.Get().SszRestUrl
-	if baseURL == "" {
+	engineURL := s.cfg.currHttpEndpoint.Url
+	if engineURL == "" {
 		s.sszRestClient = nil
 		return
 	}
 
-	// Reuse the same JWT authentication as JSON-RPC.
+	// Derive SSZ-REST base URL from the execution endpoint (same host:port).
+	baseURL := strings.TrimRight(engineURL, "/")
 	httpClient := s.cfg.currHttpEndpoint.HttpClient()
 	s.sszRestClient = newSSZRestClient(baseURL, httpClient)
 	log.WithField("url", baseURL).Info("SSZ-REST Engine API transport enabled (EIP-8161)")

@@ -368,11 +368,4 @@ var (
 		Usage:  "Disables the engine_getBlobsV2 usage.",
 		Hidden: true,
 	}
-	// SszRestUrl is the URL of the SSZ-REST Engine API server on the execution client.
-	// When set, enables SSZ-REST transport (EIP-8161).
-	SszRestUrl = &cli.StringFlag{
-		Name:  "ssz-rest-url",
-		Usage: "URL of the SSZ-REST Engine API server on the execution client (e.g., http://localhost:8552). When set, enables SSZ-REST transport (EIP-8161).",
-		Value: "",
-	}
 )
