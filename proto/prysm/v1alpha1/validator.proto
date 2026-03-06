@@ -882,6 +882,12 @@ message BlockRequest {
   // Percentage multiplier to apply to the builder's payload value when choosing
   // between a builder payload header and payload from the paired execution node
   google.protobuf.UInt64Value builder_boost_factor = 5;
+
+  // When true, eagerly compute the post-payload state root in the envelope
+  // during block production. Used by the V4 produce-block endpoint when
+  // include_payload=true so the envelope is immediately available with a
+  // populated state root.
+  bool eager_payload_state_root = 6;
 }
 
 message ProposeResponse {

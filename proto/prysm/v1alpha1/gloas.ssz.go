@@ -2931,6 +2931,254 @@ func (b *BeaconStateGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the BeaconBlockContentsGloas object
+func (b *BeaconBlockContentsGloas) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BeaconBlockContentsGloas object to a target array
+func (b *BeaconBlockContentsGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(16)
+
+	// Offset (0) 'Block'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.Block == nil {
+		b.Block = new(BeaconBlockGloas)
+	}
+	offset += b.Block.SizeSSZ()
+
+	// Offset (1) 'ExecutionPayloadEnvelope'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.ExecutionPayloadEnvelope == nil {
+		b.ExecutionPayloadEnvelope = new(ExecutionPayloadEnvelope)
+	}
+	offset += b.ExecutionPayloadEnvelope.SizeSSZ()
+
+	// Offset (2) 'KzgProofs'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.KzgProofs) * 48
+
+	// Offset (3) 'Blobs'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Blobs) * 131072
+
+	// Field (0) 'Block'
+	if dst, err = b.Block.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'ExecutionPayloadEnvelope'
+	if dst, err = b.ExecutionPayloadEnvelope.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'KzgProofs'
+	if size := len(b.KzgProofs); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(b.KzgProofs); ii++ {
+		if size := len(b.KzgProofs[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.KzgProofs[ii]", size, 48)
+			return
+		}
+		dst = append(dst, b.KzgProofs[ii]...)
+	}
+
+	// Field (3) 'Blobs'
+	if size := len(b.Blobs); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.Blobs", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(b.Blobs); ii++ {
+		if size := len(b.Blobs[ii]); size != 131072 {
+			err = ssz.ErrBytesLengthFn("--.Blobs[ii]", size, 131072)
+			return
+		}
+		dst = append(dst, b.Blobs[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BeaconBlockContentsGloas object
+func (b *BeaconBlockContentsGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 16 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1, o2, o3 uint64
+
+	// Offset (0) 'Block'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 16 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'ExecutionPayloadEnvelope'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (2) 'KzgProofs'
+	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (3) 'Blobs'
+	if o3 = ssz.ReadOffset(buf[12:16]); o3 > size || o2 > o3 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'Block'
+	{
+		buf = tail[o0:o1]
+		if b.Block == nil {
+			b.Block = new(BeaconBlockGloas)
+		}
+		if err = b.Block.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (1) 'ExecutionPayloadEnvelope'
+	{
+		buf = tail[o1:o2]
+		if b.ExecutionPayloadEnvelope == nil {
+			b.ExecutionPayloadEnvelope = new(ExecutionPayloadEnvelope)
+		}
+		if err = b.ExecutionPayloadEnvelope.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (2) 'KzgProofs'
+	{
+		buf = tail[o2:o3]
+		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		if err != nil {
+			return err
+		}
+		b.KzgProofs = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.KzgProofs[ii]) == 0 {
+				b.KzgProofs[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			}
+			b.KzgProofs[ii] = append(b.KzgProofs[ii], buf[ii*48:(ii+1)*48]...)
+		}
+	}
+
+	// Field (3) 'Blobs'
+	{
+		buf = tail[o3:]
+		num, err := ssz.DivideInt2(len(buf), 131072, 4096)
+		if err != nil {
+			return err
+		}
+		b.Blobs = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(b.Blobs[ii]) == 0 {
+				b.Blobs[ii] = make([]byte, 0, len(buf[ii*131072:(ii+1)*131072]))
+			}
+			b.Blobs[ii] = append(b.Blobs[ii], buf[ii*131072:(ii+1)*131072]...)
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BeaconBlockContentsGloas object
+func (b *BeaconBlockContentsGloas) SizeSSZ() (size int) {
+	size = 16
+
+	// Field (0) 'Block'
+	if b.Block == nil {
+		b.Block = new(BeaconBlockGloas)
+	}
+	size += b.Block.SizeSSZ()
+
+	// Field (1) 'ExecutionPayloadEnvelope'
+	if b.ExecutionPayloadEnvelope == nil {
+		b.ExecutionPayloadEnvelope = new(ExecutionPayloadEnvelope)
+	}
+	size += b.ExecutionPayloadEnvelope.SizeSSZ()
+
+	// Field (2) 'KzgProofs'
+	size += len(b.KzgProofs) * 48
+
+	// Field (3) 'Blobs'
+	size += len(b.Blobs) * 131072
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BeaconBlockContentsGloas object
+func (b *BeaconBlockContentsGloas) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BeaconBlockContentsGloas object with a hasher
+func (b *BeaconBlockContentsGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Block'
+	if err = b.Block.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'ExecutionPayloadEnvelope'
+	if err = b.ExecutionPayloadEnvelope.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'KzgProofs'
+	{
+		if size := len(b.KzgProofs); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.KzgProofs {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(b.KzgProofs))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (3) 'Blobs'
+	{
+		if size := len(b.Blobs); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.Blobs", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.Blobs {
+			if len(i) != 131072 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(b.Blobs))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the BuilderPendingPayment object
 func (b *BuilderPendingPayment) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)

@@ -1354,7 +1354,7 @@ func TestProposer_ComputeStateRoot_OK(t *testing.T) {
 
 	wsb, err := blocks.NewSignedBeaconBlock(req)
 	require.NoError(t, err)
-	_, err = proposerServer.computeStateRoot(t.Context(), wsb)
+	_, _, err = proposerServer.computeStateRoot(t.Context(), wsb)
 	require.NoError(t, err)
 }
 

@@ -111,7 +111,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		builderBoostFactor = primitives.Gwei(req.BuilderBoostFactor.Value)
 	}
 
-	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor)
+	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, req.EagerPayloadStateRoot)
 	log = log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
@@ -194,7 +194,7 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 	return head, parentRoot, err
 }
 
-func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei) (*ethpb.GenericBeaconBlock, error) {
+func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, eagerPayloadStateRoot bool) (*ethpb.GenericBeaconBlock, error) {
 	// Build consensus fields in background
 	var wg sync.WaitGroup
 	wg.Go(func() {
@@ -285,7 +285,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 	wg.Wait()
 
-	sr, err := vs.computeStateRoot(ctx, sBlk)
+	sr, postBlockState, err := vs.computeStateRoot(ctx, sBlk)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not compute state root: %v", err)
 	}
@@ -294,8 +294,15 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	// For Gloas, build and cache the execution payload envelope now that the block
 	// is fully built (state root set). The envelope needs the final block HTR as
 	// BeaconBlockRoot and the post-payload state root as StateRoot.
+	// When eagerPayloadStateRoot is true, the post-block state is passed so the
+	// envelope state root is computed immediately. Otherwise it is left zeroed
+	// and computed lazily when GetExecutionPayloadEnvelope is called.
 	if sBlk.Version() >= version.Gloas {
-		if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
+		var envelopeState state.BeaconState
+		if eagerPayloadStateRoot {
+			envelopeState = postBlockState
+		}
+		if err := vs.storeExecutionPayloadEnvelope(ctx, sBlk, local, envelopeState); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
 		}
 	}
@@ -633,18 +640,18 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 }
 
 // computeStateRoot computes the state root after a block has been processed through a state transition and
-// returns it to the validator client.
-func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, error) {
+// returns both the state root bytes and the full post-block state.
+func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, state.BeaconState, error) {
 	st, err := vs.computePostBlockState(ctx, block)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	root, err := st.HashTreeRoot(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not compute state root")
+		return nil, nil, errors.Wrap(err, "could not compute state root")
 	}
 	log.WithField("beaconStateRoot", fmt.Sprintf("%#x", root)).Debugf("Computed state root")
-	return root[:], nil
+	return root[:], st, nil
 }
 
 // computePostBlockState computes the post-block state by running the state transition.

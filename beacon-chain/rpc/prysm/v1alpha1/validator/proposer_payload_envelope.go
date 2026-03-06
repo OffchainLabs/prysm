@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -23,13 +24,14 @@ import (
 )
 
 // storeExecutionPayloadEnvelope creates and caches the execution payload envelope
-// after the block is fully built (state root set). The envelope is cached with a
-// zeroed state root; the actual post-payload state root is computed lazily in
-// GetExecutionPayloadEnvelope once the block has been submitted and the post-block
-// state is available via StateGen.
+// after the block is fully built (state root set). If postBlockState is non-nil,
+// the envelope state root is eagerly computed; otherwise it is left zeroed for
+// lazy computation by GetExecutionPayloadEnvelope.
 func (vs *Server) storeExecutionPayloadEnvelope(
+	ctx context.Context,
 	sBlk interfaces.SignedBeaconBlock,
 	local *consensusblocks.GetPayloadResponse,
+	postBlockState state.BeaconState,
 ) error {
 	blockRoot, err := sBlk.Block().HashTreeRoot()
 	if err != nil {
@@ -44,7 +46,26 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		BuilderIndex:      params.BeaconConfig().BuilderIndexSelfBuild,
 		BeaconBlockRoot:   blockRoot[:],
 		Slot:              sBlk.Block().Slot(),
-		StateRoot:         make([]byte, 32), // zeroed; computed lazily in GetExecutionPayloadEnvelope
+		StateRoot:         make([]byte, 32),
+	}
+
+	// When postBlockState is provided, eagerly compute the post-payload state
+	// root so the envelope is immediately usable by ProduceBlockV4.
+	// Otherwise, leave the state root zeroed for lazy computation later.
+	if postBlockState != nil {
+		stateCopy := postBlockState.Copy()
+		roEnvelope, err := consensusblocks.WrappedROExecutionPayloadEnvelope(envelope)
+		if err != nil {
+			return errors.Wrap(err, "could not wrap envelope")
+		}
+		if err := coregloas.ApplyExecutionPayload(ctx, stateCopy, roEnvelope); err != nil {
+			return errors.Wrap(err, "could not apply execution payload for envelope state root")
+		}
+		stateRoot, err := stateCopy.HashTreeRoot(ctx)
+		if err != nil {
+			return errors.Wrap(err, "could not compute post-payload state root")
+		}
+		envelope.StateRoot = stateRoot[:]
 	}
 
 	vs.setExecutionPayloadEnvelope(envelope)

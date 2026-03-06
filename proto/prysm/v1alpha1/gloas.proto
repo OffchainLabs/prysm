@@ -338,6 +338,22 @@ message BeaconStateGloas {
       [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
 }
 
+// BeaconBlockContentsGloas bundles a Gloas beacon block with the execution
+// payload envelope and associated blob data. This is used for block production
+// when include_payload=true.
+message BeaconBlockContentsGloas {
+  BeaconBlockGloas block = 1;
+  ExecutionPayloadEnvelope execution_payload_envelope = 2;
+  repeated bytes kzg_proofs = 3 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+  repeated bytes blobs = 4 [
+    (ethereum.eth.ext.ssz_size) = "?,blob.size",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+}
+
 // BuilderPendingPayment represents a pending payment to a builder.
 //
 // Spec:

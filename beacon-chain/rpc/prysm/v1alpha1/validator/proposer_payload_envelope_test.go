@@ -17,6 +17,62 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
+func testGloasBlock(t *testing.T) (*consensusblocks.GetPayloadResponse, interfaces.SignedBeaconBlock) {
+	t.Helper()
+
+	payload := &enginev1.ExecutionPayloadDeneb{
+		ParentHash:    make([]byte, 32),
+		FeeRecipient:  make([]byte, 20),
+		StateRoot:     make([]byte, 32),
+		ReceiptsRoot:  make([]byte, 32),
+		LogsBloom:     make([]byte, 256),
+		PrevRandao:    make([]byte, 32),
+		BaseFeePerGas: make([]byte, 32),
+		BlockHash:     make([]byte, 32),
+		ExtraData:     make([]byte, 0),
+	}
+	ed, err := consensusblocks.WrappedExecutionPayloadDeneb(payload)
+	require.NoError(t, err)
+
+	local := &consensusblocks.GetPayloadResponse{
+		ExecutionData:     ed,
+		Bid:               big.NewInt(0),
+		ExecutionRequests: &enginev1.ExecutionRequests{},
+	}
+
+	sBlk, err := consensusblocks.NewSignedBeaconBlock(util.NewBeaconBlockGloas())
+	require.NoError(t, err)
+
+	return local, sBlk
+}
+
+func TestStoreExecutionPayloadEnvelope_NilState(t *testing.T) {
+	local, sBlk := testGloasBlock(t)
+
+	vs := &Server{}
+	err := vs.storeExecutionPayloadEnvelope(t.Context(), sBlk, local, nil)
+	require.NoError(t, err)
+
+	envelope, found := vs.getExecutionPayloadEnvelope(sBlk.Block().Slot())
+	require.Equal(t, true, found)
+	require.NotNil(t, envelope.Payload)
+	require.Equal(t, sBlk.Block().Slot(), envelope.Slot)
+	require.DeepEqual(t, make([]byte, 32), envelope.StateRoot)
+}
+
+func TestStoreExecutionPayloadEnvelope_WithState(t *testing.T) {
+	local, sBlk := testGloasBlock(t)
+
+	vs := &Server{}
+	st, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+
+	// The eager path is entered but ApplyExecutionPayload will fail because
+	// the default test state doesn't satisfy all transition checks.
+	err = vs.storeExecutionPayloadEnvelope(t.Context(), sBlk, local, st)
+	require.ErrorContains(t, "could not apply execution payload for envelope state root", err)
+}
+
 func TestExtractExecutionPayloadDeneb(t *testing.T) {
 	payload := &enginev1.ExecutionPayloadDeneb{
 		ParentHash:    make([]byte, 32),
