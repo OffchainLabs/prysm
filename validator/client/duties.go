@@ -198,7 +198,7 @@ func (v *validator) logDuties(slot primitives.Slot) {
 		if durationTillDuty > 0 {
 			slotLog = slotLog.WithField("timeUntilDuty", durationTillDuty)
 		}
-		slotLog.Infof("Duties schedule")
+		slotLog.Info("Duties schedule")
 	}
 }
 
