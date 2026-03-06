@@ -222,7 +222,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	defer cancel()
 
 	v.dutiesLock.RLock()
-	storedPrev, storedCurr := v.duties.DependentRoots()
+	storedPrev, _ := v.duties.DependentRoots()
 	needsPrevUpdate := storedPrev == nil || !bytes.Equal(prevDependentRoot, storedPrev)
 	v.dutiesLock.RUnlock()
 
@@ -242,7 +242,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 		return nil
 	}
 	v.dutiesLock.RLock()
-	_, storedCurr = v.duties.DependentRoots()
+	_, storedCurr := v.duties.DependentRoots()
 	v.dutiesLock.RUnlock()
 	needsCurrUpdate := storedCurr == nil || !bytes.Equal(currDependentRoot, storedCurr)
 	if !needsCurrUpdate {
