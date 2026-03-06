@@ -857,6 +857,12 @@ message DutiesV2Response {
     // Whether the validator belongs in the sync committee and has to perform
     // sync committee duty.
     bool is_sync_committee = 10;
+
+    // Slots in which the validator is assigned to the Payload Timeliness Committee (PTC).
+    repeated uint64 ptc_slots = 11 [
+      (ethereum.eth.ext.cast_type) =
+          "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+    ];
   }
 }
 

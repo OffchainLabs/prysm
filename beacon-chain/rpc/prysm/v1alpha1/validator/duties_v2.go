@@ -3,11 +3,13 @@ package validator
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -90,7 +92,14 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	currentAttesterMap := buildAttesterMap(currentAttesterDuties)
 	nextAttesterMap := buildAttesterMap(nextAttesterDuties)
 	proposerMap := buildProposerMap(proposerDuties)
-
+	currentPTCAssignments, err := computePTCAssignments(ctx, s, req.Epoch, requestIndices)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not compute current epoch PTC assignments: %v", err)
+	}
+	nextPTCAssignments, err := computePTCAssignments(ctx, s, req.Epoch+1, requestIndices)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not compute next epoch PTC assignments: %v", err)
+	}
 	validatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 	nextValidatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 
@@ -127,6 +136,9 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 			assignment.CommitteesAtSlot = ad.CommitteesAtSlot
 			assignment.ValidatorCommitteeIndex = ad.ValidatorCommitteeIndex
 		}
+		if ptcSlots, ok := currentPTCAssignments[info.index]; ok {
+			assignment.PtcSlots = ptcSlots
+		}
 
 		// Next epoch assignment
 		nextDuty := &ethpb.DutiesV2Response_Duty{
@@ -140,6 +152,9 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 			nextDuty.CommitteeLength = ad.CommitteeLength
 			nextDuty.CommitteesAtSlot = ad.CommitteesAtSlot
 			nextDuty.ValidatorCommitteeIndex = ad.ValidatorCommitteeIndex
+		}
+		if ptcSlots, ok := nextPTCAssignments[info.index]; ok {
+			nextDuty.PtcSlots = ptcSlots
 		}
 
 		// Sync committee flags
@@ -239,4 +254,58 @@ func buildProposerMap(duties []*core.ProposerDutyResult) map[primitives.Validato
 		m[d.ValidatorIndex] = append(m[d.ValidatorIndex], d.Slot)
 	}
 	return m
+}
+
+// computePTCAssignments returns PTC slot assignments in the given epoch
+// for each requested validator index. Validators without assignments are omitted.
+// Pre-Gloas epochs return an empty map.
+func computePTCAssignments(
+	ctx context.Context,
+	st state.ReadOnlyBeaconState,
+	epoch primitives.Epoch,
+	validatorIndices []primitives.ValidatorIndex,
+) (map[primitives.ValidatorIndex][]primitives.Slot, error) {
+	assignments := make(map[primitives.ValidatorIndex][]primitives.Slot, len(validatorIndices))
+	if len(validatorIndices) == 0 {
+		return assignments, nil
+	}
+	if epoch < params.BeaconConfig().GloasForkEpoch {
+		return assignments, nil
+	}
+
+	requested := make(map[primitives.ValidatorIndex]struct{}, len(validatorIndices))
+	for _, idx := range validatorIndices {
+		requested[idx] = struct{}{}
+	}
+
+	startSlot, err := slots.EpochStart(epoch)
+	if err != nil {
+		return nil, err
+	}
+	endSlot := startSlot + params.BeaconConfig().SlotsPerEpoch
+
+	for slot := startSlot; slot < endSlot; slot++ {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		ptc, err := gloas.PayloadCommittee(ctx, st, slot)
+		if err != nil {
+			return nil, err
+		}
+
+		seen := make(map[primitives.ValidatorIndex]bool)
+		for _, idx := range ptc {
+			if _, ok := requested[idx]; !ok {
+				continue
+			}
+			if seen[idx] {
+				continue
+			}
+			seen[idx] = true
+			assignments[idx] = append(assignments[idx], slot)
+		}
+	}
+
+	return assignments, nil
 }
