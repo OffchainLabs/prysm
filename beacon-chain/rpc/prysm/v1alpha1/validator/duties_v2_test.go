@@ -602,9 +602,9 @@ func ptcTestConfig(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 }
 
-// TestComputePTCAssignments_PreGloasEpoch verifies that a requested epoch
+// TestPTCDuties_PreGloasEpoch verifies that a requested epoch
 // before the Gloas fork returns an empty assignment map without error.
-func TestComputePTCAssignments_PreGloasEpoch(t *testing.T) {
+func TestPTCDuties_PreGloasEpoch(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.GloasForkEpoch = 5
@@ -617,14 +617,15 @@ func TestComputePTCAssignments_PreGloasEpoch(t *testing.T) {
 	st, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 	require.NoError(t, err)
 
-	result, err := computePTCAssignments(t.Context(), st, 0, []primitives.ValidatorIndex{0, 1, 2})
-	require.NoError(t, err)
+	duties, rpcErr := (&core.Service{}).PTCDuties(t.Context(), st, 0, []primitives.ValidatorIndex{0, 1, 2})
+	require.Equal(t, (*core.RpcError)(nil), rpcErr)
+	result := buildPTCMap(duties)
 	assert.Equal(t, 0, len(result), "pre-Gloas epoch should yield no PTC assignments")
 }
 
-// TestComputePTCAssignments_EmptyIndices verifies that an empty validator
+// TestPTCDuties_EmptyIndices verifies that an empty validator
 // index list short-circuits and returns an empty map without calling PayloadCommittee.
-func TestComputePTCAssignments_EmptyIndices(t *testing.T) {
+func TestPTCDuties_EmptyIndices(t *testing.T) {
 	ptcTestConfig(t)
 
 	deposits, _, err := util.DeterministicDepositsAndKeys(8)
@@ -634,14 +635,15 @@ func TestComputePTCAssignments_EmptyIndices(t *testing.T) {
 	st, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
 	require.NoError(t, err)
 
-	result, err := computePTCAssignments(t.Context(), st, 0, nil)
-	require.NoError(t, err)
+	duties, rpcErr := (&core.Service{}).PTCDuties(t.Context(), st, 0, nil)
+	require.Equal(t, (*core.RpcError)(nil), rpcErr)
+	result := buildPTCMap(duties)
 	assert.Equal(t, 0, len(result), "empty indices should yield no PTC assignments")
 }
 
-// TestComputePTCAssignments_SlotsWithinEpoch verifies that every assigned slot
+// TestPTCDuties_SlotsWithinEpoch verifies that every assigned slot
 // falls within the requested epoch's slot range.
-func TestComputePTCAssignments_SlotsWithinEpoch(t *testing.T) {
+func TestPTCDuties_SlotsWithinEpoch(t *testing.T) {
 	ptcTestConfig(t)
 
 	st, pubKeys := ptcTestState(t)
@@ -654,8 +656,9 @@ func TestComputePTCAssignments_SlotsWithinEpoch(t *testing.T) {
 	}
 
 	const epoch = primitives.Epoch(0)
-	result, err := computePTCAssignments(t.Context(), st, epoch, indices)
-	require.NoError(t, err)
+	duties, rpcErr := (&core.Service{}).PTCDuties(t.Context(), st, epoch, indices)
+	require.Equal(t, (*core.RpcError)(nil), rpcErr)
+	result := buildPTCMap(duties)
 	if len(result) == 0 {
 		t.Fatal("expected at least one PTC assignment in Gloas epoch 0")
 	}
@@ -677,7 +680,7 @@ func TestComputePTCAssignments_SlotsWithinEpoch(t *testing.T) {
 
 // TestComputePTCAssignments_CollectsAllSlots verifies that assignments include
 // all PTC slots for each requested validator within the epoch.
-func TestComputePTCAssignments_CollectsAllSlots(t *testing.T) {
+func TestPTCDuties_CollectsAllSlots(t *testing.T) {
 	ptcTestConfig(t)
 
 	st, _ := ptcTestState(t)
@@ -689,8 +692,9 @@ func TestComputePTCAssignments_CollectsAllSlots(t *testing.T) {
 	}
 
 	const epoch = primitives.Epoch(0)
-	result, err := computePTCAssignments(t.Context(), st, epoch, indices)
-	require.NoError(t, err)
+	duties, rpcErr := (&core.Service{}).PTCDuties(t.Context(), st, epoch, indices)
+	require.Equal(t, (*core.RpcError)(nil), rpcErr)
+	result := buildPTCMap(duties)
 	if len(result) == 0 {
 		t.Fatal("expected at least one PTC assignment")
 	}
