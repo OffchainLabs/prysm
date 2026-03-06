@@ -243,6 +243,12 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 	}
 	currSlot := slots.CurrentSlot(genesis.GenesisTime.AsTime())
 	currEpoch := slots.ToEpoch(currSlot)
+
+	// Track blocks with zero sync committee participation across both loops.
+	// A small number is tolerated (transient p2p issues), but sustained
+	// zero participation indicates a real problem.
+	zeroSyncCount := 0
+	const maxZeroSyncBlocks = 2
 	lowestBound := primitives.Epoch(0)
 	if currEpoch >= 1 {
 		lowestBound = currEpoch - 1
@@ -301,9 +307,13 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		if err != nil {
 			return err
 		}
-		// Skip blocks where the proposer received zero sync committee messages.
-		// This indicates a transient p2p issue, not a participation problem.
+		// Tolerate a small number of blocks with zero sync committee messages
+		// (transient p2p issues), but fail if it happens too often.
 		if syncAgg.SyncCommitteeBits.Count() == 0 {
+			zeroSyncCount++
+			if zeroSyncCount > maxZeroSyncBlocks {
+				return errors.Errorf("too many blocks (%d) with zero sync participation, last at slot %d", zeroSyncCount, b.Block().Slot())
+			}
 			continue
 		}
 		threshold := uint64(float64(syncAgg.SyncCommitteeBits.Len()) * expectedParticipation)
@@ -361,9 +371,13 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		if err != nil {
 			return err
 		}
-		// Skip blocks where the proposer received zero sync committee messages.
-		// This indicates a transient p2p issue, not a participation problem.
+		// Tolerate a small number of blocks with zero sync committee messages
+		// (transient p2p issues), but fail if it happens too often.
 		if syncAgg.SyncCommitteeBits.Count() == 0 {
+			zeroSyncCount++
+			if zeroSyncCount > maxZeroSyncBlocks {
+				return errors.Errorf("too many blocks (%d) with zero sync participation, last at slot %d", zeroSyncCount, b.Block().Slot())
+			}
 			continue
 		}
 		threshold := uint64(float64(syncAgg.SyncCommitteeBits.Len()) * expectedSyncParticipation)
