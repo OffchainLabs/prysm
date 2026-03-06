@@ -23,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -160,7 +161,7 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	var failedBroadcasts []*server.IndexedError
 
 	if v >= version.Electra {
-		attFailures, failedBroadcasts, err = s.handleAttestationsElectra(ctx, req.Data)
+		attFailures, failedBroadcasts, err = s.handleAttestationsPostElectra(ctx, req.Data)
 	} else {
 		attFailures, failedBroadcasts, err = s.handleAttestations(ctx, req.Data)
 	}
@@ -189,7 +190,7 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleAttestationsElectra(
+func (s *Server) handleAttestationsPostElectra(
 	ctx context.Context,
 	data json.RawMessage,
 ) (attFailures []*server.IndexedError, failedBroadcasts []*server.IndexedError, err error) {
@@ -223,6 +224,41 @@ func (s *Server) handleAttestationsElectra(
 				Message: "Incorrect attestation signature: " + err.Error(),
 			})
 			continue
+		}
+		attEpoch := slots.ToEpoch(att.Data.Slot)
+		if attEpoch >= params.BeaconConfig().ElectraForkEpoch && attEpoch < params.BeaconConfig().GloasForkEpoch {
+			if att.Data.CommitteeIndex != 0 {
+				attFailures = append(attFailures, &server.IndexedError{
+					Index:   i,
+					Message: "Committee index must be 0 in Electra and Fulu",
+				})
+				continue
+			}
+		} else if attEpoch >= params.BeaconConfig().GloasForkEpoch {
+			if att.Data.CommitteeIndex >= 2 {
+				attFailures = append(attFailures, &server.IndexedError{
+					Index:   i,
+					Message: "Index must be < 2 post-Gloas",
+				})
+				continue
+			}
+			if att.Data.CommitteeIndex != 0 {
+				blockSlot, err := s.ForkchoiceFetcher.RecentBlockSlot(bytesutil.ToBytes32(att.Data.BeaconBlockRoot))
+				if err != nil {
+					attFailures = append(attFailures, &server.IndexedError{
+						Index:   i,
+						Message: "Could not determine block slot: " + err.Error(),
+					})
+					continue
+				}
+				if blockSlot == att.Data.Slot {
+					attFailures = append(attFailures, &server.IndexedError{
+						Index:   i,
+						Message: "Same slot attestations must use index 0 post-Gloas",
+					})
+					continue
+				}
+			}
 		}
 		validAttestations = append(validAttestations, att)
 	}
