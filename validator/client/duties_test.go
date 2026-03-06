@@ -320,7 +320,7 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		CurrDependentRoot: bytesutil.PadTo([]byte{0x04, 0x05, 0x06}, fieldparams.RootLength),
 	}
 	ds := &dutyStore{}
-	ds.SetLegacy(dutiesContainer)
+	ds.SetFromCombinedDutiesResponse(dutiesContainer)
 	v := &validator{
 		km:              newMockKeymanager(t, randKeypair(t)),
 		validatorClient: client,

@@ -73,7 +73,7 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 		return err
 	}
 	v.dutiesLock.Lock()
-	v.duties.SetLegacy(resp)
+	v.duties.SetFromCombinedDutiesResponse(resp)
 	v.logDuties(ss)
 	v.dutiesLock.Unlock()
 

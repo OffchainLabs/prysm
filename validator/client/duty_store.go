@@ -96,9 +96,10 @@ func (ds *dutyStore) IsNextSyncCommittee(idx primitives.ValidatorIndex) bool {
 	return ds.syncNextMap[idx]
 }
 
-// SetLegacy stores a legacy combined duties response by decomposing it into
+// SetFromCombinedDutiesResponse stores a combined duties response by decomposing it into
 // duty maps, proposer slots, and sync committee maps.
-func (ds *dutyStore) SetLegacy(container *ethpb.ValidatorDutiesContainer) {
+// DEPRECATED: GetDutiesV2, use the split GetAttesterDuties, GetProposerDutiesV2, and GetSyncCommitteeDuties endpoints.
+func (ds *dutyStore) SetFromCombinedDutiesResponse(container *ethpb.ValidatorDutiesContainer) {
 	if container == nil {
 		ds.Reset()
 		return

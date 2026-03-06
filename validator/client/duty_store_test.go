@@ -54,7 +54,7 @@ func TestDutyStore_ZeroValueIsNotInitialized(t *testing.T) {
 	assert.Equal(t, false, ds.IsInitialized())
 }
 
-func TestDutyStore_SetLegacy(t *testing.T) {
+func TestDutyStore_SetFromCombinedDutiesResponse(t *testing.T) {
 	pk1 := bytesutil.ToBytes48([]byte{1})
 	pk2 := bytesutil.ToBytes48([]byte{2})
 
@@ -81,7 +81,7 @@ func TestDutyStore_SetLegacy(t *testing.T) {
 	}
 
 	ds := &dutyStore{}
-	ds.SetLegacy(container)
+	ds.SetFromCombinedDutiesResponse(container)
 
 	assert.Equal(t, true, ds.IsInitialized())
 
@@ -125,17 +125,17 @@ func TestDutyStore_Reset(t *testing.T) {
 	assert.Equal(t, true, ds.CurrentEpochDuties() == nil)
 }
 
-func TestDutyStore_SetLegacyNilResets(t *testing.T) {
+func TestDutyStore_SetFromCombinedDutiesResponseNilResets(t *testing.T) {
 	ds := testDutyStore(&ethpb.ValidatorDuty{PublicKey: make([]byte, 48)})
 	assert.Equal(t, true, ds.IsInitialized())
 
-	ds.SetLegacy(nil)
+	ds.SetFromCombinedDutiesResponse(nil)
 	assert.Equal(t, false, ds.IsInitialized())
 }
 
-func TestDutyStore_SetLegacySkipsNilDuties(t *testing.T) {
+func TestDutyStore_SetFromCombinedDutiesResponseSkipsNilDuties(t *testing.T) {
 	ds := &dutyStore{}
-	ds.SetLegacy(&ethpb.ValidatorDutiesContainer{
+	ds.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 		CurrentEpochDuties: []*ethpb.ValidatorDuty{nil, {PublicKey: make([]byte, 48), ValidatorIndex: 1}},
 		NextEpochDuties:    []*ethpb.ValidatorDuty{nil},
 	})
