@@ -554,8 +554,8 @@ func (s *Service) GetAttestationData(
 		if fcRoot != bytesutil.ToBytes32(headRoot) {
 			log.WithFields(logrus.Fields{
 				"fcRoot":   hexutil.Encode(fcRoot[:]),
-				"headRoot": hexutil.Encode(headRoot[:]),
-			}).Error("forkchoice head root does not match head root")
+				"headRoot": hexutil.Encode(headRoot),
+			}).Error("Forkchoice head root does not match head root")
 		}
 		isPayloadFull = full
 	}
