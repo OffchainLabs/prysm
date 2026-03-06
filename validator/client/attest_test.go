@@ -768,7 +768,7 @@ func Test_slashableAttestationCheck(t *testing.T) {
 				AttestingIndices: []uint64{1, 2},
 				Data: &ethpb.AttestationData{
 					Slot:            5,
-					CommitteeIndex:  2,
+					Index:           2,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("great block"), 32),
 					Source: &ethpb.Checkpoint{
 						Epoch: 4,
@@ -799,7 +799,7 @@ func Test_slashableAttestationCheck_UpdatesLowestSignedEpochs(t *testing.T) {
 				AttestingIndices: []uint64{1, 2},
 				Data: &ethpb.AttestationData{
 					Slot:            5,
-					CommitteeIndex:  2,
+					Index:           2,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("great block"), 32),
 					Source: &ethpb.Checkpoint{
 						Epoch: 4,
@@ -848,7 +848,7 @@ func Test_slashableAttestationCheck_OK(t *testing.T) {
 				AttestingIndices: []uint64{1, 2},
 				Data: &ethpb.AttestationData{
 					Slot:            5,
-					CommitteeIndex:  2,
+					Index:           2,
 					BeaconBlockRoot: []byte("great block"),
 					Source: &ethpb.Checkpoint{
 						Epoch: 4,
@@ -879,7 +879,7 @@ func Test_slashableAttestationCheck_GenesisEpoch(t *testing.T) {
 				AttestingIndices: []uint64{1, 2},
 				Data: &ethpb.AttestationData{
 					Slot:            5,
-					CommitteeIndex:  2,
+					Index:           2,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("great block root"), 32),
 					Source: &ethpb.Checkpoint{
 						Epoch: 0,

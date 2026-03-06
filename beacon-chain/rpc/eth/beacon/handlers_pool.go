@@ -364,7 +364,7 @@ func (s *Server) handleAttestations(
 			return nil, nil, errors.Wrap(err, "could not get head validator indices")
 		}
 
-		subnet := corehelpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), att.Data.CommitteeIndex, att.Data.Slot)
+		subnet := corehelpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), att.Data.Index, att.Data.Slot)
 		if err = s.Broadcaster.BroadcastAttestation(ctx, subnet, att); err != nil {
 			failedBroadcasts = append(failedBroadcasts, &server.IndexedError{
 				Index:   i,

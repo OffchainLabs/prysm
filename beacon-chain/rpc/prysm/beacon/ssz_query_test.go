@@ -227,7 +227,7 @@ func TestQueryBeaconBlock(t *testing.T) {
 		AggregationBits: bitfield.Bitlist{0x01},
 		Data: &eth.AttestationData{
 			Slot:            1,
-			CommitteeIndex:  1,
+			Index:           1,
 			BeaconBlockRoot: root,
 			Source: &eth.Checkpoint{
 				Epoch: 1,

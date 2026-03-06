@@ -16,7 +16,7 @@ import (
 )
 
 // Beaconfuzz discovered an off by one issue where an attestation could be produced which would pass
-// validation when att.Data.CommitteeIndex is 1 and the committee count per slot is also 1. The only
+// validation when att.Data.Index is 1 and the committee count per slot is also 1. The only
 // valid att.Data.Committee index would be 0, so this is an off by one error.
 // See: https://github.com/sigp/beacon-fuzz/issues/78
 func TestProcessAttestationNoVerifySignature_BeaconFuzzIssue78(t *testing.T) {

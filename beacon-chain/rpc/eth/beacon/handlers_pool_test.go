@@ -51,7 +51,7 @@ func TestListAttestationsV2(t *testing.T) {
 		AggregationBits: []byte{1, 10},
 		Data: &ethpbv1alpha1.AttestationData{
 			Slot:            1,
-			CommitteeIndex:  1,
+			Index:           1,
 			BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot1"), 32),
 			Source: &ethpbv1alpha1.Checkpoint{
 				Epoch: 1,
@@ -68,7 +68,7 @@ func TestListAttestationsV2(t *testing.T) {
 		AggregationBits: []byte{1, 10},
 		Data: &ethpbv1alpha1.AttestationData{
 			Slot:            1,
-			CommitteeIndex:  4,
+			Index:           4,
 			BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot2"), 32),
 			Source: &ethpbv1alpha1.Checkpoint{
 				Epoch: 1,
@@ -85,7 +85,7 @@ func TestListAttestationsV2(t *testing.T) {
 		AggregationBits: bitfield.NewBitlist(8),
 		Data: &ethpbv1alpha1.AttestationData{
 			Slot:            2,
-			CommitteeIndex:  2,
+			Index:           2,
 			BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot3"), 32),
 			Source: &ethpbv1alpha1.Checkpoint{
 				Epoch: 1,
@@ -102,7 +102,7 @@ func TestListAttestationsV2(t *testing.T) {
 		AggregationBits: bitfield.NewBitlist(8),
 		Data: &ethpbv1alpha1.AttestationData{
 			Slot:            2,
-			CommitteeIndex:  4,
+			Index:           4,
 			BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot4"), 32),
 			Source: &ethpbv1alpha1.Checkpoint{
 				Epoch: 1,
@@ -191,7 +191,7 @@ func TestListAttestationsV2(t *testing.T) {
 			assert.Equal(t, 2, len(atts))
 			assert.Equal(t, "deneb", resp.Version)
 			for _, a := range atts {
-				assert.Equal(t, "4", a.Data.CommitteeIndex)
+				assert.Equal(t, "4", a.Data.Index)
 			}
 		})
 		t.Run("both slot + index request", func(t *testing.T) {
@@ -213,7 +213,7 @@ func TestListAttestationsV2(t *testing.T) {
 			assert.Equal(t, "deneb", resp.Version)
 			for _, a := range atts {
 				assert.Equal(t, "2", a.Data.Slot)
-				assert.Equal(t, "4", a.Data.CommitteeIndex)
+				assert.Equal(t, "4", a.Data.Index)
 			}
 		})
 	})
@@ -230,7 +230,7 @@ func TestListAttestationsV2(t *testing.T) {
 			AggregationBits: []byte{1, 10},
 			Data: &ethpbv1alpha1.AttestationData{
 				Slot:            electraSlot,
-				CommitteeIndex:  0,
+				Index:           0,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot1"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
 					Epoch: 1,
@@ -248,7 +248,7 @@ func TestListAttestationsV2(t *testing.T) {
 			AggregationBits: []byte{1, 10},
 			Data: &ethpbv1alpha1.AttestationData{
 				Slot:            electraSlot,
-				CommitteeIndex:  0,
+				Index:           0,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot2"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
 					Epoch: 1,
@@ -266,7 +266,7 @@ func TestListAttestationsV2(t *testing.T) {
 			AggregationBits: bitfield.NewBitlist(8),
 			Data: &ethpbv1alpha1.AttestationData{
 				Slot:            electraSlot + 1,
-				CommitteeIndex:  0,
+				Index:           0,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot3"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
 					Epoch: 1,
@@ -284,7 +284,7 @@ func TestListAttestationsV2(t *testing.T) {
 			AggregationBits: bitfield.NewBitlist(8),
 			Data: &ethpbv1alpha1.AttestationData{
 				Slot:            electraSlot + 1,
-				CommitteeIndex:  0,
+				Index:           0,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot4"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
 					Epoch: 1,
@@ -410,7 +410,7 @@ func TestListAttestationsV2(t *testing.T) {
 				AggregationBits: []byte{1, 10},
 				Data: &ethpbv1alpha1.AttestationData{
 					Slot:            1,
-					CommitteeIndex:  0,
+					Index:           0,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot1"), 32),
 					Source: &ethpbv1alpha1.Checkpoint{
 						Epoch: 1,
@@ -428,7 +428,7 @@ func TestListAttestationsV2(t *testing.T) {
 				AggregationBits: []byte{1, 10},
 				Data: &ethpbv1alpha1.AttestationData{
 					Slot:            1,
-					CommitteeIndex:  0,
+					Index:           0,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot2"), 32),
 					Source: &ethpbv1alpha1.Checkpoint{
 						Epoch: 1,
@@ -446,7 +446,7 @@ func TestListAttestationsV2(t *testing.T) {
 				AggregationBits: bitfield.NewBitlist(8),
 				Data: &ethpbv1alpha1.AttestationData{
 					Slot:            2,
-					CommitteeIndex:  0,
+					Index:           0,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot3"), 32),
 					Source: &ethpbv1alpha1.Checkpoint{
 						Epoch: 1,
@@ -464,7 +464,7 @@ func TestListAttestationsV2(t *testing.T) {
 				AggregationBits: bitfield.NewBitlist(8),
 				Data: &ethpbv1alpha1.AttestationData{
 					Slot:            2,
-					CommitteeIndex:  0,
+					Index:           0,
 					BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot4"), 32),
 					Source: &ethpbv1alpha1.Checkpoint{
 						Epoch: 1,
@@ -651,7 +651,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, "0x03", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetAggregationBits()))
 			assert.Equal(t, "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetSignature()))
 			assert.Equal(t, primitives.Slot(0), broadcaster.BroadcastAttestations[0].GetData().Slot)
-			assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().CommitteeIndex)
+			assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().Index)
 			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().BeaconBlockRoot))
 			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Source.Root))
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
@@ -794,7 +794,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, primitives.ValidatorIndex(1), broadcaster.BroadcastAttestations[0].GetAttestingIndex())
 			assert.Equal(t, "0x8146f4397bfd8fd057ebbcd6a67327bdc7ed5fb650533edcb6377b650dea0b6da64c14ecd60846d5c0a0cd43893d6972092500f82c9d8a955e2b58c5ed3cbe885d84008ace6bd86ba9e23652f58e2ec207cec494c916063257abf285b9b15b15", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetSignature()))
 			assert.Equal(t, primitives.Slot(0), broadcaster.BroadcastAttestations[0].GetData().Slot)
-			assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().CommitteeIndex)
+			assert.Equal(t, primitives.CommitteeIndex(0), broadcaster.BroadcastAttestations[0].GetData().Index)
 			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().BeaconBlockRoot))
 			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Source.Root))
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
@@ -1616,7 +1616,7 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 			AttestingIndices: []uint64{1, 10},
 			Data: &ethpbv1alpha1.AttestationData{
 				Slot:            1,
-				CommitteeIndex:  1,
+				Index:           1,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot1"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
 					Epoch: 1,
@@ -1633,7 +1633,7 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 			AttestingIndices: []uint64{2, 20},
 			Data: &ethpbv1alpha1.AttestationData{
 				Slot:            2,
-				CommitteeIndex:  2,
+				Index:           2,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot2"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
 					Epoch: 2,
@@ -1652,7 +1652,7 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 			AttestingIndices: []uint64{3, 30},
 			Data: &ethpbv1alpha1.AttestationData{
 				Slot:            3,
-				CommitteeIndex:  3,
+				Index:           3,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot3"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
 					Epoch: 3,
@@ -1669,7 +1669,7 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 			AttestingIndices: []uint64{4, 40},
 			Data: &ethpbv1alpha1.AttestationData{
 				Slot:            4,
-				CommitteeIndex:  4,
+				Index:           4,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot4"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
 					Epoch: 4,
@@ -1688,7 +1688,7 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 			AttestingIndices: []uint64{1, 10},
 			Data: &ethpbv1alpha1.AttestationData{
 				Slot:            1,
-				CommitteeIndex:  1,
+				Index:           1,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot1"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
 					Epoch: 1,
@@ -1705,7 +1705,7 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 			AttestingIndices: []uint64{2, 20},
 			Data: &ethpbv1alpha1.AttestationData{
 				Slot:            2,
-				CommitteeIndex:  2,
+				Index:           2,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot2"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
 					Epoch: 2,
@@ -2011,7 +2011,7 @@ func TestSubmitAttesterSlashingsV2(t *testing.T) {
 	defer transition.SkipSlotCache.Enable()
 
 	attestationData1 := &ethpbv1alpha1.AttestationData{
-		CommitteeIndex:  1,
+		Index:           1,
 		BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot1"), 32),
 		Source: &ethpbv1alpha1.Checkpoint{
 			Epoch: 1,
@@ -2023,7 +2023,7 @@ func TestSubmitAttesterSlashingsV2(t *testing.T) {
 		},
 	}
 	attestationData2 := &ethpbv1alpha1.AttestationData{
-		CommitteeIndex:  1,
+		Index:           1,
 		BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot2"), 32),
 		Source: &ethpbv1alpha1.Checkpoint{
 			Epoch: 1,

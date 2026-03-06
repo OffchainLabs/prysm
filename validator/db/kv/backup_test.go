@@ -49,7 +49,7 @@ func TestStore_NestedBackup(t *testing.T) {
 		AttestingIndices: nil,
 		Data: &ethpb.AttestationData{
 			Slot:            0,
-			CommitteeIndex:  0,
+			Index:           0,
 			BeaconBlockRoot: root[:],
 			Source: &ethpb.Checkpoint{
 				Epoch: 10,

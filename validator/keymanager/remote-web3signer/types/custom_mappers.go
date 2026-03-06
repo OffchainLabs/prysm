@@ -117,7 +117,7 @@ func MapAttestationData(data *ethpb.AttestationData) (*AttestationData, error) {
 	}
 	return &AttestationData{
 		Slot:            fmt.Sprint(data.Slot),
-		Index:           fmt.Sprint(data.CommitteeIndex),
+		Index:           fmt.Sprint(data.Index),
 		BeaconBlockRoot: data.BeaconBlockRoot,
 		Source:          source,
 		Target:          target,

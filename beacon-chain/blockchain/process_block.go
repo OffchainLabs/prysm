@@ -466,7 +466,7 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 		if s.cfg.ForkChoiceStore.HasNode(r) {
 			payloadStatus := true
 			if a.GetData().Target.Epoch >= params.BeaconConfig().GloasForkEpoch {
-				payloadStatus = a.GetData().CommitteeIndex == 1
+				payloadStatus = a.GetData().Index == 1
 			}
 			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, a.GetData().Slot, payloadStatus)
 		} else if features.Get().EnableExperimentalAttestationPool {

@@ -85,7 +85,7 @@ func TestGloasOperations_ProcessingErrors(t *testing.T) {
 						AttestingIndices: []uint64{999999},
 						Data: &ethpb.AttestationData{
 							Slot:            1,
-							CommitteeIndex:  0,
+							Index:           0,
 							BeaconBlockRoot: root,
 							Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
 							Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
@@ -115,7 +115,7 @@ func TestGloasOperations_ProcessingErrors(t *testing.T) {
 						AggregationBits: []byte{0b00000001},
 						Data: &ethpb.AttestationData{
 							Slot:            1,
-							CommitteeIndex:  999999, // no such committee
+							Index:           999999, // no such committee
 							BeaconBlockRoot: make([]byte, 32),
 							Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
 							Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},

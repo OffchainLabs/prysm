@@ -519,9 +519,9 @@ func (a *AttestationData) ToConsensus() (*eth.AttestationData, error) {
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Slot")
 	}
-	committeeIndex, err := strconv.ParseUint(a.CommitteeIndex, 10, 64)
+	committeeIndex, err := strconv.ParseUint(a.Index, 10, 64)
 	if err != nil {
-		return nil, server.NewDecodeError(err, "CommitteeIndex")
+		return nil, server.NewDecodeError(err, "Index")
 	}
 	bbRoot, err := bytesutil.DecodeHexWithLength(a.BeaconBlockRoot, fieldparams.RootLength)
 	if err != nil {
@@ -544,7 +544,7 @@ func (a *AttestationData) ToConsensus() (*eth.AttestationData, error) {
 
 	return &eth.AttestationData{
 		Slot:            primitives.Slot(slot),
-		CommitteeIndex:  primitives.CommitteeIndex(committeeIndex),
+		Index:           primitives.CommitteeIndex(committeeIndex),
 		BeaconBlockRoot: bbRoot,
 		Source:          source,
 		Target:          target,
@@ -554,7 +554,7 @@ func (a *AttestationData) ToConsensus() (*eth.AttestationData, error) {
 func AttDataFromConsensus(a *eth.AttestationData) *AttestationData {
 	return &AttestationData{
 		Slot:            fmt.Sprintf("%d", a.Slot),
-		CommitteeIndex:  fmt.Sprintf("%d", a.CommitteeIndex),
+		Index:           fmt.Sprintf("%d", a.Index),
 		BeaconBlockRoot: hexutil.Encode(a.BeaconBlockRoot),
 		Source:          CheckpointFromConsensus(a.Source),
 		Target:          CheckpointFromConsensus(a.Target),
@@ -1137,7 +1137,7 @@ func AttesterSlashingFromConsensus(src *eth.AttesterSlashing) *AttesterSlashing 
 			AttestingIndices: a1AttestingIndices,
 			Data: &AttestationData{
 				Slot:            fmt.Sprintf("%d", src.Attestation_1.Data.Slot),
-				CommitteeIndex:  fmt.Sprintf("%d", src.Attestation_1.Data.CommitteeIndex),
+				Index:           fmt.Sprintf("%d", src.Attestation_1.Data.Index),
 				BeaconBlockRoot: hexutil.Encode(src.Attestation_1.Data.BeaconBlockRoot),
 				Source: &Checkpoint{
 					Epoch: fmt.Sprintf("%d", src.Attestation_1.Data.Source.Epoch),
@@ -1154,7 +1154,7 @@ func AttesterSlashingFromConsensus(src *eth.AttesterSlashing) *AttesterSlashing 
 			AttestingIndices: a2AttestingIndices,
 			Data: &AttestationData{
 				Slot:            fmt.Sprintf("%d", src.Attestation_2.Data.Slot),
-				CommitteeIndex:  fmt.Sprintf("%d", src.Attestation_2.Data.CommitteeIndex),
+				Index:           fmt.Sprintf("%d", src.Attestation_2.Data.Index),
 				BeaconBlockRoot: hexutil.Encode(src.Attestation_2.Data.BeaconBlockRoot),
 				Source: &Checkpoint{
 					Epoch: fmt.Sprintf("%d", src.Attestation_2.Data.Source.Epoch),
@@ -1279,7 +1279,7 @@ func AttesterSlashingElectraFromConsensus(src *eth.AttesterSlashingElectra) *Att
 			AttestingIndices: a1AttestingIndices,
 			Data: &AttestationData{
 				Slot:            fmt.Sprintf("%d", src.Attestation_1.Data.Slot),
-				CommitteeIndex:  fmt.Sprintf("%d", src.Attestation_1.Data.CommitteeIndex),
+				Index:           fmt.Sprintf("%d", src.Attestation_1.Data.Index),
 				BeaconBlockRoot: hexutil.Encode(src.Attestation_1.Data.BeaconBlockRoot),
 				Source: &Checkpoint{
 					Epoch: fmt.Sprintf("%d", src.Attestation_1.Data.Source.Epoch),
@@ -1296,7 +1296,7 @@ func AttesterSlashingElectraFromConsensus(src *eth.AttesterSlashingElectra) *Att
 			AttestingIndices: a2AttestingIndices,
 			Data: &AttestationData{
 				Slot:            fmt.Sprintf("%d", src.Attestation_2.Data.Slot),
-				CommitteeIndex:  fmt.Sprintf("%d", src.Attestation_2.Data.CommitteeIndex),
+				Index:           fmt.Sprintf("%d", src.Attestation_2.Data.Index),
 				BeaconBlockRoot: hexutil.Encode(src.Attestation_2.Data.BeaconBlockRoot),
 				Source: &Checkpoint{
 					Epoch: fmt.Sprintf("%d", src.Attestation_2.Data.Source.Epoch),

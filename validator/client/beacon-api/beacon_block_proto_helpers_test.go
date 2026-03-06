@@ -262,7 +262,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttesterSlashingsToProto(t *testing.T) {
 						AttestingIndices: []uint64{1, 2},
 						Data: &ethpb.AttestationData{
 							Slot:            3,
-							CommitteeIndex:  4,
+							Index:           4,
 							BeaconBlockRoot: []byte{5},
 							Source: &ethpb.Checkpoint{
 								Epoch: 6,
@@ -279,7 +279,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttesterSlashingsToProto(t *testing.T) {
 						AttestingIndices: []uint64{11, 12},
 						Data: &ethpb.AttestationData{
 							Slot:            13,
-							CommitteeIndex:  14,
+							Index:           14,
 							BeaconBlockRoot: []byte{15},
 							Source: &ethpb.Checkpoint{
 								Epoch: 16,
@@ -298,7 +298,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttesterSlashingsToProto(t *testing.T) {
 						AttestingIndices: []uint64{21, 22},
 						Data: &ethpb.AttestationData{
 							Slot:            23,
-							CommitteeIndex:  24,
+							Index:           24,
 							BeaconBlockRoot: []byte{25},
 							Source: &ethpb.Checkpoint{
 								Epoch: 26,
@@ -315,7 +315,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttesterSlashingsToProto(t *testing.T) {
 						AttestingIndices: []uint64{31, 32},
 						Data: &ethpb.AttestationData{
 							Slot:            33,
-							CommitteeIndex:  34,
+							Index:           34,
 							BeaconBlockRoot: []byte{35},
 							Source: &ethpb.Checkpoint{
 								Epoch: 36,
@@ -393,7 +393,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationToProto(t *testing.T) {
 				AttestingIndices: []uint64{1, 2},
 				Data: &ethpb.AttestationData{
 					Slot:            3,
-					CommitteeIndex:  4,
+					Index:           4,
 					BeaconBlockRoot: []byte{5},
 					Source: &ethpb.Checkpoint{
 						Epoch: 6,
@@ -528,7 +528,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationsToProto(t *testing.T) {
 					AggregationBits: []byte{1},
 					Data: &ethpb.AttestationData{
 						Slot:            2,
-						CommitteeIndex:  3,
+						Index:           3,
 						BeaconBlockRoot: []byte{4},
 						Source: &ethpb.Checkpoint{
 							Epoch: 5,
@@ -545,7 +545,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationsToProto(t *testing.T) {
 					AggregationBits: []byte{10},
 					Data: &ethpb.AttestationData{
 						Slot:            11,
-						CommitteeIndex:  12,
+						Index:           12,
 						BeaconBlockRoot: []byte{13},
 						Source: &ethpb.Checkpoint{
 							Epoch: 14,
@@ -602,7 +602,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationDataToProto(t *testing.T) {
 			expectedErrorMessage: "failed to parse attestation committee index `bar`",
 			generateInput: func() *structs.AttestationData {
 				input := generateAttestationData()
-				input.CommitteeIndex = "bar"
+				input.Index = "bar"
 				return input
 			},
 		},
@@ -638,7 +638,7 @@ func TestBeaconBlockProtoHelpers_ConvertAttestationDataToProto(t *testing.T) {
 			generateInput: generateAttestationData,
 			expectedResult: &ethpb.AttestationData{
 				Slot:            1,
-				CommitteeIndex:  2,
+				Index:           2,
 				BeaconBlockRoot: []byte{3},
 				Source: &ethpb.Checkpoint{
 					Epoch: 4,
@@ -1147,7 +1147,7 @@ func generateAttesterSlashings() []*structs.AttesterSlashing {
 				AttestingIndices: []string{"1", "2"},
 				Data: &structs.AttestationData{
 					Slot:            "3",
-					CommitteeIndex:  "4",
+					Index:           "4",
 					BeaconBlockRoot: hexutil.Encode([]byte{5}),
 					Source: &structs.Checkpoint{
 						Epoch: "6",
@@ -1164,7 +1164,7 @@ func generateAttesterSlashings() []*structs.AttesterSlashing {
 				AttestingIndices: []string{"11", "12"},
 				Data: &structs.AttestationData{
 					Slot:            "13",
-					CommitteeIndex:  "14",
+					Index:           "14",
 					BeaconBlockRoot: hexutil.Encode([]byte{15}),
 					Source: &structs.Checkpoint{
 						Epoch: "16",
@@ -1183,7 +1183,7 @@ func generateAttesterSlashings() []*structs.AttesterSlashing {
 				AttestingIndices: []string{"21", "22"},
 				Data: &structs.AttestationData{
 					Slot:            "23",
-					CommitteeIndex:  "24",
+					Index:           "24",
 					BeaconBlockRoot: hexutil.Encode([]byte{25}),
 					Source: &structs.Checkpoint{
 						Epoch: "26",
@@ -1200,7 +1200,7 @@ func generateAttesterSlashings() []*structs.AttesterSlashing {
 				AttestingIndices: []string{"31", "32"},
 				Data: &structs.AttestationData{
 					Slot:            "33",
-					CommitteeIndex:  "34",
+					Index:           "34",
 					BeaconBlockRoot: hexutil.Encode([]byte{35}),
 					Source: &structs.Checkpoint{
 						Epoch: "36",
@@ -1222,7 +1222,7 @@ func generateIndexedAttestation() *structs.IndexedAttestation {
 		AttestingIndices: []string{"1", "2"},
 		Data: &structs.AttestationData{
 			Slot:            "3",
-			CommitteeIndex:  "4",
+			Index:           "4",
 			BeaconBlockRoot: hexutil.Encode([]byte{5}),
 			Source: &structs.Checkpoint{
 				Epoch: "6",
@@ -1250,7 +1250,7 @@ func generateAttestations() []*structs.Attestation {
 			AggregationBits: hexutil.Encode([]byte{1}),
 			Data: &structs.AttestationData{
 				Slot:            "2",
-				CommitteeIndex:  "3",
+				Index:           "3",
 				BeaconBlockRoot: hexutil.Encode([]byte{4}),
 				Source: &structs.Checkpoint{
 					Epoch: "5",
@@ -1267,7 +1267,7 @@ func generateAttestations() []*structs.Attestation {
 			AggregationBits: hexutil.Encode([]byte{10}),
 			Data: &structs.AttestationData{
 				Slot:            "11",
-				CommitteeIndex:  "12",
+				Index:           "12",
 				BeaconBlockRoot: hexutil.Encode([]byte{13}),
 				Source: &structs.Checkpoint{
 					Epoch: "14",
@@ -1286,7 +1286,7 @@ func generateAttestations() []*structs.Attestation {
 func generateAttestationData() *structs.AttestationData {
 	return &structs.AttestationData{
 		Slot:            "1",
-		CommitteeIndex:  "2",
+		Index:           "2",
 		BeaconBlockRoot: hexutil.Encode([]byte{3}),
 		Source: &structs.Checkpoint{
 			Epoch: "4",

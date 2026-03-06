@@ -2591,7 +2591,7 @@ func TestGetAttestationData_PreElectraNoCaching(t *testing.T) {
 
 	expectedData := &ethpb.AttestationData{
 		Slot:            preElectraSlot,
-		CommitteeIndex:  5,
+		Index:           5,
 		BeaconBlockRoot: bytesutil.PadTo([]byte("root"), 32),
 		Source:          &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte("source"), 32)},
 		Target:          &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte("target"), 32)},
@@ -2640,7 +2640,7 @@ func TestGetAttestationData_PostElectraCaching(t *testing.T) {
 
 	expectedData := &ethpb.AttestationData{
 		Slot:            postElectraSlot,
-		CommitteeIndex:  0,
+		Index:           0,
 		BeaconBlockRoot: bytesutil.PadTo([]byte("root"), 32),
 		Source:          &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte("source"), 32)},
 		Target:          &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte("target"), 32)},
@@ -2690,14 +2690,14 @@ func TestGetAttestationData_PostElectraCacheInvalidatesOnNewSlot(t *testing.T) {
 
 	dataSlot1 := &ethpb.AttestationData{
 		Slot:            slot1,
-		CommitteeIndex:  0,
+		Index:           0,
 		BeaconBlockRoot: bytesutil.PadTo([]byte("root1"), 32),
 		Source:          &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte("source"), 32)},
 		Target:          &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte("target"), 32)},
 	}
 	dataSlot2 := &ethpb.AttestationData{
 		Slot:            slot2,
-		CommitteeIndex:  0,
+		Index:           0,
 		BeaconBlockRoot: bytesutil.PadTo([]byte("root2"), 32),
 		Source:          &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte("source"), 32)},
 		Target:          &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte("target"), 32)},
@@ -2750,7 +2750,7 @@ func TestGetAttestationData_PostElectraConcurrentAccess(t *testing.T) {
 
 	expectedData := &ethpb.AttestationData{
 		Slot:            postElectraSlot,
-		CommitteeIndex:  0,
+		Index:           0,
 		BeaconBlockRoot: bytesutil.PadTo([]byte("root"), 32),
 		Source:          &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte("source"), 32)},
 		Target:          &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte("target"), 32)},

@@ -19,8 +19,8 @@ func TestGetAttestingIndices(t *testing.T) {
 	beaconState, _ := util.DeterministicGenesisState(t, 256)
 	att := &ethpb.Attestation{
 		Data: &ethpb.AttestationData{
-			Slot:           1,
-			CommitteeIndex: 0,
+			Slot:  1,
+			Index: 0,
 		},
 		AggregationBits: bitfield.Bitlist{0b11, 0b1},
 	}
@@ -40,7 +40,7 @@ func TestProcessIncludedAttestationTwoTracked(t *testing.T) {
 	att := &ethpb.Attestation{
 		Data: &ethpb.AttestationData{
 			Slot:            1,
-			CommitteeIndex:  0,
+			Index:           0,
 			BeaconBlockRoot: bytesutil.PadTo([]byte("hello-world"), 32),
 			Source: &ethpb.Checkpoint{
 				Epoch: 0,
@@ -75,7 +75,7 @@ func TestProcessUnaggregatedAttestationStateNotCached(t *testing.T) {
 	att := &ethpb.Attestation{
 		Data: &ethpb.AttestationData{
 			Slot:            1,
-			CommitteeIndex:  0,
+			Index:           0,
 			BeaconBlockRoot: header.GetStateRoot(),
 			Source: &ethpb.Checkpoint{
 				Epoch: 0,
@@ -108,7 +108,7 @@ func TestProcessUnaggregatedAttestationStateCached(t *testing.T) {
 	att := &ethpb.Attestation{
 		Data: &ethpb.AttestationData{
 			Slot:            1,
-			CommitteeIndex:  0,
+			Index:           0,
 			BeaconBlockRoot: root[:],
 			Source: &ethpb.Checkpoint{
 				Epoch: 0,
@@ -146,7 +146,7 @@ func TestProcessAggregatedAttestationStateNotCached(t *testing.T) {
 		Aggregate: &ethpb.Attestation{
 			Data: &ethpb.AttestationData{
 				Slot:            1,
-				CommitteeIndex:  0,
+				Index:           0,
 				BeaconBlockRoot: header.GetStateRoot(),
 				Source: &ethpb.Checkpoint{
 					Epoch: 0,
@@ -182,7 +182,7 @@ func TestProcessAggregatedAttestationStateCached(t *testing.T) {
 		Aggregate: &ethpb.Attestation{
 			Data: &ethpb.AttestationData{
 				Slot:            1,
-				CommitteeIndex:  0,
+				Index:           0,
 				BeaconBlockRoot: root[:],
 				Source: &ethpb.Checkpoint{
 					Epoch: 0,
@@ -215,7 +215,7 @@ func TestProcessAttestations(t *testing.T) {
 	att := &ethpb.Attestation{
 		Data: &ethpb.AttestationData{
 			Slot:            1,
-			CommitteeIndex:  0,
+			Index:           0,
 			BeaconBlockRoot: bytesutil.PadTo([]byte("hello-world"), 32),
 			Source: &ethpb.Checkpoint{
 				Epoch: 0,

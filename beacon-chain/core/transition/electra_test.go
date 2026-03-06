@@ -111,7 +111,7 @@ func TestElectraOperations_ProcessingErrors(t *testing.T) {
 						AggregationBits: []byte{0b00000001},
 						Data: &ethpb.AttestationData{
 							Slot:            1,
-							CommitteeIndex:  999999, // Invalid committee index
+							Index:           999999, // Invalid committee index
 							BeaconBlockRoot: make([]byte, 32),
 							Source: &ethpb.Checkpoint{
 								Epoch: 0,

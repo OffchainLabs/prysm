@@ -71,7 +71,7 @@ func GenerateProtoPhase0BeaconBlock() *ethpb.BeaconBlock {
 						AttestingIndices: []uint64{34, 35},
 						Data: &ethpb.AttestationData{
 							Slot:            36,
-							CommitteeIndex:  37,
+							Index:           37,
 							BeaconBlockRoot: FillByteSlice(32, 38),
 							Source: &ethpb.Checkpoint{
 								Epoch: 39,
@@ -88,7 +88,7 @@ func GenerateProtoPhase0BeaconBlock() *ethpb.BeaconBlock {
 						AttestingIndices: []uint64{44, 45},
 						Data: &ethpb.AttestationData{
 							Slot:            46,
-							CommitteeIndex:  47,
+							Index:           47,
 							BeaconBlockRoot: FillByteSlice(32, 48),
 							Source: &ethpb.Checkpoint{
 								Epoch: 49,
@@ -107,7 +107,7 @@ func GenerateProtoPhase0BeaconBlock() *ethpb.BeaconBlock {
 						AttestingIndices: []uint64{54, 55},
 						Data: &ethpb.AttestationData{
 							Slot:            56,
-							CommitteeIndex:  57,
+							Index:           57,
 							BeaconBlockRoot: FillByteSlice(32, 58),
 							Source: &ethpb.Checkpoint{
 								Epoch: 59,
@@ -124,7 +124,7 @@ func GenerateProtoPhase0BeaconBlock() *ethpb.BeaconBlock {
 						AttestingIndices: []uint64{64, 65},
 						Data: &ethpb.AttestationData{
 							Slot:            66,
-							CommitteeIndex:  67,
+							Index:           67,
 							BeaconBlockRoot: FillByteSlice(32, 68),
 							Source: &ethpb.Checkpoint{
 								Epoch: 69,
@@ -144,7 +144,7 @@ func GenerateProtoPhase0BeaconBlock() *ethpb.BeaconBlock {
 					AggregationBits: FillByteSlice(32, 74),
 					Data: &ethpb.AttestationData{
 						Slot:            75,
-						CommitteeIndex:  76,
+						Index:           76,
 						BeaconBlockRoot: FillByteSlice(32, 77),
 						Source: &ethpb.Checkpoint{
 							Epoch: 78,
@@ -161,7 +161,7 @@ func GenerateProtoPhase0BeaconBlock() *ethpb.BeaconBlock {
 					AggregationBits: FillByteSlice(4, 83),
 					Data: &ethpb.AttestationData{
 						Slot:            84,
-						CommitteeIndex:  85,
+						Index:           85,
 						BeaconBlockRoot: FillByteSlice(32, 38),
 						Source: &ethpb.Checkpoint{
 							Epoch: 87,
@@ -281,7 +281,7 @@ func GenerateJsonPhase0BeaconBlock() *structs.BeaconBlock {
 						AttestingIndices: []string{"34", "35"},
 						Data: &structs.AttestationData{
 							Slot:            "36",
-							CommitteeIndex:  "37",
+							Index:           "37",
 							BeaconBlockRoot: FillEncodedByteSlice(32, 38),
 							Source: &structs.Checkpoint{
 								Epoch: "39",
@@ -298,7 +298,7 @@ func GenerateJsonPhase0BeaconBlock() *structs.BeaconBlock {
 						AttestingIndices: []string{"44", "45"},
 						Data: &structs.AttestationData{
 							Slot:            "46",
-							CommitteeIndex:  "47",
+							Index:           "47",
 							BeaconBlockRoot: FillEncodedByteSlice(32, 48),
 							Source: &structs.Checkpoint{
 								Epoch: "49",
@@ -317,7 +317,7 @@ func GenerateJsonPhase0BeaconBlock() *structs.BeaconBlock {
 						AttestingIndices: []string{"54", "55"},
 						Data: &structs.AttestationData{
 							Slot:            "56",
-							CommitteeIndex:  "57",
+							Index:           "57",
 							BeaconBlockRoot: FillEncodedByteSlice(32, 58),
 							Source: &structs.Checkpoint{
 								Epoch: "59",
@@ -334,7 +334,7 @@ func GenerateJsonPhase0BeaconBlock() *structs.BeaconBlock {
 						AttestingIndices: []string{"64", "65"},
 						Data: &structs.AttestationData{
 							Slot:            "66",
-							CommitteeIndex:  "67",
+							Index:           "67",
 							BeaconBlockRoot: FillEncodedByteSlice(32, 68),
 							Source: &structs.Checkpoint{
 								Epoch: "69",
@@ -354,7 +354,7 @@ func GenerateJsonPhase0BeaconBlock() *structs.BeaconBlock {
 					AggregationBits: FillEncodedByteSlice(32, 74),
 					Data: &structs.AttestationData{
 						Slot:            "75",
-						CommitteeIndex:  "76",
+						Index:           "76",
 						BeaconBlockRoot: FillEncodedByteSlice(32, 77),
 						Source: &structs.Checkpoint{
 							Epoch: "78",
@@ -371,7 +371,7 @@ func GenerateJsonPhase0BeaconBlock() *structs.BeaconBlock {
 					AggregationBits: FillEncodedByteSlice(4, 83),
 					Data: &structs.AttestationData{
 						Slot:            "84",
-						CommitteeIndex:  "85",
+						Index:           "85",
 						BeaconBlockRoot: FillEncodedByteSlice(32, 38),
 						Source: &structs.Checkpoint{
 							Epoch: "87",

@@ -90,7 +90,7 @@ func BenchmarkHashProto(b *testing.B) {
 		AggregationBits: nil,
 		Data: &ethpb.AttestationData{
 			Slot:            5,
-			CommitteeIndex:  3,
+			Index:           3,
 			BeaconBlockRoot: []byte{},
 			Source:          nil,
 			Target:          nil,

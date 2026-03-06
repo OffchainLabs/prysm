@@ -80,7 +80,7 @@ func TestAttestation_ComputeSubnetForAttestation(t *testing.T) {
 			AggregationBits: []byte{'A'},
 			Data: &ethpb.AttestationData{
 				Slot:            34,
-				CommitteeIndex:  4,
+				Index:           4,
 				BeaconBlockRoot: []byte{'C'},
 			},
 			Signature: []byte{'B'},

@@ -89,7 +89,7 @@ func jsonifyIndexedAttestation(indexedAttestation *ethpb.IndexedAttestation) *st
 func jsonifyAttestationData(attestationData *ethpb.AttestationData) *structs.AttestationData {
 	return &structs.AttestationData{
 		BeaconBlockRoot: hexutil.Encode(attestationData.BeaconBlockRoot),
-		CommitteeIndex:  apiutil.Uint64ToString(attestationData.CommitteeIndex),
+		Index:           apiutil.Uint64ToString(attestationData.Index),
 		Slot:            apiutil.Uint64ToString(attestationData.Slot),
 		Source: &structs.Checkpoint{
 			Epoch: apiutil.Uint64ToString(attestationData.Source.Epoch),

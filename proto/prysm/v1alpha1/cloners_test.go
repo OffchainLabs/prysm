@@ -437,7 +437,7 @@ func genAttestations(num int) []*v1alpha1.Attestation {
 func genAttData() *v1alpha1.AttestationData {
 	return &v1alpha1.AttestationData{
 		Slot:            1,
-		CommitteeIndex:  2,
+		Index:           2,
 		BeaconBlockRoot: bytes(32),
 		Source:          genCheckpoint(),
 		Target:          genCheckpoint(),

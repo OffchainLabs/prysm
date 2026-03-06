@@ -308,7 +308,7 @@ func createFullBlockWithOperations(t *testing.T) (state.BeaconState,
 		AggregationBits: aggBits,
 	})
 
-	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, blockAtt.Data.Slot, blockAtt.Data.CommitteeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, blockAtt.Data.Slot, blockAtt.Data.Index)
 	assert.NoError(t, err)
 	attestingIndices, err := attestation.AttestingIndices(blockAtt, committee)
 	require.NoError(t, err)

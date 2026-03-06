@@ -42,7 +42,7 @@ func TestGetAttestationData_ValidAttestation(t *testing.T) {
 		structs.GetAttestationDataResponse{
 			Data: &structs.AttestationData{
 				Slot:            strconv.FormatUint(expectedSlot, 10),
-				CommitteeIndex:  strconv.FormatUint(expectedCommitteeIndex, 10),
+				Index:           strconv.FormatUint(expectedCommitteeIndex, 10),
 				BeaconBlockRoot: expectedBeaconBlockRoot,
 				Source: &structs.Checkpoint{
 					Epoch: strconv.FormatUint(expectedSourceEpoch, 10),
@@ -62,7 +62,7 @@ func TestGetAttestationData_ValidAttestation(t *testing.T) {
 
 	require.NotNil(t, resp)
 	assert.Equal(t, expectedBeaconBlockRoot, hexutil.Encode(resp.BeaconBlockRoot))
-	assert.Equal(t, expectedCommitteeIndex, uint64(resp.CommitteeIndex))
+	assert.Equal(t, expectedCommitteeIndex, uint64(resp.Index))
 	assert.Equal(t, expectedSlot, uint64(resp.Slot))
 
 	require.NotNil(t, resp.Source)
@@ -95,7 +95,7 @@ func TestGetAttestationData_InvalidData(t *testing.T) {
 			name: "invalid committee index",
 			generateData: func() structs.GetAttestationDataResponse {
 				attestation := generateValidAttestation(1, 2)
-				attestation.Data.CommitteeIndex = "foo"
+				attestation.Data.Index = "foo"
 				return attestation
 			},
 			expectedErrorMessage: "failed to parse attestation committee index: foo",
@@ -227,7 +227,7 @@ func generateValidAttestation(slot, committeeIndex uint64) structs.GetAttestatio
 	return structs.GetAttestationDataResponse{
 		Data: &structs.AttestationData{
 			Slot:            strconv.FormatUint(slot, 10),
-			CommitteeIndex:  strconv.FormatUint(committeeIndex, 10),
+			Index:           strconv.FormatUint(committeeIndex, 10),
 			BeaconBlockRoot: "0x5ecf3bff35e39d5f75476d42950d549f81fa93038c46b6652ae89ae1f7ad834f",
 			Source: &structs.Checkpoint{
 				Epoch: "3",

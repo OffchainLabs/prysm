@@ -45,7 +45,7 @@ type SingleAttestation struct {
 
 type AttestationData struct {
 	Slot            string      `json:"slot"`
-	CommitteeIndex  string      `json:"index"`
+	Index           string      `json:"index"`
 	BeaconBlockRoot string      `json:"beacon_block_root"`
 	Source          *Checkpoint `json:"source"`
 	Target          *Checkpoint `json:"target"`

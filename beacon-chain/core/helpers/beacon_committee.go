@@ -108,7 +108,7 @@ func attestationCommittees(
 			committees[i] = committee
 		}
 	} else {
-		committee, err := committeeFunc(ctx, st, att.GetData().Slot, att.GetData().CommitteeIndex)
+		committee, err := committeeFunc(ctx, st, att.GetData().Slot, att.GetData().Index)
 		if err != nil {
 			return nil, err
 		}

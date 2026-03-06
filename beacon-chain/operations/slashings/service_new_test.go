@@ -24,7 +24,7 @@ func TestConvertToElectraWithTimer(t *testing.T) {
 	indices := []uint64{0, 1}
 	data := &ethpb.AttestationData{
 		Slot:            1,
-		CommitteeIndex:  1,
+		Index:           1,
 		BeaconBlockRoot: make([]byte, fieldparams.RootLength),
 		Source: &ethpb.Checkpoint{
 			Epoch: 0,

@@ -88,7 +88,7 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 					AggregationBits: make([]byte, 4),
 					Data: &ethpb.AttestationData{
 						Slot:            75,
-						CommitteeIndex:  76,
+						Index:           76,
 						BeaconBlockRoot: make([]byte, 32),
 						Source: &ethpb.Checkpoint{
 							Epoch: 78,

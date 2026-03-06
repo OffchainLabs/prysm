@@ -234,7 +234,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 		}
 		attData := &ethpb.AttestationData{
 			Slot:            slot,
-			CommitteeIndex:  ci,
+			Index:           ci,
 			BeaconBlockRoot: headRoot,
 			Source:          bState.CurrentJustifiedCheckpoint(),
 			Target: &ethpb.Checkpoint{

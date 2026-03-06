@@ -94,7 +94,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 				AggregationBits: bitfield.Bitlist{0b101},
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
-					CommitteeIndex:  0,
+					Index:           0,
 					Slot:            1,
 					Target: &ethpb.Checkpoint{
 						Epoch: 0,
@@ -113,7 +113,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 				AggregationBits: bitfield.Bitlist{0b101},
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
-					CommitteeIndex:  0,
+					Index:           0,
 					Slot:            1,
 					Target: &ethpb.Checkpoint{
 						Epoch: 0,
@@ -132,7 +132,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 				AggregationBits: bitfield.Bitlist{0b101},
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
-					CommitteeIndex:  0,
+					Index:           0,
 					Slot:            1,
 					Target: &ethpb.Checkpoint{
 						Epoch: 10,
@@ -151,7 +151,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 				AggregationBits: bitfield.Bitlist{0b101},
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
-					CommitteeIndex:  0,
+					Index:           0,
 					Slot:            1,
 					Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
@@ -167,7 +167,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 				AggregationBits: bitfield.Bitlist{0b101},
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: invalidRoot[:],
-					CommitteeIndex:  0,
+					Index:           0,
 					Slot:            1,
 					Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
@@ -183,7 +183,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 				AggregationBits: bitfield.Bitlist{0b101},
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
-					CommitteeIndex:  4,
+					Index:           4,
 					Slot:            1,
 					Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
@@ -199,7 +199,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 				AggregationBits: bitfield.Bitlist{0b101},
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
-					CommitteeIndex:  2,
+					Index:           2,
 					Slot:            1,
 					Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
@@ -215,7 +215,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 				AggregationBits: bitfield.Bitlist{0b1011},
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
-					CommitteeIndex:  1,
+					Index:           1,
 					Slot:            1,
 					Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
@@ -231,7 +231,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 				AggregationBits: bitfield.Bitlist{0b101},
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: bytesutil.PadTo([]byte("missing"), fieldparams.RootLength),
-					CommitteeIndex:  1,
+					Index:           1,
 					Slot:            1,
 					Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
@@ -247,7 +247,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 				AggregationBits: bitfield.Bitlist{0b101},
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
-					CommitteeIndex:  1,
+					Index:           1,
 					Slot:            1,
 					Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
 					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
@@ -264,7 +264,7 @@ func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
 			helpers.ClearCache()
 			chain.ValidAttestation = tt.validAttestationSignature
 			if tt.validAttestationSignature {
-				com, err := helpers.BeaconCommitteeFromState(t.Context(), savedState, tt.msg.GetData().Slot, tt.msg.GetData().CommitteeIndex)
+				com, err := helpers.BeaconCommitteeFromState(t.Context(), savedState, tt.msg.GetData().Slot, tt.msg.GetData().Index)
 				require.NoError(t, err)
 				domain, err := signing.Domain(savedState.Fork(), tt.msg.GetData().Target.Epoch, params.BeaconConfig().DomainBeaconAttester, savedState.GenesisValidatorsRoot())
 				require.NoError(t, err)
@@ -374,7 +374,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 			msg: &ethpb.SingleAttestation{
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
-					CommitteeIndex:  0,
+					Index:           0,
 					Slot:            s.cfg.clock.CurrentSlot(),
 					Target: &ethpb.Checkpoint{
 						Epoch: s.cfg.clock.CurrentEpoch(),
@@ -391,7 +391,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 			msg: &ethpb.SingleAttestation{
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
-					CommitteeIndex:  1,
+					Index:           1,
 					Slot:            s.cfg.clock.CurrentSlot(),
 					Target: &ethpb.Checkpoint{
 						Epoch: s.cfg.clock.CurrentEpoch(),
@@ -408,7 +408,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 			msg: &ethpb.SingleAttestation{
 				Data: &ethpb.AttestationData{
 					BeaconBlockRoot: validBlockRoot[:],
-					CommitteeIndex:  1,
+					Index:           1,
 					Slot:            s.cfg.clock.CurrentSlot(),
 					Target: &ethpb.Checkpoint{
 						Epoch: s.cfg.clock.CurrentEpoch(),
@@ -425,7 +425,7 @@ func TestService_validateCommitteeIndexBeaconAttestationElectra(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			helpers.ClearCache()
-			com, err := helpers.BeaconCommitteeFromState(t.Context(), savedState, tt.msg.GetData().Slot, tt.msg.GetData().CommitteeIndex)
+			com, err := helpers.BeaconCommitteeFromState(t.Context(), savedState, tt.msg.GetData().Slot, tt.msg.GetData().Index)
 			require.NoError(t, err)
 			domain, err := signing.Domain(savedState.Fork(), tt.msg.GetData().Target.Epoch, params.BeaconConfig().DomainBeaconAttester, savedState.GenesisValidatorsRoot())
 			require.NoError(t, err)
@@ -472,35 +472,35 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 		s.initCaches()
 
 		s0c0a0 := &ethpb.Attestation{
-			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 0},
+			Data:            &ethpb.AttestationData{Slot: 0, Index: 0},
 			AggregationBits: bitfield.Bitlist{0b1001},
 		}
 		s0c0a1 := &ethpb.Attestation{
-			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 0},
+			Data:            &ethpb.AttestationData{Slot: 0, Index: 0},
 			AggregationBits: bitfield.Bitlist{0b1010},
 		}
 		s0c0a2 := &ethpb.Attestation{
-			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 0},
+			Data:            &ethpb.AttestationData{Slot: 0, Index: 0},
 			AggregationBits: bitfield.Bitlist{0b1100},
 		}
 		s0c1a0 := &ethpb.Attestation{
-			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 1},
+			Data:            &ethpb.AttestationData{Slot: 0, Index: 1},
 			AggregationBits: bitfield.Bitlist{0b1001},
 		}
 		s0c2a0 := &ethpb.Attestation{
-			Data:            &ethpb.AttestationData{Slot: 0, CommitteeIndex: 2},
+			Data:            &ethpb.AttestationData{Slot: 0, Index: 2},
 			AggregationBits: bitfield.Bitlist{0b1001},
 		}
 		s1c0a0 := &ethpb.Attestation{
-			Data:            &ethpb.AttestationData{Slot: 1, CommitteeIndex: 0},
+			Data:            &ethpb.AttestationData{Slot: 1, Index: 0},
 			AggregationBits: bitfield.Bitlist{0b1001},
 		}
 		s2c0a0 := &ethpb.Attestation{
-			Data:            &ethpb.AttestationData{Slot: 2, CommitteeIndex: 0},
+			Data:            &ethpb.AttestationData{Slot: 2, Index: 0},
 			AggregationBits: bitfield.Bitlist{0b1001},
 		}
 		s3c0a0 := &ethpb.Attestation{
-			Data:            &ethpb.AttestationData{Slot: 3, CommitteeIndex: 0},
+			Data:            &ethpb.AttestationData{Slot: 3, Index: 0},
 			AggregationBits: bitfield.Bitlist{0b1001},
 		}
 
@@ -660,8 +660,8 @@ func Test_validateCommitteeIndexAndCount_Boundary(t *testing.T) {
 	// Build a minimal Phase0 attestation (unaggregated path).
 	att := &ethpb.Attestation{
 		Data: &ethpb.AttestationData{
-			Slot:           1,
-			CommitteeIndex: 0,
+			Slot:  1,
+			Index: 0,
 		},
 	}
 
@@ -673,13 +673,13 @@ func Test_validateCommitteeIndexAndCount_Boundary(t *testing.T) {
 	count := helpers.SlotCommitteeCount(valCount)
 
 	// committee_index == count - 1 should be accepted.
-	att.Data.CommitteeIndex = primitives.CommitteeIndex(count - 1)
+	att.Data.Index = primitives.CommitteeIndex(count - 1)
 	_, _, res, err = s.validateCommitteeIndexAndCount(ctx, att, bs)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationAccept, res)
 
 	// committee_index == count should be rejected (out of range).
-	att.Data.CommitteeIndex = primitives.CommitteeIndex(count)
+	att.Data.Index = primitives.CommitteeIndex(count)
 	_, _, res, err = s.validateCommitteeIndexAndCount(ctx, att, bs)
 	require.ErrorContains(t, "committee index", err)
 	require.Equal(t, pubsub.ValidationReject, res)
@@ -741,7 +741,7 @@ func Test_validateGloasCommitteeIndex(t *testing.T) {
 
 			data := &ethpb.AttestationData{
 				Slot:            tt.attestationSlot,
-				CommitteeIndex:  tt.committeeIndex,
+				Index:           tt.committeeIndex,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot"), 32),
 			}
 

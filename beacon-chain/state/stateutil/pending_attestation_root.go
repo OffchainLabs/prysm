@@ -51,7 +51,7 @@ func attDataRootWithHasher(data *ethpb.AttestationData) ([32]byte, error) {
 
 		// CommitteeIndex.
 		indexBuf := make([]byte, 8)
-		binary.LittleEndian.PutUint64(indexBuf, uint64(data.CommitteeIndex))
+		binary.LittleEndian.PutUint64(indexBuf, uint64(data.Index))
 		fieldRoots[1] = bytesutil.ToBytes32(indexBuf)
 
 		// Beacon block root.

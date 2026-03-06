@@ -24,7 +24,7 @@ func TestProposeAttestation(t *testing.T) {
 		AggregationBits: testhelpers.FillByteSlice(4, 74),
 		Data: &ethpb.AttestationData{
 			Slot:            75,
-			CommitteeIndex:  76,
+			Index:           76,
 			BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
 			Source: &ethpb.Checkpoint{
 				Epoch: 78,
@@ -163,7 +163,7 @@ func TestProposeAttestationElectra(t *testing.T) {
 			AttesterIndex: 74,
 			Data: &ethpb.AttestationData{
 				Slot:            slot,
-				CommitteeIndex:  76,
+				Index:           76,
 				BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
 				Source: &ethpb.Checkpoint{
 					Epoch: sourceEpoch,

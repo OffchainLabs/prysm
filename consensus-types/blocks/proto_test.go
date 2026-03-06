@@ -1882,7 +1882,7 @@ func getFields() fields {
 		atts[i].AggregationBits = attBits
 		atts[i].Data = &eth.AttestationData{
 			Slot:            128,
-			CommitteeIndex:  128,
+			Index:           128,
 			BeaconBlockRoot: root[:],
 			Source: &eth.Checkpoint{
 				Epoch: 128,
@@ -1902,7 +1902,7 @@ func getFields() fields {
 		attsElectra[i].CommitteeBits = committeeBits
 		attsElectra[i].Data = &eth.AttestationData{
 			Slot:            128,
-			CommitteeIndex:  128,
+			Index:           128,
 			BeaconBlockRoot: root[:],
 			Source: &eth.Checkpoint{
 				Epoch: 128,
@@ -1942,7 +1942,7 @@ func getFields() fields {
 			AttestingIndices: []uint64{1, 2, 8},
 			Data: &eth.AttestationData{
 				Slot:            128,
-				CommitteeIndex:  128,
+				Index:           128,
 				BeaconBlockRoot: root[:],
 				Source: &eth.Checkpoint{
 					Epoch: 128,
@@ -1959,7 +1959,7 @@ func getFields() fields {
 			AttestingIndices: []uint64{1, 2, 8},
 			Data: &eth.AttestationData{
 				Slot:            128,
-				CommitteeIndex:  128,
+				Index:           128,
 				BeaconBlockRoot: root[:],
 				Source: &eth.Checkpoint{
 					Epoch: 128,
@@ -1978,7 +1978,7 @@ func getFields() fields {
 			AttestingIndices: []uint64{1, 2, 8},
 			Data: &eth.AttestationData{
 				Slot:            128,
-				CommitteeIndex:  128,
+				Index:           128,
 				BeaconBlockRoot: root[:],
 				Source: &eth.Checkpoint{
 					Epoch: 128,
@@ -1995,7 +1995,7 @@ func getFields() fields {
 			AttestingIndices: []uint64{1, 2, 8},
 			Data: &eth.AttestationData{
 				Slot:            128,
-				CommitteeIndex:  128,
+				Index:           128,
 				BeaconBlockRoot: root[:],
 				Source: &eth.Checkpoint{
 					Epoch: 128,

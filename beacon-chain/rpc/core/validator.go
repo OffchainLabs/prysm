@@ -408,7 +408,7 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 		} else {
 			fields = logrus.Fields{
 				"slot":            data.Slot,
-				"committeeIndex":  data.CommitteeIndex,
+				"committeeIndex":  data.Index,
 				"validatorIndex":  attAndProof.GetAggregatorIndex(),
 				"aggregatedCount": att.GetAggregationBits().Count(),
 			}
@@ -486,7 +486,7 @@ func (s *Service) GetAttestationData(
 		s.AttestationCache.RUnlock()
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
-			CommitteeIndex:  committeeIndex,
+			Index:           committeeIndex,
 			BeaconBlockRoot: res.HeadRoot,
 			Source: &ethpb.Checkpoint{
 				Epoch: res.Source.Epoch,
@@ -510,7 +510,7 @@ func (s *Service) GetAttestationData(
 	if res != nil && res.Slot == req.Slot {
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
-			CommitteeIndex:  committeeIndex,
+			Index:           committeeIndex,
 			BeaconBlockRoot: res.HeadRoot,
 			Source: &ethpb.Checkpoint{
 				Epoch: res.Source.Epoch,
@@ -570,7 +570,7 @@ func (s *Service) GetAttestationData(
 
 	return &ethpb.AttestationData{
 		Slot:            req.Slot,
-		CommitteeIndex:  committeeIndex,
+		Index:           committeeIndex,
 		BeaconBlockRoot: headRoot,
 		Source: &ethpb.Checkpoint{
 			Epoch: justifiedCheckpoint.Epoch,

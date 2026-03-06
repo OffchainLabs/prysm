@@ -26,7 +26,7 @@ func Test_computeOnChainAggregate(t *testing.T) {
 
 	data1 := &ethpb.AttestationData{
 		Slot:            123,
-		CommitteeIndex:  123,
+		Index:           123,
 		BeaconBlockRoot: bytesutil.PadTo([]byte("root"), 32),
 		Source: &ethpb.Checkpoint{
 			Epoch: 123,
@@ -39,7 +39,7 @@ func Test_computeOnChainAggregate(t *testing.T) {
 	}
 	data2 := &ethpb.AttestationData{
 		Slot:            456,
-		CommitteeIndex:  456,
+		Index:           456,
 		BeaconBlockRoot: bytesutil.PadTo([]byte("root"), 32),
 		Source: &ethpb.Checkpoint{
 			Epoch: 456,
