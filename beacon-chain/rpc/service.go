@@ -22,6 +22,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -88,6 +89,7 @@ type Config struct {
 	FinalizationFetcher              blockchain.FinalizationFetcher
 	AttestationReceiver              blockchain.AttestationReceiver
 	BlockReceiver                    blockchain.BlockReceiver
+	PayloadAttestationReceiver       blockchain.PayloadAttestationReceiver
 	ExecutionPayloadEnvelopeReceiver blockchain.ExecutionPayloadEnvelopeReceiver
 	BlobReceiver                     blockchain.BlobReceiver
 	DataColumnReceiver               blockchain.DataColumnReceiver
@@ -100,6 +102,7 @@ type Config struct {
 	EnableDebugRPCEndpoints          bool
 	AttestationCache                 *cache.AttestationCache
 	AttestationsPool                 attestations.Pool
+	PayloadAttestationPool           payloadattestation.PoolManager
 	ExitPool                         voluntaryexits.PoolManager
 	SlashingsPool                    slashings.PoolManager
 	SyncCommitteeObjectPool          synccommittee.Pool
@@ -241,6 +244,8 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		OperationNotifier:                s.cfg.OperationNotifier,
 		P2P:                              s.cfg.Broadcaster,
 		BlockReceiver:                    s.cfg.BlockReceiver,
+		PayloadAttestationPool:           s.cfg.PayloadAttestationPool,
+		PayloadAttestationReceiver:       s.cfg.PayloadAttestationReceiver,
 		ExecutionPayloadEnvelopeReceiver: s.cfg.ExecutionPayloadEnvelopeReceiver,
 		BlobReceiver:                     s.cfg.BlobReceiver,
 		DataColumnReceiver:               s.cfg.DataColumnReceiver,

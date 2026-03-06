@@ -2,7 +2,6 @@ package blockchain
 
 import (
 	"context"
-	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -29,16 +28,12 @@ func (s *Service) ReceivePayloadAttestationMessage(ctx context.Context, a *ethpb
 	if err != nil {
 		return err
 	}
-	ptc, err := gloas.PayloadCommittee(ctx, st, a.Data.Slot)
+	idx, err := gloas.PayloadCommitteeIndex(ctx, st, a.Data.Slot, a.ValidatorIndex)
 	if err != nil {
 		return err
 	}
-	idx := slices.Index(ptc, a.ValidatorIndex)
-	if idx == -1 {
-		return errors.New("validator not in PTC")
-	}
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
-	s.cfg.ForkChoiceStore.SetPTCVote(root, uint64(idx), a.Data.PayloadPresent, a.Data.BlobDataAvailable)
+	s.cfg.ForkChoiceStore.SetPTCVote(root, idx, a.Data.PayloadPresent, a.Data.BlobDataAvailable)
 	return nil
 }

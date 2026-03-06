@@ -476,6 +476,25 @@ service BeaconNodeValidator {
       body : "*"
     };
   }
+
+  // PayloadAttestationData retrieves payload attestation data for the given slot.
+  rpc PayloadAttestationData(PayloadAttestationDataRequest)
+      returns (.ethereum.eth.v1alpha1.PayloadAttestationData) {
+    option deprecated = true;
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/payload_attestation_data/{slot}"
+    };
+  }
+
+  // SubmitPayloadAttestation broadcasts a signed payload attestation message.
+  rpc SubmitPayloadAttestation(PayloadAttestationMessage)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/payload_attestation"
+      body : "*"
+    };
+  }
 }
 
 // SyncMessageBlockRootResponse for beacon chain validator to retrieve and
@@ -857,6 +876,12 @@ message DutiesV2Response {
     // Whether the validator belongs in the sync committee and has to perform
     // sync committee duty.
     bool is_sync_committee = 10;
+
+    // Slot at which a validator is assigned to the payload timeliness committee.
+    uint64 ptc_slot = 11 [
+      (ethereum.eth.ext.cast_type) =
+          "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+    ];
   }
 }
 
@@ -1194,4 +1219,16 @@ message ExecutionPayloadEnvelopeResponse {
 
   // The execution payload envelope for the requested slot and builder.
   ExecutionPayloadEnvelope envelope = 1;
+}
+
+// PayloadAttestationDataRequest is the request for retrieving payload
+// attestation data for a slot.
+message PayloadAttestationDataRequest {
+  option deprecated = true;
+
+  // The slot for which to retrieve payload attestation data.
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
 }
