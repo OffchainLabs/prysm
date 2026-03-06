@@ -232,7 +232,7 @@ func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientCo
 }
 
 // validatorsSyncParticipation ensures the validators have an acceptable participation rate for
-// sync committee assignments.
+// sync committee assignments. 
 func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewNodeClient(conn)
