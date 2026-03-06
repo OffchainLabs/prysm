@@ -101,10 +101,9 @@ type request struct {
 }
 
 type publish struct {
-	topic          string
-	c              blocks.PartialDataColumn
-	getBlobsCalled bool
-	publishRespCh  chan publishResponse
+	topic         string
+	c             blocks.PartialDataColumn
+	publishRespCh chan publishResponse
 }
 
 type publishResponse struct {
@@ -265,7 +264,7 @@ func (p *PartialColumnBroadcaster) loop() {
 			switch req.kind {
 			case requestKindPublish:
 				var pr publishResponse
-				pr.columnCompleted, pr.err = p.publish(req.publish.topic, req.publish.c, req.publish.getBlobsCalled)
+				pr.columnCompleted, pr.err = p.publish(req.publish.topic, req.publish.c)
 				req.publish.publishRespCh <- pr
 			case requestKindSubscribe:
 				req.response <- p.subscribe(req.sub.t)
@@ -600,7 +599,7 @@ func (p *PartialColumnBroadcaster) Stop() {
 }
 
 // Publish publishes the partial column.
-func (p *PartialColumnBroadcaster) Publish(topic string, c blocks.PartialDataColumn, getBlobsCalled bool) (bool, error) {
+func (p *PartialColumnBroadcaster) Publish(topic string, c blocks.PartialDataColumn) (bool, error) {
 	if p.peerFeedback == nil || p.publishPartialCol == nil {
 		return false, errors.New("pubsub not initialized")
 	}
@@ -608,10 +607,9 @@ func (p *PartialColumnBroadcaster) Publish(topic string, c blocks.PartialDataCol
 	p.incomingReq <- request{
 		kind: requestKindPublish,
 		publish: publish{
-			topic:          topic,
-			c:              c,
-			getBlobsCalled: getBlobsCalled,
-			publishRespCh:  respCh,
+			topic:         topic,
+			c:             c,
+			publishRespCh: respCh,
 		},
 	}
 	resp := <-respCh
@@ -640,7 +638,7 @@ func (p *PartialColumnBroadcaster) gossip(topic string, groupID []byte) {
 	}
 }
 
-func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataColumn, getBlobsCalled bool) (bool, error) {
+func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataColumn) (bool, error) {
 	var columnCompleted bool
 	groupIDBytes := c.GroupID()
 	topicStore, ok := p.partialMsgStore[topic]
@@ -679,7 +677,8 @@ func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataCol
 
 	err := p.publishPartialCol(topic, existing.GroupID(), existing)
 	if err == nil {
-		p.getBlobsCalled[string(groupIDBytes)] = getBlobsCalled
+		// Publishing is only done after getBlobs has been called
+		p.getBlobsCalled[string(groupIDBytes)] = true
 	}
 	return columnCompleted, err
 }
