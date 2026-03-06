@@ -1244,7 +1244,9 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			h.start(recorder)
 			defer h.Stop()
 
-			completed, err := h.broadcaster.Publish(topic, *column)
+			err := h.broadcaster.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+				yield(topic, *column)
+			})
 			if tt.expectedErrContains != "" {
 				require.ErrorContains(t, tt.expectedErrContains, err)
 			} else {
@@ -1261,7 +1263,6 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			require.Equal(t, err == nil, getBlobs)
 
 			if tt.expectHandleColumn {
-				require.Equal(t, true, completed)
 				select {
 				case call := <-recorder.handleColumnCallCh:
 					require.Equal(t, topic, call.topic)
@@ -1270,7 +1271,11 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 					t.Fatalf("handle column call not received")
 				}
 			} else {
-				require.Equal(t, false, completed)
+				select {
+				case <-recorder.handleColumnCallCh:
+					t.Fatal("handle column should not be called")
+				default:
+				}
 			}
 
 		})

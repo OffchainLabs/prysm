@@ -2,6 +2,8 @@ package partialdatacolumnbroadcaster
 
 import (
 	"bytes"
+	stderrors "errors"
+	"iter"
 	"log/slog"
 	"regexp"
 	"strconv"
@@ -101,9 +103,7 @@ type request struct {
 }
 
 type publish struct {
-	topic         string
-	c             blocks.PartialDataColumn
-	publishRespCh chan publishResponse
+	topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]
 }
 
 type publishResponse struct {
@@ -263,9 +263,7 @@ func (p *PartialColumnBroadcaster) loop() {
 		case req := <-p.incomingReq:
 			switch req.kind {
 			case requestKindPublish:
-				var pr publishResponse
-				pr.columnCompleted, pr.err = p.publish(req.publish.topic, req.publish.c)
-				req.publish.publishRespCh <- pr
+				req.response <- p.publish(req.publish.topicsAndColumns)
 			case requestKindSubscribe:
 				req.response <- p.subscribe(req.sub.t)
 			case requestKindUnsubscribe:
@@ -599,21 +597,21 @@ func (p *PartialColumnBroadcaster) Stop() {
 }
 
 // Publish publishes the partial column.
-func (p *PartialColumnBroadcaster) Publish(topic string, c blocks.PartialDataColumn) (bool, error) {
+func (p *PartialColumnBroadcaster) Publish(topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error {
 	if p.peerFeedback == nil || p.publishPartialCol == nil {
-		return false, errors.New("pubsub not initialized")
+		return errors.New("pubsub not initialized")
 	}
-	respCh := make(chan publishResponse, 1)
+	respCh := make(chan error)
+	// TODO: select against stop to not stall here on close
 	p.incomingReq <- request{
 		kind: requestKindPublish,
 		publish: publish{
-			topic:         topic,
-			c:             c,
-			publishRespCh: respCh,
+			topicsAndColumns: topicsAndColumns,
 		},
+		response: respCh,
 	}
-	resp := <-respCh
-	return resp.columnCompleted, resp.err
+	err := <-respCh
+	return err
 }
 
 func (p *PartialColumnBroadcaster) gossip(topic string, groupID []byte) {
@@ -638,49 +636,47 @@ func (p *PartialColumnBroadcaster) gossip(topic string, groupID []byte) {
 	}
 }
 
-func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataColumn) (bool, error) {
-	var columnCompleted bool
-	groupIDBytes := c.GroupID()
-	topicStore, ok := p.partialMsgStore[topic]
-	if !ok {
-		topicStore = make(map[string]*blocks.PartialDataColumn)
-		p.partialMsgStore[topic] = topicStore
-	}
+func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error {
+	var aggErr error
+	for topic, c := range topicsAndColumns {
+		if len(c.KzgCommitments) == 0 {
+			// No meaningful data. Skip publishing
+			continue
+		}
+		groupIDBytes := c.GroupID()
+		topicStore, ok := p.partialMsgStore[topic]
+		if !ok {
+			topicStore = make(map[string]*blocks.PartialDataColumn)
+			p.partialMsgStore[topic] = topicStore
+		}
 
-	existing := topicStore[string(groupIDBytes)]
-	if existing != nil {
 		var extended bool
-		// Extend the existing column with cells being published here.
-		// The existing column may already contain cells received from peers. We must not overwrite it.
-		for i := range c.Included.Len() {
-			if c.Included.BitAt(i) {
-				if existing.ExtendFromVerifiedCell(uint64(i), c.Column[i], c.KzgProofs[i]) {
-					extended = true
-				}
-			}
+		existing := topicStore[string(groupIDBytes)]
+		if existing != nil {
+			extended = existing.ExtendFromOther(&c)
+		} else {
+			extended = true
+			topicStore[string(groupIDBytes)] = &c
+			existing = &c
 		}
 		if extended {
 			if col, ok := existing.Complete(); ok {
 				log.WithFields(logrus.Fields{"topic": topic, "group": existing.GroupID()}).Info("Completed partial column")
 				if p.handleColumn != nil {
-					columnCompleted = true
 					go p.handleColumn(topic, col)
 				}
 			}
 		}
-	} else {
-		topicStore[string(groupIDBytes)] = &c
-		existing = &c
-	}
 
-	p.groupTTL[string(groupIDBytes)] = TTLInSlots
-
-	err := p.publishPartialCol(topic, existing.GroupID(), existing)
-	if err == nil {
-		// Publishing is only done after getBlobs has been called
-		p.getBlobsCalled[string(groupIDBytes)] = true
+		p.groupTTL[string(groupIDBytes)] = TTLInSlots
+		err := p.publishPartialCol(topic, groupIDBytes, existing)
+		if err == nil {
+			// Publishing is only done after getBlobs has been called
+			p.getBlobsCalled[string(groupIDBytes)] = true
+		}
+		aggErr = stderrors.Join(aggErr, err)
 	}
-	return columnCompleted, err
+	return aggErr
 }
 
 type SubHandler func(topic string, col blocks.VerifiedRODataColumn)
