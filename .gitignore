@@ -46,4 +46,4 @@ tmp
 report.txt
 
 # execution client data
-execution/
+/execution/

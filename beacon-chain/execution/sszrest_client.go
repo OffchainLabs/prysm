@@ -184,14 +184,14 @@ func (s *Service) newPayloadSSZRest(
 	var versionPath string
 	switch payload.Proto().(type) {
 	case *pb.ExecutionPayload:
-		versionPath = "/engine/v1/payloads"
+		versionPath = "/engine/v1/new_payload"
 	case *pb.ExecutionPayloadCapella:
-		versionPath = "/engine/v2/payloads"
+		versionPath = "/engine/v2/new_payload"
 	case *pb.ExecutionPayloadDeneb:
 		if executionRequests != nil {
-			versionPath = "/engine/v4/payloads"
+			versionPath = "/engine/v4/new_payload"
 		} else {
-			versionPath = "/engine/v3/payloads"
+			versionPath = "/engine/v3/new_payload"
 		}
 	default:
 		return nil, errors.New("unknown execution data type for SSZ-REST")
@@ -232,7 +232,7 @@ func (s *Service) forkchoiceUpdatedSSZRest(
 		return nil, nil, errors.Wrap(err, "marshal SSZ-REST forkchoice_updated request")
 	}
 
-	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v3/forkchoice", reqBody)
+	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v3/forkchoice_updated", reqBody)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -318,11 +318,10 @@ func (s *Service) getPayloadSSZRest(ctx context.Context, payloadId [8]byte, slot
 		version = 1
 	}
 
-	// GET /engine/v{N}/payloads/{payload_id} — payload_id as hex-encoded Bytes8
-	payloadIdHex := fmt.Sprintf("0x%x", payloadId)
-	versionPath := fmt.Sprintf("/engine/v%d/payloads/%s", version, payloadIdHex)
+	// POST /engine/v{N}/get_payload with 8-byte payload ID body
+	versionPath := fmt.Sprintf("/engine/v%d/get_payload", version)
 
-	respBody, err := s.sszRestClient.doGetRequest(ctx, versionPath)
+	respBody, err := s.sszRestClient.doRequest(ctx, versionPath, payloadId[:])
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +381,7 @@ func (s *Service) getBlobsSSZRest(ctx context.Context, versionedHashes []common.
 
 	reqBody := marshalGetBlobsRequest(versionedHashes)
 
-	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v1/blobs", reqBody)
+	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v1/get_blobs", reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +396,7 @@ func (s *Service) exchangeCapabilitiesSSZRest(ctx context.Context, capabilities 
 
 	reqBody := marshalExchangeCapabilitiesRequest(capabilities)
 
-	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v1/capabilities", reqBody)
+	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v1/exchange_capabilities", reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +416,7 @@ func (s *Service) getClientVersionSSZRest(ctx context.Context) ([]*structs.Clien
 
 	reqBody := marshalClientVersionRequest("PM", "Prysm", version.SemanticVersion(), commit)
 
-	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v1/client/version", reqBody)
+	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v1/get_client_version", reqBody)
 	if err != nil {
 		return nil, err
 	}

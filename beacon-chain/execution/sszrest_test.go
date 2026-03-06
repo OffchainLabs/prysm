@@ -124,7 +124,8 @@ func TestMarshalForkchoiceStateSSZ(t *testing.T) {
 		FinalizedBlockHash: finalized,
 	}
 
-	result := marshalForkchoiceStateSSZ(state)
+	result, err := state.MarshalSSZ()
+	require.NoError(t, err)
 	require.Equal(t, 96, len(result))
 	require.DeepEqual(t, head, result[0:32])
 	require.DeepEqual(t, safe, result[32:64])
@@ -385,51 +386,7 @@ func TestSSZRestError_Error(t *testing.T) {
 	assert.Equal(t, "SSZ-REST error (code -32602): invalid params", e.Error())
 }
 
-func TestMarshalWithdrawalSSZ(t *testing.T) {
-	w := &pb.Withdrawal{
-		Index:          42,
-		ValidatorIndex: 100,
-		Address:        make([]byte, 20),
-		Amount:         1000,
-	}
-	w.Address[0] = 0xAA
-	w.Address[19] = 0xBB
 
-	buf := marshalWithdrawalSSZ(nil, w)
-	require.Equal(t, 44, len(buf))
-
-	// index (8 bytes LE)
-	assert.Equal(t, uint64(42), binary.LittleEndian.Uint64(buf[0:8]))
-	// validator_index (8 bytes LE)
-	assert.Equal(t, uint64(100), binary.LittleEndian.Uint64(buf[8:16]))
-	// address (20 bytes)
-	assert.Equal(t, byte(0xAA), buf[16])
-	assert.Equal(t, byte(0xBB), buf[35])
-	// amount (8 bytes LE)
-	assert.Equal(t, uint64(1000), binary.LittleEndian.Uint64(buf[36:44]))
-}
-
-func TestAppendFeeRecipient(t *testing.T) {
-	t.Run("exact 20 bytes", func(t *testing.T) {
-		addr := make([]byte, 20)
-		addr[0] = 0xFF
-		addr[19] = 0x01
-		result := appendFeeRecipient(nil, addr)
-		require.Equal(t, 20, len(result))
-		assert.Equal(t, byte(0xFF), result[0])
-		assert.Equal(t, byte(0x01), result[19])
-	})
-	t.Run("short address zero-padded", func(t *testing.T) {
-		addr := []byte{0xAB, 0xCD}
-		result := appendFeeRecipient(nil, addr)
-		require.Equal(t, 20, len(result))
-		assert.Equal(t, byte(0xAB), result[0])
-		assert.Equal(t, byte(0xCD), result[1])
-		for i := 2; i < 20; i++ {
-			assert.Equal(t, byte(0), result[i])
-		}
-	})
-}
 
 func TestIsSSZRestAvailable(t *testing.T) {
 	t.Run("available when client set", func(t *testing.T) {
@@ -731,7 +688,7 @@ func TestExchangeCapabilitiesRoundTripSingle(t *testing.T) {
 
 func TestUnmarshalExchangeCapabilitiesResponseTooShort(t *testing.T) {
 	_, err := unmarshalExchangeCapabilitiesResponse([]byte{0, 1})
-	require.ErrorContains(t, "too short", err)
+	require.ErrorContains(t, "incorrect size", err)
 }
 
 // Tests for client_version SSZ encoding/decoding.
@@ -805,7 +762,7 @@ func TestClientVersionRoundTripSingle(t *testing.T) {
 
 func TestUnmarshalClientVersionResponseTooShort(t *testing.T) {
 	_, err := unmarshalClientVersionResponse([]byte{0, 1})
-	require.ErrorContains(t, "too short", err)
+	require.ErrorContains(t, "incorrect size", err)
 }
 
 
@@ -831,37 +788,7 @@ func TestParseCommitToBytes4(t *testing.T) {
 	})
 }
 
-func TestUnmarshalSSZStringList(t *testing.T) {
-	t.Run("empty data", func(t *testing.T) {
-		result, err := unmarshalSSZStringList(nil)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(result))
-	})
-	t.Run("single string", func(t *testing.T) {
-		str := "hello"
-		buf := make([]byte, 0, 4+len(str))
-		buf = binary.LittleEndian.AppendUint32(buf, 4) // offset to "hello"
-		buf = append(buf, []byte(str)...)
-		result, err := unmarshalSSZStringList(buf)
-		require.NoError(t, err)
-		require.Equal(t, 1, len(result))
-		assert.Equal(t, "hello", result[0])
-	})
-	t.Run("two strings", func(t *testing.T) {
-		s1 := "abc"
-		s2 := "defgh"
-		buf := make([]byte, 0, 8+len(s1)+len(s2))
-		buf = binary.LittleEndian.AppendUint32(buf, 8)                    // offset for s1
-		buf = binary.LittleEndian.AppendUint32(buf, 8+uint32(len(s1)))    // offset for s2
-		buf = append(buf, []byte(s1)...)
-		buf = append(buf, []byte(s2)...)
-		result, err := unmarshalSSZStringList(buf)
-		require.NoError(t, err)
-		require.Equal(t, 2, len(result))
-		assert.Equal(t, "abc", result[0])
-		assert.Equal(t, "defgh", result[1])
-	})
-}
+
 
 // Tests for SSZ-REST endpoint integration via httptest.
 
