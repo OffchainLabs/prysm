@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -708,13 +709,7 @@ func TestPTCDuties_CollectsAllSlots(t *testing.T) {
 		for s := epochStart; s < epochEnd; s++ {
 			ptc, err := gloas.PayloadCommittee(t.Context(), st, s)
 			require.NoError(t, err)
-			found := false
-			for _, idx := range ptc {
-				if idx == valIdx {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(ptc, valIdx)
 			if found {
 				expected = append(expected, s)
 			}
