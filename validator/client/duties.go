@@ -241,6 +241,9 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if bytes.Equal(currDependentRoot, params.BeaconConfig().ZeroHash[:]) {
 		return nil
 	}
+	v.dutiesLock.RLock()
+	_, storedCurr = v.duties.DependentRoots()
+	v.dutiesLock.RUnlock()
 	needsCurrUpdate := storedCurr == nil || !bytes.Equal(currDependentRoot, storedCurr)
 	if !needsCurrUpdate {
 		return nil
