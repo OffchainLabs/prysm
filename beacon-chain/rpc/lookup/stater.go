@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -237,29 +238,37 @@ func (p *BeaconDbStater) stateByRoot(ctx context.Context, stateRoot []byte) (sta
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get head state")
 	}
-	for i, root := range headState.StateRoots() {
-		if bytes.Equal(root, stateRoot) {
-			blockRoot := headState.BlockRoots()[i]
+
+	stateRoots := headState.StateRoots()
+	blkRoots := headState.BlockRoots()
+	n := len(stateRoots)
+	s, err := math.Int(uint64(headState.Slot()))
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert slot to int")
+	}
+	startIdx := s % n
+	isPostGloas := slots.ToEpoch(p.ChainInfoFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch
+
+	// iterate from the head state backwards, wrapping the list.
+	for i := range n {
+		idx := (startIdx - i + n) % n
+
+		if bytes.Equal(stateRoots[idx], stateRoot) {
+			blockRoot := blkRoots[idx]
 			return p.StateGenService.StateByRoot(ctx, bytesutil.ToBytes32(blockRoot))
 		}
-	}
 
-	// this is to support fetching states by pre-payload state roots after gloas
-	if slots.ToEpoch(p.ChainInfoFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
-		blkRoots := headState.BlockRoots()
-		for i := len(blkRoots) - 1; i >= 0; i-- {
-			r := bytesutil.ToBytes32(blkRoots[i])
-
+		// this is to support fetching states by pre-payload state roots after gloas
+		if isPostGloas {
+			r := bytesutil.ToBytes32(blkRoots[idx])
 			if r == params.BeaconConfig().ZeroHash {
 				continue
 			}
-
 			b, err := p.BeaconDB.Block(ctx, r)
 			if err != nil || b == nil || b.IsNil() {
 				continue
 			}
-
-			if b.Block().StateRoot() == [32]byte(stateRoot) {
+			if b.Block().StateRoot() == bytesutil.ToBytes32(stateRoot) {
 				return p.StateGenService.StateByRoot(ctx, r)
 			}
 		}
