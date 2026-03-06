@@ -211,12 +211,14 @@ func LogOutput(t *testing.T) {
 			t.Fatal(err)
 		}
 		LogErrorOutput(t, beaconLogFile, "beacon chain node", i)
+		_ = beaconLogFile.Close()
 
 		validatorLogFile, err := os.Open(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.ValidatorLogFileName, i)))
 		if err != nil {
 			t.Fatal(err)
 		}
 		LogErrorOutput(t, validatorLogFile, "validator client", i)
+		_ = validatorLogFile.Close()
 	}
 
 	t.Logf("Ending time: %s\n", time.Now().String())
@@ -277,10 +279,10 @@ func writeURLRespAtPath(url, fp string) error {
 	}
 
 	file, err := os.Create(filepath.Clean(fp))
-
 	if err != nil {
 		return err
 	}
+	defer func() { _ = file.Close() }()
 	if _, err = file.Write(body); err != nil {
 		return err
 	}
