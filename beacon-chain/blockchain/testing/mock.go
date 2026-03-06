@@ -77,6 +77,8 @@ type ChainService struct {
 	DataColumns                 []blocks.VerifiedRODataColumn
 	TargetRoot                  [32]byte
 	MockHeadSlot                *primitives.Slot
+	MockCanonicalRoots          map[primitives.Slot][32]byte
+	MockCanonicalFull           map[primitives.Slot]bool
 	ParentPayloadReadyVal       *bool
 	ForkchoiceRoots             map[[32]byte]bool
 }
@@ -645,7 +647,7 @@ func prepareForkchoiceState(
 	}
 
 	base.BlockRoots[0] = append(base.BlockRoots[0], blockRoot[:]...)
-	st, err := state_native.InitializeFromProtoBellatrix(base)
+	st, err := state_native.InitializeFromProtoUnsafeBellatrix(base)
 	if err != nil {
 		return nil, blocks.ROBlock{}, err
 	}
@@ -806,6 +808,17 @@ func (c *ChainService) DependentRootForEpoch(_ [32]byte, _ primitives.Epoch) ([3
 // TargetRootForEpoch mocks the same method in the chain service
 func (c *ChainService) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
 	return c.TargetRoot, nil
+}
+
+func (c *ChainService) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) {
+	var root [32]byte
+	if c.MockCanonicalRoots != nil {
+		root = c.MockCanonicalRoots[slot]
+	}
+	if c.MockCanonicalFull != nil {
+		return root, c.MockCanonicalFull[slot]
+	}
+	return root, false
 }
 
 // MockSyncChecker is a mock implementation of blockchain.Checker.
