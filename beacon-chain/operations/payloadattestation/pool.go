@@ -24,8 +24,7 @@ type payloadAttestationDataKey struct {
 // payload-attestation data.
 type PoolManager interface {
 	// PendingPayloadAttestations consumes and returns pending attestations for
-	// the requested slot. It also prunes stale entries with slot lower than the
-	// requested slot.
+	// the requested slot.
 	PendingPayloadAttestations(slot primitives.Slot) []*ethpb.PayloadAttestation
 	// InsertPayloadAttestation inserts or aggregates a payload attestation
 	// message into the pool. The idx parameter is the PTC committee index
@@ -52,7 +51,7 @@ func NewPool() *Pool {
 }
 
 // PendingPayloadAttestations consumes and returns payload attestations for the
-// requested slot, and prunes older slots.
+// requested slot.
 func (p *Pool) PendingPayloadAttestations(slot primitives.Slot) []*ethpb.PayloadAttestation {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -63,14 +62,9 @@ func (p *Pool) PendingPayloadAttestations(slot primitives.Slot) []*ethpb.Payload
 			delete(p.pending, key)
 			continue
 		}
-		switch {
-		case att.Data.Slot < slot:
-			delete(p.pending, key)
-		case att.Data.Slot == slot:
+		if att.Data.Slot == slot {
 			result = append(result, att)
 			delete(p.pending, key)
-		default:
-			continue
 		}
 	}
 	return result
@@ -79,10 +73,14 @@ func (p *Pool) PendingPayloadAttestations(slot primitives.Slot) []*ethpb.Payload
 // InsertPayloadAttestation inserts a payload attestation message into the pool.
 // If an attestation with matching data already exists, it aggregates the BLS
 // signature and sets the aggregation bit for idx.
-// idx is the validator's position in the PTC committee bitfield.
+// idx is the validator's position in the PTC committee bitfield. It also prunes
+// stale entries with slot lower than msg.Data.Slot.
 func (p *Pool) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, idx uint64) error {
 	if msg == nil || msg.Data == nil {
 		return errNilPayloadAttestationMessage
+	}
+	if idx >= uint64(fieldparams.PTCSize) {
+		return errors.Errorf("invalid payload attestation committee index: %d", idx)
 	}
 
 	key, err := dataKey(msg.Data)
@@ -92,6 +90,8 @@ func (p *Pool) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, id
 
 	p.lock.Lock()
 	defer p.lock.Unlock()
+
+	p.pruneOlderSlotsLocked(msg.Data.Slot)
 
 	existing, ok := p.pending[key]
 	if !ok {
@@ -110,6 +110,14 @@ func (p *Pool) InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage, id
 	existing.Signature = sig
 	existing.AggregationBits.SetBitAt(idx, true)
 	return nil
+}
+
+func (p *Pool) pruneOlderSlotsLocked(slot primitives.Slot) {
+	for key, att := range p.pending {
+		if att == nil || att.Data == nil || att.Data.Slot < slot {
+			delete(p.pending, key)
+		}
+	}
 }
 
 // Seen reports whether idx has already been observed for the given

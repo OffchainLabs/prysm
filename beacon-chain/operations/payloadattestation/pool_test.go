@@ -3,6 +3,7 @@ package payloadattestation
 import (
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
@@ -26,7 +27,7 @@ func TestPool_PendingPayloadAttestations(t *testing.T) {
 		assert.Equal(t, 0, pendingCount(pool))
 	})
 
-	t.Run("returns requested slot and prunes lower slots", func(t *testing.T) {
+	t.Run("returns requested slot", func(t *testing.T) {
 		pool := NewPool()
 		sig := bls.NewAggregateSignature().Marshal()
 		msg1 := &ethpb.PayloadAttestationMessage{
@@ -60,16 +61,6 @@ func TestPool_PendingPayloadAttestations(t *testing.T) {
 	t.Run("slot filtering keeps future entries", func(t *testing.T) {
 		pool := NewPool()
 		sig := bls.NewAggregateSignature().Marshal()
-		msg1 := &ethpb.PayloadAttestationMessage{
-			ValidatorIndex: 0,
-			Data: &ethpb.PayloadAttestationData{
-				BeaconBlockRoot:   make([]byte, 32),
-				Slot:              1,
-				PayloadPresent:    true,
-				BlobDataAvailable: false,
-			},
-			Signature: sig,
-		}
 		msg2 := &ethpb.PayloadAttestationMessage{
 			ValidatorIndex: 1,
 			Data: &ethpb.PayloadAttestationData{
@@ -80,12 +71,10 @@ func TestPool_PendingPayloadAttestations(t *testing.T) {
 			},
 			Signature: sig,
 		}
-		require.NoError(t, pool.InsertPayloadAttestation(msg1, 0))
 		require.NoError(t, pool.InsertPayloadAttestation(msg2, 1))
 
 		atts := pool.PendingPayloadAttestations(primitives.Slot(1))
-		assert.Equal(t, 1, len(atts))
-		assert.Equal(t, primitives.Slot(1), atts[0].Data.Slot)
+		assert.Equal(t, 0, len(atts))
 		assert.Equal(t, 1, pendingCount(pool))
 
 		atts = pool.PendingPayloadAttestations(primitives.Slot(2))
@@ -98,7 +87,7 @@ func TestPool_PendingPayloadAttestations(t *testing.T) {
 		assert.Equal(t, 0, pendingCount(pool))
 	})
 
-	t.Run("future slot request prunes all lower slots", func(t *testing.T) {
+	t.Run("future slot request does not prune", func(t *testing.T) {
 		pool := NewPool()
 		sig := bls.NewAggregateSignature().Marshal()
 		msg1 := &ethpb.PayloadAttestationMessage{
@@ -126,7 +115,7 @@ func TestPool_PendingPayloadAttestations(t *testing.T) {
 
 		atts := pool.PendingPayloadAttestations(primitives.Slot(10))
 		assert.Equal(t, 0, len(atts))
-		assert.Equal(t, 0, pendingCount(pool))
+		assert.Equal(t, 1, pendingCount(pool))
 	})
 }
 
@@ -179,6 +168,24 @@ func TestPool_InsertPayloadAttestation(t *testing.T) {
 		require.Equal(t, 1, len(atts))
 		assert.Equal(t, true, atts[0].AggregationBits.BitAt(idx))
 		assert.Equal(t, false, atts[0].AggregationBits.BitAt(idx+1))
+	})
+
+	t.Run("out-of-range index returns error and does not insert", func(t *testing.T) {
+		pool := NewPool()
+		sig := bls.NewAggregateSignature().Marshal()
+		msg := &ethpb.PayloadAttestationMessage{
+			ValidatorIndex: 0,
+			Data: &ethpb.PayloadAttestationData{
+				BeaconBlockRoot:   make([]byte, 32),
+				Slot:              1,
+				PayloadPresent:    true,
+				BlobDataAvailable: false,
+			},
+			Signature: sig,
+		}
+		err := pool.InsertPayloadAttestation(msg, uint64(fieldparams.PTCSize))
+		require.ErrorContains(t, "invalid payload attestation committee index", err)
+		assert.Equal(t, 0, pendingCount(pool))
 	})
 
 	t.Run("duplicate index is no-op", func(t *testing.T) {
@@ -265,6 +272,40 @@ func TestPool_InsertPayloadAttestation(t *testing.T) {
 		require.NoError(t, pool.InsertPayloadAttestation(msg2, 1))
 		atts := pool.PendingPayloadAttestations(primitives.Slot(1))
 		assert.Equal(t, 2, len(atts))
+	})
+
+	t.Run("inserting newer slot prunes older slots", func(t *testing.T) {
+		pool := NewPool()
+		sig := bls.NewAggregateSignature().Marshal()
+		msg1 := &ethpb.PayloadAttestationMessage{
+			ValidatorIndex: 0,
+			Data: &ethpb.PayloadAttestationData{
+				BeaconBlockRoot:   bytesutil.PadTo([]byte("older"), 32),
+				Slot:              1,
+				PayloadPresent:    true,
+				BlobDataAvailable: false,
+			},
+			Signature: sig,
+		}
+		msg2 := &ethpb.PayloadAttestationMessage{
+			ValidatorIndex: 1,
+			Data: &ethpb.PayloadAttestationData{
+				BeaconBlockRoot:   bytesutil.PadTo([]byte("newer"), 32),
+				Slot:              2,
+				PayloadPresent:    true,
+				BlobDataAvailable: false,
+			},
+			Signature: sig,
+		}
+
+		require.NoError(t, pool.InsertPayloadAttestation(msg1, 0))
+		require.NoError(t, pool.InsertPayloadAttestation(msg2, 1))
+		assert.Equal(t, 1, pendingCount(pool))
+
+		atts := pool.PendingPayloadAttestations(primitives.Slot(1))
+		assert.Equal(t, 0, len(atts))
+		atts = pool.PendingPayloadAttestations(primitives.Slot(2))
+		assert.Equal(t, 1, len(atts))
 	})
 }
 
