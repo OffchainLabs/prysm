@@ -647,8 +647,7 @@ func TestPTCDuties_EmptyIndices(t *testing.T) {
 func TestPTCDuties_SlotsWithinEpoch(t *testing.T) {
 	ptcTestConfig(t)
 
-	st, pubKeys := ptcTestState(t)
-	_ = pubKeys
+	st, _ := ptcTestState(t)
 
 	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
 	indices := make([]primitives.ValidatorIndex, depChainStart)
@@ -684,14 +683,13 @@ func TestPTCDuties_SlotsWithinEpoch(t *testing.T) {
 func TestPTCDuties_CollectsAllSlots(t *testing.T) {
 	ptcTestConfig(t)
 
-	st, _ := ptcTestState(t)
-
 	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
 	indices := make([]primitives.ValidatorIndex, depChainStart)
 	for i := range indices {
 		indices[i] = primitives.ValidatorIndex(i)
 	}
 
+	st, _ := ptcTestState(t)
 	const epoch = primitives.Epoch(0)
 	duties, rpcErr := (&core.Service{}).PTCDuties(t.Context(), st, epoch, indices)
 	require.Equal(t, (*core.RpcError)(nil), rpcErr)
