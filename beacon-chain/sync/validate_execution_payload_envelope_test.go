@@ -58,44 +58,51 @@ func TestValidateExecutionPayloadEnvelope_AlreadySeen(t *testing.T) {
 func TestValidateExecutionPayloadEnvelope_ErrorPathsWithMock(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
-		name     string
-		verifier mockExecutionPayloadEnvelopeVerifier
-		result   pubsub.ValidationResult
+		name      string
+		verifier  mockExecutionPayloadEnvelopeVerifier
+		result    pubsub.ValidationResult
+		wantError bool
 	}{
 		{
-			name:     "block root not seen",
+			name:     "block root not seen queues envelope",
 			verifier: mockExecutionPayloadEnvelopeVerifier{errBlockRootSeen: errors.New("not seen")},
 			result:   pubsub.ValidationIgnore,
 		},
 		{
-			name:     "slot below finalized",
-			verifier: mockExecutionPayloadEnvelopeVerifier{errSlotAboveFinalized: errors.New("below finalized")},
-			result:   pubsub.ValidationIgnore,
+			name:      "slot below finalized",
+			verifier:  mockExecutionPayloadEnvelopeVerifier{errSlotAboveFinalized: errors.New("below finalized")},
+			result:    pubsub.ValidationIgnore,
+			wantError: true,
 		},
 		{
-			name:     "block root invalid",
-			verifier: mockExecutionPayloadEnvelopeVerifier{errBlockRootValid: errors.New("invalid block")},
-			result:   pubsub.ValidationReject,
+			name:      "block root invalid",
+			verifier:  mockExecutionPayloadEnvelopeVerifier{errBlockRootValid: errors.New("invalid block")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
 		},
 		{
-			name:     "slot mismatch",
-			verifier: mockExecutionPayloadEnvelopeVerifier{errSlotMatchesBlock: errors.New("slot mismatch")},
-			result:   pubsub.ValidationReject,
+			name:      "slot mismatch",
+			verifier:  mockExecutionPayloadEnvelopeVerifier{errSlotMatchesBlock: errors.New("slot mismatch")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
 		},
 		{
-			name:     "builder mismatch",
-			verifier: mockExecutionPayloadEnvelopeVerifier{errBuilderValid: errors.New("builder mismatch")},
-			result:   pubsub.ValidationReject,
+			name:      "builder mismatch",
+			verifier:  mockExecutionPayloadEnvelopeVerifier{errBuilderValid: errors.New("builder mismatch")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
 		},
 		{
-			name:     "payload hash mismatch",
-			verifier: mockExecutionPayloadEnvelopeVerifier{errPayloadHash: errors.New("payload hash mismatch")},
-			result:   pubsub.ValidationReject,
+			name:      "payload hash mismatch",
+			verifier:  mockExecutionPayloadEnvelopeVerifier{errPayloadHash: errors.New("payload hash mismatch")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
 		},
 		{
-			name:     "signature invalid",
-			verifier: mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("signature invalid")},
-			result:   pubsub.ValidationReject,
+			name:      "signature invalid",
+			verifier:  mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("signature invalid")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
 		},
 	}
 
@@ -105,7 +112,9 @@ func TestValidateExecutionPayloadEnvelope_ErrorPathsWithMock(t *testing.T) {
 			s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(tc.verifier)
 
 			result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
-			require.NotNil(t, err)
+			if tc.wantError {
+				require.NotNil(t, err)
+			}
 			require.Equal(t, result, tc.result)
 		})
 	}
@@ -204,6 +213,7 @@ func setupExecutionPayloadEnvelopeService(t *testing.T, envelopeSlot, blockSlot 
 	stateGen := stategen.New(db, doublylinkedtree.New())
 	s := &Service{
 		seenPayloadEnvelopeCache: lruwrpr.New(10),
+		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
 		cfg: &config{
 			p2p:         p,
 			initialSync: &mockSync.Sync{},
@@ -227,6 +237,7 @@ func setupExecutionPayloadEnvelopeService(t *testing.T, envelopeSlot, blockSlot 
 	state, err := util.NewBeaconStateFulu()
 	require.NoError(t, err)
 	require.NoError(t, db.SaveState(ctx, state, root))
+	chainService.State = state
 
 	blockHash := bytesutil.ToBytes32(bid.Message.BlockHash)
 	env := testSignedExecutionPayloadEnvelope(t, envelopeSlot, primitives.BuilderIndex(bid.Message.BuilderIndex), root, blockHash)
@@ -252,6 +263,68 @@ func envelopeToPubsub(t *testing.T, s *Service, p p2p.P2P, env *ethpb.SignedExec
 			Data:  buf.Bytes(),
 			Topic: &topic,
 		},
+	}
+}
+
+func TestQueuePendingPayloadEnvelope_SelfBuildInvalidSignature(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name       string
+		builderIdx primitives.BuilderIndex
+		result     pubsub.ValidationResult
+		wantError  bool
+	}{
+		{
+			name:       "self-build with invalid signature is ignored",
+			builderIdx: params.BeaconConfig().BuilderIndexSelfBuild,
+			result:     pubsub.ValidationIgnore,
+		},
+		{
+			name:       "non-self-build with invalid signature is rejected",
+			builderIdx: 42,
+			result:     pubsub.ValidationReject,
+			wantError:  true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := p2ptest.NewTestP2P(t)
+			chainService := &mock.ChainService{
+				Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+				FinalizedCheckPoint: &ethpb.Checkpoint{},
+			}
+			st, err := util.NewBeaconStateFulu()
+			require.NoError(t, err)
+			chainService.State = st
+
+			s := &Service{
+				seenPayloadEnvelopeCache: lruwrpr.New(10),
+				pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+				cfg: &config{
+					p2p:         p,
+					initialSync: &mockSync.Sync{},
+					chain:       chainService,
+					clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+				},
+			}
+			s.newExecutionPayloadEnvelopeVerifier = testNewExecutionPayloadEnvelopeVerifier(mockExecutionPayloadEnvelopeVerifier{
+				errBlockRootSeen: errors.New("not seen"),
+				errSignature:     errors.New("bad signature"),
+			})
+
+			root := [32]byte{0x01}
+			blockHash := [32]byte{0x02}
+			env := testSignedExecutionPayloadEnvelope(t, 1, tc.builderIdx, root, blockHash)
+			msg := envelopeToPubsub(t, s, p, env)
+
+			result, err := s.validateExecutionPayloadEnvelope(ctx, "", msg)
+			if tc.wantError {
+				require.NotNil(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.result, result)
+		})
 	}
 }
 

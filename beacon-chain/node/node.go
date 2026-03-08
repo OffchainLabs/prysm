@@ -40,6 +40,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/node/registration"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -97,6 +98,7 @@ type BeaconNode struct {
 	slasherDB                db.SlasherDatabase
 	attestationCache         *cache.AttestationCache
 	attestationPool          attestations.Pool
+	payloadAttestationPool   payloadattestation.PoolManager
 	exitPool                 voluntaryexits.PoolManager
 	slashingsPool            slashings.PoolManager
 	syncCommitteePool        synccommittee.Pool
@@ -161,6 +163,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		opFeed:                  new(event.Feed),
 		attestationCache:        cache.NewAttestationCache(),
 		attestationPool:         attestations.NewPool(),
+		payloadAttestationPool:  payloadattestation.NewPool(),
 		exitPool:                voluntaryexits.NewPool(),
 		slashingsPool:           slashings.NewPool(),
 		syncCommitteePool:       synccommittee.NewPool(),
@@ -974,6 +977,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		ForkchoiceFetcher:                chainService,
 		FinalizationFetcher:              chainService,
 		BlockReceiver:                    chainService,
+		PayloadAttestationReceiver:       chainService,
 		ExecutionPayloadEnvelopeReceiver: chainService,
 		BlobReceiver:                     chainService,
 		DataColumnReceiver:               chainService,
@@ -983,6 +987,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		OptimisticModeFetcher:            chainService,
 		AttestationCache:                 b.attestationCache,
 		AttestationsPool:                 b.attestationPool,
+		PayloadAttestationPool:           b.payloadAttestationPool,
 		ExitPool:                         b.exitPool,
 		SlashingsPool:                    b.slashingsPool,
 		BLSChangesPool:                   b.blsToExecPool,
