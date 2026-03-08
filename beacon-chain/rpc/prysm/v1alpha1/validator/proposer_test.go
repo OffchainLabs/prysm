@@ -3476,6 +3476,65 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		require.NotEqual(t, [32]byte(str), [32]byte(genesisStr))
 		require.LogsContain(t, hook, "Late block attempted reorg failed")
 	})
+
+	t.Run("successful reorg uses payload content lookup access root", func(tt *testing.T) {
+		fullAccessRoot := bytesutil.ToBytes32([]byte("full-access-root"))
+		require.NoError(t, transition.UpdateNextSlotCache(ctx, fullAccessRoot[:], parentState))
+
+		proposerServer := &Server{
+			ForkchoiceFetcher: &mock.ChainService{
+				MockPayloadContentLookup: map[[32]byte][32]byte{
+					parentRoot: fullAccessRoot,
+				},
+				MockPayloadContentIsFull: map[[32]byte]bool{
+					parentRoot: true,
+				},
+			},
+			StateGen: stategen.New(db, doublylinkedtree.New()),
+		}
+
+		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, parentRoot, parentRoot, headRoot)
+		require.NoError(t, err)
+		st := parentState.Copy()
+		st, err = transition.ProcessSlots(ctx, st, st.Slot()+1)
+		require.NoError(t, err)
+		str, err := st.StateRootAtIndex(0)
+		require.NoError(t, err)
+		headStr, err := head.StateRootAtIndex(0)
+		require.NoError(t, err)
+		require.Equal(t, [32]byte(str), [32]byte(headStr))
+	})
+
+	t.Run("no reorg uses payload content lookup access root", func(tt *testing.T) {
+		fullAccessRoot := bytesutil.ToBytes32([]byte("full-access-root-no-reorg"))
+		require.NoError(t, transition.UpdateNextSlotCache(ctx, fullAccessRoot[:], parentState))
+
+		proposerServer := &Server{
+			ForkchoiceFetcher: &mock.ChainService{
+				MockPayloadContentLookup: map[[32]byte][32]byte{
+					headRoot: fullAccessRoot,
+				},
+				MockPayloadContentIsFull: map[[32]byte]bool{
+					headRoot: true,
+				},
+			},
+			HeadFetcher: &mock.ChainService{
+				State: headState,
+				Root:  headRoot[:],
+			},
+		}
+
+		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, headRoot, headRoot, headRoot)
+		require.NoError(t, err)
+		st := parentState.Copy()
+		st, err = transition.ProcessSlots(ctx, st, st.Slot()+1)
+		require.NoError(t, err)
+		str, err := st.StateRootAtIndex(0)
+		require.NoError(t, err)
+		headStr, err := head.StateRootAtIndex(0)
+		require.NoError(t, err)
+		require.Equal(t, [32]byte(str), [32]byte(headStr))
+	})
 }
 
 func TestProposer_ElectraBlobsAndProofs(t *testing.T) {

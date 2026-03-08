@@ -907,6 +907,46 @@ func TestChoosePayloadContent(t *testing.T) {
 	})
 }
 
+func TestPayloadContentLookup(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	t.Run("unknown root returns zero and false", func(t *testing.T) {
+		v, isBlockHash := f.PayloadContentLookup(indexToHash(999))
+		assert.Equal(t, [32]byte{}, v)
+		assert.Equal(t, false, isBlockHash)
+	})
+
+	t.Run("empty wins returns root", func(t *testing.T) {
+		v, isBlockHash := f.PayloadContentLookup(rootA)
+		assert.Equal(t, rootA, v)
+		assert.Equal(t, false, isBlockHash)
+	})
+
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	t.Run("full wins returns block hash", func(t *testing.T) {
+		en := f.store.emptyNodeByRoot[rootA]
+		fn := f.store.fullNodeByRoot[rootA]
+		require.NotNil(t, en)
+		require.NotNil(t, fn)
+		en.weight = 1
+		fn.weight = 2
+
+		v, isBlockHash := f.PayloadContentLookup(rootA)
+		assert.Equal(t, blockHashA, v)
+		assert.Equal(t, true, isBlockHash)
+	})
+}
+
 func TestGloasForkedBranches(t *testing.T) {
 	f := setupGloas(t, 1, 1)
 	s := f.store
