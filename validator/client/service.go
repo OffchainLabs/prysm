@@ -228,6 +228,7 @@ func (v *ValidatorService) Start() {
 		logValidatorPerformance:        v.logValidatorPerformance,
 		emitAccountMetrics:             v.emitAccountMetrics,
 		enableAPI:                      v.enableAPI,
+		duties:                         &dutyStore{},
 		distributed:                    v.distributed,
 		disableDutiesPolling:           v.disableDutiesPolling,
 		accountsChangedChannel:         make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
