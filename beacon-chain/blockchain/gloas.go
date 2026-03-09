@@ -184,16 +184,6 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 		log.WithError(err).Error("Failed to get head state")
 		return
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
-		defer cancel()
-		if err := transition.UpdateNextSlotCache(ctx, r, st); err != nil {
-			log.WithError(err).Error("Could not update next slot cache")
-		}
-		if err := s.handleEpochBoundary(ctx, currentSlot, st, r); err != nil {
-			log.WithError(err).Error("Could not handle epoch boundary")
-		}
-	}()
 	if !s.inRegularSync() {
 		return
 	}
