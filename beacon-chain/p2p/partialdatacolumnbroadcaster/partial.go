@@ -691,13 +691,19 @@ func (p *PartialColumnBroadcaster) Publish(topicsAndColumns iter.Seq2[string, bl
 		return errors.New("pubsub not initialized")
 	}
 	respCh := make(chan error)
-	p.incomingReq <- request{
+
+	select {
+	case p.incomingReq <- request{
 		kind: requestKindPublish,
 		publish: publish{
 			topicsAndColumns: topicsAndColumns,
 		},
 		response: respCh,
+	}:
+	case <-p.stop:
+		return errors.New("broadcaster has stopped")
 	}
+
 	return <-respCh
 }
 
