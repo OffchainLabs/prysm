@@ -13,6 +13,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	libp2p "github.com/libp2p/go-libp2p"
+	"github.com/sirupsen/logrus"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -154,7 +155,7 @@ var _ partialColumnPubSub = (*mockPubSub)(nil)
 
 func newBroadcasterHarness(t *testing.T, ps partialColumnPubSub) *broadcasterHarness {
 	t.Helper()
-	broadcaster := NewBroadcaster()
+	broadcaster := NewBroadcaster(logrus.New())
 	broadcaster.ps = ps
 	return &broadcasterHarness{
 		t:           t,

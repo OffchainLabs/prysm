@@ -150,7 +150,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	}
 
 	if cfg.PartialDataColumns {
-		s.partialColumnBroadcaster = partialdatacolumnbroadcaster.NewBroadcaster()
+		s.partialColumnBroadcaster = partialdatacolumnbroadcaster.NewBroadcaster(log.Logger)
 	}
 
 	ipAddr := prysmnetwork.IPAddr()
