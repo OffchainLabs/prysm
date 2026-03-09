@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -17,6 +18,11 @@ import (
 )
 
 func TestSubmitPayloadAttestation_PayloadAttestationDataFailure(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			hook := logTest.NewGlobal()
@@ -36,6 +42,11 @@ func TestSubmitPayloadAttestation_PayloadAttestationDataFailure(t *testing.T) {
 }
 
 func TestSubmitPayloadAttestation_ValidatorDutiesRequestFailure(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			hook := logTest.NewGlobal()
@@ -51,6 +62,10 @@ func TestSubmitPayloadAttestation_ValidatorDutiesRequestFailure(t *testing.T) {
 					PayloadPresent:  true,
 				}, nil)
 
+			m.validatorClient.EXPECT().
+				DomainData(gomock.Any(), gomock.Any()).
+				Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
 			validator.SubmitPayloadAttestation(t.Context(), 1, pubKey)
@@ -60,6 +75,11 @@ func TestSubmitPayloadAttestation_ValidatorDutiesRequestFailure(t *testing.T) {
 }
 
 func TestSubmitPayloadAttestation_BadDomainData(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			hook := logTest.NewGlobal()
@@ -94,6 +114,11 @@ func TestSubmitPayloadAttestation_BadDomainData(t *testing.T) {
 }
 
 func TestSubmitPayloadAttestation_CouldNotSubmit(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			hook := logTest.NewGlobal()
@@ -132,6 +157,11 @@ func TestSubmitPayloadAttestation_CouldNotSubmit(t *testing.T) {
 }
 
 func TestSubmitPayloadAttestation_OK(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			hook := logTest.NewGlobal()
