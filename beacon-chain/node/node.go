@@ -860,6 +860,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
 		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
+		regularsync.WithPayloadAttestationPool(b.payloadAttestationPool),
 	)
 	return b.services.RegisterService(rs)
 }
