@@ -51,7 +51,8 @@ func TestSubmitPayloadAttestation_ValidatorDutiesRequestFailure(t *testing.T) {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
 			hook := logTest.NewGlobal()
 			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{}}
+			validator.duties = &dutyStore{}
+			validator.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{}})
 			defer finish()
 
 			m.validatorClient.EXPECT().
@@ -86,12 +87,13 @@ func TestSubmitPayloadAttestation_BadDomainData(t *testing.T) {
 			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 			validatorIndex := primitives.ValidatorIndex(7)
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			validator.duties = &dutyStore{}
+			validator.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					PublicKey:      validatorKey.PublicKey().Marshal(),
 					ValidatorIndex: validatorIndex,
 				},
-			}}
+			}})
 
 			m.validatorClient.EXPECT().
 				PayloadAttestationData(gomock.Any(), gomock.Any()).
@@ -125,12 +127,13 @@ func TestSubmitPayloadAttestation_CouldNotSubmit(t *testing.T) {
 			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 			validatorIndex := primitives.ValidatorIndex(7)
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			validator.duties = &dutyStore{}
+			validator.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					PublicKey:      validatorKey.PublicKey().Marshal(),
 					ValidatorIndex: validatorIndex,
 				},
-			}}
+			}})
 
 			m.validatorClient.EXPECT().
 				PayloadAttestationData(gomock.Any(), gomock.Any()).
@@ -168,12 +171,13 @@ func TestSubmitPayloadAttestation_OK(t *testing.T) {
 			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 			validatorIndex := primitives.ValidatorIndex(7)
-			validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			validator.duties = &dutyStore{}
+			validator.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
 					PublicKey:      validatorKey.PublicKey().Marshal(),
 					ValidatorIndex: validatorIndex,
 				},
-			}}
+			}})
 
 			blockRoot := bytesutil.PadTo([]byte{'b'}, 32)
 			m.validatorClient.EXPECT().
