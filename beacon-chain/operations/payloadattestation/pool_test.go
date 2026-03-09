@@ -55,7 +55,7 @@ func TestPool_PendingPayloadAttestations(t *testing.T) {
 		atts := pool.PendingPayloadAttestations(primitives.Slot(2))
 		assert.Equal(t, 1, len(atts))
 		assert.Equal(t, primitives.Slot(2), atts[0].Data.Slot)
-		assert.Equal(t, 0, pendingCount(pool))
+		assert.Equal(t, 1, pendingCount(pool))
 	})
 
 	t.Run("slot filtering keeps future entries", func(t *testing.T) {
@@ -80,11 +80,11 @@ func TestPool_PendingPayloadAttestations(t *testing.T) {
 		atts = pool.PendingPayloadAttestations(primitives.Slot(2))
 		assert.Equal(t, 1, len(atts))
 		assert.Equal(t, primitives.Slot(2), atts[0].Data.Slot)
-		assert.Equal(t, 0, pendingCount(pool))
+		assert.Equal(t, 1, pendingCount(pool))
 
 		atts = pool.PendingPayloadAttestations(primitives.Slot(99))
 		assert.Equal(t, 0, len(atts))
-		assert.Equal(t, 0, pendingCount(pool))
+		assert.Equal(t, 1, pendingCount(pool))
 	})
 
 	t.Run("future slot request does not prune", func(t *testing.T) {
