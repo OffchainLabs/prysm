@@ -192,7 +192,8 @@ func (v *validator) logDuties(slot primitives.Slot) {
 	for i := primitives.Slot(0); i < params.BeaconConfig().SlotsPerEpoch; i++ {
 		isProposer := proposerKeys[i] != ""
 		isAttester := len(attesterKeys[i]) > 0
-		if !isProposer && !isAttester {
+		isPTCMember := len(ptcKeys[i]) > 0
+		if !isProposer && !isAttester && !isPTCMember {
 			continue
 		}
 		startTime, err := slots.StartTime(v.genesisTime, epochStartSlot+i)
@@ -200,6 +201,7 @@ func (v *validator) logDuties(slot primitives.Slot) {
 			log.WithError(err).WithField("slot", epochStartSlot+i).Error("Slot overflows, unable to log duties!")
 			return
 		}
+		durationTillDuty := (time.Until(startTime) + time.Second).Truncate(time.Second)
 		slotLog := log.WithFields(logrus.Fields{})
 		if isProposer {
 			slotLog = slotLog.WithField("proposerPubkey", proposerKeys[i])
@@ -212,7 +214,6 @@ func (v *validator) logDuties(slot primitives.Slot) {
 				"attesterPubkeys": attesterKeys[i],
 			})
 		}
-		isPTCMember := len(ptcKeys[i]) > 0
 		if isPTCMember {
 			slotLog = slotLog.WithFields(logrus.Fields{
 				"ptcCount":   len(ptcKeys[i]),
@@ -222,9 +223,7 @@ func (v *validator) logDuties(slot primitives.Slot) {
 		if durationTillDuty > 0 {
 			slotLog = slotLog.WithField("timeUntilDuty", durationTillDuty)
 		}
-		if isProposer || isAttester || isPTCMember {
-			slotLog.Infof("Duties schedule")
-		}
+		slotLog.Infof("Duties schedule")
 	}
 }
 
