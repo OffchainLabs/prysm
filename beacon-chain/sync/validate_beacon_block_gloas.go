@@ -60,19 +60,6 @@ func (s *Service) validateExecutionPayloadBidParentSeen(_ context.Context, blk i
 	return pubsub.ValidationIgnore, errors.New("parent payload not yet available")
 }
 
-// validateExecutionPayloadBidParentValid validates parent payload verification status.
-// If execution_payload verification of block's execution payload parent by an execution node is complete:
-// [REJECT] The block's execution payload parent (defined by bid.parent_block_hash) passes all validation.
-func (s *Service) validateExecutionPayloadBidParentValid(_ context.Context, blk interfaces.ReadOnlyBeaconBlock) (pubsub.ValidationResult, error) {
-	if blk.Version() < version.Gloas {
-		return pubsub.ValidationAccept, nil
-	}
-	if s.hasBadPayload(blk.ParentRoot()) {
-		return pubsub.ValidationReject, errors.New("parent payload is invalid")
-	}
-	return pubsub.ValidationAccept, nil
-}
-
 // requestPayloadEnvelope asks a random peer for the execution payload
 // envelope identified by root and feeds any response through
 // ReceiveExecutionPayloadEnvelope.
@@ -96,6 +83,15 @@ func (s *Service) requestPayloadEnvelope(root [32]byte) {
 		log.Warn("Multiple payload envelopes returned by peer, expected at most one")
 	}
 	for _, env := range envelopes {
+		envelopeHTR, err := env.HashTreeRoot()
+		if err != nil {
+			log.WithError(err).Debug("Could not compute envelope HTR")
+			continue
+		}
+		if s.hasBadPayload(envelopeHTR) {
+			log.Debug("Skipping known bad payload envelope")
+			continue
+		}
 		wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(env)
 		if err != nil {
 			log.WithError(err).Debug("Could not wrap requested payload envelope")
@@ -103,7 +99,7 @@ func (s *Service) requestPayloadEnvelope(root [32]byte) {
 		}
 		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
 			if blockchain.IsInvalidBlock(err) {
-				s.setBadPayload(s.ctx, root)
+				s.setBadPayload(s.ctx, envelopeHTR)
 			}
 			log.WithError(err).Debug("Could not process requested payload envelope")
 		}

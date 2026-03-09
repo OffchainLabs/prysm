@@ -120,47 +120,25 @@ func TestValidateExecutionPayloadBidParentSeen_Ignore(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, res)
 }
 
-func TestValidateExecutionPayloadBidParentValid_PreGloas(t *testing.T) {
-	ctx := context.Background()
-	blk := util.HydrateSignedBeaconBlockDeneb(nil)
-	wsb, err := blocks.NewSignedBeaconBlock(blk)
-	require.NoError(t, err)
-
-	s := &Service{}
-	res, err := s.validateExecutionPayloadBidParentValid(ctx, wsb.Block())
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationAccept, res)
-}
-
-func TestValidateExecutionPayloadBidParentValid_Accept(t *testing.T) {
+// TestBadPayloadCache_EquivocationSafe verifies that the bad payload cache,
+// now keyed by envelope HTR, does not suffer from builder equivocation
+// poisoning. A bad envelope for block N is cached by its own HTR. A different
+// (good) envelope for the same block N has a different HTR and is not blocked.
+func TestBadPayloadCache_EquivocationSafe(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	ctx := context.Background()
 
 	s := &Service{badPayloadCache: lruwrpr.New(10)}
 
-	blk := util.NewBeaconBlockGloas()
-	wsb, err := blocks.NewSignedBeaconBlock(blk)
-	require.NoError(t, err)
+	// Two different envelope HTRs for the same block root (builder equivocation).
+	badEnvelopeHTR := [32]byte{0xBB}
+	goodEnvelopeHTR := [32]byte{0xCC}
 
-	res, err := s.validateExecutionPayloadBidParentValid(ctx, wsb.Block())
-	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationAccept, res)
-}
+	// Bad envelope is marked in the cache.
+	s.setBadPayload(ctx, badEnvelopeHTR)
 
-func TestValidateExecutionPayloadBidParentValid_Reject(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	ctx := context.Background()
-
-	s := &Service{badPayloadCache: lruwrpr.New(10)}
-
-	blk := util.NewBeaconBlockGloas()
-	wsb, err := blocks.NewSignedBeaconBlock(blk)
-	require.NoError(t, err)
-
-	parentRoot := wsb.Block().ParentRoot()
-	s.badPayloadCache.Add(string(parentRoot[:]), true)
-
-	res, err := s.validateExecutionPayloadBidParentValid(ctx, wsb.Block())
-	require.Error(t, err)
-	require.Equal(t, pubsub.ValidationReject, res)
+	// Bad envelope is recognized.
+	require.True(t, s.hasBadPayload(badEnvelopeHTR))
+	// Good envelope is NOT blocked — different HTR, not in cache.
+	require.False(t, s.hasBadPayload(goodEnvelopeHTR))
 }

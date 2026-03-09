@@ -227,11 +227,11 @@ func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg pr
 	}
 	if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, env); err != nil {
 		if blockchain.IsInvalidBlock(err) {
-			envelope, envErr := env.Envelope()
-			if envErr == nil {
-				s.setBadPayload(ctx, envelope.BeaconBlockRoot())
+			envelopeHTR, htrErr := e.HashTreeRoot()
+			if htrErr == nil {
+				s.setBadPayload(ctx, envelopeHTR)
 			} else {
-				log.WithError(envErr).Error("failed to get envelope from signed execution payload envelope")
+				log.WithError(htrErr).Error("failed to compute envelope HTR for bad payload cache")
 			}
 		}
 		return err

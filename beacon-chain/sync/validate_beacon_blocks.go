@@ -127,10 +127,6 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Received block with an invalid parent")
 		return pubsub.ValidationReject, err
 	}
-	if res, err := s.validateExecutionPayloadBidParentValid(ctx, blk.Block()); err != nil {
-		return res, err
-	}
-
 	s.pendingQueueLock.RLock()
 	if s.seenPendingBlocks[blockRoot] {
 		s.pendingQueueLock.RUnlock()
@@ -519,23 +515,27 @@ func (s *Service) hasBadBlock(root [32]byte) bool {
 	return seen
 }
 
-// Returns true if the payload for the given block root is marked as bad.
-func (s *Service) hasBadPayload(root [32]byte) bool {
+// hasBadPayload returns true if the signed execution payload envelope
+// identified by its hash tree root has been marked as invalid.
+func (s *Service) hasBadPayload(envelopeHTR [32]byte) bool {
 	s.badPayloadLock.RLock()
 	defer s.badPayloadLock.RUnlock()
-	_, seen := s.badPayloadCache.Get(string(root[:]))
+	_, seen := s.badPayloadCache.Get(string(envelopeHTR[:]))
 	return seen
 }
 
-// Set bad payload in the cache.
-func (s *Service) setBadPayload(ctx context.Context, root [32]byte) {
+// setBadPayload marks a signed execution payload envelope as invalid, keyed
+// by the envelope's hash tree root. Keying by envelope HTR (rather than block
+// root) prevents builder equivocation from poisoning valid envelopes that
+// share the same beacon block root.
+func (s *Service) setBadPayload(ctx context.Context, envelopeHTR [32]byte) {
 	s.badPayloadLock.Lock()
 	defer s.badPayloadLock.Unlock()
 	if ctx.Err() != nil {
 		return
 	}
-	log.WithField("root", fmt.Sprintf("%#x", root)).Debug("Inserting in invalid payload cache")
-	s.badPayloadCache.Add(string(root[:]), true)
+	log.WithField("envelopeHTR", fmt.Sprintf("%#x", envelopeHTR)).Debug("Inserting in invalid payload cache")
+	s.badPayloadCache.Add(string(envelopeHTR[:]), true)
 }
 
 // Set bad block in the cache.
