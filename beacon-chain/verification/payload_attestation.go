@@ -2,8 +2,8 @@ package verification
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -12,7 +12,6 @@ import (
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/pkg/errors"
 )
 
 // RequirementList defines a list of requirements.
@@ -92,13 +91,10 @@ func (v *PayloadAttMsgVerifier) VerifyBlockRootValid(badBlock func([32]byte) boo
 func (v *PayloadAttMsgVerifier) VerifyValidatorInPTC(ctx context.Context, st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireValidatorInPTC, &err)
 
-	ptc, err := gloas.PayloadCommittee(ctx, st, v.pa.Slot())
-	if err != nil {
-		return err
-	}
-
-	if slices.Index(ptc, v.pa.ValidatorIndex()) == -1 {
+	if _, err := gloas.PayloadCommitteeIndex(ctx, st, v.pa.Slot(), v.pa.ValidatorIndex()); errors.Is(err, gloas.ErrValidatorNotInPTC) {
 		return fmt.Errorf("%w: validatorIndex=%d", ErrIncorrectPayloadAttValidator, v.pa.ValidatorIndex())
+	} else if err != nil {
+		return err
 	}
 
 	return nil

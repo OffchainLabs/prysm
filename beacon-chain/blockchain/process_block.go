@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -386,6 +387,46 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 		log.WithError(err).Error("Could not update proposer index state-root map")
 	}
 	return nil
+}
+
+// refreshCaches updates the next slot state cache and epoch boundary caches.
+// Before Fulu this is done synchronously, after Fulu it is deferred to a goroutine.
+func (s *Service) refreshCaches(ctx context.Context, currentSlot primitives.Slot, headRoot [32]byte, headState state.BeaconState, accessRoot [32]byte) {
+	lastRoot, lastState := transition.LastCachedState()
+	if lastState == nil {
+		lastRoot, lastState = headRoot[:], headState
+	}
+	if lastState.Version() < version.Fulu {
+		s.updateCachesAndEpochBoundary(ctx, currentSlot, headState, accessRoot, lastRoot, lastState)
+	} else {
+		go func() {
+			ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
+			defer cancel()
+			s.updateCachesAndEpochBoundary(ctx, currentSlot, headState, accessRoot, lastRoot, lastState)
+		}()
+	}
+}
+
+// updateCachesAndEpochBoundary updates the next slot state cache and handles
+// epoch boundary processing. If the lastRoot matches accessRoot, the cached
+// last state is reused; otherwise, the head state is advanced instead.
+func (s *Service) updateCachesAndEpochBoundary(ctx context.Context, currentSlot primitives.Slot, headState state.BeaconState, accessRoot [32]byte, lastRoot []byte, lastState state.BeaconState) {
+	if bytes.Equal(lastRoot, accessRoot[:]) {
+		// Happy case, the last advanced state is head, we thus keep it
+		lastState.CopyAllTries()
+		if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
+			log.WithError(err).Debug("Could not update next slot state cache")
+		}
+	} else {
+		// Last advanced state was not head, we do not advance this but rather use headstate
+		headState.CopyAllTries()
+		if err := transition.UpdateNextSlotCache(ctx, accessRoot[:], headState); err != nil {
+			log.WithError(err).Debug("Could not update next slot state cache")
+		}
+	}
+	if err := s.handleEpochBoundary(ctx, currentSlot, headState, accessRoot[:]); err != nil {
+		log.WithError(err).Error("Could not update epoch boundary caches")
+	}
 }
 
 // Epoch boundary tasks: it copies the headState and updates the epoch boundary
@@ -981,37 +1022,18 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	headRoot := s.headRoot()
 	headState := s.headState(ctx)
 	s.headLock.RUnlock()
-	lastRoot, lastState := transition.LastCachedState()
-	if lastState == nil {
-		lastRoot, lastState = headRoot[:], headState
-	}
-	// Before Fulu we need to process the next slot to find out if we are proposing.
-	if lastState.Version() < version.Fulu {
-		// Copy all the field tries in our cached state in the event of late
-		// blocks.
-		lastState.CopyAllTries()
-		if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
-			log.WithError(err).Debug("Could not update next slot state cache")
-		}
-		if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
-			log.WithError(err).Error("Could not update epoch boundary caches")
-		}
+	var accessRoot [32]byte
+	isFull, err := headState.IsParentBlockFull()
+	if err != nil || !isFull {
+		accessRoot = headRoot
 	} else {
-		// After Fulu, we can update the caches asynchronously after sending FCU to the engine
-		defer func() {
-			go func() {
-				ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
-				defer cancel()
-				lastState.CopyAllTries()
-				if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
-					log.WithError(err).Debug("Could not update next slot state cache")
-				}
-				if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
-					log.WithError(err).Error("Could not update epoch boundary caches")
-				}
-			}()
-		}()
+		accessRoot, err = headState.LatestBlockHash()
+		if err != nil {
+			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve latest block hash, using head root as access root")
+			accessRoot = headRoot
+		}
 	}
+	s.refreshCaches(ctx, currentSlot, headRoot, headState, accessRoot)
 	// return early if we already started building a block for the current
 	// head root
 	_, has := s.cfg.PayloadIDCache.PayloadID(s.CurrentSlot()+1, headRoot)

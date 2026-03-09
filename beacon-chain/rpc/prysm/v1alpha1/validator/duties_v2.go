@@ -72,11 +72,34 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 		}
 	}
 
-	meta, err := loadDutiesMetadata(ctx, s, req.Epoch, requestIndices)
-	if err != nil {
-		return nil, err
+	// Use core service for attester and proposer duties
+	currentAttesterDuties, rpcErr := vs.CoreService.AttesterDuties(ctx, s, req.Epoch, requestIndices)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
+	}
+	nextAttesterDuties, rpcErr := vs.CoreService.AttesterDuties(ctx, s, req.Epoch+1, requestIndices)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
+	}
+	proposerDuties, rpcErr := vs.CoreService.ProposerDuties(ctx, s, req.Epoch)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
+	}
+	currentPTCDuties, rpcErr := vs.CoreService.PTCDuties(ctx, s, req.Epoch, requestIndices)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
+	}
+	nextPTCDuties, rpcErr := vs.CoreService.PTCDuties(ctx, s, req.Epoch+1, requestIndices)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
 
+	// Build index maps for O(1) lookup
+	currentAttesterMap := buildAttesterMap(currentAttesterDuties)
+	nextAttesterMap := buildAttesterMap(nextAttesterDuties)
+	proposerMap := buildProposerMap(proposerDuties)
+	currentPTCAssignments := buildPTCMap(currentPTCDuties)
+	nextPTCAssignments := buildPTCMap(nextPTCDuties)
 	validatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 	nextValidatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 
@@ -97,13 +120,78 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 			continue
 		}
 
-		currentAssignment := vs.getValidatorAssignment(meta.current, info.index)
-		nextAssignment := vs.getValidatorAssignment(meta.next, info.index)
+		statusEnum := assignmentStatus(s, info.index)
 
-		assignment, nextDuty, err := vs.buildValidatorDuty(pubKey, info.index, s, req.Epoch, meta, currentAssignment, nextAssignment)
-		if err != nil {
-			return nil, err
+		// Current epoch assignment
+		assignment := &ethpb.DutiesV2Response_Duty{
+			PublicKey:      pubKey,
+			ValidatorIndex: info.index,
+			Status:         statusEnum,
+			ProposerSlots:  proposerMap[info.index],
 		}
+		if ad, ok := currentAttesterMap[info.index]; ok {
+			assignment.AttesterSlot = ad.Slot
+			assignment.CommitteeIndex = ad.CommitteeIndex
+			assignment.CommitteeLength = ad.CommitteeLength
+			assignment.CommitteesAtSlot = ad.CommitteesAtSlot
+			assignment.ValidatorCommitteeIndex = ad.ValidatorCommitteeIndex
+		}
+		if ptcSlots, ok := currentPTCAssignments[info.index]; ok {
+			assignment.PtcSlots = ptcSlots
+		}
+
+		// Next epoch assignment
+		nextDuty := &ethpb.DutiesV2Response_Duty{
+			PublicKey:      pubKey,
+			ValidatorIndex: info.index,
+			Status:         statusEnum,
+		}
+		if ad, ok := nextAttesterMap[info.index]; ok {
+			nextDuty.AttesterSlot = ad.Slot
+			nextDuty.CommitteeIndex = ad.CommitteeIndex
+			nextDuty.CommitteeLength = ad.CommitteeLength
+			nextDuty.CommitteesAtSlot = ad.CommitteesAtSlot
+			nextDuty.ValidatorCommitteeIndex = ad.ValidatorCommitteeIndex
+		}
+		if ptcSlots, ok := nextPTCAssignments[info.index]; ok {
+			nextDuty.PtcSlots = ptcSlots
+		}
+
+		// Sync committee flags
+		if coreTime.HigherEqualThanAltairVersionAndEpoch(s, req.Epoch) {
+			inSync, err := helpers.IsCurrentPeriodSyncCommittee(s, info.index)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not determine current epoch sync committee: %v", err)
+			}
+			assignment.IsSyncCommittee = inSync
+			nextDuty.IsSyncCommittee = inSync
+			if inSync {
+				if err := core.RegisterSyncSubnetCurrentPeriodProto(s, req.Epoch, pubKey, statusEnum); err != nil {
+					return nil, status.Errorf(codes.Internal, "Could not register sync subnet current period: %v", err)
+				}
+			}
+
+			// Next epoch sync committee duty is assigned with next period sync committee only during
+			// sync period epoch boundary (ie. EPOCHS_PER_SYNC_COMMITTEE_PERIOD - 1). Else wise
+			// next epoch sync committee duty is the same as current epoch.
+			nextEpoch := req.Epoch.Add(1)
+			stateEpoch := coreTime.CurrentEpoch(s)
+			n := slots.SyncCommitteePeriod(nextEpoch)
+			c := slots.SyncCommitteePeriod(stateEpoch)
+			if n > c {
+				nextInSync, err := helpers.IsNextPeriodSyncCommittee(s, info.index)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "Could not determine next epoch sync committee: %v", err)
+				}
+				nextDuty.IsSyncCommittee = nextInSync
+				if nextInSync {
+					if err := core.RegisterSyncSubnetNextPeriodProto(s, req.Epoch, pubKey, statusEnum); err != nil {
+						log.WithError(err).Warn("Could not register sync subnet next period")
+					}
+				}
+			}
+		}
+
 		validatorAssignments = append(validatorAssignments, assignment)
 		nextValidatorAssignments = append(nextValidatorAssignments, nextDuty)
 	}
@@ -150,155 +238,29 @@ func (vs *Server) stateForEpoch(ctx context.Context, s state.BeaconState, reqEpo
 	return s, nil
 }
 
-// dutiesMetadata bundles together related data needed for duty
-// construction.
-type dutiesMetadata struct {
-	current *metadata
-	next    *metadata
+// buildAttesterMap creates a map from validator index to attester duty for O(1) lookup.
+func buildAttesterMap(duties []*core.AttesterDutyResult) map[primitives.ValidatorIndex]*core.AttesterDutyResult {
+	m := make(map[primitives.ValidatorIndex]*core.AttesterDutyResult, len(duties))
+	for _, d := range duties {
+		m[d.ValidatorIndex] = d
+	}
+	return m
 }
 
-type metadata struct {
-	committeesAtSlot     uint64
-	proposalSlots        map[primitives.ValidatorIndex][]primitives.Slot
-	committeeAssignments map[primitives.ValidatorIndex]*helpers.CommitteeAssignment
+// buildProposerMap creates a map from validator index to proposal slots for O(1) lookup.
+func buildProposerMap(duties []*core.ProposerDutyResult) map[primitives.ValidatorIndex][]primitives.Slot {
+	m := make(map[primitives.ValidatorIndex][]primitives.Slot)
+	for _, d := range duties {
+		m[d.ValidatorIndex] = append(m[d.ValidatorIndex], d.Slot)
+	}
+	return m
 }
 
-func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch, requestIndices []primitives.ValidatorIndex) (*dutiesMetadata, error) {
-	meta := &dutiesMetadata{}
-	var err error
-	meta.current, err = loadMetadata(ctx, s, reqEpoch, requestIndices)
-	if err != nil {
-		return nil, err
+// buildPTCMap creates a map from validator index to PTC slots for O(1) lookup.
+func buildPTCMap(duties []*core.PTCDutyResult) map[primitives.ValidatorIndex][]primitives.Slot {
+	m := make(map[primitives.ValidatorIndex][]primitives.Slot)
+	for _, d := range duties {
+		m[d.ValidatorIndex] = append(m[d.ValidatorIndex], d.Slot)
 	}
-	// note: we only set the proposer slots for the current assignment and not the next epoch assignment
-	meta.current.proposalSlots, err = helpers.ProposerAssignments(ctx, s, reqEpoch)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not compute proposer slots: %v", err)
-	}
-
-	meta.next, err = loadMetadata(ctx, s, reqEpoch+1, requestIndices)
-	if err != nil {
-		return nil, err
-	}
-	return meta, nil
-}
-
-func loadMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch, requestIndices []primitives.ValidatorIndex) (*metadata, error) {
-	meta := &metadata{}
-
-	if err := helpers.VerifyAssignmentEpoch(reqEpoch, s); err != nil {
-		return nil, err
-	}
-
-	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, s, reqEpoch)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get active validator count: %v", err)
-	}
-	meta.committeesAtSlot = helpers.SlotCommitteeCount(activeValidatorCount)
-
-	// Use CommitteeAssignments which only computes committees for requested validators
-	meta.committeeAssignments, err = helpers.CommitteeAssignments(ctx, s, reqEpoch, requestIndices)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not compute committee assignments: %v", err)
-	}
-
-	return meta, nil
-}
-
-// findValidatorIndexInCommittee finds the position of a validator in a committee.
-func findValidatorIndexInCommittee(committee []primitives.ValidatorIndex, validatorIndex primitives.ValidatorIndex) uint64 {
-	for i, vIdx := range committee {
-		if vIdx == validatorIndex {
-			return uint64(i)
-		}
-	}
-	return 0
-}
-
-// getValidatorAssignment retrieves the assignment for a validator from CommitteeAssignments.
-func (vs *Server) getValidatorAssignment(meta *metadata, validatorIndex primitives.ValidatorIndex) *helpers.LiteAssignment {
-	if assignment, exists := meta.committeeAssignments[validatorIndex]; exists {
-		return &helpers.LiteAssignment{
-			AttesterSlot:            assignment.AttesterSlot,
-			CommitteeIndex:          assignment.CommitteeIndex,
-			CommitteeLength:         uint64(len(assignment.Committee)),
-			ValidatorCommitteeIndex: findValidatorIndexInCommittee(assignment.Committee, validatorIndex),
-		}
-	}
-	return &helpers.LiteAssignment{}
-}
-
-// buildValidatorDuty builds both current‑epoch and next‑epoch V2 duty objects
-// for a single validator index.
-func (vs *Server) buildValidatorDuty(
-	pubKey []byte,
-	idx primitives.ValidatorIndex,
-	s state.BeaconState,
-	reqEpoch primitives.Epoch,
-	meta *dutiesMetadata,
-	currentAssignment *helpers.LiteAssignment,
-	nextAssignment *helpers.LiteAssignment,
-) (*ethpb.DutiesV2Response_Duty, *ethpb.DutiesV2Response_Duty, error) {
-	assignment := &ethpb.DutiesV2Response_Duty{PublicKey: pubKey}
-	nextDuty := &ethpb.DutiesV2Response_Duty{PublicKey: pubKey}
-
-	statusEnum := assignmentStatus(s, idx)
-	assignment.ValidatorIndex = idx
-	assignment.Status = statusEnum
-	assignment.CommitteesAtSlot = meta.current.committeesAtSlot
-	assignment.ProposerSlots = meta.current.proposalSlots[idx]
-	populateCommitteeFields(assignment, currentAssignment)
-
-	nextDuty.ValidatorIndex = idx
-	nextDuty.Status = statusEnum
-	nextDuty.CommitteesAtSlot = meta.next.committeesAtSlot
-	populateCommitteeFields(nextDuty, nextAssignment)
-
-	// Sync committee flags
-	if coreTime.HigherEqualThanAltairVersionAndEpoch(s, reqEpoch) {
-		inSync, err := helpers.IsCurrentPeriodSyncCommittee(s, idx)
-		if err != nil {
-			return nil, nil, status.Errorf(codes.Internal, "Could not determine current epoch sync committee: %v", err)
-		}
-		assignment.IsSyncCommittee = inSync
-		nextDuty.IsSyncCommittee = inSync
-		if inSync {
-			if err := core.RegisterSyncSubnetCurrentPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
-				return nil, nil, status.Errorf(codes.Internal, "Could not register sync subnet current period: %v", err)
-			}
-		}
-
-		// Next epoch sync committee duty is assigned with next period sync committee only during
-		// sync period epoch boundary (ie. EPOCHS_PER_SYNC_COMMITTEE_PERIOD - 1). Else wise
-		// next epoch sync committee duty is the same as current epoch.
-		nextEpoch := reqEpoch + 1
-		currentEpoch := coreTime.CurrentEpoch(s)
-		n := slots.SyncCommitteePeriod(nextEpoch)
-		c := slots.SyncCommitteePeriod(currentEpoch)
-		if n > c {
-			nextInSync, err := helpers.IsNextPeriodSyncCommittee(s, idx)
-			if err != nil {
-				return nil, nil, status.Errorf(codes.Internal, "Could not determine next epoch sync committee: %v", err)
-			}
-			nextDuty.IsSyncCommittee = nextInSync
-			if nextInSync {
-				if err := core.RegisterSyncSubnetNextPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
-					log.WithError(err).Warn("Could not register sync subnet next period")
-				}
-			}
-		}
-	}
-
-	return assignment, nextDuty, nil
-}
-
-func populateCommitteeFields(duty *ethpb.DutiesV2Response_Duty, la *helpers.LiteAssignment) {
-	if duty == nil || la == nil {
-		// should never be the case as previous functions should set
-		return
-	}
-	duty.CommitteeLength = la.CommitteeLength
-	duty.CommitteeIndex = la.CommitteeIndex
-	duty.ValidatorCommitteeIndex = la.ValidatorCommitteeIndex
-	duty.AttesterSlot = la.AttesterSlot
+	return m
 }

@@ -38,7 +38,7 @@
 - name: ATTESTATION_DUE_BPS#phase0
   sources:
     - file: config/params/config.go
-      search: \bAttestationDueBPS\s+primitives.BP
+      search: ^\tAttestationDueBPS\s
       regex: true
   spec: |
     <spec config_var="ATTESTATION_DUE_BPS" fork="phase0" hash="929dd1c9">

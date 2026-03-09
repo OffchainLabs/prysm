@@ -15,8 +15,6 @@ import (
 
 const noMsgData = "message contains no data"
 
-var log = logrus.WithField("prefix", "message-handler")
-
 // SafelyHandleMessage will recover and log any panic that occurs from the
 // function argument.
 func SafelyHandleMessage(ctx context.Context, fn func(ctx context.Context, message *pubsub.Message) error, msg *pubsub.Message) {

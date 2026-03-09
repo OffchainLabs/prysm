@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
@@ -102,6 +104,14 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
+	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
+		Type: statefeed.PayloadProcessed,
+		Data: &statefeed.PayloadProcessedData{
+			Slot:      envelope.Slot(),
+			BlockRoot: root,
+		},
+	})
+
 	execution, err := envelope.Execution()
 	if err != nil {
 		log.WithError(err).Error("Could not get execution payload from envelope for logging")
@@ -131,9 +141,16 @@ func (s *Service) postPayloadHeadUpdate(ctx context.Context, envelope interfaces
 	s.head.state = st
 	s.headLock.Unlock()
 
-	if err := transition.UpdateNextSlotCache(ctx, blockHash[:], st); err != nil {
-		log.WithError(err).Error("Could not update next slot cache")
-	}
+	go func() {
+		ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
+		defer cancel()
+		if err := transition.UpdateNextSlotCache(ctx, blockHash[:], st); err != nil {
+			log.WithError(err).Error("Could not update next slot cache")
+		}
+		if err := s.handleEpochBoundary(ctx, envelope.Slot(), st, blockHash[:]); err != nil {
+			log.WithError(err).Error("Could not handle epoch boundary")
+		}
+	}()
 
 	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot)
 	if s.inRegularSync() {

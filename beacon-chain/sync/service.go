@@ -24,6 +24,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -38,7 +39,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
-	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
+	payloadattestationtypes "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
@@ -113,6 +114,7 @@ type config struct {
 	blobStorage             *filesystem.BlobStorage
 	dataColumnStorage       *filesystem.DataColumnStorage
 	batchVerifierLimit      int
+	payloadAttestationPool  payloadattestation.PoolManager
 }
 
 // This defines the interface for interacting with block chain service
@@ -171,6 +173,8 @@ type Service struct {
 	seenSyncContributionCache           *lru.Cache
 	badBlockCache                       *lru.Cache
 	badBlockLock                        sync.RWMutex
+	badPayloadCache                     *lru.Cache
+	badPayloadLock                      sync.RWMutex
 	syncContributionBitsOverlapLock     sync.RWMutex
 	syncContributionBitsOverlapCache    *lru.Cache
 	signatureChan                       chan *signatureVerifier
@@ -195,6 +199,7 @@ type Service struct {
 	newExecutionPayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
 	pendingPayloadEnvelopes             map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
 	pendingEnvelopeLock                 sync.RWMutex
+	selfBuildSigFailures                int
 }
 
 // NewService initializes new regular sync service.
@@ -264,7 +269,7 @@ func newDataColumnsVerifierFromInitializer(ini *verification.Initializer) verifi
 }
 
 func newPayloadAttestationMessageFromInitializer(ini *verification.Initializer) verification.NewPayloadAttestationMsgVerifier {
-	return func(pa payloadattestation.ROMessage, reqs []verification.Requirement) verification.PayloadAttestationMsgVerifier {
+	return func(pa payloadattestationtypes.ROMessage, reqs []verification.Requirement) verification.PayloadAttestationMsgVerifier {
 		return ini.NewPayloadAttestationMsgVerifier(pa, reqs)
 	}
 }
@@ -380,6 +385,7 @@ func (s *Service) initCaches() {
 	s.seenAttesterSlashingCache = make(map[uint64]bool)
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
+	s.badPayloadCache = lruwrpr.New(badBlockSize)
 }
 
 func (s *Service) waitForChainStart() {

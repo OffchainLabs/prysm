@@ -33,6 +33,8 @@ const (
 	LightClientOptimisticUpdate
 	// PayloadAttributes events are fired upon a missed slot or new head.
 	PayloadAttributes
+	// PayloadProcessed is sent after a payload envelope has been processed.
+	PayloadProcessed
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.
@@ -71,4 +73,10 @@ type InitializedData struct {
 	StartTime time.Time
 	// GenesisValidatorsRoot represents state.validators.HashTreeRoot().
 	GenesisValidatorsRoot []byte
+}
+
+// PayloadProcessedData is the data sent with PayloadProcessed events.
+type PayloadProcessedData struct {
+	Slot      primitives.Slot
+	BlockRoot [32]byte
 }
