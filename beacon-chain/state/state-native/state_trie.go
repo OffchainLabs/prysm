@@ -1031,18 +1031,12 @@ func (b *BeaconState) Copy() state.BeaconState {
 		}
 	}
 
-	if b.merkleLayers != nil {
-		dst.merkleLayers = make([][][]byte, len(b.merkleLayers))
-		for i, layer := range b.merkleLayers {
-			dst.merkleLayers[i] = make([][]byte, len(layer))
-			for j, content := range layer {
-				dst.merkleLayers[i][j] = make([]byte, len(content))
-				copy(dst.merkleLayers[i][j], content)
-			}
-		}
+	if b.merkle != nil {
+		dst.merkle = b.merkle.copy()
 	}
 
 	state.Count.Inc()
+
 	// Finalizer runs when dst is being destroyed in garbage collection.
 	runtime.SetFinalizer(dst, finalizerCleanup)
 	return dst
@@ -1062,14 +1056,14 @@ func (b *BeaconState) HashTreeRoot(ctx context.Context) ([32]byte, error) {
 	if err := b.recomputeDirtyFields(ctx); err != nil {
 		return [32]byte{}, err
 	}
-	return bytesutil.ToBytes32(b.merkleLayers[len(b.merkleLayers)-1][0]), nil
+	return bytesutil.ToBytes32(b.merkle.layers[len(b.merkle.layers)-1][0]), nil
 }
 
 // Initializes the Merkle layers for the beacon state if they are empty.
 //
 // WARNING: Caller must acquire the mutex before using.
 func (b *BeaconState) initializeMerkleLayers(ctx context.Context) error {
-	if len(b.merkleLayers) > 0 {
+	if b.merkle != nil && len(b.merkle.layers) > 0 {
 		return nil
 	}
 	fieldRoots, err := ComputeFieldRootsWithHasher(ctx, b)
@@ -1077,7 +1071,7 @@ func (b *BeaconState) initializeMerkleLayers(ctx context.Context) error {
 		return err
 	}
 	layers := stateutil.Merkleize(fieldRoots)
-	b.merkleLayers = layers
+	b.merkle = newSharedMerkleLayers(layers)
 	switch b.version {
 	case version.Phase0:
 		b.dirtyFields = make(map[types.FieldIndex]bool, params.BeaconConfig().BeaconStateFieldCount)
@@ -1106,13 +1100,17 @@ func (b *BeaconState) initializeMerkleLayers(ctx context.Context) error {
 //
 // WARNING: Caller must acquire the mutex before using.
 func (b *BeaconState) recomputeDirtyFields(ctx context.Context) error {
+	if len(b.dirtyFields) > 0 {
+		b.merkle = b.merkle.ensureUnique()
+	}
+
 	for field := range b.dirtyFields {
 		root, err := b.rootSelector(ctx, field)
 		if err != nil {
 			return err
 		}
 		idx := field.RealPosition()
-		b.merkleLayers[0][idx] = root[:]
+		b.merkle.layers[0][idx] = root[:]
 		b.recomputeRoot(idx)
 		delete(b.dirtyFields, field)
 	}
@@ -1472,6 +1470,9 @@ func finalizerCleanup(b *BeaconState) {
 	}
 	if b.validatorsMultiValue != nil {
 		b.validatorsMultiValue.Detach(b)
+	}
+	if b.merkle != nil {
+		b.merkle.release()
 	}
 
 	state.Count.Sub(1)
