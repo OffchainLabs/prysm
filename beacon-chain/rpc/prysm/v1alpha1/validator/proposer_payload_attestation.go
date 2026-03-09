@@ -16,7 +16,7 @@ import (
 // All nodes collect these in a pool. The slot N+1 proposer retrieves and aggregates
 // them into PayloadAttestations for block inclusion.
 func (vs *Server) getPayloadAttestations(ctx context.Context, head state.BeaconState, blockParentRoot [32]byte) []*ethpb.PayloadAttestation {
-	ctx, span := trace.StartSpan(ctx, "ProposerServer.getPayloadAttestations")
+	_, span := trace.StartSpan(ctx, "ProposerServer.getPayloadAttestations")
 	defer span.End()
 
 	if slots.ToEpoch(head.Slot()) < params.BeaconConfig().GloasForkEpoch {
