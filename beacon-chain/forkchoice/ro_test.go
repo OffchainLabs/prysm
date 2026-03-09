@@ -346,7 +346,3 @@ func (ro *mockROForkchoice) CanonicalNodeAtSlot(_ primitives.Slot) ([32]byte, bo
 	ro.calls = append(ro.calls, canonicalNodeAtSlotCalled)
 	return [32]byte{}, false
 }
-
-func (ro *mockROForkchoice) HasFullNode(_ [32]byte) bool {
-	return false
-}
