@@ -1113,6 +1113,63 @@ func TestPartialDataColumn_ExtendFromVerifiedCells(t *testing.T) {
 	}
 }
 
+func TestPartialDataColumn_ExtendFromOther(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(t *testing.T)
+	}{
+		{
+			name: "length mismatch returns false",
+			run: func(t *testing.T) {
+				p := mustNewPartialColumn(t, 3)
+				other := mustNewPartialColumn(t, 2, 0)
+				ok := p.ExtendFromOther(other)
+				require.Equal(t, false, ok)
+				require.Equal(t, uint64(0), p.Included.Count())
+			},
+		},
+		{
+			name: "extends with new cells",
+			run: func(t *testing.T) {
+				p := mustNewPartialColumn(t, 3, 0)
+				other := mustNewPartialColumn(t, 3, 1, 2)
+				ok := p.ExtendFromOther(other)
+				require.Equal(t, true, ok)
+				require.Equal(t, true, p.Included.BitAt(0))
+				require.Equal(t, true, p.Included.BitAt(1))
+				require.Equal(t, true, p.Included.BitAt(2))
+			},
+		},
+		{
+			name: "duplicate cells are not overwritten",
+			run: func(t *testing.T) {
+				p := mustNewPartialColumn(t, 2, 0)
+				originalCell := slices.Clone(p.Column[0])
+				other := mustNewPartialColumn(t, 2, 0)
+				ok := p.ExtendFromOther(other)
+				require.Equal(t, false, ok)
+				require.DeepEqual(t, originalCell, p.Column[0])
+			},
+		},
+		{
+			name: "partial overlap extends only new cells",
+			run: func(t *testing.T) {
+				p := mustNewPartialColumn(t, 3, 0)
+				other := mustNewPartialColumn(t, 3, 0, 2)
+				ok := p.ExtendFromOther(other)
+				require.Equal(t, true, ok)
+				require.Equal(t, true, p.Included.BitAt(0))
+				require.Equal(t, false, p.Included.BitAt(1))
+				require.Equal(t, true, p.Included.BitAt(2))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, tt.run)
+	}
+}
+
 func TestClonePeerState(t *testing.T) {
 	tests := []struct {
 		name  string

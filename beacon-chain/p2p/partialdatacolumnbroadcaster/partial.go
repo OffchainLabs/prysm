@@ -2,6 +2,8 @@ package partialdatacolumnbroadcaster
 
 import (
 	"bytes"
+	stderrors "errors"
+	"iter"
 	"log/slog"
 	"regexp"
 	"strconv"
@@ -110,14 +112,7 @@ type request struct {
 }
 
 type publish struct {
-	topic         string
-	c             blocks.PartialDataColumn
-	publishRespCh chan publishResponse
-}
-
-type publishResponse struct {
-	err             error
-	columnCompleted bool
+	topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]
 }
 
 type subscribe struct {
@@ -289,9 +284,7 @@ func (p *PartialColumnBroadcaster) loop() {
 		case req := <-p.incomingReq:
 			switch req.kind {
 			case requestKindPublish:
-				var pr publishResponse
-				pr.columnCompleted, pr.err = p.publish(req.publish.topic, req.publish.c)
-				req.publish.publishRespCh <- pr
+				req.response <- p.publish(req.publish.topicsAndColumns)
 			case requestKindSubscribe:
 				req.response <- p.subscribe(req.sub.t)
 			case requestKindUnsubscribe:
@@ -692,76 +685,76 @@ func (p *PartialColumnBroadcaster) Stop() {
 	}
 }
 
-// Publish publishes the partial column.
-func (p *PartialColumnBroadcaster) Publish(topic string, c blocks.PartialDataColumn) (bool, error) {
+// Publish publishes partial columns for the given topics.
+func (p *PartialColumnBroadcaster) Publish(topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error {
 	if p.ps == nil {
-		return false, errors.New("pubsub not initialized")
+		return errors.New("pubsub not initialized")
 	}
-	respCh := make(chan publishResponse, 1)
+	respCh := make(chan error)
 	p.incomingReq <- request{
 		kind: requestKindPublish,
 		publish: publish{
-			topic:         topic,
-			c:             c,
-			publishRespCh: respCh,
+			topicsAndColumns: topicsAndColumns,
 		},
+		response: respCh,
 	}
-	resp := <-respCh
-	return resp.columnCompleted, resp.err
+	return <-respCh
 }
 
-func (p *PartialColumnBroadcaster) publish(topic string, c blocks.PartialDataColumn) (bool, error) {
-	var columnCompleted bool
-	groupIDBytes := c.GroupID()
-	topicStore, ok := p.partialMsgStore[topic]
-	if !ok {
-		topicStore = make(map[string]*verification.PartialColumnVerifier)
-		p.partialMsgStore[topic] = topicStore
-	}
+func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error {
+	var aggErr error
+	for topic, c := range topicsAndColumns {
+		if len(c.KzgCommitments) == 0 {
+			// No meaningful data. Skip publishing
+			continue
+		}
+		groupIDBytes := c.GroupID()
+		topicStore, ok := p.partialMsgStore[topic]
+		if !ok {
+			topicStore = make(map[string]*verification.PartialColumnVerifier)
+			p.partialMsgStore[topic] = topicStore
+		}
 
-	existingVerifier := topicStore[string(groupIDBytes)]
-	if existingVerifier != nil {
-		existing := existingVerifier.Column
+		existing := p.getDataColumn(topic, groupIDBytes)
 		var extended bool
-		// Extend the existing column with cells being published here.
-		// The existing column may already contain cells received from peers. We must not overwrite it.
-		for i := range c.Included.Len() {
-			if c.Included.BitAt(i) {
-				if existingVerifier.ExtendFromVerifiedCell(uint64(i), c.Column[i], c.KzgProofs[i]) {
-					extended = true
-				}
+		if existing != nil {
+			extended = existing.ExtendFromOther(&c)
+			if extended {
+				p.getPartialVerifier(topic, groupIDBytes).MarkIncludedCellsVerified()
 			}
+		} else {
+			verifier, err := p.partialVerifierFromTrustedColumn(&c)
+			if err != nil {
+				aggErr = stderrors.Join(aggErr, err)
+				continue
+			}
+			topicStore[string(groupIDBytes)] = verifier
+			existing = verifier.Column
+			extended = true
 		}
 		if extended {
-			col, ok, err := existingVerifier.Complete()
+			col, ok, err := p.getPartialVerifier(topic, groupIDBytes).Complete()
 			if err != nil {
 				p.logger.WithError(err).WithFields(logrus.Fields{"topic": topic, "group": existing.GroupID()}).Error("Failed to complete partial column verifier")
-				return columnCompleted, err
+				aggErr = stderrors.Join(aggErr, err)
+				continue
 			}
 			if ok {
 				p.logger.WithFields(logrus.Fields{"topic": topic, "group": existing.GroupID()}).Info("Completed partial column")
 				if p.handleColumn != nil {
-					columnCompleted = true
 					go p.handleColumn(topic, col)
 				}
 			}
 		}
-	} else {
-		verifier, err := p.partialVerifierFromTrustedColumn(&c)
-		if err != nil {
-			return columnCompleted, err
+
+		p.groupTTL[string(groupIDBytes)] = TTLInSlots
+		err := p.ps.PublishPartialMessage(topic, existing, partialmessages.PublishOptions{})
+		if err == nil {
+			p.getBlobsCalled[string(groupIDBytes)] = true
 		}
-		topicStore[string(groupIDBytes)] = verifier
-		existingVerifier = verifier
+		aggErr = stderrors.Join(aggErr, err)
 	}
-
-	p.groupTTL[string(groupIDBytes)] = TTLInSlots
-
-	err := p.ps.PublishPartialMessage(topic, existingVerifier.Column, partialmessages.PublishOptions{})
-	if err == nil {
-		p.getBlobsCalled[string(groupIDBytes)] = true
-	}
-	return columnCompleted, err
+	return aggErr
 }
 
 type SubHandler func(topic string, col blocks.VerifiedRODataColumn)
