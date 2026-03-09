@@ -411,3 +411,11 @@ func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, s
 func (c *grpcValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
 	return c.getClient().PublishExecutionPayloadEnvelope(ctx, in)
 }
+
+func (c *grpcValidatorClient) PayloadAttestationData(_ context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+	return nil, errors.New("PayloadAttestationData not implemented")
+}
+
+func (c *grpcValidatorClient) SubmitPayloadAttestation(_ context.Context, _ *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
+	return nil, errors.New("SubmitPayloadAttestation not implemented")
+}

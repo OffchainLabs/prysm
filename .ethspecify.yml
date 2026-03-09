@@ -73,7 +73,6 @@ exceptions:
     - GLOAS_FORK_EPOCH#gloas
     - GLOAS_FORK_VERSION#gloas
     - MIN_BUILDER_WITHDRAWABILITY_DELAY#gloas
-    - PAYLOAD_ATTESTATION_DUE_BPS#gloas
     - SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
 
   ssz_objects:
