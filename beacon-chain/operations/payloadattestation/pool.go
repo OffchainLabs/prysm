@@ -23,8 +23,7 @@ type payloadAttestationDataKey struct {
 // PoolManager manages pending, aggregated payload attestations keyed by
 // payload-attestation data.
 type PoolManager interface {
-	// PendingPayloadAttestations consumes and returns pending attestations for
-	// the requested slot.
+	// PendingPayloadAttestations returns pending attestations for the requested slot.
 	PendingPayloadAttestations(slot primitives.Slot) []*ethpb.PayloadAttestation
 	// InsertPayloadAttestation inserts or aggregates a payload attestation
 	// message into the pool. The idx parameter is the PTC committee index
@@ -50,21 +49,15 @@ func NewPool() *Pool {
 	}
 }
 
-// PendingPayloadAttestations consumes and returns payload attestations for the
-// requested slot.
+// PendingPayloadAttestations returns payload attestations for the requested slot.
 func (p *Pool) PendingPayloadAttestations(slot primitives.Slot) []*ethpb.PayloadAttestation {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	result := make([]*ethpb.PayloadAttestation, 0, len(p.pending))
-	for key, att := range p.pending {
-		if att == nil || att.Data == nil {
-			delete(p.pending, key)
-			continue
-		}
+	for _, att := range p.pending {
 		if att.Data.Slot == slot {
 			result = append(result, att)
-			delete(p.pending, key)
 		}
 	}
 	return result
