@@ -107,7 +107,6 @@ type Config struct {
 	SlashingsPool                    slashings.PoolManager
 	SyncCommitteeObjectPool          synccommittee.Pool
 	BLSChangesPool                   blstoexec.PoolManager
-	PayloadAttestationPool           payloadattestation.PoolManager
 	SyncService                      chainSync.Checker
 	Broadcaster                      p2p.Broadcaster
 	PeersFetcher                     p2p.PeersProvider

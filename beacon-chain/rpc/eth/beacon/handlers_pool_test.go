@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	blockchainmock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	prysmtime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
@@ -2688,8 +2689,17 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
-		slot := primitives.Slot(1)
-		chainService := &blockchainmock.ChainService{Slot: &slot}
+		slot := primitives.Slot(0)
+		st, _ := util.DeterministicGenesisState(t, 64)
+		ptc, err := gloas.PayloadCommittee(t.Context(), st, slot)
+		require.NoError(t, err)
+		require.NotEqual(t, 0, len(ptc))
+
+		priv, err := bls.RandKey()
+		require.NoError(t, err)
+		sig := priv.Sign([]byte("test")).Marshal()
+
+		chainService := &blockchainmock.ChainService{Slot: &slot, State: st}
 		broadcaster := &p2pMock.MockBroadcaster{}
 		pool := &payloadattestationmock.PoolMock{}
 		s := &Server{
@@ -2701,16 +2711,16 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 			PayloadAttestationPool: pool,
 		}
 
-		body := `[{
-			"validator_index": "1",
+		body := fmt.Sprintf(`[{
+			"validator_index": "%d",
 			"data": {
 				"beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-				"slot": "1",
+				"slot": "0",
 				"payload_present": true,
 				"blob_data_available": true
 			},
-			"signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
-		}]`
+			"signature": "0x%x"
+		}]`, ptc[0], sig)
 		request := httptest.NewRequest(http.MethodPost, "http://example.com", strings.NewReader(body))
 		request.Header.Set(api.VersionHeader, "gloas")
 		writer := httptest.NewRecorder()
@@ -2781,7 +2791,7 @@ func TestListPayloadAttestations(t *testing.T) {
 			PayloadAttestationPool: pool,
 		}
 
-		request := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+		request := httptest.NewRequest(http.MethodGet, "http://example.com?slot=0", nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -2814,7 +2824,7 @@ func TestListPayloadAttestations(t *testing.T) {
 				{
 					Data: &ethpbv1alpha1.PayloadAttestationData{
 						BeaconBlockRoot:   bytesutil.PadTo([]byte("root2"), 32),
-						Slot:              2,
+						Slot:              1,
 						PayloadPresent:    false,
 						BlobDataAvailable: false,
 					},
@@ -2827,7 +2837,7 @@ func TestListPayloadAttestations(t *testing.T) {
 			PayloadAttestationPool: pool,
 		}
 
-		request := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+		request := httptest.NewRequest(http.MethodGet, "http://example.com?slot=1", nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -2857,15 +2867,6 @@ func TestListPayloadAttestations(t *testing.T) {
 						BlobDataAvailable: true,
 					},
 					Signature: bytesutil.PadTo([]byte("sig1"), 96),
-				},
-				{
-					Data: &ethpbv1alpha1.PayloadAttestationData{
-						BeaconBlockRoot:   bytesutil.PadTo([]byte("root2"), 32),
-						Slot:              2,
-						PayloadPresent:    false,
-						BlobDataAvailable: false,
-					},
-					Signature: bytesutil.PadTo([]byte("sig2"), 96),
 				},
 			},
 		}

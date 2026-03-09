@@ -103,7 +103,6 @@ type BeaconNode struct {
 	slashingsPool            slashings.PoolManager
 	syncCommitteePool        synccommittee.Pool
 	blsToExecPool            blstoexec.PoolManager
-	payloadAttestationPool   payloadattestation.PoolManager
 	depositCache             cache.DepositCache
 	trackedValidatorsCache   *cache.TrackedValidatorsCache
 	payloadIDCache           *cache.PayloadIDCache
@@ -994,7 +993,6 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		SlashingsPool:                    b.slashingsPool,
 		BLSChangesPool:                   b.blsToExecPool,
 		SyncCommitteeObjectPool:          b.syncCommitteePool,
-		PayloadAttestationPool:           b.payloadAttestationPool,
 		ExecutionChainService:            web3Service,
 		ExecutionChainInfoFetcher:        web3Service,
 		ChainStartFetcher:                chainStartFetcher,

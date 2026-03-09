@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	corehelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
@@ -957,6 +958,12 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	st, err := s.HeadFetcher.HeadStateReadOnly(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	var failures []*server.IndexedError
 	for i, msg := range msgs {
 		consensusMsg, err := msg.ToConsensus()
@@ -968,8 +975,23 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 
-		// TODO: Add full gossip validation (BLS signatures, PTC membership).
-		if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg); err != nil {
+		if _, err = bls.SignatureFromBytes(consensusMsg.Signature); err != nil {
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Incorrect payload attestation signature: " + err.Error(),
+			})
+			continue
+		}
+
+		idx, err := gloas.PayloadCommitteeIndex(ctx, st, consensusMsg.Data.Slot, consensusMsg.ValidatorIndex)
+		if err != nil {
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Could not determine PTC committee index: " + err.Error(),
+			})
+			continue
+		}
+		if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg, idx); err != nil {
 			failures = append(failures, &server.IndexedError{
 				Index:   i,
 				Message: "Could not insert payload attestation: " + err.Error(),
@@ -1004,18 +1026,15 @@ func (s *Server) ListPayloadAttestations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	rawSlot, slot, ok := shared.UintFromQuery(w, r, "slot", false)
+	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
 	if !ok {
 		return
 	}
 
-	allAtts := s.PayloadAttestationPool.PendingPayloadAttestations()
+	atts := s.PayloadAttestationPool.PendingPayloadAttestations(primitives.Slot(slot))
 
 	var data []*structs.PayloadAttestation
-	for _, att := range allAtts {
-		if rawSlot != "" && att.Data.Slot != primitives.Slot(slot) {
-			continue
-		}
+	for _, att := range atts {
 		data = append(data, structs.PayloadAttestationFromConsensus(att))
 	}
 
