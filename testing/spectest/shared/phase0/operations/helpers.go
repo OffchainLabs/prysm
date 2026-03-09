@@ -13,7 +13,7 @@ func sszToState(b []byte) (state.BeaconState, error) {
 	if err := base.UnmarshalSSZ(b); err != nil {
 		return nil, err
 	}
-	return state_native.InitializeFromProtoPhase0(base)
+	return state_native.InitializeFromProtoUnsafePhase0(base)
 }
 
 func sszToBlock(b []byte) (interfaces.SignedBeaconBlock, error) {

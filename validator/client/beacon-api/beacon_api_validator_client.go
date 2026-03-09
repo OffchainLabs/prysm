@@ -362,3 +362,21 @@ func (c *beaconApiValidatorClient) PublishExecutionPayloadEnvelope(ctx context.C
 		return c.publishExecutionPayloadEnvelope(ctx, in)
 	})
 }
+
+func (c *beaconApiValidatorClient) PayloadAttestationData(ctx context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+	_, span := trace.StartSpan(ctx, "beacon-api.PayloadAttestationData")
+	defer span.End()
+
+	return wrapInMetrics[*ethpb.PayloadAttestationData]("PayloadAttestationData", func() (*ethpb.PayloadAttestationData, error) {
+		return nil, errors.New("PayloadAttestationData not implemented")
+	})
+}
+
+func (c *beaconApiValidatorClient) SubmitPayloadAttestation(ctx context.Context, _ *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
+	_, span := trace.StartSpan(ctx, "beacon-api.SubmitPayloadAttestation")
+	defer span.End()
+
+	return wrapInMetrics[*empty.Empty]("SubmitPayloadAttestation", func() (*empty.Empty, error) {
+		return nil, errors.New("SubmitPayloadAttestation not implemented")
+	})
+}

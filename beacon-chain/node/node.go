@@ -98,6 +98,7 @@ type BeaconNode struct {
 	slasherDB                db.SlasherDatabase
 	attestationCache         *cache.AttestationCache
 	attestationPool          attestations.Pool
+	payloadAttestationPool   payloadattestation.PoolManager
 	exitPool                 voluntaryexits.PoolManager
 	slashingsPool            slashings.PoolManager
 	syncCommitteePool        synccommittee.Pool
@@ -153,21 +154,21 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 	ctx := cliCtx.Context
 
 	beacon := &BeaconNode{
-		cliCtx:            cliCtx,
-		ctx:               ctx,
-		cancel:            cancel,
-		services:          runtime.NewServiceRegistry(),
-		stop:              make(chan struct{}),
-		stateFeed:         new(event.Feed),
-		blockFeed:         new(event.Feed),
-		opFeed:            new(event.Feed),
-		attestationCache:  cache.NewAttestationCache(),
-		attestationPool:   attestations.NewPool(),
-		exitPool:          voluntaryexits.NewPool(),
-		slashingsPool:     slashings.NewPool(),
-		syncCommitteePool: synccommittee.NewPool(),
-		blsToExecPool:     blstoexec.NewPool(),
-		// TODO payloadAttestationPool: set once a PoolManager implementation exists.
+		cliCtx:                  cliCtx,
+		ctx:                     ctx,
+		cancel:                  cancel,
+		services:                runtime.NewServiceRegistry(),
+		stop:                    make(chan struct{}),
+		stateFeed:               new(event.Feed),
+		blockFeed:               new(event.Feed),
+		opFeed:                  new(event.Feed),
+		attestationCache:        cache.NewAttestationCache(),
+		attestationPool:         attestations.NewPool(),
+		payloadAttestationPool:  payloadattestation.NewPool(),
+		exitPool:                voluntaryexits.NewPool(),
+		slashingsPool:           slashings.NewPool(),
+		syncCommitteePool:       synccommittee.NewPool(),
+		blsToExecPool:           blstoexec.NewPool(),
 		trackedValidatorsCache:  cache.NewTrackedValidatorsCache(),
 		payloadIDCache:          cache.NewPayloadIDCache(),
 		slasherBlockHeadersFeed: new(event.Feed),
@@ -977,6 +978,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		ForkchoiceFetcher:                chainService,
 		FinalizationFetcher:              chainService,
 		BlockReceiver:                    chainService,
+		PayloadAttestationReceiver:       chainService,
 		ExecutionPayloadEnvelopeReceiver: chainService,
 		BlobReceiver:                     chainService,
 		DataColumnReceiver:               chainService,
@@ -986,6 +988,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		OptimisticModeFetcher:            chainService,
 		AttestationCache:                 b.attestationCache,
 		AttestationsPool:                 b.attestationPool,
+		PayloadAttestationPool:           b.payloadAttestationPool,
 		ExitPool:                         b.exitPool,
 		SlashingsPool:                    b.slashingsPool,
 		BLSChangesPool:                   b.blsToExecPool,
