@@ -220,13 +220,17 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 
 		// Publish
 		t.Log("Publishing from Node 1")
-		_, err = broadcaster1.Publish(topicStr, pc1, true)
+		err = broadcaster1.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+			yield(topicStr, pc1)
+		})
 		require.NoError(t, err)
 
 		time.Sleep(200 * time.Millisecond)
 
 		t.Log("Publishing from Node 2")
-		_, err = broadcaster2.Publish(topicStr, pc2, true)
+		err = broadcaster2.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+			yield(topicStr, pc2)
+		})
 		require.NoError(t, err)
 
 		//  Wait for Completion

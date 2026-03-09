@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	libp2p "github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -127,7 +126,7 @@ func (m *mockPubSub) assertPartialColumnsPublished(t *testing.T, topic string, e
 	}
 }
 
-func (m *mockPubSub) PeerFeedback(topic string, id peer.ID, kind pubsub.PeerFeedbackKind) error {
+func (m *mockPubSub) peerFeedback(topic string, id peer.ID, kind pubsub.PeerFeedbackKind) error {
 	m.peerFeedbackCalls = append(m.peerFeedbackCalls, peerFeedbackCall{
 		peerID: id,
 		topic:  topic,
@@ -136,26 +135,18 @@ func (m *mockPubSub) PeerFeedback(topic string, id peer.ID, kind pubsub.PeerFeed
 	return m.peerFeedbackErr
 }
 
-func (m *mockPubSub) PublishPartialMessage(
-	topic string,
-	message partialmessages.Message,
-	_ partialmessages.PublishOptions,
-) error {
-	column, ok := message.(*blocks.PartialDataColumn)
-	if !ok {
-		return errors.New("partial message is not *blocks.PartialDataColumn")
-	}
-	m.publishedPartialColumns = append(m.publishedPartialColumns, publishedColumn{column, topic})
+func (m *mockPubSub) publishPartialCol(topic string, groupID []byte, col *blocks.PartialDataColumn) error {
+	m.publishedPartialColumns = append(m.publishedPartialColumns, publishedColumn{col, topic})
 	retErr := m.publishPartialMessageErr
 	return retErr
 }
 
-var _ partialColumnPubSub = (*mockPubSub)(nil)
-
-func newBroadcasterHarness(t *testing.T, ps partialColumnPubSub) *broadcasterHarness {
+func newBroadcasterHarness(t *testing.T, ps *mockPubSub) *broadcasterHarness {
 	t.Helper()
 	broadcaster := NewBroadcaster()
-	broadcaster.ps = ps
+	broadcaster.peerFeedback = ps.peerFeedback
+	broadcaster.publishPartialCol = ps.publishPartialCol
+
 	return &broadcasterHarness{
 		t:           t,
 		broadcaster: broadcaster,
@@ -295,18 +286,16 @@ func mustMarshalSidecar(t *testing.T, cellsPresent bitfield.Bitlist) []byte {
 	return b
 }
 
-func assertPeerStatePartsMetadata(t *testing.T, got any, want *ethpb.PartialDataColumnPartsMetadata) {
+func assertPeerStatePartsMetadata(t *testing.T, got, want *ethpb.PartialDataColumnPartsMetadata) {
 	t.Helper()
 	if want == nil {
-		require.Equal(t, nil, got)
+		require.Equal(t, want, got)
 		return
 	}
 
 	require.NotNil(t, got)
-	meta, ok := got.(*ethpb.PartialDataColumnPartsMetadata)
-	require.Equal(t, true, ok)
-	require.DeepEqual(t, want.Available, meta.Available)
-	require.DeepEqual(t, want.Requests, meta.Requests)
+	require.DeepEqual(t, want.Available, got.Available)
+	require.DeepEqual(t, want.Requests, got.Requests)
 }
 
 func assertBitlistEqual(t *testing.T, got, want bitfield.Bitlist) {
@@ -449,7 +438,7 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 	tests := []struct {
 		wantErrContains      string
 		name                 string
-		inputPeerState       func() partialmessages.PeerState
+		inputPeerState       func() blocks.PartialDataColumnPeerState
 		inputRPC             func(t *testing.T) *pubsub_pb.PartialMessagesExtension
 		expectedRecvdState   func() *ethpb.PartialDataColumnPartsMetadata
 		expectedSentState    func() *ethpb.PartialDataColumnPartsMetadata
@@ -458,8 +447,8 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 	}{
 		{
 			name: "incoming parts metadata only initializes recvd state",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{}
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
 			},
 			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
 				return &pubsub_pb.PartialMessagesExtension{
@@ -472,10 +461,10 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 		},
 		{
 			name: "incoming parts metadata merges with existing recvd state available and overwrites requests and does not update sent state",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{
-					RecvdState: testPartsMetadata(4, []uint64{0}, []uint64{0}),
-					SentState:  testPartsMetadata(4, []uint64{3}, []uint64{1}),
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{
+					Recvd: testPartsMetadata(4, []uint64{0}, []uint64{0}),
+					Sent:  testPartsMetadata(4, []uint64{3}, []uint64{1}),
 				}
 			},
 			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
@@ -492,8 +481,8 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 		},
 		{
 			name: "partial message  updates recvd and sent states when existing peer state is empty",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{}
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
 			},
 			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
 				return &pubsub_pb.PartialMessagesExtension{
@@ -511,9 +500,9 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 		},
 		{
 			name: "incoming parts metadata with message skips recvd update from message and updates sent",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{
-					SentState: testPartsMetadata(4, []uint64{0, 1}, nil),
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{
+					Sent: testPartsMetadata(4, []uint64{0, 1}, nil),
 				}
 			},
 			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
@@ -533,8 +522,8 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 		},
 		{
 			name: "message with empty cells bitmap bytes returns decode error",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{}
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
 			},
 			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
 				return &pubsub_pb.PartialMessagesExtension{
@@ -545,8 +534,8 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 		},
 		{
 			name: "invalid incoming parts metadata bytes return error",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{}
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
 			},
 			inputRPC: func(_ *testing.T) *pubsub_pb.PartialMessagesExtension {
 				return &pubsub_pb.PartialMessagesExtension{
@@ -557,8 +546,8 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 		},
 		{
 			name: "incoming parts metadata with zero-length availability returns error",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{}
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
 			},
 			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
 				return &pubsub_pb.PartialMessagesExtension{
@@ -568,22 +557,10 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 			wantErrContains: "incoming parts metadata has 0 length availability",
 		},
 		{
-			name: "incoming parts metadata with non-metadata recvd state returns error",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{RecvdState: "not-metadata"}
-			},
-			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
-				return &pubsub_pb.PartialMessagesExtension{
-					PartsMetadata: mustMarshalPartsMetadata(t, testPartsMetadata(3, []uint64{1}, []uint64{2})),
-				}
-			},
-			wantErrContains: "recvdState is not *PartialDataColumnPartsMetadata",
-		},
-		{
 			name: "incoming parts metadata merge length mismatch returns wrapped error",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{
-					RecvdState: testPartsMetadataCustom(3, []uint64{0}, 3, []uint64{0}),
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{
+					Recvd: testPartsMetadataCustom(3, []uint64{0}, 3, []uint64{0}),
 				}
 			},
 			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
@@ -595,8 +572,8 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 		},
 		{
 			name: "invalid partial message bytes return error",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{}
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
 			},
 			inputRPC: func(_ *testing.T) *pubsub_pb.PartialMessagesExtension {
 				return &pubsub_pb.PartialMessagesExtension{
@@ -607,8 +584,8 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 		},
 		{
 			name: "partial message with non-empty bitmap bytes but zero logical length returns error",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{}
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{}
 			},
 			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
 				return &pubsub_pb.PartialMessagesExtension{
@@ -618,24 +595,10 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 			wantErrContains: "length of cells present bitmap is 0",
 		},
 		{
-			name: "partial message with non-metadata sent state returns wrapped error",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{
-					SentState: 123,
-				}
-			},
-			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
-				return &pubsub_pb.PartialMessagesExtension{
-					PartialMessage: mustMarshalSidecar(t, testBitlist(3, 1)),
-				}
-			},
-			wantErrContains: "sent: state is not *PartialDataColumnPartsMetadata",
-		},
-		{
 			name: "partial message sent merge length mismatch returns error",
-			inputPeerState: func() partialmessages.PeerState {
-				return partialmessages.PeerState{
-					SentState: testPartsMetadataCustom(3, []uint64{0}, 4, []uint64{0}),
+			inputPeerState: func() blocks.PartialDataColumnPeerState {
+				return blocks.PartialDataColumnPeerState{
+					Sent: testPartsMetadataCustom(3, []uint64{0}, 4, []uint64{0}),
 				}
 			},
 			inputRPC: func(t *testing.T) *pubsub_pb.PartialMessagesExtension {
@@ -655,8 +618,8 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 			nextPeerState, msg, err := updatePeerStateFromIncomingRPC(peerState, tt.inputRPC(t))
 
 			// updatePeerStateFromIncomingRPC must not mutate the input peerState.
-			require.DeepEqual(t, originalPeerState.RecvdState, peerState.RecvdState)
-			require.DeepEqual(t, originalPeerState.SentState, peerState.SentState)
+			require.DeepEqual(t, originalPeerState.Recvd, peerState.Recvd)
+			require.DeepEqual(t, originalPeerState.Sent, peerState.Sent)
 
 			if tt.wantErrContains != "" {
 				require.ErrorContains(t, tt.wantErrContains, err)
@@ -679,8 +642,8 @@ func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 			if tt.expectedSentState != nil {
 				wantSent = tt.expectedSentState()
 			}
-			assertPeerStatePartsMetadata(t, nextPeerState.RecvdState, wantRecvd)
-			assertPeerStatePartsMetadata(t, nextPeerState.SentState, wantSent)
+			assertPeerStatePartsMetadata(t, nextPeerState.Recvd, wantRecvd)
+			assertPeerStatePartsMetadata(t, nextPeerState.Sent, wantSent)
 		})
 	}
 }
@@ -719,7 +682,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			name:                "pubsub not initialized returns error",
 			expectedErrContains: "pubsub not initialized",
 			setup: func(t *testing.T, b *PartialColumnBroadcaster) testSetup {
-				b.ps = nil
+				b.publishPartialCol = nil
 				group := []byte("missing-group")
 				return testSetup{
 					inputRPC: buildIncomingRPC(validTopic, group, nil, nil),
@@ -1224,10 +1187,8 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 	})
 
 	tests := []struct {
-		expectGetBlobsValue bool
 		expectHandleColumn  bool
 		expectTrustedCall   bool
-		getBlobsCalled      bool
 		expectedErrContains string
 		publishErr          error
 		name                string
@@ -1237,15 +1198,12 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 	}{
 		{
 			name:                "new group stores and publishes",
-			getBlobsCalled:      true,
-			expectGetBlobsValue: true,
 			expectTrustedCall:   true,
 			publishColumn:       column1,
 			expectedStoreColumn: column1,
 		},
 		{
 			name:                "publish error is returned to caller",
-			getBlobsCalled:      true,
 			expectTrustedCall:   true,
 			publishErr:          errors.New("publish failed"),
 			expectedErrContains: "publish failed",
@@ -1253,9 +1211,7 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			expectedStoreColumn: column1,
 		},
 		{
-			name:                "existing duplicate cells are not overwritten",
-			getBlobsCalled:      false,
-			expectGetBlobsValue: false,
+			name: "existing duplicate cells are not overwritten",
 			existingColumn: pc(3, map[uint64][]byte{
 				0: {0x20},
 			}),
@@ -1268,9 +1224,7 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			}),
 		},
 		{
-			name:                "existing extends with new cells and remains incomplete",
-			getBlobsCalled:      true,
-			expectGetBlobsValue: true,
+			name: "existing extends with new cells and remains incomplete",
 			existingColumn: pc(4, map[uint64][]byte{
 				0: {0x30},
 			}),
@@ -1285,10 +1239,8 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			}),
 		},
 		{
-			name:                "existing extends to complete and invokes handleColumn",
-			getBlobsCalled:      true,
-			expectGetBlobsValue: true,
-			expectHandleColumn:  true,
+			name:               "existing extends to complete and invokes handleColumn",
+			expectHandleColumn: true,
 			existingColumn: pc(2, map[uint64][]byte{
 				0: {0x40},
 			}),
@@ -1321,7 +1273,9 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			h.start(recorder)
 			defer h.Stop()
 
-			completed, err := h.broadcaster.Publish(topic, *column, tt.getBlobsCalled)
+			err := h.broadcaster.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+				yield(topic, *column)
+			})
 			if tt.expectedErrContains != "" {
 				require.ErrorContains(t, tt.expectedErrContains, err)
 			} else {
@@ -1334,10 +1288,10 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			ps.assertPartialColumnsPublished(t, topic, []*blocks.PartialDataColumn{expectedStored})
 
 			getBlobs := h.broadcaster.getBlobsCalled[groupID]
-			require.Equal(t, tt.expectGetBlobsValue, getBlobs)
+			// getBlobs is only updated if err == nil
+			require.Equal(t, err == nil, getBlobs)
 
 			if tt.expectHandleColumn {
-				require.Equal(t, true, completed)
 				select {
 				case call := <-recorder.handleColumnCallCh:
 					require.Equal(t, topic, call.topic)
@@ -1346,7 +1300,11 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 					t.Fatalf("handle column call not received")
 				}
 			} else {
-				require.Equal(t, false, completed)
+				select {
+				case <-recorder.handleColumnCallCh:
+					t.Fatal("handle column should not be called")
+				default:
+				}
 			}
 
 			if tt.expectTrustedCall {
