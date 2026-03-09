@@ -145,6 +145,7 @@ func toValidatorDutyV2(duty *ethpb.DutiesV2Response_Duty) (*ethpb.ValidatorDuty,
 		Status:                  duty.Status,
 		ValidatorIndex:          duty.ValidatorIndex,
 		IsSyncCommittee:         duty.IsSyncCommittee,
+		PtcSlots:                duty.PtcSlots,
 	}, nil
 }
 

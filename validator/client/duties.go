@@ -104,8 +104,10 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 
 func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.ValidatorDuty, nextEpochDuties []*ethpb.ValidatorDuty) {
 	attesterKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
+	ptcKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
 	for i := range attesterKeys {
 		attesterKeys[i] = make([]string, 0)
+		ptcKeys[i] = make([]string, 0)
 	}
 	proposerKeys := make([]string, params.BeaconConfig().SlotsPerEpoch)
 	epochStartSlot, err := slots.EpochStart(slots.ToEpoch(slot))
@@ -113,7 +115,7 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 		log.WithError(err).Error("Could not calculate epoch start. Ignoring logging duties.")
 		return
 	}
-	var totalProposingKeys, totalAttestingKeys uint64
+	var totalProposingKeys, totalAttestingKeys, totalPTCKeys uint64
 	for _, duty := range currentEpochDuties {
 		pubkey := fmt.Sprintf("%#x", duty.PublicKey)
 		if v.emitAccountMetrics {
@@ -139,6 +141,18 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 			ValidatorInSyncCommitteeGaugeVec.WithLabelValues(pubkey).Set(float64(1))
 		} else if v.emitAccountMetrics && !duty.IsSyncCommittee {
 			ValidatorInSyncCommitteeGaugeVec.WithLabelValues(pubkey).Set(float64(0))
+		}
+		for _, ptcSlot := range duty.PtcSlots {
+			if ptcSlot < epochStartSlot || ptcSlot >= epochStartSlot+params.BeaconConfig().SlotsPerEpoch {
+				log.WithFields(logrus.Fields{
+					"duty": duty,
+					"slot": ptcSlot,
+				}).Warn("Invalid PTC slot")
+				continue
+			}
+			ptcSlotInEpoch := ptcSlot - epochStartSlot
+			ptcKeys[ptcSlotInEpoch] = append(ptcKeys[ptcSlotInEpoch], truncatedPubkey)
+			totalPTCKeys++
 		}
 
 		for _, proposerSlot := range duty.ProposerSlots {
@@ -169,6 +183,7 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 	log.WithFields(logrus.Fields{
 		"proposerCount": totalProposingKeys,
 		"attesterCount": totalAttestingKeys,
+		"ptcCount":      totalPTCKeys,
 	}).Infof("Schedule for epoch %d", slots.ToEpoch(slot))
 	for i := primitives.Slot(0); i < params.BeaconConfig().SlotsPerEpoch; i++ {
 		startTime, err := slots.StartTime(v.genesisTime, epochStartSlot+i)
@@ -192,10 +207,17 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 				"attesterPubkeys": attesterKeys[i],
 			})
 		}
+		isPTCMember := len(ptcKeys[i]) > 0
+		if isPTCMember {
+			slotLog = slotLog.WithFields(logrus.Fields{
+				"ptcCount":   len(ptcKeys[i]),
+				"ptcPubkeys": ptcKeys[i],
+			})
+		}
 		if durationTillDuty > 0 {
 			slotLog = slotLog.WithField("timeUntilDuty", durationTillDuty)
 		}
-		if isProposer || isAttester {
+		if isProposer || isAttester || isPTCMember {
 			slotLog.Infof("Duties schedule")
 		}
 	}

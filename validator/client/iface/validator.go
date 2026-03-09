@@ -30,6 +30,8 @@ const (
 	RoleSyncCommittee
 	// RoleSyncCommitteeAggregator means the validator should aggregate sync committee messages and submit a sync committee contribution.
 	RoleSyncCommitteeAggregator
+	// RolePTCMember means the validator should submit a payload attestation.
+	RolePTCMember
 )
 
 // Validator interface defines the primary methods of a validator client.
