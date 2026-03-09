@@ -20,6 +20,7 @@ type dutyStore struct {
 	currDependentRoot []byte
 
 	proposerSlots  map[primitives.ValidatorIndex][]primitives.Slot
+	ptcSlots       map[primitives.ValidatorIndex][]primitives.Slot
 	syncCurrentMap map[primitives.ValidatorIndex]bool
 	syncNextMap    map[primitives.ValidatorIndex]bool
 
@@ -80,6 +81,14 @@ func (ds *dutyStore) ProposerSlots(idx primitives.ValidatorIndex) []primitives.S
 	return ds.proposerSlots[idx]
 }
 
+// PtcSlots returns the PTC slots for a given validator index.
+func (ds *dutyStore) PtcSlots(idx primitives.ValidatorIndex) []primitives.Slot {
+	if !ds.IsInitialized() {
+		return nil
+	}
+	return ds.ptcSlots[idx]
+}
+
 // IsSyncCommittee returns whether a validator is in the current sync committee.
 func (ds *dutyStore) IsSyncCommittee(idx primitives.ValidatorIndex) bool {
 	if !ds.IsInitialized() {
@@ -98,7 +107,7 @@ func (ds *dutyStore) IsNextSyncCommittee(idx primitives.ValidatorIndex) bool {
 
 // SetFromCombinedDutiesResponse stores a combined duties response by decomposing it into
 // duty maps, proposer slots, and sync committee maps.
-// DEPRECATED: GetDutiesV2, use the split GetAttesterDuties, GetProposerDutiesV2, and GetSyncCommitteeDuties endpoints.
+// DEPRECATED: GetDutiesV2, use the split GetAttesterDuties, GetProposerDutiesV2, GetSyncCommitteeDuties, GetPTCduties endpoints.
 func (ds *dutyStore) SetFromCombinedDutiesResponse(container *ethpb.ValidatorDutiesContainer) {
 	if container == nil {
 		ds.Reset()
@@ -106,6 +115,7 @@ func (ds *dutyStore) SetFromCombinedDutiesResponse(container *ethpb.ValidatorDut
 	}
 
 	ds.proposerSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
+	ds.ptcSlots = make(map[primitives.ValidatorIndex][]primitives.Slot)
 	ds.syncCurrentMap = make(map[primitives.ValidatorIndex]bool)
 	ds.syncNextMap = make(map[primitives.ValidatorIndex]bool)
 
@@ -120,6 +130,9 @@ func (ds *dutyStore) SetFromCombinedDutiesResponse(container *ethpb.ValidatorDut
 		}
 		if d.IsSyncCommittee {
 			ds.syncCurrentMap[d.ValidatorIndex] = true
+		}
+		if len(d.PtcSlots) > 0 {
+			ds.ptcSlots[d.ValidatorIndex] = d.PtcSlots
 		}
 	}
 

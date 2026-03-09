@@ -600,7 +600,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 			syncCommitteeValidators[duty.ValidatorIndex] = pk
 		}
 
-		if slices.Contains(duty.PtcSlots, slot) {
+		if slices.Contains(v.duties.PtcSlots(duty.ValidatorIndex), slot) {
 			roles = append(roles, iface.RolePTCMember)
 		}
 

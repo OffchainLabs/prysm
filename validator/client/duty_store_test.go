@@ -14,6 +14,7 @@ func testDutyStore(current ...*ethpb.ValidatorDuty) *dutyStore {
 		currentDuties:  make(map[pubkey]*ethpb.ValidatorDuty),
 		nextDuties:     make(map[pubkey]*ethpb.ValidatorDuty),
 		proposerSlots:  make(map[primitives.ValidatorIndex][]primitives.Slot),
+		ptcSlots:       make(map[primitives.ValidatorIndex][]primitives.Slot),
 		syncCurrentMap: make(map[primitives.ValidatorIndex]bool),
 		syncNextMap:    make(map[primitives.ValidatorIndex]bool),
 		initialized:    true,
@@ -25,6 +26,9 @@ func testDutyStore(current ...*ethpb.ValidatorDuty) *dutyStore {
 		}
 		if d.IsSyncCommittee {
 			ds.syncCurrentMap[d.ValidatorIndex] = true
+		}
+		if len(d.PtcSlots) > 0 {
+			ds.ptcSlots[d.ValidatorIndex] = d.PtcSlots
 		}
 	}
 	return ds
@@ -45,6 +49,7 @@ func TestDutyStore_Uninitialized(t *testing.T) {
 	assert.Equal(t, (*ethpb.ValidatorDuty)(nil), d)
 
 	assert.Equal(t, true, ds.ProposerSlots(0) == nil)
+	assert.Equal(t, true, ds.PtcSlots(0) == nil)
 	assert.Equal(t, false, ds.IsSyncCommittee(0))
 	assert.Equal(t, false, ds.IsNextSyncCommittee(0))
 }
@@ -65,6 +70,7 @@ func TestDutyStore_SetFromCombinedDutiesResponse(t *testing.T) {
 				ValidatorIndex:  10,
 				AttesterSlot:    5,
 				ProposerSlots:   []primitives.Slot{3, 7},
+				PtcSlots:        []primitives.Slot{4, 6},
 				IsSyncCommittee: true,
 			},
 		},
@@ -106,6 +112,10 @@ func TestDutyStore_SetFromCombinedDutiesResponse(t *testing.T) {
 	// Proposer slots.
 	assert.DeepEqual(t, []primitives.Slot{3, 7}, ds.ProposerSlots(10))
 	assert.Equal(t, true, ds.ProposerSlots(20) == nil)
+
+	// PTC slots.
+	assert.DeepEqual(t, []primitives.Slot{4, 6}, ds.PtcSlots(10))
+	assert.Equal(t, true, ds.PtcSlots(20) == nil)
 
 	// Sync committee.
 	assert.Equal(t, true, ds.IsSyncCommittee(10))
