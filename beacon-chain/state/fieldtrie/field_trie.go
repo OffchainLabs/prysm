@@ -218,10 +218,7 @@ func (f *FieldTrie) Length() uint64 {
 // us save on a copy. Any caller of this method will need
 // to take care that this isn't called on an empty trie.
 func (f *FieldTrie) TransferTrie() *FieldTrie {
-	// Resolve any pending lazy copy.
-	f.materialize()
-
-	if f.fieldLayers == nil {
+	if f.fieldLayers == nil && f.sharedLayers == nil {
 		return &FieldTrie{
 			field:      f.field,
 			dataType:   f.dataType,
@@ -233,13 +230,14 @@ func (f *FieldTrie) TransferTrie() *FieldTrie {
 	}
 	f.isTransferred = true
 	nTrie := &FieldTrie{
-		fieldLayers: f.fieldLayers,
-		field:       f.field,
-		dataType:    f.dataType,
-		reference:   stateutil.NewRef(1),
-		RWMutex:     new(sync.RWMutex),
-		length:      f.length,
-		numOfElems:  f.numOfElems,
+		fieldLayers:  f.fieldLayers,
+		sharedLayers: f.sharedLayers,
+		field:        f.field,
+		dataType:     f.dataType,
+		reference:    stateutil.NewRef(1),
+		RWMutex:      new(sync.RWMutex),
+		length:       f.length,
+		numOfElems:   f.numOfElems,
 	}
 	// Zero out field layers here.
 	f.fieldLayers = nil
