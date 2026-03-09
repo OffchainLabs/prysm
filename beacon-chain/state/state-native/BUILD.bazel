@@ -25,6 +25,7 @@ go_library(
         "getters_withdrawal.go",
         "gloas.go",
         "hasher.go",
+        "merkle_layers.go",
         "multi_value_slices.go",
         "proofs.go",
         "readonly_validator.go",
