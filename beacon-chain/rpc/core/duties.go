@@ -5,6 +5,7 @@ import (
 	"context"
 	"sort"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -43,6 +44,12 @@ type SyncCommitteeDutyResult struct {
 	Pubkey                        [fieldparams.BLSPubkeyLength]byte
 	ValidatorIndex                primitives.ValidatorIndex
 	ValidatorSyncCommitteeIndices []uint64
+}
+
+// PTCDutyResult is a transport-agnostic representation of a PTC duty.
+type PTCDutyResult struct {
+	ValidatorIndex primitives.ValidatorIndex
+	Slot           primitives.Slot
 }
 
 // AttesterDuties computes attester duties for the requested validators at the given epoch.
@@ -180,6 +187,54 @@ func (s *Service) SyncCommitteeDuties(ctx context.Context, st state.BeaconState,
 			if err := RegisterSyncSubnetNextPeriod(st, requestedEpoch, pubkey[:], syncDutyStatus(st, index)); err != nil {
 				return nil, &RpcError{Err: errors.Wrapf(err, "could not register sync subnet for validator %d", index), Reason: Internal}
 			}
+		}
+	}
+
+	return duties, nil
+}
+
+// PTCDuties computes payload timeliness committee duties for the requested validators
+// at the given epoch. Pre-Gloas epochs return an empty result.
+func (s *Service) PTCDuties(ctx context.Context, st state.BeaconState, epoch primitives.Epoch, indices []primitives.ValidatorIndex) ([]*PTCDutyResult, *RpcError) {
+	_, span := trace.StartSpan(ctx, "coreService.PTCDuties")
+	defer span.End()
+
+	if len(indices) == 0 || epoch < params.BeaconConfig().GloasForkEpoch {
+		return []*PTCDutyResult{}, nil
+	}
+
+	requested := make(map[primitives.ValidatorIndex]bool, len(indices))
+	for _, idx := range indices {
+		requested[idx] = true
+	}
+
+	startSlot, err := slots.EpochStart(epoch)
+	if err != nil {
+		return nil, &RpcError{Err: err, Reason: Internal}
+	}
+	endSlot := startSlot + params.BeaconConfig().SlotsPerEpoch
+
+	duties := make([]*PTCDutyResult, 0, len(indices))
+	for slot := startSlot; slot < endSlot; slot++ {
+		if ctx.Err() != nil {
+			return nil, &RpcError{Err: ctx.Err(), Reason: Internal}
+		}
+
+		ptc, err := gloas.PayloadCommittee(ctx, st, slot)
+		if err != nil {
+			return nil, &RpcError{Err: err, Reason: Internal}
+		}
+
+		seen := make(map[primitives.ValidatorIndex]bool)
+		for _, idx := range ptc {
+			if !requested[idx] || seen[idx] {
+				continue
+			}
+			seen[idx] = true
+			duties = append(duties, &PTCDutyResult{
+				ValidatorIndex: idx,
+				Slot:           slot,
+			})
 		}
 	}
 

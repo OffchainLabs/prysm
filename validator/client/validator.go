@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -599,7 +600,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 			syncCommitteeValidators[duty.ValidatorIndex] = bytesutil.ToBytes48(duty.PublicKey)
 		}
 
-		if duty.PtcSlot != 0 && duty.PtcSlot == slot {
+		if slices.Contains(duty.PtcSlots, slot) {
 			roles = append(roles, iface.RolePTCMember)
 		}
 
