@@ -113,7 +113,12 @@ func (v *validator) logDuties(slot primitives.Slot) {
 		attesterKeys[i] = make([]string, 0)
 	}
 	proposerKeys := make([]string, params.BeaconConfig().SlotsPerEpoch)
-	var totalProposingKeys, totalAttestingKeys uint64
+  ptcKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
+	for i := range attesterKeys {
+		attesterKeys[i] = make([]string, 0)
+		ptcKeys[i] = make([]string, 0)
+	}
+	var totalProposingKeys, totalAttestingKeys, totalPTCKeys uint64
 
 	for _, duty := range v.duties.CurrentEpochDuties() {
 		pk := fmt.Sprintf("%#x", duty.PublicKey)
@@ -139,6 +144,18 @@ func (v *validator) logDuties(slot primitives.Slot) {
 			ValidatorInSyncCommitteeGaugeVec.WithLabelValues(pk).Set(float64(1))
 		} else if v.emitAccountMetrics && !duty.IsSyncCommittee {
 			ValidatorInSyncCommitteeGaugeVec.WithLabelValues(pk).Set(float64(0))
+		}
+		for _, ptcSlot := range duty.PtcSlots {
+			if ptcSlot < epochStartSlot || ptcSlot >= epochStartSlot+params.BeaconConfig().SlotsPerEpoch {
+				log.WithFields(logrus.Fields{
+					"duty": duty,
+					"slot": ptcSlot,
+				}).Warn("Invalid PTC slot")
+				continue
+			}
+			ptcSlotInEpoch := ptcSlot - epochStartSlot
+			ptcKeys[ptcSlotInEpoch] = append(ptcKeys[ptcSlotInEpoch], truncatedPubkey)
+			totalPTCKeys++
 		}
 
 		for _, proposerSlot := range duty.ProposerSlots {
@@ -169,6 +186,7 @@ func (v *validator) logDuties(slot primitives.Slot) {
 	log.WithFields(logrus.Fields{
 		"proposerCount": totalProposingKeys,
 		"attesterCount": totalAttestingKeys,
+		"ptcCount":      totalPTCKeys,
 	}).Infof("Schedule for epoch %d", slots.ToEpoch(slot))
 
 	for i := primitives.Slot(0); i < params.BeaconConfig().SlotsPerEpoch; i++ {
@@ -194,11 +212,19 @@ func (v *validator) logDuties(slot primitives.Slot) {
 				"attesterPubkeys": attesterKeys[i],
 			})
 		}
-		durationTillDuty := (time.Until(startTime) + time.Second).Truncate(time.Second)
+		isPTCMember := len(ptcKeys[i]) > 0
+		if isPTCMember {
+			slotLog = slotLog.WithFields(logrus.Fields{
+				"ptcCount":   len(ptcKeys[i]),
+				"ptcPubkeys": ptcKeys[i],
+			})
+		}
 		if durationTillDuty > 0 {
 			slotLog = slotLog.WithField("timeUntilDuty", durationTillDuty)
 		}
-		slotLog.Info("Duties schedule")
+		if isProposer || isAttester || isPTCMember {
+			slotLog.Infof("Duties schedule")
+		}
 	}
 }
 

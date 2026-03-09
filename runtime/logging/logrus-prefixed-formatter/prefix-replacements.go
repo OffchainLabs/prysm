@@ -1,6 +1,10 @@
 package prefixed
 
 var prefixReplacements = map[string]string{
+	"runtime":                                         "registry",
+	"runtime/debug":                                   "runtime",
+	"runtime/messagehandler":                          "message-handler",
+	"runtime/prereqs":                                 "runtime-prereqs",
 	"cmd/beacon-chain":                                "main",
 	"cmd/client-stats":                                "main",
 	"cmd/prysmctl/p2p":                                "prysmctl-p2p",

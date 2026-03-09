@@ -253,6 +253,21 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) MultipleValidatorStatus(arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MultipleValidatorStatus", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).MultipleValidatorStatus), arg0, arg1)
 }
 
+// PayloadAttestationData mocks base method.
+func (m *MockBeaconNodeValidatorServer) PayloadAttestationData(arg0 context.Context, arg1 *eth.PayloadAttestationDataRequest) (*eth.PayloadAttestationData, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PayloadAttestationData", arg0, arg1)
+	ret0, _ := ret[0].(*eth.PayloadAttestationData)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PayloadAttestationData indicates an expected call of PayloadAttestationData.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) PayloadAttestationData(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PayloadAttestationData", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).PayloadAttestationData), arg0, arg1)
+}
+
 // PrepareBeaconProposer mocks base method.
 func (m *MockBeaconNodeValidatorServer) PrepareBeaconProposer(arg0 context.Context, arg1 *eth.PrepareBeaconProposerRequest) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()
@@ -399,6 +414,21 @@ func (m *MockBeaconNodeValidatorServer) SubmitAggregateSelectionProofElectra(arg
 func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitAggregateSelectionProofElectra(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitAggregateSelectionProofElectra), arg0, arg1)
+}
+
+// SubmitPayloadAttestation mocks base method.
+func (m *MockBeaconNodeValidatorServer) SubmitPayloadAttestation(arg0 context.Context, arg1 *eth.PayloadAttestationMessage) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitPayloadAttestation", arg0, arg1)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitPayloadAttestation indicates an expected call of SubmitPayloadAttestation.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitPayloadAttestation(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPayloadAttestation", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitPayloadAttestation), arg0, arg1)
 }
 
 // SubmitSignedAggregateSelectionProof mocks base method.
