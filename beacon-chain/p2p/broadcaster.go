@@ -479,7 +479,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 				}
 
 				fullTopicStr := topic + s.Encoding().ProtocolSuffix()
-				if _, err := s.partialColumnBroadcaster.Publish(fullTopicStr, partialColumn, true); err != nil {
+				if _, err := s.partialColumnBroadcaster.Publish(fullTopicStr, partialColumn); err != nil {
 					tracing.AnnotateError(span, err)
 					log.WithError(err).Error("Cannot partial broadcast data column sidecar")
 				}
