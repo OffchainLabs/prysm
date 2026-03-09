@@ -24,6 +24,7 @@ type dutiesProvider interface {
 	AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*structs.GetAttesterDutiesResponse, error)
 	ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*structs.GetProposerDutiesResponse, error)
 	SyncDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.SyncCommitteeDuty, error)
+	PTCDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*structs.GetPTCDutiesResponse, error)
 	Committees(ctx context.Context, epoch primitives.Epoch) ([]*structs.Committee, error)
 }
 
@@ -509,4 +510,65 @@ func (c beaconApiDutiesProvider) SyncDuties(ctx context.Context, epoch primitive
 	}
 
 	return syncDuties.Data, nil
+}
+
+func (c beaconApiDutiesProvider) PTCDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*structs.GetPTCDutiesResponse, error) {
+	jsonValidatorIndices := make([]string, len(validatorIndices))
+	for i, idx := range validatorIndices {
+		jsonValidatorIndices[i] = strconv.FormatUint(uint64(idx), 10)
+	}
+
+	validatorIndicesBytes, err := json.Marshal(jsonValidatorIndices)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal validator indices")
+	}
+
+	ptcDuties := structs.GetPTCDutiesResponse{}
+	if err = c.handler.Post(
+		ctx,
+		fmt.Sprintf("/eth/v1/validator/duties/ptc/%d", epoch),
+		nil,
+		bytes.NewBuffer(validatorIndicesBytes),
+		&ptcDuties,
+	); err != nil {
+		return nil, err
+	}
+
+	return &ptcDuties, nil
+}
+
+func (c *beaconApiValidatorClient) PTCDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.PTCDutiesResponse, error) {
+	resp, err := c.dutiesProvider.PTCDuties(ctx, epoch, validatorIndices)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get PTC duties")
+	}
+	dependentRoot, err := hexutil.Decode(resp.DependentRoot)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to decode dependent root %s", resp.DependentRoot)
+	}
+	duties := make([]*ethpb.PTCDuty, len(resp.Data))
+	for i, d := range resp.Data {
+		pubkey, err := hexutil.Decode(d.Pubkey)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to decode pubkey %s", d.Pubkey)
+		}
+		valIdx, err := strconv.ParseUint(d.ValidatorIndex, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator index %s", d.ValidatorIndex)
+		}
+		slot, err := strconv.ParseUint(d.Slot, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse slot %s", d.Slot)
+		}
+		duties[i] = &ethpb.PTCDuty{
+			Pubkey:         pubkey,
+			ValidatorIndex: primitives.ValidatorIndex(valIdx),
+			Slot:           primitives.Slot(slot),
+		}
+	}
+	return &ethpb.PTCDutiesResponse{
+		DependentRoot:       dependentRoot,
+		ExecutionOptimistic: resp.ExecutionOptimistic,
+		Duties:              duties,
+	}, nil
 }

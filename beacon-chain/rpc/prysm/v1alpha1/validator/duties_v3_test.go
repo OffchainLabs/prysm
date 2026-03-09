@@ -19,6 +19,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestGetAttesterDuties_OK(t *testing.T) {
@@ -308,4 +310,89 @@ func TestGetSyncCommitteeDuties_EpochOutOfBound(t *testing.T) {
 	req := &ethpb.SyncCommitteeDutiesRequest{Epoch: lastValid + 1}
 	_, err := vs.GetSyncCommitteeDuties(t.Context(), req)
 	assert.ErrorContains(t, "can not be greater than last valid epoch", err)
+}
+
+func TestGetPTCDuties_OK(t *testing.T) {
+	helpers.ClearCache()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	numVals := uint64(fieldparams.PTCSize + 64)
+	bs, _ := util.DeterministicGenesisStateFulu(t, numVals)
+	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), bs, 0))
+
+	genesisRoot := [32]byte{0xaa}
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
+
+	chain := &mockChain.ChainService{
+		State: bs, Root: genesisRoot[:], Genesis: time.Now(),
+	}
+	vs := &Server{
+		HeadFetcher:           chain,
+		TimeFetcher:           chain,
+		OptimisticModeFetcher: chain,
+		SyncChecker:           &mockSync.Sync{IsSyncing: false},
+		BeaconDB:              db,
+		CoreService:           &core.Service{},
+	}
+
+	req := &ethpb.PTCDutiesRequest{
+		Epoch:            0,
+		ValidatorIndices: []primitives.ValidatorIndex{0, 1, 2, 3, 4},
+	}
+	res, err := vs.GetPTCDuties(t.Context(), req)
+	require.NoError(t, err)
+	assert.Equal(t, false, res.ExecutionOptimistic)
+	assert.NotNil(t, res.DependentRoot)
+	for _, d := range res.Duties {
+		assert.NotNil(t, d.Pubkey)
+		assert.Equal(t, true, d.Slot < params.BeaconConfig().SlotsPerEpoch)
+	}
+}
+
+func TestGetPTCDuties_Syncing(t *testing.T) {
+	vs := &Server{
+		SyncChecker: &mockSync.Sync{IsSyncing: true},
+	}
+	_, err := vs.GetPTCDuties(t.Context(), &ethpb.PTCDutiesRequest{})
+	assert.ErrorContains(t, "Syncing to latest head", err)
+}
+
+func TestGetPTCDuties_EpochOutOfBound(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	chain := &mockChain.ChainService{Genesis: time.Now()}
+	vs := &Server{
+		TimeFetcher: chain,
+		SyncChecker: &mockSync.Sync{IsSyncing: false},
+	}
+	currentEpoch := primitives.Epoch(chain.CurrentSlot() / params.BeaconConfig().SlotsPerEpoch)
+	req := &ethpb.PTCDutiesRequest{Epoch: currentEpoch + 2}
+	_, err := vs.GetPTCDuties(t.Context(), req)
+	assert.ErrorContains(t, "can not be greater than next epoch", err)
+}
+
+func TestGetPTCDuties_PreGloasFork(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 100
+	params.OverrideBeaconConfig(cfg)
+
+	chain := &mockChain.ChainService{Genesis: time.Now()}
+	vs := &Server{
+		TimeFetcher: chain,
+		SyncChecker: &mockSync.Sync{IsSyncing: false},
+	}
+	req := &ethpb.PTCDutiesRequest{Epoch: 0}
+	_, err := vs.GetPTCDuties(t.Context(), req)
+	s, ok := status.FromError(err)
+	require.Equal(t, true, ok)
+	assert.Equal(t, codes.InvalidArgument, s.Code())
+	assert.ErrorContains(t, "before Gloas fork epoch", err)
 }

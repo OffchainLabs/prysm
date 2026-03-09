@@ -181,6 +181,17 @@ func (c *grpcValidatorClient) SyncCommitteeDuties(ctx context.Context, epoch pri
 	return resp, nil
 }
 
+func (c *grpcValidatorClient) PTCDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.PTCDutiesResponse, error) {
+	resp, err := c.getClient().GetPTCDuties(ctx, &ethpb.PTCDutiesRequest{
+		Epoch:            epoch,
+		ValidatorIndices: validatorIndices,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "GetPTCDuties")
+	}
+	return resp, nil
+}
+
 func (c *grpcValidatorClient) CheckDoppelGanger(ctx context.Context, in *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {
 	return c.getClient().CheckDoppelGanger(ctx, in)
 }

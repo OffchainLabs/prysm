@@ -372,10 +372,10 @@ func (mr *MockValidatorClientMockRecorder) PayloadAttestationData(ctx, slot any)
 }
 
 // SubmitPayloadAttestation mocks base method.
-func (m *MockValidatorClient) SubmitPayloadAttestation(ctx context.Context, in *eth.PayloadAttestationMessage) (*empty.Empty, error) {
+func (m *MockValidatorClient) SubmitPayloadAttestation(ctx context.Context, in *eth.PayloadAttestationMessage) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubmitPayloadAttestation", ctx, in)
-	ret0, _ := ret[0].(*empty.Empty)
+	ret0, _ := ret[0].(*emptypb.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -546,6 +546,21 @@ func (m *MockValidatorClient) SyncCommitteeDuties(arg0 context.Context, arg1 pri
 func (mr *MockValidatorClientMockRecorder) SyncCommitteeDuties(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncCommitteeDuties", reflect.TypeOf((*MockValidatorClient)(nil).SyncCommitteeDuties), arg0, arg1, arg2)
+}
+
+// PTCDuties mocks base method.
+func (m *MockValidatorClient) PTCDuties(arg0 context.Context, arg1 primitives.Epoch, arg2 []primitives.ValidatorIndex) (*eth.PTCDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PTCDuties", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*eth.PTCDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PTCDuties indicates an expected call of PTCDuties.
+func (mr *MockValidatorClientMockRecorder) PTCDuties(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PTCDuties", reflect.TypeOf((*MockValidatorClient)(nil).PTCDuties), arg0, arg1, arg2)
 }
 
 // SyncMessageBlockRoot mocks base method.

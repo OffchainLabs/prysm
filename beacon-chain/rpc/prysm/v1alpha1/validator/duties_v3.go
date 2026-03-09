@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -190,6 +191,73 @@ func (vs *Server) GetSyncCommitteeDuties(ctx context.Context, req *ethpb.SyncCom
 	}
 
 	return &ethpb.SyncCommitteeDutiesResponse{
+		ExecutionOptimistic: optimistic,
+		Duties:              dutiesResponses,
+	}, nil
+}
+
+// GetPTCDuties returns payload timeliness committee duties for the requested validators at the given epoch.
+func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest) (*ethpb.PTCDutiesResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "validator.GetPTCDuties")
+	defer span.End()
+
+	if vs.SyncChecker.Syncing() {
+		return nil, status.Error(codes.Unavailable, "Syncing to latest head, not ready to respond")
+	}
+
+	if req.Epoch < params.BeaconConfig().GloasForkEpoch {
+		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d is before Gloas fork epoch %d", req.Epoch, params.BeaconConfig().GloasForkEpoch)
+	}
+
+	currentEpoch := slots.ToEpoch(vs.TimeFetcher.CurrentSlot())
+	if req.Epoch > currentEpoch+1 {
+		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than next epoch %d", req.Epoch, currentEpoch+1)
+	}
+
+	s, err := vs.HeadFetcher.HeadState(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
+	}
+	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
+	if err != nil {
+		return nil, err
+	}
+
+	duties, rpcErr := vs.CoreService.PTCDuties(ctx, s, req.Epoch, req.ValidatorIndices)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
+	}
+
+	var dependentRoot []byte
+	if req.Epoch <= 1 {
+		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get genesis block root: %v", err)
+		}
+		dependentRoot = r[:]
+	} else {
+		dependentRoot, err = core.AttestationDependentRoot(s, req.Epoch)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+		}
+	}
+
+	optimistic, err := vs.OptimisticModeFetcher.IsOptimistic(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not determine optimistic status: %v", err)
+	}
+
+	dutiesResponses := make([]*ethpb.PTCDuty, len(duties))
+	for i, d := range duties {
+		dutiesResponses[i] = &ethpb.PTCDuty{
+			Pubkey:         d.Pubkey[:],
+			ValidatorIndex: d.ValidatorIndex,
+			Slot:           d.Slot,
+		}
+	}
+
+	return &ethpb.PTCDutiesResponse{
+		DependentRoot:       dependentRoot,
 		ExecutionOptimistic: optimistic,
 		Duties:              dutiesResponses,
 	}, nil

@@ -110,6 +110,14 @@ service BeaconNodeValidator {
     };
   }
 
+  // Deprecated: Use the REST API instead. GetPTCDuties retrieves payload timeliness committee duties for the requested validators at the given epoch.
+  rpc GetPTCDuties(PTCDutiesRequest) returns (PTCDutiesResponse) {
+    option deprecated = true;
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/duties/ptc"
+    };
+  }
+
   // DomainData fetches the current BLS signature domain version information
   // from the running beacon node's state. This information is used when
   // validators sign blocks and attestations appropriately based on their duty.
@@ -1370,6 +1378,56 @@ message SyncCommitteeDuty {
 
   // The indices of the validator in the sync committee.
   repeated uint64 validator_sync_committee_indices = 3;
+}
+
+// PTCDutiesRequest is the request for GetPTCDuties.
+message PTCDutiesRequest {
+  // Epoch at which to get PTC duties.
+  uint64 epoch = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+
+  // Validator indices to get duties for.
+  repeated uint64 validator_indices = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
+}
+
+// PTCDutiesResponse is the response for GetPTCDuties.
+message PTCDutiesResponse {
+  // The block root the duties are dependent on. If this root changes, duties must be refetched.
+  bytes dependent_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  // Whether the response was computed optimistically.
+  bool execution_optimistic = 2;
+
+  // The PTC duties for the requested validators.
+  repeated PTCDuty duties = 3;
+}
+
+// PTCDuty is a single payload timeliness committee duty assignment.
+message PTCDuty {
+  // 48 byte BLS public key for the validator.
+  bytes pubkey = 1 [
+    (ethereum.eth.ext.ssz_size) = "48",
+    (ethereum.eth.ext.spec_name) = "pubkey"
+  ];
+
+  // The index of the validator in the beacon state.
+  uint64 validator_index = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
+
+  // The slot at which the validator must perform PTC duties.
+  uint64 slot = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
 }
 
 // =============================================================================
