@@ -123,10 +123,7 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 		return err
 	}
 	e.Hash = common.BytesToHash(decodedHash)
-	e.TotalDifficulty, ok = decoded["totalDifficulty"].(string)
-	if !ok {
-		return errors.New("expected `totalDifficulty` field in JSON response")
-	}
+	e.TotalDifficulty, _ = decoded["totalDifficulty"].(string)
 
 	rawWithdrawals, ok := decoded["withdrawals"]
 	if !ok || rawWithdrawals == nil {

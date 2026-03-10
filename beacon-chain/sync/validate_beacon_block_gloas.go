@@ -3,9 +3,12 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -47,15 +50,62 @@ func (s *Service) validateExecutionPayloadBid(ctx context.Context, blk interface
 // validateExecutionPayloadBidParentSeen validates parent payload gossip rules.
 // [IGNORE] The block's parent execution payload (defined by bid.parent_block_hash) has been seen
 // (via gossip or non-gossip sources) (a client MAY queue blocks for processing once the parent payload is retrieved).
-func (s *Service) validateExecutionPayloadBidParentSeen(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock) (pubsub.ValidationResult, error) {
-	// TODO: Requires blockchain service changes to expose parent payload seen status
-	return pubsub.ValidationAccept, nil
+func (s *Service) validateExecutionPayloadBidParentSeen(_ context.Context, blk interfaces.ReadOnlyBeaconBlock) (pubsub.ValidationResult, error) {
+	if blk.Version() < version.Gloas {
+		return pubsub.ValidationAccept, nil
+	}
+	if s.cfg.chain.ParentPayloadReady(blk) {
+		return pubsub.ValidationAccept, nil
+	}
+	return pubsub.ValidationIgnore, errors.New("parent payload not yet available")
 }
 
 // validateExecutionPayloadBidParentValid validates parent payload verification status.
 // If execution_payload verification of block's execution payload parent by an execution node is complete:
 // [REJECT] The block's execution payload parent (defined by bid.parent_block_hash) passes all validation.
-func (s *Service) validateExecutionPayloadBidParentValid(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock) (pubsub.ValidationResult, error) {
-	// TODO: Requires blockchain service changes to expose execution payload parent validation status.
+func (s *Service) validateExecutionPayloadBidParentValid(_ context.Context, blk interfaces.ReadOnlyBeaconBlock) (pubsub.ValidationResult, error) {
+	if blk.Version() < version.Gloas {
+		return pubsub.ValidationAccept, nil
+	}
+	if s.hasBadPayload(blk.ParentRoot()) {
+		return pubsub.ValidationReject, errors.New("parent payload is invalid")
+	}
 	return pubsub.ValidationAccept, nil
+}
+
+// requestPayloadEnvelope asks a random peer for the execution payload
+// envelope identified by root and feeds any response through
+// ReceiveExecutionPayloadEnvelope.
+func (s *Service) requestPayloadEnvelope(root [32]byte) {
+	bestPeers := s.getBestPeers()
+	if len(bestPeers) == 0 {
+		return
+	}
+	pid := bestPeers[rand.NewGenerator().Int()%len(bestPeers)]
+	req := p2ptypes.ExecutionPayloadEnvelopesByRootReq{root}
+	envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(s.ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &req)
+	if err != nil {
+		log.WithError(err).Debug("Could not request payload envelope by root")
+		return
+	}
+	if len(envelopes) == 0 {
+		log.Debug("No payload envelopes returned by peer")
+		return
+	}
+	if len(envelopes) > 1 {
+		log.Warn("Multiple payload envelopes returned by peer, expected at most one")
+	}
+	for _, env := range envelopes {
+		wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(env)
+		if err != nil {
+			log.WithError(err).Debug("Could not wrap requested payload envelope")
+			continue
+		}
+		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
+			if blockchain.IsInvalidBlock(err) {
+				s.setBadPayload(s.ctx, root)
+			}
+			log.WithError(err).Debug("Could not process requested payload envelope")
+		}
+	}
 }

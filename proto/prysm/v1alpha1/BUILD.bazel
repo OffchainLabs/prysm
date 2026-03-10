@@ -22,6 +22,7 @@ proto_library(
         "health.proto",
         "node.proto",
         "p2p_messages.proto",
+        "p2p_messages_gloas.proto",
         "powchain.proto",
         "slasher.proto",
         "validator.proto",
@@ -328,6 +329,7 @@ ssz_gen_marshal(
         "BeaconBlocksByRangeRequest",
         "BlobSidecarsByRangeRequest",
         "DataColumnSidecarsByRangeRequest",
+        "ExecutionPayloadEnvelopesByRangeRequest",
         "MetaDataV0",
         "MetaDataV1",
         "MetaDataV2",
@@ -377,6 +379,8 @@ go_library(
         "log.go",
         "sync_committee_mainnet.go",
         "sync_committee_minimal.go",  # keep
+        "payload_attestation_mainnet.go",
+        "payload_attestation_minimal.go",  # keep
         "validator.go",
         ":ssz_generated_altair",  # keep
         ":ssz_generated_bellatrix",  # keep

@@ -67,6 +67,8 @@ func (v *validator) slotComponentSpanName(component primitives.BP) string {
 		return "validator.waitContributionWindow"
 	case cfg.ProposerReorgCutoffBPS:
 		return "validator.waitProposerReorgWindow"
+	case cfg.PayloadAttestationDueBPS:
+		return "validator.waitPayloadAttestationWindow"
 	default:
 		return "validator.waitSlotComponent"
 	}

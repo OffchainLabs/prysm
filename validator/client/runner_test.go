@@ -553,6 +553,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 			},
 		},
 		signedValidatorRegistrations:   make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
+		duties:                         &dutyStore{},
 		slotFeed:                       &event.Feed{},
 		aggregatedSlotCommitteeIDCache: lru.New(100),
 		submittedAtts:                  make(map[submittedAttKey]*submittedAtt),

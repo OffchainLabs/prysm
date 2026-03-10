@@ -217,7 +217,7 @@ func OptimizedGenesisBeaconState(genesisTime uint64, preState state.BeaconState,
 		BodyRoot:   bodyRoot[:],
 	}
 
-	return state_native.InitializeFromProtoPhase0(st)
+	return state_native.InitializeFromProtoUnsafePhase0(st)
 }
 
 // EmptyGenesisState returns an empty beacon state object.
@@ -259,7 +259,7 @@ func EmptyGenesisState() (state.BeaconState, error) {
 		Eth1DataVotes:    []*ethpb.Eth1Data{},
 		Eth1DepositIndex: 0,
 	}
-	return state_native.InitializeFromProtoPhase0(st)
+	return state_native.InitializeFromProtoUnsafePhase0(st)
 }
 
 // IsValidGenesisState gets called whenever there's a deposit event,
