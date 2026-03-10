@@ -230,7 +230,7 @@ func (f *FieldTrie) Length() uint64 {
 // us save on a copy. Any caller of this method will need
 // to take care that this isn't called on an empty trie.
 func (f *FieldTrie) TransferTrie() *FieldTrie {
-	if f.fieldLayers == nil {
+	if f.fieldLayers == nil && f.parentLayers == nil {
 		return &FieldTrie{
 			field:      f.field,
 			dataType:   f.dataType,
@@ -242,16 +242,18 @@ func (f *FieldTrie) TransferTrie() *FieldTrie {
 	}
 	f.isTransferred = true
 	nTrie := &FieldTrie{
-		fieldLayers: f.fieldLayers,
-		field:       f.field,
-		dataType:    f.dataType,
-		reference:   stateutil.NewRef(1),
-		RWMutex:     new(sync.RWMutex),
-		length:      f.length,
-		numOfElems:  f.numOfElems,
+		fieldLayers:  f.fieldLayers,
+		parentLayers: f.parentLayers,
+		field:        f.field,
+		dataType:     f.dataType,
+		reference:    stateutil.NewRef(1),
+		RWMutex:      new(sync.RWMutex),
+		length:       f.length,
+		numOfElems:   f.numOfElems,
 	}
-	// Zero out field layers here.
+	// Zero out layers here.
 	f.fieldLayers = nil
+	f.parentLayers = nil
 	return nTrie
 }
 

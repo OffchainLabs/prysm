@@ -203,6 +203,50 @@ func TestFieldTrie_TransferTrie(t *testing.T) {
 	require.DeepEqual(t, oldRoot, newRoot)
 }
 
+// TestFieldTrie_TransferLazyCopy reproduces a panic where TransferTrie was
+// called on a lazy-copied trie (parentLayers set, fieldLayers nil). Before the
+// fix, TransferTrie ignored parentLayers, producing a trie with nil layers that
+// panicked in RecomputeFromLayer.
+func TestFieldTrie_TransferLazyCopy(t *testing.T) {
+	newState, _ := util.DeterministicGenesisState(t, 40)
+	mixes := newState.RandaoMixes()
+	randaoMixes := make([][32]byte, len(mixes))
+	for i, r := range mixes {
+		randaoMixes[i] = [32]byte(r)
+	}
+
+	// Create a trie with valid layers.
+	originalTrie, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, customtypes.RandaoMixes(randaoMixes), uint64(params.BeaconConfig().EpochsPerHistoricalVector))
+	require.NoError(t, err)
+	originalRoot, err := originalTrie.TrieRoot()
+	require.NoError(t, err)
+
+	// CopyTrie creates a lazy copy with parentLayers set, fieldLayers nil.
+	lazyCopy := originalTrie.CopyTrie()
+
+	// TransferTrie on the lazy copy — this used to panic because it didn't
+	// handle parentLayers.
+	transferred := lazyCopy.TransferTrie()
+
+	// The transferred trie should produce valid roots.
+	transferredRoot, err := transferred.TrieRoot()
+	require.NoError(t, err)
+	require.Equal(t, originalRoot, transferredRoot, "transferred trie should have same root")
+
+	// RecomputeTrie on the transferred trie should not panic.
+	changedIdx := []uint64{5}
+	newVal := [32]byte{'X', 'Y', 'Z'}
+	require.NoError(t, newState.UpdateRandaoMixesAtIndex(5, newVal))
+	mixes = newState.RandaoMixes()
+	randaoMixes = make([][32]byte, len(mixes))
+	for i, r := range mixes {
+		randaoMixes[i] = [32]byte(r)
+	}
+	recomputedRoot, err := transferred.RecomputeTrie(changedIdx, customtypes.RandaoMixes(randaoMixes))
+	require.NoError(t, err)
+	require.NotEqual(t, originalRoot, recomputedRoot, "recomputed root should differ after mutation")
+}
+
 func FuzzFieldTrie(f *testing.F) {
 	newState, _ := util.DeterministicGenesisState(f, 40)
 	var data []byte
