@@ -139,6 +139,7 @@ func (s *Service) postPayloadHeadUpdate(ctx context.Context, envelope interfaces
 
 	s.headLock.Lock()
 	s.head.state = st
+	s.head.full = true
 	s.headLock.Unlock()
 
 	go func() {
