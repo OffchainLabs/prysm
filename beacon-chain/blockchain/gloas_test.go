@@ -446,6 +446,37 @@ func TestPostPayloadHeadUpdate_NotHead(t *testing.T) {
 	require.NoError(t, s.postPayloadHeadUpdate(ctx, envelope, st, root, headRoot[:]))
 }
 
+func TestPostPayloadHeadUpdate_SetsHeadFull(t *testing.T) {
+	s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	ctx := t.Context()
+
+	root := bytesutil.ToBytes32([]byte("root1"))
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+
+	base, blk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	s.head = &head{root: root, block: signed, state: st, slot: 1}
+	require.Equal(t, false, s.head.full)
+
+	env := &ethpb.ExecutionPayloadEnvelope{
+		BeaconBlockRoot: root[:],
+		Payload:         &enginev1.ExecutionPayloadDeneb{BlockHash: blockHash[:], ParentHash: make([]byte, 32)},
+		Slot:            1,
+	}
+	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
+	require.NoError(t, err)
+
+	require.NoError(t, s.postPayloadHeadUpdate(ctx, envelope, st, root, root[:]))
+
+	s.headLock.RLock()
+	require.Equal(t, true, s.head.full)
+	s.headLock.RUnlock()
+}
+
 func TestGetLookupParentRoot_PreGloas(t *testing.T) {
 	service, _ := minimalTestService(t)
 
