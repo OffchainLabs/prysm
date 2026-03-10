@@ -8,7 +8,6 @@ import (
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
@@ -30,6 +29,7 @@ import (
 	grpcretry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
@@ -168,8 +168,6 @@ func (v *ValidatorService) Start() {
 		panic(err) // lint:nopanic -- Only errors on misconfiguration of config values.
 	}
 
-	aggregatedSlotCommitteeIDCache := lruwrpr.New(int(params.BeaconConfig().MaxCommitteesPerSlot))
-
 	sPubKeys, err := v.db.EIPImportBlacklistedPublicKeys(v.ctx)
 	if err != nil {
 		log.WithError(err).Error("Could not read slashable public keys from disk")
@@ -195,44 +193,54 @@ func (v *ValidatorService) Start() {
 	validatorClient := validatorclientfactory.NewValidatorClient(v.conn)
 
 	v.validator = &validator{
-		slotFeed:                       new(event.Feed),
-		startBalances:                  make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
-		prevEpochBalances:              make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
-		blacklistedPubkeys:             slashablePublicKeys,
-		pubkeyToStatus:                 make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
-		wallet:                         v.wallet,
-		walletInitializedChan:          make(chan *wallet.Wallet, 1),
-		walletInitializedFeed:          v.walletInitializedFeed,
-		graffiti:                       v.graffiti,
-		graffitiStruct:                 v.graffitiStruct,
-		graffitiOrderedIndex:           graffitiOrderedIndex,
-		conn:                           v.conn,
-		validatorClient:                validatorClient,
-		chainClient:                    beaconChainClientFactory.NewChainClient(v.conn),
-		nodeClient:                     nodeclientfactory.NewNodeClient(v.conn),
-		prysmChainClient:               beaconChainClientFactory.NewPrysmChainClient(v.conn),
-		db:                             v.db,
-		km:                             nil,
-		web3SignerConfig:               v.web3SignerConfig,
-		proposerSettings:               v.proposerSettings,
-		signedValidatorRegistrations:   make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-		validatorsRegBatchSize:         v.validatorsRegBatchSize,
-		interopKeysConfig:              v.interopKeysConfig,
-		attSelections:                  make(map[attSelectionKey]iface.BeaconCommitteeSelection),
-		aggregatedSlotCommitteeIDCache: aggregatedSlotCommitteeIDCache,
-		domainDataCache:                cache,
-		voteStats:                      voteStats{startEpoch: primitives.Epoch(^uint64(0))},
-		syncCommitteeStats:             syncCommitteeStats{},
-		submittedAtts:                  make(map[submittedAttKey]*submittedAtt),
-		submittedAggregates:            make(map[submittedAttKey]*submittedAtt),
-		logValidatorPerformance:        v.logValidatorPerformance,
-		emitAccountMetrics:             v.emitAccountMetrics,
-		enableAPI:                      v.enableAPI,
-		duties:                         &dutyStore{},
-		distributed:                    v.distributed,
-		disableDutiesPolling:           v.disableDutiesPolling,
-		accountsChangedChannel:         make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
-		eventsChannel:                  make(chan *eventClient.Event, 1),
+		slotFeed:                     new(event.Feed),
+		startBalances:                make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
+		prevEpochBalances:            make(map[[fieldparams.BLSPubkeyLength]byte]uint64),
+		blacklistedPubkeys:           slashablePublicKeys,
+		pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
+		wallet:                       v.wallet,
+		walletInitializedChan:        make(chan *wallet.Wallet, 1),
+		walletInitializedFeed:        v.walletInitializedFeed,
+		graffiti:                     v.graffiti,
+		graffitiStruct:               v.graffitiStruct,
+		graffitiOrderedIndex:         graffitiOrderedIndex,
+		conn:                         v.conn,
+		validatorClient:              validatorClient,
+		chainClient:                  beaconChainClientFactory.NewChainClient(v.conn),
+		nodeClient:                   nodeclientfactory.NewNodeClient(v.conn),
+		prysmChainClient:             beaconChainClientFactory.NewPrysmChainClient(v.conn),
+		db:                           v.db,
+		km:                           nil,
+		web3SignerConfig:             v.web3SignerConfig,
+		proposerSettings:             v.proposerSettings,
+		signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
+		validatorsRegBatchSize:       v.validatorsRegBatchSize,
+		interopKeysConfig:            v.interopKeysConfig,
+		domainDataCache:              cache,
+		voteStats:                    voteStats{startEpoch: primitives.Epoch(^uint64(0))},
+		syncCommitteeStats:           syncCommitteeStats{},
+		submittedAtts:                make(map[submittedAttKey]*submittedAtt),
+		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
+		logValidatorPerformance:      v.logValidatorPerformance,
+		emitAccountMetrics:           v.emitAccountMetrics,
+		enableAPI:                    v.enableAPI,
+		duties:                       &dutyStore{},
+		distributed:                  v.distributed,
+		disableDutiesPolling:         v.disableDutiesPolling,
+		accountsChangedChannel:       make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
+		eventsChannel:                make(chan *eventClient.Event, 1),
+	}
+
+	val := v.validator.(*validator)
+	if v.distributed {
+		val.aggSelector = &distributedSelector{v: val}
+	} else {
+		dedupCache, err := lru.New(int(params.BeaconConfig().MaxCommitteesPerSlot))
+		if err != nil {
+			log.WithError(err).Error("Could not create dedup cache")
+			return
+		}
+		val.aggSelector = newLocalSelector(val, dedupCache)
 	}
 
 	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, v.validator)

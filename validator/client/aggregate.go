@@ -41,26 +41,8 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 		return
 	}
 
-	var slotSig []byte
-	if !v.distributed {
-		// Avoid sending beacon node duplicated aggregation requests.
-		k := validatorSubnetSubscriptionKey(slot, duty.CommitteeIndex)
-		v.aggregatedSlotCommitteeIDCacheLock.Lock()
-		if v.aggregatedSlotCommitteeIDCache.Contains(k) {
-			v.aggregatedSlotCommitteeIDCacheLock.Unlock()
-			return
-		}
-		v.aggregatedSlotCommitteeIDCache.Add(k, true)
-		v.aggregatedSlotCommitteeIDCacheLock.Unlock()
-
-		slotSig, err = v.signSlotWithSelectionProof(ctx, pubKey, slot)
-		if err != nil {
-			log.WithError(err).Error("Could not sign slot")
-			if v.emitAccountMetrics {
-				ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
-			}
-			return
-		}
+	if !v.aggSelector.ClaimAggregateSlot(slot, duty.CommitteeIndex) {
+		return
 	}
 
 	// As specified in spec, an aggregator should wait until two thirds of the way through slot
@@ -68,19 +50,13 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 	// https://github.com/ethereum/consensus-specs/blob/v0.9.3/specs/validator/0_beacon-chain-validator.md#broadcast-aggregate
 	v.waitUntilAggregateDue(ctx, slot)
 
-	// In a DV setup, selection proofs need to be agreed upon by the DV.
-	// Checking for selection proofs at slot 0 of the epoch will result in an error, as the call to the DV executes slower than the start of this function.
-	// Checking for selection proofs after 2/3 of slot in a DV setup is much faster than non-DV as it's quickly fetched from memory,
-	// hence it does not slow down the aggregation as a non-DV would.
-	if v.distributed {
-		slotSig, err = v.attSelection(attSelectionKey{slot: slot, index: duty.ValidatorIndex})
-		if err != nil {
-			log.WithError(err).Error("Could not find aggregated selection proof")
-			if v.emitAccountMetrics {
-				ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
-			}
-			return
+	slotSig, err := v.aggSelector.AttestationSelectionProof(ctx, slot, pubKey, duty.ValidatorIndex)
+	if err != nil {
+		log.WithError(err).Error("Could not get selection proof")
+		if v.emitAccountMetrics {
+			ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
 		}
+		return
 	}
 
 	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch

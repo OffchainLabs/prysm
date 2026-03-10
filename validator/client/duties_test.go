@@ -89,6 +89,7 @@ func TestUpdateDuties_OK(t *testing.T) {
 		validatorClient: client,
 		duties:          &dutyStore{},
 	}
+	v.aggSelector = testLocalSelector(t, &v)
 	client.EXPECT().Duties(
 		gomock.Any(),
 		gomock.Any(),
@@ -140,6 +141,7 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 		blacklistedPubkeys: blacklistedPublicKeys,
 		duties:             &dutyStore{},
 	}
+	v.aggSelector = testLocalSelector(t, &v)
 
 	resp := &ethpb.ValidatorDutiesContainer{
 		CurrentEpochDuties: []*ethpb.ValidatorDuty{},
@@ -246,6 +248,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		distributed:     true,
 		duties:          &dutyStore{},
 	}
+	v.aggSelector = &distributedSelector{v: &v}
 
 	sigDomain := make([]byte, 32)
 
@@ -295,7 +298,9 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 
 	require.NoError(t, v.UpdateDuties(t.Context()), "Could not update assignments")
 	util.WaitTimeout(&wg, 2*time.Second)
-	require.Equal(t, 2, len(v.attSelections))
+	dvProvider, ok := v.aggSelector.(*distributedSelector)
+	require.Equal(t, true, ok)
+	require.Equal(t, 2, len(dvProvider.attSelections))
 }
 
 func TestValidator_CheckDependentRoots(t *testing.T) {
@@ -326,6 +331,7 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		validatorClient: client,
 		duties:          ds,
 	}
+	v.aggSelector = testLocalSelector(t, v)
 
 	t.Run("nil head event", func(t *testing.T) {
 		err := v.checkDependentRoots(ctx, nil)

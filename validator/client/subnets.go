@@ -22,10 +22,8 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 	activeDuties := make([]*ethpb.ValidatorDuty, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
 	alreadySubscribed := make(map[[64]byte]bool)
 
-	if v.distributed {
-		if err := v.aggregatedSelectionProofs(ctx, duties); err != nil {
-			return errors.Wrap(err, "could not get aggregated selection proofs")
-		}
+	if err := v.aggSelector.RefreshSelectionProofs(ctx, duties); err != nil {
+		return errors.Wrap(err, "could not prepare aggregated selection proofs")
 	}
 
 	for _, duty := range duties.CurrentEpochDuties {
