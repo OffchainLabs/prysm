@@ -173,6 +173,10 @@ type Service struct {
 	badBlockLock                        sync.RWMutex
 	badPayloadCache                     *lru.Cache
 	badPayloadLock                      sync.RWMutex
+	badPayloadRootCache                 *lru.Cache
+	badPayloadRootLock                  sync.RWMutex
+	goodPayloadRootCache                *lru.Cache
+	goodPayloadRootLock                 sync.RWMutex
 	syncContributionBitsOverlapLock     sync.RWMutex
 	syncContributionBitsOverlapCache    *lru.Cache
 	signatureChan                       chan *signatureVerifier
@@ -384,6 +388,8 @@ func (s *Service) initCaches() {
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
 	s.badPayloadCache = lruwrpr.New(badBlockSize)
+	s.badPayloadRootCache = lruwrpr.New(badBlockSize)
+	s.goodPayloadRootCache = lruwrpr.New(badBlockSize)
 }
 
 func (s *Service) waitForChainStart() {

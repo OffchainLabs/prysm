@@ -60,6 +60,25 @@ func (s *Service) validateExecutionPayloadBidParentSeen(_ context.Context, blk i
 	return pubsub.ValidationIgnore, errors.New("parent payload not yet available")
 }
 
+// validateExecutionPayloadBidParentValid validates cached parent payload
+// verification status for a block's parent root.
+// Reject If prior execution payload verification marked the parent root
+// (defined by bid.parent_block_hash) as invalid.
+//
+// A good payload root overrides a bad one to handle builder equivocation:
+// if a bad envelope was seen first but a valid one was processed later,
+// the block is accepted.
+func (s *Service) validateExecutionPayloadBidParentValid(_ context.Context, blk interfaces.ReadOnlyBeaconBlock) (pubsub.ValidationResult, error) {
+	if blk.Version() < version.Gloas {
+		return pubsub.ValidationAccept, nil
+	}
+	parentRoot := blk.ParentRoot()
+	if s.hasBadPayloadRoot(parentRoot) {
+		return pubsub.ValidationReject, errors.New("parent payload is invalid")
+	}
+	return pubsub.ValidationAccept, nil
+}
+
 // requestPayloadEnvelope asks a random peer for the execution payload
 // envelope identified by root and feeds any response through
 // ReceiveExecutionPayloadEnvelope.
@@ -100,8 +119,11 @@ func (s *Service) requestPayloadEnvelope(root [32]byte) {
 		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
 			if blockchain.IsInvalidBlock(err) {
 				s.setBadPayload(s.ctx, envelopeHTR)
+				s.setBadPayloadRoot(s.ctx, root)
 			}
 			log.WithError(err).Debug("Could not process requested payload envelope")
+		} else if s.cfg.chain.HasFullNode(root) {
+			s.setGoodPayloadRoot(s.ctx, root)
 		}
 	}
 }
