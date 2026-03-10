@@ -412,10 +412,20 @@ func (c *grpcValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Contex
 	return c.getClient().PublishExecutionPayloadEnvelope(ctx, in)
 }
 
-func (c *grpcValidatorClient) PayloadAttestationData(_ context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
-	return nil, errors.New("PayloadAttestationData not implemented")
+func (c *grpcValidatorClient) PayloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+	req := &ethpb.PayloadAttestationDataRequest{
+		Slot: slot,
+	}
+	resp, err := c.getClient().PayloadAttestationData(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(
+			client.ErrConnectionIssue,
+			errors.Wrap(err, "PayloadAttestationData").Error(),
+		)
+	}
+	return resp, nil
 }
 
-func (c *grpcValidatorClient) SubmitPayloadAttestation(_ context.Context, _ *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
-	return nil, errors.New("SubmitPayloadAttestation not implemented")
+func (c *grpcValidatorClient) SubmitPayloadAttestation(ctx context.Context, in *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
+	return c.getClient().SubmitPayloadAttestation(ctx, in)
 }
