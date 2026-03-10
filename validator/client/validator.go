@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -539,7 +540,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
 
-	if v.duties == nil || !v.duties.IsInitialized() {
+	if !v.duties.IsInitialized() {
 		return nil, errors.New("validator duties are not initialized")
 	}
 
@@ -551,17 +552,14 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		syncCommitteeValidators = make(map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte)
 	)
 
-	for _, duty := range v.duties.CurrentEpochDuties() {
+	for pk, duty := range v.duties.CurrentEpochDuties() {
 		var roles []iface.ValidatorRole
 
 		if duty == nil {
 			continue
 		}
-		pk := bytesutil.ToBytes48(duty.Pubkey)
-
-		proposerSlots := v.duties.ProposerSlots(duty.ValidatorIndex)
-		if len(proposerSlots) > 0 {
-			for _, proposerSlot := range proposerSlots {
+		if len(duty.ProposerSlots) > 0 {
+			for _, proposerSlot := range duty.ProposerSlots {
 				if proposerSlot != 0 && proposerSlot == slot {
 					roles = append(roles, iface.RoleProposer)
 					break
@@ -569,13 +567,13 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 			}
 		}
 
-		if duty.Slot == slot {
+		if duty.AttesterSlot == slot {
 			roles = append(roles, iface.RoleAttester)
 
 			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, pk, duty.ValidatorIndex)
 			if err != nil {
 				aggregator = false
-				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(pk[:]))
+				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(duty.PublicKey))
 			}
 			if aggregator {
 				roles = append(roles, iface.RoleAggregator)
@@ -592,7 +590,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 				inSyncCommittee = true
 			}
 		} else {
-			if v.duties.IsSyncCommittee(duty.ValidatorIndex) {
+			if duty.IsSyncCommittee {
 				roles = append(roles, iface.RoleSyncCommittee)
 				inSyncCommittee = true
 			}
@@ -600,6 +598,10 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 
 		if inSyncCommittee {
 			syncCommitteeValidators[duty.ValidatorIndex] = pk
+		}
+
+		if slices.Contains(v.duties.PtcSlots(duty.ValidatorIndex), slot) {
+			roles = append(roles, iface.RolePTCMember)
 		}
 
 		if len(roles) == 0 {
@@ -813,16 +815,18 @@ func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, doma
 	return res, nil
 }
 
-// getAttestationData fetches attestation data from the beacon node with caching for post-Electra.
-// Post-Electra, attestation data is identical for all validators in the same slot (committee index is always 0),
-// so we cache it to avoid redundant beacon node requests.
+// getAttestationData fetches attestation data from the beacon node with caching for Electra.
+// During Electra (pre-Gloas), attestation data is identical for all validators in the same slot
+// (committee index is always 0), so we cache it to avoid redundant beacon node requests.
 func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot, committeeIndex primitives.CommitteeIndex) (*ethpb.AttestationData, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.getAttestationData")
 	defer span.End()
 
-	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
+	epoch := slots.ToEpoch(slot)
+	postElectra := epoch >= params.BeaconConfig().ElectraForkEpoch
 
-	// Pre-Electra: no caching since committee index varies per validator
+	// Pre-Electra: committee index varies per validator.
+	// Post-Gloas: index signals payload status.
 	if !postElectra {
 		return v.validatorClient.AttestationData(ctx, &ethpb.AttestationDataRequest{
 			Slot:           slot,
@@ -830,7 +834,7 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 		})
 	}
 
-	// Post-Electra: check cache first (committee index is always 0)
+	// Post Electra: committee index is always 0 or consistent payload status, safe to cache
 	v.cachedAttestationDataLock.RLock()
 	if v.cachedAttestationData != nil && v.cachedAttestationData.Slot == slot {
 		data := v.cachedAttestationData

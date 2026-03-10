@@ -464,6 +464,18 @@ func (mr *MockValidatorMockRecorder) SubmitSyncCommitteeMessage(arg0, arg1, arg2
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSyncCommitteeMessage", reflect.TypeOf((*MockValidator)(nil).SubmitSyncCommitteeMessage), arg0, arg1, arg2)
 }
 
+// SubmitPayloadAttestation mocks base method.
+func (m *MockValidator) SubmitPayloadAttestation(arg0 context.Context, arg1 primitives.Slot, arg2 [48]byte) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SubmitPayloadAttestation", arg0, arg1, arg2)
+}
+
+// SubmitPayloadAttestation indicates an expected call of SubmitPayloadAttestation.
+func (mr *MockValidatorMockRecorder) SubmitPayloadAttestation(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPayloadAttestation", reflect.TypeOf((*MockValidator)(nil).SubmitPayloadAttestation), arg0, arg1, arg2)
+}
+
 // UpdateDomainDataCaches mocks base method.
 func (m *MockValidator) UpdateDomainDataCaches(arg0 context.Context, arg1 primitives.Slot) {
 	m.ctrl.T.Helper()

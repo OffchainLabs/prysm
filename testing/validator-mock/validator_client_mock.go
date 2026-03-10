@@ -150,51 +150,6 @@ func (mr *MockValidatorClientMockRecorder) Duties(ctx, in any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Duties", reflect.TypeOf((*MockValidatorClient)(nil).Duties), ctx, in)
 }
 
-// AttesterDuties mocks base method.
-func (m *MockValidatorClient) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*eth.AttesterDutiesResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AttesterDuties", ctx, epoch, validatorIndices)
-	ret0, _ := ret[0].(*eth.AttesterDutiesResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// AttesterDuties indicates an expected call of AttesterDuties.
-func (mr *MockValidatorClientMockRecorder) AttesterDuties(ctx, epoch, validatorIndices any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttesterDuties", reflect.TypeOf((*MockValidatorClient)(nil).AttesterDuties), ctx, epoch, validatorIndices)
-}
-
-// ProposerDuties mocks base method.
-func (m *MockValidatorClient) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*eth.ProposerDutiesResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProposerDuties", ctx, epoch)
-	ret0, _ := ret[0].(*eth.ProposerDutiesResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ProposerDuties indicates an expected call of ProposerDuties.
-func (mr *MockValidatorClientMockRecorder) ProposerDuties(ctx, epoch any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposerDuties", reflect.TypeOf((*MockValidatorClient)(nil).ProposerDuties), ctx, epoch)
-}
-
-// SyncCommitteeDuties mocks base method.
-func (m *MockValidatorClient) SyncCommitteeDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*eth.SyncCommitteeDutiesResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SyncCommitteeDuties", ctx, epoch, validatorIndices)
-	ret0, _ := ret[0].(*eth.SyncCommitteeDutiesResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// SyncCommitteeDuties indicates an expected call of SyncCommitteeDuties.
-func (mr *MockValidatorClientMockRecorder) SyncCommitteeDuties(ctx, epoch, validatorIndices any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncCommitteeDuties", reflect.TypeOf((*MockValidatorClient)(nil).SyncCommitteeDuties), ctx, epoch, validatorIndices)
-}
-
 // EnsureReady mocks base method.
 func (m *MockValidatorClient) EnsureReady(ctx context.Context) bool {
 	m.ctrl.T.Helper()
@@ -372,6 +327,36 @@ func (mr *MockValidatorClientMockRecorder) PublishExecutionPayloadEnvelope(ctx, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).PublishExecutionPayloadEnvelope), ctx, in)
 }
 
+// PayloadAttestationData mocks base method.
+func (m *MockValidatorClient) PayloadAttestationData(ctx context.Context, slot primitives.Slot) (*eth.PayloadAttestationData, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PayloadAttestationData", ctx, slot)
+	ret0, _ := ret[0].(*eth.PayloadAttestationData)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PayloadAttestationData indicates an expected call of PayloadAttestationData.
+func (mr *MockValidatorClientMockRecorder) PayloadAttestationData(ctx, slot any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PayloadAttestationData", reflect.TypeOf((*MockValidatorClient)(nil).PayloadAttestationData), ctx, slot)
+}
+
+// SubmitPayloadAttestation mocks base method.
+func (m *MockValidatorClient) SubmitPayloadAttestation(ctx context.Context, in *eth.PayloadAttestationMessage) (*empty.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitPayloadAttestation", ctx, in)
+	ret0, _ := ret[0].(*empty.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitPayloadAttestation indicates an expected call of SubmitPayloadAttestation.
+func (mr *MockValidatorClientMockRecorder) SubmitPayloadAttestation(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPayloadAttestation", reflect.TypeOf((*MockValidatorClient)(nil).SubmitPayloadAttestation), ctx, in)
+}
+
 // StartEventStream mocks base method.
 func (m *MockValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *event.Event) {
 	m.ctrl.T.Helper()
@@ -490,18 +475,18 @@ func (mr *MockValidatorClientMockRecorder) SubmitValidatorRegistrations(ctx, in 
 }
 
 // SubscribeCommitteeSubnets mocks base method.
-func (m *MockValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *eth.CommitteeSubnetsSubscribeRequest, validatorIndices []primitives.ValidatorIndex, committeesAtSlot []uint64) (*empty.Empty, error) {
+func (m *MockValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *eth.CommitteeSubnetsSubscribeRequest, duties []*eth.ValidatorDuty) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubscribeCommitteeSubnets", ctx, in, validatorIndices, committeesAtSlot)
+	ret := m.ctrl.Call(m, "SubscribeCommitteeSubnets", ctx, in, duties)
 	ret0, _ := ret[0].(*empty.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SubscribeCommitteeSubnets indicates an expected call of SubscribeCommitteeSubnets.
-func (mr *MockValidatorClientMockRecorder) SubscribeCommitteeSubnets(ctx, in, validatorIndices, committeesAtSlot any) *gomock.Call {
+func (mr *MockValidatorClientMockRecorder) SubscribeCommitteeSubnets(ctx, in, duties any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeCommitteeSubnets", reflect.TypeOf((*MockValidatorClient)(nil).SubscribeCommitteeSubnets), ctx, in, validatorIndices, committeesAtSlot)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeCommitteeSubnets", reflect.TypeOf((*MockValidatorClient)(nil).SubscribeCommitteeSubnets), ctx, in, duties)
 }
 
 // SyncCommitteeContribution mocks base method.

@@ -3639,3 +3639,61 @@ func TestHandleBlockPayloadAttestations(t *testing.T) {
 		require.NoError(t, s.handleBlockPayloadAttestations(ctx, wsb.Block(), headState))
 	})
 }
+
+func TestUpdateCachesAndEpochBoundary_MatchingRoots(t *testing.T) {
+	service := testServiceNoDB(t)
+	st, _ := util.DeterministicGenesisState(t, 1)
+	accessRoot := [32]byte{'a'}
+
+	service.updateCachesAndEpochBoundary(t.Context(), 1, st, accessRoot, accessRoot[:], st)
+
+	cached := transition.NextSlotState(accessRoot[:], 1)
+	require.NotNil(t, cached)
+	require.Equal(t, primitives.Slot(1), cached.Slot())
+}
+
+func TestUpdateCachesAndEpochBoundary_DifferentRoots(t *testing.T) {
+	service := testServiceNoDB(t)
+	headState, _ := util.DeterministicGenesisState(t, 1)
+	lastState, _ := util.DeterministicGenesisState(t, 1)
+	accessRoot := [32]byte{'a'}
+	lastRoot := [32]byte{'b'}
+
+	service.updateCachesAndEpochBoundary(t.Context(), 1, headState, accessRoot, lastRoot[:], lastState)
+
+	// Cache should be keyed by accessRoot, not lastRoot.
+	cached := transition.NextSlotState(accessRoot[:], 1)
+	require.NotNil(t, cached)
+	require.Equal(t, primitives.Slot(1), cached.Slot())
+
+	cached = transition.NextSlotState(lastRoot[:], 1)
+	require.Equal(t, true, cached == nil)
+}
+
+func TestRefreshCaches_NoCachedState(t *testing.T) {
+	service := testServiceNoDB(t)
+	st, _ := util.DeterministicGenesisState(t, 1)
+	headRoot := [32]byte{'h'}
+
+	service.refreshCaches(t.Context(), 1, headRoot, st, headRoot)
+
+	cached := transition.NextSlotState(headRoot[:], 1)
+	require.NotNil(t, cached)
+	require.Equal(t, primitives.Slot(1), cached.Slot())
+}
+
+func TestRefreshCaches_CachedStateMatchesAccessRoot(t *testing.T) {
+	service := testServiceNoDB(t)
+	st, _ := util.DeterministicGenesisState(t, 1)
+	accessRoot := [32]byte{'a'}
+	headRoot := [32]byte{'h'}
+
+	// Pre-populate the cache with accessRoot.
+	require.NoError(t, transition.UpdateNextSlotCache(t.Context(), accessRoot[:], st))
+
+	service.refreshCaches(t.Context(), 1, headRoot, st, accessRoot)
+
+	cached := transition.NextSlotState(accessRoot[:], 1)
+	require.NotNil(t, cached)
+	require.Equal(t, primitives.Slot(1), cached.Slot())
+}

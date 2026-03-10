@@ -32,7 +32,7 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 	fmtKey := fmt.Sprintf("%#x", pubKey[:])
 
-	duty, err := v.attesterDuty(pubKey)
+	duty, err := v.duty(pubKey)
 	if err != nil {
 		log.WithError(err).Error("Could not fetch validator assignment")
 		if v.emitAccountMetrics {
@@ -91,7 +91,7 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 		PublicKey:      pubKey[:],
 		SlotSignature:  slotSig,
 	}
-
+	// TODO: look at renaming SubmitAggregateSelectionProof functions as they are GET beacon API
 	var agg ethpb.AggregateAttAndProof
 	if postElectra {
 		res, err := v.validatorClient.SubmitAggregateSelectionProofElectra(ctx, aggSelectionRequest, duty.ValidatorIndex, duty.CommitteeLength)

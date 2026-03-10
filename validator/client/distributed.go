@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/pkg/errors"
 )
@@ -15,11 +16,7 @@ type attSelectionKey struct {
 	index primitives.ValidatorIndex
 }
 
-// aggregatedSelectionProofs pre-computes selection proofs for distributed validators
-// by batch-sending partial signatures to DVT middleware (e.g. Charon) which returns
-// aggregated threshold signatures. Must run before subscribeToSubnets so that
-// isAggregator can look up the pre-computed proofs.
-func (v *validator) aggregatedSelectionProofs(ctx context.Context, ds *dutyStore) error {
+func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb.ValidatorDutiesContainer) error {
 	ctx, span := trace.StartSpan(ctx, "validator.aggregatedSelectionProofs")
 	defer span.End()
 
@@ -29,16 +26,20 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, ds *dutyStore
 	v.attSelections = make(map[attSelectionKey]iface.BeaconCommitteeSelection)
 
 	var req []iface.BeaconCommitteeSelection
-	for _, duty := range ds.CurrentEpochDuties() {
-		pk := bytesutil.ToBytes48(duty.Pubkey)
-		slotSig, err := v.signSlotWithSelectionProof(ctx, pk, duty.Slot)
+	for _, duty := range duties.CurrentEpochDuties {
+		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
+			continue
+		}
+
+		pk := bytesutil.ToBytes48(duty.PublicKey)
+		slotSig, err := v.signSlotWithSelectionProof(ctx, pk, duty.AttesterSlot)
 		if err != nil {
 			return err
 		}
 
 		req = append(req, iface.BeaconCommitteeSelection{
 			SelectionProof: slotSig,
-			Slot:           duty.Slot,
+			Slot:           duty.AttesterSlot,
 			ValidatorIndex: duty.ValidatorIndex,
 		})
 	}
@@ -58,7 +59,6 @@ func (v *validator) aggregatedSelectionProofs(ctx context.Context, ds *dutyStore
 	return nil
 }
 
-// attSelection returns the pre-computed selection proof for a distributed validator.
 func (v *validator) attSelection(key attSelectionKey) ([]byte, error) {
 	v.attSelectionLock.Lock()
 	defer v.attSelectionLock.Unlock()

@@ -56,7 +56,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 
 	fmtKey := fmt.Sprintf("%#x", pubKey[:])
 	log := log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).WithField("slot", slot)
-	duty, err := v.attesterDuty(pubKey)
+	duty, err := v.duty(pubKey)
 	if err != nil {
 		log.WithError(err).Error("Could not fetch validator assignment")
 		if v.emitAccountMetrics {
@@ -190,20 +190,17 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 }
 
 // Given the validator public key, this gets the validator assignment.
-// attesterDuty returns the current epoch duty for the given pubkey.
-func (v *validator) attesterDuty(pubKey [fieldparams.BLSPubkeyLength]byte) (*ethpb.AttesterDuty, error) {
+func (v *validator) duty(pubKey [fieldparams.BLSPubkeyLength]byte) (*ethpb.ValidatorDuty, error) {
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
-	if v.duties == nil || !v.duties.IsInitialized() {
+	if !v.duties.IsInitialized() {
 		return nil, errors.New("no duties for validators")
 	}
-
-	dv, ok := v.duties.CurrentAttesterDuty(pubKey)
+	d, ok := v.duties.CurrentDuty(pubKey)
 	if !ok {
 		return nil, fmt.Errorf("pubkey %#x not in duties", bytesutil.Trunc(pubKey[:]))
 	}
-
-	return dv, nil
+	return d, nil
 }
 
 // Given validator's public key, this function returns the signature of an attestation data and its signing root.

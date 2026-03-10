@@ -227,11 +227,13 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 
 	err = s.validateBeaconBlock(ctx, blk, blockRoot)
 	if err != nil {
-		// If the parent is optimistic, process the block as usual
-		// This also does not penalize a peer which sends optimistic blocks
-		if !errors.Is(ErrOptimisticParent, err) {
+		if s.hasBadBlock(blockRoot) {
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not validate beacon block")
 			return pubsub.ValidationReject, err
+		}
+		if !errors.Is(ErrOptimisticParent, err) {
+			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not validate beacon block")
+			return pubsub.ValidationIgnore, err
 		}
 	}
 

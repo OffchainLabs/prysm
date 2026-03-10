@@ -1,581 +1,406 @@
 package client
 
 import (
+	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-func TestFetchSyncDuties_CacheHit(t *testing.T) {
+func TestUpdateDuties_DoesNothingWhenNotEpochStart_AlreadyExistingAssignments(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	client := validatormock.NewMockValidatorClient(ctrl)
 
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.AltairForkEpoch = 0
-	cfg.EpochsPerSyncCommitteePeriod = 256
-	params.OverrideBeaconConfig(cfg)
+	v := validator{
+		km:              newMockKeymanager(t, randKeypair(t)),
+		validatorClient: client,
+		duties: func() *dutyStore {
+			ds := testDutyStore(&ethpb.ValidatorDuty{AttesterSlot: 10, CommitteeIndex: 20})
+			ds.nextDuties[pubkey{}] = &ethpb.ValidatorDuty{AttesterSlot: 10, CommitteeIndex: 20}
+			return ds
+		}(),
+	}
+	client.EXPECT().Duties(
+		gomock.Any(),
+		gomock.Any(),
+	).Times(1)
 
-	epoch := primitives.Epoch(10)
-	currentPeriod := uint64(epoch) / uint64(cfg.EpochsPerSyncCommitteePeriod)
-	indices := []primitives.ValidatorIndex{1}
+	assert.NoError(t, v.UpdateDuties(t.Context()), "Could not update assignments")
+}
 
-	// Pre-populate dutyStore with cached sync data.
-	ds := &dutyStore{initialized: true}
-	ds.syncCurrentResp = &ethpb.SyncCommitteeDutiesResponse{Duties: []*ethpb.SyncCommitteeDuty{{ValidatorIndex: 1}}}
-	ds.syncNextResp = &ethpb.SyncCommitteeDutiesResponse{}
-	ds.syncPeriod = currentPeriod
+func TestUpdateDuties_ReturnsError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
 
+	v := validator{
+		validatorClient: client,
+		km:              newMockKeymanager(t, randKeypair(t)),
+		duties:          testDutyStore(&ethpb.ValidatorDuty{CommitteeIndex: 1}),
+	}
+
+	expected := errors.New("bad")
+
+	client.EXPECT().Duties(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(nil, expected)
+
+	assert.ErrorContains(t, expected.Error(), v.UpdateDuties(t.Context()))
+	assert.Equal(t, false, v.duties.IsInitialized(), "Assignments should have been cleared on failure")
+}
+
+func TestUpdateDuties_OK(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{
+				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+				ValidatorIndex:  200,
+				CommitteeIndex:  100,
+				CommitteeLength: 4,
+				PublicKey:       []byte("testPubKey_1"),
+				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+			},
+		},
+	}
+	v := validator{
+		km:              newMockKeymanager(t, randKeypair(t)),
+		validatorClient: client,
+		duties:          &dutyStore{},
+	}
+	client.EXPECT().Duties(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(resp, nil)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	client.EXPECT().SubscribeCommitteeSubnets(
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+		wg.Done()
+		return nil, nil
+	})
+
+	require.NoError(t, v.UpdateDuties(t.Context()), "Could not update assignments")
+
+	util.WaitTimeout(&wg, 2*time.Second)
+
+	duties := v.duties.CurrentEpochDuties()
+	require.Equal(t, 1, len(duties), "Expected one duty")
+	var gotDuty *ethpb.ValidatorDuty
+	for _, d := range duties {
+		gotDuty = d
+	}
+	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch+1, gotDuty.ProposerSlots[0], "Unexpected validator assignments")
+	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch, gotDuty.AttesterSlot, "Unexpected validator assignments")
+	assert.Equal(t, resp.CurrentEpochDuties[0].CommitteeIndex, gotDuty.CommitteeIndex, "Unexpected validator assignments")
+	assert.Equal(t, resp.CurrentEpochDuties[0].ValidatorIndex, gotDuty.ValidatorIndex, "Unexpected validator assignments")
+}
+
+func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
+	hook := logTest.NewGlobal()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	numValidators := 10
+	km := genMockKeymanager(t, numValidators)
+	blacklistedPublicKeys := make(map[[fieldparams.BLSPubkeyLength]byte]bool)
+	for _, k := range km.keys {
+		blacklistedPublicKeys[k] = true
+	}
+	v := validator{
+		km:                 km,
+		validatorClient:    client,
+		blacklistedPubkeys: blacklistedPublicKeys,
+		duties:             &dutyStore{},
+	}
+
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{},
+	}
+	client.EXPECT().Duties(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(resp, nil)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	client.EXPECT().SubscribeCommitteeSubnets(
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+		wg.Done()
+		return nil, nil
+	})
+
+	require.NoError(t, v.UpdateDuties(t.Context()), "Could not update assignments")
+
+	util.WaitTimeout(&wg, 2*time.Second)
+
+	for range blacklistedPublicKeys {
+		assert.LogsContain(t, hook, "Not including slashable public key")
+	}
+}
+
+func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{
+				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+				ValidatorIndex:  200,
+				CommitteeIndex:  100,
+				CommitteeLength: 4,
+				PublicKey:       []byte("testPubKey_1"),
+				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+				Status:          ethpb.ValidatorStatus_EXITED,
+			},
+			{
+				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+				ValidatorIndex:  201,
+				CommitteeIndex:  101,
+				CommitteeLength: 4,
+				PublicKey:       []byte("testPubKey_2"),
+				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+				Status:          ethpb.ValidatorStatus_EXITED,
+			},
+		},
+	}
+	v := validator{
+		km:              newMockKeymanager(t, randKeypair(t)),
+		validatorClient: client,
+		duties:          &dutyStore{},
+	}
+	client.EXPECT().Duties(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(resp, nil)
+
+	err := v.UpdateDuties(t.Context())
+	require.ErrorContains(t, ErrValidatorsAllExited.Error(), err)
+
+}
+
+func TestUpdateDuties_Distributed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	// Start of third epoch.
+	slot := 2 * params.BeaconConfig().SlotsPerEpoch
+	keys := randKeypair(t)
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{
+				AttesterSlot:   slot, // First slot in epoch.
+				ValidatorIndex: 200,
+				CommitteeIndex: 100,
+				PublicKey:      keys.pub[:],
+				Status:         ethpb.ValidatorStatus_ACTIVE,
+			},
+		},
+		NextEpochDuties: []*ethpb.ValidatorDuty{
+			{
+				AttesterSlot:   slot + params.BeaconConfig().SlotsPerEpoch, // First slot in next epoch.
+				ValidatorIndex: 200,
+				CommitteeIndex: 100,
+				PublicKey:      keys.pub[:],
+				Status:         ethpb.ValidatorStatus_ACTIVE,
+			},
+		},
+	}
+
+	v := validator{
+		km:              newMockKeymanager(t, keys),
+		validatorClient: client,
+		distributed:     true,
+		duties:          &dutyStore{},
+	}
+
+	sigDomain := make([]byte, 32)
+
+	client.EXPECT().Duties(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(resp, nil)
+
+	client.EXPECT().DomainData(
+		gomock.Any(), // ctx
+		gomock.Any(), // epoch
+	).Return(
+		&ethpb.DomainResponse{SignatureDomain: sigDomain},
+		nil, /*err*/
+	)
+
+	client.EXPECT().AggregatedSelections(
+		gomock.Any(),
+		gomock.Any(), // fill this properly
+	).Return(
+		[]iface.BeaconCommitteeSelection{
+			{
+				SelectionProof: make([]byte, 32),
+				Slot:           slot,
+				ValidatorIndex: 200,
+			},
+			{
+				SelectionProof: make([]byte, 32),
+				Slot:           slot + params.BeaconConfig().SlotsPerEpoch,
+				ValidatorIndex: 200,
+			},
+		},
+		nil,
+	)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	client.EXPECT().SubscribeCommitteeSubnets(
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+	).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+		wg.Done()
+		return nil, nil
+	})
+
+	require.NoError(t, v.UpdateDuties(t.Context()), "Could not update assignments")
+	util.WaitTimeout(&wg, 2*time.Second)
+	require.Equal(t, 2, len(v.attSelections))
+}
+
+func TestValidator_CheckDependentRoots(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := t.Context()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	dutiesContainer := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{
+				AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+				ValidatorIndex:  200,
+				CommitteeIndex:  100,
+				CommitteeLength: 4,
+				PublicKey:       []byte("testPubKey_1"),
+				ProposerSlots:   []primitives.Slot{params.BeaconConfig().SlotsPerEpoch + 1},
+			},
+		},
+		PrevDependentRoot: bytesutil.PadTo([]byte{0x01, 0x02, 0x03}, fieldparams.RootLength),
+		CurrDependentRoot: bytesutil.PadTo([]byte{0x04, 0x05, 0x06}, fieldparams.RootLength),
+	}
+	ds := &dutyStore{}
+	ds.SetFromCombinedDutiesResponse(dutiesContainer)
 	v := &validator{
+		km:              newMockKeymanager(t, randKeypair(t)),
 		validatorClient: client,
 		duties:          ds,
 	}
 
-	// No RPC calls expected — cache hit returns nils.
-	period, current, next, err := v.fetchSyncDuties(t.Context(), epoch, indices)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(0), period)
-	assert.Equal(t, (*ethpb.SyncCommitteeDutiesResponse)(nil), current)
-	assert.Equal(t, (*ethpb.SyncCommitteeDutiesResponse)(nil), next)
-}
-
-func TestFetchSyncDuties_PreAltair(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.AltairForkEpoch = 100
-	params.OverrideBeaconConfig(cfg)
-
-	v := &validator{
-		validatorClient: client,
-		duties:          &dutyStore{initialized: true},
-	}
-
-	// No RPC calls expected — pre-Altair returns zero values.
-	period, current, next, err := v.fetchSyncDuties(t.Context(), 50, []primitives.ValidatorIndex{1})
-	require.NoError(t, err)
-	assert.Equal(t, uint64(0), period)
-	assert.Equal(t, (*ethpb.SyncCommitteeDutiesResponse)(nil), current)
-	assert.Equal(t, (*ethpb.SyncCommitteeDutiesResponse)(nil), next)
-}
-
-func TestUpdateDutiesSplit_SyncFailureNonFatal(t *testing.T) {
-	hook := logTest.NewGlobal()
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.AltairForkEpoch = 0
-	cfg.EpochsPerSyncCommitteePeriod = 256
-	params.OverrideBeaconConfig(cfg)
-
-	kp := randKeypair(t)
-	epoch := primitives.Epoch(10)
-	idx := primitives.ValidatorIndex(42)
-
-	v := &validator{
-		validatorClient: client,
-		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			kp.pub: {index: idx, status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
-		},
-		duties: &dutyStore{},
-	}
-
-	depRoot := make([]byte, 32)
-
-	// Proposer succeeds.
-	client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(
-		&ethpb.ProposerDutiesResponse{DependentRoot: depRoot}, nil,
-	)
-
-	// Attester: no cache → straight to parallel fetch (current + next).
-	client.EXPECT().AttesterDuties(gomock.Any(), epoch, gomock.Any()).Return(
-		&ethpb.AttesterDutiesResponse{
-			DependentRoot: depRoot,
-			Duties:        []*ethpb.AttesterDuty{{ValidatorIndex: idx, Slot: 320}},
-		}, nil,
-	)
-	client.EXPECT().AttesterDuties(gomock.Any(), epoch+1, gomock.Any()).Return(
-		&ethpb.AttesterDutiesResponse{Duties: []*ethpb.AttesterDuty{{ValidatorIndex: idx, Slot: 352}}}, nil,
-	)
-
-	// Sync committee: current fails.
-	client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch, gomock.Any()).Return(
-		nil, errors.New("sync rpc failed"),
-	)
-	// Next epoch sync may or may not be called (parallel), allow it.
-	client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch+1, gomock.Any()).Return(
-		&ethpb.SyncCommitteeDutiesResponse{}, nil,
-	).AnyTimes()
-
-	filteredKeys := [][fieldparams.BLSPubkeyLength]byte{kp.pub}
-	err := v.updateDutiesSplit(t.Context(), epoch, filteredKeys)
-
-	// Should succeed despite sync failure.
-	require.NoError(t, err)
-	assert.Equal(t, true, v.duties.IsInitialized())
-	assert.LogsContain(t, hook, "Error getting sync committee duties, reusing cached data")
-}
-
-func TestUpdateDutiesSplit_AttesterFailureFatal(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.AltairForkEpoch = 0
-	cfg.EpochsPerSyncCommitteePeriod = 256
-	params.OverrideBeaconConfig(cfg)
-
-	kp := randKeypair(t)
-	epoch := primitives.Epoch(10)
-	idx := primitives.ValidatorIndex(42)
-
-	v := &validator{
-		validatorClient: client,
-		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			kp.pub: {index: idx, status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
-		},
-		duties: &dutyStore{initialized: true},
-	}
-
-	// Proposer succeeds.
-	client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(
-		&ethpb.ProposerDutiesResponse{}, nil,
-	)
-
-	// Attester current epoch fails.
-	client.EXPECT().AttesterDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-		nil, errors.New("attester rpc failed"),
-	).AnyTimes()
-
-	// Sync may or may not be called (parallel).
-	client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-		&ethpb.SyncCommitteeDutiesResponse{}, nil,
-	).AnyTimes()
-
-	filteredKeys := [][fieldparams.BLSPubkeyLength]byte{kp.pub}
-	err := v.updateDutiesSplit(t.Context(), epoch, filteredKeys)
-
-	require.ErrorContains(t, "attester rpc failed", err)
-	// Duties should be cleared.
-	assert.Equal(t, false, v.duties.IsInitialized())
-}
-
-func TestFetchProposerDuties_PostFulu(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.FuluForkEpoch = 5
-	params.OverrideBeaconConfig(cfg)
-
-	epoch := primitives.Epoch(10)
-
-	v := &validator{
-		validatorClient: client,
-		duties:          &dutyStore{},
-	}
-
-	currentResp := &ethpb.ProposerDutiesResponse{
-		DependentRoot: make([]byte, 32),
-		Duties:        []*ethpb.ProposerDutyV2{{ValidatorIndex: 1, Slot: 320}},
-	}
-	nextResp := &ethpb.ProposerDutiesResponse{
-		DependentRoot: make([]byte, 32),
-		Duties:        []*ethpb.ProposerDutyV2{{ValidatorIndex: 2, Slot: 352}},
-	}
-
-	client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(currentResp, nil)
-	client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(nextResp, nil)
-
-	current, next, err := v.fetchProposerDuties(t.Context(), epoch)
-	require.NoError(t, err)
-	assert.Equal(t, currentResp, current)
-	assert.Equal(t, nextResp, next)
-}
-
-func TestFetchProposerDuties_PreFulu(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.FuluForkEpoch = 100
-	params.OverrideBeaconConfig(cfg)
-
-	epoch := primitives.Epoch(10)
-
-	v := &validator{
-		validatorClient: client,
-		duties:          &dutyStore{},
-	}
-
-	resp := &ethpb.ProposerDutiesResponse{
-		DependentRoot: make([]byte, 32),
-		Duties:        []*ethpb.ProposerDutyV2{{ValidatorIndex: 1, Slot: 320}},
-	}
-
-	// Only current epoch fetched, no next.
-	client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(resp, nil)
-
-	current, next, err := v.fetchProposerDuties(t.Context(), epoch)
-	require.NoError(t, err)
-	assert.Equal(t, resp, current)
-	assert.Equal(t, (*ethpb.ProposerDutiesResponse)(nil), next)
-}
-
-func TestFetchProposerDuties_PostFulu_NextEpochFailureNonFatal(t *testing.T) {
-	hook := logTest.NewGlobal()
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.FuluForkEpoch = 5
-	params.OverrideBeaconConfig(cfg)
-
-	epoch := primitives.Epoch(10)
-
-	v := &validator{
-		validatorClient: client,
-		duties:          &dutyStore{},
-	}
-
-	currentResp := &ethpb.ProposerDutiesResponse{
-		DependentRoot: make([]byte, 32),
-		Duties:        []*ethpb.ProposerDutyV2{{ValidatorIndex: 1, Slot: 320}},
-	}
-
-	client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(currentResp, nil)
-	client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(nil, errors.New("next epoch failed"))
-
-	current, next, err := v.fetchProposerDuties(t.Context(), epoch)
-	require.NoError(t, err)
-	assert.Equal(t, currentResp, current)
-	assert.Equal(t, (*ethpb.ProposerDutiesResponse)(nil), next)
-	assert.LogsContain(t, hook, "Could not get next epoch proposer duties")
-}
-
-func TestFetchSyncDuties_CacheMiss(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.AltairForkEpoch = 0
-	cfg.EpochsPerSyncCommitteePeriod = 256
-	params.OverrideBeaconConfig(cfg)
-
-	epoch := primitives.Epoch(10)
-	indices := []primitives.ValidatorIndex{1, 2}
-
-	v := &validator{
-		validatorClient: client,
-		duties:          &dutyStore{},
-	}
-
-	currentResp := &ethpb.SyncCommitteeDutiesResponse{Duties: []*ethpb.SyncCommitteeDuty{{ValidatorIndex: 1}}}
-	nextResp := &ethpb.SyncCommitteeDutiesResponse{Duties: []*ethpb.SyncCommitteeDuty{{ValidatorIndex: 2}}}
-
-	client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch, indices).Return(currentResp, nil)
-	client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch+1, indices).Return(nextResp, nil)
-
-	period, current, next, err := v.fetchSyncDuties(t.Context(), epoch, indices)
-	require.NoError(t, err)
-	assert.Equal(t, currentResp, current)
-	assert.Equal(t, nextResp, next)
-	assert.Equal(t, uint64(0), period)
-}
-
-func TestFetchSyncDuties_NextEpochFailureNonFatal(t *testing.T) {
-	hook := logTest.NewGlobal()
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.AltairForkEpoch = 0
-	cfg.EpochsPerSyncCommitteePeriod = 256
-	params.OverrideBeaconConfig(cfg)
-
-	epoch := primitives.Epoch(10)
-	indices := []primitives.ValidatorIndex{1}
-
-	v := &validator{
-		validatorClient: client,
-		duties:          &dutyStore{},
-	}
-
-	currentResp := &ethpb.SyncCommitteeDutiesResponse{Duties: []*ethpb.SyncCommitteeDuty{{ValidatorIndex: 1}}}
-	client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch, indices).Return(currentResp, nil)
-	client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch+1, indices).Return(nil, errors.New("next sync failed"))
-
-	period, current, next, err := v.fetchSyncDuties(t.Context(), epoch, indices)
-	require.NoError(t, err)
-	assert.Equal(t, currentResp, current)
-	assert.Equal(t, (*ethpb.SyncCommitteeDutiesResponse)(nil), next)
-	assert.Equal(t, uint64(0), period)
-	assert.LogsContain(t, hook, "Could not get next epoch sync committee duties")
-}
-
-func TestUpdateDutiesSplit_ProposerFailureFatal(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.AltairForkEpoch = 0
-	cfg.EpochsPerSyncCommitteePeriod = 256
-	params.OverrideBeaconConfig(cfg)
-
-	kp := randKeypair(t)
-	epoch := primitives.Epoch(10)
-	idx := primitives.ValidatorIndex(42)
-
-	v := &validator{
-		validatorClient: client,
-		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			kp.pub: {index: idx, status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
-		},
-		duties: &dutyStore{initialized: true},
-	}
-
-	// Proposer fails.
-	client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(nil, errors.New("proposer rpc failed"))
-
-	// Attester may or may not be called (parallel).
-	client.EXPECT().AttesterDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-		&ethpb.AttesterDutiesResponse{DependentRoot: make([]byte, 32)}, nil,
-	).AnyTimes()
-
-	// Sync may or may not be called (parallel).
-	client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-		&ethpb.SyncCommitteeDutiesResponse{}, nil,
-	).AnyTimes()
-
-	err := v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{kp.pub})
-	require.ErrorContains(t, "proposer rpc failed", err)
-	assert.Equal(t, false, v.duties.IsInitialized())
-}
-
-func TestDependentRootChangeReason_NoChange(t *testing.T) {
-	prevRoot := []byte("prev-root-xxxxxxxxxxxxxxxxxxxxxxx")
-	currRoot := []byte("curr-root-xxxxxxxxxxxxxxxxxxxxxxx")
-
-	v := &validator{
-		duties: newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{
-			PrevDependentRoot: prevRoot,
-			CurrDependentRoot: currRoot,
-		}),
-	}
-	assert.Equal(t, "", v.dependentRootChangeReason(prevRoot, currRoot))
-}
-
-func TestDependentRootChangeReason_PreviousChanged(t *testing.T) {
-	prevRoot := []byte("prev-root-xxxxxxxxxxxxxxxxxxxxxxx")
-	currRoot := []byte("curr-root-xxxxxxxxxxxxxxxxxxxxxxx")
-	newPrev := []byte("new-prev-xxxxxxxxxxxxxxxxxxxxxxxx")
-
-	v := &validator{
-		duties: newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{
-			PrevDependentRoot: prevRoot,
-			CurrDependentRoot: currRoot,
-		}),
-	}
-	assert.Equal(t, "previous", v.dependentRootChangeReason(newPrev, currRoot))
-}
-
-func TestDependentRootChangeReason_CurrentChanged(t *testing.T) {
-	prevRoot := []byte("prev-root-xxxxxxxxxxxxxxxxxxxxxxx")
-	currRoot := []byte("curr-root-xxxxxxxxxxxxxxxxxxxxxxx")
-	newCurr := []byte("new-curr-xxxxxxxxxxxxxxxxxxxxxxxx")
-
-	v := &validator{
-		duties: newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{
-			PrevDependentRoot: prevRoot,
-			CurrDependentRoot: currRoot,
-		}),
-	}
-	assert.Equal(t, "current", v.dependentRootChangeReason(prevRoot, newCurr))
-}
-
-func TestDependentRootChangeReason_Uninitialized(t *testing.T) {
-	v := &validator{duties: &dutyStore{}}
-	assert.Equal(t, "previous", v.dependentRootChangeReason([]byte("a"), []byte("b")))
-}
-
-func TestDependentRootChangeReason_ZeroCurrentRoot(t *testing.T) {
-	prevRoot := []byte("prev-root-xxxxxxxxxxxxxxxxxxxxxxx")
-	currRoot := []byte("curr-root-xxxxxxxxxxxxxxxxxxxxxxx")
-
-	v := &validator{
-		duties: newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{
-			PrevDependentRoot: prevRoot,
-			CurrDependentRoot: currRoot,
-		}),
-	}
-	// Zero hash current root should return "" (no change).
-	assert.Equal(t, "", v.dependentRootChangeReason(prevRoot, params.BeaconConfig().ZeroHash[:]))
-}
-
-func TestUpdateDutiesSplit_NoIndices(t *testing.T) {
-	v := &validator{
-		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{},
-		duties:         &dutyStore{},
-	}
-	// No matching indices → returns nil immediately without RPCs.
-	kp := randKeypair(t)
-	err := v.updateDutiesSplit(t.Context(), 10, [][fieldparams.BLSPubkeyLength]byte{kp.pub})
-	require.NoError(t, err)
-}
-
-func TestUpdateDutiesLegacy_OK(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	kp := randKeypair(t)
-	epoch := primitives.Epoch(5)
-
-	v := &validator{
-		validatorClient: client,
-		duties:          &dutyStore{},
-		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			kp.pub: {status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}},
-		},
-	}
-
-	resp := &ethpb.ValidatorDutiesContainer{
-		PrevDependentRoot: make([]byte, 32),
-		CurrDependentRoot: make([]byte, 32),
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{
-			{
-				PublicKey:      kp.pub[:],
-				ValidatorIndex: 42,
-				AttesterSlot:   160,
-				CommitteeIndex: 1,
-			},
-		},
-	}
-	client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(resp, nil)
-
-	err := v.updateDutiesLegacy(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{kp.pub})
-	require.NoError(t, err)
-	assert.Equal(t, true, v.duties.IsInitialized())
-	duties := v.duties.CurrentEpochDuties()
-	require.Equal(t, 1, len(duties))
-	require.NotNil(t, duties[kp.pub])
-	assert.Equal(t, primitives.ValidatorIndex(42), duties[kp.pub].ValidatorIndex)
-}
-
-func TestUpdateDutiesLegacy_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	v := &validator{
-		validatorClient: client,
-		duties:          &dutyStore{initialized: true},
-	}
-
-	client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(nil, errors.New("rpc failed"))
-
-	err := v.updateDutiesLegacy(t.Context(), 5, [][fieldparams.BLSPubkeyLength]byte{})
-	require.ErrorContains(t, "rpc failed", err)
-	assert.Equal(t, false, v.duties.IsInitialized())
-}
-
-func TestUpdateDutiesLegacy_NilResponse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	v := &validator{
-		validatorClient: client,
-		duties:          &dutyStore{initialized: true},
-	}
-
-	client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(nil, nil)
-
-	err := v.updateDutiesLegacy(t.Context(), 5, [][fieldparams.BLSPubkeyLength]byte{})
-	require.NoError(t, err)
-	assert.Equal(t, false, v.duties.IsInitialized())
-}
-
-func TestOnDutiesUpdated_AllExited(t *testing.T) {
-	kp := randKeypair(t)
-	v := &validator{
-		duties: newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{PublicKey: kp.pub[:], Status: ethpb.ValidatorStatus_EXITED},
-			},
-		}),
-		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			kp.pub: {status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_EXITED}},
-		},
-	}
-	err := v.onDutiesUpdated(t.Context())
-	require.ErrorIs(t, err, ErrValidatorsAllExited)
-}
-
-func TestOnDutiesUpdated_NotAllExited(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockValidatorClient(ctrl)
-
-	kp := randKeypair(t)
-	v := &validator{
-		validatorClient: client,
-		duties:          newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{}),
-		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			kp.pub: {status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_PENDING}},
-		},
-	}
-
-	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-
-	err := v.onDutiesUpdated(t.Context())
-	require.NoError(t, err)
-}
-
-func TestClearDuties(t *testing.T) {
-	v := &validator{
-		duties: newDutyStoreFromLegacy(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{{ValidatorIndex: 1}},
-		}),
-	}
-	assert.Equal(t, true, v.duties.IsInitialized())
-	v.clearDuties()
-	assert.Equal(t, false, v.duties.IsInitialized())
-}
-
-func TestClearDuties_NilStore(t *testing.T) {
-	v := &validator{}
-	v.clearDuties()
-	assert.NotNil(t, v.duties)
-	assert.Equal(t, false, v.duties.IsInitialized())
+	t.Run("nil head event", func(t *testing.T) {
+		err := v.checkDependentRoots(ctx, nil)
+		require.ErrorContains(t, "received empty head event", err)
+	})
+
+	t.Run("invalid previous duty dependent root", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			Slot:                      "0",
+			PreviousDutyDependentRoot: "invalid_hex",
+		}
+		err := v.checkDependentRoots(ctx, head)
+		require.ErrorContains(t, "failed to decode previous duty dependent root", err)
+	})
+
+	t.Run("invalid current duty dependent root", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			Slot:                      "0",
+			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
+			CurrentDutyDependentRoot:  "invalid_hex",
+		}
+		err := v.checkDependentRoots(ctx, head)
+		require.ErrorContains(t, "failed to decode current duty dependent root", err)
+	})
+
+	t.Run("update duties for previous root mismatch", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			Slot:                      "1",
+			PreviousDutyDependentRoot: "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
+			CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
+		}
+		client.EXPECT().SubscribeCommitteeSubnets(
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+			return nil, nil
+		}).AnyTimes()
+		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(dutiesContainer, nil)
+		err := v.checkDependentRoots(ctx, head)
+		require.NoError(t, err)
+	})
+
+	t.Run("update duties for current root mismatch", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			Slot:                      "1",
+			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
+			CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
+		}
+		client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(dutiesContainer, nil)
+		var wg sync.WaitGroup
+		wg.Add(1)
+
+		client.EXPECT().SubscribeCommitteeSubnets(
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+		).DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+			wg.Done()
+			return nil, nil
+		}).AnyTimes()
+		err := v.checkDependentRoots(ctx, head)
+		require.NoError(t, err)
+		util.WaitTimeout(&wg, 2*time.Second)
+	})
+	t.Run("no updates needed", func(t *testing.T) {
+		head := &structs.HeadEvent{
+			Slot:                      "0",
+			PreviousDutyDependentRoot: "0x0102030000000000000000000000000000000000000000000000000000000000",
+			CurrentDutyDependentRoot:  "0x0405060000000000000000000000000000000000000000000000000000000000",
+		}
+		curr, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
+		require.NoError(t, err)
+		_, storedCurr := v.duties.DependentRoots()
+		require.DeepEqual(t, curr, storedCurr)
+		require.NoError(t, v.checkDependentRoots(ctx, head))
+	})
 }

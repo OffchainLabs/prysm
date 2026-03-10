@@ -145,6 +145,7 @@ func toValidatorDutyV2(duty *ethpb.DutiesV2Response_Duty) (*ethpb.ValidatorDuty,
 		Status:                  duty.Status,
 		ValidatorIndex:          duty.ValidatorIndex,
 		IsSyncCommittee:         duty.IsSyncCommittee,
+		PtcSlots:                duty.PtcSlots,
 	}, nil
 }
 
@@ -236,8 +237,7 @@ func (c *grpcValidatorClient) SubmitValidatorRegistrations(ctx context.Context, 
 	return c.getClient().SubmitValidatorRegistrations(ctx, in)
 }
 
-func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []primitives.ValidatorIndex, _ []uint64) (*empty.Empty, error) {
-	// TODO: change gRPC endpoint to accept validatorIndices, committeesAtSlot
+func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*empty.Empty, error) {
 	return c.getClient().SubscribeCommitteeSubnets(ctx, in)
 }
 
@@ -410,4 +410,12 @@ func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, s
 
 func (c *grpcValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
 	return c.getClient().PublishExecutionPayloadEnvelope(ctx, in)
+}
+
+func (c *grpcValidatorClient) PayloadAttestationData(_ context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+	return nil, errors.New("PayloadAttestationData not implemented")
+}
+
+func (c *grpcValidatorClient) SubmitPayloadAttestation(_ context.Context, _ *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
+	return nil, errors.New("SubmitPayloadAttestation not implemented")
 }

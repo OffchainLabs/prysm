@@ -141,9 +141,16 @@ func (s *Service) postPayloadHeadUpdate(ctx context.Context, envelope interfaces
 	s.head.state = st
 	s.headLock.Unlock()
 
-	if err := transition.UpdateNextSlotCache(ctx, blockHash[:], st); err != nil {
-		log.WithError(err).Error("Could not update next slot cache")
-	}
+	go func() {
+		ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
+		defer cancel()
+		if err := transition.UpdateNextSlotCache(ctx, blockHash[:], st); err != nil {
+			log.WithError(err).Error("Could not update next slot cache")
+		}
+		if err := s.handleEpochBoundary(ctx, envelope.Slot(), st, blockHash[:]); err != nil {
+			log.WithError(err).Error("Could not handle epoch boundary")
+		}
+	}()
 
 	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot)
 	if s.inRegularSync() {
