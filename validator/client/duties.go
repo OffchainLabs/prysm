@@ -132,8 +132,9 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 		attCurr, attNext   *ethpb.AttesterDutiesResponse
 		propCurr, propNext *ethpb.ProposerDutiesResponse
 		syncCurr, syncNext *ethpb.SyncCommitteeDutiesResponse
+		ptcCurr, ptcNext   *ethpb.PtcDutiesResponse
 		attErr, propErr    error
-		syncErr            error
+		syncErr, ptcErr    error
 		wg                 sync.WaitGroup
 	)
 
@@ -146,6 +147,9 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 	})
 	wg.Go(func() {
 		syncCurr, syncNext, syncErr = v.fetchSyncDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		ptcCurr, ptcNext, ptcErr = v.fetchPtcDuties(ctx, epoch, indices)
 	})
 	wg.Wait()
 
@@ -160,6 +164,9 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 	if syncErr != nil {
 		log.WithError(syncErr).Warn("Error getting sync committee duties")
 	}
+	if ptcErr != nil {
+		log.WithError(ptcErr).Warn("Error getting PTC duties")
+	}
 
 	// Build proposer slots keyed by validator index.
 	proposerSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
@@ -171,6 +178,19 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 	if propNext != nil {
 		for _, d := range propNext.Duties {
 			proposerSlots[d.ValidatorIndex] = append(proposerSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+
+	// Build PTC slots keyed by validator index.
+	ptcSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
+	if ptcCurr != nil {
+		for _, d := range ptcCurr.Duties {
+			ptcSlots[d.ValidatorIndex] = append(ptcSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+	if ptcNext != nil {
+		for _, d := range ptcNext.Duties {
+			ptcSlots[d.ValidatorIndex] = append(ptcSlots[d.ValidatorIndex], d.Slot)
 		}
 	}
 
@@ -202,6 +222,7 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 				AttesterSlot:            d.Slot,
 				ProposerSlots:           proposerSlots[d.ValidatorIndex],
 				IsSyncCommittee:         syncCurrentSet[d.ValidatorIndex],
+				PtcSlots:                ptcSlots[d.ValidatorIndex],
 				Status:                  v.statusForPubkey(d.Pubkey),
 			})
 		}
@@ -328,6 +349,37 @@ func (v *validator) fetchSyncDuties(
 		next, nextErr = v.validatorClient.SyncCommitteeDuties(ctx, epoch+1, indices)
 		if nextErr != nil {
 			log.WithError(nextErr).Debug("Could not get next epoch sync committee duties")
+			nextErr = nil
+		}
+	})
+	wg.Wait()
+
+	if currErr != nil {
+		return nil, nil, currErr
+	}
+	return current, next, nil
+}
+
+// fetchPtcDuties fetches PTC duties for current and next epoch in parallel.
+// PTC duties are only available from the Gloas fork onwards.
+func (v *validator) fetchPtcDuties(
+	ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex,
+) (current, next *ethpb.PtcDutiesResponse, err error) {
+	if epoch < params.BeaconConfig().GloasForkEpoch {
+		return nil, nil, nil
+	}
+
+	var (
+		currErr, nextErr error
+		wg               sync.WaitGroup
+	)
+	wg.Go(func() {
+		current, currErr = v.validatorClient.PtcDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		next, nextErr = v.validatorClient.PtcDuties(ctx, epoch+1, indices)
+		if nextErr != nil {
+			log.WithError(nextErr).Debug("Could not get next epoch PTC duties")
 			nextErr = nil
 		}
 	})

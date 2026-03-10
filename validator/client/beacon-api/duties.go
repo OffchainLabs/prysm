@@ -24,6 +24,7 @@ type dutiesProvider interface {
 	AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*structs.GetAttesterDutiesResponse, error)
 	ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*structs.GetProposerDutiesResponse, error)
 	SyncDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) ([]*structs.SyncCommitteeDuty, error)
+	PtcDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*structs.GetPTCDutiesResponse, error)
 	Committees(ctx context.Context, epoch primitives.Epoch) ([]*structs.Committee, error)
 }
 
@@ -383,4 +384,213 @@ func (c beaconApiDutiesProvider) SyncDuties(ctx context.Context, epoch primitive
 	}
 
 	return syncDuties.Data, nil
+}
+
+// PtcDuties retrieves the PTC duties for the given epoch and validatorIndices.
+func (c beaconApiDutiesProvider) PtcDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*structs.GetPTCDutiesResponse, error) {
+	jsonValidatorIndices := make([]string, len(validatorIndices))
+	for i, idx := range validatorIndices {
+		jsonValidatorIndices[i] = strconv.FormatUint(uint64(idx), 10)
+	}
+
+	validatorIndicesBytes, err := json.Marshal(jsonValidatorIndices)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal validator indices")
+	}
+
+	ptcDuties := &structs.GetPTCDutiesResponse{}
+	if err = c.handler.Post(
+		ctx,
+		fmt.Sprintf("/eth/v1/validator/duties/ptc/%d", epoch),
+		nil,
+		bytes.NewBuffer(validatorIndicesBytes),
+		ptcDuties,
+	); err != nil {
+		return nil, err
+	}
+
+	for i, duty := range ptcDuties.Data {
+		if duty == nil {
+			return nil, errors.Errorf("PTC duty at index `%d` is nil", i)
+		}
+	}
+
+	return ptcDuties, nil
+}
+
+// attesterDuties converts the structs response to ethpb for the split endpoint path.
+func (c *beaconApiValidatorClient) attesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.AttesterDutiesResponse, error) {
+	resp, err := c.dutiesProvider.AttesterDuties(ctx, epoch, validatorIndices)
+	if err != nil {
+		return nil, err
+	}
+
+	depRoot, err := hexutil.Decode(resp.DependentRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode dependent root")
+	}
+
+	duties := make([]*ethpb.AttesterDuty, len(resp.Data))
+	for i, d := range resp.Data {
+		valIdx, err := strconv.ParseUint(d.ValidatorIndex, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator index `%s`", d.ValidatorIndex)
+		}
+		slot, err := strconv.ParseUint(d.Slot, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse slot `%s`", d.Slot)
+		}
+		ci, err := strconv.ParseUint(d.CommitteeIndex, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse committee index `%s`", d.CommitteeIndex)
+		}
+		cl, err := strconv.ParseUint(d.CommitteeLength, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse committee length `%s`", d.CommitteeLength)
+		}
+		vci, err := strconv.ParseUint(d.ValidatorCommitteeIndex, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator committee index `%s`", d.ValidatorCommitteeIndex)
+		}
+		cas, err := strconv.ParseUint(d.CommitteesAtSlot, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse committees at slot `%s`", d.CommitteesAtSlot)
+		}
+		pk, err := hexutil.Decode(d.Pubkey)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to decode pubkey `%s`", d.Pubkey)
+		}
+
+		duties[i] = &ethpb.AttesterDuty{
+			Pubkey:                  pk,
+			ValidatorIndex:          primitives.ValidatorIndex(valIdx),
+			CommitteeIndex:          primitives.CommitteeIndex(ci),
+			CommitteeLength:         cl,
+			CommitteesAtSlot:        cas,
+			ValidatorCommitteeIndex: vci,
+			Slot:                    primitives.Slot(slot),
+		}
+	}
+
+	return &ethpb.AttesterDutiesResponse{
+		DependentRoot: depRoot,
+		Duties:        duties,
+	}, nil
+}
+
+// proposerDuties converts the structs response to ethpb for the split endpoint path.
+func (c *beaconApiValidatorClient) proposerDuties(ctx context.Context, epoch primitives.Epoch) (*ethpb.ProposerDutiesResponse, error) {
+	resp, err := c.dutiesProvider.ProposerDuties(ctx, epoch)
+	if err != nil {
+		return nil, err
+	}
+
+	depRoot, err := hexutil.Decode(resp.DependentRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode dependent root")
+	}
+
+	duties := make([]*ethpb.ProposerDuty, len(resp.Data))
+	for i, d := range resp.Data {
+		valIdx, err := strconv.ParseUint(d.ValidatorIndex, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator index `%s`", d.ValidatorIndex)
+		}
+		slot, err := strconv.ParseUint(d.Slot, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse slot `%s`", d.Slot)
+		}
+		pk, err := hexutil.Decode(d.Pubkey)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to decode pubkey `%s`", d.Pubkey)
+		}
+
+		duties[i] = &ethpb.ProposerDuty{
+			Pubkey:         pk,
+			ValidatorIndex: primitives.ValidatorIndex(valIdx),
+			Slot:           primitives.Slot(slot),
+		}
+	}
+
+	return &ethpb.ProposerDutiesResponse{
+		DependentRoot: depRoot,
+		Duties:        duties,
+	}, nil
+}
+
+// syncCommitteeDuties converts the structs response to ethpb for the split endpoint path.
+func (c *beaconApiValidatorClient) syncCommitteeDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.SyncCommitteeDutiesResponse, error) {
+	resp, err := c.dutiesProvider.SyncDuties(ctx, epoch, validatorIndices)
+	if err != nil {
+		return nil, err
+	}
+
+	duties := make([]*ethpb.SyncCommitteeDuty, len(resp))
+	for i, d := range resp {
+		valIdx, err := strconv.ParseUint(d.ValidatorIndex, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator index `%s`", d.ValidatorIndex)
+		}
+		pk, err := hexutil.Decode(d.Pubkey)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to decode pubkey `%s`", d.Pubkey)
+		}
+		syncIndices := make([]uint64, len(d.ValidatorSyncCommitteeIndices))
+		for j, idx := range d.ValidatorSyncCommitteeIndices {
+			syncIndices[j], err = strconv.ParseUint(idx, 10, 64)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to parse sync committee index `%s`", idx)
+			}
+		}
+
+		duties[i] = &ethpb.SyncCommitteeDuty{
+			Pubkey:               pk,
+			ValidatorIndex:       primitives.ValidatorIndex(valIdx),
+			SyncCommitteeIndices: syncIndices,
+		}
+	}
+
+	return &ethpb.SyncCommitteeDutiesResponse{
+		Duties: duties,
+	}, nil
+}
+
+// ptcDuties converts the structs response to ethpb for the split endpoint path.
+func (c *beaconApiValidatorClient) ptcDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.PtcDutiesResponse, error) {
+	resp, err := c.dutiesProvider.PtcDuties(ctx, epoch, validatorIndices)
+	if err != nil {
+		return nil, err
+	}
+
+	depRoot, err := hexutil.Decode(resp.DependentRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode dependent root")
+	}
+
+	duties := make([]*ethpb.PtcDuty, len(resp.Data))
+	for i, d := range resp.Data {
+		valIdx, err := strconv.ParseUint(d.ValidatorIndex, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse validator index `%s`", d.ValidatorIndex)
+		}
+		slot, err := strconv.ParseUint(d.Slot, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse slot `%s`", d.Slot)
+		}
+		pk, err := hexutil.Decode(d.Pubkey)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to decode pubkey `%s`", d.Pubkey)
+		}
+
+		duties[i] = &ethpb.PtcDuty{
+			Pubkey:         pk,
+			ValidatorIndex: primitives.ValidatorIndex(valIdx),
+			Slot:           primitives.Slot(slot),
+		}
+	}
+
+	return &ethpb.PtcDutiesResponse{
+		DependentRoot: depRoot,
+		Duties:        duties,
+	}, nil
 }

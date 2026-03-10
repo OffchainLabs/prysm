@@ -272,6 +272,26 @@ func (c *grpcValidatorClient) AggregatedSigAndAggregationBits(
 	return c.getClient().AggregatedSigAndAggregationBits(ctx, in)
 }
 
+// TODO: Implementation provided by grpc-split-duties-apis branch.
+func (c *grpcValidatorClient) AttesterDuties(_ context.Context, _ primitives.Epoch, _ []primitives.ValidatorIndex) (*ethpb.AttesterDutiesResponse, error) {
+	return nil, errors.New("AttesterDuties not yet implemented for gRPC")
+}
+
+// TODO: Implementation provided by grpc-split-duties-apis branch.
+func (c *grpcValidatorClient) ProposerDuties(_ context.Context, _ primitives.Epoch) (*ethpb.ProposerDutiesResponse, error) {
+	return nil, errors.New("ProposerDuties not yet implemented for gRPC")
+}
+
+// TODO: Implementation provided by grpc-split-duties-apis branch.
+func (c *grpcValidatorClient) SyncCommitteeDuties(_ context.Context, _ primitives.Epoch, _ []primitives.ValidatorIndex) (*ethpb.SyncCommitteeDutiesResponse, error) {
+	return nil, errors.New("SyncCommitteeDuties not yet implemented for gRPC")
+}
+
+// TODO: Implementation provided by grpc-split-duties-apis branch.
+func (c *grpcValidatorClient) PtcDuties(_ context.Context, _ primitives.Epoch, _ []primitives.ValidatorIndex) (*ethpb.PtcDutiesResponse, error) {
+	return nil, errors.New("PtcDuties not yet implemented for gRPC")
+}
+
 func (*grpcValidatorClient) AggregatedSelections(context.Context, []iface.BeaconCommitteeSelection) ([]iface.BeaconCommitteeSelection, error) {
 	return nil, iface.ErrNotSupported
 }
