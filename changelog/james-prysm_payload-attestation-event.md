@@ -1,3 +1,3 @@
 ### Added
 
-- payload_attestation_message event triggered on grpc and gossip message recieved 
+- payload_attestation_message event triggered on gossip message received.
