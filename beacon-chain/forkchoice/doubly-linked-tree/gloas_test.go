@@ -1456,3 +1456,33 @@ func TestFullHead_EmptyPayload(t *testing.T) {
 	assert.Equal(t, blockHashA, bh)
 	assert.Equal(t, false, full)
 }
+
+// TestFullHead_PreGloasBlock_ReturnsFalse verifies that FullHead returns full=false
+// for pre-Gloas (Fulu) blocks even though the fork choice store internally creates a
+// fullNodeByRoot entry with full=true for them (for EL optimistic validation tracking).
+// Without the epoch guard in FullHead, isNewHead would spuriously fire every ticker
+// tick because FullHead returned full=true while saveHead stored head.full=false.
+func TestFullHead_PreGloasBlock_ReturnsFalse(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 100 // Gloas activates far in the future; slot 1 is pre-Gloas
+	params.OverrideBeaconConfig(cfg)
+
+	f := setup(0, 0)
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, blk, err := prepareForkchoiceState(ctx, 1, rootA, zeroHash, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	driftGenesisTime(f, 1, 0)
+	require.NoError(t, f.NewSlot(ctx, 1))
+
+	hr, _, full, err := f.FullHead(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, rootA, hr)
+	assert.Equal(t, false, full, "pre-Gloas block must return full=false from FullHead")
+}
