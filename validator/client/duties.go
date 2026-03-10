@@ -62,7 +62,7 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	resp, err := v.validatorClient.Duties(ctx, req)
 	if err != nil || resp == nil {
 		v.dutiesLock.Lock()
-		v.duties = nil
+		v.duties.Reset()
 		v.dutiesLock.Unlock()
 		log.WithError(err).Error("Error getting validator duties")
 		return err
@@ -73,13 +73,13 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 		return err
 	}
 	v.dutiesLock.Lock()
-	v.duties = resp
-	v.logDuties(ss, v.duties.CurrentEpochDuties, v.duties.NextEpochDuties)
+	v.duties.SetFromCombinedDutiesResponse(resp)
+	v.logDuties(ss)
 	v.dutiesLock.Unlock()
 
 	allExitedCounter := 0
-	for i := range resp.CurrentEpochDuties {
-		if resp.CurrentEpochDuties[i].Status == ethpb.ValidatorStatus_EXITED {
+	for _, d := range resp.CurrentEpochDuties {
+		if d.Status == ethpb.ValidatorStatus_EXITED {
 			allExitedCounter++
 		}
 	}
@@ -102,24 +102,29 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	return nil
 }
 
-func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.ValidatorDuty, nextEpochDuties []*ethpb.ValidatorDuty) {
-	attesterKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
-	for i := range attesterKeys {
-		attesterKeys[i] = make([]string, 0)
-	}
-	proposerKeys := make([]string, params.BeaconConfig().SlotsPerEpoch)
+func (v *validator) logDuties(slot primitives.Slot) {
 	epochStartSlot, err := slots.EpochStart(slots.ToEpoch(slot))
 	if err != nil {
 		log.WithError(err).Error("Could not calculate epoch start. Ignoring logging duties.")
 		return
 	}
-	var totalProposingKeys, totalAttestingKeys uint64
-	for _, duty := range currentEpochDuties {
-		pubkey := fmt.Sprintf("%#x", duty.PublicKey)
-		if v.emitAccountMetrics {
-			ValidatorStatusesGaugeVec.WithLabelValues(pubkey, fmt.Sprintf("%#x", duty.ValidatorIndex)).Set(float64(duty.Status))
-		}
+	attesterKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
+	for i := range attesterKeys {
+		attesterKeys[i] = make([]string, 0)
+	}
+	proposerKeys := make([]string, params.BeaconConfig().SlotsPerEpoch)
+	ptcKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
+	for i := range attesterKeys {
+		attesterKeys[i] = make([]string, 0)
+		ptcKeys[i] = make([]string, 0)
+	}
+	var totalProposingKeys, totalAttestingKeys, totalPTCKeys uint64
 
+	for _, duty := range v.duties.CurrentEpochDuties() {
+		pk := fmt.Sprintf("%#x", duty.PublicKey)
+		if v.emitAccountMetrics {
+			ValidatorStatusesGaugeVec.WithLabelValues(pk, fmt.Sprintf("%#x", duty.ValidatorIndex)).Set(float64(duty.Status))
+		}
 		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 			continue
 		}
@@ -132,13 +137,25 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 			attesterKeys[attesterSlotInEpoch] = append(attesterKeys[attesterSlotInEpoch], truncatedPubkey)
 			totalAttestingKeys++
 			if v.emitAccountMetrics {
-				ValidatorNextAttestationSlotGaugeVec.WithLabelValues(pubkey).Set(float64(duty.AttesterSlot))
+				ValidatorNextAttestationSlotGaugeVec.WithLabelValues(pk).Set(float64(duty.AttesterSlot))
 			}
 		}
 		if v.emitAccountMetrics && duty.IsSyncCommittee {
-			ValidatorInSyncCommitteeGaugeVec.WithLabelValues(pubkey).Set(float64(1))
+			ValidatorInSyncCommitteeGaugeVec.WithLabelValues(pk).Set(float64(1))
 		} else if v.emitAccountMetrics && !duty.IsSyncCommittee {
-			ValidatorInSyncCommitteeGaugeVec.WithLabelValues(pubkey).Set(float64(0))
+			ValidatorInSyncCommitteeGaugeVec.WithLabelValues(pk).Set(float64(0))
+		}
+		for _, ptcSlot := range duty.PtcSlots {
+			if ptcSlot < epochStartSlot || ptcSlot >= epochStartSlot+params.BeaconConfig().SlotsPerEpoch {
+				log.WithFields(logrus.Fields{
+					"duty": duty,
+					"slot": ptcSlot,
+				}).Warn("Invalid PTC slot")
+				continue
+			}
+			ptcSlotInEpoch := ptcSlot - epochStartSlot
+			ptcKeys[ptcSlotInEpoch] = append(ptcKeys[ptcSlotInEpoch], truncatedPubkey)
+			totalPTCKeys++
 		}
 
 		for _, proposerSlot := range duty.ProposerSlots {
@@ -150,40 +167,45 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 				totalProposingKeys++
 			}
 			if v.emitAccountMetrics {
-				ValidatorNextProposalSlotGaugeVec.WithLabelValues(pubkey).Set(float64(proposerSlot))
+				ValidatorNextProposalSlotGaugeVec.WithLabelValues(pk).Set(float64(proposerSlot))
 			}
 		}
 	}
-	for _, duty := range nextEpochDuties {
-		pubkey := fmt.Sprintf("%#x", duty.PublicKey)
+	for _, duty := range v.duties.NextEpochDuties() {
+		pk := fmt.Sprintf("%#x", duty.PublicKey)
 		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 			continue
 		}
 		if v.emitAccountMetrics && duty.IsSyncCommittee {
-			ValidatorInNextSyncCommitteeGaugeVec.WithLabelValues(pubkey).Set(float64(1))
+			ValidatorInNextSyncCommitteeGaugeVec.WithLabelValues(pk).Set(float64(1))
 		} else if v.emitAccountMetrics && !duty.IsSyncCommittee {
-			ValidatorInNextSyncCommitteeGaugeVec.WithLabelValues(pubkey).Set(float64(0))
+			ValidatorInNextSyncCommitteeGaugeVec.WithLabelValues(pk).Set(float64(0))
 		}
 	}
 
 	log.WithFields(logrus.Fields{
 		"proposerCount": totalProposingKeys,
 		"attesterCount": totalAttestingKeys,
+		"ptcCount":      totalPTCKeys,
 	}).Infof("Schedule for epoch %d", slots.ToEpoch(slot))
+
 	for i := primitives.Slot(0); i < params.BeaconConfig().SlotsPerEpoch; i++ {
+		isProposer := proposerKeys[i] != ""
+		isAttester := len(attesterKeys[i]) > 0
+		isPTCMember := len(ptcKeys[i]) > 0
+		if !isProposer && !isAttester && !isPTCMember {
+			continue
+		}
 		startTime, err := slots.StartTime(v.genesisTime, epochStartSlot+i)
 		if err != nil {
-			log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to log duties!")
+			log.WithError(err).WithField("slot", epochStartSlot+i).Error("Slot overflows, unable to log duties!")
 			return
 		}
 		durationTillDuty := (time.Until(startTime) + time.Second).Truncate(time.Second)
-
 		slotLog := log.WithFields(logrus.Fields{})
-		isProposer := proposerKeys[i] != ""
 		if isProposer {
 			slotLog = slotLog.WithField("proposerPubkey", proposerKeys[i])
 		}
-		isAttester := len(attesterKeys[i]) > 0
 		if isAttester {
 			slotLog = slotLog.WithFields(logrus.Fields{
 				"slot":            epochStartSlot + i,
@@ -192,12 +214,16 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 				"attesterPubkeys": attesterKeys[i],
 			})
 		}
+		if isPTCMember {
+			slotLog = slotLog.WithFields(logrus.Fields{
+				"ptcCount":   len(ptcKeys[i]),
+				"ptcPubkeys": ptcKeys[i],
+			})
+		}
 		if durationTillDuty > 0 {
 			slotLog = slotLog.WithField("timeUntilDuty", durationTillDuty)
 		}
-		if isProposer || isAttester {
-			slotLog.Infof("Duties schedule")
-		}
+		slotLog.Infof("Duties schedule")
 	}
 }
 
@@ -217,30 +243,34 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if err != nil {
 		return errors.Wrap(err, "failed to get epoch start")
 	}
-	deadline := v.SlotDeadline(ss - 1)
-	dutiesCtx, cancel := context.WithDeadline(ctx, deadline)
+	dutiesCtx, cancel := context.WithDeadline(ctx, v.SlotDeadline(ss-1))
 	defer cancel()
+
 	v.dutiesLock.RLock()
-	needsPrevDependentRootUpdate := v.duties == nil || !bytes.Equal(prevDependentRoot, v.duties.PrevDependentRoot)
+	storedPrev, _ := v.duties.DependentRoots()
+	needsPrevUpdate := storedPrev == nil || !bytes.Equal(prevDependentRoot, storedPrev)
 	v.dutiesLock.RUnlock()
-	if needsPrevDependentRootUpdate {
+
+	if needsPrevUpdate {
 		if err := v.UpdateDuties(dutiesCtx); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
 		log.Info("Updated duties due to previous dependent root change")
 		return nil
 	}
-	currDepedentRoot, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
+
+	currDependentRoot, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode current duty dependent root")
 	}
-	if bytes.Equal(currDepedentRoot, params.BeaconConfig().ZeroHash[:]) {
+	if bytes.Equal(currDependentRoot, params.BeaconConfig().ZeroHash[:]) {
 		return nil
 	}
 	v.dutiesLock.RLock()
-	needsCurrDependentRootUpdate := v.duties == nil || !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot)
+	_, storedCurr := v.duties.DependentRoots()
 	v.dutiesLock.RUnlock()
-	if !needsCurrDependentRootUpdate {
+	needsCurrUpdate := storedCurr == nil || !bytes.Equal(currDependentRoot, storedCurr)
+	if !needsCurrUpdate {
 		return nil
 	}
 	if err := v.UpdateDuties(dutiesCtx); err != nil {

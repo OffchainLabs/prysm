@@ -706,7 +706,42 @@ func (s *ChainService) HighestReceivedBlockSlot() primitives.Slot {
 	if s.ForkChoiceStore != nil {
 		return s.ForkChoiceStore.HighestReceivedBlockSlot()
 	}
-	return 0
+	if s.Slot != nil {
+		return *s.Slot
+	}
+	return s.BlockSlot
+}
+
+// HighestReceivedBlockRoot mocks the same method in the chain service
+func (s *ChainService) HighestReceivedBlockRoot() [32]byte {
+	if s.ForkChoiceStore != nil {
+		return s.ForkChoiceStore.HighestReceivedBlockRoot()
+	}
+	if s.Slot != nil && s.MockCanonicalRoots != nil {
+		if root, ok := s.MockCanonicalRoots[*s.Slot]; ok {
+			return root
+		}
+	}
+	if len(s.Root) == 32 {
+		return bytesutil.ToBytes32(s.Root)
+	}
+	return [32]byte{}
+}
+
+// HasFullNode mocks the same method in the chain service
+func (s *ChainService) HasFullNode(root [32]byte) bool {
+	if s.ForkChoiceStore != nil {
+		return s.ForkChoiceStore.HasFullNode(root)
+	}
+	if s.Slot != nil && s.MockCanonicalRoots != nil && s.MockCanonicalFull != nil {
+		if r, ok := s.MockCanonicalRoots[*s.Slot]; ok && r == root {
+			return s.MockCanonicalFull[*s.Slot]
+		}
+	}
+	if s.ForkchoiceRoots != nil {
+		return s.ForkchoiceRoots[root]
+	}
+	return false
 }
 
 // InsertNode mocks the same method in the chain service

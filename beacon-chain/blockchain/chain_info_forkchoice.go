@@ -42,6 +42,20 @@ func (s *Service) HighestReceivedBlockSlot() primitives.Slot {
 	return s.cfg.ForkChoiceStore.HighestReceivedBlockSlot()
 }
 
+// HighestReceivedBlockRoot returns the corresponding value from forkchoice
+func (s *Service) HighestReceivedBlockRoot() [32]byte {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.HighestReceivedBlockRoot()
+}
+
+// HasFullNode returns the corresponding value from forkchoice
+func (s *Service) HasFullNode(root [32]byte) bool {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.HasFullNode(root)
+}
+
 // ReceivedBlocksLastEpoch returns the corresponding value from forkchoice
 func (s *Service) ReceivedBlocksLastEpoch() (uint64, error) {
 	s.cfg.ForkChoiceStore.RLock()

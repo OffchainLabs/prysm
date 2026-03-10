@@ -45,6 +45,8 @@ type ForkchoiceFetcher interface {
 	SetForkChoiceGenesisTime(time.Time)
 	UpdateHead(context.Context, primitives.Slot)
 	HighestReceivedBlockSlot() primitives.Slot
+	HighestReceivedBlockRoot() [32]byte
+	HasFullNode([32]byte) bool
 	ReceivedBlocksLastEpoch() (uint64, error)
 	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error
 	InsertPayload(interfaces.ROExecutionPayloadEnvelope) error

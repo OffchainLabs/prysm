@@ -6,7 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -20,12 +20,17 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetExecutionPayloadEnvelope")
 	defer span.End()
 
-	rootBytes, err := bytesutil.DecodeHexWithLength(r.PathValue("block_root"), 32)
-	if err != nil {
-		httputil.HandleError(w, "Could not decode block root: "+err.Error(), http.StatusBadRequest)
+	blockID := r.PathValue("block_root")
+	if blockID == "" {
+		httputil.HandleError(w, "block_root is required in URL params", http.StatusBadRequest)
 		return
 	}
-	root := [32]byte(rootBytes)
+
+	root, err := s.Blocker.BlockRoot(ctx, []byte(blockID))
+	if !shared.WriteBlockRootFetchError(w, err) {
+		return
+	}
+
 	blinded, err := s.BeaconDB.ExecutionPayloadEnvelope(ctx, root)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {

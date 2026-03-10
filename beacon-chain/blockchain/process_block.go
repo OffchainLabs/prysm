@@ -431,7 +431,7 @@ func (s *Service) updateCachesAndEpochBoundary(ctx context.Context, currentSlot 
 
 // Epoch boundary tasks: it copies the headState and updates the epoch boundary
 // caches. The caller of this function must not hold a lock in forkchoice store.
-func (s *Service) handleEpochBoundary(ctx context.Context, slot primitives.Slot, headState state.BeaconState, blockRoot []byte) error {
+func (s *Service) handleEpochBoundary(ctx context.Context, slot primitives.Slot, headState state.ReadOnlyBeaconState, blockRoot []byte) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.handleEpochBoundary")
 	defer span.End()
 	// return early if we are advancing to a past epoch
