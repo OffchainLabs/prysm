@@ -17,6 +17,7 @@ import (
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/sirupsen/logrus"
 )
 
 type headerHandlerCall struct {
@@ -35,28 +36,28 @@ type broadcasterHarness struct {
 }
 
 type callbackRecorder struct {
-	validateColumnCallCh chan []blocks.CellProofBundle
-	handleHeaderCallCh   chan headerHandlerCall
+	validateColumnCallCh                   chan []blocks.CellProofBundle
+	handleHeaderCallCh                     chan headerHandlerCall
 	partialVerifierFromHeaderCallCh        chan *blocks.PartialDataColumn
 	partialVerifierFromTrustedColumnCallCh chan *blocks.PartialDataColumn
-	handleColumnCallCh   chan columnHandlerCall
+	handleColumnCallCh                     chan columnHandlerCall
 
-	validateColumnErr                 error
-	partialVerifierFromHeaderErr      error
-	partialVerifierFromHeaderReject   bool
-	partialVerifierFromTrustedColErr  error
+	validateColumnErr                error
+	partialVerifierFromHeaderErr     error
+	partialVerifierFromHeaderReject  bool
+	partialVerifierFromTrustedColErr error
 }
 
 func newCallbackRecorder(callBuffer int, validateHeaderReject bool, validateColumnErr, validateHeaderErr error) *callbackRecorder {
 	return &callbackRecorder{
-		validateColumnCallCh: make(chan []blocks.CellProofBundle, callBuffer),
-		handleHeaderCallCh:   make(chan headerHandlerCall, callBuffer),
+		validateColumnCallCh:                   make(chan []blocks.CellProofBundle, callBuffer),
+		handleHeaderCallCh:                     make(chan headerHandlerCall, callBuffer),
 		partialVerifierFromHeaderCallCh:        make(chan *blocks.PartialDataColumn, callBuffer),
 		partialVerifierFromTrustedColumnCallCh: make(chan *blocks.PartialDataColumn, callBuffer),
-		handleColumnCallCh:   make(chan columnHandlerCall, callBuffer),
-		partialVerifierFromHeaderReject: validateHeaderReject,
-		partialVerifierFromHeaderErr:    validateHeaderErr,
-		validateColumnErr:               validateColumnErr,
+		handleColumnCallCh:                     make(chan columnHandlerCall, callBuffer),
+		partialVerifierFromHeaderReject:        validateHeaderReject,
+		partialVerifierFromHeaderErr:           validateHeaderErr,
+		validateColumnErr:                      validateColumnErr,
 	}
 }
 
@@ -154,7 +155,9 @@ var _ partialColumnPubSub = (*mockPubSub)(nil)
 
 func newBroadcasterHarness(t *testing.T, ps partialColumnPubSub) *broadcasterHarness {
 	t.Helper()
-	broadcaster := NewBroadcaster()
+	logger := logrus.New()
+	logger.SetLevel(logrus.DebugLevel)
+	broadcaster := NewBroadcaster(logger)
 	broadcaster.ps = ps
 	return &broadcasterHarness{
 		t:           t,
