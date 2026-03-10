@@ -105,6 +105,27 @@ func (ds *dutyStore) IsNextSyncCommittee(idx primitives.ValidatorIndex) bool {
 	return ds.syncNextMap[idx]
 }
 
+// ToContainer reconstructs a ValidatorDutiesContainer from the duty store's internal state.
+func (ds *dutyStore) ToContainer() *ethpb.ValidatorDutiesContainer {
+	if !ds.IsInitialized() {
+		return &ethpb.ValidatorDutiesContainer{}
+	}
+	current := make([]*ethpb.ValidatorDuty, 0, len(ds.currentDuties))
+	for _, d := range ds.currentDuties {
+		current = append(current, d)
+	}
+	next := make([]*ethpb.ValidatorDuty, 0, len(ds.nextDuties))
+	for _, d := range ds.nextDuties {
+		next = append(next, d)
+	}
+	return &ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot:  ds.prevDependentRoot,
+		CurrDependentRoot:  ds.currDependentRoot,
+		CurrentEpochDuties: current,
+		NextEpochDuties:    next,
+	}
+}
+
 // SetFromCombinedDutiesResponse stores a combined duties response by decomposing it into
 // duty maps, proposer slots, and sync committee maps.
 // DEPRECATED: GetDutiesV2, use the split GetAttesterDuties, GetProposerDutiesV2, GetSyncCommitteeDuties, GetPTCduties endpoints.

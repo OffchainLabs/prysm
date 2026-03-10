@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -54,18 +55,22 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	}
 
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
-	req := &ethpb.DutiesRequest{
-		Epoch:      epoch,
-		PublicKeys: bytesutil.FromBytes48Array(filteredKeys),
+
+	if epoch >= params.BeaconConfig().GloasForkEpoch {
+		if err := v.updateDutiesSplit(ctx, epoch, filteredKeys); err != nil {
+			return err
+		}
+	} else {
+		if err := v.updateDutiesCombined(ctx, epoch, filteredKeys); err != nil {
+			return err
+		}
 	}
 
-	resp, err := v.validatorClient.Duties(ctx, req)
-	if err != nil || resp == nil {
-		v.dutiesLock.Lock()
-		v.duties.Reset()
-		v.dutiesLock.Unlock()
-		log.WithError(err).Error("Error getting validator duties")
-		return err
+	v.dutiesLock.RLock()
+	initialized := v.duties != nil && v.duties.IsInitialized()
+	v.dutiesLock.RUnlock()
+	if !initialized {
+		return nil
 	}
 
 	ss, err := slots.EpochStart(epoch)
@@ -73,28 +78,287 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 		return err
 	}
 	v.dutiesLock.Lock()
-	v.duties.SetFromCombinedDutiesResponse(resp)
 	v.logDuties(ss)
 	v.dutiesLock.Unlock()
 
-	allExitedCounter := 0
-	for _, d := range resp.CurrentEpochDuties {
-		if d.Status == ethpb.ValidatorStatus_EXITED {
-			allExitedCounter++
+	return v.onDutiesUpdated(ctx)
+}
+
+// clearDuties resets the duty store under lock.
+func (v *validator) clearDuties() {
+	v.dutiesLock.Lock()
+	defer v.dutiesLock.Unlock()
+	if v.duties == nil {
+		v.duties = &dutyStore{}
+	}
+	v.duties.Reset()
+}
+
+// updateDutiesCombined uses the combined Duties() endpoint (pre-GLOAS).
+func (v *validator) updateDutiesCombined(ctx context.Context, epoch primitives.Epoch, filteredKeys [][fieldparams.BLSPubkeyLength]byte) error {
+	req := &ethpb.DutiesRequest{
+		Epoch:      epoch,
+		PublicKeys: bytesutil.FromBytes48Array(filteredKeys),
+	}
+
+	resp, err := v.validatorClient.Duties(ctx, req)
+	if err != nil || resp == nil {
+		v.clearDuties()
+		log.WithError(err).Error("Error getting validator duties")
+		return err
+	}
+
+	v.dutiesLock.Lock()
+	v.duties.SetFromCombinedDutiesResponse(resp)
+	v.dutiesLock.Unlock()
+	return nil
+}
+
+// updateDutiesSplit fetches duties from the split V3 endpoints and
+// populates the duty store for uniform downstream processing.
+func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoch, filteredKeys [][fieldparams.BLSPubkeyLength]byte) error {
+	indices := make([]primitives.ValidatorIndex, 0, len(filteredKeys))
+	for _, pk := range filteredKeys {
+		if st, ok := v.pubkeyToStatus[pk]; ok && st.status != nil && st.status.Status != ethpb.ValidatorStatus_UNKNOWN_STATUS {
+			indices = append(indices, st.index)
 		}
 	}
-	if allExitedCounter != 0 && allExitedCounter == len(resp.CurrentEpochDuties) {
+	if len(indices) == 0 {
+		v.clearDuties()
+		return nil
+	}
+
+	var (
+		attCurr, attNext   *ethpb.AttesterDutiesResponse
+		propCurr, propNext *ethpb.ProposerDutiesResponse
+		syncCurr, syncNext *ethpb.SyncCommitteeDutiesResponse
+		attErr, propErr    error
+		syncErr            error
+		wg                 sync.WaitGroup
+	)
+
+	// Fetch all duty types in parallel.
+	wg.Go(func() {
+		attCurr, attNext, attErr = v.fetchAttesterDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		propCurr, propNext, propErr = v.fetchProposerDuties(ctx, epoch)
+	})
+	wg.Go(func() {
+		syncCurr, syncNext, syncErr = v.fetchSyncDuties(ctx, epoch, indices)
+	})
+	wg.Wait()
+
+	if attErr != nil {
+		v.clearDuties()
+		return attErr
+	}
+	if propErr != nil {
+		v.clearDuties()
+		return propErr
+	}
+	if syncErr != nil {
+		log.WithError(syncErr).Warn("Error getting sync committee duties")
+	}
+
+	// Build proposer slots keyed by validator index.
+	proposerSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
+	if propCurr != nil {
+		for _, d := range propCurr.Duties {
+			proposerSlots[d.ValidatorIndex] = append(proposerSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+	if propNext != nil {
+		for _, d := range propNext.Duties {
+			proposerSlots[d.ValidatorIndex] = append(proposerSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
+
+	// Build sync committee sets.
+	syncCurrentSet := make(map[primitives.ValidatorIndex]bool)
+	syncNextSet := make(map[primitives.ValidatorIndex]bool)
+	if syncCurr != nil {
+		for _, d := range syncCurr.Duties {
+			syncCurrentSet[d.ValidatorIndex] = true
+		}
+	}
+	if syncNext != nil {
+		for _, d := range syncNext.Duties {
+			syncNextSet[d.ValidatorIndex] = true
+		}
+	}
+
+	// Convert attester duties into ValidatorDuty entries.
+	var currentDuties []*ethpb.ValidatorDuty
+	if attCurr != nil {
+		for _, d := range attCurr.Duties {
+			currentDuties = append(currentDuties, &ethpb.ValidatorDuty{
+				PublicKey:               d.Pubkey,
+				ValidatorIndex:          d.ValidatorIndex,
+				CommitteeIndex:          d.CommitteeIndex,
+				CommitteeLength:         d.CommitteeLength,
+				CommitteesAtSlot:        d.CommitteesAtSlot,
+				ValidatorCommitteeIndex: d.ValidatorCommitteeIndex,
+				AttesterSlot:            d.Slot,
+				ProposerSlots:           proposerSlots[d.ValidatorIndex],
+				IsSyncCommittee:         syncCurrentSet[d.ValidatorIndex],
+				Status:                  v.statusForPubkey(d.Pubkey),
+			})
+		}
+	}
+
+	var nextDuties []*ethpb.ValidatorDuty
+	if attNext != nil {
+		for _, d := range attNext.Duties {
+			nextDuties = append(nextDuties, &ethpb.ValidatorDuty{
+				PublicKey:               d.Pubkey,
+				ValidatorIndex:          d.ValidatorIndex,
+				CommitteeIndex:          d.CommitteeIndex,
+				CommitteeLength:         d.CommitteeLength,
+				CommitteesAtSlot:        d.CommitteesAtSlot,
+				ValidatorCommitteeIndex: d.ValidatorCommitteeIndex,
+				AttesterSlot:            d.Slot,
+				IsSyncCommittee:         syncNextSet[d.ValidatorIndex],
+				Status:                  v.statusForPubkey(d.Pubkey),
+			})
+		}
+	}
+
+	var prevDepRoot, currDepRoot []byte
+	if attCurr != nil {
+		prevDepRoot = attCurr.DependentRoot
+	}
+	if propCurr != nil {
+		currDepRoot = propCurr.DependentRoot
+	}
+
+	container := &ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot:  prevDepRoot,
+		CurrDependentRoot:  currDepRoot,
+		CurrentEpochDuties: currentDuties,
+		NextEpochDuties:    nextDuties,
+	}
+	v.dutiesLock.Lock()
+	v.duties.SetFromCombinedDutiesResponse(container)
+	v.dutiesLock.Unlock()
+	return nil
+}
+
+// statusForPubkey returns the cached validator status for a pubkey.
+func (v *validator) statusForPubkey(pk []byte) ethpb.ValidatorStatus {
+	if v.pubkeyToStatus == nil {
+		return ethpb.ValidatorStatus_UNKNOWN_STATUS
+	}
+	st, ok := v.pubkeyToStatus[bytesutil.ToBytes48(pk)]
+	if !ok || st.status == nil {
+		return ethpb.ValidatorStatus_UNKNOWN_STATUS
+	}
+	return st.status.Status
+}
+
+// fetchAttesterDuties fetches attester duties for current and next epoch in parallel.
+func (v *validator) fetchAttesterDuties(
+	ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex,
+) (current, next *ethpb.AttesterDutiesResponse, err error) {
+	var (
+		currErr, nextErr error
+		wg               sync.WaitGroup
+	)
+	wg.Go(func() {
+		current, currErr = v.validatorClient.AttesterDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		next, nextErr = v.validatorClient.AttesterDuties(ctx, epoch+1, indices)
+	})
+	wg.Wait()
+
+	if currErr != nil {
+		return nil, nil, currErr
+	}
+	if nextErr != nil {
+		return nil, nil, nextErr
+	}
+	return current, next, nil
+}
+
+// fetchProposerDuties fetches proposer duties for the current epoch.
+// Post-Fulu, also fetches next-epoch duties (deterministic via proposer_lookahead).
+func (v *validator) fetchProposerDuties(
+	ctx context.Context, epoch primitives.Epoch,
+) (current, next *ethpb.ProposerDutiesResponse, err error) {
+	var (
+		currErr, nextErr error
+		wg               sync.WaitGroup
+	)
+	wg.Go(func() {
+		current, currErr = v.validatorClient.ProposerDuties(ctx, epoch)
+	})
+	if epoch >= params.BeaconConfig().FuluForkEpoch {
+		wg.Go(func() {
+			next, nextErr = v.validatorClient.ProposerDuties(ctx, epoch+1)
+		})
+	}
+	wg.Wait()
+
+	if currErr != nil {
+		return nil, nil, currErr
+	}
+	if nextErr != nil {
+		log.WithError(nextErr).Debug("Could not get next epoch proposer duties")
+	}
+	return current, next, nil
+}
+
+// fetchSyncDuties fetches sync committee duties for current and next epoch.
+func (v *validator) fetchSyncDuties(
+	ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex,
+) (current, next *ethpb.SyncCommitteeDutiesResponse, err error) {
+	if epoch < params.BeaconConfig().AltairForkEpoch {
+		return nil, nil, nil
+	}
+
+	var (
+		currErr, nextErr error
+		wg               sync.WaitGroup
+	)
+	wg.Go(func() {
+		current, currErr = v.validatorClient.SyncCommitteeDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		next, nextErr = v.validatorClient.SyncCommitteeDuties(ctx, epoch+1, indices)
+		if nextErr != nil {
+			log.WithError(nextErr).Debug("Could not get next epoch sync committee duties")
+			nextErr = nil
+		}
+	})
+	wg.Wait()
+
+	if currErr != nil {
+		return nil, nil, currErr
+	}
+	return current, next, nil
+}
+
+// onDutiesUpdated checks for all-exited validators and starts subnet subscriptions.
+func (v *validator) onDutiesUpdated(ctx context.Context) error {
+	allExited := len(v.pubkeyToStatus) > 0
+	for _, s := range v.pubkeyToStatus {
+		if s.status != nil && s.status.Status != ethpb.ValidatorStatus_EXITED {
+			allExited = false
+			break
+		}
+	}
+	if allExited {
 		return ErrValidatorsAllExited
 	}
 
-	// Non-blocking call for beacon node to start subscriptions for aggregators.
 	md, exists := metadata.FromOutgoingContext(ctx)
 	ctx = context.Background()
 	if exists {
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 	go func() {
-		if err := v.subscribeToSubnets(ctx, resp); err != nil {
+		if err := v.subscribeToSubnets(ctx, v.duties.ToContainer()); err != nil {
 			log.WithError(err).Error("Failed to subscribe to subnets")
 		}
 	}()
