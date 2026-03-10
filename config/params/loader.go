@@ -194,6 +194,7 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("SHARD_COMMITTEE_PERIOD: %d", cfg.ShardCommitteePeriod),
 		fmt.Sprintf("MIN_VALIDATOR_WITHDRAWABILITY_DELAY: %d", cfg.MinValidatorWithdrawabilityDelay),
 		fmt.Sprintf("MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP: %d", cfg.MaxValidatorsPerWithdrawalsSweep),
+		fmt.Sprintf("MAX_BUILDERS_PER_WITHDRAWALS_SWEEP: %d", cfg.MaxBuildersPerWithdrawalsSweep),
 		fmt.Sprintf("MAX_SEED_LOOKAHEAD: %d", cfg.MaxSeedLookahead),
 		fmt.Sprintf("EJECTION_BALANCE: %d", cfg.EjectionBalance),
 		fmt.Sprintf("MIN_PER_EPOCH_CHURN_LIMIT: %d", cfg.MinPerEpochChurnLimit),
@@ -224,6 +225,7 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("ELECTRA_FORK_VERSION: %#x", cfg.ElectraForkVersion),
 		fmt.Sprintf("FULU_FORK_EPOCH: %d", cfg.FuluForkEpoch),
 		fmt.Sprintf("FULU_FORK_VERSION: %#x", cfg.FuluForkVersion),
+		fmt.Sprintf("GLOAS_FORK_VERSION: %#x", cfg.GloasForkVersion),
 		fmt.Sprintf("GLOAS_FORK_EPOCH: %d", cfg.GloasForkEpoch),
 		fmt.Sprintf("EPOCHS_PER_SUBNET_SUBSCRIPTION: %d", cfg.EpochsPerSubnetSubscription),
 		fmt.Sprintf("ATTESTATION_SUBNET_EXTRA_BITS: %d", cfg.AttestationSubnetExtraBits),
@@ -251,6 +253,7 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("AGGREGATE_DUE_BPS_GLOAS: %d", cfg.AggregateDueBPSGloas),
 		fmt.Sprintf("SYNC_MESSAGE_DUE_BPS_GLOAS: %d", cfg.SyncMessageDueBPSGloas),
 		fmt.Sprintf("CONTRIBUTION_DUE_BPS_GLOAS: %d", cfg.ContributionDueBPSGloas),
+		fmt.Sprintf("PAYLOAD_ATTESTATION_DUE_BPS: %d", cfg.PayloadAttestationDueBPS),
 	}
 
 	if len(cfg.BlobSchedule) > 0 {

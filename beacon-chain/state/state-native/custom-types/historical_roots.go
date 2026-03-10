@@ -55,9 +55,7 @@ func (r HistoricalRoots) MarshalSSZTo(dst []byte) ([]byte, error) {
 func (r HistoricalRoots) MarshalSSZ() ([]byte, error) {
 	marshalled := make([]byte, len(r)*32)
 	for i, r32 := range r {
-		for j, rr := range r32 {
-			marshalled[i*32+j] = rr
-		}
+		copy(marshalled[i*32:(i+1)*32], r32[:])
 	}
 	return marshalled, nil
 }

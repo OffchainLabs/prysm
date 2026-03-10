@@ -128,7 +128,8 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 
 	var genericSignedBlock *ethpb.GenericSignedBeaconBlock
 	// Special handling for Deneb blocks and later version because of blob side cars.
-	if blk.Version() >= version.Deneb && !blk.IsBlinded() {
+	// Gloas blocks are handled differently - no blobs in block, execution payload is separate.
+	if blk.Version() >= version.Deneb && blk.Version() < version.Gloas && !blk.IsBlinded() {
 		pb, err := blk.Proto()
 		if err != nil {
 			log.WithError(err).Error("Failed to get deneb block")
@@ -176,6 +177,11 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		return
 	}
 
+	if err := v.proposeSelfBuildEnvelope(ctx, slot, pubKey, blk); err != nil {
+		log.WithError(err).Error("Failed to propose self-build envelope")
+		return
+	}
+
 	span.SetAttributes(
 		trace.StringAttribute("blockRoot", fmt.Sprintf("%#x", blkResp.BlockRoot)),
 		trace.Int64Attribute("numDeposits", int64(len(blk.Block().Body().Deposits()))),
@@ -192,7 +198,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 }
 
 func logProposedBlock(log *logrus.Entry, blk interfaces.SignedBeaconBlock, blkRoot []byte) error {
-	if blk.Version() >= version.Bellatrix {
+	if blk.Version() >= version.Bellatrix && blk.Version() < version.Gloas {
 		p, err := blk.Block().Body().Execution()
 		if err != nil {
 			return errors.Wrap(err, "failed to get execution payload")
@@ -227,6 +233,30 @@ func logProposedBlock(log *logrus.Entry, blk interfaces.SignedBeaconBlock, blkRo
 				log = log.WithField("kzgCommitmentCount", len(kzgs))
 			}
 		}
+	}
+	if blk.Version() >= version.Gloas {
+		bid, err := blk.Block().Body().SignedExecutionPayloadBid()
+		if err != nil {
+			return errors.Wrap(err, "failed to get execution payload bid")
+		}
+		if bid != nil && bid.Message != nil {
+			msg := bid.Message
+			log = log.WithFields(logrus.Fields{
+				"builderIndex": msg.BuilderIndex,
+				"bidValue":     msg.Value,
+				"blockHash":    fmt.Sprintf("%#x", bytesutil.Trunc(msg.BlockHash)),
+				"parentHash":   fmt.Sprintf("%#x", bytesutil.Trunc(msg.ParentBlockHash)),
+				"gasLimit":     msg.GasLimit,
+			})
+			if len(msg.BlobKzgCommitments) != 0 {
+				log = log.WithField("kzgCommitmentCount", len(msg.BlobKzgCommitments))
+			}
+		}
+		payloadAtts, err := blk.Block().Body().PayloadAttestations()
+		if err != nil {
+			return errors.Wrap(err, "failed to get payload attestations")
+		}
+		log = log.WithField("payloadAttestationCount", len(payloadAtts))
 	}
 
 	br := fmt.Sprintf("%#x", bytesutil.Trunc(blkRoot))

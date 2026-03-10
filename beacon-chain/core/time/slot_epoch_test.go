@@ -233,6 +233,11 @@ func TestCanUpgradeTo(t *testing.T) {
 			forkEpoch:   &cfg.FuluForkEpoch,
 			upgradeFunc: time.CanUpgradeToFulu,
 		},
+		{
+			name:        "Gloas",
+			forkEpoch:   &cfg.GloasForkEpoch,
+			upgradeFunc: time.CanUpgradeToGloas,
+		},
 	}
 
 	for _, otc := range outerTestCases {

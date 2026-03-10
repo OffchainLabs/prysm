@@ -145,6 +145,7 @@ func toValidatorDutyV2(duty *ethpb.DutiesV2Response_Duty) (*ethpb.ValidatorDuty,
 		Status:                  duty.Status,
 		ValidatorIndex:          duty.ValidatorIndex,
 		IsSyncCommittee:         duty.IsSyncCommittee,
+		PtcSlots:                duty.PtcSlots,
 	}, nil
 }
 
@@ -390,4 +391,31 @@ func (c *grpcValidatorClient) Host() string {
 func (c *grpcValidatorClient) EnsureReady(ctx context.Context) bool {
 	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
 	return fallback.EnsureReady(ctx, provider, c.nodeClient)
+}
+
+// Gloas Fork Methods
+func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot) (*ethpb.ExecutionPayloadEnvelope, error) {
+	req := &ethpb.ExecutionPayloadEnvelopeRequest{
+		Slot: slot,
+	}
+	resp, err := c.getClient().GetExecutionPayloadEnvelope(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(
+			client.ErrConnectionIssue,
+			errors.Wrap(err, "GetExecutionPayloadEnvelope").Error(),
+		)
+	}
+	return resp.Envelope, nil
+}
+
+func (c *grpcValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
+	return c.getClient().PublishExecutionPayloadEnvelope(ctx, in)
+}
+
+func (c *grpcValidatorClient) PayloadAttestationData(_ context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+	return nil, errors.New("PayloadAttestationData not implemented")
+}
+
+func (c *grpcValidatorClient) SubmitPayloadAttestation(_ context.Context, _ *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
+	return nil, errors.New("SubmitPayloadAttestation not implemented")
 }
