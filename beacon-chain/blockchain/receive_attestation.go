@@ -139,7 +139,7 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		log.WithError(err).Error("Could not compute head from new attestations")
 		return
 	}
-	if !s.isNewHead(newHeadRoot) {
+	if !s.isNewHead(newHeadRoot, full) {
 		return
 	}
 	log.WithField("newHeadRoot", fmt.Sprintf("%#x", newHeadRoot)).Debug("Head changed due to attestations")
@@ -163,9 +163,19 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		}
 		if postGloas {
 			go func() {
-				if _, err := s.notifyForkchoiceUpdateGloas(s.ctx, newHeadBlockHash, attr); err != nil {
+				pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, newHeadBlockHash, attr)
+				if err != nil {
 					log.WithError(err).Error("Could not update forkchoice with engine")
 				}
+				if pid == nil {
+					if attr != nil {
+						log.Warn("Engine did not return a payload ID for the fork choice update with attributes")
+					}
+					return
+				}
+				var pId [8]byte
+				copy(pId[:], pid[:])
+				s.cfg.PayloadIDCache.Set(proposingSlot, newHeadRoot, pId)
 			}()
 		} else {
 			fcuArgs := &fcuConfig{

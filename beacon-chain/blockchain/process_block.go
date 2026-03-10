@@ -108,7 +108,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	}
 	if cfg.roblock.Version() < version.Gloas {
 		s.sendFCU(cfg)
-	} else if s.isNewHead(cfg.headRoot) {
+	} else if s.isNewHead(cfg.headRoot, false) { // We reach this only when the incoming block is head.
 		if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState); err != nil {
 			log.WithError(err).Error("Could not save head")
 		}
