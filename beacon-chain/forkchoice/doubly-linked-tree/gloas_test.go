@@ -1399,3 +1399,60 @@ func TestCanonicalNodeAtSlot_NilParent(t *testing.T) {
 	assert.Equal(t, [32]byte{}, root)
 	assert.Equal(t, false, full)
 }
+
+func TestFullHead_FullPayload(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, blk, err := prepareGloasForkchoiceState(ctx, 1, rootA, zeroHash, blockHashA, zeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	driftGenesisTime(f, 1, 0)
+	require.NoError(t, f.NewSlot(ctx, 1))
+
+	hr, bh, full, err := f.FullHead(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, rootA, hr)
+	assert.Equal(t, blockHashA, bh)
+	assert.Equal(t, true, full)
+}
+
+func TestFullHead_EmptyPayload(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	// Insert block A at slot 1 with payload.
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, blk, err := prepareGloasForkchoiceState(ctx, 1, rootA, zeroHash, blockHashA, zeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// Insert block B at slot 2 without payload.
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(101)
+	driftGenesisTime(f, 2, 0)
+	require.NoError(t, f.NewSlot(ctx, 2))
+	st, blk, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	// Head is B (empty), so blockHash should come from ancestor A.
+	hr, bh, full, err := f.FullHead(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, rootB, hr)
+	assert.Equal(t, blockHashA, bh)
+	assert.Equal(t, false, full)
+}

@@ -213,6 +213,7 @@ func (s *Service) Start() {
 	}
 	s.spawnProcessAttestationsRoutine()
 	go s.runLateBlockTasks()
+	go s.runLatePayloadTasks()
 }
 
 // Stop the blockchain service's main event loop and associated goroutines.
@@ -343,7 +344,7 @@ func (s *Service) initializeHead(ctx context.Context, st state.BeaconState) erro
 			return errors.Wrap(err, "could not get head state")
 		}
 	}
-	if err := s.setHead(&head{root, blk, st, blk.Block().Slot(), false}); err != nil {
+	if err := s.setHead(&head{root, blk, st, blk.Block().Slot(), false, false}); err != nil {
 		return errors.Wrap(err, "could not set head")
 	}
 	log.WithFields(logrus.Fields{
@@ -431,6 +432,7 @@ func (s *Service) saveGenesisData(ctx context.Context, genesisState state.Beacon
 		genesisBlk,
 		genesisState,
 		genesisBlk.Block().Slot(),
+		false,
 		false,
 	}); err != nil {
 		log.WithError(err).Fatal("Could not set head")
