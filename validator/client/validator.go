@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -91,7 +92,7 @@ type validator struct {
 	aggregatedSlotCommitteeIDCache     *lru.Cache
 	attSelections                      map[attSelectionKey]iface.BeaconCommitteeSelection
 	interopKeysConfig                  *local.InteropKeymanagerConfig
-	duties                             *ethpb.ValidatorDutiesContainer
+	duties                             *dutyStore
 	signedValidatorRegistrations       map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
 	proposerSettings                   *proposer.Settings
 	web3SignerConfig                   *remoteweb3signer.SetupConfig
@@ -539,7 +540,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
 
-	if v.duties == nil {
+	if !v.duties.IsInitialized() {
 		return nil, errors.New("validator duties are not initialized")
 	}
 
@@ -551,7 +552,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		syncCommitteeValidators = make(map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte)
 	)
 
-	for validator, duty := range v.duties.CurrentEpochDuties {
+	for pk, duty := range v.duties.CurrentEpochDuties() {
 		var roles []iface.ValidatorRole
 
 		if duty == nil {
@@ -569,7 +570,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		if duty.AttesterSlot == slot {
 			roles = append(roles, iface.RoleAttester)
 
-			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, bytesutil.ToBytes48(duty.PublicKey), duty.ValidatorIndex)
+			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, pk, duty.ValidatorIndex)
 			if err != nil {
 				aggregator = false
 				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(duty.PublicKey))
@@ -584,7 +585,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		// the validator checks whether it's in the sync committee of following epoch.
 		inSyncCommittee := false
 		if slots.IsEpochEnd(slot) {
-			if v.duties.NextEpochDuties[validator].IsSyncCommittee {
+			if v.duties.IsNextSyncCommittee(duty.ValidatorIndex) {
 				roles = append(roles, iface.RoleSyncCommittee)
 				inSyncCommittee = true
 			}
@@ -596,16 +597,18 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		}
 
 		if inSyncCommittee {
-			syncCommitteeValidators[duty.ValidatorIndex] = bytesutil.ToBytes48(duty.PublicKey)
+			syncCommitteeValidators[duty.ValidatorIndex] = pk
+		}
+
+		if slices.Contains(v.duties.PtcSlots(duty.ValidatorIndex), slot) {
+			roles = append(roles, iface.RolePTCMember)
 		}
 
 		if len(roles) == 0 {
 			roles = append(roles, iface.RoleUnknown)
 		}
 
-		var pubKey [fieldparams.BLSPubkeyLength]byte
-		copy(pubKey[:], duty.PublicKey)
-		rolesAt[pubKey] = roles
+		rolesAt[pk] = roles
 	}
 
 	aggregator, err := v.isSyncCommitteeAggregator(

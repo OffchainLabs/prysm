@@ -240,7 +240,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 		// Set payload attestations. New in Gloas.
 		if sBlk.Version() >= version.Gloas {
-			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head)); err != nil {
+			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head, sBlk.Block().ParentRoot())); err != nil {
 				log.WithError(err).Error("Could not set payload attestations")
 			}
 		}
