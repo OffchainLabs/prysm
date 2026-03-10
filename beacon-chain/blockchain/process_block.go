@@ -1022,9 +1022,11 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	headRoot := s.headRoot()
 	headState := s.headState(ctx)
 	s.headLock.RUnlock()
+
 	var accessRoot [32]byte
 	isFull, err := headState.IsParentBlockFull()
-	if err != nil || !isFull {
+	bid, bidErr := headState.LatestExecutionPayloadBid()
+	if err != nil || !isFull || bidErr != nil || slots.ToEpoch(bid.Slot()) < params.BeaconConfig().GloasForkEpoch {
 		accessRoot = headRoot
 	} else {
 		accessRoot, err = headState.LatestBlockHash()
