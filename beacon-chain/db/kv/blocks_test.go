@@ -151,6 +151,17 @@ var blockTests = []struct {
 			}
 			return blocks.NewSignedBeaconBlock(b)
 		}},
+	{
+		name: "gloas",
+		newBlock: func(slot primitives.Slot, root []byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
+			b := util.NewBeaconBlockGloas()
+			b.Block.Slot = slot
+			if root != nil {
+				b.Block.ParentRoot = root
+			}
+			return blocks.NewSignedBeaconBlock(b)
+		},
+	},
 }
 
 func TestStore_SaveBlock_NoDuplicates(t *testing.T) {
@@ -211,7 +222,7 @@ func TestStore_BlocksCRUD(t *testing.T) {
 			retrievedBlock, err = db.Block(ctx, blockRoot)
 			require.NoError(t, err)
 			wanted := retrievedBlock
-			if retrievedBlock.Version() >= version.Bellatrix {
+			if retrievedBlock.Version() >= version.Bellatrix && retrievedBlock.Version() < version.Gloas {
 				wanted, err = retrievedBlock.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -643,7 +654,7 @@ func TestStore_BlocksCRUD_NoCache(t *testing.T) {
 			require.NoError(t, err)
 
 			wanted := blk
-			if blk.Version() >= version.Bellatrix {
+			if blk.Version() >= version.Bellatrix && blk.Version() < version.Gloas {
 				wanted, err = blk.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1014,7 +1025,7 @@ func TestStore_SaveBlock_CanGetHighestAt(t *testing.T) {
 			b, err := db.Block(ctx, root)
 			require.NoError(t, err)
 			wanted := block1
-			if block1.Version() >= version.Bellatrix {
+			if block1.Version() >= version.Bellatrix && block1.Version() < version.Gloas {
 				wanted, err = wanted.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1032,7 +1043,7 @@ func TestStore_SaveBlock_CanGetHighestAt(t *testing.T) {
 			b, err = db.Block(ctx, root)
 			require.NoError(t, err)
 			wanted2 := block2
-			if block2.Version() >= version.Bellatrix {
+			if block2.Version() >= version.Bellatrix && block2.Version() < version.Gloas {
 				wanted2, err = block2.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1050,7 +1061,7 @@ func TestStore_SaveBlock_CanGetHighestAt(t *testing.T) {
 			b, err = db.Block(ctx, root)
 			require.NoError(t, err)
 			wanted = block3
-			if block3.Version() >= version.Bellatrix {
+			if block3.Version() >= version.Bellatrix && block3.Version() < version.Gloas {
 				wanted, err = wanted.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1086,7 +1097,7 @@ func TestStore_GenesisBlock_CanGetHighestAt(t *testing.T) {
 			b, err := db.Block(ctx, root)
 			require.NoError(t, err)
 			wanted := block1
-			if block1.Version() >= version.Bellatrix {
+			if block1.Version() >= version.Bellatrix && block1.Version() < version.Gloas {
 				wanted, err = block1.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1103,7 +1114,7 @@ func TestStore_GenesisBlock_CanGetHighestAt(t *testing.T) {
 			b, err = db.Block(ctx, root)
 			require.NoError(t, err)
 			wanted = genesisBlock
-			if genesisBlock.Version() >= version.Bellatrix {
+			if genesisBlock.Version() >= version.Bellatrix && genesisBlock.Version() < version.Gloas {
 				wanted, err = genesisBlock.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1120,7 +1131,7 @@ func TestStore_GenesisBlock_CanGetHighestAt(t *testing.T) {
 			b, err = db.Block(ctx, root)
 			require.NoError(t, err)
 			wanted = genesisBlock
-			if genesisBlock.Version() >= version.Bellatrix {
+			if genesisBlock.Version() >= version.Bellatrix && genesisBlock.Version() < version.Gloas {
 				wanted, err = genesisBlock.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1216,7 +1227,7 @@ func TestStore_BlocksBySlot_BlockRootsBySlot(t *testing.T) {
 			require.NoError(t, err)
 
 			wanted := b1
-			if b1.Version() >= version.Bellatrix {
+			if b1.Version() >= version.Bellatrix && b1.Version() < version.Gloas {
 				wanted, err = b1.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1232,7 +1243,7 @@ func TestStore_BlocksBySlot_BlockRootsBySlot(t *testing.T) {
 				t.Fatalf("Expected 2 blocks, received %d blocks", len(retrievedBlocks))
 			}
 			wanted = b2
-			if b2.Version() >= version.Bellatrix {
+			if b2.Version() >= version.Bellatrix && b2.Version() < version.Gloas {
 				wanted, err = b2.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1242,7 +1253,7 @@ func TestStore_BlocksBySlot_BlockRootsBySlot(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, true, proto.Equal(wantedPb, retrieved0Pb), "Wanted: %v, received: %v", retrievedBlocks[0], wanted)
 			wanted = b3
-			if b3.Version() >= version.Bellatrix {
+			if b3.Version() >= version.Bellatrix && b3.Version() < version.Gloas {
 				wanted, err = b3.ToBlinded()
 				require.NoError(t, err)
 			}

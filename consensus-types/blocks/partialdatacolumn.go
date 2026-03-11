@@ -78,21 +78,6 @@ func (p *PartialDataColumn) GroupID() []byte {
 	return p.groupID
 }
 
-func (p *PartialDataColumn) ExtendFromOther(other *PartialDataColumn) bool {
-	if p.Included.Len() != other.Included.Len() {
-		return false
-	}
-	var extended bool
-	for i := range other.Included.Len() {
-		if other.Included.BitAt(i) {
-			if p.ExtendFromVerifiedCell(uint64(i), other.Column[i], other.KzgProofs[i]) {
-				extended = true
-			}
-		}
-	}
-	return extended
-}
-
 func (p *PartialDataColumn) newPartsMetadata() *ethpb.PartialDataColumnPartsMetadata {
 	n := uint64(len(p.KzgCommitments))
 	available := slices.Clone(p.Included)

@@ -10,6 +10,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "debug.go",
+        "log.go",
         "maxprocs_metric.go",
     ] + select({
         ":use_cgosymbolizer": ["cgo_symbolizer.go"],

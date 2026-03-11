@@ -21,9 +21,9 @@ type GenesisProvider interface {
 }
 
 type beaconApiGenesisProvider struct {
-	jsonRestHandler rest.RestHandler
-	genesis         *structs.Genesis
-	once            sync.Once
+	handler rest.Handler
+	genesis *structs.Genesis
+	once    sync.Once
 }
 
 func (c *beaconApiValidatorClient) waitForChainStart(ctx context.Context) (*ethpb.ChainStartResponse, error) {
@@ -69,7 +69,7 @@ func (c *beaconApiGenesisProvider) Genesis(ctx context.Context) (*structs.Genesi
 	genesisJson := &structs.GetGenesisResponse{}
 	var doErr error
 	c.once.Do(func() {
-		if err := c.jsonRestHandler.Get(ctx, "/eth/v1/beacon/genesis", genesisJson); err != nil {
+		if err := c.handler.Get(ctx, "/eth/v1/beacon/genesis", genesisJson); err != nil {
 			doErr = err
 			return
 		}

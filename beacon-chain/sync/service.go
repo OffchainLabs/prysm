@@ -26,6 +26,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -41,6 +42,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattestationtypes "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
@@ -63,17 +65,18 @@ import (
 var _ runtime.Service = (*Service)(nil)
 
 const (
-	rangeLimit               uint64 = 1024
-	seenBlockSize                   = 1000
-	seenDataColumnSize              = seenBlockSize * 128 // Each block can have max 128 data columns.
-	seenUnaggregatedAttSize         = 20000
-	seenAggregatedAttSize           = 16384
-	seenSyncMsgSize                 = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
-	seenSyncContributionSize        = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
-	seenExitSize                    = 100
-	seenProposerSlashingSize        = 100
-	badBlockSize                    = 1000
-	syncMetricsInterval             = 10 * time.Second
+	rangeLimit               = 1024
+	seenBlockSize            = 1000
+	seenPayloadEnvelopeSize  = 1000
+	seenDataColumnSize       = seenBlockSize * 128 // Each block can have max 128 data columns.
+	seenUnaggregatedAttSize  = 20000
+	seenAggregatedAttSize    = 16384
+	seenSyncMsgSize          = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
+	seenSyncContributionSize = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
+	seenExitSize             = 100
+	seenProposerSlashingSize = 100
+	badBlockSize             = 1000
+	syncMetricsInterval      = 10 * time.Second
 )
 
 var (
@@ -114,6 +117,7 @@ type config struct {
 	blobStorage             *filesystem.BlobStorage
 	dataColumnStorage       *filesystem.DataColumnStorage
 	batchVerifierLimit      int
+	payloadAttestationPool  payloadattestation.PoolManager
 }
 
 // This defines the interface for interacting with block chain service
@@ -121,10 +125,12 @@ type blockchainService interface {
 	blockchain.BlockReceiver
 	blockchain.BlobReceiver
 	blockchain.DataColumnReceiver
+	blockchain.ExecutionPayloadEnvelopeReceiver
 	blockchain.HeadFetcher
 	blockchain.FinalizationFetcher
 	blockchain.ForkFetcher
 	blockchain.AttestationReceiver
+	blockchain.PayloadAttestationReceiver
 	blockchain.TimeFetcher
 	blockchain.GenesisFetcher
 	blockchain.CanonicalFetcher
@@ -136,73 +142,84 @@ type blockchainService interface {
 // Service is responsible for handling all run time p2p related operations as the
 // main entry point for network messages.
 type Service struct {
-	cfg                              *config
-	ctx                              context.Context
-	cancel                           context.CancelFunc
-	slotToPendingBlocks              *gcache.Cache
-	seenPendingBlocks                map[[32]byte]bool
-	blkRootToPendingAtts             map[[32]byte][]any
-	subHandler                       *subTopicHandler
-	pendingAttsLock                  sync.RWMutex
-	pendingQueueLock                 sync.RWMutex
-	chainStarted                     *abool.AtomicBool
-	validateBlockLock                sync.RWMutex
-	rateLimiter                      *limiter
-	seenBlockLock                    sync.RWMutex
-	seenBlockCache                   *lru.Cache
-	seenBlobLock                     sync.RWMutex
-	seenBlobCache                    *lru.Cache
-	seenDataColumnCache              *slotAwareCache
-	seenAggregatedAttestationLock    sync.RWMutex
-	seenAggregatedAttestationCache   *lru.Cache
-	seenUnAggregatedAttestationLock  sync.RWMutex
-	seenUnAggregatedAttestationCache *lru.Cache
-	seenExitLock                     sync.RWMutex
-	seenExitCache                    *lru.Cache
-	seenProposerSlashingLock         sync.RWMutex
-	seenProposerSlashingCache        *lru.Cache
-	seenAttesterSlashingLock         sync.RWMutex
-	seenAttesterSlashingCache        map[uint64]bool
-	seenSyncMessageLock              sync.RWMutex
-	seenSyncMessageCache             *lru.Cache
-	seenSyncContributionLock         sync.RWMutex
-	seenSyncContributionCache        *lru.Cache
-	badBlockCache                    *lru.Cache
-	badBlockLock                     sync.RWMutex
-	syncContributionBitsOverlapLock  sync.RWMutex
-	syncContributionBitsOverlapCache *lru.Cache
-	signatureChan                    chan *signatureVerifier
-	clockWaiter                      startup.ClockWaiter
-	initialSyncComplete              chan struct{}
-	verifierWaiter                   *verification.InitializerWaiter
-	newBlobVerifier                  verification.NewBlobVerifier
-	newColumnsVerifier               verification.NewDataColumnsVerifier
-	columnSidecarsExecSingleFlight   singleflight.Group
-	reconstructionSingleFlight       singleflight.Group
-	availableBlocker                 coverage.AvailableBlocker
-	reconstructionRandGen            *rand.Rand
-	trackedValidatorsCache           *cache.TrackedValidatorsCache
-	ctxMap                           ContextByteVersions
-	slasherEnabled                   bool
-	lcStore                          *lightClient.Store
-	dataColumnLogCh                  chan dataColumnLogEntry
-	digestActions                    perDigestSet
-	subscriptionSpawner              func(func()) // see Service.spawn for details
+	cfg                                 *config
+	ctx                                 context.Context
+	cancel                              context.CancelFunc
+	slotToPendingBlocks                 *gcache.Cache
+	seenPendingBlocks                   map[[32]byte]bool
+	blkRootToPendingAtts                map[[32]byte][]any
+	subHandler                          *subTopicHandler
+	pendingAttsLock                     sync.RWMutex
+	pendingQueueLock                    sync.RWMutex
+	chainStarted                        *abool.AtomicBool
+	validateBlockLock                   sync.RWMutex
+	rateLimiter                         *limiter
+	seenBlockLock                       sync.RWMutex
+	seenBlockCache                      *lru.Cache
+	seenPayloadEnvelopeCache            *lru.Cache
+	seenBlobLock                        sync.RWMutex
+	seenBlobCache                       *lru.Cache
+	seenDataColumnCache                 *slotAwareCache
+	seenAggregatedAttestationLock       sync.RWMutex
+	seenAggregatedAttestationCache      *lru.Cache
+	seenUnAggregatedAttestationLock     sync.RWMutex
+	seenUnAggregatedAttestationCache    *lru.Cache
+	seenExitLock                        sync.RWMutex
+	seenExitCache                       *lru.Cache
+	seenProposerSlashingLock            sync.RWMutex
+	seenProposerSlashingCache           *lru.Cache
+	seenAttesterSlashingLock            sync.RWMutex
+	seenAttesterSlashingCache           map[uint64]bool
+	seenSyncMessageLock                 sync.RWMutex
+	seenSyncMessageCache                *lru.Cache
+	seenSyncContributionLock            sync.RWMutex
+	seenSyncContributionCache           *lru.Cache
+	badBlockCache                       *lru.Cache
+	badBlockLock                        sync.RWMutex
+	badPayloadCache                     *lru.Cache
+	badPayloadLock                      sync.RWMutex
+	syncContributionBitsOverlapLock     sync.RWMutex
+	syncContributionBitsOverlapCache    *lru.Cache
+	signatureChan                       chan *signatureVerifier
+	clockWaiter                         startup.ClockWaiter
+	initialSyncComplete                 chan struct{}
+	verifierWaiter                      *verification.InitializerWaiter
+	newBlobVerifier                     verification.NewBlobVerifier
+	newColumnsVerifier                  verification.NewDataColumnsVerifier
+	newPayloadAttestationVerifier       verification.NewPayloadAttestationMsgVerifier
+	columnSidecarsExecSingleFlight      singleflight.Group
+	reconstructionSingleFlight          singleflight.Group
+	availableBlocker                    coverage.AvailableBlocker
+	reconstructionRandGen               *rand.Rand
+	trackedValidatorsCache              *cache.TrackedValidatorsCache
+	ctxMap                              ContextByteVersions
+	slasherEnabled                      bool
+	lcStore                             *lightClient.Store
+	dataColumnLogCh                     chan dataColumnLogEntry
+	payloadAttestationCache             *cache.PayloadAttestationCache
+	digestActions                       perDigestSet
+	subscriptionSpawner                 func(func()) // see Service.spawn for details
+	newExecutionPayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
+	pendingPayloadEnvelopes             map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
+	pendingEnvelopeLock                 sync.RWMutex
+	selfBuildSigFailures                int
 }
 
 // NewService initializes new regular sync service.
 func NewService(ctx context.Context, opts ...Option) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
-		ctx:                   ctx,
-		cancel:                cancel,
-		chainStarted:          abool.New(),
-		cfg:                   &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:   gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
-		seenPendingBlocks:     make(map[[32]byte]bool),
-		blkRootToPendingAtts:  make(map[[32]byte][]any),
-		dataColumnLogCh:       make(chan dataColumnLogEntry, 1000),
-		reconstructionRandGen: rand.NewGenerator(),
+		ctx:                     ctx,
+		cancel:                  cancel,
+		chainStarted:            abool.New(),
+		cfg:                     &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
+		slotToPendingBlocks:     gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
+		seenPendingBlocks:       make(map[[32]byte]bool),
+		blkRootToPendingAtts:    make(map[[32]byte][]any),
+		dataColumnLogCh:         make(chan dataColumnLogEntry, 1000),
+		reconstructionRandGen:   rand.NewGenerator(),
+		payloadAttestationCache: &cache.PayloadAttestationCache{},
+		pendingPayloadEnvelopes: make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
 	}
 
 	for _, opt := range opts {
@@ -254,6 +271,12 @@ func newDataColumnsVerifierFromInitializer(ini *verification.Initializer) verifi
 	}
 }
 
+func newPayloadAttestationMessageFromInitializer(ini *verification.Initializer) verification.NewPayloadAttestationMsgVerifier {
+	return func(pa payloadattestationtypes.ROMessage, reqs []verification.Requirement) verification.PayloadAttestationMsgVerifier {
+		return ini.NewPayloadAttestationMsgVerifier(pa, reqs)
+	}
+}
+
 // Start the regular sync service.
 func (s *Service) Start() {
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -263,6 +286,8 @@ func (s *Service) Start() {
 	}
 	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
 	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
+	s.newPayloadAttestationVerifier = newPayloadAttestationMessageFromInitializer(v)
+	s.newExecutionPayloadEnvelopeVerifier = newPayloadVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
 
@@ -283,6 +308,7 @@ func (s *Service) Start() {
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
 
 	s.processPendingBlocksQueue()
+	s.processPendingPayloadEnvelopeQueue()
 	s.maintainPeerStatuses()
 	s.resyncIfBehind()
 
@@ -360,6 +386,7 @@ func (s *Service) Status() error {
 // and prevent DoS.
 func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
+	s.seenPayloadEnvelopeCache = lruwrpr.New(seenPayloadEnvelopeSize)
 	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
 	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
@@ -371,6 +398,7 @@ func (s *Service) initCaches() {
 	s.seenAttesterSlashingCache = make(map[uint64]bool)
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
+	s.badPayloadCache = lruwrpr.New(badBlockSize)
 }
 
 func (s *Service) waitForChainStart() {
@@ -609,4 +637,10 @@ type Checker interface {
 	Synced() bool
 	Status() error
 	Resync() error
+}
+
+func newPayloadVerifierFromInitializer(ini *verification.Initializer) verification.NewExecutionPayloadEnvelopeVerifier {
+	return func(e interfaces.ROSignedExecutionPayloadEnvelope, reqs []verification.Requirement) verification.ExecutionPayloadEnvelopeVerifier {
+		return ini.NewPayloadEnvelopeVerifier(e, reqs)
+	}
 }

@@ -24,8 +24,8 @@ func TestStreamBlocks_UnsupportedConsensusVersion(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Get(
 		gomock.Any(),
 		gomock.Any(),
 		&abstractSignedBlockResponseJson{},
@@ -36,7 +36,7 @@ func TestStreamBlocks_UnsupportedConsensusVersion(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	streamBlocksClient := validatorClient.streamBlocks(ctx, &eth.StreamBlocksRequest{}, time.Millisecond*100)
 	_, err := streamBlocksClient.Recv()
 	assert.ErrorContains(t, "unsupported consensus version `foo`", err)
@@ -146,8 +146,8 @@ func TestStreamBlocks_Error(t *testing.T) {
 
 					ctx := t.Context()
 
-					jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-					jsonRestHandler.EXPECT().Get(
+					handler := mock.NewMockJsonRestHandler(ctrl)
+					handler.EXPECT().Get(
 						gomock.Any(),
 						gomock.Any(),
 						&abstractSignedBlockResponseJson{},
@@ -162,7 +162,7 @@ func TestStreamBlocks_Error(t *testing.T) {
 					).Times(1)
 
 					beaconBlockConverter := testSuite.generateBeaconBlockConverter(ctrl, testCase.conversionError)
-					validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler, beaconBlockConverter: beaconBlockConverter}
+					validatorClient := &beaconApiValidatorClient{handler: handler, beaconBlockConverter: beaconBlockConverter}
 					streamBlocksClient := validatorClient.streamBlocks(ctx, &eth.StreamBlocksRequest{}, time.Millisecond*100)
 
 					_, err := streamBlocksClient.Recv()
@@ -197,7 +197,7 @@ func TestStreamBlocks_Phase0Valid(t *testing.T) {
 			ctx := t.Context()
 
 			signedBlockResponseJson := abstractSignedBlockResponseJson{}
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 			beaconBlockConverter := mock.NewMockBeaconBlockConverter(ctrl)
 
 			// For the first call, return a block that satisfies the verifiedOnly condition. This block should be returned by the first Recv().
@@ -212,7 +212,7 @@ func TestStreamBlocks_Phase0Valid(t *testing.T) {
 			marshalledSignedBeaconBlockContainer1, err := json.Marshal(signedBeaconBlockContainer1)
 			require.NoError(t, err)
 
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v2/beacon/blocks/head",
 				&signedBlockResponseJson,
@@ -249,7 +249,7 @@ func TestStreamBlocks_Phase0Valid(t *testing.T) {
 			marshalledSignedBeaconBlockContainer2, err := json.Marshal(signedBeaconBlockContainer2)
 			require.NoError(t, err)
 
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v2/beacon/blocks/head",
 				&signedBlockResponseJson,
@@ -276,7 +276,7 @@ func TestStreamBlocks_Phase0Valid(t *testing.T) {
 
 			// The fourth call is only necessary when verifiedOnly == true since the previous block was optimistic
 			if testCase.verifiedOnly {
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					"/eth/v2/beacon/blocks/head",
 					&signedBlockResponseJson,
@@ -299,7 +299,7 @@ func TestStreamBlocks_Phase0Valid(t *testing.T) {
 				).Times(1)
 			}
 
-			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler, beaconBlockConverter: beaconBlockConverter}
+			validatorClient := &beaconApiValidatorClient{handler: handler, beaconBlockConverter: beaconBlockConverter}
 			streamBlocksClient := validatorClient.streamBlocks(ctx, &eth.StreamBlocksRequest{VerifiedOnly: testCase.verifiedOnly}, time.Millisecond*100)
 
 			// Get the first block
@@ -358,7 +358,7 @@ func TestStreamBlocks_AltairValid(t *testing.T) {
 			ctx := t.Context()
 
 			signedBlockResponseJson := abstractSignedBlockResponseJson{}
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 			beaconBlockConverter := mock.NewMockBeaconBlockConverter(ctrl)
 
 			// For the first call, return a block that satisfies the verifiedOnly condition. This block should be returned by the first Recv().
@@ -373,7 +373,7 @@ func TestStreamBlocks_AltairValid(t *testing.T) {
 			marshalledSignedBeaconBlockContainer1, err := json.Marshal(signedBeaconBlockContainer1)
 			require.NoError(t, err)
 
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v2/beacon/blocks/head",
 				&signedBlockResponseJson,
@@ -410,7 +410,7 @@ func TestStreamBlocks_AltairValid(t *testing.T) {
 			marshalledSignedBeaconBlockContainer2, err := json.Marshal(signedBeaconBlockContainer2)
 			require.NoError(t, err)
 
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v2/beacon/blocks/head",
 				&signedBlockResponseJson,
@@ -437,7 +437,7 @@ func TestStreamBlocks_AltairValid(t *testing.T) {
 
 			// The fourth call is only necessary when verifiedOnly == true since the previous block was optimistic
 			if testCase.verifiedOnly {
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					"/eth/v2/beacon/blocks/head",
 					&signedBlockResponseJson,
@@ -460,7 +460,7 @@ func TestStreamBlocks_AltairValid(t *testing.T) {
 				).Times(1)
 			}
 
-			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler, beaconBlockConverter: beaconBlockConverter}
+			validatorClient := &beaconApiValidatorClient{handler: handler, beaconBlockConverter: beaconBlockConverter}
 			streamBlocksClient := validatorClient.streamBlocks(ctx, &eth.StreamBlocksRequest{VerifiedOnly: testCase.verifiedOnly}, time.Millisecond*100)
 
 			// Get the first block
@@ -519,7 +519,7 @@ func TestStreamBlocks_BellatrixValid(t *testing.T) {
 			ctx := t.Context()
 
 			signedBlockResponseJson := abstractSignedBlockResponseJson{}
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 			beaconBlockConverter := mock.NewMockBeaconBlockConverter(ctrl)
 
 			// For the first call, return a block that satisfies the verifiedOnly condition. This block should be returned by the first Recv().
@@ -534,7 +534,7 @@ func TestStreamBlocks_BellatrixValid(t *testing.T) {
 			marshalledSignedBeaconBlockContainer1, err := json.Marshal(signedBeaconBlockContainer1)
 			require.NoError(t, err)
 
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v2/beacon/blocks/head",
 				&signedBlockResponseJson,
@@ -571,7 +571,7 @@ func TestStreamBlocks_BellatrixValid(t *testing.T) {
 			marshalledSignedBeaconBlockContainer2, err := json.Marshal(signedBeaconBlockContainer2)
 			require.NoError(t, err)
 
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v2/beacon/blocks/head",
 				&signedBlockResponseJson,
@@ -598,7 +598,7 @@ func TestStreamBlocks_BellatrixValid(t *testing.T) {
 
 			// The fourth call is only necessary when verifiedOnly == true since the previous block was optimistic
 			if testCase.verifiedOnly {
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					"/eth/v2/beacon/blocks/head",
 					&signedBlockResponseJson,
@@ -621,7 +621,7 @@ func TestStreamBlocks_BellatrixValid(t *testing.T) {
 				).Times(1)
 			}
 
-			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler, beaconBlockConverter: beaconBlockConverter}
+			validatorClient := &beaconApiValidatorClient{handler: handler, beaconBlockConverter: beaconBlockConverter}
 			streamBlocksClient := validatorClient.streamBlocks(ctx, &eth.StreamBlocksRequest{VerifiedOnly: testCase.verifiedOnly}, time.Millisecond*100)
 
 			// Get the first block
@@ -680,7 +680,7 @@ func TestStreamBlocks_CapellaValid(t *testing.T) {
 			ctx := t.Context()
 
 			signedBlockResponseJson := abstractSignedBlockResponseJson{}
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 			beaconBlockConverter := mock.NewMockBeaconBlockConverter(ctrl)
 
 			// For the first call, return a block that satisfies the verifiedOnly condition. This block should be returned by the first Recv().
@@ -695,7 +695,7 @@ func TestStreamBlocks_CapellaValid(t *testing.T) {
 			marshalledSignedBeaconBlockContainer1, err := json.Marshal(signedBeaconBlockContainer1)
 			require.NoError(t, err)
 
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v2/beacon/blocks/head",
 				&signedBlockResponseJson,
@@ -732,7 +732,7 @@ func TestStreamBlocks_CapellaValid(t *testing.T) {
 			marshalledSignedBeaconBlockContainer2, err := json.Marshal(signedBeaconBlockContainer2)
 			require.NoError(t, err)
 
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v2/beacon/blocks/head",
 				&signedBlockResponseJson,
@@ -759,7 +759,7 @@ func TestStreamBlocks_CapellaValid(t *testing.T) {
 
 			// The fourth call is only necessary when verifiedOnly == true since the previous block was optimistic
 			if testCase.verifiedOnly {
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					"/eth/v2/beacon/blocks/head",
 					&signedBlockResponseJson,
@@ -782,7 +782,7 @@ func TestStreamBlocks_CapellaValid(t *testing.T) {
 				).Times(1)
 			}
 
-			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler, beaconBlockConverter: beaconBlockConverter}
+			validatorClient := &beaconApiValidatorClient{handler: handler, beaconBlockConverter: beaconBlockConverter}
 			streamBlocksClient := validatorClient.streamBlocks(ctx, &eth.StreamBlocksRequest{VerifiedOnly: testCase.verifiedOnly}, time.Millisecond*100)
 
 			// Get the first block
@@ -841,7 +841,7 @@ func TestStreamBlocks_DenebValid(t *testing.T) {
 			ctx := t.Context()
 
 			signedBlockResponseJson := abstractSignedBlockResponseJson{}
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 			beaconBlockConverter := mock.NewMockBeaconBlockConverter(ctrl)
 
 			// For the first call, return a block that satisfies the verifiedOnly condition. This block should be returned by the first Recv().
@@ -856,7 +856,7 @@ func TestStreamBlocks_DenebValid(t *testing.T) {
 
 			marshalledSignedBeaconBlockContainer1, err := json.Marshal(denebBlock)
 			require.NoError(t, err)
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v2/beacon/blocks/head",
 				&signedBlockResponseJson,
@@ -885,7 +885,7 @@ func TestStreamBlocks_DenebValid(t *testing.T) {
 			marshalledSignedBeaconBlockContainer2, err := json.Marshal(denebBlock2)
 			require.NoError(t, err)
 
-			jsonRestHandler.EXPECT().Get(
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v2/beacon/blocks/head",
 				&signedBlockResponseJson,
@@ -902,7 +902,7 @@ func TestStreamBlocks_DenebValid(t *testing.T) {
 
 			// The fourth call is only necessary when verifiedOnly == true since the previous block was optimistic
 			if testCase.verifiedOnly {
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					"/eth/v2/beacon/blocks/head",
 					&signedBlockResponseJson,
@@ -918,7 +918,7 @@ func TestStreamBlocks_DenebValid(t *testing.T) {
 				).Times(1)
 			}
 
-			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler, beaconBlockConverter: beaconBlockConverter}
+			validatorClient := &beaconApiValidatorClient{handler: handler, beaconBlockConverter: beaconBlockConverter}
 			streamBlocksClient := validatorClient.streamBlocks(ctx, &eth.StreamBlocksRequest{VerifiedOnly: testCase.verifiedOnly}, time.Millisecond*100)
 
 			// Get the first block

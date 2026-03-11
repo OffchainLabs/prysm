@@ -31,9 +31,9 @@ func TestBeaconApiValidatorClient_GetAttestationDataValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v1/validator/attestation_data?committee_index=%d&slot=%d", committeeIndex, slot),
 		&produceAttestationDataResponseJson,
@@ -44,7 +44,7 @@ func TestBeaconApiValidatorClient_GetAttestationDataValid(t *testing.T) {
 		generateValidAttestation(uint64(slot), uint64(committeeIndex)),
 	).Times(2)
 
-	validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := beaconApiValidatorClient{handler: handler}
 	expectedResp, expectedErr := validatorClient.attestationData(ctx, slot, committeeIndex)
 
 	resp, err := validatorClient.AttestationData(
@@ -65,9 +65,9 @@ func TestBeaconApiValidatorClient_GetAttestationDataError(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 	produceAttestationDataResponseJson := structs.GetAttestationDataResponse{}
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v1/validator/attestation_data?committee_index=%d&slot=%d", committeeIndex, slot),
 		&produceAttestationDataResponseJson,
@@ -78,7 +78,7 @@ func TestBeaconApiValidatorClient_GetAttestationDataError(t *testing.T) {
 		generateValidAttestation(uint64(slot), uint64(committeeIndex)),
 	).Times(2)
 
-	validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := beaconApiValidatorClient{handler: handler}
 	expectedResp, expectedErr := validatorClient.attestationData(ctx, slot, committeeIndex)
 
 	resp, err := validatorClient.AttestationData(
@@ -139,8 +139,8 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().PostSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v2/beacon/blocks",
 		gomock.Any(),
@@ -149,7 +149,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockValid(t *testing.T) {
 		nil, nil, nil,
 	).Times(1)
 
-	validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := beaconApiValidatorClient{handler: handler}
 	expectedResp, expectedErr := validatorClient.proposeBeaconBlock(
 		ctx,
 		&ethpb.GenericSignedBeaconBlock{
@@ -166,8 +166,8 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockError_ThenPass(t *testing.T)
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().PostSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v2/beacon/blocks",
 		gomock.Any(),
@@ -179,7 +179,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockError_ThenPass(t *testing.T)
 		},
 	).Times(1)
 
-	jsonRestHandler.EXPECT().Post(
+	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/beacon/blocks",
 		gomock.Any(),
@@ -189,7 +189,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockError_ThenPass(t *testing.T)
 		nil,
 	).Times(1)
 
-	validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := beaconApiValidatorClient{handler: handler}
 	expectedResp, expectedErr := validatorClient.proposeBeaconBlock(
 		ctx,
 		&ethpb.GenericSignedBeaconBlock{
@@ -308,10 +308,10 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockAllTypes(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			if !tt.wantErr {
-				jsonRestHandler.EXPECT().PostSSZ(
+				handler.EXPECT().PostSSZ(
 					gomock.Any(),
 					tt.expectedPath,
 					gomock.Any(),
@@ -319,7 +319,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockAllTypes(t *testing.T) {
 				).Return(nil, nil, nil).Times(1)
 			}
 
-			validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			validatorClient := beaconApiValidatorClient{handler: handler}
 			resp, err := validatorClient.proposeBeaconBlock(ctx, tt.block)
 
 			if tt.wantErr {
@@ -366,9 +366,9 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
-			jsonRestHandler.EXPECT().PostSSZ(
+			handler.EXPECT().PostSSZ(
 				gomock.Any(),
 				"/eth/v2/beacon/blocks",
 				gomock.Any(),
@@ -377,7 +377,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
 
 			if tt.expectJSON {
 				// When SSZ fails, it falls back to JSON
-				jsonRestHandler.EXPECT().Post(
+				handler.EXPECT().Post(
 					gomock.Any(),
 					"/eth/v2/beacon/blocks",
 					gomock.Any(),
@@ -386,7 +386,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
 				).Return(tt.sszError).Times(1)
 			}
 
-			validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			validatorClient := beaconApiValidatorClient{handler: handler}
 			_, err := validatorClient.proposeBeaconBlock(
 				ctx,
 				&ethpb.GenericSignedBeaconBlock{
@@ -507,10 +507,10 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockJSONFallback(t *testing.T) {
 			defer ctrl.Finish()
 
 			ctx := t.Context()
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			// SSZ call fails with 406 to trigger JSON fallback
-			jsonRestHandler.EXPECT().PostSSZ(
+			handler.EXPECT().PostSSZ(
 				gomock.Any(),
 				tt.expectedPath,
 				gomock.Any(),
@@ -521,7 +521,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockJSONFallback(t *testing.T) {
 			}).Times(1)
 
 			// JSON fallback
-			jsonRestHandler.EXPECT().Post(
+			handler.EXPECT().Post(
 				gomock.Any(),
 				tt.expectedPath,
 				gomock.Any(),
@@ -529,7 +529,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockJSONFallback(t *testing.T) {
 				gomock.Any(),
 			).Return(tt.jsonError).Times(1)
 
-			validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			validatorClient := beaconApiValidatorClient{handler: handler}
 			resp, err := validatorClient.proposeBeaconBlock(ctx, tt.block)
 
 			if tt.wantErr {
@@ -547,29 +547,12 @@ func TestBeaconApiValidatorClient_Host(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	hosts := []string{"http://localhost:8080", "http://localhost:8081"}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().SwitchHost(
-		hosts[0],
-	).Times(1)
-	jsonRestHandler.EXPECT().Host().Return(
-		hosts[0],
-	).Times(1)
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Host().Return("http://localhost:8080").Times(1)
 
-	validatorClient := beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-	validatorClient.SwitchHost(hosts[0])
+	validatorClient := beaconApiValidatorClient{handler: handler}
 	host := validatorClient.Host()
-	require.Equal(t, hosts[0], host)
-
-	jsonRestHandler.EXPECT().SwitchHost(
-		hosts[1],
-	).Times(1)
-	jsonRestHandler.EXPECT().Host().Return(
-		hosts[1],
-	).Times(1)
-	validatorClient.SwitchHost(hosts[1])
-	host = validatorClient.Host()
-	require.Equal(t, hosts[1], host)
+	require.Equal(t, "http://localhost:8080", host)
 }
 
 // Helper functions for generating test blocks for newer consensus versions

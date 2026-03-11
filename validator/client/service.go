@@ -207,7 +207,6 @@ func (v *ValidatorService) Start() {
 		graffitiStruct:                 v.graffitiStruct,
 		graffitiOrderedIndex:           graffitiOrderedIndex,
 		conn:                           v.conn,
-		currentHostIndex:               0,
 		validatorClient:                validatorClient,
 		chainClient:                    beaconChainClientFactory.NewChainClient(v.conn),
 		nodeClient:                     nodeclientfactory.NewNodeClient(v.conn),
@@ -229,6 +228,7 @@ func (v *ValidatorService) Start() {
 		logValidatorPerformance:        v.logValidatorPerformance,
 		emitAccountMetrics:             v.emitAccountMetrics,
 		enableAPI:                      v.enableAPI,
+		duties:                         &dutyStore{},
 		distributed:                    v.distributed,
 		disableDutiesPolling:           v.disableDutiesPolling,
 		accountsChangedChannel:         make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
@@ -247,7 +247,7 @@ func (v *ValidatorService) Start() {
 		case isHealthy := <-hm.HealthyChan():
 			if !isHealthy {
 				// wait until the next health tracker update
-				log.Warn("Validator service health check failed, waiting for healthy beacon node...")
+				log.WithField("url", v.validator.Host()).Warn("Validator service health check failed, waiting for healthy beacon node...")
 				continue
 			}
 

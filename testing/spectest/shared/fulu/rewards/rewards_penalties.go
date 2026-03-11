@@ -65,7 +65,7 @@ func runPrecomputeRewardsAndPenaltiesTest(t *testing.T, testFolderPath string) {
 	require.NoError(t, err, "Failed to decompress")
 	preBeaconStateBase := &ethpb.BeaconStateFulu{}
 	require.NoError(t, preBeaconStateBase.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
-	preBeaconState, err := state_native.InitializeFromProtoFulu(preBeaconStateBase)
+	preBeaconState, err := state_native.InitializeFromProtoUnsafeFulu(preBeaconStateBase)
 	require.NoError(t, err)
 
 	vp, bp, err := electra.InitializePrecomputeValidators(ctx, preBeaconState)

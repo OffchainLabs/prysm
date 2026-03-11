@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -475,18 +476,13 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: BadRequest, Err: errors.Errorf("invalid request: %v", err)}
 	}
 
-	committeeIndex := primitives.CommitteeIndex(0)
-	if slots.ToEpoch(req.Slot) < params.BeaconConfig().ElectraForkEpoch {
-		committeeIndex = req.CommitteeIndex
-	}
-
 	s.AttestationCache.RLock()
 	res := s.AttestationCache.Get()
 	if res != nil && res.Slot == req.Slot {
 		s.AttestationCache.RUnlock()
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
-			CommitteeIndex:  committeeIndex,
+			CommitteeIndex:  attestationDataIndex(req, res.IsPayloadFull),
 			BeaconBlockRoot: res.HeadRoot,
 			Source: &ethpb.Checkpoint{
 				Epoch: res.Source.Epoch,
@@ -510,7 +506,7 @@ func (s *Service) GetAttestationData(
 	if res != nil && res.Slot == req.Slot {
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
-			CommitteeIndex:  committeeIndex,
+			CommitteeIndex:  attestationDataIndex(req, res.IsPayloadFull),
 			BeaconBlockRoot: res.HeadRoot,
 			Source: &ethpb.Checkpoint{
 				Epoch: res.Source.Epoch,
@@ -552,10 +548,22 @@ func (s *Service) GetAttestationData(
 		}
 	}
 	justifiedCheckpoint := headState.CurrentJustifiedCheckpoint()
+	var isPayloadFull bool
+	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
+		fcRoot, full := s.ChainInfoFetcher.CanonicalNodeAtSlot(req.Slot)
+		if fcRoot != bytesutil.ToBytes32(headRoot) {
+			log.WithFields(logrus.Fields{
+				"fcRoot":   hexutil.Encode(fcRoot[:]),
+				"headRoot": hexutil.Encode(headRoot),
+			}).Error("Forkchoice head root does not match head root")
+		}
+		isPayloadFull = full
+	}
 
 	if err = s.AttestationCache.Put(&cache.AttestationConsensusData{
-		Slot:     req.Slot,
-		HeadRoot: headRoot,
+		Slot:          req.Slot,
+		HeadRoot:      headRoot,
+		IsPayloadFull: isPayloadFull,
 		Target: forkchoicetypes.Checkpoint{
 			Epoch: targetEpoch,
 			Root:  targetRoot,
@@ -570,7 +578,7 @@ func (s *Service) GetAttestationData(
 
 	return &ethpb.AttestationData{
 		Slot:            req.Slot,
-		CommitteeIndex:  committeeIndex,
+		CommitteeIndex:  attestationDataIndex(req, isPayloadFull),
 		BeaconBlockRoot: headRoot,
 		Source: &ethpb.Checkpoint{
 			Epoch: justifiedCheckpoint.Epoch,
@@ -581,6 +589,25 @@ func (s *Service) GetAttestationData(
 			Root:  targetRoot[:],
 		},
 	}, nil
+}
+
+// attestationDataIndex returns the index for attestation data.
+// Pre-Electra: uses the requested committee index.
+// Electra to Gloas: always 0.
+// Post-Gloas: signals payload status of the attested head block.
+func attestationDataIndex(req *ethpb.AttestationDataRequest, isPayloadFull bool) primitives.CommitteeIndex {
+	epoch := slots.ToEpoch(req.Slot)
+	if epoch < params.BeaconConfig().ElectraForkEpoch {
+		return req.CommitteeIndex
+	}
+	if epoch < params.BeaconConfig().GloasForkEpoch {
+		// eip-7549 moves index outside
+		return 0
+	}
+	if isPayloadFull {
+		return 1
+	}
+	return 0
 }
 
 // SubmitSyncMessage submits the sync committee message to the network.

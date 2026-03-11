@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/fulu"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -143,10 +144,11 @@ func ProcessSlot(ctx context.Context, state state.BeaconState) (state.BeaconStat
 		return nil, err
 	}
 
-	// Spec v1.6.1 (pseudocode):
+	// <spec fn="process_slot" fork="gloas" lines="11-13" hash="62b28839">
 	// # [New in Gloas:EIP7732]
 	// # Unset the next payload availability
 	// state.execution_payload_availability[(state.slot + 1) % SLOTS_PER_HISTORICAL_ROOT] = 0b0
+	// </spec>
 	if state.Version() >= version.Gloas {
 		index := uint64((state.Slot() + 1) % params.BeaconConfig().SlotsPerHistoricalRoot)
 		if err := state.UpdateExecutionPayloadAvailabilityAtIndex(index, 0x0); err != nil {
@@ -315,7 +317,11 @@ func ProcessSlotsCore(ctx context.Context, span trace.Span, state state.BeaconSt
 func ProcessEpoch(ctx context.Context, state state.BeaconState) (state.BeaconState, error) {
 	var err error
 	if time.CanProcessEpoch(state) {
-		if state.Version() >= version.Fulu {
+		if state.Version() >= version.Gloas {
+			if err = processEpochGloas(ctx, state); err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("could not process %s epoch", version.String(state.Version())))
+			}
+		} else if state.Version() >= version.Fulu {
 			if err = fulu.ProcessEpoch(ctx, state); err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("could not process %s epoch", version.String(state.Version())))
 			}
@@ -394,6 +400,15 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 
 	if time.CanUpgradeToFulu(slot) {
 		state, err = fulu.UpgradeToFulu(ctx, state)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return nil, err
+		}
+		upgraded = true
+	}
+
+	if time.CanUpgradeToGloas(slot) {
+		state, err = gloas.UpgradeToGloas(state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			return nil, err

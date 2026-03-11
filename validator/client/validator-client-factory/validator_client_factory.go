@@ -13,7 +13,7 @@ func NewValidatorClient(
 	opt ...beaconApi.ValidatorClientOpt,
 ) iface.ValidatorClient {
 	if features.Get().EnableBeaconRESTApi {
-		return beaconApi.NewBeaconApiValidatorClient(validatorConn.GetRestHandler(), opt...)
+		return beaconApi.NewBeaconApiValidatorClient(validatorConn.GetRestConnectionProvider(), opt...)
 	}
 	return grpcApi.NewGrpcValidatorClient(validatorConn)
 }

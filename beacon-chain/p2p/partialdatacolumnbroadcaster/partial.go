@@ -724,9 +724,13 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 		existing := p.getDataColumn(topic, groupIDBytes)
 		var extended bool
 		if existing != nil {
-			extended = existing.ExtendFromOther(&c)
-			if extended {
-				p.getPartialVerifier(topic, groupIDBytes).MarkIncludedCellsVerified()
+			verifier := p.getPartialVerifier(topic, groupIDBytes)
+			for i := range c.Included.Len() {
+				if c.Included.BitAt(i) {
+					if verifier.ExtendFromVerifiedCell(uint64(i), c.Column[i], c.KzgProofs[i]) {
+						extended = true
+					}
+				}
 			}
 		} else {
 			verifier, err := p.partialVerifierFromTrustedColumn(&c)

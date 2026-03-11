@@ -684,3 +684,75 @@ func Test_validateCommitteeIndexAndCount_Boundary(t *testing.T) {
 	require.ErrorContains(t, "committee index", err)
 	require.Equal(t, pubsub.ValidationReject, res)
 }
+
+func Test_validateGloasCommitteeIndex(t *testing.T) {
+	tests := []struct {
+		name            string
+		committeeIndex  primitives.CommitteeIndex
+		attestationSlot primitives.Slot
+		blockSlot       primitives.Slot
+		wantResult      pubsub.ValidationResult
+		wantErr         string
+	}{
+		{
+			name:            "committee index >= 2 should reject",
+			committeeIndex:  2,
+			attestationSlot: 10,
+			blockSlot:       10,
+			wantResult:      pubsub.ValidationReject,
+			wantErr:         "committee index must be < 2",
+		},
+		{
+			name:            "committee index 0 should accept",
+			committeeIndex:  0,
+			attestationSlot: 10,
+			blockSlot:       10,
+			wantResult:      pubsub.ValidationAccept,
+			wantErr:         "",
+		},
+		{
+			name:            "committee index 1 different-slot should accept",
+			committeeIndex:  1,
+			attestationSlot: 10,
+			blockSlot:       9,
+			wantResult:      pubsub.ValidationAccept,
+			wantErr:         "",
+		},
+		{
+			name:            "committee index 1 same-slot should reject",
+			committeeIndex:  1,
+			attestationSlot: 10,
+			blockSlot:       10,
+			wantResult:      pubsub.ValidationReject,
+			wantErr:         "same slot attestations must use committee index 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockChain := &mockChain.ChainService{
+				BlockSlot: tt.blockSlot,
+			}
+			s := &Service{
+				cfg: &config{
+					chain: mockChain,
+				},
+			}
+
+			data := &ethpb.AttestationData{
+				Slot:            tt.attestationSlot,
+				CommitteeIndex:  tt.committeeIndex,
+				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot"), 32),
+			}
+
+			result, err := s.validateGloasCommitteeIndex(data)
+
+			require.Equal(t, tt.wantResult, result)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, tt.wantErr, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

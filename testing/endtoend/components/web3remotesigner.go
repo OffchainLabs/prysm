@@ -148,10 +148,12 @@ func (w *Web3RemoteSigner) monitorStart() {
 			panic(err)
 		}
 		res, err := client.Do(req)
-		_ = err
-		if res != nil && res.StatusCode == http.StatusOK {
-			close(w.started)
-			return
+		if err == nil && res != nil {
+			_ = res.Body.Close()
+			if res.StatusCode == http.StatusOK {
+				close(w.started)
+				return
+			}
 		}
 		time.Sleep(time.Second)
 	}
@@ -181,6 +183,7 @@ func (w *Web3RemoteSigner) PublicKeys(ctx context.Context) ([]bls.PublicKey, err
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("returned status code %d", res.StatusCode)
 	}

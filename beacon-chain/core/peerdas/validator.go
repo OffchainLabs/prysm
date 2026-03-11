@@ -94,23 +94,22 @@ func PopulateFromPartialHeader(header *ethpb.PartialDataColumnHeader) (*PartialD
 
 // ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#validator-custody
-func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validatorsIndex map[primitives.ValidatorIndex]bool) (uint64, error) {
-	totalNodeBalance := uint64(0)
+func ValidatorsCustodyRequirement(st beaconState.ReadOnlyBalances, validatorsIndex map[primitives.ValidatorIndex]bool) (uint64, error) {
+	cfg := params.BeaconConfig()
+	idxs := make([]primitives.ValidatorIndex, 0, len(validatorsIndex))
 	for index := range validatorsIndex {
-		validator, err := state.ValidatorAtIndexReadOnly(index)
-		if err != nil {
-			return 0, errors.Wrapf(err, "validator at index %v", index)
-		}
-
-		totalNodeBalance += validator.EffectiveBalance()
+		idxs = append(idxs, index)
+	}
+	totalBalance, err := st.EffectiveBalanceSum(idxs)
+	if err != nil {
+		return 0, errors.Wrap(err, "effective balances")
 	}
 
-	cfg := params.BeaconConfig()
 	numberOfCustodyGroups := cfg.NumberOfCustodyGroups
 	validatorCustodyRequirement := cfg.ValidatorCustodyRequirement
 	balancePerAdditionalCustodyGroup := cfg.BalancePerAdditionalCustodyGroup
 
-	count := totalNodeBalance / balancePerAdditionalCustodyGroup
+	count := totalBalance / balancePerAdditionalCustodyGroup
 	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroups), nil
 }
 

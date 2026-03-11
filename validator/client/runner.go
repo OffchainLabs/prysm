@@ -64,8 +64,7 @@ func newRunner(ctx context.Context, v iface.Validator, monitor *healthMonitor) (
 			" and will continue to use settings provided in the beacon node.")
 	}
 	if err := v.PushProposerSettings(ctx, currentSlot, true); err != nil {
-		v.Done()
-		return nil, errors.Wrap(err, "failed to update proposer settings")
+		log.WithError(err).Warn("Failed to push initial proposer settings, will retry on next slot")
 	}
 	return &runner{
 		validator:     v,
@@ -94,7 +93,7 @@ func (r *runner) run(ctx context.Context) {
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
 			if !r.healthMonitor.IsHealthy() {
-				log.Warn("Beacon node unhealthy, stopping runner")
+				log.WithField("url", r.validator.Host()).Warn("Beacon node unhealthy, stopping runner")
 				return
 			}
 
@@ -253,6 +252,8 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.Validat
 					v.SubmitSyncCommitteeMessage(slotCtx, slot, pubKey)
 				case iface.RoleSyncCommitteeAggregator:
 					v.SubmitSignedContributionAndProof(slotCtx, slot, pubKey)
+				case iface.RolePTCMember:
+					v.SubmitPayloadAttestation(slotCtx, slot, pubKey)
 				case iface.RoleUnknown:
 					log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:]))).Trace("No active roles, doing nothing")
 				default:

@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "execution.go",
+        "execution_payload_envelope.go",
         "factory.go",
         "get_payload.go",
         "getters.go",
@@ -51,6 +52,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "execution_payload_envelope_test.go",
         "execution_test.go",
         "factory_test.go",
         "getters_test.go",

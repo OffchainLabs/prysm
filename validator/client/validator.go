@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,7 +49,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -92,7 +92,7 @@ type validator struct {
 	aggregatedSlotCommitteeIDCache     *lru.Cache
 	attSelections                      map[attSelectionKey]iface.BeaconCommitteeSelection
 	interopKeysConfig                  *local.InteropKeymanagerConfig
-	duties                             *ethpb.ValidatorDutiesContainer
+	duties                             *dutyStore
 	signedValidatorRegistrations       map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
 	proposerSettings                   *proposer.Settings
 	web3SignerConfig                   *remoteweb3signer.SetupConfig
@@ -115,7 +115,6 @@ type validator struct {
 	km                                 keymanager.IKeymanager
 	accountChangedSub                  event.Subscription
 	ticker                             slots.Ticker
-	currentHostIndex                   uint64
 	genesisTime                        time.Time
 	graffiti                           []byte
 	voteStats                          voteStats
@@ -125,11 +124,6 @@ type validatorStatus struct {
 	publicKey []byte
 	status    *ethpb.ValidatorStatusResponse
 	index     primitives.ValidatorIndex
-}
-
-type attSelectionKey struct {
-	slot  primitives.Slot
-	index primitives.ValidatorIndex
 }
 
 // Done cleans up the validator.
@@ -536,167 +530,6 @@ func retrieveLatestRecord(recs []*dbCommon.AttestationRecord) *dbCommon.Attestat
 	return chosenRec
 }
 
-// UpdateDuties checks the slot number to determine if the validator's
-// list of upcoming assignments needs to be updated. For example, at the
-// beginning of a new epoch.
-func (v *validator) UpdateDuties(ctx context.Context) error {
-	ctx, span := trace.StartSpan(ctx, "validator.UpdateDuties")
-	defer span.End()
-
-	validatingKeys, err := v.km.FetchValidatingPublicKeys(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Filter out the slashable public keys from the duties request.
-	filteredKeys := make([][fieldparams.BLSPubkeyLength]byte, 0, len(validatingKeys))
-	v.blacklistedPubkeysLock.RLock()
-	for _, pubKey := range validatingKeys {
-		if ok := v.blacklistedPubkeys[pubKey]; !ok {
-			filteredKeys = append(filteredKeys, pubKey)
-		} else {
-			log.WithField(
-				"pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:])),
-			).Warn("Not including slashable public key from slashing protection import " +
-				"in request to update validator duties")
-		}
-	}
-	v.blacklistedPubkeysLock.RUnlock()
-	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
-	req := &ethpb.DutiesRequest{
-		Epoch:      epoch,
-		PublicKeys: bytesutil.FromBytes48Array(filteredKeys),
-	}
-
-	// If duties is nil it means we have had no prior duties and just started up.
-	resp, err := v.validatorClient.Duties(ctx, req)
-	if err != nil || resp == nil {
-		v.dutiesLock.Lock()
-		v.duties = nil // Clear assignments so we know to retry the request.
-		v.dutiesLock.Unlock()
-		log.WithError(err).Error("Error getting validator duties")
-		return err
-	}
-
-	ss, err := slots.EpochStart(epoch)
-	if err != nil {
-		return err
-	}
-	v.dutiesLock.Lock()
-	v.duties = resp
-	v.logDuties(ss, v.duties.CurrentEpochDuties, v.duties.NextEpochDuties)
-	v.dutiesLock.Unlock()
-
-	allExitedCounter := 0
-	for i := range resp.CurrentEpochDuties {
-		if resp.CurrentEpochDuties[i].Status == ethpb.ValidatorStatus_EXITED {
-			allExitedCounter++
-		}
-	}
-	if allExitedCounter != 0 && allExitedCounter == len(resp.CurrentEpochDuties) {
-		return ErrValidatorsAllExited
-	}
-
-	// Non-blocking call for beacon node to start subscriptions for aggregators.
-	// Make sure to copy metadata into a new context
-	md, exists := metadata.FromOutgoingContext(ctx)
-	ctx = context.Background()
-	if exists {
-		ctx = metadata.NewOutgoingContext(ctx, md)
-	}
-	go func() {
-		if err := v.subscribeToSubnets(ctx, resp); err != nil {
-			log.WithError(err).Error("Failed to subscribe to subnets")
-		}
-	}()
-
-	return nil
-}
-
-// subscribeToSubnets iterates through each validator duty, signs each slot, and asks beacon node
-// to eagerly subscribe to subnets so that the aggregator has attestations to aggregate.
-func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.ValidatorDutiesContainer) error {
-	ctx, span := trace.StartSpan(ctx, "validator.subscribeToSubnets")
-	defer span.End()
-
-	subscribeSlots := make([]primitives.Slot, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	subscribeCommitteeIndices := make([]primitives.CommitteeIndex, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	subscribeIsAggregator := make([]bool, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	activeDuties := make([]*ethpb.ValidatorDuty, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	alreadySubscribed := make(map[[64]byte]bool)
-
-	if v.distributed {
-		// Get aggregated selection proofs to calculate isAggregator.
-		if err := v.aggregatedSelectionProofs(ctx, duties); err != nil {
-			return errors.Wrap(err, "could not get aggregated selection proofs")
-		}
-	}
-
-	for _, duty := range duties.CurrentEpochDuties {
-		pk := bytesutil.ToBytes48(duty.PublicKey)
-		if duty.Status == ethpb.ValidatorStatus_ACTIVE || duty.Status == ethpb.ValidatorStatus_EXITING {
-			attesterSlot := duty.AttesterSlot
-			committeeIndex := duty.CommitteeIndex
-			validatorIndex := duty.ValidatorIndex
-
-			alreadySubscribedKey := validatorSubnetSubscriptionKey(attesterSlot, committeeIndex)
-			if _, ok := alreadySubscribed[alreadySubscribedKey]; ok {
-				continue
-			}
-
-			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, attesterSlot, pk, validatorIndex)
-			if err != nil {
-				return errors.Wrap(err, "could not check if a validator is an aggregator")
-			}
-			if aggregator {
-				alreadySubscribed[alreadySubscribedKey] = true
-			}
-
-			subscribeSlots = append(subscribeSlots, attesterSlot)
-			subscribeCommitteeIndices = append(subscribeCommitteeIndices, committeeIndex)
-			subscribeIsAggregator = append(subscribeIsAggregator, aggregator)
-			activeDuties = append(activeDuties, duty)
-		}
-	}
-
-	for _, duty := range duties.NextEpochDuties {
-		if duty.Status == ethpb.ValidatorStatus_ACTIVE || duty.Status == ethpb.ValidatorStatus_EXITING {
-			attesterSlot := duty.AttesterSlot
-			committeeIndex := duty.CommitteeIndex
-			validatorIndex := duty.ValidatorIndex
-
-			alreadySubscribedKey := validatorSubnetSubscriptionKey(attesterSlot, committeeIndex)
-			if _, ok := alreadySubscribed[alreadySubscribedKey]; ok {
-				continue
-			}
-
-			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, attesterSlot, bytesutil.ToBytes48(duty.PublicKey), validatorIndex)
-			if err != nil {
-				return errors.Wrap(err, "could not check if a validator is an aggregator")
-			}
-			if aggregator {
-				alreadySubscribed[alreadySubscribedKey] = true
-			}
-
-			subscribeSlots = append(subscribeSlots, attesterSlot)
-			subscribeCommitteeIndices = append(subscribeCommitteeIndices, committeeIndex)
-			subscribeIsAggregator = append(subscribeIsAggregator, aggregator)
-			activeDuties = append(activeDuties, duty)
-		}
-	}
-
-	_, err := v.validatorClient.SubscribeCommitteeSubnets(ctx,
-		&ethpb.CommitteeSubnetsSubscribeRequest{
-			Slots:        subscribeSlots,
-			CommitteeIds: subscribeCommitteeIndices,
-			IsAggregator: subscribeIsAggregator,
-		},
-		activeDuties,
-	)
-
-	return err
-}
-
 // RolesAt slot returns the validator roles at the given slot. Returns nil if the
 // validator is known to not have a roles at the slot. Returns UNKNOWN if the
 // validator assignments are unknown. Otherwise, returns a valid ValidatorRole map.
@@ -707,7 +540,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
 
-	if v.duties == nil {
+	if !v.duties.IsInitialized() {
 		return nil, errors.New("validator duties are not initialized")
 	}
 
@@ -719,7 +552,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		syncCommitteeValidators = make(map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte)
 	)
 
-	for validator, duty := range v.duties.CurrentEpochDuties {
+	for pk, duty := range v.duties.CurrentEpochDuties() {
 		var roles []iface.ValidatorRole
 
 		if duty == nil {
@@ -737,7 +570,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		if duty.AttesterSlot == slot {
 			roles = append(roles, iface.RoleAttester)
 
-			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, bytesutil.ToBytes48(duty.PublicKey), duty.ValidatorIndex)
+			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, pk, duty.ValidatorIndex)
 			if err != nil {
 				aggregator = false
 				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(duty.PublicKey))
@@ -752,7 +585,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		// the validator checks whether it's in the sync committee of following epoch.
 		inSyncCommittee := false
 		if slots.IsEpochEnd(slot) {
-			if v.duties.NextEpochDuties[validator].IsSyncCommittee {
+			if v.duties.IsNextSyncCommittee(duty.ValidatorIndex) {
 				roles = append(roles, iface.RoleSyncCommittee)
 				inSyncCommittee = true
 			}
@@ -764,16 +597,18 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		}
 
 		if inSyncCommittee {
-			syncCommitteeValidators[duty.ValidatorIndex] = bytesutil.ToBytes48(duty.PublicKey)
+			syncCommitteeValidators[duty.ValidatorIndex] = pk
+		}
+
+		if slices.Contains(v.duties.PtcSlots(duty.ValidatorIndex), slot) {
+			roles = append(roles, iface.RolePTCMember)
 		}
 
 		if len(roles) == 0 {
 			roles = append(roles, iface.RoleUnknown)
 		}
 
-		var pubKey [fieldparams.BLSPubkeyLength]byte
-		copy(pubKey[:], duty.PublicKey)
-		rolesAt[pubKey] = roles
+		rolesAt[pk] = roles
 	}
 
 	aggregator, err := v.isSyncCommitteeAggregator(
@@ -980,16 +815,18 @@ func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, doma
 	return res, nil
 }
 
-// getAttestationData fetches attestation data from the beacon node with caching for post-Electra.
-// Post-Electra, attestation data is identical for all validators in the same slot (committee index is always 0),
-// so we cache it to avoid redundant beacon node requests.
+// getAttestationData fetches attestation data from the beacon node with caching for Electra.
+// During Electra (pre-Gloas), attestation data is identical for all validators in the same slot
+// (committee index is always 0), so we cache it to avoid redundant beacon node requests.
 func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot, committeeIndex primitives.CommitteeIndex) (*ethpb.AttestationData, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.getAttestationData")
 	defer span.End()
 
-	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
+	epoch := slots.ToEpoch(slot)
+	postElectra := epoch >= params.BeaconConfig().ElectraForkEpoch
 
-	// Pre-Electra: no caching since committee index varies per validator
+	// Pre-Electra: committee index varies per validator.
+	// Post-Gloas: index signals payload status.
 	if !postElectra {
 		return v.validatorClient.AttestationData(ctx, &ethpb.AttestationDataRequest{
 			Slot:           slot,
@@ -997,7 +834,7 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 		})
 	}
 
-	// Post-Electra: check cache first (committee index is always 0)
+	// Post Electra: committee index is always 0 or consistent payload status, safe to cache
 	v.cachedAttestationDataLock.RLock()
 	if v.cachedAttestationData != nil && v.cachedAttestationData.Slot == slot {
 		data := v.cachedAttestationData
@@ -1026,114 +863,6 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 	v.cachedAttestationData = data
 
 	return data, nil
-}
-
-func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.ValidatorDuty, nextEpochDuties []*ethpb.ValidatorDuty) {
-	attesterKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
-	for i := range attesterKeys {
-		attesterKeys[i] = make([]string, 0)
-	}
-	proposerKeys := make([]string, params.BeaconConfig().SlotsPerEpoch)
-	epochStartSlot, err := slots.EpochStart(slots.ToEpoch(slot))
-	if err != nil {
-		log.WithError(err).Error("Could not calculate epoch start. Ignoring logging duties.")
-		return
-	}
-	var totalProposingKeys, totalAttestingKeys uint64
-	for _, duty := range currentEpochDuties {
-		pubkey := fmt.Sprintf("%#x", duty.PublicKey)
-		if v.emitAccountMetrics {
-			ValidatorStatusesGaugeVec.WithLabelValues(pubkey, fmt.Sprintf("%#x", duty.ValidatorIndex)).Set(float64(duty.Status))
-		}
-
-		// Only interested in validators who are attesting/proposing.
-		// Note that SLASHING validators will have duties but their results are ignored by the network so we don't bother with them.
-		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
-			continue
-		}
-
-		truncatedPubkey := fmt.Sprintf("%#x", bytesutil.Trunc(duty.PublicKey))
-		attesterSlotInEpoch := duty.AttesterSlot - epochStartSlot
-		if attesterSlotInEpoch >= params.BeaconConfig().SlotsPerEpoch {
-			log.WithField("duty", duty).Warn("Invalid attester slot")
-		} else {
-			attesterKeys[attesterSlotInEpoch] = append(attesterKeys[attesterSlotInEpoch], truncatedPubkey)
-			totalAttestingKeys++
-			if v.emitAccountMetrics {
-				ValidatorNextAttestationSlotGaugeVec.WithLabelValues(pubkey).Set(float64(duty.AttesterSlot))
-			}
-		}
-		if v.emitAccountMetrics && duty.IsSyncCommittee {
-			ValidatorInSyncCommitteeGaugeVec.WithLabelValues(pubkey).Set(float64(1))
-		} else if v.emitAccountMetrics && !duty.IsSyncCommittee {
-			// clear the metric out if the validator is not in the current sync committee anymore otherwise it will be left at 1
-			ValidatorInSyncCommitteeGaugeVec.WithLabelValues(pubkey).Set(float64(0))
-		}
-
-		for _, proposerSlot := range duty.ProposerSlots {
-			proposerSlotInEpoch := proposerSlot - epochStartSlot
-			if proposerSlotInEpoch >= params.BeaconConfig().SlotsPerEpoch {
-				log.WithField("duty", duty).Warn("Invalid proposer slot")
-			} else {
-				proposerKeys[proposerSlotInEpoch] = truncatedPubkey
-				totalProposingKeys++
-			}
-			if v.emitAccountMetrics {
-				ValidatorNextProposalSlotGaugeVec.WithLabelValues(pubkey).Set(float64(proposerSlot))
-			}
-		}
-	}
-	for _, duty := range nextEpochDuties {
-		// for the next epoch, currently we are only interested in whether the validator is in the next sync committee or not
-		pubkey := fmt.Sprintf("%#x", duty.PublicKey)
-
-		// Only interested in validators who are attesting/proposing.
-		// Note that slashed validators will have duties but their results are ignored by the network so we don't bother with them.
-		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
-			continue
-		}
-
-		if v.emitAccountMetrics && duty.IsSyncCommittee {
-			ValidatorInNextSyncCommitteeGaugeVec.WithLabelValues(pubkey).Set(float64(1))
-		} else if v.emitAccountMetrics && !duty.IsSyncCommittee {
-			// clear the metric out if the validator is now not in the next sync committee otherwise it will be left at 1
-			ValidatorInNextSyncCommitteeGaugeVec.WithLabelValues(pubkey).Set(float64(0))
-		}
-	}
-
-	log.WithFields(logrus.Fields{
-		"proposerCount": totalProposingKeys,
-		"attesterCount": totalAttestingKeys,
-	}).Infof("Schedule for epoch %d", slots.ToEpoch(slot))
-	for i := primitives.Slot(0); i < params.BeaconConfig().SlotsPerEpoch; i++ {
-		startTime, err := slots.StartTime(v.genesisTime, epochStartSlot+i)
-		if err != nil {
-			log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to log duties!")
-			return
-		}
-		durationTillDuty := (time.Until(startTime) + time.Second).Truncate(time.Second) // Round up to next second.
-
-		slotLog := log.WithFields(logrus.Fields{})
-		isProposer := proposerKeys[i] != ""
-		if isProposer {
-			slotLog = slotLog.WithField("proposerPubkey", proposerKeys[i])
-		}
-		isAttester := len(attesterKeys[i]) > 0
-		if isAttester {
-			slotLog = slotLog.WithFields(logrus.Fields{
-				"slot":            epochStartSlot + i,
-				"slotInEpoch":     (epochStartSlot + i) % params.BeaconConfig().SlotsPerEpoch,
-				"attesterCount":   len(attesterKeys[i]),
-				"attesterPubkeys": attesterKeys[i],
-			})
-		}
-		if durationTillDuty > 0 {
-			slotLog = slotLog.WithField("timeUntilDuty", durationTillDuty)
-		}
-		if isProposer || isAttester {
-			slotLog.Infof("Duties schedule")
-		}
-	}
 }
 
 // ProposerSettings gets the current proposer settings saved in memory validator
@@ -1220,57 +949,6 @@ func (v *validator) StartEventStream(ctx context.Context, topics []string) {
 	v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
 }
 
-func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadEvent) error {
-	if head == nil {
-		return errors.New("received empty head event")
-	}
-	prevDependentRoot, err := bytesutil.DecodeHexWithLength(head.PreviousDutyDependentRoot, fieldparams.RootLength)
-	if err != nil {
-		return errors.Wrap(err, "failed to decode previous duty dependent root")
-	}
-	if bytes.Equal(prevDependentRoot, params.BeaconConfig().ZeroHash[:]) {
-		return nil
-	}
-	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
-	ss, err := slots.EpochStart(epoch + 1)
-	if err != nil {
-		return errors.Wrap(err, "failed to get epoch start")
-	}
-	deadline := v.SlotDeadline(ss - 1)
-	dutiesCtx, cancel := context.WithDeadline(ctx, deadline)
-	defer cancel()
-	v.dutiesLock.RLock()
-	needsPrevDependentRootUpdate := v.duties == nil || !bytes.Equal(prevDependentRoot, v.duties.PrevDependentRoot)
-	v.dutiesLock.RUnlock()
-	if needsPrevDependentRootUpdate {
-		// There's an edge case when the initial duties are not set yet
-		// This routine will lock and recompute them right after the initial duties finishes.
-		if err := v.UpdateDuties(dutiesCtx); err != nil {
-			return errors.Wrap(err, "failed to update duties")
-		}
-		log.Info("Updated duties due to previous dependent root change")
-		return nil
-	}
-	currDepedentRoot, err := bytesutil.DecodeHexWithLength(head.CurrentDutyDependentRoot, fieldparams.RootLength)
-	if err != nil {
-		return errors.Wrap(err, "failed to decode current duty dependent root")
-	}
-	if bytes.Equal(currDepedentRoot, params.BeaconConfig().ZeroHash[:]) {
-		return nil
-	}
-	v.dutiesLock.RLock()
-	needsCurrDependentRootUpdate := v.duties == nil || !bytes.Equal(currDepedentRoot, v.duties.CurrDependentRoot)
-	v.dutiesLock.RUnlock()
-	if !needsCurrDependentRootUpdate {
-		return nil
-	}
-	if err := v.UpdateDuties(dutiesCtx); err != nil {
-		return errors.Wrap(err, "failed to update duties")
-	}
-	log.Info("Updated duties due to current dependent root change")
-	return nil
-}
-
 func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) {
 	if event == nil || event.Data == nil {
 		log.Warn("Received empty event")
@@ -1311,65 +989,8 @@ func (v *validator) Host() string {
 	return v.validatorClient.Host()
 }
 
-func (v *validator) changeHost() {
-	hosts := v.hosts()
-	if len(hosts) <= 1 {
-		return
-	}
-	next := (v.currentHostIndex + 1) % uint64(len(hosts))
-	log.WithFields(logrus.Fields{
-		"currentHost": hosts[v.currentHostIndex],
-		"nextHost":    hosts[next],
-	}).Warn("Beacon node is not responding, switching host")
-	v.validatorClient.SwitchHost(hosts[next])
-	v.currentHostIndex = next
-}
-
-// hosts returns the list of configured beacon node hosts.
-func (v *validator) hosts() []string {
-	if features.Get().EnableBeaconRESTApi {
-		return v.conn.GetRestConnectionProvider().Hosts()
-	}
-	return v.conn.GetGrpcConnectionProvider().Hosts()
-}
-
-// numHosts returns the number of configured beacon node hosts.
-func (v *validator) numHosts() int {
-	return len(v.hosts())
-}
-
-func (v *validator) FindHealthyHost(ctx context.Context) bool {
-	numHosts := v.numHosts()
-	startingHost := v.Host()
-	attemptedHosts := []string{}
-
-	// Check all hosts for a fully synced node
-	for i := range numHosts {
-		if v.nodeClient.IsReady(ctx) {
-			if len(attemptedHosts) > 0 {
-				log.WithFields(logrus.Fields{
-					"previousHost":   startingHost,
-					"newHost":        v.Host(),
-					"failedAttempts": attemptedHosts,
-				}).Info("Failover succeeded: connected to healthy beacon node")
-			}
-			return true
-		}
-		log.WithField("host", v.Host()).Debug("Beacon node not fully synced")
-		attemptedHosts = append(attemptedHosts, v.Host())
-
-		// Try next host if not the last iteration
-		if i < numHosts-1 {
-			v.changeHost()
-		}
-	}
-
-	if numHosts == 1 {
-		log.WithField("host", v.Host()).Warn("Beacon node is not fully synced, no backup node configured")
-	} else {
-		log.Warn("No fully synced beacon node found")
-	}
-	return false
+func (v *validator) EnsureReady(ctx context.Context) bool {
+	return v.validatorClient.EnsureReady(ctx)
 }
 
 func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {
@@ -1574,70 +1195,6 @@ func (v *validator) buildSignedRegReqs(
 		}
 	}
 	return signedValRegRequests
-}
-
-func (v *validator) aggregatedSelectionProofs(ctx context.Context, duties *ethpb.ValidatorDutiesContainer) error {
-	ctx, span := trace.StartSpan(ctx, "validator.aggregatedSelectionProofs")
-	defer span.End()
-
-	// Lock the selection proofs until we receive response from DV.
-	v.attSelectionLock.Lock()
-	defer v.attSelectionLock.Unlock()
-
-	// Create new instance of attestation selections map.
-	v.attSelections = make(map[attSelectionKey]iface.BeaconCommitteeSelection)
-
-	var req []iface.BeaconCommitteeSelection
-	for _, duty := range duties.CurrentEpochDuties {
-		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
-			continue
-		}
-
-		pk := bytesutil.ToBytes48(duty.PublicKey)
-		slotSig, err := v.signSlotWithSelectionProof(ctx, pk, duty.AttesterSlot)
-		if err != nil {
-			return err
-		}
-
-		req = append(req, iface.BeaconCommitteeSelection{
-			SelectionProof: slotSig,
-			Slot:           duty.AttesterSlot,
-			ValidatorIndex: duty.ValidatorIndex,
-		})
-	}
-
-	resp, err := v.validatorClient.AggregatedSelections(ctx, req)
-	if err != nil {
-		return err
-	}
-
-	// Store aggregated selection proofs in state.
-	for _, s := range resp {
-		v.attSelections[attSelectionKey{
-			slot:  s.Slot,
-			index: s.ValidatorIndex,
-		}] = s
-	}
-
-	return nil
-}
-
-func (v *validator) attSelection(key attSelectionKey) ([]byte, error) {
-	v.attSelectionLock.Lock()
-	defer v.attSelectionLock.Unlock()
-
-	s, ok := v.attSelections[key]
-	if !ok {
-		return nil, errors.Errorf("selection proof not found for the given slot=%d and validator_index=%d", key.slot, key.index)
-	}
-
-	return s.SelectionProof, nil
-}
-
-// This constructs a validator subscribed key, it's used to track
-// which subnet has already been pending requested.
-func validatorSubnetSubscriptionKey(slot primitives.Slot, committeeIndex primitives.CommitteeIndex) [64]byte {
-	return bytesutil.ToBytes64(append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(committeeIndex))...))
 }
 
 // This tracks all validators' voting status.

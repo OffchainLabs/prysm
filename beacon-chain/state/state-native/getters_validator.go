@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/pkg/errors"
 )
 
 // Validators participating in consensus on the beacon chain.
@@ -80,6 +81,25 @@ func (b *BeaconState) ValidatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Va
 	return b.validatorAtIndex(idx)
 }
 
+// EffectiveBalances returns the sum of the effective balances of the given list of validator indices, the eb of each given validator, or an
+// error if one of the indices is out of bounds, or the state wasn't correctly initialized.
+func (b *BeaconState) EffectiveBalanceSum(idxs []primitives.ValidatorIndex) (uint64, error) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	var sum uint64
+	for i := range idxs {
+		if b.validatorsMultiValue == nil {
+			return 0, errors.Wrap(state.ErrNilValidatorsInState, "nil validators multi-value slice")
+		}
+		v, err := b.validatorsMultiValue.At(b, uint64(idxs[i]))
+		if err != nil {
+			return 0, errors.Wrap(err, "validators multi value at index")
+		}
+		sum += v.EffectiveBalance
+	}
+	return sum, nil
+}
+
 func (b *BeaconState) validatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Validator, error) {
 	if b.validatorsMultiValue == nil {
 		return &ethpb.Validator{}, nil
@@ -119,6 +139,11 @@ func (b *BeaconState) ValidatorIndexByPubkey(key [fieldparams.BLSPubkeyLength]by
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
+	return b.validatorIndexByPubkey(key)
+}
+
+// Lock free version of ValidatorIndexByPubkey. This assumes that a lock is already held on BeaconState.
+func (b *BeaconState) validatorIndexByPubkey(key [fieldparams.BLSPubkeyLength]byte) (primitives.ValidatorIndex, bool) {
 	numOfVals := b.validatorsMultiValue.Len(b)
 
 	idx, ok := b.valMapHandler.Get(key)

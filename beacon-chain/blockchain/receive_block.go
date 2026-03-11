@@ -45,6 +45,8 @@ type BlockReceiver interface {
 	HasBlock(ctx context.Context, root [32]byte) bool
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
 	BlockBeingSynced([32]byte) bool
+	GetBlockPreState(ctx context.Context, b blocks.ROBlock) (state.BeaconState, error)
+	GetPrestateToPropose(ctx context.Context, b blocks.ROBlock) (state.BeaconState, error)
 }
 
 // BlobReceiver interface defines the methods of chain service for receiving new
@@ -95,18 +97,17 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err != nil {
 		return errors.Wrap(err, "block copy")
 	}
-
-	preState, err := s.getBlockPreState(ctx, blockCopy.Block())
-	if err != nil {
-		return errors.Wrap(err, "could not get block's prestate")
-	}
-
-	currentCheckpoints := s.saveCurrentCheckpoints(preState)
 	roblock, err := blocks.NewROBlockWithRoot(blockCopy, blockRoot)
 	if err != nil {
 		return errors.Wrap(err, "new ro block with root")
 	}
 
+	preState, err := s.GetBlockPreState(ctx, roblock)
+	if err != nil {
+		return errors.Wrap(err, "could not get block's prestate")
+	}
+
+	currentCheckpoints := s.saveCurrentCheckpoints(preState)
 	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
 	if err != nil {
 		return errors.Wrap(err, "validator execution and consensus")
@@ -152,7 +153,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 
 	// Have we been finalizing? Should we start saving hot states to db?
 	if err := s.checkSaveHotStateDB(ctx); err != nil {
-		return errors.Wrap(err, "check save hot state db")
+		log.WithError(err).Error("Could not check save hot state DB")
 	}
 
 	// We apply the same heuristic to some of our more important caches.
@@ -211,6 +212,16 @@ func (s *Service) validateExecutionAndConsensus(
 	preState state.BeaconState,
 	block blocks.ROBlock,
 ) (state.BeaconState, bool, error) {
+	if block.Version() >= version.Gloas {
+		postState, err := s.validateStateTransition(ctx, preState, block)
+		if errors.Is(err, ErrNotDescendantOfFinalized) {
+			return nil, false, invalidBlock{error: err, root: block.Root()}
+		}
+		if err != nil {
+			return nil, false, errors.Wrap(err, "failed to validate consensus state transition function")
+		}
+		return postState, false, nil
+	}
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	if err != nil {
 		return nil, false, err
@@ -244,6 +255,10 @@ func (s *Service) validateExecutionAndConsensus(
 }
 
 func (s *Service) handleDA(ctx context.Context, avs das.AvailabilityChecker, block blocks.ROBlock) (time.Duration, error) {
+	// Gloas DA is handled on the payload enevelope.
+	if block.Version() >= version.Gloas {
+		return 0, nil
+	}
 	var err error
 	start := time.Now()
 	if avs != nil {
@@ -351,6 +366,8 @@ func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedSta
 			}
 		}()
 	}
+
+	go s.checkpointStateCache.EvictUpTo(finalized.Epoch)
 }
 
 // ReceiveBlockBatch processes the whole block batch at once, assuming the block batch is linear ,transitioning
@@ -633,7 +650,7 @@ func (s *Service) validateExecutionOnBlock(ctx context.Context, ver int, header 
 	isValidPayload, err := s.notifyNewPayload(ctx, ver, header, block)
 	if err != nil {
 		s.cfg.ForkChoiceStore.Lock()
-		err = s.handleInvalidExecutionError(ctx, err, block.Root(), block.Block().ParentRoot())
+		err = s.handleInvalidExecutionError(ctx, err, block.Root(), block.Block().ParentRoot(), [32]byte(header.BlockHash()))
 		s.cfg.ForkChoiceStore.Unlock()
 		return false, err
 	}

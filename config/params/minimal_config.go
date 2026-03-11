@@ -31,6 +31,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	// Initial values
 	minimalConfig.BLSWithdrawalPrefixByte = byte(0)
 	minimalConfig.ETH1AddressWithdrawalPrefixByte = byte(1)
+	minimalConfig.BuilderWithdrawalPrefixByte = byte(3)
 
 	// Time parameters
 	minimalConfig.SecondsPerSlot = 6
@@ -102,6 +103,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.ElectraForkEpoch = math.MaxUint64
 	minimalConfig.FuluForkVersion = []byte{6, 0, 0, 1}
 	minimalConfig.FuluForkEpoch = math.MaxUint64
+	minimalConfig.GloasForkVersion = []byte{7, 0, 0, 1}
 	minimalConfig.GloasForkEpoch = minimalConfig.FarFutureEpoch
 
 	minimalConfig.SyncCommitteeSize = 32

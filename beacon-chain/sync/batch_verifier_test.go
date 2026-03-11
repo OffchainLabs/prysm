@@ -86,3 +86,70 @@ func TestValidateWithBatchVerifier(t *testing.T) {
 		})
 	}
 }
+
+// Regression test: verifyBatch must not mutate caller-provided SignatureBatch sets.
+// Since validateWithBatchVerifier no longer copies the set, any mutation in the
+// aggregation/dedup path would corrupt the caller's data.
+func TestVerifyBatch_DoesNotMutateInputSets(t *testing.T) {
+	_, keys, err := util.DeterministicDepositsAndKeys(10)
+	assert.NoError(t, err)
+
+	msg1 := [32]byte{'A'}
+	msg2 := [32]byte{'B'}
+
+	sig0 := keys[0].Sign(msg1[:])
+	sig1 := keys[1].Sign(msg2[:])
+	sig2 := keys[2].Sign(msg1[:]) // Same message as sig0 — triggers AggregateBatch
+
+	set0 := &bls.SignatureBatch{
+		Messages:     [][32]byte{msg1},
+		PublicKeys:   []bls.PublicKey{keys[0].PublicKey()},
+		Signatures:   [][]byte{sig0.Marshal()},
+		Descriptions: []string{"sig0"},
+	}
+	set1 := &bls.SignatureBatch{
+		Messages:     [][32]byte{msg2},
+		PublicKeys:   []bls.PublicKey{keys[1].PublicKey()},
+		Signatures:   [][]byte{sig1.Marshal()},
+		Descriptions: []string{"sig1"},
+	}
+	set2 := &bls.SignatureBatch{
+		Messages:     [][32]byte{msg1},
+		PublicKeys:   []bls.PublicKey{keys[2].PublicKey()},
+		Signatures:   [][]byte{sig2.Marshal()},
+		Descriptions: []string{"sig2"},
+	}
+	// Duplicate of set0 to exercise RemoveDuplicates.
+	set3 := &bls.SignatureBatch{
+		Messages:     [][32]byte{msg1},
+		PublicKeys:   []bls.PublicKey{keys[0].PublicKey()},
+		Signatures:   [][]byte{sig0.Marshal()},
+		Descriptions: []string{"sig0-dup"},
+	}
+
+	// Snapshot original state.
+	orig0 := set0.Copy()
+	orig1 := set1.Copy()
+	orig2 := set2.Copy()
+	orig3 := set3.Copy()
+
+	batch := []*signatureVerifier{
+		{set: set0, resChan: make(chan error, 1)},
+		{set: set1, resChan: make(chan error, 1)},
+		{set: set2, resChan: make(chan error, 1)},
+		{set: set3, resChan: make(chan error, 1)},
+	}
+
+	verifyBatch(batch)
+
+	// Drain results — verification should succeed.
+	for _, v := range batch {
+		assert.NoError(t, <-v.resChan)
+	}
+
+	// Assert caller-provided sets were not mutated.
+	assert.DeepEqual(t, orig0, set0)
+	assert.DeepEqual(t, orig1, set1)
+	assert.DeepEqual(t, orig2, set2)
+	assert.DeepEqual(t, orig3, set3)
+}

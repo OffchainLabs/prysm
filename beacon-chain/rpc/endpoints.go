@@ -341,6 +341,17 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
+			template: "/eth/v1/validator/duties/ptc/{epoch}",
+			name:     namespace + ".GetPTCDuties",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetPTCDuties,
+			methods: []string{http.MethodPost},
+		},
+		{
 			template: "/eth/v1/validator/prepare_beacon_proposer",
 			name:     namespace + ".PrepareBeaconProposer",
 			middleware: []middleware.Middleware{
@@ -405,6 +416,7 @@ func (s *Service) nodeEndpoints() []endpoint {
 		MetadataProvider:          s.cfg.MetadataProvider,
 		HeadFetcher:               s.cfg.HeadFetcher,
 		ExecutionChainInfoFetcher: s.cfg.ExecutionChainInfoFetcher,
+		ExecutionEngineCaller:     s.cfg.ExecutionEngineCaller,
 	}
 
 	const namespace = "node"
@@ -467,6 +479,16 @@ func (s *Service) nodeEndpoints() []endpoint {
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetVersion,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v2/node/version",
+			name:     namespace + ".GetVersionV2",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetVersionV2,
 			methods: []string{http.MethodGet},
 		},
 		{
@@ -867,6 +889,15 @@ func (s *Service) beaconEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetProposerLookahead,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/execution_payload_envelope/{block_root}",
+			name:     namespace + ".GetExecutionPayloadEnvelope",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+			},
+			handler: server.GetExecutionPayloadEnvelope,
 			methods: []string{http.MethodGet},
 		},
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
+	"github.com/OffchainLabs/prysm/v7/api/fallback"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -24,6 +25,7 @@ import (
 
 type grpcValidatorClient struct {
 	*grpcClientManager[ethpb.BeaconNodeValidatorClient]
+	nodeClient           *grpcNodeClient
 	isEventStreamRunning bool
 }
 
@@ -143,6 +145,7 @@ func toValidatorDutyV2(duty *ethpb.DutiesV2Response_Duty) (*ethpb.ValidatorDuty,
 		Status:                  duty.Status,
 		ValidatorIndex:          duty.ValidatorIndex,
 		IsSyncCommittee:         duty.IsSyncCommittee,
+		PtcSlots:                duty.PtcSlots,
 	}, nil
 }
 
@@ -282,6 +285,9 @@ func (*grpcValidatorClient) AggregatedSyncSelections(context.Context, []iface.Sy
 func NewGrpcValidatorClient(conn validatorHelpers.NodeConnection) iface.ValidatorClient {
 	return &grpcValidatorClient{
 		grpcClientManager: newGrpcClientManager(conn, ethpb.NewBeaconNodeValidatorClient),
+		nodeClient: &grpcNodeClient{
+			grpcClientManager: newGrpcClientManager(conn, ethpb.NewNodeClient),
+		},
 	}
 }
 
@@ -382,16 +388,34 @@ func (c *grpcValidatorClient) Host() string {
 	return c.grpcClientManager.conn.GetGrpcConnectionProvider().CurrentHost()
 }
 
-func (c *grpcValidatorClient) SwitchHost(host string) {
+func (c *grpcValidatorClient) EnsureReady(ctx context.Context) bool {
 	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
-	// Find the index of the requested host and switch to it
-	for i, h := range provider.Hosts() {
-		if h == host {
-			if err := provider.SwitchHost(i); err != nil {
-				log.WithError(err).WithField("host", host).Error("Failed to set gRPC host")
-			}
-			return
-		}
+	return fallback.EnsureReady(ctx, provider, c.nodeClient)
+}
+
+// Gloas Fork Methods
+func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot) (*ethpb.ExecutionPayloadEnvelope, error) {
+	req := &ethpb.ExecutionPayloadEnvelopeRequest{
+		Slot: slot,
 	}
-	log.WithField("host", host).Warn("Requested gRPC host not found in configured endpoints")
+	resp, err := c.getClient().GetExecutionPayloadEnvelope(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(
+			client.ErrConnectionIssue,
+			errors.Wrap(err, "GetExecutionPayloadEnvelope").Error(),
+		)
+	}
+	return resp.Envelope, nil
+}
+
+func (c *grpcValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
+	return c.getClient().PublishExecutionPayloadEnvelope(ctx, in)
+}
+
+func (c *grpcValidatorClient) PayloadAttestationData(_ context.Context, _ primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+	return nil, errors.New("PayloadAttestationData not implemented")
+}
+
+func (c *grpcValidatorClient) SubmitPayloadAttestation(_ context.Context, _ *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
+	return nil, errors.New("SubmitPayloadAttestation not implemented")
 }

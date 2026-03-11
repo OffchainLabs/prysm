@@ -26,6 +26,7 @@ go_library(
         "//beacon-chain/light-client:go_default_library",
         "//beacon-chain/operations/attestations:go_default_library",
         "//beacon-chain/operations/blstoexec:go_default_library",
+        "//beacon-chain/operations/payloadattestation:go_default_library",
         "//beacon-chain/operations/slashings:go_default_library",
         "//beacon-chain/operations/synccommittee:go_default_library",
         "//beacon-chain/operations/voluntaryexits:go_default_library",
