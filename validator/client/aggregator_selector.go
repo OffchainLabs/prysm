@@ -251,6 +251,8 @@ func (p *distributedSelector) AttestationSelectionProof(_ context.Context, slot 
 	return s.SelectionProof, nil
 }
 
+// ClaimAggregateSlot always returns true because the DVT middleware
+// handles aggregate deduplication across distributed validator peers.
 func (p *distributedSelector) ClaimAggregateSlot(_ primitives.Slot, _ primitives.CommitteeIndex) bool {
 	return true
 }
