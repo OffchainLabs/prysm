@@ -69,9 +69,6 @@ type PartialColumnBroadcaster struct {
 	handleColumn                     SubHandler
 	handleHeader                     HeaderHandler
 
-	// map groupID -> bool to signal when getBlobs has been called
-	getBlobsCalled map[string]bool
-
 	// map topic -> *pubsub.Topic
 	topics map[string]*pubsub.Topic
 
@@ -158,7 +155,6 @@ func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 		partialMsgStore:  make(map[string]map[string]*verification.PartialColumnVerifier),
 		groupTTL:         make(map[string]int8),
 		validHeaderCache: make(map[string]*ethpb.PartialDataColumnHeader),
-		getBlobsCalled:   make(map[string]bool),
 		// GossipSub sends the messages to this channel. The buffer should be
 		// big enough to avoid dropping messages. We don't want to block the gossipsub event loop for this.
 		incomingReq: make(chan request, 128*16),
@@ -273,7 +269,6 @@ func (p *PartialColumnBroadcaster) loop() {
 
 				delete(p.groupTTL, groupID)
 				delete(p.validHeaderCache, groupID)
-				delete(p.getBlobsCalled, groupID)
 				for topic, msgStore := range p.partialMsgStore {
 					delete(msgStore, groupID)
 					if len(msgStore) == 0 {
@@ -599,9 +594,8 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		}
 	}
 
-	getBlobsCalled := p.getBlobsCalled[string(groupID)]
-	if !getBlobsCalled {
-		p.logger.WithFields(logrus.Fields{"topic": topicID, "group": groupID}).Debug("GetBlobs not called, skipping republish")
+	if !ourDataColumn.Published {
+		p.logger.WithFields(logrus.Fields{"topic": topicID, "group": groupID}).Debug("Column not published, skipping republish")
 		return nil
 	}
 
@@ -665,9 +659,8 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 			p.logger.WithFields(logrus.Fields{"topic": cells.topic, "group": cells.group}).Info("Extended partial column")
 		}
 
-		getBlobsCalled := p.getBlobsCalled[string(ourDataColumn.GroupID())]
-		if !getBlobsCalled {
-			p.logger.WithFields(logrus.Fields{"topic": cells.topic, "group": cells.group}).Debug("GetBlobs not called, skipping republish")
+		if !ourDataColumn.Published {
+			p.logger.WithFields(logrus.Fields{"topic": cells.topic, "group": cells.group}).Debug("Column not published, skipping republish")
 			return nil
 		}
 
@@ -709,60 +702,62 @@ func (p *PartialColumnBroadcaster) Publish(topicsAndColumns iter.Seq2[string, bl
 
 func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error {
 	var aggErr error
-	for topic, c := range topicsAndColumns {
-		if len(c.KzgCommitments) == 0 {
-			// No meaningful data. Skip publishing
+	for topic, partialCol := range topicsAndColumns {
+		if len(partialCol.KzgCommitments) == 0 {
+			p.logger.WithFields(logrus.Fields{
+				"topic": topic,
+			}).Debug("Skipping publish for column with no KZG commitments")
 			continue
 		}
-		groupIDBytes := c.GroupID()
+		groupIDBytes := partialCol.GroupID()
 		topicStore, ok := p.partialMsgStore[topic]
 		if !ok {
 			topicStore = make(map[string]*verification.PartialColumnVerifier)
 			p.partialMsgStore[topic] = topicStore
 		}
-
-		existing := p.getDataColumn(topic, groupIDBytes)
 		var extended bool
-		if existing != nil {
-			verifier := p.getPartialVerifier(topic, groupIDBytes)
-			for i := range c.Included.Len() {
-				if c.Included.BitAt(i) {
-					if verifier.ExtendFromVerifiedCell(uint64(i), c.Column[i], c.KzgProofs[i]) {
-						extended = true
-					}
-				}
-			}
-		} else {
-			verifier, err := p.partialVerifierFromTrustedColumn(&c)
+		verifier := p.getPartialVerifier(topic, groupIDBytes)
+		if verifier == nil {
+			var err error
+			verifier, err = p.partialVerifierFromTrustedColumn(&partialCol)
 			if err != nil {
 				aggErr = stderrors.Join(aggErr, err)
 				continue
 			}
 			topicStore[string(groupIDBytes)] = verifier
-			existing = verifier.Column
 			extended = true
+		} else {
+			for i := range partialCol.Included.Len() {
+				if partialCol.Included.BitAt(i) {
+					if verifier.ExtendFromVerifiedCell(uint64(i), partialCol.Column[i], partialCol.KzgProofs[i]) {
+						extended = true
+					}
+				}
+			}
 		}
+		ourColummn := verifier.Column
 		if extended {
-			col, ok, err := p.getPartialVerifier(topic, groupIDBytes).Complete()
+			verifiedCol, ok, err := verifier.Complete()
 			if err != nil {
-				p.logger.WithError(err).WithFields(logrus.Fields{"topic": topic, "group": existing.GroupID()}).Error("Failed to complete partial column verifier")
+				p.logger.WithError(err).WithFields(logrus.Fields{"topic": topic, "group": ourColummn.GroupID()}).Error("Failed to complete partial column verifier")
 				aggErr = stderrors.Join(aggErr, err)
 				continue
 			}
 			if ok {
-				p.logger.WithFields(logrus.Fields{"topic": topic, "group": existing.GroupID()}).Info("Completed partial column")
+				p.logger.WithFields(logrus.Fields{"topic": topic, "group": ourColummn.GroupID()}).Info("Completed partial column")
 				if p.handleColumn != nil {
-					go p.handleColumn(topic, col)
+					go p.handleColumn(topic, verifiedCol)
 				}
 			}
 		}
 
 		p.groupTTL[string(groupIDBytes)] = TTLInSlots
-		err := p.ps.PublishPartialMessage(topic, existing, partialmessages.PublishOptions{})
+		err := p.ps.PublishPartialMessage(topic, ourColummn, partialmessages.PublishOptions{})
 		if err == nil {
-			p.getBlobsCalled[string(groupIDBytes)] = true
+			ourColummn.Published = true
+		} else {
+			aggErr = stderrors.Join(aggErr, err)
 		}
-		aggErr = stderrors.Join(aggErr, err)
 	}
 	return aggErr
 }
