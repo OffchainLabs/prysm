@@ -247,6 +247,9 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		validatorClient: client,
 		distributed:     true,
 		duties:          &dutyStore{},
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			keys.pub: {publicKey: keys.pub[:], index: 200},
+		},
 	}
 	v.aggSelector = newDistributedSelector(&v)
 

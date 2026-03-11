@@ -97,6 +97,9 @@ func setupWithKey(t *testing.T, validatorKey bls.SecretKey, isSlashingProtection
 		duties:              &dutyStore{},
 		submittedAtts:       make(map[submittedAttKey]*submittedAtt),
 		submittedAggregates: make(map[submittedAttKey]*submittedAtt),
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			pubKey: {publicKey: validatorKey.PublicKey().Marshal(), index: 0},
+		},
 	}
 	validator.aggSelector = testLocalSelector(t, validator)
 

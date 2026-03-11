@@ -191,6 +191,10 @@ func TestSubmitAggregateAndProof_Distributed(t *testing.T) {
 				AttesterSlot:   slot,
 			})
 
+			validator.pubkeyToStatus[pubKey] = &validatorStatus{
+				publicKey: validatorKey.PublicKey().Marshal(),
+				index:     validatorIdx,
+			}
 			dvProvider := newDistributedSelector(validator)
 			dvProvider.attSelections = map[attSelectionKey]iface.BeaconCommitteeSelection{
 				{slot: slot, index: 123}: {
