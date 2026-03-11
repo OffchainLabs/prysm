@@ -22,7 +22,7 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 	activeDuties := make([]*ethpb.ValidatorDuty, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
 	alreadySubscribed := make(map[[64]byte]bool)
 
-	if err := v.aggSelector.RefreshSelectionProofs(ctx, duties); err != nil {
+	if err := v.aggSelector.RefreshSelectionProofs(ctx); err != nil {
 		return errors.Wrap(err, "could not prepare aggregated selection proofs")
 	}
 
@@ -31,14 +31,12 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 		if duty.Status == ethpb.ValidatorStatus_ACTIVE || duty.Status == ethpb.ValidatorStatus_EXITING {
 			attesterSlot := duty.AttesterSlot
 			committeeIndex := duty.CommitteeIndex
-			validatorIndex := duty.ValidatorIndex
-
 			alreadySubscribedKey := validatorSubnetSubscriptionKey(attesterSlot, committeeIndex)
 			if _, ok := alreadySubscribed[alreadySubscribedKey]; ok {
 				continue
 			}
 
-			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, attesterSlot, pk, validatorIndex)
+			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, attesterSlot, pk)
 			if err != nil {
 				return errors.Wrap(err, "could not check if a validator is an aggregator")
 			}
@@ -57,14 +55,12 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 		if duty.Status == ethpb.ValidatorStatus_ACTIVE || duty.Status == ethpb.ValidatorStatus_EXITING {
 			attesterSlot := duty.AttesterSlot
 			committeeIndex := duty.CommitteeIndex
-			validatorIndex := duty.ValidatorIndex
-
 			alreadySubscribedKey := validatorSubnetSubscriptionKey(attesterSlot, committeeIndex)
 			if _, ok := alreadySubscribed[alreadySubscribedKey]; ok {
 				continue
 			}
 
-			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, attesterSlot, bytesutil.ToBytes48(duty.PublicKey), validatorIndex)
+			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, attesterSlot, bytesutil.ToBytes48(duty.PublicKey))
 			if err != nil {
 				return errors.Wrap(err, "could not check if a validator is an aggregator")
 			}

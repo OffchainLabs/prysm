@@ -121,6 +121,14 @@ type validatorStatus struct {
 	index     primitives.ValidatorIndex
 }
 
+func (v *validator) indexFromPubkey(pubKey [fieldparams.BLSPubkeyLength]byte) (primitives.ValidatorIndex, error) {
+	s, ok := v.pubkeyToStatus[pubKey]
+	if !ok {
+		return 0, fmt.Errorf("validator index not found for pubkey %#x", pubKey)
+	}
+	return s.index, nil
+}
+
 // Done cleans up the validator.
 func (v *validator) Done() {
 	if v.accountChangedSub != nil {
@@ -562,7 +570,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		if duty.AttesterSlot == slot {
 			roles = append(roles, iface.RoleAttester)
 
-			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, pk, duty.ValidatorIndex)
+			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, pk)
 			if err != nil {
 				aggregator = false
 				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(duty.PublicKey))
@@ -630,7 +638,6 @@ func (v *validator) isAggregator(
 	committeeLength uint64,
 	slot primitives.Slot,
 	pubKey [fieldparams.BLSPubkeyLength]byte,
-	validatorIndex primitives.ValidatorIndex,
 ) (bool, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.isAggregator")
 	defer span.End()
@@ -640,7 +647,7 @@ func (v *validator) isAggregator(
 		modulo = committeeLength / params.BeaconConfig().TargetAggregatorsPerCommittee
 	}
 
-	slotSig, err := v.aggSelector.AttestationSelectionProof(ctx, slot, pubKey, validatorIndex)
+	slotSig, err := v.aggSelector.AttestationSelectionProof(ctx, slot, pubKey)
 	if err != nil {
 		return false, err
 	}

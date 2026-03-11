@@ -43,6 +43,9 @@ func TestLocalSelector_AttestationSelectionProof_Memoized(t *testing.T) {
 
 	var pubKey [fieldparams.BLSPubkeyLength]byte
 	copy(pubKey[:], validatorKey.PublicKey().Marshal())
+	v.pubkeyToStatus = map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+		pubKey: {index: 0},
+	}
 
 	m.validatorClient.EXPECT().DomainData(
 		gomock.Any(),
@@ -50,14 +53,13 @@ func TestLocalSelector_AttestationSelectionProof_Memoized(t *testing.T) {
 	).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
 
 	slot := primitives.Slot(1)
-	idx := primitives.ValidatorIndex(0)
 
-	proof1, err := s.AttestationSelectionProof(t.Context(), slot, pubKey, idx)
+	proof1, err := s.AttestationSelectionProof(t.Context(), slot, pubKey)
 	require.NoError(t, err)
 	require.NotNil(t, proof1)
 
 	// Second call should return cached proof without additional signing.
-	proof2, err := s.AttestationSelectionProof(t.Context(), slot, pubKey, idx)
+	proof2, err := s.AttestationSelectionProof(t.Context(), slot, pubKey)
 	require.NoError(t, err)
 	assert.DeepEqual(t, proof1, proof2)
 }
@@ -70,7 +72,7 @@ func TestLocalSelector_RefreshSelectionProofs_ClearsCache(t *testing.T) {
 	key := attSelectionKey{slot: 1, index: 0}
 	s.proofCache[key] = []byte("cached")
 
-	require.NoError(t, s.RefreshSelectionProofs(t.Context(), nil))
+	require.NoError(t, s.RefreshSelectionProofs(t.Context()))
 	assert.Equal(t, 0, len(s.proofCache), "proof cache should be cleared")
 }
 

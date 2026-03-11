@@ -50,7 +50,7 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 	// https://github.com/ethereum/consensus-specs/blob/v0.9.3/specs/validator/0_beacon-chain-validator.md#broadcast-aggregate
 	v.waitUntilAggregateDue(ctx, slot)
 
-	slotSig, err := v.aggSelector.AttestationSelectionProof(ctx, slot, pubKey, duty.ValidatorIndex)
+	slotSig, err := v.aggSelector.AttestationSelectionProof(ctx, slot, pubKey)
 	if err != nil {
 		log.WithError(err).Error("Could not get selection proof")
 		if v.emitAccountMetrics {

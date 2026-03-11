@@ -8,7 +8,6 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
@@ -20,14 +19,14 @@ import (
 // In local mode, proofs are signed with the local keymanager.
 // In distributed mode, partial proofs are sent to DVT middleware for aggregation.
 type aggregatorSelector interface {
-	RefreshSelectionProofs(ctx context.Context, duties *ethpb.ValidatorDutiesContainer) error
-	AttestationSelectionProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, validatorIndex primitives.ValidatorIndex) ([]byte, error)
+	RefreshSelectionProofs(ctx context.Context) error
+	AttestationSelectionProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
 	// ClaimAggregateSlot atomically checks and claims the right to aggregate for
 	// a (slot, committee) pair. Returns false if already claimed. In distributed
 	// mode the middleware handles dedup, so this always returns true.
 	ClaimAggregateSlot(slot primitives.Slot, committeeIndex primitives.CommitteeIndex) bool
 	SyncCommitteeAggregators(ctx context.Context, slot primitives.Slot, pubkeys [][fieldparams.BLSPubkeyLength]byte) ([][fieldparams.BLSPubkeyLength]byte, error)
-	SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse, validatorIndex primitives.ValidatorIndex) ([][]byte, error)
+	SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse) ([][]byte, error)
 }
 
 // localSelector computes selection proofs using the local keymanager.
@@ -43,15 +42,19 @@ func newLocalSelector(v *validator, dedupCache *lru.Cache) *localSelector {
 	return &localSelector{v: v, dedupCache: dedupCache, proofCache: make(map[attSelectionKey][]byte)}
 }
 
-func (p *localSelector) RefreshSelectionProofs(context.Context, *ethpb.ValidatorDutiesContainer) error {
+func (p *localSelector) RefreshSelectionProofs(context.Context) error {
 	p.proofLock.Lock()
 	p.proofCache = make(map[attSelectionKey][]byte)
 	p.proofLock.Unlock()
 	return nil
 }
 
-func (p *localSelector) AttestationSelectionProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, validatorIndex primitives.ValidatorIndex) ([]byte, error) {
-	key := attSelectionKey{slot: slot, index: validatorIndex}
+func (p *localSelector) AttestationSelectionProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error) {
+	idx, err := p.v.indexFromPubkey(pubKey)
+	if err != nil {
+		return nil, err
+	}
+	key := attSelectionKey{slot: slot, index: idx}
 
 	p.proofLock.Lock()
 	if cached, ok := p.proofCache[key]; ok {
@@ -124,7 +127,7 @@ func (p *localSelector) SyncCommitteeAggregators(ctx context.Context, slot primi
 	return aggregators, nil
 }
 
-func (p *localSelector) SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse, _ primitives.ValidatorIndex) ([][]byte, error) {
+func (p *localSelector) SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse) ([][]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "localSelector.SyncCommitteeSelectionProofs")
 	defer span.End()
 
@@ -153,7 +156,7 @@ type attSelectionKey struct {
 	index primitives.ValidatorIndex
 }
 
-func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context, duties *ethpb.ValidatorDutiesContainer) error {
+func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "distributedSelector.RefreshSelectionProofs")
 	defer span.End()
 
@@ -163,11 +166,10 @@ func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context, duties
 	p.attSelections = make(map[attSelectionKey]iface.BeaconCommitteeSelection)
 
 	var req []iface.BeaconCommitteeSelection
-	for _, duty := range duties.CurrentEpochDuties {
+	for pk, duty := range p.v.duties.CurrentEpochDuties() {
 		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 			continue
 		}
-		pk := bytesutil.ToBytes48(duty.PublicKey)
 		slotSig, err := p.v.signSlotWithSelectionProof(ctx, pk, duty.AttesterSlot)
 		if err != nil {
 			return err
@@ -194,13 +196,18 @@ func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context, duties
 	return nil
 }
 
-func (p *distributedSelector) AttestationSelectionProof(_ context.Context, slot primitives.Slot, _ [fieldparams.BLSPubkeyLength]byte, validatorIndex primitives.ValidatorIndex) ([]byte, error) {
+func (p *distributedSelector) AttestationSelectionProof(_ context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error) {
+	idx, err := p.v.indexFromPubkey(pubKey)
+	if err != nil {
+		return nil, err
+	}
+
 	p.attSelLock.Lock()
 	defer p.attSelLock.Unlock()
 
-	s, ok := p.attSelections[attSelectionKey{slot: slot, index: validatorIndex}]
+	s, ok := p.attSelections[attSelectionKey{slot: slot, index: idx}]
 	if !ok {
-		return nil, errors.Errorf("selection proof not found for slot=%d validator_index=%d", slot, validatorIndex)
+		return nil, errors.Errorf("selection proof not found for slot=%d validator_index=%d", slot, idx)
 	}
 	return s.SelectionProof, nil
 }
@@ -209,13 +216,22 @@ func (p *distributedSelector) ClaimAggregateSlot(_ primitives.Slot, _ primitives
 	return true
 }
 
+// SyncCommitteeAggregators returns all pubkeys immediately so that RolesAt does
+// not block on DV middleware calls. The actual aggregated selection proof exchange
+// happens later when SyncCommitteeSelectionProofs is called during duty execution.
+// See https://github.com/OffchainLabs/prysm/issues/16362.
 func (p *distributedSelector) SyncCommitteeAggregators(_ context.Context, _ primitives.Slot, pubkeys [][fieldparams.BLSPubkeyLength]byte) ([][fieldparams.BLSPubkeyLength]byte, error) {
 	return pubkeys, nil
 }
 
-func (p *distributedSelector) SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse, validatorIndex primitives.ValidatorIndex) ([][]byte, error) {
+func (p *distributedSelector) SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse) ([][]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "distributedSelector.SyncCommitteeSelectionProofs")
 	defer span.End()
+
+	idx, err := p.v.indexFromPubkey(pubKey)
+	if err != nil {
+		return nil, err
+	}
 
 	cfg := params.BeaconConfig()
 	selectionProofs := make([][]byte, len(indexRes.Indices))
@@ -231,7 +247,7 @@ func (p *distributedSelector) SyncCommitteeSelectionProofs(ctx context.Context, 
 			SelectionProof:    sig,
 			Slot:              slot,
 			SubcommitteeIndex: primitives.CommitteeIndex(subnet),
-			ValidatorIndex:    validatorIndex,
+			ValidatorIndex:    idx,
 		}
 	}
 

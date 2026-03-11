@@ -119,7 +119,7 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 		return
 	}
 
-	selectionProofs, err := v.aggSelector.SyncCommitteeSelectionProofs(ctx, slot, pubKey, indexRes, duty.ValidatorIndex)
+	selectionProofs, err := v.aggSelector.SyncCommitteeSelectionProofs(ctx, slot, pubKey, indexRes)
 	if err != nil {
 		log.WithError(err).Error("Could not get selection proofs")
 		return
