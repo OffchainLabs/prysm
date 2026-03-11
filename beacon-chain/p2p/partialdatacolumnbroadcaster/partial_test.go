@@ -1225,7 +1225,6 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 	})
 
 	tests := []struct {
-		expectHandleColumn  bool
 		expectTrustedCall   bool
 		expectedErrContains string
 		publishErr          error
@@ -1277,8 +1276,7 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			}),
 		},
 		{
-			name:               "existing extends to complete and invokes handleColumn",
-			expectHandleColumn: true,
+			name: "existing extends to complete and invokes handleColumn",
 			existingColumn: pc(2, map[uint64][]byte{
 				0: {0x40},
 			}),
@@ -1327,22 +1325,6 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 
 			// Published is only set to true if err == nil
 			require.Equal(t, err == nil, stored.Published)
-
-			if tt.expectHandleColumn {
-				select {
-				case call := <-recorder.handleColumnCallCh:
-					require.Equal(t, topic, call.topic)
-					require.DeepEqual(t, expectedStored.Column, call.column.Column)
-				case <-t.Context().Done():
-					t.Fatalf("handle column call not received")
-				}
-			} else {
-				select {
-				case <-recorder.handleColumnCallCh:
-					t.Fatal("handle column should not be called")
-				default:
-				}
-			}
 
 			if tt.expectTrustedCall {
 				select {

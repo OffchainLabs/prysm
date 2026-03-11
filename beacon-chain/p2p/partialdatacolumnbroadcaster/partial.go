@@ -715,7 +715,6 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 			topicStore = make(map[string]*verification.PartialColumnVerifier)
 			p.partialMsgStore[topic] = topicStore
 		}
-		var extended bool
 		verifier := p.getPartialVerifier(topic, groupIDBytes)
 		if verifier == nil {
 			var err error
@@ -725,31 +724,14 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 				continue
 			}
 			topicStore[string(groupIDBytes)] = verifier
-			extended = true
 		} else {
 			for i := range partialCol.Included.Len() {
 				if partialCol.Included.BitAt(i) {
-					if verifier.ExtendFromVerifiedCell(uint64(i), partialCol.Column[i], partialCol.KzgProofs[i]) {
-						extended = true
-					}
+					verifier.ExtendFromVerifiedCell(uint64(i), partialCol.Column[i], partialCol.KzgProofs[i])
 				}
 			}
 		}
 		ourColummn := verifier.Column
-		if extended {
-			verifiedCol, ok, err := verifier.Complete()
-			if err != nil {
-				p.logger.WithError(err).WithFields(logrus.Fields{"topic": topic, "group": ourColummn.GroupID()}).Error("Failed to complete partial column verifier")
-				aggErr = stderrors.Join(aggErr, err)
-				continue
-			}
-			if ok {
-				p.logger.WithFields(logrus.Fields{"topic": topic, "group": ourColummn.GroupID()}).Info("Completed partial column")
-				if p.handleColumn != nil {
-					go p.handleColumn(topic, verifiedCol)
-				}
-			}
-		}
 
 		p.groupTTL[string(groupIDBytes)] = TTLInSlots
 		err := p.ps.PublishPartialMessage(topic, ourColummn, partialmessages.PublishOptions{})

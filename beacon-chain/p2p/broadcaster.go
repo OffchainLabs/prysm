@@ -460,7 +460,20 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			}
 		})
 	}
+	// Wait for batch to be populated, then publish.
+	batchWg.Wait()
+	if len(sidecarsWithPeers) > 0 {
+		if err := s.pubsub.PublishBatch(&messageBatch); err != nil {
+			log.WithError(err).Error("Cannot publish batch for data column sidecars")
+		} else {
+			dataColumnSidecarBroadcasts.Add(float64(len(sidecarsWithPeers)))
+		}
+	}
 
+	// Wait for all individual publishes to complete.
+	individualWg.Wait()
+
+	// broadcast partial columns after peer discovery is complete.
 	if s.partialColumnBroadcaster != nil {
 		_, span := trace.StartSpan(ctx, "p2p.broadcastPartialDataColumn")
 		err := s.partialColumnBroadcaster.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
@@ -478,19 +491,6 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		}
 		span.End()
 	}
-
-	// Wait for batch to be populated, then publish.
-	batchWg.Wait()
-	if len(sidecarsWithPeers) > 0 {
-		if err := s.pubsub.PublishBatch(&messageBatch); err != nil {
-			log.WithError(err).Error("Cannot publish batch for data column sidecars")
-		} else {
-			dataColumnSidecarBroadcasts.Add(float64(len(sidecarsWithPeers)))
-		}
-	}
-
-	// Wait for all individual publishes to complete.
-	individualWg.Wait()
 
 	// The rest of this function is only for debug logging purposes.
 	if logLevel < logrus.DebugLevel {
