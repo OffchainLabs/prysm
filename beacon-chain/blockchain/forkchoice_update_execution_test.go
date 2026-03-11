@@ -19,23 +19,42 @@ import (
 func TestService_isNewHead(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
-	require.Equal(t, true, service.isNewHead([32]byte{}))
 
+	// Zero root is always a new head
+	require.Equal(t, true, service.isNewHead([32]byte{}, false))
+	require.Equal(t, true, service.isNewHead([32]byte{}, true))
+
+	// Different root is a new head
 	service.head = &head{root: [32]byte{1}}
-	require.Equal(t, true, service.isNewHead([32]byte{2}))
-	require.Equal(t, false, service.isNewHead([32]byte{1}))
+	require.Equal(t, true, service.isNewHead([32]byte{2}, false))
+
+	// Same root and same full status is not a new head
+	require.Equal(t, false, service.isNewHead([32]byte{1}, false))
+
+	// Same root but different full status is a new head
+	require.Equal(t, true, service.isNewHead([32]byte{1}, true))
+
+	// Same root and both full is not a new head
+	service.head = &head{root: [32]byte{1}, full: true}
+	require.Equal(t, false, service.isNewHead([32]byte{1}, true))
+
+	// Same root, head is full but incoming is not full, is a new head
+	require.Equal(t, true, service.isNewHead([32]byte{1}, false))
 
 	// Nil head should use origin root
 	service.head = nil
 	service.originBlockRoot = [32]byte{3}
-	require.Equal(t, true, service.isNewHead([32]byte{2}))
-	require.Equal(t, false, service.isNewHead([32]byte{3}))
+	require.Equal(t, true, service.isNewHead([32]byte{2}, false))
+	require.Equal(t, false, service.isNewHead([32]byte{3}, false))
+
+	// Nil head with full=true is always a new head (originBlockRoot has full=false)
+	require.Equal(t, true, service.isNewHead([32]byte{3}, true))
 }
 
 func TestService_getHeadStateAndBlock(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
-	_, _, err := service.getStateAndBlock(t.Context(), [32]byte{})
+	_, _, err := service.getStateAndBlock(t.Context(), [32]byte{}, [32]byte{})
 	require.ErrorContains(t, "block does not exist", err)
 
 	blk, err := blocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlock(&ethpb.SignedBeaconBlock{Signature: []byte{1}}))

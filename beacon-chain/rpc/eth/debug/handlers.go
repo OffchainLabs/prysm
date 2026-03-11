@@ -2,7 +2,6 @@ package debug
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -131,20 +130,19 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 		return
 	}
 
-	jsonBytes, err := json.Marshal(respSt)
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal state into JSON: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
 	ver := version.String(st.Version())
-	resp := &structs.GetBeaconStateV2Response{
-		Version:             ver,
-		ExecutionOptimistic: isOptimistic,
-		Finalized:           isFinalized,
-		Data:                jsonBytes,
-	}
 	w.Header().Set(api.VersionHeader, ver)
-	httputil.WriteJson(w, resp)
+
+	// NOTE: Use an anonymous struct with Data as any instead of GetBeaconStateV2Response
+	// (which has Data as json.RawMessage) to avoid a double-encode: json.Marshal(state)
+	// into []byte, then json.Encode(response) copying those bytes again. With Data as any,
+	// the encoder marshals the state directly in a single pass, halving memory usage.
+	httputil.WriteJson(w, struct {
+		Version             string `json:"version"`
+		ExecutionOptimistic bool   `json:"execution_optimistic"`
+		Finalized           bool   `json:"finalized"`
+		Data                any    `json:"data"`
+	}{ver, isOptimistic, isFinalized, respSt})
 }
 
 // getBeaconStateSSZV2 returns the SSZ-serialized version of the full beacon state object for given state ID.

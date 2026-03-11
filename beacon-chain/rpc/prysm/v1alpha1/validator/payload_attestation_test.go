@@ -112,6 +112,7 @@ func TestSubmitPayloadAttestation_OK(t *testing.T) {
 		BlockReceiver:              receiver,
 		PayloadAttestationReceiver: receiver,
 		PayloadAttestationPool:     payloadattestation.NewPool(),
+		OperationNotifier:          chain.OperationNotifier(),
 	}
 
 	msg := &ethpb.PayloadAttestationMessage{

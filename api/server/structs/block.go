@@ -540,6 +540,12 @@ type PayloadAttestation struct {
 	Signature       string                  `json:"signature"`
 }
 
+type PayloadAttestationMessage struct {
+	ValidatorIndex string                  `json:"validator_index"`
+	Data           *PayloadAttestationData `json:"data"`
+	Signature      string                  `json:"signature"`
+}
+
 type BeaconBlockBodyGloas struct {
 	RandaoReveal              string                        `json:"randao_reveal"`
 	Eth1Data                  *Eth1Data                     `json:"eth1_data"`
