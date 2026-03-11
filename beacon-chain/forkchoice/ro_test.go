@@ -43,8 +43,8 @@ const (
 	blockHashCalled
 	dependentRootCalled
 	dependentRootForEpochCalled
-	payloadWeightsCalled
 	canonicalNodeAtSlotCalled
+	payloadWeightsCalled
 )
 
 func _discard(t *testing.T, e error) {
