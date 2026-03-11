@@ -62,6 +62,7 @@ go_library(
         "validate_blob.go",
         "validate_bls_to_execution_change.go",
         "validate_data_column.go",
+        "validate_data_column_gloas.go",
         "validate_execution_payload_envelope.go",
         "validate_light_client.go",
         "validate_payload_attestation.go",

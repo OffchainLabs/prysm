@@ -64,10 +64,17 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 // This is done to improve performance since the internal KZG library is way more
 // efficient when verifying in batch.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_kzg_proofs
-func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
+func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmentsBySidecar [][][]byte) error {
+	if len(sidecars) != len(commitmentsBySidecar) {
+		return ErrMismatchLength
+	}
+
 	// Compute the total count.
 	count := 0
-	for _, sidecar := range sidecars {
+	for i, sidecar := range sidecars {
+		if len(sidecar.Column) != len(commitmentsBySidecar[i]) {
+			return ErrMismatchLength
+		}
 		count += len(sidecar.Column)
 	}
 
@@ -76,7 +83,7 @@ func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 	cells := make([]kzg.Cell, 0, count)
 	proofs := make([]kzg.Bytes48, 0, count)
 
-	for _, sidecar := range sidecars {
+	for sidecarIndex, sidecar := range sidecars {
 		for i := range sidecar.Column {
 			var (
 				commitment kzg.Bytes48
@@ -84,7 +91,7 @@ func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 				proof      kzg.Bytes48
 			)
 
-			commitmentBytes := sidecar.KzgCommitments[i]
+			commitmentBytes := commitmentsBySidecar[sidecarIndex][i]
 			cellBytes := sidecar.Column[i]
 			proofBytes := sidecar.KzgProofs[i]
 

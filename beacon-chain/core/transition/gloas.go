@@ -34,9 +34,21 @@ func ProcessSlotsForBlock(
 		return nil, errors.Wrap(err, "could not determine if parent block is full")
 	}
 	if full {
-		accessRoot, err = st.LatestBlockHash()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get latest block hash")
+		// Guard against the upgrade-seeded bid at the Fulu→Gloas fork boundary.
+		// UpgradeToGloas seeds LatestExecutionPayloadBid.BlockHash == LatestBlockHash
+		// while leaving ParentBlockRoot as all-zeros. A real committed bid always has
+		// a non-zero ParentBlockRoot, so we only use the EL hash as the access root
+		// when we are certain this is a real full-payload parent.
+		latestBid, bidErr := st.LatestExecutionPayloadBid()
+		if bidErr != nil {
+			return nil, errors.Wrap(bidErr, "could not get latest execution payload bid")
+		}
+		realBid := latestBid != nil && latestBid.ParentBlockRoot() != ([32]byte{})
+		if realBid {
+			accessRoot, err = st.LatestBlockHash()
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get latest block hash")
+			}
 		}
 	}
 	return ProcessSlotsUsingNextSlotCache(ctx, st, accessRoot[:], b.Slot())

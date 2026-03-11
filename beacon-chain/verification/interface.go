@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 )
 
@@ -56,6 +57,17 @@ type DataColumnsVerifier interface {
 // NewDataColumnsVerifier is a function signature that can be used to mock a setup where a
 // column verifier can be easily initialized.
 type NewDataColumnsVerifier func(dataColumns []blocks.RODataColumn, reqs []Requirement) DataColumnsVerifier
+
+type GloasDataColumnVerifier interface {
+	VerifiedRODataColumn() (blocks.VerifiedRODataColumn, error)
+	SatisfyRequirement(Requirement)
+	VerifyDataColumnSidecarSlotMatchesBlockGloas() error
+	VerifyDataColumnSidecarGloas() error
+	CorrectSubnet(dataColumnSidecarSubTopic string, expectedTopics []string) error
+	VerifyDataColumnSidecarKzgProofsGloas() error
+}
+
+type NewGloasDataColumnVerifierFn func(sidecar blocks.RODataColumn, block interfaces.ReadOnlyBeaconBlock, reqs []Requirement) GloasDataColumnVerifier
 
 // PayloadAttestationMsgVerifier defines the methods implemented by the ROPayloadAttestation.
 type PayloadAttestationMsgVerifier interface {
