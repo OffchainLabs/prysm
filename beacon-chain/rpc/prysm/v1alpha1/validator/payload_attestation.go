@@ -3,6 +3,8 @@ package validator
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -103,6 +105,13 @@ func (vs *Server) SubmitPayloadAttestation(
 	if err := vs.PayloadAttestationPool.InsertPayloadAttestation(msg, idx); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not insert payload attestation into pool: %v", err)
 	}
+
+	vs.OperationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.PayloadAttestationMessageReceived,
+		Data: &opfeed.PayloadAttestationMessageReceivedData{
+			Message: msg,
+		},
+	})
 
 	log.WithField("slot", msg.Data.Slot).Debug("Submitted payload attestation message")
 	return &emptypb.Empty{}, nil
