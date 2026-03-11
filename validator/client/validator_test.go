@@ -874,11 +874,10 @@ func TestIsSyncCommitteeAggregator_OK(t *testing.T) {
 				},
 			).Return(&ethpb.SyncSubcommitteeIndexResponse{}, nil /*err*/)
 
-			aggregator, err := v.aggSelector.SyncCommitteeAggregators(t.Context(), slot, map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{
-				0: bytesutil.ToBytes48(pubKey),
-			})
+			pk48 := bytesutil.ToBytes48(pubKey)
+			aggregators, err := v.aggSelector.SyncCommitteeAggregators(t.Context(), slot, [][fieldparams.BLSPubkeyLength]byte{pk48})
 			require.NoError(t, err)
-			require.Equal(t, false, aggregator[0])
+			require.Equal(t, 0, len(aggregators))
 
 			c := params.BeaconConfig().Copy()
 			c.TargetAggregatorsPerSyncSubcommittee = math.MaxUint64
@@ -897,11 +896,10 @@ func TestIsSyncCommitteeAggregator_OK(t *testing.T) {
 				},
 			).Return(&ethpb.SyncSubcommitteeIndexResponse{Indices: []primitives.CommitteeIndex{0}}, nil /*err*/)
 
-			aggregator, err = v.aggSelector.SyncCommitteeAggregators(t.Context(), slot, map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{
-				0: bytesutil.ToBytes48(pubKey),
-			})
+			aggregators, err = v.aggSelector.SyncCommitteeAggregators(t.Context(), slot, [][fieldparams.BLSPubkeyLength]byte{pk48})
 			require.NoError(t, err)
-			require.Equal(t, true, aggregator[0])
+			require.Equal(t, 1, len(aggregators))
+			require.DeepEqual(t, pk48, aggregators[0])
 		})
 	}
 }
@@ -916,15 +914,11 @@ func TestIsSyncCommitteeAggregator_Distributed_OK(t *testing.T) {
 			slot := primitives.Slot(1)
 			pubKey := validatorKey.PublicKey().Marshal()
 
-			// Distributed provider always returns true for all validators,
-			// deferring the actual aggregator check to duty execution time.
-			aggregator, err := v.aggSelector.SyncCommitteeAggregators(t.Context(), slot, map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{
-				0:   bytesutil.ToBytes48(pubKey),
-				123: bytesutil.ToBytes48(pubKey),
-			})
+			pk48 := bytesutil.ToBytes48(pubKey)
+			input := [][fieldparams.BLSPubkeyLength]byte{pk48, pk48}
+			aggregators, err := v.aggSelector.SyncCommitteeAggregators(t.Context(), slot, input)
 			require.NoError(t, err)
-			require.Equal(t, true, aggregator[0])
-			require.Equal(t, true, aggregator[123])
+			require.DeepEqual(t, input, aggregators)
 		})
 	}
 }

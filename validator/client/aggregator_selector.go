@@ -26,7 +26,7 @@ type aggregatorSelector interface {
 	// a (slot, committee) pair. Returns false if already claimed. In distributed
 	// mode the middleware handles dedup, so this always returns true.
 	ClaimAggregateSlot(slot primitives.Slot, committeeIndex primitives.CommitteeIndex) bool
-	SyncCommitteeAggregators(ctx context.Context, slot primitives.Slot, validators map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte) (map[primitives.ValidatorIndex]bool, error)
+	SyncCommitteeAggregators(ctx context.Context, slot primitives.Slot, pubkeys [][fieldparams.BLSPubkeyLength]byte) ([][fieldparams.BLSPubkeyLength]byte, error)
 	SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse, validatorIndex primitives.ValidatorIndex) ([][]byte, error)
 }
 
@@ -83,12 +83,16 @@ func (p *localSelector) ClaimAggregateSlot(slot primitives.Slot, committeeIndex 
 	return true
 }
 
-func (p *localSelector) SyncCommitteeAggregators(ctx context.Context, slot primitives.Slot, validators map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte) (map[primitives.ValidatorIndex]bool, error) {
+func (p *localSelector) SyncCommitteeAggregators(ctx context.Context, slot primitives.Slot, pubkeys [][fieldparams.BLSPubkeyLength]byte) ([][fieldparams.BLSPubkeyLength]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "localSelector.SyncCommitteeAggregators")
 	defer span.End()
 
-	var selections []iface.SyncCommitteeSelection
-	for valIdx, pubKey := range validators {
+	type selectionWithPubkey struct {
+		proof  []byte
+		pubkey [fieldparams.BLSPubkeyLength]byte
+	}
+	var selections []selectionWithPubkey
+	for _, pubKey := range pubkeys {
 		res, err := p.v.validatorClient.SyncSubcommitteeIndex(ctx, &ethpb.SyncSubcommitteeIndexRequest{
 			PublicKey: pubKey[:],
 			Slot:      slot,
@@ -103,24 +107,21 @@ func (p *localSelector) SyncCommitteeAggregators(ctx context.Context, slot primi
 			if err != nil {
 				return nil, errors.Wrap(err, "can't sign selection data")
 			}
-			selections = append(selections, iface.SyncCommitteeSelection{
-				SelectionProof:    sig,
-				Slot:              slot,
-				SubcommitteeIndex: primitives.CommitteeIndex(subnet),
-				ValidatorIndex:    valIdx,
-			})
+			selections = append(selections, selectionWithPubkey{proof: sig, pubkey: pubKey})
 		}
 	}
 
-	isAgg := make(map[primitives.ValidatorIndex]bool)
+	var aggregators [][fieldparams.BLSPubkeyLength]byte
 	for _, s := range selections {
-		isAggregator, err := altair.IsSyncCommitteeAggregator(s.SelectionProof)
+		isAggregator, err := altair.IsSyncCommitteeAggregator(s.proof)
 		if err != nil {
 			return nil, errors.Wrap(err, "can't detect sync committee aggregator")
 		}
-		isAgg[s.ValidatorIndex] = isAggregator
+		if isAggregator {
+			aggregators = append(aggregators, s.pubkey)
+		}
 	}
-	return isAgg, nil
+	return aggregators, nil
 }
 
 func (p *localSelector) SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse, _ primitives.ValidatorIndex) ([][]byte, error) {
@@ -208,12 +209,8 @@ func (p *distributedSelector) ClaimAggregateSlot(_ primitives.Slot, _ primitives
 	return true
 }
 
-func (p *distributedSelector) SyncCommitteeAggregators(_ context.Context, _ primitives.Slot, validators map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte) (map[primitives.ValidatorIndex]bool, error) {
-	isAgg := make(map[primitives.ValidatorIndex]bool, len(validators))
-	for valIdx := range validators {
-		isAgg[valIdx] = true
-	}
-	return isAgg, nil
+func (p *distributedSelector) SyncCommitteeAggregators(_ context.Context, _ primitives.Slot, pubkeys [][fieldparams.BLSPubkeyLength]byte) ([][fieldparams.BLSPubkeyLength]byte, error) {
+	return pubkeys, nil
 }
 
 func (p *distributedSelector) SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse, validatorIndex primitives.ValidatorIndex) ([][]byte, error) {

@@ -540,11 +540,8 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 	}
 
 	var (
-		rolesAt = make(map[[fieldparams.BLSPubkeyLength]byte][]iface.ValidatorRole)
-
-		// store sync committee duties pubkeys and share indices in slices for
-		// potential DV processing
-		syncCommitteeValidators = make(map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte)
+		rolesAt              = make(map[[fieldparams.BLSPubkeyLength]byte][]iface.ValidatorRole)
+		syncCommitteePubkeys [][fieldparams.BLSPubkeyLength]byte
 	)
 
 	for pk, duty := range v.duties.CurrentEpochDuties() {
@@ -592,7 +589,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		}
 
 		if inSyncCommittee {
-			syncCommitteeValidators[duty.ValidatorIndex] = pk
+			syncCommitteePubkeys = append(syncCommitteePubkeys, pk)
 		}
 
 		if slices.Contains(v.duties.PtcSlots(duty.ValidatorIndex), slot) {
@@ -606,22 +603,13 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		rolesAt[pk] = roles
 	}
 
-	aggregator, err := v.aggSelector.SyncCommitteeAggregators(ctx, slot, syncCommitteeValidators)
+	aggPubkeys, err := v.aggSelector.SyncCommitteeAggregators(ctx, slot, syncCommitteePubkeys)
 	if err != nil {
 		log.WithError(err).Error("Could not check if any validator is a sync committee aggregator")
 		return rolesAt, nil
 	}
-	for valIdx, isAgg := range aggregator {
-		if isAgg {
-			valPubkey, ok := syncCommitteeValidators[valIdx]
-			if !ok {
-				log.
-					WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(valPubkey[:]))).
-					Warn("Validator is marked as sync committee aggregator but cannot be found in sync committee validator list")
-				continue
-			}
-			rolesAt[bytesutil.ToBytes48(valPubkey[:])] = append(rolesAt[bytesutil.ToBytes48(valPubkey[:])], iface.RoleSyncCommitteeAggregator)
-		}
+	for _, pk := range aggPubkeys {
+		rolesAt[pk] = append(rolesAt[pk], iface.RoleSyncCommitteeAggregator)
 	}
 
 	return rolesAt, nil

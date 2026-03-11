@@ -82,17 +82,11 @@ func TestDistributedSelector_ClaimAggregateSlot_AlwaysTrue(t *testing.T) {
 	assert.Equal(t, true, s.ClaimAggregateSlot(99, 99))
 }
 
-func TestDistributedSelector_SyncCommitteeAggregators_AlwaysTrue(t *testing.T) {
+func TestDistributedSelector_SyncCommitteeAggregators_ReturnsAll(t *testing.T) {
 	s := &distributedSelector{}
-	validators := map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{
-		1: {},
-		2: {},
-		3: {},
-	}
+	pubkeys := [][fieldparams.BLSPubkeyLength]byte{{1}, {2}, {3}}
 
-	result, err := s.SyncCommitteeAggregators(t.Context(), 0, validators)
+	result, err := s.SyncCommitteeAggregators(t.Context(), 0, pubkeys)
 	require.NoError(t, err)
-	for idx := range validators {
-		assert.Equal(t, true, result[idx])
-	}
+	assert.DeepEqual(t, pubkeys, result)
 }
