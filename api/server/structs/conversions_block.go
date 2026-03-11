@@ -3284,14 +3284,6 @@ func (d *PayloadAttestationData) ToConsensus() (*eth.PayloadAttestationData, err
 	}, nil
 }
 
-func PayloadAttestationMessageFromConsensus(msg *eth.PayloadAttestationMessage) *PayloadAttestationMessage {
-	return &PayloadAttestationMessage{
-		ValidatorIndex: fmt.Sprintf("%d", msg.ValidatorIndex),
-		Data:           PayloadAttestationDataFromConsensus(msg.Data),
-		Signature:      hexutil.Encode(msg.Signature),
-	}
-}
-
 func (p *PayloadAttestationMessage) ToConsensus() (*eth.PayloadAttestationMessage, error) {
 	if p == nil {
 		return nil, errNilValue

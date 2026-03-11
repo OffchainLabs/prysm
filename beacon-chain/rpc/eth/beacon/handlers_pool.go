@@ -991,6 +991,10 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 			})
 			continue
 		}
+		if err := s.Broadcaster.Broadcast(ctx, consensusMsg); err != nil {
+			log.WithError(err).Error("Could not broadcast payload attestation message")
+		}
+
 		if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg, idx); err != nil {
 			failures = append(failures, &server.IndexedError{
 				Index:   i,
@@ -999,9 +1003,12 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 
-		if err := s.Broadcaster.Broadcast(ctx, consensusMsg); err != nil {
-			log.WithError(err).Error("Could not broadcast payload attestation message")
-		}
+		s.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: operation.PayloadAttestationMessageReceived,
+			Data: &operation.PayloadAttestationMessageReceivedData{
+				Message: consensusMsg,
+			},
+		})
 	}
 
 	if len(failures) > 0 {
