@@ -43,6 +43,7 @@ func TestPayloadAttestationSubscriber_NoPool(t *testing.T) {
 		cfg: &config{
 			chain:                  &mock.ChainService{State: st},
 			payloadAttestationPool: payloadattestation.NewPool(),
+			operationNotifier:      &mock.MockOperationNotifier{},
 		},
 	}
 	msg := &ethpb.PayloadAttestationMessage{
@@ -65,6 +66,7 @@ func TestPayloadAttestationSubscriber_HeadStateError(t *testing.T) {
 				HeadStateErr: headErr,
 			},
 			payloadAttestationPool: payloadattestation.NewPool(),
+			operationNotifier:      &mock.MockOperationNotifier{},
 		},
 	}
 	msg := &ethpb.PayloadAttestationMessage{
@@ -90,6 +92,7 @@ func TestPayloadAttestationSubscriber_ValidatorInPTC(t *testing.T) {
 		cfg: &config{
 			chain:                  &mock.ChainService{State: st},
 			payloadAttestationPool: pool,
+			operationNotifier:      &mock.MockOperationNotifier{},
 		},
 	}
 	msg := &ethpb.PayloadAttestationMessage{
@@ -126,6 +129,7 @@ func TestPayloadAttestationSubscriber_ValidatorNotInPTC(t *testing.T) {
 		cfg: &config{
 			chain:                  &mock.ChainService{State: st},
 			payloadAttestationPool: payloadattestation.NewPool(),
+			operationNotifier:      &mock.MockOperationNotifier{},
 		},
 	}
 	msg := &ethpb.PayloadAttestationMessage{
