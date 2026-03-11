@@ -64,7 +64,22 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 // This is done to improve performance since the internal KZG library is way more
 // efficient when verifying in batch.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_kzg_proofs
-func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmentsBySidecar [][][]byte) error {
+func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
+	commitmentsBySidecar := make([][][]byte, len(sidecars))
+	for i := range sidecars {
+		commitmentsBySidecar[i] = sidecars[i].KzgCommitments
+	}
+	return verifyDataColumnsSidecarKZGProofs(sidecars, commitmentsBySidecar)
+}
+
+// VerifyDataColumnsSidecarKZGProofsWithCommitments verifies KZG proofs using
+// explicitly provided commitments instead of the sidecar's own. This is used
+// by Gloas, which validates against bid.blob_kzg_commitments.
+func VerifyDataColumnsSidecarKZGProofsWithCommitments(sidecars []blocks.RODataColumn, commitmentsBySidecar [][][]byte) error {
+	return verifyDataColumnsSidecarKZGProofs(sidecars, commitmentsBySidecar)
+}
+
+func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmentsBySidecar [][][]byte) error {
 	if len(sidecars) != len(commitmentsBySidecar) {
 		return ErrMismatchLength
 	}

@@ -76,7 +76,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 			return validationResultFromError(err), baseValidationErr(err)
 		}
 	} else {
-		verifiedRODataColumn, err = s.validateFuluDataColumn(ctx, msg, roDataColumn, dataColumnSidecarSubTopic)
+		verifiedRODataColumn, err = s.validateDataColumnFulu(ctx, msg, roDataColumn, dataColumnSidecarSubTopic)
 		if err != nil {
 			return validationResultFromError(err), baseValidationErr(err)
 		}
@@ -123,7 +123,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	return pubsub.ValidationAccept, nil
 }
 
-func (s *Service) validateFuluDataColumn(
+func (s *Service) validateDataColumnFulu(
 	ctx context.Context,
 	msg *pubsub.Message,
 	roDataColumn blocks.RODataColumn,

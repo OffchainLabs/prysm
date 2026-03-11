@@ -84,11 +84,7 @@ func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColu
 		dataColumns:     roDataColumns,
 		results:         newResults(reqs...),
 		verifyDataColumnsCommitment: func(sidecars []blocks.RODataColumn) error {
-			commitmentsBySidecar := make([][][]byte, len(sidecars))
-			for i := range sidecars {
-				commitmentsBySidecar[i] = sidecars[i].KzgCommitments
-			}
-			return peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars, commitmentsBySidecar)
+			return peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
 		},
 		stateByRoot: make(map[[fieldparams.RootLength]byte]state.BeaconState),
 	}

@@ -226,6 +226,7 @@ go_test(
         "validate_beacon_blocks_test.go",
         "validate_blob_test.go",
         "validate_bls_to_execution_change_test.go",
+        "validate_data_column_gloas_test.go",
         "validate_data_column_test.go",
         "validate_execution_payload_envelope_test.go",
         "validate_light_client_test.go",
