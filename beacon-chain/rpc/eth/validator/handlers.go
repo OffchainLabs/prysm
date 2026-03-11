@@ -1010,7 +1010,7 @@ func (s *Server) computeProposerDuties(ctx context.Context, w http.ResponseWrite
 	coreDuties, rpcErr := s.CoreService.ProposerDuties(ctx, st, dutyEpoch)
 	if rpcErr != nil {
 		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
-		return
+		return nil
 	}
 
 	duties := make([]*structs.ProposerDuty, 0, len(coreDuties))
@@ -1020,11 +1020,6 @@ func (s *Server) computeProposerDuties(ctx context.Context, w http.ResponseWrite
 			ValidatorIndex: strconv.FormatUint(uint64(d.ValidatorIndex), 10),
 			Slot:           strconv.FormatUint(uint64(d.Slot), 10),
 		})
-	}
-
-	if err = sortProposerDuties(duties); err != nil {
-		httputil.HandleError(w, "Could not sort proposer duties: "+err.Error(), http.StatusInternalServerError)
-		return nil
 	}
 
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
@@ -1062,11 +1057,12 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = root[:]
 	} else {
-		dependentRoot, err = core.ProposalDependentRoot(st, requestedEpoch)
+		root, err := core.ProposalDependentRoot(info.st, info.lookupEpoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		dependentRoot = root
 	}
 
 	resp := &structs.GetProposerDutiesResponse{
@@ -1078,8 +1074,8 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetProposerDutiesV2 requests beacon node to provide all validators that are scheduled to propose a block in the given epoch.
-// V2 computes a fork-aware dependent root: post-Fulu uses DependentRootForEpoch(headRoot, epoch-1) to account for
-// the deterministic proposer lookahead, while pre-Fulu uses DependentRootForEpoch(headRoot, epoch) matching v1 semantics.
+// V2 computes a fork-aware dependent root using core.ProposalDependentRootV2.
+// Post-Fulu (EIP-7917) this follows the previous-epoch dependency semantics.
 func (s *Server) GetProposerDutiesV2(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.GetProposerDutiesV2")
 	defer span.End()
@@ -1090,7 +1086,7 @@ func (s *Server) GetProposerDutiesV2(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var dependentRoot []byte
-	if info.dutiesEpoch == 0 {
+	if info.dutiesEpoch == 0 || (info.dutiesEpoch == 1 && info.st.Version() >= version.Fulu) {
 		root, err := s.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
 			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
@@ -1098,21 +1094,12 @@ func (s *Server) GetProposerDutiesV2(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = root[:]
 	} else {
-		headRoot, err := s.HeadFetcher.HeadRoot(ctx)
-		if err != nil {
-			httputil.HandleError(w, "Could not get head root: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		depEpoch := info.dutiesEpoch
-		if depEpoch >= params.BeaconConfig().FuluForkEpoch {
-			depEpoch = info.dutiesEpoch.Sub(1)
-		}
-		root, err := s.HeadFetcher.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), depEpoch)
+		root, err := core.ProposalDependentRootV2(info.st, info.dutiesEpoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		dependentRoot = root[:]
+		dependentRoot = root
 	}
 
 	resp := &structs.GetProposerDutiesResponse{
