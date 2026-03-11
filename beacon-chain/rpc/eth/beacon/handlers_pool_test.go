@@ -2709,6 +2709,7 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 			OptimisticModeFetcher:  chainService,
 			Broadcaster:            broadcaster,
 			PayloadAttestationPool: pool,
+			OperationNotifier:      &blockchainmock.MockOperationNotifier{},
 		}
 
 		body := fmt.Sprintf(`[{
