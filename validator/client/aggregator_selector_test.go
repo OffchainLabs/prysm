@@ -1,6 +1,7 @@
 package client
 
 import (
+	"sync"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -59,6 +60,47 @@ func TestLocalSelector_AttestationSelectionProof_Memoized(t *testing.T) {
 	proof2, err := s.AttestationSelectionProof(t.Context(), slot, pubKey)
 	require.NoError(t, err)
 	assert.DeepEqual(t, proof1, proof2)
+}
+
+func TestLocalSelector_AttestationSelectionProof_ConcurrentDedup(t *testing.T) {
+	v, m, validatorKey, finish := setup(t, false)
+	defer finish()
+
+	s, err := newLocalSelector(v)
+	require.NoError(t, err)
+
+	var pubKey [fieldparams.BLSPubkeyLength]byte
+	copy(pubKey[:], validatorKey.PublicKey().Marshal())
+	v.pubkeyToStatus = map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+		pubKey: {index: 0},
+	}
+
+	// DomainData should only be called once despite concurrent callers.
+	m.validatorClient.EXPECT().DomainData(
+		gomock.Any(),
+		gomock.Any(),
+	).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).Times(1)
+
+	slot := primitives.Slot(1)
+	const goroutines = 5
+
+	var wg sync.WaitGroup
+	results := make([][]byte, goroutines)
+	errs := make([]error, goroutines)
+
+	wg.Add(goroutines)
+	for i := range goroutines {
+		go func(idx int) {
+			defer wg.Done()
+			results[idx], errs[idx] = s.AttestationSelectionProof(t.Context(), slot, pubKey)
+		}(i)
+	}
+	wg.Wait()
+
+	for i := range goroutines {
+		require.NoError(t, errs[i], "goroutine %d failed", i)
+		assert.DeepEqual(t, results[0], results[i], "all goroutines should get the same proof")
+	}
 }
 
 func TestLocalSelector_RefreshSelectionProofs_ClearsCache(t *testing.T) {

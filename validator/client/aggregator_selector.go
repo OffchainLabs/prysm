@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
@@ -13,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/singleflight"
 )
 
 // aggregatorSelector abstracts selection proof generation and aggregation decisions.
@@ -41,6 +43,7 @@ type localSelector struct {
 	dedupCache *lru.Cache
 	proofLock  sync.Mutex
 	proofCache map[attSelectionKey][]byte
+	proofGroup singleflight.Group
 }
 
 func syncSubnet(index uint64) uint64 {
@@ -82,18 +85,25 @@ func (p *localSelector) AttestationSelectionProof(ctx context.Context, slot prim
 		return nil, err
 	}
 	key := attSelectionKey{slot: slot, index: idx}
+	sfKey := fmt.Sprintf("%d_%d", slot, idx)
 
-	if cached, ok := p.getCachedProof(key); ok {
-		return cached, nil
-	}
-
-	sig, err := p.v.signSlotWithSelectionProof(ctx, pubKey, slot)
+	// Deduplicate concurrent signing for the same (slot, validator) — subscribeToSubnets
+	// and RolesAt can race, and signing may involve a remote signer round-trip.
+	result, err, _ := p.proofGroup.Do(sfKey, func() (any, error) {
+		if cached, ok := p.getCachedProof(key); ok {
+			return cached, nil
+		}
+		sig, err := p.v.signSlotWithSelectionProof(ctx, pubKey, slot)
+		if err != nil {
+			return nil, err
+		}
+		p.cacheProof(key, sig)
+		return sig, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	p.cacheProof(key, sig)
-	return sig, nil
+	return result.([]byte), nil
 }
 
 func (p *localSelector) ClaimAggregateSlot(slot primitives.Slot, committeeIndex primitives.CommitteeIndex) bool {
