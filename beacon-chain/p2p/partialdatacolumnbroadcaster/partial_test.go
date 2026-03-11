@@ -1240,7 +1240,7 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 				select {
 				case call := <-recorder.handleColumnCallCh:
 					require.Equal(t, topic, call.topic)
-					require.Equal(t, true, len(call.column.Column) > 0)
+					require.Equal(t, true, len(call.column.Column()) > 0)
 				case <-t.Context().Done():
 					t.Fatalf("handle column call not received")
 				}
