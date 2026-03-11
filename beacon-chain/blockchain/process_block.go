@@ -108,7 +108,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	}
 	if cfg.roblock.Version() < version.Gloas {
 		s.sendFCU(cfg)
-	} else if s.isNewHead(cfg.headRoot) {
+	} else if s.isNewHead(cfg.headRoot, false) { // We reach this only when the incoming block is head.
 		if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState); err != nil {
 			log.WithError(err).Error("Could not save head")
 		}
@@ -1041,7 +1041,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		return
 	}
 
-	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
+	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:], accessRoot[:])
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
 		return
@@ -1057,28 +1057,28 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		if err != nil {
 			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
 		}
-	} else {
-		s.headLock.RLock()
-		headBlock, err := s.headBlock()
-		if err != nil {
-			s.headLock.RUnlock()
-			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve head block")
-			return
-		}
+		return
+	}
+	s.headLock.RLock()
+	headBlock, err := s.headBlock()
+	if err != nil {
 		s.headLock.RUnlock()
+		log.WithError(err).Debug("could not perform late block tasks: failed to retrieve head block")
+		return
+	}
+	s.headLock.RUnlock()
 
-		fcuArgs := &fcuConfig{
-			headState:  headState,
-			headRoot:   headRoot,
-			headBlock:  headBlock,
-			attributes: attribute,
-		}
-		s.cfg.ForkChoiceStore.Lock()
-		defer s.cfg.ForkChoiceStore.Unlock()
-		_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
-		if err != nil {
-			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
-		}
+	fcuArgs := &fcuConfig{
+		headState:  headState,
+		headRoot:   headRoot,
+		headBlock:  headBlock,
+		attributes: attribute,
+	}
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
+	_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
+	if err != nil {
+		log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
 	}
 }
 
