@@ -85,12 +85,21 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	if rpcErr != nil {
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
+	currentPTCDuties, rpcErr := vs.CoreService.PTCDuties(ctx, s, req.Epoch, requestIndices)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
+	}
+	nextPTCDuties, rpcErr := vs.CoreService.PTCDuties(ctx, s, req.Epoch+1, requestIndices)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
+	}
 
 	// Build index maps for O(1) lookup
 	currentAttesterMap := buildAttesterMap(currentAttesterDuties)
 	nextAttesterMap := buildAttesterMap(nextAttesterDuties)
 	proposerMap := buildProposerMap(proposerDuties)
-
+	currentPTCAssignments := buildPTCMap(currentPTCDuties)
+	nextPTCAssignments := buildPTCMap(nextPTCDuties)
 	validatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 	nextValidatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 
@@ -127,6 +136,9 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 			assignment.CommitteesAtSlot = ad.CommitteesAtSlot
 			assignment.ValidatorCommitteeIndex = ad.ValidatorCommitteeIndex
 		}
+		if ptcSlots, ok := currentPTCAssignments[info.index]; ok {
+			assignment.PtcSlots = ptcSlots
+		}
 
 		// Next epoch assignment
 		nextDuty := &ethpb.DutiesV2Response_Duty{
@@ -140,6 +152,9 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 			nextDuty.CommitteeLength = ad.CommitteeLength
 			nextDuty.CommitteesAtSlot = ad.CommitteesAtSlot
 			nextDuty.ValidatorCommitteeIndex = ad.ValidatorCommitteeIndex
+		}
+		if ptcSlots, ok := nextPTCAssignments[info.index]; ok {
+			nextDuty.PtcSlots = ptcSlots
 		}
 
 		// Sync committee flags
@@ -234,6 +249,15 @@ func buildAttesterMap(duties []*core.AttesterDutyResult) map[primitives.Validato
 
 // buildProposerMap creates a map from validator index to proposal slots for O(1) lookup.
 func buildProposerMap(duties []*core.ProposerDutyResult) map[primitives.ValidatorIndex][]primitives.Slot {
+	m := make(map[primitives.ValidatorIndex][]primitives.Slot)
+	for _, d := range duties {
+		m[d.ValidatorIndex] = append(m[d.ValidatorIndex], d.Slot)
+	}
+	return m
+}
+
+// buildPTCMap creates a map from validator index to PTC slots for O(1) lookup.
+func buildPTCMap(duties []*core.PTCDutyResult) map[primitives.ValidatorIndex][]primitives.Slot {
 	m := make(map[primitives.ValidatorIndex][]primitives.Slot)
 	for _, d := range duties {
 		m[d.ValidatorIndex] = append(m[d.ValidatorIndex], d.Slot)

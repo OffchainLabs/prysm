@@ -145,6 +145,7 @@ func toValidatorDutyV2(duty *ethpb.DutiesV2Response_Duty) (*ethpb.ValidatorDuty,
 		Status:                  duty.Status,
 		ValidatorIndex:          duty.ValidatorIndex,
 		IsSyncCommittee:         duty.IsSyncCommittee,
+		PtcSlots:                duty.PtcSlots,
 	}, nil
 }
 
@@ -409,4 +410,22 @@ func (c *grpcValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, s
 
 func (c *grpcValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *ethpb.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
 	return c.getClient().PublishExecutionPayloadEnvelope(ctx, in)
+}
+
+func (c *grpcValidatorClient) PayloadAttestationData(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, error) {
+	req := &ethpb.PayloadAttestationDataRequest{
+		Slot: slot,
+	}
+	resp, err := c.getClient().PayloadAttestationData(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(
+			client.ErrConnectionIssue,
+			errors.Wrap(err, "PayloadAttestationData").Error(),
+		)
+	}
+	return resp, nil
+}
+
+func (c *grpcValidatorClient) SubmitPayloadAttestation(ctx context.Context, in *ethpb.PayloadAttestationMessage) (*empty.Empty, error) {
+	return c.getClient().SubmitPayloadAttestation(ctx, in)
 }

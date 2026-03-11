@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -9,10 +10,12 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	beaconstate "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -567,4 +570,210 @@ func TestGetDutiesV2_SyncNotReady(t *testing.T) {
 	}
 	_, err := vs.GetDutiesV2(t.Context(), &ethpb.DutiesRequest{})
 	assert.ErrorContains(t, "Syncing to latest head", err)
+}
+
+// ptcTestState creates a genesis beacon state suitable for PTC testing:
+// - GloasForkEpoch = 0 (active from genesis)
+// - MaxEffectiveBalanceElectra = MaxEffectiveBalance (all validators accepted into PTC)
+// - MinGenesisActiveValidatorCount validators
+// Callers must have already called params.SetupTestConfigCleanup and overridden
+// GloasForkEpoch and MaxEffectiveBalanceElectra in the beacon config.
+func ptcTestState(t *testing.T) (beaconstate.BeaconState, [][]byte) {
+	t.Helper()
+	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
+	deposits, _, err := util.DeterministicDepositsAndKeys(depChainStart)
+	require.NoError(t, err)
+	eth1Data, err := util.DeterministicEth1Data(len(deposits))
+	require.NoError(t, err)
+	st, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
+	require.NoError(t, err)
+	pubKeys := make([][]byte, depChainStart)
+	for i, d := range deposits {
+		pubKeys[i] = d.Data.PublicKey
+	}
+	return st, pubKeys
+}
+
+func ptcTestConfig(t *testing.T) {
+	t.Helper()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.MaxEffectiveBalanceElectra = cfg.MaxEffectiveBalance
+	params.OverrideBeaconConfig(cfg)
+}
+
+// TestPTCDuties_PreGloasEpoch verifies that a requested epoch
+// before the Gloas fork returns an empty assignment map without error.
+func TestPTCDuties_PreGloasEpoch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 5
+	params.OverrideBeaconConfig(cfg)
+
+	deposits, _, err := util.DeterministicDepositsAndKeys(8)
+	require.NoError(t, err)
+	eth1Data, err := util.DeterministicEth1Data(len(deposits))
+	require.NoError(t, err)
+	st, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
+	require.NoError(t, err)
+
+	duties, rpcErr := (&core.Service{}).PTCDuties(t.Context(), st, 0, []primitives.ValidatorIndex{0, 1, 2})
+	require.Equal(t, (*core.RpcError)(nil), rpcErr)
+	result := buildPTCMap(duties)
+	assert.Equal(t, 0, len(result), "pre-Gloas epoch should yield no PTC assignments")
+}
+
+// TestPTCDuties_EmptyIndices verifies that an empty validator
+// index list short-circuits and returns an empty map without calling PayloadCommittee.
+func TestPTCDuties_EmptyIndices(t *testing.T) {
+	ptcTestConfig(t)
+
+	deposits, _, err := util.DeterministicDepositsAndKeys(8)
+	require.NoError(t, err)
+	eth1Data, err := util.DeterministicEth1Data(len(deposits))
+	require.NoError(t, err)
+	st, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
+	require.NoError(t, err)
+
+	duties, rpcErr := (&core.Service{}).PTCDuties(t.Context(), st, 0, nil)
+	require.Equal(t, (*core.RpcError)(nil), rpcErr)
+	result := buildPTCMap(duties)
+	assert.Equal(t, 0, len(result), "empty indices should yield no PTC assignments")
+}
+
+// TestPTCDuties_SlotsWithinEpoch verifies that every assigned slot
+// falls within the requested epoch's slot range.
+func TestPTCDuties_SlotsWithinEpoch(t *testing.T) {
+	ptcTestConfig(t)
+
+	st, _ := ptcTestState(t)
+
+	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
+	indices := make([]primitives.ValidatorIndex, depChainStart)
+	for i := range indices {
+		indices[i] = primitives.ValidatorIndex(i)
+	}
+
+	const epoch = primitives.Epoch(0)
+	duties, rpcErr := (&core.Service{}).PTCDuties(t.Context(), st, epoch, indices)
+	require.Equal(t, (*core.RpcError)(nil), rpcErr)
+	result := buildPTCMap(duties)
+	if len(result) == 0 {
+		t.Fatal("expected at least one PTC assignment in Gloas epoch 0")
+	}
+
+	epochStart, err := slots.EpochStart(epoch)
+	require.NoError(t, err)
+	epochEnd := epochStart + params.BeaconConfig().SlotsPerEpoch
+	for valIdx, ptcSlots := range result {
+		for _, ptcSlot := range ptcSlots {
+			if ptcSlot < epochStart {
+				t.Errorf("validator %d: ptcSlot %d before epoch start %d", valIdx, ptcSlot, epochStart)
+			}
+			if ptcSlot >= epochEnd {
+				t.Errorf("validator %d: ptcSlot %d at or after epoch end %d", valIdx, ptcSlot, epochEnd)
+			}
+		}
+	}
+}
+
+// TestComputePTCAssignments_CollectsAllSlots verifies that assignments include
+// all PTC slots for each requested validator within the epoch.
+func TestPTCDuties_CollectsAllSlots(t *testing.T) {
+	ptcTestConfig(t)
+
+	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
+	indices := make([]primitives.ValidatorIndex, depChainStart)
+	for i := range indices {
+		indices[i] = primitives.ValidatorIndex(i)
+	}
+
+	st, _ := ptcTestState(t)
+	const epoch = primitives.Epoch(0)
+	duties, rpcErr := (&core.Service{}).PTCDuties(t.Context(), st, epoch, indices)
+	require.Equal(t, (*core.RpcError)(nil), rpcErr)
+	result := buildPTCMap(duties)
+	if len(result) == 0 {
+		t.Fatal("expected at least one PTC assignment")
+	}
+
+	epochStart, err := slots.EpochStart(epoch)
+	require.NoError(t, err)
+	epochEnd := epochStart + params.BeaconConfig().SlotsPerEpoch
+
+	for valIdx, assignedSlots := range result {
+		expected := make([]primitives.Slot, 0)
+		for s := epochStart; s < epochEnd; s++ {
+			ptc, err := gloas.PayloadCommittee(t.Context(), st, s)
+			require.NoError(t, err)
+			found := slices.Contains(ptc, valIdx)
+			if found {
+				expected = append(expected, s)
+			}
+		}
+		assert.DeepEqual(t, expected, assignedSlots, "validator %d PTC slots mismatch", valIdx)
+	}
+}
+
+// TestGetDutiesV2_PTC_OK verifies that GetDutiesV2 populates PtcSlots on duties
+// when the Gloas fork is active at epoch 0.
+func TestGetDutiesV2_PTC_OK(t *testing.T) {
+	ptcTestConfig(t)
+
+	st, pubKeys := ptcTestState(t)
+	genesis := util.NewBeaconBlock()
+	genesisRoot, err := genesis.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	chain := &mockChain.ChainService{
+		State: st, Root: genesisRoot[:], Genesis: time.Now(),
+	}
+	vs := &Server{
+		HeadFetcher:       chain,
+		TimeFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
+		CoreService:       &core.Service{},
+	}
+
+	req := &ethpb.DutiesRequest{
+		PublicKeys: pubKeys,
+		Epoch:      0,
+	}
+	res, err := vs.GetDutiesV2(t.Context(), req)
+	require.NoError(t, err)
+
+	// Next-epoch duties span slots [SlotsPerEpoch, 2*SlotsPerEpoch).
+	nextEpochStart := params.BeaconConfig().SlotsPerEpoch
+	nextEpochEnd := nextEpochStart * 2
+	nextPTCCount := 0
+	for _, d := range res.NextEpochDuties {
+		for _, ptcSlot := range d.PtcSlots {
+			nextPTCCount++
+			if ptcSlot < nextEpochStart {
+				t.Errorf("next-epoch PtcSlot %d below epoch start %d", ptcSlot, nextEpochStart)
+			}
+			if ptcSlot >= nextEpochEnd {
+				t.Errorf("next-epoch PtcSlot %d at or after epoch end %d", ptcSlot, nextEpochEnd)
+			}
+		}
+	}
+	if nextPTCCount == 0 {
+		t.Error("expected next-epoch PTC assignments with GloasForkEpoch=0")
+	}
+
+	currentCount := 0
+	for _, d := range res.CurrentEpochDuties {
+		for _, ptcSlot := range d.PtcSlots {
+			currentCount++
+			if ptcSlot >= params.BeaconConfig().SlotsPerEpoch {
+				t.Errorf("current-epoch PtcSlot %d out of epoch 0 range", ptcSlot)
+			}
+		}
+	}
+	if currentCount == 0 {
+		t.Error("expected some current-epoch PTC assignments")
+	}
 }

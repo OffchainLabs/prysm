@@ -327,6 +327,36 @@ func (mr *MockValidatorClientMockRecorder) PublishExecutionPayloadEnvelope(ctx, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).PublishExecutionPayloadEnvelope), ctx, in)
 }
 
+// PayloadAttestationData mocks base method.
+func (m *MockValidatorClient) PayloadAttestationData(ctx context.Context, slot primitives.Slot) (*eth.PayloadAttestationData, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PayloadAttestationData", ctx, slot)
+	ret0, _ := ret[0].(*eth.PayloadAttestationData)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PayloadAttestationData indicates an expected call of PayloadAttestationData.
+func (mr *MockValidatorClientMockRecorder) PayloadAttestationData(ctx, slot any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PayloadAttestationData", reflect.TypeOf((*MockValidatorClient)(nil).PayloadAttestationData), ctx, slot)
+}
+
+// SubmitPayloadAttestation mocks base method.
+func (m *MockValidatorClient) SubmitPayloadAttestation(ctx context.Context, in *eth.PayloadAttestationMessage) (*empty.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitPayloadAttestation", ctx, in)
+	ret0, _ := ret[0].(*empty.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitPayloadAttestation indicates an expected call of SubmitPayloadAttestation.
+func (mr *MockValidatorClientMockRecorder) SubmitPayloadAttestation(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPayloadAttestation", reflect.TypeOf((*MockValidatorClient)(nil).SubmitPayloadAttestation), ctx, in)
+}
+
 // StartEventStream mocks base method.
 func (m *MockValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *event.Event) {
 	m.ctrl.T.Helper()

@@ -489,3 +489,23 @@ func (s *Store) removeProposerBoostFromParent() {
 	}
 	return
 }
+
+// FullHead returns the head root and the head blockhash of the chain. It also
+// returns whether the head is full or not, that is if the blockhash is for the same
+// slot as the beacon root or some previous slots.
+func (f *ForkChoice) FullHead(ctx context.Context) ([32]byte, [32]byte, bool, error) {
+	hr, err := f.Head(ctx)
+	if err != nil {
+		return [32]byte{}, [32]byte{}, false, err
+	}
+	n := f.store.headNode
+	pn := f.store.choosePayloadContent(n)
+	if pn.full {
+		return hr, pn.node.blockHash, true, nil
+	}
+	fullAncestor := f.store.fullParent(pn)
+	if fullAncestor == nil {
+		return hr, [32]byte{}, false, nil
+	}
+	return hr, fullAncestor.node.blockHash, false, nil
+}

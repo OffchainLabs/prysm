@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["tos.go"],
+    srcs = [
+        "log.go",
+        "tos.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/runtime/tos",
     visibility = ["//visibility:public"],
     deps = [

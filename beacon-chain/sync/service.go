@@ -24,6 +24,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -38,7 +39,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
-	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
+	payloadattestationtypes "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
@@ -113,6 +114,7 @@ type config struct {
 	blobStorage             *filesystem.BlobStorage
 	dataColumnStorage       *filesystem.DataColumnStorage
 	batchVerifierLimit      int
+	payloadAttestationPool  payloadattestation.PoolManager
 }
 
 // This defines the interface for interacting with block chain service
@@ -267,7 +269,7 @@ func newDataColumnsVerifierFromInitializer(ini *verification.Initializer) verifi
 }
 
 func newPayloadAttestationMessageFromInitializer(ini *verification.Initializer) verification.NewPayloadAttestationMsgVerifier {
-	return func(pa payloadattestation.ROMessage, reqs []verification.Requirement) verification.PayloadAttestationMsgVerifier {
+	return func(pa payloadattestationtypes.ROMessage, reqs []verification.Requirement) verification.PayloadAttestationMsgVerifier {
 		return ini.NewPayloadAttestationMsgVerifier(pa, reqs)
 	}
 }
