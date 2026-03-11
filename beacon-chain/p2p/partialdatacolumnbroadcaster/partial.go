@@ -173,7 +173,9 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 			Logger: slogger,
 			GossipForPeer: func(topic string, groupID string, remote peer.ID, peerState partialmessages.PeerState) (partialmessages.PeerState, []byte, partialmessages.PartsMetadata, error) {
 				respCh := make(chan gossipForPeerResponse, 1)
-				p.incomingReq <- request{
+
+				select {
+				case p.incomingReq <- request{
 					kind: requestKindGossipForPeer,
 					gossipForPeer: gossipForPeer{
 						topic:             topic,
@@ -182,6 +184,9 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 						peerState:         peerState,
 						gossipForPeerResp: respCh,
 					},
+				}:
+				case <-p.stop:
+					return peerState, nil, nil, errors.New("broadcaster stopped")
 				}
 				select {
 				case resp := <-respCh:
@@ -748,15 +753,20 @@ type SubHandler func(topic string, col blocks.VerifiedRODataColumn)
 
 func (p *PartialColumnBroadcaster) Subscribe(t *pubsub.Topic) error {
 	respCh := make(chan error)
-	p.incomingReq <- request{
+	select {
+	case <-p.stop:
+		return errors.New("broadcaster stopped")
+	case p.incomingReq <- request{
 		kind: requestKindSubscribe,
 		sub: subscribe{
 			t: t,
 		},
 		response: respCh,
+	}:
 	}
 	return <-respCh
 }
+
 func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic) error {
 	topic := t.String()
 	if _, ok := p.topics[topic]; ok {
@@ -769,12 +779,16 @@ func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic) error {
 
 func (p *PartialColumnBroadcaster) Unsubscribe(topic string) error {
 	respCh := make(chan error)
-	p.incomingReq <- request{
+	select {
+	case <-p.stop:
+		return errors.New("broadcaster stopped")
+	case p.incomingReq <- request{
 		kind: requestKindUnsubscribe,
 		unsub: unsubscribe{
 			topic: topic,
 		},
 		response: respCh,
+	}:
 	}
 	return <-respCh
 }
