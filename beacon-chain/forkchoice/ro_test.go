@@ -45,6 +45,7 @@ const (
 	dependentRootForEpochCalled
 	payloadWeightsCalled
 	payloadContentLookupCalled
+	canonicalNodeAtSlotCalled
 )
 
 func _discard(t *testing.T, e error) {
