@@ -910,7 +910,7 @@ func TestIsSyncCommitteeAggregator_Distributed_OK(t *testing.T) {
 			v, _, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 
-			v.aggSelector = &distributedSelector{v: v}
+			v.aggSelector = newDistributedSelector(v)
 			slot := primitives.Slot(1)
 			pubKey := validatorKey.PublicKey().Marshal()
 

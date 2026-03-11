@@ -8,21 +8,19 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	lru "github.com/hashicorp/golang-lru"
 	"go.uber.org/mock/gomock"
 )
 
 func testLocalSelector(t *testing.T, v *validator) *localSelector {
 	t.Helper()
-	cache, err := lru.New(10)
+	s, err := newLocalSelector(v)
 	require.NoError(t, err)
-	return newLocalSelector(v, cache)
+	return s
 }
 
 func TestLocalSelector_ClaimAggregateSlot(t *testing.T) {
-	cache, err := lru.New(10)
+	s, err := newLocalSelector(&validator{})
 	require.NoError(t, err)
-	s := newLocalSelector(&validator{}, cache)
 
 	slot := primitives.Slot(5)
 	committee := primitives.CommitteeIndex(2)
@@ -37,9 +35,8 @@ func TestLocalSelector_AttestationSelectionProof_Memoized(t *testing.T) {
 	v, m, validatorKey, finish := setup(t, false)
 	defer finish()
 
-	cache, err := lru.New(10)
+	s, err := newLocalSelector(v)
 	require.NoError(t, err)
-	s := newLocalSelector(v, cache)
 
 	var pubKey [fieldparams.BLSPubkeyLength]byte
 	copy(pubKey[:], validatorKey.PublicKey().Marshal())
@@ -65,9 +62,8 @@ func TestLocalSelector_AttestationSelectionProof_Memoized(t *testing.T) {
 }
 
 func TestLocalSelector_RefreshSelectionProofs_ClearsCache(t *testing.T) {
-	cache, err := lru.New(10)
+	s, err := newLocalSelector(&validator{})
 	require.NoError(t, err)
-	s := newLocalSelector(&validator{}, cache)
 
 	key := attSelectionKey{slot: 1, index: 0}
 	s.proofCache[key] = []byte("cached")
@@ -77,7 +73,7 @@ func TestLocalSelector_RefreshSelectionProofs_ClearsCache(t *testing.T) {
 }
 
 func TestDistributedSelector_ClaimAggregateSlot_AlwaysTrue(t *testing.T) {
-	s := &distributedSelector{}
+	s := newDistributedSelector(&validator{})
 
 	assert.Equal(t, true, s.ClaimAggregateSlot(0, 0))
 	assert.Equal(t, true, s.ClaimAggregateSlot(0, 0))
@@ -85,7 +81,7 @@ func TestDistributedSelector_ClaimAggregateSlot_AlwaysTrue(t *testing.T) {
 }
 
 func TestDistributedSelector_SyncCommitteeAggregators_ReturnsAll(t *testing.T) {
-	s := &distributedSelector{}
+	s := newDistributedSelector(&validator{})
 	pubkeys := [][fieldparams.BLSPubkeyLength]byte{{1}, {2}, {3}}
 
 	result, err := s.SyncCommitteeAggregators(t.Context(), 0, pubkeys)

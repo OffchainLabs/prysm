@@ -191,7 +191,7 @@ func TestSubmitAggregateAndProof_Distributed(t *testing.T) {
 				AttesterSlot:   slot,
 			})
 
-			dvProvider := &distributedSelector{v: validator}
+			dvProvider := newDistributedSelector(validator)
 			dvProvider.attSelections = map[attSelectionKey]iface.BeaconCommitteeSelection{
 				{slot: slot, index: 123}: {
 					SelectionProof: make([]byte, 96),

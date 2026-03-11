@@ -248,7 +248,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		distributed:     true,
 		duties:          &dutyStore{},
 	}
-	v.aggSelector = &distributedSelector{v: &v}
+	v.aggSelector = newDistributedSelector(&v)
 
 	sigDomain := make([]byte, 32)
 

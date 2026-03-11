@@ -29,6 +29,11 @@ type aggregatorSelector interface {
 	SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse) ([][]byte, error)
 }
 
+type attSelectionKey struct {
+	slot  primitives.Slot
+	index primitives.ValidatorIndex
+}
+
 // localSelector computes selection proofs using the local keymanager.
 type localSelector struct {
 	v          *validator
@@ -38,14 +43,36 @@ type localSelector struct {
 	proofCache map[attSelectionKey][]byte
 }
 
-func newLocalSelector(v *validator, dedupCache *lru.Cache) *localSelector {
-	return &localSelector{v: v, dedupCache: dedupCache, proofCache: make(map[attSelectionKey][]byte)}
+func syncSubnet(index uint64) uint64 {
+	cfg := params.BeaconConfig()
+	return index / (cfg.SyncCommitteeSize / cfg.SyncCommitteeSubnetCount)
+}
+
+func newLocalSelector(v *validator) (*localSelector, error) {
+	cache, err := lru.New(int(params.BeaconConfig().MaxCommitteesPerSlot))
+	if err != nil {
+		return nil, errors.Wrap(err, "could not create dedup cache")
+	}
+	return &localSelector{v: v, dedupCache: cache, proofCache: make(map[attSelectionKey][]byte)}, nil
+}
+
+func (p *localSelector) getCachedProof(key attSelectionKey) ([]byte, bool) {
+	p.proofLock.Lock()
+	defer p.proofLock.Unlock()
+	proof, ok := p.proofCache[key]
+	return proof, ok
+}
+
+func (p *localSelector) cacheProof(key attSelectionKey, proof []byte) {
+	p.proofLock.Lock()
+	defer p.proofLock.Unlock()
+	p.proofCache[key] = proof
 }
 
 func (p *localSelector) RefreshSelectionProofs(context.Context) error {
 	p.proofLock.Lock()
+	defer p.proofLock.Unlock()
 	p.proofCache = make(map[attSelectionKey][]byte)
-	p.proofLock.Unlock()
 	return nil
 }
 
@@ -56,22 +83,16 @@ func (p *localSelector) AttestationSelectionProof(ctx context.Context, slot prim
 	}
 	key := attSelectionKey{slot: slot, index: idx}
 
-	p.proofLock.Lock()
-	if cached, ok := p.proofCache[key]; ok {
-		p.proofLock.Unlock()
+	if cached, ok := p.getCachedProof(key); ok {
 		return cached, nil
 	}
-	p.proofLock.Unlock()
 
 	sig, err := p.v.signSlotWithSelectionProof(ctx, pubKey, slot)
 	if err != nil {
 		return nil, err
 	}
 
-	p.proofLock.Lock()
-	p.proofCache[key] = sig
-	p.proofLock.Unlock()
-
+	p.cacheProof(key, sig)
 	return sig, nil
 }
 
@@ -86,32 +107,42 @@ func (p *localSelector) ClaimAggregateSlot(slot primitives.Slot, committeeIndex 
 	return true
 }
 
+type syncSelectionProof struct {
+	proof  []byte
+	pubkey [fieldparams.BLSPubkeyLength]byte
+}
+
+// signSyncSelectionProofs fetches subcommittee indices and signs selection data for a single pubkey.
+func (p *localSelector) signSyncSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) ([]syncSelectionProof, error) {
+	res, err := p.v.validatorClient.SyncSubcommitteeIndex(ctx, &ethpb.SyncSubcommitteeIndexRequest{
+		PublicKey: pubKey[:],
+		Slot:      slot,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "can't fetch sync subcommittee index")
+	}
+	proofs := make([]syncSelectionProof, 0, len(res.Indices))
+	for _, index := range res.Indices {
+		sig, err := p.v.signSyncSelectionData(ctx, pubKey, syncSubnet(uint64(index)), slot)
+		if err != nil {
+			return nil, errors.Wrap(err, "can't sign selection data")
+		}
+		proofs = append(proofs, syncSelectionProof{proof: sig, pubkey: pubKey})
+	}
+	return proofs, nil
+}
+
 func (p *localSelector) SyncCommitteeAggregators(ctx context.Context, slot primitives.Slot, pubkeys [][fieldparams.BLSPubkeyLength]byte) ([][fieldparams.BLSPubkeyLength]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "localSelector.SyncCommitteeAggregators")
 	defer span.End()
 
-	type selectionWithPubkey struct {
-		proof  []byte
-		pubkey [fieldparams.BLSPubkeyLength]byte
-	}
-	var selections []selectionWithPubkey
+	var selections []syncSelectionProof
 	for _, pubKey := range pubkeys {
-		res, err := p.v.validatorClient.SyncSubcommitteeIndex(ctx, &ethpb.SyncSubcommitteeIndexRequest{
-			PublicKey: pubKey[:],
-			Slot:      slot,
-		})
+		proofs, err := p.signSyncSelectionProofs(ctx, slot, pubKey)
 		if err != nil {
-			return nil, errors.Wrap(err, "can't fetch sync subcommittee index")
+			return nil, err
 		}
-		for _, index := range res.Indices {
-			subCommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
-			subnet := uint64(index) / subCommitteeSize
-			sig, err := p.v.signSyncSelectionData(ctx, pubKey, subnet, slot)
-			if err != nil {
-				return nil, errors.Wrap(err, "can't sign selection data")
-			}
-			selections = append(selections, selectionWithPubkey{proof: sig, pubkey: pubKey})
-		}
+		selections = append(selections, proofs...)
 	}
 
 	var aggregators [][fieldparams.BLSPubkeyLength]byte
@@ -131,10 +162,9 @@ func (p *localSelector) SyncCommitteeSelectionProofs(ctx context.Context, slot p
 	ctx, span := trace.StartSpan(ctx, "localSelector.SyncCommitteeSelectionProofs")
 	defer span.End()
 
-	cfg := params.BeaconConfig()
 	selectionProofs := make([][]byte, len(indexRes.Indices))
 	for i, index := range indexRes.Indices {
-		subnet := uint64(index) / (cfg.SyncCommitteeSize / cfg.SyncCommitteeSubnetCount)
+		subnet := syncSubnet(uint64(index))
 		sig, err := p.v.signSyncSelectionData(ctx, pubKey, subnet, slot)
 		if err != nil {
 			return nil, err
@@ -151,19 +181,13 @@ type distributedSelector struct {
 	attSelections map[attSelectionKey]iface.BeaconCommitteeSelection
 }
 
-type attSelectionKey struct {
-	slot  primitives.Slot
-	index primitives.ValidatorIndex
+func newDistributedSelector(v *validator) *distributedSelector {
+	return &distributedSelector{v: v, attSelections: make(map[attSelectionKey]iface.BeaconCommitteeSelection)}
 }
 
 func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "distributedSelector.RefreshSelectionProofs")
 	defer span.End()
-
-	p.attSelLock.Lock()
-	defer p.attSelLock.Unlock()
-
-	p.attSelections = make(map[attSelectionKey]iface.BeaconCommitteeSelection)
 
 	var req []iface.BeaconCommitteeSelection
 	for pk, duty := range p.v.duties.CurrentEpochDuties() {
@@ -186,12 +210,17 @@ func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context) error 
 		return err
 	}
 
+	newSelections := make(map[attSelectionKey]iface.BeaconCommitteeSelection, len(resp))
 	for _, s := range resp {
-		p.attSelections[attSelectionKey{
+		newSelections[attSelectionKey{
 			slot:  s.Slot,
 			index: s.ValidatorIndex,
 		}] = s
 	}
+
+	p.attSelLock.Lock()
+	p.attSelections = newSelections
+	p.attSelLock.Unlock()
 
 	return nil
 }
@@ -233,11 +262,10 @@ func (p *distributedSelector) SyncCommitteeSelectionProofs(ctx context.Context, 
 		return nil, err
 	}
 
-	cfg := params.BeaconConfig()
 	selectionProofs := make([][]byte, len(indexRes.Indices))
 	selections := make([]iface.SyncCommitteeSelection, len(indexRes.Indices))
 	for i, index := range indexRes.Indices {
-		subnet := uint64(index) / (cfg.SyncCommitteeSize / cfg.SyncCommitteeSubnetCount)
+		subnet := syncSubnet(uint64(index))
 		sig, err := p.v.signSyncSelectionData(ctx, pubKey, subnet, slot)
 		if err != nil {
 			return nil, err
@@ -255,6 +283,9 @@ func (p *distributedSelector) SyncCommitteeSelectionProofs(ctx context.Context, 
 		aggregated, err := p.v.validatorClient.AggregatedSyncSelections(ctx, selections)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get aggregated sync selections")
+		}
+		if len(aggregated) != len(selections) {
+			return nil, errors.Errorf("aggregated sync selections length mismatch: got %d, want %d", len(aggregated), len(selections))
 		}
 		for i, s := range aggregated {
 			selectionProofs[i] = s.SelectionProof

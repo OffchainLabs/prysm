@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -29,7 +28,6 @@ import (
 	grpcretry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
@@ -233,14 +231,14 @@ func (v *ValidatorService) Start() {
 
 	val := v.validator.(*validator)
 	if v.distributed {
-		val.aggSelector = &distributedSelector{v: val}
+		val.aggSelector = newDistributedSelector(val)
 	} else {
-		dedupCache, err := lru.New(int(params.BeaconConfig().MaxCommitteesPerSlot))
+		selector, err := newLocalSelector(val)
 		if err != nil {
-			log.WithError(err).Error("Could not create dedup cache")
+			log.WithError(err).Error("Could not create aggregator selector")
 			return
 		}
-		val.aggSelector = newLocalSelector(val, dedupCache)
+		val.aggSelector = selector
 	}
 
 	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, v.validator)
