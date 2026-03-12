@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -35,8 +34,7 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	segments := strings.Split(r.URL.Path, "/")
-	rawSlot := segments[len(segments)-1]
+	rawSlot := r.PathValue("slot")
 
 	slot, valid := shared.ValidateUint(w, "slot", rawSlot)
 	if !valid {

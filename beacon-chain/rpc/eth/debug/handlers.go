@@ -258,8 +258,7 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	segments := strings.Split(r.URL.Path, "/")
-	blockId := segments[len(segments)-1]
+	blockId := r.PathValue("block_id")
 
 	verifiedDataColumns, rpcErr := s.Blocker.DataColumns(ctx, blockId, indices)
 	if rpcErr != nil {
