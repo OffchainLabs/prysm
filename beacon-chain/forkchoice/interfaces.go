@@ -39,6 +39,7 @@ type RLocker interface {
 // HeadRetriever retrieves head root and optimistic info of the current chain.
 type HeadRetriever interface {
 	Head(context.Context) ([32]byte, error)
+	FullHead(context.Context) ([32]byte, [32]byte, bool, error)
 	GetProposerHead() [32]byte
 	CachedHeadRoot() [32]byte
 }
