@@ -30,6 +30,7 @@ type FieldTrie struct {
 	*sync.RWMutex
 	reference     *stateutil.Reference
 	fieldLayers   [][]*[32]byte
+	parentLayers  [][]*[32]byte // Lazy reference from CopyTrie; materialized on first write.
 	field         types.FieldIndex
 	dataType      types.DataType
 	length        uint64
@@ -107,6 +108,9 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, err
 		return f.TrieRoot()
 	}
 
+	// Materialize from parent if this is a lazy copy.
+	f.materializeFromParent()
+
 	fieldRoots, err := fieldConverters(f.field, indices, elements, false)
 	if err != nil {
 		return [32]byte{}, err
@@ -166,10 +170,17 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, err
 	}
 }
 
-// CopyTrie copies the references to the elements the trie
-// is built on.
+// CopyTrie creates a lazy copy of the trie. The underlying layers are not
+// copied immediately — they are shared via parentLayers. A full copy is
+// deferred until RecomputeTrie() needs to mutate the layers. If the trie is
+// only read (TrieRoot), the copy cost is avoided entirely.
 func (f *FieldTrie) CopyTrie() *FieldTrie {
-	if f.fieldLayers == nil {
+	srcLayers := f.fieldLayers
+	if srcLayers == nil {
+		// Also check parentLayers for a chain of lazy copies.
+		srcLayers = f.parentLayers
+	}
+	if srcLayers == nil {
 		return &FieldTrie{
 			field:      f.field,
 			dataType:   f.dataType,
@@ -179,13 +190,8 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 			numOfElems: f.numOfElems,
 		}
 	}
-	dstFieldTrie := make([][]*[32]byte, len(f.fieldLayers))
-	for i, layer := range f.fieldLayers {
-		dstFieldTrie[i] = make([]*[32]byte, len(layer))
-		copy(dstFieldTrie[i], layer)
-	}
 	return &FieldTrie{
-		fieldLayers:   dstFieldTrie,
+		parentLayers:  srcLayers,
 		field:         f.field,
 		dataType:      f.dataType,
 		reference:     stateutil.NewRef(1),
@@ -194,6 +200,22 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 		numOfElems:    f.numOfElems,
 		isTransferred: f.isTransferred,
 	}
+}
+
+// materializeFromParent performs the deferred deep copy from parentLayers into
+// fieldLayers. This must be called before any mutation of the trie layers.
+// Caller must hold the write lock.
+func (f *FieldTrie) materializeFromParent() {
+	if f.fieldLayers != nil || f.parentLayers == nil {
+		return
+	}
+	dst := make([][]*[32]byte, len(f.parentLayers))
+	for i, layer := range f.parentLayers {
+		dst[i] = make([]*[32]byte, len(layer))
+		copy(dst[i], layer)
+	}
+	f.fieldLayers = dst
+	f.parentLayers = nil
 }
 
 // Length return the length of the whole field trie.
@@ -208,7 +230,7 @@ func (f *FieldTrie) Length() uint64 {
 // us save on a copy. Any caller of this method will need
 // to take care that this isn't called on an empty trie.
 func (f *FieldTrie) TransferTrie() *FieldTrie {
-	if f.fieldLayers == nil {
+	if f.fieldLayers == nil && f.parentLayers == nil {
 		return &FieldTrie{
 			field:      f.field,
 			dataType:   f.dataType,
@@ -220,16 +242,18 @@ func (f *FieldTrie) TransferTrie() *FieldTrie {
 	}
 	f.isTransferred = true
 	nTrie := &FieldTrie{
-		fieldLayers: f.fieldLayers,
-		field:       f.field,
-		dataType:    f.dataType,
-		reference:   stateutil.NewRef(1),
-		RWMutex:     new(sync.RWMutex),
-		length:      f.length,
-		numOfElems:  f.numOfElems,
+		fieldLayers:  f.fieldLayers,
+		parentLayers: f.parentLayers,
+		field:        f.field,
+		dataType:     f.dataType,
+		reference:    stateutil.NewRef(1),
+		RWMutex:      new(sync.RWMutex),
+		length:       f.length,
+		numOfElems:   f.numOfElems,
 	}
-	// Zero out field layers here.
+	// Zero out layers here.
 	f.fieldLayers = nil
+	f.parentLayers = nil
 	return nTrie
 }
 
@@ -238,21 +262,31 @@ func (f *FieldTrie) TrieRoot() ([32]byte, error) {
 	if f.Empty() {
 		return [32]byte{}, ErrEmptyFieldTrie
 	}
-	if len(f.fieldLayers[len(f.fieldLayers)-1]) == 0 {
+	layers := f.effectiveLayers()
+	if len(layers[len(layers)-1]) == 0 {
 		return [32]byte{}, ErrInvalidFieldTrie
 	}
 	switch f.dataType {
 	case types.BasicArray:
-		return *f.fieldLayers[len(f.fieldLayers)-1][0], nil
+		return *layers[len(layers)-1][0], nil
 	case types.CompositeArray:
-		trieRoot := *f.fieldLayers[len(f.fieldLayers)-1][0]
-		return stateutil.AddInMixin(trieRoot, uint64(len(f.fieldLayers[0])))
+		trieRoot := *layers[len(layers)-1][0]
+		return stateutil.AddInMixin(trieRoot, uint64(len(layers[0])))
 	case types.CompressedArray:
-		trieRoot := *f.fieldLayers[len(f.fieldLayers)-1][0]
+		trieRoot := *layers[len(layers)-1][0]
 		return stateutil.AddInMixin(trieRoot, uint64(f.numOfElems))
 	default:
 		return [32]byte{}, errors.Errorf("unrecognized data type in field map: %v", reflect.TypeFor[types.DataType]().Name())
 	}
+}
+
+// effectiveLayers returns the active layers — either the materialized fieldLayers
+// or the shared parentLayers (for lazy copies that haven't been mutated yet).
+func (f *FieldTrie) effectiveLayers() [][]*[32]byte {
+	if f.fieldLayers != nil {
+		return f.fieldLayers
+	}
+	return f.parentLayers
 }
 
 // FieldReference returns the underlying field reference
@@ -264,7 +298,7 @@ func (f *FieldTrie) FieldReference() *stateutil.Reference {
 // Empty checks whether the underlying field trie is
 // empty or not.
 func (f *FieldTrie) Empty() bool {
-	return f == nil || len(f.fieldLayers) == 0 || f.isTransferred
+	return f == nil || (len(f.fieldLayers) == 0 && len(f.parentLayers) == 0) || f.isTransferred
 }
 
 // InsertFieldLayer manually inserts a field layer. This method
