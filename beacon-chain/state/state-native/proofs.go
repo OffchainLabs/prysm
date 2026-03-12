@@ -93,7 +93,7 @@ func (b *BeaconState) proofByFieldIndex(ctx context.Context, f types.FieldIndex)
 	if err := b.recomputeDirtyFields(ctx); err != nil {
 		return nil, err
 	}
-	return trie.ProofFromMerkleLayers(b.merkleLayers, f.RealPosition()), nil
+	return trie.ProofFromMerkleLayers(b.merkleLayers.layers, f.RealPosition()), nil
 }
 
 func (b *BeaconState) validateFieldIndex(f types.FieldIndex) error {
