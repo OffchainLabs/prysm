@@ -27,6 +27,7 @@ go_library(
         "gloas.go",
         "hasher.go",
         "log.go",
+        "merkle_layers.go",
         "metrics_gloas.go",
         "multi_value_slices.go",
         "proofs.go",
