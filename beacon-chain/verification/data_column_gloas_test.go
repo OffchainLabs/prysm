@@ -2,8 +2,10 @@ package verification
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -15,6 +17,7 @@ import (
 
 func testGloasDataColumnFixture(t *testing.T) (blocks.RODataColumn, interfaces.SignedBeaconBlock) {
 	t.Helper()
+	require.NoError(t, kzg.Start())
 
 	_, roSidecars, _ := util.GenerateTestFuluBlockWithSidecars(t, 1, util.WithSlot(1))
 	require.Equal(t, true, len(roSidecars) > 0)
@@ -44,6 +47,47 @@ func testGloasDataColumnFixture(t *testing.T) (blocks.RODataColumn, interfaces.S
 	require.NoError(t, err)
 
 	return roDataColumn, signedBlock
+}
+
+func TestCorrectSubnetGloas(t *testing.T) {
+	const dataColumnSidecarSubTopic = "/data_column_sidecar_%d/"
+
+	roDataColumn, signedBlock := testGloasDataColumnFixture(t)
+
+	t.Run("lengths mismatch", func(t *testing.T) {
+		verifier := NewGloasDataColumnVerifier(roDataColumn, signedBlock.Block(), GossipDataColumnSidecarRequirementsGloas)
+
+		err := verifier.CorrectSubnet(dataColumnSidecarSubTopic, []string{})
+		require.ErrorIs(t, err, errBadTopicLength)
+	})
+
+	t.Run("wrong topic", func(t *testing.T) {
+		verifier := NewGloasDataColumnVerifier(roDataColumn, signedBlock.Block(), GossipDataColumnSidecarRequirementsGloas)
+
+		wrongSubnet := (peerdas.ComputeSubnetForDataColumnSidecar(roDataColumn.Index) + 1) % 128
+		err := verifier.CorrectSubnet(
+			dataColumnSidecarSubTopic,
+			[]string{fmt.Sprintf("/eth2/9dc47cc6/data_column_sidecar_%d/ssz_snappy", wrongSubnet)},
+		)
+		require.ErrorIs(t, err, errBadTopic)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		verifier := NewGloasDataColumnVerifier(roDataColumn, signedBlock.Block(), GossipDataColumnSidecarRequirementsGloas)
+
+		subnet := peerdas.ComputeSubnetForDataColumnSidecar(roDataColumn.Index)
+		err := verifier.CorrectSubnet(
+			dataColumnSidecarSubTopic,
+			[]string{fmt.Sprintf("/eth2/9dc47cc6/data_column_sidecar_%d/ssz_snappy", subnet)},
+		)
+		require.NoError(t, err)
+
+		err = verifier.CorrectSubnet(
+			dataColumnSidecarSubTopic,
+			[]string{fmt.Sprintf("/eth2/9dc47cc6/data_column_sidecar_%d/ssz_snappy", subnet)},
+		)
+		require.NoError(t, err)
+	})
 }
 
 func TestVerifyDataColumnSidecarSlotMatchesBlockGloas(t *testing.T) {
