@@ -36,13 +36,13 @@ func Test_handleEth1DataSlice_OutOfRange(t *testing.T) {
 func Test_handleValidatorSlice_OutOfRange(t *testing.T) {
 	vals := make([]*ethpb.Validator, 1)
 	indices := []uint64{3}
-	_, err := handleValidatorMVSlice(mvslice.BuildEmptyCompositeSlice[*ethpb.Validator](vals), indices, false)
+	_, err := handleValidatorMVSlice(mvslice.BuildEmptyCompositeSlice(vals), indices, false)
 	assert.ErrorContains(t, "index 3 greater than number of validators 1", err)
 }
 
 func TestBalancesSlice_CorrectRoots_All(t *testing.T) {
 	balances := []uint64{5, 2929, 34, 1291, 354305}
-	roots, err := handleBalanceMVSlice(mvslice.BuildEmptyCompositeSlice[uint64](balances), []uint64{}, true)
+	roots, err := handleBalanceMVSlice(mvslice.BuildEmptyCompositeSlice(balances), []uint64{}, true)
 	assert.NoError(t, err)
 
 	var root1 [32]byte
@@ -59,7 +59,7 @@ func TestBalancesSlice_CorrectRoots_All(t *testing.T) {
 
 func TestBalancesSlice_CorrectRoots_Some(t *testing.T) {
 	balances := []uint64{5, 2929, 34, 1291, 354305}
-	roots, err := handleBalanceMVSlice(mvslice.BuildEmptyCompositeSlice[uint64](balances), []uint64{2, 3}, false)
+	roots, err := handleBalanceMVSlice(mvslice.BuildEmptyCompositeSlice(balances), []uint64{2, 3}, false)
 	assert.NoError(t, err)
 
 	var root1 [32]byte

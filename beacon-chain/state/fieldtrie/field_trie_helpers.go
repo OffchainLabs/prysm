@@ -74,11 +74,11 @@ func fieldConverters(field types.FieldIndex, indices []uint64, elements any, con
 func convertRoots(indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	switch castedType := elements.(type) {
 	case customtypes.BlockRoots:
-		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice[[32]byte](castedType), indices, convertAll)
+		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice(castedType), indices, convertAll)
 	case customtypes.StateRoots:
-		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice[[32]byte](castedType), indices, convertAll)
+		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice(castedType), indices, convertAll)
 	case customtypes.RandaoMixes:
-		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice[[32]byte](castedType), indices, convertAll)
+		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice(castedType), indices, convertAll)
 	case multi_value_slice.MultiValueSliceComposite[[32]byte]:
 		return handle32ByteMVslice(castedType, indices, convertAll)
 	default:
@@ -97,7 +97,7 @@ func convertEth1DataVotes(indices []uint64, elements any, convertAll bool) ([][3
 func convertValidators(indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	switch casted := elements.(type) {
 	case []*ethpb.Validator:
-		return handleValidatorMVSlice(multi_value_slice.BuildEmptyCompositeSlice[*ethpb.Validator](casted), indices, convertAll)
+		return handleValidatorMVSlice(multi_value_slice.BuildEmptyCompositeSlice(casted), indices, convertAll)
 	case multi_value_slice.MultiValueSliceComposite[*ethpb.Validator]:
 		return handleValidatorMVSlice(casted, indices, convertAll)
 	default:
@@ -116,7 +116,7 @@ func convertAttestations(indices []uint64, elements any, convertAll bool) ([][32
 func convertBalances(indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	switch casted := elements.(type) {
 	case []uint64:
-		return handleBalanceMVSlice(multi_value_slice.BuildEmptyCompositeSlice[uint64](casted), indices, convertAll)
+		return handleBalanceMVSlice(multi_value_slice.BuildEmptyCompositeSlice(casted), indices, convertAll)
 	case multi_value_slice.MultiValueSliceComposite[uint64]:
 		return handleBalanceMVSlice(casted, indices, convertAll)
 	default:
