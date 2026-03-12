@@ -122,6 +122,7 @@ func (s *SyncCommitteeSelection) UnmarshalJSON(input []byte) error {
 
 type ValidatorClient interface {
 	// Duties is the pre-GLOAS combined endpoint (GetDuties/GetDutiesV2).
+	// This will be eventually replaced by the split duty endpoints below.
 	Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error)
 	// Split duty endpoints used post-GLOAS.
 	AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.AttesterDutiesResponse, error)

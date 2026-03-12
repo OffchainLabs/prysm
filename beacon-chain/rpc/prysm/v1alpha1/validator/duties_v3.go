@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -33,7 +35,7 @@ func (vs *Server) GetAttesterDuties(ctx context.Context, req *ethpb.AttesterDuti
 	}
 	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
 	}
 
 	duties, rpcErr := vs.CoreService.AttesterDuties(ctx, s, req.Epoch, req.ValidatorIndices)
@@ -41,18 +43,9 @@ func (vs *Server) GetAttesterDuties(ctx context.Context, req *ethpb.AttesterDuti
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
 
-	var dependentRoot []byte
-	if req.Epoch <= 1 {
-		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not get genesis block root: %v", err)
-		}
-		dependentRoot = r[:]
-	} else {
-		dependentRoot, err = core.AttestationDependentRoot(s, req.Epoch)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
-		}
+	dependentRoot, err := vs.attestationDependentRoot(ctx, s, req.Epoch)
+	if err != nil {
+		return nil, err
 	}
 
 	optimistic, err := vs.OptimisticModeFetcher.IsOptimistic(ctx)
@@ -100,7 +93,7 @@ func (vs *Server) GetProposerDutiesV2(ctx context.Context, req *ethpb.ProposerDu
 	}
 	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
 	}
 
 	duties, rpcErr := vs.CoreService.ProposerDuties(ctx, s, req.Epoch)
@@ -108,22 +101,9 @@ func (vs *Server) GetProposerDutiesV2(ctx context.Context, req *ethpb.ProposerDu
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
 
-	// Epoch 0 always needs genesis root from DB. Epoch 1 also needs it
-	// post-Fulu because V2 uses AttestationDependentRoot which requires epoch > 1.
-	// Pre-Fulu epoch 1 can be computed normally via ProposalDependentRoot.
-	useGenesisRoot := req.Epoch == 0 || (req.Epoch == 1 && s.Version() >= version.Fulu)
-	var dependentRoot []byte
-	if useGenesisRoot {
-		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not get genesis block root: %v", err)
-		}
-		dependentRoot = r[:]
-	} else {
-		dependentRoot, err = core.ProposalDependentRootV2(s, req.Epoch)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
-		}
+	dependentRoot, err := vs.proposalDependentRoot(ctx, s, req.Epoch)
+	if err != nil {
+		return nil, err
 	}
 
 	optimistic, err := vs.OptimisticModeFetcher.IsOptimistic(ctx)
@@ -168,7 +148,7 @@ func (vs *Server) GetSyncCommitteeDuties(ctx context.Context, req *ethpb.SyncCom
 	}
 	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
 	}
 
 	duties, rpcErr := vs.CoreService.SyncCommitteeDuties(ctx, s, req.Epoch, currentEpoch, req.ValidatorIndices)
@@ -209,9 +189,10 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d is before Gloas fork epoch %d", req.Epoch, params.BeaconConfig().GloasForkEpoch)
 	}
 
+	// PTC assignments are not stable for the next epoch, so only allow current epoch.
 	currentEpoch := slots.ToEpoch(vs.TimeFetcher.CurrentSlot())
-	if req.Epoch > currentEpoch+1 {
-		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than next epoch %d", req.Epoch, currentEpoch+1)
+	if req.Epoch > currentEpoch {
+		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than current epoch %d", req.Epoch, currentEpoch)
 	}
 
 	s, err := vs.HeadFetcher.HeadState(ctx)
@@ -220,7 +201,7 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 	}
 	s, err = vs.stateForEpoch(ctx, s, req.Epoch)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Internal, "Could not get state for epoch: %v", err)
 	}
 
 	duties, rpcErr := vs.CoreService.PTCDuties(ctx, s, req.Epoch, req.ValidatorIndices)
@@ -228,18 +209,9 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
 
-	var dependentRoot []byte
-	if req.Epoch <= 1 {
-		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not get genesis block root: %v", err)
-		}
-		dependentRoot = r[:]
-	} else {
-		dependentRoot, err = core.AttestationDependentRoot(s, req.Epoch)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
-		}
+	dependentRoot, err := vs.attestationDependentRoot(ctx, s, req.Epoch)
+	if err != nil {
+		return nil, err
 	}
 
 	optimistic, err := vs.OptimisticModeFetcher.IsOptimistic(ctx)
@@ -261,4 +233,39 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 		ExecutionOptimistic: optimistic,
 		Duties:              dutiesResponses,
 	}, nil
+}
+
+// attestationDependentRoot returns the dependent root for attestation-style duties.
+// For epochs <= 1 it returns the genesis block root; otherwise it computes the root from state.
+func (vs *Server) attestationDependentRoot(ctx context.Context, s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+	if epoch <= 1 {
+		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get genesis block root: %v", err)
+		}
+		return r[:], nil
+	}
+	root, err := core.AttestationDependentRoot(s, epoch)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+	}
+	return root, nil
+}
+
+// proposalDependentRoot returns the dependent root for proposer duties.
+// Epoch 0 always needs genesis root. Epoch 1 also needs it post-Fulu because
+// V2 uses AttestationDependentRoot which requires epoch > 1.
+func (vs *Server) proposalDependentRoot(ctx context.Context, s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+	if epoch == 0 || (epoch == 1 && s.Version() >= version.Fulu) {
+		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get genesis block root: %v", err)
+		}
+		return r[:], nil
+	}
+	root, err := core.ProposalDependentRootV2(s, epoch)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
+	}
+	return root, nil
 }

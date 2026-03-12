@@ -745,23 +745,11 @@ func TestGetDutiesV2_PTC_OK(t *testing.T) {
 	res, err := vs.GetDutiesV2(t.Context(), req)
 	require.NoError(t, err)
 
-	// Next-epoch duties span slots [SlotsPerEpoch, 2*SlotsPerEpoch).
-	nextEpochStart := params.BeaconConfig().SlotsPerEpoch
-	nextEpochEnd := nextEpochStart * 2
-	nextPTCCount := 0
+	// PTC assignments are not stable for the next epoch, so only current epoch should be populated.
 	for _, d := range res.NextEpochDuties {
-		for _, ptcSlot := range d.PtcSlots {
-			nextPTCCount++
-			if ptcSlot < nextEpochStart {
-				t.Errorf("next-epoch PtcSlot %d below epoch start %d", ptcSlot, nextEpochStart)
-			}
-			if ptcSlot >= nextEpochEnd {
-				t.Errorf("next-epoch PtcSlot %d at or after epoch end %d", ptcSlot, nextEpochEnd)
-			}
+		if len(d.PtcSlots) > 0 {
+			t.Error("expected no next-epoch PTC assignments (not stable for next epoch)")
 		}
-	}
-	if nextPTCCount == 0 {
-		t.Error("expected next-epoch PTC assignments with GloasForkEpoch=0")
 	}
 
 	currentCount := 0
