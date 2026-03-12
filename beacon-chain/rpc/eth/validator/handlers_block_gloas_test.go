@@ -75,6 +75,7 @@ func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 	}
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s", testRandao, testGraffiti), nil)
+	request.SetPathValue("slot", "1")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	server.ProduceBlockV4(writer, request)
@@ -113,6 +114,7 @@ func TestProduceBlockV4_IncludePayloadFalse(t *testing.T) {
 		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 	}
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=false", testRandao, testGraffiti), nil)
+	request.SetPathValue("slot", "1")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	server.ProduceBlockV4(writer, request)
@@ -145,6 +147,7 @@ func TestProduceBlockV4_PreGloasSlotRejected(t *testing.T) {
 		OptimisticModeFetcher: &blockchainTesting.ChainService{},
 	}
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s", testRandao, testGraffiti), nil)
+	request.SetPathValue("slot", "1")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	server.ProduceBlockV4(writer, request)
@@ -195,6 +198,7 @@ func TestProduceBlockV4_SSZ_IncludePayloadTrue(t *testing.T) {
 		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 	}
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s", testRandao, testGraffiti), nil)
+	request.SetPathValue("slot", "1")
 	request.Header.Set("Accept", "application/octet-stream")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
@@ -221,6 +225,7 @@ func TestProduceBlockV4_SSZ_IncludePayloadFalse(t *testing.T) {
 		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
 	}
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s&include_payload=false", testRandao, testGraffiti), nil)
+	request.SetPathValue("slot", "1")
 	request.Header.Set("Accept", "application/octet-stream")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
