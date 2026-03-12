@@ -479,8 +479,9 @@ func TestComputeCellsAndProofsFromFlat(t *testing.T) {
 
 func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 	t.Run("nil blob and proof", func(t *testing.T) {
-		_, _, err := peerdas.ComputeCellsAndProofsFromStructured([]*pb.BlobAndProofV2{nil})
-		require.ErrorIs(t, err, peerdas.ErrNilBlobAndProof)
+		included, _, _, err := peerdas.ComputeCellsAndProofsFromStructured(0, []*pb.BlobAndProofV2{nil})
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), included.Count())
 	})
 
 	t.Run("nominal", func(t *testing.T) {
@@ -533,7 +534,8 @@ func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test ComputeCellsAndProofs
-		actualCellsPerBlob, actualProofsPerBlob, err := peerdas.ComputeCellsAndProofsFromStructured(blobsAndProofs)
+		included, actualCellsPerBlob, actualProofsPerBlob, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(blobsAndProofs)), blobsAndProofs)
+		require.Equal(t, included.Count(), uint64(len(actualCellsPerBlob)))
 		require.NoError(t, err)
 		require.Equal(t, blobCount, len(actualCellsPerBlob))
 

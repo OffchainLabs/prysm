@@ -368,4 +368,9 @@ var (
 		Usage:  "Disables the engine_getBlobsV2 usage.",
 		Hidden: true,
 	}
+	// PartialDataColumns specifies the regex for enabling partial messages on datacolumns
+	PartialDataColumns = &cli.BoolFlag{
+		Name:  "partial-data-columns",
+		Usage: "Enable cell-level dissemination for PeerDAS data columns",
+	}
 )

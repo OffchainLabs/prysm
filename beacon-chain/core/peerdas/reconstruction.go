@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -339,7 +340,8 @@ func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([][]kzg
 }
 
 // ComputeCellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
-func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([][]kzg.Cell, [][]kzg.Proof, error) {
+// commitmentCount is required to return the correct sized bitlist even if we see a nil slice of blobsAndProofs.
+func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.BlobAndProofV2) (bitfield.Bitlist /* parts included */, [][]kzg.Cell, [][]kzg.Proof, error) {
 	start := time.Now()
 	defer func() {
 		cellsAndProofsFromStructuredComputationTime.Observe(float64(time.Since(start).Milliseconds()))
@@ -347,14 +349,24 @@ func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([
 
 	var wg errgroup.Group
 
-	cellsPerBlob := make([][]kzg.Cell, len(blobsAndProofs))
-	proofsPerBlob := make([][]kzg.Proof, len(blobsAndProofs))
+	var blobsPresent int
+	for _, blobAndProof := range blobsAndProofs {
+		if blobAndProof != nil {
+			blobsPresent++
+		}
+	}
+	cellsPerBlob := make([][]kzg.Cell, blobsPresent)
+	proofsPerBlob := make([][]kzg.Proof, blobsPresent)
+	included := bitfield.NewBitlist(commitmentCount)
 
+	var j int
 	for i, blobAndProof := range blobsAndProofs {
 		if blobAndProof == nil {
-			return nil, nil, ErrNilBlobAndProof
+			continue
 		}
+		included.SetBitAt(uint64(i), true)
 
+		compactIndex := j
 		wg.Go(func() error {
 			var kzgBlob kzg.Blob
 			if copy(kzgBlob[:], blobAndProof.Blob) != len(kzgBlob) {
@@ -381,17 +393,18 @@ func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([
 				kzgProofs = append(kzgProofs, kzgProof)
 			}
 
-			cellsPerBlob[i] = cells
-			proofsPerBlob[i] = kzgProofs
+			cellsPerBlob[compactIndex] = cells
+			proofsPerBlob[compactIndex] = kzgProofs
 			return nil
 		})
+		j++
 	}
 
 	if err := wg.Wait(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return cellsPerBlob, proofsPerBlob, nil
+	return included, cellsPerBlob, proofsPerBlob, nil
 }
 
 // ReconstructBlobs reconstructs blobs from data column sidecars without computing KZG proofs or creating sidecars.

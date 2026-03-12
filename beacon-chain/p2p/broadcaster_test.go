@@ -803,7 +803,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
 
 	// Broadcast to peers and wait.
-	err = service.BroadcastDataColumnSidecars(ctx, []blocks.VerifiedRODataColumn{verifiedRoSidecar})
+	err = service.BroadcastDataColumnSidecars(ctx, []blocks.VerifiedRODataColumn{verifiedRoSidecar}, nil)
 	require.NoError(t, err)
 
 	// Receive the message.
@@ -969,7 +969,7 @@ func TestService_BroadcastDataColumnRoundRobin(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Broadcast all sidecars.
-	err = service.BroadcastDataColumnSidecars(ctx, verifiedRoSidecars)
+	err = service.BroadcastDataColumnSidecars(ctx, verifiedRoSidecars, nil)
 	require.NoError(t, err)
 	// Give some time for messages to be sent.
 	time.Sleep(100 * time.Millisecond)

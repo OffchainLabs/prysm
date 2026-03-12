@@ -6,6 +6,8 @@ package sync
 
 import (
 	"context"
+	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -29,6 +31,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
@@ -287,6 +290,13 @@ func (s *Service) Start() {
 	s.newExecutionPayloadEnvelopeVerifier = newPayloadVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
+
+	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+		if err := s.startPartialColumnBroadcaster(broadcaster); err != nil {
+			log.WithError(err).Error("Failed to start partial column broadcaster")
+		}
+	}
+
 	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
 
@@ -354,6 +364,9 @@ func (s *Service) Stop() error {
 	}
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
+	}
+	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+		broadcaster.Stop()
 	}
 	return nil
 }
@@ -424,6 +437,51 @@ func (s *Service) waitForChainStart() {
 	}
 	log.WithField("startTime", startTime).Debug("Chain started in sync service")
 	s.markForChainStart()
+}
+
+func (s *Service) startPartialColumnBroadcaster(broadcaster *partialdatacolumnbroadcaster.PartialColumnBroadcaster) error {
+	return broadcaster.Start(
+		func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
+			return s.validatePartialDataColumnHeader(s.ctx, col)
+		},
+		func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
+			return s.partialVerifierFromTrustedColumn(s.ctx, col)
+		},
+		func(cellsToVerify []blocks.CellProofBundle) error {
+			return peerdas.VerifyDataColumnsCellsKZGProofs(len(cellsToVerify), slices.Values(cellsToVerify))
+		},
+		func(topic string, col blocks.VerifiedRODataColumn) {
+			ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
+			defer cancel()
+
+			slot := col.SignedBlockHeader.Header.Slot
+			proposerIndex := col.SignedBlockHeader.Header.ProposerIndex
+			if !s.hasSeenDataColumnIndex(slot, proposerIndex, col.Index) {
+				s.setSeenDataColumnIndex(slot, proposerIndex, col.Index)
+				// This column was completed from a partial message.
+				partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index, 10)).Inc()
+			}
+			err := s.verifiedRODataColumnSubscriber(ctx, col)
+			if err != nil {
+				log.WithError(err).Error("Failed to handle verified RO data column subscriber")
+			}
+		},
+		func(header *ethpb.PartialDataColumnHeader, groupID string) {
+			ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
+			defer cancel()
+			source, err := peerdas.PopulateFromPartialHeader(header)
+			if err != nil {
+				log.WithError(err).Error("Failed to populate from partial data column header")
+				return
+			}
+			log.WithField("slot", source.Slot()).Info("Received data column header")
+			err = s.processDataColumnSidecarsFromExecution(ctx, source)
+			if err != nil {
+				log.WithError(err).Error("Failed to process partial data column header")
+				return
+			}
+		},
+	)
 }
 
 func (s *Service) startDiscoveryAndSubscriptions() {

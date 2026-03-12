@@ -170,7 +170,7 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 		pubsub.WithPeerScore(peerScoringParams(s.cfg.IPColocationWhitelist)),
 		pubsub.WithPeerScoreInspect(s.peerInspector, time.Minute),
 		pubsub.WithGossipSubParams(pubsubGossipParam()),
-		pubsub.WithRawTracer(gossipTracer{host: s.host}),
+		pubsub.WithRawTracer(&gossipTracer{host: s.host, allowedTopics: filt}),
 	}
 
 	if len(s.cfg.StaticPeers) > 0 {
@@ -180,6 +180,9 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 			return psOpts
 		}
 		psOpts = append(psOpts, pubsub.WithDirectPeers(directPeersAddrInfos))
+	}
+	if s.partialColumnBroadcaster != nil {
+		psOpts = s.partialColumnBroadcaster.AppendPubSubOpts(psOpts)
 	}
 
 	return psOpts

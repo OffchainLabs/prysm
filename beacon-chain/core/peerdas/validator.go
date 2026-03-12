@@ -3,6 +3,7 @@ package peerdas
 import (
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -23,11 +24,13 @@ var (
 var (
 	_ ConstructionPopulator = (*BlockReconstructionSource)(nil)
 	_ ConstructionPopulator = (*SidecarReconstructionSource)(nil)
+	_ ConstructionPopulator = (*PartialDataColumnHeaderReconstructionSource)(nil)
 )
 
 const (
-	BlockType   = "BeaconBlock"
-	SidecarType = "DataColumnSidecar"
+	BlockType                   = "BeaconBlock"
+	SidecarType                 = "DataColumnSidecar"
+	PartialDataColumnHeaderType = "PartialDataColumnHeader"
 )
 
 type (
@@ -54,6 +57,11 @@ type (
 		blocks.VerifiedRODataColumn
 	}
 
+	PartialDataColumnHeaderReconstructionSource struct {
+		*ethpb.PartialDataColumnHeader
+		root [fieldparams.RootLength]byte
+	}
+
 	blockInfo struct {
 		signedBlockHeader *ethpb.SignedBeaconBlockHeader
 		kzgCommitments    [][]byte
@@ -69,6 +77,19 @@ func PopulateFromBlock(block blocks.ROBlock) *BlockReconstructionSource {
 // PopulateFromSidecar creates a SidecarReconstructionSource from a data column sidecar
 func PopulateFromSidecar(sidecar blocks.VerifiedRODataColumn) *SidecarReconstructionSource {
 	return &SidecarReconstructionSource{VerifiedRODataColumn: sidecar}
+}
+
+// PopulateFromPartialHeader creates a PartialDataColumnHeaderReconstructionSource from a partial header.
+// It eagerly computes and validates the hash tree root of the block header.
+func PopulateFromPartialHeader(header *ethpb.PartialDataColumnHeader) (*PartialDataColumnHeaderReconstructionSource, error) {
+	if header.SignedBlockHeader == nil || header.SignedBlockHeader.Header == nil {
+		return nil, errors.New("nil signed block header or header")
+	}
+	root, err := header.SignedBlockHeader.Header.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "hash tree root")
+	}
+	return &PartialDataColumnHeaderReconstructionSource{PartialDataColumnHeader: header, root: root}, nil
 }
 
 // ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
@@ -140,6 +161,40 @@ func DataColumnSidecars(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, 
 
 	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
 	return roSidecars, nil
+}
+
+func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, src ConstructionPopulator) ([]blocks.PartialDataColumn, error) {
+	start := time.Now()
+	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
+	cells, proofs, err := rotateRowsToCols(cellsPerBlob, proofsPerBlob, numberOfColumns)
+	if err != nil {
+		return nil, errors.Wrap(err, "rotate cells and proofs")
+	}
+	info, err := src.extract()
+	if err != nil {
+		return nil, errors.Wrap(err, "extract block info")
+	}
+
+	dataColumns := make([]blocks.PartialDataColumn, 0, numberOfColumns)
+	for idx := range numberOfColumns {
+		dc, err := blocks.NewPartialDataColumn(info.signedBlockHeader, idx, info.kzgCommitments, info.kzgInclusionProof)
+		if err != nil {
+			return nil, errors.Wrap(err, "new ro data column")
+		}
+
+		for i := range len(info.kzgCommitments) {
+			if !included.BitAt(uint64(i)) {
+				continue
+			}
+			dc.ExtendFromVerifiedCell(uint64(i), cells[idx][0], proofs[idx][0])
+			cells[idx] = cells[idx][1:]
+			proofs[idx] = proofs[idx][1:]
+		}
+		dataColumns = append(dataColumns, dc)
+	}
+
+	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
+	return dataColumns, nil
 }
 
 // Slot returns the slot of the source
@@ -249,6 +304,42 @@ func (s *SidecarReconstructionSource) extract() (*blockInfo, error) {
 		signedBlockHeader: s.SignedBlockHeader,
 		kzgCommitments:    s.KzgCommitments,
 		kzgInclusionProof: s.KzgCommitmentsInclusionProof,
+	}
+
+	return info, nil
+}
+
+// Slot returns the slot from the partial data column header
+func (p *PartialDataColumnHeaderReconstructionSource) Slot() primitives.Slot {
+	return p.SignedBlockHeader.Header.Slot
+}
+
+// Root returns the block root computed from the header
+func (p *PartialDataColumnHeaderReconstructionSource) Root() [fieldparams.RootLength]byte {
+	return p.root
+}
+
+// ProposerIndex returns the proposer index from the header
+func (p *PartialDataColumnHeaderReconstructionSource) ProposerIndex() primitives.ValidatorIndex {
+	return p.SignedBlockHeader.Header.ProposerIndex
+}
+
+// Commitments returns the KZG commitments from the header
+func (p *PartialDataColumnHeaderReconstructionSource) Commitments() ([][]byte, error) {
+	return p.KzgCommitments, nil
+}
+
+// Type returns the type of the source
+func (p *PartialDataColumnHeaderReconstructionSource) Type() string {
+	return PartialDataColumnHeaderType
+}
+
+// extract extracts the block information from the partial header
+func (p *PartialDataColumnHeaderReconstructionSource) extract() (*blockInfo, error) {
+	info := &blockInfo{
+		signedBlockHeader: p.SignedBlockHeader,
+		kzgCommitments:    p.KzgCommitments,
+		kzgInclusionProof: p.KzgCommitmentsInclusionProof,
 	}
 
 	return info, nil

@@ -110,7 +110,7 @@ func VerifyCellKZGProofBatch(commitmentsBytes []Bytes48, cellIndices []uint64, c
 	ckzgCells := make([]ckzg4844.Cell, len(cells))
 
 	for i := range cells {
-		copy(ckzgCells[i][:], cells[i][:])
+		ckzgCells[i] = ckzg4844.Cell(cells[i])
 	}
 	return ckzg4844.VerifyCellKZGProofBatch(commitmentsBytes, cellIndices, ckzgCells, proofsBytes)
 }
