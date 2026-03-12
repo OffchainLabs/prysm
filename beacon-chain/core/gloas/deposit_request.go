@@ -74,6 +74,7 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 		return errors.Wrap(err, "could not apply builder deposit")
 	}
 	if applied {
+		gloasBuilderDepositsProcessedTotal.Inc()
 		return nil
 	}
 
@@ -86,6 +87,7 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 	}); err != nil {
 		return errors.Wrap(err, "could not append deposit request")
 	}
+	gloasBuilderDepositsProcessedTotal.Inc()
 	return nil
 }
 

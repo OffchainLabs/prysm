@@ -25,6 +25,12 @@ import (
 func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.executionPayloadEnvelopesByRootRPCHandler")
 	defer span.End()
+	recordResult := func(result string) {
+		gloasExecutionPayloadEnvelopesRPCRequestsTotal.WithLabelValues("by_root", result).Inc()
+		if result == "served" {
+			syncPayloadEnvelopeByRootServedTotal.Inc()
+		}
+	}
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
 	defer cancel()
 	SetRPCStreamDeadlines(stream)
@@ -32,17 +38,20 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 
 	ref, ok := msg.(*types.ExecutionPayloadEnvelopesByRootReq)
 	if !ok {
+		recordResult("invalid")
 		return errors.New("message is not type ExecutionPayloadEnvelopesByRootReq")
 	}
 
 	requestedRoots := *ref
 
 	if err := s.rateLimiter.validateRequest(stream, uint64(len(requestedRoots))); err != nil {
+		recordResult("rate_limited")
 		return errors.Wrap(err, "rate limiter validate request")
 	}
 
 	remotePeer := stream.Conn().RemotePeer()
 	if err := validateExecutionPayloadEnvelopeByRootRequest(len(requestedRoots)); err != nil {
+		recordResult("invalid")
 		s.downscorePeer(remotePeer, "executionPayloadEnvelopesByRootRPCHandlerValidationError")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return err
@@ -69,6 +78,7 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 		env  *ethpb.SignedBlindedExecutionPayloadEnvelope
 	}
 	if s.cfg.executionReconstructor == nil {
+		recordResult("error")
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 		return errors.New("execution reconstructor is nil")
 	}
@@ -86,6 +96,7 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 
 		for _, root := range rootsBatch {
 			if err := ctx.Err(); err != nil {
+				recordResult("error")
 				return err
 			}
 			s.rateLimiter.add(stream, 1)
@@ -97,6 +108,7 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 					continue
 				}
 				log.WithError(err).Debug("Could not fetch blinded execution payload envelope")
+				recordResult("error")
 				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 				return err
 			}
@@ -125,6 +137,7 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 
 		payloadByHash, batchErr := s.cfg.executionReconstructor.ReconstructFullExecutionPayloadsByHash(ctx, batchHashes)
 		if batchErr != nil {
+			recordResult("error")
 			log.WithError(batchErr).Debug("Could not batch reconstruct full execution payload envelopes")
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 			return batchErr
@@ -152,6 +165,7 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 			SetStreamWriteDeadline(stream, defaultWriteDuration)
 			if chunkErr := WriteExecutionPayloadEnvelopeChunk(stream, s.cfg.p2p.Encoding(), envelope); chunkErr != nil {
 				log.WithError(chunkErr).Debug("Could not send a chunked response")
+				recordResult("error")
 				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 				tracing.AnnotateError(span, chunkErr)
 				return chunkErr
@@ -159,6 +173,7 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 		}
 	}
 
+	recordResult("served")
 	return nil
 }
 

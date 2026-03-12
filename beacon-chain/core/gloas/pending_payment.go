@@ -52,6 +52,7 @@ func ProcessBuilderPendingPayments(state state.BeaconState) error {
 	if err := state.RotateBuilderPendingPayments(); err != nil {
 		return errors.Wrap(err, "could not rotate builder pending payments")
 	}
+	gloasBuilderPendingPaymentsProcessedTotal.Add(float64(len(withdrawals)))
 
 	return nil
 }

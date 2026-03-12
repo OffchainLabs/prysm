@@ -26,6 +26,12 @@ var envelopeRpcThrottleInterval = time.Second
 func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.ExecutionPayloadEnvelopesByRangeHandler")
 	defer span.End()
+	recordResult := func(result string) {
+		gloasExecutionPayloadEnvelopesRPCRequestsTotal.WithLabelValues("by_range", result).Inc()
+		if result == "served" {
+			syncPayloadEnvelopeByRangeServedTotal.Inc()
+		}
+	}
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
 	defer cancel()
 	SetRPCStreamDeadlines(stream)
@@ -33,9 +39,11 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 
 	r, ok := msg.(*pb.ExecutionPayloadEnvelopesByRangeRequest)
 	if !ok {
+		recordResult("invalid")
 		return errors.New("message is not type *pb.ExecutionPayloadEnvelopesByRangeRequest")
 	}
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
+		recordResult("rate_limited")
 		return err
 	}
 
@@ -49,6 +57,7 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 
 	rp, err := validateEnvelopesByRange(r, s.cfg.clock.CurrentSlot())
 	if err != nil {
+		recordResult("invalid")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		s.downscorePeer(remotePeer, "executionPayloadEnvelopesByRangeRPCHandlerValidationError")
 		tracing.AnnotateError(span, err)
@@ -56,6 +65,7 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 	}
 	available := s.validateRangeAvailability(rp)
 	if !available {
+		recordResult("resource_unavailable")
 		currentSlot := s.cfg.clock.CurrentSlot()
 		unavailableErr := errors.Wrapf(
 			p2ptypes.ErrResourceUnavailable,
@@ -80,6 +90,7 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 	defer ticker.Stop()
 	batcher, err := newBlockRangeBatcher(rp, s.cfg.beaconDB, s.rateLimiter, s.cfg.chain.IsCanonical, ticker)
 	if err != nil {
+		recordResult("error")
 		log.WithError(err).Error("Cannot create new block range batcher for envelopes")
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)
@@ -93,6 +104,7 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 	for batch, more = batcher.next(ctx, stream); more; batch, more = batcher.next(ctx, stream) {
 		wQuota, err = s.streamEnvelopeBatch(ctx, batch, wQuota, stream)
 		if err != nil {
+			recordResult("error")
 			return err
 		}
 		if wQuota == 0 {
@@ -103,12 +115,16 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 	if err := batch.error(); err != nil {
 		log.WithError(err).Debug("Error in ExecutionPayloadEnvelopesByRange batch")
 		if !errors.Is(err, p2ptypes.ErrRateLimited) {
+			recordResult("error")
 			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		} else {
+			recordResult("rate_limited")
 		}
 		tracing.AnnotateError(span, err)
 		return err
 	}
 
+	recordResult("served")
 	closeStream(stream, log)
 	return nil
 }
