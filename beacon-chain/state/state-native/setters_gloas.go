@@ -261,6 +261,49 @@ func (b *BeaconState) SetExecutionPayloadAvailability(index primitives.Slot, ava
 	return nil
 }
 
+// UpdateBuilderAtIndex updates the builder at the given index.
+//
+//	<spec fn="initiate_builder_exit" fork="gloas" hash="3da938d5">
+//	def initiate_builder_exit(state: BeaconState, builder_index: BuilderIndex) -> None:
+//	    """
+//	    Initiate the exit of the builder with index ``index``.
+//	    """
+//	    # Return if builder already initiated exit
+//	    builder = state.builders[builder_index]
+//	    if builder.withdrawable_epoch != FAR_FUTURE_EPOCH:
+//	        return
+//
+//	    # Set builder exit epoch
+//	    builder.withdrawable_epoch = get_current_epoch(state) + MIN_BUILDER_WITHDRAWABILITY_DELAY
+//	</spec>
+func (b *BeaconState) UpdateBuilderAtIndex(index primitives.BuilderIndex, builder *ethpb.Builder) error {
+	if b.version < version.Gloas {
+		return errNotSupported("UpdateBuilderAtIndex", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	idx := uint64(index)
+	if idx >= uint64(len(b.builders)) {
+		return fmt.Errorf("builder index %d out of range (len=%d)", index, len(b.builders))
+	}
+
+	builders := b.builders
+	if b.sharedFieldReferences[types.Builders].Refs() > 1 {
+		builders = make([]*ethpb.Builder, len(b.builders))
+		copy(builders, b.builders)
+		b.sharedFieldReferences[types.Builders].MinusRef()
+		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
+	}
+
+	builders[idx] = ethpb.CopyBuilder(builder)
+	b.builders = builders
+
+	b.markFieldAsDirty(types.Builders)
+	return nil
+}
+
 // IncreaseBuilderBalance increases the balance of the builder at the given index.
 func (b *BeaconState) IncreaseBuilderBalance(index primitives.BuilderIndex, amount uint64) error {
 	if b.version < version.Gloas {
