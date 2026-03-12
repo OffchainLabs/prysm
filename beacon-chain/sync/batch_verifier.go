@@ -26,7 +26,7 @@ type signatureVerifier struct {
 type errorWithSegment struct {
 	err error
 	// segment is only available if the batched verification failed
-	segment peerdas.CellProofBundleSegment
+	segment *peerdas.CellProofBundleSegment
 }
 
 type kzgVerifier struct {
@@ -188,8 +188,11 @@ func (s *Service) validateKZGProofs(ctx context.Context, sizeHint int, cellProof
 			err := errWithSegment.err
 			log.WithError(err).Trace("Could not perform batch verification of cells")
 			tracing.AnnotateError(span, err)
+			if errWithSegment.segment == nil {
+				return err
+			}
 			// We failed batch verification. Try again in this goroutine without batching
-			return validateUnbatchedKZGProofs(ctx, errWithSegment.segment)
+			return validateUnbatchedKZGProofs(ctx, *errWithSegment.segment)
 		}
 	}
 	return nil
@@ -229,11 +232,14 @@ func verifyKzgBatch(kzgBatch []*kzgVerifier) {
 		verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("batch").Observe(float64(time.Since(start).Milliseconds()))
 	}
 
+	segmentAvailable := verificationErr != nil && len(segments) == len(kzgBatch)
+
 	// Send the same result to all verifiers in the batch
 	for i, verifier := range kzgBatch {
-		var segment peerdas.CellProofBundleSegment
-		if verificationErr != nil {
-			segment = segments[i]
+		var segment *peerdas.CellProofBundleSegment
+		if segmentAvailable {
+			failedSegment := segments[i]
+			segment = &failedSegment
 		}
 		verifier.resChan <- errorWithSegment{
 			err:     verificationErr,
