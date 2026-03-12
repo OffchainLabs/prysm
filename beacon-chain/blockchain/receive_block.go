@@ -29,10 +29,24 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
 
 // This defines how many epochs since finality the run time will begin to save hot state on to the DB.
+
+func debugContextFields(ctx context.Context) logrus.Fields {
+	fields := logrus.Fields{}
+	if deadline, ok := ctx.Deadline(); ok {
+		fields["deadline"] = deadline
+		fields["timeUntilDeadline"] = time.Until(deadline)
+	}
+	if err := ctx.Err(); err != nil {
+		fields["ctxErr"] = err
+	}
+	return fields
+}
+
 var epochsSinceFinalitySaveHotStateDB = primitives.Epoch(100)
 
 // This defines how many epochs since finality the run time will begin to expand our respective cache sizes.
@@ -101,21 +115,51 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err != nil {
 		return errors.Wrap(err, "new ro block with root")
 	}
+	receiveLog := log.WithFields(logrus.Fields{
+		"slot":    roblock.Block().Slot(),
+		"root":    fmt.Sprintf("%#x", blockRoot),
+		"version": version.String(roblock.Block().Version()),
+	}).WithFields(debugContextFields(ctx))
+	if receiveLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		receiveLog.Debug("Starting local block processing")
+	}
 
+	preStateStart := time.Now()
 	preState, err := s.GetBlockPreState(ctx, roblock)
 	if err != nil {
 		return errors.Wrap(err, "could not get block's prestate")
 	}
+	if receiveLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		receiveLog.WithFields(logrus.Fields{
+			"preStateSlot":       preState.Slot(),
+			"getPreStateElapsed": time.Since(preStateStart),
+		}).Debug("Loaded pre-state for local block processing")
+	}
 
 	currentCheckpoints := s.saveCurrentCheckpoints(preState)
+	validateStart := time.Now()
 	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
 	if err != nil {
 		return errors.Wrap(err, "validator execution and consensus")
 	}
+	if receiveLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		receiveLog.WithFields(logrus.Fields{
+			"postStateSlot":                        postState.Slot(),
+			"isValidPayload":                       isValidPayload,
+			"validateExecutionAndConsensusElapsed": time.Since(validateStart),
+		}).Debug("Validated execution and consensus for local block processing")
+	}
 
+	daStart := time.Now()
 	daWaitedTime, err := s.handleDA(ctx, avs, roblock)
 	if err != nil {
 		return errors.Wrap(err, "handle da")
+	}
+	if receiveLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		receiveLog.WithFields(logrus.Fields{
+			"handleDAElapsed":            time.Since(daStart),
+			"dataAvailabilityWaitedTime": daWaitedTime,
+		}).Debug("Completed local block data availability handling")
 	}
 
 	// Defragment the state before continuing block processing.

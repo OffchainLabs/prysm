@@ -101,29 +101,40 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 	ctx, span := trace.StartSpan(ctx, "validator.SubmitSignedContributionAndProof")
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
+	logger := log.WithFields(logrus.Fields{
+		"slot":   slot,
+		"pubkey": hexutil.Encode(pubKey[:]),
+	})
 
 	duty, err := v.duty(pubKey)
 	if err != nil {
-		log.WithError(err).Error("Could not fetch validator assignment")
+		logger.WithError(err).Error("Could not fetch validator assignment")
 		return
 	}
+	logger = logger.WithField("validatorIndex", duty.ValidatorIndex)
 
+	indexRequestStart := time.Now()
 	indexRes, err := v.validatorClient.SyncSubcommitteeIndex(ctx, &ethpb.SyncSubcommitteeIndexRequest{
 		PublicKey: pubKey[:],
 		Slot:      slot,
 	})
 	if err != nil {
-		log.WithError(err).Error("Could not get sync subcommittee index")
+		logger.WithFields(proposalContextFields(ctx)).WithField("requestDuration", time.Since(indexRequestStart)).WithError(err).Error("Could not get sync subcommittee index")
 		return
 	}
+	logger.WithFields(logrus.Fields{
+		"requestDuration":     time.Since(indexRequestStart),
+		"subcommitteeCount":   len(indexRes.Indices),
+		"subcommitteeIndices": indexRes.Indices,
+	}).Debug("Resolved sync subcommittee indices")
 	if len(indexRes.Indices) == 0 {
-		log.Debug("Empty subcommittee index list, do nothing")
+		logger.Debug("Empty subcommittee index list, do nothing")
 		return
 	}
 
 	selectionProofs, err := v.selectionProofs(ctx, slot, pubKey, indexRes, duty.ValidatorIndex)
 	if err != nil {
-		log.WithError(err).Error("Could not get selection proofs")
+		logger.WithError(err).Error("Could not get selection proofs")
 		return
 	}
 
@@ -138,7 +149,7 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 	for i, comIdx := range indexRes.Indices {
 		isAggregator, err := altair.IsSyncCommitteeAggregator(selectionProofs[i])
 		if err != nil {
-			log.WithError(err).Error("Could check in aggregator")
+			logger.WithField("subcommitteeIndex", comIdx).WithError(err).Error("Could check in aggregator")
 			return
 		}
 		if !isAggregator {
@@ -150,19 +161,21 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 			// Don't submit a message for the same subnet multiple times
 			continue
 		}
+		contributionRequestStart := time.Now()
 		contribution, err := v.validatorClient.SyncCommitteeContribution(ctx, &ethpb.SyncCommitteeContributionRequest{
 			Slot:      slot,
 			PublicKey: pubKey[:],
 			SubnetId:  subnet,
 		})
 		if err != nil {
-			log.WithError(err).Error("Could not get sync committee contribution")
+			logger.WithFields(proposalContextFields(ctx)).WithFields(logrus.Fields{
+				"subnet":          subnet,
+				"requestDuration": time.Since(contributionRequestStart),
+			}).WithError(err).Error("Could not get sync committee contribution")
 			return
 		}
 		if contribution.AggregationBits.Count() == 0 {
-			log.WithFields(logrus.Fields{
-				"slot":   slot,
-				"pubkey": hexutil.Encode(pubKey[:]),
+			logger.WithFields(logrus.Fields{
 				"subnet": subnet,
 			}).Warn("Sync contribution for validator has no bits set.")
 			continue
@@ -175,15 +188,27 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 		}
 		sig, err := v.signContributionAndProof(ctx, pubKey, contributionAndProof, slot)
 		if err != nil {
-			log.WithError(err).Error("Could not sign contribution and proof")
+			logger.WithFields(logrus.Fields{
+				"subnet":            subnet,
+				"subcommitteeIndex": contribution.SubcommitteeIndex,
+				"aggregatorIndex":   contributionAndProof.AggregatorIndex,
+				"bitsCount":         contribution.AggregationBits.Count(),
+			}).WithError(err).Error("Could not sign contribution and proof")
 			return
 		}
 
+		submitStart := time.Now()
 		if _, err := v.validatorClient.SubmitSignedContributionAndProof(ctx, &ethpb.SignedContributionAndProof{
 			Message:   contributionAndProof,
 			Signature: sig,
 		}); err != nil {
-			log.WithError(err).Error("Could not submit signed contribution and proof")
+			logger.WithFields(proposalContextFields(ctx)).WithFields(logrus.Fields{
+				"subnet":            subnet,
+				"subcommitteeIndex": contribution.SubcommitteeIndex,
+				"aggregatorIndex":   contributionAndProof.AggregatorIndex,
+				"bitsCount":         contribution.AggregationBits.Count(),
+				"submitDuration":    time.Since(submitStart),
+			}).WithError(err).Error("Could not submit signed contribution and proof")
 			return
 		}
 

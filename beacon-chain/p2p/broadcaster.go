@@ -346,6 +346,21 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 func (s *Service) BroadcastDataColumnSidecars(ctx context.Context, sidecars []blocks.VerifiedRODataColumn, partialColumns []blocks.PartialDataColumn) error {
 	// Increase the number of broadcast attempts.
 	dataColumnSidecarBroadcastAttempts.Add(float64(len(sidecars)))
+	if logrus.GetLevel() >= logrus.DebugLevel {
+		fields := logrus.Fields{
+			"sidecarCount":       len(sidecars),
+			"partialColumnCount": len(partialColumns),
+		}
+		if len(sidecars) > 0 {
+			fields["slot"] = sidecars[0].Slot()
+			fields["root"] = fmt.Sprintf("%#x", sidecars[0].BlockRoot())
+			fields["proposerIndex"] = sidecars[0].ProposerIndex()
+		} else if len(partialColumns) > 0 && partialColumns[0].SignedBlockHeader != nil && partialColumns[0].SignedBlockHeader.Header != nil {
+			fields["slot"] = partialColumns[0].SignedBlockHeader.Header.Slot
+			fields["proposerIndex"] = partialColumns[0].SignedBlockHeader.Header.ProposerIndex
+		}
+		log.WithFields(fields).Debug("Queueing data column sidecars for gossip broadcast")
+	}
 
 	// Retrieve the current fork digest.
 	forkDigest, err := s.currentForkDigest()
@@ -401,6 +416,21 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		}
 
 		sidecarsWithoutPeers = append(sidecarsWithoutPeers, sidecar)
+	}
+	if logLevel >= logrus.DebugLevel {
+		fields := logrus.Fields{
+			"sidecarCount":               len(sidecars),
+			"sidecarsWithPeersCount":     len(sidecarsWithPeers),
+			"sidecarsWithoutPeersCount":  len(sidecarsWithoutPeers),
+			"partialColumnCount":         len(partialColumns),
+			"partialColumnBroadcasterOn": s.partialColumnBroadcaster != nil,
+		}
+		if len(sidecars) > 0 {
+			fields["slot"] = sidecars[0].Slot()
+			fields["root"] = fmt.Sprintf("%#x", sidecars[0].BlockRoot())
+			fields["proposerIndex"] = sidecars[0].ProposerIndex()
+		}
+		log.WithFields(fields).Debug("Prepared data column sidecars for gossip broadcast")
 	}
 
 	var batchWg, individualWg sync.WaitGroup
@@ -553,6 +583,7 @@ func (s *Service) broadcastPartialDataColumns(ctx context.Context, partialColumn
 	defer span.End()
 
 	ctx = trace.NewContext(s.ctx, span)
+	start := time.Now()
 
 	publish := func(partialColumns []blocks.PartialDataColumn) error {
 		if len(partialColumns) == 0 {
@@ -586,6 +617,18 @@ func (s *Service) broadcastPartialDataColumns(ctx context.Context, partialColumn
 		}
 
 		partialColumnsWithoutPeers = append(partialColumnsWithoutPeers, partialColumn)
+	}
+	if logrus.GetLevel() >= logrus.DebugLevel {
+		fields := logrus.Fields{
+			"partialColumnCount":              len(partialColumns),
+			"partialColumnsWithPeersCount":    len(partialColumnsWithPeers),
+			"partialColumnsWithoutPeersCount": len(partialColumnsWithoutPeers),
+		}
+		if len(partialColumns) > 0 && partialColumns[0].SignedBlockHeader != nil && partialColumns[0].SignedBlockHeader.Header != nil {
+			fields["slot"] = partialColumns[0].SignedBlockHeader.Header.Slot
+			fields["proposerIndex"] = partialColumns[0].SignedBlockHeader.Header.ProposerIndex
+		}
+		log.WithFields(fields).Debug("Prepared partial data columns for gossip broadcast")
 	}
 
 	if len(partialColumnsWithPeers) > 0 {
@@ -624,6 +667,17 @@ func (s *Service) broadcastPartialDataColumns(ctx context.Context, partialColumn
 	}
 
 	withoutPeersWg.Wait()
+	if logrus.GetLevel() >= logrus.DebugLevel {
+		fields := logrus.Fields{
+			"partialColumnCount": len(partialColumns),
+			"elapsed":            time.Since(start),
+		}
+		if len(partialColumns) > 0 && partialColumns[0].SignedBlockHeader != nil && partialColumns[0].SignedBlockHeader.Header != nil {
+			fields["slot"] = partialColumns[0].SignedBlockHeader.Header.Slot
+			fields["proposerIndex"] = partialColumns[0].SignedBlockHeader.Header.ProposerIndex
+		}
+		log.WithFields(fields).Debug("Finished partial data column gossip broadcast")
+	}
 
 	return nil
 }

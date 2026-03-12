@@ -112,7 +112,11 @@ func FetchDataColumnSidecars(
 		return nil, nil, errors.Wrap(err, "request sidecars from storage")
 	}
 
-	log := log.WithField("initialMissingRootCount", initialMissingRootCount)
+	log := log.WithFields(logrus.Fields{
+		"blockCount":              blockCount,
+		"requestedIndexCount":     len(requestedIndices),
+		"initialMissingRootCount": initialMissingRootCount,
+	})
 
 	if len(incompleteRoots) == 0 {
 		log.WithField("finalMissingRootCount", 0).Debug("Fetched data column sidecars from storage")
@@ -264,6 +268,12 @@ func requestDirectSidecarsFromPeers(
 
 	initialMissingRootCount := len(missingIndicesByRoot)
 	initialMissingCount := computeTotalCount(missingIndicesByRoot)
+	log.WithFields(logrus.Fields{
+		"connectedPeerCount":      len(connectedPeers),
+		"initialMissingRootCount": initialMissingRootCount,
+		"initialMissingCount":     initialMissingCount,
+		"initialMissingRoots":     rootIndexStatsByRoot(missingIndicesByRoot),
+	}).Debug("Preparing direct data column sidecar requests")
 
 	indicesByRootByPeer, err := computeIndicesByRootByPeer(params.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
 	if err != nil {
@@ -271,12 +281,24 @@ func requestDirectSidecarsFromPeers(
 	}
 
 	verifiedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
+	round := 0
 	for len(missingIndicesByRoot) > 0 && len(indicesByRootByPeer) > 0 {
+		round++
+		log.WithFields(logrus.Fields{
+			"round":                 round,
+			"candidatePeerCount":    len(indicesByRootByPeer),
+			"remainingMissingRoots": len(missingIndicesByRoot),
+			"remainingMissingCount": computeTotalCount(missingIndicesByRoot),
+		}).Debug("Selecting peers for direct data column sidecar requests")
 		// Select peers to query the missing sidecars from.
 		indicesByRootByPeerToQuery, err := selectPeers(params, randomSource, len(missingIndicesByRoot), indicesByRootByPeer)
 		if err != nil {
 			return nil, errors.Wrap(err, "select peers")
 		}
+		log.WithFields(logrus.Fields{
+			"round":         round,
+			"selectedPeers": peerSelectionSummaries(indicesByRootByPeerToQuery),
+		}).Debug("Selected peers for direct data column sidecar requests")
 
 		// Remove selected peers from the maps.
 		for peer := range indicesByRootByPeerToQuery {
@@ -297,6 +319,15 @@ func requestDirectSidecarsFromPeers(
 		for root, verifiedRoDataColumns := range localVerifiedColumnsByRoot {
 			verifiedColumnsByRoot[root] = append(verifiedColumnsByRoot[root], verifiedRoDataColumns...)
 		}
+		respondedPeerCount, respondedSidecarCount := countRODataColumnsByPeer(roDataColumnsByPeer)
+		log.WithFields(logrus.Fields{
+			"round":                 round,
+			"respondedPeerCount":    respondedPeerCount,
+			"respondedSidecars":     respondedSidecarCount,
+			"verifiedSidecars":      len(verifiedRoDataColumnSidecars),
+			"remainingMissingRoots": len(missingIndicesByRoot),
+			"remainingMissingCount": computeTotalCount(missingIndicesByRoot),
+		}).Debug("Completed direct data column sidecar request round")
 
 		// Compute indices by root by peers with the updated missing indices and connected peers.
 		indicesByRootByPeer, err = computeIndicesByRootByPeer(params.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
@@ -368,6 +399,12 @@ func requestIndirectSidecarsFromPeers(
 	}
 
 	initialToRetrieveRootCount := len(indicesToRetrieveByRoot)
+	initialToRetrieveCount := computeTotalCount(indicesToRetrieveByRoot)
+	log.WithFields(logrus.Fields{
+		"initialToRetrieveRootCount": initialToRetrieveRootCount,
+		"initialToRetrieveCount":     initialToRetrieveCount,
+		"initialToRetrieveRoots":     rootIndexStatsByRoot(indicesToRetrieveByRoot),
+	}).Debug("Preparing indirect data column sidecar requests")
 
 	// Determine all sidecars each peers are expected to custody.
 	connectedPeersSlice := p.P2P.Peers().Connected()
@@ -389,12 +426,24 @@ func requestIndirectSidecarsFromPeers(
 		result[root] = append(result[root], alreadyAvailable...)
 	}
 
+	round := 0
 	for len(indicesToRetrieveByRoot) > 0 && len(indicesByRootByPeer) > 0 {
+		round++
+		log.WithFields(logrus.Fields{
+			"round":               round,
+			"candidatePeerCount":  len(indicesByRootByPeer),
+			"remainingRootCount":  len(indicesToRetrieveByRoot),
+			"remainingIndexCount": computeTotalCount(indicesToRetrieveByRoot),
+		}).Debug("Selecting peers for indirect data column sidecar requests")
 		// Select peers to query the missing sidecars from.
 		indicesByRootByPeerToQuery, err := selectPeers(p, randomSource, len(indicesToRetrieveByRoot), indicesByRootByPeer)
 		if err != nil {
 			return nil, errors.Wrap(err, "select peers")
 		}
+		log.WithFields(logrus.Fields{
+			"round":         round,
+			"selectedPeers": peerSelectionSummaries(indicesByRootByPeerToQuery),
+		}).Debug("Selected peers for indirect data column sidecar requests")
 
 		// Remove selected peers from the maps.
 		for peer := range indicesByRootByPeerToQuery {
@@ -415,6 +464,7 @@ func requestIndirectSidecarsFromPeers(
 		for root, verifiedRoDataColumns := range localVerifiedColumnsByRoot {
 			result[root] = append(result[root], verifiedRoDataColumns...)
 		}
+		respondedPeerCount, respondedSidecarCount := countRODataColumnsByPeer(roDataColumnsByPeer)
 
 		// Unlabel a root as to retrieve if enough sidecars are retrieved to enable a reconstruction,
 		// or if all requested sidecars are now available for this root.
@@ -441,6 +491,14 @@ func requestIndirectSidecarsFromPeers(
 				delete(indicesToRetrieveByRoot, root)
 			}
 		}
+		log.WithFields(logrus.Fields{
+			"round":               round,
+			"respondedPeerCount":  respondedPeerCount,
+			"respondedSidecars":   respondedSidecarCount,
+			"verifiedSidecars":    len(verifiedRoDataColumnSidecars),
+			"remainingRootCount":  len(indicesToRetrieveByRoot),
+			"remainingIndexCount": computeTotalCount(indicesToRetrieveByRoot),
+		}).Debug("Completed indirect data column sidecar request round")
 
 		// Compute indices by root by peers with the updated missing indices and connected peers.
 		indicesByRootByPeer, err = computeIndicesByRootByPeer(p.P2P, slotByRoot, indicesToRetrieveByRoot, connectedPeers)
@@ -452,7 +510,9 @@ func requestIndirectSidecarsFromPeers(
 	log.WithFields(logrus.Fields{
 		"duration":                   time.Since(start),
 		"initialToRetrieveRootCount": initialToRetrieveRootCount,
+		"initialToRetrieveCount":     initialToRetrieveCount,
 		"finalToRetrieveRootCount":   len(indicesToRetrieveByRoot),
+		"finalToRetrieveCount":       computeTotalCount(indicesToRetrieveByRoot),
 	}).Debug("Requested all data column sidecars from peers")
 
 	return result, nil
@@ -1024,16 +1084,24 @@ func computeIndicesByRootByPeer(
 	peers map[goPeer.ID]bool,
 ) (map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	inputPeerCount := len(peers)
+	requestedRootCount := len(indicesByBlockRoot)
+	requestedIndexCount := computeTotalCount(indicesByBlockRoot)
 
 	// First, compute custody columns for all peers
 	peersByIndex := make(map[uint64]map[goPeer.ID]bool)
 	headSlotByPeer := make(map[goPeer.ID]primitives.Slot)
+	failedNodeIDCount := 0
+	failedDASInfoCount := 0
+	failedChainStateCount := 0
+	nilChainStateCount := 0
 	for peer := range peers {
 		log := log.WithField("peerID", peer)
 
 		// Computes the custody columns for each peer
 		nodeID, err := prysmP2P.ConvertPeerIDToNodeID(peer)
 		if err != nil {
+			failedNodeIDCount++
 			log.WithError(err).Debug("Failed to convert peer ID to node ID")
 			continue
 		}
@@ -1041,6 +1109,7 @@ func computeIndicesByRootByPeer(
 		custodyGroupCount := p2p.CustodyGroupCountFromPeer(peer)
 		dasInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 		if err != nil {
+			failedDASInfoCount++
 			log.WithError(err).Debug("Failed to get peer DAS info")
 			continue
 		}
@@ -1055,11 +1124,13 @@ func computeIndicesByRootByPeer(
 		// Compute the head slot for each peer
 		peerChainState, err := p2p.Peers().ChainState(peer)
 		if err != nil {
+			failedChainStateCount++
 			log.WithError(err).Debug("Failed to get peer chain state")
 			continue
 		}
 
 		if peerChainState == nil {
+			nilChainStateCount++
 			log.Debug("Peer chain state is nil")
 			continue
 		}
@@ -1069,6 +1140,7 @@ func computeIndicesByRootByPeer(
 		// is higher than our view of it.
 		headSlotByPeer[peer] = peerChainState.HeadSlot + slotsPerEpoch
 	}
+	eligiblePeerCount := len(headSlotByPeer)
 
 	// For each block root and its indices, find suitable peers
 	indicesByRootByPeer := make(map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool)
@@ -1101,6 +1173,21 @@ func computeIndicesByRootByPeer(
 			}
 		}
 	}
+	coveredRootCount := coveredRootCountByPeerAssignments(indicesByRootByPeer)
+	log.WithFields(logrus.Fields{
+		"inputPeerCount":        inputPeerCount,
+		"requestedRootCount":    requestedRootCount,
+		"requestedIndexCount":   requestedIndexCount,
+		"eligiblePeerCount":     eligiblePeerCount,
+		"candidatePeerCount":    len(indicesByRootByPeer),
+		"coveredRootCount":      coveredRootCount,
+		"uncoveredRootCount":    requestedRootCount - coveredRootCount,
+		"failedNodeIDCount":     failedNodeIDCount,
+		"failedDASInfoCount":    failedDASInfoCount,
+		"failedChainStateCount": failedChainStateCount,
+		"nilChainStateCount":    nilChainStateCount,
+		"peerAssignments":       peerRootIndexStats(indicesByRootByPeer),
+	}).Debug("Computed data column peer assignments")
 
 	return indicesByRootByPeer, nil
 }
@@ -1194,4 +1281,64 @@ func computeTotalCount(input map[[fieldparams.RootLength]byte]map[uint64]bool) i
 		totalCount += len(indices)
 	}
 	return totalCount
+}
+
+func rootIndexStatsByRoot(input map[[fieldparams.RootLength]byte]map[uint64]bool) []map[string]any {
+	roots := make([][fieldparams.RootLength]byte, 0, len(input))
+	for root := range input {
+		roots = append(roots, root)
+	}
+	slices.SortFunc(roots, func(left, right [fieldparams.RootLength]byte) int {
+		return bytes.Compare(left[:], right[:])
+	})
+
+	stats := make([]map[string]any, 0, len(roots))
+	for _, root := range roots {
+		stats = append(stats, map[string]any{
+			"root":       fmt.Sprintf("%#x", root),
+			"indexCount": len(input[root]),
+		})
+	}
+	return stats
+}
+
+func peerRootIndexStats(input map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool) []map[string]any {
+	peers := make([]goPeer.ID, 0, len(input))
+	for peer := range input {
+		peers = append(peers, peer)
+	}
+	slices.Sort(peers)
+
+	stats := make([]map[string]any, 0, len(peers))
+	for _, peer := range peers {
+		indicesByRoot := input[peer]
+		stats = append(stats, map[string]any{
+			"peerID":     peer.String(),
+			"rootCount":  len(indicesByRoot),
+			"indexCount": computeTotalCount(indicesByRoot),
+		})
+	}
+	return stats
+}
+
+func peerSelectionSummaries(input map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool) []map[string]any {
+	return peerRootIndexStats(input)
+}
+
+func countRODataColumnsByPeer(input map[goPeer.ID][]blocks.RODataColumn) (int, int) {
+	totalCount := 0
+	for _, columns := range input {
+		totalCount += len(columns)
+	}
+	return len(input), totalCount
+}
+
+func coveredRootCountByPeerAssignments(input map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool) int {
+	covered := make(map[[fieldparams.RootLength]byte]bool)
+	for _, indicesByRoot := range input {
+		for root := range indicesByRoot {
+			covered[root] = true
+		}
+	}
+	return len(covered)
 }

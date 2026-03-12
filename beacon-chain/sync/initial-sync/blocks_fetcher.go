@@ -336,7 +336,18 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 	if response.err == nil {
 		pid, err := f.fetchSidecars(ctx, response.blocksFrom, peers, response.bwb)
 		if err != nil {
-			log.WithError(err).Error("Failed to fetch sidecars")
+			fields := logrus.Fields{
+				"startSlot":         start,
+				"requestedCount":    count,
+				"fetchedBlockCount": len(response.bwb),
+				"blocksFrom":        response.blocksFrom,
+				"peerCount":         len(peers),
+			}
+			if len(response.bwb) > 0 {
+				fields["firstFetchedSlot"] = response.bwb[0].Block.Block().Slot()
+				fields["lastFetchedSlot"] = response.bwb[len(response.bwb)-1].Block.Block().Slot()
+			}
+			log.WithFields(fields).WithError(err).Error("Failed to fetch sidecars")
 			response.err = err
 		}
 
@@ -354,6 +365,7 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 // It returns the peer ID from which blobs were fetched (if any).
 func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []peer.ID, bwScs []blocks.BlockWithROSidecars) (peer.ID, error) {
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+	fetchStart := time.Now()
 
 	if len(bwScs) == 0 {
 		return "", nil
@@ -408,6 +420,12 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 
 	// Return early if there are no blocks that need data column sidecars.
 	if len(roBlocks) == 0 {
+		log.WithFields(logrus.Fields{
+			"blocksFrom":      pid,
+			"requestedBlocks": len(bwScs),
+			"preFuluBlocks":   len(preFulu),
+			"postFuluBlocks":  len(postFulu),
+		}).Debug("No blocks required data column sidecars")
 		return blobsPid, nil
 	}
 
@@ -426,12 +444,38 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 	if err != nil {
 		return "", errors.Wrap(err, "fetch data column sidecars")
 	}
+	verifiedColumnCount := 0
+	for _, columns := range verifiedRoDataColumnsByRoot {
+		verifiedColumnCount += len(columns)
+	}
+	log.WithFields(logrus.Fields{
+		"blocksFrom":          pid,
+		"blobsFrom":           blobsPid,
+		"requestedBlocks":     len(bwScs),
+		"preFuluBlocks":       len(preFulu),
+		"postFuluBlocks":      len(postFulu),
+		"daPeriodBlocks":      len(roBlocks),
+		"custodyGroupCount":   custodyGroupCount,
+		"samplingSize":        samplingSize,
+		"custodyColumnCount":  len(info.CustodyColumns),
+		"verifiedRootCount":   len(verifiedRoDataColumnsByRoot),
+		"verifiedColumnCount": verifiedColumnCount,
+		"duration":            time.Since(fetchStart),
+	}).Debug("Fetched data column sidecars for initial sync blocks")
 
 	if len(missingIndicesByRoot) > 0 {
 		prettyMissingIndicesByRoot := make(map[string]string, len(missingIndicesByRoot))
+		missingIndexCount := 0
 		for root, indices := range missingIndicesByRoot {
 			prettyMissingIndicesByRoot[fmt.Sprintf("%#x", root)] = helpers.SortedPrettySliceFromMap(indices)
+			missingIndexCount += len(indices)
 		}
+		log.WithFields(logrus.Fields{
+			"missingRootCount":  len(missingIndicesByRoot),
+			"missingIndexCount": missingIndexCount,
+			"missingIndices":    prettyMissingIndicesByRoot,
+			"duration":          time.Since(fetchStart),
+		}).Warn("Data column sidecars still missing after initial sync fetch")
 		return "", errors.Errorf("some sidecars are still missing after fetch: %v", prettyMissingIndicesByRoot)
 	}
 

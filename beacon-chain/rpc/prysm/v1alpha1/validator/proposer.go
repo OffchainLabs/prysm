@@ -48,6 +48,136 @@ const (
 	defaultBuilderBoostFactor = primitives.Gwei(100)
 )
 
+func debugContextFields(ctx context.Context) logrus.Fields {
+	fields := logrus.Fields{}
+	if deadline, ok := ctx.Deadline(); ok {
+		fields["deadline"] = deadline
+		fields["timeUntilDeadline"] = time.Until(deadline)
+	}
+	if err := ctx.Err(); err != nil {
+		fields["ctxErr"] = err
+	}
+	return fields
+}
+
+func genericBeaconBlockFields(block *ethpb.GenericBeaconBlock) logrus.Fields {
+	fields := logrus.Fields{}
+	switch {
+	case block == nil:
+		fields["responseType"] = "nil"
+	case block.GetPhase0() != nil:
+		fields["responseType"] = "phase0"
+	case block.GetAltair() != nil:
+		fields["responseType"] = "altair"
+	case block.GetBellatrix() != nil:
+		fields["responseType"] = "bellatrix"
+	case block.GetBlindedBellatrix() != nil:
+		fields["responseType"] = "blinded_bellatrix"
+	case block.GetCapella() != nil:
+		fields["responseType"] = "capella"
+	case block.GetBlindedCapella() != nil:
+		fields["responseType"] = "blinded_capella"
+	case block.GetDeneb() != nil:
+		fields["responseType"] = "deneb"
+		fields["blobCount"] = len(block.GetDeneb().Blobs)
+		fields["kzgProofCount"] = len(block.GetDeneb().KzgProofs)
+	case block.GetBlindedDeneb() != nil:
+		fields["responseType"] = "blinded_deneb"
+	case block.GetElectra() != nil:
+		fields["responseType"] = "electra"
+		fields["blobCount"] = len(block.GetElectra().Blobs)
+		fields["kzgProofCount"] = len(block.GetElectra().KzgProofs)
+	case block.GetBlindedElectra() != nil:
+		fields["responseType"] = "blinded_electra"
+	case block.GetFulu() != nil:
+		fields["responseType"] = "fulu"
+		fields["blobCount"] = len(block.GetFulu().Blobs)
+		fields["kzgProofCount"] = len(block.GetFulu().KzgProofs)
+	case block.GetBlindedFulu() != nil:
+		fields["responseType"] = "blinded_fulu"
+	default:
+		fields["responseType"] = "unknown"
+	}
+	return fields
+}
+
+func signedBlockFields(block interfaces.ReadOnlySignedBeaconBlock, root [fieldparams.RootLength]byte) logrus.Fields {
+	fields := logrus.Fields{
+		"slot":          block.Block().Slot(),
+		"root":          fmt.Sprintf("%#x", root),
+		"fork":          version.String(block.Version()),
+		"blinded":       block.IsBlinded(),
+		"proposerIndex": block.Block().ProposerIndex(),
+	}
+	body := block.Block().Body()
+	if body == nil {
+		return fields
+	}
+	if kzgs, err := body.BlobKzgCommitments(); err == nil {
+		fields["kzgCommitmentCount"] = len(kzgs)
+	}
+	return fields
+}
+
+func genericSignedBlockFields(block *ethpb.GenericSignedBeaconBlock) logrus.Fields {
+	fields := logrus.Fields{}
+	switch {
+	case block == nil:
+		fields["requestType"] = "nil"
+	case block.GetPhase0() != nil:
+		fields["requestType"] = "phase0"
+	case block.GetAltair() != nil:
+		fields["requestType"] = "altair"
+	case block.GetBellatrix() != nil:
+		fields["requestType"] = "bellatrix"
+	case block.GetBlindedBellatrix() != nil:
+		fields["requestType"] = "blinded_bellatrix"
+	case block.GetCapella() != nil:
+		fields["requestType"] = "capella"
+	case block.GetBlindedCapella() != nil:
+		fields["requestType"] = "blinded_capella"
+	case block.GetDeneb() != nil:
+		fields["requestType"] = "deneb"
+		fields["blobCount"] = len(block.GetDeneb().Blobs)
+		fields["kzgProofCount"] = len(block.GetDeneb().KzgProofs)
+	case block.GetBlindedDeneb() != nil:
+		fields["requestType"] = "blinded_deneb"
+	case block.GetElectra() != nil:
+		fields["requestType"] = "electra"
+		fields["blobCount"] = len(block.GetElectra().Blobs)
+		fields["kzgProofCount"] = len(block.GetElectra().KzgProofs)
+	case block.GetBlindedElectra() != nil:
+		fields["requestType"] = "blinded_electra"
+	case block.GetFulu() != nil:
+		fields["requestType"] = "fulu"
+		fields["blobCount"] = len(block.GetFulu().Blobs)
+		fields["kzgProofCount"] = len(block.GetFulu().KzgProofs)
+	case block.GetBlindedFulu() != nil:
+		fields["requestType"] = "blinded_fulu"
+	default:
+		fields["requestType"] = "unknown"
+	}
+	return fields
+}
+
+func dataColumnSidecarFields(sidecars []blocks.RODataColumn, partialColumns []blocks.PartialDataColumn) logrus.Fields {
+	fields := logrus.Fields{
+		"dataColumnSidecarCount": len(sidecars),
+		"partialColumnCount":     len(partialColumns),
+	}
+	if len(sidecars) > 0 {
+		fields["slot"] = sidecars[0].Slot()
+		fields["root"] = fmt.Sprintf("%#x", sidecars[0].BlockRoot())
+		fields["proposerIndex"] = sidecars[0].ProposerIndex()
+		return fields
+	}
+	if len(partialColumns) > 0 && partialColumns[0].SignedBlockHeader != nil && partialColumns[0].SignedBlockHeader.Header != nil {
+		fields["slot"] = partialColumns[0].SignedBlockHeader.Header.Slot
+		fields["proposerIndex"] = partialColumns[0].SignedBlockHeader.Header.ProposerIndex
+	}
+	return fields
+}
+
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // GetBeaconBlock is called by a proposer during its assigned slot to request a block to sign
@@ -56,6 +186,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.GetBeaconBlock")
 	defer span.End()
 	span.SetAttributes(trace.Int64Attribute("slot", int64(req.Slot)))
+	buildStarted := time.Now()
 
 	t, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), req.Slot)
 	if err != nil {
@@ -111,6 +242,20 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	if req.BuilderBoostFactor != nil {
 		builderBoostFactor = primitives.Gwei(req.BuilderBoostFactor.Value)
 	}
+	if log.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		fields := debugContextFields(ctx)
+		fields["slot"] = req.Slot
+		fields["headStateSlot"] = head.Slot()
+		fields["parentRoot"] = fmt.Sprintf("%#x", parentRoot)
+		fields["currentSlot"] = vs.TimeFetcher.CurrentSlot()
+		fields["skipMevBoost"] = req.SkipMevBoost
+		fields["builderBoostFactor"] = builderBoostFactor
+		fields["buildElapsed"] = time.Since(buildStarted)
+		if !t.IsZero() {
+			fields["sinceSlotStartTime"] = time.Since(t)
+		}
+		log.WithFields(fields).Debug("Starting beacon block build with selected parent state")
+	}
 
 	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor)
 	log = log.WithFields(logrus.Fields{
@@ -121,6 +266,18 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	if err != nil {
 		log.WithError(err).Error("Finished building block")
 		return nil, errors.Wrap(err, "could not build block in parallel")
+	}
+	if log.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		fields := debugContextFields(ctx)
+		fields["slot"] = req.Slot
+		fields["buildElapsed"] = time.Since(buildStarted)
+		for key, value := range genericBeaconBlockFields(resp) {
+			fields[key] = value
+		}
+		if !t.IsZero() {
+			fields["sinceSlotStartTime"] = time.Since(t)
+		}
+		log.WithFields(fields).Debug("Built beacon block response for validator")
 	}
 
 	log.Info("Finished building block")
@@ -192,6 +349,17 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 	headRoot := vs.ForkchoiceFetcher.CachedHeadRoot()
 	parentRoot := vs.ForkchoiceFetcher.GetProposerHead()
 	head, err := vs.getParentStateFromReorgData(ctx, slot, oldHeadRoot, parentRoot, headRoot)
+	if err == nil && log.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		fields := debugContextFields(ctx)
+		fields["slot"] = slot
+		fields["oldHeadRoot"] = fmt.Sprintf("%#x", oldHeadRoot)
+		fields["headRoot"] = fmt.Sprintf("%#x", headRoot)
+		fields["parentRoot"] = fmt.Sprintf("%#x", parentRoot)
+		fields["headStateSlot"] = head.Slot()
+		fields["currentSlot"] = vs.TimeFetcher.CurrentSlot()
+		fields["reorgedForProposal"] = parentRoot != headRoot
+		log.WithFields(fields).Debug("Selected parent state for proposal")
+	}
 	return head, parentRoot, err
 }
 
@@ -315,6 +483,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
 	defer span.End()
+	proposalStarted := time.Now()
 
 	if req == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "empty request")
@@ -328,18 +497,30 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
 	}
+	reqLog := log.WithFields(signedBlockFields(block, root)).WithFields(debugContextFields(ctx)).WithFields(genericSignedBlockFields(req))
+	if reqLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		reqLog.WithField("proposalElapsed", time.Since(proposalStarted)).Debug("Received signed block proposal from validator")
+	}
 
 	// For post-Fulu blinded blocks, submit to relay and return early
 	if block.IsBlinded() && slots.ToEpoch(block.Block().Slot()) >= params.BeaconConfig().FuluForkEpoch {
+		submitStart := time.Now()
 		err := vs.BlockBuilder.SubmitBlindedBlockPostFulu(ctx, block)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not submit blinded block post-Fulu: %v", err)
+		}
+		if reqLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+			reqLog.WithFields(logrus.Fields{
+				"submitBlindedBlockElapsed": time.Since(submitStart),
+				"proposalElapsed":           time.Since(proposalStarted),
+			}).Debug("Submitted blinded post-Fulu block to relay")
 		}
 		return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 	}
 
 	rob, err := blocks.NewROBlockWithRoot(block, root)
 	var partialColumns []blocks.PartialDataColumn
+	handleBlockStart := time.Now()
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
 		if errors.Is(err, builderapi.ErrBadGateway) {
@@ -351,6 +532,15 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
+	}
+	if reqLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		reqLog.WithFields(logrus.Fields{
+			"handleBlockElapsed":     time.Since(handleBlockStart),
+			"blobSidecarCount":       len(blobSidecars),
+			"dataColumnSidecarCount": len(dataColumnSidecars),
+			"partialColumnCount":     len(partialColumns),
+			"proposalElapsed":        time.Since(proposalStarted),
+		}).Debug("Prepared block sidecars for proposal processing")
 	}
 
 	var wg sync.WaitGroup
@@ -365,15 +555,32 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		errChan <- nil
 	}()
 
+	waitForBroadcastStart := time.Now()
 	wg.Wait()
+	if reqLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		reqLog.WithFields(logrus.Fields{
+			"waitForBroadcastElapsed": time.Since(waitForBroadcastStart),
+			"proposalElapsed":         time.Since(proposalStarted),
+		}).Debug("Finished waiting for block gossip broadcast before sidecar handling")
+	}
 
 	if block.Version() < version.Gloas {
+		sidecarStart := time.Now()
 		if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars, partialColumns); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
+		}
+		if reqLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+			reqLog.WithFields(logrus.Fields{
+				"broadcastAndReceiveSidecarsElapsed": time.Since(sidecarStart),
+				"proposalElapsed":                    time.Since(proposalStarted),
+			}).Debug("Finished sidecar broadcast and local receive")
 		}
 	}
 	if err := <-errChan; err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
+	}
+	if reqLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		reqLog.WithField("proposalElapsed", time.Since(proposalStarted)).Debug("Finished proposer submission path")
 	}
 
 	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
@@ -439,22 +646,51 @@ func (vs *Server) handleUnblindedBlock(
 	block blocks.ROBlock,
 	req *ethpb.GenericSignedBeaconBlock,
 ) ([]*ethpb.BlobSidecar, []blocks.RODataColumn, []blocks.PartialDataColumn, error) {
+	handleLog := log.WithFields(logrus.Fields{
+		"slot": block.Block().Slot(),
+		"root": fmt.Sprintf("%#x", block.Root()),
+		"fork": version.String(block.Version()),
+	})
+	handleStarted := time.Now()
 	rawBlobs, proofs, err := blobsAndProofs(req)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	if handleLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		handleLog.WithFields(logrus.Fields{
+			"blobCount":          len(rawBlobs),
+			"kzgProofCount":      len(proofs),
+			"handleBlockElapsed": time.Since(handleStarted),
+		}).Debug("Decoded blobs and proofs from proposed block")
+	}
 
 	if block.Version() >= version.Fulu {
 		// Compute cells and proofs from the blobs and cell proofs.
+		computeCellsStart := time.Now()
 		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, proofs)
 		if err != nil {
 			return nil, nil, nil, errors.Wrap(err, "compute cells and proofs")
 		}
+		if handleLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+			handleLog.WithFields(logrus.Fields{
+				"blobCount":                    len(rawBlobs),
+				"cellsPerBlobCount":            len(cellsPerBlob),
+				"proofGroupsCount":             len(proofsPerBlob),
+				"computeCellsAndProofsElapsed": time.Since(computeCellsStart),
+			}).Debug("Computed cells and proofs from flat blob data")
+		}
 
 		// Construct data column sidecars from the signed block and cells and proofs.
+		dataColumnsStart := time.Now()
 		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
 		if err != nil {
 			return nil, nil, nil, errors.Wrap(err, "data column sidcars")
+		}
+		if handleLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+			handleLog.WithFields(logrus.Fields{
+				"dataColumnSidecarCount": len(roDataColumnSidecars),
+				"dataColumnBuildElapsed": time.Since(dataColumnsStart),
+			}).Debug("Constructed full data column sidecars from proposed block")
 		}
 
 		if len(cellsPerBlob) == 0 {
@@ -463,17 +699,33 @@ func (vs *Server) handleUnblindedBlock(
 
 		included := bitfield.NewBitlist(uint64(len(cellsPerBlob)))
 		included = included.Not() // all bits set to 1
+		partialColumnsStart := time.Now()
 		partialColumns, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
 		if err != nil {
 			return nil, nil, nil, errors.Wrap(err, "data column sidcars")
+		}
+		if handleLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+			handleLog.WithFields(logrus.Fields{
+				"partialColumnCount":        len(partialColumns),
+				"partialColumnBuildElapsed": time.Since(partialColumnsStart),
+				"handleBlockElapsed":        time.Since(handleStarted),
+			}).Debug("Constructed partial data columns from proposed block")
 		}
 
 		return nil, roDataColumnSidecars, partialColumns, nil
 	}
 
+	blobSidecarsStart := time.Now()
 	blobSidecars, err := BuildBlobSidecars(block, rawBlobs, proofs)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "build blob sidecars")
+	}
+	if handleLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		handleLog.WithFields(logrus.Fields{
+			"blobSidecarCount":        len(blobSidecars),
+			"blobSidecarBuildElapsed": time.Since(blobSidecarsStart),
+			"handleBlockElapsed":      time.Since(handleStarted),
+		}).Debug("Constructed blob sidecars from proposed block")
 	}
 
 	return blobSidecars, nil, nil, nil
@@ -481,8 +733,20 @@ func (vs *Server) handleUnblindedBlock(
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.
 func (vs *Server) broadcastReceiveBlock(ctx context.Context, wg *sync.WaitGroup, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
+	stageLog := log.WithFields(signedBlockFields(block, root)).WithFields(debugContextFields(ctx))
+	stageStarted := time.Now()
+	if stageLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		stageLog.Debug("Starting block gossip broadcast and local self-import")
+	}
+	broadcastStarted := time.Now()
 	if err := vs.broadcastBlock(ctx, wg, block, root); err != nil {
 		return errors.Wrap(err, "broadcast block")
+	}
+	if stageLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		stageLog.WithFields(logrus.Fields{
+			"broadcastElapsed": time.Since(broadcastStarted),
+			"totalElapsed":     time.Since(stageStarted),
+		}).Debug("Finished block gossip broadcast")
 	}
 
 	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
@@ -490,8 +754,15 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, wg *sync.WaitGroup,
 		Data: &blockfeed.ReceivedBlockData{SignedBlock: block},
 	})
 
+	receiveStarted := time.Now()
 	if err := vs.BlockReceiver.ReceiveBlock(ctx, block, root, nil); err != nil {
 		return errors.Wrap(err, "receive block")
+	}
+	if stageLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		stageLog.WithFields(logrus.Fields{
+			"receiveBlockElapsed": time.Since(receiveStarted),
+			"totalElapsed":        time.Since(stageStarted),
+		}).Debug("Finished local block self-import")
 	}
 
 	return nil
@@ -518,6 +789,14 @@ func (vs *Server) broadcastBlock(ctx context.Context, wg *sync.WaitGroup, block 
 
 // broadcastAndReceiveBlobs handles the broadcasting and reception of blob sidecars.
 func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethpb.BlobSidecar, root [fieldparams.RootLength]byte) error {
+	start := time.Now()
+	blobLog := log.WithFields(logrus.Fields{
+		"root":             fmt.Sprintf("%#x", root),
+		"blobSidecarCount": len(sidecars),
+	}).WithFields(debugContextFields(ctx))
+	if blobLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		blobLog.Debug("Starting blob sidecar broadcast and local receive")
+	}
 	eg, eCtx := errgroup.WithContext(ctx)
 	for subIdx, sc := range sidecars {
 		eg.Go(func() error {
@@ -539,11 +818,23 @@ func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethp
 			return nil
 		})
 	}
-	return eg.Wait()
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+	if blobLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		blobLog.WithField("elapsed", time.Since(start)).Debug("Finished blob sidecar broadcast and local receive")
+	}
+	return nil
 }
 
 // broadcastAndReceiveDataColumns handles the broadcasting and reception of data columns sidecars.
 func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, roSidecars []blocks.RODataColumn, partialColumns []blocks.PartialDataColumn) error {
+	dataColumnLog := log.WithFields(dataColumnSidecarFields(roSidecars, partialColumns)).WithFields(debugContextFields(ctx))
+	totalStart := time.Now()
+	if dataColumnLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		dataColumnLog.Debug("Starting data column broadcast and local receive")
+	}
+
 	// We built this block ourselves, so we can upgrade the read only data column sidecar into a verified one.
 	verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roSidecars))
 	for _, sidecar := range roSidecars {
@@ -552,13 +843,27 @@ func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, roSidecars
 	}
 
 	// Broadcast sidecars (non blocking).
+	broadcastStart := time.Now()
 	if err := vs.P2P.BroadcastDataColumnSidecars(ctx, verifiedSidecars, partialColumns); err != nil {
 		return errors.Wrap(err, "broadcast data column sidecars")
 	}
+	if dataColumnLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		dataColumnLog.WithFields(logrus.Fields{
+			"queueBroadcastElapsed": time.Since(broadcastStart),
+			"totalElapsed":          time.Since(totalStart),
+		}).Debug("Queued data column sidecars for gossip broadcast")
+	}
 
 	// In parallel, receive sidecars.
+	receiveStart := time.Now()
 	if err := vs.DataColumnReceiver.ReceiveDataColumns(verifiedSidecars); err != nil {
 		return errors.Wrap(err, "receive data columns")
+	}
+	if dataColumnLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		dataColumnLog.WithFields(logrus.Fields{
+			"localReceiveElapsed": time.Since(receiveStart),
+			"totalElapsed":        time.Since(totalStart),
+		}).Debug("Saved data column sidecars locally")
 	}
 
 	return nil

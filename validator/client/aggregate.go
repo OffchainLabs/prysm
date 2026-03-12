@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -17,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -31,14 +33,32 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 	fmtKey := fmt.Sprintf("%#x", pubKey[:])
+	logger := log.WithFields(logrus.Fields{
+		"slot":   slot,
+		"pubkey": fmtKey,
+	})
 
 	duty, err := v.duty(pubKey)
 	if err != nil {
-		log.WithError(err).Error("Could not fetch validator assignment")
+		logger.WithError(err).Error("Could not fetch validator assignment")
 		if v.emitAccountMetrics {
 			ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
 		}
 		return
+	}
+	logger = logger.WithFields(logrus.Fields{
+		"validatorIndex":  duty.ValidatorIndex,
+		"committeeIndex":  duty.CommitteeIndex,
+		"committeeLength": duty.CommitteeLength,
+	})
+	if logger.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		fields := proposalContextFields(ctx)
+		fields["slot"] = slot
+		fields["pubkey"] = fmtKey
+		fields["validatorIndex"] = duty.ValidatorIndex
+		fields["committeeIndex"] = duty.CommitteeIndex
+		fields["committeeLength"] = duty.CommitteeLength
+		logger.WithFields(fields).Debug("Starting aggregate selection flow")
 	}
 
 	var slotSig []byte
@@ -55,7 +75,7 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 
 		slotSig, err = v.signSlotWithSelectionProof(ctx, pubKey, slot)
 		if err != nil {
-			log.WithError(err).Error("Could not sign slot")
+			logger.WithError(err).Error("Could not sign slot")
 			if v.emitAccountMetrics {
 				ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
 			}
@@ -75,7 +95,7 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 	if v.distributed {
 		slotSig, err = v.attSelection(attSelectionKey{slot: slot, index: duty.ValidatorIndex})
 		if err != nil {
-			log.WithError(err).Error("Could not find aggregated selection proof")
+			logger.WithError(err).Error("Could not find aggregated selection proof")
 			if v.emitAccountMetrics {
 				ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
 			}
@@ -93,32 +113,38 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 	}
 	// TODO: look at renaming SubmitAggregateSelectionProof functions as they are GET beacon API
 	var agg ethpb.AggregateAttAndProof
+	selectionRequestStart := time.Now()
 	if postElectra {
 		res, err := v.validatorClient.SubmitAggregateSelectionProofElectra(ctx, aggSelectionRequest, duty.ValidatorIndex, duty.CommitteeLength)
 		if err != nil {
-			v.handleSubmitAggSelectionProofError(err, slot, fmtKey)
+			v.handleSubmitAggSelectionProofError(ctx, logger, err, slot, fmtKey)
 			return
 		}
 		agg = res.AggregateAndProof
 	} else {
 		res, err := v.validatorClient.SubmitAggregateSelectionProof(ctx, aggSelectionRequest, duty.ValidatorIndex, duty.CommitteeLength)
 		if err != nil {
-			v.handleSubmitAggSelectionProofError(err, slot, fmtKey)
+			v.handleSubmitAggSelectionProofError(ctx, logger, err, slot, fmtKey)
 			return
 		}
 		agg = res.AggregateAndProof
 	}
+	logger.WithFields(logrus.Fields{
+		"selectionRequestDuration": time.Since(selectionRequestStart),
+		"postElectra":              postElectra,
+	}).Debug("Beacon node returned aggregate selection proof")
 
 	sig, err := v.aggregateAndProofSig(ctx, pubKey, agg, slot)
 	if err != nil {
-		log.WithError(err).Error("Could not sign aggregate and proof")
+		logger.WithError(err).Error("Could not sign aggregate and proof")
 		return
 	}
 
+	submitStart := time.Now()
 	if postElectra {
 		msg, ok := agg.(*ethpb.AggregateAttestationAndProofElectra)
 		if !ok {
-			log.Errorf("Message is not %T", &ethpb.AggregateAttestationAndProofElectra{})
+			logger.Errorf("Message is not %T", &ethpb.AggregateAttestationAndProofElectra{})
 			if v.emitAccountMetrics {
 				ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
 			}
@@ -131,7 +157,10 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 			},
 		})
 		if err != nil {
-			log.WithError(err).Error("Could not submit signed aggregate and proof to beacon node")
+			logger.WithFields(proposalContextFields(ctx)).WithFields(logrus.Fields{
+				"submitDuration": time.Since(submitStart),
+				"postElectra":    postElectra,
+			}).WithError(err).Error("Could not submit signed aggregate and proof to beacon node")
 			if v.emitAccountMetrics {
 				ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
 			}
@@ -140,7 +169,7 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 	} else {
 		msg, ok := agg.(*ethpb.AggregateAttestationAndProof)
 		if !ok {
-			log.Errorf("Message is not %T", &ethpb.AggregateAttestationAndProof{})
+			logger.Errorf("Message is not %T", &ethpb.AggregateAttestationAndProof{})
 			if v.emitAccountMetrics {
 				ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
 			}
@@ -153,7 +182,10 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 			},
 		})
 		if err != nil {
-			log.WithError(err).Error("Could not submit signed aggregate and proof to beacon node")
+			logger.WithFields(proposalContextFields(ctx)).WithFields(logrus.Fields{
+				"submitDuration": time.Since(submitStart),
+				"postElectra":    postElectra,
+			}).WithError(err).Error("Could not submit signed aggregate and proof to beacon node")
 			if v.emitAccountMetrics {
 				ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
 			}
@@ -162,7 +194,7 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 	}
 
 	if err := v.saveSubmittedAtt(agg.AggregateVal(), pubKey[:], true); err != nil {
-		log.WithError(err).Error("Could not add aggregator indices to logs")
+		logger.WithError(err).Error("Could not add aggregator indices to logs")
 		if v.emitAccountMetrics {
 			ValidatorAggFailVec.WithLabelValues(fmtKey).Inc()
 		}
@@ -260,7 +292,7 @@ func (v *validator) aggregateAndProofSig(ctx context.Context, pubKey [fieldparam
 	return sig.Marshal(), nil
 }
 
-func (v *validator) handleSubmitAggSelectionProofError(err error, slot primitives.Slot, hexPubkey string) {
+func (v *validator) handleSubmitAggSelectionProofError(ctx context.Context, logger *logrus.Entry, err error, slot primitives.Slot, hexPubkey string) {
 	// handle grpc not found
 	s, ok := status.FromError(err)
 	grpcNotFound := ok && s.Code() == codes.NotFound
@@ -269,9 +301,9 @@ func (v *validator) handleSubmitAggSelectionProofError(err error, slot primitive
 	httpNotFound := errors.As(err, &jsonErr) && jsonErr.Code == http.StatusNotFound
 
 	if grpcNotFound || httpNotFound {
-		log.WithField("slot", slot).WithError(err).Warn("No attestations to aggregate")
+		logger.WithFields(proposalContextFields(ctx)).WithField("slot", slot).WithError(err).Warn("No attestations to aggregate")
 	} else {
-		log.WithField("slot", slot).WithError(err).Error("Could not submit aggregate selection proof to beacon node")
+		logger.WithFields(proposalContextFields(ctx)).WithField("slot", slot).WithError(err).Error("Could not submit aggregate selection proof to beacon node")
 		if v.emitAccountMetrics {
 			ValidatorAggFailVec.WithLabelValues(hexPubkey).Inc()
 		}

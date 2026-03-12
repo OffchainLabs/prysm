@@ -803,10 +803,22 @@ func (s *Service) areDataColumnsAvailable(
 	root [fieldparams.RootLength]byte,
 	slot primitives.Slot,
 ) error {
+	availabilityLog := log.WithFields(logrus.Fields{
+		"slot": slot,
+		"root": fmt.Sprintf("%#x", root),
+	}).WithFields(debugContextFields(ctx))
+
 	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
 	currentSlot := s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(slot), slots.ToEpoch(currentSlot)
 	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
+		if availabilityLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+			availabilityLog.WithFields(logrus.Fields{
+				"currentSlot":  currentSlot,
+				"blockEpoch":   blockEpoch,
+				"currentEpoch": currentEpoch,
+			}).Debug("Skipping data column availability check outside DA period")
+		}
 		return nil
 	}
 
@@ -843,6 +855,17 @@ func (s *Service) areDataColumnsAvailable(
 	// As soon as we have enough data column sidecars, we can reconstruct the missing ones.
 	// We don't need to wait for the rest of the data columns to declare the block as available.
 	if storedDataColumnsCount >= minimumColumnCountToReconstruct {
+		if availabilityLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+			availabilityLog.WithFields(logrus.Fields{
+				"currentSlot":                     currentSlot,
+				"blockEpoch":                      blockEpoch,
+				"currentEpoch":                    currentEpoch,
+				"custodyGroupCount":               custodyGroupCount,
+				"samplingSize":                    samplingSize,
+				"storedDataColumnsCount":          storedDataColumnsCount,
+				"minimumColumnCountToReconstruct": minimumColumnCountToReconstruct,
+			}).Debug("Data columns already satisfy local reconstruction threshold")
+		}
 		return nil
 	}
 
@@ -855,7 +878,32 @@ func (s *Service) areDataColumnsAvailable(
 	// If there are no missing indices, all data column sidecars are available.
 	// This is the happy path.
 	if len(missing) == 0 {
+		if availabilityLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+			availabilityLog.WithFields(logrus.Fields{
+				"currentSlot":            currentSlot,
+				"blockEpoch":             blockEpoch,
+				"currentEpoch":           currentEpoch,
+				"custodyGroupCount":      custodyGroupCount,
+				"samplingSize":           samplingSize,
+				"storedDataColumnsCount": storedDataColumnsCount,
+				"columnsExpected":        helpers.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
+			}).Debug("All required sampled data columns were already available locally")
+		}
 		return nil
+	}
+	if availabilityLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		availabilityLog.WithFields(logrus.Fields{
+			"currentSlot":                     currentSlot,
+			"blockEpoch":                      blockEpoch,
+			"currentEpoch":                    currentEpoch,
+			"custodyGroupCount":               custodyGroupCount,
+			"samplingSize":                    samplingSize,
+			"storedDataColumnsCount":          storedDataColumnsCount,
+			"minimumColumnCountToReconstruct": minimumColumnCountToReconstruct,
+			"missingCount":                    len(missing),
+			"columnsExpected":                 helpers.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
+			"columnsWaiting":                  helpers.SortedPrettySliceFromMap(missing),
+		}).Debug("Waiting for sampled data columns to become available")
 	}
 
 	if s.startWaitingDataColumnSidecars != nil {
@@ -895,15 +943,24 @@ func (s *Service) areDataColumnsAvailable(
 				continue
 			}
 
+			matchedIndices := make([]uint64, 0, len(idents.Indices))
 			for _, index := range idents.Indices {
 				// This is a data column we are expecting.
 				if _, ok := missing[index]; ok {
 					storedDataColumnsCount++
+					matchedIndices = append(matchedIndices, index)
 				}
 
 				// As soon as we have more than half of the data columns, we can reconstruct the missing ones.
 				// We don't need to wait for the rest of the data columns to declare the block as available.
 				if storedDataColumnsCount >= minimumColumnCountToReconstruct {
+					if availabilityLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+						availabilityLog.WithFields(logrus.Fields{
+							"storedDataColumnsCount": storedDataColumnsCount,
+							"matchedIndices":         matchedIndices,
+							"remainingMissingCount":  len(missing),
+						}).Debug("Data column availability reached reconstruction threshold")
+					}
 					return nil
 				}
 
@@ -912,8 +969,22 @@ func (s *Service) areDataColumnsAvailable(
 
 				// Return if there is no more missing data columns.
 				if len(missing) == 0 {
+					if availabilityLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+						availabilityLog.WithFields(logrus.Fields{
+							"storedDataColumnsCount": storedDataColumnsCount,
+							"matchedIndices":         matchedIndices,
+						}).Debug("All sampled data columns became available")
+					}
 					return nil
 				}
+			}
+			if len(matchedIndices) > 0 && availabilityLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+				availabilityLog.WithFields(logrus.Fields{
+					"matchedIndices":         matchedIndices,
+					"storedDataColumnsCount": storedDataColumnsCount,
+					"remainingMissingCount":  len(missing),
+					"remainingMissing":       helpers.SortedPrettySliceFromMap(missing),
+				}).Debug("Processed data column availability notification")
 			}
 
 		case <-ctx.Done():
@@ -922,6 +993,13 @@ func (s *Service) areDataColumnsAvailable(
 
 			if missingIndicesCount < fieldparams.NumberOfColumns {
 				missingIndices = helpers.SortedPrettySliceFromMap(missing)
+			}
+			if availabilityLog.Logger.IsLevelEnabled(logrus.DebugLevel) {
+				availabilityLog.WithFields(logrus.Fields{
+					"storedDataColumnsCount": storedDataColumnsCount,
+					"remainingMissingCount":  missingIndicesCount,
+					"remainingMissing":       missingIndices,
+				}).WithError(ctx.Err()).Debug("Data column availability wait ended due to context completion")
 			}
 
 			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", slot, root, missingIndices)

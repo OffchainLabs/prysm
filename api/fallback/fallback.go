@@ -2,6 +2,7 @@ package fallback
 
 import (
 	"context"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -29,6 +30,7 @@ func EnsureReady(ctx context.Context, provider HostProvider, checker ReadyChecke
 	numHosts := len(hosts)
 	startingHost := provider.CurrentHost()
 	var attemptedHosts []string
+	start := time.Now()
 
 	// Find current index
 	currentIdx := 0
@@ -40,17 +42,30 @@ func EnsureReady(ctx context.Context, provider HostProvider, checker ReadyChecke
 	}
 
 	for i := range numHosts {
-		if checker.IsReady(ctx) {
+		currentHost := provider.CurrentHost()
+		checkStart := time.Now()
+		isReady := checker.IsReady(ctx)
+		checkDuration := time.Since(checkStart)
+		log.WithFields(logrus.Fields{
+			"attempt":       i + 1,
+			"attemptsTotal": numHosts,
+			"host":          currentHost,
+			"checkDuration": checkDuration,
+			"isReady":       isReady,
+			"startingHost":  startingHost,
+			"totalElapsed":  time.Since(start),
+		}).Debug("Beacon node readiness check completed")
+		if isReady {
 			if len(attemptedHosts) > 0 {
 				log.WithFields(logrus.Fields{
-					"previous": startingHost,
-					"current":  provider.CurrentHost(),
-					"tried":    attemptedHosts,
+					"from":  startingHost,
+					"to":    currentHost,
+					"tried": attemptedHosts,
 				}).Info("Switched to responsive beacon node")
 			}
 			return true
 		}
-		attemptedHosts = append(attemptedHosts, provider.CurrentHost())
+		attemptedHosts = append(attemptedHosts, currentHost)
 
 		// Try next host if not the last iteration
 		if i < numHosts-1 {
@@ -61,6 +76,11 @@ func EnsureReady(ctx context.Context, provider HostProvider, checker ReadyChecke
 		}
 	}
 
-	log.WithField("tried", attemptedHosts).Warn("No responsive beacon node found")
+	log.WithFields(logrus.Fields{
+		"startingHost": startingHost,
+		"tried":        attemptedHosts,
+		"attemptCount": len(attemptedHosts),
+		"totalElapsed": time.Since(start),
+	}).Warn("No responsive beacon node found")
 	return false
 }

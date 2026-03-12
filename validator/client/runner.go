@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -92,12 +93,16 @@ func (r *runner) run(ctx context.Context) {
 			//nolint:govet
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
+			deadline := v.SlotDeadline(slot)
 			if !r.healthMonitor.IsHealthy() {
-				log.WithField("url", r.validator.Host()).Warn("Beacon node unhealthy, stopping runner")
+				log.WithFields(logrus.Fields{
+					"url":      r.validator.Host(),
+					"slot":     slot,
+					"deadline": deadline,
+				}).Warn("Beacon node unhealthy, stopping runner")
 				return
 			}
 
-			deadline := v.SlotDeadline(slot)
 			slotCtx, cancel := context.WithDeadline(ctx, deadline) //nolint:govet
 
 			var span trace.Span

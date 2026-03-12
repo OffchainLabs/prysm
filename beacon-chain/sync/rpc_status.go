@@ -101,17 +101,32 @@ func (s *Service) resyncIfBehind() {
 	interval := time.Duration(millisecondsPerEpoch/16) * time.Millisecond
 	async.RunEvery(s.ctx, interval, func() {
 		if s.shouldReSync() {
-			syncedEpoch := slots.ToEpoch(s.cfg.chain.HeadSlot())
+			headSlot := s.cfg.chain.HeadSlot()
+			syncedEpoch := slots.ToEpoch(headSlot)
+			currentSlot := s.cfg.clock.CurrentSlot()
+			currentEpoch := slots.ToEpoch(currentSlot)
 			// Factor number of expected minimum sync peers, to make sure that enough peers are
 			// available to resync (some peers may go away between checking non-finalized peers and
 			// actual resyncing).
-			highestEpoch, _ := s.cfg.p2p.Peers().BestNonFinalized(flags.Get().MinimumSyncPeers*2, syncedEpoch)
+			bestPeersThreshold := flags.Get().MinimumSyncPeers * 2
+			highestEpoch, bestPeers := s.cfg.p2p.Peers().BestNonFinalized(bestPeersThreshold, syncedEpoch)
 			// Check if the current node is more than 1 epoch behind.
 			if highestEpoch > (syncedEpoch + 1) {
+				slotLag := primitives.Slot(0)
+				if currentSlot > headSlot {
+					slotLag = currentSlot - headSlot
+				}
 				log.WithFields(logrus.Fields{
-					"currentEpoch": slots.ToEpoch(s.cfg.clock.CurrentSlot()),
-					"syncedEpoch":  syncedEpoch,
-					"peersEpoch":   highestEpoch,
+					"currentSlot":        currentSlot,
+					"headSlot":           headSlot,
+					"slotLag":            slotLag,
+					"currentEpoch":       currentEpoch,
+					"syncedEpoch":        syncedEpoch,
+					"peersEpoch":         highestEpoch,
+					"connectedPeerCount": len(s.cfg.p2p.Peers().Connected()),
+					"candidatePeerCount": len(bestPeers),
+					"minimumSyncPeers":   flags.Get().MinimumSyncPeers,
+					"bestPeersThreshold": bestPeersThreshold,
 				}).Info("Fallen behind peers; reverting to initial sync to catch up")
 				numberOfTimesResyncedCounter.Inc()
 				s.clearPendingSlots()

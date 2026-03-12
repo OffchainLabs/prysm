@@ -57,6 +57,20 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 	fmtKey := fmt.Sprintf("%#x", pubKey[:])
 	span.SetAttributes(trace.StringAttribute("validator", fmtKey))
 	log := log.WithField("pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:])))
+	proposalStarted := time.Now()
+	slotStart, err := slots.StartTime(v.genesisTime, slot)
+	if err != nil {
+		log.WithError(err).Debug("Could not determine slot start time for proposal logging")
+	}
+	if log.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		fields := proposalContextFields(ctx)
+		fields["slot"] = slot
+		fields["totalElapsed"] = time.Since(proposalStarted)
+		if !slotStart.IsZero() {
+			fields["sinceSlotStartTime"] = time.Since(slotStart)
+		}
+		log.WithFields(fields).Debug("Starting validator proposal flow")
+	}
 
 	// Sign randao reveal, it's used to request block from beacon node
 	epoch := primitives.Epoch(slot / params.BeaconConfig().SlotsPerEpoch)
@@ -78,17 +92,44 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 	}
 
 	// Request block from beacon node
+	blockRequestStart := time.Now()
+	if log.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		fields := proposalContextFields(ctx)
+		fields["slot"] = slot
+		fields["totalElapsed"] = time.Since(proposalStarted)
+		if !slotStart.IsZero() {
+			fields["sinceSlotStartTime"] = time.Since(slotStart)
+		}
+		log.WithFields(fields).Debug("Requesting beacon block from beacon node")
+	}
 	b, err := v.validatorClient.BeaconBlock(ctx, &ethpb.BlockRequest{
 		Slot:         slot,
 		RandaoReveal: randaoReveal,
 		Graffiti:     g,
 	})
 	if err != nil {
-		log.WithField("slot", slot).WithError(err).Error("Failed to request block from beacon node")
+		log.WithFields(proposalContextFields(ctx)).WithFields(logrus.Fields{
+			"slot":            slot,
+			"requestDuration": time.Since(blockRequestStart),
+			"totalElapsed":    time.Since(proposalStarted),
+		}).WithError(err).Error("Failed to request block from beacon node")
 		if v.emitAccountMetrics {
 			ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
 		}
 		return
+	}
+	if log.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		fields := proposalContextFields(ctx)
+		fields["slot"] = slot
+		fields["requestDuration"] = time.Since(blockRequestStart)
+		fields["totalElapsed"] = time.Since(proposalStarted)
+		for key, value := range genericBeaconBlockResponseFields(b) {
+			fields[key] = value
+		}
+		if !slotStart.IsZero() {
+			fields["sinceSlotStartTime"] = time.Since(slotStart)
+		}
+		log.WithFields(fields).Debug("Received beacon block from beacon node")
 	}
 
 	// Sign returned block from beacon node
@@ -168,13 +209,47 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		}
 	}
 
+	if log.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		fields := proposalContextFields(ctx)
+		fields["slot"] = slot
+		fields["totalElapsed"] = time.Since(proposalStarted)
+		for key, value := range blockProposalFields(wb) {
+			fields[key] = value
+		}
+		if !slotStart.IsZero() {
+			fields["sinceSlotStartTime"] = time.Since(slotStart)
+		}
+		log.WithFields(fields).Debug("Submitting signed block to beacon node")
+	}
+	blockSubmitStart := time.Now()
 	blkResp, err := v.validatorClient.ProposeBeaconBlock(ctx, genericSignedBlock)
 	if err != nil {
-		log.WithField("slot", slot).WithError(err).Error("Failed to propose block")
+		fields := proposalContextFields(ctx)
+		fields["slot"] = slot
+		fields["submitDuration"] = time.Since(blockSubmitStart)
+		fields["totalElapsed"] = time.Since(proposalStarted)
+		for key, value := range blockProposalFields(wb) {
+			fields[key] = value
+		}
+		if !slotStart.IsZero() {
+			fields["sinceSlotStartTime"] = time.Since(slotStart)
+		}
+		log.WithFields(fields).WithError(err).Error("Failed to propose block")
 		if v.emitAccountMetrics {
 			ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
 		}
 		return
+	}
+	if log.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		fields := proposalContextFields(ctx)
+		fields["slot"] = slot
+		fields["submitDuration"] = time.Since(blockSubmitStart)
+		fields["totalElapsed"] = time.Since(proposalStarted)
+		fields["blockRoot"] = fmt.Sprintf("%#x", bytesutil.Trunc(blkResp.BlockRoot))
+		if !slotStart.IsZero() {
+			fields["sinceSlotStartTime"] = time.Since(slotStart)
+		}
+		log.WithFields(fields).Debug("Beacon node accepted proposed block")
 	}
 
 	if err := v.proposeSelfBuildEnvelope(ctx, slot, pubKey, blk); err != nil {
@@ -195,6 +270,81 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 	if v.emitAccountMetrics {
 		ValidatorProposeSuccessVec.WithLabelValues(fmtKey).Inc()
 	}
+}
+
+func proposalContextFields(ctx context.Context) logrus.Fields {
+	fields := logrus.Fields{}
+	if deadline, ok := ctx.Deadline(); ok {
+		fields["deadline"] = deadline
+		fields["timeUntilDeadline"] = time.Until(deadline)
+	}
+	if err := ctx.Err(); err != nil {
+		fields["ctxErr"] = err
+	}
+	return fields
+}
+
+func genericBeaconBlockResponseFields(block *ethpb.GenericBeaconBlock) logrus.Fields {
+	fields := logrus.Fields{}
+	switch {
+	case block == nil:
+		fields["responseType"] = "nil"
+	case block.GetPhase0() != nil:
+		fields["responseType"] = "phase0"
+	case block.GetAltair() != nil:
+		fields["responseType"] = "altair"
+	case block.GetBellatrix() != nil:
+		fields["responseType"] = "bellatrix"
+	case block.GetBlindedBellatrix() != nil:
+		fields["responseType"] = "blinded_bellatrix"
+	case block.GetCapella() != nil:
+		fields["responseType"] = "capella"
+	case block.GetBlindedCapella() != nil:
+		fields["responseType"] = "blinded_capella"
+	case block.GetDeneb() != nil:
+		fields["responseType"] = "deneb"
+		fields["blobCount"] = len(block.GetDeneb().Blobs)
+		fields["kzgProofCount"] = len(block.GetDeneb().KzgProofs)
+	case block.GetBlindedDeneb() != nil:
+		fields["responseType"] = "blinded_deneb"
+	case block.GetElectra() != nil:
+		fields["responseType"] = "electra"
+		fields["blobCount"] = len(block.GetElectra().Blobs)
+		fields["kzgProofCount"] = len(block.GetElectra().KzgProofs)
+	case block.GetBlindedElectra() != nil:
+		fields["responseType"] = "blinded_electra"
+	case block.GetFulu() != nil:
+		fields["responseType"] = "fulu"
+		fields["blobCount"] = len(block.GetFulu().Blobs)
+		fields["kzgProofCount"] = len(block.GetFulu().KzgProofs)
+	case block.GetBlindedFulu() != nil:
+		fields["responseType"] = "blinded_fulu"
+	default:
+		fields["responseType"] = "unknown"
+	}
+	return fields
+}
+
+func blockProposalFields(block interfaces.ReadOnlyBeaconBlock) logrus.Fields {
+	fields := logrus.Fields{
+		"fork":          version.String(block.Version()),
+		"blinded":       block.IsBlinded(),
+		"slot":          block.Slot(),
+		"proposerIndex": block.ProposerIndex(),
+	}
+	body := block.Body()
+	if body == nil {
+		return fields
+	}
+	if kzgs, err := body.BlobKzgCommitments(); err == nil {
+		fields["kzgCommitmentCount"] = len(kzgs)
+	}
+	if block.Version() >= version.Gloas {
+		if payloadAtts, err := body.PayloadAttestations(); err == nil {
+			fields["payloadAttestationCount"] = len(payloadAtts)
+		}
+	}
+	return fields
 }
 
 func logProposedBlock(log *logrus.Entry, blk interfaces.SignedBeaconBlock, blkRoot []byte) error {

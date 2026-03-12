@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -12,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -106,11 +108,20 @@ func (c *beaconApiNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethp
 // IsReady returns true only if the node is fully synced (200 OK).
 // A 206 Partial Content response indicates the node is syncing and not ready.
 func (c *beaconApiNodeClient) IsReady(ctx context.Context) bool {
+	start := time.Now()
 	statusCode, err := c.handler.GetStatusCode(ctx, "/eth/v1/node/health")
 	if err != nil {
-		log.WithError(err).WithField("url", c.handler.Host()).Error("failed to get health of node")
+		log.WithError(err).WithFields(logrus.Fields{
+			"url":      c.handler.Host(),
+			"duration": time.Since(start),
+		}).Error("Failed to get health of node")
 		return false
 	}
+	log.WithFields(logrus.Fields{
+		"url":        c.handler.Host(),
+		"statusCode": statusCode,
+		"duration":   time.Since(start),
+	}).Debug("Beacon node health request completed")
 	// Only 200 OK means the node is fully synced and ready.
 	// 206 Partial Content means syncing, 503 means unavailable.
 	return statusCode == http.StatusOK

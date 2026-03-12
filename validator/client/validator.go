@@ -957,7 +957,7 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 	case eventClient.EventError:
 		log.Error(string(event.Data))
 	case eventClient.EventConnectionError:
-		log.WithError(errors.New(string(event.Data))).Error("Event stream interrupted")
+		log.WithError(errors.New(string(event.Data))).WithField("url", v.Host()).Error("Event stream interrupted")
 	case eventClient.EventHead:
 		log.Debug("Received head event")
 		head := &structs.HeadEvent{}
