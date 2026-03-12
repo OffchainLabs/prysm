@@ -63,7 +63,7 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 // while we are verifying all the KZG proofs from multiple sidecars in a batch.
 // This is done to improve performance since the internal KZG library is way more
 // efficient when verifying in batch.
-// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_kzg_proofs
+// https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/p2p-interface.md#modified-verify_data_column_sidecar_kzg_proofs
 func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 	commitmentsBySidecar := make([][][]byte, len(sidecars))
 	for i := range sidecars {
