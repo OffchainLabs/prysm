@@ -1,6 +1,8 @@
 package beacon
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -11,6 +13,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // GetExecutionPayloadEnvelope retrieves a full execution payload envelope by beacon block root.
@@ -76,4 +80,46 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 		Finalized:           finalized,
 		Data:                jsonEnvelope,
 	})
+}
+
+// PublishExecutionPayloadEnvelope broadcasts a signed execution payload envelope.
+//
+// Endpoint: POST /eth/v1/beacon/execution_payload_envelope
+func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishExecutionPayloadEnvelope")
+	defer span.End()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		httputil.HandleError(w, "could not read request body: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var jsonEnvelope structs.SignedExecutionPayloadEnvelope
+	if err := json.Unmarshal(body, &jsonEnvelope); err != nil {
+		httputil.HandleError(w, "could not decode request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	consensus, err := jsonEnvelope.ToConsensus()
+	if err != nil {
+		httputil.HandleError(w, "invalid signed execution payload envelope: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, consensus); err != nil {
+		if st, ok := status.FromError(err); ok {
+			switch st.Code() {
+			case codes.InvalidArgument:
+				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
+			default:
+				httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
+			}
+			return
+		}
+		httputil.HandleError(w, "could not publish execution payload envelope: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

@@ -151,6 +151,11 @@ type ValidatorParticipation struct {
 	PreviousEpochHeadAttestingGwei   string `json:"previous_epoch_head_attesting_gwei"`
 }
 
+type GetValidatorExecutionPayloadEnvelopeResponse struct {
+	Version string                    `json:"version"`
+	Data    *ExecutionPayloadEnvelope `json:"data"`
+}
+
 type ActiveSetChanges struct {
 	Epoch               string   `json:"epoch"`
 	ActivatedPublicKeys []string `json:"activated_public_keys"`
