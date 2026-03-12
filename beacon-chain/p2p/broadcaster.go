@@ -367,16 +367,19 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		index uint64
 	}
 
+	var partialColumnsWg sync.WaitGroup
+	if s.partialColumnBroadcaster != nil {
+		// broadcast partial columns
+		partialColumnsWg.Go(func() {
+			if err := s.broadcastPartialDataColumns(ctx, partialColumns, forkDigest); err != nil {
+				log.WithError(err).Error("Cannot broadcast partial data columns")
+			}
+		})
+	}
+
 	var timings sync.Map
 	logLevel := logrus.GetLevel()
 	slotPerRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, 1)
-
-	topicFunc := func(dcIndex uint64) (topic string, wrappedSubIdx uint64, subnet uint64) {
-		subnet = peerdas.ComputeSubnetForDataColumnSidecar(dcIndex)
-		topic = dataColumnSubnetToTopic(subnet, forkDigest)
-		wrappedSubIdx = subnet + dataColumnSubnetVal
-		return
-	}
 
 	sidecarsWithPeers := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
 	var sidecarsWithoutPeers []blocks.VerifiedRODataColumn
@@ -385,7 +388,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 	for _, sidecar := range sidecars {
 		slotPerRoot[sidecar.BlockRoot()] = sidecar.Slot()
 
-		topic, wrappedSubIdx, _ := topicFunc(sidecar.Index)
+		topic, wrappedSubIdx, _ := columnToTopic(sidecar.Index, forkDigest)
 		// Check if we have a peer for this subnet (use RLock for read-only check).
 		mu := s.subnetLocker(wrappedSubIdx)
 		mu.RLock()
@@ -410,16 +413,13 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			ctx := trace.NewContext(s.ctx, span)
 			defer span.End()
 
-			topic, _, _ := topicFunc(sidecar.Index)
+			topic, _, _ := columnToTopic(sidecar.Index, forkDigest)
 
 			if err := s.batchObject(ctx, &messageBatch, sidecar, topic); err != nil {
 				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot batch data column sidecar")
 				return
 			}
-
-			// Increase the number of successful broadcasts.
-			dataColumnSidecarBroadcasts.Inc()
 
 			// Record the timing for log purposes.
 			if logLevel >= logrus.DebugLevel {
@@ -436,7 +436,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			ctx := trace.NewContext(s.ctx, span)
 			defer span.End()
 
-			topic, wrappedSubIdx, subnet := topicFunc(sidecar.Index)
+			topic, wrappedSubIdx, subnet := columnToTopic(sidecar.Index, forkDigest)
 
 			// Find peers for this sidecar's subnet.
 			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, subnet); err != nil {
@@ -472,24 +472,8 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 	// Wait for all individual publishes to complete.
 	individualWg.Wait()
-
-	// broadcast partial columns after peer discovery is complete.
 	if s.partialColumnBroadcaster != nil {
-		_, span := trace.StartSpan(ctx, "p2p.broadcastPartialDataColumn")
-		err := s.partialColumnBroadcaster.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
-			for _, partialColumn := range partialColumns {
-				topic, _, _ := topicFunc(partialColumn.Index)
-				fullTopicStr := topic + s.Encoding().ProtocolSuffix()
-				if !yield(fullTopicStr, partialColumn) {
-					return
-				}
-			}
-		})
-		if err != nil {
-			tracing.AnnotateError(span, err)
-			log.WithError(err).Error("Cannot partial broadcast data column sidecar")
-		}
-		span.End()
+		partialColumnsWg.Wait()
 	}
 
 	// The rest of this function is only for debug logging purposes.
@@ -555,6 +539,93 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			"timeSinceSlotStartMax": info.durationMax,
 		}).Debug("Broadcasted data column sidecars")
 	}
+}
+
+func columnToTopic(dcIndex uint64, forkDigest [fieldparams.VersionLength]byte) (topic string, wrappedSubIdx uint64, subnet uint64) {
+	subnet = peerdas.ComputeSubnetForDataColumnSidecar(dcIndex)
+	topic = dataColumnSubnetToTopic(subnet, forkDigest)
+	wrappedSubIdx = subnet + dataColumnSubnetVal
+	return
+}
+
+func (s *Service) broadcastPartialDataColumns(ctx context.Context, partialColumns []blocks.PartialDataColumn, forkDigest [fieldparams.VersionLength]byte) error {
+	_, span := trace.StartSpan(ctx, "p2p.broadcastPartialDataColumns")
+	defer span.End()
+
+	ctx = trace.NewContext(s.ctx, span)
+
+	publish := func(partialColumns []blocks.PartialDataColumn) error {
+		if len(partialColumns) == 0 {
+			return nil
+		}
+
+		return s.partialColumnBroadcaster.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+			for _, partialColumn := range partialColumns {
+				topic, _, _ := columnToTopic(partialColumn.Index, forkDigest)
+				fullTopicStr := topic + s.Encoding().ProtocolSuffix()
+				if !yield(fullTopicStr, partialColumn) {
+					return
+				}
+			}
+		})
+	}
+
+	partialColumnsWithPeers := make([]blocks.PartialDataColumn, 0, len(partialColumns))
+	var partialColumnsWithoutPeers []blocks.PartialDataColumn
+
+	for _, partialColumn := range partialColumns {
+		topic, wrappedSubIdx, _ := columnToTopic(partialColumn.Index, forkDigest)
+		mu := s.subnetLocker(wrappedSubIdx)
+		mu.RLock()
+		hasPeer := s.hasPeerWithSubnet(topic)
+		mu.RUnlock()
+
+		if hasPeer {
+			partialColumnsWithPeers = append(partialColumnsWithPeers, partialColumn)
+			continue
+		}
+
+		partialColumnsWithoutPeers = append(partialColumnsWithoutPeers, partialColumn)
+	}
+
+	if len(partialColumnsWithPeers) > 0 {
+		_, span := trace.StartSpan(ctx, "p2p.broadcastPartialDataColumns.publishWithPeers")
+
+		if err := publish(partialColumnsWithPeers); err != nil {
+			tracing.AnnotateError(span, err)
+			log.WithError(err).Error("Cannot publish partial data columns")
+		} else {
+			partialDataColumnBroadcasts.Add(float64(len(partialColumnsWithPeers)))
+		}
+		span.End()
+	}
+
+	var withoutPeersWg sync.WaitGroup
+
+	for _, partialColumn := range partialColumnsWithoutPeers {
+		withoutPeersWg.Go(func() {
+			_, span := trace.StartSpan(ctx, "p2p.broadcastPartialDataColumns.findPeersAndPublish")
+			defer span.End()
+			ctx = trace.NewContext(s.ctx, span)
+
+			_, wrappedSubIdx, subnet := columnToTopic(partialColumn.Index, forkDigest)
+			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, subnet); err != nil {
+				tracing.AnnotateError(span, err)
+				log.WithError(err).Error("Cannot find peers for partial data columns")
+				return
+			}
+			if err := publish([]blocks.PartialDataColumn{partialColumn}); err != nil {
+				tracing.AnnotateError(span, err)
+				log.WithError(err).Error("Cannot publish partial data columns")
+				return
+			}
+			partialDataColumnBroadcasts.Inc()
+		})
+	}
+
+	withoutPeersWg.Wait()
+
+	return nil
 }
 
 func (s *Service) findPeersIfNeeded(

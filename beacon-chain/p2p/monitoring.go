@@ -97,6 +97,11 @@ var (
 		Help: "The number of data column sidecar message broadcast attempts.",
 	})
 
+	// Partial Data Column Metrics
+	partialDataColumnBroadcasts = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "p2p_partial_data_column_broadcasts",
+		Help: "The number of partial data column messages that were broadcasted.",
+	})
 	// Gossip Tracer Metrics
 	pubsubTopicsActive = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "p2p_pubsub_topic_active",
