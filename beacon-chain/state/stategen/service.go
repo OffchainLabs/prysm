@@ -40,6 +40,7 @@ type StateManager interface {
 	SaveFinalizedState(fSlot primitives.Slot, fRoot [32]byte, fState state.BeaconState)
 	MigrateToCold(ctx context.Context, fRoot [32]byte) error
 	StateByRoot(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
+	StateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
 	ActiveNonSlashedBalancesByRoot(context.Context, [32]byte) ([]uint64, error)
 	StateByRootIfCachedNoCopy(blockRoot [32]byte) state.BeaconState
 	StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)

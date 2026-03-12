@@ -43,11 +43,18 @@ func (s *State) hasStateInCache(_ context.Context, blockRoot [32]byte) (bool, er
 }
 
 // StateByRootIfCachedNoCopy retrieves a state using the input block root only if the state is already in the cache.
+// It checks both the hot state cache and the epoch boundary state cache.
+// WARNING: The returned state MUST NOT be modified by the caller.
 func (s *State) StateByRootIfCachedNoCopy(blockRoot [32]byte) state.BeaconState {
-	if !s.hotStateCache.has(blockRoot) {
+	st := s.hotStateCache.getWithoutCopy(blockRoot)
+	if st != nil {
+		return st
+	}
+	cachedInfo, ok, err := s.epochBoundaryStateCache.getByBlockRootNoCopy(blockRoot)
+	if err != nil || !ok {
 		return nil
 	}
-	return s.hotStateCache.getWithoutCopy(blockRoot)
+	return cachedInfo.state
 }
 
 // StateByRoot retrieves the state using input block root.
@@ -66,10 +73,27 @@ func (s *State) StateByRoot(ctx context.Context, blockRoot [32]byte) (state.Beac
 	return s.loadStateByRoot(ctx, blockRoot)
 }
 
+// StateByRootNoCopy retrieves the state using input block root without copying from caches.
+// WARNING: The returned state MUST NOT be modified by the caller. It may be shared
+// with internal caches. Use StateByRoot if you need a mutable state.
+func (s *State) StateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "stateGen.StateByRootNoCopy")
+	defer span.End()
+
+	if blockRoot == params.BeaconConfig().ZeroHash {
+		root, err := s.beaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			return nil, stderrors.Join(ErrNoGenesisBlock, err)
+		}
+		blockRoot = root
+	}
+	return s.loadStateByRootNoCopy(ctx, blockRoot)
+}
+
 // ActiveNonSlashedBalancesByRoot retrieves the effective balances of all active and non-slashed validators at the
 // state with a given root
 func (s *State) ActiveNonSlashedBalancesByRoot(ctx context.Context, blockRoot [32]byte) ([]uint64, error) {
-	st, err := s.StateByRoot(ctx, blockRoot)
+	st, err := s.StateByRootNoCopy(ctx, blockRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +248,61 @@ func (s *State) loadStateByRoot(ctx context.Context, blockRoot [32]byte) (state.
 
 	// Since the requested state is not in caches or DB, start replaying using the last
 	// available ancestor state which is retrieved using input block's root.
+	startState, err := s.latestAncestor(ctx, blockRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get ancestor state")
+	}
+	if startState == nil || startState.IsNil() {
+		return nil, errUnknownBoundaryState
+	}
+
+	if startState.Slot() == targetSlot {
+		return startState, nil
+	}
+
+	blks, err := s.loadBlocks(ctx, startState.Slot()+1, targetSlot, bytesutil.ToBytes32(summary.Root))
+	if err != nil {
+		return nil, errors.Wrap(err, "could not load blocks for hot state using root")
+	}
+
+	replayBlockCount.Observe(float64(len(blks)))
+
+	return s.replayBlocks(ctx, startState, blks, targetSlot)
+}
+
+// loadStateByRootNoCopy is like loadStateByRoot but returns cached states without copying.
+// States from DB or replay are already owned by the caller.
+// WARNING: The returned state MUST NOT be modified if it came from a cache.
+func (s *State) loadStateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "stateGen.loadStateByRootNoCopy")
+	defer span.End()
+
+	// First, check hot state cache without copy.
+	cachedState := s.hotStateCache.getWithoutCopy(blockRoot)
+	if cachedState != nil && !cachedState.IsNil() {
+		return cachedState, nil
+	}
+
+	// Second, check epoch boundary state cache without copy.
+	cachedInfo, ok, err := s.epochBoundaryStateCache.getByBlockRootNoCopy(blockRoot)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return cachedInfo.state, nil
+	}
+
+	// Short circuit if the state is already in the DB.
+	if s.beaconDB.HasState(ctx, blockRoot) {
+		return s.beaconDB.State(ctx, blockRoot)
+	}
+
+	summary, err := s.stateSummary(ctx, blockRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get state summary")
+	}
+	targetSlot := summary.Slot
+
 	startState, err := s.latestAncestor(ctx, blockRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get ancestor state")

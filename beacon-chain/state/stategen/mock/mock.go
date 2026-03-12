@@ -52,6 +52,11 @@ func (m *StateManager) StateByRoot(_ context.Context, blockRoot [32]byte) (state
 	return m.StatesByRoot[blockRoot], nil
 }
 
+// StateByRootNoCopy --
+func (m *StateManager) StateByRootNoCopy(_ context.Context, blockRoot [32]byte) (state.BeaconState, error) {
+	return m.StatesByRoot[blockRoot], nil
+}
+
 // ActiveNonSlashedBalancesByRoot --
 func (*StateManager) ActiveNonSlashedBalancesByRoot(_ context.Context, _ [32]byte) ([]uint64, error) {
 	return []uint64{}, nil

@@ -160,7 +160,7 @@ func (s *Service) retrieveActiveValidators() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	bState, err := s.cfg.StateGen.StateByRoot(s.ctx, [32]byte(finalizedCheckpoint.Root))
+	bState, err := s.cfg.StateGen.StateByRootNoCopy(s.ctx, [32]byte(finalizedCheckpoint.Root))
 	if err != nil {
 		return 0, err
 	}
