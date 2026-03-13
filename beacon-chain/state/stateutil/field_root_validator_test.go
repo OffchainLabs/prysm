@@ -3,13 +3,13 @@ package stateutil
 import (
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 
 	mathutil "github.com/OffchainLabs/prysm/v7/math"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"golang.org/x/sync/errgroup"
 )
 
 func TestValidatorConstants(t *testing.T) {
@@ -34,15 +34,15 @@ func TestValidatorConstants(t *testing.T) {
 }
 
 func TestHashValidatorHelper(t *testing.T) {
-	wg := sync.WaitGroup{}
-	wg.Add(1)
+	g, ctx := errgroup.WithContext(t.Context())
 	v := &ethpb.Validator{}
 	valList := make([]*ethpb.Validator, 10*validatorFieldRoots)
 	for i := range valList {
 		valList[i] = v
 	}
 	roots := make([][32]byte, len(valList))
-	hashValidatorHelper(valList, roots, 2, 2, &wg)
+	g.Go(hashValidatorHelper(ctx, valList, roots, 2, 2))
+	require.NoError(t, g.Wait())
 	for i := range 4 * validatorFieldRoots {
 		require.Equal(t, [32]byte{}, roots[i])
 	}

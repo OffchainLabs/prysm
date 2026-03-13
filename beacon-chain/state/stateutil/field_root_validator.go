@@ -2,16 +2,16 @@ package stateutil
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"runtime"
-	"sync"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -54,17 +54,23 @@ func validatorRegistryRoot(validators []*ethpb.Validator) ([32]byte, error) {
 	return res, nil
 }
 
-func hashValidatorHelper(validators []*ethpb.Validator, roots [][32]byte, j int, groupSize int, wg *sync.WaitGroup) {
-	defer wg.Done()
-	for i := range groupSize {
-		fRoots, err := ValidatorFieldRoots(validators[j*groupSize+i])
-		if err != nil {
-			logrus.WithError(err).Error("Could not get validator field roots")
-			return
+func hashValidatorHelper(ctx context.Context, validators []*ethpb.Validator, roots [][32]byte, j int, groupSize int) func() error {
+	return func() error {
+		for i := range groupSize {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				fRoots, err := ValidatorFieldRoots(validators[j*groupSize+i])
+				if err != nil {
+					return errors.Wrap(err, "could not get validator field roots")
+				}
+				for k, root := range fRoots {
+					roots[(j*groupSize+i)*validatorFieldRoots+k] = root
+				}
+			}
 		}
-		for k, root := range fRoots {
-			roots[(j*groupSize+i)*validatorFieldRoots+k] = root
-		}
+		return nil
 	}
 }
 
@@ -75,14 +81,13 @@ func OptimizedValidatorRoots(validators []*ethpb.Validator) ([][32]byte, error) 
 	if len(validators) == 0 {
 		return [][32]byte{}, nil
 	}
-	wg := sync.WaitGroup{}
+	g, ctx := errgroup.WithContext(context.Background())
 	n := runtime.GOMAXPROCS(0)
 	rootsSize := len(validators) * validatorFieldRoots
 	groupSize := len(validators) / n
 	roots := make([][32]byte, rootsSize)
-	wg.Add(n - 1)
 	for j := 0; j < n-1; j++ {
-		go hashValidatorHelper(validators, roots, j, groupSize, &wg)
+		g.Go(hashValidatorHelper(ctx, validators, roots, j, groupSize))
 	}
 	for i := (n - 1) * groupSize; i < len(validators); i++ {
 		fRoots, err := ValidatorFieldRoots(validators[i])
@@ -93,7 +98,9 @@ func OptimizedValidatorRoots(validators []*ethpb.Validator) ([][32]byte, error) 
 			roots[i*validatorFieldRoots+k] = root
 		}
 	}
-	wg.Wait()
+	if err := g.Wait(); err != nil {
+		return [][32]byte{}, err
+	}
 
 	// A validator's tree can represented with a depth of 3. As log2(8) = 3
 	// Using this property we can lay out all the individual fields of a
