@@ -282,7 +282,9 @@ func TestBlockRewards(t *testing.T) {
 		st, sbb, err := BlockRewardTestSetup(t, version.Altair)
 		require.NoError(t, err)
 
-		mockChainService := &mock.ChainService{Optimistic: true}
+		blkRoot, err := sbb.Block().HashTreeRoot()
+		require.NoError(t, err)
+		mockChainService := &mock.ChainService{OptimisticRoots: map[[32]byte]bool{blkRoot: true}}
 		s := &Server{
 			Blocker: &testutil.MockBlocker{SlotBlockMap: map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock{
 				0: phase0block,
@@ -318,7 +320,9 @@ func TestBlockRewards(t *testing.T) {
 		st, sbb, err := BlockRewardTestSetup(t, version.Bellatrix)
 		require.NoError(t, err)
 
-		mockChainService := &mock.ChainService{Optimistic: true}
+		blkRoot, err := sbb.Block().HashTreeRoot()
+		require.NoError(t, err)
+		mockChainService := &mock.ChainService{OptimisticRoots: map[[32]byte]bool{blkRoot: true}}
 		s := &Server{
 			Blocker: &testutil.MockBlocker{SlotBlockMap: map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock{
 				0: phase0block,
@@ -354,7 +358,9 @@ func TestBlockRewards(t *testing.T) {
 		st, sbb, err := BlockRewardTestSetup(t, version.Capella)
 		require.NoError(t, err)
 
-		mockChainService := &mock.ChainService{Optimistic: true}
+		blkRoot, err := sbb.Block().HashTreeRoot()
+		require.NoError(t, err)
+		mockChainService := &mock.ChainService{OptimisticRoots: map[[32]byte]bool{blkRoot: true}}
 		s := &Server{
 			Blocker: &testutil.MockBlocker{SlotBlockMap: map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock{
 				0: phase0block,
@@ -390,7 +396,9 @@ func TestBlockRewards(t *testing.T) {
 		st, sbb, err := BlockRewardTestSetup(t, version.Deneb)
 		require.NoError(t, err)
 
-		mockChainService := &mock.ChainService{Optimistic: true}
+		blkRoot, err := sbb.Block().HashTreeRoot()
+		require.NoError(t, err)
+		mockChainService := &mock.ChainService{OptimisticRoots: map[[32]byte]bool{blkRoot: true}}
 		s := &Server{
 			Blocker: &testutil.MockBlocker{SlotBlockMap: map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock{
 				0: phase0block,
@@ -426,7 +434,9 @@ func TestBlockRewards(t *testing.T) {
 		st, sbb, err := BlockRewardTestSetup(t, version.Electra)
 		require.NoError(t, err)
 
-		mockChainService := &mock.ChainService{Optimistic: true}
+		blkRoot, err := sbb.Block().HashTreeRoot()
+		require.NoError(t, err)
+		mockChainService := &mock.ChainService{OptimisticRoots: map[[32]byte]bool{blkRoot: true}}
 		s := &Server{
 			Blocker: &testutil.MockBlocker{SlotBlockMap: map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock{
 				0: phase0block,
@@ -457,6 +467,40 @@ func TestBlockRewards(t *testing.T) {
 		assert.Equal(t, "7812500", resp.Data.ProposerSlashings)
 		assert.Equal(t, true, resp.ExecutionOptimistic)
 		assert.Equal(t, false, resp.Finalized)
+	})
+	t.Run("optimistic checked per block root", func(t *testing.T) {
+		st, sbb, err := BlockRewardTestSetup(t, version.Altair)
+		require.NoError(t, err)
+
+		blkRoot, err := sbb.Block().HashTreeRoot()
+		require.NoError(t, err)
+		// Block root is NOT in the optimistic set, so ExecutionOptimistic should be false.
+		mockChainService := &mock.ChainService{Optimistic: true}
+		s := &Server{
+			Blocker: &testutil.MockBlocker{SlotBlockMap: map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock{
+				0: phase0block,
+				2: sbb,
+			}},
+			OptimisticModeFetcher: mockChainService,
+			FinalizationFetcher:   mockChainService,
+			BlockRewardFetcher: &BlockRewardService{
+				Replayer: mockstategen.NewReplayerBuilder(mockstategen.WithMockState(st)),
+				DB:       db,
+			},
+		}
+
+		url := "http://only.the.slot.number.at.the.end.is.important/2"
+		request := httptest.NewRequest("GET", url, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.BlockRewards(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.BlockRewardsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, false, resp.ExecutionOptimistic)
+		// Verify the correct block root was passed to IsOptimisticForRoot.
+		assert.Equal(t, blkRoot, mockChainService.OptimisticCheckRootReceived)
 	})
 }
 
