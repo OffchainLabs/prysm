@@ -1,6 +1,7 @@
 package initialsync
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sort"
@@ -126,12 +127,14 @@ type fetchRequestParams struct {
 // fetchRequestResponse is a combined type to hold results of both successful executions and errors.
 // Valid usage pattern will be to check whether result's `err` is nil, before using `blocks`.
 type fetchRequestResponse struct {
-	blocksFrom peer.ID
-	blobsFrom  peer.ID
-	start      primitives.Slot
-	count      uint64
-	bwb        []blocks.BlockWithROSidecars
-	err        error
+	blocksFrom   peer.ID
+	blobsFrom    peer.ID
+	payloadsFrom peer.ID
+	start        primitives.Slot
+	count        uint64
+	bwb          []blocks.BlockWithROSidecars
+	envelopes    []interfaces.ROSignedExecutionPayloadEnvelope
+	err          error
 }
 
 func (r *fetchRequestResponse) blocksQueueFetchedData() *blocksQueueFetchedData {
@@ -139,6 +142,7 @@ func (r *fetchRequestResponse) blocksQueueFetchedData() *blocksQueueFetchedData 
 		blocksFrom: r.blocksFrom,
 		blobsFrom:  r.blobsFrom,
 		bwb:        r.bwb,
+		envelopes:  r.envelopes,
 	}
 }
 
@@ -302,10 +306,11 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 	defer span.End()
 
 	response := &fetchRequestResponse{
-		start: start,
-		count: count,
-		bwb:   []blocks.BlockWithROSidecars{},
-		err:   nil,
+		start:     start,
+		count:     count,
+		bwb:       []blocks.BlockWithROSidecars{},
+		envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{},
+		err:       nil,
 	}
 
 	if ctx.Err() != nil {
@@ -332,18 +337,211 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 		}
 	}
 
-	response.bwb, response.blocksFrom, response.err = f.fetchBlocksFromPeer(ctx, start, count, peers)
-	if response.err == nil {
-		pid, err := f.fetchSidecars(ctx, response.blocksFrom, peers, response.bwb)
-		if err != nil {
-			log.WithError(err).Error("Failed to fetch sidecars")
-			response.err = err
-		}
+	f.fetchBlocksFromPeer(ctx, response, peers)
+	if response.err != nil {
+		log.WithError(response.err).Error("Failed to fetch blocks")
+		return response
+	}
+	f.fetchSidecars(ctx, response, peers)
+	if response.err != nil {
+		log.WithError(response.err).Error("Failed to fetch sidecars")
+		return response
+	}
+	f.fetchPayloads(ctx, response, peers)
+	if response.err != nil {
+		log.WithError(response.err).Error("Failed to fetch payloads")
+	}
+	return response
+}
 
-		response.blobsFrom = pid
+// checkAllBlocksBuildOnEmpty verifies that all the passed blocks build on top of the empty block
+// It ignores the first block in the slice
+func checkAllBlocksBuildOnEmpty(blocks []blocks.BlockWithROSidecars) error {
+	b := blocks[0].Block
+	s, err := b.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return errors.Wrap(err, "get execution payload bid from block")
+	}
+	firstBid := s.Message
+	for i := 1; i < len(blocks); i++ {
+		next := blocks[i].Block
+		if next.Block().ParentRoot() != b.Root() {
+			return fmt.Errorf("block with root %#x does not descend from %#x", next.Root(), b.Root())
+		}
+		nextSignedBid, err := next.Block().Body().SignedExecutionPayloadBid()
+		if err != nil {
+			return errors.Wrap(err, "get execution payload bid from block")
+		}
+		if !bytes.Equal(nextSignedBid.Message.ParentBlockHash, firstBid.ParentBlockHash) {
+			return fmt.Errorf("block with root %#x does not build on top of the empty block", next.Root())
+		}
+		b = next
+	}
+	return nil
+}
+
+// validatePayloadBlockConsistency checks that the envelopes slice correponds to the blocks slice in
+// the peers responses. If they were given by the same peer then we also penalize the peer if they are
+// not consistent.
+func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse) {
+	if len(r.envelopes) == 0 {
+		if err := checkAllBlocksBuildOnEmpty(r.bwb); err != nil {
+			r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
+			if r.blocksFrom == r.payloadsFrom {
+				f.downscorePeer(r.blocksFrom, r.err)
+			}
+		}
+		return
 	}
 
-	return response
+	full, err := blocks.BlockBuiltOnEnvelope(r.envelopes[0], r.bwb[0].Block)
+	if err != nil {
+		r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
+		return
+	}
+	pidx := 0
+	if full {
+		pidx = 1
+	}
+	bh, err := r.bwb[0].Block.ParentHash()
+	if err != nil {
+		r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
+		f.downscorePeer(r.blocksFrom, r.err)
+		return
+	}
+	for i, b := range r.bwb[1:] {
+		nh, err := b.Block.ParentHash()
+		if err != nil {
+			r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
+			f.downscorePeer(r.blocksFrom, r.err)
+			return
+		}
+		if nh == bh {
+			continue
+		}
+		if pidx >= len(r.envelopes) {
+			log.Debug("Not enough envelopes corresponding to blocks, truncating the block batch")
+			r.bwb = r.bwb[:i+1]
+			return
+		}
+		env := r.envelopes[pidx]
+		full, err := blocks.BlockBuiltOnEnvelope(env, b.Block)
+		if err != nil || !full {
+			r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, "envelope does not match block")
+			if r.blocksFrom == r.payloadsFrom {
+				f.downscorePeer(r.blocksFrom, r.err)
+			}
+			return
+		}
+		bh = nh
+		pidx++
+	}
+	if pidx < len(r.envelopes) {
+		// Check if the next envelope belongs to the last block in the batch.
+		lastBlock := r.bwb[len(r.bwb)-1]
+		env, err := r.envelopes[pidx].Envelope()
+		if err == nil && env.BeaconBlockRoot() == lastBlock.Block.Root() {
+			r.envelopes = r.envelopes[:pidx+1]
+		} else {
+			log.Debug("Not enough blocks in batch, truncating envelopes")
+			r.envelopes = r.envelopes[:pidx]
+		}
+	}
+}
+
+// fetchPayloads fetches execution payload envelopes correponding to blocks in
+// `response.bwb`.
+// `pid` is the initial peer to request payload from (usually the peer from which the block originated).
+// `peers` is a list of peers to use for the request payloads if `pid` fails.
+// `r.bwb` must be sorted by slot.
+func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestResponse, peers []peer.ID) {
+	if len(r.bwb) == 0 {
+		r.payloadsFrom = ""
+		return
+	}
+
+	firstGloasIndex, err := findFirstForkIndex(r.bwb, version.Gloas)
+	if err != nil {
+		r.err = errors.Wrap(err, "find first Gloas index")
+		r.payloadsFrom = ""
+		return
+	}
+	if firstGloasIndex == len(r.bwb) {
+		r.payloadsFrom = ""
+		return
+	}
+	if firstGloasIndex > 0 {
+		// We leave the first Gloas block so that the post-state is a post-CL state.
+		log.Debug("Batch across the Fulu/Gloas fork, truncating it")
+		r.bwb = r.bwb[:firstGloasIndex+1]
+		r.payloadsFrom = ""
+		return
+	}
+
+	// The whole block batch is gloas
+	start := r.start
+	if start > 0 {
+		start--
+	}
+	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, r.count, r.blocksFrom, peers)
+	if err != nil {
+		r.err = errors.Wrap(err, "fetch payload envelopes from peer")
+		r.payloadsFrom = ""
+		return
+	}
+	r.envelopes = envelopes
+	r.payloadsFrom = pid
+	f.validatePayloadBlockConsistency(r)
+}
+
+// fetchPayloadEnvelopesFromPeer fetches execution payload envelopes by range,
+// trying pid first, then falling back to other peers.
+func (f *blocksFetcher) fetchPayloadEnvelopesFromPeer(
+	ctx context.Context,
+	start primitives.Slot,
+	count uint64,
+	pid peer.ID,
+	peers []peer.ID,
+) ([]interfaces.ROSignedExecutionPayloadEnvelope, peer.ID, error) {
+	ctx, span := trace.StartSpan(ctx, "initialsync.fetchPayloadEnvelopesFromPeer")
+	defer span.End()
+
+	req := &p2ppb.ExecutionPayloadEnvelopesByRangeRequest{
+		StartSlot: start,
+		Count:     count,
+	}
+	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
+	// Try the block provider first, then best bandwidth peers, then the rest.
+	peers = append([]peer.ID{pid}, peers...)
+	bestPeers := f.hasSufficientBandwidth(peers, req.Count)
+	peers = append(bestPeers, peers...)
+	peers = dedupPeers(peers)
+	for _, p := range peers {
+		envelopes, err := prysmsync.SendExecutionPayloadEnvelopesByRangeRequest(ctx, f.clock, f.p2p, p, f.ctxMap, req)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"peer":      p,
+				"startSlot": req.StartSlot,
+				"count":     req.Count,
+			}).WithError(err).Debug("Could not request payload envelopes by range from peer")
+			if errors.Is(err, prysmsync.ErrInvalidFetchedData) {
+				f.downscorePeer(p, err)
+			}
+			continue
+		}
+		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
+		roEnvelopes := make([]interfaces.ROSignedExecutionPayloadEnvelope, len(envelopes))
+		for i, env := range envelopes {
+			wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
+			if err != nil {
+				log.WithField("peer", p).WithError(err).Debug("Invalid payload envelope in response")
+				continue
+			}
+			roEnvelopes[i] = wrapped
+		}
+		return roEnvelopes, p, nil
+	}
+	return nil, "", errNoPeersAvailable
 }
 
 // fetchSidecars fetches sidecars corresponding to blocks in `response.bwb`.
@@ -351,46 +549,54 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start primitives.Slot
 // `pid` is the initial peer to request blob from (usually the peer from which the block originated),
 // `peers` is a list of peers to use for the request blobs if `pid` fails.
 // `bwScs` must me sorted by slot.
-// It returns the peer ID from which blobs were fetched (if any).
-func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []peer.ID, bwScs []blocks.BlockWithROSidecars) (peer.ID, error) {
+// It sets r.blobsFrom to the peer ID from which blobs were fetched (if any).
+func (f *blocksFetcher) fetchSidecars(ctx context.Context, r *fetchRequestResponse, peers []peer.ID) {
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
-	if len(bwScs) == 0 {
-		return "", nil
+	if len(r.bwb) == 0 {
+		r.blobsFrom = ""
+		return
 	}
 
-	firstFuluIndex, err := findFirstFuluIndex(bwScs)
+	firstFuluIndex, err := findFirstForkIndex(r.bwb, version.Fulu)
 	if err != nil {
-		return "", errors.Wrap(err, "find first Fulu index")
+		r.err = errors.Wrap(err, "find first Fulu index")
+		r.blobsFrom = ""
+		return
 	}
 
-	preFulu := bwScs[:firstFuluIndex]
-	postFulu := bwScs[firstFuluIndex:]
+	preFulu := r.bwb[:firstFuluIndex]
+	postFulu := r.bwb[firstFuluIndex:]
 
 	var blobsPid peer.ID
 
 	if len(preFulu) > 0 {
-		// Fetch blob sidecars.
-		blobsPid, err = f.fetchBlobsFromPeer(ctx, preFulu, pid, peers)
+		// Fetch blob sidecars. Try first with the same peer that served the blocks.
+		blobsPid, err = f.fetchBlobsFromPeer(ctx, preFulu, r.blocksFrom, peers)
 		if err != nil {
-			return "", errors.Wrap(err, "fetch blobs from peer")
+			r.blobsFrom = ""
+			r.err = errors.Wrap(err, "fetch blobs from peer")
+			return
 		}
 	}
 
+	r.blobsFrom = blobsPid
 	if len(postFulu) == 0 {
-		return blobsPid, nil
+		return
 	}
 
 	// Compute the columns to request.
 	custodyGroupCount, err := f.p2p.CustodyGroupCount(ctx)
 	if err != nil {
-		return blobsPid, errors.Wrap(err, "custody group count")
+		r.err = errors.Wrap(err, "custody group count")
+		return
 	}
 
 	samplingSize := max(custodyGroupCount, samplesPerSlot)
 	info, _, err := peerdas.Info(f.p2p.NodeID(), samplingSize)
 	if err != nil {
-		return blobsPid, errors.Wrap(err, "custody info")
+		r.err = errors.Wrap(err, "custody info")
+		return
 	}
 
 	currentSlot := f.clock.CurrentSlot()
@@ -408,10 +614,10 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 
 	// Return early if there are no blocks that need data column sidecars.
 	if len(roBlocks) == 0 {
-		return blobsPid, nil
+		return
 	}
 
-	// Some blocks neesd data column sidecars, fetch them.
+	// Some blocks need data column sidecars, fetch them.
 	params := prysmsync.DataColumnSidecarsParams{
 		Ctx:         ctx,
 		Tor:         f.clock,
@@ -424,7 +630,9 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 
 	verifiedRoDataColumnsByRoot, missingIndicesByRoot, err := prysmsync.FetchDataColumnSidecars(params, roBlocks, info.CustodyColumns)
 	if err != nil {
-		return "", errors.Wrap(err, "fetch data column sidecars")
+		r.blobsFrom = ""
+		r.err = errors.Wrap(err, "fetch data column sidecars")
+		return
 	}
 
 	if len(missingIndicesByRoot) > 0 {
@@ -432,34 +640,34 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 		for root, indices := range missingIndicesByRoot {
 			prettyMissingIndicesByRoot[fmt.Sprintf("%#x", root)] = helpers.SortedPrettySliceFromMap(indices)
 		}
-		return "", errors.Errorf("some sidecars are still missing after fetch: %v", prettyMissingIndicesByRoot)
+		r.blobsFrom = ""
+		r.err = errors.Errorf("some sidecars are still missing after fetch: %v", prettyMissingIndicesByRoot)
+		return
 	}
 
 	// Populate the response.
-	for i := range bwScs {
-		bwSc := &bwScs[i]
+	for i := range r.bwb {
+		bwSc := &r.bwb[i]
 		root := bwSc.Block.Root()
 		if columns, ok := verifiedRoDataColumnsByRoot[root]; ok {
 			bwSc.Columns = columns
 		}
 	}
-
-	return blobsPid, nil
 }
 
 // fetchBlocksFromPeer fetches blocks from a single randomly selected peer, sorted by slot.
 func (f *blocksFetcher) fetchBlocksFromPeer(
 	ctx context.Context,
-	start primitives.Slot, count uint64,
+	r *fetchRequestResponse,
 	peers []peer.ID,
-) ([]blocks.BlockWithROSidecars, peer.ID, error) {
+) {
 	ctx, span := trace.StartSpan(ctx, "initialsync.fetchBlocksFromPeer")
 	defer span.End()
 
 	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
 	req := &p2ppb.BeaconBlocksByRangeRequest{
-		StartSlot: start,
-		Count:     count,
+		StartSlot: r.start,
+		Count:     r.count,
 		Step:      1,
 	}
 	bestPeers := f.hasSufficientBandwidth(peers, req.Count)
@@ -487,16 +695,22 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 			log.WithField("peer", p).WithError(err).Debug("Invalid BeaconBlocksByRange response")
 			continue
 		}
+		r.blocksFrom = p
 		if len(features.Get().BlacklistedRoots) > 0 {
 			for _, b := range robs {
 				if features.BlacklistedBlock(b.Block.Root()) {
-					return nil, p, prysmsync.ErrInvalidFetchedData
+					r.err = prysmsync.ErrInvalidFetchedData
+					return
 				}
 			}
 		}
-		return robs, p, err
+		r.bwb = robs
+		r.err = err
+		return
 	}
-	return nil, "", errNoPeersAvailable
+	r.err = errNoPeersAvailable
+	r.blocksFrom = ""
+	return
 }
 
 func sortedBlockWithVerifiedBlobSlice(blks []interfaces.ReadOnlySignedBeaconBlock) ([]blocks.BlockWithROSidecars, error) {
@@ -894,22 +1108,21 @@ func (f *blocksFetcher) downscorePeer(peerID peer.ID, reason error) {
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
 
-// findFirstFuluIndex returns the index of the first block with a version >= Fulu.
-// It returns an error if blocks are not correctly sorted by version regarding Fulu.
-func findFirstFuluIndex(bwScs []blocks.BlockWithROSidecars) (int, error) {
-	firstFuluIndex := len(bwScs)
+// findFirstForkIndex returns the index of the first block with a version >= v.
+func findFirstForkIndex(b []blocks.BlockWithROSidecars, v int) (int, error) {
+	firstForkIndex := len(b)
 
-	for i, bwSc := range bwScs {
+	for i, bwSc := range b {
 		blockVersion := bwSc.Block.Version()
-		if blockVersion >= version.Fulu && firstFuluIndex > i {
-			firstFuluIndex = i
+		if blockVersion >= v && firstForkIndex > i {
+			firstForkIndex = i
 			continue
 		}
 
-		if blockVersion < version.Fulu && firstFuluIndex <= i {
+		if blockVersion < v && firstForkIndex <= i {
 			return 0, errors.New("blocks are not sorted by version")
 		}
 	}
 
-	return firstFuluIndex, nil
+	return firstForkIndex, nil
 }
