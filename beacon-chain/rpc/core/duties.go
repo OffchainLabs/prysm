@@ -48,6 +48,7 @@ type SyncCommitteeDutyResult struct {
 
 // PTCDutyResult is a transport-agnostic representation of a PTC duty.
 type PTCDutyResult struct {
+	Pubkey         [fieldparams.BLSPubkeyLength]byte
 	ValidatorIndex primitives.ValidatorIndex
 	Slot           primitives.Slot
 }
@@ -232,6 +233,7 @@ func (s *Service) PTCDuties(ctx context.Context, st state.BeaconState, epoch pri
 			}
 			seen[idx] = true
 			duties = append(duties, &PTCDutyResult{
+				Pubkey:         st.PubkeyAtIndex(idx),
 				ValidatorIndex: idx,
 				Slot:           slot,
 			})
