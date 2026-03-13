@@ -60,14 +60,20 @@ func (s *Service) validateExecutionPayloadBidParentSeen(_ context.Context, blk i
 	return pubsub.ValidationIgnore, errors.New("parent payload not yet available")
 }
 
-// validateExecutionPayloadBidParentValid validates parent payload verification status.
-// If execution_payload verification of block's execution payload parent by an execution node is complete:
-// [REJECT] The block's execution payload parent (defined by bid.parent_block_hash) passes all validation.
+// validateExecutionPayloadBidParentValid validates cached parent payload
+// verification status for a block's parent root.
+// Reject If prior execution payload verification marked the parent root
+// (defined by bid.parent_block_hash) as invalid.
+//
+// A good payload root overrides a bad one to handle builder equivocation:
+// if a bad envelope was seen first but a valid one was processed later,
+// the block is accepted.
 func (s *Service) validateExecutionPayloadBidParentValid(_ context.Context, blk interfaces.ReadOnlyBeaconBlock) (pubsub.ValidationResult, error) {
 	if blk.Version() < version.Gloas {
 		return pubsub.ValidationAccept, nil
 	}
-	if s.hasBadPayload(blk.ParentRoot()) {
+	parentRoot := blk.ParentRoot()
+	if s.hasBadPayloadRoot(parentRoot) {
 		return pubsub.ValidationReject, errors.New("parent payload is invalid")
 	}
 	return pubsub.ValidationAccept, nil
@@ -96,6 +102,15 @@ func (s *Service) requestPayloadEnvelope(root [32]byte) {
 		log.Warn("Multiple payload envelopes returned by peer, expected at most one")
 	}
 	for _, env := range envelopes {
+		envelopeHTR, err := env.HashTreeRoot()
+		if err != nil {
+			log.WithError(err).Debug("Could not compute envelope HTR")
+			continue
+		}
+		if s.hasBadPayload(envelopeHTR) {
+			log.Debug("Skipping known bad payload envelope")
+			continue
+		}
 		wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(env)
 		if err != nil {
 			log.WithError(err).Debug("Could not wrap requested payload envelope")
@@ -103,9 +118,12 @@ func (s *Service) requestPayloadEnvelope(root [32]byte) {
 		}
 		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
 			if blockchain.IsInvalidBlock(err) {
-				s.setBadPayload(s.ctx, root)
+				s.setBadPayload(s.ctx, envelopeHTR)
+				s.setBadPayloadRoot(s.ctx, root)
 			}
 			log.WithError(err).Debug("Could not process requested payload envelope")
+		} else if s.cfg.chain.HasFullNode(root) {
+			s.setGoodPayloadRoot(s.ctx, root)
 		}
 	}
 }

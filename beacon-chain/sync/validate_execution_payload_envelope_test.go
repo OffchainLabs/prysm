@@ -150,6 +150,50 @@ func TestExecutionPayloadEnvelopeSubscriber_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestExecutionPayloadEnvelopeSubscriber_NoGoodRootWithoutFullNode verifies
+// that setGoodPayloadRoot is NOT called when ReceiveExecutionPayloadEnvelope
+// returns nil but HasFullNode is false (the errBlockBeingSynced early-return).
+func TestExecutionPayloadEnvelopeSubscriber_NoGoodRootWithoutFullNode(t *testing.T) {
+	root := [32]byte{0x01}
+	blockHash := [32]byte{0x02}
+
+	// HasFullNode returns false by default (no ForkchoiceRoots set).
+	s := &Service{
+		cfg:                  &config{chain: &mock.ChainService{}},
+		goodPayloadRootCache: lruwrpr.New(10),
+	}
+	env := testSignedExecutionPayloadEnvelope(t, 1, 2, root, blockHash)
+
+	err := s.executionPayloadEnvelopeSubscriber(context.Background(), env)
+	require.NoError(t, err)
+
+	// Good root must NOT be set because HasFullNode is false.
+	_, found := s.goodPayloadRootCache.Get(string(root[:]))
+	require.Equal(t, false, found, "goodPayloadRootCache should not be populated when HasFullNode is false")
+}
+
+// TestExecutionPayloadEnvelopeSubscriber_GoodRootWithFullNode verifies
+// that setGoodPayloadRoot IS called when processing succeeds and HasFullNode is true.
+func TestExecutionPayloadEnvelopeSubscriber_GoodRootWithFullNode(t *testing.T) {
+	root := [32]byte{0x01}
+	blockHash := [32]byte{0x02}
+
+	s := &Service{
+		cfg: &config{chain: &mock.ChainService{
+			ForkchoiceRoots: map[[32]byte]bool{root: true},
+		}},
+		goodPayloadRootCache: lruwrpr.New(10),
+	}
+	env := testSignedExecutionPayloadEnvelope(t, 1, 2, root, blockHash)
+
+	err := s.executionPayloadEnvelopeSubscriber(context.Background(), env)
+	require.NoError(t, err)
+
+	// Good root must be set because HasFullNode is true.
+	_, found := s.goodPayloadRootCache.Get(string(root[:]))
+	require.Equal(t, true, found, "goodPayloadRootCache should be populated when HasFullNode is true")
+}
+
 type mockExecutionPayloadEnvelopeVerifier struct {
 	errBlockRootSeen      error
 	errBlockRootValid     error

@@ -130,7 +130,6 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	if res, err := s.validateExecutionPayloadBidParentValid(ctx, blk.Block()); err != nil {
 		return res, err
 	}
-
 	s.pendingQueueLock.RLock()
 	if s.seenPendingBlocks[blockRoot] {
 		s.pendingQueueLock.RUnlock()
@@ -519,23 +518,79 @@ func (s *Service) hasBadBlock(root [32]byte) bool {
 	return seen
 }
 
-// Returns true if the payload for the given block root is marked as bad.
-func (s *Service) hasBadPayload(root [32]byte) bool {
+// hasBadPayload returns true if the signed execution payload envelope
+// identified by its hash tree root has been marked as invalid.
+func (s *Service) hasBadPayload(envelopeHTR [32]byte) bool {
+	if s.badPayloadCache == nil {
+		return false
+	}
 	s.badPayloadLock.RLock()
 	defer s.badPayloadLock.RUnlock()
-	_, seen := s.badPayloadCache.Get(string(root[:]))
+	_, seen := s.badPayloadCache.Get(string(envelopeHTR[:]))
 	return seen
 }
 
-// Set bad payload in the cache.
-func (s *Service) setBadPayload(ctx context.Context, root [32]byte) {
+// setBadPayload marks a signed execution payload envelope as invalid, keyed
+// by the envelope's hash tree root. Keying by envelope HTR (rather than block
+// root) prevents builder equivocation from poisoning valid envelopes that
+// share the same beacon block root.
+func (s *Service) setBadPayload(ctx context.Context, envelopeHTR [32]byte) {
+	if s.badPayloadCache == nil {
+		return
+	}
 	s.badPayloadLock.Lock()
 	defer s.badPayloadLock.Unlock()
 	if ctx.Err() != nil {
 		return
 	}
-	log.WithField("root", fmt.Sprintf("%#x", root)).Debug("Inserting in invalid payload cache")
-	s.badPayloadCache.Add(string(root[:]), true)
+	log.WithField("envelopeHTR", fmt.Sprintf("%#x", envelopeHTR)).Debug("Inserting in invalid payload cache")
+	s.badPayloadCache.Add(string(envelopeHTR[:]), true)
+}
+
+// hasBadPayloadRoot returns true if a payload for the given block root has been
+// marked as invalid AND no valid payload has since been processed for that root.
+func (s *Service) hasBadPayloadRoot(root [32]byte) bool {
+	if s.goodPayloadRootCache == nil || s.badPayloadRootCache == nil {
+		return false
+	}
+	s.goodPayloadRootLock.RLock()
+	_, good := s.goodPayloadRootCache.Get(string(root[:]))
+	s.goodPayloadRootLock.RUnlock()
+	if good {
+		return false
+	}
+	s.badPayloadRootLock.RLock()
+	defer s.badPayloadRootLock.RUnlock()
+	_, bad := s.badPayloadRootCache.Get(string(root[:]))
+	return bad
+}
+
+// setBadPayloadRoot marks a block root as having an invalid payload.
+func (s *Service) setBadPayloadRoot(ctx context.Context, root [32]byte) {
+	if s.badPayloadRootCache == nil {
+		return
+	}
+	s.badPayloadRootLock.Lock()
+	defer s.badPayloadRootLock.Unlock()
+	if ctx.Err() != nil {
+		return
+	}
+	s.badPayloadRootCache.Add(string(root[:]), true)
+}
+
+// setGoodPayloadRoot marks a block root as having a valid payload, overriding
+// any previous bad marking. This handles builder equivocation where a bad
+// envelope arrives before a good one for the same block.
+func (s *Service) setGoodPayloadRoot(ctx context.Context, root [32]byte) {
+	if s.goodPayloadRootCache == nil {
+		return
+	}
+	s.goodPayloadRootLock.Lock()
+	defer s.goodPayloadRootLock.Unlock()
+	if ctx.Err() != nil {
+		return
+	}
+	s.goodPayloadRootCache.Add(string(root[:]), true)
 }
 
 // Set bad block in the cache.
