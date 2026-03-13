@@ -149,6 +149,49 @@ func toValidatorDutyV2(duty *ethpb.DutiesV2Response_Duty) (*ethpb.ValidatorDuty,
 	}, nil
 }
 
+func (c *grpcValidatorClient) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.AttesterDutiesResponse, error) {
+	resp, err := c.getClient().GetAttesterDuties(ctx, &ethpb.AttesterDutiesRequest{
+		Epoch:            epoch,
+		ValidatorIndices: validatorIndices,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "GetAttesterDuties")
+	}
+	return resp, nil
+}
+
+func (c *grpcValidatorClient) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*ethpb.ProposerDutiesResponse, error) {
+	resp, err := c.getClient().GetProposerDutiesV2(ctx, &ethpb.ProposerDutiesRequest{
+		Epoch: epoch,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "GetProposerDutiesV2")
+	}
+	return resp, nil
+}
+
+func (c *grpcValidatorClient) SyncCommitteeDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.SyncCommitteeDutiesResponse, error) {
+	resp, err := c.getClient().GetSyncCommitteeDuties(ctx, &ethpb.SyncCommitteeDutiesRequest{
+		Epoch:            epoch,
+		ValidatorIndices: validatorIndices,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "GetSyncCommitteeDuties")
+	}
+	return resp, nil
+}
+
+func (c *grpcValidatorClient) PTCDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.PTCDutiesResponse, error) {
+	resp, err := c.getClient().GetPTCDuties(ctx, &ethpb.PTCDutiesRequest{
+		Epoch:            epoch,
+		ValidatorIndices: validatorIndices,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "GetPTCDuties")
+	}
+	return resp, nil
+}
+
 func (c *grpcValidatorClient) CheckDoppelGanger(ctx context.Context, in *ethpb.DoppelGangerRequest) (*ethpb.DoppelGangerResponse, error) {
 	return c.getClient().CheckDoppelGanger(ctx, in)
 }

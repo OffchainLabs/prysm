@@ -234,6 +234,25 @@ var (
 			Help: "The maximum number of blobs allowed in a block.",
 		},
 	)
+	beaconExecutionPayloadEnvelopeValidTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_execution_payload_envelope_valid_total",
+		Help: "Count the number of execution payload envelopes that were processed successfully.",
+	})
+	beaconExecutionPayloadEnvelopeInvalidTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_execution_payload_envelope_invalid_total",
+		Help: "Count the number of execution payload envelopes that failed processing.",
+	})
+	beaconExecutionPayloadEnvelopeProcessingDurationSeconds = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "beacon_execution_payload_envelope_processing_duration_seconds",
+			Help:    "Captures end-to-end processing time for execution payload envelopes.",
+			Buckets: prometheus.DefBuckets,
+		},
+	)
+	beaconLatePayloadTaskTriggeredTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_late_payload_task_triggered_total",
+		Help: "Count the number of times late payload tasks fired.",
+	})
 )
 
 // reportSlotMetrics reports slot related metrics.
