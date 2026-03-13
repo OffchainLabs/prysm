@@ -215,7 +215,7 @@ func (s *Service) notifyNewEnvelopeFromBlock(ctx context.Context, b blocks.ROBlo
 	parentRoot := common.Hash(b.Block().ParentRoot())
 	requests := envelope.ExecutionRequests()
 
-	_, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests, envelope.Slot())
+	_, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)
 	if err == nil {
 		return true, nil
 	}
