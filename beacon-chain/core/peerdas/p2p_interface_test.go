@@ -89,6 +89,12 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 		err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
 		require.NoError(t, err)
 	})
+
+	t.Run("with commitments", func(t *testing.T) {
+		sidecars := generateRandomSidecars(t, seed, blobCount)
+		err := peerdas.VerifyDataColumnsSidecarKZGProofsWithCommitments(sidecars, sidecarCommitments(sidecars))
+		require.NoError(t, err)
+	})
 }
 
 func Test_VerifyKZGInclusionProofColumn(t *testing.T) {
@@ -346,6 +352,14 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch4(b *testing
 			require.NoError(b, err)
 		}
 	}
+}
+
+func sidecarCommitments(sidecars []blocks.RODataColumn) [][][]byte {
+	commitmentsBySidecar := make([][][]byte, len(sidecars))
+	for i := range sidecars {
+		commitmentsBySidecar[i] = sidecars[i].KzgCommitments
+	}
+	return commitmentsBySidecar
 }
 
 func createTestSidecar(t *testing.T, index uint64, column, kzgCommitments, kzgProofs [][]byte) blocks.RODataColumn {
