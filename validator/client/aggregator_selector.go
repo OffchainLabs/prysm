@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
@@ -186,9 +187,11 @@ func (p *localSelector) SyncCommitteeSelectionProofs(ctx context.Context, slot p
 
 // distributedSelector coordinates with DVT middleware for selection proofs.
 type distributedSelector struct {
-	v             *validator
-	attSelLock    sync.Mutex
-	attSelections map[attSelectionKey]iface.BeaconCommitteeSelection
+	v              *validator
+	attSelLock     sync.Mutex
+	attSelections  map[attSelectionKey]iface.BeaconCommitteeSelection
+	refreshedEpoch primitives.Epoch
+	hasRefreshed   bool
 }
 
 func newDistributedSelector(v *validator) *distributedSelector {
@@ -199,20 +202,33 @@ func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context) error 
 	ctx, span := trace.StartSpan(ctx, "distributedSelector.RefreshSelectionProofs")
 	defer span.End()
 
+	epoch := slots.ToEpoch(slots.CurrentSlot(p.v.genesisTime))
+	p.attSelLock.Lock()
+	if p.hasRefreshed && p.refreshedEpoch == epoch {
+		p.attSelLock.Unlock()
+		return nil
+	}
+	p.attSelLock.Unlock()
+
 	var req []iface.BeaconCommitteeSelection
-	for pk, duty := range p.v.duties.CurrentEpochDuties() {
-		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
-			continue
+	for _, duties := range []map[pubkey]*ethpb.ValidatorDuty{
+		p.v.duties.CurrentEpochDuties(),
+		p.v.duties.NextEpochDuties(),
+	} {
+		for pk, duty := range duties {
+			if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
+				continue
+			}
+			slotSig, err := p.v.signSlotWithSelectionProof(ctx, pk, duty.AttesterSlot)
+			if err != nil {
+				return err
+			}
+			req = append(req, iface.BeaconCommitteeSelection{
+				SelectionProof: slotSig,
+				Slot:           duty.AttesterSlot,
+				ValidatorIndex: duty.ValidatorIndex,
+			})
 		}
-		slotSig, err := p.v.signSlotWithSelectionProof(ctx, pk, duty.AttesterSlot)
-		if err != nil {
-			return err
-		}
-		req = append(req, iface.BeaconCommitteeSelection{
-			SelectionProof: slotSig,
-			Slot:           duty.AttesterSlot,
-			ValidatorIndex: duty.ValidatorIndex,
-		})
 	}
 
 	resp, err := p.v.validatorClient.AggregatedSelections(ctx, req)
@@ -230,6 +246,8 @@ func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context) error 
 
 	p.attSelLock.Lock()
 	p.attSelections = newSelections
+	p.refreshedEpoch = epoch
+	p.hasRefreshed = true
 	p.attSelLock.Unlock()
 
 	return nil
@@ -274,21 +292,27 @@ func (p *distributedSelector) SyncCommitteeSelectionProofs(ctx context.Context, 
 		return nil, err
 	}
 
-	selectionProofs := make([][]byte, len(indexRes.Indices))
-	selections := make([]iface.SyncCommitteeSelection, len(indexRes.Indices))
-	for i, index := range indexRes.Indices {
+	// Deduplicate by subnet — multiple committee positions can map to the same subnet,
+	// and signing the same (pubKey, subnet, slot) tuple twice sends duplicate partial
+	// signatures to the DVT middleware.
+	subnetProof := make(map[uint64][]byte)
+	var selections []iface.SyncCommitteeSelection
+	for _, index := range indexRes.Indices {
 		subnet := syncSubnet(uint64(index))
+		if _, ok := subnetProof[subnet]; ok {
+			continue
+		}
 		sig, err := p.v.signSyncSelectionData(ctx, pubKey, subnet, slot)
 		if err != nil {
 			return nil, err
 		}
-		selectionProofs[i] = sig
-		selections[i] = iface.SyncCommitteeSelection{
+		subnetProof[subnet] = sig
+		selections = append(selections, iface.SyncCommitteeSelection{
 			SelectionProof:    sig,
 			Slot:              slot,
 			SubcommitteeIndex: primitives.CommitteeIndex(subnet),
 			ValidatorIndex:    idx,
-		}
+		})
 	}
 
 	if len(selections) > 0 {
@@ -300,9 +324,14 @@ func (p *distributedSelector) SyncCommitteeSelectionProofs(ctx context.Context, 
 			return nil, errors.Errorf("aggregated sync selections length mismatch: got %d, want %d", len(aggregated), len(selections))
 		}
 		for i, s := range aggregated {
-			selectionProofs[i] = s.SelectionProof
+			subnetProof[uint64(selections[i].SubcommitteeIndex)] = s.SelectionProof
 		}
 	}
 
-	return selectionProofs, nil
+	// Map each committee index back to its subnet's aggregated proof.
+	proofs := make([][]byte, len(indexRes.Indices))
+	for i, index := range indexRes.Indices {
+		proofs[i] = subnetProof[syncSubnet(uint64(index))]
+	}
+	return proofs, nil
 }

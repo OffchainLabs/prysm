@@ -266,7 +266,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 	).Return(
 		&ethpb.DomainResponse{SignatureDomain: sigDomain},
 		nil, /*err*/
-	)
+	).Times(2) // Once for current epoch duty, once for next epoch duty.
 
 	client.EXPECT().AggregatedSelections(
 		gomock.Any(),
