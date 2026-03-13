@@ -132,7 +132,7 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 		attCurr, attNext   *ethpb.AttesterDutiesResponse
 		propCurr, propNext *ethpb.ProposerDutiesResponse
 		syncCurr, syncNext *ethpb.SyncCommitteeDutiesResponse
-		ptcCurr, ptcNext   *ethpb.PtcDutiesResponse
+		ptcCurr, ptcNext   *ethpb.PTCDutiesResponse
 		attErr, propErr    error
 		syncErr, ptcErr    error
 		wg                 sync.WaitGroup
@@ -364,7 +364,7 @@ func (v *validator) fetchSyncDuties(
 // PTC duties are only available from the Gloas fork onwards.
 func (v *validator) fetchPtcDuties(
 	ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex,
-) (current, next *ethpb.PtcDutiesResponse, err error) {
+) (current, next *ethpb.PTCDutiesResponse, err error) {
 	if epoch < params.BeaconConfig().GloasForkEpoch {
 		return nil, nil, nil
 	}
@@ -374,10 +374,10 @@ func (v *validator) fetchPtcDuties(
 		wg               sync.WaitGroup
 	)
 	wg.Go(func() {
-		current, currErr = v.validatorClient.PtcDuties(ctx, epoch, indices)
+		current, currErr = v.validatorClient.PTCDuties(ctx, epoch, indices)
 	})
 	wg.Go(func() {
-		next, nextErr = v.validatorClient.PtcDuties(ctx, epoch+1, indices)
+		next, nextErr = v.validatorClient.PTCDuties(ctx, epoch+1, indices)
 		if nextErr != nil {
 			log.WithError(nextErr).Debug("Could not get next epoch PTC duties")
 			nextErr = nil

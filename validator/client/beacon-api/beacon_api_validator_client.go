@@ -87,10 +87,10 @@ func (c *beaconApiValidatorClient) SyncCommitteeDuties(ctx context.Context, epoc
 	})
 }
 
-func (c *beaconApiValidatorClient) PtcDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.PtcDutiesResponse, error) {
-	ctx, span := trace.StartSpan(ctx, "beacon-api.PtcDuties")
+func (c *beaconApiValidatorClient) PTCDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.PTCDutiesResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "beacon-api.PTCDuties")
 	defer span.End()
-	return wrapInMetrics[*ethpb.PtcDutiesResponse]("PtcDuties", func() (*ethpb.PtcDutiesResponse, error) {
+	return wrapInMetrics[*ethpb.PTCDutiesResponse]("PTCDuties", func() (*ethpb.PTCDutiesResponse, error) {
 		return c.ptcDuties(ctx, epoch, validatorIndices)
 	})
 }

@@ -229,7 +229,7 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 	return nil
 }
 
-func (c *beaconApiValidatorClient) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.AttesterDutiesResponse, error) {
+func (c *beaconApiValidatorClient) attesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.AttesterDutiesResponse, error) {
 	resp, err := c.dutiesProvider.AttesterDuties(ctx, epoch, validatorIndices)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get attester duties")
@@ -285,7 +285,7 @@ func (c *beaconApiValidatorClient) AttesterDuties(ctx context.Context, epoch pri
 	}, nil
 }
 
-func (c *beaconApiValidatorClient) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*ethpb.ProposerDutiesResponse, error) {
+func (c *beaconApiValidatorClient) proposerDuties(ctx context.Context, epoch primitives.Epoch) (*ethpb.ProposerDutiesResponse, error) {
 	resp, err := c.dutiesProvider.ProposerDuties(ctx, epoch)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get proposer duties")
@@ -321,7 +321,7 @@ func (c *beaconApiValidatorClient) ProposerDuties(ctx context.Context, epoch pri
 	}, nil
 }
 
-func (c *beaconApiValidatorClient) SyncCommitteeDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.SyncCommitteeDutiesResponse, error) {
+func (c *beaconApiValidatorClient) syncCommitteeDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.SyncCommitteeDutiesResponse, error) {
 	syncDuties, err := c.dutiesProvider.SyncDuties(ctx, epoch, validatorIndices)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get sync committee duties")
@@ -537,7 +537,7 @@ func (c beaconApiDutiesProvider) PTCDuties(ctx context.Context, epoch primitives
 	return &ptcDuties, nil
 }
 
-func (c *beaconApiValidatorClient) PTCDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.PTCDutiesResponse, error) {
+func (c *beaconApiValidatorClient) ptcDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.PTCDutiesResponse, error) {
 	resp, err := c.dutiesProvider.PTCDuties(ctx, epoch, validatorIndices)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get PTC duties")
