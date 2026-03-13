@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('\x00')
+[]byte("\xdf9[\x8c\xa5$\xb1=4\xe0!\x15B\xe9C,&")
