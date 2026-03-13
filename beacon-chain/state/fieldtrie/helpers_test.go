@@ -34,7 +34,7 @@ func Test_handleEth1DataSlice_OutOfRange(t *testing.T) {
 }
 
 func Test_handleValidatorSlice_OutOfRange(t *testing.T) {
-	vals := make([]*ethpb.Validator, 1)
+	vals := make([]stateutil.CompactValidator, 1)
 	indices := []uint64{3}
 	_, err := handleValidatorMVSlice(mvslice.BuildEmptyCompositeSlice(vals), indices, false)
 	assert.ErrorContains(t, "index 3 greater than number of validators 1", err)
@@ -241,7 +241,7 @@ func TestFieldTrie_NativeState_fieldConvertersNative(t *testing.T) {
 			args: &args{
 				field:   types.FieldIndex(11),
 				indices: []uint64{},
-				elements: []*ethpb.Validator{
+				elements: []stateutil.CompactValidator{
 					{
 						ActivationEpoch: 1,
 					},
@@ -259,7 +259,7 @@ func TestFieldTrie_NativeState_fieldConvertersNative(t *testing.T) {
 				convertAll: true,
 			},
 			wantHex: nil,
-			errMsg:  fmt.Sprintf("Wanted type of %T", []*ethpb.Validator{}),
+			errMsg:  "Wanted type of CompactValidator",
 		},
 		{
 			name: "Attestations",

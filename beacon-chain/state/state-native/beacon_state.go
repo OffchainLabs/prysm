@@ -166,7 +166,7 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		Eth1Data:                            b.eth1Data,
 		Eth1DataVotes:                       b.eth1DataVotes,
 		Eth1DepositIndex:                    b.eth1DepositIndex,
-		Validators:                          vals,
+		Validators:                          stateutil.CompactValidatorsToProto(vals),
 		Balances:                            balances,
 		RandaoMixes:                         mixes,
 		Slashings:                           b.slashings,
