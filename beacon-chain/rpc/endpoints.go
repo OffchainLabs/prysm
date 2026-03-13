@@ -891,6 +891,15 @@ func (s *Service) beaconEndpoints(
 			handler: server.GetProposerLookahead,
 			methods: []string{http.MethodGet},
 		},
+		{
+			template: "/eth/v1/beacon/execution_payload_envelope/{block_id}",
+			name:     namespace + ".GetExecutionPayloadEnvelope",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+			},
+			handler: server.GetExecutionPayloadEnvelope,
+			methods: []string{http.MethodGet},
+		},
 	}
 }
 

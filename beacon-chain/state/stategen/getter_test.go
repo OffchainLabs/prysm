@@ -466,7 +466,7 @@ func TestLoadStateByRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	// make state at slot 10 by transitioning a copy of st9 with ib10 (aka blk10)
-	st10, err = executeStateTransitionStateGen(t.Context(), st10, ib10)
+	st10, err = executeStateTransitionStateGen(t.Context(), st10, ib10, nil)
 	require.NoError(t, err)
 	st10Root, err := st10.HashTreeRoot(t.Context())
 	require.NoError(t, err)
@@ -489,7 +489,7 @@ func TestLoadStateByRoot(t *testing.T) {
 
 	// same steps as 9->10; stf 10->11, then block update
 	st11 := st10.Copy()
-	st11, err = executeStateTransitionStateGen(t.Context(), st11, ib11)
+	st11, err = executeStateTransitionStateGen(t.Context(), st11, ib11, nil)
 	require.NoError(t, err)
 	st11Root, err := st11.HashTreeRoot(t.Context())
 	require.NoError(t, err)

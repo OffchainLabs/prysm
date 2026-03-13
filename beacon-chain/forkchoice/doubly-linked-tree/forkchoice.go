@@ -68,6 +68,7 @@ func (f *ForkChoice) Head(
 	if err := f.store.applyWeightChangesConsensusNode(ctx, f.store.treeRootNode); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not apply weight changes")
 	}
+	f.store.removeProposerBoostFromParent()
 
 	jc := f.JustifiedCheckpoint()
 	fc := f.FinalizedCheckpoint()
@@ -80,24 +81,25 @@ func (f *ForkChoice) Head(
 
 // ProcessAttestation processes attestation for vote accounting, it iterates around validator indices
 // and update their votes accordingly.
-func (f *ForkChoice) ProcessAttestation(ctx context.Context, validatorIndices []uint64, blockRoot [32]byte, targetEpoch primitives.Epoch) {
+func (f *ForkChoice) ProcessAttestation(ctx context.Context, validatorIndices []uint64, blockRoot [32]byte, slot primitives.Slot, payloadStatus bool) {
 	_, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.ProcessAttestation")
 	defer span.End()
 
 	for _, index := range validatorIndices {
 		// Validator indices will grow the vote cache.
+		newVote := false
 		for index >= uint64(len(f.votes)) {
 			f.votes = append(f.votes, Vote{currentRoot: params.BeaconConfig().ZeroHash, nextRoot: params.BeaconConfig().ZeroHash})
+			newVote = true
 		}
 
-		// Newly allocated vote if the root fields are untouched.
-		newVote := f.votes[index].nextRoot == params.BeaconConfig().ZeroHash &&
-			f.votes[index].currentRoot == params.BeaconConfig().ZeroHash
-
 		// Vote gets updated if it's newly allocated or high target epoch.
-		if newVote || targetEpoch > f.votes[index].nextEpoch {
-			f.votes[index].nextEpoch = targetEpoch
+		targetEpoch := slots.ToEpoch(slot)
+		nextEpoch := slots.ToEpoch(f.votes[index].nextSlot)
+		if newVote || targetEpoch > nextEpoch {
+			f.votes[index].nextSlot = slot
 			f.votes[index].nextRoot = blockRoot
+			f.votes[index].nextPayloadStatus = payloadStatus
 		}
 	}
 
@@ -307,44 +309,58 @@ func (f *ForkChoice) updateBalances() error {
 			newBalance = newBalances[index]
 		}
 
-		// Update only if the validator's balance or vote has changed.
-		if vote.currentRoot != vote.nextRoot || oldBalance != newBalance {
-			// Ignore the vote if the root is not in fork choice
-			// store, that means we have not seen the block before.
-			nextNode, ok := f.store.emptyNodeByRoot[vote.nextRoot]
-			if ok && vote.nextRoot != zHash {
-				// Protection against nil node
-				if nextNode == nil {
-					return errors.Wrap(ErrNilNode, "could not update balances")
+		// Update only if the validator's voting slot has changed.
+		if vote.currentSlot != vote.nextSlot {
+			// Add new balance to the next vote target if the root is known.
+			pn, pending := f.store.resolveVoteNode(vote.nextRoot, vote.nextSlot, vote.nextPayloadStatus)
+			if pn != nil && vote.nextRoot != zHash {
+				if pending {
+					pn.node.balance += newBalance
+				} else {
+					pn.balance += newBalance
 				}
-				nextNode.balance += newBalance
 			}
 
-			currentNode, ok := f.store.emptyNodeByRoot[vote.currentRoot]
-			if ok && vote.currentRoot != zHash {
-				// Protection against nil node
-				if currentNode == nil {
-					return errors.Wrap(ErrNilNode, "could not update balances")
-				}
-				if currentNode.balance < oldBalance {
-					log.WithFields(logrus.Fields{
-						"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
-						"oldBalance":                 oldBalance,
-						"nodeBalance":                currentNode.balance,
-						"nodeWeight":                 currentNode.weight,
-						"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
-						"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
-						"previousProposerBoostScore": f.store.previousProposerBoostScore,
-					}).Warning("node with invalid balance, setting it to zero")
-					currentNode.balance = 0
+			// Subtract old balance from the current vote target if the root is known.
+			pn, pending = f.store.resolveVoteNode(vote.currentRoot, vote.currentSlot, vote.currentPayloadStatus)
+			if pn != nil && vote.currentRoot != zHash {
+				if pending {
+					if pn.node.balance < oldBalance {
+						log.WithFields(logrus.Fields{
+							"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
+							"oldBalance":                 oldBalance,
+							"nodeBalance":                pn.node.balance,
+							"nodeWeight":                 pn.node.weight,
+							"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
+							"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
+							"previousProposerBoostScore": f.store.previousProposerBoostScore,
+						}).Warning("node with invalid balance, setting it to zero")
+						pn.node.balance = 0
+					} else {
+						pn.node.balance -= oldBalance
+					}
 				} else {
-					currentNode.balance -= oldBalance
+					if pn.balance < oldBalance {
+						log.WithFields(logrus.Fields{
+							"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
+							"oldBalance":                 oldBalance,
+							"nodeBalance":                pn.balance,
+							"nodeWeight":                 pn.weight,
+							"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
+							"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
+							"previousProposerBoostScore": f.store.previousProposerBoostScore,
+						}).Warning("node with invalid balance, setting it to zero")
+						pn.balance = 0
+					} else {
+						pn.balance -= oldBalance
+					}
 				}
 			}
 		}
-
 		// Rotate the validator vote.
 		f.votes[index].currentRoot = vote.nextRoot
+		f.votes[index].currentSlot = vote.nextSlot
+		f.votes[index].currentPayloadStatus = vote.nextPayloadStatus
 	}
 	f.balances = newBalances
 	return nil
@@ -410,15 +426,23 @@ func (f *ForkChoice) InsertSlashedIndex(_ context.Context, index primitives.Vali
 		return
 	}
 
-	node, ok := f.store.emptyNodeByRoot[f.votes[index].currentRoot]
-	if !ok || node == nil {
+	v := f.votes[index]
+	pn, pending := f.store.resolveVoteNode(v.currentRoot, v.currentSlot, v.currentPayloadStatus)
+	if pn == nil {
 		return
 	}
-
-	if node.balance < f.balances[index] {
-		node.balance = 0
+	if pending {
+		if pn.node.balance < f.balances[index] {
+			pn.node.balance = 0
+		} else {
+			pn.node.balance -= f.balances[index]
+		}
+		return
+	}
+	if pn.balance < f.balances[index] {
+		pn.balance = 0
 	} else {
-		node.balance -= f.balances[index]
+		pn.balance -= f.balances[index]
 	}
 }
 
@@ -600,13 +624,38 @@ func (f *ForkChoice) SetBalancesByRooter(handler forkchoice.BalancesByRooter) {
 	f.balancesByRoot = handler
 }
 
-// Weight returns the weight of the given root if found on the store
+// Weight returns the payload-node weight of the given root if found on the store.
+// For Gloas, this is the node weight used for forkchoice on the payload tree.
 func (f *ForkChoice) Weight(root [32]byte) (uint64, error) {
 	n, ok := f.store.emptyNodeByRoot[root]
 	if !ok || n == nil {
 		return 0, ErrNilNode
 	}
 	return n.weight, nil
+}
+
+// ConsensusNodeWeight returns the consensus-node weight for the given root if found on the store.
+// For Gloas blocks, this includes both empty and full payload node weights.
+func (f *ForkChoice) ConsensusNodeWeight(root [32]byte) (uint64, error) {
+	n, ok := f.store.emptyNodeByRoot[root]
+	if !ok || n == nil {
+		return 0, ErrNilNode
+	}
+	return n.node.weight, nil
+}
+
+// PayloadWeights returns the empty and full payload node weights for the given root.
+func (f *ForkChoice) PayloadWeights(root [32]byte) (emptyWeight, fullWeight uint64, err error) {
+	en, ok := f.store.emptyNodeByRoot[root]
+	if !ok || en == nil {
+		return 0, 0, ErrNilNode
+	}
+	emptyWeight = en.weight
+	fn := f.store.fullNodeByRoot[root]
+	if fn != nil {
+		fullWeight = fn.weight
+	}
+	return emptyWeight, fullWeight, nil
 }
 
 // updateJustifiedBalances updates the validators balances on the justified checkpoint pointed by root.
@@ -617,11 +666,9 @@ func (f *ForkChoice) updateJustifiedBalances(ctx context.Context, root [32]byte)
 	}
 	f.justifiedBalances = balances
 	f.store.committeeWeight = 0
-	f.numActiveValidators = 0
 	for _, val := range balances {
 		if val > 0 {
 			f.store.committeeWeight += val
-			f.numActiveValidators++
 		}
 	}
 	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)

@@ -49,7 +49,7 @@ const (
 	// GossipPayloadAttestationMessageMessage is the name for the payload attestation message type.
 	GossipPayloadAttestationMessageMessage = "payload_attestation_message"
 	// GossipExecutionPayloadEnvelopeMessage is the name for the execution payload envelope message type.
-	GossipExecutionPayloadEnvelopeMessage = "execution_payload_envelope"
+	GossipExecutionPayloadEnvelopeMessage = "execution_payload"
 
 	// Topic Formats
 	//

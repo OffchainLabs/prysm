@@ -2152,10 +2152,12 @@ func TestBlockVerifyingState_SameEpochAsParent(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, forkchoiceStore.InsertNode(ctx, headState, roHeadBlock))
 
+	headSlot := primitives.Slot(40)
 	chainService := &mock.ChainService{
-		DB:    db,
-		Root:  headRoot[:], // Head is different from parent
-		State: headState,   // Set head state so HeadSlot() returns correct value
+		DB:           db,
+		Root:         headRoot[:],
+		MockHeadSlot: &headSlot,
+		State:        parentState, // GetBlockPreState returns this for the parent block
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
 			Root:  parentRoot[:],

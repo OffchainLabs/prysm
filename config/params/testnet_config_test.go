@@ -95,6 +95,7 @@ func compareConfigs(t *testing.T, expected, actual *params.BeaconChainConfig) {
 	require.DeepEqual(t, expected.MaxDeposits, actual.MaxDeposits)
 	require.DeepEqual(t, expected.MaxVoluntaryExits, actual.MaxVoluntaryExits)
 	require.DeepEqual(t, expected.MaxWithdrawalsPerPayload, actual.MaxWithdrawalsPerPayload)
+	require.DeepEqual(t, expected.MaxBuildersPerWithdrawalsSweep, actual.MaxBuildersPerWithdrawalsSweep)
 	require.DeepEqual(t, expected.DomainBeaconProposer, actual.DomainBeaconProposer)
 	require.DeepEqual(t, expected.DomainRandao, actual.DomainRandao)
 	require.DeepEqual(t, expected.DomainBeaconAttester, actual.DomainBeaconAttester)

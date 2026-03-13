@@ -540,6 +540,12 @@ type PayloadAttestation struct {
 	Signature       string                  `json:"signature"`
 }
 
+type PayloadAttestationMessage struct {
+	ValidatorIndex string                  `json:"validator_index"`
+	Data           *PayloadAttestationData `json:"data"`
+	Signature      string                  `json:"signature"`
+}
+
 type BeaconBlockBodyGloas struct {
 	RandaoReveal              string                        `json:"randao_reveal"`
 	Eth1Data                  *Eth1Data                     `json:"eth1_data"`
@@ -576,4 +582,18 @@ func (s *SignedBeaconBlockGloas) MessageRawJson() ([]byte, error) {
 
 func (s *SignedBeaconBlockGloas) SigString() string {
 	return s.Signature
+}
+
+type ExecutionPayloadEnvelope struct {
+	Payload           *ExecutionPayloadDeneb `json:"payload"`
+	ExecutionRequests *ExecutionRequests     `json:"execution_requests"`
+	BuilderIndex      string                 `json:"builder_index"`
+	BeaconBlockRoot   string                 `json:"beacon_block_root"`
+	Slot              string                 `json:"slot"`
+	StateRoot         string                 `json:"state_root"`
+}
+
+type SignedExecutionPayloadEnvelope struct {
+	Message   *ExecutionPayloadEnvelope `json:"message"`
+	Signature string                    `json:"signature"`
 }

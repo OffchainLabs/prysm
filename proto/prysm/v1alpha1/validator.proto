@@ -25,6 +25,7 @@ import "proto/prysm/v1alpha1/beacon_block.proto";
 import "proto/prysm/v1alpha1/beacon_core_types.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
+import "proto/prysm/v1alpha1/gloas.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1";
 option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
@@ -65,8 +66,9 @@ service BeaconNodeValidator {
   //   Proposer - the validator that creates a beacon chain block.
   //   Attester — a validator that is part of a committee that needs to sign off
   //   on a beacon chain
-  //   Sync Committee - a special group of validators that ensure lightclients and effectively sync with Ethereum
-  //   and continues in this role for 256 epochs if selected
+  //   Sync Committee - a special group of validators that ensure lightclients
+  //   and effectively sync with Ethereum and continues in this role for 256
+  //   epochs if selected
   // The server returns a list of duties which are the actions should be
   // performed by validators for a given epoch. Validator duties should be
   // polled every epoch, but due to chain reorg of >MIN_SEED_LOOKAHEAD could
@@ -74,8 +76,9 @@ service BeaconNodeValidator {
   // recommended to poll at every slot to ensure validator is fully aware of any
   // sudden chain reorg.
   //
-  // GetDutiesV2 differs from GetDuties through the removal of the full committee list in favor of adding
-  // committee_length and validator_committee_index fields which significantly saves on marshalling
+  // GetDutiesV2 differs from GetDuties through the removal of the full
+  // committee list in favor of adding committee_length and
+  // validator_committee_index fields which significantly saves on marshalling
   rpc GetDutiesV2(DutiesRequest) returns (DutiesV2Response) {
     option deprecated = true;
     option (google.api.http) = {
@@ -139,12 +142,13 @@ service BeaconNodeValidator {
   //
   // The status response can be one of the following:
   //	DEPOSITED - validator's deposit has been recognized by Ethereum 1, not
-  //yet recognized by Ethereum. 	PENDING - validator is in Ethereum's activation
-  //queue. 	ACTIVE - validator is active. 	EXITING - validator has initiated an an
-  //exit request, or has dropped below the ejection balance and is being kicked
-  //out. 	EXITED - validator is no longer validating. 	SLASHING - validator has
-  //been kicked out due to meeting a slashing condition. 	UNKNOWN_STATUS -
-  //validator does not have a known status in the network.
+  // yet recognized by Ethereum. 	PENDING - validator is in Ethereum's
+  // activation queue. 	ACTIVE - validator is active. 	EXITING - validator has
+  // initiated an an exit request, or has dropped below the ejection balance and
+  // is being kicked out. 	EXITED - validator is no longer validating.
+  // SLASHING - validator has been kicked out due to meeting a slashing
+  // condition. 	UNKNOWN_STATUS - validator does not have a known status
+  // in the network.
   rpc ValidatorStatus(ValidatorStatusRequest)
       returns (ValidatorStatusResponse) {
     option deprecated = true;
@@ -439,6 +443,58 @@ service BeaconNodeValidator {
       get : "/eth/v1alpha1/validator/blocks/aggregated_sig_and_aggregation_bits"
     };
   }
+
+  // ==========================================================================
+  // Gloas Fork Endpoints
+  // ==========================================================================
+
+  // GetExecutionPayloadEnvelope retrieves a cached execution payload envelope
+  // for the given slot and builder index. This is called by validators after
+  // receiving a Gloas block to get the envelope they need to sign and broadcast.
+  //
+  // The envelope is cached by the beacon node during block production and
+  // contains the full execution payload that corresponds to the bid in the block.
+  rpc GetExecutionPayloadEnvelope(ExecutionPayloadEnvelopeRequest)
+      returns (ExecutionPayloadEnvelopeResponse) {
+    option deprecated = true;
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/execution_payload_envelope/{slot}"
+    };
+  }
+
+  // PublishExecutionPayloadEnvelope broadcasts a signed execution payload envelope
+  // to the P2P network. This is called by validators after signing the envelope
+  // retrieved from GetExecutionPayloadEnvelope.
+  //
+  // The beacon node validates the envelope signature and broadcasts it to peers
+  // via the execution_payload_envelope gossip topic.
+  rpc PublishExecutionPayloadEnvelope(SignedExecutionPayloadEnvelope)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/execution_payload_envelope"
+      body : "*"
+    };
+  }
+
+  // PayloadAttestationData retrieves payload attestation data for the given slot.
+  rpc PayloadAttestationData(PayloadAttestationDataRequest)
+      returns (.ethereum.eth.v1alpha1.PayloadAttestationData) {
+    option deprecated = true;
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/payload_attestation_data/{slot}"
+    };
+  }
+
+  // SubmitPayloadAttestation broadcasts a signed payload attestation message.
+  rpc SubmitPayloadAttestation(PayloadAttestationMessage)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/payload_attestation"
+      body : "*"
+    };
+  }
 }
 
 // SyncMessageBlockRootResponse for beacon chain validator to retrieve and
@@ -718,7 +774,7 @@ message DutiesResponse {
 
   bytes previous_duty_dependent_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes current_duty_dependent_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  
+
   message Duty {
     // The committee a validator is assigned to.
     repeated uint64 committee = 1
@@ -782,9 +838,9 @@ message DutiesV2Response {
 
     // The index of the committee which the given validator has an assignment
     uint64 committee_index = 2
-    [ (ethereum.eth.ext.cast_type) =
-    "github.com/OffchainLabs/prysm/v7/consensus-types/"
-        "primitives.CommitteeIndex" ];
+        [ (ethereum.eth.ext.cast_type) =
+              "github.com/OffchainLabs/prysm/v7/consensus-types/"
+              "primitives.CommitteeIndex" ];
 
     // The number of committees in the duty's slot.
     uint64 committees_at_slot = 3;
@@ -813,13 +869,19 @@ message DutiesV2Response {
 
     // The index of the validator in the beacon state.
     uint64 validator_index = 9
-    [ (ethereum.eth.ext.cast_type) =
-    "github.com/OffchainLabs/prysm/v7/consensus-types/"
-        "primitives.ValidatorIndex" ];
+        [ (ethereum.eth.ext.cast_type) =
+              "github.com/OffchainLabs/prysm/v7/consensus-types/"
+              "primitives.ValidatorIndex" ];
 
     // Whether the validator belongs in the sync committee and has to perform
     // sync committee duty.
     bool is_sync_committee = 10;
+
+    // Slots in which the validator is assigned to the Payload Timeliness Committee (PTC).
+    repeated uint64 ptc_slots = 11 [
+      (ethereum.eth.ext.cast_type) =
+          "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+    ];
   }
 }
 
@@ -994,18 +1056,16 @@ message ValidatorParticipation {
   uint64 previous_epoch_head_attesting_gwei = 10;
 }
 
-// ValidatorIdentity gives information about the state of a validator at a certain
-// epoch.
+// ValidatorIdentity gives information about the state of a validator at a
+// certain epoch.
 message ValidatorIdentity {
   // The validator's index in the beacon state.
   uint64 index = 1 [ (ethereum.eth.ext.cast_type) =
-  "github.com/OffchainLabs/prysm/v7/consensus-types/"
-      "primitives.ValidatorIndex" ];
+                         "github.com/OffchainLabs/prysm/v7/consensus-types/"
+                         "primitives.ValidatorIndex" ];
 
   // The validator's 48 byte BLS public key.
-  bytes pubkey = 2 [
-    (ethereum.eth.ext.ssz_size) = "48"
-  ];
+  bytes pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
 
   // Epoch when the validator was activated. This field may be zero if the
   // validator was present in the Ethereum proof of stake genesis. This field is
@@ -1133,4 +1193,42 @@ message AggregatedSigAndAggregationBitsResponse {
 
   bytes aggregated_sig = 1;
   bytes bits = 2;
+}
+
+// =============================================================================
+// Gloas Fork Messages
+// =============================================================================
+
+// ExecutionPayloadEnvelopeRequest is the request for retrieving a cached
+// execution payload envelope from the beacon node. This is only used for
+// self-build envelopes.
+message ExecutionPayloadEnvelopeRequest {
+  option deprecated = true;
+
+  // The slot for which to retrieve the execution payload envelope.
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+}
+
+// ExecutionPayloadEnvelopeResponse is the response containing the cached
+// execution payload envelope.
+message ExecutionPayloadEnvelopeResponse {
+  option deprecated = true;
+
+  // The execution payload envelope for the requested slot and builder.
+  ExecutionPayloadEnvelope envelope = 1;
+}
+
+// PayloadAttestationDataRequest is the request for retrieving payload
+// attestation data for a slot.
+message PayloadAttestationDataRequest {
+  option deprecated = true;
+
+  // The slot for which to retrieve payload attestation data.
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
 }

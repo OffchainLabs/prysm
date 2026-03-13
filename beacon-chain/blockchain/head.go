@@ -50,6 +50,7 @@ type head struct {
 	block      interfaces.ReadOnlySignedBeaconBlock // current head block.
 	state      state.BeaconState                    // current head state.
 	slot       primitives.Slot                      // the head block slot number
+	full       bool                                 // whether the head is post-CL or post-EL after Gloas
 	optimistic bool                                 // optimistic status when saved head
 }
 
@@ -60,8 +61,18 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	ctx, span := trace.StartSpan(ctx, "blockChain.saveHead")
 	defer span.End()
 
+	// Pre-Gloas we use empty for head because we still key states by blockroot
+	var full bool
+	var err error
+	if headState.Version() >= version.Gloas {
+		full, err = headState.IsParentBlockFull()
+		if err != nil {
+			return errors.Wrap(err, "could not determine if head is full or not")
+		}
+	}
+
 	// Do nothing if head hasn't changed.
-	if !s.isNewHead(newHeadRoot) {
+	if !s.isNewHead(newHeadRoot, full) {
 		return nil
 	}
 
@@ -157,6 +168,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 		state:      headState,
 		optimistic: isOptimistic,
 		slot:       headBlock.Block().Slot(),
+		full:       full,
 	}
 	if err := s.setHead(newHead); err != nil {
 		return errors.Wrap(err, "could not set head")
@@ -170,7 +182,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	// Forward an event capturing a new chain head over a common event feed
 	// done in a goroutine to avoid blocking the critical runtime main routine.
 	go func() {
-		if err := s.notifyNewHeadEvent(ctx, newHeadSlot, headState, newStateRoot[:], newHeadRoot[:]); err != nil {
+		if err := s.notifyNewHeadEvent(ctx, newHeadSlot, newStateRoot[:], newHeadRoot[:]); err != nil {
 			log.WithError(err).Error("Could not notify event feed of new chain head")
 		}
 	}()
@@ -217,6 +229,7 @@ func (s *Service) setHead(newHead *head) error {
 		root:       newHead.root,
 		block:      bCp,
 		state:      newHead.state.Copy(),
+		full:       newHead.full,
 		optimistic: newHead.optimistic,
 		slot:       newHead.slot,
 	}
@@ -322,7 +335,6 @@ func (s *Service) hasHeadState() bool {
 func (s *Service) notifyNewHeadEvent(
 	ctx context.Context,
 	newHeadSlot primitives.Slot,
-	newHeadState state.BeaconState,
 	newHeadStateRoot,
 	newHeadRoot []byte,
 ) error {

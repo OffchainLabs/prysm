@@ -42,6 +42,20 @@ func (s *Service) HighestReceivedBlockSlot() primitives.Slot {
 	return s.cfg.ForkChoiceStore.HighestReceivedBlockSlot()
 }
 
+// HighestReceivedBlockRoot returns the corresponding value from forkchoice
+func (s *Service) HighestReceivedBlockRoot() [32]byte {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.HighestReceivedBlockRoot()
+}
+
+// HasFullNode returns the corresponding value from forkchoice
+func (s *Service) HasFullNode(root [32]byte) bool {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.HasFullNode(root)
+}
+
 // ReceivedBlocksLastEpoch returns the corresponding value from forkchoice
 func (s *Service) ReceivedBlocksLastEpoch() (uint64, error) {
 	s.cfg.ForkChoiceStore.RLock()
@@ -134,6 +148,13 @@ func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byt
 		return nil, errors.Wrap(err, "could not get latest execution payload header")
 	}
 	return bytesutil.SafeCopyBytes(header.BlockHash()), nil
+}
+
+// CanonicalNodeAtSlot wraps the corresponding method in forkchoice
+func (s *Service) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.CanonicalNodeAtSlot(slot)
 }
 
 // DependentRoot wraps the corresponding method in forkchoice

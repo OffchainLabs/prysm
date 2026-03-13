@@ -108,7 +108,7 @@ func ProcessExecutionPayload(
 	st state.BeaconState,
 	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
 ) error {
-	if err := verifyExecutionPayloadEnvelopeSignature(st, signedEnvelope); err != nil {
+	if err := VerifyExecutionPayloadEnvelopeSignature(st, signedEnvelope); err != nil {
 		return errors.Wrap(err, "signature verification failed")
 	}
 
@@ -225,7 +225,20 @@ func ApplyExecutionPayload(
 		return errors.Errorf("payload timestamp does not match expected timestamp: payload=%d, expected=%d", payload.Timestamp(), uint64(t.Unix()))
 	}
 
-	if err := processExecutionRequests(ctx, st, envelope.ExecutionRequests()); err != nil {
+	if err := ApplyExecutionPayloadStateMutations(ctx, st, envelope.ExecutionRequests(), [32]byte(payload.BlockHash())); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ApplyExecutionPayloadStateMutations(
+	ctx context.Context,
+	st state.BeaconState,
+	executionRequests *enginev1.ExecutionRequests,
+	blockHash [32]byte,
+) error {
+	if err := processExecutionRequests(ctx, st, executionRequests); err != nil {
 		return errors.Wrap(err, "could not process execution requests")
 	}
 
@@ -237,7 +250,7 @@ func ApplyExecutionPayload(
 		return errors.Wrap(err, "could not set execution payload availability")
 	}
 
-	if err := st.SetLatestBlockHash([32]byte(payload.BlockHash())); err != nil {
+	if err := st.SetLatestBlockHash(blockHash); err != nil {
 		return errors.Wrap(err, "could not set latest block hash")
 	}
 
@@ -301,25 +314,28 @@ func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *en
 	return nil
 }
 
-// verifyExecutionPayloadEnvelopeSignature verifies the BLS signature on a signed execution payload envelope.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// builder_index = signed_envelope.message.builder_index
-// if builder_index == BUILDER_INDEX_SELF_BUILD:
+// VerifyExecutionPayloadEnvelopeSignature verifies the BLS signature on a signed execution payload envelope.
+// <spec fn="verify_execution_payload_envelope_signature" fork="gloas" style="full" hash="49483ae2">
+// def verify_execution_payload_envelope_signature(
 //
-//	validator_index = state.latest_block_header.proposer_index
-//	pubkey = state.validators[validator_index].pubkey
+//	state: BeaconState, signed_envelope: SignedExecutionPayloadEnvelope
 //
-// else:
+// ) -> bool:
 //
-//	pubkey = state.builders[builder_index].pubkey
+//	builder_index = signed_envelope.message.builder_index
+//	if builder_index == BUILDER_INDEX_SELF_BUILD:
+//	    validator_index = state.latest_block_header.proposer_index
+//	    pubkey = state.validators[validator_index].pubkey
+//	else:
+//	    pubkey = state.builders[builder_index].pubkey
 //
-// signing_root = compute_signing_root(
+//	signing_root = compute_signing_root(
+//	    signed_envelope.message, get_domain(state, DOMAIN_BEACON_BUILDER)
+//	)
+//	return bls.Verify(pubkey, signing_root, signed_envelope.signature)
 //
-//	signed_envelope.message, get_domain(state, DOMAIN_BEACON_BUILDER)
-//
-// )
-// return bls.Verify(pubkey, signing_root, signed_envelope.signature)
-func verifyExecutionPayloadEnvelopeSignature(st state.BeaconState, signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope) error {
+// </spec>
+func VerifyExecutionPayloadEnvelopeSignature(st state.BeaconState, signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope) error {
 	envelope, err := signedEnvelope.Envelope()
 	if err != nil {
 		return fmt.Errorf("failed to get envelope: %w", err)
