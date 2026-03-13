@@ -904,6 +904,7 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+<<<<<<< gloas-ptc-api
 			template: "/eth/v1/beacon/pool/payload_attestations",
 			name:     namespace + ".ListPayloadAttestations",
 			middleware: []middleware.Middleware{
@@ -926,6 +927,9 @@ func (s *Service) beaconEndpoints(
 		},
 		{
 			template: "/eth/v1/beacon/execution_payload_envelope/{block_root}",
+=======
+			template: "/eth/v1/beacon/execution_payload_envelope/{block_id}",
+>>>>>>> develop
 			name:     namespace + ".GetExecutionPayloadEnvelope",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),

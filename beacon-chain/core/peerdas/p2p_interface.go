@@ -63,11 +63,33 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 // while we are verifying all the KZG proofs from multiple sidecars in a batch.
 // This is done to improve performance since the internal KZG library is way more
 // efficient when verifying in batch.
-// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_kzg_proofs
+// https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/p2p-interface.md#modified-verify_data_column_sidecar_kzg_proofs
 func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
+	commitmentsBySidecar := make([][][]byte, len(sidecars))
+	for i := range sidecars {
+		commitmentsBySidecar[i] = sidecars[i].KzgCommitments
+	}
+	return verifyDataColumnsSidecarKZGProofs(sidecars, commitmentsBySidecar)
+}
+
+// VerifyDataColumnsSidecarKZGProofsWithCommitments verifies KZG proofs using
+// explicitly provided commitments instead of the sidecar's own. This is used
+// by Gloas, which validates against bid.blob_kzg_commitments.
+func VerifyDataColumnsSidecarKZGProofsWithCommitments(sidecars []blocks.RODataColumn, commitmentsBySidecar [][][]byte) error {
+	return verifyDataColumnsSidecarKZGProofs(sidecars, commitmentsBySidecar)
+}
+
+func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmentsBySidecar [][][]byte) error {
+	if len(sidecars) != len(commitmentsBySidecar) {
+		return ErrMismatchLength
+	}
+
 	// Compute the total count.
 	count := 0
-	for _, sidecar := range sidecars {
+	for i, sidecar := range sidecars {
+		if len(sidecar.Column) != len(commitmentsBySidecar[i]) {
+			return ErrMismatchLength
+		}
 		count += len(sidecar.Column)
 	}
 
@@ -76,7 +98,7 @@ func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 	cells := make([]kzg.Cell, 0, count)
 	proofs := make([]kzg.Bytes48, 0, count)
 
-	for _, sidecar := range sidecars {
+	for sidecarIndex, sidecar := range sidecars {
 		for i := range sidecar.Column {
 			var (
 				commitment kzg.Bytes48
@@ -84,7 +106,7 @@ func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 				proof      kzg.Bytes48
 			)
 
-			commitmentBytes := sidecar.KzgCommitments[i]
+			commitmentBytes := commitmentsBySidecar[sidecarIndex][i]
 			cellBytes := sidecar.Column[i]
 			proofBytes := sidecar.KzgProofs[i]
 

@@ -1456,3 +1456,103 @@ func TestFullHead_EmptyPayload(t *testing.T) {
 	assert.Equal(t, blockHashA, bh)
 	assert.Equal(t, false, full)
 }
+
+// TestFullHead_PreGloasBlock_ReturnsFalse verifies that FullHead returns full=false
+// for pre-Gloas (Fulu) blocks even though the fork choice store internally creates a
+// fullNodeByRoot entry with full=true for them (for EL optimistic validation tracking).
+// Without the epoch guard in FullHead, isNewHead would spuriously fire every ticker
+// tick because FullHead returned full=true while saveHead stored head.full=false.
+func TestFullHead_PreGloasBlock_ReturnsFalse(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 100 // Gloas activates far in the future; slot 1 is pre-Gloas
+	params.OverrideBeaconConfig(cfg)
+
+	f := setup(0, 0)
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, blk, err := prepareForkchoiceState(ctx, 1, rootA, zeroHash, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	driftGenesisTime(f, 1, 0)
+	require.NoError(t, f.NewSlot(ctx, 1))
+
+	hr, _, full, err := f.FullHead(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, rootA, hr)
+	assert.Equal(t, false, full, "pre-Gloas block must return full=false from FullHead")
+}
+
+func TestUpdateBalances_SlotChangeMovesBalance(t *testing.T) {
+	f := setupGloas(t, 1, 1)
+	ctx := t.Context()
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	// Insert block B at slot 100 and block C at slot 101.
+	slotB := primitives.Slot(100)
+	rootB := indexToHash(1)
+	blockHashB := indexToHash(100)
+	driftGenesisTime(f, slotB, 0)
+	st, blk, err := prepareGloasForkchoiceState(ctx, slotB, rootB, zeroHash, blockHashB, zeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	slotC := primitives.Slot(101)
+	rootC := indexToHash(2)
+	blockHashC := indexToHash(200)
+	driftGenesisTime(f, slotC, 0)
+	// Use zeroHash as parentBlockHash so C builds on B's empty node (no full node needed).
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotC, rootC, rootB, blockHashC, zeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	s := f.store
+	validatorBalance := uint64(32000000000)
+	f.justifiedBalances = []uint64{validatorBalance}
+
+	// Step 1: Validator attests for block B at slot 100 (same slot as block) with payloadStatus=false.
+	// resolveVoteNode(B, 100, false) → pending = (100 == 100) = true → Node.balance.
+	f.votes = []Vote{
+		{currentRoot: zeroHash, nextRoot: rootB, nextSlot: slotB, currentSlot: 0, nextPayloadStatus: false, currentPayloadStatus: false},
+	}
+	require.NoError(t, f.updateBalances())
+
+	emptyB := s.emptyNodeByRoot[rootB]
+	require.NotNil(t, emptyB)
+	assert.Equal(t, validatorBalance, emptyB.node.balance, "balance should be in Node.balance (pending)")
+	assert.Equal(t, uint64(0), emptyB.balance, "PayloadNode.balance should be zero")
+
+	// Step 2: Validator re-attests for the same block B but at slot 140 (new epoch, different slot).
+	// payloadStatus and root are unchanged, only the slot changes.
+	laterSlot := primitives.Slot(140)
+	f.votes[0].nextSlot = laterSlot
+	// nextRoot is still B, nextPayloadStatus is still false.
+
+	// Step 3: updateBalances should detect the slot change and reprocess.
+	// It should subtract from Node.balance (pending, old slot 100==100) and
+	// add to PayloadNode.balance (non-pending, new slot 140!=100).
+	require.NoError(t, f.updateBalances())
+
+	assert.Equal(t, uint64(0), emptyB.node.balance, "Node.balance should be zero after slot change moved balance out")
+	assert.Equal(t, validatorBalance, emptyB.balance, "balance should have moved to PayloadNode.balance (non-pending)")
+
+	// Step 4: Validator switches vote to block C at slot 101.
+	// The subtract from B should now correctly target PayloadNode.balance (non-pending).
+	f.votes[0].nextRoot = rootC
+	f.votes[0].nextSlot = slotC
+	require.NoError(t, f.updateBalances())
+
+	// B's balances should both be zero (balance was correctly subtracted).
+	assert.Equal(t, uint64(0), emptyB.node.balance, "Node.balance should remain zero")
+	assert.Equal(t, uint64(0), emptyB.balance, "PayloadNode.balance should be zero after vote moved to C")
+
+	// C should have received the balance.
+	emptyC := s.emptyNodeByRoot[rootC]
+	require.NotNil(t, emptyC)
+	// slot 101 == C.node.slot(101) → pending=true → Node.balance
+	assert.Equal(t, validatorBalance, emptyC.node.balance, "C should have the validator's balance")
+}

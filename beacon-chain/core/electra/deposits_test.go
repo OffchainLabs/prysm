@@ -20,37 +20,46 @@ import (
 )
 
 func TestProcessPendingDepositsMultiplesSameDeposits(t *testing.T) {
-	st := stateWithActiveBalanceETH(t, 1000)
-	deps := make([]*eth.PendingDeposit, 2) // Make same deposit twice
-	validators := st.Validators()
-	sk, err := bls.RandKey()
-	require.NoError(t, err)
-	for i := 0; i < len(deps); i += 1 {
-		wc := make([]byte, 32)
-		wc[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
-		wc[31] = byte(i)
-		validators[i].PublicKey = sk.PublicKey().Marshal()
-		validators[i].WithdrawalCredentials = wc
-		deps[i] = stateTesting.GeneratePendingDeposit(t, sk, 32, bytesutil.ToBytes32(wc), 0)
-	}
-	require.NoError(t, st.SetPendingDeposits(deps))
+	const (
+		depositCount      = uint64(2)
+		amountETH         = uint64(32)
+		slot              = 0
+		activeBalanceGwei = 10_000
+	)
 
-	err = electra.ProcessPendingDeposits(context.TODO(), st, 10000)
+	state := stateWithActiveBalanceETH(t, 0)
+
+	secretKey, err := bls.RandKey()
 	require.NoError(t, err)
 
-	val := st.Validators()
-	seenPubkeys := make(map[string]struct{})
-	for i := 0; i < len(val); i += 1 {
-		if len(val[i].PublicKey) == 0 {
-			continue
-		}
-		_, ok := seenPubkeys[string(val[i].PublicKey)]
-		if ok {
-			t.Fatalf("duplicated pubkeys")
-		} else {
-			seenPubkeys[string(val[i].PublicKey)] = struct{}{}
-		}
+	withdrawalCredentialsBytes := make([]byte, 32)
+	withdrawalCredentialsBytes[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+	withdrawalCredentials := bytesutil.ToBytes32(withdrawalCredentialsBytes)
+
+	validators := state.Validators()
+	require.Equal(t, 0, len(validators))
+
+	deposits := make([]*eth.PendingDeposit, 0, depositCount)
+	for range depositCount {
+		deposit := stateTesting.GeneratePendingDeposit(t, secretKey, amountETH, withdrawalCredentials, slot)
+		deposits = append(deposits, deposit)
 	}
+
+	err = state.SetPendingDeposits(deposits)
+	require.NoError(t, err)
+
+	err = electra.ProcessPendingDeposits(t.Context(), state, activeBalanceGwei)
+	require.NoError(t, err)
+
+	// The first deposit should create a new validator,
+	// and the second deposit should top up the same validator
+	// We should have 1 validator with balance of 64 ETH.
+	validators = state.Validators()
+	require.Equal(t, 1, len(validators))
+
+	balance, err := state.BalanceAtIndex(0)
+	require.NoError(t, err)
+	require.Equal(t, depositCount*amountETH, balance)
 }
 
 func TestProcessPendingDeposits(t *testing.T) {

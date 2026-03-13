@@ -1242,26 +1242,17 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		requestedValIndices[i] = primitives.ValidatorIndex(valIx)
 	}
 
-	// Limit how far in the future we can query (current + 1 epoch).
+	// PTC assignments are not stable for the next epoch, so only allow current epoch.
 	cs := s.TimeFetcher.CurrentSlot()
 	currentEpoch := slots.ToEpoch(cs)
-	nextEpoch := currentEpoch + 1
-	if requestedEpoch > nextEpoch {
+	if requestedEpoch > currentEpoch {
 		httputil.HandleError(w,
-			fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", requestedEpoch, nextEpoch),
+			fmt.Sprintf("Request epoch %d can not be greater than current epoch %d", requestedEpoch, currentEpoch),
 			http.StatusBadRequest)
 		return
 	}
 
-	// For next epoch requests, we use the current epoch's state since PTC
-	// assignments for next epoch can be computed from current epoch's state.
-	// This mirrors the spec's get_ptc_assignment which asserts epoch <= next_epoch
-	// and uses the current state to compute assignments.
-	epochForState := requestedEpoch
-	if requestedEpoch == nextEpoch {
-		epochForState = currentEpoch
-	}
-	st, err := s.Stater.StateByEpoch(ctx, epochForState)
+	st, err := s.Stater.StateByEpoch(ctx, requestedEpoch)
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
 		return
