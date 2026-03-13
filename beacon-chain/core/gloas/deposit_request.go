@@ -39,9 +39,10 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 //	    # Regardless of the withdrawal credentials prefix, if a builder/validator
 //	    # already exists with this pubkey, apply the deposit to their balance
 //	    is_builder = deposit_request.pubkey in builder_pubkeys
-//	    is_validator = deposit_request.pubkey in validator_pubkeys
-//	    is_builder_prefix = is_builder_withdrawal_credential(deposit_request.withdrawal_credentials)
-//	    if is_builder or (is_builder_prefix and not is_validator):
+//	    has_builder_prefix = is_builder_withdrawal_credential(deposit_request.withdrawal_credentials)
+//	    is_existing_validator = deposit_request.pubkey in validator_pubkeys
+//	    is_validator = is_existing_validator or is_pending_validator(state, deposit_request.pubkey)
+//	    if is_builder or (has_builder_prefix and not is_validator):
 //	        # Apply builder deposits immediately
 //	        apply_deposit_for_builder(
 //	            state,
@@ -132,6 +133,15 @@ func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1
 	_, isValidator := beaconState.ValidatorIndexByPubkey(pubkey)
 	idx, isBuilder := beaconState.BuilderIndexByPubkey(pubkey)
 	isBuilderPrefix := helpers.IsBuilderWithdrawalCredential(request.WithdrawalCredentials)
+	if !isBuilder {
+		isPending, err := beaconState.IsPendingValidator(request.Pubkey)
+		if err != nil {
+			return false, err
+		}
+		if isPending {
+			return false, nil
+		}
+	}
 	if !isBuilder && (!isBuilderPrefix || isValidator) {
 		return false, nil
 	}

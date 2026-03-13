@@ -239,6 +239,7 @@ type ReadOnlyDeposits interface {
 	DepositBalanceToConsume() (primitives.Gwei, error)
 	DepositRequestsStartIndex() (uint64, error)
 	PendingDeposits() ([]*ethpb.PendingDeposit, error)
+	IsPendingValidator(pubkey []byte) (bool, error)
 }
 
 type ReadOnlyConsolidations interface {
