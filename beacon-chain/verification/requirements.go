@@ -16,6 +16,11 @@ const (
 	// Data columns specific.
 	RequireValidFields
 	RequireCorrectSubnet
+	RequireBlockSeenGloas
+	RequireSlotMatchesBlockGloas
+	RequireValidFieldsGloas
+	RequireSidecarKzgProofVerifiedGloas
+	RequireNotSeenGloas
 
 	// Payload attestation specific.
 	RequireCurrentSlot
