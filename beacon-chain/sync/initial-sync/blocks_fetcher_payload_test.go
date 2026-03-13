@@ -32,9 +32,9 @@ func makeEnvelope(t *testing.T, slot primitives.Slot, blockHash [32]byte, parent
 	env := &ethpb.SignedExecutionPayloadEnvelope{
 		Signature: make([]byte, fieldparams.BLSSignatureLength),
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Slot:              slot,
-			BeaconBlockRoot:   make([]byte, fieldparams.RootLength),
-			StateRoot:         make([]byte, fieldparams.RootLength),
+			Slot:            slot,
+			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+			StateRoot:       make([]byte, fieldparams.RootLength),
 			ExecutionRequests: &enginev1.ExecutionRequests{},
 			Payload: &enginev1.ExecutionPayloadDeneb{
 				ParentHash:    parentHash[:],
