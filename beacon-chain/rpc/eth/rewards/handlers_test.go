@@ -541,8 +541,10 @@ func TestAttestationRewards(t *testing.T) {
 	require.NoError(t, st.SetCurrentParticipationBits(participation))
 	require.NoError(t, st.SetPreviousParticipationBits(participation))
 
+	blkRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	require.NoError(t, err)
 	currentSlot := params.BeaconConfig().SlotsPerEpoch * 3
-	mockChainService := &mock.ChainService{Optimistic: true, Slot: &currentSlot}
+	mockChainService := &mock.ChainService{OptimisticRoots: map[[32]byte]bool{blkRoot: true}, Slot: &currentSlot}
 	s := &Server{
 		Stater: &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{
 			params.BeaconConfig().SlotsPerEpoch*3 - 1: st,
@@ -803,6 +805,30 @@ func TestAttestationRewards(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusNotFound, e.Code)
+	})
+	t.Run("optimistic checked per block root", func(t *testing.T) {
+		// Block root is NOT in the optimistic set, so ExecutionOptimistic should be false.
+		nonOptMock := &mock.ChainService{OptimisticRoots: map[[32]byte]bool{}, Slot: &currentSlot}
+		nonOptServer := &Server{
+			Stater: &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{
+				params.BeaconConfig().SlotsPerEpoch*3 - 1: st,
+			}},
+			TimeFetcher:           nonOptMock,
+			OptimisticModeFetcher: nonOptMock,
+			FinalizationFetcher:   nonOptMock,
+		}
+
+		url := "http://only.the.epoch.number.at.the.end.is.important/1"
+		request := httptest.NewRequest("POST", url, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		nonOptServer.AttestationRewards(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.AttestationRewardsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, false, resp.ExecutionOptimistic)
+		assert.Equal(t, blkRoot, nonOptMock.OptimisticCheckRootReceived)
 	})
 }
 
