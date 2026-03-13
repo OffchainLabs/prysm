@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -561,4 +562,78 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	}
 
 	runTest(t, timedCtx, v)
+}
+
+func TestEventProcessingDoesNotBlockSlotProcessing(t *testing.T) {
+	slotChan := make(chan primitives.Slot, 1)
+	v := &testutil.FakeValidator{
+		Km:                &mockKeymanager{accountsChangedFeed: &event.Feed{}},
+		NextSlotRet:       slotChan,
+		RolesAtRet:        []iface.ValidatorRole{iface.RoleUnknown},
+		EventsChannel:     make(chan *eventClient.Event, 64),
+		IsRegularDeadline: true,
+	}
+	require.NoError(t, v.SetProposerSettings(t.Context(), &proposer.Settings{}))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	// Send an event before starting the runner.
+	v.EventsChannel <- &eventClient.Event{
+		EventType: eventClient.EventHead,
+		Data:      []byte(`{"slot":"1","previous_duty_dependent_root":"0x00","current_duty_dependent_root":"0x00"}`),
+	}
+
+	// Start the runner in a goroutine.
+	done := make(chan struct{})
+	go func() {
+		runTest(t, ctx, v)
+		close(done)
+	}()
+
+	// Give the runner time to start and spawn its event goroutine.
+	time.Sleep(100 * time.Millisecond)
+
+	// Now send a slot - it should be processed without being blocked by event processing.
+	slotChan <- 1
+	time.Sleep(200 * time.Millisecond)
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Runner did not exit after context cancel")
+	}
+
+	require.Equal(t, true, v.RoleAtCalled, "Expected RolesAt to be called when slot arrives")
+}
+
+func TestEventGoroutine_ExitsOnContextCancel(t *testing.T) {
+	v := &testutil.FakeValidator{
+		Km:            &mockKeymanager{accountsChangedFeed: &event.Feed{}},
+		NextSlotRet:   make(chan primitives.Slot),
+		EventsChannel: make(chan *eventClient.Event, 1),
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	done := make(chan struct{})
+	go func() {
+		runTest(t, ctx, v)
+		close(done)
+	}()
+
+	// Give the runner time to start.
+	time.Sleep(50 * time.Millisecond)
+
+	cancel()
+
+	select {
+	case <-done:
+		// Runner and event goroutine exited cleanly.
+	case <-time.After(5 * time.Second):
+		t.Fatal("Runner did not exit within timeout after context cancel")
+	}
+
+	require.Equal(t, true, v.DoneCalled, "Expected Done() to be called")
 }

@@ -1,6 +1,7 @@
 package event
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -94,5 +95,86 @@ func TestEventStreamRequestError(t *testing.T) {
 	if event.EventType != EventConnectionError {
 		t.Errorf("Expected event type %q, got %q", EventConnectionError, event.EventType)
 	}
+}
 
+func TestEventStream_ContextCancelDuringBlockedSend(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/eth/v1/events", func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		require.Equal(t, true, ok)
+		// Send events continuously until the client disconnects.
+		for i := 0; ; i++ {
+			_, err := fmt.Fprintf(w, "event: head\ndata: data%d\n\n", i)
+			if err != nil {
+				return
+			}
+			flusher.Flush()
+			time.Sleep(10 * time.Millisecond)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	// Use an unbuffered channel so sends will block.
+	eventsChannel := make(chan *Event)
+	ctx, cancel := context.WithCancel(t.Context())
+	stream, err := NewEventStream(ctx, http.DefaultClient, server.URL, []string{"head"})
+	require.NoError(t, err)
+
+	done := make(chan struct{})
+	go func() {
+		stream.Subscribe(eventsChannel)
+		close(done)
+	}()
+
+	// Cancel the context while the goroutine is trying to send on the blocked channel.
+	cancel()
+
+	// The goroutine should exit promptly.
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Subscribe goroutine did not exit after context cancel")
+	}
+}
+
+func TestEventStream_DoesNotCloseChannel(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/eth/v1/events", func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		require.Equal(t, true, ok)
+		_, err := fmt.Fprintf(w, "event: head\ndata: data1\n\n")
+		if err != nil {
+			return
+		}
+		flusher.Flush()
+		// Close the connection after one event to end the scanner loop.
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	eventsChannel := make(chan *Event, 10)
+	stream, err := NewEventStream(t.Context(), http.DefaultClient, server.URL, []string{"head"})
+	require.NoError(t, err)
+
+	done := make(chan struct{})
+	go func() {
+		stream.Subscribe(eventsChannel)
+		close(done)
+	}()
+
+	// Wait for Subscribe to finish.
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Subscribe goroutine did not exit")
+	}
+
+	// Channel should still be open (not closed). Verify by sending to it.
+	select {
+	case eventsChannel <- &Event{EventType: "test"}:
+		// Successfully sent, channel is open.
+	default:
+		t.Fatal("Channel appears to be closed or blocked unexpectedly")
+	}
 }

@@ -952,6 +952,7 @@ func (v *validator) StartEventStream(ctx context.Context, topics []string) {
 func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) {
 	if event == nil || event.Data == nil {
 		log.Warn("Received empty event")
+		return
 	}
 	switch event.EventType {
 	case eventClient.EventError:
@@ -959,25 +960,70 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 	case eventClient.EventConnectionError:
 		log.WithError(errors.New(string(event.Data))).Error("Event stream interrupted")
 	case eventClient.EventHead:
-		log.Debug("Received head event")
-		head := &structs.HeadEvent{}
-		if err := json.Unmarshal(event.Data, head); err != nil {
-			log.WithError(err).Error("Failed to unmarshal head Event into JSON")
-		}
-		uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
+		latest := v.drainHeadEvents(ctx, event)
+		head, slot, err := v.parseHeadEvent(latest)
 		if err != nil {
-			log.WithError(err).Error("Failed to parse slot")
+			log.WithError(err).Error("Failed to parse head event")
 			return
 		}
-		v.setHighestSlot(primitives.Slot(uintSlot))
+		v.setHighestSlot(slot)
 		if !v.disableDutiesPolling {
 			if err := v.checkDependentRoots(ctx, head); err != nil {
 				log.WithError(err).Error("Failed to check dependent roots")
 			}
 		}
 	default:
-		// just keep going and log the error
 		log.WithField("type", event.EventType).WithField("data", string(event.Data)).Warn("Received an unknown event")
+	}
+}
+
+// parseHeadEvent unmarshals a head event and extracts the slot.
+func (v *validator) parseHeadEvent(event *eventClient.Event) (*structs.HeadEvent, primitives.Slot, error) {
+	head := &structs.HeadEvent{}
+	if err := json.Unmarshal(event.Data, head); err != nil {
+		return nil, 0, err
+	}
+	uintSlot, err := strconv.ParseUint(head.Slot, 10, 64)
+	if err != nil {
+		return nil, 0, err
+	}
+	return head, primitives.Slot(uintSlot), nil
+}
+
+// drainHeadEvents reads any queued events from the channel, processing
+// non-head events immediately and returning the latest head event.
+// It also calls setHighestSlot for each intermediate head event.
+func (v *validator) drainHeadEvents(ctx context.Context, first *eventClient.Event) *eventClient.Event {
+	latest := first
+	drained := 0
+	for {
+		select {
+		case next := <-v.eventsChannel:
+			if next == nil || next.Data == nil {
+				continue
+			}
+			switch next.EventType {
+			case eventClient.EventHead:
+				if _, slot, err := v.parseHeadEvent(next); err == nil {
+					v.setHighestSlot(slot)
+				}
+				latest = next
+				drained++
+			case eventClient.EventError:
+				log.Error(string(next.Data))
+			case eventClient.EventConnectionError:
+				log.WithError(errors.New(string(next.Data))).Error("Event stream interrupted")
+			default:
+				log.WithField("type", next.EventType).WithField("data", string(next.Data)).Warn("Received an unknown event")
+			}
+		case <-ctx.Done():
+			return latest
+		default:
+			if drained > 0 {
+				log.WithField("drained", drained).Info("Drained stale head events during reorg")
+			}
+			return latest
+		}
 	}
 }
 
