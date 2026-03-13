@@ -1,3 +1,3 @@
 ### Fixed
 
-- Return `execution_optimistic` correctly for `/eth/v1/beacon/rewards/blocks/{block_id}`.
+- Return `execution_optimistic` correctly for reward APIs (block, attestation, sync committee).
