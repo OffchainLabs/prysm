@@ -1153,5 +1153,33 @@ func (s *Store) hasStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 	}
 
 	stateLvl := computeLevel(s.getOffset(), slot)
-	return stateLvl != -1, nil
+	if stateLvl == -1 {
+		return false, nil
+	}
+
+	if !s.stateDiffCache.levelHasData(stateLvl) {
+		return false, nil
+	}
+
+	hasState := false
+	err = s.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return errors.New("state diff bucket not found")
+		}
+
+		if stateLvl == 0 {
+			hasState = bucket.Get(makeKeyForStateDiffTree(stateLvl, uint64(slot))) != nil
+			return nil
+		}
+
+		hasState = hasCompleteDiffAtLevelSlot(bucket, stateLvl, uint64(slot))
+
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+	return hasState, nil
 }
