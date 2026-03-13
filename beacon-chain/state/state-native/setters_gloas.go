@@ -262,20 +262,6 @@ func (b *BeaconState) SetExecutionPayloadAvailability(index primitives.Slot, ava
 }
 
 // UpdateBuilderAtIndex updates the builder at the given index.
-//
-//	<spec fn="initiate_builder_exit" fork="gloas" hash="3da938d5">
-//	def initiate_builder_exit(state: BeaconState, builder_index: BuilderIndex) -> None:
-//	    """
-//	    Initiate the exit of the builder with index ``index``.
-//	    """
-//	    # Return if builder already initiated exit
-//	    builder = state.builders[builder_index]
-//	    if builder.withdrawable_epoch != FAR_FUTURE_EPOCH:
-//	        return
-//
-//	    # Set builder exit epoch
-//	    builder.withdrawable_epoch = get_current_epoch(state) + MIN_BUILDER_WITHDRAWABILITY_DELAY
-//	</spec>
 func (b *BeaconState) UpdateBuilderAtIndex(index primitives.BuilderIndex, builder *ethpb.Builder) error {
 	if b.version < version.Gloas {
 		return errNotSupported("UpdateBuilderAtIndex", b.version)
