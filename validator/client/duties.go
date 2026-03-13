@@ -111,6 +111,16 @@ func (v *validator) updateDutiesCombined(ctx context.Context, epoch primitives.E
 	v.dutiesLock.Lock()
 	v.duties.SetFromCombinedDutiesResponse(resp)
 	v.dutiesLock.Unlock()
+
+	allExitedCounter := 0
+	for _, d := range resp.CurrentEpochDuties {
+		if d.Status == ethpb.ValidatorStatus_EXITED {
+			allExitedCounter++
+		}
+	}
+	if allExitedCounter != 0 && allExitedCounter == len(resp.CurrentEpochDuties) {
+		return ErrValidatorsAllExited
+	}
 	return nil
 }
 
