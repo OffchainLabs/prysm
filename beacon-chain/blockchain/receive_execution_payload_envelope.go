@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -31,9 +32,18 @@ type ExecutionPayloadEnvelopeReceiver interface {
 }
 
 // ReceiveExecutionPayloadEnvelope processes a signed execution payload envelope for the Gloas fork.
-func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed interfaces.ROSignedExecutionPayloadEnvelope) error {
+func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed interfaces.ROSignedExecutionPayloadEnvelope) (err error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveExecutionPayloadEnvelope")
 	defer span.End()
+	start := time.Now()
+	defer func() {
+		beaconExecutionPayloadEnvelopeProcessingDurationSeconds.Observe(time.Since(start).Seconds())
+		if err != nil {
+			beaconExecutionPayloadEnvelopeInvalidTotal.Inc()
+			return
+		}
+		beaconExecutionPayloadEnvelopeValidTotal.Inc()
+	}()
 
 	envelope, err := signed.Envelope()
 	if err != nil {
@@ -139,6 +149,7 @@ func (s *Service) postPayloadHeadUpdate(ctx context.Context, envelope interfaces
 
 	s.headLock.Lock()
 	s.head.state = st
+	s.head.full = true
 	s.headLock.Unlock()
 
 	go func() {
@@ -152,7 +163,7 @@ func (s *Service) postPayloadHeadUpdate(ctx context.Context, envelope interfaces
 		}
 	}()
 
-	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot)
+	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot, blockHash[:])
 	if s.inRegularSync() {
 		go func() {
 			pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)

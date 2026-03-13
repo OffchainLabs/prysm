@@ -3,6 +3,7 @@ package state_native
 import (
 	"context"
 	"fmt"
+	"math/bits"
 	"runtime"
 	"slices"
 
@@ -1195,6 +1196,66 @@ func (b *BeaconState) RecordStateMetrics() {
 		multiValueAppendedElementsCountGauge.WithLabelValues(types.RandaoMixes.String()).Set(float64(stats.TotalAppendedElements))
 		multiValueAppendedElementReferencesCountGauge.WithLabelValues(types.RandaoMixes.String()).Set(float64(stats.TotalAppendedElemReferences))
 	}
+
+	recordGloasStateMetrics(b)
+}
+
+func recordGloasStateMetrics(b *BeaconState) {
+	if b.version < version.Gloas {
+		gloasExecutionPayloadAvailabilityRatio.Set(0)
+		gloasBuilderPendingWithdrawalsCount.Set(0)
+		gloasBuilderPendingWithdrawalsGwei.Set(0)
+		gloasPayloadExpectedWithdrawalsCount.Set(0)
+		gloasActiveBuildersCount.Set(0)
+		gloasActiveBuildersBalanceGwei.Set(0)
+		return
+	}
+
+	slotsPerHistoricalRoot := uint64(params.BeaconConfig().SlotsPerHistoricalRoot)
+	if slotsPerHistoricalRoot == 0 {
+		gloasExecutionPayloadAvailabilityRatio.Set(0)
+	} else {
+		availableCount := 0
+		for i, availabilityByte := range b.executionPayloadAvailability {
+			if i == len(b.executionPayloadAvailability)-1 && slotsPerHistoricalRoot%8 != 0 {
+				mask := byte((1 << (slotsPerHistoricalRoot % 8)) - 1)
+				availableCount += bits.OnesCount8(availabilityByte & mask)
+				continue
+			}
+			availableCount += bits.OnesCount8(availabilityByte)
+		}
+		gloasExecutionPayloadAvailabilityRatio.Set(float64(availableCount) / float64(slotsPerHistoricalRoot))
+	}
+
+	var pendingWithdrawalsGwei uint64
+	for _, withdrawal := range b.builderPendingWithdrawals {
+		if withdrawal == nil {
+			continue
+		}
+		pendingWithdrawalsGwei += uint64(withdrawal.Amount)
+	}
+	gloasBuilderPendingWithdrawalsCount.Set(float64(len(b.builderPendingWithdrawals)))
+	gloasBuilderPendingWithdrawalsGwei.Set(float64(pendingWithdrawalsGwei))
+	gloasPayloadExpectedWithdrawalsCount.Set(float64(len(b.payloadExpectedWithdrawals)))
+
+	var activeBuildersCount uint64
+	var activeBuildersBalanceGwei uint64
+	finalizedEpoch := primitives.Epoch(0)
+	if b.finalizedCheckpoint != nil {
+		finalizedEpoch = b.finalizedCheckpoint.Epoch
+	}
+	for _, builder := range b.builders {
+		if builder == nil {
+			continue
+		}
+		if builder.DepositEpoch >= finalizedEpoch || builder.WithdrawableEpoch != params.BeaconConfig().FarFutureEpoch {
+			continue
+		}
+		activeBuildersCount++
+		activeBuildersBalanceGwei += uint64(builder.Balance)
+	}
+	gloasActiveBuildersCount.Set(float64(activeBuildersCount))
+	gloasActiveBuildersBalanceGwei.Set(float64(activeBuildersBalanceGwei))
 }
 
 // IsNil checks if the state and the underlying proto
