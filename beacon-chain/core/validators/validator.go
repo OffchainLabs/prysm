@@ -125,35 +125,6 @@ func InitiateValidatorExit(
 	return s, nil
 }
 
-// InitiateBuilderExit initiates the exit of a builder by setting its withdrawable epoch.
-//
-//	<spec fn="initiate_builder_exit" fork="gloas" hash="3da938d5">
-//	def initiate_builder_exit(state: BeaconState, builder_index: BuilderIndex) -> None:
-//	    """
-//	    Initiate the exit of the builder with index ``index``.
-//	    """
-//	    # Return if builder already initiated exit
-//	    builder = state.builders[builder_index]
-//	    if builder.withdrawable_epoch != FAR_FUTURE_EPOCH:
-//	        return
-//
-//	    # Set builder exit epoch
-//	    builder.withdrawable_epoch = get_current_epoch(state) + MIN_BUILDER_WITHDRAWABILITY_DELAY
-//	</spec>
-func InitiateBuilderExit(s state.BeaconState, builderIndex primitives.BuilderIndex) error {
-	builder, err := s.Builder(builderIndex)
-	if err != nil {
-		return err
-	}
-	// Return if builder already initiated exit.
-	if builder.WithdrawableEpoch != params.BeaconConfig().FarFutureEpoch {
-		return nil
-	}
-	currentEpoch := slots.ToEpoch(s.Slot())
-	builder.WithdrawableEpoch = currentEpoch + params.BeaconConfig().MinBuilderWithdrawabilityDelay
-	return s.UpdateBuilderAtIndex(builderIndex, builder)
-}
-
 // InitiateValidatorExitForTotalBal has the same functionality as InitiateValidatorExit,
 // the only difference being how total active balance is obtained. In InitiateValidatorExit
 // it is calculated inside the function and in InitiateValidatorExitForTotalBal it's a

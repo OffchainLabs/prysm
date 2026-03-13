@@ -4861,7 +4861,7 @@
 
 - name: initiate_builder_exit#gloas
   sources:
-    - file: beacon-chain/core/validators/validator.go
+    - file: beacon-chain/core/gloas/builder_exit.go
       search: func InitiateBuilderExit(
   spec: |
     <spec fn="initiate_builder_exit" fork="gloas" hash="3da938d5">

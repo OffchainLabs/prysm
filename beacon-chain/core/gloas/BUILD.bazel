@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "attestation.go",
         "bid.go",
+        "builder_exit.go",
         "deposit_request.go",
         "log.go",
         "payload.go",

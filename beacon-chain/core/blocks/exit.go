@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
@@ -67,7 +68,7 @@ func ProcessVoluntaryExits(
 			if err := verifyBuilderExitAndSignature(beaconState, exit); err != nil {
 				return nil, errors.Wrapf(err, "could not verify builder exit %d", idx)
 			}
-			if err := v.InitiateBuilderExit(beaconState, exit.Exit.ValidatorIndex.ToBuilderIndex()); err != nil {
+			if err := gloas.InitiateBuilderExit(beaconState, exit.Exit.ValidatorIndex.ToBuilderIndex()); err != nil {
 				return nil, err
 			}
 			continue
@@ -215,9 +216,7 @@ func verifyExitConditions(st state.ReadOnlyBeaconState, validator state.ReadOnly
 }
 
 // verifyBuilderExitAndSignature validates a builder voluntary exit.
-//
-// [New in Gloas:EIP7732] Builder exits reuse the SignedVoluntaryExit envelope
-// but are identified by the builder index flag on the validator index field.
+// [New in Gloas:EIP7732]
 func verifyBuilderExitAndSignature(st state.ReadOnlyBeaconState, signed *ethpb.SignedVoluntaryExit) error {
 	if signed == nil || signed.Exit == nil {
 		return errors.New("nil exit")
