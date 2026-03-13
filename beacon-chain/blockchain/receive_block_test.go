@@ -281,7 +281,7 @@ func TestService_ReceiveBlockBatch(t *testing.T) {
 			require.NoError(t, err)
 			rwsb, err := blocks.NewROBlock(wsb)
 			require.NoError(t, err)
-			err = s.ReceiveBlockBatch(ctx, []blocks.ROBlock{rwsb}, &das.MockAvailabilityStore{})
+			err = s.ReceiveBlockBatch(ctx, []blocks.ROBlock{rwsb}, nil, &das.MockAvailabilityStore{})
 			if tt.wantedErr != "" {
 				assert.ErrorContains(t, tt.wantedErr, err)
 			} else {

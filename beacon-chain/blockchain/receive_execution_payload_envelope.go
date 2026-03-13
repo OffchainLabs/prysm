@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -200,6 +201,45 @@ func (s *Service) getPayloadEnvelopePrestate(ctx context.Context, envelope inter
 		return nil, fmt.Errorf("nil pre-state for beacon block root %#x", root)
 	}
 	return preState, nil
+}
+
+func (s *Service) notifyNewEnvelopeFromBlock(ctx context.Context, b blocks.ROBlock, envelope interfaces.ROExecutionPayloadEnvelope) (bool, error) {
+	ctx, span := trace.StartSpan(ctx, "blockChain.notifyNewEnvelopeFromBlock")
+	defer span.End()
+
+	payload, err := envelope.Execution()
+	if err != nil {
+		return false, errors.Wrap(err, "could not get execution payload from envelope")
+	}
+
+	sbid, err := b.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return false, errors.Wrap(err, "could not get signed execution payload bid from block")
+	}
+	commitments := sbid.Message.BlobKzgCommitments
+	versionedHashes := make([]common.Hash, len(commitments))
+	for i, c := range commitments {
+		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
+	}
+
+	parentRoot := common.Hash(b.Block().ParentRoot())
+	requests := envelope.ExecutionRequests()
+
+	_, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests, envelope.Slot())
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus) {
+		log.WithFields(logrus.Fields{
+			"slot":             envelope.Slot(),
+			"payloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
+		}).Info("Called new payload with optimistic envelope")
+		return false, nil
+	}
+	if errors.Is(err, execution.ErrInvalidPayloadStatus) {
+		return false, invalidBlock{error: ErrInvalidPayload}
+	}
+	return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 }
 
 // The returned boolean indicates whether the payload was valid or if it was accepted as syncing (optimistic).
