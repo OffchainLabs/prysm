@@ -64,7 +64,11 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	// Pre-Gloas we use empty for head because we still key states by blockroot
 	var full bool
 	var err error
-	if headState.Version() >= version.Gloas && slots.ToEpoch(headState.Slot()) >= params.BeaconConfig().GloasForkEpoch {
+	gloasFirstSlot, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
+	if err != nil {
+		return errors.Wrap(err, "could not compute gloas first slot")
+	}
+	if headState.Version() >= version.Gloas && headState.Slot() > gloasFirstSlot {
 		full, err = headState.IsParentBlockFull()
 		if err != nil {
 			return errors.Wrap(err, "could not determine if head is full or not")
