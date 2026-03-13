@@ -64,19 +64,10 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	// Pre-Gloas we use empty for head because we still key states by blockroot
 	var full bool
 	var err error
-	if headState.Version() >= version.Gloas {
-		bid, err := headState.LatestExecutionPayloadBid()
+	if headState.Version() >= version.Gloas && slots.ToEpoch(headState.Slot()) >= params.BeaconConfig().GloasForkEpoch {
+		full, err = headState.IsParentBlockFull()
 		if err != nil {
-			return errors.Wrap(err, "could not retrieve latest execution payload bid")
-		}
-		// Guard against the fork-boundary false positive: `UpgradeToGloas` initializes
-		// `bid.BlockHash == latestBlockHash`. A real Gloas bid (bid.Slot >= fork epoch)
-		// must have been processed before `IsParentBlockFull` can be trusted.
-		if slots.ToEpoch(bid.Slot()) >= params.BeaconConfig().GloasForkEpoch {
-			full, err = headState.IsParentBlockFull()
-			if err != nil {
-				return errors.Wrap(err, "could not determine if head is full or not")
-			}
+			return errors.Wrap(err, "could not determine if head is full or not")
 		}
 	}
 
