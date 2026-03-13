@@ -65,26 +65,37 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 //	    )
 //	</spec>
 func processDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest) error {
+	var err error
+	defer func() {
+		if err == nil {
+			builderDepositsProcessedTotal.Inc()
+		}
+	}()
+
 	if request == nil {
-		return errors.New("nil deposit request")
+		err = errors.New("nil deposit request")
+		return err
 	}
 
-	applied, err := applyBuilderDepositRequest(beaconState, request)
+	var applied bool
+	applied, err = applyBuilderDepositRequest(beaconState, request)
 	if err != nil {
-		return errors.Wrap(err, "could not apply builder deposit")
+		err = errors.Wrap(err, "could not apply builder deposit")
+		return err
 	}
 	if applied {
 		return nil
 	}
 
-	if err := beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
+	if err = beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
 		PublicKey:             request.Pubkey,
 		WithdrawalCredentials: request.WithdrawalCredentials,
 		Amount:                request.Amount,
 		Signature:             request.Signature,
 		Slot:                  beaconState.Slot(),
 	}); err != nil {
-		return errors.Wrap(err, "could not append deposit request")
+		err = errors.Wrap(err, "could not append deposit request")
+		return err
 	}
 	return nil
 }

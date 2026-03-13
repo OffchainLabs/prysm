@@ -191,6 +191,7 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	if attr == nil || attr.IsEmpty() {
 		return
 	}
+	beaconLatePayloadTaskTriggeredTotal.Inc()
 	// Head is the empty block.
 	bh, err := st.LatestBlockHash()
 	if err != nil {

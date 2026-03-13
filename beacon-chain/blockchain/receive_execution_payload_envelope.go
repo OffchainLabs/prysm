@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -31,9 +32,18 @@ type ExecutionPayloadEnvelopeReceiver interface {
 }
 
 // ReceiveExecutionPayloadEnvelope processes a signed execution payload envelope for the Gloas fork.
-func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed interfaces.ROSignedExecutionPayloadEnvelope) error {
+func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed interfaces.ROSignedExecutionPayloadEnvelope) (err error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveExecutionPayloadEnvelope")
 	defer span.End()
+	start := time.Now()
+	defer func() {
+		beaconExecutionPayloadEnvelopeProcessingDurationSeconds.Observe(time.Since(start).Seconds())
+		if err != nil {
+			beaconExecutionPayloadEnvelopeInvalidTotal.Inc()
+			return
+		}
+		beaconExecutionPayloadEnvelopeValidTotal.Inc()
+	}()
 
 	envelope, err := signed.Envelope()
 	if err != nil {
