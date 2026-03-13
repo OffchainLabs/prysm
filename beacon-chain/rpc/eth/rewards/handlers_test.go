@@ -475,7 +475,7 @@ func TestBlockRewards(t *testing.T) {
 		blkRoot, err := sbb.Block().HashTreeRoot()
 		require.NoError(t, err)
 		// Block root is NOT in the optimistic set, so ExecutionOptimistic should be false.
-		mockChainService := &mock.ChainService{Optimistic: true}
+		mockChainService := &mock.ChainService{OptimisticRoots: map[[32]byte]bool{}}
 		s := &Server{
 			Blocker: &testutil.MockBlocker{SlotBlockMap: map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock{
 				0: phase0block,
@@ -873,8 +873,11 @@ func TestSyncCommiteeRewards(t *testing.T) {
 	phase0block, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 	require.NoError(t, err)
 
+	blkRoot, err := sbb.Block().HashTreeRoot()
+	require.NoError(t, err)
 	currentSlot := params.BeaconConfig().SlotsPerEpoch
-	mockChainService := &mock.ChainService{Optimistic: true, Slot: &currentSlot}
+	mockChainService := &mock.ChainService{OptimisticRoots: map[[32]byte]bool{blkRoot: true}, Slot: &currentSlot}
+	db := dbutil.SetupDB(t)
 	s := &Server{
 		Blocker: &testutil.MockBlocker{SlotBlockMap: map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock{
 			0:  phase0block,
@@ -884,7 +887,7 @@ func TestSyncCommiteeRewards(t *testing.T) {
 		FinalizationFetcher:   mockChainService,
 		BlockRewardFetcher: &BlockRewardService{
 			Replayer: mockstategen.NewReplayerBuilder(mockstategen.WithMockState(st)),
-			DB:       dbutil.SetupDB(t)},
+			DB:       db},
 	}
 
 	t.Run("ok - filtered vals", func(t *testing.T) {
@@ -1100,5 +1103,39 @@ func TestSyncCommiteeRewards(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
 		assert.Equal(t, "Sync committee rewards are not supported for Phase 0", e.Message)
+	})
+	t.Run("optimistic checked per block root", func(t *testing.T) {
+		balances := make([]uint64, 0, valCount)
+		for range valCount {
+			balances = append(balances, params.BeaconConfig().MaxEffectiveBalance)
+		}
+		require.NoError(t, st.SetBalances(balances))
+
+		// Use a mock where the block root is NOT optimistic.
+		nonOptMock := &mock.ChainService{OptimisticRoots: map[[32]byte]bool{}, Slot: &currentSlot}
+		nonOptServer := &Server{
+			Blocker: &testutil.MockBlocker{SlotBlockMap: map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock{
+				0:  phase0block,
+				32: sbb,
+			}},
+			OptimisticModeFetcher: nonOptMock,
+			FinalizationFetcher:   nonOptMock,
+			BlockRewardFetcher: &BlockRewardService{
+				Replayer: mockstategen.NewReplayerBuilder(mockstategen.WithMockState(st)),
+				DB:       db,
+			},
+		}
+
+		url := "http://only.the.slot.number.at.the.end.is.important/32"
+		request := httptest.NewRequest("POST", url, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		nonOptServer.SyncCommitteeRewards(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.SyncCommitteeRewardsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, false, resp.ExecutionOptimistic)
+		assert.Equal(t, blkRoot, nonOptMock.OptimisticCheckRootReceived)
 	})
 }
