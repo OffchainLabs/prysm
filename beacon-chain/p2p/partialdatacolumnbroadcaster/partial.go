@@ -185,8 +185,9 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 						gossipForPeerResp: respCh,
 					},
 				}:
-				case <-p.stop:
-					return peerState, nil, nil, errors.New("broadcaster stopped")
+				default:
+					p.logger.Warn("Dropping incoming gossip for peer", "topic", topic, "groupID", groupID, "remote", remote)
+					return peerState, nil, nil, errors.New("incomingReq channel is full, dropping gossip for peer")
 				}
 				select {
 				case resp := <-respCh:
