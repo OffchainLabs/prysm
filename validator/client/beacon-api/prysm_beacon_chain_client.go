@@ -47,7 +47,7 @@ func (c prysmChainClient) ValidatorCount(ctx context.Context, stateID string, st
 		queryParams.Add("status", status.String())
 	}
 
-	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v1/beacon/states/%s/validator_count", stateID), queryParams)
+	queryUrl := apiutil.BuildURL(fmt.Sprintf("/prysm/v1/beacon/states/%s/validator_count", stateID), queryParams)
 
 	var validatorCountResponse structs.GetValidatorCountResponse
 	if err = c.handler.Get(ctx, queryUrl, &validatorCountResponse); err != nil {

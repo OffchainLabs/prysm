@@ -1109,16 +1109,6 @@ func (s *Service) prysmBeaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
-			template: "/eth/v1/beacon/states/{state_id}/validator_count",
-			name:     namespace + ".GetValidatorCount",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.GetValidatorCount,
-			methods: []string{http.MethodGet},
-		},
-		{
 			template: "/prysm/v1/beacon/states/{state_id}/validator_count",
 			name:     namespace + ".GetValidatorCount",
 			middleware: []middleware.Middleware{

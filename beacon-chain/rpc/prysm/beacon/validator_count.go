@@ -20,7 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
-// GetValidatorCount is a HTTP handler that serves the GET /eth/v1/beacon/states/{state_id}/validator_count endpoint.
+// GetValidatorCount is a HTTP handler that serves the GET /prysm/v1/beacon/states/{state_id}/validator_count endpoint.
 // It returns the total validator count according to the given statuses provided as a query parameter.
 //
 // The state ID is expected to be a valid Beacon Chain state identifier.
@@ -30,7 +30,7 @@ import (
 //
 // Example usage:
 //
-//	GET /eth/v1/beacon/states/12345/validator_count?status=active&status=pending
+//	GET /prysm/v1/beacon/states/12345/validator_count?status=active&status=pending
 //
 // The above request will return a JSON response like:
 //
