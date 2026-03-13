@@ -81,8 +81,6 @@ type ChainService struct {
 	MockCanonicalFull           map[primitives.Slot]bool
 	ParentPayloadReadyVal       *bool
 	ForkchoiceRoots             map[[32]byte]bool
-	MockCanonicalRoots          map[primitives.Slot][32]byte
-	MockCanonicalFull           map[primitives.Slot]bool
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -280,7 +278,7 @@ func (s *ChainService) ReceiveBlockInitialSync(ctx context.Context, block interf
 }
 
 // ReceiveBlockBatch processes blocks in batches from initial-sync.
-func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, _ das.AvailabilityChecker) error {
+func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, _ []interfaces.ROSignedExecutionPayloadEnvelope, _ das.AvailabilityChecker) error {
 	if s.State == nil {
 		return ErrNilState
 	}
