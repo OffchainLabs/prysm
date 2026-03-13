@@ -24,12 +24,12 @@ func (b *BeaconState) SetRandaoMixes(val [][]byte) error {
 // UpdateRandaoMixesAtIndex for the beacon state. Updates the randao mixes
 // at a specific index to a new value.
 func (b *BeaconState) UpdateRandaoMixesAtIndex(idx uint64, val [32]byte) error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
 	if err := b.randaoMixesMultiValue.UpdateAt(b, idx, val); err != nil {
 		return errors.Wrap(err, "could not update randao mixes")
 	}
-
-	b.lock.Lock()
-	defer b.lock.Unlock()
 
 	b.markFieldAsDirty(types.RandaoMixes)
 	b.addDirtyIndices(types.RandaoMixes, []uint64{idx})

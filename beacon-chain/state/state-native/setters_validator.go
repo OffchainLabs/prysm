@@ -31,6 +31,9 @@ func (b *BeaconState) SetValidators(val []*ethpb.Validator) error {
 // ApplyToEveryValidator applies the provided callback function to each validator in the
 // validator registry.
 func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error)) error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
 	var changedVals []uint64
 	l := b.validatorsMultiValue.Len(b)
 	for i := range l {
@@ -54,9 +57,6 @@ func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyVa
 		}
 	}
 
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
 	if len(changedVals) > 0 {
 		b.markFieldAsDirty(types.Validators)
 		b.addDirtyIndices(types.Validators, changedVals)
@@ -67,12 +67,12 @@ func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyVa
 // UpdateValidatorAtIndex for the beacon state. Updates the validator
 // at a specific index to a new value.
 func (b *BeaconState) UpdateValidatorAtIndex(idx primitives.ValidatorIndex, val *ethpb.Validator) error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
 	if err := b.validatorsMultiValue.UpdateAt(b, uint64(idx), val); err != nil {
 		return errors.Wrap(err, "could not update validator")
 	}
-
-	b.lock.Lock()
-	defer b.lock.Unlock()
 
 	b.markFieldAsDirty(types.Validators)
 	b.addDirtyIndices(types.Validators, []uint64{uint64(idx)})
@@ -98,12 +98,12 @@ func (b *BeaconState) SetBalances(val []uint64) error {
 // UpdateBalancesAtIndex for the beacon state. This method updates the balance
 // at a specific index to a new value.
 func (b *BeaconState) UpdateBalancesAtIndex(idx primitives.ValidatorIndex, val uint64) error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
 	if err := b.balancesMultiValue.UpdateAt(b, uint64(idx), val); err != nil {
 		return errors.Wrap(err, "could not update balances")
 	}
-
-	b.lock.Lock()
-	defer b.lock.Unlock()
 
 	b.markFieldAsDirty(types.Balances)
 	b.addDirtyIndices(types.Balances, []uint64{uint64(idx)})
@@ -151,11 +151,11 @@ func (b *BeaconState) UpdateSlashingsAtIndex(idx, val uint64) error {
 // AppendValidator for the beacon state. Appends the new value
 // to the end of list.
 func (b *BeaconState) AppendValidator(val *ethpb.Validator) error {
-	b.validatorsMultiValue.Append(b, val)
-	valIdx := primitives.ValidatorIndex(b.validatorsMultiValue.Len(b) - 1)
-
 	b.lock.Lock()
 	defer b.lock.Unlock()
+
+	b.validatorsMultiValue.Append(b, val)
+	valIdx := primitives.ValidatorIndex(b.validatorsMultiValue.Len(b) - 1)
 
 	b.valMapHandler.Set(bytesutil.ToBytes48(val.PublicKey), valIdx)
 	b.markFieldAsDirty(types.Validators)
@@ -166,11 +166,11 @@ func (b *BeaconState) AppendValidator(val *ethpb.Validator) error {
 // AppendBalance for the beacon state. Appends the new value
 // to the end of list.
 func (b *BeaconState) AppendBalance(bal uint64) error {
-	b.balancesMultiValue.Append(b, bal)
-	balIdx := uint64(b.balancesMultiValue.Len(b) - 1)
-
 	b.lock.Lock()
 	defer b.lock.Unlock()
+
+	b.balancesMultiValue.Append(b, bal)
+	balIdx := uint64(b.balancesMultiValue.Len(b) - 1)
 
 	b.markFieldAsDirty(types.Balances)
 	b.addDirtyIndices(types.Balances, []uint64{balIdx})
@@ -179,14 +179,14 @@ func (b *BeaconState) AppendBalance(bal uint64) error {
 
 // AppendInactivityScore for the beacon state.
 func (b *BeaconState) AppendInactivityScore(s uint64) error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
 	if b.version == version.Phase0 {
 		return errNotSupported("AppendInactivityScore", b.version)
 	}
 
 	b.inactivityScoresMultiValue.Append(b, s)
-
-	b.lock.Lock()
-	defer b.lock.Unlock()
 
 	b.markFieldAsDirty(types.InactivityScores)
 	return nil
