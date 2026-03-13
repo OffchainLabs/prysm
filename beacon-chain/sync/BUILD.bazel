@@ -34,6 +34,7 @@ go_library(
         "rpc_data_column_sidecars_by_root.go",
         "rpc_execution_payload_envelopes_by_range.go",
         "rpc_execution_payload_envelopes_by_root.go",
+        "rpc_execution_payload_envelopes_metrics.go",
         "rpc_goodbye.go",
         "rpc_light_client.go",
         "rpc_metadata.go",

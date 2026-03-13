@@ -39,10 +39,6 @@ var (
 		Name: "payload_id_cache_hit",
 		Help: "The number of payload id get requests that are present in the cache.",
 	})
-	gloasPayloadIDCacheTotal = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "gloas_payload_id_cache_total",
-		Help: "The number of Gloas payload ID cache requests by result.",
-	}, []string{"result"})
 )
 
 func setFeeRecipientIfBurnAddress(val *cache.TrackedValidator) {
@@ -93,9 +89,6 @@ func (vs *Server) getLocalPayloadFromEngine(
 		var pid primitives.PayloadID
 		copy(pid[:], payloadId[:])
 		payloadIDCacheHit.Inc()
-		if st.Version() >= version.Gloas {
-			gloasPayloadIDCacheTotal.WithLabelValues("hit").Inc()
-		}
 		res, err := vs.ExecutionEngineCaller.GetPayload(ctx, pid, slot)
 		if err == nil {
 			warnIfFeeRecipientDiffers(val.FeeRecipient[:], res.ExecutionData.FeeRecipient())
@@ -117,9 +110,6 @@ func (vs *Server) getLocalPayloadFromEngine(
 		return nil, err
 	}
 	payloadIDCacheMiss.Inc()
-	if st.Version() >= version.Gloas {
-		gloasPayloadIDCacheTotal.WithLabelValues("miss").Inc()
-	}
 
 	random, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	if err != nil {

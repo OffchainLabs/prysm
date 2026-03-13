@@ -6,21 +6,21 @@ import (
 )
 
 var (
-	gloasBuilderPendingPaymentsProcessedTotal = promauto.NewCounter(
+	builderPendingPaymentsProcessedTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
-			Name: "gloas_builder_pending_payments_processed_total",
+			Name: "builder_pending_payments_processed_total",
 			Help: "The number of builder pending payments promoted into the builder pending withdrawal queue.",
 		},
 	)
-	gloasBuilderDepositsProcessedTotal = promauto.NewCounter(
+	builderDepositsProcessedTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
-			Name: "gloas_builder_deposits_processed_total",
+			Name: "builder_deposits_processed_total",
 			Help: "The number of builder-related deposit requests processed.",
 		},
 	)
-	gloasBuilderExitsProcessedTotal = promauto.NewCounter(
+	builderExitsProcessedTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
-			Name: "gloas_builder_exits_processed_total",
+			Name: "builder_exits_processed_total",
 			Help: "The number of processed builder exits.",
 		},
 	)
