@@ -8,6 +8,7 @@ import (
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -30,9 +31,15 @@ func (vs *Server) ProposeExit(ctx context.Context, req *ethpb.SignedVoluntaryExi
 		return nil, status.Error(codes.InvalidArgument, "invalid signature provided")
 	}
 
-	// Confirm the validator is eligible to exit with the parameters provided.
+	// Builder exits are only valid from Gloas onwards.
+	if req.Exit.ValidatorIndex.IsBuilderIndex() {
+		if s.Version() < version.Gloas {
+			return nil, status.Error(codes.InvalidArgument, "builder exits not supported before Gloas")
+		}
+	}
+	// Confirm the validator/builder is eligible to exit with the parameters provided.
 	val, err := s.ValidatorAtIndexReadOnly(req.Exit.ValidatorIndex)
-	if err != nil {
+	if err != nil && !req.Exit.ValidatorIndex.IsBuilderIndex() {
 		return nil, status.Error(codes.InvalidArgument, "validator index exceeds validator set length")
 	}
 

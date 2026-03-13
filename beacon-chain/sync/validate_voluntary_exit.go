@@ -7,11 +7,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
-	beaconstate "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -56,19 +56,19 @@ func (s *Service) validateVoluntaryExit(ctx context.Context, pid peer.ID, msg *p
 		return pubsub.ValidationIgnore, err
 	}
 
-	// For builder exits (Gloas+), skip the validator bounds check and lookup
-	// since the index refers to a builder, not a validator.
-	var val beaconstate.ReadOnlyValidator
+	// Builder exits are only valid from Gloas onwards.
 	if exit.Exit.ValidatorIndex.IsBuilderIndex() {
-		// val remains nil; VerifyExitAndSignature handles builder verification internally.
+		if headState.Version() < version.Gloas {
+			return pubsub.ValidationReject, errors.New("builder exits not supported before Gloas")
+		}
 	} else {
 		if uint64(exit.Exit.ValidatorIndex) >= uint64(headState.NumValidators()) {
 			return pubsub.ValidationReject, errors.New("validator index is invalid")
 		}
-		val, err = headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
-		if err != nil {
-			return pubsub.ValidationIgnore, err
-		}
+	}
+	val, err := headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
+	if err != nil && !exit.Exit.ValidatorIndex.IsBuilderIndex() {
+		return pubsub.ValidationIgnore, err
 	}
 	if err := blocks.VerifyExitAndSignature(val, headState, exit); err != nil {
 		return pubsub.ValidationReject, err

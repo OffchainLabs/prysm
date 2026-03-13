@@ -9,6 +9,7 @@ import (
 	types "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	doublylinkedlist "github.com/OffchainLabs/prysm/v7/container/doubly-linked-list"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/sirupsen/logrus"
 )
@@ -79,9 +80,18 @@ func (p *Pool) ExitsForInclusion(state state.ReadOnlyBeaconState, slot types.Slo
 			}
 			continue
 		}
-		validator, err := state.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
-		if err != nil {
-			logrus.WithError(err).Warningf("could not get validator at index %d", exit.Exit.ValidatorIndex)
+		// Builder exits are only valid from Gloas onwards.
+		if exit.Exit.ValidatorIndex.IsBuilderIndex() && state.Version() < version.Gloas {
+			node, err = node.Next()
+			if err != nil {
+				p.lock.RUnlock()
+				return nil, err
+			}
+			continue
+		}
+		validator, vErr := state.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
+		if vErr != nil && !exit.Exit.ValidatorIndex.IsBuilderIndex() {
+			logrus.WithError(vErr).Warningf("could not get validator at index %d", exit.Exit.ValidatorIndex)
 			node, err = node.Next()
 			if err != nil {
 				p.lock.RUnlock()
