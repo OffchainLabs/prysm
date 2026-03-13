@@ -3453,7 +3453,7 @@ func TestGetPTCDuties(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
-		assert.StringContains(t, "can not be greater than next epoch", e.Message)
+		assert.StringContains(t, "can not be greater than current epoch", e.Message)
 	})
 }
 

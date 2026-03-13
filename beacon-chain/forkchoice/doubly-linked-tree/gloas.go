@@ -372,6 +372,8 @@ func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) err
 		children:   make([]*Node, 0),
 	}
 	s.fullNodeByRoot[root] = fn
+	payloadInsertedCount.Inc()
+	updatePayloadNodeMetrics(s)
 	f.updateNewFullNodeWeight(fn)
 	return nil
 }
@@ -391,6 +393,7 @@ func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, bl
 	if n == nil {
 		return
 	}
+	ptcVoteCount.Inc()
 	if payloadPresent {
 		n.node.setPayloadAvailabilityVote(ptcIdx)
 	}
@@ -500,7 +503,7 @@ func (f *ForkChoice) FullHead(ctx context.Context) ([32]byte, [32]byte, bool, er
 	}
 	n := f.store.headNode
 	pn := f.store.choosePayloadContent(n)
-	if pn.full {
+	if pn.full && slots.ToEpoch(n.slot) >= params.BeaconConfig().GloasForkEpoch {
 		return hr, pn.node.blockHash, true, nil
 	}
 	fullAncestor := f.store.fullParent(pn)
