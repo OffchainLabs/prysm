@@ -1025,11 +1025,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 
 	var accessRoot [32]byte
 	isFull, err := headState.IsParentBlockFull()
-	gloasFirstSlot, slotErr := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
-	if slotErr != nil {
-		log.WithError(slotErr).Debug("could not perform late block tasks: failed to compute gloas first slot")
-		return
-	}
+	gloasFirstSlot, _ := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
 	if err != nil || !isFull || headState.Slot() <= gloasFirstSlot {
 		accessRoot = headRoot
 	} else {
