@@ -832,7 +832,7 @@ func TestAttestationRewards(t *testing.T) {
 	})
 }
 
-func TestSyncCommiteeRewards(t *testing.T) {
+func TestSyncCommitteeRewards(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.AltairForkEpoch = 1
