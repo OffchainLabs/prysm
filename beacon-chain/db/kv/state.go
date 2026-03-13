@@ -1103,12 +1103,16 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 		return nil, ErrSlotBeforeOffset
 	}
 
+	if computeLevel(s.getOffset(), slot) == -1 {
+		return nil, ErrNotFoundState
+	}
+
 	st, err := s.stateByDiff(ctx, slot)
 	if err != nil {
 		return nil, err
 	}
 	if st == nil || st.IsNil() {
-		return nil, errors.Wrap(ErrNotFoundState, "state not found")
+		return nil, ErrNotFoundState
 	}
 
 	if blk == nil {
