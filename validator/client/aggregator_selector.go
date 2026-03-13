@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
@@ -191,11 +192,22 @@ type distributedSelector struct {
 	attSelLock     sync.Mutex
 	attSelections  map[attSelectionKey]iface.BeaconCommitteeSelection
 	refreshedEpoch primitives.Epoch
-	hasRefreshed   bool
+	readyCh        chan struct{}
+}
+
+func closedChan() chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
 }
 
 func newDistributedSelector(v *validator) *distributedSelector {
-	return &distributedSelector{v: v, attSelections: make(map[attSelectionKey]iface.BeaconCommitteeSelection)}
+	return &distributedSelector{
+		v:              v,
+		attSelections:  make(map[attSelectionKey]iface.BeaconCommitteeSelection),
+		refreshedEpoch: math.MaxUint64, // No real epoch matches this, so the first refresh always proceeds.
+		readyCh:        closedChan(),   // Already signaled so reads before the first refresh don't block.
+	}
 }
 
 func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context) error {
@@ -203,13 +215,35 @@ func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context) error 
 	defer span.End()
 
 	epoch := slots.ToEpoch(slots.CurrentSlot(p.v.genesisTime))
+
 	p.attSelLock.Lock()
-	if p.hasRefreshed && p.refreshedEpoch == epoch {
+	if p.refreshedEpoch == epoch {
 		p.attSelLock.Unlock()
 		return nil
 	}
+	// New epoch — create a fresh channel that readers will block on.
+	ch := make(chan struct{})
+	p.readyCh = ch
+	p.refreshedEpoch = epoch
 	p.attSelLock.Unlock()
 
+	// Ensure the channel is closed even on error so readers don't block forever.
+	defer close(ch)
+
+	newSelections, err := p.fetchSelectionProofs(ctx)
+
+	p.attSelLock.Lock()
+	if err != nil {
+		p.refreshedEpoch = math.MaxUint64 // Allow retry next call.
+	} else {
+		p.attSelections = newSelections
+	}
+	p.attSelLock.Unlock()
+
+	return err
+}
+
+func (p *distributedSelector) fetchSelectionProofs(ctx context.Context) (map[attSelectionKey]iface.BeaconCommitteeSelection, error) {
 	var req []iface.BeaconCommitteeSelection
 	for _, duties := range []map[pubkey]*ethpb.ValidatorDuty{
 		p.v.duties.CurrentEpochDuties(),
@@ -221,7 +255,7 @@ func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context) error 
 			}
 			slotSig, err := p.v.signSlotWithSelectionProof(ctx, pk, duty.AttesterSlot)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			req = append(req, iface.BeaconCommitteeSelection{
 				SelectionProof: slotSig,
@@ -233,30 +267,36 @@ func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context) error 
 
 	resp, err := p.v.validatorClient.AggregatedSelections(ctx, req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	newSelections := make(map[attSelectionKey]iface.BeaconCommitteeSelection, len(resp))
+	selections := make(map[attSelectionKey]iface.BeaconCommitteeSelection, len(resp))
 	for _, s := range resp {
-		newSelections[attSelectionKey{
+		selections[attSelectionKey{
 			slot:  s.Slot,
 			index: s.ValidatorIndex,
 		}] = s
 	}
-
-	p.attSelLock.Lock()
-	p.attSelections = newSelections
-	p.refreshedEpoch = epoch
-	p.hasRefreshed = true
-	p.attSelLock.Unlock()
-
-	return nil
+	return selections, nil
 }
 
-func (p *distributedSelector) AttestationSelectionProof(_ context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error) {
+func (p *distributedSelector) AttestationSelectionProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error) {
 	idx, err := p.v.indexFromPubkey(pubKey)
 	if err != nil {
 		return nil, err
+	}
+
+	// Grab the current ready channel under the lock (cheap).
+	p.attSelLock.Lock()
+	ch := p.readyCh
+	p.attSelLock.Unlock()
+
+	// Wait for the refresh goroutine to finish. Within an epoch the channel
+	// is already closed so the select completes immediately.
+	select {
+	case <-ch:
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 
 	p.attSelLock.Lock()
