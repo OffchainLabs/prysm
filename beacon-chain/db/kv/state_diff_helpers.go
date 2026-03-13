@@ -288,7 +288,7 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 		return bucket.Put(exponentsKey, exponentsBytes)
 	})
 	if err != nil {
-		return pkgerrors.Wrap(err, "failed to set offset")
+		return pkgerrors.Wrap(err, "failed to set state diff metadata in db")
 	}
 
 	// Create the state diff cache (this will read the offset from the database).
