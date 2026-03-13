@@ -123,6 +123,11 @@ func (s *Store) LegacyGenesisState(ctx context.Context) (state.BeaconState, erro
 func (s *Store) SaveState(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveState")
 	defer span.End()
+
+	if features.Get().EnableStateDiff && s.stateDiffCache != nil {
+		return s.saveStateByDiff(ctx, st)
+	}
+
 	ok, err := s.isStateValidatorMigrationOver()
 	if err != nil {
 		return err
