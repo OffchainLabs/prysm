@@ -145,50 +145,6 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 	return preStateVersion, preStateHeader, nil
 }
 
-// applyPayloadIfNeeded applies the parent block's execution payload envelope to
-// preState when the current block's bid indicates it built on a full parent.
-func (s *Service) applyPayloadIfNeeded(ctx context.Context, b interfaces.ReadOnlyBeaconBlock, parentRoot [32]byte, preState state.BeaconState) error {
-	if b.Version() < version.Gloas || parentRoot == [32]byte{} {
-		return nil
-	}
-	parentBlock, err := s.cfg.BeaconDB.Block(ctx, parentRoot)
-	if err != nil {
-		return errors.Wrapf(err, "could not get parent block with root %#x", parentRoot)
-	}
-	if parentBlock.Version() < version.Gloas {
-		return nil
-	}
-	sb, err := b.Body().SignedExecutionPayloadBid()
-	if err != nil {
-		return errors.Wrap(err, "could not get execution payload bid for block")
-	}
-	if sb == nil || sb.Message == nil {
-		return fmt.Errorf("missing execution payload bid for block at slot %d", b.Slot())
-	}
-	parentBid, err := parentBlock.Block().Body().SignedExecutionPayloadBid()
-	if err != nil {
-		return errors.Wrapf(err, "could not get execution payload bid for parent block with root %#x", parentRoot)
-	}
-	if parentBid == nil || parentBid.Message == nil {
-		return fmt.Errorf("missing execution payload bid for parent block with root %#x", parentRoot)
-	}
-	if !bytes.Equal(sb.Message.ParentBlockHash, parentBid.Message.BlockHash) {
-		return nil
-	}
-	signedEnvelope, err := s.cfg.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
-	if err != nil {
-		return errors.Wrapf(err, "could not get execution payload envelope for parent block with root %#x", parentRoot)
-	}
-	if signedEnvelope == nil || signedEnvelope.Message == nil {
-		return nil
-	}
-	envelope, err := consensusblocks.WrappedROBlindedExecutionPayloadEnvelope(signedEnvelope.Message)
-	if err != nil {
-		return errors.Wrapf(err, "could not wrap blinded execution payload envelope for parent block with root %#x", parentRoot)
-	}
-	return gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, preState, parentBlock.Block().StateRoot(), envelope)
-}
-
 // getBatchPrestate returns the pre-state to apply to the first beacon block in the batch and returns true if it applied the first envelope before
 func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope) (state.BeaconState, bool, error) {
 	if len(envelopes) == 0 || b.Version() < version.Gloas {
@@ -223,6 +179,10 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 		}
 		return blockPreState, false, nil
 	}
+	parentBlock, err := s.cfg.BeaconDB.Block(ctx, parentRoot)
+	if err != nil {
+		return nil, false, errors.Wrap(err, "could not get parent block")
+	}
 	env, err := envelopes[0].Envelope()
 	if err != nil {
 		return nil, false, err
@@ -234,10 +194,6 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 	}
 	if _, err := s.notifyNewEnvelope(ctx, blockPreState, env); err != nil {
 		return nil, false, err
-	}
-	parentBlock, err := s.cfg.BeaconDB.Block(ctx, parentRoot)
-	if err != nil {
-		return nil, false, errors.Wrap(err, "could not get parent block")
 	}
 	if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, blockPreState, parentBlock.Block().StateRoot(), env); err != nil {
 		return nil, false, err

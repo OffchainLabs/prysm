@@ -478,37 +478,37 @@ func (s *Service) fetchAndQueuePayloadEnvelopesForRoots(
 		return
 	}
 
-	var envelopeRoots p2ptypes.ExecutionPayloadEnvelopesByRootReq
 	for _, root := range roots {
-		if s.cfg.beaconDB.HasExecutionPayloadEnvelope(ctx, root) {
-			continue
-		}
 		blk, found, err := s.pendingBlockByRoot(root)
 		if err != nil {
 			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Debug("Could not inspect pending block by root")
 			continue
 		}
+		// Only request payload envelopes for blocks strictly after the Gloas start slot.
 		if !found || blk.Block().Slot() <= gloasStartSlot {
 			continue
 		}
-		envelopeRoots = append(envelopeRoots, root)
-	}
-
-	if len(envelopeRoots) == 0 {
-		return
-	}
-
-	envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &envelopeRoots)
-	if err != nil {
-		log.WithError(err).Debug("Could not request execution payload envelopes by root")
-		return
-	}
-
-	for _, env := range envelopes {
-		if env == nil || env.Message == nil {
+		if s.cfg.beaconDB.HasExecutionPayloadEnvelope(ctx, root) {
 			continue
 		}
-		s.queuePendingPayloadEnvelopeFromRootRequest(env)
+
+		req := p2ptypes.ExecutionPayloadEnvelopesByRootReq{root}
+		envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &req)
+		if err != nil {
+			log.WithError(err).WithFields(logrus.Fields{
+				"peer": pid,
+				"root": fmt.Sprintf("%#x", root),
+				"slot": blk.Block().Slot(),
+			}).Debug("Could not request execution payload envelope by root")
+			continue
+		}
+
+		for _, env := range envelopes {
+			if env == nil || env.Message == nil {
+				continue
+			}
+			s.queuePendingPayloadEnvelopeFromRootRequest(env)
+		}
 	}
 }
 

@@ -203,31 +203,6 @@ func (s *Service) getPayloadEnvelopePrestate(ctx context.Context, envelope inter
 	return preState, nil
 }
 
-func (s *Service) callNewPayload(
-	ctx context.Context,
-	payload interfaces.ExecutionData,
-	versionedHashes []common.Hash,
-	parentRoot common.Hash,
-	requests *enginev1.ExecutionRequests,
-	slot primitives.Slot,
-) (bool, error) {
-	_, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)
-	if err == nil {
-		return true, nil
-	}
-	if errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus) {
-		log.WithFields(logrus.Fields{
-			"slot":             slot,
-			"payloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
-		}).Info("Called new payload with optimistic envelope")
-		return false, nil
-	}
-	if errors.Is(err, execution.ErrInvalidPayloadStatus) {
-		return false, invalidBlock{error: ErrInvalidPayload}
-	}
-	return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
-}
-
 func (s *Service) notifyNewEnvelopeFromBlock(ctx context.Context, b blocks.ROBlock, envelope interfaces.ROExecutionPayloadEnvelope) (bool, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyNewEnvelopeFromBlock")
 	defer span.End()
@@ -236,15 +211,35 @@ func (s *Service) notifyNewEnvelopeFromBlock(ctx context.Context, b blocks.ROBlo
 	if err != nil {
 		return false, errors.Wrap(err, "could not get execution payload from envelope")
 	}
+
 	sbid, err := b.Block().Body().SignedExecutionPayloadBid()
 	if err != nil {
 		return false, errors.Wrap(err, "could not get signed execution payload bid from block")
 	}
-	versionedHashes := make([]common.Hash, len(sbid.Message.BlobKzgCommitments))
-	for i, c := range sbid.Message.BlobKzgCommitments {
+	commitments := sbid.Message.BlobKzgCommitments
+	versionedHashes := make([]common.Hash, len(commitments))
+	for i, c := range commitments {
 		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
 	}
-	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(b.Block().ParentRoot()), envelope.ExecutionRequests(), envelope.Slot())
+
+	parentRoot := common.Hash(b.Block().ParentRoot())
+	requests := envelope.ExecutionRequests()
+
+	_, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests, envelope.Slot())
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus) {
+		log.WithFields(logrus.Fields{
+			"slot":             envelope.Slot(),
+			"payloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
+		}).Info("Called new payload with optimistic envelope")
+		return false, nil
+	}
+	if errors.Is(err, execution.ErrInvalidPayloadStatus) {
+		return false, invalidBlock{error: ErrInvalidPayload}
+	}
+	return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 }
 
 // The returned boolean indicates whether the payload was valid or if it was accepted as syncing (optimistic).
