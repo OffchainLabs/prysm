@@ -142,8 +142,9 @@ var (
 	}
 	// P2PHost defines the host IP to be used by libp2p.
 	P2PHost = &cli.StringFlag{
-		Name:  "p2p-host-ip",
-		Usage: "The IP address advertised by libp2p. This may be used to advertise an external IP.",
+		Name: "p2p-host-ip",
+		Usage: "The IP address advertised by libp2p. This may be used to advertise an external IP. " +
+			"Set to 'auto' to automatically detect the IP from local network interfaces. (Won't work behind a NAT or within a containerized environment.)",
 		Value: "",
 	}
 	// P2PHostDNS defines the host DNS to be used by libp2p.

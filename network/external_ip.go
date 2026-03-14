@@ -2,9 +2,12 @@
 package network
 
 import (
+	"fmt"
 	"net"
 	"sort"
 )
+
+const defaultIP = "127.0.0.1"
 
 // IPAddr gets the external ipv4 address and converts into a libp2p formatted value.
 func IPAddr() net.IP {
@@ -22,7 +25,7 @@ func ExternalIPv4() (string, error) {
 		return "", err
 	}
 	if len(ips) == 0 {
-		return "127.0.0.1", nil
+		return defaultIP, nil
 	}
 	for _, ip := range ips {
 		ip = ip.To4()
@@ -31,7 +34,7 @@ func ExternalIPv4() (string, error) {
 		}
 		return ip.String(), nil
 	}
-	return "127.0.0.1", nil
+	return defaultIP, nil
 }
 
 // ExternalIP returns the first IPv4/IPv6 available.
@@ -41,8 +44,31 @@ func ExternalIP() (string, error) {
 		return "", err
 	}
 	if len(ips) == 0 {
-		return "127.0.0.1", nil
+		return defaultIP, nil
 	}
+	return ips[0].String(), nil
+}
+
+// ExternalPublicIP returns the first public (non-private) IP available,
+// preferring IPv4 over IPv6. If no public IP is found, it falls back to the
+// first private IP. Returns "127.0.0.1" if no addresses are available at all.
+func ExternalPublicIP() (string, error) {
+	ips, err := ipAddrs()
+	if err != nil {
+		return "", fmt.Errorf("failed to get IP addresses: %w", err)
+	}
+
+	if len(ips) == 0 {
+		return defaultIP, nil
+	}
+
+	for _, ip := range ips {
+		if !ip.IsPrivate() {
+			return ip.String(), nil
+		}
+	}
+
+	// No public IP found, fall back to first available (private) IP.
 	return ips[0].String(), nil
 }
 

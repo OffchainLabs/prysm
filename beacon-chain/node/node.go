@@ -65,6 +65,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	"github.com/OffchainLabs/prysm/v7/monitoring/prometheus"
+	prysmnetwork "github.com/OffchainLabs/prysm/v7/network"
 	"github.com/OffchainLabs/prysm/v7/runtime"
 	"github.com/OffchainLabs/prysm/v7/runtime/prereqs"
 	"github.com/ethereum/go-ethereum/common"
@@ -73,7 +74,10 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const testSkipPowFlag = "test-skip-pow"
+const (
+	testSkipPowFlag = "test-skip-pow"
+	autoIPFlag      = "auto"
+)
 
 // Used as a struct to keep cli flag options for configuring services
 // for the beacon node. We keep this as a separate struct to not pollute the actual BeaconNode
@@ -656,6 +660,16 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		return fmt.Errorf("failed to register p2p service: %w", err)
 	}
 
+	hostAddress := cliCtx.String(cmd.P2PHost.Name)
+	if hostAddress == autoIPFlag {
+		hostAddress, err = prysmnetwork.ExternalPublicIP()
+		if err != nil {
+			return fmt.Errorf("failed to auto-detect IP address: %w", err)
+		}
+
+		logHostAddress(hostAddress)
+	}
+
 	svc, err := p2p.NewService(b.ctx, &p2p.Config{
 		NoDiscovery:           cliCtx.Bool(cmd.NoDiscovery.Name),
 		StaticPeers:           slice.SplitCommaSeparated(cliCtx.StringSlice(cmd.StaticPeers.Name)),
@@ -664,7 +678,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		DataDir:               dataDir,
 		DiscoveryDir:          filepath.Join(dataDir, "discovery"),
 		LocalIP:               cliCtx.String(cmd.P2PIP.Name),
-		HostAddress:           cliCtx.String(cmd.P2PHost.Name),
+		HostAddress:           hostAddress,
 		HostDNS:               cliCtx.String(cmd.P2PHostDNS.Name),
 		PrivateKey:            cliCtx.String(cmd.P2PPrivKey.Name),
 		StaticPeerID:          cliCtx.Bool(cmd.P2PStaticID.Name),
@@ -1174,4 +1188,15 @@ func hasNetworkFlag(cliCtx *cli.Context) bool {
 		}
 	}
 	return false
+}
+
+func logHostAddress(address string) {
+	parsedIP := net.ParseIP(address)
+
+	if parsedIP == nil || !parsedIP.IsPrivate() {
+		log.WithField("address", address).Info("Automatically detected host IP address")
+		return
+	}
+
+	log.WithField("address", address).Warning("No public IP address found, falling back to private address which may not be reachable from the internet")
 }
