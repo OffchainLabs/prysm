@@ -1,2 +1,8 @@
 bazel-*
 .git
+tests/
+external/
+.github/
+*.md
+hack/
+bin/

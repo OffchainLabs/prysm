@@ -68,7 +68,7 @@ func (c *CanonicalHistory) BlockRootForSlot(ctx context.Context, target primitiv
 	// don't bother searching for candidate roots when we know the target slot is genesis
 	for slotAbove > 1 {
 		if ctx.Err() != nil {
-			return [32]byte{}, errors.Wrap(ctx.Err(), "context canceled during manu canonicalBlockForSlot")
+			return [32]byte{}, errors.Wrap(ctx.Err(), "context canceled during canonicalBlockForSlot")
 		}
 		slot, roots, err := c.h.HighestRootsBelowSlot(ctx, slotAbove)
 		if err != nil {
