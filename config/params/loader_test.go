@@ -39,9 +39,13 @@ var placeholderFields = []string{
 	"EIP7805_FORK_VERSION",
 	"EIP7928_FORK_EPOCH",
 	"EIP7928_FORK_VERSION",
+	"EIP8025_FORK_EPOCH",
+	"EIP8025_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
 	"FIELD_ELEMENTS_PER_CELL",     // Configured as a constant in config/fieldparams/mainnet.go
 	"FIELD_ELEMENTS_PER_EXT_BLOB", // Configured in proto/ssz_proto_library.bzl
+	"HEZE_FORK_EPOCH",
+	"HEZE_FORK_VERSION",
 	"INCLUSION_LIST_SUBMISSION_DEADLINE",
 	"INCLUSION_LIST_SUBMISSION_DUE_BPS",
 	"KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH", // Configured in proto/ssz_proto_library.bzl

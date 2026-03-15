@@ -1,4 +1,4 @@
-version: v1.7.0-alpha.2
+version: v1.7.0-alpha.3
 style: full
 
 specrefs:
@@ -49,6 +49,8 @@ exceptions:
     - RANDOM_CHALLENGE_KZG_CELL_BATCH_DOMAIN#fulu
     # fulu
     - UINT256_MAX#fulu
+    # heze
+    - DOMAIN_INCLUSION_LIST_COMMITTEE#heze
     # gloas
     - BUILDER_PAYMENT_THRESHOLD_DENOMINATOR#gloas
     - BUILDER_PAYMENT_THRESHOLD_NUMERATOR#gloas
@@ -74,6 +76,14 @@ exceptions:
     - GLOAS_FORK_VERSION#gloas
     - MIN_BUILDER_WITHDRAWABILITY_DELAY#gloas
     - SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
+    # heze
+    - HEZE_FORK_EPOCH#heze
+    - HEZE_FORK_VERSION#heze
+    - INCLUSION_LIST_SUBMISSION_DUE_BPS#heze
+    - MAX_BYTES_PER_INCLUSION_LIST#heze
+    - MAX_REQUEST_INCLUSION_LIST#heze
+    - PROPOSER_INCLUSION_LIST_CUTOFF_BPS#heze
+    - VIEW_FREEZE_CUTOFF_BPS#heze
 
   ssz_objects:
     # phase0
@@ -103,6 +113,12 @@ exceptions:
     - SignedExecutionPayloadBid#gloas
     - SignedExecutionPayloadEnvelope#gloas
     - SignedProposerPreferences#gloas
+    # heze
+    - BeaconState#heze
+    - ExecutionPayloadBid#heze
+    - InclusionList#heze
+    - SignedExecutionPayloadBid#heze
+    - SignedInclusionList#heze
 
   dataclasses:
     # phase0
@@ -123,6 +139,11 @@ exceptions:
     - ExpectedWithdrawals#gloas
     - LatestMessage#gloas
     - Store#gloas
+    # heze
+    - GetInclusionListResponse#heze
+    - InclusionListStore#heze
+    - PayloadAttributes#heze
+    - Store#heze
 
   functions:
     # Functions implemented by KZG library for EIP-4844
@@ -411,6 +432,36 @@ exceptions:
     - update_next_withdrawal_builder_index#gloas
     - update_payload_expected_withdrawals#gloas
     - update_proposer_boost_root#gloas
+    # new in alpha.3 (not yet implemented)
+    - compute_attestation_subnet_prefix_bits#phase0
+    - compute_max_request_blob_sidecars#deneb
+    - compute_max_request_blob_sidecars#electra
+    - compute_max_request_data_column_sidecars#fulu
+    - compute_min_epochs_for_block_requests#phase0
+    - is_payload_data_available#gloas
+    - is_pending_validator#gloas
+    # heze
+    - compute_fork_version#heze
+    - get_forkchoice_store#heze
+    - get_inclusion_list_bits#heze
+    - get_inclusion_list_committee#heze
+    - get_inclusion_list_committee_assignment#heze
+    - get_inclusion_list_signature#heze
+    - get_inclusion_list_store#heze
+    - get_inclusion_list_submission_due_ms#heze
+    - get_inclusion_list_transactions#heze
+    - get_proposer_inclusion_list_cutoff_ms#heze
+    - get_view_freeze_cutoff_ms#heze
+    - is_inclusion_list_bits_inclusive#heze
+    - is_payload_inclusion_list_satisfied#heze
+    - is_valid_inclusion_list_signature#heze
+    - on_execution_payload#heze
+    - on_inclusion_list#heze
+    - prepare_execution_payload#heze
+    - process_inclusion_list#heze
+    - record_payload_inclusion_list_satisfaction#heze
+    - should_extend_payload#heze
+    - upgrade_to_heze#heze
 
   presets:
     # gloas
@@ -419,3 +470,5 @@ exceptions:
     - MAX_BUILDERS_PER_WITHDRAWALS_SWEEP#gloas
     - MAX_PAYLOAD_ATTESTATIONS#gloas
     - PTC_SIZE#gloas
+    # heze
+    - INCLUSION_LIST_COMMITTEE_SIZE#heze
