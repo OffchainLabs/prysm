@@ -108,6 +108,16 @@ func (ini *Initializer) NewSignedProposerPreferencesVerifier(p *ethpb.SignedProp
 	}
 }
 
+// NewExecutionPayloadBidVerifier creates an ExecutionPayloadBidVerifier for a single signed execution payload bid
+// with the given set of requirements.
+func (ini *Initializer) NewExecutionPayloadBidVerifier(b interfaces.ROSignedExecutionPayloadBid, reqs []Requirement) *BidVerifier {
+	return &BidVerifier{
+		sharedResources: ini.shared,
+		results:         newResults(reqs...),
+		b:               b,
+	}
+}
+
 // NewPayloadEnvelopeVerifier creates a SignedExecutionPayloadEnvelopeVerifier for a single signed execution payload envelope with the given set of requirements.
 func (ini *Initializer) NewPayloadEnvelopeVerifier(ee interfaces.ROSignedExecutionPayloadEnvelope, reqs []Requirement) *EnvelopeVerifier {
 	return &EnvelopeVerifier{
