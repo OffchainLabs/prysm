@@ -49,3 +49,18 @@ Therefore, whenever using `go test`, do not forget to pass in extra build tag, e
 ```bash
 go test ./beacon-chain/sync/initial-sync -tags develop
 ```
+
+### Test data setup
+
+Spec tests and config param tests require external data that is not checked in.
+Download it before running tests:
+
+```bash
+# Spec test vectors + consensus configs + testnet configs
+./hack/download-spec-tests.sh
+
+# E2E test binaries (lighthouse, web3signer)
+./hack/download-e2e-deps.sh
+```
+
+See `testing/spectest/README.md` for more details.

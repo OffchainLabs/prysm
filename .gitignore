@@ -41,3 +41,7 @@ tmp
 
 # spectest coverage reports
 report.txt
+
+# Downloaded test data (see hack/download-spec-tests.sh)
+tests/
+external/

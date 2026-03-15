@@ -85,6 +85,9 @@ jobs:
         env:
            CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
 
+      - name: Download spec test data
+        run: ./hack/download-spec-tests.sh
+
       - name: Test
         run: go test -v ./...
         env:

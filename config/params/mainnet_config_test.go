@@ -2,12 +2,12 @@ package params_test
 
 import (
 	"path"
-	"path/filepath"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	testutil "github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestMaxRequestBlock(t *testing.T) {
@@ -45,8 +45,9 @@ func TestMainnetConfigMatchesUpstreamYaml(t *testing.T) {
 		cfg, err = params.UnmarshalConfigFile(fp, cfg)
 		require.NoError(t, err)
 	}
-	fPath, err := filepath.Abs("external/mainnet")
+	repoRoot, err := testutil.RepoRoot()
 	require.NoError(t, err)
+	fPath := path.Join(repoRoot, "external", "mainnet")
 	configFP := path.Join(fPath, "metadata", "config.yaml")
 	pcfg, err := params.UnmarshalConfigFile(configFP, nil)
 	require.NoError(t, err)

@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	testutil "github.com/OffchainLabs/prysm/v7/testing/util"
 	"gopkg.in/yaml.v2"
 )
 
@@ -367,18 +368,18 @@ func TestConfigParityYaml(t *testing.T) {
 // configFilePath sets the proper config and returns the relevant
 // config file path from eth2-spec-tests directory.
 func configFilePath(t *testing.T, config string) string {
-	fPath, err := filepath.Abs("external/consensus_spec")
+	repoRoot, err := testutil.RepoRoot()
 	require.NoError(t, err)
-	configFilePath := path.Join(fPath, "configs", config+".yaml")
-	return configFilePath
+	return path.Join(repoRoot, "external", "consensus_spec", "configs", config+".yaml")
 }
 
 // presetsFilePath returns the relevant preset file paths from eth2-spec-tests
 // directory. This method returns a preset file path for each hard fork or
 // major network upgrade, in order.
 func presetsFilePath(t *testing.T, config string) []string {
-	fPath, err := filepath.Abs("external/consensus_spec")
+	repoRoot, err := testutil.RepoRoot()
 	require.NoError(t, err)
+	fPath := path.Join(repoRoot, "external", "consensus_spec")
 
 	return []string{
 		path.Join(fPath, "presets", config, "phase0.yaml"),
