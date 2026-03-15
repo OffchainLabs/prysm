@@ -13,7 +13,6 @@ approval_rules:
       only_changed_files:
         paths:
           - "*_test.go"
-          - "*.bazel"
     options:
       ignore_commits_by:
         users: ["bulldozer[bot]"]
@@ -26,7 +25,6 @@ approval_rules:
       only_changed_files:
         paths:
           - "*pb.go"
-          - "*.bazel"
     options:
       ignore_commits_by:
         users: ["bulldozer[bot]"]
@@ -68,7 +66,6 @@ approval_rules:
       changed_files:
         ignore:
           - "*pb.go"
-          - "*.bazel"
     options:
       ignore_commits_by:
         users: ["bulldozer[bot]"]

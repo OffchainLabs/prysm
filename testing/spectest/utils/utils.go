@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ghodss/yaml"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -34,9 +34,9 @@ func UnmarshalYaml(y []byte, dest any) error {
 // on the passed in eth2-spec-tests directory along with its path.
 func TestFolders(t testing.TB, config, forkOrPhase, folderPath string) ([]os.DirEntry, string) {
 	testsFolderPath := path.Join("tests", config, forkOrPhase, folderPath)
-	filepath, err := bazel.Runfile(testsFolderPath)
+	absPath, err := filepath.Abs(testsFolderPath)
 	require.NoError(t, err)
-	testFolders, err := os.ReadDir(filepath)
+	testFolders, err := os.ReadDir(absPath)
 	require.NoError(t, err)
 
 	if len(testFolders) == 0 {

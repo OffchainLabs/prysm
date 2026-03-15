@@ -22,7 +22,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -178,16 +177,14 @@ func (node *ValidatorNode) saveConfig() (string, error) {
 // Start starts a validator client.
 func (v *ValidatorNode) Start(ctx context.Context) error {
 	validatorHexPubKeys := make([]string, 0)
-	var pkg, target string
+	var target string
 	if v.config.UsePrysmShValidator {
-		pkg = ""
 		target = "prysm_sh"
 	} else {
-		pkg = "cmd/validator"
 		target = "validator"
 	}
-	binaryPath, found := bazel.FindBinary(pkg, target)
-	if !found {
+	binaryPath, err := exec.LookPath(target)
+	if err != nil {
 		return errors.New("validator binary not found")
 	}
 

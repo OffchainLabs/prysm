@@ -3,6 +3,8 @@ package depositsnapshot
 import (
 	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
@@ -162,29 +163,36 @@ func (sd *snapshot) UnmarshalYAML(value *yaml.Node) error {
 }
 
 func readTestCases() ([]testCase, error) {
-	testFolders, err := bazel.ListRunfiles()
+	var found string
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.Contains(path, "eip4881_spec_tests") &&
+			strings.Contains(path, "eip-4881/test_cases.yaml") {
+			found = path
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	for _, ff := range testFolders {
-		if strings.Contains(ff.ShortPath, "eip4881_spec_tests") &&
-			strings.Contains(ff.ShortPath, "eip-4881/test_cases.yaml") {
-			enc, err := file.ReadFileAsBytes(ff.Path)
-			if err != nil {
-				return nil, err
-			}
-			var testCases []testCase
-			err = yaml.Unmarshal(enc, &testCases)
-			if err != nil {
-				return []testCase{}, err
-			}
-			if len(testCases) == 0 {
-				return nil, errors.New("no test cases found")
-			}
-			return testCases, nil
-		}
+	if found == "" {
+		return nil, errors.New("spec test file not found")
 	}
-	return nil, errors.New("spec test file not found")
+	enc, err := file.ReadFileAsBytes(found)
+	if err != nil {
+		return nil, err
+	}
+	var testCases []testCase
+	err = yaml.Unmarshal(enc, &testCases)
+	if err != nil {
+		return []testCase{}, err
+	}
+	if len(testCases) == 0 {
+		return nil, errors.New("no test cases found")
+	}
+	return testCases, nil
 }
 
 func TestRead(t *testing.T) {

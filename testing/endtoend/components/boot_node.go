@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 )
 
 var _ e2etypes.ComponentRunner = (*BootNode)(nil)
@@ -39,9 +38,8 @@ func (node *BootNode) ENR() string {
 
 // Start starts a bootnode blocks up until ctx is cancelled.
 func (node *BootNode) Start(ctx context.Context) error {
-	binaryPath, found := bazel.FindBinary("tools/bootnode", "bootnode")
-	if !found {
-		log.Info(binaryPath)
+	binaryPath, err := exec.LookPath("bootnode")
+	if err != nil {
 		return errors.New("boot node binary not found")
 	}
 

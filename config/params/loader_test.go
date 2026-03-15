@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"gopkg.in/yaml.v2"
 )
 
@@ -354,7 +353,7 @@ func Test_replaceHexStringWithYAMLFormat(t *testing.T) {
 
 func TestConfigParityYaml(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	testDir := bazel.TestTmpDir()
+	testDir := os.TempDir()
 	yamlDir := filepath.Join(testDir, "config.yaml")
 
 	testCfg := params.E2ETestConfig()
@@ -368,7 +367,7 @@ func TestConfigParityYaml(t *testing.T) {
 // configFilePath sets the proper config and returns the relevant
 // config file path from eth2-spec-tests directory.
 func configFilePath(t *testing.T, config string) string {
-	fPath, err := bazel.Runfile("external/consensus_spec")
+	fPath, err := filepath.Abs("external/consensus_spec")
 	require.NoError(t, err)
 	configFilePath := path.Join(fPath, "configs", config+".yaml")
 	return configFilePath
@@ -378,7 +377,7 @@ func configFilePath(t *testing.T, config string) string {
 // directory. This method returns a preset file path for each hard fork or
 // major network upgrade, in order.
 func presetsFilePath(t *testing.T, config string) []string {
-	fPath, err := bazel.Runfile("external/consensus_spec")
+	fPath, err := filepath.Abs("external/consensus_spec")
 	require.NoError(t, err)
 
 	return []string{

@@ -75,7 +75,6 @@ jobs:
           go get -v -t -d ./...
 
       - name: Build
-        # Use blst tag to allow go and bazel builds for blst.
         run: go build -v ./...
         env:
            CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
@@ -86,6 +85,7 @@ jobs:
         env:
            CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"
 
-# Tests run via Bazel for now...
-#      - name: Test
-#        run: go test -v ./...
+      - name: Test
+        run: go test -v ./...
+        env:
+           CGO_CFLAGS: "-O2 -D__BLST_PORTABLE__"

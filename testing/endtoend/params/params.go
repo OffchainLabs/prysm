@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/io/file"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -68,10 +67,10 @@ func (*paths) Eth1StaticFile(rel ...string) string {
 	return path.Join(parts...)
 }
 
-// Eth1Runfile returns the full path to a file in the eth1 static directory, within bazel's run context.
+// Eth1Runfile returns the full path to a file in the eth1 static directory.
 // The relative path is specified as a variadic slice of path parts, in the same style as path.Join.
 func (p *paths) Eth1Runfile(rel ...string) (string, error) {
-	return bazel.Runfile(p.Eth1StaticFile(rel...))
+	return filepath.Abs(p.Eth1StaticFile(rel...))
 }
 
 // MinerKeyPath returns the full path to the file containing the miner's cryptographic keys.
@@ -181,7 +180,7 @@ func Init(t *testing.T, beaconNodeCount int) error {
 	if err := file.MkdirAll(logPath); err != nil {
 		return err
 	}
-	testPath := bazel.TestTmpDir()
+	testPath := os.TempDir()
 	testTotalShardsStr, ok := os.LookupEnv("TEST_TOTAL_SHARDS")
 	if !ok {
 		testTotalShardsStr = "1"
@@ -222,7 +221,7 @@ func Init(t *testing.T, beaconNodeCount int) error {
 
 // InitMultiClient initializes the multiclient E2E config, properly handling test sharding.
 func InitMultiClient(t *testing.T, beaconNodeCount int, lighthouseNodeCount int) error {
-	testPath := bazel.TestTmpDir()
+	testPath := os.TempDir()
 	logPath, ok := os.LookupEnv("TEST_UNDECLARED_OUTPUTS_DIR")
 	if !ok {
 		return errors.New("expected TEST_UNDECLARED_OUTPUTS_DIR to be defined")

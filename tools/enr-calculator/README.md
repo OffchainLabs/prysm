@@ -3,8 +3,7 @@
 To generate the ENR of a node
 
 ```
- bazel run //tools/enr-calculator:enr-calculator -- --private CAISIJXSWjkbgprwuo01QCRegULoNIOZ0yTl1fLz5N0SsJCS --ipAddress 127.0.0.1 --port 2000
-
+go run ./tools/enr-calculator -- --private CAISIJXSWjkbgprwuo01QCRegULoNIOZ0yTl1fLz5N0SsJCS --ipAddress 127.0.0.1 --port 2000
 ```
 
 This will deterministically generate an ENR from given inputs of private key, ip address and udp port.

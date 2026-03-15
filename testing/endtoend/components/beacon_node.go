@@ -23,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/pkg/errors"
 )
 
@@ -215,9 +214,8 @@ func (node *BeaconNode) saveConfig() (string, error) {
 
 // Start starts a fresh beacon node, connecting to all passed in beacon nodes.
 func (node *BeaconNode) Start(ctx context.Context) error {
-	binaryPath, found := bazel.FindBinary("cmd/beacon-chain", "beacon-chain")
-	if !found {
-		log.Info(binaryPath)
+	binaryPath, err := exec.LookPath("beacon-chain")
+	if err != nil {
 		return errors.New("beacon chain binary not found")
 	}
 

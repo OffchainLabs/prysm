@@ -1,26 +1,31 @@
 #!/bin/bash
 . "$(dirname "$0")"/common.sh
 
-# Script to copy ssz.go files from bazel build folder to appropriate location.
-# Bazel builds to bazel-bin/... folder, script copies them back to original folder where target is.
+# Script to regenerate SSZ marshal/unmarshal code.
+# Requires: sszgen (github.com/prysmaticlabs/fastssz/sszgen)
+#
+# Install:
+#   go install github.com/prysmaticlabs/fastssz/sszgen@latest
 
-bazel query 'kind(ssz_gen_marshal, //proto/...)' | xargs bazel build $@
-
-# Get locations of proto ssz.go files.
+# Find all directories containing ssz-tagged structs under proto/
 file_list=()
 while IFS= read -d $'\0' -r file; do
-    file_list=("${file_list[@]}" "$file")
-done < <($findutil -L "$(bazel info bazel-bin)"/ -type f -regextype sed -regex ".*ssz\.go$" -print0)
+    file_list=("${file_list[@]}" "$(dirname "$file")")
+done < <($findutil ./proto -type f -name "*_generated.ssz.go" -print0)
 
-arraylength=${#file_list[@]}
-searchstring="/bin/"
+# Deduplicate directories
+declare -A seen
+for dir in "${file_list[@]}"; do
+    if [[ -z "${seen[$dir]}" ]]; then
+        seen[$dir]=1
+        color "34" "Generating SSZ for $dir"
+        sszgen --path "$dir"
 
-# Copy ssz.go files from bazel-bin to original folder where the target is located.
-for ((i = 0; i < arraylength; i++)); do
-    destination=${file_list[i]#*$searchstring}
-    color "34" "$destination"
-    chmod 644 "$destination"
-
-    # Copy to destination while removing the `// Hash: ...` line from the file header.
-    sed '/\/\/ Hash: /d' "${file_list[i]}" > "$destination"
+        # Remove the `// Hash: ...` line from generated files
+        for f in "$dir"/*_generated.ssz.go; do
+            if [ -f "$f" ]; then
+                sed -i'' '/\/\/ Hash: /d' "$f"
+            fi
+        done
+    fi
 done

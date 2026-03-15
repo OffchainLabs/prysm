@@ -6,22 +6,15 @@ set -xe
 PROJECT_ROOT=$(pwd)
 PRYSM_DIR="${PROJECT_ROOT%/hack}/testing/spectest"
 EXCLUSION_LIST="$PRYSM_DIR/exclusions.txt"
-BAZEL_DIR="/tmp/spectest_report"
+REPORT_DIR="/tmp/spectest_report"
 SPEC_REPO="git@github.com:ethereum/consensus-spec-tests.git"
 SPEC_DIR="/tmp/consensus-spec"
 
 # Create directory if it doesn't already exist
-mkdir -p "$BAZEL_DIR"
-
-# Add any passed flags to BAZEL_FLAGS
-BAZEL_FLAGS=""
-for flag in "$@"
-do
-    BAZEL_FLAGS="$BAZEL_FLAGS $flag"
-done
+mkdir -p "$REPORT_DIR"
 
 # Run spectests
-bazel test //testing/spectest/... --test_env=SPEC_TEST_REPORT_OUTPUT_DIR="$BAZEL_DIR" $BAZEL_FLAGS
+go test ./testing/spectest/... -test.env SPEC_TEST_REPORT_OUTPUT_DIR="$REPORT_DIR" "$@"
 
 # Ensure the SPEC_DIR exists and is a git repository
 if [ -d "$SPEC_DIR/.git" ]; then
@@ -32,8 +25,8 @@ else
     git clone "$SPEC_REPO" "$SPEC_DIR" || exit 1
 fi
 
-# Finding all *_tests.txt files in BAZEL_DIR and concatenating them into tests.txt
-find "$BAZEL_DIR" -type f -name '*_tests.txt' -exec cat {} + > "$PRYSM_DIR/tests.txt"
+# Finding all *_tests.txt files in REPORT_DIR and concatenating them into tests.txt
+find "$REPORT_DIR" -type f -name '*_tests.txt' -exec cat {} + > "$PRYSM_DIR/tests.txt"
 
 # Generating spec.txt
 (cd "$SPEC_DIR" && find tests -maxdepth 4 -mindepth 4 -type d > "$PRYSM_DIR/spec.txt") || exit 1

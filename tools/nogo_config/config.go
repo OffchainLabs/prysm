@@ -1,8 +1,7 @@
 package main
 
-// These Config types are copied from bazelbuild/rules_go.
-// License: Apache 2.0
-// https://github.com/bazelbuild/rules_go/blob/c90a11ad8dc5f3f9d633f0556b22c90af1b01116/go/tools/builders/generate_nogo_main.go#L193
+// These Config types are copied from the nogo analyzer configuration format.
+// Originally from: https://github.com/bazelbuild/rules_go/blob/c90a11ad8dc5f3f9d633f0556b22c90af1b01116/go/tools/builders/generate_nogo_main.go#L193
 type Configs map[string]Config
 
 type Config struct {

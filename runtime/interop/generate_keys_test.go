@@ -3,12 +3,12 @@ package interop_test
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/go-yaml/yaml"
 )
@@ -22,7 +22,7 @@ type KeyTest struct {
 }
 
 func TestKeyGenerator(t *testing.T) {
-	path, err := bazel.Runfile("keygen_test_vector.yaml")
+	path, err := filepath.Abs("keygen_test_vector.yaml")
 	require.NoError(t, err)
 	file, err := os.ReadFile(path)
 	require.NoError(t, err)

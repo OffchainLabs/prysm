@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 )
 
 func TestStore_SaveGenesisData(t *testing.T) {
@@ -69,10 +68,6 @@ func TestLoadCapellaFromFile(t *testing.T) {
 	}()
 
 	fp := "testdata/capella_genesis.ssz"
-	rfp, err := bazel.Runfile(fp)
-	if err == nil {
-		fp = rfp
-	}
 	sb, err := os.ReadFile(fp)
 	require.NoError(t, err)
 
@@ -111,10 +106,6 @@ func TestLoadGenesisFromFile(t *testing.T) {
 	}()
 
 	fp := "testdata/mainnet.genesis.ssz"
-	rfp, err := bazel.Runfile(fp)
-	if err == nil {
-		fp = rfp
-	}
 	sb, err := os.ReadFile(fp)
 	require.NoError(t, err)
 
@@ -130,10 +121,6 @@ func TestLoadGenesisFromFile(t *testing.T) {
 
 func TestLoadGenesisFromFile_mismatchedForkVersion(t *testing.T) {
 	fp := "testdata/altona.genesis.ssz"
-	rfp, err := bazel.Runfile(fp)
-	if err == nil {
-		fp = rfp
-	}
 	sb, err := os.ReadFile(fp)
 	assert.NoError(t, err)
 

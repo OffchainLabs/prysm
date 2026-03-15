@@ -1,6 +1,3 @@
-# Ignore bazel directories
-bazel-*
-
 .DS_Store
 .swp
 

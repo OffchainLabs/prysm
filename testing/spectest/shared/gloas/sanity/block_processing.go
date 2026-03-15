@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"strings"
+	"path/filepath"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -18,7 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/snappy"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/proto"
@@ -86,12 +85,11 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 			}
 
 			// If the post.ssz is not present, it means the test should fail on our end.
-			postSSZFilepath, readError := bazel.Runfile(path.Join(testsFolderPath, folder.Name(), "post.ssz_snappy"))
+			postSSZFilepath, err := filepath.Abs(path.Join(testsFolderPath, folder.Name(), "post.ssz_snappy"))
+			require.NoError(t, err)
 			postSSZExists := true
-			if readError != nil && strings.Contains(readError.Error(), "could not locate file") {
+			if _, err := os.Stat(postSSZFilepath); os.IsNotExist(err) {
 				postSSZExists = false
-			} else if readError != nil {
-				t.Fatal(readError)
 			}
 
 			if postSSZExists {

@@ -18,7 +18,6 @@ import (
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
@@ -164,10 +163,9 @@ func NewLighthouseValidatorNode(config *types.E2EConfig, validatorNum, index, of
 
 // Start starts a validator client.
 func (v *LighthouseValidatorNode) Start(ctx context.Context) error {
-	binaryPath, found := bazel.FindBinary("external/lighthouse", "lighthouse")
-	if !found {
-		log.Info(binaryPath)
-		log.Error("validator binary not found")
+	binaryPath, err := exec.LookPath("lighthouse")
+	if err != nil {
+		log.Error("lighthouse validator binary not found")
 	}
 
 	_, _, index, _ := v.config, v.validatorNum, v.index, v.offset

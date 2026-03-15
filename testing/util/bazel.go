@@ -2,28 +2,24 @@ package util
 
 import (
 	"os"
-	"path"
+	"path/filepath"
 
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/pkg/errors"
 )
 
 // BazelDirectoryNonEmpty returns true if directory exists and is not empty.
 func BazelDirectoryNonEmpty(filePath string) (bool, error) {
-	fs, err := bazelReadDir(filePath)
+	fs, err := readDir(filePath)
 	if err != nil {
 		return false, err
 	}
 	return len(fs) > 0, nil
 }
 
-// BazelFileBytes returns the byte array of the bazel file path given.
+// BazelFileBytes returns the byte array of the file path given.
 func BazelFileBytes(filePaths ...string) ([]byte, error) {
-	filepath, err := bazel.Runfile(path.Join(filePaths...))
-	if err != nil {
-		return nil, err
-	}
-	fileBytes, err := os.ReadFile(filepath) // #nosec G304
+	fp := filepath.Join(filePaths...)
+	fileBytes, err := os.ReadFile(fp) // #nosec G304
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +32,7 @@ func BazelFileBytes(filePaths ...string) ([]byte, error) {
 // BazelListFiles lists all of the file names in a given directory. Excludes directories. Returns
 // an error when no non-directory files exist.
 func BazelListFiles(filepath string) ([]string, error) {
-	d, err := bazelReadDir(filepath)
+	d, err := readDir(filepath)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +56,7 @@ func BazelListFiles(filepath string) ([]string, error) {
 // BazelListDirectories lists all of the directories in the given directory. Excludes regular files.
 // Returns error when no directories exist.
 func BazelListDirectories(filepath string) ([]string, error) {
-	d, err := bazelReadDir(filepath)
+	d, err := readDir(filepath)
 	if err != nil {
 		return nil, err
 	}
@@ -78,10 +74,6 @@ func BazelListDirectories(filepath string) ([]string, error) {
 	return ret, nil
 }
 
-func bazelReadDir(filepath string) ([]os.DirEntry, error) {
-	p, err := bazel.Runfile(filepath)
-	if err != nil {
-		return nil, err
-	}
-	return os.ReadDir(p)
+func readDir(filepath string) ([]os.DirEntry, error) {
+	return os.ReadDir(filepath)
 }

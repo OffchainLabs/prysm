@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/pkg/errors"
 )
 
@@ -157,10 +156,9 @@ func NewLighthouseBeaconNode(config *e2etypes.E2EConfig, index int, enr string) 
 
 // Start starts a fresh beacon node, connecting to all passed in beacon nodes.
 func (node *LighthouseBeaconNode) Start(ctx context.Context) error {
-	binaryPath, found := bazel.FindBinary("external/lighthouse", "lighthouse")
-	if !found {
-		log.Info(binaryPath)
-		log.Error("beacon chain binary not found")
+	binaryPath, err := exec.LookPath("lighthouse")
+	if err != nil {
+		log.Error("lighthouse beacon chain binary not found")
 	}
 
 	_, index, _ := node.config, node.index, node.enr

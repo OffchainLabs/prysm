@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -82,12 +81,12 @@ func (m *Miner) initAttempt(ctx context.Context, attempt int) (*os.File, error) 
 	}
 
 	// find geth so we can run it.
-	binaryPath, found := bazel.FindBinary("cmd/geth", "geth")
-	if !found {
+	binaryPath, err := exec.LookPath("geth")
+	if err != nil {
 		return nil, errors.New("go-ethereum binary not found")
 	}
 
-	gethJsonPath := path.Join(path.Dir(binaryPath), "genesis.json")
+	gethJsonPath := path.Join(m.DataDir(), "genesis.json")
 	gen := interop.GethTestnetGenesis(e2e.TestParams.Eth1GenesisTime, params.BeaconConfig())
 	log.WithField("timestamp", e2e.TestParams.Eth1GenesisTime).Info("Eth1 miner genesis")
 	b, err := json.Marshal(gen)

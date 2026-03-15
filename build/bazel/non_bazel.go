@@ -1,56 +1,53 @@
-// Copyright 2015 The Cockroach Authors.
-//
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
-
-//go:build !bazel
-
 package bazel
 
-// This file contains stub implementations for non-bazel builds.
-// See bazel.go for full documentation on the contracts of these functions.
+import (
+	"os"
+	"path/filepath"
+)
 
 // BuiltWithBazel returns true iff this library was built with Bazel.
 func BuiltWithBazel() bool {
 	return false
 }
 
-// FindBinary is not implemented.
+// FindBinary looks for a binary in PATH.
 func FindBinary(pkg, name string) (string, bool) {
-	panic("not build with Bazel")
+	p, err := findBinaryInPath(name)
+	if err != nil {
+		return "", false
+	}
+	return p, true
 }
 
-// Runfile is not implemented.
-func Runfile(string) (string, error) {
-	panic("not built with Bazel")
+func findBinaryInPath(name string) (string, error) {
+	return filepath.Abs(name)
 }
 
-// RunfilesPath is not implemented.
+// Runfile returns the absolute path to the given file, assuming it is
+// relative to the workspace root.
+func Runfile(path string) (string, error) {
+	return filepath.Abs(path)
+}
+
+// RunfilesPath returns the current working directory.
 func RunfilesPath() (string, error) {
-	panic("not built with Bazel")
+	return os.Getwd()
 }
 
-// TestTmpDir is not implemented.
+// TestTmpDir returns a temporary directory for tests.
 func TestTmpDir() string {
-	panic("not built with Bazel")
+	return os.TempDir()
 }
 
-// NewTmpDir is not implemented.
+// NewTmpDir creates a new temporary directory with the given prefix.
 func NewTmpDir(prefix string) (string, error) {
-	panic("not built with Bazel")
+	return os.MkdirTemp("", prefix)
 }
 
-// RelativeTestTargetPath is not implemented.
+// RelativeTestTargetPath returns an empty string outside of Bazel.
 func RelativeTestTargetPath() string {
-	panic("not built with Bazel")
+	return ""
 }
 
-// SetGoEnv is not implemented.
-func SetGoEnv() {
-	panic("not built with Bazel")
-}
+// SetGoEnv is a no-op outside of Bazel.
+func SetGoEnv() {}

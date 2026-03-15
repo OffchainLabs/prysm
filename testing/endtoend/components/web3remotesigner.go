@@ -22,7 +22,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
@@ -57,16 +56,16 @@ func NewWeb3RemoteSigner() *Web3RemoteSigner {
 func (w *Web3RemoteSigner) Start(ctx context.Context) error {
 	w.ctx = ctx
 
-	binaryPath, found := bazel.FindBinary("", "web3signer")
-	if !found {
+	binaryPath, err := exec.LookPath("web3signer")
+	if err != nil {
 		return errors.New("web3signer binary not found")
 	}
 
-	keystorePath := path.Join(bazel.TestTmpDir(), "web3signerkeystore")
+	keystorePath := path.Join(os.TempDir(), "web3signerkeystore")
 	if err := writeKeystoreKeys(ctx, keystorePath, params.BeaconConfig().MinGenesisActiveValidatorCount); err != nil {
 		return err
 	}
-	websignerDataDir := path.Join(bazel.TestTmpDir(), "web3signerdata")
+	websignerDataDir := path.Join(os.TempDir(), "web3signerdata")
 	if err := os.MkdirAll(websignerDataDir, 0750); err != nil {
 		return err
 	}

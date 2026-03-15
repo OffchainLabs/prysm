@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/validator/helpers"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 )
 
 type eip3076TestCase struct {
@@ -61,19 +62,27 @@ type eip3076TestCase struct {
 }
 
 func setupEIP3076SpecTests(t *testing.T) []*eip3076TestCase {
-	testFolders, err := bazel.ListRunfiles()
-	require.NoError(t, err)
 	testCases := make([]*eip3076TestCase, 0)
-	for _, ff := range testFolders {
-		if strings.Contains(ff.ShortPath, "eip3076_spec_tests") &&
-			strings.Contains(ff.ShortPath, "generated/") {
-			enc, err := file.ReadFileAsBytes(ff.Path)
-			require.NoError(t, err)
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.Contains(path, "eip3076_spec_tests") &&
+			strings.Contains(path, "generated/") &&
+			!info.IsDir() {
+			enc, err := file.ReadFileAsBytes(path)
+			if err != nil {
+				return err
+			}
 			testCase := &eip3076TestCase{}
-			require.NoError(t, json.Unmarshal(enc, testCase))
+			if err := json.Unmarshal(enc, testCase); err != nil {
+				return err
+			}
 			testCases = append(testCases, testCase)
 		}
-	}
+		return nil
+	})
+	require.NoError(t, err)
 	return testCases
 }
 

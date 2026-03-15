@@ -1,25 +1,28 @@
 #!/bin/bash
 . "$(dirname "$0")"/common.sh
 
-# Script to copy pb.go files from bazel build folder to appropriate location.
-# Bazel builds to bazel-bin/... folder, script copies them back to original folder where .proto is.
+# Script to regenerate pb.go files from proto definitions.
+# Requires: protoc, protoc-gen-go, protoc-gen-go-grpc
+#
+# Install dependencies:
+#   go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+#   go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
-bazel query 'attr(testonly, 0, //proto/...)' | xargs bazel build $@
-
+# Find all .proto files under proto/
 file_list=()
 while IFS= read -d $'\0' -r file; do
     file_list=("${file_list[@]}" "$file")
-done < <($findutil -L "$(bazel info bazel-bin)"/proto -type f -regextype sed -regex ".*pb\.go$" -print0)
+done < <($findutil ./proto -type f -name "*.proto" -print0)
 
-arraylength=${#file_list[@]}
-searchstring="OffchainLabs/prysm/v7/"
-
-# Copy pb.go files from bazel-bin to original folder where .proto is.
-for ((i = 0; i < arraylength; i++)); do
-    color "34" "$destination"
-    destination=${file_list[i]#*$searchstring}
-    cp -R -L "${file_list[i]}" "$destination"
-    chmod 755 "$destination"
+for proto_file in "${file_list[@]}"; do
+    dir=$(dirname "$proto_file")
+    color "34" "Compiling $proto_file"
+    protoc \
+        --proto_path=. \
+        --proto_path=proto \
+        --go_out=. --go_opt=paths=source_relative \
+        --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+        "$proto_file"
 done
 
 # Run goimports on newly generated protos

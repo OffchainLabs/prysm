@@ -6,8 +6,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/build/bazel"
 )
 
-func TestBuildWithBazel(t *testing.T) {
-	if !bazel.BuiltWithBazel() {
-		t.Error("not built with Bazel")
+func TestBuiltWithBazel(t *testing.T) {
+	if bazel.BuiltWithBazel() {
+		t.Error("should not be built with Bazel")
 	}
 }

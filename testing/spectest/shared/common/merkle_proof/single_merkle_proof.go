@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -13,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/snappy"
 	fssz "github.com/prysmaticlabs/fastssz"
 )
@@ -40,7 +40,7 @@ func runSingleMerkleProofTests(t *testing.T, config, forkOrPhase string, unmarsh
 
 	for _, folder := range testFolders {
 		typeFolderBase := path.Join(basePath, folder.Name())
-		typeFolder, err := bazel.Runfile(typeFolderBase)
+		typeFolder, err := filepath.Abs(typeFolderBase)
 		require.NoError(t, err)
 		modeFolders, err := os.ReadDir(typeFolder)
 		require.NoError(t, err)

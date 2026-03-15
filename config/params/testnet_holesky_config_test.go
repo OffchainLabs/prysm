@@ -2,11 +2,11 @@ package params_test
 
 import (
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 )
 
 func TestHoleskyConfigMatchesUpstreamYaml(t *testing.T) {
@@ -18,7 +18,7 @@ func TestHoleskyConfigMatchesUpstreamYaml(t *testing.T) {
 		cfg, err = params.UnmarshalConfigFile(fp, cfg)
 		require.NoError(t, err)
 	}
-	fPath, err := bazel.Runfile("external/holesky_testnet")
+	fPath, err := filepath.Abs("external/holesky_testnet")
 	require.NoError(t, err)
 	configFP := path.Join(fPath, "metadata", "config.yaml")
 	pcfg, err := params.UnmarshalConfigFile(configFP, nil)

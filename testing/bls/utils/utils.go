@@ -8,13 +8,10 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 )
 
 func RetrieveFiles(name string, t *testing.T) ([]string, [][]byte) {
-	filepath, err := bazel.Runfile(name)
-	require.NoError(t, err)
-	testFiles, err := os.ReadDir(filepath)
+	testFiles, err := os.ReadDir(name)
 	require.NoError(t, err)
 
 	fileNames := make([]string, 0, len(testFiles))
@@ -24,7 +21,7 @@ func RetrieveFiles(name string, t *testing.T) ([]string, [][]byte) {
 		// Remove .yml suffix
 		fName := strings.TrimSuffix(f.Name(), ".yaml")
 		fileNames = append(fileNames, fName)
-		data, err := file.ReadFileAsBytes(path.Join(filepath, f.Name()))
+		data, err := file.ReadFileAsBytes(path.Join(name, f.Name()))
 		require.NoError(t, err)
 		fileContent = append(fileContent, data)
 	}

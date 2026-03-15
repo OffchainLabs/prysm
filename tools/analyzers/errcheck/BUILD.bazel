@@ -1,9 +1,0 @@
-load("@prysm//tools/go:def.bzl", "go_library")
-
-go_library(
-    name = "go_default_library",
-    srcs = ["analyzer.go"],
-    importpath = "github.com/OffchainLabs/prysm/v7/tools/analyzers/errcheck",
-    visibility = ["//visibility:public"],
-    deps = ["@com_github_kisielk_errcheck//errcheck:go_default_library"],
-)

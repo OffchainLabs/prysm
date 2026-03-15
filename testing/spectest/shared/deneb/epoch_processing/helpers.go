@@ -3,7 +3,7 @@ package epoch_processing
 import (
 	"os"
 	"path"
-	"strings"
+	"path/filepath"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -11,7 +11,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/snappy"
 	"google.golang.org/protobuf/proto"
 )
@@ -37,12 +36,11 @@ func RunEpochOperationTest(
 	require.NoError(t, err)
 
 	// If the post.ssz is not present, it means the test should fail on our end.
-	postSSZFilepath, err := bazel.Runfile(path.Join(testFolderPath, "post.ssz_snappy"))
+	postSSZFilepath, err := filepath.Abs(path.Join(testFolderPath, "post.ssz_snappy"))
+	require.NoError(t, err)
 	postSSZExists := true
-	if err != nil && strings.Contains(err.Error(), "could not locate file") {
+	if _, err := os.Stat(postSSZFilepath); os.IsNotExist(err) {
 		postSSZExists = false
-	} else if err != nil {
-		t.Fatal(err)
 	}
 
 	beaconState, err := operationFn(t, preBeaconState)

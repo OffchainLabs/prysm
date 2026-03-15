@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 	"path"
-	"strings"
+	"path/filepath"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
@@ -18,7 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/snappy"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/proto"
@@ -50,8 +49,9 @@ func RunExecutionPayloadTest(t *testing.T, config string) {
 			helpers.ClearCache()
 
 			// Check if signed_envelope.ssz_snappy exists, skip if not
-			_, err := bazel.Runfile(path.Join(testsFolderPath, folder.Name(), "signed_envelope.ssz_snappy"))
-			if err != nil && strings.Contains(err.Error(), "could not locate file") {
+			envelopePath, err := filepath.Abs(path.Join(testsFolderPath, folder.Name(), "signed_envelope.ssz_snappy"))
+			require.NoError(t, err)
+			if _, err := os.Stat(envelopePath); os.IsNotExist(err) {
 				t.Skipf("Skipping test %s: signed_envelope.ssz_snappy not found", folder.Name())
 				return
 			}
@@ -71,12 +71,11 @@ func RunExecutionPayloadTest(t *testing.T, config string) {
 			preBeaconState, err := sszToState(preBeaconStateSSZ)
 			require.NoError(t, err)
 
-			postSSZFilepath, err := bazel.Runfile(path.Join(testsFolderPath, folder.Name(), "post.ssz_snappy"))
+			postSSZFilepath, err := filepath.Abs(path.Join(testsFolderPath, folder.Name(), "post.ssz_snappy"))
+			require.NoError(t, err)
 			postSSZExists := true
-			if err != nil && strings.Contains(err.Error(), "could not locate file") {
+			if _, err := os.Stat(postSSZFilepath); os.IsNotExist(err) {
 				postSSZExists = false
-			} else {
-				require.NoError(t, err)
 			}
 
 			file, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "execution.yaml")

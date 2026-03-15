@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
@@ -43,8 +42,8 @@ func NewNode(index int, enr string) *Node {
 // Start runs a non-mining ETH1 node.
 // To connect to a miner and start working properly, this node should be a part of a NodeSet.
 func (node *Node) Start(ctx context.Context) error {
-	binaryPath, found := bazel.FindBinary("cmd/geth", "geth")
-	if !found {
+	binaryPath, err := exec.LookPath("geth")
+	if err != nil {
 		return errors.New("go-ethereum binary not found")
 	}
 

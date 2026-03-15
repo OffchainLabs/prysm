@@ -5,12 +5,12 @@ package benchmark
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 )
 
 // ValidatorCount is for declaring how many validators the benchmarks will be
@@ -41,7 +41,7 @@ func filePath(path string) string {
 
 // PreGenState1Epoch unmarshals the pre-generated beacon state after 1 epoch of block processing and returns it.
 func PreGenState1Epoch() (state.BeaconState, error) {
-	path, err := bazel.Runfile(filePath(BState1EpochFileName))
+	path, err := filepath.Abs(filePath(BState1EpochFileName))
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func PreGenState1Epoch() (state.BeaconState, error) {
 
 // PreGenstateFullEpochs unmarshals the pre-generated beacon state after 2 epoch of full block processing and returns it.
 func PreGenstateFullEpochs() (state.BeaconState, error) {
-	path, err := bazel.Runfile(filePath(BstateEpochFileName))
+	path, err := filepath.Abs(filePath(BstateEpochFileName))
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func PreGenstateFullEpochs() (state.BeaconState, error) {
 
 // PreGenFullBlock unmarshals the pre-generated signed beacon block containing an epochs worth of attestations and returns it.
 func PreGenFullBlock() (*ethpb.SignedBeaconBlock, error) {
-	path, err := bazel.Runfile(filePath(FullBlockFileName))
+	path, err := filepath.Abs(filePath(FullBlockFileName))
 	if err != nil {
 		return nil, err
 	}

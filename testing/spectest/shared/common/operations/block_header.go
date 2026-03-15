@@ -2,8 +2,9 @@ package operations
 
 import (
 	"context"
+	"os"
 	"path"
-	"strings"
+	"path/filepath"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
@@ -12,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/snappy"
 )
 
@@ -44,12 +44,11 @@ func RunBlockHeaderTest(t *testing.T, config string, fork string, sszToBlock SSZ
 			require.NoError(t, err)
 
 			// If the post.ssz is not present, it means the test should fail on our end.
-			postSSZFilepath, err := bazel.Runfile(path.Join(testsFolderPath, folder.Name(), "post.ssz_snappy"))
+			postSSZFilepath, err := filepath.Abs(path.Join(testsFolderPath, folder.Name(), "post.ssz_snappy"))
+			require.NoError(t, err)
 			postSSZExists := true
-			if err != nil && strings.Contains(err.Error(), "could not locate file") {
+			if _, err := os.Stat(postSSZFilepath); os.IsNotExist(err) {
 				postSSZExists = false
-			} else {
-				require.NoError(t, err)
 			}
 
 			// Spectest blocks are not signed, so we'll call NoVerify to skip sig verification.
