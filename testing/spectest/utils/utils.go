@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	testutil "github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ghodss/yaml"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -33,10 +34,10 @@ func UnmarshalYaml(y []byte, dest any) error {
 // TestFolders sets the proper config and returns the result of ReadDir
 // on the passed in eth2-spec-tests directory along with its path.
 func TestFolders(t testing.TB, config, forkOrPhase, folderPath string) ([]os.DirEntry, string) {
-	testsFolderPath := path.Join("tests", config, forkOrPhase, folderPath)
-	absPath, err := filepath.Abs(testsFolderPath)
+	repoRoot, err := testutil.RepoRoot()
 	require.NoError(t, err)
-	testFolders, err := os.ReadDir(absPath)
+	testsFolderPath := filepath.Join(repoRoot, "tests", config, forkOrPhase, folderPath)
+	testFolders, err := os.ReadDir(testsFolderPath)
 	require.NoError(t, err)
 
 	if len(testFolders) == 0 {
