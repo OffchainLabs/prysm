@@ -140,7 +140,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
 	if err != nil {
 		tracing.AnnotateError(span, err)
-		return pubsub.ValidationIgnore, err
+		return pubsub.ValidationIgnore, wrapAttestationError(err, att)
 	}
 
 	validationRes, err := s.validateUnaggregatedAttTopic(ctx, att, preState, *msg.Topic)

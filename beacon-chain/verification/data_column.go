@@ -330,7 +330,9 @@ func (dv *RODataColumnsVerifier) getVerifyingState(ctx context.Context, dataColu
 		"slot":       dataColumnSlot,
 		"parentRoot": fmt.Sprintf("%#x", parentRoot),
 		"headRoot":   fmt.Sprintf("%#x", headRoot),
+		"index":      dataColumn.Index,
 	}).Debug("Replying state for data column verification")
+
 	targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
 	if err != nil {
 		return nil, err

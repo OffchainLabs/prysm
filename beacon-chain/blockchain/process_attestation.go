@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -57,7 +58,7 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 	// save it to the cache.
 	baseState, err := s.getAttPreState(ctx, tgt)
 	if err != nil {
-		return err
+		return fmt.Errorf("get att pre state for att root %s: %w", fmt.Sprintf("%#x", a.GetData().BeaconBlockRoot), err)
 	}
 
 	// Verify attestation target is from current epoch or previous epoch.

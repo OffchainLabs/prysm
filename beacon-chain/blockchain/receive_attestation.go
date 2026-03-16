@@ -49,7 +49,13 @@ func (s *Service) AttestationTargetState(ctx context.Context, target *ethpb.Chec
 	// We acquire the lock here instead than on gettAttPreState because that function gets called from UpdateHead that holds a write lock
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
-	return s.getAttPreState(ctx, target)
+
+	preState, err := s.getAttPreState(ctx, target)
+	if err != nil {
+		return nil, fmt.Errorf("get att pre state: %w", err)
+	}
+
+	return preState, nil
 }
 
 // VerifyLmdFfgConsistency verifies that attestation's LMD and FFG votes are consistency to each other.
