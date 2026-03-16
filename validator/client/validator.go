@@ -923,11 +923,21 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
 	}
 
+	// TODO(gloas): Remove PrepareBeaconProposer once SubmitSignedProposerPreferences
+	// handles the tracked validators cache (OffchainLabs/prysm#16538).
 	if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
 		Recipients: proposerReqs,
 	}); err != nil {
 		return err
 	}
+
+	prefs := v.buildProposerPreferences(filteredKeys, slot)
+	if len(prefs) > 0 {
+		if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, prefs); err != nil {
+			log.WithError(err).Warn("Failed to submit proposer preferences")
+		}
+	}
+
 	signedRegReqs := v.buildSignedRegReqs(ctx, filteredKeys, km.Sign, slot, forceFullPush)
 	if len(signedRegReqs) > 0 {
 		go func() {
@@ -1098,6 +1108,52 @@ func (v *validator) buildPrepProposerReqs(activePubkeys [][fieldparams.BLSPubkey
 		})
 	}
 	return prepareProposerReqs, nil
+}
+
+// buildProposerPreferences builds proposer preference entries from the same
+// configuration used by buildPrepProposerReqs and buildSignedRegReqs.
+// TODO(gloas): Once signing is required (OffchainLabs/prysm#16538), this
+// should produce signed messages using the validator's BLS key.
+func (v *validator) buildProposerPreferences(activePubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) []*iface.ProposerPreference {
+	var prefs []*iface.ProposerPreference
+	for _, k := range activePubkeys {
+		s, ok := v.pubkeyToStatus[k]
+		if !ok {
+			continue
+		}
+
+		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
+		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
+
+		if v.ProposerSettings() != nil && v.ProposerSettings().DefaultConfig != nil {
+			if v.ProposerSettings().DefaultConfig.FeeRecipientConfig != nil {
+				feeRecipient = v.ProposerSettings().DefaultConfig.FeeRecipientConfig.FeeRecipient
+			}
+			if v.ProposerSettings().DefaultConfig.BuilderConfig != nil && v.ProposerSettings().DefaultConfig.BuilderConfig.Enabled {
+				gasLimit = uint64(v.ProposerSettings().DefaultConfig.BuilderConfig.GasLimit)
+			}
+		}
+
+		if v.ProposerSettings() != nil && v.ProposerSettings().ProposeConfig != nil {
+			config, ok := v.ProposerSettings().ProposeConfig[k]
+			if ok && config != nil {
+				if config.FeeRecipientConfig != nil {
+					feeRecipient = config.FeeRecipientConfig.FeeRecipient
+				}
+				if config.BuilderConfig != nil && config.BuilderConfig.Enabled {
+					gasLimit = uint64(config.BuilderConfig.GasLimit)
+				}
+			}
+		}
+
+		prefs = append(prefs, &iface.ProposerPreference{
+			ProposalSlot:   slot,
+			ValidatorIndex: s.index,
+			FeeRecipient:   feeRecipient[:],
+			GasLimit:       gasLimit,
+		})
+	}
+	return prefs
 }
 
 func (v *validator) buildSignedRegReqs(

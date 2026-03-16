@@ -1104,6 +1104,7 @@ func TestValidator_PushSettings(t *testing.T) {
 		ctx := t.Context()
 		db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
 		client := validatormock.NewMockValidatorClient(ctrl)
+		client.EXPECT().SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).Return(&empty.Empty{}, nil).AnyTimes()
 		nodeClient := validatormock.NewMockNodeClient(ctrl)
 		defaultFeeHex := "0x046Fb65722E7b2455043BFEBf6177F1D2e9738D9"
 		byteValueAddress, err := hexutil.Decode("0x046Fb65722E7b2455043BFEBf6177F1D2e9738D9")

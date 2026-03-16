@@ -386,6 +386,21 @@ func (mr *MockValidatorClientMockRecorder) SubmitPayloadAttestation(ctx, in any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPayloadAttestation", reflect.TypeOf((*MockValidatorClient)(nil).SubmitPayloadAttestation), ctx, in)
 }
 
+// SubmitSignedProposerPreferences mocks base method.
+func (m *MockValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, preferences []*iface.ProposerPreference) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitSignedProposerPreferences", ctx, preferences)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitSignedProposerPreferences indicates an expected call of SubmitSignedProposerPreferences.
+func (mr *MockValidatorClientMockRecorder) SubmitSignedProposerPreferences(ctx, preferences any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedProposerPreferences", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedProposerPreferences), ctx, preferences)
+}
+
 // StartEventStream mocks base method.
 func (m *MockValidatorClient) StartEventStream(arg0 context.Context, arg1 []string, arg2 chan<- *event.Event) {
 	m.ctrl.T.Helper()
