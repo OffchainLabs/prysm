@@ -3412,6 +3412,11 @@ func TestProposer_GetFeeRecipientByPubKey(t *testing.T) {
 }
 
 func TestProposer_GetParentHeadState(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.MinimalSpecConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	db := dbutil.SetupDB(t)
 	ctx := t.Context()
 
@@ -3423,6 +3428,7 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		ChainStartFetcher: &mockExecution.Chain{},
 		Eth1InfoFetcher:   &mockExecution.Chain{},
 		Eth1BlockFetcher:  &mockExecution.Chain{},
+		ForkchoiceFetcher: &mock.ChainService{},
 		StateGen:          stategen.New(db, doublylinkedtree.New()),
 	}
 	t.Run("successful reorg", func(tt *testing.T) {
