@@ -162,7 +162,7 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 			OnEmitGossip: func(topic string, groupID []byte, gossipPeers []peer.ID, peerStates map[peer.ID]blocks.PartialDataColumnPeerState) {
 				select {
 				case p.incomingReq <- request{
-					kind: requestKindPublish,
+					kind: requestKindGossip,
 					gossip: gossip{
 						topic:   topic,
 						groupID: groupID,
