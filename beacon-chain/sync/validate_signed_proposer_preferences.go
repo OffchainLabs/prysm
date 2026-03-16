@@ -45,7 +45,7 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		return pubsub.ValidationIgnore, err
 	}
 
-	v := s.newSignedProposerPreferencesVerifier(signedPreferences, verification.GossipSignedProposerPreferencesRequirements)
+	v := s.newSignedProposerPreferencesVerifier(signedPreferences, verification.SignedProposerPreferencesGossipRequirements)
 	// [IGNORE] preferences.proposal_slot is in the next epoch.
 	if err := v.VerifyNextEpoch(st); err != nil {
 		return pubsub.ValidationIgnore, err

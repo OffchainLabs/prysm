@@ -11,15 +11,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-// SignedProposerPreferencesGossipRequirements defines the list of requirements for gossip signed proposer preferences.
-var SignedProposerPreferencesGossipRequirements = []Requirement{
+// SignedProposerPreferencesGossipRequirements is the requirement list for gossip
+// signed proposer preferences.
+var SignedProposerPreferencesGossipRequirements = requirementList([]Requirement{
 	RequireProposerPreferencesNextEpoch,
 	RequireProposerPreferencesProposalSlotValid,
 	RequireProposerPreferencesSignatureValid,
-}
-
-// GossipSignedProposerPreferencesRequirements is a requirement list for gossip signed proposer preferences.
-var GossipSignedProposerPreferencesRequirements = requirementList(SignedProposerPreferencesGossipRequirements)
+})
 
 var (
 	ErrProposerPreferencesNotNextEpoch        = errors.New("proposer preferences proposal slot is not in the next epoch")
