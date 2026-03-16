@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"math"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/pkg/errors"
 	"go.uber.org/mock/gomock"
@@ -251,7 +251,7 @@ func TestDistributedSelector_ReadyCh_BlocksUntilRefresh(t *testing.T) {
 	assert.DeepEqual(t, proof, got)
 }
 
-func TestDistributedSelector_ErrorResetsEpochGuard(t *testing.T) {
+func TestDistributedSelector_ErrorIsStickyWithinEpoch(t *testing.T) {
 	v, client, keys := newDistributedTestValidator(t, 4)
 	ds := v.aggSelector.(*distributedSelector)
 
@@ -267,26 +267,23 @@ func TestDistributedSelector_ErrorResetsEpochGuard(t *testing.T) {
 
 	sigDomain := make([]byte, 32)
 	client.EXPECT().DomainData(gomock.Any(), gomock.Any()).
-		Return(&ethpb.DomainResponse{SignatureDomain: sigDomain}, nil).Times(2)
+		Return(&ethpb.DomainResponse{SignatureDomain: sigDomain}, nil).Times(1)
 
-	// First call: RPC fails.
+	refreshErr := errors.New("middleware down")
 	client.EXPECT().AggregatedSelections(gomock.Any(), gomock.Any()).
-		Return(nil, errors.New("middleware down"))
-	// Second call: RPC succeeds (retry).
-	client.EXPECT().AggregatedSelections(gomock.Any(), gomock.Any()).
-		Return([]iface.BeaconCommitteeSelection{{
-			SelectionProof: make([]byte, 96),
-			Slot:           slot,
-			ValidatorIndex: 200,
-		}}, nil)
+		Return(nil, refreshErr)
 
 	err := ds.RefreshSelectionProofs(t.Context())
 	require.ErrorContains(t, "middleware down", err)
-	assert.Equal(t, primitives.Epoch(math.MaxUint64), ds.refreshedEpoch, "epoch guard should reset on error")
+	assert.Equal(t, slots.ToEpoch(slot), ds.refreshedEpoch, "epoch guard should remain set for the failing epoch")
 
-	// Retry should succeed.
-	require.NoError(t, ds.RefreshSelectionProofs(t.Context()))
-	assert.Equal(t, 1, len(ds.attSelections))
+	// Same-epoch refreshes should not retry the middleware call.
+	err = ds.RefreshSelectionProofs(t.Context())
+	require.ErrorContains(t, "middleware down", err)
+
+	_, err = ds.AttestationSelectionProof(t.Context(), slot, keys.pub)
+	require.ErrorContains(t, "selection proofs unavailable", err)
+	require.ErrorContains(t, "middleware down", err)
 }
 
 func TestDistributedSelector_SyncSubnetDedup(t *testing.T) {

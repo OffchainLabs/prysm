@@ -193,6 +193,7 @@ type distributedSelector struct {
 	attSelections  map[attSelectionKey]iface.BeaconCommitteeSelection
 	refreshedEpoch primitives.Epoch
 	readyCh        chan struct{}
+	refreshErr     error
 }
 
 func closedChan() chan struct{} {
@@ -218,26 +219,34 @@ func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context) error 
 
 	p.attSelLock.Lock()
 	if p.refreshedEpoch == epoch {
+		ch := p.readyCh
 		p.attSelLock.Unlock()
-		return nil
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		p.attSelLock.Lock()
+		err := p.refreshErr
+		p.attSelLock.Unlock()
+		return err
 	}
 	// New epoch — create a fresh channel that readers will block on.
 	ch := make(chan struct{})
 	p.readyCh = ch
 	p.refreshedEpoch = epoch
+	p.refreshErr = nil
 	p.attSelLock.Unlock()
-
-	// Ensure the channel is closed even on error so readers don't block forever.
-	defer close(ch)
 
 	newSelections, err := p.fetchSelectionProofs(ctx)
 
 	p.attSelLock.Lock()
-	if err != nil {
-		p.refreshedEpoch = math.MaxUint64 // Allow retry next call.
-	} else {
+	if err == nil {
 		p.attSelections = newSelections
 	}
+	p.refreshErr = err
+	close(ch)
 	p.attSelLock.Unlock()
 
 	return err
@@ -301,6 +310,10 @@ func (p *distributedSelector) AttestationSelectionProof(ctx context.Context, slo
 
 	p.attSelLock.Lock()
 	defer p.attSelLock.Unlock()
+
+	if p.refreshErr != nil {
+		return nil, errors.Wrap(p.refreshErr, "selection proofs unavailable")
+	}
 
 	s, ok := p.attSelections[attSelectionKey{slot: slot, index: idx}]
 	if !ok {
