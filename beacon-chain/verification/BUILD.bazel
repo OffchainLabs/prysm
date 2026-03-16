@@ -7,6 +7,7 @@ go_library(
         "blob.go",
         "cache.go",
         "data_column.go",
+        "data_column_gloas.go",
         "error.go",
         "execution_payload_envelope.go",
         "fake.go",
@@ -61,6 +62,7 @@ go_test(
         "batch_test.go",
         "blob_test.go",
         "cache_test.go",
+        "data_column_gloas_test.go",
         "data_column_test.go",
         "execution_payload_envelope_test.go",
         "filesystem_test.go",
@@ -98,5 +100,6 @@ go_test(
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_spf13_afero//:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
+        "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )

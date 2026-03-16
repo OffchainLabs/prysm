@@ -57,6 +57,15 @@ type DataColumnsVerifier interface {
 // column verifier can be easily initialized.
 type NewDataColumnsVerifier func(dataColumns []blocks.RODataColumn, reqs []Requirement) DataColumnsVerifier
 
+type GloasDataColumnVerifier interface {
+	VerifiedRODataColumn() (blocks.VerifiedRODataColumn, error)
+	SatisfyRequirement(Requirement)
+	VerifyDataColumnSidecarSlotMatchesBlockGloas() error
+	VerifyDataColumnSidecarGloas() error
+	CorrectSubnet(dataColumnSidecarSubTopic string, expectedTopics []string) error
+	VerifyDataColumnSidecarKzgProofsGloas() error
+}
+
 // PayloadAttestationMsgVerifier defines the methods implemented by the ROPayloadAttestation.
 type PayloadAttestationMsgVerifier interface {
 	VerifyCurrentSlot() error
