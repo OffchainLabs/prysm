@@ -38,7 +38,7 @@
 - name: ATTESTATION_DUE_BPS#phase0
   sources:
     - file: config/params/config.go
-      search: AttestationDueBPS\s+primitives.BP
+      search: ^\tAttestationDueBPS\s
       regex: true
   spec: |
     <spec config_var="ATTESTATION_DUE_BPS" fork="phase0" hash="929dd1c9">
@@ -610,7 +610,10 @@
     </spec>
 
 - name: PAYLOAD_ATTESTATION_DUE_BPS#gloas
-  sources: []
+  sources:
+    - file: config/params/config.go
+      search: PayloadAttestationDueBPS\s+primitives.BP
+      regex: true
   spec: |
     <spec config_var="PAYLOAD_ATTESTATION_DUE_BPS" fork="gloas" hash="17307d0e">
     PAYLOAD_ATTESTATION_DUE_BPS: uint64 = 7500

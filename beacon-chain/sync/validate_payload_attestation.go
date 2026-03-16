@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -29,6 +30,7 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 	if s.cfg.initialSync.Syncing() {
 		return pubsub.ValidationIgnore, nil
 	}
+	receivedTime := prysmTime.Now()
 	ctx, span := trace.StartSpan(ctx, "sync.validatePayloadAttestation")
 	defer span.End()
 
@@ -90,6 +92,12 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 	}
 
 	msg.ValidatorData = att
+	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), pa.Slot())
+	if err == nil {
+		syncPayloadAttestationArrivalDelaySeconds.Observe(receivedTime.Sub(startTime).Seconds())
+	} else {
+		log.WithError(err).WithField("slot", pa.Slot()).Debug("Could not compute payload attestation slot start time")
+	}
 
 	return pubsub.ValidationAccept, nil
 }
