@@ -742,3 +742,199 @@ func TestLateBlockTasks_GloasFCU(t *testing.T) {
 	service.lateBlockTasks(tr.ctx)
 	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
 }
+
+// TestSaveHead_GloasForkBoundary_PreforkBidForcesEmptyHead verifies that saveHead does not
+// treat the head as "full" when the latest execution payload bid was issued in a pre-fork epoch.
+// This guards against the Fulu->Gloas upgrade-seeded bid (bid.BlockHash == latestBlockHash,
+// bid.Slot == 0) causing a spurious full=true head before any real Gloas bid has been processed.
+func TestSaveHead_GloasForkBoundary_PreforkBidForcesEmptyHead(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
+	service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	ctx := t.Context()
+
+	blockRoot := bytesutil.ToBytes32([]byte("root1"))
+	parentRoot := params.BeaconConfig().ZeroHash
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+
+	// Create a Gloas state where IsParentBlockFull()==true (bid.BlockHash == LatestBlockHash)
+	// but bid.Slot is 0 (epoch 0, pre-fork). This mimics the upgrade-seeded state.
+	base, blk := testGloasState(t, 1, parentRoot, blockHash)
+	base.LatestBlockHash = blockHash[:]
+	// bid.Slot defaults to 0, which is before GloasForkEpoch=1.
+
+	// Set a valid initial head so saveHead's headBlock() call does not panic.
+	// We do NOT insert the old block into forkchoice because insertGloasBlock
+	// would claim the tree root slot; the target block (parentRoot=ZeroHash) must
+	// be the first node inserted so it can become the tree root.
+	oldBlk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{})
+	oldSigned, err2 := blocks.NewSignedBeaconBlock(oldBlk)
+	require.NoError(t, err2)
+	oldSt, err2 := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		Slot:                       0,
+		RandaoMixes:                make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
+		CurrentJustifiedCheckpoint: &ethpb.Checkpoint{Root: make([]byte, 32)},
+		FinalizedCheckpoint:        &ethpb.Checkpoint{Root: make([]byte, 32)},
+		LatestBlockHeader:          &ethpb.BeaconBlockHeader{ParentRoot: make([]byte, 32), StateRoot: make([]byte, 32), BodyRoot: make([]byte, 32)},
+		Eth1Data:                   &ethpb.Eth1Data{DepositRoot: make([]byte, 32), BlockHash: make([]byte, 32)},
+		LatestExecutionPayloadBid:  &ethpb.ExecutionPayloadBid{BlockHash: make([]byte, 32), ParentBlockHash: make([]byte, 32), ParentBlockRoot: make([]byte, 32), PrevRandao: make([]byte, 32), FeeRecipient: make([]byte, 20), BlobKzgCommitments: [][]byte{make([]byte, 48)}},
+		BuilderPendingPayments:     func() []*ethpb.BuilderPendingPayment { pp := make([]*ethpb.BuilderPendingPayment, 64); for i := range pp { pp[i] = &ethpb.BuilderPendingPayment{Withdrawal: &ethpb.BuilderPendingWithdrawal{FeeRecipient: make([]byte, 20)}} }; return pp }(),
+		ExecutionPayloadAvailability: make([]byte, 1024),
+		LatestBlockHash:            make([]byte, 32),
+		PayloadExpectedWithdrawals: make([]*enginev1.Withdrawal, 0),
+		ProposerLookahead:          make([]uint64, 64),
+	})
+	require.NoError(t, err2)
+	oldRoot := bytesutil.ToBytes32([]byte("oldroot1"))
+	service.head = &head{root: oldRoot, block: oldSigned, state: oldSt, slot: 0}
+
+	insertGloasBlock(t, service, base, blk, blockRoot)
+
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+
+	// Verify precondition: IsParentBlockFull() is true.
+	full, err := st.IsParentBlockFull()
+	require.NoError(t, err)
+	require.Equal(t, true, full, "precondition: IsParentBlockFull must be true")
+
+	// Verify guard precondition: bid.Slot is pre-fork.
+	bid, err := st.LatestExecutionPayloadBid()
+	require.NoError(t, err)
+	isPrefork := slots.ToEpoch(bid.Slot()) < params.BeaconConfig().GloasForkEpoch
+	require.Equal(t, true, isPrefork, "precondition: bid.Slot must be pre-fork")
+
+	ssigned, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	// saveHead should NOT mark the head as full because bid.Slot < GloasForkEpoch.
+	require.NoError(t, service.saveHead(ctx, blockRoot, ssigned, st))
+
+	service.headLock.RLock()
+	headFull := service.head.full
+	service.headLock.RUnlock()
+	require.Equal(t, false, headFull, "head must not be full for upgrade-seeded bid")
+}
+
+// TestSaveHead_GloasForkBoundary_PostforkBidSetsFullHead verifies that saveHead correctly
+// marks the head as full when the latest bid is from a post-fork epoch.
+func TestSaveHead_GloasForkBoundary_PostforkBidSetsFullHead(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
+	service, _ := setupGloasService(t, &mockExecution.EngineClient{})
+	ctx := t.Context()
+
+	forkSlot, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
+	require.NoError(t, err)
+
+	blockRoot := bytesutil.ToBytes32([]byte("root1"))
+	parentRoot := params.BeaconConfig().ZeroHash
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+
+	// Set a valid initial head so saveHead's headBlock() call does not panic.
+	// Do NOT use insertGloasBlock for the old block — the target block must be
+	// the first node inserted so it can claim the tree root (parentRoot=ZeroHash).
+	oldBlk2 := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{})
+	oldSigned2, err2 := blocks.NewSignedBeaconBlock(oldBlk2)
+	require.NoError(t, err2)
+	oldSt2, err2 := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		Slot:                       0,
+		RandaoMixes:                make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
+		CurrentJustifiedCheckpoint: &ethpb.Checkpoint{Root: make([]byte, 32)},
+		FinalizedCheckpoint:        &ethpb.Checkpoint{Root: make([]byte, 32)},
+		LatestBlockHeader:          &ethpb.BeaconBlockHeader{ParentRoot: make([]byte, 32), StateRoot: make([]byte, 32), BodyRoot: make([]byte, 32)},
+		Eth1Data:                   &ethpb.Eth1Data{DepositRoot: make([]byte, 32), BlockHash: make([]byte, 32)},
+		LatestExecutionPayloadBid:  &ethpb.ExecutionPayloadBid{BlockHash: make([]byte, 32), ParentBlockHash: make([]byte, 32), ParentBlockRoot: make([]byte, 32), PrevRandao: make([]byte, 32), FeeRecipient: make([]byte, 20), BlobKzgCommitments: [][]byte{make([]byte, 48)}},
+		BuilderPendingPayments:     func() []*ethpb.BuilderPendingPayment { pp := make([]*ethpb.BuilderPendingPayment, 64); for i := range pp { pp[i] = &ethpb.BuilderPendingPayment{Withdrawal: &ethpb.BuilderPendingWithdrawal{FeeRecipient: make([]byte, 20)}} }; return pp }(),
+		ExecutionPayloadAvailability: make([]byte, 1024),
+		LatestBlockHash:            make([]byte, 32),
+		PayloadExpectedWithdrawals: make([]*enginev1.Withdrawal, 0),
+		ProposerLookahead:          make([]uint64, 64),
+	})
+	require.NoError(t, err2)
+	oldRoot2 := bytesutil.ToBytes32([]byte("oldroot2"))
+	service.head = &head{root: oldRoot2, block: oldSigned2, state: oldSt2, slot: 0}
+
+	base, blk := testGloasState(t, forkSlot+1, parentRoot, blockHash)
+	base.LatestBlockHash = blockHash[:]
+	// Set bid.Slot to a post-fork epoch slot.
+	base.LatestExecutionPayloadBid.Slot = forkSlot + 1
+
+	insertGloasBlock(t, service, base, blk, blockRoot)
+
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+
+	// Verify preconditions.
+	full, err := st.IsParentBlockFull()
+	require.NoError(t, err)
+	require.Equal(t, true, full, "precondition: IsParentBlockFull must be true")
+
+	bid, err := st.LatestExecutionPayloadBid()
+	require.NoError(t, err)
+	isPostfork := slots.ToEpoch(bid.Slot()) >= params.BeaconConfig().GloasForkEpoch
+	require.Equal(t, true, isPostfork, "precondition: bid.Slot must be post-fork")
+
+	ssigned, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	// saveHead SHOULD mark the head as full because bid.Slot >= GloasForkEpoch.
+	require.NoError(t, service.saveHead(ctx, blockRoot, ssigned, st))
+
+	service.headLock.RLock()
+	headFull := service.head.full
+	service.headLock.RUnlock()
+	require.Equal(t, true, headFull, "head must be full for real post-fork bid")
+}
+
+// TestLateBlockTasks_GloasForkBoundary_PreforkBidUsesHeadRoot verifies that lateBlockTasks
+// uses headRoot (not LatestBlockHash) as the accessRoot when the bid is pre-fork epoch.
+// Without this guard, the upgrade-seeded bid would cause lateBlockTasks to use the wrong
+// access root for the next-slot cache.
+func TestLateBlockTasks_GloasForkBoundary_PreforkBidUsesHeadRoot(t *testing.T) {
+	logHook := logTest.NewGlobal()
+	resetCfg := features.InitWithReset(&features.Flags{
+		PrepareAllPayloads: true,
+	})
+	defer resetCfg()
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	cfg.InitializeForkSchedule()
+	params.OverrideBeaconConfig(cfg)
+
+	pid := &enginev1.PayloadIDBytes{1, 2, 3, 4, 5, 6, 7, 8}
+	service, tr := setupGloasService(t, &mockExecution.EngineClient{PayloadIDBytes: pid})
+
+	blockHash := bytesutil.ToBytes32([]byte("hash1"))
+	base, _ := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
+	// Make IsParentBlockFull() true: bid.BlockHash == LatestBlockHash.
+	base.LatestBlockHash = blockHash[:]
+	// bid.Slot is 0 (pre-fork epoch): the epoch guard should prevent using LatestBlockHash as accessRoot.
+
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+
+	headRoot := bytesutil.ToBytes32([]byte("headroot"))
+	service.head = &head{
+		root:  headRoot,
+		state: st,
+		slot:  1,
+	}
+
+	// Trigger late block logic: CurrentSlot > HeadSlot.
+	service.SetGenesisTime(time.Now().Add(-2 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second))
+	service.SetForkChoiceGenesisTime(service.genesisTime)
+
+	service.lateBlockTasks(tr.ctx)
+	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
+}
