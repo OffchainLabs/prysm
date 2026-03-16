@@ -169,7 +169,11 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		slashingsPool:            slashings.NewPool(),
 		syncCommitteePool:        synccommittee.NewPool(),
 		blsToExecPool:            blstoexec.NewPool(),
-		trackedValidatorsCache:   cache.NewTrackedValidatorsCache(),
+		trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		// TODO(gloas): revisit whether trackedValidatorsCache and
+		// proposerPreferencesCache should remain separate. The tracked
+		// validators cache is local-node specific, while proposer preferences
+		// are global and include proposers we do not own.
 		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 		payloadIDCache:           cache.NewPayloadIDCache(),
 		slasherBlockHeadersFeed:  new(event.Feed),
