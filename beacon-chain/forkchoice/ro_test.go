@@ -45,6 +45,7 @@ const (
 	dependentRootForEpochCalled
 	canonicalNodeAtSlotCalled
 	payloadWeightsCalled
+	payloadContentLookupCalled
 )
 
 func _discard(t *testing.T, e error) {
@@ -171,6 +172,11 @@ func TestROLocking(t *testing.T) {
 			name: "canonicalNodeAtSlotCalled",
 			call: canonicalNodeAtSlotCalled,
 			cb:   func(g FastGetter) { g.CanonicalNodeAtSlot(0) },
+		},
+		{
+			name: "payloadContentLookupCalled",
+			call: payloadContentLookupCalled,
+			cb:   func(g FastGetter) { g.PayloadContentLookup([32]byte{}) },
 		},
 	}
 	for _, c := range cases {
@@ -344,5 +350,10 @@ func (ro *mockROForkchoice) BlockHash(_ [32]byte) ([32]byte, error) {
 
 func (ro *mockROForkchoice) CanonicalNodeAtSlot(_ primitives.Slot) ([32]byte, bool) {
 	ro.calls = append(ro.calls, canonicalNodeAtSlotCalled)
+	return [32]byte{}, false
+}
+
+func (ro *mockROForkchoice) PayloadContentLookup(_ [32]byte) ([32]byte, bool) {
+	ro.calls = append(ro.calls, payloadContentLookupCalled)
 	return [32]byte{}, false
 }
