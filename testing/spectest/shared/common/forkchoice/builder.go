@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -131,6 +132,24 @@ func (bb *Builder) AttesterSlashing(s *ethpb.AttesterSlashing) {
 	bb.service.InsertSlashingsToForkChoiceStore(context.TODO(), slashings)
 }
 
+// ExecutionPayloadEnvelope receives a valid signed execution payload envelope and notifies forkchoice.
+func (bb *Builder) ExecutionPayloadEnvelope(t testing.TB, envelope *ethpb.SignedExecutionPayloadEnvelope) {
+	signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(envelope)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	require.NoError(t, bb.service.ReceiveExecutionPayloadEnvelope(ctx, signed))
+}
+
+// InvalidExecutionPayloadEnvelope receives an invalid execution payload envelope and notifies forkchoice.
+func (bb *Builder) InvalidExecutionPayloadEnvelope(t testing.TB, envelope *ethpb.SignedExecutionPayloadEnvelope) {
+	signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(envelope)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	require.Equal(t, true, bb.service.ReceiveExecutionPayloadEnvelope(ctx, signed) != nil)
+}
+
 // Check evaluates the fork choice results and compares them to the expected values.
 func (bb *Builder) Check(t testing.TB, c *Check) {
 	if c == nil {
@@ -170,6 +189,17 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 		want := fmt.Sprintf("%#x", common.FromHex(*c.GetProposerHead))
 		got := fmt.Sprintf("%#x", bb.service.GetProposerHead())
 		require.Equal(t, want, got)
+	}
+	if c.HeadPayloadStatus != nil {
+		r, err := bb.service.HeadRoot(ctx)
+		require.NoError(t, err)
+		root := bytesutil.ToBytes32(r)
+		hasFull := bb.service.HasFullNode(root)
+		if *c.HeadPayloadStatus == 1 {
+			require.Equal(t, true, hasFull)
+		} else {
+			require.Equal(t, false, hasFull)
+		}
 	}
 	/* TODO: We need to mock the entire proposer system to be able to test this.
 	if c.ShouldOverrideFCU != nil {

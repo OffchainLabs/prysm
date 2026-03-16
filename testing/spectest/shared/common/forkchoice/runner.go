@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -41,8 +42,14 @@ func init() {
 
 // Run executes "forkchoice"  and "sync" test.
 func Run(t *testing.T, config string, fork int) {
+	if fork >= version.Gloas {
+		resetFn := features.InitWithReset(&features.Flags{
+			EnableStartOptimistic: true,
+		})
+		defer resetFn()
+	}
 	runTest(t, config, fork, "fork_choice")
-	if fork >= version.Bellatrix {
+	if fork >= version.Bellatrix && fork < version.Gloas {
 		runTest(t, config, fork, "sync")
 	}
 }
@@ -114,6 +121,9 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 				case version.Fulu:
 					beaconState = unmarshalFuluState(t, preBeaconStateSSZ)
 					beaconBlock = unmarshalFuluBlock(t, blockSSZ)
+				case version.Gloas:
+					beaconState = unmarshalGloasState(t, preBeaconStateSSZ)
+					beaconBlock = unmarshalGloasBlock(t, blockSSZ)
 				default:
 					t.Fatalf("unknown fork version: %v", fork)
 				}
@@ -156,6 +166,8 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 							beaconBlock = unmarshalSignedElectraBlock(t, blockSSZ)
 						case version.Fulu:
 							beaconBlock = unmarshalSignedFuluBlock(t, blockSSZ)
+						case version.Gloas:
+							beaconBlock = unmarshalSignedGloasBlock(t, blockSSZ)
 						default:
 							t.Fatalf("unknown fork version: %v", fork)
 						}
@@ -205,6 +217,19 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 						pb := &ethpb.PowBlock{}
 						require.NoError(t, pb.UnmarshalSSZ(p), "Failed to unmarshal")
 						builder.PoWBlock(pb)
+					}
+					if step.ExecutionPayload != nil {
+						envelopeFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.ExecutionPayload, ".ssz_snappy"))
+						require.NoError(t, err)
+						envelopeSSZ, err := snappy.Decode(nil /* dst */, envelopeFile)
+						require.NoError(t, err)
+						signedEnvelope := &ethpb.SignedExecutionPayloadEnvelope{}
+						require.NoError(t, signedEnvelope.UnmarshalSSZ(envelopeSSZ), "Failed to unmarshal")
+						if step.Valid != nil && !*step.Valid {
+							builder.InvalidExecutionPayloadEnvelope(t, signedEnvelope)
+						} else {
+							builder.ExecutionPayloadEnvelope(t, signedEnvelope)
+						}
 					}
 					builder.Check(t, step.Check)
 				}
@@ -666,6 +691,34 @@ func unmarshalFuluBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
 
 func unmarshalSignedFuluBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
 	base := &ethpb.SignedBeaconBlockFulu{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(base)
+	require.NoError(t, err)
+	return blk
+}
+
+// ----------------------------------------------------------------------------
+// Gloas
+// ----------------------------------------------------------------------------
+
+func unmarshalGloasState(t *testing.T, raw []byte) state.BeaconState {
+	base := &ethpb.BeaconStateGloas{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+	return st
+}
+
+func unmarshalGloasBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
+	base := &ethpb.BeaconBlockGloas{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	require.NoError(t, err)
+	return blk
+}
+
+func unmarshalSignedGloasBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
+	base := &ethpb.SignedBeaconBlockGloas{}
 	require.NoError(t, base.UnmarshalSSZ(raw))
 	blk, err := blocks.NewSignedBeaconBlock(base)
 	require.NoError(t, err)

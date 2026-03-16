@@ -28,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -91,6 +92,17 @@ func startChainService(t testing.TB,
 	// force start kzg context here until Deneb fork epoch is decided
 	require.NoError(t, kzg.Start())
 	require.NoError(t, service.StartFromSavedState(st))
+	// gloas anchor blocks are full per spec
+	if block.Block().Version() >= version.Gloas {
+		// TODO: process anchor envelope from test vectors when available
+		env := &ethpb.ExecutionPayloadEnvelope{
+			BeaconBlockRoot: r[:],
+			Payload:         &pb.ExecutionPayloadDeneb{},
+		}
+		roEnv, err := blocks.WrappedROExecutionPayloadEnvelope(env)
+		require.NoError(t, err)
+		require.NoError(t, fc.InsertPayload(roEnv))
+	}
 	return service, sg, fc
 }
 
