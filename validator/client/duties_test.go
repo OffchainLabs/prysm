@@ -242,11 +242,15 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		},
 	}
 
+	secsPerSlot := params.BeaconConfig().SecondsPerSlot
+	genesis := time.Now().Add(-time.Duration(uint64(slot)*secsPerSlot) * time.Second)
+
 	v := validator{
 		km:              newMockKeymanager(t, keys),
 		validatorClient: client,
 		distributed:     true,
 		duties:          &dutyStore{},
+		genesisTime:     genesis,
 		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
 			keys.pub: {publicKey: keys.pub[:], index: 200},
 		},
@@ -266,21 +270,16 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 	).Return(
 		&ethpb.DomainResponse{SignatureDomain: sigDomain},
 		nil, /*err*/
-	).Times(2) // Once for current epoch duty, once for next epoch duty.
+	)
 
 	client.EXPECT().AggregatedSelections(
 		gomock.Any(),
-		gomock.Any(), // fill this properly
+		gomock.Any(),
 	).Return(
 		[]iface.BeaconCommitteeSelection{
 			{
 				SelectionProof: make([]byte, 32),
 				Slot:           slot,
-				ValidatorIndex: 200,
-			},
-			{
-				SelectionProof: make([]byte, 32),
-				Slot:           slot + params.BeaconConfig().SlotsPerEpoch,
 				ValidatorIndex: 200,
 			},
 		},
@@ -303,7 +302,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 	util.WaitTimeout(&wg, 2*time.Second)
 	dvProvider, ok := v.aggSelector.(*distributedSelector)
 	require.Equal(t, true, ok)
-	require.Equal(t, 2, len(dvProvider.attSelections))
+	require.Equal(t, 1, len(dvProvider.attSelections))
 }
 
 func TestValidator_CheckDependentRoots(t *testing.T) {

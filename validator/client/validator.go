@@ -648,6 +648,9 @@ func (v *validator) isAggregator(
 	}
 
 	slotSig, err := v.aggSelector.AttestationSelectionProof(ctx, slot, pubKey)
+	if errors.Is(err, ErrSelectionProofNotFound) {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}

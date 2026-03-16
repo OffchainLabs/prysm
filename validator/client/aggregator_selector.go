@@ -33,6 +33,10 @@ type aggregatorSelector interface {
 	SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse) ([][]byte, error)
 }
 
+// ErrSelectionProofNotFound is returned when a selection proof is not cached
+// for the requested slot, e.g. next-epoch duties before the epoch refresh.
+var ErrSelectionProofNotFound = errors.New("selection proof not found")
+
 type attSelectionKey struct {
 	slot  primitives.Slot
 	index primitives.ValidatorIndex
@@ -254,24 +258,19 @@ func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context) error 
 
 func (p *distributedSelector) fetchSelectionProofs(ctx context.Context) (map[attSelectionKey]iface.BeaconCommitteeSelection, error) {
 	var req []iface.BeaconCommitteeSelection
-	for _, duties := range []map[pubkey]*ethpb.ValidatorDuty{
-		p.v.duties.CurrentEpochDuties(),
-		p.v.duties.NextEpochDuties(),
-	} {
-		for pk, duty := range duties {
-			if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
-				continue
-			}
-			slotSig, err := p.v.signSlotWithSelectionProof(ctx, pk, duty.AttesterSlot)
-			if err != nil {
-				return nil, err
-			}
-			req = append(req, iface.BeaconCommitteeSelection{
-				SelectionProof: slotSig,
-				Slot:           duty.AttesterSlot,
-				ValidatorIndex: duty.ValidatorIndex,
-			})
+	for pk, duty := range p.v.duties.CurrentEpochDuties() {
+		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
+			continue
 		}
+		slotSig, err := p.v.signSlotWithSelectionProof(ctx, pk, duty.AttesterSlot)
+		if err != nil {
+			return nil, err
+		}
+		req = append(req, iface.BeaconCommitteeSelection{
+			SelectionProof: slotSig,
+			Slot:           duty.AttesterSlot,
+			ValidatorIndex: duty.ValidatorIndex,
+		})
 	}
 
 	resp, err := p.v.validatorClient.AggregatedSelections(ctx, req)
@@ -317,7 +316,7 @@ func (p *distributedSelector) AttestationSelectionProof(ctx context.Context, slo
 
 	s, ok := p.attSelections[attSelectionKey{slot: slot, index: idx}]
 	if !ok {
-		return nil, errors.Errorf("selection proof not found for slot=%d validator_index=%d", slot, idx)
+		return nil, ErrSelectionProofNotFound
 	}
 	return s.SelectionProof, nil
 }
