@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -66,9 +67,12 @@ func (s *Service) validateVoluntaryExit(ctx context.Context, pid peer.ID, msg *p
 			return pubsub.ValidationReject, errors.New("validator index is invalid")
 		}
 	}
-	val, err := headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
-	if err != nil && !exit.Exit.ValidatorIndex.IsBuilderIndex() {
-		return pubsub.ValidationIgnore, err
+	var val state.ReadOnlyValidator
+	if !exit.Exit.ValidatorIndex.IsBuilderIndex() {
+		val, err = headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
+		if err != nil {
+			return pubsub.ValidationIgnore, err
+		}
 	}
 	if err := blocks.VerifyExitAndSignature(val, headState, exit); err != nil {
 		return pubsub.ValidationReject, err

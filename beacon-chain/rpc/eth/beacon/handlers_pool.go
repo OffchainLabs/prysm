@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	corehelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -502,14 +503,17 @@ func (s *Server) SubmitVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	val, err := headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
-	if err != nil && !exit.Exit.ValidatorIndex.IsBuilderIndex() {
-		if errors.Is(err, mvslice.ErrOutOfBounds) {
-			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
+	var val state.ReadOnlyValidator
+	if !exit.Exit.ValidatorIndex.IsBuilderIndex() {
+		val, err = headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
+		if err != nil {
+			if errors.Is(err, mvslice.ErrOutOfBounds) {
+				httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
-		return
 	}
 	if err = blocks.VerifyExitAndSignature(val, headState, exit); err != nil {
 		httputil.HandleError(w, "Invalid exit: "+err.Error(), http.StatusBadRequest)

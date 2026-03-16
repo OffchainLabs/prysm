@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -38,9 +39,12 @@ func (vs *Server) ProposeExit(ctx context.Context, req *ethpb.SignedVoluntaryExi
 		}
 	}
 	// Confirm the validator/builder is eligible to exit with the parameters provided.
-	val, err := s.ValidatorAtIndexReadOnly(req.Exit.ValidatorIndex)
-	if err != nil && !req.Exit.ValidatorIndex.IsBuilderIndex() {
-		return nil, status.Error(codes.InvalidArgument, "validator index exceeds validator set length")
+	var val state.ReadOnlyValidator
+	if !req.Exit.ValidatorIndex.IsBuilderIndex() {
+		val, err = s.ValidatorAtIndexReadOnly(req.Exit.ValidatorIndex)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "validator index exceeds validator set length")
+		}
 	}
 
 	if err := blocks.VerifyExitAndSignature(val, s, req); err != nil {
