@@ -901,7 +901,7 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
-			template: "/eth/v1/beacon/execution_payload_envelope/{block_root}",
+			template: "/eth/v1/beacon/execution_payload_envelope/{block_id}",
 			name:     namespace + ".GetExecutionPayloadEnvelope",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),

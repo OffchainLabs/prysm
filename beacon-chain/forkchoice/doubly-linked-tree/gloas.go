@@ -40,6 +40,13 @@ func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) 
 	return pn.node.root, pn.full
 }
 
+// PayloadContentLookup returns the preferred lookup key for a given beacon block root.
+// If full payload content wins, it returns the block hash and true.
+// If empty payload content wins, it returns the beacon block root and false.
+func (f *ForkChoice) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
+	return f.store.payloadContentLookup(root)
+}
+
 func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte) error {
 	sb, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
@@ -292,6 +299,21 @@ func (s *Store) choosePayloadContent(n *Node) *PayloadNode {
 	return en
 }
 
+func (s *Store) payloadContentLookup(root [32]byte) ([32]byte, bool) {
+	en := s.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return [32]byte{}, false
+	}
+	pn := s.choosePayloadContent(en.node)
+	if pn == nil || pn.node == nil {
+		return [32]byte{}, false
+	}
+	if pn.full {
+		return pn.node.blockHash, true
+	}
+	return pn.node.root, false
+}
+
 // nodeTreeDump appends to the given list all the nodes descending from this one
 func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.Node) ([]*forkchoice2.Node, error) {
 	if ctx.Err() != nil {
@@ -372,6 +394,8 @@ func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) err
 		children:   make([]*Node, 0),
 	}
 	s.fullNodeByRoot[root] = fn
+	payloadInsertedCount.Inc()
+	updatePayloadNodeMetrics(s)
 	f.updateNewFullNodeWeight(fn)
 	return nil
 }
@@ -391,6 +415,7 @@ func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, bl
 	if n == nil {
 		return
 	}
+	ptcVoteCount.Inc()
 	if payloadPresent {
 		n.node.setPayloadAvailabilityVote(ptcIdx)
 	}

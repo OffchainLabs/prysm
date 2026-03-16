@@ -24,9 +24,9 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetExecutionPayloadEnvelope")
 	defer span.End()
 
-	blockID := r.PathValue("block_root")
+	blockID := r.PathValue("block_id")
 	if blockID == "" {
-		httputil.HandleError(w, "block_root is required in URL params", http.StatusBadRequest)
+		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 

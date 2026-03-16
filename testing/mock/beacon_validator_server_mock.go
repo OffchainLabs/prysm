@@ -163,6 +163,15 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) GetDutiesV2(arg0, arg1 any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDutiesV2", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetDutiesV2), arg0, arg1)
 }
 
+// GetAttesterDuties mocks base method.
+func (m *MockBeaconNodeValidatorServer) GetAttesterDuties(arg0 context.Context, arg1 *eth.AttesterDutiesRequest) (*eth.AttesterDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAttesterDuties", arg0, arg1)
+	ret0, _ := ret[0].(*eth.AttesterDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
 // GetExecutionPayloadEnvelope mocks base method.
 func (m *MockBeaconNodeValidatorServer) GetExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.ExecutionPayloadEnvelopeRequest) (*eth.ExecutionPayloadEnvelopeResponse, error) {
 	m.ctrl.T.Helper()
@@ -170,6 +179,57 @@ func (m *MockBeaconNodeValidatorServer) GetExecutionPayloadEnvelope(arg0 context
 	ret0, _ := ret[0].(*eth.ExecutionPayloadEnvelopeResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
+}
+
+// GetAttesterDuties indicates an expected call of GetAttesterDuties.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) GetAttesterDuties(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAttesterDuties", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetAttesterDuties), arg0, arg1)
+}
+
+// GetProposerDutiesV2 mocks base method.
+func (m *MockBeaconNodeValidatorServer) GetProposerDutiesV2(arg0 context.Context, arg1 *eth.ProposerDutiesRequest) (*eth.ProposerDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProposerDutiesV2", arg0, arg1)
+	ret0, _ := ret[0].(*eth.ProposerDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProposerDutiesV2 indicates an expected call of GetProposerDutiesV2.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) GetProposerDutiesV2(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposerDutiesV2", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetProposerDutiesV2), arg0, arg1)
+}
+
+// GetSyncCommitteeDuties mocks base method.
+func (m *MockBeaconNodeValidatorServer) GetSyncCommitteeDuties(arg0 context.Context, arg1 *eth.SyncCommitteeDutiesRequest) (*eth.SyncCommitteeDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSyncCommitteeDuties", arg0, arg1)
+	ret0, _ := ret[0].(*eth.SyncCommitteeDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSyncCommitteeDuties indicates an expected call of GetSyncCommitteeDuties.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) GetSyncCommitteeDuties(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSyncCommitteeDuties", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetSyncCommitteeDuties), arg0, arg1)
+}
+
+// GetPTCDuties mocks base method.
+func (m *MockBeaconNodeValidatorServer) GetPTCDuties(arg0 context.Context, arg1 *eth.PTCDutiesRequest) (*eth.PTCDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPTCDuties", arg0, arg1)
+	ret0, _ := ret[0].(*eth.PTCDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPTCDuties indicates an expected call of GetPTCDuties.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) GetPTCDuties(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPTCDuties", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetPTCDuties), arg0, arg1)
 }
 
 // GetExecutionPayloadEnvelope indicates an expected call of GetExecutionPayloadEnvelope.

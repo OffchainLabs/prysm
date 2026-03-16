@@ -204,6 +204,19 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) GetDutiesV2(ctx, in any, op
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDutiesV2", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetDutiesV2), varargs...)
 }
 
+// GetAttesterDuties mocks base method.
+func (m *MockBeaconNodeValidatorClient) GetAttesterDuties(arg0 context.Context, arg1 *eth.AttesterDutiesRequest, arg2 ...grpc.CallOption) (*eth.AttesterDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetAttesterDuties", varargs...)
+	ret0, _ := ret[0].(*eth.AttesterDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
 // GetExecutionPayloadEnvelope mocks base method.
 func (m *MockBeaconNodeValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, in *eth.ExecutionPayloadEnvelopeRequest, opts ...grpc.CallOption) (*eth.ExecutionPayloadEnvelopeResponse, error) {
 	m.ctrl.T.Helper()
@@ -215,6 +228,73 @@ func (m *MockBeaconNodeValidatorClient) GetExecutionPayloadEnvelope(ctx context.
 	ret0, _ := ret[0].(*eth.ExecutionPayloadEnvelopeResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
+}
+
+// GetAttesterDuties indicates an expected call of GetAttesterDuties.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) GetAttesterDuties(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAttesterDuties", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetAttesterDuties), varargs...)
+}
+
+// GetProposerDutiesV2 mocks base method.
+func (m *MockBeaconNodeValidatorClient) GetProposerDutiesV2(arg0 context.Context, arg1 *eth.ProposerDutiesRequest, arg2 ...grpc.CallOption) (*eth.ProposerDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetProposerDutiesV2", varargs...)
+	ret0, _ := ret[0].(*eth.ProposerDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProposerDutiesV2 indicates an expected call of GetProposerDutiesV2.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) GetProposerDutiesV2(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposerDutiesV2", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetProposerDutiesV2), varargs...)
+}
+
+// GetSyncCommitteeDuties mocks base method.
+func (m *MockBeaconNodeValidatorClient) GetSyncCommitteeDuties(arg0 context.Context, arg1 *eth.SyncCommitteeDutiesRequest, arg2 ...grpc.CallOption) (*eth.SyncCommitteeDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetSyncCommitteeDuties", varargs...)
+	ret0, _ := ret[0].(*eth.SyncCommitteeDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSyncCommitteeDuties indicates an expected call of GetSyncCommitteeDuties.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) GetSyncCommitteeDuties(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSyncCommitteeDuties", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetSyncCommitteeDuties), varargs...)
+}
+
+// GetPTCDuties mocks base method.
+func (m *MockBeaconNodeValidatorClient) GetPTCDuties(arg0 context.Context, arg1 *eth.PTCDutiesRequest, arg2 ...grpc.CallOption) (*eth.PTCDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetPTCDuties", varargs...)
+	ret0, _ := ret[0].(*eth.PTCDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPTCDuties indicates an expected call of GetPTCDuties.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) GetPTCDuties(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPTCDuties", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetPTCDuties), varargs...)
 }
 
 // GetExecutionPayloadEnvelope indicates an expected call of GetExecutionPayloadEnvelope.

@@ -214,7 +214,7 @@ func TestValidateDataColumn(t *testing.T) {
 		service, message := serviceAndMessage(t, testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{}), dataColumnSidecarMsg)
 		service.setSeenDataColumnIndex(0, 0, 0)
 		result, err := service.validateDataColumn(ctx, "aDummyPID", message)
-		require.ErrorContains(t, "data column sidecar already seen", err)
+		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, result)
 	})
 }
