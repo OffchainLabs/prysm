@@ -45,10 +45,11 @@ func (s *State) hasStateInCache(_ context.Context, blockRoot [32]byte) (bool, er
 
 // StateByRootIfCachedNoCopy retrieves a state using the input block root only if the state is already in the cache.
 func (s *State) StateByRootIfCachedNoCopy(blockRoot [32]byte) state.ReadOnlyBeaconState {
-	if !s.hotStateCache.has(blockRoot) {
-		return nil
+	if state := s.hotStateCache.getWithoutCopy(blockRoot); state != nil {
+		return state
 	}
-	return s.hotStateCache.getWithoutCopy(blockRoot)
+
+	return s.epochBoundaryStateCache.getByBlockRootNoCopy(blockRoot)
 }
 
 // StateByRoot retrieves the state using input block root.
