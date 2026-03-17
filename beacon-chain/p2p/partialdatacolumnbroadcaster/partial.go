@@ -479,10 +479,8 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			select {
 			case p.concurrentHeaderHandlerSemaphore <- struct{}{}:
 				go func() {
-					defer func() {
-						<-p.concurrentHeaderHandlerSemaphore
-					}()
 					p.handleHeader(header, string(groupID))
+					<-p.concurrentHeaderHandlerSemaphore
 				}()
 			default:
 				p.logger.WithFields(logrus.Fields{
