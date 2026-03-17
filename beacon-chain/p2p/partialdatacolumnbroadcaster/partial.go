@@ -292,7 +292,7 @@ func (p *PartialColumnBroadcaster) getDataColumn(topic string, group []byte) *bl
 	return verifier.Column
 }
 
-func decodePartsMetadataFromPeerState(state *ethpb.PartialDataColumnPartsMetadata, expectedLength uint64) (*ethpb.PartialDataColumnPartsMetadata, error) {
+func parsePartsMetadataFromPeerState(state *ethpb.PartialDataColumnPartsMetadata, expectedLength uint64) (*ethpb.PartialDataColumnPartsMetadata, error) {
 	if state == nil {
 		return blocks.NewPartsMetaWithNoAvailableAndNoRequests(expectedLength), nil
 	}
@@ -350,7 +350,7 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 
 	// only update RecvdState using the incoming partial message if the peer did not send us their parts metadata
 	if !hasIncomingPartsMetadata {
-		recievedMeta, err := decodePartsMetadataFromPeerState(peerState.Recvd, nKzgCommitments)
+		recievedMeta, err := parsePartsMetadataFromPeerState(peerState.Recvd, nKzgCommitments)
 		if err != nil {
 			return peerState, nil, errors.Wrap(err, "received")
 		}
@@ -361,7 +361,7 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 		peerState.Recvd = recvdState
 	}
 
-	sentMeta, err := decodePartsMetadataFromPeerState(peerState.Sent, nKzgCommitments)
+	sentMeta, err := parsePartsMetadataFromPeerState(peerState.Sent, nKzgCommitments)
 	if err != nil {
 		return peerState, nil, errors.Wrap(err, "sent")
 	}
