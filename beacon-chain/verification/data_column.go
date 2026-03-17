@@ -15,6 +15,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/runtime/logging"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -327,6 +328,16 @@ func (dv *RODataColumnsVerifier) getVerifyingState(ctx context.Context, dataColu
 		}
 	}
 
+	// Check caches before entering the expensive singleflight state replay.
+	cachedState, err := dv.cachedVerifyingState(parentRoot, dataColumnEpoch)
+	if err != nil {
+		return nil, fmt.Errorf("cached verifying state: %w", err)
+	}
+
+	if cachedState != nil {
+		return cachedState, nil
+	}
+
 	// Deduplicate the expensive state replay across concurrent data columns for the same block.
 	var slotBytes [8]byte
 	binary.BigEndian.PutUint64(slotBytes[:], uint64(dataColumnSlot))
@@ -367,6 +378,28 @@ func (dv *RODataColumnsVerifier) getVerifyingState(ctx context.Context, dataColu
 	}
 
 	return v.(state.ReadOnlyBeaconState), nil
+}
+
+// cachedVerifyingState attempts to find a suitable verifying state from caches,
+// avoiding the expensive StateByRoot disk lookup and singleflight contention.
+func (dv *RODataColumnsVerifier) cachedVerifyingState(parentRoot [fieldparams.RootLength]byte, dataColumnEpoch primitives.Epoch) (state.ReadOnlyBeaconState, error) {
+	targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
+	if err != nil {
+		return nil, fmt.Errorf("target root for epoch: %w", err)
+	}
+
+	if state := dv.sr.StateByRootIfCachedNoCopy(targetRoot); state != nil {
+		targetEpoch := slots.ToEpoch(state.Slot())
+		if targetEpoch == dataColumnEpoch || targetEpoch == dataColumnEpoch-1 {
+			return state, nil
+		}
+	}
+
+	if state := dv.sr.StateByRootIfCachedNoCopy(parentRoot); state != nil {
+		return state, nil
+	}
+
+	return nil, nil
 }
 
 func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.RootLength]byte) bool) (err error) {
