@@ -156,15 +156,7 @@ func newBroadcasterHarness(t *testing.T, ps *mockPubSub) *broadcasterHarness {
 
 func (h *broadcasterHarness) start(cr *callbackRecorder) {
 	h.t.Helper()
-
-	err := h.broadcaster.Start(
-		cr.PartialVerifierFromHeader,
-		cr.PartialVerifierFromTrustedColumn,
-		cr.ValidateColumn,
-		cr.HandleColumn,
-		cr.HandleHeader,
-	)
-	require.NoError(h.t, err)
+	h.broadcaster.Start(cr)
 }
 
 func (h *broadcasterHarness) Stop() {
@@ -862,10 +854,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			recorder := newCallbackRecorder(8, tt.validateHeaderReject, tt.validateColumnErr, tt.validateHeaderErr)
 			h := newBroadcasterHarness(t, ps)
 
-			h.broadcaster.partialVerifierFromHeader = recorder.PartialVerifierFromHeader
-			h.broadcaster.partialVerifierFromTrustedColumn = recorder.PartialVerifierFromTrustedColumn
-			h.broadcaster.validateColumn = recorder.ValidateColumn
-			h.broadcaster.handleHeader = recorder.HandleHeader
+			h.broadcaster.callbacks = recorder
 
 			setup := tt.setup(t, h.broadcaster)
 			err := h.broadcaster.handleIncomingRPC(setup.inputRPC)
@@ -1126,7 +1115,7 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 				}
 				h.broadcaster.partialMsgStore[topic][string(setup.group)].Column.Published = setup.published
 			}
-			h.broadcaster.handleColumn = recorder.HandleColumn
+			h.broadcaster.callbacks = recorder
 
 			var cellIndices []uint64
 			var cells []blocks.CellProofBundle

@@ -46,15 +46,24 @@ func extractColumnIndexFromTopic(topic string) (uint64, error) {
 	return strconv.ParseUint(matches[1], 10, 64)
 }
 
-// PartialVerifierFromHeader builds and validates a partial column from a new header.
-// Returns (verifier, reject, err) where:
-//   - reject=true, err!=nil: REJECT - peer should be penalized
-//   - reject=false, err!=nil: IGNORE - don't penalize, just ignore
-//   - reject=false, err=nil: valid verifier
-type PartialVerifierFromHeader func(col *blocks.PartialDataColumn) (verifier *verification.PartialColumnVerifier, reject bool, err error)
-type PartialVerifierFromTrustedColumn func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error)
-type HeaderHandler func(header *ethpb.PartialDataColumnHeader, groupID string)
-type ColumnValidator func(cells []blocks.CellProofBundle) error
+// ColumnCallbacks is the interface that the broadcaster uses to validate and handle
+// partial data column headers and cells.
+type ColumnCallbacks interface {
+	// PartialVerifierFromHeader builds and validates a partial column from a new header.
+	// Returns (verifier, reject, err) where:
+	//   - reject=true, err!=nil: REJECT - peer should be penalized
+	//   - reject=false, err!=nil: IGNORE - don't penalize, just ignore
+	//   - reject=false, err=nil: valid verifier
+	PartialVerifierFromHeader(col *blocks.PartialDataColumn) (verifier *verification.PartialColumnVerifier, reject bool, err error)
+	// PartialVerifierFromTrustedColumn creates a verifier from a previously validated column.
+	PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error)
+	// ValidateColumn validates the KZG proofs of the given cells.
+	ValidateColumn(cells []blocks.CellProofBundle) error
+	// HandleColumn is called when a partial column has been fully reconstructed.
+	HandleColumn(topic string, col blocks.VerifiedRODataColumn)
+	// HandleHeader is called when a new partial data column header is first validated.
+	HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string)
+}
 
 type PartialColumnBroadcaster struct {
 	logger *logrus.Logger
@@ -63,11 +72,7 @@ type PartialColumnBroadcaster struct {
 	publishPartialCol func(topic string, groupID []byte, col *blocks.PartialDataColumn) error
 	stop              chan struct{}
 
-	partialVerifierFromHeader        PartialVerifierFromHeader
-	partialVerifierFromTrustedColumn PartialVerifierFromTrustedColumn
-	validateColumn                   ColumnValidator
-	handleColumn                     SubHandler
-	handleHeader                     HeaderHandler
+	callbacks ColumnCallbacks
 
 	// map topic -> *pubsub.Topic
 	topics map[string]*pubsub.Topic
@@ -211,36 +216,10 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 // Start starts the event loop of the PartialColumnBroadcaster.
 // It accepts the required validator and handler functions, returning an error if any is nil.
 // The event loop is launched in a goroutine.
-func (p *PartialColumnBroadcaster) Start(
-	partialVerifierFromHeader PartialVerifierFromHeader,
-	partialVerifierFromTrustedColumn PartialVerifierFromTrustedColumn,
-	validateColumn ColumnValidator,
-	handleColumn SubHandler,
-	handleHeader HeaderHandler,
-) error {
-	if partialVerifierFromHeader == nil {
-		return errors.New("no header partial verifier provided")
-	}
-	if partialVerifierFromTrustedColumn == nil {
-		return errors.New("no trusted partial verifier provided")
-	}
-	if handleHeader == nil {
-		return errors.New("no header handler provided")
-	}
-	if validateColumn == nil {
-		return errors.New("no column validator provided")
-	}
-	if handleColumn == nil {
-		return errors.New("no column handler provided")
-	}
-	p.partialVerifierFromHeader = partialVerifierFromHeader
-	p.partialVerifierFromTrustedColumn = partialVerifierFromTrustedColumn
-	p.validateColumn = validateColumn
-	p.handleColumn = handleColumn
-	p.handleHeader = handleHeader
+func (p *PartialColumnBroadcaster) Start(callbacks ColumnCallbacks) {
+	p.callbacks = callbacks
 	p.stop = make(chan struct{})
 	go p.loop()
-	return nil
 }
 
 func (p *PartialColumnBroadcaster) loop() {
@@ -448,7 +427,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 
 		var verifier *verification.PartialColumnVerifier
 		if headerWasCached {
-			verifier, err = p.partialVerifierFromTrustedColumn(&newColumn)
+			verifier, err = p.callbacks.PartialVerifierFromTrustedColumn(&newColumn)
 			if err != nil {
 				p.logger.WithError(err).WithFields(logrus.Fields{
 					"topic":          topicID,
@@ -459,7 +438,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			}
 		} else {
 			var reject bool
-			verifier, reject, err = p.partialVerifierFromHeader(&newColumn)
+			verifier, reject, err = p.callbacks.PartialVerifierFromHeader(&newColumn)
 			if err != nil {
 				p.logger.WithError(err).WithField("reject", reject).Debug("Header validation failed")
 				if reject {
@@ -479,7 +458,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			select {
 			case p.concurrentHeaderHandlerSemaphore <- struct{}{}:
 				go func() {
-					p.handleHeader(header, string(groupID))
+					p.callbacks.HandleHeader(header, string(groupID))
 					<-p.concurrentHeaderHandlerSemaphore
 				}()
 			default:
@@ -537,7 +516,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 					<-p.concurrentValidatorSemaphore
 				}()
 				start := time.Now()
-				err := p.validateColumn(cellsToVerify)
+				err := p.callbacks.ValidateColumn(cellsToVerify)
 				if err != nil {
 					logger.WithError(err).Error("Failed to validate cells")
 					_ = p.peerFeedback(topicID, rpcWithFrom.from, pubsub.PeerFeedbackInvalidMessage)
@@ -616,9 +595,7 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 		}
 		if ok {
 			p.logger.WithFields(logrus.Fields{"topic": cells.topic, "group": cells.group}).Info("Completed partial column")
-			if p.handleColumn != nil {
-				go p.handleColumn(cells.topic, col)
-			}
+			go p.callbacks.HandleColumn(cells.topic, col)
 		} else {
 			p.logger.WithFields(logrus.Fields{"topic": cells.topic, "group": cells.group}).Info("Extended partial column")
 		}
@@ -704,7 +681,7 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 		verifier := p.getPartialVerifier(topic, groupIDBytes)
 		if verifier == nil {
 			var err error
-			verifier, err = p.partialVerifierFromTrustedColumn(&partialCol)
+			verifier, err = p.callbacks.PartialVerifierFromTrustedColumn(&partialCol)
 			if err != nil {
 				aggErr = stderrors.Join(aggErr, err)
 				continue
@@ -729,8 +706,6 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 	}
 	return aggErr
 }
-
-type SubHandler func(topic string, col blocks.VerifiedRODataColumn)
 
 func (p *PartialColumnBroadcaster) Subscribe(t *pubsub.Topic) error {
 	respCh := make(chan error)

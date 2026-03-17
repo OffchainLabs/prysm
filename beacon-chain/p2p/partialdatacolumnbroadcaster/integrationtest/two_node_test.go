@@ -27,6 +27,43 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// testColumnCallbacks implements partialdatacolumnbroadcaster.ColumnCallbacks for integration tests.
+type testColumnCallbacks struct {
+	t           *testing.T
+	newVerifier func(col *blocks.PartialDataColumn, markIncluded bool) (*verification.PartialColumnVerifier, error)
+	completeCh  chan blocks.VerifiedRODataColumn
+	label       string
+}
+
+func (c *testColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
+	if col.SignedBlockHeader == nil || col.SignedBlockHeader.Header == nil {
+		return nil, true, fmt.Errorf("nil signed block header")
+	}
+	if len(col.KzgCommitments) == 0 {
+		return nil, true, fmt.Errorf("empty kzg commitments")
+	}
+	verifier, err := c.newVerifier(col, false)
+	if err != nil {
+		return nil, true, err
+	}
+	return verifier, false, nil
+}
+
+func (c *testColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
+	return c.newVerifier(col, true)
+}
+
+func (c *testColumnCallbacks) ValidateColumn(_ []blocks.CellProofBundle) error {
+	return nil
+}
+
+func (c *testColumnCallbacks) HandleColumn(_ string, col blocks.VerifiedRODataColumn) {
+	c.t.Logf("%s: Completed! Column has %d cells", c.label, len(col.Column))
+	c.completeCh <- col
+}
+
+func (c *testColumnCallbacks) HandleHeader(_ *ethpb.PartialDataColumnHeader, _ string) {}
+
 // TestTwoNodePartialColumnExchange tests that two nodes can exchange partial columns
 // and reconstruct the complete column. Node 1 has cells 0-2, Node 2 has cells 3-5.
 // After exchange, both should have all cells.
@@ -153,39 +190,16 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 			return verifier, nil
 		}
 
-		partialVerifierFromHeader := func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
-			if col.SignedBlockHeader == nil || col.SignedBlockHeader.Header == nil {
-				return nil, true, fmt.Errorf("nil signed block header")
-			}
-			if len(col.KzgCommitments) == 0 {
-				return nil, true, fmt.Errorf("empty kzg commitments")
-			}
-			verifier, err := newVerifier(col, false)
-			if err != nil {
-				return nil, true, err
-			}
-			return verifier, false, nil
-		}
-
-		partialVerifierFromTrustedColumn := func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
-			return newVerifier(col, true)
-		}
-
-		cellValidator := func(_ []blocks.CellProofBundle) error {
-			return nil
-		}
-
 		node1Complete := make(chan blocks.VerifiedRODataColumn, 1)
 		node2Complete := make(chan blocks.VerifiedRODataColumn, 1)
 
-		handler1 := func(topic string, col blocks.VerifiedRODataColumn) {
-			t.Logf("Node 1: Completed! Column has %d cells", len(col.Column))
-			node1Complete <- col
-		}
-
-		handler2 := func(topic string, col blocks.VerifiedRODataColumn) {
-			t.Logf("Node 2: Completed! Column has %d cells", len(col.Column))
-			node2Complete <- col
+		newTestCallbacks := func(completeCh chan blocks.VerifiedRODataColumn, label string) *testColumnCallbacks {
+			return &testColumnCallbacks{
+				t:           t,
+				newVerifier: newVerifier,
+				completeCh:  completeCh,
+				label:       label,
+			}
 		}
 
 		// Connect hosts
@@ -205,13 +219,9 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		require.NoError(t, err)
 		defer sub2.Cancel()
 
-		noopHeaderHandler := func(header *ethpb.PartialDataColumnHeader, groupID string) {}
+		broadcaster1.Start(newTestCallbacks(node1Complete, "Node 1"))
 
-		err = broadcaster1.Start(partialVerifierFromHeader, partialVerifierFromTrustedColumn, cellValidator, handler1, noopHeaderHandler)
-		require.NoError(t, err)
-
-		err = broadcaster2.Start(partialVerifierFromHeader, partialVerifierFromTrustedColumn, cellValidator, handler2, noopHeaderHandler)
-		require.NoError(t, err)
+		broadcaster2.Start(newTestCallbacks(node2Complete, "Node 2"))
 
 		err = broadcaster1.Subscribe(topic1)
 		require.NoError(t, err)
