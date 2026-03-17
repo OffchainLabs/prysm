@@ -226,7 +226,7 @@ func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata,
 	if base.Requests.Len() != additionalAvailable.Len() {
 		return nil, errors.New("requests length mismatch")
 	}
-	merged, err := bitfield.Bitlist(base.Available).Or(additionalAvailable)
+	merged, err := base.Available.Or(additionalAvailable)
 	if err != nil {
 		return nil, err
 	}
