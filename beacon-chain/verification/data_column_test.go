@@ -1059,6 +1059,91 @@ func TestGetVerifyingStateEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, true, headStateCalled, "HeadState should be called when head is far ahead")
 	})
+
+	t.Run("different dependent roots - cache hit on target root avoids StateByRoot", func(t *testing.T) {
+		signatureCache := &mockSignatureCache{
+			svcb: func(signatureData signatureData) (bool, error) {
+				return false, nil
+			},
+			vscb: func(signatureData signatureData, _ validatorAtIndexer) (err error) {
+				return nil
+			},
+		}
+
+		stateByRooter := &mockStateByRooter{
+			sbr: sbrErrorIfCalled(t), // StateByRoot should NOT be called
+			cachedNoCopyFunc: func(root [32]byte) state.ReadOnlyBeaconState {
+				return fuluState // Cache hit for any root
+			},
+		}
+
+		initializer := Initializer{
+			shared: &sharedResources{
+				sc: signatureCache,
+				sr: stateByRooter,
+				hsp: &mockHeadStateProvider{
+					headRoot: []byte{0xff},
+					headSlot: columnSlot,
+				},
+				fc: &mockForkchoicer{
+					DependentRootForEpochCB: func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+						return root, nil // Different roots for parent vs head
+					},
+					TargetRootForEpochCB: fcReturnsTargetRoot([fieldparams.RootLength]byte{}),
+				},
+			},
+		}
+
+		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
+		err := verifier.ValidProposerSignature(t.Context())
+		require.NoError(t, err)
+	})
+
+	t.Run("different dependent roots - cache hit on parent root avoids StateByRoot", func(t *testing.T) {
+		signatureCache := &mockSignatureCache{
+			svcb: func(signatureData signatureData) (bool, error) {
+				return false, nil
+			},
+			vscb: func(signatureData signatureData, _ validatorAtIndexer) (err error) {
+				return nil
+			},
+		}
+
+		// Only return a cache hit for the parent root, not the target root.
+		// Also set the target state to a far-away epoch so it doesn't match the epoch check.
+		farState, _ := util.DeterministicGenesisStateFulu(t, numValidators)
+		stateByRooter := &mockStateByRooter{
+			sbr: sbrErrorIfCalled(t),
+			cachedNoCopyFunc: func(root [32]byte) state.ReadOnlyBeaconState {
+				if root == parentRoot {
+					return fuluState // Cache hit only for parent root
+				}
+				// Target root returns a state in epoch 0 (won't match epoch 3 or 2)
+				return farState
+			},
+		}
+
+		initializer := Initializer{
+			shared: &sharedResources{
+				sc: signatureCache,
+				sr: stateByRooter,
+				hsp: &mockHeadStateProvider{
+					headRoot: []byte{0xff},
+					headSlot: columnSlot,
+				},
+				fc: &mockForkchoicer{
+					DependentRootForEpochCB: func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+						return root, nil
+					},
+					TargetRootForEpochCB: fcReturnsTargetRoot([fieldparams.RootLength]byte{0xaa}),
+				},
+			},
+		}
+
+		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
+		err := verifier.ValidProposerSignature(t.Context())
+		require.NoError(t, err)
+	})
 }
 
 // headStateCallTracker wraps mockHeadStateProvider to track HeadState calls.

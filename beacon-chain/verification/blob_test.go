@@ -624,11 +624,15 @@ var _ signatureCache = &mockSignatureCache{}
 type sbrfunc func(context.Context, [32]byte) (state.BeaconState, error)
 
 type mockStateByRooter struct {
-	sbr           sbrfunc
-	calledForRoot map[[32]byte]bool
+	sbr              sbrfunc
+	calledForRoot    map[[32]byte]bool
+	cachedNoCopyFunc func(root [32]byte) state.ReadOnlyBeaconState
 }
 
-func (sbr *mockStateByRooter) StateByRootIfCachedNoCopy(_ [32]byte) state.ReadOnlyBeaconState {
+func (sbr *mockStateByRooter) StateByRootIfCachedNoCopy(root [32]byte) state.ReadOnlyBeaconState {
+	if sbr.cachedNoCopyFunc != nil {
+		return sbr.cachedNoCopyFunc(root)
+	}
 	return nil
 }
 
