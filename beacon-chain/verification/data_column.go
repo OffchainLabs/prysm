@@ -3,6 +3,7 @@ package verification
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"strings"
 	"time"
@@ -326,24 +327,46 @@ func (dv *RODataColumnsVerifier) getVerifyingState(ctx context.Context, dataColu
 		}
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"slot":       dataColumnSlot,
-		"parentRoot": fmt.Sprintf("%#x", parentRoot),
-		"headRoot":   fmt.Sprintf("%#x", headRoot),
-	}).Debug("Replying state for data column verification")
-	targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
+	// Deduplicate the expensive state replay across concurrent data columns for the same block.
+	var slotBytes [8]byte
+	binary.BigEndian.PutUint64(slotBytes[:], uint64(dataColumnSlot))
+	key := "vs:" + string(parentRoot[:]) + string(slotBytes[:])
+
+	v, err, _ := dv.sg.Do(key, func() (any, error) {
+		logrus.WithFields(logrus.Fields{
+			"slot":       dataColumnSlot,
+			"parentRoot": fmt.Sprintf("%#x", parentRoot),
+			"headRoot":   fmt.Sprintf("%#x", headRoot),
+			"index":      dataColumn.Index,
+		}).Debug("Replying state for data column verification")
+
+		targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
+		if err != nil {
+			return nil, fmt.Errorf("target root for epoch: %w", err)
+		}
+
+		targetState, err := dv.sr.StateByRoot(ctx, targetRoot)
+		if err != nil {
+			return nil, fmt.Errorf("state by root: %w", err)
+		}
+
+		targetEpoch := slots.ToEpoch(targetState.Slot())
+		if targetEpoch == dataColumnEpoch || targetEpoch == dataColumnEpoch-1 {
+			return targetState, nil
+		}
+
+		st, err := dv.sr.StateByRoot(ctx, parentRoot)
+		if err != nil {
+			return nil, fmt.Errorf("state by root: %w", err)
+		}
+
+		return st, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	targetState, err := dv.sr.StateByRoot(ctx, targetRoot)
-	if err != nil {
-		return nil, err
-	}
-	targetEpoch := slots.ToEpoch(targetState.Slot())
-	if targetEpoch == dataColumnEpoch || targetEpoch == dataColumnEpoch-1 {
-		return targetState, nil
-	}
-	return transition.ProcessSlotsUsingNextSlotCache(ctx, targetState, parentRoot[:], dataColumnSlot)
+
+	return v.(state.ReadOnlyBeaconState), nil
 }
 
 func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.RootLength]byte) bool) (err error) {
