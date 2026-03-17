@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math"
 	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
@@ -809,19 +808,14 @@ func (s *Store) HighestRootsBelowSlot(ctx context.Context, slot primitives.Slot)
 	return fs, roots, nil
 }
 
-// LowestRootsAboveSlot returns roots from the database slot index from the lowest slot above the input slot.
+// LowestRootsAboveSlot returns roots from the database slot index at or above the input slot.
 // The returned slot is the slot where the roots were found. This is the mirror of HighestRootsBelowSlot.
-// If no block exists above the given slot, an empty root slice is returned.
+// If no block exists at or above the given slot, an empty root slice is returned.
 func (s *Store) LowestRootsAboveSlot(ctx context.Context, slot primitives.Slot) (fs primitives.Slot, roots [][32]byte, err error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.LowestRootsAboveSlot")
 	defer span.End()
 
-	// Guard against overflow: if slot is already max, nothing can be above it.
-	if slot == math.MaxUint64 {
-		return 0, nil, nil
-	}
-	// Seek to slot+1 so we find the first key strictly above slot.
-	sk := bytesutil.Uint64ToBytesBigEndian(uint64(slot + 1))
+	sk := bytesutil.Uint64ToBytesBigEndian(uint64(slot))
 	err = s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(blockSlotIndicesBucket)
 		c := bkt.Cursor()

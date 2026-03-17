@@ -109,7 +109,7 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 		blockHash [32]byte
 	}
 
-	_, roots, err := s.cfg.beaconDB.LowestRootsAboveSlot(ctx, rp.end)
+	_, roots, err := s.cfg.beaconDB.LowestRootsAboveSlot(ctx, rp.end+1)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 		return errors.Wrap(err, "could not find successor block")
