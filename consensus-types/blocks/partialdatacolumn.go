@@ -2,7 +2,6 @@ package blocks
 
 import (
 	"bytes"
-	"errors"
 	"iter"
 	"slices"
 
@@ -11,6 +10,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 )
 
 var _ partialmessages.PublishActionsFn[PartialDataColumnPeerState] = (*PartialDataColumn)(nil).PublishActions
@@ -160,44 +160,42 @@ func (p *PartialDataColumn) NKzgCommitments() uint64 {
 }
 
 func (p *PartialDataColumn) cellsToSendForPeer(peerMeta *ethpb.PartialDataColumnPartsMetadata) (encodedMsg []byte, cellsSent bitfield.Bitlist, err error) {
-	peerAvailable := bitfield.Bitlist(peerMeta.Available)
-	peerRequests := bitfield.Bitlist(peerMeta.Requests)
-
-	n := p.Included.Len()
-	if peerAvailable.Len() != n || peerRequests.Len() != n {
-		return nil, nil, errors.New("peer metadata bitmap length mismatch")
+	// We have it and the peer requested it.
+	meetsRequests, err := peerMeta.Requests.And(p.Included)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "peer metadata bitmap length mismatch - requests")
+	}
+	// Even though the bitmaps provide the flexibility for the peer to request cells it has, we will still save bandwidth by filtering those out.
+	meetsNeeds, err := meetsRequests.And(peerMeta.Available.Not())
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "peer metadata bitmap length mismatch - available")
 	}
 
-	var cellsToReturn int
-	for i := range n {
-		if p.Included.BitAt(i) && !peerAvailable.BitAt(i) && peerRequests.BitAt(i) {
-			cellsToReturn++
-		}
-	}
-	if cellsToReturn == 0 {
+	size := meetsNeeds.Len()
+
+	// Nothing to send
+	if meetsNeeds.Count() == 0 {
 		return nil, nil, nil
 	}
 
-	included := bitfield.NewBitlist(n)
-	outMessage := ethpb.PartialDataColumnSidecar{
-		PartialColumn: make([][]byte, 0, cellsToReturn),
-		KzgProofs:     make([][]byte, 0, cellsToReturn),
+	nCells := meetsNeeds.Count()
+	out := ethpb.PartialDataColumnSidecar{
+		PartialColumn:      make([][]byte, 0, nCells),
+		KzgProofs:          make([][]byte, 0, nCells),
+		CellsPresentBitmap: meetsNeeds,
 	}
-	for i := range n {
-		if !p.Included.BitAt(i) || peerAvailable.BitAt(i) || !peerRequests.BitAt(i) {
-			continue
+	for i := range size {
+		if meetsNeeds.BitAt(i) {
+			out.PartialColumn = append(out.PartialColumn, p.Column[i])
+			out.KzgProofs = append(out.KzgProofs, p.KzgProofs[i])
 		}
-		included.SetBitAt(i, true)
-		outMessage.PartialColumn = append(outMessage.PartialColumn, p.Column[i])
-		outMessage.KzgProofs = append(outMessage.KzgProofs, p.KzgProofs[i])
 	}
-	outMessage.CellsPresentBitmap = included
 
-	marshalled, err := outMessage.MarshalSSZ()
+	marshalled, err := out.MarshalSSZ()
 	if err != nil {
 		return nil, nil, err
 	}
-	return marshalled, included, nil
+	return marshalled, meetsNeeds, nil
 }
 
 // eagerPushBytes builds SSZ-encoded PartialDataColumnSidecar with header only (no cells).
