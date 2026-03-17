@@ -28,9 +28,9 @@ type CompactValidator struct {
 // CompactValidatorsFromProto converts a slice of protobuf Validators to CompactValidators.
 func CompactValidatorsFromProto(validators []*ethpb.Validator) []CompactValidator {
 	compactValidators := make([]CompactValidator, len(validators))
-	for i, validators := range validators {
-		if validators != nil {
-			compactValidators[i] = CompactValidatorFromProto(validators)
+	for i, validator := range validators {
+		if validator != nil {
+			compactValidators[i] = CompactValidatorFromProto(validator)
 		}
 	}
 
