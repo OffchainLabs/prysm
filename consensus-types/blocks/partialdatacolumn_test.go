@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 )
 
 func testSignedHeader(validRoots bool, sigLen int) *ethpb.SignedBeaconBlockHeader {
@@ -242,7 +243,7 @@ func TestMarshalPartsMetadata(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			parsed, parseErr := ParsePartsMetadata(out, 4)
+			parsed, parseErr := decodePartsMetadata(out, 4)
 			require.NoError(t, parseErr)
 			require.Equal(t, uint64(4), bitfield.Bitlist(parsed.Available).Len())
 		})
@@ -293,7 +294,7 @@ func TestParsePartsMetadata(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			meta, err := ParsePartsMetadata(tt.pm, tt.expectedLength)
+			meta, err := decodePartsMetadata(tt.pm, tt.expectedLength)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, err)
 				return
@@ -339,7 +340,7 @@ func TestPartialDataColumn_PartsMetadata(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			parsed, parseErr := ParsePartsMetadata(meta, tt.expectedN)
+			parsed, parseErr := decodePartsMetadata(meta, tt.expectedN)
 			require.NoError(t, parseErr)
 			require.Equal(t, tt.availCount, bitfield.Bitlist(parsed.Available).Count())
 			require.Equal(t, tt.expectedN, bitfield.Bitlist(parsed.Requests).Count())
@@ -598,7 +599,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				require.DeepEqual(t, initialRequests, initialMeta.Requests)
 
 				// Verify wire-format partsMetadata
-				sentMetaWire, parseSentErr := ParsePartsMetadata(action.EncodedPartsMetadata, 4)
+				sentMetaWire, parseSentErr := decodePartsMetadata(action.EncodedPartsMetadata, 4)
 				require.NoError(t, parseSentErr)
 				require.Equal(t, uint64(2), bitfield.Bitlist(sentMetaWire.Available).Count())
 				require.Equal(t, true, bitfield.Bitlist(sentMetaWire.Available).BitAt(0))
@@ -1150,4 +1151,15 @@ func TestPartialDataColumn_Complete(t *testing.T) {
 			require.Equal(t, tt.wantOK, ok)
 		})
 	}
+}
+
+func decodePartsMetadata(pm partialmessages.PartsMetadata, expectedLength uint64) (*ethpb.PartialDataColumnPartsMetadata, error) {
+	meta := &ethpb.PartialDataColumnPartsMetadata{}
+	if err := meta.UnmarshalSSZ(pm); err != nil {
+		return nil, err
+	}
+	if meta.Available.Len() != expectedLength || meta.Requests.Len() != expectedLength {
+		return nil, errors.New("invalid parts metadata length")
+	}
+	return meta, nil
 }

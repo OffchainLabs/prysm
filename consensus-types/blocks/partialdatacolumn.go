@@ -159,18 +159,6 @@ func (p *PartialDataColumn) NKzgCommitments() uint64 {
 	return p.Included.Len()
 }
 
-// ParsePartsMetadata SSZ-decodes bytes back to PartialDataColumnPartsMetadata.
-func ParsePartsMetadata(pm partialmessages.PartsMetadata, expectedLength uint64) (*ethpb.PartialDataColumnPartsMetadata, error) {
-	meta := &ethpb.PartialDataColumnPartsMetadata{}
-	if err := meta.UnmarshalSSZ(pm); err != nil {
-		return nil, err
-	}
-	if meta.Available.Len() != expectedLength || meta.Requests.Len() != expectedLength {
-		return nil, errors.New("invalid parts metadata length")
-	}
-	return meta, nil
-}
-
 func (p *PartialDataColumn) cellsToSendForPeer(peerMeta *ethpb.PartialDataColumnPartsMetadata) (encodedMsg []byte, cellsSent bitfield.Bitlist, err error) {
 	peerAvailable := bitfield.Bitlist(peerMeta.Available)
 	peerRequests := bitfield.Bitlist(peerMeta.Requests)
