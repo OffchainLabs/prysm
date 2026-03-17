@@ -53,6 +53,10 @@ func (vs *Server) SubmitSignedProposerPreferences(
 	}
 
 	if vs.ProposerPreferencesCache.Has(proposalSlot) {
+		log.WithFields(logrus.Fields{
+			"slot":           proposalSlot,
+			"validatorIndex": msg.Message.ValidatorIndex,
+		}).Debug("Ignoring duplicate signed proposer preferences submission")
 		return &emptypb.Empty{}, nil
 	}
 
