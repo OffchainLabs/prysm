@@ -156,7 +156,7 @@ func newBroadcasterHarness(t *testing.T, ps *mockPubSub) *broadcasterHarness {
 
 func (h *broadcasterHarness) start(cr *callbackRecorder) {
 	h.t.Helper()
-	h.broadcaster.Start(cr)
+	go h.broadcaster.Start(cr)
 }
 
 func (h *broadcasterHarness) Stop() {

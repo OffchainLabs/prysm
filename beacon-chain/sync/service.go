@@ -296,7 +296,7 @@ func (s *Service) Start() {
 	go s.kzgVerifierRoutine()
 
 	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
-		broadcaster.Start(&partialColumnCallbacks{s: s})
+		go broadcaster.Start(&partialColumnCallbacks{s: s})
 	}
 
 	go s.startDiscoveryAndSubscriptions()

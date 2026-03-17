@@ -219,9 +219,8 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		require.NoError(t, err)
 		defer sub2.Cancel()
 
-		broadcaster1.Start(newTestCallbacks(node1Complete, "Node 1"))
-
-		broadcaster2.Start(newTestCallbacks(node2Complete, "Node 2"))
+		go broadcaster1.Start(newTestCallbacks(node1Complete, "Node 1"))
+		go broadcaster2.Start(newTestCallbacks(node2Complete, "Node 2"))
 
 		err = broadcaster1.Subscribe(topic1)
 		require.NoError(t, err)

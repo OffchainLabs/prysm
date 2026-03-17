@@ -215,11 +215,11 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 
 // Start starts the event loop of the PartialColumnBroadcaster.
 // It accepts the required validator and handler functions, returning an error if any is nil.
-// The event loop is launched in a goroutine.
+// Note: The event loop is blocking and so the broadcaster should be started in a goroutine.
 func (p *PartialColumnBroadcaster) Start(callbacks ColumnCallbacks) {
 	p.callbacks = callbacks
 	p.stop = make(chan struct{})
-	go p.loop()
+	p.loop()
 }
 
 func (p *PartialColumnBroadcaster) loop() {
