@@ -36,4 +36,9 @@ const (
 	RequireEnvelopeSlotAboveFinalized
 	RequireEnvelopeSlotMatchesBlock
 	RequireBuilderSignatureValid
+
+	// Signed proposer preferences specific.
+	RequireProposerPreferencesNextEpoch
+	RequireProposerPreferencesProposalSlotValid
+	RequireProposerPreferencesSignatureValid
 )
