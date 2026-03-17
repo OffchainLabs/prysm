@@ -73,6 +73,39 @@ message SignedExecutionPayloadBid {
   bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
+// ProposerPreferences communicates a proposer fee recipient and gas limit for a
+// future proposal slot.
+//
+// Spec:
+// class ProposerPreferences(Container):
+//     proposal_slot: Slot
+//     validator_index: ValidatorIndex
+//     fee_recipient: ExecutionAddress
+//     gas_limit: uint64
+message ProposerPreferences {
+  uint64 proposal_slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  uint64 validator_index = 2
+      [ (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v7/consensus-types/"
+            "primitives.ValidatorIndex" ];
+  bytes fee_recipient = 3 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  uint64 gas_limit = 4;
+}
+
+// SignedProposerPreferences wraps proposer preferences with a signature.
+//
+// Spec:
+// class SignedProposerPreferences(Container):
+//     message: ProposerPreferences
+//     signature: BLSSignature
+message SignedProposerPreferences {
+  ProposerPreferences message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
 // PayloadAttestationData contains the core data for Payload Timeliness
 // Committee (PTC) attestations.
 //

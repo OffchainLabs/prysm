@@ -501,14 +501,14 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 
 	seed, err := Seed(state, e, params.BeaconConfig().DomainBeaconAttester)
 	if err != nil {
-		return err
+		return fmt.Errorf("seed: %w", err)
 	}
 	if committeeCache.HasEntry(string(seed[:])) {
 		return nil
 	}
 	shuffledIndices, err := ShuffledIndices(ctx, state, e)
 	if err != nil {
-		return err
+		return fmt.Errorf("shuffled indices: %w", err)
 	}
 
 	count := SlotCommitteeCount(uint64(len(shuffledIndices)))
@@ -526,8 +526,9 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 		Seed:            seed,
 		SortedIndices:   sortedIndices,
 	}); err != nil {
-		return err
+		return fmt.Errorf("add committee shuffled list to cache: %w", err)
 	}
+
 	return nil
 }
 

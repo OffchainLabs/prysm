@@ -201,6 +201,126 @@ func (x *SignedExecutionPayloadBid) GetSignature() []byte {
 	return nil
 }
 
+type ProposerPreferences struct {
+	state          protoimpl.MessageState                                                     `protogen:"open.v1"`
+	ProposalSlot   github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot           `protobuf:"varint,1,opt,name=proposal_slot,json=proposalSlot,proto3" json:"proposal_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
+	ValidatorIndex github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
+	FeeRecipient   []byte                                                                     `protobuf:"bytes,3,opt,name=fee_recipient,json=feeRecipient,proto3" json:"fee_recipient,omitempty" ssz-size:"20"`
+	GasLimit       uint64                                                                     `protobuf:"varint,4,opt,name=gas_limit,json=gasLimit,proto3" json:"gas_limit,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ProposerPreferences) Reset() {
+	*x = ProposerPreferences{}
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProposerPreferences) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProposerPreferences) ProtoMessage() {}
+
+func (x *ProposerPreferences) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProposerPreferences.ProtoReflect.Descriptor instead.
+func (*ProposerPreferences) Descriptor() ([]byte, []int) {
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ProposerPreferences) GetProposalSlot() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot {
+	if x != nil {
+		return x.ProposalSlot
+	}
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(0)
+}
+
+func (x *ProposerPreferences) GetValidatorIndex() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex {
+	if x != nil {
+		return x.ValidatorIndex
+	}
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(0)
+}
+
+func (x *ProposerPreferences) GetFeeRecipient() []byte {
+	if x != nil {
+		return x.FeeRecipient
+	}
+	return nil
+}
+
+func (x *ProposerPreferences) GetGasLimit() uint64 {
+	if x != nil {
+		return x.GasLimit
+	}
+	return 0
+}
+
+type SignedProposerPreferences struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Message       *ProposerPreferences   `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	Signature     []byte                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty" ssz-size:"96"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SignedProposerPreferences) Reset() {
+	*x = SignedProposerPreferences{}
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SignedProposerPreferences) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SignedProposerPreferences) ProtoMessage() {}
+
+func (x *SignedProposerPreferences) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SignedProposerPreferences.ProtoReflect.Descriptor instead.
+func (*SignedProposerPreferences) Descriptor() ([]byte, []int) {
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *SignedProposerPreferences) GetMessage() *ProposerPreferences {
+	if x != nil {
+		return x.Message
+	}
+	return nil
+}
+
+func (x *SignedProposerPreferences) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
 type PayloadAttestationData struct {
 	state             protoimpl.MessageState                                           `protogen:"open.v1"`
 	BeaconBlockRoot   []byte                                                           `protobuf:"bytes,1,opt,name=beacon_block_root,json=beaconBlockRoot,proto3" json:"beacon_block_root,omitempty" ssz-size:"32"`
@@ -213,7 +333,7 @@ type PayloadAttestationData struct {
 
 func (x *PayloadAttestationData) Reset() {
 	*x = PayloadAttestationData{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[2]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -225,7 +345,7 @@ func (x *PayloadAttestationData) String() string {
 func (*PayloadAttestationData) ProtoMessage() {}
 
 func (x *PayloadAttestationData) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[2]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -238,7 +358,7 @@ func (x *PayloadAttestationData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PayloadAttestationData.ProtoReflect.Descriptor instead.
 func (*PayloadAttestationData) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{2}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PayloadAttestationData) GetBeaconBlockRoot() []byte {
@@ -280,7 +400,7 @@ type PayloadAttestation struct {
 
 func (x *PayloadAttestation) Reset() {
 	*x = PayloadAttestation{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[3]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -292,7 +412,7 @@ func (x *PayloadAttestation) String() string {
 func (*PayloadAttestation) ProtoMessage() {}
 
 func (x *PayloadAttestation) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[3]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -305,7 +425,7 @@ func (x *PayloadAttestation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PayloadAttestation.ProtoReflect.Descriptor instead.
 func (*PayloadAttestation) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{3}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PayloadAttestation) GetAggregationBits() github_com_OffchainLabs_go_bitfield.Bitvector512 {
@@ -340,7 +460,7 @@ type PayloadAttestationMessage struct {
 
 func (x *PayloadAttestationMessage) Reset() {
 	*x = PayloadAttestationMessage{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[4]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -352,7 +472,7 @@ func (x *PayloadAttestationMessage) String() string {
 func (*PayloadAttestationMessage) ProtoMessage() {}
 
 func (x *PayloadAttestationMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[4]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -365,7 +485,7 @@ func (x *PayloadAttestationMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PayloadAttestationMessage.ProtoReflect.Descriptor instead.
 func (*PayloadAttestationMessage) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{4}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *PayloadAttestationMessage) GetValidatorIndex() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex {
@@ -402,7 +522,7 @@ type BeaconBlockGloas struct {
 
 func (x *BeaconBlockGloas) Reset() {
 	*x = BeaconBlockGloas{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[5]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -414,7 +534,7 @@ func (x *BeaconBlockGloas) String() string {
 func (*BeaconBlockGloas) ProtoMessage() {}
 
 func (x *BeaconBlockGloas) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[5]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -427,7 +547,7 @@ func (x *BeaconBlockGloas) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeaconBlockGloas.ProtoReflect.Descriptor instead.
 func (*BeaconBlockGloas) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{5}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *BeaconBlockGloas) GetSlot() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot {
@@ -485,7 +605,7 @@ type BeaconBlockBodyGloas struct {
 
 func (x *BeaconBlockBodyGloas) Reset() {
 	*x = BeaconBlockBodyGloas{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[6]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -497,7 +617,7 @@ func (x *BeaconBlockBodyGloas) String() string {
 func (*BeaconBlockBodyGloas) ProtoMessage() {}
 
 func (x *BeaconBlockBodyGloas) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[6]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -510,7 +630,7 @@ func (x *BeaconBlockBodyGloas) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeaconBlockBodyGloas.ProtoReflect.Descriptor instead.
 func (*BeaconBlockBodyGloas) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{6}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *BeaconBlockBodyGloas) GetRandaoReveal() []byte {
@@ -607,7 +727,7 @@ type SignedBeaconBlockGloas struct {
 
 func (x *SignedBeaconBlockGloas) Reset() {
 	*x = SignedBeaconBlockGloas{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[7]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -619,7 +739,7 @@ func (x *SignedBeaconBlockGloas) String() string {
 func (*SignedBeaconBlockGloas) ProtoMessage() {}
 
 func (x *SignedBeaconBlockGloas) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[7]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -632,7 +752,7 @@ func (x *SignedBeaconBlockGloas) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SignedBeaconBlockGloas.ProtoReflect.Descriptor instead.
 func (*SignedBeaconBlockGloas) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{7}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SignedBeaconBlockGloas) GetBlock() *BeaconBlockGloas {
@@ -702,7 +822,7 @@ type BeaconStateGloas struct {
 
 func (x *BeaconStateGloas) Reset() {
 	*x = BeaconStateGloas{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[8]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -714,7 +834,7 @@ func (x *BeaconStateGloas) String() string {
 func (*BeaconStateGloas) ProtoMessage() {}
 
 func (x *BeaconStateGloas) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[8]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -727,7 +847,7 @@ func (x *BeaconStateGloas) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeaconStateGloas.ProtoReflect.Descriptor instead.
 func (*BeaconStateGloas) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{8}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *BeaconStateGloas) GetGenesisTime() uint64 {
@@ -1055,7 +1175,7 @@ type BuilderPendingPayment struct {
 
 func (x *BuilderPendingPayment) Reset() {
 	*x = BuilderPendingPayment{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[9]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1067,7 +1187,7 @@ func (x *BuilderPendingPayment) String() string {
 func (*BuilderPendingPayment) ProtoMessage() {}
 
 func (x *BuilderPendingPayment) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[9]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1080,7 +1200,7 @@ func (x *BuilderPendingPayment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuilderPendingPayment.ProtoReflect.Descriptor instead.
 func (*BuilderPendingPayment) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{9}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *BuilderPendingPayment) GetWeight() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei {
@@ -1108,7 +1228,7 @@ type BuilderPendingWithdrawal struct {
 
 func (x *BuilderPendingWithdrawal) Reset() {
 	*x = BuilderPendingWithdrawal{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[10]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1120,7 +1240,7 @@ func (x *BuilderPendingWithdrawal) String() string {
 func (*BuilderPendingWithdrawal) ProtoMessage() {}
 
 func (x *BuilderPendingWithdrawal) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[10]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1133,7 +1253,7 @@ func (x *BuilderPendingWithdrawal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuilderPendingWithdrawal.ProtoReflect.Descriptor instead.
 func (*BuilderPendingWithdrawal) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{10}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *BuilderPendingWithdrawal) GetFeeRecipient() []byte {
@@ -1170,7 +1290,7 @@ type DataColumnSidecarGloas struct {
 
 func (x *DataColumnSidecarGloas) Reset() {
 	*x = DataColumnSidecarGloas{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[11]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1182,7 +1302,7 @@ func (x *DataColumnSidecarGloas) String() string {
 func (*DataColumnSidecarGloas) ProtoMessage() {}
 
 func (x *DataColumnSidecarGloas) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[11]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1195,7 +1315,7 @@ func (x *DataColumnSidecarGloas) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DataColumnSidecarGloas.ProtoReflect.Descriptor instead.
 func (*DataColumnSidecarGloas) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{11}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *DataColumnSidecarGloas) GetIndex() uint64 {
@@ -1247,7 +1367,7 @@ type ExecutionPayloadEnvelope struct {
 
 func (x *ExecutionPayloadEnvelope) Reset() {
 	*x = ExecutionPayloadEnvelope{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[12]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1259,7 +1379,7 @@ func (x *ExecutionPayloadEnvelope) String() string {
 func (*ExecutionPayloadEnvelope) ProtoMessage() {}
 
 func (x *ExecutionPayloadEnvelope) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[12]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1272,7 +1392,7 @@ func (x *ExecutionPayloadEnvelope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecutionPayloadEnvelope.ProtoReflect.Descriptor instead.
 func (*ExecutionPayloadEnvelope) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{12}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ExecutionPayloadEnvelope) GetPayload() *v1.ExecutionPayloadDeneb {
@@ -1327,7 +1447,7 @@ type SignedExecutionPayloadEnvelope struct {
 
 func (x *SignedExecutionPayloadEnvelope) Reset() {
 	*x = SignedExecutionPayloadEnvelope{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[13]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1339,7 +1459,7 @@ func (x *SignedExecutionPayloadEnvelope) String() string {
 func (*SignedExecutionPayloadEnvelope) ProtoMessage() {}
 
 func (x *SignedExecutionPayloadEnvelope) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[13]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1352,7 +1472,7 @@ func (x *SignedExecutionPayloadEnvelope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SignedExecutionPayloadEnvelope.ProtoReflect.Descriptor instead.
 func (*SignedExecutionPayloadEnvelope) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{13}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SignedExecutionPayloadEnvelope) GetMessage() *ExecutionPayloadEnvelope {
@@ -1383,7 +1503,7 @@ type BlindedExecutionPayloadEnvelope struct {
 
 func (x *BlindedExecutionPayloadEnvelope) Reset() {
 	*x = BlindedExecutionPayloadEnvelope{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[14]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1395,7 +1515,7 @@ func (x *BlindedExecutionPayloadEnvelope) String() string {
 func (*BlindedExecutionPayloadEnvelope) ProtoMessage() {}
 
 func (x *BlindedExecutionPayloadEnvelope) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[14]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1408,7 +1528,7 @@ func (x *BlindedExecutionPayloadEnvelope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlindedExecutionPayloadEnvelope.ProtoReflect.Descriptor instead.
 func (*BlindedExecutionPayloadEnvelope) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{14}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *BlindedExecutionPayloadEnvelope) GetBlockHash() []byte {
@@ -1463,7 +1583,7 @@ type SignedBlindedExecutionPayloadEnvelope struct {
 
 func (x *SignedBlindedExecutionPayloadEnvelope) Reset() {
 	*x = SignedBlindedExecutionPayloadEnvelope{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[15]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1475,7 +1595,7 @@ func (x *SignedBlindedExecutionPayloadEnvelope) String() string {
 func (*SignedBlindedExecutionPayloadEnvelope) ProtoMessage() {}
 
 func (x *SignedBlindedExecutionPayloadEnvelope) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[15]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1488,7 +1608,7 @@ func (x *SignedBlindedExecutionPayloadEnvelope) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use SignedBlindedExecutionPayloadEnvelope.ProtoReflect.Descriptor instead.
 func (*SignedBlindedExecutionPayloadEnvelope) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{15}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SignedBlindedExecutionPayloadEnvelope) GetMessage() *BlindedExecutionPayloadEnvelope {
@@ -1519,7 +1639,7 @@ type Builder struct {
 
 func (x *Builder) Reset() {
 	*x = Builder{}
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[16]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1531,7 +1651,7 @@ func (x *Builder) String() string {
 func (*Builder) ProtoMessage() {}
 
 func (x *Builder) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[16]
+	mi := &file_proto_prysm_v1alpha1_gloas_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1544,7 +1664,7 @@ func (x *Builder) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Builder.ProtoReflect.Descriptor instead.
 func (*Builder) Descriptor() ([]byte, []int) {
-	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{16}
+	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Builder) GetPubkey() []byte {
@@ -1666,6 +1786,35 @@ var file_proto_prysm_v1alpha1_gloas_proto_rawDesc = []byte{
 	0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x74, 0x68, 0x2e, 0x76, 0x31, 0x61, 0x6c, 0x70, 0x68, 0x61,
 	0x31, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x50, 0x61, 0x79, 0x6c, 0x6f,
 	0x61, 0x64, 0x42, 0x69, 0x64, 0x52, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x24,
+	0x0a, 0x09, 0x73, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x0c, 0x42, 0x06, 0x8a, 0xb5, 0x18, 0x02, 0x39, 0x36, 0x52, 0x09, 0x73, 0x69, 0x67, 0x6e, 0x61,
+	0x74, 0x75, 0x72, 0x65, 0x22, 0xc3, 0x02, 0x0a, 0x13, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x65,
+	0x72, 0x50, 0x72, 0x65, 0x66, 0x65, 0x72, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x12, 0x69, 0x0a, 0x0d,
+	0x70, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x61, 0x6c, 0x5f, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x04, 0x42, 0x44, 0x82, 0xb5, 0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e,
+	0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73,
+	0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e,
+	0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74,
+	0x69, 0x76, 0x65, 0x73, 0x2e, 0x53, 0x6c, 0x6f, 0x74, 0x52, 0x0c, 0x70, 0x72, 0x6f, 0x70, 0x6f,
+	0x73, 0x61, 0x6c, 0x53, 0x6c, 0x6f, 0x74, 0x12, 0x77, 0x0a, 0x0f, 0x76, 0x61, 0x6c, 0x69, 0x64,
+	0x61, 0x74, 0x6f, 0x72, 0x5f, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04,
+	0x42, 0x4e, 0x82, 0xb5, 0x18, 0x4a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d,
+	0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72,
+	0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73,
+	0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65,
+	0x73, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x49, 0x6e, 0x64, 0x65, 0x78,
+	0x52, 0x0e, 0x76, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x49, 0x6e, 0x64, 0x65, 0x78,
+	0x12, 0x2b, 0x0a, 0x0d, 0x66, 0x65, 0x65, 0x5f, 0x72, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65, 0x6e,
+	0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x42, 0x06, 0x8a, 0xb5, 0x18, 0x02, 0x32, 0x30, 0x52,
+	0x0c, 0x66, 0x65, 0x65, 0x52, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65, 0x6e, 0x74, 0x12, 0x1b, 0x0a,
+	0x09, 0x67, 0x61, 0x73, 0x5f, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x18, 0x04, 0x20, 0x01, 0x28, 0x04,
+	0x52, 0x08, 0x67, 0x61, 0x73, 0x4c, 0x69, 0x6d, 0x69, 0x74, 0x22, 0x87, 0x01, 0x0a, 0x19, 0x53,
+	0x69, 0x67, 0x6e, 0x65, 0x64, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x65, 0x72, 0x50, 0x72, 0x65,
+	0x66, 0x65, 0x72, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x12, 0x44, 0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73,
+	0x61, 0x67, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x2a, 0x2e, 0x65, 0x74, 0x68, 0x65,
+	0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x74, 0x68, 0x2e, 0x76, 0x31, 0x61, 0x6c, 0x70, 0x68, 0x61,
+	0x31, 0x2e, 0x50, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x65, 0x72, 0x50, 0x72, 0x65, 0x66, 0x65, 0x72,
+	0x65, 0x6e, 0x63, 0x65, 0x73, 0x52, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x24,
 	0x0a, 0x09, 0x73, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
 	0x0c, 0x42, 0x06, 0x8a, 0xb5, 0x18, 0x02, 0x39, 0x36, 0x52, 0x09, 0x73, 0x69, 0x67, 0x6e, 0x61,
 	0x74, 0x75, 0x72, 0x65, 0x22, 0xff, 0x01, 0x0a, 0x16, 0x50, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64,
@@ -2233,92 +2382,95 @@ func file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP() []byte {
 	return file_proto_prysm_v1alpha1_gloas_proto_rawDescData
 }
 
-var file_proto_prysm_v1alpha1_gloas_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_proto_prysm_v1alpha1_gloas_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_proto_prysm_v1alpha1_gloas_proto_goTypes = []any{
 	(*ExecutionPayloadBid)(nil),                   // 0: ethereum.eth.v1alpha1.ExecutionPayloadBid
 	(*SignedExecutionPayloadBid)(nil),             // 1: ethereum.eth.v1alpha1.SignedExecutionPayloadBid
-	(*PayloadAttestationData)(nil),                // 2: ethereum.eth.v1alpha1.PayloadAttestationData
-	(*PayloadAttestation)(nil),                    // 3: ethereum.eth.v1alpha1.PayloadAttestation
-	(*PayloadAttestationMessage)(nil),             // 4: ethereum.eth.v1alpha1.PayloadAttestationMessage
-	(*BeaconBlockGloas)(nil),                      // 5: ethereum.eth.v1alpha1.BeaconBlockGloas
-	(*BeaconBlockBodyGloas)(nil),                  // 6: ethereum.eth.v1alpha1.BeaconBlockBodyGloas
-	(*SignedBeaconBlockGloas)(nil),                // 7: ethereum.eth.v1alpha1.SignedBeaconBlockGloas
-	(*BeaconStateGloas)(nil),                      // 8: ethereum.eth.v1alpha1.BeaconStateGloas
-	(*BuilderPendingPayment)(nil),                 // 9: ethereum.eth.v1alpha1.BuilderPendingPayment
-	(*BuilderPendingWithdrawal)(nil),              // 10: ethereum.eth.v1alpha1.BuilderPendingWithdrawal
-	(*DataColumnSidecarGloas)(nil),                // 11: ethereum.eth.v1alpha1.DataColumnSidecarGloas
-	(*ExecutionPayloadEnvelope)(nil),              // 12: ethereum.eth.v1alpha1.ExecutionPayloadEnvelope
-	(*SignedExecutionPayloadEnvelope)(nil),        // 13: ethereum.eth.v1alpha1.SignedExecutionPayloadEnvelope
-	(*BlindedExecutionPayloadEnvelope)(nil),       // 14: ethereum.eth.v1alpha1.BlindedExecutionPayloadEnvelope
-	(*SignedBlindedExecutionPayloadEnvelope)(nil), // 15: ethereum.eth.v1alpha1.SignedBlindedExecutionPayloadEnvelope
-	(*Builder)(nil),                               // 16: ethereum.eth.v1alpha1.Builder
-	(*Eth1Data)(nil),                              // 17: ethereum.eth.v1alpha1.Eth1Data
-	(*ProposerSlashing)(nil),                      // 18: ethereum.eth.v1alpha1.ProposerSlashing
-	(*AttesterSlashingElectra)(nil),               // 19: ethereum.eth.v1alpha1.AttesterSlashingElectra
-	(*AttestationElectra)(nil),                    // 20: ethereum.eth.v1alpha1.AttestationElectra
-	(*Deposit)(nil),                               // 21: ethereum.eth.v1alpha1.Deposit
-	(*SignedVoluntaryExit)(nil),                   // 22: ethereum.eth.v1alpha1.SignedVoluntaryExit
-	(*SyncAggregate)(nil),                         // 23: ethereum.eth.v1alpha1.SyncAggregate
-	(*SignedBLSToExecutionChange)(nil),            // 24: ethereum.eth.v1alpha1.SignedBLSToExecutionChange
-	(*Fork)(nil),                                  // 25: ethereum.eth.v1alpha1.Fork
-	(*BeaconBlockHeader)(nil),                     // 26: ethereum.eth.v1alpha1.BeaconBlockHeader
-	(*Validator)(nil),                             // 27: ethereum.eth.v1alpha1.Validator
-	(*Checkpoint)(nil),                            // 28: ethereum.eth.v1alpha1.Checkpoint
-	(*SyncCommittee)(nil),                         // 29: ethereum.eth.v1alpha1.SyncCommittee
-	(*HistoricalSummary)(nil),                     // 30: ethereum.eth.v1alpha1.HistoricalSummary
-	(*PendingDeposit)(nil),                        // 31: ethereum.eth.v1alpha1.PendingDeposit
-	(*PendingPartialWithdrawal)(nil),              // 32: ethereum.eth.v1alpha1.PendingPartialWithdrawal
-	(*PendingConsolidation)(nil),                  // 33: ethereum.eth.v1alpha1.PendingConsolidation
-	(*v1.Withdrawal)(nil),                         // 34: ethereum.engine.v1.Withdrawal
-	(*v1.ExecutionPayloadDeneb)(nil),              // 35: ethereum.engine.v1.ExecutionPayloadDeneb
-	(*v1.ExecutionRequests)(nil),                  // 36: ethereum.engine.v1.ExecutionRequests
+	(*ProposerPreferences)(nil),                   // 2: ethereum.eth.v1alpha1.ProposerPreferences
+	(*SignedProposerPreferences)(nil),             // 3: ethereum.eth.v1alpha1.SignedProposerPreferences
+	(*PayloadAttestationData)(nil),                // 4: ethereum.eth.v1alpha1.PayloadAttestationData
+	(*PayloadAttestation)(nil),                    // 5: ethereum.eth.v1alpha1.PayloadAttestation
+	(*PayloadAttestationMessage)(nil),             // 6: ethereum.eth.v1alpha1.PayloadAttestationMessage
+	(*BeaconBlockGloas)(nil),                      // 7: ethereum.eth.v1alpha1.BeaconBlockGloas
+	(*BeaconBlockBodyGloas)(nil),                  // 8: ethereum.eth.v1alpha1.BeaconBlockBodyGloas
+	(*SignedBeaconBlockGloas)(nil),                // 9: ethereum.eth.v1alpha1.SignedBeaconBlockGloas
+	(*BeaconStateGloas)(nil),                      // 10: ethereum.eth.v1alpha1.BeaconStateGloas
+	(*BuilderPendingPayment)(nil),                 // 11: ethereum.eth.v1alpha1.BuilderPendingPayment
+	(*BuilderPendingWithdrawal)(nil),              // 12: ethereum.eth.v1alpha1.BuilderPendingWithdrawal
+	(*DataColumnSidecarGloas)(nil),                // 13: ethereum.eth.v1alpha1.DataColumnSidecarGloas
+	(*ExecutionPayloadEnvelope)(nil),              // 14: ethereum.eth.v1alpha1.ExecutionPayloadEnvelope
+	(*SignedExecutionPayloadEnvelope)(nil),        // 15: ethereum.eth.v1alpha1.SignedExecutionPayloadEnvelope
+	(*BlindedExecutionPayloadEnvelope)(nil),       // 16: ethereum.eth.v1alpha1.BlindedExecutionPayloadEnvelope
+	(*SignedBlindedExecutionPayloadEnvelope)(nil), // 17: ethereum.eth.v1alpha1.SignedBlindedExecutionPayloadEnvelope
+	(*Builder)(nil),                               // 18: ethereum.eth.v1alpha1.Builder
+	(*Eth1Data)(nil),                              // 19: ethereum.eth.v1alpha1.Eth1Data
+	(*ProposerSlashing)(nil),                      // 20: ethereum.eth.v1alpha1.ProposerSlashing
+	(*AttesterSlashingElectra)(nil),               // 21: ethereum.eth.v1alpha1.AttesterSlashingElectra
+	(*AttestationElectra)(nil),                    // 22: ethereum.eth.v1alpha1.AttestationElectra
+	(*Deposit)(nil),                               // 23: ethereum.eth.v1alpha1.Deposit
+	(*SignedVoluntaryExit)(nil),                   // 24: ethereum.eth.v1alpha1.SignedVoluntaryExit
+	(*SyncAggregate)(nil),                         // 25: ethereum.eth.v1alpha1.SyncAggregate
+	(*SignedBLSToExecutionChange)(nil),            // 26: ethereum.eth.v1alpha1.SignedBLSToExecutionChange
+	(*Fork)(nil),                                  // 27: ethereum.eth.v1alpha1.Fork
+	(*BeaconBlockHeader)(nil),                     // 28: ethereum.eth.v1alpha1.BeaconBlockHeader
+	(*Validator)(nil),                             // 29: ethereum.eth.v1alpha1.Validator
+	(*Checkpoint)(nil),                            // 30: ethereum.eth.v1alpha1.Checkpoint
+	(*SyncCommittee)(nil),                         // 31: ethereum.eth.v1alpha1.SyncCommittee
+	(*HistoricalSummary)(nil),                     // 32: ethereum.eth.v1alpha1.HistoricalSummary
+	(*PendingDeposit)(nil),                        // 33: ethereum.eth.v1alpha1.PendingDeposit
+	(*PendingPartialWithdrawal)(nil),              // 34: ethereum.eth.v1alpha1.PendingPartialWithdrawal
+	(*PendingConsolidation)(nil),                  // 35: ethereum.eth.v1alpha1.PendingConsolidation
+	(*v1.Withdrawal)(nil),                         // 36: ethereum.engine.v1.Withdrawal
+	(*v1.ExecutionPayloadDeneb)(nil),              // 37: ethereum.engine.v1.ExecutionPayloadDeneb
+	(*v1.ExecutionRequests)(nil),                  // 38: ethereum.engine.v1.ExecutionRequests
 }
 var file_proto_prysm_v1alpha1_gloas_proto_depIdxs = []int32{
 	0,  // 0: ethereum.eth.v1alpha1.SignedExecutionPayloadBid.message:type_name -> ethereum.eth.v1alpha1.ExecutionPayloadBid
-	2,  // 1: ethereum.eth.v1alpha1.PayloadAttestation.data:type_name -> ethereum.eth.v1alpha1.PayloadAttestationData
-	2,  // 2: ethereum.eth.v1alpha1.PayloadAttestationMessage.data:type_name -> ethereum.eth.v1alpha1.PayloadAttestationData
-	6,  // 3: ethereum.eth.v1alpha1.BeaconBlockGloas.body:type_name -> ethereum.eth.v1alpha1.BeaconBlockBodyGloas
-	17, // 4: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.eth1_data:type_name -> ethereum.eth.v1alpha1.Eth1Data
-	18, // 5: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.proposer_slashings:type_name -> ethereum.eth.v1alpha1.ProposerSlashing
-	19, // 6: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.attester_slashings:type_name -> ethereum.eth.v1alpha1.AttesterSlashingElectra
-	20, // 7: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.attestations:type_name -> ethereum.eth.v1alpha1.AttestationElectra
-	21, // 8: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.deposits:type_name -> ethereum.eth.v1alpha1.Deposit
-	22, // 9: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.voluntary_exits:type_name -> ethereum.eth.v1alpha1.SignedVoluntaryExit
-	23, // 10: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.sync_aggregate:type_name -> ethereum.eth.v1alpha1.SyncAggregate
-	24, // 11: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.bls_to_execution_changes:type_name -> ethereum.eth.v1alpha1.SignedBLSToExecutionChange
-	1,  // 12: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.signed_execution_payload_bid:type_name -> ethereum.eth.v1alpha1.SignedExecutionPayloadBid
-	3,  // 13: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.payload_attestations:type_name -> ethereum.eth.v1alpha1.PayloadAttestation
-	5,  // 14: ethereum.eth.v1alpha1.SignedBeaconBlockGloas.block:type_name -> ethereum.eth.v1alpha1.BeaconBlockGloas
-	25, // 15: ethereum.eth.v1alpha1.BeaconStateGloas.fork:type_name -> ethereum.eth.v1alpha1.Fork
-	26, // 16: ethereum.eth.v1alpha1.BeaconStateGloas.latest_block_header:type_name -> ethereum.eth.v1alpha1.BeaconBlockHeader
-	17, // 17: ethereum.eth.v1alpha1.BeaconStateGloas.eth1_data:type_name -> ethereum.eth.v1alpha1.Eth1Data
-	17, // 18: ethereum.eth.v1alpha1.BeaconStateGloas.eth1_data_votes:type_name -> ethereum.eth.v1alpha1.Eth1Data
-	27, // 19: ethereum.eth.v1alpha1.BeaconStateGloas.validators:type_name -> ethereum.eth.v1alpha1.Validator
-	28, // 20: ethereum.eth.v1alpha1.BeaconStateGloas.previous_justified_checkpoint:type_name -> ethereum.eth.v1alpha1.Checkpoint
-	28, // 21: ethereum.eth.v1alpha1.BeaconStateGloas.current_justified_checkpoint:type_name -> ethereum.eth.v1alpha1.Checkpoint
-	28, // 22: ethereum.eth.v1alpha1.BeaconStateGloas.finalized_checkpoint:type_name -> ethereum.eth.v1alpha1.Checkpoint
-	29, // 23: ethereum.eth.v1alpha1.BeaconStateGloas.current_sync_committee:type_name -> ethereum.eth.v1alpha1.SyncCommittee
-	29, // 24: ethereum.eth.v1alpha1.BeaconStateGloas.next_sync_committee:type_name -> ethereum.eth.v1alpha1.SyncCommittee
-	0,  // 25: ethereum.eth.v1alpha1.BeaconStateGloas.latest_execution_payload_bid:type_name -> ethereum.eth.v1alpha1.ExecutionPayloadBid
-	30, // 26: ethereum.eth.v1alpha1.BeaconStateGloas.historical_summaries:type_name -> ethereum.eth.v1alpha1.HistoricalSummary
-	31, // 27: ethereum.eth.v1alpha1.BeaconStateGloas.pending_deposits:type_name -> ethereum.eth.v1alpha1.PendingDeposit
-	32, // 28: ethereum.eth.v1alpha1.BeaconStateGloas.pending_partial_withdrawals:type_name -> ethereum.eth.v1alpha1.PendingPartialWithdrawal
-	33, // 29: ethereum.eth.v1alpha1.BeaconStateGloas.pending_consolidations:type_name -> ethereum.eth.v1alpha1.PendingConsolidation
-	16, // 30: ethereum.eth.v1alpha1.BeaconStateGloas.builders:type_name -> ethereum.eth.v1alpha1.Builder
-	9,  // 31: ethereum.eth.v1alpha1.BeaconStateGloas.builder_pending_payments:type_name -> ethereum.eth.v1alpha1.BuilderPendingPayment
-	10, // 32: ethereum.eth.v1alpha1.BeaconStateGloas.builder_pending_withdrawals:type_name -> ethereum.eth.v1alpha1.BuilderPendingWithdrawal
-	34, // 33: ethereum.eth.v1alpha1.BeaconStateGloas.payload_expected_withdrawals:type_name -> ethereum.engine.v1.Withdrawal
-	10, // 34: ethereum.eth.v1alpha1.BuilderPendingPayment.withdrawal:type_name -> ethereum.eth.v1alpha1.BuilderPendingWithdrawal
-	35, // 35: ethereum.eth.v1alpha1.ExecutionPayloadEnvelope.payload:type_name -> ethereum.engine.v1.ExecutionPayloadDeneb
-	36, // 36: ethereum.eth.v1alpha1.ExecutionPayloadEnvelope.execution_requests:type_name -> ethereum.engine.v1.ExecutionRequests
-	12, // 37: ethereum.eth.v1alpha1.SignedExecutionPayloadEnvelope.message:type_name -> ethereum.eth.v1alpha1.ExecutionPayloadEnvelope
-	36, // 38: ethereum.eth.v1alpha1.BlindedExecutionPayloadEnvelope.execution_requests:type_name -> ethereum.engine.v1.ExecutionRequests
-	14, // 39: ethereum.eth.v1alpha1.SignedBlindedExecutionPayloadEnvelope.message:type_name -> ethereum.eth.v1alpha1.BlindedExecutionPayloadEnvelope
-	40, // [40:40] is the sub-list for method output_type
-	40, // [40:40] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	2,  // 1: ethereum.eth.v1alpha1.SignedProposerPreferences.message:type_name -> ethereum.eth.v1alpha1.ProposerPreferences
+	4,  // 2: ethereum.eth.v1alpha1.PayloadAttestation.data:type_name -> ethereum.eth.v1alpha1.PayloadAttestationData
+	4,  // 3: ethereum.eth.v1alpha1.PayloadAttestationMessage.data:type_name -> ethereum.eth.v1alpha1.PayloadAttestationData
+	8,  // 4: ethereum.eth.v1alpha1.BeaconBlockGloas.body:type_name -> ethereum.eth.v1alpha1.BeaconBlockBodyGloas
+	19, // 5: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.eth1_data:type_name -> ethereum.eth.v1alpha1.Eth1Data
+	20, // 6: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.proposer_slashings:type_name -> ethereum.eth.v1alpha1.ProposerSlashing
+	21, // 7: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.attester_slashings:type_name -> ethereum.eth.v1alpha1.AttesterSlashingElectra
+	22, // 8: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.attestations:type_name -> ethereum.eth.v1alpha1.AttestationElectra
+	23, // 9: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.deposits:type_name -> ethereum.eth.v1alpha1.Deposit
+	24, // 10: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.voluntary_exits:type_name -> ethereum.eth.v1alpha1.SignedVoluntaryExit
+	25, // 11: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.sync_aggregate:type_name -> ethereum.eth.v1alpha1.SyncAggregate
+	26, // 12: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.bls_to_execution_changes:type_name -> ethereum.eth.v1alpha1.SignedBLSToExecutionChange
+	1,  // 13: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.signed_execution_payload_bid:type_name -> ethereum.eth.v1alpha1.SignedExecutionPayloadBid
+	5,  // 14: ethereum.eth.v1alpha1.BeaconBlockBodyGloas.payload_attestations:type_name -> ethereum.eth.v1alpha1.PayloadAttestation
+	7,  // 15: ethereum.eth.v1alpha1.SignedBeaconBlockGloas.block:type_name -> ethereum.eth.v1alpha1.BeaconBlockGloas
+	27, // 16: ethereum.eth.v1alpha1.BeaconStateGloas.fork:type_name -> ethereum.eth.v1alpha1.Fork
+	28, // 17: ethereum.eth.v1alpha1.BeaconStateGloas.latest_block_header:type_name -> ethereum.eth.v1alpha1.BeaconBlockHeader
+	19, // 18: ethereum.eth.v1alpha1.BeaconStateGloas.eth1_data:type_name -> ethereum.eth.v1alpha1.Eth1Data
+	19, // 19: ethereum.eth.v1alpha1.BeaconStateGloas.eth1_data_votes:type_name -> ethereum.eth.v1alpha1.Eth1Data
+	29, // 20: ethereum.eth.v1alpha1.BeaconStateGloas.validators:type_name -> ethereum.eth.v1alpha1.Validator
+	30, // 21: ethereum.eth.v1alpha1.BeaconStateGloas.previous_justified_checkpoint:type_name -> ethereum.eth.v1alpha1.Checkpoint
+	30, // 22: ethereum.eth.v1alpha1.BeaconStateGloas.current_justified_checkpoint:type_name -> ethereum.eth.v1alpha1.Checkpoint
+	30, // 23: ethereum.eth.v1alpha1.BeaconStateGloas.finalized_checkpoint:type_name -> ethereum.eth.v1alpha1.Checkpoint
+	31, // 24: ethereum.eth.v1alpha1.BeaconStateGloas.current_sync_committee:type_name -> ethereum.eth.v1alpha1.SyncCommittee
+	31, // 25: ethereum.eth.v1alpha1.BeaconStateGloas.next_sync_committee:type_name -> ethereum.eth.v1alpha1.SyncCommittee
+	0,  // 26: ethereum.eth.v1alpha1.BeaconStateGloas.latest_execution_payload_bid:type_name -> ethereum.eth.v1alpha1.ExecutionPayloadBid
+	32, // 27: ethereum.eth.v1alpha1.BeaconStateGloas.historical_summaries:type_name -> ethereum.eth.v1alpha1.HistoricalSummary
+	33, // 28: ethereum.eth.v1alpha1.BeaconStateGloas.pending_deposits:type_name -> ethereum.eth.v1alpha1.PendingDeposit
+	34, // 29: ethereum.eth.v1alpha1.BeaconStateGloas.pending_partial_withdrawals:type_name -> ethereum.eth.v1alpha1.PendingPartialWithdrawal
+	35, // 30: ethereum.eth.v1alpha1.BeaconStateGloas.pending_consolidations:type_name -> ethereum.eth.v1alpha1.PendingConsolidation
+	18, // 31: ethereum.eth.v1alpha1.BeaconStateGloas.builders:type_name -> ethereum.eth.v1alpha1.Builder
+	11, // 32: ethereum.eth.v1alpha1.BeaconStateGloas.builder_pending_payments:type_name -> ethereum.eth.v1alpha1.BuilderPendingPayment
+	12, // 33: ethereum.eth.v1alpha1.BeaconStateGloas.builder_pending_withdrawals:type_name -> ethereum.eth.v1alpha1.BuilderPendingWithdrawal
+	36, // 34: ethereum.eth.v1alpha1.BeaconStateGloas.payload_expected_withdrawals:type_name -> ethereum.engine.v1.Withdrawal
+	12, // 35: ethereum.eth.v1alpha1.BuilderPendingPayment.withdrawal:type_name -> ethereum.eth.v1alpha1.BuilderPendingWithdrawal
+	37, // 36: ethereum.eth.v1alpha1.ExecutionPayloadEnvelope.payload:type_name -> ethereum.engine.v1.ExecutionPayloadDeneb
+	38, // 37: ethereum.eth.v1alpha1.ExecutionPayloadEnvelope.execution_requests:type_name -> ethereum.engine.v1.ExecutionRequests
+	14, // 38: ethereum.eth.v1alpha1.SignedExecutionPayloadEnvelope.message:type_name -> ethereum.eth.v1alpha1.ExecutionPayloadEnvelope
+	38, // 39: ethereum.eth.v1alpha1.BlindedExecutionPayloadEnvelope.execution_requests:type_name -> ethereum.engine.v1.ExecutionRequests
+	16, // 40: ethereum.eth.v1alpha1.SignedBlindedExecutionPayloadEnvelope.message:type_name -> ethereum.eth.v1alpha1.BlindedExecutionPayloadEnvelope
+	41, // [41:41] is the sub-list for method output_type
+	41, // [41:41] is the sub-list for method input_type
+	41, // [41:41] is the sub-list for extension type_name
+	41, // [41:41] is the sub-list for extension extendee
+	0,  // [0:41] is the sub-list for field type_name
 }
 
 func init() { file_proto_prysm_v1alpha1_gloas_proto_init() }
@@ -2336,7 +2488,7 @@ func file_proto_prysm_v1alpha1_gloas_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_prysm_v1alpha1_gloas_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -24,7 +24,8 @@ func (s *Service) p2pHandlerControlLoop() {
 		// In the event of a node restart, we will still end up subscribing to the correct
 		// topics during/after the fork epoch. This routine is to ensure correct
 		// subscriptions for nodes running before a fork epoch.
-		case <-slotTicker.C():
+		case currentSlot := <-slotTicker.C():
+			s.proposerPreferencesCache.PruneBefore(currentSlot)
 			current := s.cfg.clock.CurrentEpoch()
 			if err := s.ensureRegistrationsForEpoch(current); err != nil {
 				log.WithError(err).Error("Unable to check for fork in the next epoch")

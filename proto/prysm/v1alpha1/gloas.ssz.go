@@ -371,6 +371,178 @@ func (s *SignedExecutionPayloadBid) HashTreeRootWith(hh *ssz.Hasher) (err error)
 	return
 }
 
+// MarshalSSZ ssz marshals the ProposerPreferences object
+func (p *ProposerPreferences) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the ProposerPreferences object to a target array
+func (p *ProposerPreferences) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'ProposalSlot'
+	dst = ssz.MarshalUint64(dst, uint64(p.ProposalSlot))
+
+	// Field (1) 'ValidatorIndex'
+	dst = ssz.MarshalUint64(dst, uint64(p.ValidatorIndex))
+
+	// Field (2) 'FeeRecipient'
+	if size := len(p.FeeRecipient); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.FeeRecipient", size, 20)
+		return
+	}
+	dst = append(dst, p.FeeRecipient...)
+
+	// Field (3) 'GasLimit'
+	dst = ssz.MarshalUint64(dst, p.GasLimit)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ProposerPreferences object
+func (p *ProposerPreferences) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 44 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'ProposalSlot'
+	p.ProposalSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+
+	// Field (1) 'ValidatorIndex'
+	p.ValidatorIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+
+	// Field (2) 'FeeRecipient'
+	if cap(p.FeeRecipient) == 0 {
+		p.FeeRecipient = make([]byte, 0, len(buf[16:36]))
+	}
+	p.FeeRecipient = append(p.FeeRecipient, buf[16:36]...)
+
+	// Field (3) 'GasLimit'
+	p.GasLimit = ssz.UnmarshallUint64(buf[36:44])
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ProposerPreferences object
+func (p *ProposerPreferences) SizeSSZ() (size int) {
+	size = 44
+	return
+}
+
+// HashTreeRoot ssz hashes the ProposerPreferences object
+func (p *ProposerPreferences) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the ProposerPreferences object with a hasher
+func (p *ProposerPreferences) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'ProposalSlot'
+	hh.PutUint64(uint64(p.ProposalSlot))
+
+	// Field (1) 'ValidatorIndex'
+	hh.PutUint64(uint64(p.ValidatorIndex))
+
+	// Field (2) 'FeeRecipient'
+	if size := len(p.FeeRecipient); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.FeeRecipient", size, 20)
+		return
+	}
+	hh.PutBytes(p.FeeRecipient)
+
+	// Field (3) 'GasLimit'
+	hh.PutUint64(p.GasLimit)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the SignedProposerPreferences object
+func (s *SignedProposerPreferences) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedProposerPreferences object to a target array
+func (s *SignedProposerPreferences) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(ProposerPreferences)
+	}
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, s.Signature...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SignedProposerPreferences object
+func (s *SignedProposerPreferences) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 140 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(ProposerPreferences)
+	}
+	if err = s.Message.UnmarshalSSZ(buf[0:44]); err != nil {
+		return err
+	}
+
+	// Field (1) 'Signature'
+	if cap(s.Signature) == 0 {
+		s.Signature = make([]byte, 0, len(buf[44:140]))
+	}
+	s.Signature = append(s.Signature, buf[44:140]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedProposerPreferences object
+func (s *SignedProposerPreferences) SizeSSZ() (size int) {
+	size = 140
+	return
+}
+
+// HashTreeRoot ssz hashes the SignedProposerPreferences object
+func (s *SignedProposerPreferences) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedProposerPreferences object with a hasher
+func (s *SignedProposerPreferences) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Message'
+	if err = s.Message.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(s.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the PayloadAttestationData object
 func (p *PayloadAttestationData) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(p)

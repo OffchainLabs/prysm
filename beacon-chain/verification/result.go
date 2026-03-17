@@ -65,6 +65,12 @@ func (r Requirement) String() string {
 		return "RequireEnvelopeSlotMatchesBlock"
 	case RequireBuilderSignatureValid:
 		return "RequireBuilderSignatureValid"
+	case RequireProposerPreferencesNextEpoch:
+		return "RequireProposerPreferencesNextEpoch"
+	case RequireProposerPreferencesProposalSlotValid:
+		return "RequireProposerPreferencesProposalSlotValid"
+	case RequireProposerPreferencesSignatureValid:
+		return "RequireProposerPreferencesSignatureValid"
 	default:
 		return unknownRequirementName
 	}
