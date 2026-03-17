@@ -74,11 +74,11 @@ func fieldConverters(field types.FieldIndex, indices []uint64, elements any, con
 func convertRoots(indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	switch castedType := elements.(type) {
 	case customtypes.BlockRoots:
-		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice[[32]byte](castedType), indices, convertAll)
+		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice(castedType), indices, convertAll)
 	case customtypes.StateRoots:
-		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice[[32]byte](castedType), indices, convertAll)
+		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice(castedType), indices, convertAll)
 	case customtypes.RandaoMixes:
-		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice[[32]byte](castedType), indices, convertAll)
+		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice(castedType), indices, convertAll)
 	case multi_value_slice.MultiValueSliceComposite[[32]byte]:
 		return handle32ByteMVslice(castedType, indices, convertAll)
 	default:
@@ -96,12 +96,12 @@ func convertEth1DataVotes(indices []uint64, elements any, convertAll bool) ([][3
 
 func convertValidators(indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	switch casted := elements.(type) {
-	case []*ethpb.Validator:
-		return handleValidatorMVSlice(multi_value_slice.BuildEmptyCompositeSlice[*ethpb.Validator](casted), indices, convertAll)
-	case multi_value_slice.MultiValueSliceComposite[*ethpb.Validator]:
+	case []stateutil.CompactValidator:
+		return handleValidatorMVSlice(multi_value_slice.BuildEmptyCompositeSlice(casted), indices, convertAll)
+	case multi_value_slice.MultiValueSliceComposite[stateutil.CompactValidator]:
 		return handleValidatorMVSlice(casted, indices, convertAll)
 	default:
-		return nil, errors.Errorf("Wanted type of %T but got %T", []*ethpb.Validator{}, elements)
+		return nil, errors.Errorf("Wanted type of CompactValidator but got %T", elements)
 	}
 }
 
@@ -116,7 +116,7 @@ func convertAttestations(indices []uint64, elements any, convertAll bool) ([][32
 func convertBalances(indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	switch casted := elements.(type) {
 	case []uint64:
-		return handleBalanceMVSlice(multi_value_slice.BuildEmptyCompositeSlice[uint64](casted), indices, convertAll)
+		return handleBalanceMVSlice(multi_value_slice.BuildEmptyCompositeSlice(casted), indices, convertAll)
 	case multi_value_slice.MultiValueSliceComposite[uint64]:
 		return handleBalanceMVSlice(casted, indices, convertAll)
 	default:
@@ -160,20 +160,12 @@ func handle32ByteMVslice(mv multi_value_slice.MultiValueSliceComposite[[32]byte]
 }
 
 // handleValidatorMVSlice returns the validator indices in a slice of root format.
-func handleValidatorMVSlice(mv multi_value_slice.MultiValueSliceComposite[*ethpb.Validator], indices []uint64, convertAll bool) ([][32]byte, error) {
+func handleValidatorMVSlice(mv multi_value_slice.MultiValueSliceComposite[stateutil.CompactValidator], indices []uint64, convertAll bool) ([][32]byte, error) {
 	length := len(indices)
 	if convertAll {
 		return stateutil.OptimizedValidatorRoots(mv.Value(mv.State()))
 	}
 	roots := make([][32]byte, 0, length)
-	rootCreator := func(input *ethpb.Validator) error {
-		newRoot, err := stateutil.ValidatorRootWithHasher(input)
-		if err != nil {
-			return err
-		}
-		roots = append(roots, newRoot)
-		return nil
-	}
 	totalLen := mv.Len(mv.State())
 	if totalLen > 0 {
 		for _, idx := range indices {
@@ -184,10 +176,11 @@ func handleValidatorMVSlice(mv multi_value_slice.MultiValueSliceComposite[*ethpb
 			if err != nil {
 				return nil, err
 			}
-			err = rootCreator(val)
+			newRoot, err := val.Root()
 			if err != nil {
 				return nil, err
 			}
+			roots = append(roots, newRoot)
 		}
 	}
 	return roots, nil
