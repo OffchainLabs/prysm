@@ -120,17 +120,6 @@ func (s *SyncCommitteeSelection) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-// ProposerPreference holds a validator's fee recipient and gas limit for a
-// proposal slot. This is a temporary local type used while the proto types
-// from OffchainLabs/prysm#16538 are not yet merged. Once merged, callers
-// should switch to ethpb.SignedProposerPreferences.
-type ProposerPreference struct {
-	ProposalSlot   primitives.Slot
-	ValidatorIndex primitives.ValidatorIndex
-	FeeRecipient   []byte
-	GasLimit       uint64
-}
-
 type ValidatorClient interface {
 	// Duties is the pre-GLOAS combined endpoint (GetDuties/GetDutiesV2).
 	// This will be eventually replaced by the split duty endpoints below.
@@ -168,9 +157,7 @@ type ValidatorClient interface {
 	// SubmitSignedProposerPreferences submits proposer preferences for upcoming
 	// proposal slots. This replaces PrepareBeaconProposer and SubmitValidatorRegistrations
 	// for GLOAS+.
-	// TODO(gloas): Replace []*ProposerPreference with ethpb.SignedProposerPreferences
-	// once OffchainLabs/prysm#16538 is merged.
-	SubmitSignedProposerPreferences(ctx context.Context, preferences []*ProposerPreference) (*empty.Empty, error)
+	SubmitSignedProposerPreferences(ctx context.Context, preferences []*ethpb.SignedProposerPreferences) (*empty.Empty, error)
 	StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *event.Event)
 	EventStreamIsRunning() bool
 	AggregatedSelections(ctx context.Context, selections []BeaconCommitteeSelection) ([]BeaconCommitteeSelection, error)

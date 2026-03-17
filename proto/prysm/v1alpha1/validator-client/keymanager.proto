@@ -86,6 +86,7 @@ message SignRequest {
     ethereum.eth.v1alpha1.BeaconBlockGloas block_gloas = 123;
     ethereum.eth.v1alpha1.ExecutionPayloadEnvelope execution_payload_envelope = 124;
     ethereum.eth.v1alpha1.PayloadAttestationData payload_attestation_data = 125;
+    ethereum.eth.v1alpha1.ProposerPreferences proposer_preferences = 126;
   }
 
   reserved 4, 5; // Reserving old, deleted fields.

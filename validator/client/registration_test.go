@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -144,6 +146,35 @@ func Test_signValidatorRegistration(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func Test_signProposerPreferences(t *testing.T) {
+	kp := randKeypair(t)
+	km := newMockKeymanager(t, kp)
+	pref := &ethpb.ProposerPreferences{
+		ProposalSlot:   123,
+		ValidatorIndex: 456,
+		FeeRecipient:   bytesutil.PadTo([]byte("fee"), 20),
+		GasLimit:       789,
+	}
+
+	signed, err := signProposerPreferences(t.Context(), km, kp.pub, pref)
+	require.NoError(t, err)
+	require.Equal(t, pref, signed.Message)
+
+	domain, err := signing.ComputeDomain(
+		params.BeaconConfig().DomainProposerPreferences,
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+
+	root, err := signing.ComputeSigningRoot(pref, domain)
+	require.NoError(t, err)
+
+	sig, err := bls.SignatureFromBytes(signed.Signature)
+	require.NoError(t, err)
+	require.Equal(t, true, sig.Verify(kp.pri.PublicKey(), root[:]))
 }
 
 func TestValidator_SignValidatorRegistrationRequest(t *testing.T) {

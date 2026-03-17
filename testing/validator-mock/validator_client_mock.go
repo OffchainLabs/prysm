@@ -388,10 +388,10 @@ func (mr *MockValidatorClientMockRecorder) PublishExecutionPayloadEnvelope(ctx, 
 }
 
 // SubmitSignedProposerPreferences mocks base method.
-func (m *MockValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, preferences []*iface.ProposerPreference) (*emptypb.Empty, error) {
+func (m *MockValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, preferences []*eth.SignedProposerPreferences) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubmitSignedProposerPreferences", ctx, preferences)
-	ret0, _ := ret[0].(*emptypb.Empty)
+	ret0, _ := ret[0].(*empty.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -280,9 +280,12 @@ func (c *grpcValidatorClient) SubmitValidatorRegistrations(ctx context.Context, 
 	return c.getClient().SubmitValidatorRegistrations(ctx, in)
 }
 
-// TODO(gloas): Wire up actual gRPC call once OffchainLabs/prysm#16538 is merged.
-func (c *grpcValidatorClient) SubmitSignedProposerPreferences(_ context.Context, preferences []*iface.ProposerPreference) (*empty.Empty, error) {
-	log.WithField("count", len(preferences)).Debug("SubmitSignedProposerPreferences not yet implemented, skipping")
+func (c *grpcValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, preferences []*ethpb.SignedProposerPreferences) (*empty.Empty, error) {
+	for _, preference := range preferences {
+		if _, err := c.getClient().SubmitSignedProposerPreferences(ctx, preference); err != nil {
+			return nil, err
+		}
+	}
 	return &empty.Empty{}, nil
 }
 

@@ -768,6 +768,7 @@ func (v *validator) UpdateDomainDataCaches(ctx context.Context, slot primitives.
 		params.BeaconConfig().DomainSyncCommittee[:],
 		params.BeaconConfig().DomainSyncCommitteeSelectionProof[:],
 		params.BeaconConfig().DomainContributionAndProof[:],
+		params.BeaconConfig().DomainProposerPreferences[:],
 	} {
 		_, err := v.domainData(ctx, slots.ToEpoch(slot), d)
 		if err != nil {
@@ -931,8 +932,10 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		return err
 	}
 
-	prefs := v.buildProposerPreferences(filteredKeys, slot)
-	if len(prefs) > 0 {
+	prefs, err := v.buildSignedProposerPreferences(ctx, filteredKeys, km, slot)
+	if err != nil {
+		log.WithError(err).Warn("Failed to build signed proposer preferences")
+	} else if len(prefs) > 0 {
 		if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, prefs); err != nil {
 			log.WithError(err).Warn("Failed to submit proposer preferences")
 		}
@@ -1110,12 +1113,15 @@ func (v *validator) buildPrepProposerReqs(activePubkeys [][fieldparams.BLSPubkey
 	return prepareProposerReqs, nil
 }
 
-// buildProposerPreferences builds proposer preference entries from the same
-// configuration used by buildPrepProposerReqs and buildSignedRegReqs.
-// TODO(gloas): Once signing is required (OffchainLabs/prysm#16538), this
-// should produce signed messages using the validator's BLS key.
-func (v *validator) buildProposerPreferences(activePubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) []*iface.ProposerPreference {
-	var prefs []*iface.ProposerPreference
+// buildSignedProposerPreferences builds and signs proposer preference entries
+// from the same configuration used by buildPrepProposerReqs and buildSignedRegReqs.
+func (v *validator) buildSignedProposerPreferences(
+	ctx context.Context,
+	activePubkeys [][fieldparams.BLSPubkeyLength]byte,
+	km keymanager.IKeymanager,
+	slot primitives.Slot,
+) ([]*ethpb.SignedProposerPreferences, error) {
+	var prefs []*ethpb.SignedProposerPreferences
 	for _, k := range activePubkeys {
 		s, ok := v.pubkeyToStatus[k]
 		if !ok {
@@ -1146,14 +1152,25 @@ func (v *validator) buildProposerPreferences(activePubkeys [][fieldparams.BLSPub
 			}
 		}
 
-		prefs = append(prefs, &iface.ProposerPreference{
+		pref := &ethpb.ProposerPreferences{
 			ProposalSlot:   slot,
 			ValidatorIndex: s.index,
 			FeeRecipient:   feeRecipient[:],
 			GasLimit:       gasLimit,
-		})
+		}
+
+		signedPref, err := signProposerPreferences(ctx, km, k, pref)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"pubkey":       fmt.Sprintf("%#x", k[:]),
+				"feeRecipient": feeRecipient,
+			}).WithError(err).Warn("Could not sign proposer preferences")
+			continue
+		}
+
+		prefs = append(prefs, signedPref)
 	}
-	return prefs
+	return prefs, nil
 }
 
 func (v *validator) buildSignedRegReqs(

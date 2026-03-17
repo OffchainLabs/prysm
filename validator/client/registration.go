@@ -6,12 +6,14 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
@@ -90,6 +92,45 @@ func signValidatorRegistration(ctx context.Context, signer iface.SigningFunc, re
 		return nil, errors.Wrap(err, "could not sign validator registration")
 	}
 	return sig.Marshal(), nil
+}
+
+func signProposerPreferences(
+	ctx context.Context,
+	km keymanager.IKeymanager,
+	pubkey [fieldparams.BLSPubkeyLength]byte,
+	pref *ethpb.ProposerPreferences,
+) (*ethpb.SignedProposerPreferences, error) {
+	ctx, span := trace.StartSpan(ctx, "validator.signProposerPreferences")
+	defer span.End()
+
+	d, err := signing.ComputeDomain(
+		params.BeaconConfig().DomainProposerPreferences,
+		nil, /* fork version */
+		nil, /* genesis val root */
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := signing.ComputeSigningRoot(pref, d)
+	if err != nil {
+		return nil, errors.Wrap(err, signingRootErr)
+	}
+
+	sig, err := km.Sign(ctx, &validatorpb.SignRequest{
+		PublicKey:       pubkey[:],
+		SigningRoot:     r[:],
+		SignatureDomain: d,
+		Object:          &validatorpb.SignRequest_ProposerPreferences{ProposerPreferences: pref},
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "could not sign proposer preferences")
+	}
+
+	return &ethpb.SignedProposerPreferences{
+		Message:   pref,
+		Signature: sig.Marshal(),
+	}, nil
 }
 
 // SignValidatorRegistrationRequest compares and returns either the cached validator registration request or signs a new one.
