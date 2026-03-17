@@ -30,8 +30,11 @@ import (
 // - eager push missing cells
 
 const TTLInSlots = 3
-const maxConcurrentValidators = 128
-const maxConcurrentHeaderHandlers = 128
+
+var (
+	maxConcurrentValidators     = params.BeaconConfig().DataColumnSidecarSubnetCount
+	maxConcurrentHeaderHandlers = params.BeaconConfig().DataColumnSidecarSubnetCount
+)
 
 var dataColumnTopicRegex = regexp.MustCompile(`data_column_sidecar_(\d+)`)
 
