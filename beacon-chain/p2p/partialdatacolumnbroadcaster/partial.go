@@ -161,46 +161,53 @@ func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 	}
 }
 
+// onEmitGossip enqueues a gossip request for the broadcaster's event loop.
+func (p *PartialColumnBroadcaster) onEmitGossip(topic string, groupID []byte, _ []peer.ID, _ map[peer.ID]blocks.PartialDataColumnPeerState) {
+	select {
+	case p.incomingReq <- request{
+		kind: requestKindGossip,
+		gossip: gossip{
+			topic:   topic,
+			groupID: groupID,
+		},
+	}:
+	default:
+		// Drop gossip emission if we have too many pending requests
+	}
+}
+
+// onIncomingRPC processes an incoming partial message RPC by updating peer state
+// and enqueuing the message for the broadcaster's event loop.
+func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[peer.ID]blocks.PartialDataColumnPeerState, rpc *pubsub_pb.PartialMessagesExtension) error {
+	if rpc == nil {
+		return nil
+	}
+	nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from], rpc)
+	if err != nil {
+		return err
+	}
+	select {
+	case p.incomingReq <- request{
+		kind:        requestKindHandleIncomingRPC,
+		incomingRPC: rpcWithFrom{rpc, from, message},
+	}:
+	default:
+		p.logger.Warn("Dropping incoming partial RPC", "rpc", rpc)
+		return errors.New("incomingReq channel is full, dropping RPC")
+	}
+
+	peerStates[from] = nextPeerState
+	return nil
+}
+
 // AppendPubSubOpts adds the necessary pubsub options to enable partial messages.
 func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubsub.Option {
 	slogger := slog.New(logrusadapter.Handler{Logger: p.logger})
 	opts = append(opts,
 		pubsub.WithPartialMessagesExtension(&partialmessages.PartialMessagesExtension[blocks.PartialDataColumnPeerState]{
-			Logger: slogger,
-			OnEmitGossip: func(topic string, groupID []byte, gossipPeers []peer.ID, peerStates map[peer.ID]blocks.PartialDataColumnPeerState) {
-				select {
-				case p.incomingReq <- request{
-					kind: requestKindGossip,
-					gossip: gossip{
-						topic:   topic,
-						groupID: groupID,
-					},
-				}:
-				default:
-					// Drop gossip emission if we have too many pending requests
-				}
-			},
-			OnIncomingRPC: func(from peer.ID, peerStates map[peer.ID]blocks.PartialDataColumnPeerState, rpc *pubsub_pb.PartialMessagesExtension) error {
-				if rpc == nil {
-					return nil
-				}
-				nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from], rpc)
-				if err != nil {
-					return err
-				}
-				select {
-				case p.incomingReq <- request{
-					kind:        requestKindHandleIncomingRPC,
-					incomingRPC: rpcWithFrom{rpc, from, message},
-				}:
-				default:
-					p.logger.Warn("Dropping incoming partial RPC", "rpc", rpc)
-					return errors.New("incomingReq channel is full, dropping RPC")
-				}
-
-				peerStates[from] = nextPeerState
-				return nil
-			},
+			Logger:        slogger,
+			OnEmitGossip:  p.onEmitGossip,
+			OnIncomingRPC: p.onIncomingRPC,
 		}),
 		func(ps *pubsub.PubSub) error {
 			p.peerFeedback = ps.PeerFeedback
