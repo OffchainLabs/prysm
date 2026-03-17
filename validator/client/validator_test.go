@@ -1703,8 +1703,7 @@ func TestValidator_PushSettings(t *testing.T) {
 				pubkeys, err := km.FetchValidatingPublicKeys(ctx)
 				require.NoError(t, err)
 				if tt.feeRecipientMap != nil {
-					feeRecipients, err := v.buildPrepProposerReqs(pubkeys)
-					require.NoError(t, err)
+					feeRecipients, _ := v.buildProposerSettingsRequests(ctx, pubkeys, km, 0)
 					signedRegisterValidatorRequests := v.buildSignedRegReqs(ctx, pubkeys, km.Sign, 0, false)
 					for _, recipient := range feeRecipients {
 						require.Equal(t, strings.ToLower(tt.feeRecipientMap[recipient.ValidatorIndex]), strings.ToLower(hexutil.Encode(recipient.FeeRecipient)))
@@ -1764,7 +1763,7 @@ func feeRecipientFromString(t *testing.T, stringFeeRecipient string) common.Addr
 	return feeRecipient
 }
 
-func TestValidator_buildPrepProposerReqs_WithoutDefaultConfig(t *testing.T) {
+func TestValidator_buildProposerSettingsRequests_WithoutDefaultConfig(t *testing.T) {
 	// pubkey1 => feeRecipient1 (already in `v.validatorIndex`)
 	// pubkey2 => feeRecipient2 (NOT in `v.validatorIndex`, index found by beacon node)
 	// pubkey3 => feeRecipient3 (NOT in `v.validatorIndex`, index NOT found by beacon node)
@@ -1855,12 +1854,12 @@ func TestValidator_buildPrepProposerReqs_WithoutDefaultConfig(t *testing.T) {
 	}
 	filteredKeys, err := v.filterAndCacheActiveKeys(ctx, pubkeys, 0)
 	require.NoError(t, err)
-	actual, err := v.buildPrepProposerReqs(filteredKeys)
-	require.NoError(t, err)
+	actual, prefs := v.buildProposerSettingsRequests(ctx, filteredKeys, nil, 0)
 	sort.Slice(actual, func(i, j int) bool {
 		return actual[i].ValidatorIndex < actual[j].ValidatorIndex
 	})
 	assert.DeepEqual(t, expected, actual)
+	require.Equal(t, 0, len(prefs))
 }
 
 func TestValidator_filterAndCacheActiveKeys(t *testing.T) {
@@ -1963,7 +1962,7 @@ func TestValidator_filterAndCacheActiveKeys(t *testing.T) {
 
 }
 
-func TestValidator_buildPrepProposerReqs_WithDefaultConfig(t *testing.T) {
+func TestValidator_buildProposerSettingsRequests_WithDefaultConfig(t *testing.T) {
 	// pubkey1 => feeRecipient1 - Status: active
 	// pubkey2 => feeRecipient2 - Status: active
 	// pubkey3 => feeRecipient3 - Status: unknown
@@ -2157,12 +2156,65 @@ func TestValidator_buildPrepProposerReqs_WithDefaultConfig(t *testing.T) {
 	}
 	filteredKeys, err := v.filterAndCacheActiveKeys(ctx, pubkeys, 640)
 	require.NoError(t, err)
-	actual, err := v.buildPrepProposerReqs(filteredKeys)
-	require.NoError(t, err)
+	actual, prefs := v.buildProposerSettingsRequests(ctx, filteredKeys, nil, 640)
 	sort.Slice(actual, func(i, j int) bool {
 		return actual[i].ValidatorIndex < actual[j].ValidatorIndex
 	})
 	assert.DeepEqual(t, expected, actual)
+	require.Equal(t, 0, len(prefs))
+}
+
+func TestValidator_buildProposerSettingsRequests_GloasOnly(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+
+	kp := randKeypair(t)
+	km := newMockKeymanager(t, kp)
+	feeRecipient := feeRecipientFromString(t, "0x1111111111111111111111111111111111111111")
+
+	v := validator{
+		proposerSettings: &proposer.Settings{
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{
+					FeeRecipient: feeRecipient,
+				},
+				BuilderConfig: &proposer.BuilderConfig{
+					Enabled:  true,
+					GasLimit: 42000000,
+				},
+			},
+		},
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			kp.pub: {
+				publicKey: kp.pub[:],
+				status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE},
+				index:     1,
+			},
+		},
+	}
+
+	t.Run("pre-gloas", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 1
+		params.OverrideBeaconConfig(cfg)
+
+		prepReqs, prefs := v.buildProposerSettingsRequests(t.Context(), [][fieldparams.BLSPubkeyLength]byte{kp.pub}, km, 0)
+		require.Equal(t, 1, len(prepReqs))
+		require.Equal(t, 0, len(prefs))
+	})
+
+	t.Run("post-gloas", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		prepReqs, prefs := v.buildProposerSettingsRequests(t.Context(), [][fieldparams.BLSPubkeyLength]byte{kp.pub}, km, 0)
+		require.Equal(t, 1, len(prepReqs))
+		require.Equal(t, 1, len(prefs))
+		require.Equal(t, primitives.ValidatorIndex(1), prefs[0].Message.ValidatorIndex)
+		require.Equal(t, uint64(42000000), prefs[0].Message.GasLimit)
+		require.DeepEqual(t, feeRecipient[:], prefs[0].Message.FeeRecipient)
+		require.NotNil(t, prefs[0].Signature)
+	})
 }
 
 func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {

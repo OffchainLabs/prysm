@@ -909,10 +909,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		return err
 	}
 
-	proposerReqs, err := v.buildPrepProposerReqs(filteredKeys)
-	if err != nil {
-		return err
-	}
+	proposerReqs, prefs := v.buildProposerSettingsRequests(ctx, filteredKeys, km, slot)
 	if len(proposerReqs) == 0 {
 		log.Warnf("Could not locate valid validator indices. Skipping prepare proposer routine")
 		return nil
@@ -932,10 +929,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		return err
 	}
 
-	prefs, err := v.buildSignedProposerPreferences(ctx, filteredKeys, km, slot)
-	if err != nil {
-		log.WithError(err).Warn("Failed to build signed proposer preferences")
-	} else if len(prefs) > 0 {
+	if len(prefs) > 0 {
 		if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, prefs); err != nil {
 			log.WithError(err).Warn("Failed to submit proposer preferences")
 		}
@@ -1080,48 +1074,17 @@ func (v *validator) updateValidatorStatusCache(ctx context.Context, pubkeys [][f
 	return nil
 }
 
-func (v *validator) buildPrepProposerReqs(activePubkeys [][fieldparams.BLSPubkeyLength]byte) ([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, error) {
-	var prepareProposerReqs []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer
-	for _, k := range activePubkeys {
-		s, ok := v.pubkeyToStatus[k]
-		if !ok {
-			continue
-		}
-
-		// Default case: Define fee recipient to burn address
-		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
-
-		// If fee recipient is defined in default configuration, use it
-		if v.ProposerSettings() != nil && v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig != nil {
-			feeRecipient = v.ProposerSettings().DefaultConfig.FeeRecipientConfig.FeeRecipient // Use cli config for fee recipient.
-		}
-
-		// If fee recipient is defined for this specific pubkey in proposer configuration, use it
-		if v.ProposerSettings() != nil && v.ProposerSettings().ProposeConfig != nil {
-			config, ok := v.ProposerSettings().ProposeConfig[k]
-
-			if ok && config != nil && config.FeeRecipientConfig != nil {
-				feeRecipient = config.FeeRecipientConfig.FeeRecipient // Use file config for fee recipient.
-			}
-		}
-
-		prepareProposerReqs = append(prepareProposerReqs, &ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer{
-			ValidatorIndex: s.index,
-			FeeRecipient:   feeRecipient[:],
-		})
-	}
-	return prepareProposerReqs, nil
-}
-
-// buildSignedProposerPreferences builds and signs proposer preference entries
-// from the same configuration used by buildPrepProposerReqs and buildSignedRegReqs.
-func (v *validator) buildSignedProposerPreferences(
+// buildProposerSettingsRequests builds both PrepareBeaconProposer requests and,
+// post-Gloas, signed proposer preferences from the same validator settings.
+func (v *validator) buildProposerSettingsRequests(
 	ctx context.Context,
 	activePubkeys [][fieldparams.BLSPubkeyLength]byte,
 	km keymanager.IKeymanager,
 	slot primitives.Slot,
-) ([]*ethpb.SignedProposerPreferences, error) {
-	var prefs []*ethpb.SignedProposerPreferences
+) ([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, []*ethpb.SignedProposerPreferences) {
+	var prepareProposerReqs []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer
+	var signedPrefs []*ethpb.SignedProposerPreferences
+	postGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
 	for _, k := range activePubkeys {
 		s, ok := v.pubkeyToStatus[k]
 		if !ok {
@@ -1152,6 +1115,15 @@ func (v *validator) buildSignedProposerPreferences(
 			}
 		}
 
+		prepareProposerReqs = append(prepareProposerReqs, &ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer{
+			ValidatorIndex: s.index,
+			FeeRecipient:   feeRecipient[:],
+		})
+
+		if !postGloas {
+			continue
+		}
+
 		pref := &ethpb.ProposerPreferences{
 			ProposalSlot:   slot,
 			ValidatorIndex: s.index,
@@ -1168,9 +1140,9 @@ func (v *validator) buildSignedProposerPreferences(
 			continue
 		}
 
-		prefs = append(prefs, signedPref)
+		signedPrefs = append(signedPrefs, signedPref)
 	}
-	return prefs, nil
+	return prepareProposerReqs, signedPrefs
 }
 
 func (v *validator) buildSignedRegReqs(
