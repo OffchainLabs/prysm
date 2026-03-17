@@ -60,10 +60,10 @@ func TestReadOnlyValidator_PublicKey(t *testing.T) {
 }
 
 func TestReadOnlyValidator_WithdrawalCredentials(t *testing.T) {
-	creds := []byte{0xFA, 0xCC}
-	v, err := statenative.NewValidator(&ethpb.Validator{WithdrawalCredentials: creds})
+	creds := [32]byte{0xFA, 0xCC}
+	v, err := statenative.NewValidator(&ethpb.Validator{WithdrawalCredentials: creds[:]})
 	require.NoError(t, err)
-	assert.DeepEqual(t, creds, v.GetWithdrawalCredentials())
+	assert.DeepEqual(t, creds[:], v.GetWithdrawalCredentials())
 }
 
 func TestReadOnlyValidator_Slashed(t *testing.T) {
