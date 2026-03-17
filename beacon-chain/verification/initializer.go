@@ -98,6 +98,16 @@ func (ini *Initializer) NewPayloadAttestationMsgVerifier(pa payloadattestation.R
 	}
 }
 
+// NewSignedProposerPreferencesVerifier creates a SignedProposerPreferencesVerifier for a single signed proposer preferences
+// message, with the given set of requirements.
+func (ini *Initializer) NewSignedProposerPreferencesVerifier(p *ethpb.SignedProposerPreferences, reqs []Requirement) *ProposerPreferencesVerifier {
+	return &ProposerPreferencesVerifier{
+		sharedResources: ini.shared,
+		results:         newResults(reqs...),
+		p:               p,
+	}
+}
+
 // NewPayloadEnvelopeVerifier creates a SignedExecutionPayloadEnvelopeVerifier for a single signed execution payload envelope with the given set of requirements.
 func (ini *Initializer) NewPayloadEnvelopeVerifier(ee interfaces.ROSignedExecutionPayloadEnvelope, reqs []Requirement) *EnvelopeVerifier {
 	return &EnvelopeVerifier{
