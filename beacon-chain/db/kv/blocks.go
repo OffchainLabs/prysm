@@ -835,6 +835,12 @@ func (s *Store) LowestRootsAboveSlot(ctx context.Context, slot primitives.Slot) 
 			}
 			return nil
 		}
+		// No block found at or above slot — fall back to the head block root.
+		headRoot := tx.Bucket(blocksBucket).Get(headBlockRootKey)
+		if headRoot == nil {
+			return nil
+		}
+		roots = [][32]byte{bytesutil.ToBytes32(headRoot)}
 		return nil
 	})
 	return fs, roots, err
