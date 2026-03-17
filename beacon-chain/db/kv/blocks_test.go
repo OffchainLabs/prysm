@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -1459,4 +1460,52 @@ func TestStore_EarliestSlot(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, nextEpochSlot, slot)
 	})
+}
+
+func TestStore_LowestRootsAboveSlot(t *testing.T) {
+	for _, tt := range blockTests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setupDB(t)
+			ctx := t.Context()
+
+			block1, err := tt.newBlock(primitives.Slot(10), nil)
+			require.NoError(t, err)
+			block2, err := tt.newBlock(primitives.Slot(50), nil)
+			require.NoError(t, err)
+			block3, err := tt.newBlock(primitives.Slot(100), nil)
+			require.NoError(t, err)
+
+			require.NoError(t, db.SaveBlock(ctx, block1))
+			require.NoError(t, db.SaveBlock(ctx, block2))
+			require.NoError(t, db.SaveBlock(ctx, block3))
+
+			// Exact next-slot hit: slot 9 → block at slot 10.
+			foundSlot, roots, err := db.LowestRootsAboveSlot(ctx, 9)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(roots))
+			assert.Equal(t, primitives.Slot(10), foundSlot)
+
+			// Gap across missed slots: slot 10 → block at slot 50 (slots 11-49 missing).
+			foundSlot, roots, err = db.LowestRootsAboveSlot(ctx, 10)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(roots))
+			assert.Equal(t, primitives.Slot(50), foundSlot)
+
+			// Another gap: slot 50 → block at slot 100.
+			foundSlot, roots, err = db.LowestRootsAboveSlot(ctx, 50)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(roots))
+			assert.Equal(t, primitives.Slot(100), foundSlot)
+
+			// No slot above: slot 100 is the last block.
+			_, roots, err = db.LowestRootsAboveSlot(ctx, 100)
+			require.NoError(t, err)
+			assert.Equal(t, 0, len(roots))
+
+			// Max-slot overflow: should return empty, not wrap to 0.
+			_, roots, err = db.LowestRootsAboveSlot(ctx, math.MaxUint64)
+			require.NoError(t, err)
+			assert.Equal(t, 0, len(roots))
+		})
+	}
 }
