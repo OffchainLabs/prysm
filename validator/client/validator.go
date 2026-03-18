@@ -1089,19 +1089,7 @@ func (v *validator) buildProposerSettingsRequests(
 	var prepareProposerReqs []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer
 	var signedPrefs []*ethpb.SignedProposerPreferences
 	postGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
-
-	var domainData []byte
 	var sigFailCount int
-	if postGloas {
-		epoch := slots.ToEpoch(slot)
-		resp, err := v.domainData(ctx, epoch, params.BeaconConfig().DomainProposerPreferences[:])
-		if err != nil {
-			log.WithError(err).Error("Could not get proposer preferences domain data")
-			postGloas = false
-		} else {
-			domainData = resp.SignatureDomain
-		}
-	}
 
 	ps := v.ProposerSettings()
 	for _, k := range activePubkeys {
@@ -1150,7 +1138,7 @@ func (v *validator) buildProposerSettingsRequests(
 			GasLimit:       gasLimit,
 		}
 
-		signedPref, err := signProposerPreferences(ctx, km, k, pref, domainData)
+		signedPref, err := v.signProposerPreferences(ctx, km, k, pref)
 		if err != nil {
 			sigFailCount++
 			continue

@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -94,15 +95,21 @@ func signValidatorRegistration(ctx context.Context, signer iface.SigningFunc, re
 	return sig.Marshal(), nil
 }
 
-func signProposerPreferences(
+func (v *validator) signProposerPreferences(
 	ctx context.Context,
 	km keymanager.IKeymanager,
 	pubkey [fieldparams.BLSPubkeyLength]byte,
 	pref *ethpb.ProposerPreferences,
-	domain []byte,
 ) (*ethpb.SignedProposerPreferences, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.signProposerPreferences")
 	defer span.End()
+
+	epoch := slots.ToEpoch(pref.ProposalSlot)
+	resp, err := v.domainData(ctx, epoch, params.BeaconConfig().DomainProposerPreferences[:])
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get proposer preferences domain data")
+	}
+	domain := resp.SignatureDomain
 
 	r, err := signing.ComputeSigningRoot(pref, domain)
 	if err != nil {
