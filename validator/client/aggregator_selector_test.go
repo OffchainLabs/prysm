@@ -251,7 +251,7 @@ func TestDistributedSelector_ReadyCh_BlocksUntilRefresh(t *testing.T) {
 	assert.DeepEqual(t, proof, got)
 }
 
-func TestDistributedSelector_ErrorSkipsAggregation(t *testing.T) {
+func TestDistributedSelector_ErrorIsStickyWithinEpoch(t *testing.T) {
 	v, client, keys := newDistributedTestValidator(t, 4)
 	ds := v.aggSelector.(*distributedSelector)
 
@@ -267,20 +267,23 @@ func TestDistributedSelector_ErrorSkipsAggregation(t *testing.T) {
 
 	sigDomain := make([]byte, 32)
 	client.EXPECT().DomainData(gomock.Any(), gomock.Any()).
-		Return(&ethpb.DomainResponse{SignatureDomain: sigDomain}, nil)
+		Return(&ethpb.DomainResponse{SignatureDomain: sigDomain}, nil).Times(1)
+
+	refreshErr := errors.New("middleware down")
 	client.EXPECT().AggregatedSelections(gomock.Any(), gomock.Any()).
-		Return(nil, errors.New("middleware down"))
+		Return(nil, refreshErr)
 
 	err := ds.RefreshSelectionProofs(t.Context())
 	require.ErrorContains(t, "middleware down", err)
-	assert.Equal(t, slots.ToEpoch(slot), ds.refreshedEpoch, "epoch guard should remain set")
+	assert.Equal(t, slots.ToEpoch(slot), ds.refreshedEpoch, "epoch guard should remain set for the failing epoch")
 
-	// Same-epoch refresh is a no-op (no retry).
-	require.NoError(t, ds.RefreshSelectionProofs(t.Context()))
+	// Same-epoch refreshes should not retry the middleware call.
+	err = ds.RefreshSelectionProofs(t.Context())
+	require.ErrorContains(t, "middleware down", err)
 
-	// Cache is empty so proof lookup returns ErrSelectionProofNotFound.
 	_, err = ds.AttestationSelectionProof(t.Context(), slot, keys.pub)
-	require.ErrorIs(t, err, ErrSelectionProofNotFound)
+	require.ErrorContains(t, "selection proofs unavailable", err)
+	require.ErrorContains(t, "middleware down", err)
 }
 
 func TestDistributedSelector_SyncSubnetDedup(t *testing.T) {
