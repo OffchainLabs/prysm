@@ -1019,6 +1019,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		BlobStorage:                      b.BlobStorage,
 		DataColumnStorage:                b.DataColumnStorage,
 		TrackedValidatorsCache:           b.trackedValidatorsCache,
+		ProposerPreferencesCache:         b.proposerPreferencesCache,
 		PayloadIDCache:                   b.payloadIDCache,
 		LCStore:                          b.lcStore,
 		GraffitiInfo:                     web3Service.GraffitiInfo(),
