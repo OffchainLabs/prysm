@@ -34,6 +34,7 @@ const TTLInSlots = 3
 var (
 	maxConcurrentValidators     = params.BeaconConfig().DataColumnSidecarSubnetCount
 	maxConcurrentHeaderHandlers = params.BeaconConfig().DataColumnSidecarSubnetCount
+	errInvalidHeader            = errors.New("invalid header")
 )
 
 var dataColumnTopicRegex = regexp.MustCompile(`data_column_sidecar_(\d+)`)
@@ -410,20 +411,9 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	var shouldRepublish bool
 
 	if ourVerifier == nil && hasMessage {
-		var header *ethpb.PartialDataColumnHeader
-		headerWasCached := false
-		// Check cache first for this group
-		if cachedHeader, ok := p.validHeaderCache[string(groupID)]; ok {
-			header = cachedHeader
-			headerWasCached = true
-		} else {
-			// We haven't seen this group before. Check if we have a valid header.
-			if len(message.Header) == 0 {
-				p.logger.Debug("No partial column found and no header in message, ignoring")
-				return nil
-			}
-
-			header = message.Header[0]
+		header, headerWasCached := p.getHeader(groupID, message)
+		if len(message.Header) == 0 {
+			return nil
 		}
 
 		columnIndex, err := extractColumnIndexFromTopic(topicID)
@@ -431,60 +421,16 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 			return err
 		}
 
-		newColumn, err := blocks.NewPartialDataColumn(
-			header.SignedBlockHeader,
-			columnIndex,
-			header.KzgCommitments,
-			header.KzgCommitmentsInclusionProof,
-		)
+		verifier, err := p.makeVerifierFromHeader(header, columnIndex, headerWasCached, rpc)
 		if err != nil {
-			p.logger.WithError(err).WithFields(logrus.Fields{
-				"topic":          topicID,
-				"columnIndex":    columnIndex,
-				"numCommitments": len(header.KzgCommitments),
-			}).Error("Failed to create partial data column from header")
+			if err == errInvalidHeader {
+				return nil
+			}
 			return err
 		}
 
-		var verifier *verification.PartialColumnVerifier
-		if headerWasCached {
-			verifier, err = p.callbacks.PartialVerifierFromTrustedColumn(&newColumn)
-			if err != nil {
-				p.logger.WithError(err).WithFields(logrus.Fields{
-					"topic":          topicID,
-					"columnIndex":    columnIndex,
-					"numCommitments": len(header.KzgCommitments),
-				}).Error("Failed to create partial column verifier from header")
-				return err
-			}
-		} else {
-			var reject bool
-			verifier, reject, err = p.callbacks.PartialVerifierFromHeader(&newColumn)
-			if err != nil {
-				p.logger.WithError(err).WithField("reject", reject).Debug("Header validation failed")
-				if reject {
-					// REJECT case: penalize the peer
-					_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
-				}
-				// Both REJECT and IGNORE: don't process further
-				return nil
-			}
-		}
-
 		if !headerWasCached {
-			p.logger.Debug("Handling header as it was previously not cached for this group")
-			// Cache the valid header.
-			p.validHeaderCache[string(groupID)] = header
-
-			select {
-			case p.concurrentHeaderHandlerSemaphore <- struct{}{}:
-				go func() {
-					p.callbacks.HandleHeader(header, string(groupID))
-					<-p.concurrentHeaderHandlerSemaphore
-				}()
-			default:
-				p.logger.WithFields(rpc.logFields()).Warn("Dropping header handler, max concurrent header handlers reached")
-			}
+			p.handleHeader(rpc, header)
 		}
 
 		// Save to store
@@ -493,8 +439,8 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 			topicStore = make(map[string]*verification.PartialColumnVerifier)
 			p.partialMsgStore[topicID] = topicStore
 		}
-		topicStore[string(newColumn.GroupID())] = verifier
-		p.groupTTL[string(newColumn.GroupID())] = TTLInSlots
+		topicStore[string(groupID)] = verifier
+		p.groupTTL[string(groupID)] = TTLInSlots
 
 		ourVerifier = verifier
 		shouldRepublish = true
@@ -508,51 +454,81 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	ourDataColumn := ourVerifier.Column
 
 	if hasMessage {
-		// TODO: is there any penalty we want to consider for giving us data we didn't request?
-		// Note that we need to be careful around race conditions and eager data.
-		// Also note that protobufs by design allow extra data that we don't parse.
-		// Marco's thoughts. No, we don't need to do anything else here.
-		cellIndices, cellsToVerify, err := ourDataColumn.CellsToVerifyFromPartialMessage(message)
+		err := p.handlePartialCells(ourDataColumn, message, rpc)
 		if err != nil {
 			return err
 		}
-		// Track cells received via partial message
-		if len(cellIndices) > 0 {
-			columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
-			partialMessageCellsReceivedTotal.WithLabelValues(columnIndexStr).Add(float64(len(cellIndices)))
-		}
-		if len(cellsToVerify) > 0 {
-			p.concurrentValidatorSemaphore <- struct{}{}
-			go func() {
-				defer func() {
-					<-p.concurrentValidatorSemaphore
-				}()
-				start := time.Now()
-				err := p.callbacks.ValidateColumn(cellsToVerify)
-				if err != nil {
-					p.logger.WithError(err).WithFields(rpc.logFields()).Error("Failed to validate cells")
-					_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
-					return
-				}
-				_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackUsefulMessage)
-				p.incomingReq <- request{
-					kind: requestKindCellsValidated,
-					cellsValidated: &cellsValidated{
-						validationTook: time.Since(start),
-						topic:          topicID,
-						group:          groupID,
-						cells:          cellsToVerify,
-						cellIndices:    cellIndices,
-					},
-				}
-			}()
-		}
 	}
 
+	return p.republishColumn(ourDataColumn, rpc, shouldRepublish)
+}
+
+func (p *PartialColumnBroadcaster) makeVerifierFromHeader(header *ethpb.PartialDataColumnHeader, columnIndex uint64,
+	headerWasCached bool, rpc incomingPartialRPC) (*verification.PartialColumnVerifier, error) {
+	topicID := rpc.GetTopicID()
+	newColumn, err := blocks.NewPartialDataColumn(
+		header.SignedBlockHeader,
+		columnIndex,
+		header.KzgCommitments,
+		header.KzgCommitmentsInclusionProof,
+	)
+	if err != nil {
+		p.logger.WithError(err).WithFields(logrus.Fields{
+			"topic":          topicID,
+			"columnIndex":    columnIndex,
+			"numCommitments": len(header.KzgCommitments),
+		}).Error("Failed to create partial data column from header")
+		return nil, err
+	}
+
+	if headerWasCached {
+		verifier, err := p.callbacks.PartialVerifierFromTrustedColumn(&newColumn)
+		if err != nil {
+			p.logger.WithError(err).WithFields(logrus.Fields{
+				"topic":          topicID,
+				"columnIndex":    columnIndex,
+				"numCommitments": len(header.KzgCommitments),
+			}).Error("Failed to create partial column verifier from header")
+			return nil, err
+		}
+		return verifier, nil
+	}
+	var reject bool
+	verifier, reject, err := p.callbacks.PartialVerifierFromHeader(&newColumn)
+	if err != nil {
+		p.logger.WithError(err).WithField("reject", reject).Debug("Header validation failed")
+		if reject {
+			// REJECT case: penalize the peer
+			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+		}
+		// Both REJECT and IGNORE: don't process further
+		return nil, errInvalidHeader
+	}
+	return verifier, nil
+}
+
+func (p *PartialColumnBroadcaster) getHeader(groupID []byte, message *ethpb.PartialDataColumnSidecar) (*ethpb.PartialDataColumnHeader, bool) {
+	if cachedHeader, ok := p.validHeaderCache[string(groupID)]; ok {
+		return cachedHeader, true
+	} else {
+		// We haven't seen this group before. Check if we have a valid header.
+		if len(message.Header) == 0 {
+			p.logger.Debug("No partial column found and no header in message, ignoring")
+			return nil, false
+		}
+
+		return message.Header[0], false
+	}
+}
+
+func (p *PartialColumnBroadcaster) republishColumn(ourDataColumn *blocks.PartialDataColumn, rpc incomingPartialRPC,
+	shouldRepublish bool) error {
 	if !ourDataColumn.Published {
 		p.logger.WithFields(rpc.logFields()).Debug("Column not published, skipping republish")
 		return nil
 	}
+
+	topicId := rpc.GetTopicID()
 
 	peerMeta := rpc.PartsMetadata
 	myMeta, err := ourDataColumn.PartsMetadata()
@@ -566,12 +542,76 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	}
 
 	if shouldRepublish {
-		err := p.publishPartialCol(topicID, ourDataColumn.GroupID(), ourDataColumn)
+		err := p.publishPartialCol(topicId, ourDataColumn.GroupID(), ourDataColumn)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.PartialDataColumn, message *ethpb.PartialDataColumnSidecar,
+	rpc incomingPartialRPC) error {
+	topicId := rpc.GetTopicID()
+
+	// TODO: is there any penalty we want to consider for giving us data we didn't request?
+	// Note that we need to be careful around race conditions and eager data.
+	// Also note that protobufs by design allow extra data that we don't parse.
+	// Marco's thoughts. No, we don't need to do anything else here.
+	cellIndices, cellsToVerify, err := ourDataColumn.CellsToVerifyFromPartialMessage(message)
+	if err != nil {
+		return err
+	}
+	// Track cells received via partial message
+	if len(cellIndices) > 0 {
+		columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
+		partialMessageCellsReceivedTotal.WithLabelValues(columnIndexStr).Add(float64(len(cellIndices)))
+	}
+	if len(cellsToVerify) > 0 {
+		p.concurrentValidatorSemaphore <- struct{}{}
+		go func() {
+			defer func() {
+				<-p.concurrentValidatorSemaphore
+			}()
+			start := time.Now()
+			err := p.callbacks.ValidateColumn(cellsToVerify)
+			if err != nil {
+				p.logger.WithError(err).WithFields(rpc.logFields()).Error("Failed to validate cells")
+				_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+				return
+			}
+			_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackUsefulMessage)
+			p.incomingReq <- request{
+				kind: requestKindCellsValidated,
+				cellsValidated: &cellsValidated{
+					validationTook: time.Since(start),
+					topic:          topicId,
+					group:          ourDataColumn.GroupID(),
+					cells:          cellsToVerify,
+					cellIndices:    cellIndices,
+				},
+			}
+		}()
+	}
+	return nil
+}
+
+func (p *PartialColumnBroadcaster) handleHeader(rpc incomingPartialRPC, header *ethpb.PartialDataColumnHeader) {
+	groupID := rpc.GroupID
+	p.logger.Debug("Handling header as it was previously not cached for this group")
+	// Cache the valid header.
+	p.validHeaderCache[string(groupID)] = header
+
+	select {
+	case p.concurrentHeaderHandlerSemaphore <- struct{}{}:
+		go func() {
+			p.callbacks.HandleHeader(header, string(groupID))
+			<-p.concurrentHeaderHandlerSemaphore
+		}()
+	default:
+		p.logger.WithFields(rpc.logFields()).Warn("Dropping header handler, max concurrent header handlers reached")
+	}
+
 }
 
 func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) error {
