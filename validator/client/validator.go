@@ -1087,6 +1087,7 @@ func (v *validator) buildProposerSettingsRequests(
 	postGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
 
 	var domainData []byte
+	var sigFailCount int
 	if postGloas {
 		epoch := slots.ToEpoch(slot)
 		resp, err := v.domainData(ctx, epoch, params.BeaconConfig().DomainProposerPreferences[:])
@@ -1098,6 +1099,7 @@ func (v *validator) buildProposerSettingsRequests(
 		}
 	}
 
+	ps := v.ProposerSettings()
 	for _, k := range activePubkeys {
 		s, ok := v.pubkeyToStatus[k]
 		if !ok {
@@ -1107,17 +1109,17 @@ func (v *validator) buildProposerSettingsRequests(
 		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
 		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
 
-		if v.ProposerSettings() != nil && v.ProposerSettings().DefaultConfig != nil {
-			if v.ProposerSettings().DefaultConfig.FeeRecipientConfig != nil {
-				feeRecipient = v.ProposerSettings().DefaultConfig.FeeRecipientConfig.FeeRecipient
+		if ps != nil && ps.DefaultConfig != nil {
+			if ps.DefaultConfig.FeeRecipientConfig != nil {
+				feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
 			}
-			if v.ProposerSettings().DefaultConfig.BuilderConfig != nil && v.ProposerSettings().DefaultConfig.BuilderConfig.Enabled {
-				gasLimit = uint64(v.ProposerSettings().DefaultConfig.BuilderConfig.GasLimit)
+			if ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.Enabled {
+				gasLimit = uint64(ps.DefaultConfig.BuilderConfig.GasLimit)
 			}
 		}
 
-		if v.ProposerSettings() != nil && v.ProposerSettings().ProposeConfig != nil {
-			config, ok := v.ProposerSettings().ProposeConfig[k]
+		if ps != nil && ps.ProposeConfig != nil {
+			config, ok := ps.ProposeConfig[k]
 			if ok && config != nil {
 				if config.FeeRecipientConfig != nil {
 					feeRecipient = config.FeeRecipientConfig.FeeRecipient
@@ -1146,14 +1148,14 @@ func (v *validator) buildProposerSettingsRequests(
 
 		signedPref, err := signProposerPreferences(ctx, km, k, pref, domainData)
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"pubkey":       fmt.Sprintf("%#x", k[:]),
-				"feeRecipient": feeRecipient,
-			}).WithError(err).Warn("Could not sign proposer preferences")
+			sigFailCount++
 			continue
 		}
 
 		signedPrefs = append(signedPrefs, signedPref)
+	}
+	if sigFailCount > 0 {
+		log.WithField("count", sigFailCount).Warn("Failed to sign proposer preferences")
 	}
 	return prepareProposerReqs, signedPrefs
 }
