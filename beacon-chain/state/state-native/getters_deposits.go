@@ -2,6 +2,7 @@ package state_native
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -76,6 +77,7 @@ func (b *BeaconState) IsPendingValidator(pubkey []byte) (bool, error) {
 			Signature:             deposit.Signature,
 		})
 		if err != nil {
+			log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Warn("Could not verify pending deposit signature")
 			continue
 		}
 		if valid {
