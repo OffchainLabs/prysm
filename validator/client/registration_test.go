@@ -158,16 +158,16 @@ func Test_signProposerPreferences(t *testing.T) {
 		GasLimit:       789,
 	}
 
-	signed, err := signProposerPreferences(t.Context(), km, kp.pub, pref)
-	require.NoError(t, err)
-	require.Equal(t, pref, signed.Message)
-
 	domain, err := signing.ComputeDomain(
 		params.BeaconConfig().DomainProposerPreferences,
-		nil,
-		nil,
+		params.BeaconConfig().GenesisForkVersion,
+		params.BeaconConfig().GenesisValidatorsRoot[:],
 	)
 	require.NoError(t, err)
+
+	signed, err := signProposerPreferences(t.Context(), km, kp.pub, pref, domain)
+	require.NoError(t, err)
+	require.Equal(t, pref, signed.Message)
 
 	root, err := signing.ComputeSigningRoot(pref, domain)
 	require.NoError(t, err)

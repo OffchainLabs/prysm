@@ -921,8 +921,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
 	}
 
-	// TODO(gloas): Remove PrepareBeaconProposer once SubmitSignedProposerPreferences
-	// handles the tracked validators cache (OffchainLabs/prysm#16538).
+	// TODO(gloas): add gloas flag to stop needing prepare beacon proposer post gloas
 	if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
 		Recipients: proposerReqs,
 	}); err != nil {
@@ -935,6 +934,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}
 	}
 
+	// TODO(gloas): add gloas flag to stop needing validator registrations post gloas
 	signedRegReqs := v.buildSignedRegReqs(ctx, filteredKeys, km.Sign, slot, forceFullPush)
 	if len(signedRegReqs) > 0 {
 		go func() {
@@ -1085,6 +1085,19 @@ func (v *validator) buildProposerSettingsRequests(
 	var prepareProposerReqs []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer
 	var signedPrefs []*ethpb.SignedProposerPreferences
 	postGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
+
+	var domainData []byte
+	if postGloas {
+		epoch := slots.ToEpoch(slot)
+		resp, err := v.domainData(ctx, epoch, params.BeaconConfig().DomainProposerPreferences[:])
+		if err != nil {
+			log.WithError(err).Error("Could not get proposer preferences domain data")
+			postGloas = false
+		} else {
+			domainData = resp.SignatureDomain
+		}
+	}
+
 	for _, k := range activePubkeys {
 		s, ok := v.pubkeyToStatus[k]
 		if !ok {
@@ -1131,7 +1144,7 @@ func (v *validator) buildProposerSettingsRequests(
 			GasLimit:       gasLimit,
 		}
 
-		signedPref, err := signProposerPreferences(ctx, km, k, pref)
+		signedPref, err := signProposerPreferences(ctx, km, k, pref, domainData)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"pubkey":       fmt.Sprintf("%#x", k[:]),

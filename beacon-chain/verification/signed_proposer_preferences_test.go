@@ -77,7 +77,7 @@ func signProposerPreferencesForState(t *testing.T, sk bls.SecretKey, preferences
 	t.Helper()
 
 	epoch := slots.ToEpoch(preferences.ProposalSlot)
-	domain, err := signing.Domain(st.Fork(), epoch, params.BeaconConfig().DomainBeaconProposer, st.GenesisValidatorsRoot())
+	domain, err := signing.Domain(st.Fork(), epoch, params.BeaconConfig().DomainProposerPreferences, st.GenesisValidatorsRoot())
 	require.NoError(t, err)
 	root, err := signing.ComputeSigningRoot(preferences, domain)
 	require.NoError(t, err)

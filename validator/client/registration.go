@@ -99,20 +99,12 @@ func signProposerPreferences(
 	km keymanager.IKeymanager,
 	pubkey [fieldparams.BLSPubkeyLength]byte,
 	pref *ethpb.ProposerPreferences,
+	domain []byte,
 ) (*ethpb.SignedProposerPreferences, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.signProposerPreferences")
 	defer span.End()
 
-	d, err := signing.ComputeDomain(
-		params.BeaconConfig().DomainProposerPreferences,
-		nil, /* fork version */
-		nil, /* genesis val root */
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	r, err := signing.ComputeSigningRoot(pref, d)
+	r, err := signing.ComputeSigningRoot(pref, domain)
 	if err != nil {
 		return nil, errors.Wrap(err, signingRootErr)
 	}
@@ -120,7 +112,7 @@ func signProposerPreferences(
 	sig, err := km.Sign(ctx, &validatorpb.SignRequest{
 		PublicKey:       pubkey[:],
 		SigningRoot:     r[:],
-		SignatureDomain: d,
+		SignatureDomain: domain,
 		Object:          &validatorpb.SignRequest_ProposerPreferences{ProposerPreferences: pref},
 	})
 	if err != nil {

@@ -40,6 +40,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
+	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -47,6 +48,7 @@ import (
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -2171,7 +2173,18 @@ func TestValidator_buildProposerSettingsRequests_GloasOnly(t *testing.T) {
 	km := newMockKeymanager(t, kp)
 	feeRecipient := feeRecipientFromString(t, "0x1111111111111111111111111111111111111111")
 
+	ctrl := gomock.NewController(t)
+	client := validatormock.NewMockValidatorClient(ctrl)
+	cache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
+		NumCounters: 1920,
+		MaxCost:     192,
+		BufferItems: 64,
+	})
+	require.NoError(t, err)
+
 	v := validator{
+		validatorClient: client,
+		domainDataCache: cache,
 		proposerSettings: &proposer.Settings{
 			DefaultConfig: &proposer.Option{
 				FeeRecipientConfig: &proposer.FeeRecipientConfig{
@@ -2206,6 +2219,10 @@ func TestValidator_buildProposerSettingsRequests_GloasOnly(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
+
+		client.EXPECT().
+			DomainData(gomock.Any(), gomock.Any()).
+			Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
 
 		prepReqs, prefs := v.buildProposerSettingsRequests(t.Context(), [][fieldparams.BLSPubkeyLength]byte{kp.pub}, km, 0)
 		require.Equal(t, 1, len(prepReqs))
