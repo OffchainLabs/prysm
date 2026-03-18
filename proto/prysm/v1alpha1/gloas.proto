@@ -106,6 +106,12 @@ message SignedProposerPreferences {
   bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
+// SubmitSignedProposerPreferencesRequest wraps multiple signed proposer
+// preferences for batch submission via gRPC.
+message SubmitSignedProposerPreferencesRequest {
+  repeated SignedProposerPreferences signed_proposer_preferences = 1;
+}
+
 // PayloadAttestationData contains the core data for Payload Timeliness
 // Committee (PTC) attestations.
 //
