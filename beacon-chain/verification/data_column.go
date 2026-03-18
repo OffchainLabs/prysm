@@ -465,7 +465,7 @@ func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
 		// Compute the slot of the parent block.
 		parentSlot, err := dv.fc.Slot(dataColumn.ParentRoot())
 		if err != nil {
-			return columnErrBuilder(errors.Wrap(ErrSidecarParentSlotUnavailable, err.Error()))
+			return columnErrBuilder(errors.Wrap(ErrSidecarParentUnknown, err.Error()))
 		}
 
 		// Check if the data column slot is after the parent slot.

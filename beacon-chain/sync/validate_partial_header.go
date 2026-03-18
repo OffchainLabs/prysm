@@ -95,7 +95,7 @@ func (s *Service) validatePartialDataColumnHeader(ctx context.Context, col *bloc
 
 	// [REJECT] Header slot > parent slot
 	if err := verifier.SidecarParentSlotLower(); err != nil {
-		if stderrors.Is(err, verification.ErrSidecarParentSlotUnavailable) {
+		if stderrors.Is(err, verification.ErrSidecarParentUnknown) {
 			return verifier, false, err
 		}
 		return verifier, true, err

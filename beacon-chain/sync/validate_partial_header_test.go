@@ -84,7 +84,7 @@ func TestService_PartialVerifierFromTrustedColumn(t *testing.T) {
 func TestService_ValidatePartialDataColumnHeader(t *testing.T) {
 	ctx := context.Background()
 	genericErr := errors.New("generic error")
-	unavailableParentSlotErr := errors.Wrap(verification.ErrSidecarParentSlotUnavailable, "slot lookup failed")
+	unavailableParentSlotErr := errors.Wrap(verification.ErrSidecarParentUnknown, "slot lookup failed")
 	invalidVerifierErr := errors.Wrap(verification.ErrInvalid, "invalid verification")
 
 	db := dbtest.SetupDB(t)
