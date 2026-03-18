@@ -6,6 +6,19 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v7.1.3](https://github.com/prysmaticlabs/prysm/compare/v7.1.2...v7.1.3) - 2026-03-18
 
+This release brings extensive Gloas (next fork) groundwork, a major logging infrastructure overhaul, and numerous performance optimizations across the beacon chain. A security update to go-ethereum v1.16.8 is also included.
+
+Release highlights:
+
+- **Gloas fork preparation**: Builder registry, bid processing, payload attestation, proposer slashing, slot processing, block API endpoints, and duty timing intervals are all wired up.
+- **Logging revamp**: New ephemeral debug logfile (24h retention, enabled by default), per-package loggers with CI enforcement, per-hook verbosity control (`--log.vmodule`), and a version banner at startup.
+- **Performance**: Forkchoice updates moved to background, post-Electra attestation data cached per slot, parallel data column cache warmup, reduced heap allocations in SSZ marshaling and `MixInLength`, and proposer preprocessing behind a feature flag.
+- **Validator client**: gRPC fallback now matches the REST API implementation — both connect only to fully synced nodes. The gRPC health endpoint returns an error on syncing/optimistic status.
+- **Security**: go-ethereum updated to v1.16.8; fixed an authentication bypass on `/v2/validator/*` endpoints.
+- **State storage**: Initial support for the `hdiff` state-diff feature — migration-to-cold and DB initialization are now available behind feature flags.
+
+There are no known security issues in this release. Operators can update at their convenience.
+
 ### Added
 
 - Use the head state to validate attestations for the previous epoch if head is compatible with the target checkpoint. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16109)
