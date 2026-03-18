@@ -934,7 +934,11 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}
 	}
 
-	// TODO(gloas): add gloas flag to stop needing validator registrations post gloas
+	// TODO: figure out what to do post gloas for builder apis
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		return nil
+	}
+
 	signedRegReqs := v.buildSignedRegReqs(ctx, filteredKeys, km.Sign, slot, forceFullPush)
 	if len(signedRegReqs) > 0 {
 		go func() {
