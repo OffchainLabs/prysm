@@ -43,6 +43,7 @@ func TestProposerPreferencesVerifier_VerifySignature(t *testing.T) {
 	verifier := &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesSignatureValid), p: signed}
 	require.NoError(t, verifier.VerifySignature(st))
 
+	// Signature from the wrong key must fail.
 	badSig := signProposerPreferencesForState(t, keys[6], signed.Message, st)
 	signed.Signature = badSig
 	verifier = &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesSignatureValid), p: signed}
@@ -52,8 +53,18 @@ func TestProposerPreferencesVerifier_VerifySignature(t *testing.T) {
 func newSignedProposerPreferencesState(t *testing.T, currentSlot, proposalSlot primitives.Slot, validatorIndex primitives.ValidatorIndex) (state.BeaconState, []bls.SecretKey, *ethpb.SignedProposerPreferences) {
 	t.Helper()
 
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	st, keys := util.DeterministicGenesisStateFulu(t, 64)
 	require.NoError(t, st.SetSlot(currentSlot))
+	require.NoError(t, st.SetFork(&ethpb.Fork{
+		PreviousVersion: cfg.FuluForkVersion,
+		CurrentVersion:  cfg.GloasForkVersion,
+		Epoch:           0,
+	}))
 
 	lookaheadSize := int(uint64(params.BeaconConfig().MinSeedLookahead+1) * uint64(params.BeaconConfig().SlotsPerEpoch))
 	lookahead := make([]primitives.ValidatorIndex, lookaheadSize)
@@ -77,9 +88,7 @@ func signProposerPreferencesForState(t *testing.T, sk bls.SecretKey, preferences
 	t.Helper()
 
 	epoch := slots.ToEpoch(preferences.ProposalSlot)
-	domain, err := signing.Domain(st.Fork(), epoch, params.BeaconConfig().DomainProposerPreferences, st.GenesisValidatorsRoot())
+	sig, err := signing.ComputeDomainAndSign(st, epoch, preferences, params.BeaconConfig().DomainProposerPreferences, sk)
 	require.NoError(t, err)
-	root, err := signing.ComputeSigningRoot(preferences, domain)
-	require.NoError(t, err)
-	return sk.Sign(root[:]).Marshal()
+	return sig
 }
