@@ -122,27 +122,26 @@ func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1
 	}
 
 	pubkey := bytesutil.ToBytes48(request.Pubkey)
-	_, isValidator := beaconState.ValidatorIndexByPubkey(pubkey)
 	idx, isBuilder := beaconState.BuilderIndexByPubkey(pubkey)
-	isBuilderPrefix := helpers.IsBuilderWithdrawalCredential(request.WithdrawalCredentials)
-	if !isBuilder {
-		isPending, err := beaconState.IsPendingValidator(request.Pubkey)
-		if err != nil {
-			return false, err
-		}
-		if isPending {
-			return false, nil
-		}
-	}
-	if !isBuilder && (!isBuilderPrefix || isValidator) {
-		return false, nil
-	}
-
 	if isBuilder {
 		if err := beaconState.IncreaseBuilderBalance(idx, request.Amount); err != nil {
 			return false, err
 		}
 		return true, nil
+	}
+
+	isBuilderPrefix := helpers.IsBuilderWithdrawalCredential(request.WithdrawalCredentials)
+	_, isValidator := beaconState.ValidatorIndexByPubkey(pubkey)
+	if !isBuilderPrefix || isValidator {
+		return false, nil
+	}
+
+	isPending, err := beaconState.IsPendingValidator(request.Pubkey)
+	if err != nil {
+		return false, err
+	}
+	if isPending {
+		return false, nil
 	}
 
 	if err := applyDepositForNewBuilder(
