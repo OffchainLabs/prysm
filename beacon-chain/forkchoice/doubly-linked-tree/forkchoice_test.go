@@ -93,9 +93,9 @@ func TestForkChoice_UpdateBalancesPositiveChange(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	f.votes = []Vote{
-		{indexToHash(1), indexToHash(1), 0, 0, true, true},
-		{indexToHash(2), indexToHash(2), 0, 0, true, true},
-		{indexToHash(3), indexToHash(3), 0, 0, true, true},
+		{indexToHash(1), indexToHash(1), 1, 0, true, true},
+		{indexToHash(2), indexToHash(2), 2, 0, true, true},
+		{indexToHash(3), indexToHash(3), 3, 0, true, true},
 	}
 
 	// Each node gets one unique vote. The weight should look like 103 <- 102 <- 101 because
@@ -127,9 +127,9 @@ func TestForkChoice_UpdateBalancesNegativeChange(t *testing.T) {
 
 	f.balances = []uint64{100, 100, 100}
 	f.votes = []Vote{
-		{indexToHash(1), indexToHash(1), 0, 0, true, true},
-		{indexToHash(2), indexToHash(2), 0, 0, true, true},
-		{indexToHash(3), indexToHash(3), 0, 0, true, true},
+		{indexToHash(1), indexToHash(1), 1, 0, true, true},
+		{indexToHash(2), indexToHash(2), 2, 0, true, true},
+		{indexToHash(3), indexToHash(3), 3, 0, true, true},
 	}
 
 	f.justifiedBalances = []uint64{10, 20, 30}
@@ -158,9 +158,9 @@ func TestForkChoice_UpdateBalancesUnderflow(t *testing.T) {
 
 	f.balances = []uint64{125, 125, 125}
 	f.votes = []Vote{
-		{indexToHash(1), indexToHash(1), 0, 0, true, true},
-		{indexToHash(2), indexToHash(2), 0, 0, true, true},
-		{indexToHash(3), indexToHash(3), 0, 0, true, true},
+		{indexToHash(1), indexToHash(1), 1, 0, true, true},
+		{indexToHash(2), indexToHash(2), 2, 0, true, true},
+		{indexToHash(3), indexToHash(3), 3, 0, true, true},
 	}
 
 	f.justifiedBalances = []uint64{10, 20, 30}

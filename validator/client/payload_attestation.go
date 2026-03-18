@@ -32,6 +32,7 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 
 	data, err := v.validatorClient.PayloadAttestationData(ctx, slot)
 	if err != nil {
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not request payload attestation data")
 		tracing.AnnotateError(span, err)
 		return
@@ -39,12 +40,14 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 
 	d, err := v.domainData(ctx, slots.ToEpoch(slot), params.BeaconConfig().DomainPTCAttester[:])
 	if err != nil {
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not get PTC attester domain data")
 		return
 	}
 
 	r, err := signing.ComputeSigningRoot(data, d.SignatureDomain)
 	if err != nil {
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not compute payload attestation signing root")
 		return
 	}
@@ -59,12 +62,14 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		SigningSlot: slot,
 	})
 	if err != nil {
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not sign payload attestation")
 		return
 	}
 
 	duty, err := v.duty(pubKey)
 	if err != nil {
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not fetch validator assignment")
 		return
 	}
@@ -75,9 +80,11 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		Signature:      sig.Marshal(),
 	}
 	if _, err := v.validatorClient.SubmitPayloadAttestation(ctx, msg); err != nil {
+		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not submit payload attestation")
 		return
 	}
+	validatorPayloadAttestationSubmissionTotal.WithLabelValues("success").Inc()
 
 	slotTime, err := slots.StartTime(v.genesisTime, slot)
 	if err != nil {

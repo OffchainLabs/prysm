@@ -33,6 +33,16 @@ func (r Requirement) String() string {
 		return "RequireValidFields"
 	case RequireCorrectSubnet:
 		return "RequireCorrectSubnet"
+	case RequireBlockSeenGloas:
+		return "RequireBlockSeenGloas"
+	case RequireSlotMatchesBlockGloas:
+		return "RequireSlotMatchesBlockGloas"
+	case RequireValidFieldsGloas:
+		return "RequireValidFieldsGloas"
+	case RequireSidecarKzgProofVerifiedGloas:
+		return "RequireSidecarKzgProofVerifiedGloas"
+	case RequireNotSeenGloas:
+		return "RequireNotSeenGloas"
 	case RequireCurrentSlot:
 		return "RequireCurrentSlot"
 	case RequireMessageNotSeen:
@@ -55,6 +65,12 @@ func (r Requirement) String() string {
 		return "RequireEnvelopeSlotMatchesBlock"
 	case RequireBuilderSignatureValid:
 		return "RequireBuilderSignatureValid"
+	case RequireProposerPreferencesNextEpoch:
+		return "RequireProposerPreferencesNextEpoch"
+	case RequireProposerPreferencesProposalSlotValid:
+		return "RequireProposerPreferencesProposalSlotValid"
+	case RequireProposerPreferencesSignatureValid:
+		return "RequireProposerPreferencesSignatureValid"
 	default:
 		return unknownRequirementName
 	}

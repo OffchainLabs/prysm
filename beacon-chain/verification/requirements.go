@@ -16,6 +16,11 @@ const (
 	// Data columns specific.
 	RequireValidFields
 	RequireCorrectSubnet
+	RequireBlockSeenGloas
+	RequireSlotMatchesBlockGloas
+	RequireValidFieldsGloas
+	RequireSidecarKzgProofVerifiedGloas
+	RequireNotSeenGloas
 
 	// Payload attestation specific.
 	RequireCurrentSlot
@@ -31,4 +36,9 @@ const (
 	RequireEnvelopeSlotAboveFinalized
 	RequireEnvelopeSlotMatchesBlock
 	RequireBuilderSignatureValid
+
+	// Signed proposer preferences specific.
+	RequireProposerPreferencesNextEpoch
+	RequireProposerPreferencesProposalSlotValid
+	RequireProposerPreferencesSignatureValid
 )

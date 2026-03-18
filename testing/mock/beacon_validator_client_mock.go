@@ -144,6 +144,26 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) GetAttestationData(ctx, in 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAttestationData", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetAttestationData), varargs...)
 }
 
+// GetAttesterDuties mocks base method.
+func (m *MockBeaconNodeValidatorClient) GetAttesterDuties(ctx context.Context, in *eth.AttesterDutiesRequest, opts ...grpc.CallOption) (*eth.AttesterDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetAttesterDuties", varargs...)
+	ret0, _ := ret[0].(*eth.AttesterDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAttesterDuties indicates an expected call of GetAttesterDuties.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) GetAttesterDuties(ctx, in any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAttesterDuties", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetAttesterDuties), varargs...)
+}
+
 // GetBeaconBlock mocks base method.
 func (m *MockBeaconNodeValidatorClient) GetBeaconBlock(ctx context.Context, in *eth.BlockRequest, opts ...grpc.CallOption) (*eth.GenericBeaconBlock, error) {
 	m.ctrl.T.Helper()
@@ -244,6 +264,46 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) GetFeeRecipientByPubKey(ctx
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeeRecipientByPubKey", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetFeeRecipientByPubKey), varargs...)
 }
 
+// GetPTCDuties mocks base method.
+func (m *MockBeaconNodeValidatorClient) GetPTCDuties(ctx context.Context, in *eth.PTCDutiesRequest, opts ...grpc.CallOption) (*eth.PTCDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetPTCDuties", varargs...)
+	ret0, _ := ret[0].(*eth.PTCDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPTCDuties indicates an expected call of GetPTCDuties.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) GetPTCDuties(ctx, in any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPTCDuties", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetPTCDuties), varargs...)
+}
+
+// GetProposerDutiesV2 mocks base method.
+func (m *MockBeaconNodeValidatorClient) GetProposerDutiesV2(ctx context.Context, in *eth.ProposerDutiesRequest, opts ...grpc.CallOption) (*eth.ProposerDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetProposerDutiesV2", varargs...)
+	ret0, _ := ret[0].(*eth.ProposerDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProposerDutiesV2 indicates an expected call of GetProposerDutiesV2.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) GetProposerDutiesV2(ctx, in any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposerDutiesV2", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetProposerDutiesV2), varargs...)
+}
+
 // GetSyncCommitteeContribution mocks base method.
 func (m *MockBeaconNodeValidatorClient) GetSyncCommitteeContribution(ctx context.Context, in *eth.SyncCommitteeContributionRequest, opts ...grpc.CallOption) (*eth.SyncCommitteeContribution, error) {
 	m.ctrl.T.Helper()
@@ -262,6 +322,26 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) GetSyncCommitteeContributio
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, in}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSyncCommitteeContribution", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetSyncCommitteeContribution), varargs...)
+}
+
+// GetSyncCommitteeDuties mocks base method.
+func (m *MockBeaconNodeValidatorClient) GetSyncCommitteeDuties(ctx context.Context, in *eth.SyncCommitteeDutiesRequest, opts ...grpc.CallOption) (*eth.SyncCommitteeDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetSyncCommitteeDuties", varargs...)
+	ret0, _ := ret[0].(*eth.SyncCommitteeDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSyncCommitteeDuties indicates an expected call of GetSyncCommitteeDuties.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) GetSyncCommitteeDuties(ctx, in any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSyncCommitteeDuties", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetSyncCommitteeDuties), varargs...)
 }
 
 // GetSyncMessageBlockRoot mocks base method.
@@ -622,6 +702,26 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitSignedContributionAnd
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, in}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedContributionAndProof", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitSignedContributionAndProof), varargs...)
+}
+
+// SubmitSignedProposerPreferences mocks base method.
+func (m *MockBeaconNodeValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, in *eth.SignedProposerPreferences, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SubmitSignedProposerPreferences", varargs...)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitSignedProposerPreferences indicates an expected call of SubmitSignedProposerPreferences.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitSignedProposerPreferences(ctx, in any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedProposerPreferences", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitSignedProposerPreferences), varargs...)
 }
 
 // SubmitSyncMessage mocks base method.
