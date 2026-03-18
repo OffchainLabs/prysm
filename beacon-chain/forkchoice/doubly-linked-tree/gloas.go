@@ -163,18 +163,14 @@ func (s *Store) parentHash(pn *PayloadNode) [32]byte {
 	return fullParent.node.blockHash
 }
 
-// latestCanonicalHashForRoot returns the latest canonical payload hash for the given block root.
-// It uses choosePayloadContent to determine whether the full or empty payload node
-// is canonical. If the full node is canonical, it returns its block hash. Otherwise,
-// it returns the parent hash.
-func (s *Store) latestCanonicalHashForRoot(root [32]byte) [32]byte {
+// latestParentHashForRoot returns the parent payload hash for the given block root.
+// In ePBS, a checkpoint finalizes a beacon block root, not a payload. The child block
+// that would confirm full vs empty status is not itself finalized. Therefore we return
+// the parent hash.
+func (s *Store) latestParentHashForRoot(root [32]byte) [32]byte {
 	en := s.emptyNodeByRoot[root]
 	if en == nil {
 		return [32]byte{}
-	}
-	pn := s.choosePayloadContent(en.node)
-	if pn.full {
-		return pn.node.blockHash
 	}
 	return s.parentHash(en)
 }

@@ -717,12 +717,26 @@ func TestForkChoice_UnrealizedJustifiedPayloadBlockHash(t *testing.T) {
 	ctx := t.Context()
 	f := setup(0, 0)
 
+	// Insert block 'a' at slot 0 with blockHash 'A', parent is genesis.
 	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
+	// A checkpoint finalizes a beacon root, not a payload. The only provably
+	// finalized EL hash is the parent hash — the EL block the checkpoint's
+	// beacon block built on. For 'a' at slot 0, the parent is genesis (zeroes).
 	f.store.unrealizedJustifiedCheckpoint.Root = [32]byte{'a'}
 	got := f.UnrealizedJustifiedPayloadBlockHash()
+	require.Equal(t, [32]byte{}, got)
+
+	// Insert block 'b' at slot 1 with blockHash 'B', parent is 'a'.
+	st, roblock, err = prepareForkchoiceState(ctx, 1, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	// For 'b', the parent hash is 'A' (block 'a's full node hash).
+	f.store.unrealizedJustifiedCheckpoint.Root = [32]byte{'b'}
+	got = f.UnrealizedJustifiedPayloadBlockHash()
 	require.Equal(t, [32]byte{'A'}, got)
 }
 
