@@ -163,17 +163,18 @@ func (s *Store) parentHash(pn *PayloadNode) [32]byte {
 	return fullParent.node.blockHash
 }
 
-// latestHashForRoot returns the latest payload hash for the given block root.
-func (s *Store) latestHashForRoot(root [32]byte) [32]byte {
-	// try to get the full node first
-	fn := s.fullNodeByRoot[root]
-	if fn != nil {
-		return fn.node.blockHash
-	}
+// latestCanonicalHashForRoot returns the latest canonical payload hash for the given block root.
+// It uses choosePayloadContent to determine whether the full or empty payload node
+// is canonical. If the full node is canonical, it returns its block hash. Otherwise,
+// it returns the parent hash.
+func (s *Store) latestCanonicalHashForRoot(root [32]byte) [32]byte {
 	en := s.emptyNodeByRoot[root]
 	if en == nil {
-		// This should not happen
 		return [32]byte{}
+	}
+	pn := s.choosePayloadContent(en.node)
+	if pn.full {
+		return pn.node.blockHash
 	}
 	return s.parentHash(en)
 }
