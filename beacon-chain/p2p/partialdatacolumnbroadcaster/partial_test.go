@@ -236,9 +236,7 @@ func newMockPartialVerifier(col *blocks.PartialDataColumn) *verification.Partial
 }
 
 func newMarkedVerifier(col *blocks.PartialDataColumn) *verification.PartialColumnVerifier {
-	v := newMockPartialVerifier(col)
-	v.MarkIncludedCellsVerified()
-	return v
+	return newMockPartialVerifier(col)
 }
 
 func testBitlist(n uint64, set ...uint64) bitfield.Bitlist {
@@ -353,9 +351,9 @@ func buildSidecarWithCells(nCells uint64, cellsByIndex map[uint64][]byte) *ethpb
 	return msg
 }
 
-func buildIncomingRPC(topic string, group []byte, message *ethpb.PartialDataColumnSidecar, partsMetadata []byte) rpcWithFrom {
+func buildIncomingRPC(topic string, group []byte, message *ethpb.PartialDataColumnSidecar, partsMetadata []byte) incomingPartialRPC {
 	topicCopy := topic
-	return rpcWithFrom{
+	return incomingPartialRPC{
 		PartialMessagesExtension: &pubsub_pb.PartialMessagesExtension{
 			TopicID:        &topicCopy,
 			GroupID:        slices.Clone(group),
@@ -648,7 +646,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 	)
 
 	type testSetup struct {
-		inputRPC                   rpcWithFrom
+		inputRPC                   incomingPartialRPC
 		expectedGroupID            string
 		expectedHeader             *ethpb.PartialDataColumnHeader
 		expectedValidateColumnCall []blocks.CellProofBundle
@@ -1389,7 +1387,6 @@ func TestPartialColumnBroadcaster_Unsubscribe(t *testing.T) {
 						createPartialColumn(t, 2, map[uint64][]byte{0: {0x10}}),
 					),
 				}
-				h.broadcaster.partialMsgStore[topicName]["group1"].MarkIncludedCellsVerified()
 			}
 
 			// Assert state exists before unsubscribe.

@@ -107,7 +107,7 @@ type request struct {
 	cellsValidated *cellsValidated
 	response       chan error
 	unsub          unsubscribe
-	incomingRPC    rpcWithFrom
+	incomingRPC    incomingPartialRPC
 	sub            subscribe
 	publish        publish
 	gossip         gossip
@@ -125,10 +125,18 @@ type unsubscribe struct {
 	topic string
 }
 
-type rpcWithFrom struct {
+type incomingPartialRPC struct {
 	*pubsub_pb.PartialMessagesExtension
 	from    peer.ID
 	message *ethpb.PartialDataColumnSidecar
+}
+
+func (r incomingPartialRPC) logFields() logrus.Fields {
+	return logrus.Fields{
+		"from":  r.from,
+		"topic": r.GetTopicID(),
+		"group": r.GroupID,
+	}
 }
 
 type cellsValidated struct {
@@ -137,6 +145,13 @@ type cellsValidated struct {
 	group          []byte
 	cellIndices    []uint64
 	cells          []blocks.CellProofBundle
+}
+
+func (c *cellsValidated) logFields() logrus.Fields {
+	return logrus.Fields{
+		"topic": c.topic,
+		"group": c.group,
+	}
 }
 
 // gossip is used when we are republishing our PartialDataColumn to gossip peers.
@@ -189,13 +204,12 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 	select {
 	case p.incomingReq <- request{
 		kind:        requestKindHandleIncomingRPC,
-		incomingRPC: rpcWithFrom{rpc, from, message},
+		incomingRPC: incomingPartialRPC{rpc, from, message},
 	}:
 	default:
 		p.logger.Warn("Dropping incoming partial RPC", "rpc", rpc)
 		return errors.New("incomingReq channel is full, dropping RPC")
 	}
-
 	peerStates[from] = nextPeerState
 	return nil
 }
@@ -382,16 +396,16 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 	return peerState, &message, nil
 }
 
-func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) error {
+func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) error {
 	if p.peerFeedback == nil || p.publishPartialCol == nil {
 		return errors.New("pubsub not initialized")
 	}
 
-	message := rpcWithFrom.message
+	message := rpc.message
 	hasMessage := message != nil
 
-	topicID := rpcWithFrom.GetTopicID()
-	groupID := rpcWithFrom.GroupID
+	topicID := rpc.GetTopicID()
+	groupID := rpc.GroupID
 	ourVerifier := p.getPartialVerifier(topicID, groupID)
 	var shouldRepublish bool
 
@@ -450,7 +464,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 				p.logger.WithError(err).WithField("reject", reject).Debug("Header validation failed")
 				if reject {
 					// REJECT case: penalize the peer
-					_ = p.peerFeedback(topicID, rpcWithFrom.from, pubsub.PeerFeedbackInvalidMessage)
+					_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 				}
 				// Both REJECT and IGNORE: don't process further
 				return nil
@@ -469,10 +483,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 					<-p.concurrentHeaderHandlerSemaphore
 				}()
 			default:
-				p.logger.WithFields(logrus.Fields{
-					"topic": topicID,
-					"group": groupID,
-				}).Warn("Dropping header handler, max concurrent header handlers reached")
+				p.logger.WithFields(rpc.logFields()).Warn("Dropping header handler, max concurrent header handlers reached")
 			}
 		}
 
@@ -495,12 +506,6 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		return nil
 	}
 	ourDataColumn := ourVerifier.Column
-
-	logger := p.logger.WithFields(logrus.Fields{
-		"from":  rpcWithFrom.from,
-		"topic": topicID,
-		"group": groupID,
-	})
 
 	if hasMessage {
 		// TODO: is there any penalty we want to consider for giving us data we didn't request?
@@ -525,11 +530,11 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 				start := time.Now()
 				err := p.callbacks.ValidateColumn(cellsToVerify)
 				if err != nil {
-					logger.WithError(err).Error("Failed to validate cells")
-					_ = p.peerFeedback(topicID, rpcWithFrom.from, pubsub.PeerFeedbackInvalidMessage)
+					p.logger.WithError(err).WithFields(rpc.logFields()).Error("Failed to validate cells")
+					_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 					return
 				}
-				_ = p.peerFeedback(topicID, rpcWithFrom.from, pubsub.PeerFeedbackUsefulMessage)
+				_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackUsefulMessage)
 				p.incomingReq <- request{
 					kind: requestKindCellsValidated,
 					cellsValidated: &cellsValidated{
@@ -545,11 +550,11 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 	}
 
 	if !ourDataColumn.Published {
-		p.logger.WithFields(logrus.Fields{"topic": topicID, "group": groupID}).Debug("Column not published, skipping republish")
+		p.logger.WithFields(rpc.logFields()).Debug("Column not published, skipping republish")
 		return nil
 	}
 
-	peerMeta := rpcWithFrom.PartsMetadata
+	peerMeta := rpc.PartsMetadata
 	myMeta, err := ourDataColumn.PartsMetadata()
 	if err != nil {
 		return err
@@ -557,7 +562,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 	if !shouldRepublish && len(peerMeta) > 0 && !bytes.Equal(peerMeta, myMeta) {
 		// Either we have something they don't or vice versa
 		shouldRepublish = true
-		logger.Debug("republishing due to parts metadata difference")
+		p.logger.WithFields(rpc.logFields()).Debug("Republishing due to parts metadata difference")
 	}
 
 	if shouldRepublish {
@@ -597,18 +602,18 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 
 		col, ok, err := ourVerifier.Complete()
 		if err != nil {
-			p.logger.WithError(err).WithFields(logrus.Fields{"topic": cells.topic, "group": cells.group}).Error("Failed to complete partial column verifier")
+			p.logger.WithError(err).WithFields(cells.logFields()).Error("Failed to complete partial column verifier")
 			return err
 		}
 		if ok {
-			p.logger.WithFields(logrus.Fields{"topic": cells.topic, "group": cells.group}).Info("Completed partial column")
+			p.logger.WithFields(cells.logFields()).Info("Completed partial column")
 			go p.callbacks.HandleColumn(cells.topic, col)
 		} else {
-			p.logger.WithFields(logrus.Fields{"topic": cells.topic, "group": cells.group}).Info("Extended partial column")
+			p.logger.WithFields(cells.logFields()).Info("Extended partial column")
 		}
 
 		if !ourDataColumn.Published {
-			p.logger.WithFields(logrus.Fields{"topic": cells.topic, "group": cells.group}).Debug("Column not published, skipping republish")
+			p.logger.WithFields(cells.logFields()).Debug("Column not published, skipping republish")
 			return nil
 		}
 

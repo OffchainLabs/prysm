@@ -30,7 +30,7 @@ import (
 // testColumnCallbacks implements partialdatacolumnbroadcaster.ColumnCallbacks for integration tests.
 type testColumnCallbacks struct {
 	t           *testing.T
-	newVerifier func(col *blocks.PartialDataColumn, markIncluded bool) (*verification.PartialColumnVerifier, error)
+	newVerifier func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error)
 	completeCh  chan blocks.VerifiedRODataColumn
 	label       string
 }
@@ -42,7 +42,7 @@ func (c *testColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataC
 	if len(col.KzgCommitments) == 0 {
 		return nil, true, fmt.Errorf("empty kzg commitments")
 	}
-	verifier, err := c.newVerifier(col, false)
+	verifier, err := c.newVerifier(col)
 	if err != nil {
 		return nil, true, err
 	}
@@ -50,7 +50,7 @@ func (c *testColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataC
 }
 
 func (c *testColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
-	return c.newVerifier(col, true)
+	return c.newVerifier(col)
 }
 
 func (c *testColumnCallbacks) ValidateColumn(_ []blocks.CellProofBundle) error {
@@ -176,7 +176,7 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		topic2, err := ps2.Join(topicStr, pubsub.RequestPartialMessages())
 		require.NoError(t, err)
 
-		newVerifier := func(col *blocks.PartialDataColumn, markIncluded bool) (*verification.PartialColumnVerifier, error) {
+		newVerifier := func(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
 			mock := &verification.MockDataColumnsVerifier{}
 			roCol, err := blocks.NewRODataColumn(col.DataColumnSidecar)
 			if err != nil {
@@ -184,9 +184,6 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 			}
 			mock.AppendRODataColumns(roCol)
 			verifier := verification.NewPartialColumnVerifier(mock, col)
-			if markIncluded {
-				verifier.MarkIncludedCellsVerified()
-			}
 			return verifier, nil
 		}
 

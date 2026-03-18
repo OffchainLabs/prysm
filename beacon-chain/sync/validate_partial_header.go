@@ -31,7 +31,6 @@ func (s *Service) partialVerifierFromTrustedColumn(ctx context.Context, col *blo
 
 	dcv := s.newColumnsVerifier([]blocks.RODataColumn{roDataColumn}, verification.PartialColumnRequirements)
 	verifier := verification.NewPartialColumnVerifier(dcv, col)
-	verifier.MarkIncludedCellsVerified()
 
 	// mark all header checks as completed
 	verifier.SatisfyRequirement(verification.RequireNotFromFutureSlot)

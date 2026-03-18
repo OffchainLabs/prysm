@@ -412,5 +412,5 @@ func (p *PartialDataColumn) ExtendFromVerifiedCells(cellIndices []uint64, cells 
 
 // IsComplete returns true if all cells are now present in this column.
 func (p *PartialDataColumn) IsComplete() bool {
-	return len(p.KzgCommitments) == int(p.Included.Count())
+	return uint64(len(p.KzgCommitments)) == p.Included.Count()
 }
