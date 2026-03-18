@@ -123,7 +123,7 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 	for _, r := range roots {
 		canonical, err := s.cfg.chain.IsCanonical(ctx, r)
 		if err != nil {
-			log.WithError(err).WithField("blockHash", bytesutil.Trunc(r[:])).Debug("Could not check if block is canonical")
+			log.WithError(err).WithField("blockRoot", bytesutil.Trunc(r[:])).Debug("Could not check if block is canonical")
 			continue
 		}
 		if canonical {
