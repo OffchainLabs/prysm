@@ -681,11 +681,11 @@ func (s *Store) SaveHeadBlockRoot(ctx context.Context, blockRoot [32]byte) error
 	defer span.End()
 	hasStateSummary := s.HasStateSummary(ctx, blockRoot)
 	hasStateInDB := s.HasState(ctx, blockRoot)
-	return s.db.Update(func(tx *bolt.Tx) error {
-		if !(hasStateInDB || hasStateSummary) {
-			return errors.New("no state or state summary found with head block root")
-		}
+	if !(hasStateInDB || hasStateSummary) {
+		return errors.New("no state or state summary found with head block root")
+	}
 
+	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(blocksBucket)
 		return bucket.Put(headBlockRootKey, blockRoot[:])
 	})
