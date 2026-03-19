@@ -5,8 +5,8 @@ import (
 	stderrors "errors"
 	"iter"
 	"log/slog"
-	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -21,13 +21,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
-
-// TODOs:
-// different eager push strategies:
-// - no eager push
-// - full column eager push
-//   - With debouncing - some factor of RTT
-// - eager push missing cells
 
 const TTLInSlots = 3
 
