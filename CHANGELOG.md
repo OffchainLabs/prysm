@@ -4,6 +4,116 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v7.1.3](https://github.com/prysmaticlabs/prysm/compare/v7.1.2...v7.1.3) - 2026-03-18
+
+This release brings extensive Gloas (next fork) groundwork, a major logging infrastructure overhaul, and numerous performance optimizations across the beacon chain. A security update to go-ethereum v1.16.8 is also included.
+
+Release highlights:
+
+- **Gloas fork preparation**: Builder registry, bid processing, payload attestation, proposer slashing, slot processing, block API endpoints, and duty timing intervals are all wired up.
+- **Logging revamp**: New ephemeral debug logfile (24h retention, enabled by default), per-package loggers with CI enforcement, per-hook verbosity control (`--log.vmodule`), and a version banner at startup.
+- **Performance**: Forkchoice updates moved to background, post-Electra attestation data cached per slot, parallel data column cache warmup, reduced heap allocations in SSZ marshaling and `MixInLength`, and proposer preprocessing behind a feature flag.
+- **Validator client**: gRPC fallback now matches the REST API implementation — both connect only to fully synced nodes. The gRPC health endpoint returns an error on syncing/optimistic status.
+- **Security**: go-ethereum updated to v1.16.8; fixed an authentication bypass on `/v2/validator/*` endpoints.
+- **State storage**: Initial support for the `hdiff` state-diff feature — migration-to-cold and DB initialization are now available behind feature flags.
+
+There are no known security issues in this release. Operators can update at their convenience.
+
+### Added
+
+- Use the head state to validate attestations for the previous epoch if head is compatible with the target checkpoint. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16109)
+- Added separate logrus hooks for handling the formatting and output of terminal logs vs log-file logs, instead of the. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16102)
+- Batch publish data columns for faster data propogation. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16183)
+- `--disable-get-blobs-v2` flag. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16155)
+- Update spectests to v1.7.0-alpha.0. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16219)
+- Added basic Gloas builder support (`Builder` message and `BeaconStateGloas` `builders`/`next_withdrawal_builder_index` fields). [[PR]](https://github.com/prysmaticlabs/prysm/pull/16164)
+- Added an ephemeral debug logfile that for beacon and validator nodes that captures debug-level logs for 24 hours. It. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16108)
+- Add a feature flag to pass spectests with low validator count. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16231)
+- Add feature flag `--enable-proposer-preprocessing` to process the block and verify signatures before proposing. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15920)
+- Add `ProofByFieldIndex` to generalize merkle proof generation for `BeaconState`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15443)
+- Update spectests to v1.7.0-alpha-1. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16246)
+- Add feature flag to use hashtree instead of gohashtre. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16216)
+- Migrate to cold with the hdiff feature. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16049)
+- Adding basic fulu fork transition support for mainnet and minimal e2e tests (multi scenario is not included). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15640)
+- `commitment_count_in_gossip_processed_blocks` gauge metric to track the number of blob KZG commitments in processed beacon blocks. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16254)
+- Add Gloas latest execution bid processing. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15638)
+- Added shell completion support for `beacon-chain` and `validator` CLI tools. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16245)
+- add pending payments processing and quorum threshold, plus spectests and state hooks (rotate/append). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15655)
+- Add slot processing with execution payload availability updates. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15730)
+- Implement modified proposer slashing for gloas. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16212)
+- Added missing beacon config in fulu so that the presets don't go missing in /eth/v1/config/spec beacon api. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16170)
+- Close opened file in data_column.go. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16274)
+- Flag `--log.vmodule` to set per-package verbosity levels for logging. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16272)
+- Added a version log at startup to display the version of the build. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16283)
+- gloas block return support for /eth/v2/beacon/blocks/{block_id} and /eth/v1/beacon/blocks/{block_id}/root endpoints. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16278)
+- Add Gloas process payload attestation. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15650)
+- Initialize db with state-diff feature flag. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16203)
+- Gloas-specific timing intervals for validator attestation, aggregation, and sync duties. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16291)
+- Added new proofCollector type to ssz-query. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16177)
+- Added README for maintaining specrefs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16302)
+- The ability to download the nightly reference tests from a specific day. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16298)
+- Set beacon node options after reading the config file. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16320)
+- Implement finalization-based eviction for `CheckpointStateCache`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16458)
+
+### Changed
+
+- Performance improvement in ProcessConsolidationRequests: Use more performance HasPendingBalanceToWithdraw instead of PendingBalanceToWithdraw as no need to calculate full total pending balance. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16189)
+- Extend `httperror` analyzer to more functions. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16186)
+- Do not check block signature on state transition. [[PR]](https://github.com/prysmaticlabs/prysm/pull/14820)
+- Notify the engine about forkchoice updates in the background. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16149)
+- Use a separate context when updating the slot cache. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16209)
+- Data column sidecars cache warmup: Process in parallel all sidecars for a given epoch. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16207)
+- Use lookahead to validate data column sidecar proposer index. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16202)
+- Summarize DEBUG log corresponding to incoming via gossip data column sidecar. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16210)
+- Added a log.go file for every important package with a logger variable containing a `package` field set to the package. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16059)
+- Added a CI check to ensure every important package has a log.go file with the correct `package` field. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16059)
+- Changed the log formatter to use this `package` field instead of the previous `prefix` field. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16059)
+- Replaced `time.Sleep` with `require.Eventually` polling in tests to fix flaky behavior caused by race conditions between goroutines and assertions. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16217)
+- changed IsHealthy check to IsReady for validator client's interpretation from /eth/v1/node/health, 206 will now return false as the node is syncing. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16167)
+- Performance improvement in state (MarshalSSZTo): use copy() instead of byte-by-byte loop which isn't required. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16222)
+- Moved verbosity settings to be configurable per hook, rather than just globally. This allows us to control the. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16106)
+- updated go ethereum to 1.16.7. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15640)
+- Use dependent root and target root to verify data column proposer index. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16250)
+- post electra we now call attestation data once per slot and use a cache for subsequent requests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16236)
+- Avoid unnessary heap allocation while calling MixInLength. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16251)
+- Log commitments instead of indices in missingCommitError. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16258)
+- Added some defensive checks to prevent overflows in block batch requests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16227)
+- gRPC health endpoint will now return an error on syncing or optimistic status showing that it's unavailable. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16294)
+- Sample PTC per committee to reduce allocations. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16293)
+- gRPC fallback now matches rest api implementation and will also check and connect to only synced nodes. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16215)
+- Improved node fallback logs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16316)
+- Improved integrations with ethspecify so specrefs can be used throughout the codebase. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16304)
+- Fixed the logging issue described in #16314. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16322)
+
+### Removed
+
+- removed github.com/MariusVanDerWijden/FuzzyVM and github.com/MariusVanDerWijden/tx-fuzz due to lack of support post 1.16.7, only used in e2e for transaction fuzzing. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15640)
+- Remove unused `delay` parameter from `fetchOriginDataColumnSidecars` function. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16262)
+- Batching of KZG verification for incoming via gossip data column sidecars. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16240)
+- `--disable-get-blobs-v2` flag from help. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16265)
+- gRPC resolver for load balancing, the new implementation matches rest api's so we should remove the resolver so it's handled the same way for consistency. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16215)
+
+### Fixed
+
+- avoid panic when fork schedule is empty [#16175](https://github.com/OffchainLabs/prysm/pull/16175). [[PR]](https://github.com/prysmaticlabs/prysm/pull/16175)
+- Fix validation logic for `--backfill-oldest-slot`, which was rejecting slots newer than 1056767. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16173)
+- Don't call trace.WithMaxExportBatchSize(trace.DefaultMaxExportBatchSize) twice. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16211)
+- When adding the `--[semi-]supernode` flag, update the ealiest available slot accordingly. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16230)
+- fixed broken and old links to actual. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15856)
+- stop SlotIntervalTicker goroutine leaks [#16241](https://github.com/OffchainLabs/prysm/pull/16241). [[PR]](https://github.com/prysmaticlabs/prysm/pull/16241)
+- Fix `prysmctl testnet generate-genesis` to use the timestamp from `--geth-genesis-json-in` when `--genesis-time` is not explicitly provided. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16239)
+- Prevent authentication bypass on direct `/v2/validator/*` endpoints by enforcing auth checks for non-public routes. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16226)
+- Fixed a typo: AggregrateDueBPS -> AggregateDueBPS. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16194)
+- Fixed a bug in `hack/check-logs.sh` where untracked files were ignored. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16287)
+- Fix hashtree release builds. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16288)
+- Fix Bazel build failure on macOS x86_64 (darwin_amd64) (adds missing assembly stub to hashtree patch). [[PR]](https://github.com/prysmaticlabs/prysm/pull/16281)
+- a potential race condition when switching hosts quickly and reconnecting to same host on an old connection. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16316)
+- Fixed a bug where `cmd/beacon-chain/execution` was being ignored by `hack/gen-logs.sh` due to a `.gitignore` rule. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16328)
+
+### Security
+
+- Update go-ethereum to v1.16.8. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16252)
+
 ## [v7.1.2](https://github.com/prysmaticlabs/prysm/compare/v7.1.1...v7.1.2) - 2026-01-07
 
 Happy new year! This patch release is very small. The main improvement is better management of pending attestation aggregation via [PR 16153](https://github.com/OffchainLabs/prysm/pull/16153).
