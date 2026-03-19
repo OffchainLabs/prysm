@@ -7,9 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -943,20 +941,19 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	if err != nil {
 		return nil, nil, wrapWithBlockRoot(err, root, "commitments")
 	}
-
-	included, cellsPerBlob, proofsPerBlob, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
-	log.Info("Received cells and proofs from execution client", "included", included, "cells count", len(cellsPerBlob), "err", err)
+	cp, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
+	log.Info("Received cells and proofs from execution client", "included", cp.Included, "cells count", len(cp.CellsPerBlob), "err", err)
 	if err != nil {
 		return nil, nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
 
-	partialColumns, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, populator)
-	haveAllBlobs := included.Count() == uint64(len(commitments))
+	partialColumns, err := peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
+	haveAllBlobs := cp.Included.Count() == uint64(len(commitments))
 	log.Info("Constructed partial columns", "haveAllBlobs", haveAllBlobs)
 
 	if haveAllBlobs {
 		// Construct data column sidears from the signed block and cells and proofs.
-		roSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, populator)
+		roSidecars, err := peerdas.DataColumnSidecars(cp.CellsPerBlob, cp.ProofsPerBlob, populator)
 		if err != nil {
 			return nil, nil, wrapWithBlockRoot(err, populator.Root(), "data column sidcars from column sidecar")
 		}
@@ -975,7 +972,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 }
 
 // fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
-func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) (bitfield.Bitlist /* included parts */, [][]kzg.Cell, [][]kzg.Proof, error) {
+func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) (peerdas.StructuredCellsAndProofs, error) {
 	// Collect KZG hashes for all blobs.
 	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
 	for _, commitment := range kzgCommitments {
@@ -996,21 +993,21 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	}
 
 	if err != nil {
-		return nil, nil, nil, errors.Wrapf(err, "get blobs V2/3")
+		return peerdas.StructuredCellsAndProofs{}, errors.Wrapf(err, "get blobs V2/3")
 	}
 
 	// Compute cells and proofs from the blobs and cell proofs.
-	included, cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(kzgCommitments)), blobAndProofs)
+	result, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(kzgCommitments)), blobAndProofs)
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "compute cells and proofs")
+		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "compute cells and proofs")
 	}
-	if included.Count() == uint64(len(kzgCommitments)) {
+	if result.Included.Count() == uint64(len(kzgCommitments)) {
 		getBlobsV3CompleteResponsesTotal.Inc()
-	} else if included.Count() > 0 {
+	} else if result.Included.Count() > 0 {
 		getBlobsV3PartialResponsesTotal.Inc()
 	}
 
-	return included, cellsPerBlob, proofsPerBlob, nil
+	return result, nil
 }
 
 // upgradeSidecarsToVerifiedSidecars upgrades a list of data column sidecars into verified data column sidecars.
