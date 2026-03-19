@@ -11,6 +11,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/verification:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//internal/logrusadapter:go_default_library",

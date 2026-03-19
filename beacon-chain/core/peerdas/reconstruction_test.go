@@ -479,9 +479,9 @@ func TestComputeCellsAndProofsFromFlat(t *testing.T) {
 
 func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 	t.Run("nil blob and proof", func(t *testing.T) {
-		included, _, _, err := peerdas.ComputeCellsAndProofsFromStructured(0, []*pb.BlobAndProofV2{nil})
+		result, err := peerdas.ComputeCellsAndProofsFromStructured(0, []*pb.BlobAndProofV2{nil})
 		require.NoError(t, err)
-		require.Equal(t, uint64(0), included.Count())
+		require.Equal(t, uint64(0), result.Included.Count())
 	})
 
 	t.Run("nominal", func(t *testing.T) {
@@ -534,25 +534,25 @@ func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test ComputeCellsAndProofs
-		included, actualCellsPerBlob, actualProofsPerBlob, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(blobsAndProofs)), blobsAndProofs)
-		require.Equal(t, included.Count(), uint64(len(actualCellsPerBlob)))
+		result, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(blobsAndProofs)), blobsAndProofs)
+		require.Equal(t, result.Included.Count(), uint64(len(result.CellsPerBlob)))
 		require.NoError(t, err)
-		require.Equal(t, blobCount, len(actualCellsPerBlob))
+		require.Equal(t, blobCount, len(result.CellsPerBlob))
 
 		// Verify the results match expected
 		for i := range blobCount {
-			require.Equal(t, len(expectedCellsPerBlob[i]), len(actualCellsPerBlob[i]))
-			require.Equal(t, len(expectedProofsPerBlob[i]), len(actualProofsPerBlob[i]))
-			require.Equal(t, len(expectedProofsPerBlob[i]), cap(actualProofsPerBlob[i]))
+			require.Equal(t, len(expectedCellsPerBlob[i]), len(result.CellsPerBlob[i]))
+			require.Equal(t, len(expectedProofsPerBlob[i]), len(result.ProofsPerBlob[i]))
+			require.Equal(t, len(expectedProofsPerBlob[i]), cap(result.ProofsPerBlob[i]))
 
 			// Compare cells
 			for j, expectedCell := range expectedCellsPerBlob[i] {
-				require.Equal(t, expectedCell, actualCellsPerBlob[i][j])
+				require.Equal(t, expectedCell, result.CellsPerBlob[i][j])
 			}
 
 			// Compare proofs
 			for j, expectedProof := range expectedProofsPerBlob[i] {
-				require.Equal(t, expectedProof, actualProofsPerBlob[i][j])
+				require.Equal(t, expectedProof, result.ProofsPerBlob[i][j])
 			}
 		}
 	})

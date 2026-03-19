@@ -31,7 +31,6 @@ func (s *Service) partialVerifierFromTrustedColumn(ctx context.Context, col *blo
 
 	dcv := s.newColumnsVerifier([]blocks.RODataColumn{roDataColumn}, verification.PartialColumnRequirements)
 	verifier := verification.NewPartialColumnVerifier(dcv, col)
-	verifier.MarkIncludedCellsVerified()
 
 	// mark all header checks as completed
 	verifier.SatisfyRequirement(verification.RequireNotFromFutureSlot)
@@ -95,7 +94,7 @@ func (s *Service) validatePartialDataColumnHeader(ctx context.Context, col *bloc
 
 	// [REJECT] Header slot > parent slot
 	if err := verifier.SidecarParentSlotLower(); err != nil {
-		if stderrors.Is(err, verification.ErrSidecarParentSlotUnavailable) {
+		if stderrors.Is(err, verification.ErrSidecarParentUnknown) {
 			return verifier, false, err
 		}
 		return verifier, true, err

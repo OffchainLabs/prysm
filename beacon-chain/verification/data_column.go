@@ -79,15 +79,13 @@ var _ HeadStateProvider = &LazyHeadStateProvider{}
 // Note: It is not thread safe and the caller is responsible for thread-safety
 type PartialColumnVerifier struct {
 	DataColumnsVerifier
-	Column              *blocks.PartialDataColumn
-	verifiedCellByIndex map[uint64]bool
+	Column *blocks.PartialDataColumn
 }
 
 func NewPartialColumnVerifier(dv DataColumnsVerifier, col *blocks.PartialDataColumn) *PartialColumnVerifier {
 	return &PartialColumnVerifier{
 		DataColumnsVerifier: dv,
 		Column:              col,
-		verifiedCellByIndex: make(map[uint64]bool),
 	}
 }
 
@@ -101,9 +99,7 @@ func (pv *PartialColumnVerifier) Complete() (blocks.VerifiedRODataColumn, bool, 
 		return blocks.VerifiedRODataColumn{}, false, err
 	}
 
-	if err := pv.SidecarKzgProofVerified(); err != nil {
-		return blocks.VerifiedRODataColumn{}, false, err
-	}
+	pv.SatisfyRequirement(RequireSidecarKzgProofVerified)
 
 	cols, err := pv.VerifiedRODataColumns()
 	if err != nil {
@@ -115,32 +111,8 @@ func (pv *PartialColumnVerifier) Complete() (blocks.VerifiedRODataColumn, bool, 
 	return cols[0], true, nil
 }
 
-func (pv *PartialColumnVerifier) SidecarKzgProofVerified() error {
-	nCells := uint64(len(pv.Column.KzgCommitments))
-	for i := range nCells {
-		if !pv.verifiedCellByIndex[i] {
-			return errors.Wrapf(ErrSidecarKzgProofInvalid, "missing verified cell at index %d", i)
-		}
-	}
-
-	pv.SatisfyRequirement(RequireSidecarKzgProofVerified)
-	return nil
-}
-
 func (pv *PartialColumnVerifier) ExtendFromVerifiedCell(cellIndex uint64, cell, proof []byte) bool {
-	extended := pv.Column.ExtendFromVerifiedCell(cellIndex, cell, proof)
-	if extended {
-		pv.verifiedCellByIndex[cellIndex] = true
-	}
-	return extended
-}
-
-func (pv *PartialColumnVerifier) MarkIncludedCellsVerified() {
-	for i := range pv.Column.Included.Len() {
-		if pv.Column.Included.BitAt(i) {
-			pv.verifiedCellByIndex[i] = true
-		}
-	}
+	return pv.Column.ExtendFromVerifiedCell(cellIndex, cell, proof)
 }
 
 type (
@@ -465,7 +437,7 @@ func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
 		// Compute the slot of the parent block.
 		parentSlot, err := dv.fc.Slot(dataColumn.ParentRoot())
 		if err != nil {
-			return columnErrBuilder(errors.Wrap(ErrSidecarParentSlotUnavailable, err.Error()))
+			return columnErrBuilder(errors.Wrap(ErrSidecarParentUnknown, err.Error()))
 		}
 
 		// Check if the data column slot is after the parent slot.

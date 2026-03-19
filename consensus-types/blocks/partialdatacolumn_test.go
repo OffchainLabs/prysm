@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 )
 
 func testSignedHeader(validRoots bool, sigLen int) *ethpb.SignedBeaconBlockHeader {
@@ -74,6 +75,7 @@ func mustMarshalMeta(t *testing.T, meta *ethpb.PartialDataColumnPartsMetadata) p
 func mustNewPartialColumnWithSigLen(t *testing.T, n int, sigLen int, included ...uint64) *PartialDataColumn {
 	t.Helper()
 	pdc, err := NewPartialDataColumn(
+		[fieldparams.RootLength]byte{},
 		testSignedHeader(true, sigLen),
 		7,
 		sizedSlices(n, 48, 1),
@@ -122,17 +124,20 @@ func TestNewPartialDataColumn(t *testing.T) {
 			inclusion:   sizedSlices(4, 32, 10),
 		},
 		{
-			name:        "header hash tree root error",
-			header:      testSignedHeader(false, fieldparams.BLSSignatureLength),
-			commitments: sizedSlices(2, 48, 10),
-			inclusion:   sizedSlices(4, 32, 10),
-			wantErr:     "ParentRoot",
+			name:    "nil header returns error",
+			wantErr: "signedBlockHeader is nil",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pdc, err := NewPartialDataColumn(tt.header, 11, tt.commitments, tt.inclusion)
+			root := [fieldparams.RootLength]byte{}
+			if tt.header != nil && tt.header.Header != nil {
+				var err error
+				root, err = tt.header.Header.HashTreeRoot()
+				require.NoError(t, err)
+			}
+			pdc, err := NewPartialDataColumn(root, tt.header, 11, tt.commitments, tt.inclusion)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, err)
 				return
@@ -146,9 +151,6 @@ func TestNewPartialDataColumn(t *testing.T) {
 			require.Equal(t, uint64(0), pdc.Included.Count())
 			require.Equal(t, fieldparams.RootLength+1, len(pdc.groupID))
 			require.Equal(t, byte(0), pdc.groupID[0])
-
-			root, rootErr := tt.header.Header.HashTreeRoot()
-			require.NoError(t, rootErr)
 			require.DeepEqual(t, root[:], pdc.groupID[1:])
 		})
 	}
@@ -242,7 +244,7 @@ func TestMarshalPartsMetadata(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			parsed, parseErr := ParsePartsMetadata(out, 4)
+			parsed, parseErr := decodePartsMetadata(out, 4)
 			require.NoError(t, parseErr)
 			require.Equal(t, uint64(4), bitfield.Bitlist(parsed.Available).Len())
 		})
@@ -293,7 +295,7 @@ func TestParsePartsMetadata(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			meta, err := ParsePartsMetadata(tt.pm, tt.expectedLength)
+			meta, err := decodePartsMetadata(tt.pm, tt.expectedLength)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, err)
 				return
@@ -339,7 +341,7 @@ func TestPartialDataColumn_PartsMetadata(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			parsed, parseErr := ParsePartsMetadata(meta, tt.expectedN)
+			parsed, parseErr := decodePartsMetadata(meta, tt.expectedN)
 			require.NoError(t, parseErr)
 			require.Equal(t, tt.availCount, bitfield.Bitlist(parsed.Available).Count())
 			require.Equal(t, tt.expectedN, bitfield.Bitlist(parsed.Requests).Count())
@@ -598,7 +600,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				require.DeepEqual(t, initialRequests, initialMeta.Requests)
 
 				// Verify wire-format partsMetadata
-				sentMetaWire, parseSentErr := ParsePartsMetadata(action.EncodedPartsMetadata, 4)
+				sentMetaWire, parseSentErr := decodePartsMetadata(action.EncodedPartsMetadata, 4)
 				require.NoError(t, parseSentErr)
 				require.Equal(t, uint64(2), bitfield.Bitlist(sentMetaWire.Available).Count())
 				require.Equal(t, true, bitfield.Bitlist(sentMetaWire.Available).BitAt(0))
@@ -985,89 +987,6 @@ func TestPartialDataColumn_ExtendFromVerifiedCell(t *testing.T) {
 	}
 }
 
-func TestPartialDataColumn_ExtendFromVerifiedCells(t *testing.T) {
-	tests := []struct {
-		name string
-		run  func(t *testing.T)
-	}{
-		{
-			name: "mismatched cellIndices and cells panics",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumn(t, 2)
-				defer func() {
-					require.NotNil(t, recover())
-				}()
-				p.ExtendFromVerifiedCells(
-					[]uint64{0},
-					[]CellProofBundle{
-						{ColumnIndex: p.Index, Cell: []byte{1}, Proof: []byte{2}},
-						{ColumnIndex: p.Index, Cell: []byte{3}, Proof: []byte{4}},
-					},
-				)
-			},
-		},
-		{
-			name: "all new cells",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumn(t, 3)
-				ok := p.ExtendFromVerifiedCells(
-					[]uint64{0, 2},
-					[]CellProofBundle{
-						{ColumnIndex: p.Index, Cell: []byte{1}, Proof: []byte{2}},
-						{ColumnIndex: p.Index, Cell: []byte{3}, Proof: []byte{4}},
-					},
-				)
-				require.Equal(t, true, ok)
-				require.Equal(t, true, p.Included.BitAt(0))
-				require.Equal(t, true, p.Included.BitAt(2))
-			},
-		},
-		{
-			name: "all duplicate cells",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumn(t, 2, 1)
-				ok := p.ExtendFromVerifiedCells(
-					[]uint64{1},
-					[]CellProofBundle{{ColumnIndex: p.Index, Cell: []byte{7}, Proof: []byte{8}}},
-				)
-				require.Equal(t, false, ok)
-			},
-		},
-		{
-			name: "invalid column index first",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumn(t, 2)
-				ok := p.ExtendFromVerifiedCells(
-					[]uint64{0},
-					[]CellProofBundle{{ColumnIndex: p.Index + 1, Cell: []byte{1}, Proof: []byte{2}}},
-				)
-				require.Equal(t, false, ok)
-				require.Equal(t, uint64(0), p.Included.Count())
-			},
-		},
-		{
-			name: "invalid column index after partial extension",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumn(t, 3)
-				ok := p.ExtendFromVerifiedCells(
-					[]uint64{0, 1},
-					[]CellProofBundle{
-						{ColumnIndex: p.Index, Cell: []byte{1}, Proof: []byte{2}},
-						{ColumnIndex: p.Index + 1, Cell: []byte{3}, Proof: []byte{4}},
-					},
-				)
-				require.Equal(t, false, ok)
-				require.Equal(t, true, p.Included.BitAt(0))
-				require.Equal(t, false, p.Included.BitAt(1))
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, tt.run)
-	}
-}
-
 func TestClonePeerState(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -1150,4 +1069,15 @@ func TestPartialDataColumn_Complete(t *testing.T) {
 			require.Equal(t, tt.wantOK, ok)
 		})
 	}
+}
+
+func decodePartsMetadata(pm partialmessages.PartsMetadata, expectedLength uint64) (*ethpb.PartialDataColumnPartsMetadata, error) {
+	meta := &ethpb.PartialDataColumnPartsMetadata{}
+	if err := meta.UnmarshalSSZ(pm); err != nil {
+		return nil, err
+	}
+	if meta.Available.Len() != expectedLength || meta.Requests.Len() != expectedLength {
+		return nil, errors.New("invalid parts metadata length")
+	}
+	return meta, nil
 }

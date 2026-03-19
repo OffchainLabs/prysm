@@ -156,15 +156,7 @@ func newBroadcasterHarness(t *testing.T, ps *mockPubSub) *broadcasterHarness {
 
 func (h *broadcasterHarness) start(cr *callbackRecorder) {
 	h.t.Helper()
-
-	err := h.broadcaster.Start(
-		cr.PartialVerifierFromHeader,
-		cr.PartialVerifierFromTrustedColumn,
-		cr.ValidateColumn,
-		cr.HandleColumn,
-		cr.HandleHeader,
-	)
-	require.NoError(h.t, err)
+	go h.broadcaster.Start(cr)
 }
 
 func (h *broadcasterHarness) Stop() {
@@ -180,15 +172,20 @@ func createPartialColumn(t *testing.T, nCells uint64, cells map[uint64][]byte) *
 		commitments[i] = []byte{byte(i + 1)}
 	}
 
-	c, err := blocks.NewPartialDataColumn(
-		&ethpb.SignedBeaconBlockHeader{
-			Header: &ethpb.BeaconBlockHeader{
-				ParentRoot: make([]byte, 32),
-				StateRoot:  make([]byte, 32),
-				BodyRoot:   make([]byte, 32),
-			},
-			Signature: []byte{1},
+	header := &ethpb.SignedBeaconBlockHeader{
+		Header: &ethpb.BeaconBlockHeader{
+			ParentRoot: make([]byte, 32),
+			StateRoot:  make([]byte, 32),
+			BodyRoot:   make([]byte, 32),
 		},
+		Signature: []byte{1},
+	}
+	root, err := header.Header.HashTreeRoot()
+	require.NoError(t, err)
+
+	c, err := blocks.NewPartialDataColumn(
+		root,
+		header,
 		12,
 		commitments,
 		nil,
@@ -244,9 +241,7 @@ func newMockPartialVerifier(col *blocks.PartialDataColumn) *verification.Partial
 }
 
 func newMarkedVerifier(col *blocks.PartialDataColumn) *verification.PartialColumnVerifier {
-	v := newMockPartialVerifier(col)
-	v.MarkIncludedCellsVerified()
-	return v
+	return newMockPartialVerifier(col)
 }
 
 func testBitlist(n uint64, set ...uint64) bitfield.Bitlist {
@@ -361,9 +356,9 @@ func buildSidecarWithCells(nCells uint64, cellsByIndex map[uint64][]byte) *ethpb
 	return msg
 }
 
-func buildIncomingRPC(topic string, group []byte, message *ethpb.PartialDataColumnSidecar, partsMetadata []byte) rpcWithFrom {
+func buildIncomingRPC(topic string, group []byte, message *ethpb.PartialDataColumnSidecar, partsMetadata []byte) incomingPartialRPC {
 	topicCopy := topic
-	return rpcWithFrom{
+	return incomingPartialRPC{
 		PartialMessagesExtension: &pubsub_pb.PartialMessagesExtension{
 			TopicID:        &topicCopy,
 			GroupID:        slices.Clone(group),
@@ -432,6 +427,43 @@ func waitForPeerFeedbackCalls(t *testing.T, ps *mockPubSub, expected int) {
 			t.Fatalf("expected at least %d peer feedback calls, got %d", expected, len(ps.peerFeedbackCalls))
 		case <-ticker.C:
 		}
+	}
+}
+
+func TestExtractColumnIndexFromTopic(t *testing.T) {
+	tests := []struct {
+		name            string
+		topic           string
+		expectedIndex   uint64
+		wantErrContains string
+	}{
+		{
+			name:          "valid topic extracts column index",
+			topic:         "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy",
+			expectedIndex: 12,
+		},
+		{
+			name:            "topic without data_column_sidecar prefix returns error",
+			topic:           "/eth2/abcd1234/beacon_block/ssz_snappy",
+			wantErrContains: "could not extract column index from topic",
+		},
+		{
+			name:          "column index zero",
+			topic:         "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy",
+			expectedIndex: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			index, err := extractColumnIndexFromTopic(tt.topic)
+			if tt.wantErrContains != "" {
+				require.ErrorContains(t, tt.wantErrContains, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedIndex, index)
+			}
+		})
 	}
 }
 
@@ -656,7 +688,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 	)
 
 	type testSetup struct {
-		inputRPC                   rpcWithFrom
+		inputRPC                   incomingPartialRPC
 		expectedGroupID            string
 		expectedHeader             *ethpb.PartialDataColumnHeader
 		expectedValidateColumnCall []blocks.CellProofBundle
@@ -718,6 +750,19 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			expectHeaderValidateCall: true,
 			expectPeerFeedbackCall:   true,
 			expectPeerFeedback:       pubsub.PeerFeedbackInvalidMessage,
+		},
+		{
+			name:                "group ID mismatch rejects peer and returns error",
+			expectedErrContains: "group ID mismatch",
+			setup: func(t *testing.T, _ *PartialColumnBroadcaster) testSetup {
+				col := createPartialColumn(t, 2, nil)
+				wrongGroup := []byte("wrong-group-id")
+				return testSetup{
+					inputRPC: buildIncomingRPC(validTopic, wrongGroup, buildHeaderOnlySidecar(col), nil),
+				}
+			},
+			expectPeerFeedbackCall: true,
+			expectPeerFeedback:     pubsub.PeerFeedbackInvalidMessage,
 		},
 		{
 			name:              "header validation ignore does not report peer feedback",
@@ -862,10 +907,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			recorder := newCallbackRecorder(8, tt.validateHeaderReject, tt.validateColumnErr, tt.validateHeaderErr)
 			h := newBroadcasterHarness(t, ps)
 
-			h.broadcaster.partialVerifierFromHeader = recorder.PartialVerifierFromHeader
-			h.broadcaster.partialVerifierFromTrustedColumn = recorder.PartialVerifierFromTrustedColumn
-			h.broadcaster.validateColumn = recorder.ValidateColumn
-			h.broadcaster.handleHeader = recorder.HandleHeader
+			h.broadcaster.callbacks = recorder
 
 			setup := tt.setup(t, h.broadcaster)
 			err := h.broadcaster.handleIncomingRPC(setup.inputRPC)
@@ -1126,7 +1168,7 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 				}
 				h.broadcaster.partialMsgStore[topic][string(setup.group)].Column.Published = setup.published
 			}
-			h.broadcaster.handleColumn = recorder.HandleColumn
+			h.broadcaster.callbacks = recorder
 
 			var cellIndices []uint64
 			var cells []blocks.CellProofBundle
@@ -1400,7 +1442,6 @@ func TestPartialColumnBroadcaster_Unsubscribe(t *testing.T) {
 						createPartialColumn(t, 2, map[uint64][]byte{0: {0x10}}),
 					),
 				}
-				h.broadcaster.partialMsgStore[topicName]["group1"].MarkIncludedCellsVerified()
 			}
 
 			// Assert state exists before unsubscribe.

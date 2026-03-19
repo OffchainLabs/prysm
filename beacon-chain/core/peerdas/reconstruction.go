@@ -339,9 +339,16 @@ func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([][]kzg
 	return cellsPerBlob, proofsPerBlob, nil
 }
 
+// StructuredCellsAndProofs packages the results of computing cells and proofs from structured blobs.
+type StructuredCellsAndProofs struct {
+	Included      bitfield.Bitlist
+	CellsPerBlob  [][]kzg.Cell
+	ProofsPerBlob [][]kzg.Proof
+}
+
 // ComputeCellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
 // commitmentCount is required to return the correct sized bitlist even if we see a nil slice of blobsAndProofs.
-func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.BlobAndProofV2) (bitfield.Bitlist /* parts included */, [][]kzg.Cell, [][]kzg.Proof, error) {
+func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.BlobAndProofV2) (StructuredCellsAndProofs, error) {
 	start := time.Now()
 	defer func() {
 		cellsAndProofsFromStructuredComputationTime.Observe(float64(time.Since(start).Milliseconds()))
@@ -401,10 +408,14 @@ func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs 
 	}
 
 	if err := wg.Wait(); err != nil {
-		return nil, nil, nil, err
+		return StructuredCellsAndProofs{}, err
 	}
 
-	return included, cellsPerBlob, proofsPerBlob, nil
+	return StructuredCellsAndProofs{
+		Included:      included,
+		CellsPerBlob:  cellsPerBlob,
+		ProofsPerBlob: proofsPerBlob,
+	}, nil
 }
 
 // ReconstructBlobs reconstructs blobs from data column sidecars without computing KZG proofs or creating sidecars.
