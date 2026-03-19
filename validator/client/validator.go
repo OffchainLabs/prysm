@@ -929,7 +929,9 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	}
 
 	if len(prefs) > 0 {
-		if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, prefs); err != nil {
+		if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
+			SignedProposerPreferences: prefs,
+		}); err != nil {
 			log.WithError(err).Warn("Failed to submit proposer preferences")
 		}
 	}

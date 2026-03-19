@@ -388,18 +388,18 @@ func (mr *MockValidatorClientMockRecorder) PublishExecutionPayloadEnvelope(ctx, 
 }
 
 // SubmitSignedProposerPreferences mocks base method.
-func (m *MockValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, preferences []*eth.SignedProposerPreferences) (*empty.Empty, error) {
+func (m *MockValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, in *eth.SubmitSignedProposerPreferencesRequest) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubmitSignedProposerPreferences", ctx, preferences)
+	ret := m.ctrl.Call(m, "SubmitSignedProposerPreferences", ctx, in)
 	ret0, _ := ret[0].(*empty.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SubmitSignedProposerPreferences indicates an expected call of SubmitSignedProposerPreferences.
-func (mr *MockValidatorClientMockRecorder) SubmitSignedProposerPreferences(ctx, preferences any) *gomock.Call {
+func (mr *MockValidatorClientMockRecorder) SubmitSignedProposerPreferences(ctx, in any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedProposerPreferences", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedProposerPreferences), ctx, preferences)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedProposerPreferences", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedProposerPreferences), ctx, in)
 }
 
 // StartEventStream mocks base method.

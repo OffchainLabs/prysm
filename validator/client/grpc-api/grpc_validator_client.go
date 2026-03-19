@@ -280,13 +280,8 @@ func (c *grpcValidatorClient) SubmitValidatorRegistrations(ctx context.Context, 
 	return c.getClient().SubmitValidatorRegistrations(ctx, in)
 }
 
-func (c *grpcValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, preferences []*ethpb.SignedProposerPreferences) (*empty.Empty, error) {
-	for _, preference := range preferences {
-		if _, err := c.getClient().SubmitSignedProposerPreferences(ctx, preference); err != nil {
-			return nil, err
-		}
-	}
-	return &empty.Empty{}, nil
+func (c *grpcValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, in *ethpb.SubmitSignedProposerPreferencesRequest) (*empty.Empty, error) {
+	return c.getClient().SubmitSignedProposerPreferences(ctx, in)
 }
 
 func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*empty.Empty, error) {

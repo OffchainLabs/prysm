@@ -157,7 +157,7 @@ type ValidatorClient interface {
 	// SubmitSignedProposerPreferences submits proposer preferences for upcoming
 	// proposal slots. This replaces PrepareBeaconProposer and SubmitValidatorRegistrations
 	// for GLOAS+.
-	SubmitSignedProposerPreferences(ctx context.Context, preferences []*ethpb.SignedProposerPreferences) (*empty.Empty, error)
+	SubmitSignedProposerPreferences(ctx context.Context, in *ethpb.SubmitSignedProposerPreferencesRequest) (*empty.Empty, error)
 	StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *event.Event)
 	EventStreamIsRunning() bool
 	AggregatedSelections(ctx context.Context, selections []BeaconCommitteeSelection) ([]BeaconCommitteeSelection, error)
