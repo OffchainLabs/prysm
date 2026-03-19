@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -495,14 +496,25 @@ func (s *Server) SubmitVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not process slots: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	val, err := headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
-	if err != nil {
-		if errors.Is(err, mvslice.ErrOutOfBounds) {
-			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
+
+	// Builder exits are only valid from Gloas onwards.
+	if exit.Exit.ValidatorIndex.IsBuilderIndex() {
+		if headState.Version() < version.Gloas {
+			httputil.HandleError(w, "Builder exits not supported before Gloas", http.StatusBadRequest)
 			return
 		}
-		httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
-		return
+	}
+	var val state.ReadOnlyValidator
+	if !exit.Exit.ValidatorIndex.IsBuilderIndex() {
+		val, err = headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
+		if err != nil {
+			if errors.Is(err, mvslice.ErrOutOfBounds) {
+				httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	if err = blocks.VerifyExitAndSignature(val, headState, exit); err != nil {
 		httputil.HandleError(w, "Invalid exit: "+err.Error(), http.StatusBadRequest)

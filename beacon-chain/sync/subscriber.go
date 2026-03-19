@@ -350,6 +350,15 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 				nse,
 			)
 		})
+
+		s.spawn(func() {
+			s.subscribe(
+				p2p.SignedProposerPreferencesTopicFormat,
+				s.validateSignedProposerPreferencesGossip,
+				s.signedProposerPreferencesSubscriber,
+				nse,
+			)
+		})
 	}
 	return true
 }
