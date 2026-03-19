@@ -530,7 +530,7 @@ service BeaconNodeValidator {
 
   // SubmitSignedProposerPreferences broadcasts signed proposer preferences for
   // a future proposal slot.
-  rpc SubmitSignedProposerPreferences(SignedProposerPreferences)
+  rpc SubmitSignedProposerPreferences(SubmitSignedProposerPreferencesRequest)
       returns (google.protobuf.Empty) {
     option deprecated = true;
     option (google.api.http) = {
