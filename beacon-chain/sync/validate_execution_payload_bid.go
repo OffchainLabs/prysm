@@ -62,6 +62,14 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if !ok {
 		return pubsub.ValidationIgnore, nil
 	}
+	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	// [REJECT] bid.builder_index is a valid/active builder index.
+	if err := v.VerifyBuilderActive(st); err != nil {
+		return pubsub.ValidationReject, err
+	}
 	// [REJECT] bid.execution_payment is zero.
 	if err := v.VerifyExecutionPaymentNonZero(); err != nil {
 		return pubsub.ValidationReject, err
@@ -74,42 +82,36 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyGasLimitMatches(pref.GasLimit); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	// [IGNORE] bid.parent_block_root is the hash tree root of a known beacon block in fork choice.
-	if err := v.VerifyParentBlockRootSeen(s.cfg.chain.InForkchoice); err != nil {
-		return pubsub.ValidationIgnore, err
+	// The spec lists signature validation later, but the "first signed bid seen
+	// with a valid signature" gate below depends on knowing validity first.
+	if err := v.VerifySignature(st); err != nil {
+		return pubsub.ValidationReject, err
 	}
+
 	// [IGNORE] this is the first signed bid seen with a valid signature from the given builder for this slot.
 	builderKey := executionPayloadBidBuilderKey(bid.Slot(), bid.BuilderIndex())
 	if s.hasSeenExecutionPayloadBidBuilder(builderKey) {
 		return pubsub.ValidationIgnore, nil
 	}
+	s.setSeenExecutionPayloadBidBuilder(bid.Slot(), builderKey)
 	// [IGNORE] this bid is the highest value bid seen for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
 	if !s.isHighestExecutionPayloadBid(bid) {
 		return pubsub.ValidationIgnore, nil
-	}
-
-	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
-	if err != nil {
-		return pubsub.ValidationIgnore, err
-	}
-	// [REJECT] bid.builder_index is a valid/active builder index.
-	if err := v.VerifyBuilderActive(st); err != nil {
-		return pubsub.ValidationReject, err
-	}
-	// [IGNORE] bid.parent_block_hash is the block hash of a known execution payload in fork choice.
-	if err := v.VerifyParentBlockHash(s.cfg.chain.BlockHash); err != nil {
-		return pubsub.ValidationIgnore, err
 	}
 	// [IGNORE] bid.value is less or equal than the builder's excess balance.
 	if err := v.VerifyBuilderCanCoverBid(st); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	// [REJECT] signed_execution_payload_bid.signature is valid with respect to the bid.builder_index.
-	if err := v.VerifySignature(st); err != nil {
-		return pubsub.ValidationReject, err
+	// [IGNORE] bid.parent_block_hash is the block hash of a known execution payload in fork choice.
+	if err := v.VerifyParentBlockHash(s.cfg.chain.BlockHash); err != nil {
+		return pubsub.ValidationIgnore, err
 	}
-
-	s.setSeenExecutionPayloadBidBuilder(bid.Slot(), builderKey)
+	// [IGNORE] bid.parent_block_root is the hash tree root of a known beacon block in fork choice.
+	if err := v.VerifyParentBlockRootSeen(s.cfg.chain.InForkchoice); err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	// [REJECT] signed_execution_payload_bid.signature is valid with respect to the bid.builder_index.
+	// Verified earlier to satisfy the "first valid signed bid seen" condition.
 	msg.ValidatorData = signedBid
 	return pubsub.ValidationAccept, nil
 }

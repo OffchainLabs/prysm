@@ -163,6 +163,31 @@ func TestValidateExecutionPayloadBidGossip_LowerOrEqualBidIgnored(t *testing.T) 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
+	builderKey := executionPayloadBidBuilderKey(signedBid.Message.Slot, signedBid.Message.BuilderIndex)
+	require.Equal(t, true, s.hasSeenExecutionPayloadBidBuilder(builderKey))
+}
+
+func TestValidateExecutionPayloadBidGossip_LowerBidIgnoredStillMarksBuilderSeen(t *testing.T) {
+	ctx := context.Background()
+	s, msg, signedBid := setupExecutionPayloadBidService(t)
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+
+	higherBid := proto.Clone(signedBid).(*ethpb.SignedExecutionPayloadBid)
+	higherBid.Message.Value = signedBid.Message.Value + 1
+	s.setHighestExecutionPayloadBid(higherBid)
+
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+
+	// If the lower valid bid did not mark the builder as seen, the same bid would
+	// be accepted once the highest-bid cache is cleared.
+	s.highestExecutionPayloadBidCache = cache.NewHighestExecutionPayloadBidCache()
+	msg = executionPayloadBidToPubsub(t, s, s.cfg.p2p, signedBid)
+
+	result, err = s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
 func TestValidateExecutionPayloadBidGossip_HigherBidAccepted(t *testing.T) {
