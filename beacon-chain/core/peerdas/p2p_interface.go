@@ -161,13 +161,19 @@ func BatchVerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIters []iter.S
 	return nil, nil
 }
 
-// verifyKzgCommitmentsInclusionProof is the shared implementation for inclusion proof verification.
-func verifyKzgCommitmentsInclusionProof(bodyRoot []byte, kzgCommitments [][]byte, inclusionProof [][]byte) error {
-	if len(bodyRoot) != fieldparams.RootLength {
+// VerifyDataColumnSidecarInclusionProof verifies if the given KZG commitments included in the given beacon block.
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_inclusion_proof
+func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
+	if sidecar.SignedBlockHeader == nil || sidecar.SignedBlockHeader.Header == nil {
+		return ErrNilBlockHeader
+	}
+
+	root := sidecar.SignedBlockHeader.Header.BodyRoot
+	if len(root) != fieldparams.RootLength {
 		return ErrBadRootLength
 	}
 
-	leaves := blocks.LeavesFromCommitments(kzgCommitments)
+	leaves := blocks.LeavesFromCommitments(sidecar.KzgCommitments)
 
 	sparse, err := trie.GenerateTrieFromItems(leaves, fieldparams.LogMaxBlobCommitments)
 	if err != nil {
@@ -179,25 +185,12 @@ func verifyKzgCommitmentsInclusionProof(bodyRoot []byte, kzgCommitments [][]byte
 		return errors.Wrap(err, "hash tree root")
 	}
 
-	verified := trie.VerifyMerkleProof(bodyRoot, hashTreeRoot[:], kzgPosition, inclusionProof)
+	verified := trie.VerifyMerkleProof(root, hashTreeRoot[:], kzgPosition, sidecar.KzgCommitmentsInclusionProof)
 	if !verified {
 		return ErrInvalidInclusionProof
 	}
 
 	return nil
-}
-
-// VerifyDataColumnSidecarInclusionProof verifies if the given KZG commitments included in the given beacon block.
-// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_inclusion_proof
-func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
-	if sidecar.SignedBlockHeader == nil || sidecar.SignedBlockHeader.Header == nil {
-		return ErrNilBlockHeader
-	}
-	return verifyKzgCommitmentsInclusionProof(
-		sidecar.SignedBlockHeader.Header.BodyRoot,
-		sidecar.KzgCommitments,
-		sidecar.KzgCommitmentsInclusionProof,
-	)
 }
 
 // ComputeSubnetForDataColumnSidecar computes the subnet for a data column sidecar.
