@@ -808,11 +808,11 @@ func (s *Store) HighestRootsBelowSlot(ctx context.Context, slot primitives.Slot)
 	return fs, roots, nil
 }
 
-// LowestRootsAboveSlot returns roots from the database slot index at or above the input slot.
+// LowestRootsAtOrAboveSlot returns roots from the database slot index at or above the input slot.
 // The returned slot is the slot where the roots were found. This is the mirror of HighestRootsBelowSlot.
 // If no block exists at or above the given slot, an empty root slice is returned.
-func (s *Store) LowestRootsAboveSlot(ctx context.Context, slot primitives.Slot) (fs primitives.Slot, roots [][32]byte, err error) {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.LowestRootsAboveSlot")
+func (s *Store) LowestRootsAtOrAboveSlot(ctx context.Context, slot primitives.Slot) (fs primitives.Slot, roots [][32]byte, err error) {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.LowestRootsAtOrAboveSlot")
 	defer span.End()
 
 	sk := bytesutil.Uint64ToBytesBigEndian(uint64(slot))

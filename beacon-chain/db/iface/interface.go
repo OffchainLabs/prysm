@@ -34,7 +34,7 @@ type ReadOnlyDatabase interface {
 	IsFinalizedBlock(ctx context.Context, blockRoot [32]byte) bool
 	FinalizedChildBlock(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HighestRootsBelowSlot(ctx context.Context, slot primitives.Slot) (primitives.Slot, [][32]byte, error)
-	LowestRootsAboveSlot(ctx context.Context, slot primitives.Slot) (primitives.Slot, [][32]byte, error)
+	LowestRootsAtOrAboveSlot(ctx context.Context, slot primitives.Slot) (primitives.Slot, [][32]byte, error)
 	EarliestSlot(ctx context.Context) (primitives.Slot, error)
 	// State related methods.
 	State(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
