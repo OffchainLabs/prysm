@@ -554,10 +554,6 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 	rpc incomingPartialRPC) error {
 	topicId := rpc.GetTopicID()
 
-	// TODO: is there any penalty we want to consider for giving us data we didn't request?
-	// Note that we need to be careful around race conditions and eager data.
-	// Also note that protobufs by design allow extra data that we don't parse.
-	// Marco's thoughts. No, we don't need to do anything else here.
 	cellIndices, cellsToVerify, err := ourDataColumn.CellsToVerifyFromPartialMessage(message)
 	if err != nil {
 		return err
