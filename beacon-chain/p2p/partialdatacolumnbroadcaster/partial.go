@@ -190,10 +190,16 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 	if rpc == nil {
 		return nil
 	}
-	if len(rpc.GetGroupID()) != (fieldparams.RootLength + 1) {
+	expectedGroupIDLen := fieldparams.RootLength + 1
+	if len(rpc.GetGroupID()) != expectedGroupIDLen {
 		_ = p.peerFeedback(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
-		log.Debug("Invalid group ID length, expected " + strconv.Itoa(fieldparams.RootLength+1) + " bytes")
-		return errors.New("invalid group ID length, expected " + strconv.Itoa(fieldparams.RootLength+1) + " bytes")
+		p.logger.WithFields(logrus.Fields{
+			"peer":     from,
+			"topic":    rpc.GetTopicID(),
+			"got":      len(rpc.GetGroupID()),
+			"expected": expectedGroupIDLen,
+		}).Debug("Invalid group ID length")
+		return errors.Errorf("invalid group ID length: got %d, expected %d", len(rpc.GetGroupID()), expectedGroupIDLen)
 	}
 	nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from], rpc)
 	if err != nil {
