@@ -425,6 +425,43 @@ func waitForPeerFeedbackCalls(t *testing.T, ps *mockPubSub, expected int) {
 	}
 }
 
+func TestExtractColumnIndexFromTopic(t *testing.T) {
+	tests := []struct {
+		name            string
+		topic           string
+		expectedIndex   uint64
+		wantErrContains string
+	}{
+		{
+			name:          "valid topic extracts column index",
+			topic:         "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy",
+			expectedIndex: 12,
+		},
+		{
+			name:            "topic without data_column_sidecar prefix returns error",
+			topic:           "/eth2/abcd1234/beacon_block/ssz_snappy",
+			wantErrContains: "could not extract column index from topic",
+		},
+		{
+			name:          "column index zero",
+			topic:         "/eth2/abcd1234/data_column_sidecar_0/ssz_snappy",
+			expectedIndex: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			index, err := extractColumnIndexFromTopic(tt.topic)
+			if tt.wantErrContains != "" {
+				require.ErrorContains(t, tt.wantErrContains, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedIndex, index)
+			}
+		})
+	}
+}
+
 func TestUpdatePeerStateFromIncomingRPC(t *testing.T) {
 	tests := []struct {
 		wantErrContains      string

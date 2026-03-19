@@ -30,14 +30,19 @@ var (
 	errInvalidHeader            = errors.New("invalid header")
 )
 
-var dataColumnTopicRegex = regexp.MustCompile(`data_column_sidecar_(\d+)`)
+const dataColumnSidecarPrefix = "data_column_sidecar_"
 
 func extractColumnIndexFromTopic(topic string) (uint64, error) {
-	matches := dataColumnTopicRegex.FindStringSubmatch(topic)
-	if len(matches) < 2 {
+	idx := strings.Index(topic, dataColumnSidecarPrefix)
+	if idx == -1 {
 		return 0, errors.New("could not extract column index from topic")
 	}
-	return strconv.ParseUint(matches[1], 10, 64)
+	sub := topic[idx+len(dataColumnSidecarPrefix):]
+	end := strings.Index(sub, "/")
+	if end != -1 {
+		sub = sub[:end]
+	}
+	return strconv.ParseUint(sub, 10, 64)
 }
 
 // ColumnCallbacks is the interface that the broadcaster uses to validate and handle
