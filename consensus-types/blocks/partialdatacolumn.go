@@ -395,21 +395,6 @@ func (p *PartialDataColumn) ExtendFromVerifiedCell(cellIndex uint64, cell, proof
 	return true
 }
 
-// ExtendFromVerifiedCells extends this partial column with the provided verified cells.
-func (p *PartialDataColumn) ExtendFromVerifiedCells(cellIndices []uint64, cells []CellProofBundle) /* extended */ bool {
-	var extended bool
-	for i, bundle := range cells {
-		if bundle.ColumnIndex != p.Index {
-			// Invalid column index, shouldn't happen
-			return false
-		}
-		if p.ExtendFromVerifiedCell(cellIndices[i], bundle.Cell, bundle.Proof) {
-			extended = true
-		}
-	}
-	return extended
-}
-
 // IsComplete returns true if all cells are now present in this column.
 func (p *PartialDataColumn) IsComplete() bool {
 	return uint64(len(p.KzgCommitments)) == p.Included.Count()
