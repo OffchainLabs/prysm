@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/internal/logrusadapter"
@@ -188,6 +189,11 @@ func (p *PartialColumnBroadcaster) onEmitGossip(topic string, groupID []byte, _ 
 func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[peer.ID]blocks.PartialDataColumnPeerState, rpc *pubsub_pb.PartialMessagesExtension) error {
 	if rpc == nil {
 		return nil
+	}
+	if len(rpc.GetGroupID()) != (fieldparams.RootLength + 1) {
+		_ = p.peerFeedback(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
+		log.Debug("Invalid group ID length, expected " + strconv.Itoa(fieldparams.RootLength+1) + " bytes")
+		return errors.New("invalid group ID length, expected " + strconv.Itoa(fieldparams.RootLength+1) + " bytes")
 	}
 	nextPeerState, message, err := updatePeerStateFromIncomingRPC(peerStates[from], rpc)
 	if err != nil {
@@ -470,6 +476,13 @@ func (p *PartialColumnBroadcaster) makeVerifierFromHeader(header *ethpb.PartialD
 			"numCommitments": len(header.KzgCommitments),
 		}).Error("Failed to create partial data column from header")
 		return nil, err
+	}
+
+	if !bytes.Equal(newColumn.GroupID(), rpc.GroupID) {
+		p.logger.WithFields(rpc.logFields()).Error("Group ID mismatch")
+		// REJECT case: penalize the peer
+		_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+		return nil, errors.New("group ID mismatch")
 	}
 
 	if headerWasCached {

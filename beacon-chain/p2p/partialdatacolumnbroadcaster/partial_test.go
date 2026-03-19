@@ -747,6 +747,19 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 			expectPeerFeedback:       pubsub.PeerFeedbackInvalidMessage,
 		},
 		{
+			name:                "group ID mismatch rejects peer and returns error",
+			expectedErrContains: "group ID mismatch",
+			setup: func(t *testing.T, _ *PartialColumnBroadcaster) testSetup {
+				col := createPartialColumn(t, 2, nil)
+				wrongGroup := []byte("wrong-group-id")
+				return testSetup{
+					inputRPC: buildIncomingRPC(validTopic, wrongGroup, buildHeaderOnlySidecar(col), nil),
+				}
+			},
+			expectPeerFeedbackCall: true,
+			expectPeerFeedback:     pubsub.PeerFeedbackInvalidMessage,
+		},
+		{
 			name:              "header validation ignore does not report peer feedback",
 			validateHeaderErr: errors.New("ignore header"),
 			setup: func(t *testing.T, _ *PartialColumnBroadcaster) testSetup {
