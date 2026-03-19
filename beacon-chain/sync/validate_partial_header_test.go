@@ -274,6 +274,7 @@ func buildPartialColumn(t *testing.T, nCommitments int, included []uint64) *bloc
 	}
 
 	col, err := blocks.NewPartialDataColumn(
+		[fieldparams.RootLength]byte{},
 		&ethpb.SignedBeaconBlockHeader{
 			Header: &ethpb.BeaconBlockHeader{
 				ParentRoot: make([]byte, fieldparams.RootLength),

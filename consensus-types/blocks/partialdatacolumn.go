@@ -69,6 +69,7 @@ func groupIdFromRoot(root [fieldparams.RootLength]byte) []byte {
 // It does not validate the inputs. The caller is responsible for validating the
 // block header and KZG Commitment Inclusion proof.
 func NewPartialDataColumn(
+	root [fieldparams.RootLength]byte,
 	signedBlockHeader *ethpb.SignedBeaconBlockHeader,
 	columnIndex uint64,
 	kzgCommitments [][]byte,
@@ -76,10 +77,6 @@ func NewPartialDataColumn(
 ) (PartialDataColumn, error) {
 	if signedBlockHeader == nil {
 		return PartialDataColumn{}, errors.New("signedBlockHeader is nil")
-	}
-	root, err := signedBlockHeader.Header.HashTreeRoot()
-	if err != nil {
-		return PartialDataColumn{}, err
 	}
 
 	sidecar := &ethpb.DataColumnSidecar{

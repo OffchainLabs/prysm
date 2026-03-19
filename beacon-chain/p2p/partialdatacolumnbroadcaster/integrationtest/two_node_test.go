@@ -148,9 +148,11 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 			},
 		})
 
-		pc1, err := blocks.NewPartialDataColumn(roDC[0].DataColumnSidecar.SignedBlockHeader, roDC[0].Index, roDC[0].KzgCommitments, roDC[0].KzgCommitmentsInclusionProof)
+		headerRoot, err := roDC[0].DataColumnSidecar.SignedBlockHeader.Header.HashTreeRoot()
 		require.NoError(t, err)
-		pc2, err := blocks.NewPartialDataColumn(roDC[0].DataColumnSidecar.SignedBlockHeader, roDC[0].Index, roDC[0].KzgCommitments, roDC[0].KzgCommitmentsInclusionProof)
+		pc1, err := blocks.NewPartialDataColumn(headerRoot, roDC[0].DataColumnSidecar.SignedBlockHeader, roDC[0].Index, roDC[0].KzgCommitments, roDC[0].KzgCommitmentsInclusionProof)
+		require.NoError(t, err)
+		pc2, err := blocks.NewPartialDataColumn(headerRoot, roDC[0].DataColumnSidecar.SignedBlockHeader, roDC[0].Index, roDC[0].KzgCommitments, roDC[0].KzgCommitmentsInclusionProof)
 		require.NoError(t, err)
 
 		// Split data

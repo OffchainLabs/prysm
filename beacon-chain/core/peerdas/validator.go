@@ -177,7 +177,7 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 
 	dataColumns := make([]blocks.PartialDataColumn, 0, numberOfColumns)
 	for idx := range numberOfColumns {
-		dc, err := blocks.NewPartialDataColumn(info.signedBlockHeader, idx, info.kzgCommitments, info.kzgInclusionProof)
+		dc, err := blocks.NewPartialDataColumn(src.Root(), info.signedBlockHeader, idx, info.kzgCommitments, info.kzgInclusionProof)
 		if err != nil {
 			return nil, errors.Wrap(err, "new ro data column")
 		}

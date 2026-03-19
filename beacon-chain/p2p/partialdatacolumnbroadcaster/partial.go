@@ -190,6 +190,7 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 	if rpc == nil {
 		return nil
 	}
+
 	expectedGroupIDLen := fieldparams.RootLength + 1
 	if len(rpc.GetGroupID()) != expectedGroupIDLen {
 		_ = p.peerFeedback(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
@@ -418,13 +419,19 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 		if len(message.Header) == 0 {
 			return nil
 		}
+		root, err := header.SignedBlockHeader.Header.HashTreeRoot()
+		if err != nil {
+			p.logger.WithFields(rpc.logFields()).WithError(err).Debug("Failed to get root from header")
+			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+			return errors.Wrap(err, "failed to get root from header")
+		}
 
 		columnIndex, err := extractColumnIndexFromTopic(topicID)
 		if err != nil {
 			return err
 		}
 
-		verifier, err := p.makeVerifierFromHeader(header, columnIndex, headerWasCached, rpc)
+		verifier, err := p.makeVerifierFromHeader(root, header, columnIndex, headerWasCached, rpc)
 		if err != nil {
 			if err == errInvalidHeader {
 				return nil
@@ -466,10 +473,11 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	return p.republishColumn(ourDataColumn, rpc, shouldRepublish)
 }
 
-func (p *PartialColumnBroadcaster) makeVerifierFromHeader(header *ethpb.PartialDataColumnHeader, columnIndex uint64,
+func (p *PartialColumnBroadcaster) makeVerifierFromHeader(root [fieldparams.RootLength]byte, header *ethpb.PartialDataColumnHeader, columnIndex uint64,
 	headerWasCached bool, rpc incomingPartialRPC) (*verification.PartialColumnVerifier, error) {
 	topicID := rpc.GetTopicID()
 	newColumn, err := blocks.NewPartialDataColumn(
+		root,
 		header.SignedBlockHeader,
 		columnIndex,
 		header.KzgCommitments,

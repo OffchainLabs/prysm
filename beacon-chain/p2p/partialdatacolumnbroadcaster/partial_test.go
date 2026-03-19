@@ -172,15 +172,20 @@ func createPartialColumn(t *testing.T, nCells uint64, cells map[uint64][]byte) *
 		commitments[i] = []byte{byte(i + 1)}
 	}
 
-	c, err := blocks.NewPartialDataColumn(
-		&ethpb.SignedBeaconBlockHeader{
-			Header: &ethpb.BeaconBlockHeader{
-				ParentRoot: make([]byte, 32),
-				StateRoot:  make([]byte, 32),
-				BodyRoot:   make([]byte, 32),
-			},
-			Signature: []byte{1},
+	header := &ethpb.SignedBeaconBlockHeader{
+		Header: &ethpb.BeaconBlockHeader{
+			ParentRoot: make([]byte, 32),
+			StateRoot:  make([]byte, 32),
+			BodyRoot:   make([]byte, 32),
 		},
+		Signature: []byte{1},
+	}
+	root, err := header.Header.HashTreeRoot()
+	require.NoError(t, err)
+
+	c, err := blocks.NewPartialDataColumn(
+		root,
+		header,
 		12,
 		commitments,
 		nil,

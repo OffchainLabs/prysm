@@ -1034,6 +1034,7 @@ func buildTestPartialColumnForVerifier(t *testing.T, nCommitments int, included 
 	}
 
 	col, err := blocks.NewPartialDataColumn(
+		[fieldparams.RootLength]byte{},
 		&ethpb.SignedBeaconBlockHeader{
 			Header: &ethpb.BeaconBlockHeader{
 				ParentRoot: make([]byte, fieldparams.RootLength),

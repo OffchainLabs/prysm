@@ -75,6 +75,7 @@ func mustMarshalMeta(t *testing.T, meta *ethpb.PartialDataColumnPartsMetadata) p
 func mustNewPartialColumnWithSigLen(t *testing.T, n int, sigLen int, included ...uint64) *PartialDataColumn {
 	t.Helper()
 	pdc, err := NewPartialDataColumn(
+		[fieldparams.RootLength]byte{},
 		testSignedHeader(true, sigLen),
 		7,
 		sizedSlices(n, 48, 1),
@@ -123,17 +124,20 @@ func TestNewPartialDataColumn(t *testing.T) {
 			inclusion:   sizedSlices(4, 32, 10),
 		},
 		{
-			name:        "header hash tree root error",
-			header:      testSignedHeader(false, fieldparams.BLSSignatureLength),
-			commitments: sizedSlices(2, 48, 10),
-			inclusion:   sizedSlices(4, 32, 10),
-			wantErr:     "ParentRoot",
+			name:    "nil header returns error",
+			wantErr: "signedBlockHeader is nil",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pdc, err := NewPartialDataColumn(tt.header, 11, tt.commitments, tt.inclusion)
+			root := [fieldparams.RootLength]byte{}
+			if tt.header != nil && tt.header.Header != nil {
+				var err error
+				root, err = tt.header.Header.HashTreeRoot()
+				require.NoError(t, err)
+			}
+			pdc, err := NewPartialDataColumn(root, tt.header, 11, tt.commitments, tt.inclusion)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, err)
 				return
@@ -147,9 +151,6 @@ func TestNewPartialDataColumn(t *testing.T) {
 			require.Equal(t, uint64(0), pdc.Included.Count())
 			require.Equal(t, fieldparams.RootLength+1, len(pdc.groupID))
 			require.Equal(t, byte(0), pdc.groupID[0])
-
-			root, rootErr := tt.header.Header.HashTreeRoot()
-			require.NoError(t, rootErr)
 			require.DeepEqual(t, root[:], pdc.groupID[1:])
 		})
 	}
