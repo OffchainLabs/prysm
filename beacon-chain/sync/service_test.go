@@ -8,6 +8,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
@@ -67,8 +68,9 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 			chain:       chainService,
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted: abool.New(),
-		clockWaiter:  gs,
+		chainStarted:             abool.New(),
+		clockWaiter:              gs,
+		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 
 	topic := "/eth2/%x/beacon_block"
@@ -136,10 +138,11 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 			blockNotifier: chainService.BlockNotifier(),
 			initialSync:   &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted:        abool.New(),
-		subHandler:          newSubTopicHandler(),
-		clockWaiter:         gs,
-		initialSyncComplete: make(chan struct{}),
+		chainStarted:             abool.New(),
+		subHandler:               newSubTopicHandler(),
+		clockWaiter:              gs,
+		initialSyncComplete:      make(chan struct{}),
+		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 	r.initCaches()
 
@@ -205,10 +208,11 @@ func TestSyncService_StopCleanly(t *testing.T) {
 			chain:       chainService,
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted:        abool.New(),
-		subHandler:          newSubTopicHandler(),
-		clockWaiter:         gs,
-		initialSyncComplete: make(chan struct{}),
+		chainStarted:             abool.New(),
+		subHandler:               newSubTopicHandler(),
+		clockWaiter:              gs,
+		initialSyncComplete:      make(chan struct{}),
+		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 	markInitSyncComplete(t, &r)
 

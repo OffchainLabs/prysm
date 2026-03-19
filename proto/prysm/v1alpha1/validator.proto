@@ -527,6 +527,17 @@ service BeaconNodeValidator {
       body : "*"
     };
   }
+
+  // SubmitSignedProposerPreferences broadcasts signed proposer preferences for
+  // a future proposal slot.
+  rpc SubmitSignedProposerPreferences(SubmitSignedProposerPreferencesRequest)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/proposer_preferences"
+      body : "*"
+    };
+  }
 }
 
 // SyncMessageBlockRootResponse for beacon chain validator to retrieve and

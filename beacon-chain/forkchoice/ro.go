@@ -218,3 +218,10 @@ func (ro *ROForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, boo
 	defer ro.l.RUnlock()
 	return ro.getter.CanonicalNodeAtSlot(slot)
 }
+
+// PayloadContentLookup delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.PayloadContentLookup(root)
+}
