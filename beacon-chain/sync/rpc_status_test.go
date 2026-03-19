@@ -10,6 +10,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -325,10 +326,11 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 			stateNotifier: chain.StateNotifier(),
 			initialSync:   &mockSync.Sync{IsSyncing: false},
 		},
-		rateLimiter:  newRateLimiter(p1),
-		clockWaiter:  cw,
-		chainStarted: abool.New(),
-		subHandler:   newSubTopicHandler(),
+		rateLimiter:              newRateLimiter(p1),
+		clockWaiter:              cw,
+		chainStarted:             abool.New(),
+		subHandler:               newSubTopicHandler(),
+		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 	markInitSyncComplete(t, r)
 	clock := startup.NewClockSynchronizer()
@@ -941,11 +943,12 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 			initialSync:   &mockSync.Sync{IsSyncing: false},
 		},
 
-		ctx:          ctx,
-		rateLimiter:  newRateLimiter(p1),
-		clockWaiter:  cw,
-		chainStarted: abool.New(),
-		subHandler:   newSubTopicHandler(),
+		ctx:                      ctx,
+		rateLimiter:              newRateLimiter(p1),
+		clockWaiter:              cw,
+		chainStarted:             abool.New(),
+		subHandler:               newSubTopicHandler(),
+		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 	markInitSyncComplete(t, r)
 	clock := startup.NewClockSynchronizer()

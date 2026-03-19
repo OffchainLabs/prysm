@@ -22,6 +22,7 @@ go_library(
         "proposer_indices.go",
         "proposer_indices_disabled.go",  # keep
         "proposer_indices_type.go",
+        "proposer_preferences.go",
         "registration.go",
         "skip_slot_cache.go",
         "subnet_ids.go",
@@ -82,6 +83,7 @@ go_test(
         "payload_id_test.go",
         "private_access_test.go",
         "proposer_indices_test.go",
+        "proposer_preferences_test.go",
         "registration_test.go",
         "skip_slot_cache_test.go",
         "subnet_ids_test.go",
