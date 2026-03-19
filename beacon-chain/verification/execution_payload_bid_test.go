@@ -96,6 +96,30 @@ func TestBidVerifier_VerifyExecutionPaymentNonZero(t *testing.T) {
 	require.ErrorIs(t, verifier.VerifyExecutionPaymentNonZero(), ErrBidExecutionPaymentZero)
 }
 
+func TestBidVerifier_VerifyFeeRecipientMatches(t *testing.T) {
+	signed := testSignedExecutionPayloadBid(t, 1)
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
+	require.NoError(t, err)
+
+	verifier := &BidVerifier{results: newResults(RequireBidFeeRecipientMatches), b: wrapped}
+	require.NoError(t, verifier.VerifyFeeRecipientMatches(signed.Message.FeeRecipient))
+
+	verifier = &BidVerifier{results: newResults(RequireBidFeeRecipientMatches), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyFeeRecipientMatches(bytes.Repeat([]byte{0xff}, 20)), ErrBidFeeRecipientMismatch)
+}
+
+func TestBidVerifier_VerifyGasLimitMatches(t *testing.T) {
+	signed := testSignedExecutionPayloadBid(t, 1)
+	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
+	require.NoError(t, err)
+
+	verifier := &BidVerifier{results: newResults(RequireBidGasLimitMatches), b: wrapped}
+	require.NoError(t, verifier.VerifyGasLimitMatches(signed.Message.GasLimit))
+
+	verifier = &BidVerifier{results: newResults(RequireBidGasLimitMatches), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyGasLimitMatches(signed.Message.GasLimit+1), ErrBidGasLimitMismatch)
+}
+
 func TestBidVerifier_VerifyParentBlockRootSeen(t *testing.T) {
 	signed := testSignedExecutionPayloadBid(t, 1)
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)

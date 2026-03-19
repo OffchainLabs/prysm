@@ -1,6 +1,7 @@
 package verification
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
@@ -14,6 +15,8 @@ var ExecutionPayloadBidGossipRequirements = []Requirement{
 	RequireBidCurrentOrNextSlot,
 	RequireBidBuilderActive,
 	RequireBidExecutionPaymentNonZero,
+	RequireBidFeeRecipientMatches,
+	RequireBidGasLimitMatches,
 	RequireBidParentBlockRootSeen,
 	RequireBidParentBlockHashValid,
 	RequireBidBuilderCanCover,
@@ -27,6 +30,8 @@ var (
 	ErrBidSlotNotCurrentOrNext    = errors.New("bid slot is not current or next")
 	ErrBidBuilderNotActive        = errors.New("builder is not active")
 	ErrBidExecutionPaymentZero    = errors.New("execution payment is zero")
+	ErrBidFeeRecipientMismatch    = errors.New("fee recipient does not match proposer preferences")
+	ErrBidGasLimitMismatch        = errors.New("gas limit does not match proposer preferences")
 	ErrBidParentBlockRootNotSeen  = errors.New("parent block root not seen")
 	ErrBidParentBlockHashMismatch = errors.New("parent block hash does not match forkchoice")
 	ErrBidBuilderCannotCover      = errors.New("builder cannot cover bid")
@@ -84,6 +89,35 @@ func (v *BidVerifier) VerifyExecutionPaymentNonZero() (err error) {
 	}
 	if bid.ExecutionPayment() == 0 {
 		return fmt.Errorf("%w: builder=%d slot=%d", ErrBidExecutionPaymentZero, bid.BuilderIndex(), bid.Slot())
+	}
+	return nil
+}
+
+// VerifyFeeRecipientMatches verifies the bid fee recipient matches the expected proposer preferences value.
+func (v *BidVerifier) VerifyFeeRecipientMatches(expected []byte) (err error) {
+	defer v.record(RequireBidFeeRecipientMatches, &err)
+
+	bid, err := v.b.Bid()
+	if err != nil {
+		return errors.Wrap(err, "failed to get bid")
+	}
+	bidFeeRecipient := bid.FeeRecipient()
+	if !bytes.Equal(expected, bidFeeRecipient[:]) {
+		return fmt.Errorf("%w: bid=%#x expected=%#x", ErrBidFeeRecipientMismatch, bidFeeRecipient, expected)
+	}
+	return nil
+}
+
+// VerifyGasLimitMatches verifies the bid gas limit matches the expected proposer preferences value.
+func (v *BidVerifier) VerifyGasLimitMatches(expected uint64) (err error) {
+	defer v.record(RequireBidGasLimitMatches, &err)
+
+	bid, err := v.b.Bid()
+	if err != nil {
+		return errors.Wrap(err, "failed to get bid")
+	}
+	if bid.GasLimit() != expected {
+		return fmt.Errorf("%w: bid=%d expected=%d", ErrBidGasLimitMismatch, bid.GasLimit(), expected)
 	}
 	return nil
 }

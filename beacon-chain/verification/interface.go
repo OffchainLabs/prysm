@@ -100,6 +100,8 @@ type ExecutionPayloadBidVerifier interface {
 	VerifyCurrentOrNextSlot() error
 	VerifyBuilderActive(state.ReadOnlyBeaconState) error
 	VerifyExecutionPaymentNonZero() error
+	VerifyFeeRecipientMatches([]byte) error
+	VerifyGasLimitMatches(uint64) error
 	VerifyParentBlockRootSeen(func([32]byte) bool) error
 	VerifyParentBlockHash(func([32]byte) ([32]byte, error)) error
 	VerifyBuilderCanCoverBid(state.ReadOnlyBeaconState) error

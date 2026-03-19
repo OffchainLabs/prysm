@@ -95,6 +95,18 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 			wantError: true,
 		},
 		{
+			name:      "fee recipient mismatch",
+			verifier:  mockExecutionPayloadBidVerifier{errFeeRecipientMismatch: errors.New("wrong fee recipient")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
+			name:      "gas limit mismatch",
+			verifier:  mockExecutionPayloadBidVerifier{errGasLimitMismatch: errors.New("wrong gas limit")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
 			name:      "parent root unknown",
 			verifier:  mockExecutionPayloadBidVerifier{errParentBlockRootSeen: errors.New("unknown root")},
 			result:    pubsub.ValidationIgnore,
@@ -182,10 +194,6 @@ func TestValidateExecutionPayloadBidGossip_HappyPath(t *testing.T) {
 
 	builderKey := executionPayloadBidBuilderKey(signedBid.Message.Slot, signedBid.Message.BuilderIndex)
 	require.Equal(t, true, s.hasSeenExecutionPayloadBidBuilder(builderKey))
-	bid := mustBid(t, signedBid)
-	highest, ok := s.highestExecutionPayloadBidCache.Get(bid.Slot(), bid.ParentBlockHash(), bid.ParentBlockRoot())
-	require.Equal(t, true, ok)
-	require.DeepEqual(t, signedBid, highest)
 	got, ok := msg.ValidatorData.(*ethpb.SignedExecutionPayloadBid)
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, signedBid, got)
@@ -193,27 +201,28 @@ func TestValidateExecutionPayloadBidGossip_HappyPath(t *testing.T) {
 
 func TestValidateExecutionPayloadBidGossip_FeeRecipientMismatch(t *testing.T) {
 	ctx := context.Background()
-	s, msg, signedBid := setupExecutionPayloadBidService(t)
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
-	require.Equal(t, true, s.proposerPreferencesCache.Add(signedBid.Message.Slot+1, []byte{1}, 1))
-	s.proposerPreferencesCache.Clear()
-	require.Equal(t, true, s.proposerPreferencesCache.Add(signedBid.Message.Slot, bytes.Repeat([]byte{0xff}, 20), signedBid.Message.GasLimit))
+	s, msg, _ := setupExecutionPayloadBidService(t)
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(
+		mockExecutionPayloadBidVerifier{errFeeRecipientMismatch: verification.ErrBidFeeRecipientMismatch},
+	)
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NotNil(t, err)
 	require.Equal(t, pubsub.ValidationReject, result)
+	require.ErrorIs(t, err, verification.ErrBidFeeRecipientMismatch)
 }
 
 func TestValidateExecutionPayloadBidGossip_GasLimitMismatch(t *testing.T) {
 	ctx := context.Background()
-	s, msg, signedBid := setupExecutionPayloadBidService(t)
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
-	s.proposerPreferencesCache.Clear()
-	require.Equal(t, true, s.proposerPreferencesCache.Add(signedBid.Message.Slot, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit+1))
+	s, msg, _ := setupExecutionPayloadBidService(t)
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(
+		mockExecutionPayloadBidVerifier{errGasLimitMismatch: verification.ErrBidGasLimitMismatch},
+	)
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NotNil(t, err)
 	require.Equal(t, pubsub.ValidationReject, result)
+	require.ErrorIs(t, err, verification.ErrBidGasLimitMismatch)
 }
 
 func TestExecutionPayloadBidSubscriber_WrongMessage(t *testing.T) {
@@ -229,7 +238,6 @@ func TestExecutionPayloadBidSubscriber_HappyPath(t *testing.T) {
 	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
 	err := s.executionPayloadBidSubscriber(context.Background(), signedBid)
 	require.NoError(t, err)
-
 	bid := mustBid(t, signedBid)
 	got, ok := s.highestExecutionPayloadBidCache.Get(bid.Slot(), bid.ParentBlockHash(), bid.ParentBlockRoot())
 	require.Equal(t, true, ok)
@@ -245,13 +253,15 @@ func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {
 }
 
 type mockExecutionPayloadBidVerifier struct {
-	errCurrentOrNextSlot   error
-	errBuilderActive       error
-	errExecutionPayment    error
-	errParentBlockRootSeen error
-	errParentBlockHash     error
-	errBuilderCanCoverBid  error
-	errSignature           error
+	errCurrentOrNextSlot    error
+	errBuilderActive        error
+	errExecutionPayment     error
+	errFeeRecipientMismatch error
+	errGasLimitMismatch     error
+	errParentBlockRootSeen  error
+	errParentBlockHash      error
+	errBuilderCanCoverBid   error
+	errSignature            error
 }
 
 var _ verification.ExecutionPayloadBidVerifier = &mockExecutionPayloadBidVerifier{}
@@ -266,6 +276,14 @@ func (m *mockExecutionPayloadBidVerifier) VerifyBuilderActive(state.ReadOnlyBeac
 
 func (m *mockExecutionPayloadBidVerifier) VerifyExecutionPaymentNonZero() error {
 	return m.errExecutionPayment
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyFeeRecipientMatches([]byte) error {
+	return m.errFeeRecipientMismatch
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyGasLimitMatches(uint64) error {
+	return m.errGasLimitMismatch
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockRootSeen(func([32]byte) bool) error {

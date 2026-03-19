@@ -41,6 +41,8 @@ const (
 	RequireBidCurrentOrNextSlot
 	RequireBidBuilderActive
 	RequireBidExecutionPaymentNonZero
+	RequireBidFeeRecipientMatches
+	RequireBidGasLimitMatches
 	RequireBidParentBlockRootSeen
 	RequireBidParentBlockHashValid
 	RequireBidBuilderCanCover

@@ -1,9 +1,7 @@
 package sync
 
 import (
-	"bytes"
 	"context"
-	"errors"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -69,13 +67,12 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationReject, err
 	}
 	// [REJECT] bid.fee_recipient matches the fee_recipient from the proposer's SignedProposerPreferences associated with bid.slot.
-	bidFeeRecipient := bid.FeeRecipient()
-	if !bytes.Equal(pref.FeeRecipient, bidFeeRecipient[:]) {
-		return pubsub.ValidationReject, errors.New("execution payload bid fee recipient does not match proposer preferences")
+	if err := v.VerifyFeeRecipientMatches(pref.FeeRecipient); err != nil {
+		return pubsub.ValidationReject, err
 	}
 	// [REJECT] bid.gas_limit matches the gas_limit from the proposer's SignedProposerPreferences associated with bid.slot.
-	if pref.GasLimit != bid.GasLimit() {
-		return pubsub.ValidationReject, errors.New("execution payload bid gas limit does not match proposer preferences")
+	if err := v.VerifyGasLimitMatches(pref.GasLimit); err != nil {
+		return pubsub.ValidationReject, err
 	}
 	// [IGNORE] bid.parent_block_root is the hash tree root of a known beacon block in fork choice.
 	if err := v.VerifyParentBlockRootSeen(s.cfg.chain.InForkchoice); err != nil {
@@ -113,7 +110,6 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	}
 
 	s.setSeenExecutionPayloadBidBuilder(bid.Slot(), builderKey)
-	s.setHighestExecutionPayloadBid(signedBid)
 	msg.ValidatorData = signedBid
 	return pubsub.ValidationAccept, nil
 }
