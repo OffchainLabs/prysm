@@ -26,16 +26,15 @@ type aggregatorSelector interface {
 	RefreshSelectionProofs(ctx context.Context) error
 	AttestationSelectionProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
 	// ClaimAggregateSlot atomically checks and claims the right to aggregate for
-	// a (slot, committee) pair. Returns false if already claimed. In distributed
-	// mode the middleware handles dedup, so this always returns true.
+	// a (slot, committee) pair. Returns false if already claimed.
 	ClaimAggregateSlot(slot primitives.Slot, committeeIndex primitives.CommitteeIndex) bool
 	SyncCommitteeAggregators(ctx context.Context, slot primitives.Slot, pubkeys [][fieldparams.BLSPubkeyLength]byte) ([][fieldparams.BLSPubkeyLength]byte, error)
 	SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse) ([][]byte, error)
 }
 
-// ErrSelectionProofNotFound is returned when a selection proof is not cached
+// errSelectionProofNotFound is returned when a selection proof is not cached
 // for the requested slot, e.g. next-epoch duties before the epoch refresh.
-var ErrSelectionProofNotFound = errors.New("selection proof not found")
+var errSelectionProofNotFound = errors.New("selection proof not found")
 
 type attSelectionKey struct {
 	slot  primitives.Slot
@@ -88,7 +87,7 @@ func (p *localSelector) RefreshSelectionProofs(context.Context) error {
 func (p *localSelector) AttestationSelectionProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error) {
 	idx, err := p.v.indexFromPubkey(pubKey)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "index from pubkey")
 	}
 	key := attSelectionKey{slot: slot, index: idx}
 	sfKey := fmt.Sprintf("%d_%d", slot, idx)
@@ -101,13 +100,13 @@ func (p *localSelector) AttestationSelectionProof(ctx context.Context, slot prim
 		}
 		sig, err := p.v.signSlotWithSelectionProof(ctx, pubKey, slot)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "sign selection proof")
 		}
 		p.cacheProof(key, sig)
 		return sig, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "attestation selection proof")
 	}
 	return result.([]byte), nil
 }
@@ -156,7 +155,7 @@ func (p *localSelector) SyncCommitteeAggregators(ctx context.Context, slot primi
 	for _, pubKey := range pubkeys {
 		proofs, err := p.signSyncSelectionProofs(ctx, slot, pubKey)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "sign sync selection proofs")
 		}
 		selections = append(selections, proofs...)
 	}
@@ -183,7 +182,7 @@ func (p *localSelector) SyncCommitteeSelectionProofs(ctx context.Context, slot p
 		subnet := syncSubnet(uint64(index))
 		sig, err := p.v.signSyncSelectionData(ctx, pubKey, subnet, slot)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "sign sync selection data")
 		}
 		selectionProofs[i] = sig
 	}
@@ -200,18 +199,14 @@ type distributedSelector struct {
 	refreshErr     error
 }
 
-func closedChan() chan struct{} {
-	ch := make(chan struct{})
-	close(ch)
-	return ch
-}
-
 func newDistributedSelector(v *validator) *distributedSelector {
+	ch := make(chan struct{})
+	close(ch) // Already signaled so reads before the first refresh don't block.
 	return &distributedSelector{
 		v:              v,
 		attSelections:  make(map[attSelectionKey]iface.BeaconCommitteeSelection),
 		refreshedEpoch: math.MaxUint64, // No real epoch matches this, so the first refresh always proceeds.
-		readyCh:        closedChan(),   // Already signaled so reads before the first refresh don't block.
+		readyCh:        ch,
 	}
 }
 
@@ -264,7 +259,7 @@ func (p *distributedSelector) fetchSelectionProofs(ctx context.Context) (map[att
 		}
 		slotSig, err := p.v.signSlotWithSelectionProof(ctx, pk, duty.AttesterSlot)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "sign selection proof")
 		}
 		req = append(req, iface.BeaconCommitteeSelection{
 			SelectionProof: slotSig,
@@ -275,7 +270,7 @@ func (p *distributedSelector) fetchSelectionProofs(ctx context.Context) (map[att
 
 	resp, err := p.v.validatorClient.AggregatedSelections(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "aggregated selections")
 	}
 
 	selections := make(map[attSelectionKey]iface.BeaconCommitteeSelection, len(resp))
@@ -291,7 +286,7 @@ func (p *distributedSelector) fetchSelectionProofs(ctx context.Context) (map[att
 func (p *distributedSelector) AttestationSelectionProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error) {
 	idx, err := p.v.indexFromPubkey(pubKey)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "index from pubkey")
 	}
 
 	// Grab the current ready channel under the lock (cheap).
@@ -316,7 +311,7 @@ func (p *distributedSelector) AttestationSelectionProof(ctx context.Context, slo
 
 	s, ok := p.attSelections[attSelectionKey{slot: slot, index: idx}]
 	if !ok {
-		return nil, ErrSelectionProofNotFound
+		return nil, errSelectionProofNotFound
 	}
 	return s.SelectionProof, nil
 }
@@ -341,7 +336,7 @@ func (p *distributedSelector) SyncCommitteeSelectionProofs(ctx context.Context, 
 
 	idx, err := p.v.indexFromPubkey(pubKey)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "index from pubkey")
 	}
 
 	// Deduplicate by subnet — multiple committee positions can map to the same subnet,
@@ -356,7 +351,7 @@ func (p *distributedSelector) SyncCommitteeSelectionProofs(ctx context.Context, 
 		}
 		sig, err := p.v.signSyncSelectionData(ctx, pubKey, subnet, slot)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "sign sync selection data")
 		}
 		subnetProof[subnet] = sig
 		selections = append(selections, iface.SyncCommitteeSelection{
