@@ -7,6 +7,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // BlobVerifier defines the methods implemented by the ROBlobVerifier.
@@ -80,3 +81,15 @@ type PayloadAttestationMsgVerifier interface {
 // NewPayloadAttestationMsgVerifier is a function signature that can be used by code that needs to be
 // able to mock Initializer.NewPayloadAttestationMsgVerifier without complex setup.
 type NewPayloadAttestationMsgVerifier func(pa payloadattestation.ROMessage, reqs []Requirement) PayloadAttestationMsgVerifier
+
+// SignedProposerPreferencesVerifier defines the methods implemented by the signed proposer preferences verifier.
+type SignedProposerPreferencesVerifier interface {
+	VerifyNextEpoch(state.ReadOnlyBeaconState) error
+	VerifyValidProposalSlot(state.ReadOnlyBeaconState) error
+	VerifySignature(state.ReadOnlyBeaconState) error
+	SatisfyRequirement(Requirement)
+}
+
+// NewSignedProposerPreferencesVerifier is a function signature that can be used by code that needs to be
+// able to mock Initializer.NewSignedProposerPreferencesVerifier without complex setup.
+type NewSignedProposerPreferencesVerifier func(p *ethpb.SignedProposerPreferences, reqs []Requirement) SignedProposerPreferencesVerifier

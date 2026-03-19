@@ -139,84 +139,87 @@ type blockchainService interface {
 // Service is responsible for handling all run time p2p related operations as the
 // main entry point for network messages.
 type Service struct {
-	cfg                                 *config
-	ctx                                 context.Context
-	cancel                              context.CancelFunc
-	slotToPendingBlocks                 *gcache.Cache
-	seenPendingBlocks                   map[[32]byte]bool
-	blkRootToPendingAtts                map[[32]byte][]any
-	subHandler                          *subTopicHandler
-	pendingAttsLock                     sync.RWMutex
-	pendingQueueLock                    sync.RWMutex
-	chainStarted                        *abool.AtomicBool
-	validateBlockLock                   sync.RWMutex
-	rateLimiter                         *limiter
-	seenBlockLock                       sync.RWMutex
-	seenBlockCache                      *lru.Cache
-	seenPayloadEnvelopeCache            *lru.Cache
-	seenBlobLock                        sync.RWMutex
-	seenBlobCache                       *lru.Cache
-	seenDataColumnCache                 *slotAwareCache
-	seenAggregatedAttestationLock       sync.RWMutex
-	seenAggregatedAttestationCache      *lru.Cache
-	seenUnAggregatedAttestationLock     sync.RWMutex
-	seenUnAggregatedAttestationCache    *lru.Cache
-	seenExitLock                        sync.RWMutex
-	seenExitCache                       *lru.Cache
-	seenProposerSlashingLock            sync.RWMutex
-	seenProposerSlashingCache           *lru.Cache
-	seenAttesterSlashingLock            sync.RWMutex
-	seenAttesterSlashingCache           map[uint64]bool
-	seenSyncMessageLock                 sync.RWMutex
-	seenSyncMessageCache                *lru.Cache
-	seenSyncContributionLock            sync.RWMutex
-	seenSyncContributionCache           *lru.Cache
-	badBlockCache                       *lru.Cache
-	badBlockLock                        sync.RWMutex
-	badPayloadCache                     *lru.Cache
-	badPayloadLock                      sync.RWMutex
-	syncContributionBitsOverlapLock     sync.RWMutex
-	syncContributionBitsOverlapCache    *lru.Cache
-	signatureChan                       chan *signatureVerifier
-	clockWaiter                         startup.ClockWaiter
-	initialSyncComplete                 chan struct{}
-	verifierWaiter                      *verification.InitializerWaiter
-	newBlobVerifier                     verification.NewBlobVerifier
-	newColumnsVerifier                  verification.NewDataColumnsVerifier
-	newPayloadAttestationVerifier       verification.NewPayloadAttestationMsgVerifier
-	columnSidecarsExecSingleFlight      singleflight.Group
-	reconstructionSingleFlight          singleflight.Group
-	availableBlocker                    coverage.AvailableBlocker
-	reconstructionRandGen               *rand.Rand
-	trackedValidatorsCache              *cache.TrackedValidatorsCache
-	ctxMap                              ContextByteVersions
-	slasherEnabled                      bool
-	lcStore                             *lightClient.Store
-	dataColumnLogCh                     chan dataColumnLogEntry
-	payloadAttestationCache             *cache.PayloadAttestationCache
-	digestActions                       perDigestSet
-	subscriptionSpawner                 func(func()) // see Service.spawn for details
-	newExecutionPayloadEnvelopeVerifier verification.NewExecutionPayloadEnvelopeVerifier
-	pendingPayloadEnvelopes             map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
-	pendingEnvelopeLock                 sync.RWMutex
-	selfBuildSigFailures                int
+	cfg                                  *config
+	ctx                                  context.Context
+	cancel                               context.CancelFunc
+	slotToPendingBlocks                  *gcache.Cache
+	seenPendingBlocks                    map[[32]byte]bool
+	blkRootToPendingAtts                 map[[32]byte][]any
+	subHandler                           *subTopicHandler
+	pendingAttsLock                      sync.RWMutex
+	pendingQueueLock                     sync.RWMutex
+	chainStarted                         *abool.AtomicBool
+	validateBlockLock                    sync.RWMutex
+	rateLimiter                          *limiter
+	seenBlockLock                        sync.RWMutex
+	seenBlockCache                       *lru.Cache
+	seenPayloadEnvelopeCache             *lru.Cache
+	seenBlobLock                         sync.RWMutex
+	seenBlobCache                        *lru.Cache
+	seenDataColumnCache                  *slotAwareCache
+	seenAggregatedAttestationLock        sync.RWMutex
+	seenAggregatedAttestationCache       *lru.Cache
+	seenUnAggregatedAttestationLock      sync.RWMutex
+	seenUnAggregatedAttestationCache     *lru.Cache
+	seenExitLock                         sync.RWMutex
+	seenExitCache                        *lru.Cache
+	seenProposerSlashingLock             sync.RWMutex
+	seenProposerSlashingCache            *lru.Cache
+	seenAttesterSlashingLock             sync.RWMutex
+	seenAttesterSlashingCache            map[uint64]bool
+	seenSyncMessageLock                  sync.RWMutex
+	seenSyncMessageCache                 *lru.Cache
+	seenSyncContributionLock             sync.RWMutex
+	seenSyncContributionCache            *lru.Cache
+	badBlockCache                        *lru.Cache
+	badBlockLock                         sync.RWMutex
+	badPayloadCache                      *lru.Cache
+	badPayloadLock                       sync.RWMutex
+	syncContributionBitsOverlapLock      sync.RWMutex
+	syncContributionBitsOverlapCache     *lru.Cache
+	signatureChan                        chan *signatureVerifier
+	clockWaiter                          startup.ClockWaiter
+	initialSyncComplete                  chan struct{}
+	verifierWaiter                       *verification.InitializerWaiter
+	newBlobVerifier                      verification.NewBlobVerifier
+	newColumnsVerifier                   verification.NewDataColumnsVerifier
+	newPayloadAttestationVerifier        verification.NewPayloadAttestationMsgVerifier
+	newSignedProposerPreferencesVerifier verification.NewSignedProposerPreferencesVerifier
+	columnSidecarsExecSingleFlight       singleflight.Group
+	reconstructionSingleFlight           singleflight.Group
+	availableBlocker                     coverage.AvailableBlocker
+	reconstructionRandGen                *rand.Rand
+	trackedValidatorsCache               *cache.TrackedValidatorsCache
+	ctxMap                               ContextByteVersions
+	slasherEnabled                       bool
+	lcStore                              *lightClient.Store
+	dataColumnLogCh                      chan dataColumnLogEntry
+	payloadAttestationCache              *cache.PayloadAttestationCache
+	proposerPreferencesCache             *cache.ProposerPreferencesCache
+	digestActions                        perDigestSet
+	subscriptionSpawner                  func(func()) // see Service.spawn for details
+	newExecutionPayloadEnvelopeVerifier  verification.NewExecutionPayloadEnvelopeVerifier
+	pendingPayloadEnvelopes              map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
+	pendingEnvelopeLock                  sync.RWMutex
+	selfBuildSigFailures                 int
 }
 
 // NewService initializes new regular sync service.
 func NewService(ctx context.Context, opts ...Option) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
-		ctx:                     ctx,
-		cancel:                  cancel,
-		chainStarted:            abool.New(),
-		cfg:                     &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:     gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
-		seenPendingBlocks:       make(map[[32]byte]bool),
-		blkRootToPendingAtts:    make(map[[32]byte][]any),
-		dataColumnLogCh:         make(chan dataColumnLogEntry, 1000),
-		reconstructionRandGen:   rand.NewGenerator(),
-		payloadAttestationCache: &cache.PayloadAttestationCache{},
-		pendingPayloadEnvelopes: make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		ctx:                      ctx,
+		cancel:                   cancel,
+		chainStarted:             abool.New(),
+		cfg:                      &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
+		slotToPendingBlocks:      gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
+		seenPendingBlocks:        make(map[[32]byte]bool),
+		blkRootToPendingAtts:     make(map[[32]byte][]any),
+		dataColumnLogCh:          make(chan dataColumnLogEntry, 1000),
+		reconstructionRandGen:    rand.NewGenerator(),
+		payloadAttestationCache:  &cache.PayloadAttestationCache{},
+		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
 	}
 
 	for _, opt := range opts {
@@ -274,6 +277,12 @@ func newPayloadAttestationMessageFromInitializer(ini *verification.Initializer) 
 	}
 }
 
+func newSignedProposerPreferencesVerifierFromInitializer(ini *verification.Initializer) verification.NewSignedProposerPreferencesVerifier {
+	return func(p *ethpb.SignedProposerPreferences, reqs []verification.Requirement) verification.SignedProposerPreferencesVerifier {
+		return ini.NewSignedProposerPreferencesVerifier(p, reqs)
+	}
+}
+
 // Start the regular sync service.
 func (s *Service) Start() {
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -284,6 +293,7 @@ func (s *Service) Start() {
 	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
 	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
 	s.newPayloadAttestationVerifier = newPayloadAttestationMessageFromInitializer(v)
+	s.newSignedProposerPreferencesVerifier = newSignedProposerPreferencesVerifierFromInitializer(v)
 	s.newExecutionPayloadEnvelopeVerifier = newPayloadVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
