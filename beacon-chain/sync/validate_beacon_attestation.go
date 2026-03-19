@@ -372,6 +372,8 @@ func validateAttestingIndex(
 // validateGloasCommitteeIndex validates committee index rules for Gloas fork.
 // [REJECT] attestation.data.index < 2. (New in Gloas)
 // [REJECT] attestation.data.index == 0 if block.slot == attestation.data.slot. (New in Gloas)
+// [REJECT] If attestation.data.index == 1, the execution payload for the block passes validation. (New in Gloas)
+// [IGNORE] When attestation.data.index == 1, the execution payload for the block has been seen. (New in Gloas)
 func (s *Service) validateGloasCommitteeIndex(data *eth.AttestationData) (pubsub.ValidationResult, error) {
 	if data.CommitteeIndex >= 2 {
 		return pubsub.ValidationReject, errors.New("attestation data's committee index must be < 2")
@@ -386,6 +388,16 @@ func (s *Service) validateGloasCommitteeIndex(data *eth.AttestationData) (pubsub
 		}
 		if slot == data.Slot {
 			return pubsub.ValidationReject, errors.New("same slot attestations must use committee index 0")
+		}
+		// [REJECT] If index == 1, the execution payload for the block must not be invalid.
+		if s.hasBadPayload(blockRoot) {
+			return pubsub.ValidationReject, errors.New("execution payload for attested block is invalid")
+		}
+		// [IGNORE] If index == 1, the execution payload for the block must have been seen.
+		// Request the payload envelope if not yet available.
+		if !s.cfg.chain.HasFullNode(blockRoot) {
+			go s.requestPayloadEnvelope(blockRoot)
+			return pubsub.ValidationIgnore, errors.New("execution payload for attested block has not been seen")
 		}
 	}
 
