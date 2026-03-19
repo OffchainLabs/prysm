@@ -22,7 +22,7 @@ func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	switch object.(type) {
 	case *ethpb.BeaconStateBellatrix:
 		htrs = append(htrs, func(s any) ([32]byte, error) {
-			beaconState, err := state_native.InitializeFromProtoBellatrix(s.(*ethpb.BeaconStateBellatrix))
+			beaconState, err := state_native.InitializeFromProtoUnsafeBellatrix(s.(*ethpb.BeaconStateBellatrix))
 			require.NoError(t, err)
 			return beaconState.HashTreeRoot(context.Background())
 		})

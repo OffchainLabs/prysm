@@ -275,12 +275,12 @@ func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex
 	offset := (round % 16) * 2
 	randomValue := uint64(binary.LittleEndian.Uint16(random[offset : offset+2])) // 16-bit draw per spec
 
-	val, err := st.ValidatorAtIndex(idx)
+	val, err := st.ValidatorAtIndexReadOnly(idx)
 	if err != nil {
 		return false, errors.Wrapf(err, "validator %d", idx)
 	}
 
-	return val.EffectiveBalance*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue, nil
+	return val.EffectiveBalance()*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue, nil
 }
 
 // validIndexedPayloadAttestation verifies the signature of an indexed payload attestation.

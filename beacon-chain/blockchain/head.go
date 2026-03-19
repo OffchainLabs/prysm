@@ -65,9 +65,15 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	var full bool
 	var err error
 	if headState.Version() >= version.Gloas {
-		full, err = headState.IsParentBlockFull()
+		gloasFirstSlot, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
 		if err != nil {
-			return errors.Wrap(err, "could not determine if head is full or not")
+			return errors.Wrap(err, "could not compute gloas first slot")
+		}
+		if headState.Slot() > gloasFirstSlot {
+			full, err = headState.IsParentBlockFull()
+			if err != nil {
+				return errors.Wrap(err, "could not determine if head is full or not")
+			}
 		}
 	}
 

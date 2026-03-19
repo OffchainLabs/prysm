@@ -127,7 +127,6 @@ type ReadOnlyValidator interface {
 	GetWithdrawalCredentials() []byte
 	Copy() *ethpb.Validator
 	Slashed() bool
-	IsNil() bool
 	HasETH1WithdrawalCredentials() bool
 	HasCompoundingWithdrawalCredentials() bool
 	HasExecutionWithdrawalCredentials() bool

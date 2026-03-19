@@ -192,6 +192,33 @@ func (b *BeaconState) builderPendingBalanceToWithdraw(builderIndex primitives.Bu
 	return total
 }
 
+// BuilderPendingBalanceToWithdraw returns the total pending balance to withdraw for a builder.
+//
+//	<spec fn="get_pending_balance_to_withdraw_for_builder" fork="gloas" hash="a5d10dc1">
+//	def get_pending_balance_to_withdraw_for_builder(
+//	    state: BeaconState, builder_index: BuilderIndex
+//	) -> Gwei:
+//	    return sum(
+//	        withdrawal.amount
+//	        for withdrawal in state.builder_pending_withdrawals
+//	        if withdrawal.builder_index == builder_index
+//	    ) + sum(
+//	        payment.withdrawal.amount
+//	        for payment in state.builder_pending_payments
+//	        if payment.withdrawal.builder_index == builder_index
+//	    )
+//	</spec>
+func (b *BeaconState) BuilderPendingBalanceToWithdraw(builderIndex primitives.BuilderIndex) (uint64, error) {
+	if b.version < version.Gloas {
+		return 0, errNotSupported("BuilderPendingBalanceToWithdraw", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.builderPendingBalanceToWithdraw(builderIndex), nil
+}
+
 // BuilderPendingPayments returns a copy of the builder pending payments.
 func (b *BeaconState) BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error) {
 	if b.version < version.Gloas {

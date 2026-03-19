@@ -49,6 +49,7 @@ type Server struct {
 	Ctx                              context.Context
 	PayloadIDCache                   *cache.PayloadIDCache
 	TrackedValidatorsCache           *cache.TrackedValidatorsCache
+	ProposerPreferencesCache         *cache.ProposerPreferencesCache
 	executionPayloadEnvelopeMu       sync.RWMutex
 	executionPayloadEnvelope         *ethpb.ExecutionPayloadEnvelope
 	HeadFetcher                      blockchain.HeadFetcher

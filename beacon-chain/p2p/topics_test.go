@@ -39,6 +39,10 @@ func TestAllTopics(t *testing.T) {
 		digest := params.ForkDigest(f)
 		expected = append(expected, "/eth2/"+hex.EncodeToString(digest[:])+"/beacon_block/ssz_snappy")
 	}
+	if cfg.GloasForkEpoch < cfg.FarFutureEpoch {
+		gloasDigest := params.ForkDigest(cfg.GloasForkEpoch)
+		expected = append(expected, "/eth2/"+hex.EncodeToString(gloasDigest[:])+"/proposer_preferences/ssz_snappy")
+	}
 	for _, e := range expected {
 		_, ok := tops[e]
 		require.Equal(t, true, ok)
