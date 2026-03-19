@@ -123,6 +123,11 @@ func (s *Store) LegacyGenesisState(ctx context.Context) (state.BeaconState, erro
 func (s *Store) SaveState(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveState")
 	defer span.End()
+
+	if features.Get().EnableStateDiff && s.stateDiffCache != nil {
+		return s.saveStateByDiff(ctx, st)
+	}
+
 	ok, err := s.isStateValidatorMigrationOver()
 	if err != nil {
 		return err
@@ -1098,12 +1103,16 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 		return nil, ErrSlotBeforeOffset
 	}
 
+	if computeLevel(s.getOffset(), slot) == -1 {
+		return nil, ErrNotFoundState
+	}
+
 	st, err := s.stateByDiff(ctx, slot)
 	if err != nil {
 		return nil, err
 	}
 	if st == nil || st.IsNil() {
-		return nil, errors.Wrap(ErrNotFoundState, "state not found")
+		return nil, ErrNotFoundState
 	}
 
 	if blk == nil {
@@ -1153,5 +1162,33 @@ func (s *Store) hasStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 	}
 
 	stateLvl := computeLevel(s.getOffset(), slot)
-	return stateLvl != -1, nil
+	if stateLvl == -1 {
+		return false, nil
+	}
+
+	if !s.stateDiffCache.levelHasData(stateLvl) {
+		return false, nil
+	}
+
+	hasState := false
+	err = s.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return errors.New("state diff bucket not found")
+		}
+
+		if stateLvl == 0 {
+			hasState = bucket.Get(makeKeyForStateDiffTree(stateLvl, uint64(slot))) != nil
+			return nil
+		}
+
+		hasState = hasCompleteDiffAtLevelSlot(bucket, stateLvl, uint64(slot))
+
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+	return hasState, nil
 }

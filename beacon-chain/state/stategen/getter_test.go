@@ -226,7 +226,7 @@ func TestStateByRoot_FallsBackToReplayOnNotFoundStateFromDirectRead(t *testing.T
 	ib10, err := blt.NewSignedBeaconBlock(blk10)
 	require.NoError(t, err)
 
-	st10, err = executeStateTransitionStateGen(ctx, st10, ib10)
+	st10, err = executeStateTransitionStateGen(ctx, st10, ib10, nil)
 	require.NoError(t, err)
 	st10Root, err := st10.HashTreeRoot(ctx)
 	require.NoError(t, err)
