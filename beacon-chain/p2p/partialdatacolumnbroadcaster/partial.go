@@ -72,24 +72,17 @@ type PartialColumnBroadcaster struct {
 	peerFeedback      func(topic string, peer peer.ID, kind pubsub.PeerFeedbackKind) error
 	publishPartialCol func(topic string, groupID []byte, col *blocks.PartialDataColumn) error
 	stop              chan struct{}
-
-	callbacks ColumnCallbacks
-
+	callbacks         ColumnCallbacks
 	// map topic -> *pubsub.Topic
-	topics map[string]*pubsub.Topic
-
+	topics                           map[string]*pubsub.Topic
 	concurrentValidatorSemaphore     chan struct{}
 	concurrentHeaderHandlerSemaphore chan struct{}
-
 	// map topic -> map[groupID]PartialColumnVerifier
 	partialMsgStore map[string]map[string]*verification.PartialColumnVerifier
-
-	groupTTL map[string]int8
-
+	groupTTL        map[string]int8
 	// validHeaderCache caches validated headers by group ID (works across topics)
 	validHeaderCache map[string]*ethpb.PartialDataColumnHeader
-
-	incomingReq chan request
+	incomingReq      chan request
 }
 
 type requestKind uint8
