@@ -34,6 +34,7 @@ type Forkchoicer interface {
 // StateByRooter describes a stategen-ish type that can produce arbitrary states by their root
 type StateByRooter interface {
 	StateByRoot(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
+	StateByRootIfCachedNoCopy(blockRoot [32]byte) state.ReadOnlyBeaconState
 }
 
 // HeadStateProvider describes a type that can provide access to the current head state and related methods.
