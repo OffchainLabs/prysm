@@ -295,9 +295,7 @@ func (s *Service) Start() {
 	go s.verifierRoutine()
 	go s.kzgVerifierRoutine()
 
-	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
-		go broadcaster.Start(&partialColumnCallbacks{s: s})
-	}
+	s.startPartialColumnBroadcaster()
 
 	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
@@ -328,6 +326,12 @@ func (s *Service) Start() {
 		log.WithError(err).Error("Failed to maintain custody info")
 	}
 
+}
+
+func (s *Service) startPartialColumnBroadcaster() {
+	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+		go broadcaster.Start(&partialColumnCallbacks{s: s})
+	}
 }
 
 // Stop the regular sync service.
