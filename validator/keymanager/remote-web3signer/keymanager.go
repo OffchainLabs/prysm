@@ -438,7 +438,7 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	case *validatorpb.SignRequest_ExecutionPayloadEnvelope:
 		// TODO: Implement execution payload envelope signing for web3signer.
 		return nil, fmt.Errorf("web3signer execution payload envelope signing not yet implemented")
-	case *validatorpb.SignRequest_ProposerPreferences:
+	case *validatorpb.SignRequest_ProposerPreference:
 		// TODO: Implement proposer preferences signing for web3signer.
 		return nil, fmt.Errorf("web3signer proposer preferences signing not yet implemented")
 

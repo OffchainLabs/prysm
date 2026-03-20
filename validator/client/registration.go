@@ -120,7 +120,7 @@ func (v *validator) signProposerPreferences(
 		PublicKey:       pubkey[:],
 		SigningRoot:     r[:],
 		SignatureDomain: domain,
-		Object:          &validatorpb.SignRequest_ProposerPreferences{ProposerPreferences: pref},
+		Object:          &validatorpb.SignRequest_ProposerPreference{ProposerPreference: pref},
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "could not sign proposer preferences")
