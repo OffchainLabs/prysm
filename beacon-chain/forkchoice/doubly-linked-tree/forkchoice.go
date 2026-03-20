@@ -562,17 +562,17 @@ func (f *ForkChoice) CachedHeadRoot() [32]byte {
 
 // FinalizedPayloadBlockHash returns the hash of the payload at the finalized checkpoint
 func (f *ForkChoice) FinalizedPayloadBlockHash() [32]byte {
-	return f.store.latestHashForRoot(f.FinalizedCheckpoint().Root)
+	return f.store.checkpointPayloadHashForRoot(f.FinalizedCheckpoint().Root)
 }
 
 // JustifiedPayloadBlockHash returns the hash of the payload at the justified checkpoint
 func (f *ForkChoice) JustifiedPayloadBlockHash() [32]byte {
-	return f.store.latestHashForRoot(f.JustifiedCheckpoint().Root)
+	return f.store.checkpointPayloadHashForRoot(f.JustifiedCheckpoint().Root)
 }
 
 // UnrealizedJustifiedPayloadBlockHash returns the hash of the payload at the unrealized justified checkpoint
 func (f *ForkChoice) UnrealizedJustifiedPayloadBlockHash() [32]byte {
-	return f.store.latestHashForRoot(f.store.unrealizedJustifiedCheckpoint.Root)
+	return f.store.checkpointPayloadHashForRoot(f.store.unrealizedJustifiedCheckpoint.Root)
 }
 
 // ForkChoiceDump returns a full dump of forkchoice.
