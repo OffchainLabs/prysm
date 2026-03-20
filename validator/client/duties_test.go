@@ -404,3 +404,150 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		require.NoError(t, v.checkDependentRoots(ctx, head))
 	})
 }
+
+func TestUpdateDutiesSplit(t *testing.T) {
+	epoch := primitives.Epoch(5)
+
+	setup := func(t *testing.T) (*validator, *validatormock.MockValidatorClient, keypair) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.AltairForkEpoch = 0
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		ctrl := gomock.NewController(t)
+		client := validatormock.NewMockValidatorClient(ctrl)
+		keys := randKeypair(t)
+		v := &validator{
+			validatorClient: client,
+			duties:          &dutyStore{},
+			pubkeyToStatus: map[pubkey]*validatorStatus{
+				keys.pub: {
+					publicKey: keys.pub[:],
+					status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE},
+					index:     42,
+				},
+			},
+		}
+		return v, client, keys
+	}
+
+	t.Run("OK", func(t *testing.T) {
+		v, client, keys := setup(t)
+		spe := params.BeaconConfig().SlotsPerEpoch
+
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch, gomock.Any()).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: make([]byte, 32),
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: keys.pub[:], ValidatorIndex: 42,
+				Slot: primitives.Slot(epoch)*spe + 3, CommitteeIndex: 1, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.AttesterDutiesResponse{
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: keys.pub[:], ValidatorIndex: 42,
+				Slot: primitives.Slot(epoch+1)*spe + 7, CommitteeIndex: 2, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(&ethpb.ProposerDutiesResponse{
+			DependentRoot: make([]byte, 32),
+			Duties:        []*ethpb.ProposerDutyV2{{Pubkey: keys.pub[:], ValidatorIndex: 42, Slot: primitives.Slot(epoch)*spe + 1}},
+		}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(&ethpb.ProposerDutiesResponse{}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch, gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{
+			Duties: []*ethpb.SyncCommitteeDuty{{Pubkey: keys.pub[:], ValidatorIndex: 42}},
+		}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil)
+		client.EXPECT().PTCDuties(gomock.Any(), epoch, gomock.Any()).Return(&ethpb.PTCDutiesResponse{
+			Duties: []*ethpb.PTCDuty{{Pubkey: keys.pub[:], ValidatorIndex: 42, Slot: primitives.Slot(epoch)*spe + 5}},
+		}, nil)
+
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub}))
+
+		// Current epoch: attester + proposer + sync + PTC.
+		current := v.duties.CurrentEpochDuties()
+		require.Equal(t, 1, len(current))
+		for _, d := range current {
+			assert.Equal(t, primitives.Slot(epoch)*spe+3, d.AttesterSlot)
+			require.Equal(t, 1, len(d.ProposerSlots))
+			assert.Equal(t, primitives.Slot(epoch)*spe+1, d.ProposerSlots[0])
+			assert.Equal(t, true, d.IsSyncCommittee)
+			require.Equal(t, 1, len(d.PtcSlots))
+			assert.Equal(t, primitives.Slot(epoch)*spe+5, d.PtcSlots[0])
+		}
+
+		// Next epoch: attester only — no PTC (not stable for next epoch).
+		next := v.duties.NextEpochDuties()
+		require.Equal(t, 1, len(next))
+		for _, d := range next {
+			assert.Equal(t, primitives.Slot(epoch+1)*spe+7, d.AttesterSlot)
+			assert.Equal(t, 0, len(d.PtcSlots))
+			assert.Equal(t, false, d.IsSyncCommittee)
+		}
+
+		// Duty store accessors.
+		assert.DeepEqual(t, []primitives.Slot{primitives.Slot(epoch)*spe + 1}, v.duties.ProposerSlots(42))
+		assert.DeepEqual(t, []primitives.Slot{primitives.Slot(epoch)*spe + 5}, v.duties.PtcSlots(42))
+		assert.Equal(t, true, v.duties.IsSyncCommittee(42))
+		assert.Equal(t, false, v.duties.IsNextSyncCommittee(42))
+	})
+
+	t.Run("attester error clears duties", func(t *testing.T) {
+		v, client, keys := setup(t)
+
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch, gomock.Any()).Return(nil, errors.New("attester fail"))
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch+1, gomock.Any()).Return(nil, nil).AnyTimes()
+		client.EXPECT().ProposerDuties(gomock.Any(), gomock.Any()).Return(&ethpb.ProposerDutiesResponse{}, nil).AnyTimes()
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).AnyTimes()
+		client.EXPECT().PTCDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil).AnyTimes()
+
+		err := v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub})
+		require.ErrorContains(t, "attester fail", err)
+		assert.Equal(t, false, v.duties.IsInitialized())
+	})
+
+	t.Run("proposer error clears duties", func(t *testing.T) {
+		v, client, keys := setup(t)
+
+		client.EXPECT().AttesterDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.AttesterDutiesResponse{}, nil).AnyTimes()
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(nil, errors.New("proposer fail"))
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(nil, nil).AnyTimes()
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).AnyTimes()
+		client.EXPECT().PTCDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil).AnyTimes()
+
+		err := v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub})
+		require.ErrorContains(t, "proposer fail", err)
+		assert.Equal(t, false, v.duties.IsInitialized())
+	})
+
+	t.Run("PTC error is non-fatal", func(t *testing.T) {
+		v, client, keys := setup(t)
+		spe := params.BeaconConfig().SlotsPerEpoch
+
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch, gomock.Any()).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: make([]byte, 32),
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: keys.pub[:], ValidatorIndex: 42,
+				Slot: primitives.Slot(epoch)*spe + 3, CommitteeIndex: 1, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.AttesterDutiesResponse{}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(&ethpb.ProposerDutiesResponse{DependentRoot: make([]byte, 32)}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(&ethpb.ProposerDutiesResponse{}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).AnyTimes()
+		client.EXPECT().PTCDuties(gomock.Any(), epoch, gomock.Any()).Return(nil, errors.New("ptc fail"))
+
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub}))
+		assert.Equal(t, true, v.duties.IsInitialized())
+		assert.Equal(t, 0, len(v.duties.PtcSlots(42)))
+	})
+
+	t.Run("no known indices clears duties", func(t *testing.T) {
+		v, _, keys := setup(t)
+		v.pubkeyToStatus = map[pubkey]*validatorStatus{}
+
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub}))
+		assert.Equal(t, false, v.duties.IsInitialized())
+	})
+}
