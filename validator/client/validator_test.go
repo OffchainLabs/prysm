@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -2276,9 +2277,12 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			},
 		})
 
+		// DomainData is cached after the first call, so subsequent subtests
+		// using the same epoch will hit the cache. Use AnyTimes() here.
 		client.EXPECT().
 			DomainData(gomock.Any(), gomock.Any()).
-			Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+			Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
+			AnyTimes()
 
 		prefs := v.buildProposerPreferences(t.Context(), km, 0)
 		require.Equal(t, 1, len(prefs))
@@ -2287,6 +2291,139 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		require.Equal(t, uint64(42000000), prefs[0].Message.GasLimit)
 		require.DeepEqual(t, feeRecipient[:], prefs[0].Message.FeeRecipient)
 		require.NotNil(t, prefs[0].Signature)
+	})
+
+	t.Run("multiple proposer slots produces multiple preferences", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot1 := params.BeaconConfig().SlotsPerEpoch + 1
+		slot2 := params.BeaconConfig().SlotsPerEpoch + 5
+
+		v.duties = &dutyStore{}
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{slot1, slot2},
+				},
+			},
+		})
+
+		// DomainData calls served from cache (populated in prior subtest).
+		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		require.Equal(t, 2, len(prefs))
+
+		gotSlots := []primitives.Slot{prefs[0].Message.ProposalSlot, prefs[1].Message.ProposalSlot}
+		slices.Sort(gotSlots)
+		require.Equal(t, slot1, gotSlots[0])
+		require.Equal(t, slot2, gotSlots[1])
+	})
+
+	t.Run("exited validator with proposer slots is skipped", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		v.duties = &dutyStore{}
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_EXITED,
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_EXITED,
+					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+				},
+			},
+		})
+
+		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		require.Equal(t, 0, len(prefs))
+	})
+
+	t.Run("per-validator config overrides defaults", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		customFeeRecipient := feeRecipientFromString(t, "0x2222222222222222222222222222222222222222")
+		v.proposerSettings = &proposer.Settings{
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{
+					FeeRecipient: feeRecipient,
+				},
+				BuilderConfig: &proposer.BuilderConfig{
+					Enabled:  true,
+					GasLimit: 42000000,
+				},
+			},
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				kp.pub: {
+					FeeRecipientConfig: &proposer.FeeRecipientConfig{
+						FeeRecipient: customFeeRecipient,
+					},
+					BuilderConfig: &proposer.BuilderConfig{
+						Enabled:  true,
+						GasLimit: 99000000,
+					},
+				},
+			},
+		}
+
+		v.duties = &dutyStore{}
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+				},
+			},
+		})
+
+		// DomainData calls served from cache (populated in prior subtest).
+		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		require.Equal(t, 1, len(prefs))
+		require.DeepEqual(t, customFeeRecipient[:], prefs[0].Message.FeeRecipient)
+		require.Equal(t, uint64(99000000), prefs[0].Message.GasLimit)
+
+		// Restore default settings for other subtests.
+		v.proposerSettings = &proposer.Settings{
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{
+					FeeRecipient: feeRecipient,
+				},
+				BuilderConfig: &proposer.BuilderConfig{
+					Enabled:  true,
+					GasLimit: 42000000,
+				},
+			},
+		}
 	})
 }
 
