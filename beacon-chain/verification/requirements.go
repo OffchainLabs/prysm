@@ -37,6 +37,17 @@ const (
 	RequireEnvelopeSlotMatchesBlock
 	RequireBuilderSignatureValid
 
+	// Execution payload bid specific.
+	RequireBidCurrentOrNextSlot
+	RequireBidBuilderActive
+	RequireBidExecutionPaymentNonZero
+	RequireBidFeeRecipientMatches
+	RequireBidGasLimitMatches
+	RequireBidParentBlockRootSeen
+	RequireBidParentBlockHashValid
+	RequireBidBuilderCanCover
+	RequireBidSignatureValid
+
 	// Signed proposer preferences specific.
 	RequireProposerPreferencesNextEpoch
 	RequireProposerPreferencesProposalSlotValid

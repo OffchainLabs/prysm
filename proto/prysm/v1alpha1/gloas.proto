@@ -493,6 +493,7 @@ message BlindedExecutionPayloadEnvelope {
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
   bytes state_root = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes parent_block_hash = 7 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // SignedBlindedExecutionPayloadEnvelope wraps a blinded execution payload

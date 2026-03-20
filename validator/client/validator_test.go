@@ -877,11 +877,10 @@ func TestIsSyncCommitteeAggregator_OK(t *testing.T) {
 				},
 			).Return(&ethpb.SyncSubcommitteeIndexResponse{}, nil /*err*/)
 
-			aggregator, err := v.isSyncCommitteeAggregator(t.Context(), slot, map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{
-				0: bytesutil.ToBytes48(pubKey),
-			})
+			pk48 := bytesutil.ToBytes48(pubKey)
+			aggregators, err := v.aggSelector.SyncCommitteeAggregators(t.Context(), slot, [][fieldparams.BLSPubkeyLength]byte{pk48})
 			require.NoError(t, err)
-			require.Equal(t, false, aggregator[0])
+			require.Equal(t, 0, len(aggregators))
 
 			c := params.BeaconConfig().Copy()
 			c.TargetAggregatorsPerSyncSubcommittee = math.MaxUint64
@@ -900,11 +899,10 @@ func TestIsSyncCommitteeAggregator_OK(t *testing.T) {
 				},
 			).Return(&ethpb.SyncSubcommitteeIndexResponse{Indices: []primitives.CommitteeIndex{0}}, nil /*err*/)
 
-			aggregator, err = v.isSyncCommitteeAggregator(t.Context(), slot, map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{
-				0: bytesutil.ToBytes48(pubKey),
-			})
+			aggregators, err = v.aggSelector.SyncCommitteeAggregators(t.Context(), slot, [][fieldparams.BLSPubkeyLength]byte{pk48})
 			require.NoError(t, err)
-			require.Equal(t, true, aggregator[0])
+			require.Equal(t, 1, len(aggregators))
+			require.DeepEqual(t, pk48, aggregators[0])
 		})
 	}
 }
@@ -912,64 +910,18 @@ func TestIsSyncCommitteeAggregator_OK(t *testing.T) {
 func TestIsSyncCommitteeAggregator_Distributed_OK(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
-			params.SetupTestConfigCleanup(t)
-			v, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
+			v, _, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 
-			v.distributed = true
+			v.aggSelector = newDistributedSelector(v)
 			slot := primitives.Slot(1)
 			pubKey := validatorKey.PublicKey().Marshal()
 
-			m.validatorClient.EXPECT().SyncSubcommitteeIndex(
-				gomock.Any(), // ctx
-				&ethpb.SyncSubcommitteeIndexRequest{
-					PublicKey: validatorKey.PublicKey().Marshal(),
-					Slot:      1,
-				},
-			).Return(&ethpb.SyncSubcommitteeIndexResponse{}, nil /*err*/)
-
-			aggregator, err := v.isSyncCommitteeAggregator(t.Context(), slot, map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{
-				0: bytesutil.ToBytes48(pubKey),
-			})
+			pk48 := bytesutil.ToBytes48(pubKey)
+			input := [][fieldparams.BLSPubkeyLength]byte{pk48, pk48}
+			aggregators, err := v.aggSelector.SyncCommitteeAggregators(t.Context(), slot, input)
 			require.NoError(t, err)
-			require.Equal(t, false, aggregator[0])
-
-			c := params.BeaconConfig().Copy()
-			c.TargetAggregatorsPerSyncSubcommittee = math.MaxUint64
-			params.OverrideBeaconConfig(c)
-
-			m.validatorClient.EXPECT().DomainData(
-				gomock.Any(), // ctx
-				gomock.Any(), // epoch
-			).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil /*err*/).Times(2)
-
-			m.validatorClient.EXPECT().SyncSubcommitteeIndex(
-				gomock.Any(), // ctx
-				&ethpb.SyncSubcommitteeIndexRequest{
-					PublicKey: validatorKey.PublicKey().Marshal(),
-					Slot:      1,
-				},
-			).Return(&ethpb.SyncSubcommitteeIndexResponse{Indices: []primitives.CommitteeIndex{0}}, nil /*err*/)
-
-			sig, err := v.signSyncSelectionData(t.Context(), bytesutil.ToBytes48(pubKey), 0, slot)
-			require.NoError(t, err)
-
-			selection := iface.SyncCommitteeSelection{
-				SelectionProof:    sig,
-				Slot:              1,
-				ValidatorIndex:    123,
-				SubcommitteeIndex: 0,
-			}
-			m.validatorClient.EXPECT().AggregatedSyncSelections(
-				gomock.Any(), // ctx
-				[]iface.SyncCommitteeSelection{selection},
-			).Return([]iface.SyncCommitteeSelection{selection}, nil)
-
-			aggregator, err = v.isSyncCommitteeAggregator(t.Context(), slot, map[primitives.ValidatorIndex][fieldparams.BLSPubkeyLength]byte{
-				123: bytesutil.ToBytes48(pubKey),
-			})
-			require.NoError(t, err)
-			require.Equal(t, true, aggregator[123])
+			require.DeepEqual(t, input, aggregators)
 		})
 	}
 }
