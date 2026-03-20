@@ -326,11 +326,12 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 			stateNotifier: chain.StateNotifier(),
 			initialSync:   &mockSync.Sync{IsSyncing: false},
 		},
-		rateLimiter:              newRateLimiter(p1),
-		clockWaiter:              cw,
-		chainStarted:             abool.New(),
-		subHandler:               newSubTopicHandler(),
-		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		rateLimiter:                     newRateLimiter(p1),
+		clockWaiter:                     cw,
+		chainStarted:                    abool.New(),
+		subHandler:                      newSubTopicHandler(),
+		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
+		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
 	}
 	markInitSyncComplete(t, r)
 	clock := startup.NewClockSynchronizer()
@@ -943,12 +944,13 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 			initialSync:   &mockSync.Sync{IsSyncing: false},
 		},
 
-		ctx:                      ctx,
-		rateLimiter:              newRateLimiter(p1),
-		clockWaiter:              cw,
-		chainStarted:             abool.New(),
-		subHandler:               newSubTopicHandler(),
-		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		ctx:                             ctx,
+		rateLimiter:                     newRateLimiter(p1),
+		clockWaiter:                     cw,
+		chainStarted:                    abool.New(),
+		subHandler:                      newSubTopicHandler(),
+		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
+		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
 	}
 	markInitSyncComplete(t, r)
 	clock := startup.NewClockSynchronizer()

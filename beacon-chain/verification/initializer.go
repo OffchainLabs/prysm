@@ -34,6 +34,7 @@ type Forkchoicer interface {
 // StateByRooter describes a stategen-ish type that can produce arbitrary states by their root
 type StateByRooter interface {
 	StateByRoot(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
+	StateByRootIfCachedNoCopy(blockRoot [32]byte) state.ReadOnlyBeaconState
 }
 
 // HeadStateProvider describes a type that can provide access to the current head state and related methods.
@@ -105,6 +106,16 @@ func (ini *Initializer) NewSignedProposerPreferencesVerifier(p *ethpb.SignedProp
 		sharedResources: ini.shared,
 		results:         newResults(reqs...),
 		p:               p,
+	}
+}
+
+// NewExecutionPayloadBidVerifier creates an ExecutionPayloadBidVerifier for a single signed execution payload bid
+// with the given set of requirements.
+func (ini *Initializer) NewExecutionPayloadBidVerifier(b interfaces.ROSignedExecutionPayloadBid, reqs []Requirement) *BidVerifier {
+	return &BidVerifier{
+		sharedResources: ini.shared,
+		results:         newResults(reqs...),
+		b:               b,
 	}
 }
 

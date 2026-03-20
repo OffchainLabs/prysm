@@ -106,6 +106,12 @@ message SignedProposerPreferences {
   bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
+// SubmitSignedProposerPreferencesRequest wraps multiple signed proposer
+// preferences for batch submission via gRPC.
+message SubmitSignedProposerPreferencesRequest {
+  repeated SignedProposerPreferences signed_proposer_preferences = 1;
+}
+
 // PayloadAttestationData contains the core data for Payload Timeliness
 // Committee (PTC) attestations.
 //
@@ -487,6 +493,7 @@ message BlindedExecutionPayloadEnvelope {
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
   bytes state_root = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes parent_block_hash = 7 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // SignedBlindedExecutionPayloadEnvelope wraps a blinded execution payload

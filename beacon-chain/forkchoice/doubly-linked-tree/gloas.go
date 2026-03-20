@@ -163,17 +163,18 @@ func (s *Store) parentHash(pn *PayloadNode) [32]byte {
 	return fullParent.node.blockHash
 }
 
-// latestHashForRoot returns the latest payload hash for the given block root.
-func (s *Store) latestHashForRoot(root [32]byte) [32]byte {
-	// try to get the full node first
-	fn := s.fullNodeByRoot[root]
-	if fn != nil {
-		return fn.node.blockHash
-	}
+// checkpointPayloadHashForRoot returns the payload hash associated with a checkpoint root.
+// Before Gloas, there is no empty/full ambiguity, so the checkpoint payload hash is the
+// block's own payload hash. In Gloas, a checkpoint finalizes a beacon block root, not a
+// payload, and the child block that disambiguates full vs empty is not itself finalized,
+// so we return the latest known parent payload hash instead.
+func (s *Store) checkpointPayloadHashForRoot(root [32]byte) [32]byte {
 	en := s.emptyNodeByRoot[root]
 	if en == nil {
-		// This should not happen
 		return [32]byte{}
+	}
+	if slots.ToEpoch(en.node.slot) < params.BeaconConfig().GloasForkEpoch {
+		return en.node.blockHash
 	}
 	return s.parentHash(en)
 }
