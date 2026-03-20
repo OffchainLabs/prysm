@@ -170,6 +170,10 @@ var (
 		Name: "txs_per_slot_count",
 		Help: "Count the number of txs per slot",
 	})
+	consolidationRequestCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "consolidation_request_count",
+		Help: "Count the number of consolidation requests",
+	})
 	onBlockProcessingTime = promauto.NewSummary(prometheus.SummaryOpts{
 		Name: "on_block_processing_milliseconds",
 		Help: "Total time in milliseconds to complete a call to postBlockProcess()",
