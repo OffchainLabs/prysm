@@ -714,6 +714,11 @@ func TestForkchoice_UpdateJustifiedBalances(t *testing.T) {
 }
 
 func TestForkChoice_UnrealizedJustifiedPayloadBlockHash(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 100
+	params.OverrideBeaconConfig(cfg)
+
 	ctx := t.Context()
 	f := setup(0, 0)
 
@@ -722,22 +727,41 @@ func TestForkChoice_UnrealizedJustifiedPayloadBlockHash(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
-	// A checkpoint finalizes a beacon root, not a payload. The only provably
-	// finalized EL hash is the parent hash — the EL block the checkpoint's
-	// beacon block built on. For 'a' at slot 0, the parent is genesis (zeroes).
+	// Pre-Gloas there is no empty/full ambiguity, so the checkpoint payload hash
+	// is the block's own payload hash.
 	f.store.unrealizedJustifiedCheckpoint.Root = [32]byte{'a'}
 	got := f.UnrealizedJustifiedPayloadBlockHash()
-	require.Equal(t, [32]byte{}, got)
+	require.Equal(t, [32]byte{'A'}, got)
 
 	// Insert block 'b' at slot 1 with blockHash 'B', parent is 'a'.
 	st, roblock, err = prepareForkchoiceState(ctx, 1, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
-	// For 'b', the parent hash is 'A' (block 'a's full node hash).
+	// Pre-Gloas the checkpoint payload hash is still the block's own payload hash.
 	f.store.unrealizedJustifiedCheckpoint.Root = [32]byte{'b'}
 	got = f.UnrealizedJustifiedPayloadBlockHash()
-	require.Equal(t, [32]byte{'A'}, got)
+	require.Equal(t, [32]byte{'B'}, got)
+}
+
+func TestForkChoice_FinalizedAndJustifiedPayloadBlockHash_PreGloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 100
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	f := setup(0, 0)
+
+	st, roblock, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	f.store.finalizedCheckpoint.Root = [32]byte{'a'}
+	f.store.justifiedCheckpoint.Root = [32]byte{'a'}
+
+	require.Equal(t, [32]byte{'A'}, f.FinalizedPayloadBlockHash())
+	require.Equal(t, [32]byte{'A'}, f.JustifiedPayloadBlockHash())
 }
 
 func TestForkChoiceIsViableForCheckpoint(t *testing.T) {
