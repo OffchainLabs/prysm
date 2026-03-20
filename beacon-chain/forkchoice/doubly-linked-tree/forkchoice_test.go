@@ -108,6 +108,33 @@ func TestForkChoice_UpdateBalancesPositiveChange(t *testing.T) {
 	assert.Equal(t, uint64(30), s.fullNodeByRoot[indexToHash(3)].balance)
 }
 
+func TestForkChoice_UpdateBalancesSameSlot(t *testing.T) {
+	f := setup(0, 0)
+	ctx := t.Context()
+	st, roblock, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	s := f.store
+	s.fullNodeByRoot[indexToHash(1)].balance = 100
+	s.fullNodeByRoot[indexToHash(2)].balance = 100
+
+	f.balances = []uint64{100, 100}
+	f.votes = []Vote{
+		{indexToHash(1), indexToHash(1), 1, 1, true, true},
+		{indexToHash(2), indexToHash(2), 2, 2, true, true},
+	}
+
+	// Balance changes with same slot should still update node balances.
+	f.justifiedBalances = []uint64{50, 200}
+	require.NoError(t, f.updateBalances())
+	assert.Equal(t, uint64(50), s.fullNodeByRoot[indexToHash(1)].balance)
+	assert.Equal(t, uint64(200), s.fullNodeByRoot[indexToHash(2)].balance)
+}
+
 func TestForkChoice_UpdateBalancesNegativeChange(t *testing.T) {
 	f := setup(0, 0)
 	ctx := t.Context()
