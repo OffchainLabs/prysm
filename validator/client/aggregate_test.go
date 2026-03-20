@@ -191,16 +191,19 @@ func TestSubmitAggregateAndProof_Distributed(t *testing.T) {
 				AttesterSlot:   slot,
 			})
 
-			validator.distributed = true
-			validator.attSelections = make(map[attSelectionKey]iface.BeaconCommitteeSelection)
-			validator.attSelections[attSelectionKey{
-				slot:  slot,
-				index: 123,
-			}] = iface.BeaconCommitteeSelection{
-				SelectionProof: make([]byte, 96),
-				Slot:           slot,
-				ValidatorIndex: validatorIdx,
+			validator.pubkeyToStatus[pubKey] = &validatorStatus{
+				publicKey: validatorKey.PublicKey().Marshal(),
+				index:     validatorIdx,
 			}
+			dvProvider := newDistributedSelector(validator)
+			dvProvider.attSelections = map[attSelectionKey]iface.BeaconCommitteeSelection{
+				{slot: slot, index: 123}: {
+					SelectionProof: make([]byte, 96),
+					Slot:           slot,
+					ValidatorIndex: validatorIdx,
+				},
+			}
+			validator.aggSelector = dvProvider
 
 			m.validatorClient.EXPECT().SubmitAggregateSelectionProof(
 				gomock.Any(), // ctx
