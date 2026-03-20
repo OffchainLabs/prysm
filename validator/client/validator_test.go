@@ -359,24 +359,21 @@ func TestRolesAt_OK(t *testing.T) {
 			v, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 
-			v.duties = &ethpb.ValidatorDutiesContainer{
-				CurrentEpochDuties: []*ethpb.ValidatorDuty{
-					{
-						CommitteeIndex:  1,
-						AttesterSlot:    1,
-						PublicKey:       validatorKey.PublicKey().Marshal(),
-						IsSyncCommittee: true,
-					},
-				},
-				NextEpochDuties: []*ethpb.ValidatorDuty{
-					{
-						CommitteeIndex:  1,
-						AttesterSlot:    1,
-						PublicKey:       validatorKey.PublicKey().Marshal(),
-						IsSyncCommittee: true,
-					},
-				},
+			v.duties = testDutyStore(&ethpb.ValidatorDuty{
+				CommitteeIndex:  1,
+				AttesterSlot:    1,
+				PublicKey:       validatorKey.PublicKey().Marshal(),
+				IsSyncCommittee: true,
+				PtcSlots:        []primitives.Slot{1},
+			})
+			nextPk := bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())
+			v.duties.nextDuties[nextPk] = &ethpb.ValidatorDuty{
+				CommitteeIndex:  1,
+				AttesterSlot:    1,
+				PublicKey:       validatorKey.PublicKey().Marshal(),
+				IsSyncCommittee: true,
 			}
+			v.duties.syncNextMap[v.duties.nextDuties[nextPk].ValidatorIndex] = true
 
 			m.validatorClient.EXPECT().DomainData(
 				gomock.Any(), // ctx
@@ -394,29 +391,26 @@ func TestRolesAt_OK(t *testing.T) {
 			roleMap, err := v.RolesAt(t.Context(), 1)
 			require.NoError(t, err)
 
-			assert.Equal(t, iface.RoleAttester, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][0])
-			assert.Equal(t, iface.RoleAggregator, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][1])
-			assert.Equal(t, iface.RoleSyncCommittee, roleMap[bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())][2])
+			pk := bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())
+			assert.Equal(t, iface.RoleAttester, roleMap[pk][0])
+			assert.Equal(t, iface.RoleAggregator, roleMap[pk][1])
+			assert.Equal(t, iface.RoleSyncCommittee, roleMap[pk][2])
+			assert.Equal(t, iface.RolePTCMember, roleMap[pk][3])
 
 			// Test sync committee role at epoch boundary.
-			v.duties = &ethpb.ValidatorDutiesContainer{
-				CurrentEpochDuties: []*ethpb.ValidatorDuty{
-					{
-						CommitteeIndex:  1,
-						AttesterSlot:    1,
-						PublicKey:       validatorKey.PublicKey().Marshal(),
-						IsSyncCommittee: false,
-					},
-				},
-				NextEpochDuties: []*ethpb.ValidatorDuty{
-					{
-						CommitteeIndex:  1,
-						AttesterSlot:    1,
-						PublicKey:       validatorKey.PublicKey().Marshal(),
-						IsSyncCommittee: true,
-					},
-				},
+			v.duties = testDutyStore(&ethpb.ValidatorDuty{
+				CommitteeIndex:  1,
+				AttesterSlot:    1,
+				PublicKey:       validatorKey.PublicKey().Marshal(),
+				IsSyncCommittee: false,
+			})
+			v.duties.nextDuties[nextPk] = &ethpb.ValidatorDuty{
+				CommitteeIndex:  1,
+				AttesterSlot:    1,
+				PublicKey:       validatorKey.PublicKey().Marshal(),
+				IsSyncCommittee: true,
 			}
+			v.duties.syncNextMap[v.duties.nextDuties[nextPk].ValidatorIndex] = true
 
 			m.validatorClient.EXPECT().SyncSubcommitteeIndex(
 				gomock.Any(), // ctx
@@ -439,16 +433,12 @@ func TestRolesAt_DoesNotAssignProposer_Slot0(t *testing.T) {
 			v, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
 			defer finish()
 
-			v.duties = &ethpb.ValidatorDutiesContainer{
-				CurrentEpochDuties: []*ethpb.ValidatorDuty{
-					{
-						CommitteeIndex: 1,
-						AttesterSlot:   0,
-						ProposerSlots:  []primitives.Slot{0},
-						PublicKey:      validatorKey.PublicKey().Marshal(),
-					},
-				},
-			}
+			v.duties = testDutyStore(&ethpb.ValidatorDuty{
+				CommitteeIndex: 1,
+				AttesterSlot:   0,
+				ProposerSlots:  []primitives.Slot{0},
+				PublicKey:      validatorKey.PublicKey().Marshal(),
+			})
 
 			m.validatorClient.EXPECT().DomainData(
 				gomock.Any(), // ctx
@@ -554,13 +544,9 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 			client := validatormock.NewMockValidatorClient(ctrl)
 			v := validator{
 				validatorClient: client,
-				duties: &ethpb.ValidatorDutiesContainer{
-					CurrentEpochDuties: []*ethpb.ValidatorDuty{
-						{
-							CommitteeIndex: 1,
-						},
-					},
-				},
+				duties: testDutyStore(&ethpb.ValidatorDuty{
+					CommitteeIndex: 1,
+				}),
 				pubkeyToStatus: make(map[[48]byte]*validatorStatus),
 			}
 			v.pubkeyToStatus[bytesutil.ToBytes48(test.status.publicKey)] = test.status

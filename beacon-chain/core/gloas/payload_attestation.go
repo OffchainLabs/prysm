@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	stderrors "errors"
 	"fmt"
 	"slices"
 
@@ -22,6 +23,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
+
+var ErrValidatorNotInPTC = stderrors.New("validator not in PTC")
 
 // ProcessPayloadAttestations validates payload attestations in a block body.
 //
@@ -156,6 +159,24 @@ func PayloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot pr
 	return selected, nil
 }
 
+// PayloadCommitteeIndex returns the validator's index position in the payload committee for a slot.
+func PayloadCommitteeIndex(
+	ctx context.Context,
+	st state.ReadOnlyBeaconState,
+	slot primitives.Slot,
+	validatorIndex primitives.ValidatorIndex,
+) (uint64, error) {
+	ptc, err := PayloadCommittee(ctx, st, slot)
+	if err != nil {
+		return 0, err
+	}
+	idx := slices.Index(ptc, validatorIndex)
+	if idx == -1 {
+		return 0, fmt.Errorf("%w: validator=%d slot=%d", ErrValidatorNotInPTC, validatorIndex, slot)
+	}
+	return uint64(idx), nil
+}
+
 // ptcSeed computes the seed for the payload timeliness committee.
 func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitives.Slot) ([32]byte, error) {
 	seed, err := helpers.Seed(st, epoch, params.BeaconConfig().DomainPTCAttester)
@@ -254,12 +275,12 @@ func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex
 	offset := (round % 16) * 2
 	randomValue := uint64(binary.LittleEndian.Uint16(random[offset : offset+2])) // 16-bit draw per spec
 
-	val, err := st.ValidatorAtIndex(idx)
+	val, err := st.ValidatorAtIndexReadOnly(idx)
 	if err != nil {
 		return false, errors.Wrapf(err, "validator %d", idx)
 	}
 
-	return val.EffectiveBalance*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue, nil
+	return val.EffectiveBalance()*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue, nil
 }
 
 // validIndexedPayloadAttestation verifies the signature of an indexed payload attestation.

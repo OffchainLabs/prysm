@@ -128,12 +128,16 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 
 func (vs *Server) handleSuccesfulReorgAttempt(ctx context.Context, slot primitives.Slot, parentRoot, _ [32]byte) (state.BeaconState, error) {
 	// Try to get the state from the NSC
-	head := transition.NextSlotState(parentRoot[:], slot)
+	accessRoot := parentRoot
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		accessRoot, _ = vs.ForkchoiceFetcher.PayloadContentLookup(parentRoot)
+	}
+	head := transition.NextSlotState(accessRoot[:], slot)
 	if head != nil {
 		return head, nil
 	}
 	// cache miss
-	head, err := vs.StateGen.StateByRoot(ctx, parentRoot)
+	head, err := vs.StateGen.StateByRoot(ctx, accessRoot)
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "could not obtain head state")
 	}
@@ -151,7 +155,11 @@ func logFailedReorgAttempt(slot primitives.Slot, oldHeadRoot, headRoot [32]byte)
 
 func (vs *Server) getHeadNoReorg(ctx context.Context, slot primitives.Slot, parentRoot [32]byte) (state.BeaconState, error) {
 	// Try to get the state from the NSC
-	head := transition.NextSlotState(parentRoot[:], slot)
+	accessRoot := parentRoot
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		accessRoot, _ = vs.ForkchoiceFetcher.PayloadContentLookup(parentRoot)
+	}
+	head := transition.NextSlotState(accessRoot[:], slot)
 	if head != nil {
 		return head, nil
 	}
@@ -240,7 +248,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 		// Set payload attestations. New in Gloas.
 		if sBlk.Version() >= version.Gloas {
-			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head)); err != nil {
+			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head, sBlk.Block().ParentRoot())); err != nil {
 				log.WithError(err).Error("Could not set payload attestations")
 			}
 		}

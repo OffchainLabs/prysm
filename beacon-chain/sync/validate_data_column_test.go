@@ -8,6 +8,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -82,7 +83,12 @@ func TestValidateDataColumn(t *testing.T) {
 		digest, err := service.currentForkDigest()
 		require.NoError(t, err)
 
-		topic = service.addDigestToTopic(topic, digest)
+		if dc, ok := msg.(*ethpb.DataColumnSidecar); ok {
+			subnet := peerdas.ComputeSubnetForDataColumnSidecar(dc.Index)
+			topic = service.addDigestAndIndexToTopic(topic, digest, subnet)
+		} else {
+			topic = service.addDigestToTopic(topic, digest)
+		}
 
 		message := &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}}
 
@@ -199,7 +205,7 @@ func TestValidateDataColumn(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			service, message := serviceAndMessage(t, tc.verifier, dataColumnSidecarMsg)
 			result, err := service.validateDataColumn(ctx, "aDummyPID", message)
-			require.ErrorIs(t, tc.expectedError, err)
+			require.ErrorIs(t, err, tc.expectedError)
 			require.Equal(t, tc.expectedResult, result)
 		})
 	}
@@ -211,7 +217,6 @@ func TestValidateDataColumn(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationIgnore, result)
 	})
-
 }
 
 func testNewDataColumnSidecarsVerifier(verifier verification.MockDataColumnsVerifier) verification.NewDataColumnsVerifier {

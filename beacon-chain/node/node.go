@@ -40,6 +40,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/node/registration"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -97,12 +98,14 @@ type BeaconNode struct {
 	slasherDB                db.SlasherDatabase
 	attestationCache         *cache.AttestationCache
 	attestationPool          attestations.Pool
+	payloadAttestationPool   payloadattestation.PoolManager
 	exitPool                 voluntaryexits.PoolManager
 	slashingsPool            slashings.PoolManager
 	syncCommitteePool        synccommittee.Pool
 	blsToExecPool            blstoexec.PoolManager
 	depositCache             cache.DepositCache
 	trackedValidatorsCache   *cache.TrackedValidatorsCache
+	proposerPreferencesCache *cache.ProposerPreferencesCache
 	payloadIDCache           *cache.PayloadIDCache
 	stateFeed                *event.Feed
 	blockFeed                *event.Feed
@@ -151,28 +154,34 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 	ctx := cliCtx.Context
 
 	beacon := &BeaconNode{
-		cliCtx:                  cliCtx,
-		ctx:                     ctx,
-		cancel:                  cancel,
-		services:                runtime.NewServiceRegistry(),
-		stop:                    make(chan struct{}),
-		stateFeed:               new(event.Feed),
-		blockFeed:               new(event.Feed),
-		opFeed:                  new(event.Feed),
-		attestationCache:        cache.NewAttestationCache(),
-		attestationPool:         attestations.NewPool(),
-		exitPool:                voluntaryexits.NewPool(),
-		slashingsPool:           slashings.NewPool(),
-		syncCommitteePool:       synccommittee.NewPool(),
-		blsToExecPool:           blstoexec.NewPool(),
-		trackedValidatorsCache:  cache.NewTrackedValidatorsCache(),
-		payloadIDCache:          cache.NewPayloadIDCache(),
-		slasherBlockHeadersFeed: new(event.Feed),
-		slasherAttestationsFeed: new(event.Feed),
-		serviceFlagOpts:         &serviceFlagOpts{},
-		initialSyncComplete:     make(chan struct{}),
-		syncChecker:             &initialsync.SyncChecker{},
-		slasherEnabled:          cliCtx.Bool(flags.SlasherFlag.Name),
+		cliCtx:                 cliCtx,
+		ctx:                    ctx,
+		cancel:                 cancel,
+		services:               runtime.NewServiceRegistry(),
+		stop:                   make(chan struct{}),
+		stateFeed:              new(event.Feed),
+		blockFeed:              new(event.Feed),
+		opFeed:                 new(event.Feed),
+		attestationCache:       cache.NewAttestationCache(),
+		attestationPool:        attestations.NewPool(),
+		payloadAttestationPool: payloadattestation.NewPool(),
+		exitPool:               voluntaryexits.NewPool(),
+		slashingsPool:          slashings.NewPool(),
+		syncCommitteePool:      synccommittee.NewPool(),
+		blsToExecPool:          blstoexec.NewPool(),
+		trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		// TODO(gloas): revisit whether trackedValidatorsCache and
+		// proposerPreferencesCache should remain separate. The tracked
+		// validators cache is local-node specific, while proposer preferences
+		// are global and include proposers we do not own.
+		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		payloadIDCache:           cache.NewPayloadIDCache(),
+		slasherBlockHeadersFeed:  new(event.Feed),
+		slasherAttestationsFeed:  new(event.Feed),
+		serviceFlagOpts:          &serviceFlagOpts{},
+		initialSyncComplete:      make(chan struct{}),
+		syncChecker:              &initialsync.SyncChecker{},
+		slasherEnabled:           cliCtx.Bool(flags.SlasherFlag.Name),
 	}
 
 	for _, opt := range opts {
@@ -853,9 +862,11 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithTrackedValidatorsCache(b.trackedValidatorsCache),
+		regularsync.WithProposerPreferencesCache(b.proposerPreferencesCache),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
 		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
+		regularsync.WithPayloadAttestationPool(b.payloadAttestationPool),
 	)
 	return b.services.RegisterService(rs)
 }
@@ -974,6 +985,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		ForkchoiceFetcher:                chainService,
 		FinalizationFetcher:              chainService,
 		BlockReceiver:                    chainService,
+		PayloadAttestationReceiver:       chainService,
 		ExecutionPayloadEnvelopeReceiver: chainService,
 		BlobReceiver:                     chainService,
 		DataColumnReceiver:               chainService,
@@ -983,6 +995,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		OptimisticModeFetcher:            chainService,
 		AttestationCache:                 b.attestationCache,
 		AttestationsPool:                 b.attestationPool,
+		PayloadAttestationPool:           b.payloadAttestationPool,
 		ExitPool:                         b.exitPool,
 		SlashingsPool:                    b.slashingsPool,
 		BLSChangesPool:                   b.blsToExecPool,
@@ -1006,6 +1019,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		BlobStorage:                      b.BlobStorage,
 		DataColumnStorage:                b.DataColumnStorage,
 		TrackedValidatorsCache:           b.trackedValidatorsCache,
+		ProposerPreferencesCache:         b.proposerPreferencesCache,
 		PayloadIDCache:                   b.payloadIDCache,
 		LCStore:                          b.lcStore,
 		GraffitiInfo:                     web3Service.GraffitiInfo(),

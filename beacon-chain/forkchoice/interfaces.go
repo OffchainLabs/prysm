@@ -39,6 +39,7 @@ type RLocker interface {
 // HeadRetriever retrieves head root and optimistic info of the current chain.
 type HeadRetriever interface {
 	Head(context.Context) ([32]byte, error)
+	FullHead(context.Context) ([32]byte, [32]byte, bool, error)
 	GetProposerHead() [32]byte
 	CachedHeadRoot() [32]byte
 }
@@ -96,6 +97,7 @@ type FastGetter interface {
 	ParentRoot(root [32]byte) ([32]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
 	CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool)
+	PayloadContentLookup(root [32]byte) ([32]byte, bool)
 }
 
 // Setter allows to set forkchoice information

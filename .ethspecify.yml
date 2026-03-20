@@ -72,8 +72,6 @@ exceptions:
     - CONTRIBUTION_DUE_BPS_GLOAS#gloas
     - GLOAS_FORK_EPOCH#gloas
     - GLOAS_FORK_VERSION#gloas
-    - MIN_BUILDER_WITHDRAWABILITY_DELAY#gloas
-    - PAYLOAD_ATTESTATION_DUE_BPS#gloas
     - SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
 
   ssz_objects:
@@ -389,10 +387,8 @@ exceptions:
     - get_builder_withdrawals#gloas
     - get_builders_sweep_withdrawals#gloas
     - get_index_for_new_builder#gloas
-    - get_pending_balance_to_withdraw_for_builder#gloas
     - get_proposer_preferences_signature#gloas
     - get_upcoming_proposal_slots#gloas
-    - initiate_builder_exit#gloas
     - is_active_builder#gloas
     - is_builder_index#gloas
     - is_data_available#gloas
@@ -403,7 +399,6 @@ exceptions:
     - is_valid_proposal_slot#gloas
     - onboard_builders_from_pending_deposits#gloas
     - process_deposit_request#gloas
-    - process_voluntary_exit#gloas
     - record_block_timeliness#gloas
     - record_block_timeliness#phase0
     - verify_data_column_sidecar_kzg_proofs#gloas

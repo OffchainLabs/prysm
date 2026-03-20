@@ -47,11 +47,12 @@ func (s *State) hasStateInCache(_ context.Context, blockRoot [32]byte) (bool, er
 }
 
 // StateByRootIfCachedNoCopy retrieves a state using the input block root only if the state is already in the cache.
-func (s *State) StateByRootIfCachedNoCopy(blockRoot [32]byte) state.BeaconState {
-	if !s.hotStateCache.has(blockRoot) {
-		return nil
+func (s *State) StateByRootIfCachedNoCopy(blockRoot [32]byte) state.ReadOnlyBeaconState {
+	if state := s.hotStateCache.getWithoutCopy(blockRoot); state != nil {
+		return state
 	}
-	return s.hotStateCache.getWithoutCopy(blockRoot)
+
+	return s.epochBoundaryStateCache.getByBlockRootNoCopy(blockRoot)
 }
 
 // StateByRoot retrieves the state using input block root.
@@ -67,13 +68,41 @@ func (s *State) StateByRoot(ctx context.Context, blockRoot [32]byte) (state.Beac
 		}
 		blockRoot = root
 	}
-	return s.loadStateByRoot(ctx, blockRoot)
+
+	state, err := s.loadStateByRoot(ctx, blockRoot)
+	if err != nil {
+		return nil, fmt.Errorf("load state by root: %w", err)
+	}
+
+	return state, nil
+}
+
+// StateByRootNoCopy retrieves the state using input block root without copying from caches.
+func (s *State) StateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (state.ReadOnlyBeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "stateGen.StateByRootNoCopy")
+	defer span.End()
+
+	if blockRoot == params.BeaconConfig().ZeroHash {
+		root, err := s.beaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			return nil, stderrors.Join(ErrNoGenesisBlock, err)
+		}
+
+		blockRoot = root
+	}
+
+	state, err := s.loadStateByRootNoCopy(ctx, blockRoot)
+	if err != nil {
+		return nil, fmt.Errorf("load state by root no copy: %w", err)
+	}
+
+	return state, nil
 }
 
 // ActiveNonSlashedBalancesByRoot retrieves the effective balances of all active and non-slashed validators at the
 // state with a given root
 func (s *State) ActiveNonSlashedBalancesByRoot(ctx context.Context, blockRoot [32]byte) ([]uint64, error) {
-	st, err := s.StateByRoot(ctx, blockRoot)
+	st, err := s.StateByRootNoCopy(ctx, blockRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -232,12 +261,40 @@ func (s *State) loadStateByRoot(ctx context.Context, blockRoot [32]byte) (state.
 	// Second, it checks if the state exists in epoch boundary state cache.
 	cachedInfo, ok, err := s.epochBoundaryStateCache.getByBlockRoot(blockRoot)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get by block root: %w", err)
 	}
-	if ok {
+
+	if ok && cachedInfo != nil {
 		return cachedInfo.state, nil
 	}
 
+	return s.loadStateByRootFromDBOrReplay(ctx, blockRoot)
+}
+
+// loadStateByRootNoCopy is like loadStateByRoot but returns cached states without copying.
+// States from DB or replay are already owned by the caller.
+func (s *State) loadStateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (state.ReadOnlyBeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "stateGen.loadStateByRootNoCopy")
+	defer span.End()
+
+	// First, check hot state cache without copy.
+	cachedState := s.hotStateCache.getWithoutCopy(blockRoot)
+	if cachedState != nil && !cachedState.IsNil() {
+		return cachedState, nil
+	}
+
+	// Second, check epoch boundary state cache without copy.
+	cachedEpochState := s.epochBoundaryStateCache.getByBlockRootNoCopy(blockRoot)
+	if cachedEpochState != nil && !cachedEpochState.IsNil() {
+		return cachedEpochState, nil
+	}
+
+	return s.loadStateByRootFromDBOrReplay(ctx, blockRoot)
+}
+
+// loadStateByRootFromDBOrReplay loads a state from the DB or by replaying blocks from the latest ancestor.
+// This is the shared tail of loadStateByRoot and loadStateByRootNoCopy.
+func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
 	// Short circuit if the state is already in the DB.
 	if s.beaconDB.HasState(ctx, blockRoot) {
 		return s.beaconDB.State(ctx, blockRoot)

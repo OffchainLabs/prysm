@@ -201,6 +201,8 @@ ssz_gloas_objs = [
     "BuilderPendingWithdrawal",
     "DataColumnSidecarGloas",
     "ExecutionPayloadEnvelope",
+    "ProposerPreferences",
+    "SignedProposerPreferences",
     "PayloadAttestation",
     "PayloadAttestationData",
     "PayloadAttestationMessage",
@@ -379,6 +381,8 @@ go_library(
         "log.go",
         "sync_committee_mainnet.go",
         "sync_committee_minimal.go",  # keep
+        "payload_attestation_mainnet.go",
+        "payload_attestation_minimal.go",  # keep
         "validator.go",
         ":ssz_generated_altair",  # keep
         ":ssz_generated_bellatrix",  # keep

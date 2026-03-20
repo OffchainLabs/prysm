@@ -111,6 +111,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	EpochsPerEth1VotingPeriod:        64,
 	SlotsPerHistoricalRoot:           8192,
 	MinValidatorWithdrawabilityDelay: 256,
+	MinBuilderWithdrawabilityDelay:   64,
 	ShardCommitteePeriod:             256,
 	MinEpochsToInactivityPenalty:     4,
 	Eth1FollowDistance:               2048,
@@ -123,15 +124,16 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	IntervalsPerSlot:                3,
 
 	// Time-based protocol parameters.
-	ProposerReorgCutoffBPS:  primitives.BP(1667),
-	AttestationDueBPS:       primitives.BP(3333),
-	AggregateDueBPS:         primitives.BP(6667),
-	SyncMessageDueBPS:       primitives.BP(3333),
-	ContributionDueBPS:      primitives.BP(6667),
-	AttestationDueBPSGloas:  primitives.BP(2500),
-	AggregateDueBPSGloas:    primitives.BP(5000),
-	SyncMessageDueBPSGloas:  primitives.BP(2500),
-	ContributionDueBPSGloas: primitives.BP(5000),
+	ProposerReorgCutoffBPS:   primitives.BP(1667),
+	AttestationDueBPS:        primitives.BP(3333),
+	AggregateDueBPS:          primitives.BP(6667),
+	SyncMessageDueBPS:        primitives.BP(3333),
+	ContributionDueBPS:       primitives.BP(6667),
+	AttestationDueBPSGloas:   primitives.BP(2500),
+	AggregateDueBPSGloas:     primitives.BP(5000),
+	SyncMessageDueBPSGloas:   primitives.BP(2500),
+	ContributionDueBPSGloas:  primitives.BP(5000),
+	PayloadAttestationDueBPS: primitives.BP(7500),
 
 	// Ethereum PoW parameters.
 	DepositChainID:         1, // Chain ID of eth1 mainnet.

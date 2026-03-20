@@ -147,7 +147,8 @@ func OptimizedGenesisBeaconState(genesisTime uint64, preState state.BeaconState,
 
 	slashings := make([]uint64, params.BeaconConfig().EpochsPerSlashingsVector)
 
-	genesisValidatorsRoot, err := stateutil.ValidatorRegistryRoot(preState.Validators())
+	compactValidators := stateutil.CompactValidatorsFromProto(preState.Validators())
+	genesisValidatorsRoot, err := stateutil.ValidatorRegistryRoot(compactValidators)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not hash tree root genesis validators %v", err)
 	}
@@ -217,7 +218,7 @@ func OptimizedGenesisBeaconState(genesisTime uint64, preState state.BeaconState,
 		BodyRoot:   bodyRoot[:],
 	}
 
-	return state_native.InitializeFromProtoPhase0(st)
+	return state_native.InitializeFromProtoUnsafePhase0(st)
 }
 
 // EmptyGenesisState returns an empty beacon state object.
@@ -259,7 +260,7 @@ func EmptyGenesisState() (state.BeaconState, error) {
 		Eth1DataVotes:    []*ethpb.Eth1Data{},
 		Eth1DepositIndex: 0,
 	}
-	return state_native.InitializeFromProtoPhase0(st)
+	return state_native.InitializeFromProtoUnsafePhase0(st)
 }
 
 // IsValidGenesisState gets called whenever there's a deposit event,

@@ -1778,6 +1778,8 @@ func TestGetAttestationData(t *testing.T) {
 			CurrentJustifiedCheckPoint: justifiedCheckpoint,
 			TargetRoot:                 blockRoot,
 			State:                      beaconState,
+			MockCanonicalRoots:         map[primitives.Slot][32]byte{slot: blockRoot},
+			MockCanonicalFull:          map[primitives.Slot]bool{slot: false},
 		}
 
 		s := &Server{
@@ -1788,6 +1790,7 @@ func TestGetAttestationData(t *testing.T) {
 			CoreService: &core.Service{
 				HeadFetcher:           chain,
 				GenesisTimeFetcher:    chain,
+				ChainInfoFetcher:      chain,
 				FinalizedFetcher:      chain,
 				AttestationCache:      cache.NewAttestationDataCache(),
 				OptimisticModeFetcher: chain,
@@ -3286,7 +3289,7 @@ func TestGetPTCDuties(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
-		assert.StringContains(t, "can not be greater than next epoch", e.Message)
+		assert.StringContains(t, "can not be greater than current epoch", e.Message)
 	})
 }
 
