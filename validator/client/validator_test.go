@@ -1705,7 +1705,7 @@ func TestValidator_PushSettings(t *testing.T) {
 				pubkeys, err := km.FetchValidatingPublicKeys(ctx)
 				require.NoError(t, err)
 				if tt.feeRecipientMap != nil {
-					feeRecipients, _ := v.buildProposerSettingsRequests(ctx, pubkeys, km, 0)
+					feeRecipients := v.buildProposerSettingsRequests(pubkeys)
 					signedRegisterValidatorRequests := v.buildSignedRegReqs(ctx, pubkeys, km.Sign, 0, false)
 					for _, recipient := range feeRecipients {
 						require.Equal(t, strings.ToLower(tt.feeRecipientMap[recipient.ValidatorIndex]), strings.ToLower(hexutil.Encode(recipient.FeeRecipient)))
@@ -1856,12 +1856,11 @@ func TestValidator_buildProposerSettingsRequests_WithoutDefaultConfig(t *testing
 	}
 	filteredKeys, err := v.filterAndCacheActiveKeys(ctx, pubkeys, 0)
 	require.NoError(t, err)
-	actual, prefs := v.buildProposerSettingsRequests(ctx, filteredKeys, nil, 0)
+	actual := v.buildProposerSettingsRequests(filteredKeys)
 	sort.Slice(actual, func(i, j int) bool {
 		return actual[i].ValidatorIndex < actual[j].ValidatorIndex
 	})
 	assert.DeepEqual(t, expected, actual)
-	require.Equal(t, 0, len(prefs))
 }
 
 func TestValidator_filterAndCacheActiveKeys(t *testing.T) {
@@ -2158,15 +2157,14 @@ func TestValidator_buildProposerSettingsRequests_WithDefaultConfig(t *testing.T)
 	}
 	filteredKeys, err := v.filterAndCacheActiveKeys(ctx, pubkeys, 640)
 	require.NoError(t, err)
-	actual, prefs := v.buildProposerSettingsRequests(ctx, filteredKeys, nil, 640)
+	actual := v.buildProposerSettingsRequests(filteredKeys)
 	sort.Slice(actual, func(i, j int) bool {
 		return actual[i].ValidatorIndex < actual[j].ValidatorIndex
 	})
 	assert.DeepEqual(t, expected, actual)
-	require.Equal(t, 0, len(prefs))
 }
 
-func TestValidator_buildProposerSettingsRequests_GloasOnly(t *testing.T) {
+func TestValidator_buildProposerPreferences(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 
 	kp := randKeypair(t)
@@ -2181,6 +2179,8 @@ func TestValidator_buildProposerSettingsRequests_GloasOnly(t *testing.T) {
 		BufferItems: 64,
 	})
 	require.NoError(t, err)
+
+	nextEpochProposerSlot := params.BeaconConfig().SlotsPerEpoch + 3
 
 	v := validator{
 		validatorClient: client,
@@ -2203,31 +2203,87 @@ func TestValidator_buildProposerSettingsRequests_GloasOnly(t *testing.T) {
 				index:     1,
 			},
 		},
+		duties: &dutyStore{},
 	}
 
-	t.Run("pre-gloas", func(t *testing.T) {
+	t.Run("pre-gloas returns nil", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
 		cfg.GloasForkEpoch = 1
 		params.OverrideBeaconConfig(cfg)
 
-		prepReqs, prefs := v.buildProposerSettingsRequests(t.Context(), [][fieldparams.BLSPubkeyLength]byte{kp.pub}, km, 0)
-		require.Equal(t, 1, len(prepReqs))
+		prefs := v.buildProposerPreferences(t.Context(), km, 0)
 		require.Equal(t, 0, len(prefs))
 	})
 
-	t.Run("post-gloas", func(t *testing.T) {
+	t.Run("duties not initialized returns nil", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
+
+		v.duties = &dutyStore{}
+		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		require.Equal(t, 0, len(prefs))
+	})
+
+	t.Run("no proposer slots in next epoch returns nil", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		v.duties = &dutyStore{}
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+				},
+			},
+		})
+
+		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		require.Equal(t, 0, len(prefs))
+	})
+
+	t.Run("post-gloas with next epoch proposer slot", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		v.duties = &dutyStore{}
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+				},
+			},
+		})
 
 		client.EXPECT().
 			DomainData(gomock.Any(), gomock.Any()).
 			Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
 
-		prepReqs, prefs := v.buildProposerSettingsRequests(t.Context(), [][fieldparams.BLSPubkeyLength]byte{kp.pub}, km, 0)
-		require.Equal(t, 1, len(prepReqs))
+		prefs := v.buildProposerPreferences(t.Context(), km, 0)
 		require.Equal(t, 1, len(prefs))
 		require.Equal(t, primitives.ValidatorIndex(1), prefs[0].Message.ValidatorIndex)
+		require.Equal(t, nextEpochProposerSlot, prefs[0].Message.ProposalSlot)
 		require.Equal(t, uint64(42000000), prefs[0].Message.GasLimit)
 		require.DeepEqual(t, feeRecipient[:], prefs[0].Message.FeeRecipient)
 		require.NotNil(t, prefs[0].Signature)

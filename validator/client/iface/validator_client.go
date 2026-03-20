@@ -156,7 +156,7 @@ type ValidatorClient interface {
 	SubmitValidatorRegistrations(ctx context.Context, in *ethpb.SignedValidatorRegistrationsV1) (*empty.Empty, error)
 	// SubmitSignedProposerPreferences submits proposer preferences for upcoming
 	// proposal slots. This replaces PrepareBeaconProposer and SubmitValidatorRegistrations
-	// for GLOAS+.
+	// for Gloas+.
 	SubmitSignedProposerPreferences(ctx context.Context, in *ethpb.SubmitSignedProposerPreferencesRequest) (*empty.Empty, error)
 	StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *event.Event)
 	EventStreamIsRunning() bool

@@ -909,7 +909,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		return err
 	}
 
-	proposerReqs, prefs := v.buildProposerSettingsRequests(ctx, filteredKeys, km, slot)
+	proposerReqs := v.buildProposerSettingsRequests(filteredKeys)
 	if len(proposerReqs) == 0 {
 		log.Warnf("Could not locate valid validator indices. Skipping prepare proposer routine")
 		return nil
@@ -928,6 +928,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		return err
 	}
 
+	prefs := v.buildProposerPreferences(ctx, km, slot)
 	if len(prefs) > 0 {
 		if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
 			SignedProposerPreferences: prefs,
@@ -1083,20 +1084,69 @@ func (v *validator) updateValidatorStatusCache(ctx context.Context, pubkeys [][f
 // buildProposerSettingsRequests builds both PrepareBeaconProposer requests and,
 // post-Gloas, signed proposer preferences from the same validator settings.
 func (v *validator) buildProposerSettingsRequests(
-	ctx context.Context,
 	activePubkeys [][fieldparams.BLSPubkeyLength]byte,
-	km keymanager.IKeymanager,
-	slot primitives.Slot,
-) ([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, []*ethpb.SignedProposerPreferences) {
+) []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer {
 	var prepareProposerReqs []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer
-	var signedPrefs []*ethpb.SignedProposerPreferences
-	postGloas := slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch
-	var sigFailCount int
-
 	ps := v.ProposerSettings()
 	for _, k := range activePubkeys {
 		s, ok := v.pubkeyToStatus[k]
 		if !ok {
+			continue
+		}
+
+		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
+		if ps != nil && ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig != nil {
+			feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
+		}
+		if ps != nil && ps.ProposeConfig != nil {
+			if config, ok := ps.ProposeConfig[k]; ok && config != nil && config.FeeRecipientConfig != nil {
+				feeRecipient = config.FeeRecipientConfig.FeeRecipient
+			}
+		}
+
+		prepareProposerReqs = append(prepareProposerReqs, &ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer{
+			ValidatorIndex: s.index,
+			FeeRecipient:   feeRecipient[:],
+		})
+	}
+	return prepareProposerReqs
+}
+
+// buildProposerPreferences creates signed proposer preferences for validators
+// that have proposer slots in the next epoch. Per the spec, proposal_slot must
+// be in the next epoch and only actual proposers should submit preferences.
+// On restarts, duties may not yet be initialized — this returns nil gracefully.
+func (v *validator) buildProposerPreferences(
+	ctx context.Context,
+	km keymanager.IKeymanager,
+	slot primitives.Slot,
+) []*ethpb.SignedProposerPreferences {
+	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+		return nil
+	}
+
+	v.dutiesLock.RLock()
+	defer v.dutiesLock.RUnlock()
+
+	if !v.duties.IsInitialized() {
+		log.Debug("Duties not yet initialized, skipping proposer preferences")
+		return nil
+	}
+
+	nextDuties := v.duties.NextEpochDuties()
+	if len(nextDuties) == 0 {
+		return nil
+	}
+
+	ps := v.ProposerSettings()
+	var signedPrefs []*ethpb.SignedProposerPreferences
+	var sigFailCount int
+
+	for pk, duty := range nextDuties {
+		if len(duty.ProposerSlots) == 0 {
+			continue
+		}
+		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 			continue
 		}
 
@@ -1111,10 +1161,8 @@ func (v *validator) buildProposerSettingsRequests(
 				gasLimit = uint64(ps.DefaultConfig.BuilderConfig.GasLimit)
 			}
 		}
-
 		if ps != nil && ps.ProposeConfig != nil {
-			config, ok := ps.ProposeConfig[k]
-			if ok && config != nil {
+			if config, ok := ps.ProposeConfig[pk]; ok && config != nil {
 				if config.FeeRecipientConfig != nil {
 					feeRecipient = config.FeeRecipientConfig.FeeRecipient
 				}
@@ -1124,34 +1172,26 @@ func (v *validator) buildProposerSettingsRequests(
 			}
 		}
 
-		prepareProposerReqs = append(prepareProposerReqs, &ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer{
-			ValidatorIndex: s.index,
-			FeeRecipient:   feeRecipient[:],
-		})
+		for _, proposalSlot := range duty.ProposerSlots {
+			pref := &ethpb.ProposerPreferences{
+				ProposalSlot:   proposalSlot,
+				ValidatorIndex: duty.ValidatorIndex,
+				FeeRecipient:   feeRecipient[:],
+				GasLimit:       gasLimit,
+			}
 
-		if !postGloas {
-			continue
+			signedPref, err := v.signProposerPreferences(ctx, km, pk, pref)
+			if err != nil {
+				sigFailCount++
+				continue
+			}
+			signedPrefs = append(signedPrefs, signedPref)
 		}
-
-		pref := &ethpb.ProposerPreferences{
-			ProposalSlot:   slot,
-			ValidatorIndex: s.index,
-			FeeRecipient:   feeRecipient[:],
-			GasLimit:       gasLimit,
-		}
-
-		signedPref, err := v.signProposerPreferences(ctx, km, k, pref)
-		if err != nil {
-			sigFailCount++
-			continue
-		}
-
-		signedPrefs = append(signedPrefs, signedPref)
 	}
 	if sigFailCount > 0 {
 		log.WithField("count", sigFailCount).Warn("Failed to sign proposer preferences")
 	}
-	return prepareProposerReqs, signedPrefs
+	return signedPrefs
 }
 
 func (v *validator) buildSignedRegReqs(
