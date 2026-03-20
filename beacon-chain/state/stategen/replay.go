@@ -153,11 +153,11 @@ func executeStateTransitionStateGen(
 	}
 	if st != nil && !st.IsNil() {
 		fields["stateSlot"] = st.Slot()
-	}
-	if st != nil && !st.IsNil() && st.Version() >= version.Gloas {
-		latestHash, hashErr := st.LatestBlockHash()
-		if hashErr == nil {
-			fields["stateLatestBlockHash"] = fmt.Sprintf("%#x", latestHash)
+		if st.Version() >= version.Gloas {
+			latestHash, hashErr := st.LatestBlockHash()
+			if hashErr == nil {
+				fields["stateLatestBlockHash"] = fmt.Sprintf("%#x", latestHash)
+			}
 		}
 	}
 	if signed.Block().Version() >= version.Gloas {
