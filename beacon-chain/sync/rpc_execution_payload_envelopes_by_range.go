@@ -3,7 +3,7 @@ package sync
 import (
 	"context"
 	"math"
-	"time"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
@@ -18,8 +18,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
-
-var envelopeRpcThrottleInterval = time.Second
 
 // executionPayloadEnvelopesByRangeRPCHandler looks up the request execution payload envelopes from
 // the database for the given slot range, serving one envelope per canonical block slot.
@@ -85,41 +83,8 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 		return nil
 	}
 
-	// Ticker to stagger out large requests.
-	ticker := time.NewTicker(envelopeRpcThrottleInterval)
-	defer ticker.Stop()
-	batcher, err := newBlockRangeBatcher(rp, s.cfg.beaconDB, s.rateLimiter, s.cfg.chain.IsCanonical, ticker)
-	if err != nil {
+	if err := s.streamCanonicalEnvelopes(ctx, rp, stream); err != nil {
 		recordResult(executionPayloadEnvelopeRPCResultError)
-		log.WithError(err).Error("Cannot create new block range batcher for envelopes")
-		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-		tracing.AnnotateError(span, err)
-		return err
-	}
-
-	var batch blockBatch
-	var more bool
-	// wQuota caps total envelopes sent per request, bounded by MAX_REQUEST_PAYLOADS.
-	wQuota := params.BeaconConfig().MaxRequestPayloads
-	for batch, more = batcher.next(ctx, stream); more; batch, more = batcher.next(ctx, stream) {
-		wQuota, err = s.streamEnvelopeBatch(ctx, batch, wQuota, stream)
-		if err != nil {
-			recordResult(executionPayloadEnvelopeRPCResultError)
-			return err
-		}
-		if wQuota == 0 {
-			break
-		}
-	}
-
-	if err := batch.error(); err != nil {
-		log.WithError(err).Debug("Error in ExecutionPayloadEnvelopesByRange batch")
-		if !errors.Is(err, p2ptypes.ErrRateLimited) {
-			recordResult(executionPayloadEnvelopeRPCResultError)
-			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-		} else {
-			recordResult(executionPayloadEnvelopeRPCResultRateLimited)
-		}
 		tracing.AnnotateError(span, err)
 		return err
 	}
@@ -129,86 +94,121 @@ func (s *Service) executionPayloadEnvelopesByRangeRPCHandler(ctx context.Context
 	return nil
 }
 
-// streamEnvelopeBatch sends all available envelopes for the canonical blocks in the batch.
-// It returns the remaining write quota and any error encountered.
-func (s *Service) streamEnvelopeBatch(ctx context.Context, batch blockBatch, wQuota uint64, stream libp2pcore.Stream) (uint64, error) {
-	if wQuota == 0 {
-		return 0, nil
-	}
-	_, span := trace.StartSpan(ctx, "sync.streamEnvelopeBatch")
+// streamCanonicalEnvelopes walks the canonical payload chain backwards from the successor of rp.end
+// to rp.start, collecting only envelopes whose payloads were actually included in the canonical chain.
+func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, stream libp2pcore.Stream) error {
+	_, span := trace.StartSpan(ctx, "sync.streamCanonicalEnvelopes")
 	defer span.End()
 	if s.cfg.executionReconstructor == nil {
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-		return wQuota, errors.New("execution reconstructor is nil")
+		return errors.New("execution reconstructor is nil")
 	}
 
-	type requestedEnvelope struct {
-		root      [32]byte
+	type collectedEnvelope struct {
 		env       *pb.SignedBlindedExecutionPayloadEnvelope
 		blockHash [32]byte
 	}
 
-	limit := min(uint64(len(batch.canonical())), wQuota)
-	requestedEnvs := make([]requestedEnvelope, 0, limit)
-	batchHashes := make([][32]byte, 0, limit)
-	hashSeen := make(map[[32]byte]struct{}, limit)
-
-	for _, b := range batch.canonical() {
-		if uint64(len(requestedEnvs)) >= wQuota {
-			break
-		}
-		root := b.Root()
-		if !s.cfg.beaconDB.HasExecutionPayloadEnvelope(ctx, root) {
-			// No envelope for this slot — spec allows gaps, just skip.
-			continue
-		}
-		blindedEnv, err := s.cfg.beaconDB.ExecutionPayloadEnvelope(ctx, root)
-		if err != nil {
-			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-			return wQuota, errors.Wrapf(err, "could not retrieve execution payload envelope for root %#x", root)
-		}
-		if blindedEnv == nil || blindedEnv.Message == nil {
-			continue
-		}
-
-		blockHash := bytesutil.ToBytes32(blindedEnv.Message.BlockHash)
-		requestedEnvs = append(requestedEnvs, requestedEnvelope{
-			root:      root,
-			env:       blindedEnv,
-			blockHash: blockHash,
-		})
-		if _, ok := hashSeen[blockHash]; !ok {
-			hashSeen[blockHash] = struct{}{}
-			batchHashes = append(batchHashes, blockHash)
-		}
+	_, roots, err := s.cfg.beaconDB.LowestRootsAtOrAboveSlot(ctx, rp.end+1)
+	if err != nil {
+		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		return errors.Wrap(err, "could not find successor block")
+	}
+	if len(roots) == 0 {
+		return nil
 	}
 
-	if len(requestedEnvs) == 0 {
-		return wQuota, nil
+	var successorRoot [32]byte
+	var found bool
+	for _, r := range roots {
+		canonical, err := s.cfg.chain.IsCanonical(ctx, r)
+		if err != nil {
+			log.WithError(err).WithField("blockRoot", bytesutil.Trunc(r[:])).Debug("Could not check if block is canonical")
+			continue
+		}
+		if canonical {
+			successorRoot = r
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil
+	}
+	successorBlock, err := s.cfg.beaconDB.Block(ctx, successorRoot)
+	if err != nil {
+		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		return errors.Wrap(err, "could not load successor block")
+	}
+	bid, err := successorBlock.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		return errors.Wrap(err, "could not get bid from successor block")
+	}
+	parentBlockHash := bytesutil.ToBytes32(bid.Message.ParentBlockHash)
+
+	wQuota := params.BeaconConfig().MaxRequestPayloads
+	var collected []collectedEnvelope
+
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		blindedEnv, err := s.cfg.beaconDB.ExecutionPayloadEnvelopeByBlockHash(ctx, parentBlockHash)
+		if err != nil {
+			log.WithError(err).WithField("blockHash", bytesutil.Trunc(parentBlockHash[:])).Debug("Could not load execution payload envelope")
+			break
+		}
+
+		if blindedEnv.Message.Slot < rp.start {
+			break
+		}
+
+		collected = append(collected, collectedEnvelope{
+			env:       blindedEnv,
+			blockHash: parentBlockHash,
+		})
+		if uint64(len(collected)) >= wQuota {
+			break
+		}
+
+		parentBlockHash = bytesutil.ToBytes32(blindedEnv.Message.ParentBlockHash)
+	}
+
+	if len(collected) == 0 {
+		return nil
+	}
+
+	slices.Reverse(collected)
+
+	batchHashes := make([][32]byte, 0, len(collected))
+	for _, c := range collected {
+		batchHashes = append(batchHashes, c.blockHash)
 	}
 
 	payloadByHash, err := s.cfg.executionReconstructor.ReconstructFullExecutionPayloadsByHash(ctx, batchHashes)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
-		return wQuota, errors.Wrap(err, "could not batch reconstruct full execution payload envelopes")
+		return errors.Wrap(err, "could not batch reconstruct full execution payload envelopes")
 	}
 
-	for _, req := range requestedEnvs {
-		payload := payloadByHash[req.blockHash]
+	for _, c := range collected {
+		payload := payloadByHash[c.blockHash]
 		if payload == nil {
-			log.WithField("root", bytesutil.Trunc(req.root[:])).Debug("Missing reconstructed payload after successful batch call")
-			continue
+			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+			return errors.Errorf("missing reconstructed payload for block hash %#x", c.blockHash)
 		}
 		fullEnv := &pb.SignedExecutionPayloadEnvelope{
 			Message: &pb.ExecutionPayloadEnvelope{
 				Payload:           payload,
-				ExecutionRequests: req.env.Message.ExecutionRequests,
-				BuilderIndex:      req.env.Message.BuilderIndex,
-				BeaconBlockRoot:   req.env.Message.BeaconBlockRoot,
-				Slot:              req.env.Message.Slot,
-				StateRoot:         req.env.Message.StateRoot,
+				ExecutionRequests: c.env.Message.ExecutionRequests,
+				BuilderIndex:      c.env.Message.BuilderIndex,
+				BeaconBlockRoot:   c.env.Message.BeaconBlockRoot,
+				Slot:              c.env.Message.Slot,
+				StateRoot:         c.env.Message.StateRoot,
 			},
-			Signature: req.env.Signature,
+			Signature: c.env.Signature,
 		}
 
 		SetStreamWriteDeadline(stream, defaultWriteDuration)
@@ -216,15 +216,15 @@ func (s *Service) streamEnvelopeBatch(ctx context.Context, batch blockBatch, wQu
 			log.WithError(chunkErr).Debug("Could not send execution payload envelope chunk")
 			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 			tracing.AnnotateError(span, chunkErr)
-			return wQuota, chunkErr
+			return chunkErr
 		}
 		s.rateLimiter.add(stream, 1)
 		wQuota -= 1
 		if wQuota == 0 {
-			return 0, nil
+			break
 		}
 	}
-	return wQuota, nil
+	return nil
 }
 
 // validateEnvelopesByRange validates the ExecutionPayloadEnvelopesByRange request and returns

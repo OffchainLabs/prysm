@@ -68,9 +68,10 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 			chain:       chainService,
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted:             abool.New(),
-		clockWaiter:              gs,
-		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		chainStarted:                    abool.New(),
+		clockWaiter:                     gs,
+		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
+		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
 	}
 
 	topic := "/eth2/%x/beacon_block"
@@ -138,11 +139,12 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 			blockNotifier: chainService.BlockNotifier(),
 			initialSync:   &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted:             abool.New(),
-		subHandler:               newSubTopicHandler(),
-		clockWaiter:              gs,
-		initialSyncComplete:      make(chan struct{}),
-		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		chainStarted:                    abool.New(),
+		subHandler:                      newSubTopicHandler(),
+		clockWaiter:                     gs,
+		initialSyncComplete:             make(chan struct{}),
+		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
+		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
 	}
 	r.initCaches()
 
@@ -208,11 +210,12 @@ func TestSyncService_StopCleanly(t *testing.T) {
 			chain:       chainService,
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted:             abool.New(),
-		subHandler:               newSubTopicHandler(),
-		clockWaiter:              gs,
-		initialSyncComplete:      make(chan struct{}),
-		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		chainStarted:                    abool.New(),
+		subHandler:                      newSubTopicHandler(),
+		clockWaiter:                     gs,
+		initialSyncComplete:             make(chan struct{}),
+		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
+		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
 	}
 	markInitSyncComplete(t, &r)
 
