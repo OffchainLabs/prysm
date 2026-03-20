@@ -1113,9 +1113,7 @@ func (v *validator) buildProposerSettingsRequests(
 }
 
 // buildProposerPreferences creates signed proposer preferences for validators
-// that have proposer slots in the next epoch. Per the spec, proposal_slot must
-// be in the next epoch and only actual proposers should submit preferences.
-// On restarts, duties may not yet be initialized — this returns nil gracefully.
+// that have proposer slots in the next epoch.
 func (v *validator) buildProposerPreferences(
 	ctx context.Context,
 	km keymanager.IKeymanager,
