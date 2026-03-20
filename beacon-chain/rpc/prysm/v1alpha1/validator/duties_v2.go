@@ -86,7 +86,7 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	if rpcErr != nil {
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
-	// Next epoch proposer duties are only needed from Fulu onwards (for GLOAS proposer preferences).
+	// Next epoch proposer duties are only needed from Fulu onwards (for Gloas proposer preferences).
 	var nextProposerDuties []*core.ProposerDutyResult
 	if req.Epoch+1 >= params.BeaconConfig().FuluForkEpoch {
 		nextProposerDuties, rpcErr = vs.CoreService.ProposerDuties(ctx, s, req.Epoch+1)
