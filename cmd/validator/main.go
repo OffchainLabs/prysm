@@ -197,8 +197,15 @@ func main() {
 				}
 				logrus.SetFormatter(f)
 			case "json":
-				logrus.SetFormatter(&logrus.JSONFormatter{
-					TimestampFormat: "2006-01-02 15:04:05.00",
+				// disabling logrus default output so we can control it via hooks
+				logrus.SetOutput(io.Discard)
+				logrus.AddHook(&logs.WriterHook{
+					Formatter: &logrus.JSONFormatter{
+						TimestampFormat: "2006-01-02 15:04:05.00",
+					},
+					Writer:        os.Stderr,
+					AllowedLevels: logrus.AllLevels[:verbosityLevel+1],
+					Identifier:    logs.LogTargetUser,
 				})
 			case "journald":
 				if err := journald.Enable(); err != nil {
