@@ -372,6 +372,28 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 
 	v := st.Version()
 
+	if v >= version.Gloas {
+		withdrawals, err := st.PayloadWithdrawals()
+		if err != nil {
+			log.WithError(err).Error("Could not get payload withdrawals to get payload attribute")
+			return emptyAttri
+		}
+
+		attr, err := payloadattribute.New(&enginev1.PayloadAttributesV3{
+			Timestamp:             uint64(t.Unix()),
+			PrevRandao:            prevRando,
+			SuggestedFeeRecipient: val.FeeRecipient[:],
+			Withdrawals:           withdrawals,
+			ParentBeaconBlockRoot: headRoot,
+		})
+		if err != nil {
+			log.WithError(err).Error("Could not get payload attribute")
+			return emptyAttri
+		}
+
+		return attr
+	}
+
 	if v >= version.Deneb {
 		withdrawals, _, err := st.ExpectedWithdrawals()
 		if err != nil {

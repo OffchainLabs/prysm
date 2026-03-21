@@ -652,6 +652,32 @@ func (b *BeaconState) PayloadExpectedWithdrawals() ([]*enginev1.Withdrawal, erro
 	return b.payloadExpectedWithdrawalsVal(), nil
 }
 
+// PayloadWithdrawals returns the withdrawals that should be included in the
+// execution payload for the current slot. If the parent block was full,
+// fresh withdrawals are computed via ExpectedWithdrawalsGloas; otherwise
+// the existing payload_expected_withdrawals from state are reused unchanged.
+// This method does not acquire a lock directly; it delegates to
+// IsParentBlockFull, ExpectedWithdrawalsGloas, and PayloadExpectedWithdrawals
+// which each acquire their own read lock.
+func (b *BeaconState) PayloadWithdrawals() ([]*enginev1.Withdrawal, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("PayloadWithdrawals", b.version)
+	}
+
+	full, err := b.IsParentBlockFull()
+	if err != nil {
+		return nil, err
+	}
+	if full {
+		result, err := b.ExpectedWithdrawalsGloas()
+		if err != nil {
+			return nil, err
+		}
+		return result.Withdrawals, nil
+	}
+	return b.PayloadExpectedWithdrawals()
+}
+
 // NextWithdrawalBuilderIndex returns the next withdrawal builder index.
 func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, error) {
 	if b.version < version.Gloas {

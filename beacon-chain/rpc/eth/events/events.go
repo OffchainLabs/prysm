@@ -694,7 +694,15 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		})
 	}
 
-	w, _, err := st.ExpectedWithdrawals()
+	var (
+		w   []*engine.Withdrawal
+		err error
+	)
+	if v >= version.Gloas {
+		w, err = st.PayloadWithdrawals()
+	} else {
+		w, _, err = st.ExpectedWithdrawals()
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get withdrawals from head state")
 	}

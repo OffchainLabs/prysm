@@ -136,6 +136,21 @@ func (vs *Server) getLocalPayloadFromEngine(
 	}
 	var attr payloadattribute.Attributer
 	switch {
+	case st.Version() >= version.Gloas:
+		withdrawals, err := st.PayloadWithdrawals()
+		if err != nil {
+			return nil, err
+		}
+		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV3{
+			Timestamp:             uint64(t.Unix()),
+			PrevRandao:            random,
+			SuggestedFeeRecipient: val.FeeRecipient[:],
+			Withdrawals:           withdrawals,
+			ParentBeaconBlockRoot: parentRoot[:],
+		})
+		if err != nil {
+			return nil, err
+		}
 	case st.Version() >= version.Deneb:
 		withdrawals, _, err := st.ExpectedWithdrawals()
 		if err != nil {

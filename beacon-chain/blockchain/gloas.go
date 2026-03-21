@@ -138,9 +138,9 @@ func (s *Service) getPayloadAttributeGloas(ctx context.Context, st state.ReadOnl
 		return emptyAttri
 	}
 
-	withdrawals, _, err := st.ExpectedWithdrawals()
+	withdrawals, err := st.PayloadWithdrawals()
 	if err != nil {
-		log.WithError(err).Error("Could not get expected withdrawals to get payload attribute")
+		log.WithError(err).Error("Could not get payload withdrawals to get payload attribute")
 		return emptyAttri
 	}
 

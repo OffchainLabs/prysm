@@ -834,6 +834,55 @@ func TestPayloadExpectedWithdrawals(t *testing.T) {
 	})
 }
 
+func TestPayloadWithdrawals(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		_, err := st.PayloadWithdrawals()
+		require.ErrorContains(t, "PayloadWithdrawals", err)
+	})
+
+	t.Run("returns existing withdrawals when parent empty", func(t *testing.T) {
+		existing := []*enginev1.Withdrawal{
+			{Index: 5, ValidatorIndex: 10, Address: bytes.Repeat([]byte{0x26}, 20), Amount: 100},
+		}
+		// Parent is empty: bid block hash differs from latest block hash.
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
+				BlockHash: bytes.Repeat([]byte{0xAA}, 32),
+			},
+			LatestBlockHash:            bytes.Repeat([]byte{0xBB}, 32),
+			PayloadExpectedWithdrawals: existing,
+		})
+		require.NoError(t, err)
+
+		got, err := st.PayloadWithdrawals()
+		require.NoError(t, err)
+		require.DeepEqual(t, existing, got)
+	})
+
+	t.Run("computes fresh withdrawals when parent full", func(t *testing.T) {
+		hash := bytes.Repeat([]byte{0xAB}, 32)
+		stale := []*enginev1.Withdrawal{
+			{Index: 1, ValidatorIndex: 2, Address: bytes.Repeat([]byte{0x01}, 20), Amount: 999},
+		}
+		// Parent is full: bid block hash == latest block hash.
+		// With no validators/pending withdrawals, fresh computation returns empty.
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
+				BlockHash: hash,
+			},
+			LatestBlockHash:            hash,
+			PayloadExpectedWithdrawals: stale,
+		})
+		require.NoError(t, err)
+
+		got, err := st.PayloadWithdrawals()
+		require.NoError(t, err)
+		// Fresh computation with no validators yields empty, not the stale value.
+		require.Equal(t, 0, len(got))
+	})
+}
+
 func TestExecutionPayloadAvailabilityVector(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
 		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
