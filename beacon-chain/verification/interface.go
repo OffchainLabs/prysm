@@ -99,7 +99,7 @@ type NewSignedProposerPreferencesVerifier func(p *ethpb.SignedProposerPreference
 type ExecutionPayloadBidVerifier interface {
 	VerifyCurrentOrNextSlot() error
 	VerifyBuilderActive(state.ReadOnlyBeaconState) error
-	VerifyExecutionPaymentNonZero() error
+	VerifyExecutionPaymentZero() error
 	VerifyFeeRecipientMatches([]byte) error
 	VerifyGasLimitMatches(uint64) error
 	VerifyParentBlockRootSeen(func([32]byte) bool) error
