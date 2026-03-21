@@ -239,7 +239,7 @@ func before(ctx *cli.Context) error {
 			Identifier:    logs.LogTargetUser,
 		})
 	case "journald":
-		if err := journald.Enable(); err != nil {
+		if err := journald.Enable(verbosityLevel); err != nil {
 			return err
 		}
 	default:
