@@ -257,9 +257,11 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			return errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
 		}
 
-		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,
+		args := &forkchoicetypes.BlockAndCheckpoints{
+			Block:               b,
 			JustifiedCheckpoint: jCheckpoints[i],
-			FinalizedCheckpoint: fCheckpoints[i]}
+			FinalizedCheckpoint: fCheckpoints[i],
+		}
 		pendingNodes[i] = args
 		if err := s.saveInitSyncBlock(ctx, root, b); err != nil {
 			tracing.AnnotateError(span, err)
@@ -1055,9 +1057,12 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve latest block hash")
 			return
 		}
-		_, err = s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
+		id, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
 		if err != nil {
 			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
+		}
+		if id != nil {
+			s.cfg.PayloadIDCache.Set(s.CurrentSlot()+1, headRoot, [8]byte(*id))
 		}
 		return
 	}
