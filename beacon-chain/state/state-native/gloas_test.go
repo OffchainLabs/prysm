@@ -3,7 +3,6 @@ package state_native
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/stretchr/testify/require"
@@ -49,7 +48,7 @@ func TestPTCWindowVal(t *testing.T) {
 	require.Nil(t, st.ptcWindowVal())
 
 	st.ptcWindow = []*ethpb.PTCs{
-		{ValidatorIndices: []primitives.ValidatorIndex{1, 2}},
+		{ValidatorIndices: []uint64{1, 2}},
 		nil,
 	}
 
@@ -60,5 +59,5 @@ func TestPTCWindowVal(t *testing.T) {
 	require.NotSame(t, st.ptcWindow[0], got[0])
 
 	got[0].ValidatorIndices[0] = 99
-	require.Equal(t, primitives.ValidatorIndex(1), st.ptcWindow[0].ValidatorIndices[0])
+	require.Equal(t, uint64(1), st.ptcWindow[0].ValidatorIndices[0])
 }

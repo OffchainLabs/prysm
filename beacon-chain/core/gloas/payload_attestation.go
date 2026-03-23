@@ -81,7 +81,7 @@ func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body 
 
 // indexedPayloadAttestation converts a payload attestation into its indexed form.
 func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState, att *eth.PayloadAttestation) (*consensus_types.IndexedPayloadAttestation, error) {
-	committee, err := st.PayloadCommitteeReadOnly(att.Data.Slot)
+	committee, err := st.PayloadCommittee(att.Data.Slot)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 
 // computePTC computes the payload timeliness committee for a given slot.
 //
-//	<spec fn="compute_ptc" fork="gloas" hash="0f323552">
+//	<spec fn="compute_ptc" fork="gloas" hash="ae15f761">
 //	def compute_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
 //	    """
 //	    Get the payload timeliness committee for the given ``slot``.
@@ -160,6 +160,22 @@ func computePTC(ctx context.Context, st state.ReadOnlyBeaconState, slot primitiv
 	return selected, nil
 }
 
+func ptcSlotFromValidatorIndices(indices []primitives.ValidatorIndex) *eth.PTCs {
+	result := &eth.PTCs{
+		ValidatorIndices: make([]uint64, len(indices)),
+	}
+	for i, index := range indices {
+		result.ValidatorIndices[i] = uint64(index)
+	}
+	return result
+}
+
+func emptyPTCs() *eth.PTCs {
+	return &eth.PTCs{
+		ValidatorIndices: make([]uint64, fieldparams.PTCSize),
+	}
+}
+
 // PayloadCommitteeIndex returns the validator's index position in the payload committee for a slot.
 func PayloadCommitteeIndex(
 	ctx context.Context,
@@ -167,7 +183,7 @@ func PayloadCommitteeIndex(
 	slot primitives.Slot,
 	validatorIndex primitives.ValidatorIndex,
 ) (uint64, error) {
-	ptc, err := st.PayloadCommitteeReadOnly(slot)
+	ptc, err := st.PayloadCommittee(slot)
 	if err != nil {
 		return 0, err
 	}
@@ -347,7 +363,7 @@ func validIndexedPayloadAttestation(st state.ReadOnlyBeaconState, att *consensus
 // ProcessPTCWindow rotates the cached PTC window at epoch boundaries by computing
 // PTC assignments for the new lookahead epoch and shifting the window.
 //
-//	<spec fn="process_ptc_window" fork="gloas" hash="7be3d509">
+//	<spec fn="process_ptc_window" fork="gloas" hash="2c292a1c">
 //	def process_ptc_window(state: BeaconState) -> None:
 //	    """
 //	    Update the cached PTC window.
@@ -378,7 +394,7 @@ func ProcessPTCWindow(ctx context.Context, st state.BeaconState) error {
 		if err != nil {
 			return err
 		}
-		newSlots[i] = &eth.PTCs{ValidatorIndices: ptc}
+		newSlots[i] = ptcSlotFromValidatorIndices(ptc)
 	}
 
 	return st.RotatePTCWindow(newSlots)

@@ -642,7 +642,7 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 // OnboardBuildersFromPendingDeposits applies any pending builder deposits at the fork.
 // It mutates the state and prunes pending deposits accordingly.
 //
-//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="2bd662c7">
+//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas">
 //	def onboard_builders_from_pending_deposits(state: BeaconState) -> None:
 //	    """
 //	    Applies any pending deposit for builders, effectively
@@ -812,16 +812,12 @@ func (b *BeaconState) RotatePTCWindow(newEpochSlots []*ethpb.PTCs) error {
 	b.sharedFieldReferences[types.PTCWindow].MinusRef()
 	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)
 
-	newWindow := make([]*ethpb.PTCs, expected)
-
 	// Shift left by one epoch.
 	lastEpochStart := expected - slotsPerEpoch
-	copy(newWindow[:lastEpochStart], b.ptcWindow[slotsPerEpoch:])
+	copy(b.ptcWindow[:lastEpochStart], b.ptcWindow[slotsPerEpoch:])
 
 	// Fill the last epoch with copied new slots.
-	copy(newWindow[lastEpochStart:], ethpb.CopyPTCWindow(newEpochSlots))
-
-	b.ptcWindow = newWindow
+	copy(b.ptcWindow[lastEpochStart:], ethpb.CopyPTCWindow(newEpochSlots))
 
 	b.markFieldAsDirty(types.PTCWindow)
 	return nil

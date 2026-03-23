@@ -199,7 +199,7 @@ func (s *Service) PTCDuties(ctx context.Context, st state.BeaconState, epoch pri
 	_, span := trace.StartSpan(ctx, "coreService.PTCDuties")
 	defer span.End()
 
-	if len(indices) == 0 || epoch < params.BeaconConfig().GloasForkEpoch || st.Version() < version.Gloas {
+	if len(indices) == 0 || epoch < params.BeaconConfig().GloasForkEpoch {
 		return []*PTCDutyResult{}, nil
 	}
 
@@ -220,7 +220,7 @@ func (s *Service) PTCDuties(ctx context.Context, st state.BeaconState, epoch pri
 			return nil, &RpcError{Err: ctx.Err(), Reason: Internal}
 		}
 
-		ptc, err := st.PayloadCommitteeReadOnly(slot)
+		ptc, err := st.PayloadCommittee(slot)
 		if err != nil {
 			return nil, &RpcError{Err: err, Reason: Internal}
 		}

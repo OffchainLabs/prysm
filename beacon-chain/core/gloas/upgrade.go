@@ -17,7 +17,7 @@ import (
 
 // UpgradeToGloas updates inputs a generic state to return the version Gloas state.
 //
-//	<spec fn="upgrade_to_gloas" fork="gloas" hash="8f67112c">
+//	<spec fn="upgrade_to_gloas" fork="gloas" hash="6e66df25">
 //	def upgrade_to_gloas(pre: fulu.BeaconState) -> BeaconState:
 //	    epoch = fulu.get_current_epoch(pre)
 //
@@ -84,8 +84,6 @@ import (
 //	        latest_block_hash=pre.latest_execution_payload_header.block_hash,
 //	        # [New in Gloas:EIP7732]
 //	        payload_expected_withdrawals=[],
-//	        # [New in Gloas:EIP7732]
-//	        ptc_window=initialize_ptc_window(pre),
 //	    )
 //
 //	    # [New in Gloas:EIP7732]
@@ -163,7 +161,7 @@ func UpgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 
 // initializePTCWindow builds the initial PTC window for the Gloas fork upgrade.
 //
-//	<spec fn="initialize_ptc_window" fork="gloas" hash="3764b7f5">
+//	<spec fn="initialize_ptc_window" fork="gloas" hash="2c292a1c">
 //	def initialize_ptc_window(
 //	    state: BeaconState,
 //	) -> Vector[Vector[ValidatorIndex, PTC_SIZE], (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH]:
@@ -194,7 +192,7 @@ func initializePTCWindow(ctx context.Context, st state.ReadOnlyBeaconState) ([]*
 	// Previous epoch has no cached data at fork time — fill with empty slots.
 	for range slotsPerEpoch {
 		window = append(window, &ethpb.PTCs{
-			ValidatorIndices: make([]primitives.ValidatorIndex, fieldparams.PTCSize),
+			ValidatorIndices: make([]uint64, fieldparams.PTCSize),
 		})
 	}
 
@@ -209,7 +207,7 @@ func initializePTCWindow(ctx context.Context, st state.ReadOnlyBeaconState) ([]*
 		if err != nil {
 			return nil, err
 		}
-		window = append(window, &ethpb.PTCs{ValidatorIndices: ptc})
+		window = append(window, ptcSlotFromValidatorIndices(ptc))
 	}
 
 	return window, nil
@@ -292,6 +290,10 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, err
 	}
+	proposerLookaheadU64 := make([]uint64, len(proposerLookahead))
+	for i, v := range proposerLookahead {
+		proposerLookaheadU64[i] = uint64(v)
+	}
 
 	executionPayloadAvailability := make([]byte, int((params.BeaconConfig().SlotsPerHistoricalRoot+7)/8))
 	for i := range executionPayloadAvailability {
@@ -355,7 +357,7 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		PendingDeposits:               pendingDeposits,
 		PendingPartialWithdrawals:     pendingPartialWithdrawals,
 		PendingConsolidations:         pendingConsolidations,
-		ProposerLookahead:             proposerLookahead,
+		ProposerLookahead:             proposerLookaheadU64,
 		Builders:                      []*ethpb.Builder{},
 		NextWithdrawalBuilderIndex:    primitives.BuilderIndex(0),
 		ExecutionPayloadAvailability:  executionPayloadAvailability,

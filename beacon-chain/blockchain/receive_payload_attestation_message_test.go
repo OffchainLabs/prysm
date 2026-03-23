@@ -50,7 +50,7 @@ func TestReceivePayloadAttestationMessage_ValidatorNotInPTC(t *testing.T) {
 	require.NoError(t, err)
 	s.head = &head{root: blockRoot, block: wsb, state: headState, slot: 1}
 
-	ptc, err := headState.PayloadCommitteeReadOnly(1)
+	ptc, err := headState.PayloadCommittee(1)
 	require.NoError(t, err)
 
 	// Pick a validator index not in the PTC.
@@ -99,7 +99,7 @@ func TestReceivePayloadAttestationMessage_OK(t *testing.T) {
 	require.NoError(t, err)
 	s.head = &head{root: blockRoot, block: wsb, state: headState, slot: 1}
 
-	ptc, err := headState.PayloadCommitteeReadOnly(1)
+	ptc, err := headState.PayloadCommittee(1)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(ptc))
 

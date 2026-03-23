@@ -702,10 +702,10 @@ func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, err
 	return b.nextWithdrawalBuilderIndex, nil
 }
 
-// PayloadCommitteeReadOnly returns the payload timeliness committee for a given slot
+// PayloadCommittee returns the payload timeliness committee for a given slot
 // by looking up the cached PTC window in state.
 //
-//	<spec fn="get_ptc" fork="gloas" hash="b55ba184">
+//	<spec fn="get_ptc" fork="gloas" hash="2c292a1c">
 //	def get_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
 //	    """
 //	    Get the payload timeliness committee for the given ``slot``.
@@ -719,9 +719,9 @@ func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, err
 //	    offset = (epoch - state_epoch + 1) * SLOTS_PER_EPOCH
 //	    return state.ptc_window[offset + slot % SLOTS_PER_EPOCH]
 //	</spec>
-func (b *BeaconState) PayloadCommitteeReadOnly(slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
+func (b *BeaconState) PayloadCommittee(slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
 	if b.version < version.Gloas {
-		return nil, errNotSupported("PayloadCommitteeReadOnly", b.version)
+		return nil, errNotSupported("PayloadCommittee", b.version)
 	}
 
 	b.lock.RLock()
@@ -732,15 +732,12 @@ func (b *BeaconState) PayloadCommitteeReadOnly(slot primitives.Slot) ([]primitiv
 		return nil, err
 	}
 
-	if uint64(offset) >= uint64(len(b.ptcWindow)) {
-		return nil, fmt.Errorf("ptc window offset %d out of range for size %d", offset, len(b.ptcWindow))
-	}
 	ptcSlot := b.ptcWindow[offset]
 	if ptcSlot == nil {
 		return nil, fmt.Errorf("ptc window slot %d is nil", offset)
 	}
 
-	return ptcSlot.ValidatorIndices, nil
+	return validatorIndicesFromUint64(ptcSlot.ValidatorIndices), nil
 }
 
 func ptcWindowOffset(stateSlot, slot primitives.Slot) (primitives.Slot, error) {
@@ -761,4 +758,12 @@ func ptcWindowOffset(stateSlot, slot primitives.Slot) (primitives.Slot, error) {
 
 	offset := slotsPerEpoch.Mul(uint64(epoch-stateEpoch+1)) + (slot % slotsPerEpoch)
 	return offset, nil
+}
+
+func validatorIndicesFromUint64(indices []uint64) []primitives.ValidatorIndex {
+	result := make([]primitives.ValidatorIndex, len(indices))
+	for i, index := range indices {
+		result[i] = primitives.ValidatorIndex(index)
+	}
+	return result
 }

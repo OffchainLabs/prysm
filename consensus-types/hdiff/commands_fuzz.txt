@@ -1,0 +1,22 @@
+# Commands to run all fuzz tests individually for 30 seconds each
+# Run these commands one by one in the consensus-types/hdiff directory
+# All memory bounds have been added to prevent OOM issues
+
+go test -fuzz=FuzzNewHdiff -fuzztime=30s
+go test -fuzz=FuzzNewStateDiff -fuzztime=30s
+go test -fuzz=FuzzNewValidatorDiffs -fuzztime=30s
+go test -fuzz=FuzzNewBalancesDiff -fuzztime=30s
+go test -fuzz=FuzzApplyDiff -fuzztime=30s
+go test -fuzz=FuzzReadPendingAttestation -fuzztime=30s
+go test -fuzz=FuzzKmpIndex -fuzztime=30s
+go test -fuzz=FuzzComputeLPS -fuzztime=30s
+go test -fuzz=FuzzDiffToBalances -fuzztime=30s
+go test -fuzz=FuzzValidatorsEqual -fuzztime=30s
+
+# Property tests (from property_test.go)
+go test -fuzz=FuzzPropertyRoundTrip -fuzztime=30s
+go test -fuzz=FuzzPropertyResourceBounds -fuzztime=30s
+go test -fuzz=FuzzPropertyDiffEfficiency -fuzztime=30s
+go test -fuzz=FuzzPropertyBalanceConservation -fuzztime=30s
+go test -fuzz=FuzzPropertyMonotonicSlot -fuzztime=30s
+go test -fuzz=FuzzPropertyValidatorIndices -fuzztime=30s
