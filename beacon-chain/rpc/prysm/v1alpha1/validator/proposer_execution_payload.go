@@ -137,7 +137,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 	var attr payloadattribute.Attributer
 	switch {
 	case st.Version() >= version.Gloas:
-		withdrawals, err := st.PayloadWithdrawals()
+		withdrawals, err := st.WithdrawalsForPayload()
 		if err != nil {
 			return nil, err
 		}

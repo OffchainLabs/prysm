@@ -699,7 +699,7 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		err error
 	)
 	if v >= version.Gloas {
-		w, err = st.PayloadWithdrawals()
+		w, err = st.WithdrawalsForPayload()
 	} else {
 		w, _, err = st.ExpectedWithdrawals()
 	}

@@ -834,11 +834,11 @@ func TestPayloadExpectedWithdrawals(t *testing.T) {
 	})
 }
 
-func TestPayloadWithdrawals(t *testing.T) {
+func TestWithdrawalsForPayload(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
 		st := &BeaconState{version: version.Fulu}
-		_, err := st.PayloadWithdrawals()
-		require.ErrorContains(t, "PayloadWithdrawals", err)
+		_, err := st.WithdrawalsForPayload()
+		require.ErrorContains(t, "WithdrawalsForPayload", err)
 	})
 
 	t.Run("returns existing withdrawals when parent empty", func(t *testing.T) {
@@ -855,7 +855,7 @@ func TestPayloadWithdrawals(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		got, err := st.PayloadWithdrawals()
+		got, err := st.WithdrawalsForPayload()
 		require.NoError(t, err)
 		require.DeepEqual(t, existing, got)
 	})
@@ -876,7 +876,7 @@ func TestPayloadWithdrawals(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		got, err := st.PayloadWithdrawals()
+		got, err := st.WithdrawalsForPayload()
 		require.NoError(t, err)
 		// Fresh computation with no validators yields empty, not the stale value.
 		require.Equal(t, 0, len(got))

@@ -70,7 +70,7 @@ type readOnlyGloasFields interface {
 	IsParentBlockFull() (bool, error)
 	ExpectedWithdrawalsGloas() (ExpectedWithdrawalsGloasResult, error)
 	PayloadExpectedWithdrawals() ([]*enginev1.Withdrawal, error)
-	PayloadWithdrawals() ([]*enginev1.Withdrawal, error)
+	WithdrawalsForPayload() ([]*enginev1.Withdrawal, error)
 }
 
 // ExpectedWithdrawalsGloasResult bundles the expected withdrawals and related counters
