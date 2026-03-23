@@ -5,7 +5,6 @@ import (
 	"context"
 	"sort"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -221,7 +220,7 @@ func (s *Service) PTCDuties(ctx context.Context, st state.BeaconState, epoch pri
 			return nil, &RpcError{Err: ctx.Err(), Reason: Internal}
 		}
 
-		ptc, err := gloas.PayloadCommittee(ctx, st, slot)
+		ptc, err := st.PayloadCommittee(slot)
 		if err != nil {
 			return nil, &RpcError{Err: err, Reason: Internal}
 		}

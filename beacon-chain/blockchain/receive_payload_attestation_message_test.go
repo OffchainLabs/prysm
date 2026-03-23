@@ -3,7 +3,6 @@ package blockchain
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -51,7 +50,7 @@ func TestReceivePayloadAttestationMessage_ValidatorNotInPTC(t *testing.T) {
 	require.NoError(t, err)
 	s.head = &head{root: blockRoot, block: wsb, state: headState, slot: 1}
 
-	ptc, err := gloas.PayloadCommittee(ctx, headState, 1)
+	ptc, err := headState.PayloadCommittee(1)
 	require.NoError(t, err)
 
 	// Pick a validator index not in the PTC.
@@ -100,7 +99,7 @@ func TestReceivePayloadAttestationMessage_OK(t *testing.T) {
 	require.NoError(t, err)
 	s.head = &head{root: blockRoot, block: wsb, state: headState, slot: 1}
 
-	ptc, err := gloas.PayloadCommittee(ctx, headState, 1)
+	ptc, err := headState.PayloadCommittee(1)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(ptc))
 

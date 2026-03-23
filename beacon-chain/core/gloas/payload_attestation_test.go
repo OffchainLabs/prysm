@@ -292,6 +292,50 @@ func signAttestation(t *testing.T, st state.ReadOnlyBeaconState, data *eth.Paylo
 	return agg.Marshal()
 }
 
+func TestProcessPTCWindow(t *testing.T) {
+	fuluSt, _ := testutil.DeterministicGenesisStateFulu(t, 256)
+	st, err := gloas.UpgradeToGloas(fuluSt)
+	require.NoError(t, err)
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+	// Get original window.
+	origWindow, err := st.PTCWindow()
+	require.NoError(t, err)
+	windowSize := int(slotsPerEpoch.Mul(uint64(2 + params.BeaconConfig().MinSeedLookahead)))
+	require.Equal(t, windowSize, len(origWindow))
+
+	// Advance state to next epoch boundary so process_ptc_window sees a new epoch.
+	require.NoError(t, st.SetSlot(slotsPerEpoch))
+
+	// Process PTC window — should rotate.
+	require.NoError(t, gloas.ProcessPTCWindow(t.Context(), st))
+
+	newWindow, err := st.PTCWindow()
+	require.NoError(t, err)
+	require.Equal(t, windowSize, len(newWindow))
+
+	// The first two epochs should be the old epochs 1 and 2 (shifted left by one epoch).
+	for i := range 2 * slotsPerEpoch {
+		require.DeepEqual(t, origWindow[slotsPerEpoch+i], newWindow[i])
+	}
+
+	// The last epoch should be freshly computed — not all zeros.
+	lastStart := 2 * slotsPerEpoch
+	for i := range slotsPerEpoch {
+		ptcSlot := newWindow[lastStart+i]
+		require.NotNil(t, ptcSlot)
+		nonZero := false
+		for _, idx := range ptcSlot.ValidatorIndices {
+			if idx != 0 {
+				nonZero = true
+				break
+			}
+		}
+		require.Equal(t, true, nonZero, "last epoch slot %d should have non-zero validator indices", i)
+	}
+}
+
 type validatorLookupErrState struct {
 	state.BeaconState
 	errIndex primitives.ValidatorIndex

@@ -11,6 +11,8 @@ import (
 type writeOnlyGloasFields interface {
 	// Bids.
 	SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid) error
+	SetPTCWindow([]*ethpb.PTCs) error
+	RotatePTCWindow([]*ethpb.PTCs) error
 
 	// Builder pending payments / withdrawals.
 	SetBuilderPendingPayment(index primitives.Slot, payment *ethpb.BuilderPendingPayment) error
@@ -43,6 +45,8 @@ type writeOnlyGloasFields interface {
 type readOnlyGloasFields interface {
 	// Bids.
 	LatestExecutionPayloadBid() (interfaces.ROExecutionPayloadBid, error)
+	PTCWindow() ([]*ethpb.PTCs, error)
+	PayloadCommittee(slot primitives.Slot) ([]primitives.ValidatorIndex, error)
 
 	// Builder pending payments / withdrawals.
 	BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error)
