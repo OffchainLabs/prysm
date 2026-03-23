@@ -24,12 +24,12 @@ func TestStore_SetUnrealizedEpochs(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
 	require.Equal(t, primitives.Epoch(1), f.store.emptyNodeByRoot[[32]byte{'b'}].node.unrealizedJustifiedEpoch)
 	require.Equal(t, primitives.Epoch(1), f.store.emptyNodeByRoot[[32]byte{'b'}].node.unrealizedFinalizedEpoch)
-	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'b'}, 2))
+	require.NoError(t, f.store.setUnrealizedJustifiedCheckpoint([32]byte{'b'}, 2, [32]byte{}))
 	require.NoError(t, f.store.setUnrealizedFinalizedEpoch([32]byte{'b'}, 2))
 	require.Equal(t, primitives.Epoch(2), f.store.emptyNodeByRoot[[32]byte{'b'}].node.unrealizedJustifiedEpoch)
 	require.Equal(t, primitives.Epoch(2), f.store.emptyNodeByRoot[[32]byte{'b'}].node.unrealizedFinalizedEpoch)
 
-	require.ErrorIs(t, errInvalidUnrealizedJustifiedEpoch, f.store.setUnrealizedJustifiedEpoch([32]byte{'b'}, 0))
+	require.ErrorIs(t, errInvalidUnrealizedJustifiedEpoch, f.store.setUnrealizedJustifiedCheckpoint([32]byte{'b'}, 0, [32]byte{}))
 	require.ErrorIs(t, errInvalidUnrealizedFinalizedEpoch, f.store.setUnrealizedFinalizedEpoch([32]byte{'b'}, 0))
 }
 
@@ -69,11 +69,11 @@ func TestStore_LongFork(t *testing.T) {
 	state, blkRoot, err = prepareForkchoiceState(ctx, 80, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'b'}, 2))
+	require.NoError(t, f.store.setUnrealizedJustifiedCheckpoint([32]byte{'b'}, 2, [32]byte{}))
 	state, blkRoot, err = prepareForkchoiceState(ctx, 95, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'c'}, 2))
+	require.NoError(t, f.store.setUnrealizedJustifiedCheckpoint([32]byte{'c'}, 2, [32]byte{}))
 
 	// Add an attestation to c, it is head
 	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'c'}, params.BeaconConfig().SlotsPerEpoch, true)
@@ -135,22 +135,22 @@ func TestStore_NoDeadLock(t *testing.T) {
 	state, blkRoot, err = prepareForkchoiceState(ctx, 104, [32]byte{'e'}, [32]byte{'d'}, [32]byte{'E'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'e'}, 1))
+	require.NoError(t, f.store.setUnrealizedJustifiedCheckpoint([32]byte{'e'}, 1, [32]byte{}))
 	state, blkRoot, err = prepareForkchoiceState(ctx, 105, [32]byte{'f'}, [32]byte{'e'}, [32]byte{'F'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'f'}, 1))
+	require.NoError(t, f.store.setUnrealizedJustifiedCheckpoint([32]byte{'f'}, 1, [32]byte{}))
 	state, blkRoot, err = prepareForkchoiceState(ctx, 106, [32]byte{'g'}, [32]byte{'f'}, [32]byte{'G'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'g'}, 2))
+	require.NoError(t, f.store.setUnrealizedJustifiedCheckpoint([32]byte{'g'}, 2, [32]byte{}))
 	require.NoError(t, f.store.setUnrealizedFinalizedEpoch([32]byte{'g'}, 1))
 	f.store.unrealizedJustifiedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: 2}
 	f.store.unrealizedFinalizedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: 1}
 	state, blkRoot, err = prepareForkchoiceState(ctx, 107, [32]byte{'h'}, [32]byte{'g'}, [32]byte{'H'}, 0, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'h'}, 2))
+	require.NoError(t, f.store.setUnrealizedJustifiedCheckpoint([32]byte{'h'}, 2, [32]byte{}))
 	require.NoError(t, f.store.setUnrealizedFinalizedEpoch([32]byte{'h'}, 1))
 	// Add an attestation for h
 	f.ProcessAttestation(ctx, []uint64{0}, [32]byte{'h'}, params.BeaconConfig().SlotsPerEpoch, true)
@@ -236,7 +236,7 @@ func TestStore_ForkNextEpoch(t *testing.T) {
 	state, blkRoot, err = prepareForkchoiceState(ctx, 95, [32]byte{'d'}, [32]byte{'c'}, [32]byte{'D'}, 1, 0)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blkRoot))
-	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'d'}, 2))
+	require.NoError(t, f.store.setUnrealizedJustifiedCheckpoint([32]byte{'d'}, 2, [32]byte{}))
 	f.store.unrealizedJustifiedCheckpoint = &forkchoicetypes.Checkpoint{Epoch: 2}
 	require.NoError(t, f.updateUnrealizedCheckpoints(ctx))
 	headRoot, err = f.Head(ctx)
@@ -247,7 +247,7 @@ func TestStore_ForkNextEpoch(t *testing.T) {
 	require.Equal(t, uint64(100), f.store.emptyNodeByRoot[[32]byte{'h'}].node.weight)
 	// Set current epoch to 3, and H's unrealized checkpoint. Check it's head
 	driftGenesisTime(f, 99, 0)
-	require.NoError(t, f.store.setUnrealizedJustifiedEpoch([32]byte{'h'}, 2))
+	require.NoError(t, f.store.setUnrealizedJustifiedCheckpoint([32]byte{'h'}, 2, [32]byte{}))
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{'h'}, headRoot)

@@ -29,6 +29,7 @@ const (
 	previousJustifiedCheckpointCalled
 	justifiedPayloadBlockHashCalled
 	unrealizedJustifiedPayloadBlockHashCalled
+	unrealizedJustifiedCheckpointCalled
 	nodeCountCalled
 	highestReceivedBlockSlotCalled
 	highestReceivedBlockRootCalled
@@ -46,7 +47,9 @@ const (
 	dependentRootCalled
 	dependentRootForEpochCalled
 	canonicalNodeAtSlotCalled
+	confirmedPayloadBlockHashCalled
 	payloadWeightsCalled
+	slashedIndicesCalled
 )
 
 func _discard(t *testing.T, e error) {
@@ -125,6 +128,11 @@ func TestROLocking(t *testing.T) {
 			cb:   func(g FastGetter) { g.UnrealizedJustifiedPayloadBlockHash() },
 		},
 		{
+			name: "unrealizedJustifiedCheckpointCalled",
+			call: unrealizedJustifiedCheckpointCalled,
+			cb:   func(g FastGetter) { g.UnrealizedJustifiedCheckpoint() },
+		},
+		{
 			name: "nodeCountCalled",
 			call: nodeCountCalled,
 			cb:   func(g FastGetter) { g.NodeCount() },
@@ -175,6 +183,11 @@ func TestROLocking(t *testing.T) {
 			cb:   func(g FastGetter) { _, err := g.DependentRoot(0); _discard(t, err) },
 		},
 		{
+			name: "confirmedPayloadBlockHashCalled",
+			call: confirmedPayloadBlockHashCalled,
+			cb:   func(g FastGetter) { g.ConfirmedPayloadBlockHash([32]byte{}) },
+		},
+		{
 			name: "canonicalNodeAtSlotCalled",
 			call: canonicalNodeAtSlotCalled,
 			cb:   func(g FastGetter) { g.CanonicalNodeAtSlot(0) },
@@ -183,6 +196,11 @@ func TestROLocking(t *testing.T) {
 			name: "gasLimitCalled",
 			call: gasLimitCalled,
 			cb:   func(g FastGetter) { _, err := g.GasLimit([32]byte{}); _discard(t, err) },
+		},
+		{
+			name: "slashedIndicesCalled",
+			call: slashedIndicesCalled,
+			cb:   func(g FastGetter) { g.SlashedIndices() },
 		},
 	}
 	for _, c := range cases {
@@ -281,6 +299,11 @@ func (ro *mockROForkchoice) UnrealizedJustifiedPayloadBlockHash() [32]byte {
 	return [32]byte{}
 }
 
+func (ro *mockROForkchoice) UnrealizedJustifiedCheckpoint() *forkchoicetypes.Checkpoint {
+	ro.calls = append(ro.calls, unrealizedJustifiedCheckpointCalled)
+	return nil
+}
+
 func (ro *mockROForkchoice) NodeCount() int {
 	ro.calls = append(ro.calls, nodeCountCalled)
 	return 0
@@ -364,7 +387,17 @@ func (ro *mockROForkchoice) GasLimit(_ [32]byte) (uint64, error) {
 	return 0, nil
 }
 
+func (ro *mockROForkchoice) ConfirmedPayloadBlockHash(_ [32]byte) [32]byte {
+	ro.calls = append(ro.calls, confirmedPayloadBlockHashCalled)
+	return [32]byte{}
+}
+
 func (ro *mockROForkchoice) CanonicalNodeAtSlot(_ primitives.Slot) ([32]byte, bool) {
 	ro.calls = append(ro.calls, canonicalNodeAtSlotCalled)
 	return [32]byte{}, false
+}
+
+func (ro *mockROForkchoice) SlashedIndices() map[primitives.ValidatorIndex]bool {
+	ro.calls = append(ro.calls, slashedIndicesCalled)
+	return nil
 }

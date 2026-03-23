@@ -33,6 +33,7 @@ import (
 var proposerBoostTests3s = []string{
 	"proposer_boost_is_first_block",
 	"proposer_boost",
+	"is_one_confirmed_fails_with_competing_branch",
 }
 
 func init() {
@@ -41,13 +42,18 @@ func init() {
 
 // Run executes "forkchoice"  and "sync" test.
 func Run(t *testing.T, config string, fork int) {
-	runTest(t, config, fork, "fork_choice")
+	runTest(t, config, fork, "fork_choice", false)
 	if fork >= version.Bellatrix && fork < version.Gloas {
-		runTest(t, config, fork, "sync")
+		runTest(t, config, fork, "sync", false)
 	}
 }
 
-func runTest(t *testing.T, config string, fork int, basePath string) { // nolint:gocognit
+// RunFastConfirmation executes fast confirmation rule spec tests.
+func RunFastConfirmation(t *testing.T, config string, fork int) {
+	runTest(t, config, fork, "fast_confirmation", true)
+}
+
+func runTest(t *testing.T, config string, fork int, basePath string, fcr bool) { // nolint:gocognit
 	require.NoError(t, utils.SetConfig(t, config))
 	cfg := params.BeaconConfig()
 	params.SetGenesisFork(t, cfg, fork)
@@ -77,6 +83,7 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 			}
 			t.Run(folder.Name(), func(t *testing.T) {
 				helpers.ClearCache()
+				transition.ClearNextSlotCache()
 				preStepsFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "steps.yaml")
 				require.NoError(t, err)
 				var steps []Step
@@ -92,38 +99,23 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 				blockSSZ, err := snappy.Decode(nil /* dst */, blockFile)
 				require.NoError(t, err)
 
-				var beaconState state.BeaconState
-				var beaconBlock interfaces.ReadOnlySignedBeaconBlock
-				switch fork {
-				case version.Phase0:
-					beaconState = unmarshalPhase0State(t, preBeaconStateSSZ)
-					beaconBlock = unmarshalPhase0Block(t, blockSSZ)
-				case version.Altair:
-					beaconState = unmarshalAltairState(t, preBeaconStateSSZ)
-					beaconBlock = unmarshalAltairBlock(t, blockSSZ)
-				case version.Bellatrix:
-					beaconState = unmarshalBellatrixState(t, preBeaconStateSSZ)
-					beaconBlock = unmarshalBellatrixBlock(t, blockSSZ)
-				case version.Capella:
-					beaconState = unmarshalCapellaState(t, preBeaconStateSSZ)
-					beaconBlock = unmarshalCapellaBlock(t, blockSSZ)
-				case version.Deneb:
-					beaconState = unmarshalDenebState(t, preBeaconStateSSZ)
-					beaconBlock = unmarshalDenebBlock(t, blockSSZ)
-				case version.Electra:
-					beaconState = unmarshalElectraState(t, preBeaconStateSSZ)
-					beaconBlock = unmarshalElectraBlock(t, blockSSZ)
-				case version.Fulu:
-					beaconState = unmarshalFuluState(t, preBeaconStateSSZ)
-					beaconBlock = unmarshalFuluBlock(t, blockSSZ)
-				case version.Gloas:
-					beaconState = unmarshalGloasState(t, preBeaconStateSSZ)
-					beaconBlock = unmarshalGloasBlock(t, blockSSZ)
-				default:
-					t.Fatalf("unknown fork version: %v", fork)
+				beaconState, beaconBlock := unmarshalAnchor(t, fork, preBeaconStateSSZ, blockSSZ)
+
+				var builder *Builder
+				if fcr {
+					builder = NewFCRBuilder(t, beaconState, beaconBlock)
+				} else {
+					builder = NewBuilder(t, beaconState, beaconBlock)
 				}
 
-				builder := NewBuilder(t, beaconState, beaconBlock)
+				// Vectors generated with bls_setting 2 carry unsigned blocks.
+				if metaFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "meta.yaml"); err == nil {
+					meta := &Meta{}
+					require.NoError(t, utils.UnmarshalYaml(metaFile, meta))
+					if meta.BlsSetting == 2 {
+						builder.service.DisableBlockSignatureVerificationForTesting()
+					}
+				}
 
 				for _, step := range steps {
 					if step.Tick != nil {
@@ -146,26 +138,7 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 						require.NoError(t, err)
 						blockSSZ, err := snappy.Decode(nil /* dst */, blockFile)
 						require.NoError(t, err)
-						switch fork {
-						case version.Phase0:
-							beaconBlock = unmarshalSignedPhase0Block(t, blockSSZ)
-						case version.Altair:
-							beaconBlock = unmarshalSignedAltairBlock(t, blockSSZ)
-						case version.Bellatrix:
-							beaconBlock = unmarshalSignedBellatrixBlock(t, blockSSZ)
-						case version.Capella:
-							beaconBlock = unmarshalSignedCapellaBlock(t, blockSSZ)
-						case version.Deneb:
-							beaconBlock = unmarshalSignedDenebBlock(t, blockSSZ)
-						case version.Electra:
-							beaconBlock = unmarshalSignedElectraBlock(t, blockSSZ)
-						case version.Fulu:
-							beaconBlock = unmarshalSignedFuluBlock(t, blockSSZ)
-						case version.Gloas:
-							beaconBlock = unmarshalSignedGloasBlock(t, blockSSZ)
-						default:
-							t.Fatalf("unknown fork version: %v", fork)
-						}
+						beaconBlock = unmarshalSignedBlock(t, fork, blockSSZ)
 					}
 					runBlobStep(t, step, beaconBlock, fork, folder, testsFolderPath, builder)
 					if len(step.DataColumns) > 0 {
@@ -178,56 +151,124 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 							builder.ValidBlock(t, beaconBlock)
 						}
 					}
-					if step.AttesterSlashing != nil {
-						slashingFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.AttesterSlashing, ".ssz_snappy"))
-						require.NoError(t, err)
-						slashingSSZ, err := snappy.Decode(nil /* dst */, slashingFile)
-						require.NoError(t, err)
-						slashing := &ethpb.AttesterSlashing{}
-						require.NoError(t, slashing.UnmarshalSSZ(slashingSSZ), "Failed to unmarshal")
-						builder.AttesterSlashing(slashing)
-					}
-					if step.Attestation != nil {
-						attFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.Attestation, ".ssz_snappy"))
-						require.NoError(t, err)
-						attSSZ, err := snappy.Decode(nil /* dst */, attFile)
-						require.NoError(t, err)
-						var att ethpb.Att
-						if fork < version.Electra {
-							att = &ethpb.Attestation{}
-						} else {
-							att = &ethpb.AttestationElectra{}
-						}
-						require.NoError(t, att.UnmarshalSSZ(attSSZ), "Failed to unmarshal")
-						builder.Attestation(t, att)
-					}
+					runAttesterSlashingStep(t, step, folder, testsFolderPath, builder)
+					runAttestationStep(t, step, fork, folder, testsFolderPath, builder)
 					if step.PayloadStatus != nil {
 						require.NoError(t, builder.SetPayloadStatus(step.PayloadStatus))
 					}
-					if step.ExecutionPayload != nil {
-						envFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.ExecutionPayload, ".ssz_snappy"))
-						require.NoError(t, err)
-						envSSZ, err := snappy.Decode(nil /* dst */, envFile)
-						require.NoError(t, err)
-						signed := &ethpb.SignedExecutionPayloadEnvelope{}
-						require.NoError(t, signed.UnmarshalSSZ(envSSZ), "Failed to unmarshal signed envelope")
-						expectValid := step.Valid == nil || *step.Valid
-						builder.ExecutionPayloadEnvelope(t, signed, expectValid)
-					}
+					runExecutionPayloadStep(t, step, folder, testsFolderPath, builder)
 					runPayloadAttestationStep(t, step, folder, testsFolderPath, builder)
-					if step.PowBlock != nil {
-						powBlockFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.PowBlock, ".ssz_snappy"))
-						require.NoError(t, err)
-						p, err := snappy.Decode(nil /* dst */, powBlockFile)
-						require.NoError(t, err)
-						pb := &ethpb.PowBlock{}
-						require.NoError(t, pb.UnmarshalSSZ(p), "Failed to unmarshal")
-						builder.PoWBlock(pb)
-					}
+					runPowBlockStep(t, step, folder, testsFolderPath, builder)
 					builder.Check(t, step.Check)
 				}
 			})
 		}
+	}
+}
+
+func runAttesterSlashingStep(t *testing.T, step Step, folder os.DirEntry, testsFolderPath string, builder *Builder) {
+	if step.AttesterSlashing == nil {
+		return
+	}
+	slashingFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.AttesterSlashing, ".ssz_snappy"))
+	require.NoError(t, err)
+	slashingSSZ, err := snappy.Decode(nil /* dst */, slashingFile)
+	require.NoError(t, err)
+	slashing := &ethpb.AttesterSlashing{}
+	require.NoError(t, slashing.UnmarshalSSZ(slashingSSZ), "Failed to unmarshal")
+	builder.AttesterSlashing(slashing)
+}
+
+func runAttestationStep(t *testing.T, step Step, fork int, folder os.DirEntry, testsFolderPath string, builder *Builder) {
+	if step.Attestation == nil {
+		return
+	}
+	attFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.Attestation, ".ssz_snappy"))
+	require.NoError(t, err)
+	attSSZ, err := snappy.Decode(nil /* dst */, attFile)
+	require.NoError(t, err)
+	var att ethpb.Att
+	if fork < version.Electra {
+		att = &ethpb.Attestation{}
+	} else {
+		att = &ethpb.AttestationElectra{}
+	}
+	require.NoError(t, att.UnmarshalSSZ(attSSZ), "Failed to unmarshal")
+	builder.Attestation(t, att)
+}
+
+func runExecutionPayloadStep(t *testing.T, step Step, folder os.DirEntry, testsFolderPath string, builder *Builder) {
+	if step.ExecutionPayload == nil {
+		return
+	}
+	envFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.ExecutionPayload, ".ssz_snappy"))
+	require.NoError(t, err)
+	envSSZ, err := snappy.Decode(nil /* dst */, envFile)
+	require.NoError(t, err)
+	signed := &ethpb.SignedExecutionPayloadEnvelope{}
+	require.NoError(t, signed.UnmarshalSSZ(envSSZ), "Failed to unmarshal signed envelope")
+	expectValid := step.Valid == nil || *step.Valid
+	builder.ExecutionPayloadEnvelope(t, signed, expectValid)
+}
+
+func runPowBlockStep(t *testing.T, step Step, folder os.DirEntry, testsFolderPath string, builder *Builder) {
+	if step.PowBlock == nil {
+		return
+	}
+	powBlockFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*step.PowBlock, ".ssz_snappy"))
+	require.NoError(t, err)
+	p, err := snappy.Decode(nil /* dst */, powBlockFile)
+	require.NoError(t, err)
+	pb := &ethpb.PowBlock{}
+	require.NoError(t, pb.UnmarshalSSZ(p), "Failed to unmarshal")
+	builder.PoWBlock(pb)
+}
+
+func unmarshalAnchor(t *testing.T, fork int, stateSSZ, blockSSZ []byte) (state.BeaconState, interfaces.ReadOnlySignedBeaconBlock) {
+	switch fork {
+	case version.Phase0:
+		return unmarshalPhase0State(t, stateSSZ), unmarshalPhase0Block(t, blockSSZ)
+	case version.Altair:
+		return unmarshalAltairState(t, stateSSZ), unmarshalAltairBlock(t, blockSSZ)
+	case version.Bellatrix:
+		return unmarshalBellatrixState(t, stateSSZ), unmarshalBellatrixBlock(t, blockSSZ)
+	case version.Capella:
+		return unmarshalCapellaState(t, stateSSZ), unmarshalCapellaBlock(t, blockSSZ)
+	case version.Deneb:
+		return unmarshalDenebState(t, stateSSZ), unmarshalDenebBlock(t, blockSSZ)
+	case version.Electra:
+		return unmarshalElectraState(t, stateSSZ), unmarshalElectraBlock(t, blockSSZ)
+	case version.Fulu:
+		return unmarshalFuluState(t, stateSSZ), unmarshalFuluBlock(t, blockSSZ)
+	case version.Gloas:
+		return unmarshalGloasState(t, stateSSZ), unmarshalGloasBlock(t, blockSSZ)
+	default:
+		t.Fatalf("unknown fork version: %v", fork)
+		return nil, nil
+	}
+}
+
+func unmarshalSignedBlock(t *testing.T, fork int, blockSSZ []byte) interfaces.ReadOnlySignedBeaconBlock {
+	switch fork {
+	case version.Phase0:
+		return unmarshalSignedPhase0Block(t, blockSSZ)
+	case version.Altair:
+		return unmarshalSignedAltairBlock(t, blockSSZ)
+	case version.Bellatrix:
+		return unmarshalSignedBellatrixBlock(t, blockSSZ)
+	case version.Capella:
+		return unmarshalSignedCapellaBlock(t, blockSSZ)
+	case version.Deneb:
+		return unmarshalSignedDenebBlock(t, blockSSZ)
+	case version.Electra:
+		return unmarshalSignedElectraBlock(t, blockSSZ)
+	case version.Fulu:
+		return unmarshalSignedFuluBlock(t, blockSSZ)
+	case version.Gloas:
+		return unmarshalSignedGloasBlock(t, blockSSZ)
+	default:
+		t.Fatalf("unknown fork version: %v", fork)
+		return nil
 	}
 }
 

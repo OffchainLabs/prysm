@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -32,6 +33,32 @@ type Builder struct {
 	execMock *engineMock
 	vwait    *verification.InitializerWaiter
 	fc       forkchoice.ForkChoicer
+	fcr      bool
+}
+
+// NewFCRBuilder creates a Builder with fast confirmation rule enabled.
+func NewFCRBuilder(t testing.TB, initialState state.BeaconState, initialBlock interfaces.ReadOnlySignedBeaconBlock) *Builder {
+	resetFeatures := features.InitWithReset(&features.Flags{EnableFastConfirmation: true})
+
+	b := NewBuilder(t, initialState, initialBlock)
+	b.fcr = true
+	b.service.InitFastConfirmation()
+	t.Cleanup(resetFeatures)
+
+	// The genesis state carries a zero justified root stub, backfill nodes with the anchor root.
+	headRoot := b.service.CachedHeadRoot()
+	fc := b.service.ForkChoicer()
+	type nodeRootFixer interface {
+		FixZeroUnrealizedJustifiedRoots(root [32]byte, epoch primitives.Epoch)
+	}
+	fc.Lock()
+	if fixer, ok := fc.(nodeRootFixer); ok {
+		jc := fc.JustifiedCheckpoint()
+		fixer.FixZeroUnrealizedJustifiedRoots(headRoot, jc.Epoch)
+	}
+	fc.Unlock()
+
+	return b
 }
 
 func NewBuilder(t testing.TB, initialState state.BeaconState, initialBlock interfaces.ReadOnlySignedBeaconBlock) *Builder {
@@ -56,15 +83,29 @@ func NewBuilder(t testing.TB, initialState state.BeaconState, initialBlock inter
 	}
 }
 
+func (bb *Builder) runFCR(ctx context.Context, slot primitives.Slot) {
+	fcr := bb.service.FCR()
+	if fcr == nil {
+		return
+	}
+	fcr.OnFastConfirmation(ctx, slot)
+}
+
 // Tick resets the genesis time to now()-tick and adjusts the slot to the appropriate value.
 func (bb *Builder) Tick(t testing.TB, tick int64) {
-	bb.service.SetGenesisTime(time.Unix(time.Now().Unix()-tick, 0))
+	now := time.Now()
+	bb.service.SetGenesisTime(time.Unix(now.Unix()-tick, 0))
+	bb.service.SetForkChoiceGenesisTime(now.Add(-1 * time.Duration(tick) * time.Second))
 	lastSlot := uint64(bb.lastTick) / params.BeaconConfig().SecondsPerSlot
 	currentSlot := uint64(tick) / params.BeaconConfig().SecondsPerSlot
 	for lastSlot < currentSlot {
 		lastSlot++
 		bb.service.SetForkChoiceGenesisTime(time.Now().Add(-1 * time.Duration(params.BeaconConfig().SecondsPerSlot*lastSlot) * time.Second))
 		require.NoError(t, bb.service.NewSlot(t.Context(), primitives.Slot(lastSlot)))
+		if bb.fcr {
+			require.NoError(t, bb.service.UpdateAndSaveHeadWithBalances(t.Context()))
+			bb.runFCR(t.Context(), primitives.Slot(lastSlot))
+		}
 	}
 	if tick > int64(params.BeaconConfig().SecondsPerSlot*lastSlot) {
 		bb.service.SetForkChoiceGenesisTime(time.Now().Add(-1 * time.Duration(tick) * time.Second))
@@ -156,7 +197,13 @@ func (bb *Builder) PoWBlock(pb *ethpb.PowBlock) {
 
 // Attestation receives the attestation and updates forkchoice.
 func (bb *Builder) Attestation(t testing.TB, a ethpb.Att) {
-	require.NoError(t, bb.service.OnAttestation(context.TODO(), a, params.BeaconConfig().MaximumGossipClockDisparityDuration()))
+	disparity := params.BeaconConfig().MaximumGossipClockDisparityDuration()
+	if bb.fcr {
+		// FCR spec tests seed attestations before time advances, so allow
+		// one extra slot of disparity to avoid "slot from the future" rejections.
+		disparity = time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	}
+	require.NoError(t, bb.service.OnAttestation(context.TODO(), a, disparity))
 }
 
 // AttesterSlashing receives an attester slashing and feeds it to forkchoice.
@@ -237,6 +284,44 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 			require.Equal(t, true, ok, "no forkchoice node for payload_data_availability_vote root")
 			checkPTCVotes(t, "payload_data_availability_vote", c.PayloadDataAvailabilityVote, attesters, da)
 		}
+	}
+
+	fcr := bb.service.FCR()
+	if c.ConfirmedRoot != nil && fcr != nil {
+		want := fmt.Sprintf("%#x", common.FromHex(*c.ConfirmedRoot))
+		got := fmt.Sprintf("%#x", fcr.ConfirmedRoot())
+		require.Equal(t, want, got, "confirmed_root mismatch")
+	}
+	if c.PreviousSlotHead != nil && fcr != nil {
+		want := fmt.Sprintf("%#x", common.FromHex(*c.PreviousSlotHead))
+		got := fmt.Sprintf("%#x", fcr.PreviousSlotHead())
+		require.Equal(t, want, got, "previous_slot_head mismatch")
+	}
+	if c.CurrentSlotHead != nil && fcr != nil {
+		want := fmt.Sprintf("%#x", common.FromHex(*c.CurrentSlotHead))
+		got := fmt.Sprintf("%#x", fcr.CurrentSlotHead())
+		require.Equal(t, want, got, "current_slot_head mismatch")
+	}
+	if c.PreviousEpochObservedJustifiedCheckpoint != nil && fcr != nil {
+		cp := fcr.PreviousEpochObservedJustifiedCheckpoint()
+		require.Equal(t, primitives.Epoch(c.PreviousEpochObservedJustifiedCheckpoint.Epoch), cp.Epoch, "previous_epoch_observed_justified_checkpoint epoch mismatch")
+		wantRoot := fmt.Sprintf("%#x", common.FromHex(c.PreviousEpochObservedJustifiedCheckpoint.Root))
+		gotRoot := fmt.Sprintf("%#x", cp.Root)
+		require.Equal(t, wantRoot, gotRoot, "previous_epoch_observed_justified_checkpoint root mismatch")
+	}
+	if c.CurrentEpochObservedJustifiedCheckpoint != nil && fcr != nil {
+		cp := fcr.CurrentEpochObservedJustifiedCheckpoint()
+		require.Equal(t, primitives.Epoch(c.CurrentEpochObservedJustifiedCheckpoint.Epoch), cp.Epoch, "current_epoch_observed_justified_checkpoint epoch mismatch")
+		wantRoot := fmt.Sprintf("%#x", common.FromHex(c.CurrentEpochObservedJustifiedCheckpoint.Root))
+		gotRoot := fmt.Sprintf("%#x", cp.Root)
+		require.Equal(t, wantRoot, gotRoot, "current_epoch_observed_justified_checkpoint root mismatch")
+	}
+	if c.PreviousEpochGreatestUnrealizedCheckpoint != nil && fcr != nil {
+		cp := fcr.PreviousEpochGreatestUnrealizedCheckpoint()
+		require.Equal(t, primitives.Epoch(c.PreviousEpochGreatestUnrealizedCheckpoint.Epoch), cp.Epoch, "previous_epoch_greatest_unrealized_checkpoint epoch mismatch")
+		wantRoot := fmt.Sprintf("%#x", common.FromHex(c.PreviousEpochGreatestUnrealizedCheckpoint.Root))
+		gotRoot := fmt.Sprintf("%#x", cp.Root)
+		require.Equal(t, wantRoot, gotRoot, "previous_epoch_greatest_unrealized_checkpoint root mismatch")
 	}
 }
 

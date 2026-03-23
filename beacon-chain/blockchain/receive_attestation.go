@@ -109,6 +109,11 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 					s.cfg.ForkChoiceStore.Unlock()
 
 					s.UpdateHead(s.ctx, slotInterval.Slot)
+
+					// The spec requires running FCR at slot start, after attestations are applied.
+					if s.fcr != nil {
+						s.fcr.OnFastConfirmation(s.ctx, slotInterval.Slot)
+					}
 				}
 			}
 		}

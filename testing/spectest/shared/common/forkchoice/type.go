@@ -29,6 +29,18 @@ type Check struct {
 	HeadPayloadStatus           *int            `json:"head_payload_status"`
 	PayloadTimelinessVote       *PTCVotes       `json:"payload_timeliness_vote"`
 	PayloadDataAvailabilityVote *PTCVotes       `json:"payload_data_availability_vote"`
+
+	// Fast confirmation rule fields
+	ConfirmedRoot                             *string    `json:"confirmed_root"`
+	PreviousSlotHead                          *string    `json:"previous_slot_head"`
+	CurrentSlotHead                           *string    `json:"current_slot_head"`
+	PreviousEpochObservedJustifiedCheckpoint  *EpochRoot `json:"previous_epoch_observed_justified_checkpoint"`
+	CurrentEpochObservedJustifiedCheckpoint   *EpochRoot `json:"current_epoch_observed_justified_checkpoint"`
+	PreviousEpochGreatestUnrealizedCheckpoint *EpochRoot `json:"previous_epoch_greatest_unrealized_checkpoint"`
+}
+
+type Meta struct {
+	BlsSetting int `json:"bls_setting"`
 }
 
 type PTCVotes struct {

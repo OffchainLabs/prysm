@@ -398,11 +398,11 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 
 	s.cfg.ForkChoiceStore.RLock()
 	finalizedHash := s.cfg.ForkChoiceStore.FinalizedPayloadBlockHash()
-	justifiedHash := s.cfg.ForkChoiceStore.UnrealizedJustifiedPayloadBlockHash()
+	safeHash := s.safeBlockHash()
 	s.cfg.ForkChoiceStore.RUnlock()
 	fcs := &enginev1.ForkchoiceState{
 		HeadBlockHash:      blockHash[:],
-		SafeBlockHash:      justifiedHash[:],
+		SafeBlockHash:      safeHash[:],
 		FinalizedBlockHash: finalizedHash[:],
 	}
 	if attributes == nil {

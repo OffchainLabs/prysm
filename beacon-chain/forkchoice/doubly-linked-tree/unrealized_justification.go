@@ -14,15 +14,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *Store) setUnrealizedJustifiedEpoch(root [32]byte, epoch primitives.Epoch) error {
-	en, ok := s.emptyNodeByRoot[root]
+func (s *Store) setUnrealizedJustifiedCheckpoint(blockRoot [32]byte, epoch primitives.Epoch, cpRoot [32]byte) error {
+	en, ok := s.emptyNodeByRoot[blockRoot]
 	if !ok || en == nil {
-		return errors.Wrap(ErrNilNode, "could not set unrealized justified epoch")
+		return errors.Wrap(ErrNilNode, "could not set unrealized justified checkpoint")
 	}
 	if epoch < en.node.unrealizedJustifiedEpoch {
 		return errInvalidUnrealizedJustifiedEpoch
 	}
 	en.node.unrealizedJustifiedEpoch = epoch
+	en.node.unrealizedJustifiedRoot = cpRoot
 	return nil
 }
 
@@ -60,7 +61,10 @@ func (f *ForkChoice) updateUnrealizedCheckpoints(ctx context.Context) error {
 }
 
 func (s *Store) pullTips(state state.BeaconState, node *Node, jc, fc *ethpb.Checkpoint) (*ethpb.Checkpoint, *ethpb.Checkpoint) {
-	if node.parent == nil { // Nothing to do if the parent is nil.
+	if node.parent == nil {
+		if jc != nil {
+			node.unrealizedJustifiedRoot = bytesutil.ToBytes32(jc.Root)
+		}
 		return jc, fc
 	}
 	pn := node.parent.node
@@ -73,6 +77,7 @@ func (s *Store) pullTips(state state.BeaconState, node *Node, jc, fc *ethpb.Chec
 	// Exit early if it's justified or too early to be justified.
 	if currJustified || (stateEpoch == currentEpoch && prevJustified && tooEarlyForCurr) {
 		node.unrealizedJustifiedEpoch = pn.unrealizedJustifiedEpoch
+		node.unrealizedJustifiedRoot = pn.unrealizedJustifiedRoot
 		node.unrealizedFinalizedEpoch = pn.unrealizedFinalizedEpoch
 		return jc, fc
 	}
@@ -99,7 +104,9 @@ func (s *Store) pullTips(state state.BeaconState, node *Node, jc, fc *ethpb.Chec
 	}
 
 	// Update node's checkpoints.
-	node.unrealizedJustifiedEpoch, node.unrealizedFinalizedEpoch = uj.Epoch, uf.Epoch
+	node.unrealizedJustifiedEpoch = uj.Epoch
+	node.unrealizedJustifiedRoot = bytesutil.ToBytes32(uj.Root)
+	node.unrealizedFinalizedEpoch = uf.Epoch
 	if stateEpoch < currentEpoch {
 		jc, fc = uj, uf
 		node.justifiedEpoch = uj.Epoch

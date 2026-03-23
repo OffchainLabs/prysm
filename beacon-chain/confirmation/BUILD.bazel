@@ -1,0 +1,43 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "confirmation.go",
+        "ffg.go",
+        "helpers.go",
+        "interfaces.go",
+        "safety.go",
+        "support.go",
+        "types.go",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/confirmation",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//beacon-chain/forkchoice/types:go_default_library",
+        "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//time/slots:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "confirmation_test.go",
+        "ffg_test.go",
+        "helpers_test.go",
+        "safety_test.go",
+        "support_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//beacon-chain/forkchoice/types:go_default_library",
+        "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//testing/require:go_default_library",
+        "//time/slots:go_default_library",
+    ],
+)
