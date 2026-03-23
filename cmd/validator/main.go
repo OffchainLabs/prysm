@@ -103,6 +103,7 @@ var appFlags = []cli.Flag{
 	cmd.TracingEndpointFlag,
 	cmd.TraceSampleFractionFlag,
 	cmd.LogFormat,
+	cmd.DisableLogColor,
 	cmd.LogFileName,
 	cmd.ConfigFileFlag,
 	cmd.ChainConfigFileFlag,
@@ -180,7 +181,8 @@ func main() {
 				formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 				formatter.FullTimestamp = true
 				formatter.ForceFormatting = true
-				formatter.ForceColors = true
+				formatter.ForceColors = !ctx.Bool(cmd.DisableLogColor.Name)
+				formatter.DisableColors = ctx.Bool(cmd.DisableLogColor.Name)
 				formatter.VModule = vmodule
 				formatter.BaseVerbosity = verbosityLevel
 

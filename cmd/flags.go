@@ -213,6 +213,11 @@ var (
 		Usage: "Specifies log formatting. Supports: text, json, fluentd, journald.",
 		Value: "text",
 	}
+	// DisableLogColor disables ANSI color codes in log output, useful when redirecting output to a file or pipe.
+	DisableLogColor = &cli.BoolFlag{
+		Name:  "disable-log-color",
+		Usage: "Disables color logging.",
+	}
 	// MaxGoroutines specifies the maximum amount of goroutines tolerated, before a status check fails.
 	MaxGoroutines = &cli.IntFlag{
 		Name:  "max-goroutines",
