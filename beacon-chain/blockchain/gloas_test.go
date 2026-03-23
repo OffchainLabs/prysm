@@ -741,6 +741,11 @@ func TestLateBlockTasks_GloasFCU(t *testing.T) {
 
 	service.lateBlockTasks(tr.ctx)
 	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
+
+	// Payload ID should have been cached by the Gloas FCU path.
+	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot)
+	require.Equal(t, true, has)
+	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
 }
 
 // TestSaveHead_GloasForkBoundary_PreforkBidForcesEmptyHead verifies that saveHead does not
