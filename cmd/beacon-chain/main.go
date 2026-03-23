@@ -203,6 +203,7 @@ func before(ctx *cli.Context) error {
 		formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 		formatter.FullTimestamp = true
 		formatter.ForceFormatting = true
+		formatter.ForceColors = true
 		formatter.DisableColors = ctx.Bool(cmd.DisableLogColor.Name)
 		formatter.VModule = vmodule
 		formatter.BaseVerbosity = verbosityLevel
