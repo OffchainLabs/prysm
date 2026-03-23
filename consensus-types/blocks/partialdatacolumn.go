@@ -222,45 +222,35 @@ func (p *PartialDataColumn) cellsToSendForPeer(peerMeta *ethpb.PartialDataColumn
 // eagerPushBytes builds SSZ-encoded PartialDataColumnSidecar for the initial eager push.
 // When byBlockProposer is true, all available cells and proofs are included.
 // Otherwise, only the header is sent (no cells).
-func (p *PartialDataColumn) eagerPushBytes(remote peer.ID, includeCellAndProofs bool, includeHeader bool) (encoded []byte, err error) {
-	log.WithFields(logrus.Fields{
-		"peer":                 remote,
-		"index":                p.Index,
-		"includeHeader":        includeHeader,
-		"includeCellAndProofs": includeCellAndProofs,
-	}).Debug("Eager push")
-
-	if !includeHeader && (!includeCellAndProofs || p.Included.Count() == 0) {
-		return nil, nil
-	}
-	outMessage := &ethpb.PartialDataColumnSidecar{}
-
-	if includeHeader {
-		outMessage.Header = []*ethpb.PartialDataColumnHeader{{
-			KzgCommitments:               p.KzgCommitments,
-			SignedBlockHeader:            p.SignedBlockHeader,
-			KzgCommitmentsInclusionProof: p.KzgCommitmentsInclusionProof,
-		}}
+func (p *PartialDataColumn) eagerPushBytes(includeCellAndProofs bool) ([]byte, error) {
+	outHeader := &ethpb.PartialDataColumnHeader{
+		KzgCommitments:               p.KzgCommitments,
+		SignedBlockHeader:            p.SignedBlockHeader,
+		KzgCommitmentsInclusionProof: p.KzgCommitmentsInclusionProof,
 	}
 
 	if !includeCellAndProofs {
-		outMessage.CellsPresentBitmap = bitfield.NewBitlist(uint64(len(p.KzgCommitments)))
-		encoded, err = outMessage.MarshalSSZ()
-		return encoded, err
+		outMessage := &ethpb.PartialDataColumnSidecar{
+			CellsPresentBitmap: bitfield.NewBitlist(uint64(len(p.KzgCommitments))),
+			Header:             []*ethpb.PartialDataColumnHeader{outHeader},
+		}
+		return outMessage.MarshalSSZ()
 	}
 
 	nCells := p.Included.Count()
-	outMessage.CellsPresentBitmap = slices.Clone(p.Included)
-	outMessage.PartialColumn = make([][]byte, 0, nCells)
-	outMessage.KzgProofs = make([][]byte, 0, nCells)
+	outMessage := &ethpb.PartialDataColumnSidecar{
+		CellsPresentBitmap: slices.Clone(p.Included),
+		PartialColumn:      make([][]byte, 0, nCells),
+		KzgProofs:          make([][]byte, 0, nCells),
+		Header:             []*ethpb.PartialDataColumnHeader{outHeader},
+	}
 	for i := range p.Included.Len() {
 		if p.Included.BitAt(i) {
 			outMessage.PartialColumn = append(outMessage.PartialColumn, p.Column[i])
 			outMessage.KzgProofs = append(outMessage.KzgProofs, p.KzgProofs[i])
 		}
 	}
-	encoded, err = outMessage.MarshalSSZ()
-	return encoded, err
+	return outMessage.MarshalSSZ()
 }
 
 // PartsMetadata returns SSZ-encoded PartialDataColumnPartsMetadata.
@@ -320,7 +310,7 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 	// Eager push - we don't know what the peer has and message has been requested.
 	// Set RecvdState so subsequent calls skip the eager push path.
 	if requestedMessage && peerState.Recvd == nil {
-		encoded, err := p.eagerPushBytes(remote, p.byBlockProposer, includeHeader)
+		encoded, err := p.eagerPushBytes(p.byBlockProposer)
 		if err != nil {
 			return peerState, partialmessages.PublishAction{Err: err}, false
 		}

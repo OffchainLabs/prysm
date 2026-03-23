@@ -446,7 +446,7 @@ func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
 			name: "nominal",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0)
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), false, true)
+				encoded, err := p.eagerPushBytes(false)
 				require.NoError(t, err)
 				msg := mustDecodeSidecar(t, encoded)
 				require.Equal(t, 1, len(msg.Header))
@@ -461,7 +461,7 @@ func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				p.KzgCommitments[0] = []byte{1}
-				_, err := p.eagerPushBytes(peer.ID("test-peer"), false, true)
+				_, err := p.eagerPushBytes(false)
 				require.ErrorContains(t, "KzgCommitments", err)
 			},
 		},
@@ -470,7 +470,7 @@ func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				p.KzgCommitmentsInclusionProof = p.KzgCommitmentsInclusionProof[:3]
-				_, err := p.eagerPushBytes(peer.ID("test-peer"), false, true)
+				_, err := p.eagerPushBytes(false)
 				require.ErrorContains(t, "KzgCommitmentsInclusionProof", err)
 			},
 		},
@@ -478,7 +478,7 @@ func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
 			name: "byBlockProposer includes cells and proofs",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumnWithOpts(t, 3, []uint64{0, 2}, WithByBlockProposer())
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), true, true)
+				encoded, err := p.eagerPushBytes(true)
 				require.NoError(t, err)
 				msg := mustDecodeSidecar(t, encoded)
 				require.Equal(t, 1, len(msg.Header))
@@ -501,59 +501,12 @@ func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
 			name: "byBlockProposer with no cells still works",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumnWithOpts(t, 2, nil, WithByBlockProposer())
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), true, true)
+				encoded, err := p.eagerPushBytes(true)
 				require.NoError(t, err)
 				msg := mustDecodeSidecar(t, encoded)
 				require.Equal(t, 1, len(msg.Header))
 				require.Equal(t, 0, len(msg.PartialColumn))
 				require.Equal(t, 0, len(msg.KzgProofs))
-			},
-		},
-		{
-			name: "includeHeader false and includeCellAndProofs false returns nil",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumn(t, 3, 0)
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), false, false)
-				require.NoError(t, err)
-				require.IsNil(t, encoded)
-			},
-		},
-		{
-			name: "includeHeader false with byBlockProposer includes cells but no header",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumnWithOpts(t, 3, []uint64{0, 2}, WithByBlockProposer())
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), true, false)
-				require.NoError(t, err)
-				require.NotNil(t, encoded)
-				msg := mustDecodeSidecar(t, encoded)
-				require.Equal(t, 0, len(msg.Header))
-				require.Equal(t, 2, len(msg.PartialColumn))
-				require.Equal(t, 2, len(msg.KzgProofs))
-				bitmap := bitfield.Bitlist(msg.CellsPresentBitmap)
-				require.Equal(t, true, bitmap.BitAt(0))
-				require.Equal(t, false, bitmap.BitAt(1))
-				require.Equal(t, true, bitmap.BitAt(2))
-			},
-		},
-		{
-			name: "includeHeader false with byBlockProposer no cells returns nil",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumnWithOpts(t, 2, nil, WithByBlockProposer())
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), true, false)
-				require.NoError(t, err)
-				require.IsNil(t, encoded)
-			},
-		},
-		{
-			name: "includeHeader true with includeCellAndProofs false sends header only",
-			run: func(t *testing.T) {
-				p := mustNewPartialColumn(t, 3, 0)
-				encoded, err := p.eagerPushBytes(peer.ID("test-peer"), false, true)
-				require.NoError(t, err)
-				msg := mustDecodeSidecar(t, encoded)
-				require.Equal(t, 1, len(msg.Header))
-				require.Equal(t, 0, len(msg.PartialColumn))
-				require.Equal(t, uint64(0), bitfield.Bitlist(msg.CellsPresentBitmap).Count())
 			},
 		},
 	}
@@ -634,11 +587,11 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				var initial PartialDataColumnPeerState
 				nextState, action, headerIncluded := p.forPeer(peer.ID("peer-a"), true, initial, true)
+				require.Equal(t, true, headerIncluded)
 				require.NoError(t, action.Err)
 				require.NotNil(t, action.EncodedPartialMessage)
 				require.NotNil(t, action.EncodedPartsMetadata)
 				require.NotNil(t, nextState.Recvd)
-				require.Equal(t, true, headerIncluded)
 				require.Equal(t, uint64(0), bitfield.Bitlist(nextState.Recvd.Available).Count())
 				require.Equal(t, uint64(0), bitfield.Bitlist(nextState.Recvd.Requests).Count())
 				decoded := mustDecodeSidecar(t, action.EncodedPartialMessage)
