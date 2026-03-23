@@ -19,10 +19,9 @@ type dutyStore struct {
 	prevDependentRoot []byte
 	currDependentRoot []byte
 
-	// Next-epoch dependent roots, stored so that epoch promotion can
-	// set the correct roots without re-fetching current-epoch duties.
-	nextAttDepRoot  []byte
-	nextPropDepRoot []byte
+	// Next-epoch attester dependent root, stored so that epoch promotion
+	// can set prevDepRoot without re-fetching current-epoch duties.
+	nextAttDepRoot []byte
 
 	epoch primitives.Epoch
 

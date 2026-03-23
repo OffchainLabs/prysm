@@ -56,11 +56,11 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
 
-	//if epoch >= params.BeaconConfig().GloasForkEpoch {
-	err = v.updateDutiesSplit(ctx, epoch, filteredKeys)
-	//} else {
-	//	err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
-	//}
+	if epoch >= params.BeaconConfig().GloasForkEpoch {
+		err = v.updateDutiesSplit(ctx, epoch, filteredKeys)
+	} else {
+		err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
+	}
 	if err != nil {
 		return err
 	}
@@ -182,9 +182,6 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 	if res.attNext != nil {
 		v.duties.nextAttDepRoot = res.attNext.DependentRoot
 	}
-	if res.propNext != nil {
-		v.duties.nextPropDepRoot = res.propNext.DependentRoot
-	}
 	v.dutiesLock.Unlock()
 
 	if epochAdvanced {
@@ -205,7 +202,6 @@ func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, i
 	res := dutiesFetchResult{
 		currentDuties: currentDuties,
 		prevDepRoot:   v.duties.nextAttDepRoot,
-		currDepRoot:   v.duties.nextPropDepRoot,
 	}
 	v.dutiesLock.RUnlock()
 
@@ -250,6 +246,11 @@ func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, i
 		for _, d := range res.currentDuties {
 			d.PtcSlots = ptcSlots[d.ValidatorIndex]
 		}
+	}
+
+	// currDepRoot comes from the newly fetched next-epoch attester root.
+	if res.attNext != nil {
+		res.currDepRoot = res.attNext.DependentRoot
 	}
 	return res, nil
 }
@@ -296,8 +297,13 @@ func (v *validator) fetchAllDuties(ctx context.Context, epoch primitives.Epoch, 
 	if attCurr != nil {
 		res.prevDepRoot = attCurr.DependentRoot
 	}
-	if propCurr != nil {
-		res.currDepRoot = propCurr.DependentRoot
+	// Use the next-epoch attester dependent root as currDepRoot.
+	// The head event's CurrentDutyDependentRoot = DependentRoot(epoch),
+	// and attester duties for epoch+1 have DependentRoot(epoch), so they match.
+	// The proposer dependent root changed post-fulu (EIP-7917) and no longer
+	// aligns with the head event.
+	if res.attNext != nil {
+		res.currDepRoot = res.attNext.DependentRoot
 	}
 
 	proposerSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
