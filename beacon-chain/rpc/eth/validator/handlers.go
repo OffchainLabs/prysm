@@ -936,11 +936,12 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = r[:]
 	} else {
-		dependentRoot, err = core.AttestationDependentRoot(st, requestedEpoch)
+		r, err := s.ChainInfoFetcher.DependentRoot(requestedEpoch.Sub(1))
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		dependentRoot = r[:]
 	}
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
@@ -1022,11 +1023,12 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = r[:]
 	} else {
-		dependentRoot, err = core.ProposalDependentRoot(st, requestedEpoch)
+		r, err := s.ChainInfoFetcher.DependentRoot(requestedEpoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		dependentRoot = r[:]
 	}
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
@@ -1306,11 +1308,12 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = r[:]
 	} else {
-		dependentRoot, err = core.AttestationDependentRoot(st, requestedEpoch)
+		r, err := s.ChainInfoFetcher.DependentRoot(requestedEpoch.Sub(1))
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		dependentRoot = r[:]
 	}
 
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)

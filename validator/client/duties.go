@@ -56,11 +56,11 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
 
-	if epoch >= params.BeaconConfig().GloasForkEpoch {
-		err = v.updateDutiesSplit(ctx, epoch, filteredKeys)
-	} else {
-		err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
-	}
+	//if epoch >= params.BeaconConfig().GloasForkEpoch {
+	err = v.updateDutiesSplit(ctx, epoch, filteredKeys)
+	//} else {
+	//	err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
+	//}
 	if err != nil {
 		return err
 	}
@@ -654,7 +654,6 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	v.dutiesLock.RUnlock()
 
 	if needsPrevUpdate {
-		v.clearDuties()
 		if err := v.UpdateDuties(dutiesCtx); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
@@ -676,7 +675,6 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if !needsCurrUpdate {
 		return nil
 	}
-	v.clearDuties()
 	if err := v.UpdateDuties(dutiesCtx); err != nil {
 		return errors.Wrap(err, "failed to update duties")
 	}
