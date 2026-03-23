@@ -215,8 +215,8 @@ var (
 	}
 	// DisableLogColor disables ANSI color codes in log output, useful when redirecting output to a file or pipe.
 	DisableLogColor = &cli.BoolFlag{
-		Name:  "disable-log-color",
-		Usage: "Disables color logging.",
+		Name:  "disable-log-colors",
+		Usage: "Disable color formatting for terminal logs.",
 	}
 	// MaxGoroutines specifies the maximum amount of goroutines tolerated, before a status check fails.
 	MaxGoroutines = &cli.IntFlag{
