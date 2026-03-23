@@ -164,6 +164,7 @@ func (r *testRunner) waitForChainStart() {
 	time.Sleep(time.Duration(params.BeaconConfig().GenesisDelay) * time.Second)
 	beaconLogFile, err := os.Open(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.BeaconNodeLogFileName, 0)))
 	require.NoError(r.t, err)
+	defer func() { _ = beaconLogFile.Close() }()
 
 	r.t.Run("chain started", func(t *testing.T) {
 		require.NoError(t, helpers.WaitForTextInFile(beaconLogFile, "Chain started in sync service"), "Chain did not start")
@@ -397,6 +398,7 @@ func (r *testRunner) testBeaconChainSync(ctx context.Context, g *errgroup.Group,
 
 	syncLogFile, err := os.Open(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.BeaconNodeLogFileName, index)))
 	require.NoError(t, err)
+	defer func() { _ = syncLogFile.Close() }()
 	defer helpers.LogErrorOutput(t, syncLogFile, "beacon chain node", index)
 	t.Run("sync completed", func(t *testing.T) {
 		assert.NoError(t, helpers.WaitForTextInFile(syncLogFile, "Synced up to"), "Failed to sync")
@@ -447,6 +449,7 @@ func (r *testRunner) testDoppelGangerProtection(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to open log file: %w", err)
 	}
+	defer func() { _ = logFile.Close() }()
 	r.t.Run("doppelganger found", func(t *testing.T) {
 		assert.NoError(t, helpers.WaitForTextInFile(logFile, "Duplicate instances exists in the network for validator keys"), "Failed to carry out doppelganger check correctly")
 	})

@@ -175,6 +175,7 @@ func checkValidatorsParticipating(conns []*grpc.ClientConn) error {
 		if err != nil {
 			return err
 		}
+		defer func() { _ = httpResp.Body.Close() }()
 		if httpResp.StatusCode != http.StatusOK {
 			e := httputil.DefaultJsonError{}
 			if err = json.NewDecoder(httpResp.Body).Decode(&e); err != nil {

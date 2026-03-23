@@ -24,7 +24,6 @@ type BeaconState interface {
 	SpecParametersProvider
 	ReadOnlyBeaconState
 	WriteOnlyBeaconState
-	Copy() BeaconState
 	CopyAllTries()
 	Defragment()
 	HashTreeRoot(ctx context.Context) ([32]byte, error)
@@ -69,6 +68,7 @@ type ReadOnlyBeaconState interface {
 	readOnlyGloasFields
 	ToProtoUnsafe() any
 	ToProto() any
+	Copy() BeaconState
 	GenesisTime() time.Time
 	GenesisValidatorsRoot() []byte
 	Slot() primitives.Slot
@@ -127,7 +127,6 @@ type ReadOnlyValidator interface {
 	GetWithdrawalCredentials() []byte
 	Copy() *ethpb.Validator
 	Slashed() bool
-	IsNil() bool
 	HasETH1WithdrawalCredentials() bool
 	HasCompoundingWithdrawalCredentials() bool
 	HasExecutionWithdrawalCredentials() bool

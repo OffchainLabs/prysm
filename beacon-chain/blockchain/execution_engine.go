@@ -321,7 +321,7 @@ func (s *Service) pruneInvalidBlock(ctx context.Context, root, parentRoot, paren
 
 // getPayloadAttributes returns the payload attributes for the given state and slot.
 // The attribute is required to initiate a payload build process in the context of an `engine_forkchoiceUpdated` call.
-func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot []byte) payloadattribute.Attributer {
+func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot, accessRoot []byte) payloadattribute.Attributer {
 	emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
 
 	// If it is an epoch boundary then process slots to get the right
@@ -343,7 +343,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		// right proposer index pre-Fulu, either way we need to copy the state to process it.
 		st = st.Copy()
 		var err error
-		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, headRoot, slot)
+		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, accessRoot, slot)
 		if err != nil {
 			log.WithError(err).Error("Could not process slots to get payload attribute")
 			return emptyAttri

@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -29,6 +30,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if s.cfg.initialSync.Syncing() {
 		return pubsub.ValidationIgnore, nil
 	}
+	receivedTime := prysmTime.Now()
 
 	ctx, span := trace.StartSpan(ctx, "sync.validateExecutionPayloadEnvelope")
 	defer span.End()
@@ -128,6 +130,13 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		return pubsub.ValidationReject, err
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
+	msg.ValidatorData = signedEnvelope
+	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), env.Slot())
+	if err == nil {
+		syncExecutionPayloadEnvelopeArrivalDelaySeconds.Observe(receivedTime.Sub(startTime).Seconds())
+	} else {
+		log.WithError(err).WithField("slot", env.Slot()).Debug("Could not compute execution payload envelope slot start time")
+	}
 	return pubsub.ValidationAccept, nil
 }
 

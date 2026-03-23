@@ -40,6 +40,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.AggregateDueBPSGloas = 5000
 	minimalConfig.SyncMessageDueBPSGloas = 2500
 	minimalConfig.ContributionDueBPSGloas = 5000
+	minimalConfig.PayloadAttestationDueBPS = 7500
 	minimalConfig.MinAttestationInclusionDelay = 1
 	minimalConfig.SlotsPerEpoch = 8
 	minimalConfig.SqrRootSlotsPerEpoch = 2
@@ -48,6 +49,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.EpochsPerEth1VotingPeriod = 4
 	minimalConfig.SlotsPerHistoricalRoot = 64
 	minimalConfig.MinValidatorWithdrawabilityDelay = 256
+	minimalConfig.MinBuilderWithdrawabilityDelay = 2
 	minimalConfig.ShardCommitteePeriod = 64
 	minimalConfig.MinEpochsToInactivityPenalty = 4
 	minimalConfig.Eth1FollowDistance = 16

@@ -215,6 +215,7 @@ go_test(
         "gloas__operations__execution_payload_test.go",
         "gloas__operations__payload_attestation_test.go",
         "gloas__operations__proposer_slashing_test.go",
+        "gloas__operations__voluntary_exit_test.go",
         "gloas__operations__withdrawals_test.go",
         "gloas__sanity__blocks_test.go",
         "gloas__sanity__slots_test.go",
