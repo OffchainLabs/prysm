@@ -77,6 +77,7 @@ type Server struct {
 	ExecutionPayloadEnvelopeReceiver blockchain.ExecutionPayloadEnvelopeReceiver
 	BlobReceiver                     blockchain.BlobReceiver
 	DataColumnReceiver               blockchain.DataColumnReceiver
+	BlockProposalEagerPushCells      bool
 	MockEth1Votes                    bool
 	Eth1BlockFetcher                 execution.POWBlockFetcher
 	PendingDepositsFetcher           depositsnapshot.PendingDepositsFetcher

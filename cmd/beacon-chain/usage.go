@@ -76,6 +76,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.BatchVerifierLimit,
 			flags.StateDiffExponents,
 			flags.PartialDataColumns,
+			flags.BlockProposalEagerPushCells,
 		},
 	},
 	{

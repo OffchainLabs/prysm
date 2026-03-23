@@ -582,6 +582,12 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 		partialMessageCellsReceivedTotal.WithLabelValues(columnIndexStr).Add(float64(len(cellIndices)))
 	}
 	if len(cellsToVerify) > 0 {
+		p.logger.WithFields(logrus.Fields{
+			"from":      rpc.from,
+			"column":    ourDataColumn.Index,
+			"cellCount": len(cellsToVerify),
+			"indices":   cellIndices,
+		}).Debug("Received cells from peer, submitting for KZG verification")
 		p.concurrentValidatorSemaphore <- struct{}{}
 		go func() {
 			defer func() {
@@ -594,6 +600,12 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 				_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackInvalidMessage)
 				return
 			}
+			p.logger.WithFields(logrus.Fields{
+				"from":      rpc.from,
+				"column":    ourDataColumn.Index,
+				"cellCount": len(cellsToVerify),
+				"duration":  time.Since(start),
+			}).Debug("KZG verification passed for received cells")
 			_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackUsefulMessage)
 			p.incomingReq <- request{
 				kind: requestKindCellsValidated,
@@ -643,7 +655,14 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 			extended = true
 		}
 	}
-	p.logger.WithFields(logrus.Fields{"duration": cells.validationTook, "extended": extended}).Debug("Extended partial message")
+	p.logger.WithFields(logrus.Fields{
+		"duration":       cells.validationTook,
+		"extended":       extended,
+		"column":         ourDataColumn.Index,
+		"cellsAdded":     len(cells.cells),
+		"totalIncluded":  ourDataColumn.Included.Count(),
+		"totalCommitted": len(ourDataColumn.KzgCommitments),
+	}).Debug("Processed KZG-verified cells into partial column")
 
 	columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
 	if extended {
@@ -660,10 +679,16 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 			return err
 		}
 		if ok {
-			p.logger.WithFields(cells.logFields()).Info("Completed partial column")
+			p.logger.WithFields(logrus.Fields{
+				"column":        ourDataColumn.Index,
+				"totalIncluded": ourDataColumn.Included.Count(),
+			}).WithFields(cells.logFields()).Info("Completed partial column from received cells")
 			go p.callbacks.HandleColumn(cells.topic, col)
 		} else {
-			p.logger.WithFields(cells.logFields()).Info("Extended partial column")
+			p.logger.WithFields(logrus.Fields{
+				"column":        ourDataColumn.Index,
+				"totalIncluded": ourDataColumn.Included.Count(),
+			}).WithFields(cells.logFields()).Info("Extended partial column with received cells")
 		}
 
 		if !ourDataColumn.Published {
