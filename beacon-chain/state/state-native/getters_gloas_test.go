@@ -2,6 +2,7 @@ package state_native
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -908,5 +909,209 @@ func TestExecutionPayloadAvailabilityVector(t *testing.T) {
 		got2, err := st.ExecutionPayloadAvailabilityVector()
 		require.NoError(t, err)
 		require.DeepEqual(t, availability, got2)
+	})
+}
+
+// testPTCWindow creates a PTC window of the expected size where each slot's
+// first validator index encodes the slot offset for easy identification.
+func testPTCWindow(t *testing.T) []*ethpb.PTCs {
+	t.Helper()
+	size := int(expectedPTCWindowSize())
+	window := make([]*ethpb.PTCs, size)
+	for i := range window {
+		indices := make([]uint64, fieldparams.PTCSize)
+		indices[0] = uint64(i) + 1 // non-zero marker
+		window[i] = &ethpb.PTCs{ValidatorIndices: indices}
+	}
+	return window
+}
+
+func TestPtcWindowOffset(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+	t.Run("current epoch slot", func(t *testing.T) {
+		// State at epoch 2, query slot in epoch 2 → offset = (2-2+1)*32 + slot%32 = 32 + slot%32
+		stateSlot := slotsPerEpoch * 2 // slot 64, epoch 2
+		querySlot := stateSlot + 3     // slot 67, epoch 2
+		offset, err := ptcWindowOffset(stateSlot, querySlot)
+		require.NoError(t, err)
+		expected := slotsPerEpoch + (querySlot % slotsPerEpoch) // offset in "current epoch" region
+		require.Equal(t, expected, offset)
+	})
+
+	t.Run("previous epoch slot", func(t *testing.T) {
+		stateSlot := slotsPerEpoch * 2 // epoch 2
+		querySlot := slotsPerEpoch + 5 // slot 37, epoch 1 (previous)
+		offset, err := ptcWindowOffset(stateSlot, querySlot)
+		require.NoError(t, err)
+		require.Equal(t, querySlot%slotsPerEpoch, offset) // previous epoch region
+	})
+
+	t.Run("lookahead epoch slot", func(t *testing.T) {
+		stateSlot := slotsPerEpoch * 2    // epoch 2
+		querySlot := slotsPerEpoch*3 + 10 // slot 106, epoch 3 (lookahead with MinSeedLookahead=1)
+		offset, err := ptcWindowOffset(stateSlot, querySlot)
+		require.NoError(t, err)
+		// epoch_diff = 3-2 = 1, offset = (1+1)*32 + 10 = 74
+		expected := slotsPerEpoch.Mul(uint64(slots.ToEpoch(querySlot)-slots.ToEpoch(stateSlot)+1)) + (querySlot % slotsPerEpoch)
+		require.Equal(t, expected, offset)
+	})
+
+	t.Run("error: epoch too far in past", func(t *testing.T) {
+		stateSlot := slotsPerEpoch * 3 // epoch 3
+		querySlot := slotsPerEpoch + 1 // slot 33, epoch 1 (two epochs back)
+		_, err := ptcWindowOffset(stateSlot, querySlot)
+		require.ErrorContains(t, "only supports previous epoch lookups", err)
+	})
+
+	t.Run("error: epoch too far in future", func(t *testing.T) {
+		stateSlot := slotsPerEpoch * 2   // epoch 2
+		querySlot := slotsPerEpoch*4 + 1 // epoch 4 (beyond MinSeedLookahead=1 from epoch 2)
+		_, err := ptcWindowOffset(stateSlot, querySlot)
+		require.ErrorContains(t, "out of range", err)
+	})
+}
+
+func TestPayloadCommittee(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+	t.Run("returns error before gloas", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		_, err := st.PayloadCommittee(0)
+		require.ErrorContains(t, "PayloadCommittee", err)
+	})
+
+	t.Run("returns committee from current epoch", func(t *testing.T) {
+		window := testPTCWindow(t)
+		st := &BeaconState{
+			version:   version.Gloas,
+			slot:      slotsPerEpoch * 2, // epoch 2
+			ptcWindow: window,
+		}
+		// Query slot 64 (first slot of epoch 2) → offset = 32
+		ptc, err := st.PayloadCommittee(slotsPerEpoch * 2)
+		require.NoError(t, err)
+		require.Equal(t, primitives.ValidatorIndex(slotsPerEpoch+1), ptc[0])
+	})
+
+	t.Run("returns committee from previous epoch", func(t *testing.T) {
+		window := testPTCWindow(t)
+		st := &BeaconState{
+			version:   version.Gloas,
+			slot:      slotsPerEpoch * 2, // epoch 2
+			ptcWindow: window,
+		}
+		// Query slot 35 (epoch 1, offset 3) → previous epoch region, offset = 3
+		ptc, err := st.PayloadCommittee(slotsPerEpoch + 3)
+		require.NoError(t, err)
+		require.Equal(t, primitives.ValidatorIndex(4), ptc[0]) // window[3] has marker 4
+	})
+
+	t.Run("error on nil ptc slot", func(t *testing.T) {
+		window := testPTCWindow(t)
+		window[slotsPerEpoch] = nil // nil out the first current-epoch slot
+		st := &BeaconState{
+			version:   version.Gloas,
+			slot:      slotsPerEpoch * 2,
+			ptcWindow: window,
+		}
+		_, err := st.PayloadCommittee(slotsPerEpoch * 2)
+		require.ErrorContains(t, "is nil", err)
+	})
+}
+
+func TestSetPTCWindow(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+
+	t.Run("returns error before gloas", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.SetPTCWindow(nil)
+		require.ErrorContains(t, "SetPTCWindow", err)
+	})
+
+	t.Run("rejects wrong size", func(t *testing.T) {
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			PtcWindow: testPTCWindow(t),
+		})
+		require.NoError(t, err)
+		err = st.SetPTCWindow(make([]*ethpb.PTCs, 10))
+		require.ErrorContains(t, "invalid size", err)
+	})
+
+	t.Run("sets and copies window", func(t *testing.T) {
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			PtcWindow: testPTCWindow(t),
+		})
+		require.NoError(t, err)
+
+		newWindow := testPTCWindow(t)
+		newWindow[0].ValidatorIndices[0] = 999
+		require.NoError(t, st.SetPTCWindow(newWindow))
+
+		got, err := st.PTCWindow()
+		require.NoError(t, err)
+		require.Equal(t, uint64(999), got[0].ValidatorIndices[0])
+
+		// Verify it's a copy — mutating the input doesn't affect state.
+		newWindow[0].ValidatorIndices[0] = 0
+		got2, err := st.PTCWindow()
+		require.NoError(t, err)
+		require.Equal(t, uint64(999), got2[0].ValidatorIndices[0])
+	})
+}
+
+func TestRotatePTCWindow(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+	t.Run("returns error before gloas", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.RotatePTCWindow(nil)
+		require.ErrorContains(t, "RotatePTCWindow", err)
+	})
+
+	t.Run("rejects wrong new epoch size", func(t *testing.T) {
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			PtcWindow: testPTCWindow(t),
+		})
+		require.NoError(t, err)
+		err = st.RotatePTCWindow(make([]*ethpb.PTCs, 5))
+		require.ErrorContains(t, "invalid new epoch slots size", err)
+	})
+
+	t.Run("rotates window correctly", func(t *testing.T) {
+		origWindow := testPTCWindow(t)
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			PtcWindow: origWindow,
+		})
+		require.NoError(t, err)
+
+		// Build new epoch slots with distinct markers.
+		newEpoch := make([]*ethpb.PTCs, slotsPerEpoch)
+		for i := range newEpoch {
+			indices := make([]uint64, fieldparams.PTCSize)
+			indices[0] = uint64(1000 + i)
+			newEpoch[i] = &ethpb.PTCs{ValidatorIndices: indices}
+		}
+		require.NoError(t, st.RotatePTCWindow(newEpoch))
+
+		got, err := st.PTCWindow()
+		require.NoError(t, err)
+
+		// First two epochs should be shifted from original epochs 1 and 2.
+		for i := range 2 * slotsPerEpoch {
+			expected := origWindow[slotsPerEpoch+i].ValidatorIndices[0]
+			require.Equal(t, expected, got[i].ValidatorIndices[0],
+				fmt.Sprintf("mismatch at shifted slot %d", i))
+		}
+
+		// Last epoch should be the new epoch slots.
+		lastStart := 2 * slotsPerEpoch
+		for i := range slotsPerEpoch {
+			require.Equal(t, uint64(1000+i), got[lastStart+i].ValidatorIndices[0],
+				fmt.Sprintf("mismatch at new slot %d", i))
+		}
 	})
 }

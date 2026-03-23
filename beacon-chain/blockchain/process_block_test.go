@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -3556,7 +3555,7 @@ func TestHandleBlockPayloadAttestations(t *testing.T) {
 		base, insertBlk := testGloasState(t, 1, parentRoot, blockHash)
 		insertGloasBlock(t, s, base, insertBlk, blockRoot)
 
-		ptc, err := gloas.PayloadCommittee(ctx, headState, 1)
+		ptc, err := headState.PayloadCommittee(1)
 		require.NoError(t, err)
 		require.NotEqual(t, 0, len(ptc))
 

@@ -8,7 +8,6 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
@@ -642,7 +641,7 @@ func (s *Service) handleBlockPayloadAttestations(ctx context.Context, blk interf
 	if len(atts) == 0 {
 		return nil
 	}
-	committee, err := gloas.PayloadCommittee(ctx, st, blk.Slot()-1)
+	committee, err := st.PayloadCommittee(blk.Slot() - 1)
 	if err != nil {
 		return err
 	}

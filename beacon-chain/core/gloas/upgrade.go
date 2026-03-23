@@ -1,6 +1,8 @@
 package gloas
 
 import (
+	"context"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -9,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -143,10 +146,71 @@ func UpgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert to gloas")
 	}
+	ptcWindow, err := initializePTCWindow(context.Background(), s)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to initialize ptc window")
+	}
+	if err := s.SetPTCWindow(ptcWindow); err != nil {
+		return nil, errors.Wrap(err, "failed to set ptc window")
+	}
 	if err := s.OnboardBuildersFromPendingDeposits(); err != nil {
 		return nil, errors.Wrap(err, "failed to onboard builders from pending deposits")
 	}
 	return s, nil
+}
+
+// initializePTCWindow builds the initial PTC window for the Gloas fork upgrade.
+//
+//	<spec fn="initialize_ptc_window" fork="gloas" hash="2c292a1c">
+//	def initialize_ptc_window(
+//	    state: BeaconState,
+//	) -> Vector[Vector[ValidatorIndex, PTC_SIZE], (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH]:
+//	    """
+//	    Return the cached PTC window starting from the current epoch.
+//	    Used to initialize the ``ptc_window`` field in the beacon state at genesis and after forks.
+//	    """
+//	    empty_previous_epoch = [
+//	        Vector[ValidatorIndex, PTC_SIZE]([ValidatorIndex(0) for _ in range(PTC_SIZE)])
+//	        for _ in range(SLOTS_PER_EPOCH)
+//	    ]
+//
+//	    ptcs = []
+//	    current_epoch = get_current_epoch(state)
+//	    for e in range(1 + MIN_SEED_LOOKAHEAD):
+//	        epoch = Epoch(current_epoch + e)
+//	        start_slot = compute_start_slot_at_epoch(epoch)
+//	        ptcs += [compute_ptc(state, Slot(start_slot + i)) for i in range(SLOTS_PER_EPOCH)]
+//
+//	    return empty_previous_epoch + ptcs
+//	</spec>
+func initializePTCWindow(ctx context.Context, st state.ReadOnlyBeaconState) ([]*ethpb.PTCs, error) {
+	currentEpoch := slots.ToEpoch(st.Slot())
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	windowSize := slotsPerEpoch.Mul(uint64(2 + params.BeaconConfig().MinSeedLookahead))
+	window := make([]*ethpb.PTCs, 0, windowSize)
+
+	// Previous epoch has no cached data at fork time — fill with empty slots.
+	for range slotsPerEpoch {
+		window = append(window, &ethpb.PTCs{
+			ValidatorIndices: make([]uint64, fieldparams.PTCSize),
+		})
+	}
+
+	// Compute PTC for current epoch through lookahead.
+	startSlot, err := slots.EpochStart(currentEpoch)
+	if err != nil {
+		return nil, err
+	}
+	totalSlots := slotsPerEpoch.Mul(uint64(1 + params.BeaconConfig().MinSeedLookahead))
+	for i := range totalSlots {
+		ptc, err := computePTC(ctx, st, startSlot+i)
+		if err != nil {
+			return nil, err
+		}
+		window = append(window, ptcSlotFromValidatorIndices(ptc))
+	}
+
+	return window, nil
 }
 
 func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {

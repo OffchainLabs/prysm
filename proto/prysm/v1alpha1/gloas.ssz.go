@@ -1701,7 +1701,7 @@ func (b *BeaconStateGloas) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the BeaconStateGloas object to a target array
 func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(2741117)
+	offset := int(3134333)
 
 	// Field (0) 'GenesisTime'
 	dst = ssz.MarshalUint64(dst, b.GenesisTime)
@@ -1962,6 +1962,17 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(b.PayloadExpectedWithdrawals) * 44
 
+	// Field (45) 'PtcWindow'
+	if size := len(b.PtcWindow); size != 96 {
+		err = ssz.ErrVectorLengthFn("--.PtcWindow", size, 96)
+		return
+	}
+	for ii := 0; ii < 96; ii++ {
+		if dst, err = b.PtcWindow[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
 	// Field (7) 'HistoricalRoots'
 	if size := len(b.HistoricalRoots); size > 16777216 {
 		err = ssz.ErrListTooBigFn("--.HistoricalRoots", size, 16777216)
@@ -2118,7 +2129,7 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 2741117 {
+	if size < 3134333 {
 		return ssz.ErrSize
 	}
 
@@ -2176,7 +2187,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o7 != 2741117 {
+	if o7 != 3134333 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -2376,6 +2387,17 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 	// Offset (44) 'PayloadExpectedWithdrawals'
 	if o44 = ssz.ReadOffset(buf[2741113:2741117]); o44 > size || o42 > o44 {
 		return ssz.ErrOffset
+	}
+
+	// Field (45) 'PtcWindow'
+	b.PtcWindow = make([]*PTCs, 96)
+	for ii := 0; ii < 96; ii++ {
+		if b.PtcWindow[ii] == nil {
+			b.PtcWindow[ii] = new(PTCs)
+		}
+		if err = b.PtcWindow[ii].UnmarshalSSZ(buf[2741117:3134333][ii*4096 : (ii+1)*4096]); err != nil {
+			return err
+		}
 	}
 
 	// Field (7) 'HistoricalRoots'
@@ -2621,7 +2643,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the BeaconStateGloas object
 func (b *BeaconStateGloas) SizeSSZ() (size int) {
-	size = 2741117
+	size = 3134333
 
 	// Field (7) 'HistoricalRoots'
 	size += len(b.HistoricalRoots) * 32
@@ -3097,6 +3119,87 @@ func (b *BeaconStateGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			}
 		}
 		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (45) 'PtcWindow'
+	{
+		subIndx := hh.Index()
+		for _, elem := range b.PtcWindow {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the PTCs object
+func (p *PTCs) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PTCs object to a target array
+func (p *PTCs) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'ValidatorIndices'
+	if size := len(p.ValidatorIndices); size != 512 {
+		err = ssz.ErrVectorLengthFn("--.ValidatorIndices", size, 512)
+		return
+	}
+	for ii := 0; ii < 512; ii++ {
+		dst = ssz.MarshalUint64(dst, p.ValidatorIndices[ii])
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PTCs object
+func (p *PTCs) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 4096 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'ValidatorIndices'
+	p.ValidatorIndices = ssz.ExtendUint64(p.ValidatorIndices, 512)
+	for ii := 0; ii < 512; ii++ {
+		p.ValidatorIndices[ii] = ssz.UnmarshallUint64(buf[0:4096][ii*8 : (ii+1)*8])
+	}
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PTCs object
+func (p *PTCs) SizeSSZ() (size int) {
+	size = 4096
+	return
+}
+
+// HashTreeRoot ssz hashes the PTCs object
+func (p *PTCs) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the PTCs object with a hasher
+func (p *PTCs) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'ValidatorIndices'
+	{
+		if size := len(p.ValidatorIndices); size != 512 {
+			err = ssz.ErrVectorLengthFn("--.ValidatorIndices", size, 512)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range p.ValidatorIndices {
+			hh.AppendUint64(i)
+		}
+		hh.Merkleize(subIndx)
 	}
 
 	hh.Merkleize(indx)

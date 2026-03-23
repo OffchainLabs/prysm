@@ -41,3 +41,23 @@ func TestPayloadExpectedWithdrawalsVal(t *testing.T) {
 	require.Equal(t, st.payloadExpectedWithdrawals[0], got[0])
 	require.NotSame(t, st.payloadExpectedWithdrawals[0], got[0])
 }
+
+func TestPTCWindowVal(t *testing.T) {
+	st := &BeaconState{}
+
+	require.Nil(t, st.ptcWindowVal())
+
+	st.ptcWindow = []*ethpb.PTCs{
+		{ValidatorIndices: []uint64{1, 2}},
+		nil,
+	}
+
+	got := st.ptcWindowVal()
+	require.Len(t, got, 2)
+	require.Nil(t, got[1])
+	require.Equal(t, st.ptcWindow[0], got[0])
+	require.NotSame(t, st.ptcWindow[0], got[0])
+
+	got[0].ValidatorIndices[0] = 99
+	require.Equal(t, uint64(1), st.ptcWindow[0].ValidatorIndices[0])
+}

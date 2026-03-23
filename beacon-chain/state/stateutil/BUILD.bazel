@@ -22,6 +22,7 @@ go_library(
         "pending_deposits_root.go",
         "pending_partial_withdrawals_root.go",
         "proposer_lookahead_root.go",
+        "ptc_window_root.go",
         "reference.go",
         "sync_committee.root.go",
         "trie_helpers.go",

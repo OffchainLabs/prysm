@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
@@ -776,7 +775,7 @@ func TestPTCDuties_CollectsAllSlots(t *testing.T) {
 	for valIdx, assignedSlots := range result {
 		expected := make([]primitives.Slot, 0)
 		for s := epochStart; s < epochEnd; s++ {
-			ptc, err := gloas.PayloadCommittee(t.Context(), st, s)
+			ptc, err := st.PayloadCommittee(s)
 			require.NoError(t, err)
 			found := slices.Contains(ptc, valIdx)
 			if found {
