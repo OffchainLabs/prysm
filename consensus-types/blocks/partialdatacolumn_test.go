@@ -446,7 +446,7 @@ func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
 			name: "nominal",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0)
-				encoded, err := p.eagerPushBytes()
+				encoded, err := p.eagerPushBytes(false)
 				require.NoError(t, err)
 				msg := mustDecodeSidecar(t, encoded)
 				require.Equal(t, 1, len(msg.Header))
@@ -461,7 +461,7 @@ func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				p.KzgCommitments[0] = []byte{1}
-				_, err := p.eagerPushBytes()
+				_, err := p.eagerPushBytes(false)
 				require.ErrorContains(t, "KzgCommitments", err)
 			},
 		},
@@ -470,7 +470,7 @@ func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				p.KzgCommitmentsInclusionProof = p.KzgCommitmentsInclusionProof[:3]
-				_, err := p.eagerPushBytes()
+				_, err := p.eagerPushBytes(false)
 				require.ErrorContains(t, "KzgCommitmentsInclusionProof", err)
 			},
 		},
@@ -478,7 +478,7 @@ func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
 			name: "byBlockProposer includes cells and proofs",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumnWithOpts(t, 3, []uint64{0, 2}, WithByBlockProposer())
-				encoded, err := p.eagerPushBytes()
+				encoded, err := p.eagerPushBytes(true)
 				require.NoError(t, err)
 				msg := mustDecodeSidecar(t, encoded)
 				require.Equal(t, 1, len(msg.Header))
@@ -501,7 +501,7 @@ func TestPartialDataColumn_eagerPushBytes(t *testing.T) {
 			name: "byBlockProposer with no cells still works",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumnWithOpts(t, 2, nil, WithByBlockProposer())
-				encoded, err := p.eagerPushBytes()
+				encoded, err := p.eagerPushBytes(true)
 				require.NoError(t, err)
 				msg := mustDecodeSidecar(t, encoded)
 				require.Equal(t, 1, len(msg.Header))
