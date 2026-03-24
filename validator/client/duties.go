@@ -56,11 +56,11 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
 
-	//if epoch >= params.BeaconConfig().GloasForkEpoch {
-	err = v.updateDutiesSplit(ctx, epoch, filteredKeys)
-	//} else {
-	//	err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
-	//}
+	if epoch >= params.BeaconConfig().GloasForkEpoch {
+		err = v.updateDutiesSplit(ctx, epoch, filteredKeys)
+	} else {
+		err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
+	}
 	if err != nil {
 		return err
 	}
