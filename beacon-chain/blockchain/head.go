@@ -358,6 +358,9 @@ func (s *Service) notifyNewHeadEvent(
 		if err != nil {
 			return errors.Wrap(err, "could not get duty dependent root")
 		}
+		if previousDutyDependentRoot == [32]byte{} {
+			previousDutyDependentRoot = s.originBlockRoot
+		}
 	}
 
 	isOptimistic, err := s.IsOptimistic(ctx)
