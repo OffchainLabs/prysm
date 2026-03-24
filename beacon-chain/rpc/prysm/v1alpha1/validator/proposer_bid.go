@@ -33,33 +33,11 @@ func (vs *Server) setExecutionPayloadBid(
 		return false, errors.New("local execution payload is nil")
 	}
 
-	// Check the highest-bid cache for a P2P bid that beats the local EL value.
-	if !selfBuildOnly && vs.HighestBidCache != nil {
-		ed := local.ExecutionData
-		var parentHash [32]byte
-		copy(parentHash[:], ed.ParentHash())
-		parentRoot := sBlk.Block().ParentRoot()
-		if cached, ok := vs.HighestBidCache.Get(sBlk.Block().Slot(), parentHash, parentRoot); ok {
-			builderValueGwei := cached.Message.Value
-			localValueGwei := primitives.WeiToGwei(local.Bid)
-			if builderValueGwei > localValueGwei {
-				log.WithFields(logrus.Fields{
-					"slot":             sBlk.Block().Slot(),
-					"builderIndex":     cached.Message.BuilderIndex,
-					"builderValueGwei": builderValueGwei,
-					"localValueGwei":   localValueGwei,
-				}).Info("Using P2P execution payload bid over self-build")
-				if err := sBlk.SetSignedExecutionPayloadBid(cached); err != nil {
-					return false, errors.Wrap(err, "could not set cached P2P execution payload bid")
-				}
-				return false, nil
-			}
-			log.WithFields(logrus.Fields{
-				"slot":             sBlk.Block().Slot(),
-				"builderValueGwei": builderValueGwei,
-				"localValueGwei":   localValueGwei,
-			}).Info("Local EL value exceeds P2P bid, using self-build")
+	if cached := vs.winningP2PBid(sBlk, local, selfBuildOnly); cached != nil {
+		if err := sBlk.SetSignedExecutionPayloadBid(cached); err != nil {
+			return false, errors.Wrap(err, "could not set cached P2P execution payload bid")
 		}
+		return false, nil
 	}
 
 	// Fall back to self-build bid.
@@ -78,6 +56,44 @@ func (vs *Server) setExecutionPayloadBid(
 	}
 
 	return true, nil
+}
+
+// winningP2PBid returns a cached P2P bid if one exists and exceeds the local EL value.
+func (vs *Server) winningP2PBid(
+	sBlk interfaces.SignedBeaconBlock,
+	local *consensusblocks.GetPayloadResponse,
+	selfBuildOnly bool,
+) *ethpb.SignedExecutionPayloadBid {
+	if selfBuildOnly || vs.HighestBidCache == nil {
+		return nil
+	}
+
+	ed := local.ExecutionData
+	var parentHash [32]byte
+	copy(parentHash[:], ed.ParentHash())
+	cached, ok := vs.HighestBidCache.Get(sBlk.Block().Slot(), parentHash, sBlk.Block().ParentRoot())
+	if !ok {
+		return nil
+	}
+
+	builderValueGwei := cached.Message.Value
+	localValueGwei := primitives.WeiToGwei(local.Bid)
+	if builderValueGwei <= localValueGwei {
+		log.WithFields(logrus.Fields{
+			"slot":             sBlk.Block().Slot(),
+			"builderValueGwei": builderValueGwei,
+			"localValueGwei":   localValueGwei,
+		}).Info("Local EL value exceeds P2P bid, using self-build")
+		return nil
+	}
+
+	log.WithFields(logrus.Fields{
+		"slot":             sBlk.Block().Slot(),
+		"builderIndex":     cached.Message.BuilderIndex,
+		"builderValueGwei": builderValueGwei,
+		"localValueGwei":   localValueGwei,
+	}).Info("Using P2P execution payload bid over self-build")
+	return cached
 }
 
 // createSelfBuildExecutionPayloadBid creates an ExecutionPayloadBid for self-building,

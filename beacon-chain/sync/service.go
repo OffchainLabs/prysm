@@ -396,9 +396,7 @@ func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
 	s.seenPayloadEnvelopeCache = lruwrpr.New(seenPayloadEnvelopeSize)
 	s.seenExecutionPayloadBidCache = newSlotAwareCache(seenExecutionPayloadBidSize)
-	if s.highestExecutionPayloadBidCache == nil {
-		s.highestExecutionPayloadBidCache = cache.NewHighestExecutionPayloadBidCache()
-	}
+	s.highestExecutionPayloadBidCache = cache.NewHighestExecutionPayloadBidCache()
 	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
 	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)

@@ -287,13 +287,10 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 			}
 		} else {
 			selfBuildOnly := local.OverrideBuilder || skipMevBoost
-			var isSelfBuild bool
-			isSelfBuild, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
+			selfBuildEnvelope, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
 			}
-			// Track whether we need to cache the self-build envelope after the block is finalized.
-			selfBuildEnvelope = isSelfBuild
 		}
 	}
 
