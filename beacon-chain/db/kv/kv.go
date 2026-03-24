@@ -317,8 +317,6 @@ func (s *Store) Close() error {
 	if err := s.saveCachedStateSummariesDB(s.ctx); err != nil {
 		return err
 	}
-	s.stateSummaryCache = nil
-	s.stateDiffCache = nil
 
 	return s.db.Close()
 }
