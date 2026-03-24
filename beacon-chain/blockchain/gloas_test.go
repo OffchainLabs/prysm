@@ -741,6 +741,11 @@ func TestLateBlockTasks_GloasFCU(t *testing.T) {
 
 	service.lateBlockTasks(tr.ctx)
 	require.LogsDoNotContain(t, logHook, "could not perform late block tasks")
+
+	// Payload ID should have been cached by the Gloas FCU path.
+	cachedPid, has := service.cfg.PayloadIDCache.PayloadID(service.CurrentSlot()+1, headRoot)
+	require.Equal(t, true, has)
+	require.Equal(t, primitives.PayloadID(pid[:]), cachedPid)
 }
 
 // TestSaveHead_GloasForkBoundary_PreforkBidForcesEmptyHead verifies that saveHead does not
@@ -782,11 +787,17 @@ func TestSaveHead_GloasForkBoundary_PreforkBidForcesEmptyHead(t *testing.T) {
 		LatestBlockHeader:          &ethpb.BeaconBlockHeader{ParentRoot: make([]byte, 32), StateRoot: make([]byte, 32), BodyRoot: make([]byte, 32)},
 		Eth1Data:                   &ethpb.Eth1Data{DepositRoot: make([]byte, 32), BlockHash: make([]byte, 32)},
 		LatestExecutionPayloadBid:  &ethpb.ExecutionPayloadBid{BlockHash: make([]byte, 32), ParentBlockHash: make([]byte, 32), ParentBlockRoot: make([]byte, 32), PrevRandao: make([]byte, 32), FeeRecipient: make([]byte, 20), BlobKzgCommitments: [][]byte{make([]byte, 48)}},
-		BuilderPendingPayments:     func() []*ethpb.BuilderPendingPayment { pp := make([]*ethpb.BuilderPendingPayment, 64); for i := range pp { pp[i] = &ethpb.BuilderPendingPayment{Withdrawal: &ethpb.BuilderPendingWithdrawal{FeeRecipient: make([]byte, 20)}} }; return pp }(),
+		BuilderPendingPayments: func() []*ethpb.BuilderPendingPayment {
+			pp := make([]*ethpb.BuilderPendingPayment, 64)
+			for i := range pp {
+				pp[i] = &ethpb.BuilderPendingPayment{Withdrawal: &ethpb.BuilderPendingWithdrawal{FeeRecipient: make([]byte, 20)}}
+			}
+			return pp
+		}(),
 		ExecutionPayloadAvailability: make([]byte, 1024),
-		LatestBlockHash:            make([]byte, 32),
-		PayloadExpectedWithdrawals: make([]*enginev1.Withdrawal, 0),
-		ProposerLookahead:          make([]uint64, 64),
+		LatestBlockHash:              make([]byte, 32),
+		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
+		ProposerLookahead:            make([]uint64, 64),
 	})
 	require.NoError(t, err2)
 	oldRoot := bytesutil.ToBytes32([]byte("oldroot1"))
@@ -853,11 +864,17 @@ func TestSaveHead_GloasForkBoundary_PostforkBidSetsFullHead(t *testing.T) {
 		LatestBlockHeader:          &ethpb.BeaconBlockHeader{ParentRoot: make([]byte, 32), StateRoot: make([]byte, 32), BodyRoot: make([]byte, 32)},
 		Eth1Data:                   &ethpb.Eth1Data{DepositRoot: make([]byte, 32), BlockHash: make([]byte, 32)},
 		LatestExecutionPayloadBid:  &ethpb.ExecutionPayloadBid{BlockHash: make([]byte, 32), ParentBlockHash: make([]byte, 32), ParentBlockRoot: make([]byte, 32), PrevRandao: make([]byte, 32), FeeRecipient: make([]byte, 20), BlobKzgCommitments: [][]byte{make([]byte, 48)}},
-		BuilderPendingPayments:     func() []*ethpb.BuilderPendingPayment { pp := make([]*ethpb.BuilderPendingPayment, 64); for i := range pp { pp[i] = &ethpb.BuilderPendingPayment{Withdrawal: &ethpb.BuilderPendingWithdrawal{FeeRecipient: make([]byte, 20)}} }; return pp }(),
+		BuilderPendingPayments: func() []*ethpb.BuilderPendingPayment {
+			pp := make([]*ethpb.BuilderPendingPayment, 64)
+			for i := range pp {
+				pp[i] = &ethpb.BuilderPendingPayment{Withdrawal: &ethpb.BuilderPendingWithdrawal{FeeRecipient: make([]byte, 20)}}
+			}
+			return pp
+		}(),
 		ExecutionPayloadAvailability: make([]byte, 1024),
-		LatestBlockHash:            make([]byte, 32),
-		PayloadExpectedWithdrawals: make([]*enginev1.Withdrawal, 0),
-		ProposerLookahead:          make([]uint64, 64),
+		LatestBlockHash:              make([]byte, 32),
+		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
+		ProposerLookahead:            make([]uint64, 64),
 	})
 	require.NoError(t, err2)
 	oldRoot2 := bytesutil.ToBytes32([]byte("oldroot2"))

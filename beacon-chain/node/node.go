@@ -559,6 +559,12 @@ func openDB(ctx context.Context, dbPath string, clearer *dbClearer) (*kv.Store, 
 		cfg := features.Get()
 		cfg.EnableStateDiff = false
 		features.Init(cfg)
+	} else if errors.Is(err, kv.ErrStateDiffExponentMismatch) {
+		log.WithError(err).Error("State-diff configuration mismatch; restart aborted. Use the stored exponents or re-sync the database.")
+		return nil, err
+	} else if errors.Is(err, kv.ErrStateDiffMissingSnapshot) || errors.Is(err, kv.ErrStateDiffCorrupted) {
+		log.WithError(err).Error("State-diff database corrupted; restart aborted. Delete database and re-sync from genesis/checkpoint.")
+		return nil, err
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "could not create database at %s", dbPath)
 	}

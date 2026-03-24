@@ -5653,8 +5653,6 @@
   sources:
     - file: beacon-chain/core/altair/sync_committee.go
       search: func IsSyncCommitteeAggregator(
-    - file: validator/client/validator.go
-      search: func (v *validator) isSyncCommitteeAggregator(
   spec: |
     <spec fn="is_sync_committee_aggregator" fork="altair" hash="13d9d470">
     def is_sync_committee_aggregator(signature: BLSSignature) -> bool:

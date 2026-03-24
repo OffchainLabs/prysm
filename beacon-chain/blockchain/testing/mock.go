@@ -83,6 +83,7 @@ type ChainService struct {
 	MockPayloadContentIsFull    map[[32]byte]bool
 	ParentPayloadReadyVal       *bool
 	ForkchoiceRoots             map[[32]byte]bool
+	ForkchoiceBlockHashes       map[[32]byte][32]byte
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -590,6 +591,16 @@ func (s *ChainService) InForkchoice(root [32]byte) bool {
 		return s.ForkchoiceRoots[root]
 	}
 	return !s.NotFinalized
+}
+
+// BlockHash mocks the execution payload block hash lookup for a beacon block root.
+func (s *ChainService) BlockHash(root [32]byte) ([32]byte, error) {
+	if s.ForkchoiceBlockHashes != nil {
+		if blockHash, ok := s.ForkchoiceBlockHashes[root]; ok {
+			return blockHash, nil
+		}
+	}
+	return [32]byte{}, errors.New("block hash not found")
 }
 
 // IsOptimisticForRoot mocks the same method in the chain service.

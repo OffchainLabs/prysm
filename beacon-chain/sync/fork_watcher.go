@@ -26,6 +26,7 @@ func (s *Service) p2pHandlerControlLoop() {
 		// subscriptions for nodes running before a fork epoch.
 		case currentSlot := <-slotTicker.C():
 			s.proposerPreferencesCache.PruneBefore(currentSlot)
+			s.highestExecutionPayloadBidCache.PruneBefore(currentSlot)
 			current := s.cfg.clock.CurrentEpoch()
 			if err := s.ensureRegistrationsForEpoch(current); err != nil {
 				log.WithError(err).Error("Unable to check for fork in the next epoch")
