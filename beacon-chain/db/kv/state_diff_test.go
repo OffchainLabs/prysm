@@ -378,6 +378,47 @@ func TestStateDiff_PopulateStateDiffCacheFromDB_MissingLevelSuffixes(t *testing.
 	require.ErrorIs(t, ErrStateDiffCorrupted, err)
 }
 
+func TestStateDiff_LatestSlotForLevel(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	db := setupDB(t)
+	require.NoError(t, setOffsetInDB(db, 0))
+
+	// Write entries at level 2 with slots whose little-endian byte order
+	// differs from numerical order. bbolt sorts keys lexicographically,
+	// so the last key in byte order is not necessarily the highest slot.
+	//
+	//   Slot 1:     LE = 01 00 00 00 00 00 00 00  (lex-last)
+	//   Slot 512:   LE = 00 02 00 00 00 00 00 00
+	//   Slot 65536: LE = 00 00 01 00 00 00 00 00  (lex-first)
+	level := 2
+	slots := []uint64{1, 512, 65536}
+
+	require.NoError(t, db.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		for _, slot := range slots {
+			key := makeKeyForStateDiffTree(level, slot)
+			if err := bucket.Put(append(key, stateSuffix...), []byte{1}); err != nil {
+				return err
+			}
+			if err := bucket.Put(append(key, validatorSuffix...), []byte{1}); err != nil {
+				return err
+			}
+			if err := bucket.Put(append(key, balancesSuffix...), []byte{1}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}))
+
+	maxSlot, err := latestSlotForLevel(db, level)
+	require.NoError(t, err)
+	require.Equal(t, uint64(65536), maxSlot)
+}
+
 func TestStateDiff_GetBaseAndDiffChainSkipsEmptyLevels(t *testing.T) {
 	setDefaultStateDiffExponents()
 
