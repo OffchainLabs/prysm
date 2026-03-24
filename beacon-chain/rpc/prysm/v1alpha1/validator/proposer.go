@@ -666,7 +666,11 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedB
 // It uses the same logic as CalculateStateRoot (Copy, feature flags, slot processing)
 // but returns the full state instead of just its hash.
 func (vs *Server) computePostBlockState(ctx context.Context, block interfaces.SignedBeaconBlock) (state.BeaconState, error) {
-	beaconState, err := vs.StateGen.StateByRoot(ctx, block.Block().ParentRoot())
+	roblock, err := blocks.NewROBlockWithRoot(block, [32]byte{}) // root is not used
+	if err != nil {
+		return nil, errors.Wrap(err, "could not create ROBlock")
+	}
+	beaconState, err := vs.BlockReceiver.GetPrestateToPropose(ctx, roblock)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve beacon state")
 	}
