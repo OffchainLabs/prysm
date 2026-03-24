@@ -69,6 +69,11 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, errors.Wrap(err, "roDataColumn conversion failure")
 	}
 
+	if s.cfg.chain.ShouldIgnoreData(roDataColumn.ParentRoot(), roDataColumn.Slot()) {
+		log.WithFields(logging.DataColumnFields(roDataColumn)).Debug("Ignoring data column with canonical parent before justified checkpoint")
+		return pubsub.ValidationIgnore, nil
+	}
+
 	var verifiedRODataColumn blocks.VerifiedRODataColumn
 	if slots.ToEpoch(roDataColumn.Slot()) >= params.BeaconConfig().GloasForkEpoch {
 		verifiedRODataColumn, err = s.validateDataColumnGloas(ctx, msg, roDataColumn, dataColumnSidecarSubTopic)
