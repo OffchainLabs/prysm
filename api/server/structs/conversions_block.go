@@ -2966,6 +2966,14 @@ func PayloadAttestationFromConsensus(pa *eth.PayloadAttestation) *PayloadAttesta
 	}
 }
 
+func PayloadAttestationMessageFromConsensus(m *eth.PayloadAttestationMessage) *PayloadAttestationMessage {
+	return &PayloadAttestationMessage{
+		ValidatorIndex: fmt.Sprintf("%d", m.ValidatorIndex),
+		Data:           PayloadAttestationDataFromConsensus(m.Data),
+		Signature:      hexutil.Encode(m.Signature),
+	}
+}
+
 func PayloadAttestationDataFromConsensus(d *eth.PayloadAttestationData) *PayloadAttestationData {
 	return &PayloadAttestationData{
 		BeaconBlockRoot:   hexutil.Encode(d.BeaconBlockRoot),
@@ -3273,5 +3281,28 @@ func (d *PayloadAttestationData) ToConsensus() (*eth.PayloadAttestationData, err
 		Slot:              primitives.Slot(slot),
 		PayloadPresent:    d.PayloadPresent,
 		BlobDataAvailable: d.BlobDataAvailable,
+	}, nil
+}
+
+// SignedExecutionPayloadEnvelopeFromConsensus converts a proto envelope to the API struct.
+func SignedExecutionPayloadEnvelopeFromConsensus(e *eth.SignedExecutionPayloadEnvelope) (*SignedExecutionPayloadEnvelope, error) {
+	payload, err := ExecutionPayloadDenebFromConsensus(e.Message.Payload)
+	if err != nil {
+		return nil, err
+	}
+	var requests *ExecutionRequests
+	if e.Message.ExecutionRequests != nil {
+		requests = ExecutionRequestsFromConsensus(e.Message.ExecutionRequests)
+	}
+	return &SignedExecutionPayloadEnvelope{
+		Message: &ExecutionPayloadEnvelope{
+			Payload:           payload,
+			ExecutionRequests: requests,
+			BuilderIndex:      fmt.Sprintf("%d", e.Message.BuilderIndex),
+			BeaconBlockRoot:   hexutil.Encode(e.Message.BeaconBlockRoot),
+			Slot:              fmt.Sprintf("%d", e.Message.Slot),
+			StateRoot:         hexutil.Encode(e.Message.StateRoot),
+		},
+		Signature: hexutil.Encode(e.Signature),
 	}, nil
 }

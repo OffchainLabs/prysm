@@ -26,7 +26,7 @@ func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	}
 
 	htrs = append(htrs, func(s any) ([32]byte, error) {
-		beaconState, err := state_native.InitializeFromProtoGloas(s.(*ethpb.BeaconStateGloas))
+		beaconState, err := state_native.InitializeFromProtoUnsafeGloas(s.(*ethpb.BeaconStateGloas))
 		require.NoError(t, err)
 
 		return beaconState.HashTreeRoot(context.Background())

@@ -4,7 +4,6 @@
 package maxprocs
 
 import (
-	log "github.com/sirupsen/logrus"
 	"go.uber.org/automaxprocs/maxprocs"
 )
 

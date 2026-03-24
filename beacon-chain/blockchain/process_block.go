@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -107,6 +108,11 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	}
 	if cfg.roblock.Version() < version.Gloas {
 		s.sendFCU(cfg)
+	} else if s.isNewHead(cfg.headRoot, false) { // We reach this only when the incoming block is head.
+		if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState); err != nil {
+			log.WithError(err).Error("Could not save head")
+		}
+		s.pruneAttsFromPool(ctx, cfg.postState, cfg.roblock)
 	}
 
 	// Pre-Fulu the caches are updated when computing the payload attributes
@@ -251,9 +257,11 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			return errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
 		}
 
-		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,
+		args := &forkchoicetypes.BlockAndCheckpoints{
+			Block:               b,
 			JustifiedCheckpoint: jCheckpoints[i],
-			FinalizedCheckpoint: fCheckpoints[i]}
+			FinalizedCheckpoint: fCheckpoints[i],
+		}
 		pendingNodes[i] = args
 		if err := s.saveInitSyncBlock(ctx, root, b); err != nil {
 			tracing.AnnotateError(span, err)
@@ -383,9 +391,49 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	return nil
 }
 
+// refreshCaches updates the next slot state cache and epoch boundary caches.
+// Before Fulu this is done synchronously, after Fulu it is deferred to a goroutine.
+func (s *Service) refreshCaches(ctx context.Context, currentSlot primitives.Slot, headRoot [32]byte, headState state.BeaconState, accessRoot [32]byte) {
+	lastRoot, lastState := transition.LastCachedState()
+	if lastState == nil {
+		lastRoot, lastState = headRoot[:], headState
+	}
+	if lastState.Version() < version.Fulu {
+		s.updateCachesAndEpochBoundary(ctx, currentSlot, headState, accessRoot, lastRoot, lastState)
+	} else {
+		go func() {
+			ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
+			defer cancel()
+			s.updateCachesAndEpochBoundary(ctx, currentSlot, headState, accessRoot, lastRoot, lastState)
+		}()
+	}
+}
+
+// updateCachesAndEpochBoundary updates the next slot state cache and handles
+// epoch boundary processing. If the lastRoot matches accessRoot, the cached
+// last state is reused; otherwise, the head state is advanced instead.
+func (s *Service) updateCachesAndEpochBoundary(ctx context.Context, currentSlot primitives.Slot, headState state.BeaconState, accessRoot [32]byte, lastRoot []byte, lastState state.BeaconState) {
+	if bytes.Equal(lastRoot, accessRoot[:]) {
+		// Happy case, the last advanced state is head, we thus keep it
+		lastState.CopyAllTries()
+		if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
+			log.WithError(err).Debug("Could not update next slot state cache")
+		}
+	} else {
+		// Last advanced state was not head, we do not advance this but rather use headstate
+		headState.CopyAllTries()
+		if err := transition.UpdateNextSlotCache(ctx, accessRoot[:], headState); err != nil {
+			log.WithError(err).Debug("Could not update next slot state cache")
+		}
+	}
+	if err := s.handleEpochBoundary(ctx, currentSlot, headState, accessRoot[:]); err != nil {
+		log.WithError(err).Error("Could not update epoch boundary caches")
+	}
+}
+
 // Epoch boundary tasks: it copies the headState and updates the epoch boundary
 // caches. The caller of this function must not hold a lock in forkchoice store.
-func (s *Service) handleEpochBoundary(ctx context.Context, slot primitives.Slot, headState state.BeaconState, blockRoot []byte) error {
+func (s *Service) handleEpochBoundary(ctx context.Context, slot primitives.Slot, headState state.ReadOnlyBeaconState, blockRoot []byte) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.handleEpochBoundary")
 	defer span.End()
 	// return early if we are advancing to a past epoch
@@ -976,37 +1024,20 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	headRoot := s.headRoot()
 	headState := s.headState(ctx)
 	s.headLock.RUnlock()
-	lastRoot, lastState := transition.LastCachedState()
-	if lastState == nil {
-		lastRoot, lastState = headRoot[:], headState
-	}
-	// Before Fulu we need to process the next slot to find out if we are proposing.
-	if lastState.Version() < version.Fulu {
-		// Copy all the field tries in our cached state in the event of late
-		// blocks.
-		lastState.CopyAllTries()
-		if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
-			log.WithError(err).Debug("Could not update next slot state cache")
-		}
-		if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
-			log.WithError(err).Error("Could not update epoch boundary caches")
-		}
+
+	var accessRoot [32]byte
+	isFull, err := headState.IsParentBlockFull()
+	gloasFirstSlot, _ := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
+	if err != nil || !isFull || headState.Slot() <= gloasFirstSlot {
+		accessRoot = headRoot
 	} else {
-		// After Fulu, we can update the caches asynchronously after sending FCU to the engine
-		defer func() {
-			go func() {
-				ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
-				defer cancel()
-				lastState.CopyAllTries()
-				if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
-					log.WithError(err).Debug("Could not update next slot state cache")
-				}
-				if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
-					log.WithError(err).Error("Could not update epoch boundary caches")
-				}
-			}()
-		}()
+		accessRoot, err = headState.LatestBlockHash()
+		if err != nil {
+			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve latest block hash, using head root as access root")
+			accessRoot = headRoot
+		}
 	}
+	s.refreshCaches(ctx, currentSlot, headRoot, headState, accessRoot)
 	// return early if we already started building a block for the current
 	// head root
 	_, has := s.cfg.PayloadIDCache.PayloadID(s.CurrentSlot()+1, headRoot)
@@ -1014,7 +1045,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		return
 	}
 
-	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
+	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:], accessRoot[:])
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
 		return
@@ -1026,32 +1057,35 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve latest block hash")
 			return
 		}
-		_, err = s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
+		id, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
 		if err != nil {
 			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
 		}
-	} else {
-		s.headLock.RLock()
-		headBlock, err := s.headBlock()
-		if err != nil {
-			s.headLock.RUnlock()
-			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve head block")
-			return
+		if id != nil {
+			s.cfg.PayloadIDCache.Set(s.CurrentSlot()+1, headRoot, [8]byte(*id))
 		}
+		return
+	}
+	s.headLock.RLock()
+	headBlock, err := s.headBlock()
+	if err != nil {
 		s.headLock.RUnlock()
+		log.WithError(err).Debug("could not perform late block tasks: failed to retrieve head block")
+		return
+	}
+	s.headLock.RUnlock()
 
-		fcuArgs := &fcuConfig{
-			headState:  headState,
-			headRoot:   headRoot,
-			headBlock:  headBlock,
-			attributes: attribute,
-		}
-		s.cfg.ForkChoiceStore.Lock()
-		defer s.cfg.ForkChoiceStore.Unlock()
-		_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
-		if err != nil {
-			log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
-		}
+	fcuArgs := &fcuConfig{
+		headState:  headState,
+		headRoot:   headRoot,
+		headBlock:  headBlock,
+		attributes: attribute,
+	}
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
+	_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
+	if err != nil {
+		log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
 	}
 }
 

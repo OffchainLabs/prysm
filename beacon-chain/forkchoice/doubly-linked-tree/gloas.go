@@ -16,6 +16,37 @@ import (
 	"github.com/pkg/errors"
 )
 
+// CanonicalNodeAtSlot returns the full node that exists at the given slot in the canonical chain.
+// The boolean indicates whether the payload was present for the returned blockroot.
+// If the slot for the given blockroot is the current wall clock slot, it returns the pending node, that is, it sets the boolean to false.
+// If the slot is in the past the boolean indicates between full or empty.
+func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) {
+	s := f.store
+	n := s.headNode
+	for n != nil && n.slot > slot {
+		if n.parent == nil {
+			n = nil
+		} else {
+			n = n.parent.node
+		}
+	}
+	if n == nil {
+		return [32]byte{}, false
+	}
+	if n.slot == s.currentSlot() {
+		return n.root, false
+	}
+	pn := s.choosePayloadContent(n)
+	return pn.node.root, pn.full
+}
+
+// PayloadContentLookup returns the preferred lookup key for a given beacon block root.
+// If full payload content wins, it returns the block hash and true.
+// If empty payload content wins, it returns the beacon block root and false.
+func (f *ForkChoice) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
+	return f.store.payloadContentLookup(root)
+}
+
 func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte) error {
 	sb, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
@@ -132,17 +163,18 @@ func (s *Store) parentHash(pn *PayloadNode) [32]byte {
 	return fullParent.node.blockHash
 }
 
-// latestHashForRoot returns the latest payload hash for the given block root.
-func (s *Store) latestHashForRoot(root [32]byte) [32]byte {
-	// try to get the full node first
-	fn := s.fullNodeByRoot[root]
-	if fn != nil {
-		return fn.node.blockHash
-	}
+// checkpointPayloadHashForRoot returns the payload hash associated with a checkpoint root.
+// Before Gloas, there is no empty/full ambiguity, so the checkpoint payload hash is the
+// block's own payload hash. In Gloas, a checkpoint finalizes a beacon block root, not a
+// payload, and the child block that disambiguates full vs empty is not itself finalized,
+// so we return the latest known parent payload hash instead.
+func (s *Store) checkpointPayloadHashForRoot(root [32]byte) [32]byte {
 	en := s.emptyNodeByRoot[root]
 	if en == nil {
-		// This should not happen
 		return [32]byte{}
+	}
+	if slots.ToEpoch(en.node.slot) < params.BeaconConfig().GloasForkEpoch {
+		return en.node.blockHash
 	}
 	return s.parentHash(en)
 }
@@ -268,6 +300,21 @@ func (s *Store) choosePayloadContent(n *Node) *PayloadNode {
 	return en
 }
 
+func (s *Store) payloadContentLookup(root [32]byte) ([32]byte, bool) {
+	en := s.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return [32]byte{}, false
+	}
+	pn := s.choosePayloadContent(en.node)
+	if pn == nil || pn.node == nil {
+		return [32]byte{}, false
+	}
+	if pn.full {
+		return pn.node.blockHash, true
+	}
+	return pn.node.root, false
+}
+
 // nodeTreeDump appends to the given list all the nodes descending from this one
 func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.Node) ([]*forkchoice2.Node, error) {
 	if ctx.Err() != nil {
@@ -348,6 +395,8 @@ func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) err
 		children:   make([]*Node, 0),
 	}
 	s.fullNodeByRoot[root] = fn
+	payloadInsertedCount.Inc()
+	updatePayloadNodeMetrics(s)
 	f.updateNewFullNodeWeight(fn)
 	return nil
 }
@@ -367,6 +416,7 @@ func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, bl
 	if n == nil {
 		return
 	}
+	ptcVoteCount.Inc()
 	if payloadPresent {
 		n.node.setPayloadAvailabilityVote(ptcIdx)
 	}
@@ -402,6 +452,12 @@ func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus 
 		return s.fullNodeByRoot[r], false
 	}
 	return en, slot == en.node.slot
+}
+
+// HasFullNode returns true if a full (payload) node exists for the given beacon block root.
+func (f *ForkChoice) HasFullNode(root [32]byte) bool {
+	_, ok := f.store.fullNodeByRoot[root]
+	return ok
 }
 
 // BlockHash returns the hash committed in the given block
@@ -458,4 +514,24 @@ func (s *Store) removeProposerBoostFromParent() {
 		p.weight -= s.previousProposerBoostScore
 	}
 	return
+}
+
+// FullHead returns the head root and the head blockhash of the chain. It also
+// returns whether the head is full or not, that is if the blockhash is for the same
+// slot as the beacon root or some previous slots.
+func (f *ForkChoice) FullHead(ctx context.Context) ([32]byte, [32]byte, bool, error) {
+	hr, err := f.Head(ctx)
+	if err != nil {
+		return [32]byte{}, [32]byte{}, false, err
+	}
+	n := f.store.headNode
+	pn := f.store.choosePayloadContent(n)
+	if pn.full && slots.ToEpoch(n.slot) >= params.BeaconConfig().GloasForkEpoch {
+		return hr, pn.node.blockHash, true, nil
+	}
+	fullAncestor := f.store.fullParent(pn)
+	if fullAncestor == nil {
+		return hr, [32]byte{}, false, nil
+	}
+	return hr, fullAncestor.node.blockHash, false, nil
 }

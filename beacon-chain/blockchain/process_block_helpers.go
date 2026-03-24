@@ -44,7 +44,7 @@ func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) (*fcuConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:])
+	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:], cfg.headRoot[:])
 	return fcuArgs, nil
 }
 
@@ -64,26 +64,32 @@ func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig) (*fcuConfig,
 // block is not the head of the chain. It requires the caller holds a lock on
 // Forkchoice.
 func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]byte) {
-	receivedWeight, err := s.cfg.ForkChoiceStore.Weight(blockRoot)
+	receivedWeight, err := s.cfg.ForkChoiceStore.ConsensusNodeWeight(blockRoot)
 	if err != nil {
 		log.WithField("root", fmt.Sprintf("%#x", blockRoot)).Warn("Could not determine node weight")
 	}
-	headWeight, err := s.cfg.ForkChoiceStore.Weight(headRoot)
+	headWeight, err := s.cfg.ForkChoiceStore.ConsensusNodeWeight(headRoot)
 	if err != nil {
 		log.WithField("root", fmt.Sprintf("%#x", headRoot)).Warn("Could not determine node weight")
 	}
-	log.WithFields(logrus.Fields{
+	fields := logrus.Fields{
 		"receivedRoot":   fmt.Sprintf("%#x", blockRoot),
 		"receivedWeight": receivedWeight,
 		"headRoot":       fmt.Sprintf("%#x", headRoot),
 		"headWeight":     headWeight,
-	}).Debug("Head block is not the received block")
+	}
+	headEmpty, headFull, err := s.cfg.ForkChoiceStore.PayloadWeights(headRoot)
+	if err == nil {
+		fields["headEmptyWeight"] = headEmpty
+		fields["headFullWeight"] = headFull
+	}
+	log.WithFields(fields).Debug("Head block is not the received block")
 }
 
 // fcuArgsNonCanonicalBlock returns the arguments to the FCU call when the
 // incoming block is non-canonical, that is, based on the head root.
 func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
-	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot)
+	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot, cfg.headRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -193,10 +199,32 @@ func reportProcessingTime(startTime time.Time) {
 	onBlockProcessingTime.Observe(float64(time.Since(startTime).Milliseconds()))
 }
 
-// getBlockPreState returns the pre state of an incoming block. It uses the parent root of the block
+// GetPrestateToPropose returns the pre-state for a proposer to base its block on.
+// It is similar to GetBlockPreState but it lacks unnecessary verifications.
+func (s *Service) GetPrestateToPropose(ctx context.Context, b consensus_blocks.ROBlock) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "blockChain.GetPreStateToPropose")
+	defer span.End()
+
+	accessRoot, err := s.getLookupParentRoot(b)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get lookup parent root")
+	}
+
+	bl := b.Block()
+	preState, err := s.cfg.StateGen.StateByRoot(ctx, accessRoot)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not get pre state for slot %d", bl.Slot())
+	}
+	if preState == nil || preState.IsNil() {
+		return nil, errors.Wrapf(err, "nil pre state for slot %d", bl.Slot())
+	}
+	return preState, nil
+}
+
+// GetBlockPreState returns the pre state of an incoming block. It uses the parent root of the block
 // to retrieve the state in DB. It verifies the pre state's validity and the incoming block
 // is in the correct time window.
-func (s *Service) getBlockPreState(ctx context.Context, b consensus_blocks.ROBlock) (state.BeaconState, error) {
+func (s *Service) GetBlockPreState(ctx context.Context, b consensus_blocks.ROBlock) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.getBlockPreState")
 	defer span.End()
 

@@ -709,3 +709,204 @@ func TestAppendBuildersSweepWithdrawals(t *testing.T) {
 		require.Equal(t, primitives.BuilderIndex(0), nextBuilderIndex)
 	})
 }
+
+func TestBuilderPendingWithdrawals(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		require.NoError(t, err)
+		st := stIface.(*BeaconState)
+
+		_, err = st.BuilderPendingWithdrawals()
+		require.ErrorContains(t, "BuilderPendingWithdrawals", err)
+	})
+
+	t.Run("returns copy", func(t *testing.T) {
+		original := []*ethpb.BuilderPendingWithdrawal{
+			{Amount: 10, BuilderIndex: 1},
+		}
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			BuilderPendingWithdrawals: original,
+		})
+		require.NoError(t, err)
+
+		got1, err := st.BuilderPendingWithdrawals()
+		require.NoError(t, err)
+		require.Equal(t, len(original), len(got1))
+		require.Equal(t, original[0].Amount, got1[0].Amount)
+		require.Equal(t, original[0].BuilderIndex, got1[0].BuilderIndex)
+
+		got1[0].Amount = 99
+		got2, err := st.BuilderPendingWithdrawals()
+		require.NoError(t, err)
+		require.Equal(t, len(original), len(got2))
+		require.Equal(t, original[0].Amount, got2[0].Amount)
+		require.Equal(t, original[0].BuilderIndex, got2[0].BuilderIndex)
+
+	})
+}
+
+func TestBuildersGetter(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		require.NoError(t, err)
+		st := stIface.(*BeaconState)
+
+		_, err = st.Builders()
+		require.ErrorContains(t, "Builders", err)
+	})
+
+	t.Run("returns copy", func(t *testing.T) {
+		pubkey := bytes.Repeat([]byte{0xAB}, fieldparams.BLSPubkeyLength)
+		buildr := &ethpb.Builder{
+			Pubkey:            pubkey,
+			Balance:           42,
+			DepositEpoch:      3,
+			WithdrawableEpoch: 4,
+		}
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			Builders: []*ethpb.Builder{buildr},
+		})
+		require.NoError(t, err)
+
+		got1, err := st.Builders()
+		require.NoError(t, err)
+		require.DeepEqual(t, buildr, got1[0])
+
+		got1[0].Pubkey[0] = 0xFF
+		got2, err := st.Builders()
+		require.NoError(t, err)
+		require.DeepEqual(t, buildr, got2[0])
+	})
+}
+
+func TestNextWithdrawalBuilderIndex(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		require.NoError(t, err)
+		st := stIface.(*BeaconState)
+
+		_, err = st.NextWithdrawalBuilderIndex()
+		require.ErrorContains(t, "NextWithdrawalBuilderIndex", err)
+	})
+
+	t.Run("returns configured value", func(t *testing.T) {
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			NextWithdrawalBuilderIndex: 2,
+		})
+		require.NoError(t, err)
+
+		got, err := st.NextWithdrawalBuilderIndex()
+		require.NoError(t, err)
+		require.Equal(t, primitives.BuilderIndex(2), got)
+	})
+}
+
+func TestPayloadExpectedWithdrawals(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		require.NoError(t, err)
+		st := stIface.(*BeaconState)
+
+		_, err = st.PayloadExpectedWithdrawals()
+		require.ErrorContains(t, "PayloadExpectedWithdrawals", err)
+	})
+
+	t.Run("returns copy", func(t *testing.T) {
+		original := enginev1.Withdrawal{
+			Index:          1,
+			ValidatorIndex: 2,
+			Address:        bytes.Repeat([]byte{0x01}, 20),
+			Amount:         10,
+		}
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			PayloadExpectedWithdrawals: []*enginev1.Withdrawal{&original},
+		})
+		require.NoError(t, err)
+
+		got1, err := st.PayloadExpectedWithdrawals()
+		require.NoError(t, err)
+		require.DeepEqual(t, &original, got1[0])
+
+		got1[0].Amount = 99
+		got2, err := st.PayloadExpectedWithdrawals()
+		require.NoError(t, err)
+		require.DeepEqual(t, &original, got2[0])
+	})
+}
+
+func TestWithdrawalsForPayload(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		_, err := st.WithdrawalsForPayload()
+		require.ErrorContains(t, "WithdrawalsForPayload", err)
+	})
+
+	t.Run("returns existing withdrawals when parent empty", func(t *testing.T) {
+		existing := []*enginev1.Withdrawal{
+			{Index: 5, ValidatorIndex: 10, Address: bytes.Repeat([]byte{0x26}, 20), Amount: 100},
+		}
+		// Parent is empty: bid block hash differs from latest block hash.
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
+				BlockHash: bytes.Repeat([]byte{0xAA}, 32),
+			},
+			LatestBlockHash:            bytes.Repeat([]byte{0xBB}, 32),
+			PayloadExpectedWithdrawals: existing,
+		})
+		require.NoError(t, err)
+
+		got, err := st.WithdrawalsForPayload()
+		require.NoError(t, err)
+		require.DeepEqual(t, existing, got)
+	})
+
+	t.Run("computes fresh withdrawals when parent full", func(t *testing.T) {
+		hash := bytes.Repeat([]byte{0xAB}, 32)
+		stale := []*enginev1.Withdrawal{
+			{Index: 1, ValidatorIndex: 2, Address: bytes.Repeat([]byte{0x01}, 20), Amount: 999},
+		}
+		// Parent is full: bid block hash == latest block hash.
+		// With no validators/pending withdrawals, fresh computation returns empty.
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
+				BlockHash: hash,
+			},
+			LatestBlockHash:            hash,
+			PayloadExpectedWithdrawals: stale,
+		})
+		require.NoError(t, err)
+
+		got, err := st.WithdrawalsForPayload()
+		require.NoError(t, err)
+		// Fresh computation with no validators yields empty, not the stale value.
+		require.Equal(t, 0, len(got))
+	})
+}
+
+func TestExecutionPayloadAvailabilityVector(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		stIface, err := InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		require.NoError(t, err)
+		st := stIface.(*BeaconState)
+
+		_, err = st.ExecutionPayloadAvailabilityVector()
+		require.ErrorContains(t, "ExecutionPayloadAvailabilityVector", err)
+	})
+
+	t.Run("returns copy", func(t *testing.T) {
+		availability := []byte{0xAA, 0xBB, 0xCC}
+		st, err := InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			ExecutionPayloadAvailability: availability,
+		})
+		require.NoError(t, err)
+
+		got1, err := st.ExecutionPayloadAvailabilityVector()
+		require.NoError(t, err)
+		require.DeepEqual(t, availability, got1)
+
+		got1[0] = 0xFF
+		got2, err := st.ExecutionPayloadAvailabilityVector()
+		require.NoError(t, err)
+		require.DeepEqual(t, availability, got2)
+	})
+}

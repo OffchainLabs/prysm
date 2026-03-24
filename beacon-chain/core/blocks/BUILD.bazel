@@ -60,6 +60,7 @@ go_test(
         "block_operations_fuzz_test.go",
         "block_regression_test.go",
         "eth1_data_test.go",
+        "exit_builder_test.go",
         "exit_test.go",
         "exports_test.go",
         "genesis_test.go",

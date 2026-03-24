@@ -192,6 +192,33 @@ func (b *BeaconState) builderPendingBalanceToWithdraw(builderIndex primitives.Bu
 	return total
 }
 
+// BuilderPendingBalanceToWithdraw returns the total pending balance to withdraw for a builder.
+//
+//	<spec fn="get_pending_balance_to_withdraw_for_builder" fork="gloas" hash="a5d10dc1">
+//	def get_pending_balance_to_withdraw_for_builder(
+//	    state: BeaconState, builder_index: BuilderIndex
+//	) -> Gwei:
+//	    return sum(
+//	        withdrawal.amount
+//	        for withdrawal in state.builder_pending_withdrawals
+//	        if withdrawal.builder_index == builder_index
+//	    ) + sum(
+//	        payment.withdrawal.amount
+//	        for payment in state.builder_pending_payments
+//	        if payment.withdrawal.builder_index == builder_index
+//	    )
+//	</spec>
+func (b *BeaconState) BuilderPendingBalanceToWithdraw(builderIndex primitives.BuilderIndex) (uint64, error) {
+	if b.version < version.Gloas {
+		return 0, errNotSupported("BuilderPendingBalanceToWithdraw", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.builderPendingBalanceToWithdraw(builderIndex), nil
+}
+
 // BuilderPendingPayments returns a copy of the builder pending payments.
 func (b *BeaconState) BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error) {
 	if b.version < version.Gloas {
@@ -575,4 +602,90 @@ func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, wit
 
 	*withdrawals = ws
 	return withdrawalIndex, builderIndex, nil
+}
+
+// Builders returns a copy of the builders registry.
+func (b *BeaconState) Builders() ([]*ethpb.Builder, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("Builders", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.buildersVal(), nil
+}
+
+// ExecutionPayloadAvailabilityVector returns a copy of the execution payload availability bitvector.
+func (b *BeaconState) ExecutionPayloadAvailabilityVector() ([]byte, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("ExecutionPayloadAvailabilityVector", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.executionPayloadAvailabilityVal(), nil
+}
+
+// BuilderPendingWithdrawals returns a copy of the builder pending withdrawals.
+func (b *BeaconState) BuilderPendingWithdrawals() ([]*ethpb.BuilderPendingWithdrawal, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("BuilderPendingWithdrawals", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.builderPendingWithdrawalsVal(), nil
+}
+
+// PayloadExpectedWithdrawals returns a copy of the payload expected withdrawals.
+func (b *BeaconState) PayloadExpectedWithdrawals() ([]*enginev1.Withdrawal, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("PayloadExpectedWithdrawals", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.payloadExpectedWithdrawalsVal(), nil
+}
+
+// WithdrawalsForPayload returns the withdrawals that should be included in the
+// execution payload for the current slot. If the parent block was full,
+// fresh withdrawals are computed via ExpectedWithdrawalsGloas; otherwise
+// the existing payload_expected_withdrawals from state are reused unchanged.
+// This method does not acquire a lock directly; it delegates to
+// IsParentBlockFull, ExpectedWithdrawalsGloas, and PayloadExpectedWithdrawals
+// which each acquire their own read lock.
+func (b *BeaconState) WithdrawalsForPayload() ([]*enginev1.Withdrawal, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("WithdrawalsForPayload", b.version)
+	}
+
+	full, err := b.IsParentBlockFull()
+	if err != nil {
+		return nil, err
+	}
+	if full {
+		result, err := b.ExpectedWithdrawalsGloas()
+		if err != nil {
+			return nil, err
+		}
+		return result.Withdrawals, nil
+	}
+	return b.PayloadExpectedWithdrawals()
+}
+
+// NextWithdrawalBuilderIndex returns the next withdrawal builder index.
+func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, error) {
+	if b.version < version.Gloas {
+		return 0, errNotSupported("NextWithdrawalBuilderIndex", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.nextWithdrawalBuilderIndex, nil
 }

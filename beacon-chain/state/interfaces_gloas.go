@@ -30,6 +30,7 @@ type writeOnlyGloasFields interface {
 	IncreaseBuilderBalance(index primitives.BuilderIndex, amount uint64) error
 	AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64) error
 	UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64, participatedFlags map[uint8]bool) error
+	UpdateBuilderAtIndex(index primitives.BuilderIndex, builder *ethpb.Builder) error
 
 	// Withdrawals.
 	SetPayloadExpectedWithdrawals(withdrawals []*enginev1.Withdrawal) error
@@ -46,23 +47,30 @@ type readOnlyGloasFields interface {
 	// Builder pending payments / withdrawals.
 	BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error)
 	WithdrawalsMatchPayloadExpected(withdrawals []*enginev1.Withdrawal) (bool, error)
+	BuilderPendingWithdrawals() ([]*ethpb.BuilderPendingWithdrawal, error)
 
 	// Misc.
 	LatestBlockHash() ([32]byte, error)
 
 	// Builders.
 	Builder(index primitives.BuilderIndex) (*ethpb.Builder, error)
+	Builders() ([]*ethpb.Builder, error)
 	BuilderPubkey(primitives.BuilderIndex) ([48]byte, error)
 	BuilderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]byte) (primitives.BuilderIndex, bool)
 	IsActiveBuilder(primitives.BuilderIndex) (bool, error)
 	CanBuilderCoverBid(primitives.BuilderIndex, primitives.Gwei) (bool, error)
+	BuilderPendingBalanceToWithdraw(primitives.BuilderIndex) (uint64, error)
 	IsAttestationSameSlot(blockRoot [32]byte, slot primitives.Slot) (bool, error)
 	BuilderPendingPayment(index uint64) (*ethpb.BuilderPendingPayment, error)
 	ExecutionPayloadAvailability(slot primitives.Slot) (uint64, error)
+	ExecutionPayloadAvailabilityVector() ([]byte, error)
+	NextWithdrawalBuilderIndex() (primitives.BuilderIndex, error)
 
 	// Withdrawals
 	IsParentBlockFull() (bool, error)
 	ExpectedWithdrawalsGloas() (ExpectedWithdrawalsGloasResult, error)
+	PayloadExpectedWithdrawals() ([]*enginev1.Withdrawal, error)
+	WithdrawalsForPayload() ([]*enginev1.Withdrawal, error)
 }
 
 // ExpectedWithdrawalsGloasResult bundles the expected withdrawals and related counters
