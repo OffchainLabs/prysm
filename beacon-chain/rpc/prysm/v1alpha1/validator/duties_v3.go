@@ -43,7 +43,7 @@ func (vs *Server) GetAttesterDuties(ctx context.Context, req *ethpb.AttesterDuti
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
 
-	dependentRoot, err := vs.attestationDependentRoot(ctx, req.Epoch)
+	dependentRoot, err := vs.attestationDependentRoot(ctx, s, req.Epoch)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
 
-	dependentRoot, err := vs.attestationDependentRoot(ctx, req.Epoch)
+	dependentRoot, err := vs.attestationDependentRoot(ctx, s, req.Epoch)
 	if err != nil {
 		return nil, err
 	}
@@ -236,8 +236,8 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 }
 
 // attestationDependentRoot returns the dependent root for attestation-style duties.
-// Uses the forkchoice tree to stay consistent with the head event SSE.
-func (vs *Server) attestationDependentRoot(ctx context.Context, epoch primitives.Epoch) ([]byte, error) {
+// For epochs <= 1 it returns the genesis block root; otherwise it computes the root from state.
+func (vs *Server) attestationDependentRoot(ctx context.Context, s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
 	if epoch <= 1 {
 		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
@@ -245,15 +245,16 @@ func (vs *Server) attestationDependentRoot(ctx context.Context, epoch primitives
 		}
 		return r[:], nil
 	}
-	root, err := vs.ForkchoiceFetcher.DependentRoot(epoch.Sub(1))
+	root, err := core.AttestationDependentRoot(s, epoch)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
 	}
-	return root[:], nil
+	return root, nil
 }
 
 // proposalDependentRoot returns the dependent root for proposer duties.
-// Uses the forkchoice tree to stay consistent with the head event SSE.
+// Epoch 0 always needs genesis root. Epoch 1 also needs it post-Fulu because
+// V2 uses AttestationDependentRoot which requires epoch > 1.
 func (vs *Server) proposalDependentRoot(ctx context.Context, s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
 	if epoch == 0 || (epoch == 1 && s.Version() >= version.Fulu) {
 		r, err := vs.BeaconDB.GenesisBlockRoot(ctx)
@@ -262,15 +263,9 @@ func (vs *Server) proposalDependentRoot(ctx context.Context, s state.BeaconState
 		}
 		return r[:], nil
 	}
-	var depEpoch primitives.Epoch
-	if s.Version() >= version.Fulu {
-		depEpoch = epoch.Sub(1)
-	} else {
-		depEpoch = epoch
-	}
-	root, err := vs.ForkchoiceFetcher.DependentRoot(depEpoch)
+	root, err := core.ProposalDependentRootV2(s, epoch)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
 	}
-	return root[:], nil
+	return root, nil
 }

@@ -156,6 +156,60 @@ func TestSyncCommitteeDutiesLastValidEpoch(t *testing.T) {
 	})
 }
 
+func TestProposalDependentRootV2(t *testing.T) {
+	helpers.ClearCache()
+
+	// With SlotsPerEpoch=8 and epoch=2:
+	//   attestation dependent root slot = prev_epoch_start - 1 = 8 - 1 = 7
+	//   v1 proposer dependent root slot = epoch_start - 1     = 16 - 1 = 15
+	// We set distinct roots at these slots so the test proves the fork
+	// branch selects the right one.
+	makeBlockRoots := func(t *testing.T) [][]byte {
+		shr := params.BeaconConfig().SlotsPerHistoricalRoot
+		roots := make([][]byte, shr)
+		for i := range roots {
+			roots[i] = make([]byte, 32)
+			roots[i][0] = byte(i)
+		}
+		return roots
+	}
+
+	t.Run("post-Fulu uses prev_epoch_start minus 1", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		spe := params.BeaconConfig().SlotsPerEpoch
+		st, _ := util.DeterministicGenesisStateFulu(t, 64)
+		require.NoError(t, st.SetSlot(2*spe))
+		require.NoError(t, st.SetBlockRoots(makeBlockRoots(t)))
+
+		got, err := ProposalDependentRootV2(st, 2)
+		require.NoError(t, err)
+		// Post-Fulu: prev_epoch_start - 1 = SlotsPerEpoch - 1
+		assert.Equal(t, byte(spe-1), got[0])
+	})
+
+	t.Run("pre-Fulu uses epoch_start minus 1", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.ElectraForkEpoch = 0
+		cfg.FuluForkEpoch = 1000
+		params.OverrideBeaconConfig(cfg)
+
+		spe := params.BeaconConfig().SlotsPerEpoch
+		st, _ := util.DeterministicGenesisStateElectra(t, 64)
+		require.NoError(t, st.SetSlot(2*spe))
+		require.NoError(t, st.SetBlockRoots(makeBlockRoots(t)))
+
+		got, err := ProposalDependentRootV2(st, 2)
+		require.NoError(t, err)
+		// Pre-Fulu: epoch_start - 1 = 2*SlotsPerEpoch - 1
+		assert.Equal(t, byte(2*spe-1), got[0])
+	})
+}
+
 func TestFindValidatorIndexInCommittee(t *testing.T) {
 	committee := []primitives.ValidatorIndex{10, 20, 30}
 	assert.Equal(t, uint64(0), findValidatorIndexInCommittee(committee, 10))

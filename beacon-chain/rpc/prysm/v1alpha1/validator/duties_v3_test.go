@@ -130,7 +130,7 @@ func TestGetProposerDutiesV2_DependentRoot(t *testing.T) {
 
 	genesisRoot := [32]byte{0xff}
 
-	t.Run("pre-Fulu epoch 1 uses forkchoice dependent root", func(t *testing.T) {
+	t.Run("pre-Fulu epoch 1 computes dependent root", func(t *testing.T) {
 		helpers.ClearCache()
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig().Copy()
@@ -139,42 +139,12 @@ func TestGetProposerDutiesV2_DependentRoot(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		bs, _ := util.DeterministicGenesisStateElectra(t, 64)
-		require.NoError(t, bs.SetSlot(spe)) // epoch 1 start
-
-		db := dbutil.SetupDB(t)
-		require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
-
-		expectedRoot := [32]byte{0xab}
-		secondsPerSlot := params.BeaconConfig().SecondsPerSlot
-		chain := &mockChain.ChainService{
-			State:            bs,
-			Root:             genesisRoot[:],
-			Genesis:          time.Now().Add(-time.Duration(uint64(spe)*secondsPerSlot) * time.Second),
-			DependentRootVal: expectedRoot,
+		roots := make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
+		for i := range roots {
+			roots[i] = make([]byte, 32)
+			roots[i][0] = byte(i)
 		}
-		vs := &Server{
-			HeadFetcher:           chain,
-			TimeFetcher:           chain,
-			OptimisticModeFetcher: chain,
-			ForkchoiceFetcher:     chain,
-			SyncChecker:           &mockSync.Sync{IsSyncing: false},
-			BeaconDB:              db,
-			CoreService:           &core.Service{},
-		}
-
-		res, err := vs.GetProposerDutiesV2(t.Context(), &ethpb.ProposerDutiesRequest{Epoch: 1})
-		require.NoError(t, err)
-		assert.Equal(t, expectedRoot[0], res.DependentRoot[0])
-	})
-
-	t.Run("post-Fulu epoch 1 uses genesis root", func(t *testing.T) {
-		helpers.ClearCache()
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig().Copy()
-		cfg.FuluForkEpoch = 0
-		params.OverrideBeaconConfig(cfg)
-
-		bs, _ := util.DeterministicGenesisStateFulu(t, 64)
+		require.NoError(t, bs.SetBlockRoots(roots))
 		require.NoError(t, bs.SetSlot(spe)) // epoch 1 start
 
 		db := dbutil.SetupDB(t)
@@ -190,7 +160,46 @@ func TestGetProposerDutiesV2_DependentRoot(t *testing.T) {
 			HeadFetcher:           chain,
 			TimeFetcher:           chain,
 			OptimisticModeFetcher: chain,
-			ForkchoiceFetcher:     chain,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			BeaconDB:              db,
+			CoreService:           &core.Service{},
+		}
+
+		res, err := vs.GetProposerDutiesV2(t.Context(), &ethpb.ProposerDutiesRequest{Epoch: 1})
+		require.NoError(t, err)
+		// Pre-Fulu: ProposalDependentRoot uses epoch_start-1 = spe-1.
+		assert.Equal(t, byte(spe-1), res.DependentRoot[0])
+	})
+
+	t.Run("post-Fulu epoch 1 uses genesis root", func(t *testing.T) {
+		helpers.ClearCache()
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		bs, _ := util.DeterministicGenesisStateFulu(t, 64)
+		roots := make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
+		for i := range roots {
+			roots[i] = make([]byte, 32)
+			roots[i][0] = byte(i)
+		}
+		require.NoError(t, bs.SetBlockRoots(roots))
+		require.NoError(t, bs.SetSlot(spe)) // epoch 1 start
+
+		db := dbutil.SetupDB(t)
+		require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
+
+		secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+		chain := &mockChain.ChainService{
+			State:   bs,
+			Root:    genesisRoot[:],
+			Genesis: time.Now().Add(-time.Duration(uint64(spe)*secondsPerSlot) * time.Second),
+		}
+		vs := &Server{
+			HeadFetcher:           chain,
+			TimeFetcher:           chain,
+			OptimisticModeFetcher: chain,
 			SyncChecker:           &mockSync.Sync{IsSyncing: false},
 			BeaconDB:              db,
 			CoreService:           &core.Service{},

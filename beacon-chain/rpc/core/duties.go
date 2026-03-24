@@ -14,8 +14,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // AttesterDutyResult is a transport-agnostic representation of attester duty.
@@ -268,4 +271,53 @@ func syncDutyStatus(st state.BeaconState, idx primitives.ValidatorIndex) validat
 		return validator.Active
 	}
 	return validator.Pending
+}
+
+// AttestationDependentRoot returns the block root at (epoch-1 start - 1),
+// which is the dependent root for attester duties at the given epoch.
+// Callers must handle epoch <= 1 separately (e.g. using the genesis block root from the DB).
+func AttestationDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+	if epoch <= 1 {
+		return nil, errors.New("epoch <= 1 requires genesis block root from DB")
+	}
+	prevEpochStartSlot, err := slots.EpochStart(epoch.Sub(1))
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
+	}
+	root, err := helpers.BlockRootAtSlot(s, prevEpochStartSlot.Sub(1))
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get block root")
+	}
+	return root, nil
+}
+
+// ProposalDependentRoot returns the block root at (epoch start - 1),
+// which is the dependent root for proposer duties at the given epoch.
+// This is the pre-Fulu (v1) calculation used by the REST /eth/v1 endpoint.
+// Callers must handle epoch 0 separately (e.g. using the genesis block root from the DB).
+func ProposalDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+	if epoch == 0 {
+		return nil, errors.New("epoch 0 requires genesis block root from DB")
+	}
+	epochStartSlot, err := slots.EpochStart(epoch)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
+	}
+	root, err := helpers.BlockRootAtSlot(s, epochStartSlot.Sub(1))
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get block root")
+	}
+	return root, nil
+}
+
+// ProposalDependentRootV2 returns the dependent root for proposer duties.
+func ProposalDependentRootV2(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+	if s.Version() >= version.Fulu {
+		// Post-Fulu (EIP-7917) the proposer schedule is deterministic from the
+		// previous epoch's state, so the dependent root is (prev_epoch_start - 1),
+		// matching AttestationDependentRoot. Pre-Fulu it falls back to (epoch_start - 1).
+		// See https://github.com/ethereum/beacon-APIs/pull/563.
+		return AttestationDependentRoot(s, epoch)
+	}
+	return ProposalDependentRoot(s, epoch)
 }

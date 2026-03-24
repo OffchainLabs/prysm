@@ -69,7 +69,6 @@ type ChainService struct {
 	ForkChoiceStore             forkchoice.ForkChoicer
 	ReceiveBlockMockErr         error
 	OptimisticCheckRootReceived [32]byte
-	DependentRootVal            [32]byte
 	FinalizedRoots              map[[32]byte]bool
 	OptimisticRoots             map[[32]byte]bool
 	BlockSlot                   primitives.Slot
@@ -471,8 +470,8 @@ func (s *ChainService) IsCanonical(_ context.Context, r [32]byte) (bool, error) 
 }
 
 // DependentRoot mocks the base method in the chain service.
-func (c *ChainService) DependentRoot(_ primitives.Epoch) ([32]byte, error) {
-	return c.DependentRootVal, nil
+func (*ChainService) DependentRoot(_ primitives.Epoch) ([32]byte, error) {
+	return [32]byte{}, nil
 }
 
 // HasBlock mocks the same method in the chain service.

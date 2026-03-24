@@ -56,11 +56,11 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
 
-	if epoch >= params.BeaconConfig().GloasForkEpoch {
+	//if epoch >= params.BeaconConfig().GloasForkEpoch {
 		err = v.updateDutiesSplit(ctx, epoch, filteredKeys)
-	} else {
-		err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
-	}
+	//} else {
+	//	err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
+	//}
 	if err != nil {
 		return err
 	}
@@ -248,7 +248,8 @@ func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, i
 		}
 	}
 
-	// currDepRoot comes from the newly fetched next-epoch attester root.
+	// currDepRoot comes from the newly fetched next-epoch attester root,
+	// which matches the head event's CurrentDutyDependentRoot.
 	if res.attNext != nil {
 		res.currDepRoot = res.attNext.DependentRoot
 	}
@@ -300,8 +301,6 @@ func (v *validator) fetchAllDuties(ctx context.Context, epoch primitives.Epoch, 
 	// Use the next-epoch attester dependent root as currDepRoot.
 	// The head event's CurrentDutyDependentRoot = DependentRoot(epoch),
 	// and attester duties for epoch+1 have DependentRoot(epoch), so they match.
-	// The proposer dependent root changed post-fulu (EIP-7917) and no longer
-	// aligns with the head event.
 	if res.attNext != nil {
 		res.currDepRoot = res.attNext.DependentRoot
 	}
@@ -660,6 +659,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	v.dutiesLock.RUnlock()
 
 	if needsPrevUpdate {
+		v.clearDuties()
 		if err := v.UpdateDuties(dutiesCtx); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
@@ -681,6 +681,7 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if !needsCurrUpdate {
 		return nil
 	}
+	v.clearDuties()
 	if err := v.UpdateDuties(dutiesCtx); err != nil {
 		return errors.Wrap(err, "failed to update duties")
 	}
