@@ -89,6 +89,7 @@ func TestUpdateDuties_OK(t *testing.T) {
 		validatorClient: client,
 		duties:          &dutyStore{},
 	}
+	v.aggSelector = testLocalSelector(t, &v)
 	client.EXPECT().Duties(
 		gomock.Any(),
 		gomock.Any(),
@@ -140,6 +141,7 @@ func TestUpdateDuties_OK_FilterBlacklistedPublicKeys(t *testing.T) {
 		blacklistedPubkeys: blacklistedPublicKeys,
 		duties:             &dutyStore{},
 	}
+	v.aggSelector = testLocalSelector(t, &v)
 
 	resp := &ethpb.ValidatorDutiesContainer{
 		CurrentEpochDuties: []*ethpb.ValidatorDuty{},
@@ -240,12 +242,20 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		},
 	}
 
+	secsPerSlot := params.BeaconConfig().SecondsPerSlot
+	genesis := time.Now().Add(-time.Duration(uint64(slot)*secsPerSlot) * time.Second)
+
 	v := validator{
 		km:              newMockKeymanager(t, keys),
 		validatorClient: client,
 		distributed:     true,
 		duties:          &dutyStore{},
+		genesisTime:     genesis,
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			keys.pub: {publicKey: keys.pub[:], index: 200},
+		},
 	}
+	v.aggSelector = newDistributedSelector(&v)
 
 	sigDomain := make([]byte, 32)
 
@@ -264,17 +274,12 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 
 	client.EXPECT().AggregatedSelections(
 		gomock.Any(),
-		gomock.Any(), // fill this properly
+		gomock.Any(),
 	).Return(
 		[]iface.BeaconCommitteeSelection{
 			{
 				SelectionProof: make([]byte, 32),
 				Slot:           slot,
-				ValidatorIndex: 200,
-			},
-			{
-				SelectionProof: make([]byte, 32),
-				Slot:           slot + params.BeaconConfig().SlotsPerEpoch,
 				ValidatorIndex: 200,
 			},
 		},
@@ -295,7 +300,9 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 
 	require.NoError(t, v.UpdateDuties(t.Context()), "Could not update assignments")
 	util.WaitTimeout(&wg, 2*time.Second)
-	require.Equal(t, 2, len(v.attSelections))
+	dvProvider, ok := v.aggSelector.(*distributedSelector)
+	require.Equal(t, true, ok)
+	require.Equal(t, 1, len(dvProvider.attSelections))
 }
 
 func TestValidator_CheckDependentRoots(t *testing.T) {
@@ -326,6 +333,7 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		validatorClient: client,
 		duties:          ds,
 	}
+	v.aggSelector = testLocalSelector(t, v)
 
 	t.Run("nil head event", func(t *testing.T) {
 		err := v.checkDependentRoots(ctx, nil)

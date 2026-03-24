@@ -79,8 +79,11 @@ type ChainService struct {
 	MockHeadSlot                *primitives.Slot
 	MockCanonicalRoots          map[primitives.Slot][32]byte
 	MockCanonicalFull           map[primitives.Slot]bool
+	MockPayloadContentLookup    map[[32]byte][32]byte
+	MockPayloadContentIsFull    map[[32]byte]bool
 	ParentPayloadReadyVal       *bool
 	ForkchoiceRoots             map[[32]byte]bool
+	ForkchoiceBlockHashes       map[[32]byte][32]byte
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -590,6 +593,16 @@ func (s *ChainService) InForkchoice(root [32]byte) bool {
 	return !s.NotFinalized
 }
 
+// BlockHash mocks the execution payload block hash lookup for a beacon block root.
+func (s *ChainService) BlockHash(root [32]byte) ([32]byte, error) {
+	if s.ForkchoiceBlockHashes != nil {
+		if blockHash, ok := s.ForkchoiceBlockHashes[root]; ok {
+			return blockHash, nil
+		}
+	}
+	return [32]byte{}, errors.New("block hash not found")
+}
+
 // IsOptimisticForRoot mocks the same method in the chain service.
 func (s *ChainService) IsOptimisticForRoot(_ context.Context, root [32]byte) (bool, error) {
 	s.OptimisticCheckRootReceived = root
@@ -742,6 +755,19 @@ func (s *ChainService) HasFullNode(root [32]byte) bool {
 		return s.ForkchoiceRoots[root]
 	}
 	return false
+}
+
+// PayloadContentLookup mocks the same method in the chain service.
+func (s *ChainService) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
+	if s.ForkChoiceStore != nil {
+		return s.ForkChoiceStore.PayloadContentLookup(root)
+	}
+	if s.MockPayloadContentLookup != nil {
+		if value, ok := s.MockPayloadContentLookup[root]; ok {
+			return value, s.MockPayloadContentIsFull[root]
+		}
+	}
+	return root, false
 }
 
 // InsertNode mocks the same method in the chain service

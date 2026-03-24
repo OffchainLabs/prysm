@@ -154,7 +154,7 @@ func recomputeRootFromLayer(idx int, layers [][]*[32]byte, chunks []*[32]byte,
 		neighborIdx := currentIndex ^ 1
 
 		var neighbor [32]byte
-		if layers[i] != nil && len(layers[i]) != 0 && neighborIdx < len(layers[i]) {
+		if len(layers[i]) != 0 && neighborIdx < len(layers[i]) {
 			neighbor = *layers[i][neighborIdx]
 		}
 		if isLeft {

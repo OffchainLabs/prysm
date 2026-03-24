@@ -206,7 +206,7 @@ func (s *Service) validateDataColumnFulu(
 	// [IGNORE] The sidecar is the first sidecar for the tuple `(block_header.slot, block_header.proposer_index, sidecar.index)`
 	// with valid header signature, sidecar inclusion proof, and kzg proof.
 	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.DataColumnSidecar.Index) {
-		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("data column sidecar already seen"))
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(nil)
 	}
 
 	// [REJECT] The sidecar is proposed by the expected `proposer_index` for the block's slot in the context of the current shuffling (defined by `block_header.parent_root`/`block_header.slot`).

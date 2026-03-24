@@ -211,7 +211,8 @@ func TestProcessPayloadAttestations_IndexedVerificationError(t *testing.T) {
 		errIndex:    0,
 	}
 	err := gloas.ProcessPayloadAttestations(t.Context(), errState, body)
-	require.ErrorContains(t, "failed to verify indexed form", err)
+	require.ErrorContains(t, "failed to convert to indexed form", err)
+	require.ErrorContains(t, "failed to sample beacon committee 0", err)
 	require.ErrorContains(t, "validator 0", err)
 }
 

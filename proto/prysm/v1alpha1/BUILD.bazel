@@ -201,6 +201,8 @@ ssz_gloas_objs = [
     "BuilderPendingWithdrawal",
     "DataColumnSidecarGloas",
     "ExecutionPayloadEnvelope",
+    "ProposerPreferences",
+    "SignedProposerPreferences",
     "PayloadAttestation",
     "PayloadAttestationData",
     "PayloadAttestationMessage",
