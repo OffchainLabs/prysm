@@ -57,7 +57,7 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
 
 	//if epoch >= params.BeaconConfig().GloasForkEpoch {
-		err = v.updateDutiesSplit(ctx, epoch, filteredKeys)
+	err = v.updateDutiesSplit(ctx, epoch, filteredKeys)
 	//} else {
 	//	err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
 	//}
@@ -168,6 +168,20 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 		return err
 	}
 
+	// Post-fulu, attester and proposer dependent roots should match.
+	// If they diverge (e.g. due to a reorg during promotion), fall back
+	// to a full fetch to ensure consistency.
+	if epochAdvanced && res.propNext != nil && res.attNext != nil &&
+		!bytes.Equal(res.propNext.DependentRoot, res.attNext.DependentRoot) {
+		log.Warn("Proposer and attester dependent roots diverged, refetching all duties")
+		res, err = v.fetchAllDuties(ctx, epoch, indices)
+		if err != nil {
+			v.clearDuties()
+			return err
+		}
+		epochAdvanced = false
+	}
+
 	nextDuties := v.buildNextDuties(res)
 
 	container := &ethpb.ValidatorDutiesContainer{
@@ -191,7 +205,8 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 }
 
 // promoteDuties promotes the cached next-epoch duties to current and
-// fetches only the new next-epoch duties plus current-epoch PTC.
+// fetches only the new next-epoch duties plus current-epoch proposer
+// (for reorg detection) and PTC.
 func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex) (dutiesFetchResult, error) {
 	v.dutiesLock.RLock()
 	oldNext := v.duties.NextEpochDuties()
@@ -304,7 +319,6 @@ func (v *validator) fetchAllDuties(ctx context.Context, epoch primitives.Epoch, 
 	if res.attNext != nil {
 		res.currDepRoot = res.attNext.DependentRoot
 	}
-
 	proposerSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
 	if propCurr != nil {
 		for _, d := range propCurr.Duties {
