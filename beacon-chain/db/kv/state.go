@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/genesis"
@@ -122,6 +123,11 @@ func (s *Store) LegacyGenesisState(ctx context.Context) (state.BeaconState, erro
 func (s *Store) SaveState(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveState")
 	defer span.End()
+
+	if features.Get().EnableStateDiff && s.stateDiffCache != nil {
+		return s.saveStateByDiff(ctx, st)
+	}
+
 	ok, err := s.isStateValidatorMigrationOver()
 	if err != nil {
 		return err
@@ -1074,13 +1080,31 @@ func (s *Store) isStateValidatorMigrationOver() (bool, error) {
 }
 
 func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
-	slot, err := s.SlotByBlockRoot(ctx, blockRoot)
+	stateSummary, err := s.StateSummary(ctx, blockRoot)
 	if err != nil {
 		return nil, err
+	}
+	var slot primitives.Slot
+	var blk interfaces.ReadOnlySignedBeaconBlock
+	if stateSummary == nil {
+		blk, err = s.Block(ctx, blockRoot)
+		if err != nil {
+			return nil, err
+		}
+		if blk == nil || blk.IsNil() {
+			return nil, ErrNotFoundState
+		}
+		slot = blk.Block().Slot()
+	} else {
+		slot = stateSummary.Slot
 	}
 
 	if uint64(slot) < s.getOffset() {
 		return nil, ErrSlotBeforeOffset
+	}
+
+	if computeLevel(s.getOffset(), slot) == -1 {
+		return nil, ErrNotFoundState
 	}
 
 	st, err := s.stateByDiff(ctx, slot)
@@ -1088,16 +1112,49 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 		return nil, err
 	}
 	if st == nil || st.IsNil() {
-		return nil, errors.New("state not found")
+		return nil, ErrNotFoundState
+	}
+
+	if blk == nil {
+		blk, err = s.Block(ctx, blockRoot)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if blk == nil || blk.IsNil() {
+		// Existing databases may have state summaries without corresponding blocks.
+		// In that case we return the slot-derived state but mark the verification gap.
+		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Warn("Block not found for state-diff root verification; returning unverified state")
+		return st, nil
+	}
+	stateRoot, err := st.HashTreeRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if stateRoot != blk.Block().StateRoot() {
+		return nil, errors.Wrap(ErrNotFoundState, "state root mismatch for block")
 	}
 
 	return st, nil
 }
 
 func (s *Store) hasStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) (bool, error) {
-	slot, err := s.SlotByBlockRoot(ctx, blockRoot)
+	stateSummary, err := s.StateSummary(ctx, blockRoot)
 	if err != nil {
 		return false, err
+	}
+	var slot primitives.Slot
+	if stateSummary == nil {
+		blk, err := s.Block(ctx, blockRoot)
+		if err != nil {
+			return false, err
+		}
+		if blk == nil || blk.IsNil() {
+			return false, nil
+		}
+		slot = blk.Block().Slot()
+	} else {
+		slot = stateSummary.Slot
 	}
 
 	if uint64(slot) < s.getOffset() {
@@ -1105,5 +1162,33 @@ func (s *Store) hasStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 	}
 
 	stateLvl := computeLevel(s.getOffset(), slot)
-	return stateLvl != -1, nil
+	if stateLvl == -1 {
+		return false, nil
+	}
+
+	if !s.stateDiffCache.levelHasData(stateLvl) {
+		return false, nil
+	}
+
+	hasState := false
+	err = s.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return errors.New("state diff bucket not found")
+		}
+
+		if stateLvl == 0 {
+			hasState = bucket.Get(makeKeyForStateDiffTree(stateLvl, uint64(slot))) != nil
+			return nil
+		}
+
+		hasState = hasCompleteDiffAtLevelSlot(bucket, stateLvl, uint64(slot))
+
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+	return hasState, nil
 }

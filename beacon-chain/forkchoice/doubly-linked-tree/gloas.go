@@ -40,6 +40,13 @@ func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) 
 	return pn.node.root, pn.full
 }
 
+// PayloadContentLookup returns the preferred lookup key for a given beacon block root.
+// If full payload content wins, it returns the block hash and true.
+// If empty payload content wins, it returns the beacon block root and false.
+func (f *ForkChoice) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
+	return f.store.payloadContentLookup(root)
+}
+
 func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte) error {
 	sb, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
@@ -156,17 +163,18 @@ func (s *Store) parentHash(pn *PayloadNode) [32]byte {
 	return fullParent.node.blockHash
 }
 
-// latestHashForRoot returns the latest payload hash for the given block root.
-func (s *Store) latestHashForRoot(root [32]byte) [32]byte {
-	// try to get the full node first
-	fn := s.fullNodeByRoot[root]
-	if fn != nil {
-		return fn.node.blockHash
-	}
+// checkpointPayloadHashForRoot returns the payload hash associated with a checkpoint root.
+// Before Gloas, there is no empty/full ambiguity, so the checkpoint payload hash is the
+// block's own payload hash. In Gloas, a checkpoint finalizes a beacon block root, not a
+// payload, and the child block that disambiguates full vs empty is not itself finalized,
+// so we return the latest known parent payload hash instead.
+func (s *Store) checkpointPayloadHashForRoot(root [32]byte) [32]byte {
 	en := s.emptyNodeByRoot[root]
 	if en == nil {
-		// This should not happen
 		return [32]byte{}
+	}
+	if slots.ToEpoch(en.node.slot) < params.BeaconConfig().GloasForkEpoch {
+		return en.node.blockHash
 	}
 	return s.parentHash(en)
 }
@@ -290,6 +298,21 @@ func (s *Store) choosePayloadContent(n *Node) *PayloadNode {
 		return fn
 	}
 	return en
+}
+
+func (s *Store) payloadContentLookup(root [32]byte) ([32]byte, bool) {
+	en := s.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return [32]byte{}, false
+	}
+	pn := s.choosePayloadContent(en.node)
+	if pn == nil || pn.node == nil {
+		return [32]byte{}, false
+	}
+	if pn.full {
+		return pn.node.blockHash, true
+	}
+	return pn.node.root, false
 }
 
 // nodeTreeDump appends to the given list all the nodes descending from this one

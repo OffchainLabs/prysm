@@ -72,21 +72,6 @@ func (mr *MockdutiesProviderMockRecorder) Committees(ctx, epoch any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Committees", reflect.TypeOf((*MockdutiesProvider)(nil).Committees), ctx, epoch)
 }
 
-// ProposerDuties mocks base method.
-func (m *MockdutiesProvider) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*structs.GetProposerDutiesResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProposerDuties", ctx, epoch)
-	ret0, _ := ret[0].(*structs.GetProposerDutiesResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ProposerDuties indicates an expected call of ProposerDuties.
-func (mr *MockdutiesProviderMockRecorder) ProposerDuties(ctx, epoch any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposerDuties", reflect.TypeOf((*MockdutiesProvider)(nil).ProposerDuties), ctx, epoch)
-}
-
 // PTCDuties mocks base method.
 func (m *MockdutiesProvider) PTCDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*structs.GetPTCDutiesResponse, error) {
 	m.ctrl.T.Helper()
@@ -100,6 +85,21 @@ func (m *MockdutiesProvider) PTCDuties(ctx context.Context, epoch primitives.Epo
 func (mr *MockdutiesProviderMockRecorder) PTCDuties(ctx, epoch, validatorIndices any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PTCDuties", reflect.TypeOf((*MockdutiesProvider)(nil).PTCDuties), ctx, epoch, validatorIndices)
+}
+
+// ProposerDuties mocks base method.
+func (m *MockdutiesProvider) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*structs.GetProposerDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ProposerDuties", ctx, epoch)
+	ret0, _ := ret[0].(*structs.GetProposerDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ProposerDuties indicates an expected call of ProposerDuties.
+func (mr *MockdutiesProviderMockRecorder) ProposerDuties(ctx, epoch any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposerDuties", reflect.TypeOf((*MockdutiesProvider)(nil).ProposerDuties), ctx, epoch)
 }
 
 // SyncDuties mocks base method.
