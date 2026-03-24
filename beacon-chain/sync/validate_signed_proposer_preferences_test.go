@@ -96,7 +96,9 @@ func TestValidateSignedProposerPreferencesGossip_AlreadySeenSlot(t *testing.T) {
 	s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
 	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
 
-	require.Equal(t, true, s.proposerPreferencesCache.Add(signedPreferences.Message.ProposalSlot, []byte{0x01}, 10))
+	require.Equal(t, true, s.proposerPreferencesCache.Add(signedPreferences.Message.ProposalSlot, &ethpb.SignedProposerPreferences{
+		Message: &ethpb.ProposerPreferences{ProposalSlot: signedPreferences.Message.ProposalSlot, FeeRecipient: []byte{0x01}, GasLimit: 10},
+	}))
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
@@ -122,13 +124,17 @@ func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 }
 
 func TestSignedProposerPreferencesSubscriber_WrongMessage(t *testing.T) {
-	s := &Service{}
+	s := &Service{
+		cfg: &config{operationNotifier: &mock.MockOperationNotifier{}},
+	}
 	err := s.signedProposerPreferencesSubscriber(context.Background(), &ethpb.BeaconBlock{})
 	require.ErrorIs(t, errWrongMessage, err)
 }
 
 func TestSignedProposerPreferencesSubscriber_HappyPath(t *testing.T) {
-	s := &Service{}
+	s := &Service{
+		cfg: &config{operationNotifier: &mock.MockOperationNotifier{}},
+	}
 	err := s.signedProposerPreferencesSubscriber(context.Background(), &ethpb.SignedProposerPreferences{})
 	require.NoError(t, err)
 }

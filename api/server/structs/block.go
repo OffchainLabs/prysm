@@ -546,6 +546,18 @@ type PayloadAttestationMessage struct {
 	Signature      string                  `json:"signature"`
 }
 
+type ProposerPreferences struct {
+	ProposalSlot   string `json:"proposal_slot"`
+	ValidatorIndex string `json:"validator_index"`
+	FeeRecipient   string `json:"fee_recipient"`
+	GasLimit       string `json:"gas_limit"`
+}
+
+type SignedProposerPreferences struct {
+	Message   *ProposerPreferences `json:"message"`
+	Signature string               `json:"signature"`
+}
+
 type BeaconBlockBodyGloas struct {
 	RandaoReveal              string                        `json:"randao_reveal"`
 	Eth1Data                  *Eth1Data                     `json:"eth1_data"`

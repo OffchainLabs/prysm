@@ -363,7 +363,13 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 	}
 	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
 	signedBid.Message.BuilderIndex = 1
-	require.Equal(t, true, s.proposerPreferencesCache.Add(signedBid.Message.Slot, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit))
+	require.Equal(t, true, s.proposerPreferencesCache.Add(signedBid.Message.Slot, &ethpb.SignedProposerPreferences{
+		Message: &ethpb.ProposerPreferences{
+			ProposalSlot: signedBid.Message.Slot,
+			FeeRecipient: signedBid.Message.FeeRecipient,
+			GasLimit:     signedBid.Message.GasLimit,
+		},
+	}))
 	msg := executionPayloadBidToPubsub(t, s, p, signedBid)
 	return s, msg, signedBid
 }

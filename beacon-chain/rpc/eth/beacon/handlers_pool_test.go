@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	blockchainmock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	prysmtime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
@@ -2294,6 +2295,218 @@ func TestSubmitProposerSlashing_InvalidSlashing(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 	assert.Equal(t, http.StatusBadRequest, e.Code)
 	assert.StringContains(t, "Invalid proposer slashing", e.Message)
+}
+
+func TestListProposerPreferences(t *testing.T) {
+	c := cache.NewProposerPreferencesCache()
+	sp1 := &ethpbv1alpha1.SignedProposerPreferences{
+		Message: &ethpbv1alpha1.ProposerPreferences{
+			ProposalSlot:   32,
+			ValidatorIndex: 1,
+			FeeRecipient:   bytesutil.PadTo([]byte("fee1"), 20),
+			GasLimit:       30000000,
+		},
+		Signature: bytesutil.PadTo([]byte("sig1"), 96),
+	}
+	sp2 := &ethpbv1alpha1.SignedProposerPreferences{
+		Message: &ethpbv1alpha1.ProposerPreferences{
+			ProposalSlot:   33,
+			ValidatorIndex: 2,
+			FeeRecipient:   bytesutil.PadTo([]byte("fee2"), 20),
+			GasLimit:       30000001,
+		},
+		Signature: bytesutil.PadTo([]byte("sig2"), 96),
+	}
+	c.Add(32, sp1)
+	c.Add(33, sp2)
+
+	s := &Server{
+		ProposerPreferencesCache: c,
+		TimeFetcher:              &blockchainmock.ChainService{},
+	}
+
+	t.Run("all", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/proposer_preferences", nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.ListProposerPreferences(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.Equal(t, "gloas", writer.Header().Get(api.VersionHeader))
+
+		resp := &structs.ProposerPreferencesPoolResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, 2, len(resp.Data))
+		assert.Equal(t, "gloas", resp.Version)
+	})
+	t.Run("filter by slot", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/proposer_preferences?slot=32", nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.ListProposerPreferences(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.ProposerPreferencesPoolResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, 1, len(resp.Data))
+		assert.Equal(t, "32", resp.Data[0].Message.ProposalSlot)
+	})
+	t.Run("empty result", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/proposer_preferences?slot=999", nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.ListProposerPreferences(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.ProposerPreferencesPoolResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, 0, len(resp.Data))
+	})
+}
+
+func TestSubmitProposerPreferences_OK(t *testing.T) {
+	c := cache.NewProposerPreferencesCache()
+	currentSlot := primitives.Slot(31)
+	broadcaster := &p2pMock.MockBroadcaster{}
+
+	s := &Server{
+		ProposerPreferencesCache: c,
+		TimeFetcher:              &blockchainmock.ChainService{Slot: &currentSlot},
+		OperationNotifier:        &blockchainmock.MockOperationNotifier{},
+		Broadcaster:              broadcaster,
+	}
+
+	feeRecipient := bytesutil.PadTo([]byte{0xaa}, 20)
+	sig := bytesutil.PadTo([]byte{0xcc}, 96)
+	body := fmt.Sprintf(`[{
+		"message": {
+			"proposal_slot": "32",
+			"validator_index": "5",
+			"fee_recipient": "%s",
+			"gas_limit": "30000000"
+		},
+		"signature": "%s"
+	}]`, hexutil.Encode(feeRecipient), hexutil.Encode(sig))
+
+	request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/pool/proposer_preferences", strings.NewReader(body))
+	request.Header.Set(api.VersionHeader, "gloas")
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	s.SubmitProposerPreferences(writer, request)
+	assert.Equal(t, http.StatusOK, writer.Code)
+
+	require.Equal(t, true, c.Has(32))
+	pref, ok := c.Get(32)
+	require.Equal(t, true, ok)
+	assert.DeepEqual(t, feeRecipient, pref.FeeRecipient)
+	assert.Equal(t, uint64(30000000), pref.GasLimit)
+}
+
+func TestSubmitProposerPreferences_MissingVersionHeader(t *testing.T) {
+	s := &Server{}
+	request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/pool/proposer_preferences", strings.NewReader("[]"))
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	s.SubmitProposerPreferences(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+}
+
+func TestSubmitProposerPreferences_EmptyBody(t *testing.T) {
+	s := &Server{}
+	request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/pool/proposer_preferences", nil)
+	request.Header.Set(api.VersionHeader, "gloas")
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	s.SubmitProposerPreferences(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+}
+
+func TestSubmitProposerPreferences_WrongEpoch(t *testing.T) {
+	c := cache.NewProposerPreferencesCache()
+	currentSlot := primitives.Slot(31)
+
+	s := &Server{
+		ProposerPreferencesCache: c,
+		TimeFetcher:              &blockchainmock.ChainService{Slot: &currentSlot},
+	}
+
+	feeRecipient := bytesutil.PadTo([]byte{0xaa}, 20)
+	sig := bytesutil.PadTo([]byte{0xcc}, 96)
+	body := fmt.Sprintf(`[{
+		"message": {
+			"proposal_slot": "0",
+			"validator_index": "5",
+			"fee_recipient": "%s",
+			"gas_limit": "30000000"
+		},
+		"signature": "%s"
+	}]`, hexutil.Encode(feeRecipient), hexutil.Encode(sig))
+
+	request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/pool/proposer_preferences", strings.NewReader(body))
+	request.Header.Set(api.VersionHeader, "gloas")
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	s.SubmitProposerPreferences(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+
+	e := &server.IndexedErrorContainer{}
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+	require.Equal(t, 1, len(e.Failures))
+	assert.StringContains(t, "next epoch", e.Failures[0].Message)
+}
+
+func TestSubmitProposerPreferences_Duplicate(t *testing.T) {
+	c := cache.NewProposerPreferencesCache()
+	currentSlot := primitives.Slot(31)
+	broadcaster := &p2pMock.MockBroadcaster{}
+
+	sp := &ethpbv1alpha1.SignedProposerPreferences{
+		Message: &ethpbv1alpha1.ProposerPreferences{
+			ProposalSlot:   32,
+			ValidatorIndex: 5,
+			FeeRecipient:   bytesutil.PadTo([]byte{0xaa}, 20),
+			GasLimit:       30000000,
+		},
+		Signature: bytesutil.PadTo([]byte{0xcc}, 96),
+	}
+	c.Add(32, sp)
+
+	s := &Server{
+		ProposerPreferencesCache: c,
+		TimeFetcher:              &blockchainmock.ChainService{Slot: &currentSlot},
+		OperationNotifier:        &blockchainmock.MockOperationNotifier{},
+		Broadcaster:              broadcaster,
+	}
+
+	feeRecipient := bytesutil.PadTo([]byte{0xbb}, 20)
+	sig := bytesutil.PadTo([]byte{0xdd}, 96)
+	body := fmt.Sprintf(`[{
+		"message": {
+			"proposal_slot": "32",
+			"validator_index": "6",
+			"fee_recipient": "%s",
+			"gas_limit": "30000001"
+		},
+		"signature": "%s"
+	}]`, hexutil.Encode(feeRecipient), hexutil.Encode(sig))
+
+	request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/beacon/pool/proposer_preferences", strings.NewReader(body))
+	request.Header.Set(api.VersionHeader, "gloas")
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	s.SubmitProposerPreferences(writer, request)
+	assert.Equal(t, http.StatusOK, writer.Code)
+
+	pref, ok := c.Get(32)
+	require.Equal(t, true, ok)
+	assert.DeepEqual(t, bytesutil.PadTo([]byte{0xaa}, 20), pref.FeeRecipient)
 }
 
 var (

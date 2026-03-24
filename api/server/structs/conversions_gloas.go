@@ -2,8 +2,13 @@ package structs
 
 import (
 	"fmt"
+	"strconv"
 
+	"github.com/OffchainLabs/prysm/v7/api/server"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -35,6 +40,61 @@ func ROExecutionPayloadBidFromConsensus(b interfaces.ROExecutionPayloadBid) *Exe
 		Value:              fmt.Sprintf("%d", b.Value()),
 		ExecutionPayment:   fmt.Sprintf("%d", b.ExecutionPayment()),
 		BlobKzgCommitments: blobKzgCommitments,
+	}
+}
+
+func (s *SignedProposerPreferences) ToConsensus() (*ethpb.SignedProposerPreferences, error) {
+	if s.Message == nil {
+		return nil, server.NewDecodeError(errNilValue, "Message")
+	}
+	msg, err := s.Message.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Message")
+	}
+	sig, err := bytesutil.DecodeHexWithLength(s.Signature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Signature")
+	}
+	return &ethpb.SignedProposerPreferences{
+		Message:   msg,
+		Signature: sig,
+	}, nil
+}
+
+func (p *ProposerPreferences) ToConsensus() (*ethpb.ProposerPreferences, error) {
+	slot, err := strconv.ParseUint(p.ProposalSlot, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ProposalSlot")
+	}
+	valIdx, err := strconv.ParseUint(p.ValidatorIndex, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ValidatorIndex")
+	}
+	feeRecipient, err := bytesutil.DecodeHexWithLength(p.FeeRecipient, fieldparams.FeeRecipientLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "FeeRecipient")
+	}
+	gasLimit, err := strconv.ParseUint(p.GasLimit, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "GasLimit")
+	}
+	return &ethpb.ProposerPreferences{
+		ProposalSlot:   primitives.Slot(slot),
+		ValidatorIndex: primitives.ValidatorIndex(valIdx),
+		FeeRecipient:   feeRecipient,
+		GasLimit:       gasLimit,
+	}, nil
+}
+
+func SignedProposerPreferencesFromConsensus(sp *ethpb.SignedProposerPreferences) *SignedProposerPreferences {
+	return &SignedProposerPreferences{
+		Message: &ProposerPreferences{
+			ProposalSlot:   fmt.Sprintf("%d", sp.Message.ProposalSlot),
+			ValidatorIndex: fmt.Sprintf("%d", sp.Message.ValidatorIndex),
+			FeeRecipient:   hexutil.Encode(sp.Message.FeeRecipient),
+			GasLimit:       fmt.Sprintf("%d", sp.Message.GasLimit),
+		},
+		Signature: hexutil.Encode(sp.Signature),
 	}
 }
 

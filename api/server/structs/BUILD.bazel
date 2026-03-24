@@ -54,11 +54,14 @@ go_test(
     name = "go_default_test",
     srcs = [
         "conversions_block_execution_test.go",
+        "conversions_gloas_test.go",
         "conversions_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
         "//consensus-types/blocks:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//encoding/bytesutil:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/assert:go_default_library",

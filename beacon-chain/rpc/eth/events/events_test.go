@@ -124,6 +124,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 		BlockGossipTopic,
 		DataColumnTopic,
 		PayloadAttestationMessageTopic,
+		ProposerPreferencesTopic,
 	})
 	require.NoError(t, err)
 	ro, err := blocks.NewROBlob(util.HydrateBlobSidecar(&eth.BlobSidecar{}))
@@ -323,6 +324,20 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 						Slot:              0,
 						PayloadPresent:    true,
 						BlobDataAvailable: true,
+					},
+					Signature: make([]byte, fieldparams.BLSSignatureLength),
+				},
+			},
+		},
+		{
+			Type: operation.ProposerPreferencesReceived,
+			Data: &operation.ProposerPreferencesReceivedData{
+				Preferences: &eth.SignedProposerPreferences{
+					Message: &eth.ProposerPreferences{
+						ProposalSlot:   32,
+						ValidatorIndex: 1,
+						FeeRecipient:   make([]byte, 20),
+						GasLimit:       30000000,
 					},
 					Signature: make([]byte, fieldparams.BLSSignatureLength),
 				},

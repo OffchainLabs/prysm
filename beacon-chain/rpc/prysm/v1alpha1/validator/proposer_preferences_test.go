@@ -119,7 +119,9 @@ func TestSubmitSignedProposerPreferences_DuplicateSlot(t *testing.T) {
 	chain := &chainMock.ChainService{Slot: &currentSlot}
 	p2p := &p2pmock.MockBroadcaster{}
 	c := cache.NewProposerPreferencesCache()
-	c.Add(proposalSlot, make([]byte, 20), 30_000_000)
+	c.Add(proposalSlot, &ethpb.SignedProposerPreferences{
+		Message: &ethpb.ProposerPreferences{ProposalSlot: proposalSlot, FeeRecipient: make([]byte, 20), GasLimit: 30_000_000},
+	})
 	vs := &Server{
 		SyncChecker:              &mockSync.Sync{IsSyncing: false},
 		TimeFetcher:              chain,

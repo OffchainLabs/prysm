@@ -4,12 +4,14 @@ import (
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // ProposerPreference stores the proposer fee recipient and gas limit for a slot.
 type ProposerPreference struct {
 	FeeRecipient []byte
 	GasLimit     uint64
+	Signed       *ethpb.SignedProposerPreferences
 }
 
 // ProposerPreferencesCache stores proposer preferences by slot.
@@ -27,7 +29,7 @@ func NewProposerPreferencesCache() *ProposerPreferencesCache {
 
 // Add stores proposer preferences for a slot. If the slot already exists, the
 // existing value is kept and false is returned.
-func (c *ProposerPreferencesCache) Add(slot primitives.Slot, feeRecipient []byte, gasLimit uint64) bool {
+func (c *ProposerPreferencesCache) Add(slot primitives.Slot, signed *ethpb.SignedProposerPreferences) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -35,11 +37,10 @@ func (c *ProposerPreferencesCache) Add(slot primitives.Slot, feeRecipient []byte
 		return false
 	}
 
-	// FeeRecipient comes from validated SSZ-decoded proposer preferences, so
-	// retaining the slice reference here is intentional.
 	c.slotToPreferences[slot] = ProposerPreference{
-		FeeRecipient: feeRecipient,
-		GasLimit:     gasLimit,
+		FeeRecipient: signed.Message.FeeRecipient,
+		GasLimit:     signed.Message.GasLimit,
+		Signed:       signed,
 	}
 	return true
 }
@@ -64,6 +65,27 @@ func (c *ProposerPreferencesCache) Has(slot primitives.Slot) bool {
 
 	_, ok := c.slotToPreferences[slot]
 	return ok
+}
+
+// All returns all cached signed proposer preferences. If slot is non-zero,
+// only the entry for that slot is returned.
+func (c *ProposerPreferencesCache) All(slot primitives.Slot) []*ethpb.SignedProposerPreferences {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	if slot != 0 {
+		if p, ok := c.slotToPreferences[slot]; ok && p.Signed != nil {
+			return []*ethpb.SignedProposerPreferences{p.Signed}
+		}
+		return nil
+	}
+	result := make([]*ethpb.SignedProposerPreferences, 0, len(c.slotToPreferences))
+	for _, p := range c.slotToPreferences {
+		if p.Signed != nil {
+			result = append(result, p.Signed)
+		}
+	}
+	return result
 }
 
 // PruneBefore removes all proposer preferences for slots before the provided slot.

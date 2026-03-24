@@ -69,7 +69,7 @@ func (vs *Server) SubmitSignedProposerPreferences(
 				broadcast, len(req.SignedProposerPreferences), err)
 		}
 
-		vs.ProposerPreferencesCache.Add(proposalSlot, msg.Message.FeeRecipient, msg.Message.GasLimit)
+		vs.ProposerPreferencesCache.Add(proposalSlot, msg)
 		broadcast++
 	}
 
