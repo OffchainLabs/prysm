@@ -107,16 +107,3 @@ func (m *mockValidatorAtIndexer) ValidatorAtIndex(idx primitives.ValidatorIndex)
 }
 
 var _ validatorAtIndexer = &mockValidatorAtIndexer{}
-
-func TestProposerCache(t *testing.T) {
-	ctx := t.Context()
-	// 3 validators because that was the first number that produced a non-zero proposer index by default
-	st, _ := util.DeterministicGenesisStateDeneb(t, 3)
-
-	pc := newPropCache()
-	// If this test breaks due to changes in the deterministic state gen, just replace '2' with whatever the right index is.
-	expectedIdx := 2
-	idx, err := pc.ComputeProposer(ctx, [32]byte{}, 1, st)
-	require.NoError(t, err)
-	require.Equal(t, primitives.ValidatorIndex(expectedIdx), idx)
-}

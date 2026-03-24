@@ -275,7 +275,7 @@ func (bv *ROBlobVerifier) SidecarProposerExpected(ctx context.Context) (err erro
 		log.WithError(err).WithFields(logging.BlobFields(bv.blob)).Debug("State replay to parent_root failed")
 		return errSidecarUnexpectedProposer
 	}
-	idx, err := bv.pc.ComputeProposer(ctx, bv.blob.ParentRoot(), bv.blob.Slot(), pst)
+	idx, err := bv.pc.ComputeProposer(ctx, bv.blob.Slot(), pst)
 	if err != nil {
 		log.WithError(err).WithFields(logging.BlobFields(bv.blob)).Debug("Error computing proposer index from parent state")
 		return errSidecarUnexpectedProposer
