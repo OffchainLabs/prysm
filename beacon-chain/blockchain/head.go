@@ -352,7 +352,7 @@ func (s *Service) notifyNewHeadEvent(
 	if currentDutyDependentRoot == [32]byte{} {
 		currentDutyDependentRoot = s.originBlockRoot
 	}
-	previousDutyDependentRoot := currentDutyDependentRoot
+	var previousDutyDependentRoot [32]byte
 	if currEpoch > 0 {
 		previousDutyDependentRoot, err = s.DependentRoot(currEpoch.Sub(1))
 		if err != nil {
@@ -361,6 +361,9 @@ func (s *Service) notifyNewHeadEvent(
 		if previousDutyDependentRoot == [32]byte{} {
 			previousDutyDependentRoot = s.originBlockRoot
 		}
+	}
+	if previousDutyDependentRoot == [32]byte{} {
+		previousDutyDependentRoot = s.originBlockRoot
 	}
 
 	isOptimistic, err := s.IsOptimistic(ctx)

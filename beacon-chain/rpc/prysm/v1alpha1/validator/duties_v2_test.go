@@ -95,6 +95,77 @@ func TestGetDutiesV2_OK(t *testing.T) {
 	}
 }
 
+func TestGetDutiesV2_NextEpochProposerSlots(t *testing.T) {
+	tests := []struct {
+		name           string
+		fuluForkEpoch  primitives.Epoch
+		gloasForkEpoch primitives.Epoch
+		wantNextSlots  bool
+	}{
+		{
+			name:           "post-Fulu populates next epoch proposer slots",
+			fuluForkEpoch:  0,
+			gloasForkEpoch: 0,
+			wantNextSlots:  true,
+		},
+		{
+			name:           "pre-Fulu returns nil next epoch proposer slots",
+			fuluForkEpoch:  10,
+			gloasForkEpoch: 11,
+			wantNextSlots:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig().Copy()
+			cfg.FuluForkEpoch = tt.fuluForkEpoch
+			cfg.GloasForkEpoch = tt.gloasForkEpoch
+			params.OverrideBeaconConfig(cfg)
+
+			genesis := util.NewBeaconBlock()
+			deposits, _, err := util.DeterministicDepositsAndKeys(params.BeaconConfig().MinGenesisActiveValidatorCount)
+			require.NoError(t, err)
+			eth1Data, err := util.DeterministicEth1Data(len(deposits))
+			require.NoError(t, err)
+			bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
+			require.NoError(t, err)
+			genesisRoot, err := genesis.Block.HashTreeRoot()
+			require.NoError(t, err)
+
+			pubKeys := make([][]byte, len(deposits))
+			for i := range deposits {
+				pubKeys[i] = deposits[i].Data.PublicKey
+			}
+
+			chain := &mockChain.ChainService{
+				State: bs, Root: genesisRoot[:], Genesis: time.Now(),
+			}
+			vs := &Server{
+				HeadFetcher:       chain,
+				TimeFetcher:       chain,
+				ForkchoiceFetcher: chain,
+				SyncChecker:       &mockSync.Sync{IsSyncing: false},
+				PayloadIDCache:    cache.NewPayloadIDCache(),
+				CoreService:       &core.Service{},
+			}
+
+			res, err := vs.GetDutiesV2(t.Context(), &ethpb.DutiesRequest{PublicKeys: pubKeys, Epoch: 0})
+			require.NoError(t, err)
+
+			nextCount := 0
+			for _, d := range res.NextEpochDuties {
+				nextCount += len(d.ProposerSlots)
+			}
+			if tt.wantNextSlots {
+				assert.Equal(t, true, nextCount > 0, "expected next epoch proposer slots")
+			} else {
+				assert.Equal(t, 0, nextCount, "expected no next epoch proposer slots pre-Fulu")
+			}
+		})
+	}
+}
+
 func TestGetAltairDutiesV2_SyncCommitteeOK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()

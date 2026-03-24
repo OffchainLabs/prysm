@@ -267,6 +267,8 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 
 		eventHead, ok := events[0].Data.(*ethpbv1.EventHead)
 		require.Equal(t, true, ok)
+		// DependentRoot(0) returns zero hash since the forkchoice tree is sparse.
+		// The fix ensures it falls back to originBlockRoot instead of sending zeros.
 		assert.DeepEqual(t, srv.originBlockRoot[:], eventHead.PreviousDutyDependentRoot)
 		assert.DeepEqual(t, srv.originBlockRoot[:], eventHead.CurrentDutyDependentRoot)
 	})
