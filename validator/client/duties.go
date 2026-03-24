@@ -168,10 +168,11 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 		return err
 	}
 
-	// Post-fulu, attester and proposer dependent roots should match.
-	// If they diverge (e.g. due to a reorg during promotion), fall back
-	// to a full fetch to ensure consistency.
-	if epochAdvanced && res.propNext != nil && res.attNext != nil &&
+	// Post-fulu, attester and proposer dependent roots should match
+	// (both determined at epoch N-2). If they diverge during a promotion
+	// (e.g. due to a reorg), fall back to a full fetch.
+	if epochAdvanced && epoch >= params.BeaconConfig().FuluForkEpoch &&
+		res.propNext != nil && res.attNext != nil &&
 		!bytes.Equal(res.propNext.DependentRoot, res.attNext.DependentRoot) {
 		log.Warn("Proposer and attester dependent roots diverged, refetching all duties")
 		res, err = v.fetchAllDuties(ctx, epoch, indices)
@@ -233,7 +234,9 @@ func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, i
 		res.propNext, propErr = v.validatorClient.ProposerDuties(ctx, epoch.Add(1))
 	})
 	wg.Go(func() {
-		res.syncNext, syncErr = v.validatorClient.SyncCommitteeDuties(ctx, epoch.Add(1), indices)
+		if epoch.Add(1) >= params.BeaconConfig().AltairForkEpoch {
+			res.syncNext, syncErr = v.validatorClient.SyncCommitteeDuties(ctx, epoch.Add(1), indices)
+		}
 	})
 	wg.Go(func() {
 		ptcCurr, ptcErr = v.fetchPtcDuties(ctx, epoch, indices)
@@ -430,7 +433,8 @@ func (v *validator) fetchAttesterDuties(
 }
 
 // fetchProposerDuties fetches proposer duties for the current epoch.
-// Post-Fulu, also fetches next-epoch duties (deterministic via proposer_lookahead).
+// Post-fulu, also fetches next-epoch duties (deterministic via proposer_lookahead).
+// Pre-fulu, next-epoch proposer duties are not deterministic and not fetched.
 func (v *validator) fetchProposerDuties(
 	ctx context.Context, epoch primitives.Epoch,
 ) (current, next *ethpb.ProposerDutiesResponse, err error) {
@@ -441,9 +445,11 @@ func (v *validator) fetchProposerDuties(
 	wg.Go(func() {
 		current, currErr = v.validatorClient.ProposerDuties(ctx, epoch)
 	})
-	wg.Go(func() {
-		next, nextErr = v.validatorClient.ProposerDuties(ctx, epoch.Add(1))
-	})
+	if epoch >= params.BeaconConfig().FuluForkEpoch {
+		wg.Go(func() {
+			next, nextErr = v.validatorClient.ProposerDuties(ctx, epoch.Add(1))
+		})
+	}
 	wg.Wait()
 
 	if currErr != nil {
