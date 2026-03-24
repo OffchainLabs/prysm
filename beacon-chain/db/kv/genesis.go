@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	dbIface "github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -26,9 +27,17 @@ func (s *Store) SaveGenesisData(ctx context.Context, genesisState state.BeaconSt
 	if err := s.SaveBlock(ctx, wsb); err != nil {
 		return errors.Wrap(err, "could not save genesis block")
 	}
-	if err := s.SaveState(ctx, genesisState, genesisBlkRoot); err != nil {
-		return errors.Wrap(err, "could not save genesis state")
+
+	if features.Get().EnableStateDiff {
+		if err := s.initializeStateDiff(0, genesisState); err != nil {
+			return errors.Wrap(err, "failed to initialize state diff for genesis")
+		}
+	} else {
+		if err := s.SaveState(ctx, genesisState, genesisBlkRoot); err != nil {
+			return errors.Wrap(err, "could not save genesis state")
+		}
 	}
+
 	if err := s.SaveStateSummary(ctx, &ethpb.StateSummary{
 		Slot: 0,
 		Root: genesisBlkRoot[:],
@@ -43,9 +52,6 @@ func (s *Store) SaveGenesisData(ctx context.Context, genesisState state.BeaconSt
 		return errors.Wrap(err, "could not save genesis block root")
 	}
 
-	if err := s.initializeStateDiff(0, genesisState); err != nil {
-		return errors.Wrap(err, "failed to initialize state diff for genesis")
-	}
 	return nil
 }
 
