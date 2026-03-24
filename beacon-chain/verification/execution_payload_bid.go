@@ -14,7 +14,7 @@ import (
 var ExecutionPayloadBidGossipRequirements = []Requirement{
 	RequireBidCurrentOrNextSlot,
 	RequireBidBuilderActive,
-	RequireBidExecutionPaymentNonZero,
+	RequireBidExecutionPaymentZero,
 	RequireBidFeeRecipientMatches,
 	RequireBidGasLimitMatches,
 	RequireBidParentBlockRootSeen,
@@ -29,7 +29,7 @@ var GossipExecutionPayloadBidRequirements = requirementList(ExecutionPayloadBidG
 var (
 	ErrBidSlotNotCurrentOrNext    = errors.New("bid slot is not current or next")
 	ErrBidBuilderNotActive        = errors.New("builder is not active")
-	ErrBidExecutionPaymentZero    = errors.New("execution payment is zero")
+	ErrBidExecutionPaymentNonZero = errors.New("execution payment is non-zero")
 	ErrBidFeeRecipientMismatch    = errors.New("fee recipient does not match proposer preferences")
 	ErrBidGasLimitMismatch        = errors.New("gas limit does not match proposer preferences")
 	ErrBidParentBlockRootNotSeen  = errors.New("parent block root not seen")
@@ -79,16 +79,18 @@ func (v *BidVerifier) VerifyBuilderActive(st state.ReadOnlyBeaconState) (err err
 	return nil
 }
 
-// VerifyExecutionPaymentNonZero verifies the bid execution payment is non-zero.
-func (v *BidVerifier) VerifyExecutionPaymentNonZero() (err error) {
-	defer v.record(RequireBidExecutionPaymentNonZero, &err)
+// VerifyExecutionPaymentZero verifies the bid execution payment is zero.
+// Bids with non-zero execution_payment indicate trusted EL payments and
+// MUST NOT be broadcast on the gossip network.
+func (v *BidVerifier) VerifyExecutionPaymentZero() (err error) {
+	defer v.record(RequireBidExecutionPaymentZero, &err)
 
 	bid, err := v.b.Bid()
 	if err != nil {
 		return errors.Wrap(err, "failed to get bid")
 	}
-	if bid.ExecutionPayment() == 0 {
-		return fmt.Errorf("%w: builder=%d slot=%d", ErrBidExecutionPaymentZero, bid.BuilderIndex(), bid.Slot())
+	if bid.ExecutionPayment() != 0 {
+		return fmt.Errorf("%w: builder=%d slot=%d payment=%d", ErrBidExecutionPaymentNonZero, bid.BuilderIndex(), bid.Slot(), bid.ExecutionPayment())
 	}
 	return nil
 }
