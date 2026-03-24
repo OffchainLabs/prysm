@@ -17,7 +17,6 @@ const (
 // GlobalFlags specifies all the global flags for the
 // beacon node.
 type GlobalFlags struct {
-	StateDiffValidateOnStartup      bool
 	Supernode                       bool
 	DisableGetBlobsV2               bool
 	SemiSupernode                   bool
@@ -84,8 +83,6 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 
 	// State-diff-exponents
 	cfg.StateDiffExponents = ctx.IntSlice(StateDiffExponents.Name)
-	disableStateDiffValidateOnStartup := ctx.Bool(DisableStateDiffValidateOnStartup.Name)
-	cfg.StateDiffValidateOnStartup = !disableStateDiffValidateOnStartup
 	if features.Get().EnableStateDiff {
 		if err := validateStateDiffExponents(cfg.StateDiffExponents); err != nil {
 			return err
@@ -93,9 +90,6 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	} else {
 		if ctx.IsSet(StateDiffExponents.Name) {
 			log.Warn("--state-diff-exponents is set but --enable-state-diff is not; the value will be ignored.")
-		}
-		if ctx.IsSet(DisableStateDiffValidateOnStartup.Name) {
-			log.Warn("--disable-state-diff-validate-on-startup is set but --enable-state-diff is not; the value will be ignored.")
 		}
 	}
 

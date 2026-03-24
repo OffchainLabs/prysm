@@ -92,8 +92,7 @@ func TestStartStateDiff_ValidateOnStartup(t *testing.T) {
 	setDefaultStateDiffExponents()
 
 	globalFlags := flags.GlobalFlags{
-		StateDiffExponents:         flags.Get().StateDiffExponents,
-		StateDiffValidateOnStartup: true,
+		StateDiffExponents: flags.Get().StateDiffExponents,
 	}
 	flags.Init(&globalFlags)
 

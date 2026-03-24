@@ -75,7 +75,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.RPCPort,
 			flags.BatchVerifierLimit,
 			flags.StateDiffExponents,
-			flags.DisableStateDiffValidateOnStartup,
 		},
 	},
 	{
