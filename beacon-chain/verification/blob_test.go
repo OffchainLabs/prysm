@@ -452,31 +452,8 @@ func TestSidecarProposerExpected(t *testing.T) {
 	ctx := t.Context()
 	_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 1)
 	b := blobs[0]
-	t.Run("cached, matches", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{pc: &mockProposerCache{ProposerCB: pcReturnsIdx(b.ProposerIndex())}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.NoError(t, v.SidecarProposerExpected(ctx))
-		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
-		require.NoError(t, v.results.result(RequireSidecarProposerExpected))
-	})
-	t.Run("cached, does not match", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{pc: &mockProposerCache{ProposerCB: pcReturnsIdx(b.ProposerIndex() + 1)}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.ErrorIs(t, v.SidecarProposerExpected(ctx), errSidecarUnexpectedProposer)
-		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
-		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
-	})
-	t.Run("not cached, state lookup failure", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{sr: sbrNotFound(t, b.ParentRoot()), pc: &mockProposerCache{ProposerCB: pcReturnsNotFound()}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.ErrorIs(t, v.SidecarProposerExpected(ctx), errSidecarUnexpectedProposer)
-		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
-		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
-	})
-
-	t.Run("not cached, proposer matches", func(t *testing.T) {
+	t.Run("proposer matches", func(t *testing.T) {
 		pc := &mockProposerCache{
-			ProposerCB: pcReturnsNotFound(),
 			ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
 				require.Equal(t, b.ParentRoot(), root)
 				require.Equal(t, b.Slot(), slot)
@@ -489,9 +466,8 @@ func TestSidecarProposerExpected(t *testing.T) {
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NoError(t, v.results.result(RequireSidecarProposerExpected))
 	})
-	t.Run("not cached, proposer does not match", func(t *testing.T) {
+	t.Run("proposer does not match", func(t *testing.T) {
 		pc := &mockProposerCache{
-			ProposerCB: pcReturnsNotFound(),
 			ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
 				require.Equal(t, b.ParentRoot(), root)
 				require.Equal(t, b.Slot(), slot)
@@ -504,9 +480,15 @@ func TestSidecarProposerExpected(t *testing.T) {
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
 	})
-	t.Run("not cached, ComputeProposer fails", func(t *testing.T) {
+	t.Run("state lookup failure", func(t *testing.T) {
+		ini := Initializer{shared: &sharedResources{sr: sbrNotFound(t, b.ParentRoot()), pc: &mockProposerCache{}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
+		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
+		require.ErrorIs(t, v.SidecarProposerExpected(ctx), errSidecarUnexpectedProposer)
+		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
+		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
+	})
+	t.Run("ComputeProposer fails", func(t *testing.T) {
 		pc := &mockProposerCache{
-			ProposerCB: pcReturnsNotFound(),
 			ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
 				require.Equal(t, b.ParentRoot(), root)
 				require.Equal(t, b.Slot(), slot)
@@ -862,27 +844,10 @@ func (v *validxStateOverride) ReadFromEveryValidator(f func(idx int, val state.R
 
 type mockProposerCache struct {
 	ComputeProposerCB func(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error)
-	ProposerCB        func(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool)
 }
 
 func (p *mockProposerCache) ComputeProposer(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
 	return p.ComputeProposerCB(ctx, root, slot, pst)
 }
 
-func (p *mockProposerCache) Proposer(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool) {
-	return p.ProposerCB(c, slot)
-}
-
 var _ proposerCache = &mockProposerCache{}
-
-func pcReturnsIdx(idx primitives.ValidatorIndex) func(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool) {
-	return func(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool) {
-		return idx, true
-	}
-}
-
-func pcReturnsNotFound() func(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool) {
-	return func(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool) {
-		return 0, false
-	}
-}

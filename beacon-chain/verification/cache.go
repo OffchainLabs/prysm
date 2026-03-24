@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -148,12 +147,9 @@ func (c *sigCache) SignatureVerified(sig signatureData) (bool, error) {
 	return true, signing.ErrSigFailedToVerify
 }
 
-// proposerCache represents a type that can compute the proposer for a given slot + parent root,
-// and cache the result so that it can be reused when the same verification needs to be performed
-// across multiple values.
+// proposerCache represents a type that can compute the proposer for a given slot + parent root.
 type proposerCache interface {
 	ComputeProposer(ctx context.Context, root [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error)
-	Proposer(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool)
 }
 
 func newPropCache() *propCache {
@@ -163,8 +159,7 @@ func newPropCache() *propCache {
 type propCache struct {
 }
 
-// ComputeProposer takes the state for the given parent root and slot and computes the proposer index, updating the
-// proposer index cache when successful.
+// ComputeProposer takes the state for the given parent root and slot and computes the proposer index.
 func (*propCache) ComputeProposer(ctx context.Context, parent [32]byte, slot primitives.Slot, pst state.BeaconState) (primitives.ValidatorIndex, error) {
 	pst, err := transition.ProcessSlotsUsingNextSlotCache(ctx, pst, parent[:], slot)
 	if err != nil {
@@ -175,14 +170,4 @@ func (*propCache) ComputeProposer(ctx context.Context, parent [32]byte, slot pri
 		return 0, err
 	}
 	return idx, nil
-}
-
-// Proposer returns the validator index if it is found in the cache, along with a boolean indicating
-// whether the value was present, similar to accessing an lru or go map.
-func (*propCache) Proposer(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, bool) {
-	id, err := helpers.ProposerIndexAtSlotFromCheckpoint(c, slot)
-	if err != nil {
-		return 0, false
-	}
-	return id, true
 }

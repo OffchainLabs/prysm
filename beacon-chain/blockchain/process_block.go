@@ -476,10 +476,6 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	if err := helpers.UpdateCommitteeCache(ctx, st, e); err != nil {
 		return errors.Wrap(err, "could not update committee cache")
 	}
-	if err := helpers.UpdateProposerIndicesInCache(ctx, st, e); err != nil {
-		return errors.Wrap(err, "could not update proposer index cache")
-	}
-
 	go func(ep primitives.Epoch) {
 		// Use a custom deadline here, since this method runs asynchronously.
 		// We ignore the parent method's context and instead create a new one
@@ -502,28 +498,6 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 		}
 	}()
 
-	// The latest block header is from the previous epoch
-	r, err := st.LatestBlockHeader().HashTreeRoot()
-	if err != nil {
-		log.WithError(err).Error("Could not update proposer index state-root map")
-		return nil
-	}
-	// The proposer indices cache takes the target root for the previous
-	// epoch as key
-	if e > 0 {
-		e = e - 1
-	}
-	s.ForkChoicer().RLock()
-	target, err := s.cfg.ForkChoiceStore.TargetRootForEpoch(r, e)
-	s.ForkChoicer().RUnlock()
-	if err != nil {
-		log.WithError(err).Error("Could not update proposer index state-root map")
-		return nil
-	}
-	err = helpers.UpdateCachedCheckpointToStateRoot(st, &forkchoicetypes.Checkpoint{Epoch: e, Root: target})
-	if err != nil {
-		log.WithError(err).Error("Could not update proposer index state-root map")
-	}
 	return nil
 }
 
