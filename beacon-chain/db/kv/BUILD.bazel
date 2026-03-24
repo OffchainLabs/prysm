@@ -107,6 +107,7 @@ go_test(
         "migration_block_slot_index_test.go",
         "migration_state_validators_test.go",
         "p2p_test.go",
+        "state_diff_helpers_test.go",
         "state_diff_test.go",
         "state_summary_test.go",
         "state_test.go",
