@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "handlers.go",
+        "handlers_gloas.go",
         "handlers_pool.go",
         "handlers_state.go",
         "handlers_validator.go",
@@ -72,6 +73,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "handlers_equivocation_test.go",
+        "handlers_gloas_test.go",
         "handlers_pool_test.go",
         "handlers_state_test.go",
         "handlers_test.go",
@@ -90,6 +92,7 @@ go_test(
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/testing:go_default_library",
+        "//beacon-chain/execution/testing:go_default_library",
         "//beacon-chain/forkchoice/doubly-linked-tree:go_default_library",
         "//beacon-chain/operations/attestations:go_default_library",
         "//beacon-chain/operations/blstoexec:go_default_library",
@@ -116,6 +119,7 @@ go_test(
         "//encoding/bytesutil:go_default_library",
         "//encoding/ssz:go_default_library",
         "//network/httputil:go_default_library",
+        "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",

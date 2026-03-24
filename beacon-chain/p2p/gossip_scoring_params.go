@@ -145,6 +145,12 @@ func (s *Service) topicScoreParams(topic string) (*pubsub.TopicScoreParams, erro
 		return defaultLightClientOptimisticUpdateTopicParams(), nil
 	case strings.Contains(topic, GossipLightClientFinalityUpdateMessage):
 		return defaultLightClientFinalityUpdateTopicParams(), nil
+	case strings.Contains(topic, GossipPayloadAttestationMessageMessage):
+		// TODO: Revisit scoring params for payload attestation gossip.
+		return defaultBlockTopicParams(), nil
+	case strings.Contains(topic, GossipExecutionPayloadEnvelopeMessage):
+		// TODO: Revisit scoring params for execution payload envelope gossip.
+		return defaultBlockTopicParams(), nil
 	default:
 		return nil, errors.Errorf("unrecognized topic provided for parameter registration: %s", topic)
 	}
@@ -160,7 +166,7 @@ func (s *Service) retrieveActiveValidators() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	bState, err := s.cfg.StateGen.StateByRoot(s.ctx, [32]byte(finalizedCheckpoint.Root))
+	bState, err := s.cfg.StateGen.StateByRootNoCopy(s.ctx, [32]byte(finalizedCheckpoint.Root))
 	if err != nil {
 		return 0, err
 	}

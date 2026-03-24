@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -49,18 +50,20 @@ type Store struct {
 // Node defines the individual block which includes its block parent, ancestor and how much weight accounted for it.
 // This is used as an array based stateful DAG for efficient fork choice look up.
 type Node struct {
-	slot                     primitives.Slot              // slot of the block converted to the node.
-	root                     [fieldparams.RootLength]byte // root of the block converted to the node.
-	blockHash                [fieldparams.RootLength]byte // payloadHash of the block converted to the node.
-	parent                   *PayloadNode                 // parent index of this node.
-	target                   *Node                        // target checkpoint for
-	bestDescendant           *Node                        // bestDescendant node of this node.
-	justifiedEpoch           primitives.Epoch             // justifiedEpoch of this node.
-	unrealizedJustifiedEpoch primitives.Epoch             // the epoch that would be justified if the block would be advanced to the next epoch.
-	finalizedEpoch           primitives.Epoch             // finalizedEpoch of this node.
-	unrealizedFinalizedEpoch primitives.Epoch             // the epoch that would be finalized if the block would be advanced to the next epoch.
-	balance                  uint64                       // the balance that voted for this node directly
-	weight                   uint64                       // weight of this node: the total balance including children
+	slot                        primitives.Slot              // slot of the block converted to the node.
+	root                        [fieldparams.RootLength]byte // root of the block converted to the node.
+	blockHash                   [fieldparams.RootLength]byte // payloadHash of the block converted to the node.
+	parent                      *PayloadNode                 // parent index of this node.
+	target                      *Node                        // target checkpoint for
+	bestDescendant              *Node                        // bestDescendant node of this node.
+	justifiedEpoch              primitives.Epoch             // justifiedEpoch of this node.
+	unrealizedJustifiedEpoch    primitives.Epoch             // the epoch that would be justified if the block would be advanced to the next epoch.
+	finalizedEpoch              primitives.Epoch             // finalizedEpoch of this node.
+	unrealizedFinalizedEpoch    primitives.Epoch             // the epoch that would be finalized if the block would be advanced to the next epoch.
+	balance                     uint64                       // the balance that voted for this node directly
+	weight                      uint64                       // weight of this node: the total balance including children
+	payloadAvailabilityVote     bitfield.Bitvector512        // PTC payload availability votes
+	payloadDataAvailabilityVote bitfield.Bitvector512        // PTC payload data availability votes
 }
 
 // PayloadNode defines a full Forkchoice node after the Gloas fork, with the payload status either empty of full

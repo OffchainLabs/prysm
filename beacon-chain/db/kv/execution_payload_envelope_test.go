@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -75,6 +76,7 @@ func TestStore_SaveAndRetrieveExecutionPayloadEnvelope(t *testing.T) {
 
 	// BlockHash should be the payload's block hash (not a hash tree root).
 	assert.DeepEqual(t, env.Message.Payload.BlockHash, loaded.Message.BlockHash)
+	assert.Equal(t, true, bytes.Equal(env.Message.Payload.ParentHash, loaded.Message.ParentBlockHash))
 }
 
 func TestStore_DeleteExecutionPayloadEnvelope(t *testing.T) {
@@ -107,6 +109,52 @@ func TestStore_SaveExecutionPayloadEnvelope_NilRejected(t *testing.T) {
 	require.ErrorContains(t, "nil", err)
 }
 
+func TestStore_ExecutionPayloadEnvelopeByBlockHash(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	env := testEnvelope(t)
+	blockHash := bytesutil.ToBytes32(env.Message.Payload.BlockHash)
+
+	// Save envelope — should populate both primary and BlockHash index.
+	require.NoError(t, db.SaveExecutionPayloadEnvelope(ctx, env))
+
+	// Look up by block hash.
+	loaded, err := db.ExecutionPayloadEnvelopeByBlockHash(ctx, blockHash)
+	require.NoError(t, err)
+	assert.Equal(t, env.Message.Slot, loaded.Message.Slot)
+	assert.DeepEqual(t, env.Message.Payload.BlockHash, loaded.Message.BlockHash)
+	assert.Equal(t, true, bytes.Equal(env.Message.Payload.ParentHash, loaded.Message.ParentBlockHash))
+}
+
+func TestStore_ExecutionPayloadEnvelopeByBlockHash_NotFound(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	nonExistent := bytesutil.ToBytes32([]byte("nonexistent"))
+
+	_, err := db.ExecutionPayloadEnvelopeByBlockHash(ctx, nonExistent)
+	require.ErrorContains(t, "not found", err)
+}
+
+func TestStore_DeleteExecutionPayloadEnvelope_CleansBlockHashIndex(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	env := testEnvelope(t)
+	blockRoot := bytesutil.ToBytes32(env.Message.BeaconBlockRoot)
+	blockHash := bytesutil.ToBytes32(env.Message.Payload.BlockHash)
+
+	require.NoError(t, db.SaveExecutionPayloadEnvelope(ctx, env))
+
+	// Verify BlockHash lookup works before delete.
+	_, err := db.ExecutionPayloadEnvelopeByBlockHash(ctx, blockHash)
+	require.NoError(t, err)
+
+	// Delete should clean up both buckets.
+	require.NoError(t, db.DeleteExecutionPayloadEnvelope(ctx, blockRoot))
+
+	_, err = db.ExecutionPayloadEnvelopeByBlockHash(ctx, blockHash)
+	require.ErrorContains(t, "not found", err)
+}
+
 func TestBlindEnvelope_PreservesBlockHash(t *testing.T) {
 	env := testEnvelope(t)
 
@@ -114,6 +162,7 @@ func TestBlindEnvelope_PreservesBlockHash(t *testing.T) {
 
 	// Should contain the block hash from the payload, not a hash tree root.
 	assert.DeepEqual(t, env.Message.Payload.BlockHash, blinded.Message.BlockHash)
+	assert.Equal(t, true, bytes.Equal(env.Message.Payload.ParentHash, blinded.Message.ParentBlockHash))
 
 	// Metadata should be preserved.
 	assert.Equal(t, env.Message.BuilderIndex, blinded.Message.BuilderIndex)

@@ -27,6 +27,8 @@ var gossipTopicMappings = map[string]func() proto.Message{
 	DataColumnSubnetTopicFormat:               func() proto.Message { return &ethpb.DataColumnSidecar{} },
 	PayloadAttestationMessageTopicFormat:      func() proto.Message { return &ethpb.PayloadAttestationMessage{} },
 	ExecutionPayloadEnvelopeTopicFormat:       func() proto.Message { return &ethpb.SignedExecutionPayloadEnvelope{} },
+	ExecutionPayloadBidTopicFormat:            func() proto.Message { return &ethpb.SignedExecutionPayloadBid{} },
+	SignedProposerPreferencesTopicFormat:      func() proto.Message { return &ethpb.SignedProposerPreferences{} },
 }
 
 // GossipTopicMappings is a function to return the assigned data type
@@ -36,6 +38,9 @@ func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 	case BlockSubnetTopicFormat:
 		if epoch >= params.BeaconConfig().FuluForkEpoch {
 			return &ethpb.SignedBeaconBlockFulu{}
+		}
+		if epoch >= params.BeaconConfig().GloasForkEpoch {
+			return &ethpb.SignedBeaconBlockGloas{}
 		}
 		if epoch >= params.BeaconConfig().ElectraForkEpoch {
 			return &ethpb.SignedBeaconBlockElectra{}
@@ -146,7 +151,11 @@ func init() {
 
 	// Specially handle Fulu objects.
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockFulu]()] = BlockSubnetTopicFormat
+	// Specially handle Gloas objects.
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockGloas]()] = BlockSubnetTopicFormat
 
 	// Payload attestation messages.
 	GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestationMessage]()] = PayloadAttestationMessageTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedExecutionPayloadBid]()] = ExecutionPayloadBidTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedProposerPreferences]()] = SignedProposerPreferencesTopicFormat
 }

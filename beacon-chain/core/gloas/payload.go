@@ -225,7 +225,20 @@ func ApplyExecutionPayload(
 		return errors.Errorf("payload timestamp does not match expected timestamp: payload=%d, expected=%d", payload.Timestamp(), uint64(t.Unix()))
 	}
 
-	if err := processExecutionRequests(ctx, st, envelope.ExecutionRequests()); err != nil {
+	if err := ApplyExecutionPayloadStateMutations(ctx, st, envelope.ExecutionRequests(), [32]byte(payload.BlockHash())); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ApplyExecutionPayloadStateMutations(
+	ctx context.Context,
+	st state.BeaconState,
+	executionRequests *enginev1.ExecutionRequests,
+	blockHash [32]byte,
+) error {
+	if err := processExecutionRequests(ctx, st, executionRequests); err != nil {
 		return errors.Wrap(err, "could not process execution requests")
 	}
 
@@ -237,7 +250,7 @@ func ApplyExecutionPayload(
 		return errors.Wrap(err, "could not set execution payload availability")
 	}
 
-	if err := st.SetLatestBlockHash([32]byte(payload.BlockHash())); err != nil {
+	if err := st.SetLatestBlockHash(blockHash); err != nil {
 		return errors.Wrap(err, "could not set latest block hash")
 	}
 

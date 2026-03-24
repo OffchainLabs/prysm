@@ -110,7 +110,7 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 			return fmt.Errorf("builder %d cannot cover bid amount %d", builderIndex, amount)
 		}
 
-		if err := validatePayloadBidSignature(st, wrappedBid); err != nil {
+		if err := ValidatePayloadBidSignature(st, wrappedBid); err != nil {
 			return errors.Wrap(err, "bid signature validation failed")
 		}
 	}
@@ -179,10 +179,10 @@ func validateBidConsistency(st state.BeaconState, bid interfaces.ROExecutionPayl
 	return nil
 }
 
-// validatePayloadBidSignature verifies the BLS signature on a signed execution payload bid.
+// ValidatePayloadBidSignature verifies the BLS signature on a signed execution payload bid.
 // It validates that the signature was created by the builder specified in the bid
 // using the appropriate domain for the beacon builder.
-func validatePayloadBidSignature(st state.ReadOnlyBeaconState, signedBid interfaces.ROSignedExecutionPayloadBid) error {
+func ValidatePayloadBidSignature(st state.ReadOnlyBeaconState, signedBid interfaces.ROSignedExecutionPayloadBid) error {
 	bid, err := signedBid.Bid()
 	if err != nil {
 		return errors.Wrap(err, "failed to get bid")

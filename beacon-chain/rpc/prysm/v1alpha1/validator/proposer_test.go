@@ -94,6 +94,14 @@ func TestServer_GetBeaconBlock_Phase0(t *testing.T) {
 	require.NoError(t, db.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
 
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
+	// Use a separate mock for BlockReceiver with an independent state copy.
+	// This mirrors production where computeStateRoot calls StateByRoot (fresh from DB),
+	// not the same head state object mutated by the getSlashings goroutine.
+	proposerServer.BlockReceiver = &mock.ChainService{
+		State:           beaconState.Copy(),
+		Root:            parentRoot[:],
+		ForkChoiceStore: doublylinkedtree.New(),
+	}
 
 	randaoReveal, err := util.RandaoReveal(beaconState, 0, privKeys)
 	require.NoError(t, err)
@@ -405,6 +413,14 @@ func TestServer_GetBeaconBlock_Capella(t *testing.T) {
 	}
 
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
+	advancedState := beaconState.Copy()
+	advancedState, err = transition.ProcessSlots(ctx, advancedState, capellaSlot)
+	require.NoError(t, err)
+	proposerServer.BlockReceiver = &mock.ChainService{
+		State:           advancedState,
+		Root:            parentRoot[:],
+		ForkChoiceStore: doublylinkedtree.New(),
+	}
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
@@ -528,6 +544,14 @@ func TestServer_GetBeaconBlock_Deneb(t *testing.T) {
 	blobs := [][]byte{[]byte("blob"), []byte("blob1"), []byte("blob2")}
 	bundle := &enginev1.BlobsBundle{KzgCommitments: kc, Proofs: proofs, Blobs: blobs}
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
+	advancedState := beaconState.Copy()
+	advancedState, err = transition.ProcessSlots(ctx, advancedState, denebSlot)
+	require.NoError(t, err)
+	proposerServer.BlockReceiver = &mock.ChainService{
+		State:           advancedState,
+		Root:            parentRoot[:],
+		ForkChoiceStore: doublylinkedtree.New(),
+	}
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
 		PayloadIDBytes: &enginev1.PayloadIDBytes{1},
 		GetPayloadResponse: &blocks.GetPayloadResponse{
@@ -661,6 +685,14 @@ func TestServer_GetBeaconBlock_Electra(t *testing.T) {
 		BlockHash:     make([]byte, fieldparams.RootLength),
 	}
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
+	advancedState := beaconState.Copy()
+	advancedState, err = transition.ProcessSlots(ctx, advancedState, electraSlot)
+	require.NoError(t, err)
+	proposerServer.BlockReceiver = &mock.ChainService{
+		State:           advancedState,
+		Root:            parentRoot[:],
+		ForkChoiceStore: doublylinkedtree.New(),
+	}
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
@@ -790,6 +822,14 @@ func TestServer_GetBeaconBlock_Fulu(t *testing.T) {
 		BlockHash:     make([]byte, fieldparams.RootLength),
 	}
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
+	advancedState := beaconState.Copy()
+	advancedState, err = transition.ProcessSlots(ctx, advancedState, fuluSlot)
+	require.NoError(t, err)
+	proposerServer.BlockReceiver = &mock.ChainService{
+		State:           advancedState,
+		Root:            parentRoot[:],
+		ForkChoiceStore: doublylinkedtree.New(),
+	}
 	ed, err := blocks.NewWrappedExecutionData(payload)
 	require.NoError(t, err)
 	proposerServer.ExecutionEngineCaller = &mockExecution.EngineClient{
@@ -1291,6 +1331,11 @@ func TestProposer_ComputeStateRoot_OK(t *testing.T) {
 		Eth1InfoFetcher:   &mockExecution.Chain{},
 		Eth1BlockFetcher:  &mockExecution.Chain{},
 		StateGen:          stategen.New(db, doublylinkedtree.New()),
+		BlockReceiver: &mock.ChainService{
+			State:           beaconState.Copy(),
+			Root:            parentRoot[:],
+			ForkChoiceStore: doublylinkedtree.New(),
+		},
 	}
 	req := util.NewBeaconBlock()
 	req.Block.ProposerIndex = 84
@@ -1344,7 +1389,8 @@ func TestHandleStateRootError_IncrementsAttempts(t *testing.T) {
 
 	stateGen := stategen.New(db, doublylinkedtree.New())
 	vs := &Server{
-		StateGen: stateGen,
+		StateGen:      stateGen,
+		BlockReceiver: &mock.ChainService{State: beaconState},
 	}
 
 	// Create a block that will trigger retries
@@ -3366,6 +3412,11 @@ func TestProposer_GetFeeRecipientByPubKey(t *testing.T) {
 }
 
 func TestProposer_GetParentHeadState(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.MinimalSpecConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	db := dbutil.SetupDB(t)
 	ctx := t.Context()
 
@@ -3377,6 +3428,7 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		ChainStartFetcher: &mockExecution.Chain{},
 		Eth1InfoFetcher:   &mockExecution.Chain{},
 		Eth1BlockFetcher:  &mockExecution.Chain{},
+		ForkchoiceFetcher: &mock.ChainService{},
 		StateGen:          stategen.New(db, doublylinkedtree.New()),
 	}
 	t.Run("successful reorg", func(tt *testing.T) {
@@ -3429,6 +3481,65 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		require.Equal(t, [32]byte(str), [32]byte(headStr))
 		require.NotEqual(t, [32]byte(str), [32]byte(genesisStr))
 		require.LogsContain(t, hook, "Late block attempted reorg failed")
+	})
+
+	t.Run("successful reorg uses payload content lookup access root", func(tt *testing.T) {
+		fullAccessRoot := bytesutil.ToBytes32([]byte("full-access-root"))
+		require.NoError(t, transition.UpdateNextSlotCache(ctx, fullAccessRoot[:], parentState))
+
+		proposerServer := &Server{
+			ForkchoiceFetcher: &mock.ChainService{
+				MockPayloadContentLookup: map[[32]byte][32]byte{
+					parentRoot: fullAccessRoot,
+				},
+				MockPayloadContentIsFull: map[[32]byte]bool{
+					parentRoot: true,
+				},
+			},
+			StateGen: stategen.New(db, doublylinkedtree.New()),
+		}
+
+		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, parentRoot, parentRoot, headRoot)
+		require.NoError(t, err)
+		st := parentState.Copy()
+		st, err = transition.ProcessSlots(ctx, st, st.Slot()+1)
+		require.NoError(t, err)
+		str, err := st.StateRootAtIndex(0)
+		require.NoError(t, err)
+		headStr, err := head.StateRootAtIndex(0)
+		require.NoError(t, err)
+		require.Equal(t, [32]byte(str), [32]byte(headStr))
+	})
+
+	t.Run("no reorg uses payload content lookup access root", func(tt *testing.T) {
+		fullAccessRoot := bytesutil.ToBytes32([]byte("full-access-root-no-reorg"))
+		require.NoError(t, transition.UpdateNextSlotCache(ctx, fullAccessRoot[:], parentState))
+
+		proposerServer := &Server{
+			ForkchoiceFetcher: &mock.ChainService{
+				MockPayloadContentLookup: map[[32]byte][32]byte{
+					headRoot: fullAccessRoot,
+				},
+				MockPayloadContentIsFull: map[[32]byte]bool{
+					headRoot: true,
+				},
+			},
+			HeadFetcher: &mock.ChainService{
+				State: headState,
+				Root:  headRoot[:],
+			},
+		}
+
+		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, headRoot, headRoot, headRoot)
+		require.NoError(t, err)
+		st := parentState.Copy()
+		st, err = transition.ProcessSlots(ctx, st, st.Slot()+1)
+		require.NoError(t, err)
+		str, err := st.StateRootAtIndex(0)
+		require.NoError(t, err)
+		headStr, err := head.StateRootAtIndex(0)
+		require.NoError(t, err)
+		require.Equal(t, [32]byte(str), [32]byte(headStr))
 	})
 }
 

@@ -74,6 +74,7 @@ func TestSyncStatus(t *testing.T) {
 
 func TestGetVersion(t *testing.T) {
 	semVer := version.SemanticVersion()
+	commit := version.GitCommit()
 	os := runtime.GOOS
 	arch := runtime.GOARCH
 
@@ -87,6 +88,7 @@ func TestGetVersion(t *testing.T) {
 	resp := &structs.GetVersionResponse{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 	assert.StringContains(t, semVer, resp.Data.Version)
+	assert.StringContains(t, commit, resp.Data.Version)
 	assert.StringContains(t, os, resp.Data.Version)
 	assert.StringContains(t, arch, resp.Data.Version)
 }
