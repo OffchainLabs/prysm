@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -30,6 +31,23 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	proposerIndex := sidecar.SignedBlockHeader.Header.ProposerIndex
 	if !s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index) {
 		usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index, 10)).Inc()
+		// re-publish the full column on the partial column extension as we don't send full columns to peers
+		// who have explicitly requested for partial columns. This method is idempotent so this is fine.
+		if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+			digest, err := s.currentForkDigest()
+			if err != nil {
+				log.Error("Failed to get current fork digest")
+			} else {
+				err := broadcaster.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+					subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+					topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+					yield(topic, blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar))
+				})
+				if err != nil {
+					log.WithError(err).Error("Failed to publish partial column on getting data column sidecar")
+				}
+			}
+		}
 	}
 
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {

@@ -246,19 +246,23 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
 			if partialBroadcaster != nil {
 				log.WithField("len(partialColumns)", len(partialColumns)).Debug("Publishing partial columns")
-				for i := range uint64(len(partialColumns)) {
-					if !columnIndicesToSample[i] {
-						continue
+				// Publish the partial column. This is idempotent if we republish the same data twice.
+				// Note, the "partial column" may indeed be complete. We still
+				// should publish to help our peers.
+				err = partialBroadcaster.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+					for i := range uint64(len(partialColumns)) {
+						if !columnIndicesToSample[i] {
+							continue
+						}
+						subnet := peerdas.ComputeSubnetForDataColumnSidecar(i)
+						topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+						if !yield(topic, partialColumns[i]) {
+							return
+						}
 					}
-					subnet := peerdas.ComputeSubnetForDataColumnSidecar(i)
-					topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
-					// Publish the partial column. This is idempotent if we republish the same data twice.
-					// Note, the "partial column" may indeed be complete. We still
-					// should publish to help our peers.
-					_, err = partialBroadcaster.Publish(topic, partialColumns[i], true)
-					if err != nil {
-						log.WithError(err).Warn("Failed to publish partial column")
-					}
+				})
+				if err != nil {
+					log.WithError(err).Warn("Failed to publish partial columns")
 				}
 			}
 

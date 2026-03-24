@@ -155,9 +155,7 @@ var _ partialColumnPubSub = (*mockPubSub)(nil)
 
 func newBroadcasterHarness(t *testing.T, ps partialColumnPubSub) *broadcasterHarness {
 	t.Helper()
-	logger := logrus.New()
-	logger.SetLevel(logrus.DebugLevel)
-	broadcaster := NewBroadcaster(logger)
+	broadcaster := NewBroadcaster(logrus.New())
 	broadcaster.ps = ps
 	return &broadcasterHarness{
 		t:           t,
@@ -881,7 +879,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				b.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
 					string(group): newMarkedVerifier(existing),
 				}
-				b.getBlobsCalled[string(group)] = true
+				b.partialMsgStore[validTopic][string(group)].Column.Published = true
 				return testSetup{
 					inputRPC: buildIncomingRPC(validTopic, group, nil, []byte{0x01, 0x02}),
 				}
@@ -987,9 +985,9 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 	const topic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
 
 	type testSetup struct {
-		column         *blocks.PartialDataColumn
-		group          []byte
-		getBlobsCalled bool
+		column    *blocks.PartialDataColumn
+		group     []byte
+		published bool
 	}
 
 	tests := []struct {
@@ -1019,9 +1017,9 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 					0: {0x10},
 				})
 				return testSetup{
-					column:         c,
-					group:          c.GroupID(),
-					getBlobsCalled: true,
+					column:    c,
+					group:     c.GroupID(),
+					published: true,
 				}
 			},
 			validatedCells: map[uint64][]byte{
@@ -1040,9 +1038,9 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 					0: {0x20},
 				})
 				return testSetup{
-					column:         c,
-					group:          c.GroupID(),
-					getBlobsCalled: false,
+					column:    c,
+					group:     c.GroupID(),
+					published: false,
 				}
 			},
 			validatedCells: map[uint64][]byte{
@@ -1062,9 +1060,9 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 					0: {0x30},
 				})
 				return testSetup{
-					column:         c,
-					group:          c.GroupID(),
-					getBlobsCalled: true,
+					column:    c,
+					group:     c.GroupID(),
+					published: true,
 				}
 			},
 			validatedCells: map[uint64][]byte{
@@ -1086,9 +1084,9 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 					0: {0x40},
 				})
 				return testSetup{
-					column:         c,
-					group:          c.GroupID(),
-					getBlobsCalled: true,
+					column:    c,
+					group:     c.GroupID(),
+					published: true,
 				}
 			},
 			validatedCells: map[uint64][]byte{
@@ -1110,9 +1108,9 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 					0: {0x50},
 				})
 				return testSetup{
-					column:         c,
-					group:          c.GroupID(),
-					getBlobsCalled: false,
+					column:    c,
+					group:     c.GroupID(),
+					published: false,
 				}
 			},
 			validatedCells: map[uint64][]byte{
@@ -1133,9 +1131,9 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 					0: {0x60},
 				})
 				return testSetup{
-					column:         c,
-					group:          c.GroupID(),
-					getBlobsCalled: true,
+					column:    c,
+					group:     c.GroupID(),
+					published: true,
 				}
 			},
 			validatedCells: map[uint64][]byte{
@@ -1163,7 +1161,7 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 				h.broadcaster.partialMsgStore[topic] = map[string]*verification.PartialColumnVerifier{
 					string(setup.group): newMarkedVerifier(setup.column),
 				}
-				h.broadcaster.getBlobsCalled[string(setup.group)] = setup.getBlobsCalled
+				h.broadcaster.partialMsgStore[topic][string(setup.group)].Column.Published = setup.published
 			}
 			h.broadcaster.handleColumn = recorder.HandleColumn
 
@@ -1227,10 +1225,7 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 	})
 
 	tests := []struct {
-		expectGetBlobsValue bool
-		expectHandleColumn  bool
 		expectTrustedCall   bool
-		getBlobsCalled      bool
 		expectedErrContains string
 		publishErr          error
 		name                string
@@ -1240,15 +1235,12 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 	}{
 		{
 			name:                "new group stores and publishes",
-			getBlobsCalled:      true,
-			expectGetBlobsValue: true,
 			expectTrustedCall:   true,
 			publishColumn:       column1,
 			expectedStoreColumn: column1,
 		},
 		{
 			name:                "publish error is returned to caller",
-			getBlobsCalled:      true,
 			expectTrustedCall:   true,
 			publishErr:          errors.New("publish failed"),
 			expectedErrContains: "publish failed",
@@ -1256,9 +1248,7 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			expectedStoreColumn: column1,
 		},
 		{
-			name:                "existing duplicate cells are not overwritten",
-			getBlobsCalled:      false,
-			expectGetBlobsValue: false,
+			name: "existing duplicate cells are not overwritten",
 			existingColumn: pc(3, map[uint64][]byte{
 				0: {0x20},
 			}),
@@ -1271,9 +1261,7 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			}),
 		},
 		{
-			name:                "existing extends with new cells and remains incomplete",
-			getBlobsCalled:      true,
-			expectGetBlobsValue: true,
+			name: "existing extends with new cells and remains incomplete",
 			existingColumn: pc(4, map[uint64][]byte{
 				0: {0x30},
 			}),
@@ -1288,10 +1276,7 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			}),
 		},
 		{
-			name:                "existing extends to complete and invokes handleColumn",
-			getBlobsCalled:      true,
-			expectGetBlobsValue: true,
-			expectHandleColumn:  true,
+			name: "existing extends to complete and invokes handleColumn",
 			existingColumn: pc(2, map[uint64][]byte{
 				0: {0x40},
 			}),
@@ -1324,7 +1309,9 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			h.start(recorder)
 			defer h.Stop()
 
-			completed, err := h.broadcaster.Publish(topic, *column, tt.getBlobsCalled)
+			err := h.broadcaster.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+				yield(topic, *column)
+			})
 			if tt.expectedErrContains != "" {
 				require.ErrorContains(t, tt.expectedErrContains, err)
 			} else {
@@ -1336,21 +1323,8 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			assertPartialColumnsEqual(t, expectedStored, stored)
 			ps.assertPartialColumnsPublished(t, topic, []*blocks.PartialDataColumn{expectedStored})
 
-			getBlobs := h.broadcaster.getBlobsCalled[groupID]
-			require.Equal(t, tt.expectGetBlobsValue, getBlobs)
-
-			if tt.expectHandleColumn {
-				require.Equal(t, true, completed)
-				select {
-				case call := <-recorder.handleColumnCallCh:
-					require.Equal(t, topic, call.topic)
-					require.DeepEqual(t, expectedStored.Column, call.column.Column)
-				case <-t.Context().Done():
-					t.Fatalf("handle column call not received")
-				}
-			} else {
-				require.Equal(t, false, completed)
-			}
+			// Published is only set to true if err == nil
+			require.Equal(t, err == nil, stored.Published)
 
 			if tt.expectTrustedCall {
 				select {
