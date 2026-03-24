@@ -1,6 +1,6 @@
 module github.com/OffchainLabs/prysm/v7
 
-go 1.26.0
+go 1.26
 
 require (
 	github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506
