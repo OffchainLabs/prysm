@@ -956,6 +956,10 @@ func (s *Server) ListProposerPreferences(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
+	if slot != 0 && slots.ToEpoch(primitives.Slot(slot)) < params.BeaconConfig().GloasForkEpoch {
+		httputil.HandleError(w, "Requested slot is before the gloas fork", http.StatusBadRequest)
+		return
+	}
 
 	pending := s.ProposerPreferencesCache.Pending(primitives.Slot(slot))
 	data := make([]*structs.SignedProposerPreferences, 0, len(pending))

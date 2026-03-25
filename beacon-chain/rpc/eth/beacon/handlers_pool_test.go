@@ -2377,11 +2377,31 @@ func TestListProposerPreferences_PreFork(t *testing.T) {
 	cfg.GloasForkEpoch = 100
 	params.OverrideBeaconConfig(cfg)
 
+	currentSlot := primitives.Slot(0)
 	s := &Server{
 		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
-		TimeFetcher:              &blockchainmock.ChainService{},
+		TimeFetcher:              &blockchainmock.ChainService{Slot: &currentSlot},
 	}
 	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/proposer_preferences", nil)
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+
+	s.ListProposerPreferences(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+}
+
+func TestListProposerPreferences_PreForkSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	currentSlot := primitives.Slot(32)
+	s := &Server{
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		TimeFetcher:              &blockchainmock.ChainService{Slot: &currentSlot},
+	}
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/pool/proposer_preferences?slot=5", nil)
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 
