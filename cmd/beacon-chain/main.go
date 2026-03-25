@@ -125,6 +125,7 @@ var appFlags = []cli.Flag{
 	cmd.ClearDB,
 	cmd.ForceClearDB,
 	cmd.LogFormat,
+	cmd.DisableLogColor,
 	cmd.MaxGoroutines,
 	debug.PProfFlag,
 	debug.PProfAddrFlag,
@@ -203,6 +204,7 @@ func before(ctx *cli.Context) error {
 		formatter.FullTimestamp = true
 		formatter.ForceFormatting = true
 		formatter.ForceColors = true
+		formatter.DisableColors = ctx.Bool(cmd.DisableLogColor.Name)
 		formatter.VModule = vmodule
 		formatter.BaseVerbosity = verbosityLevel
 
