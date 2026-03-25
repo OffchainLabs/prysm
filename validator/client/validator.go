@@ -1028,7 +1028,7 @@ func (v *validator) buildProposerPreferences(
 	km keymanager.IKeymanager,
 	slot primitives.Slot,
 ) []*ethpb.SignedProposerPreferences {
-	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+	if slots.ToEpoch(slot)+1 < params.BeaconConfig().GloasForkEpoch {
 		return nil
 	}
 

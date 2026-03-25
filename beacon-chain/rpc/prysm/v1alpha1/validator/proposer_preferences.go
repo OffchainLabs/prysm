@@ -63,7 +63,7 @@ func (vs *Server) SubmitSignedProposerPreferences(
 			continue
 		}
 
-		if err := vs.P2P.Broadcast(ctx, msg); err != nil {
+		if err := vs.P2P.BroadcastForEpoch(ctx, msg, slots.ToEpoch(proposalSlot)); err != nil {
 			return nil, status.Errorf(codes.Internal,
 				"Could not broadcast signed proposer preferences (broadcast %d/%d): %v",
 				broadcast, len(req.SignedProposerPreferences), err)
