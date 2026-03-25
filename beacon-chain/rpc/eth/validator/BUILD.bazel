@@ -18,6 +18,7 @@ go_library(
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/builder:go_default_library",
         "//beacon-chain/cache:go_default_library",
+        "//beacon-chain/core/feed:go_default_library",
         "//beacon-chain/core/feed/operation:go_default_library",
         "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
@@ -58,11 +59,13 @@ go_test(
     name = "go_default_test",
     srcs = [
         "handlers_block_test.go",
+        "handlers_gloas_test.go",
         "handlers_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
         "//api:go_default_library",
+        "//api/server:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/blockchain/testing:go_default_library",
         "//beacon-chain/builder/testing:go_default_library",

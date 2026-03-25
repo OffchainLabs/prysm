@@ -947,14 +947,19 @@ func (s *Server) ListProposerPreferences(w http.ResponseWriter, r *http.Request)
 	_, span := trace.StartSpan(r.Context(), "beacon.ListProposerPreferences")
 	defer span.End()
 
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) < params.BeaconConfig().GloasForkEpoch {
+		httputil.HandleError(w, "Proposer preferences are not supported before the gloas fork", http.StatusBadRequest)
+		return
+	}
+
 	_, slot, ok := shared.UintFromQuery(w, r, "slot", false)
 	if !ok {
 		return
 	}
 
-	all := s.ProposerPreferencesCache.All(primitives.Slot(slot))
-	data := make([]*structs.SignedProposerPreferences, 0, len(all))
-	for _, sp := range all {
+	pending := s.ProposerPreferencesCache.Pending(primitives.Slot(slot))
+	data := make([]*structs.SignedProposerPreferences, 0, len(pending))
+	for _, sp := range pending {
 		data = append(data, structs.SignedProposerPreferencesFromConsensus(sp))
 	}
 
@@ -963,82 +968,4 @@ func (s *Server) ListProposerPreferences(w http.ResponseWriter, r *http.Request)
 		Version: version.String(version.Gloas),
 		Data:    data,
 	})
-}
-
-// SubmitProposerPreferences submits signed proposer preferences to the node's pool.
-func (s *Server) SubmitProposerPreferences(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitProposerPreferences")
-	defer span.End()
-
-	versionHeader := r.Header.Get(api.VersionHeader)
-	if versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
-		return
-	}
-
-	var req []*structs.SignedProposerPreferences
-	err := json.NewDecoder(r.Body).Decode(&req)
-	switch {
-	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if len(req) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	}
-
-	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
-	var failures []*server.IndexedError
-
-	for i, sp := range req {
-		consensus, err := sp.ToConsensus()
-		if err != nil {
-			failures = append(failures, &server.IndexedError{
-				Index:   i,
-				Message: "Unable to decode SignedProposerPreferences: " + err.Error(),
-			})
-			continue
-		}
-		if consensus.Message == nil {
-			failures = append(failures, &server.IndexedError{
-				Index:   i,
-				Message: "Message is nil",
-			})
-			continue
-		}
-		proposalSlot := consensus.Message.ProposalSlot
-		if slots.ToEpoch(proposalSlot) != currentEpoch+1 {
-			failures = append(failures, &server.IndexedError{
-				Index:   i,
-				Message: fmt.Sprintf("proposal_slot must be in the next epoch: slot %d currentEpoch %d", proposalSlot, currentEpoch),
-			})
-			continue
-		}
-		if s.ProposerPreferencesCache.Has(proposalSlot) {
-			continue
-		}
-		s.OperationNotifier.OperationFeed().Send(&feed.Event{
-			Type: operation.ProposerPreferencesReceived,
-			Data: &operation.ProposerPreferencesReceivedData{
-				Preferences: consensus,
-			},
-		})
-		s.ProposerPreferencesCache.Add(proposalSlot, consensus)
-		if err := s.Broadcaster.Broadcast(ctx, consensus); err != nil {
-			log.WithError(err).Error("Could not broadcast signed proposer preferences")
-		}
-	}
-
-	if len(failures) > 0 {
-		failuresErr := &server.IndexedErrorContainer{
-			Code:     http.StatusBadRequest,
-			Message:  server.ErrIndexedValidationFail,
-			Failures: failures,
-		}
-		httputil.WriteError(w, failuresErr)
-	}
 }

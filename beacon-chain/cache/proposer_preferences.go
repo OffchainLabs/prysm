@@ -67,9 +67,9 @@ func (c *ProposerPreferencesCache) Has(slot primitives.Slot) bool {
 	return ok
 }
 
-// All returns all cached signed proposer preferences. If slot is non-zero,
-// only the entry for that slot is returned.
-func (c *ProposerPreferencesCache) All(slot primitives.Slot) []*ethpb.SignedProposerPreferences {
+// Pending returns cached signed proposer preferences not yet included in a
+// block. If slot is non-zero, only the entry for that slot is returned.
+func (c *ProposerPreferencesCache) Pending(slot primitives.Slot) []*ethpb.SignedProposerPreferences {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 

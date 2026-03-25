@@ -73,20 +73,20 @@ func TestProposerPreferencesCache_PruneBefore(t *testing.T) {
 	require.Equal(t, true, c.Has(12))
 }
 
-func TestProposerPreferencesCache_All(t *testing.T) {
+func TestProposerPreferencesCache_Pending(t *testing.T) {
 	c := NewProposerPreferencesCache()
 
 	c.Add(10, testSigned(10, []byte{1}, 10))
 	c.Add(11, testSigned(11, []byte{2}, 11))
 	c.Add(12, testSigned(12, []byte{3}, 12))
 
-	all := c.All(0)
+	all := c.Pending(0)
 	require.Equal(t, 3, len(all))
 
-	bySlot := c.All(11)
+	bySlot := c.Pending(11)
 	require.Equal(t, 1, len(bySlot))
 	require.Equal(t, primitives.Slot(11), bySlot[0].Message.ProposalSlot)
 
-	empty := c.All(999)
+	empty := c.Pending(999)
 	require.Equal(t, 0, len(empty))
 }

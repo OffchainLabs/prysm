@@ -3,6 +3,8 @@ package validator
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -70,6 +72,12 @@ func (vs *Server) SubmitSignedProposerPreferences(
 		}
 
 		vs.ProposerPreferencesCache.Add(proposalSlot, msg)
+		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
+			Type: opfeed.ProposerPreferencesReceived,
+			Data: &opfeed.ProposerPreferencesReceivedData{
+				Preferences: msg,
+			},
+		})
 		broadcast++
 	}
 
