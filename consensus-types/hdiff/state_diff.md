@@ -210,7 +210,17 @@ type stateDiff struct {
 	pendingPartialWithdrawalsDiff  []*ethpb.PendingPartialWithdrawal 
 	pendingConsolidationsDiffs     []*ethpb.PendingConsolidation     
 	
-	proposerLookahead []uint64 
+	proposerLookahead []uint64
+
+	latestExecutionPayloadBid      *ethpb.ExecutionPayloadBid
+	builderDiffs                   []builderDiff
+	nextWithdrawalBuilderIndex     uint64
+	executionPayloadAvailability   []byte
+	builderPendingPayments         []*ethpb.BuilderPendingPayment
+	builderPendingWithdrawalsIndex uint64
+	builderPendingWithdrawalsDiff  []*ethpb.BuilderPendingWithdrawal
+	latestBlockHash                [fieldparams.RootLength]byte
+	payloadExpectedWithdrawals     []*enginev1.Withdrawal
 }
 ```
 
@@ -378,7 +388,31 @@ This field is treated exactly like the pending deposits.
 
 ##### Proposer Lookahead
 
-The proposer lookahead is stored as the SSZ serialized version of the field. It always overrides the source's field. 
+The proposer lookahead is stored as the SSZ serialized version of the field. It always overrides the source's field.
+
+#### Gloas fields
+
+Gloas replaces `executionPayloadHeader` with `latestExecutionPayloadBid` and introduces several new state fields related to the builder registry and execution payload availability. The Gloas-specific diff logic lives in `state_diff_gloas.go`. When `targetVersion >= version.Gloas`, the `executionPayloadHeader` path is skipped entirely and the following fields are serialized/deserialized instead:
+
+**Latest Execution Payload Bid.** Always non-nil for valid Gloas states. Serialized as 8 bytes for the SSZ size followed by the SSZ bytes (variable size due to `BlobKzgCommitments`). Always overrides. The diff computation errors if the target bid is nil.
+
+**Builder Diffs.** The builder registry is diffed sparsely. Only builders whose fields changed between source and target are stored. The first 8 bytes encode the count of changed builders. Each entry is a `uint32` index followed by the fixed-size (93 bytes) SSZ-encoded `Builder`. When applying, the current builder slice is read from the source, changed indices are patched, and the result is written back with `SetBuilders`. This handles both mutations (balance changes, exits) and replacements (exited builder slot reused by a new deposit) since the full builder struct is stored for each changed index.
+
+**Next Withdrawal Builder Index.** Stored as an 8 byte `uint64`, always overrides.
+
+**Execution Payload Availability.** A fixed-size bitvector of `SlotsPerHistoricalRoot / 8` bytes (1024 bytes), stored without a length prefix. This uses a full override strategy rather than an append diff: availability updates flip bits in place on a wrapping slot-indexed ring buffer, so the mutation pattern is overwrite-with-wraparound rather than list growth. Given the small fixed size, storing the full vector is simpler than introducing changed-byte or append metadata. Always overrides.
+
+**Builder Pending Payments.** A fixed-size vector of `2 * SlotsPerEpoch` entries (64 entries × 44 bytes each), stored without a length prefix. Each entry is SSZ-encoded. Always overrides.
+
+**Builder Pending Withdrawals.** Treated exactly like pending deposits/partial withdrawals: prefix-drop + append using KMP. The first 8 bytes store the drop index, the next 8 bytes store the length of the appended diff, followed by the SSZ-encoded entries (36 bytes each).
+
+**Latest Block Hash.** Stored as 32 raw bytes, always overrides.
+
+**Payload Expected Withdrawals.** The first 8 bytes store the length. The remaining bytes contain SSZ-encoded `Withdrawal` entries (44 bytes each). Always overrides.
+
+##### Cross-fork diffs involving Gloas
+
+When the source state is pre-Gloas and the target is Gloas, `updateToVersion` calls `gloas.UpgradeToGloas` which performs the full fork upgrade including `OnboardBuildersFromPendingDeposits`. The diff helpers guard source-side Gloas getter calls with `source.Version() >= version.Gloas`, treating a pre-Gloas source as having empty builders and empty builder pending withdrawals.
 
 #### Applying a diff
 

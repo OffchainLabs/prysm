@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/fulu"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -117,6 +118,16 @@ type stateDiff struct {
 	pendingConsolidationsDiffs     []*ethpb.PendingConsolidation     // override.
 	// Fulu
 	proposerLookahead []uint64 // override
+	// Gloas
+	latestExecutionPayloadBid      *ethpb.ExecutionPayloadBid        // override.
+	builderDiffs                   []builderDiff                     // sparse diff: only changed/replaced builders.
+	nextWithdrawalBuilderIndex     uint64                            // override.
+	executionPayloadAvailability   []byte                            // override.
+	builderPendingPayments         []*ethpb.BuilderPendingPayment    // override.
+	builderPendingWithdrawalsIndex uint64                            // prefix-drop index.
+	builderPendingWithdrawalsDiff  []*ethpb.BuilderPendingWithdrawal // prefix-drop + append.
+	latestBlockHash                [fieldparams.RootLength]byte      // override.
+	payloadExpectedWithdrawals     []*enginev1.Withdrawal            // override.
 }
 
 type hdiff struct {
@@ -838,8 +849,10 @@ func newStateDiff(input []byte) (*stateDiff, error) {
 	if err := ret.readNextSyncCommittee(&data); err != nil {
 		return nil, err
 	}
-	if err := ret.readExecutionPayloadHeader(&data); err != nil {
-		return nil, err
+	if ret.targetVersion < version.Gloas {
+		if err := ret.readExecutionPayloadHeader(&data); err != nil {
+			return nil, err
+		}
 	}
 	if err := ret.readWithdrawalIndices(&data); err != nil {
 		return nil, err
@@ -862,6 +875,11 @@ func newStateDiff(input []byte) (*stateDiff, error) {
 	if ret.targetVersion >= version.Fulu {
 		// Proposer lookahead has fixed size and it is not added for forks previous to Fulu.
 		if err := ret.readProposerLookahead(&data); err != nil {
+			return nil, err
+		}
+	}
+	if ret.targetVersion >= version.Gloas {
+		if err := ret.readGloasFields(&data); err != nil {
 			return nil, err
 		}
 	}
@@ -1108,17 +1126,19 @@ func (s *stateDiff) serialize() []byte {
 		ret = append(ret, s.nextSyncCommittee.AggregatePubkey...)
 	}
 
-	if s.executionPayloadHeader == nil {
-		ret = append(ret, nilMarker)
-	} else {
-		ret = append(ret, notNilMarker)
-		ret = binary.LittleEndian.AppendUint64(ret, uint64(s.executionPayloadHeader.SizeSSZ()))
-		var err error
-		ret, err = s.executionPayloadHeader.MarshalSSZTo(ret)
-		if err != nil {
-			// this is impossible to happen.
-			logrus.WithError(err).Error("Failed to marshal executionPayloadHeader")
-			return nil
+	if s.targetVersion < version.Gloas {
+		if s.executionPayloadHeader == nil {
+			ret = append(ret, nilMarker)
+		} else {
+			ret = append(ret, notNilMarker)
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(s.executionPayloadHeader.SizeSSZ()))
+			var err error
+			ret, err = s.executionPayloadHeader.MarshalSSZTo(ret)
+			if err != nil {
+				// this is impossible to happen.
+				logrus.WithError(err).Error("Failed to marshal executionPayloadHeader")
+				return nil
+			}
 		}
 	}
 
@@ -1165,6 +1185,9 @@ func (s *stateDiff) serialize() []byte {
 		for _, proposer := range s.proposerLookahead {
 			ret = binary.LittleEndian.AppendUint64(ret, proposer)
 		}
+	}
+	if s.targetVersion >= version.Gloas {
+		ret = serializeGloasFields(ret, s)
 	}
 	return ret
 }
@@ -1391,9 +1414,11 @@ func diffToState(source, target state.ReadOnlyBeaconState) (*stateDiff, error) {
 	if target.Version() < version.Bellatrix {
 		return ret, nil
 	}
-	ret.executionPayloadHeader, err = target.LatestExecutionPayloadHeader()
-	if err != nil {
-		return nil, err
+	if target.Version() < version.Gloas {
+		ret.executionPayloadHeader, err = target.LatestExecutionPayloadHeader()
+		if err != nil {
+			return nil, err
+		}
 	}
 	if target.Version() < version.Capella {
 		return ret, nil
@@ -1429,6 +1454,14 @@ func diffToState(source, target state.ReadOnlyBeaconState) (*stateDiff, error) {
 	ret.proposerLookahead = make([]uint64, len(proposerLookahead))
 	for i, idx := range proposerLookahead {
 		ret.proposerLookahead[i] = uint64(idx)
+	}
+
+	if target.Version() < version.Gloas {
+		return ret, nil
+	}
+
+	if err := diffGloasFields(ret, source, target); err != nil {
+		return nil, err
 	}
 
 	return ret, nil
@@ -1884,7 +1917,7 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	if diff.targetVersion < version.Bellatrix {
 		return source, nil
 	}
-	if diff.executionPayloadHeader != nil {
+	if diff.targetVersion < version.Gloas && diff.executionPayloadHeader != nil {
 		if err := source.SetLatestExecutionPayloadHeader(diff.executionPayloadHeader); err != nil {
 			return nil, errors.Wrap(err, "failed to set latest execution payload header")
 		}
@@ -1936,6 +1969,12 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	}
 	if err := applyProposerLookaheadDiff(source, diff); err != nil {
 		return nil, errors.Wrap(err, "failed to apply proposer lookahead diff")
+	}
+	if diff.targetVersion < version.Gloas {
+		return source, nil
+	}
+	if err := applyGloasFields(source, diff); err != nil {
+		return nil, errors.Wrap(err, "failed to apply Gloas fields")
 	}
 	return source, nil
 }
@@ -2132,6 +2171,8 @@ func updateToVersion(ctx context.Context, source state.BeaconState, target int) 
 		ret, err = electra.ConvertToElectra(source)
 	case version.Electra:
 		ret, err = fulu.ConvertToFulu(source)
+	case version.Fulu:
+		ret, err = gloas.UpgradeToGloas(source)
 	default:
 		return nil, errors.Errorf("unsupported version %s", version.String(source.Version()))
 	}

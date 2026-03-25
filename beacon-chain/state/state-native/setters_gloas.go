@@ -767,3 +767,66 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 
 	return nil
 }
+
+// SetBuilders replaces the entire builders registry.
+func (b *BeaconState) SetBuilders(val []*ethpb.Builder) error {
+	if b.version < version.Gloas {
+		return errNotSupported("SetBuilders", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.sharedFieldReferences[types.Builders].MinusRef()
+	b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
+	b.builders = val
+	b.markFieldAsDirty(types.Builders)
+	b.rebuildTrie[types.Builders] = true
+	return nil
+}
+
+// SetBuilderPendingPayments replaces the entire builder pending payments vector.
+func (b *BeaconState) SetBuilderPendingPayments(val []*ethpb.BuilderPendingPayment) error {
+	if b.version < version.Gloas {
+		return errNotSupported("SetBuilderPendingPayments", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.builderPendingPayments = val
+	b.markFieldAsDirty(types.BuilderPendingPayments)
+	b.rebuildTrie[types.BuilderPendingPayments] = true
+	return nil
+}
+
+// SetBuilderPendingWithdrawals replaces the entire builder pending withdrawals list.
+func (b *BeaconState) SetBuilderPendingWithdrawals(val []*ethpb.BuilderPendingWithdrawal) error {
+	if b.version < version.Gloas {
+		return errNotSupported("SetBuilderPendingWithdrawals", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.sharedFieldReferences[types.BuilderPendingWithdrawals].MinusRef()
+	b.sharedFieldReferences[types.BuilderPendingWithdrawals] = stateutil.NewRef(1)
+	b.builderPendingWithdrawals = val
+	b.markFieldAsDirty(types.BuilderPendingWithdrawals)
+	b.rebuildTrie[types.BuilderPendingWithdrawals] = true
+	return nil
+}
+
+// SetExecutionPayloadAvailabilityVector replaces the entire execution payload availability bitvector.
+func (b *BeaconState) SetExecutionPayloadAvailabilityVector(val []byte) error {
+	if b.version < version.Gloas {
+		return errNotSupported("SetExecutionPayloadAvailabilityVector", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.executionPayloadAvailability = val
+	b.markFieldAsDirty(types.ExecutionPayloadAvailability)
+	return nil
+}
