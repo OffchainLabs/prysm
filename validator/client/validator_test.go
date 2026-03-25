@@ -2245,7 +2245,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		require.NotNil(t, prefs[0].Signature)
 	})
 
-	t.Run("epoch before gloas builds preferences", func(t *testing.T) {
+	t.Run("epoch before gloas early slot returns nil", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
 		cfg.GloasForkEpoch = 1
 		params.OverrideBeaconConfig(cfg)
@@ -2269,7 +2269,37 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			},
 		})
 
+		// Slot 0 is start of epoch 0 (before mid-epoch), should not build yet.
 		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		require.Equal(t, 0, len(prefs))
+	})
+
+	t.Run("epoch before gloas mid-epoch builds preferences", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 1
+		params.OverrideBeaconConfig(cfg)
+
+		v.duties = &dutyStore{}
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+				},
+			},
+		})
+
+		midSlot := params.BeaconConfig().SlotsPerEpoch / 2
+		prefs := v.buildProposerPreferences(t.Context(), km, midSlot)
 		require.Equal(t, 1, len(prefs))
 		require.Equal(t, nextEpochProposerSlot, prefs[0].Message.ProposalSlot)
 	})
