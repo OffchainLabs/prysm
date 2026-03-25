@@ -179,10 +179,6 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 		}
 		return blockPreState, false, nil
 	}
-	parentBlock, err := s.cfg.BeaconDB.Block(ctx, parentRoot)
-	if err != nil {
-		return nil, false, errors.Wrap(err, "could not get parent block")
-	}
 	env, err := envelopes[0].Envelope()
 	if err != nil {
 		return nil, false, err
@@ -194,6 +190,10 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 	}
 	if _, err := s.notifyNewEnvelope(ctx, blockPreState, env); err != nil {
 		return nil, false, err
+	}
+	parentBlock, err := s.cfg.BeaconDB.Block(ctx, parentRoot)
+	if err != nil {
+		return nil, false, errors.Wrap(err, "could not get parent block")
 	}
 	if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, blockPreState, parentBlock.Block().StateRoot(), env); err != nil {
 		return nil, false, err
