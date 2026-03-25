@@ -4,7 +4,9 @@ go_library(
     name = "go_default_library",
     srcs = [
         "blocks_fetcher.go",
+        "blocks_fetcher_payload.go",
         "blocks_fetcher_peers.go",
+        "blocks_fetcher_sidecar.go",
         "blocks_fetcher_utils.go",
         "blocks_queue.go",
         "blocks_queue_utils.go",
