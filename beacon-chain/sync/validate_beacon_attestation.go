@@ -41,18 +41,34 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	ctx context.Context,
 	pid peer.ID,
 	msg *pubsub.Message,
-) (pubsub.ValidationResult, error) {
+) (result pubsub.ValidationResult, err error) {
 	start := time.Now()
+	skipEpochStats := false
+	var auditReason string
 	defer func() {
 		attestationVerificationGossipSummary.Observe(float64(time.Since(start).Milliseconds()))
+		if skipEpochStats {
+			return
+		}
+		var reasonKey string
+		if result == pubsub.ValidationAccept {
+			reasonKey = ""
+		} else if auditReason != "" {
+			reasonKey = auditReason
+		} else {
+			reasonKey = classifyCommitteeAttGossipNonSuccess(result, err)
+		}
+		s.committeeAttGossipEpochStats.observe(s.cfg.clock, result, reasonKey)
 	}()
 
 	if pid == s.cfg.p2p.PeerID() {
+		skipEpochStats = true
 		return pubsub.ValidationAccept, nil
 	}
 	// Attestation processing requires the target block to be present in the database, so we'll skip
 	// validating or processing attestations until fully synced.
 	if s.cfg.initialSync.Syncing() {
+		auditReason = "ignore_initial_sync"
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -81,6 +97,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 
 	// Do not process slot 0 attestations.
 	if data.Slot == 0 {
+		auditReason = "ignore_slot_zero"
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -88,9 +105,11 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	// processing tolerance.
 	if err := helpers.ValidateAttestationTime(data.Slot, s.cfg.clock.GenesisTime(), earlyAttestationProcessingTolerance); err != nil {
 		tracing.AnnotateError(span, err)
+		auditReason = "ignore_attestation_propagation_time"
 		return pubsub.ValidationIgnore, err
 	}
 	if err := helpers.ValidateSlotTargetEpoch(data); err != nil {
+		auditReason = "reject_slot_target_epoch_mismatch"
 		return pubsub.ValidationReject, wrapAttestationError(err, att)
 	}
 
@@ -100,6 +119,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	attKey, err := generateUnaggregatedAttCacheKey(att)
 	if err != nil {
 		log.WithError(err).Error("Could not generate cache key for attestation tracking")
+		auditReason = "ignore_cache_key_error"
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -107,6 +127,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		// Verify this the first attestation received for the participating validator for the slot. This verification is here to return early if we've already seen this attestation.
 		// This verification is carried again later after all other validations to avoid TOCTOU issues.
 		if s.hasSeenUnaggregatedAtt(attKey) {
+			auditReason = "ignore_duplicate_early_check"
 			return pubsub.ValidationIgnore, nil
 		}
 		// Reject an attestation if it references an invalid block.
@@ -114,6 +135,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 			s.hasBadBlock(bytesutil.ToBytes32(data.Target.Root)) ||
 			s.hasBadBlock(bytesutil.ToBytes32(data.Source.Root)) {
 			attBadBlockCount.Inc()
+			auditReason = "reject_bad_block_root"
 			return pubsub.ValidationReject, wrapAttestationError(errors.New("attestation data references bad block root"), att)
 		}
 	}
@@ -124,38 +146,53 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		// Block not yet available - save attestation to pending queue for later processing
 		// when the block arrives. Return ValidationIgnore so gossip doesn't potentially penalize the peer.
 		s.savePendingAtt(att)
+		auditReason = "ignore_pending_unknown_block"
 		return pubsub.ValidationIgnore, nil
 	}
 	// Block exists - verify it's in forkchoice (i.e., it's a descendant of the finalized checkpoint)
 	if !s.cfg.chain.InForkchoice(blockRoot) {
 		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
+		auditReason = "ignore_not_descendant_of_finalized"
 		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
 	}
 	if err = s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
 		tracing.AnnotateError(span, err)
 		attBadLmdConsistencyCount.Inc()
+		auditReason = "reject_lmd_ffg_inconsistent"
 		return pubsub.ValidationReject, wrapAttestationError(err, att)
 	}
 
 	preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
 	if err != nil {
 		tracing.AnnotateError(span, err)
+		auditReason = "ignore_attestation_target_state"
 		return pubsub.ValidationIgnore, err
 	}
 
 	validationRes, err := s.validateUnaggregatedAttTopic(ctx, att, preState, *msg.Topic)
 	if validationRes != pubsub.ValidationAccept {
+		if validationRes == pubsub.ValidationReject {
+			auditReason = "reject_subnet_or_committee_topic"
+		} else {
+			auditReason = "ignore_subnet_or_committee_topic"
+		}
 		return validationRes, wrapAttestationError(err, att)
 	}
 
 	committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, committeeIndex)
 	if err != nil {
 		tracing.AnnotateError(span, err)
+		auditReason = "ignore_beacon_committee_lookup"
 		return pubsub.ValidationIgnore, err
 	}
 
 	validationRes, err = validateAttesterData(ctx, att, committee)
 	if validationRes != pubsub.ValidationAccept {
+		if validationRes == pubsub.ValidationReject {
+			auditReason = "reject_attester_data"
+		} else {
+			auditReason = "ignore_attester_data"
+		}
 		return validationRes, wrapAttestationError(err, att)
 	}
 
@@ -169,6 +206,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	if att.Version() >= version.Electra {
 		singleAtt, ok := att.(*eth.SingleAttestation)
 		if !ok {
+			auditReason = "ignore_wrong_electra_attestation_type"
 			return pubsub.ValidationIgnore, fmt.Errorf(
 				"attestation has wrong type (expected %T, got %T)",
 				&eth.SingleAttestation{}, att,
@@ -191,6 +229,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 
 	validationRes, err = s.validateUnaggregatedAttWithState(ctx, attForValidation, preState)
 	if validationRes != pubsub.ValidationAccept {
+		auditReason = "reject_attestation_signature"
 		return validationRes, wrapAttestationError(err, att)
 	}
 
@@ -231,6 +270,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 
 	if first := s.setSeenUnaggregatedAtt(attKey); !first {
 		// Another concurrent validation processed the same attestation meanwhile
+		auditReason = "ignore_duplicate_race"
 		return pubsub.ValidationIgnore, nil
 	}
 

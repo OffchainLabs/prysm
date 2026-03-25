@@ -206,6 +206,7 @@ type Service struct {
 	pendingPayloadEnvelopes              map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
 	pendingEnvelopeLock                  sync.RWMutex
 	selfBuildSigFailures                 int
+	committeeAttGossipEpochStats         committeeAttGossipEpochStats
 }
 
 // NewService initializes new regular sync service.
@@ -325,6 +326,12 @@ func (s *Service) Start() {
 
 	// Update sync metrics.
 	async.RunEvery(s.ctx, syncMetricsInterval, s.updateMetrics)
+
+	// Flush per-epoch committee attestation gossip validation stats when epochs roll over,
+	// including epochs with no attestations.
+	async.RunEvery(s.ctx, committeeAttGossipSlotDuration(), func() {
+		s.committeeAttGossipEpochStats.rotateOnly(s.cfg.clock)
+	})
 
 	// Prune data column cache periodically on finalization.
 	async.RunEvery(s.ctx, 30*time.Second, s.pruneDataColumnCache)
