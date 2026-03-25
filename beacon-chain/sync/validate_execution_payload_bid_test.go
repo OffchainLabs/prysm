@@ -89,8 +89,8 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name:      "zero execution payment",
-			verifier:  mockExecutionPayloadBidVerifier{errExecutionPayment: errors.New("zero payment")},
+			name:      "non-zero execution payment",
+			verifier:  mockExecutionPayloadBidVerifier{errExecutionPayment: errors.New("non-zero payment")},
 			result:    pubsub.ValidationReject,
 			wantError: true,
 		},
@@ -299,7 +299,7 @@ func (m *mockExecutionPayloadBidVerifier) VerifyBuilderActive(state.ReadOnlyBeac
 	return m.errBuilderActive
 }
 
-func (m *mockExecutionPayloadBidVerifier) VerifyExecutionPaymentNonZero() error {
+func (m *mockExecutionPayloadBidVerifier) VerifyExecutionPaymentZero() error {
 	return m.errExecutionPayment
 }
 

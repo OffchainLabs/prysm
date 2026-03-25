@@ -81,19 +81,19 @@ func TestBidVerifier_VerifyBuilderActive(t *testing.T) {
 	require.ErrorIs(t, verifier.VerifyBuilderActive(inactiveState), ErrBidBuilderNotActive)
 }
 
-func TestBidVerifier_VerifyExecutionPaymentNonZero(t *testing.T) {
+func TestBidVerifier_VerifyExecutionPaymentZero(t *testing.T) {
 	signed := testSignedExecutionPayloadBid(t, 1)
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
 	require.NoError(t, err)
 
-	verifier := &BidVerifier{results: newResults(RequireBidExecutionPaymentNonZero), b: wrapped}
-	require.NoError(t, verifier.VerifyExecutionPaymentNonZero())
+	verifier := &BidVerifier{results: newResults(RequireBidExecutionPaymentZero), b: wrapped}
+	require.NoError(t, verifier.VerifyExecutionPaymentZero())
 
-	signed.Message.ExecutionPayment = 0
+	signed.Message.ExecutionPayment = 100
 	wrapped, err = blocks.WrappedROSignedExecutionPayloadBid(signed)
 	require.NoError(t, err)
-	verifier = &BidVerifier{results: newResults(RequireBidExecutionPaymentNonZero), b: wrapped}
-	require.ErrorIs(t, verifier.VerifyExecutionPaymentNonZero(), ErrBidExecutionPaymentZero)
+	verifier = &BidVerifier{results: newResults(RequireBidExecutionPaymentZero), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyExecutionPaymentZero(), ErrBidExecutionPaymentNonZero)
 }
 
 func TestBidVerifier_VerifyFeeRecipientMatches(t *testing.T) {
@@ -227,7 +227,7 @@ func testSignedExecutionPayloadBid(t *testing.T, slot primitives.Slot) *ethpb.Si
 			FeeRecipient:     bytes.Repeat([]byte{0x05}, 20),
 			GasLimit:         30_000_000,
 			Value:            100,
-			ExecutionPayment: 10,
+			ExecutionPayment: 0,
 		},
 		Signature: bytes.Repeat([]byte{0x06}, 96),
 	}

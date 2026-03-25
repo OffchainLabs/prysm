@@ -88,51 +88,52 @@ type serviceFlagOpts struct {
 // full PoS node. It handles the lifecycle of the entire system and registers
 // services to a service registry.
 type BeaconNode struct {
-	cliCtx                   *cli.Context
-	ctx                      context.Context
-	cancel                   context.CancelFunc
-	services                 *runtime.ServiceRegistry
-	lock                     sync.RWMutex
-	stop                     chan struct{} // Channel to wait for termination notifications.
-	db                       db.Database
-	slasherDB                db.SlasherDatabase
-	attestationCache         *cache.AttestationCache
-	attestationPool          attestations.Pool
-	payloadAttestationPool   payloadattestation.PoolManager
-	exitPool                 voluntaryexits.PoolManager
-	slashingsPool            slashings.PoolManager
-	syncCommitteePool        synccommittee.Pool
-	blsToExecPool            blstoexec.PoolManager
-	depositCache             cache.DepositCache
-	trackedValidatorsCache   *cache.TrackedValidatorsCache
-	proposerPreferencesCache *cache.ProposerPreferencesCache
-	payloadIDCache           *cache.PayloadIDCache
-	stateFeed                *event.Feed
-	blockFeed                *event.Feed
-	opFeed                   *event.Feed
-	stateGen                 *stategen.State
-	collector                *bcnodeCollector
-	slasherBlockHeadersFeed  *event.Feed
-	slasherAttestationsFeed  *event.Feed
-	finalizedStateAtStartUp  state.BeaconState
-	serviceFlagOpts          *serviceFlagOpts
-	GenesisProviders         []genesis.Provider
-	CheckpointInitializer    checkpoint.Initializer
-	forkChoicer              forkchoice.ForkChoicer
-	ClockWaiter              startup.ClockWaiter
-	BackfillOpts             []backfill.ServiceOption
-	initialSyncComplete      chan struct{}
-	BlobStorage              *filesystem.BlobStorage
-	BlobStorageOptions       []filesystem.BlobStorageOption
-	DataColumnStorage        *filesystem.DataColumnStorage
-	DataColumnStorageOptions []filesystem.DataColumnStorageOption
-	verifyInitWaiter         *verification.InitializerWaiter
-	lhsp                     *verification.LazyHeadStateProvider
-	syncChecker              *initialsync.SyncChecker
-	slasherEnabled           bool
-	lcStore                  *lightclient.Store
-	ConfigOptions            []params.Option
-	SyncNeedsWaiter          func() (das.SyncNeeds, error)
+	cliCtx                          *cli.Context
+	ctx                             context.Context
+	cancel                          context.CancelFunc
+	services                        *runtime.ServiceRegistry
+	lock                            sync.RWMutex
+	stop                            chan struct{} // Channel to wait for termination notifications.
+	db                              db.Database
+	slasherDB                       db.SlasherDatabase
+	attestationCache                *cache.AttestationCache
+	attestationPool                 attestations.Pool
+	payloadAttestationPool          payloadattestation.PoolManager
+	exitPool                        voluntaryexits.PoolManager
+	slashingsPool                   slashings.PoolManager
+	syncCommitteePool               synccommittee.Pool
+	blsToExecPool                   blstoexec.PoolManager
+	depositCache                    cache.DepositCache
+	trackedValidatorsCache          *cache.TrackedValidatorsCache
+	proposerPreferencesCache        *cache.ProposerPreferencesCache
+	highestExecutionPayloadBidCache *cache.HighestExecutionPayloadBidCache
+	payloadIDCache                  *cache.PayloadIDCache
+	stateFeed                       *event.Feed
+	blockFeed                       *event.Feed
+	opFeed                          *event.Feed
+	stateGen                        *stategen.State
+	collector                       *bcnodeCollector
+	slasherBlockHeadersFeed         *event.Feed
+	slasherAttestationsFeed         *event.Feed
+	finalizedStateAtStartUp         state.BeaconState
+	serviceFlagOpts                 *serviceFlagOpts
+	GenesisProviders                []genesis.Provider
+	CheckpointInitializer           checkpoint.Initializer
+	forkChoicer                     forkchoice.ForkChoicer
+	ClockWaiter                     startup.ClockWaiter
+	BackfillOpts                    []backfill.ServiceOption
+	initialSyncComplete             chan struct{}
+	BlobStorage                     *filesystem.BlobStorage
+	BlobStorageOptions              []filesystem.BlobStorageOption
+	DataColumnStorage               *filesystem.DataColumnStorage
+	DataColumnStorageOptions        []filesystem.DataColumnStorageOption
+	verifyInitWaiter                *verification.InitializerWaiter
+	lhsp                            *verification.LazyHeadStateProvider
+	syncChecker                     *initialsync.SyncChecker
+	slasherEnabled                  bool
+	lcStore                         *lightclient.Store
+	ConfigOptions                   []params.Option
+	SyncNeedsWaiter                 func() (das.SyncNeeds, error)
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -174,14 +175,15 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		// proposerPreferencesCache should remain separate. The tracked
 		// validators cache is local-node specific, while proposer preferences
 		// are global and include proposers we do not own.
-		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
-		payloadIDCache:           cache.NewPayloadIDCache(),
-		slasherBlockHeadersFeed:  new(event.Feed),
-		slasherAttestationsFeed:  new(event.Feed),
-		serviceFlagOpts:          &serviceFlagOpts{},
-		initialSyncComplete:      make(chan struct{}),
-		syncChecker:              &initialsync.SyncChecker{},
-		slasherEnabled:           cliCtx.Bool(flags.SlasherFlag.Name),
+		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
+		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
+		payloadIDCache:                  cache.NewPayloadIDCache(),
+		slasherBlockHeadersFeed:         new(event.Feed),
+		slasherAttestationsFeed:         new(event.Feed),
+		serviceFlagOpts:                 &serviceFlagOpts{},
+		initialSyncComplete:             make(chan struct{}),
+		syncChecker:                     &initialsync.SyncChecker{},
+		slasherEnabled:                  cliCtx.Bool(flags.SlasherFlag.Name),
 	}
 
 	for _, opt := range opts {
@@ -559,6 +561,12 @@ func openDB(ctx context.Context, dbPath string, clearer *dbClearer) (*kv.Store, 
 		cfg := features.Get()
 		cfg.EnableStateDiff = false
 		features.Init(cfg)
+	} else if errors.Is(err, kv.ErrStateDiffExponentMismatch) {
+		log.WithError(err).Error("State-diff configuration mismatch; restart aborted. Use the stored exponents or re-sync the database.")
+		return nil, err
+	} else if errors.Is(err, kv.ErrStateDiffMissingSnapshot) || errors.Is(err, kv.ErrStateDiffCorrupted) {
+		log.WithError(err).Error("State-diff database corrupted; restart aborted. Delete database and re-sync from genesis/checkpoint.")
+		return nil, err
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "could not create database at %s", dbPath)
 	}
@@ -863,6 +871,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		regularsync.WithProposerPreferencesCache(b.proposerPreferencesCache),
+		regularsync.WithHighestExecutionPayloadBidCache(b.highestExecutionPayloadBidCache),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
 		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
@@ -1020,6 +1029,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		DataColumnStorage:                b.DataColumnStorage,
 		TrackedValidatorsCache:           b.trackedValidatorsCache,
 		ProposerPreferencesCache:         b.proposerPreferencesCache,
+		HighestBidCache:                  b.highestExecutionPayloadBidCache,
 		PayloadIDCache:                   b.payloadIDCache,
 		LCStore:                          b.lcStore,
 		GraffitiInfo:                     web3Service.GraffitiInfo(),
