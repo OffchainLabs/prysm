@@ -71,6 +71,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 	if s.cfg.chain.ShouldIgnoreData(roDataColumn.ParentRoot(), roDataColumn.Slot()) {
 		log.WithFields(logging.DataColumnFields(roDataColumn)).Debug("Ignoring data column with canonical parent before justified checkpoint")
+		ignoredPreJustifiedDataColumnCount.Inc()
 		return pubsub.ValidationIgnore, nil
 	}
 
