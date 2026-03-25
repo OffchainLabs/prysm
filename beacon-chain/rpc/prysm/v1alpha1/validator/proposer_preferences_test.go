@@ -53,8 +53,8 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 	assert.Equal(t, true, p2p.BroadcastCalled.Load())
 	pref, ok := cache.Get(proposalSlot)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, req.SignedProposerPreferences[0].Message.FeeRecipient, pref.FeeRecipient)
-	require.Equal(t, req.SignedProposerPreferences[0].Message.GasLimit, pref.GasLimit)
+	require.DeepEqual(t, req.SignedProposerPreferences[0].Message.FeeRecipient, pref.Message.FeeRecipient)
+	require.Equal(t, req.SignedProposerPreferences[0].Message.GasLimit, pref.Message.GasLimit)
 }
 
 func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
@@ -105,7 +105,7 @@ func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
 	require.Equal(t, true, ok)
 	pref2, ok := c.Get(currentSlot + 2)
 	require.Equal(t, true, ok)
-	require.Equal(t, uint64(25_000_000), pref2.GasLimit)
+	require.Equal(t, uint64(25_000_000), pref2.Message.GasLimit)
 }
 
 func TestSubmitSignedProposerPreferences_DuplicateSlot(t *testing.T) {

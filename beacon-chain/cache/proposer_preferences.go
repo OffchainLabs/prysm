@@ -7,28 +7,21 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
-// ProposerPreference stores the proposer fee recipient and gas limit for a slot.
-type ProposerPreference struct {
-	FeeRecipient []byte
-	GasLimit     uint64
-	Signed       *ethpb.SignedProposerPreferences
-}
-
-// ProposerPreferencesCache stores proposer preferences by slot.
+// ProposerPreferencesCache stores signed proposer preferences by slot.
 type ProposerPreferencesCache struct {
-	slotToPreferences map[primitives.Slot]ProposerPreference
+	slotToPreferences map[primitives.Slot]*ethpb.SignedProposerPreferences
 	lock              sync.RWMutex
 }
 
 // NewProposerPreferencesCache initializes a proposer preferences cache.
 func NewProposerPreferencesCache() *ProposerPreferencesCache {
 	return &ProposerPreferencesCache{
-		slotToPreferences: make(map[primitives.Slot]ProposerPreference),
+		slotToPreferences: make(map[primitives.Slot]*ethpb.SignedProposerPreferences),
 	}
 }
 
-// Add stores proposer preferences for a slot. If the slot already exists, the
-// existing value is kept and false is returned.
+// Add stores signed proposer preferences for a slot. If the slot already
+// exists, the existing value is kept and false is returned.
 func (c *ProposerPreferencesCache) Add(slot primitives.Slot, signed *ethpb.SignedProposerPreferences) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -36,26 +29,17 @@ func (c *ProposerPreferencesCache) Add(slot primitives.Slot, signed *ethpb.Signe
 	if _, ok := c.slotToPreferences[slot]; ok {
 		return false
 	}
-
-	c.slotToPreferences[slot] = ProposerPreference{
-		FeeRecipient: signed.Message.FeeRecipient,
-		GasLimit:     signed.Message.GasLimit,
-		Signed:       signed,
-	}
+	c.slotToPreferences[slot] = signed
 	return true
 }
 
-// Get returns proposer preferences for a slot.
-func (c *ProposerPreferencesCache) Get(slot primitives.Slot) (ProposerPreference, bool) {
+// Get returns the signed proposer preferences for a slot.
+func (c *ProposerPreferencesCache) Get(slot primitives.Slot) (*ethpb.SignedProposerPreferences, bool) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	pref, ok := c.slotToPreferences[slot]
-	if !ok {
-		return ProposerPreference{}, false
-	}
-
-	return pref, true
+	sp, ok := c.slotToPreferences[slot]
+	return sp, ok
 }
 
 // Has returns true if proposer preferences for the slot already exist.
@@ -74,16 +58,14 @@ func (c *ProposerPreferencesCache) Pending(slot primitives.Slot) []*ethpb.Signed
 	defer c.lock.RUnlock()
 
 	if slot != 0 {
-		if p, ok := c.slotToPreferences[slot]; ok && p.Signed != nil {
-			return []*ethpb.SignedProposerPreferences{p.Signed}
+		if sp, ok := c.slotToPreferences[slot]; ok {
+			return []*ethpb.SignedProposerPreferences{sp}
 		}
 		return nil
 	}
 	result := make([]*ethpb.SignedProposerPreferences, 0, len(c.slotToPreferences))
-	for _, p := range c.slotToPreferences {
-		if p.Signed != nil {
-			result = append(result, p.Signed)
-		}
+	for _, sp := range c.slotToPreferences {
+		result = append(result, sp)
 	}
 	return result
 }
@@ -105,5 +87,5 @@ func (c *ProposerPreferencesCache) Clear() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.slotToPreferences = make(map[primitives.Slot]ProposerPreference)
+	c.slotToPreferences = make(map[primitives.Slot]*ethpb.SignedProposerPreferences)
 }

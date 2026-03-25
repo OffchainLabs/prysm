@@ -28,10 +28,10 @@ func TestProposerPreferencesCache_AddGetHas(t *testing.T) {
 	require.Equal(t, true, added)
 	require.Equal(t, true, c.Has(slot))
 
-	pref, ok := c.Get(slot)
+	sp, ok := c.Get(slot)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, feeRecipient, pref.FeeRecipient)
-	require.Equal(t, uint64(42), pref.GasLimit)
+	require.DeepEqual(t, feeRecipient, sp.Message.FeeRecipient)
+	require.Equal(t, uint64(42), sp.Message.GasLimit)
 }
 
 func TestProposerPreferencesCache_AddDuplicateSlot(t *testing.T) {
@@ -41,10 +41,10 @@ func TestProposerPreferencesCache_AddDuplicateSlot(t *testing.T) {
 	require.Equal(t, true, c.Add(slot, testSigned(slot, []byte{1}, 10)))
 	require.Equal(t, false, c.Add(slot, testSigned(slot, []byte{2}, 20)))
 
-	pref, ok := c.Get(slot)
+	sp, ok := c.Get(slot)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, []byte{1}, pref.FeeRecipient)
-	require.Equal(t, uint64(10), pref.GasLimit)
+	require.DeepEqual(t, []byte{1}, sp.Message.FeeRecipient)
+	require.Equal(t, uint64(10), sp.Message.GasLimit)
 }
 
 func TestProposerPreferencesCache_Clear(t *testing.T) {

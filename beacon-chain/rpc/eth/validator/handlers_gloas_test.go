@@ -79,8 +79,8 @@ func TestSubmitProposerPreferences_OK(t *testing.T) {
 	require.Equal(t, true, c.Has(32))
 	pref, ok := c.Get(32)
 	require.Equal(t, true, ok)
-	assert.DeepEqual(t, feeRecipient, pref.FeeRecipient)
-	assert.Equal(t, uint64(30000000), pref.GasLimit)
+	assert.DeepEqual(t, feeRecipient, pref.Message.FeeRecipient)
+	assert.Equal(t, uint64(30000000), pref.Message.GasLimit)
 }
 
 func TestSubmitProposerPreferences_MissingVersionHeader(t *testing.T) {
@@ -204,5 +204,5 @@ func TestSubmitProposerPreferences_Duplicate(t *testing.T) {
 
 	pref, ok := c.Get(32)
 	require.Equal(t, true, ok)
-	assert.DeepEqual(t, bytesutil.PadTo([]byte{0xaa}, 20), pref.FeeRecipient)
+	assert.DeepEqual(t, bytesutil.PadTo([]byte{0xaa}, 20), pref.Message.FeeRecipient)
 }
