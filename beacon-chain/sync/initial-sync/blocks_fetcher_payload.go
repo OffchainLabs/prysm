@@ -28,6 +28,9 @@ func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
 	firstBid := s.Message
 	for i := 1; i < len(blks); i++ {
 		next := blks[i].Block
+		if next.ReadOnlySignedBeaconBlock == nil {
+			return fmt.Errorf("nil block at index %d", i)
+		}
 		if next.Block().ParentRoot() != b.Root() {
 			return fmt.Errorf("block with root %#x does not descend from %#x", next.Root(), b.Root())
 		}
