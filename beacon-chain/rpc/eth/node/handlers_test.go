@@ -74,7 +74,7 @@ func TestSyncStatus(t *testing.T) {
 
 func TestGetVersion(t *testing.T) {
 	semVer := version.SemanticVersion()
-	commit := version.GitCommit()
+	commit := version.GitCommit()[:7]
 	os := runtime.GOOS
 	arch := runtime.GOARCH
 
