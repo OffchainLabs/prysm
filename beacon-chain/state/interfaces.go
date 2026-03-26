@@ -24,7 +24,6 @@ type BeaconState interface {
 	SpecParametersProvider
 	ReadOnlyBeaconState
 	WriteOnlyBeaconState
-	CopyAllTries()
 	Defragment()
 	HashTreeRoot(ctx context.Context) ([32]byte, error)
 	Prover

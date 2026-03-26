@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/fieldtrie"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -87,10 +88,6 @@ var (
 		Name: "beacon_processed_deposits_total",
 		Help: "Total number of deposits processed",
 	})
-	stateTrieReferences = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "field_references",
-		Help: "The number of states a particular field is shared with.",
-	}, []string{"state"})
 	prevEpochActiveBalances = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "beacon_prev_epoch_active_gwei",
 		Help: "The total amount of ether, in gwei, that was active for voting of previous epoch",
@@ -396,7 +393,7 @@ func reportEpochMetrics(ctx context.Context, postState, headState state.BeaconSt
 
 	refMap := postState.FieldReferencesCount()
 	for name, val := range refMap {
-		stateTrieReferences.WithLabelValues(name).Set(float64(val))
+		fieldtrie.FieldReferences.WithLabelValues(name).Set(float64(val))
 	}
 	postState.RecordStateMetrics()
 

@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
-	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -1024,12 +1023,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 	}
 
 	for fldIdx, fieldTrie := range b.stateFieldLeaves {
-		dst.stateFieldLeaves[fldIdx] = fieldTrie
-		if fieldTrie.FieldReference() != nil {
-			fieldTrie.Lock()
-			fieldTrie.FieldReference().AddRef()
-			fieldTrie.Unlock()
-		}
+		dst.stateFieldLeaves[fldIdx] = fieldTrie.CopyTrie()
 	}
 
 	if b.merkleLayers != nil {
@@ -1120,22 +1114,13 @@ func (b *BeaconState) recomputeDirtyFields(ctx context.Context) error {
 	return nil
 }
 
-// FieldReferencesCount returns the reference count held by each field. This
-// also includes the field trie held by each field.
+// FieldReferencesCount returns the reference count held by each shared field.
 func (b *BeaconState) FieldReferencesCount() map[string]uint64 {
 	refMap := make(map[string]uint64)
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 	for i, f := range b.sharedFieldReferences {
 		refMap[i.String()] = uint64(f.Refs())
-	}
-	for i, f := range b.stateFieldLeaves {
-		numOfRefs := uint64(f.FieldReference().Refs())
-		f.RLock()
-		if !f.Empty() {
-			refMap[i.String()+"_trie"] = numOfRefs
-		}
-		f.RUnlock()
 	}
 	return refMap
 }
@@ -1415,65 +1400,8 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	return [32]byte{}, errors.New("invalid field index provided")
 }
 
-// CopyAllTries copies our field tries from the state. This is used to
-// remove shared field tries which have references to other states and
-// only have this copied set referencing to the current state.
-func (b *BeaconState) CopyAllTries() {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	for fldIdx, fieldTrie := range b.stateFieldLeaves {
-		if fieldTrie.FieldReference() != nil {
-			fieldTrie.Lock()
-			if fieldTrie.FieldReference().Refs() > 1 {
-				fieldTrie.FieldReference().MinusRef()
-				newTrie := fieldTrie.CopyTrie()
-				b.stateFieldLeaves[fldIdx] = newTrie
-			}
-			fieldTrie.Unlock()
-		}
-	}
-}
-
 func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements any) ([32]byte, error) {
-	fTrie := b.stateFieldLeaves[index]
-	fTrieMutex := fTrie.RWMutex
-	// We can't lock the trie directly because the trie's variable gets reassigned,
-	// and therefore we would call Unlock() on a different object.
-	fTrieMutex.Lock()
-
-	if fTrie.Empty() {
-		err := b.resetFieldTrie(index, elements, fTrie.Length())
-		if err != nil {
-			fTrieMutex.Unlock()
-			return [32]byte{}, err
-		}
-		// Reduce reference count as we are instantiating a new trie.
-		fTrie.FieldReference().MinusRef()
-		fTrieMutex.Unlock()
-		return b.stateFieldLeaves[index].TrieRoot()
-	}
-
-	if fTrie.FieldReference().Refs() > 1 {
-		var newTrie *fieldtrie.FieldTrie
-		// We choose to only copy the validator
-		// trie as it is pretty expensive to regenerate.
-		if index == types.Validators {
-			newTrie = fTrie.CopyTrie()
-		} else {
-			newTrie = fTrie.TransferTrie()
-		}
-		fTrie.FieldReference().MinusRef()
-		b.stateFieldLeaves[index] = newTrie
-		fTrie = newTrie
-	}
-	fTrieMutex.Unlock()
-
-	// remove duplicate indexes
-	b.dirtyIndices[index] = slice.SetUint64(b.dirtyIndices[index])
-	// sort indexes again
-	slices.Sort(b.dirtyIndices[index])
-	root, err := fTrie.RecomputeTrie(b.dirtyIndices[index], elements)
+	root, err := b.stateFieldLeaves[index].RecomputeTrie(b.dirtyIndices[index], elements)
 	if err != nil {
 		return [32]byte{}, err
 	}
@@ -1494,11 +1422,8 @@ func (b *BeaconState) resetFieldTrie(index types.FieldIndex, elements any, lengt
 func finalizerCleanup(b *BeaconState) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
-	for field, v := range b.sharedFieldReferences {
+	for _, v := range b.sharedFieldReferences {
 		v.MinusRef()
-		if b.stateFieldLeaves[field].FieldReference() != nil {
-			b.stateFieldLeaves[field].FieldReference().MinusRef()
-		}
 	}
 	for i := range b.dirtyFields {
 		delete(b.dirtyFields, i)
