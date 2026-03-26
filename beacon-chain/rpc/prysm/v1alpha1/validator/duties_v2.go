@@ -94,8 +94,11 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 			return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 		}
 	}
-	// PTC assignments are not stable for the next epoch, so only compute for current epoch.
 	currentPTCDuties, rpcErr := vs.CoreService.PTCDuties(ctx, s, req.Epoch, requestIndices)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
+	}
+	nextPTCDuties, rpcErr := vs.CoreService.PTCDuties(ctx, s, req.Epoch+1, requestIndices)
 	if rpcErr != nil {
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
@@ -106,6 +109,7 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	proposerMap := buildProposerMap(proposerDuties)
 	nextProposerMap := buildProposerMap(nextProposerDuties)
 	currentPTCAssignments := buildPTCMap(currentPTCDuties)
+	nextPTCAssignments := buildPTCMap(nextPTCDuties)
 	validatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 	nextValidatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 
@@ -160,6 +164,10 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 			nextDuty.CommitteesAtSlot = ad.CommitteesAtSlot
 			nextDuty.ValidatorCommitteeIndex = ad.ValidatorCommitteeIndex
 		}
+		if ptcSlots, ok := nextPTCAssignments[info.index]; ok {
+			nextDuty.PtcSlots = ptcSlots
+		}
+
 		// Sync committee flags
 		if coreTime.HigherEqualThanAltairVersionAndEpoch(s, req.Epoch) {
 			inSync, err := helpers.IsCurrentPeriodSyncCommittee(s, info.index)

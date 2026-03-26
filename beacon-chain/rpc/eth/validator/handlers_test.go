@@ -3109,7 +3109,7 @@ func TestGetPTCDuties(t *testing.T) {
 		}
 
 		// Test ptcDuties directly.
-		directDuties, err := ptcDuties(t.Context(), st, requestedSet)
+		directDuties, err := ptcDuties(t.Context(), st, 0, requestedSet)
 		require.NoError(t, err)
 		// Should return some duties (not necessarily all 100, depends on PTC selection).
 		require.NotEmpty(t, directDuties, "Should return at least some duties")
@@ -3276,6 +3276,57 @@ func TestGetPTCDuties(t *testing.T) {
 		assert.StringContains(t, "Invalid validator index", e.Message)
 	})
 
+	t.Run("next epoch returns duties in correct slot range", func(t *testing.T) {
+		// Request epoch 1 (next epoch) while current slot is 0 (epoch 0).
+		// The handler should accept this and return duties with slots in [SlotsPerEpoch, 2*SlotsPerEpoch).
+		var indices []string
+		for i := range numVals {
+			indices = append(indices, strconv.FormatUint(i, 10))
+		}
+		indicesJSON, err := json.Marshal(indices)
+		require.NoError(t, err)
+
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", bytes.NewReader(indicesJSON))
+		request.SetPathValue("epoch", "1") // next epoch
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetPTCDutiesResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.NotEmpty(t, resp.Data, "expected PTC duties for next epoch")
+
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+		for _, duty := range resp.Data {
+			slotVal, err := strconv.ParseUint(duty.Slot, 10, 64)
+			require.NoError(t, err)
+			if slotVal < uint64(slotsPerEpoch) {
+				t.Errorf("next-epoch duty slot %d is below epoch 1 start %d", slotVal, slotsPerEpoch)
+			}
+			if slotVal >= uint64(slotsPerEpoch*2) {
+				t.Errorf("next-epoch duty slot %d is at or after epoch 1 end %d", slotVal, slotsPerEpoch*2)
+			}
+		}
+	})
+
+	t.Run("epoch current+2 is rejected", func(t *testing.T) {
+		// Epoch 2 should be rejected when current epoch is 0 (next epoch is 1).
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"0\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", &body)
+		request.SetPathValue("epoch", "2")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.StringContains(t, "can not be greater than next epoch", e.Message)
+	})
+
 	t.Run("epoch too far in future", func(t *testing.T) {
 		var body bytes.Buffer
 		_, err := body.WriteString("[\"0\"]")
@@ -3289,7 +3340,7 @@ func TestGetPTCDuties(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
-		assert.StringContains(t, "can not be greater than current epoch", e.Message)
+		assert.StringContains(t, "can not be greater than next epoch", e.Message)
 	})
 }
 
