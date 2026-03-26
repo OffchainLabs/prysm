@@ -93,9 +93,9 @@ func TestForkChoice_UpdateBalancesPositiveChange(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	f.votes = []Vote{
-		{indexToHash(1), indexToHash(1), 0, 0, true, true},
-		{indexToHash(2), indexToHash(2), 0, 0, true, true},
-		{indexToHash(3), indexToHash(3), 0, 0, true, true},
+		{indexToHash(1), indexToHash(1), 1, 0, true, true},
+		{indexToHash(2), indexToHash(2), 2, 0, true, true},
+		{indexToHash(3), indexToHash(3), 3, 0, true, true},
 	}
 
 	// Each node gets one unique vote. The weight should look like 103 <- 102 <- 101 because
@@ -106,6 +106,33 @@ func TestForkChoice_UpdateBalancesPositiveChange(t *testing.T) {
 	assert.Equal(t, uint64(10), s.fullNodeByRoot[indexToHash(1)].balance)
 	assert.Equal(t, uint64(20), s.fullNodeByRoot[indexToHash(2)].balance)
 	assert.Equal(t, uint64(30), s.fullNodeByRoot[indexToHash(3)].balance)
+}
+
+func TestForkChoice_UpdateBalancesSameSlot(t *testing.T) {
+	f := setup(0, 0)
+	ctx := t.Context()
+	st, roblock, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	s := f.store
+	s.fullNodeByRoot[indexToHash(1)].balance = 100
+	s.fullNodeByRoot[indexToHash(2)].balance = 100
+
+	f.balances = []uint64{100, 100}
+	f.votes = []Vote{
+		{indexToHash(1), indexToHash(1), 1, 1, true, true},
+		{indexToHash(2), indexToHash(2), 2, 2, true, true},
+	}
+
+	// Balance changes with same slot should still update node balances.
+	f.justifiedBalances = []uint64{50, 200}
+	require.NoError(t, f.updateBalances())
+	assert.Equal(t, uint64(50), s.fullNodeByRoot[indexToHash(1)].balance)
+	assert.Equal(t, uint64(200), s.fullNodeByRoot[indexToHash(2)].balance)
 }
 
 func TestForkChoice_UpdateBalancesNegativeChange(t *testing.T) {
@@ -127,9 +154,9 @@ func TestForkChoice_UpdateBalancesNegativeChange(t *testing.T) {
 
 	f.balances = []uint64{100, 100, 100}
 	f.votes = []Vote{
-		{indexToHash(1), indexToHash(1), 0, 0, true, true},
-		{indexToHash(2), indexToHash(2), 0, 0, true, true},
-		{indexToHash(3), indexToHash(3), 0, 0, true, true},
+		{indexToHash(1), indexToHash(1), 1, 0, true, true},
+		{indexToHash(2), indexToHash(2), 2, 0, true, true},
+		{indexToHash(3), indexToHash(3), 3, 0, true, true},
 	}
 
 	f.justifiedBalances = []uint64{10, 20, 30}
@@ -158,9 +185,9 @@ func TestForkChoice_UpdateBalancesUnderflow(t *testing.T) {
 
 	f.balances = []uint64{125, 125, 125}
 	f.votes = []Vote{
-		{indexToHash(1), indexToHash(1), 0, 0, true, true},
-		{indexToHash(2), indexToHash(2), 0, 0, true, true},
-		{indexToHash(3), indexToHash(3), 0, 0, true, true},
+		{indexToHash(1), indexToHash(1), 1, 0, true, true},
+		{indexToHash(2), indexToHash(2), 2, 0, true, true},
+		{indexToHash(3), indexToHash(3), 3, 0, true, true},
 	}
 
 	f.justifiedBalances = []uint64{10, 20, 30}
@@ -714,16 +741,54 @@ func TestForkchoice_UpdateJustifiedBalances(t *testing.T) {
 }
 
 func TestForkChoice_UnrealizedJustifiedPayloadBlockHash(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 100
+	params.OverrideBeaconConfig(cfg)
+
 	ctx := t.Context()
 	f := setup(0, 0)
 
+	// Insert block 'a' at slot 0 with blockHash 'A', parent is genesis.
 	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
+	// Pre-Gloas there is no empty/full ambiguity, so the checkpoint payload hash
+	// is the block's own payload hash.
 	f.store.unrealizedJustifiedCheckpoint.Root = [32]byte{'a'}
 	got := f.UnrealizedJustifiedPayloadBlockHash()
 	require.Equal(t, [32]byte{'A'}, got)
+
+	// Insert block 'b' at slot 1 with blockHash 'B', parent is 'a'.
+	st, roblock, err = prepareForkchoiceState(ctx, 1, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	// Pre-Gloas the checkpoint payload hash is still the block's own payload hash.
+	f.store.unrealizedJustifiedCheckpoint.Root = [32]byte{'b'}
+	got = f.UnrealizedJustifiedPayloadBlockHash()
+	require.Equal(t, [32]byte{'B'}, got)
+}
+
+func TestForkChoice_FinalizedAndJustifiedPayloadBlockHash_PreGloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 100
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	f := setup(0, 0)
+
+	st, roblock, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	f.store.finalizedCheckpoint.Root = [32]byte{'a'}
+	f.store.justifiedCheckpoint.Root = [32]byte{'a'}
+
+	require.Equal(t, [32]byte{'A'}, f.FinalizedPayloadBlockHash())
+	require.Equal(t, [32]byte{'A'}, f.JustifiedPayloadBlockHash())
 }
 
 func TestForkChoiceIsViableForCheckpoint(t *testing.T) {

@@ -213,7 +213,7 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 			Block:                     newHeadRoot[:],
 			State:                     newHeadStateRoot[:],
 			EpochTransition:           true,
-			PreviousDutyDependentRoot: make([]byte, 32),
+			PreviousDutyDependentRoot: srv.originBlockRoot[:],
 			CurrentDutyDependentRoot:  srv.originBlockRoot[:],
 		}
 		require.DeepSSZEqual(t, wanted, eventHead)
@@ -243,10 +243,34 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 			Block:                     newHeadRoot[:],
 			State:                     newHeadStateRoot[:],
 			EpochTransition:           true,
-			PreviousDutyDependentRoot: params.BeaconConfig().ZeroHash[:],
+			PreviousDutyDependentRoot: srv.originBlockRoot[:],
 			CurrentDutyDependentRoot:  srv.originBlockRoot[:],
 		}
 		require.DeepSSZEqual(t, wanted, eventHead)
+	})
+	t.Run("previous dependent root zero hash falls back to origin", func(t *testing.T) {
+		srv := testServiceWithDB(t)
+		srv.SetGenesisTime(time.Now())
+		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
+		srv.originBlockRoot = [32]byte{0xab}
+		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
+		newHeadRoot := [32]byte{3}
+		st, blk, err = prepareForkchoiceState(t.Context(), 32, newHeadRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
+		newHeadSlot := params.BeaconConfig().SlotsPerEpoch
+		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), newHeadSlot, []byte{2}, newHeadRoot[:]))
+		events := notifier.ReceivedEvents()
+		require.Equal(t, 1, len(events))
+
+		eventHead, ok := events[0].Data.(*ethpbv1.EventHead)
+		require.Equal(t, true, ok)
+		// DependentRoot(0) returns zero hash since the forkchoice tree is sparse.
+		// The fix ensures it falls back to originBlockRoot instead of sending zeros.
+		assert.DeepEqual(t, srv.originBlockRoot[:], eventHead.PreviousDutyDependentRoot)
+		assert.DeepEqual(t, srv.originBlockRoot[:], eventHead.CurrentDutyDependentRoot)
 	})
 }
 

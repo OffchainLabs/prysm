@@ -3867,7 +3867,9 @@
     </spec>
 
 - name: get_pending_balance_to_withdraw_for_builder#gloas
-  sources: []
+  sources:
+    - file: beacon-chain/state/state-native/getters_gloas.go
+      search: func (b *BeaconState) BuilderPendingBalanceToWithdraw(
   spec: |
     <spec fn="get_pending_balance_to_withdraw_for_builder" fork="gloas" hash="a5d10dc1">
     def get_pending_balance_to_withdraw_for_builder(
@@ -4858,7 +4860,9 @@
     </spec>
 
 - name: initiate_builder_exit#gloas
-  sources: []
+  sources:
+    - file: beacon-chain/core/gloas/builder_exit.go
+      search: func InitiateBuilderExit(
   spec: |
     <spec fn="initiate_builder_exit" fork="gloas" hash="3da938d5">
     def initiate_builder_exit(state: BeaconState, builder_index: BuilderIndex) -> None:
@@ -5649,8 +5653,6 @@
   sources:
     - file: beacon-chain/core/altair/sync_committee.go
       search: func IsSyncCommitteeAggregator(
-    - file: validator/client/validator.go
-      search: func (v *validator) isSyncCommitteeAggregator(
   spec: |
     <spec fn="is_sync_committee_aggregator" fork="altair" hash="13d9d470">
     def is_sync_committee_aggregator(signature: BLSSignature) -> bool:
@@ -9097,7 +9099,9 @@
     </spec>
 
 - name: process_voluntary_exit#gloas
-  sources: []
+  sources:
+    - file: beacon-chain/core/blocks/exit.go
+      search: func ProcessVoluntaryExits(
   spec: |
     <spec fn="process_voluntary_exit" fork="gloas" hash="2a22a698">
     def process_voluntary_exit(state: BeaconState, signed_voluntary_exit: SignedVoluntaryExit) -> None:
