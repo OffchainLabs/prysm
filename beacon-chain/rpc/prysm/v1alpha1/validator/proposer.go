@@ -302,28 +302,23 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	}
 	sBlk.SetStateRoot(sr)
 
-<<<<<<< get-block-v4
-	// For Gloas, build and cache the execution payload envelope now that the block
-	// is fully built (state root set). The envelope needs the final block HTR as
-	// BeaconBlockRoot and the post-payload state root as StateRoot.
+	// For Gloas self-build, build and cache the execution payload envelope now
+	// that the block is fully built (state root set). The envelope needs the
+	// final block HTR as BeaconBlockRoot and the post-payload state root as
+	// StateRoot.
+	//
+	// When a remote P2P bid was selected, the winning builder is responsible
+	// for producing the envelope, so we must not cache a self-build one.
+	//
 	// When eagerPayloadStateRoot is true, the post-block state is passed so the
-	// envelope state root is computed immediately. Otherwise it is left zeroed
+	// envelope StateRoot is computed immediately. Otherwise it is left zeroed
 	// and computed lazily when GetExecutionPayloadEnvelope is called.
-	if sBlk.Version() >= version.Gloas {
+	if sBlk.Version() >= version.Gloas && selfBuildEnvelope {
 		var envelopeState state.BeaconState
 		if eagerPayloadStateRoot {
 			envelopeState = postBlockState
 		}
 		if err := vs.storeExecutionPayloadEnvelope(ctx, sBlk, local, envelopeState); err != nil {
-=======
-	// For Gloas self-build, cache the execution payload envelope now that the
-	// block is fully built (state root set). The envelope needs the final block
-	// HTR as BeaconBlockRoot and the post-payload state root as StateRoot.
-	// When a remote P2P bid was selected, the winning builder is responsible
-	// for producing the envelope, so we must not cache a self-build one.
-	if sBlk.Version() >= version.Gloas && selfBuildEnvelope {
-		if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
->>>>>>> develop
 			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
 		}
 	}
