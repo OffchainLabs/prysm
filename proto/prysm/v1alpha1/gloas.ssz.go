@@ -543,6 +543,323 @@ func (s *SignedProposerPreferences) HashTreeRootWith(hh *ssz.Hasher) (err error)
 	return
 }
 
+// MarshalSSZ ssz marshals the RequestAuth object
+func (r *RequestAuth) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(r)
+}
+
+// MarshalSSZTo ssz marshals the RequestAuth object to a target array
+func (r *RequestAuth) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'BuilderPubkey'
+	if size := len(r.BuilderPubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.BuilderPubkey", size, 48)
+		return
+	}
+	dst = append(dst, r.BuilderPubkey...)
+
+	// Field (1) 'Slot'
+	dst = ssz.MarshalUint64(dst, uint64(r.Slot))
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the RequestAuth object
+func (r *RequestAuth) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 56 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'BuilderPubkey'
+	if cap(r.BuilderPubkey) == 0 {
+		r.BuilderPubkey = make([]byte, 0, len(buf[0:48]))
+	}
+	r.BuilderPubkey = append(r.BuilderPubkey, buf[0:48]...)
+
+	// Field (1) 'Slot'
+	r.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[48:56]))
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the RequestAuth object
+func (r *RequestAuth) SizeSSZ() (size int) {
+	size = 56
+	return
+}
+
+// HashTreeRoot ssz hashes the RequestAuth object
+func (r *RequestAuth) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(r)
+}
+
+// HashTreeRootWith ssz hashes the RequestAuth object with a hasher
+func (r *RequestAuth) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'BuilderPubkey'
+	if size := len(r.BuilderPubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.BuilderPubkey", size, 48)
+		return
+	}
+	hh.PutBytes(r.BuilderPubkey)
+
+	// Field (1) 'Slot'
+	hh.PutUint64(uint64(r.Slot))
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the SignedRequestAuth object
+func (s *SignedRequestAuth) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedRequestAuth object to a target array
+func (s *SignedRequestAuth) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(RequestAuth)
+	}
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, s.Signature...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SignedRequestAuth object
+func (s *SignedRequestAuth) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 152 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(RequestAuth)
+	}
+	if err = s.Message.UnmarshalSSZ(buf[0:56]); err != nil {
+		return err
+	}
+
+	// Field (1) 'Signature'
+	if cap(s.Signature) == 0 {
+		s.Signature = make([]byte, 0, len(buf[56:152]))
+	}
+	s.Signature = append(s.Signature, buf[56:152]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedRequestAuth object
+func (s *SignedRequestAuth) SizeSSZ() (size int) {
+	size = 152
+	return
+}
+
+// HashTreeRoot ssz hashes the SignedRequestAuth object
+func (s *SignedRequestAuth) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedRequestAuth object with a hasher
+func (s *SignedRequestAuth) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Message'
+	if err = s.Message.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(s.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the BuilderPreferencesRPC object
+func (b *BuilderPreferencesRPC) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BuilderPreferencesRPC object to a target array
+func (b *BuilderPreferencesRPC) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'BuilderPubkey'
+	if size := len(b.BuilderPubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.BuilderPubkey", size, 48)
+		return
+	}
+	dst = append(dst, b.BuilderPubkey...)
+
+	// Field (1) 'Slot'
+	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+
+	// Field (2) 'MaxTrustedBid'
+	dst = ssz.MarshalUint64(dst, uint64(b.MaxTrustedBid))
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BuilderPreferencesRPC object
+func (b *BuilderPreferencesRPC) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 64 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'BuilderPubkey'
+	if cap(b.BuilderPubkey) == 0 {
+		b.BuilderPubkey = make([]byte, 0, len(buf[0:48]))
+	}
+	b.BuilderPubkey = append(b.BuilderPubkey, buf[0:48]...)
+
+	// Field (1) 'Slot'
+	b.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[48:56]))
+
+	// Field (2) 'MaxTrustedBid'
+	b.MaxTrustedBid = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[56:64]))
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BuilderPreferencesRPC object
+func (b *BuilderPreferencesRPC) SizeSSZ() (size int) {
+	size = 64
+	return
+}
+
+// HashTreeRoot ssz hashes the BuilderPreferencesRPC object
+func (b *BuilderPreferencesRPC) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BuilderPreferencesRPC object with a hasher
+func (b *BuilderPreferencesRPC) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'BuilderPubkey'
+	if size := len(b.BuilderPubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.BuilderPubkey", size, 48)
+		return
+	}
+	hh.PutBytes(b.BuilderPubkey)
+
+	// Field (1) 'Slot'
+	hh.PutUint64(uint64(b.Slot))
+
+	// Field (2) 'MaxTrustedBid'
+	hh.PutUint64(uint64(b.MaxTrustedBid))
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the SignedBuilderPreferencesRPC object
+func (s *SignedBuilderPreferencesRPC) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedBuilderPreferencesRPC object to a target array
+func (s *SignedBuilderPreferencesRPC) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(BuilderPreferencesRPC)
+	}
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	dst = append(dst, s.Signature...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SignedBuilderPreferencesRPC object
+func (s *SignedBuilderPreferencesRPC) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 160 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(BuilderPreferencesRPC)
+	}
+	if err = s.Message.UnmarshalSSZ(buf[0:64]); err != nil {
+		return err
+	}
+
+	// Field (1) 'Signature'
+	if cap(s.Signature) == 0 {
+		s.Signature = make([]byte, 0, len(buf[64:160]))
+	}
+	s.Signature = append(s.Signature, buf[64:160]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedBuilderPreferencesRPC object
+func (s *SignedBuilderPreferencesRPC) SizeSSZ() (size int) {
+	size = 160
+	return
+}
+
+// HashTreeRoot ssz hashes the SignedBuilderPreferencesRPC object
+func (s *SignedBuilderPreferencesRPC) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedBuilderPreferencesRPC object with a hasher
+func (s *SignedBuilderPreferencesRPC) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Message'
+	if err = s.Message.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if size := len(s.Signature); size != 96 {
+		err = ssz.ErrBytesLengthFn("--.Signature", size, 96)
+		return
+	}
+	hh.PutBytes(s.Signature)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the PayloadAttestationData object
 func (p *PayloadAttestationData) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(p)

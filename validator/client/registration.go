@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -132,6 +133,90 @@ func (v *validator) signProposerPreferences(
 	}, nil
 }
 
+// signRequestAuth signs a RequestAuth with DOMAIN_APPLICATION_BUILDER.
+// The proposer signs over (builder_pubkey, slot) to authenticate bid
+// requests and prevent replay/DOS attacks from other builders.
+func (v *validator) signRequestAuth(
+	ctx context.Context,
+	km keymanager.IKeymanager,
+	pubkey [fieldparams.BLSPubkeyLength]byte,
+	auth *ethpb.RequestAuth,
+) (*ethpb.SignedRequestAuth, error) {
+	ctx, span := trace.StartSpan(ctx, "validator.signRequestAuth")
+	defer span.End()
+
+	d, err := signing.ComputeDomain(
+		params.BeaconConfig().DomainApplicationBuilder,
+		nil, /* fork version */
+		nil, /* genesis val root */
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := signing.ComputeSigningRoot(auth, d)
+	if err != nil {
+		return nil, errors.Wrap(err, signingRootErr)
+	}
+
+	sig, err := km.Sign(ctx, &validatorpb.SignRequest{
+		PublicKey:       pubkey[:],
+		SigningRoot:     r[:],
+		SignatureDomain: d,
+		Object:          &validatorpb.SignRequest_RequestAuth{RequestAuth: auth},
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "could not sign request auth")
+	}
+
+	return &ethpb.SignedRequestAuth{
+		Message:   auth,
+		Signature: sig.Marshal(),
+	}, nil
+}
+
+// signBuilderPreferencesRPC signs a BuilderPreferencesRPC with
+// DOMAIN_APPLICATION_BUILDER. The proposer signs per-builder preferences
+// (e.g. max_trusted_bid) to prevent replay attacks.
+func (v *validator) signBuilderPreferencesRPC(
+	ctx context.Context,
+	km keymanager.IKeymanager,
+	pubkey [fieldparams.BLSPubkeyLength]byte,
+	pref *ethpb.BuilderPreferencesRPC,
+) (*ethpb.SignedBuilderPreferencesRPC, error) {
+	ctx, span := trace.StartSpan(ctx, "validator.signBuilderPreferencesRPC")
+	defer span.End()
+
+	d, err := signing.ComputeDomain(
+		params.BeaconConfig().DomainApplicationBuilder,
+		nil, /* fork version */
+		nil, /* genesis val root */
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := signing.ComputeSigningRoot(pref, d)
+	if err != nil {
+		return nil, errors.Wrap(err, signingRootErr)
+	}
+
+	sig, err := km.Sign(ctx, &validatorpb.SignRequest{
+		PublicKey:       pubkey[:],
+		SigningRoot:     r[:],
+		SignatureDomain: d,
+		Object:          &validatorpb.SignRequest_BuilderPreferencesRpc{BuilderPreferencesRpc: pref},
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "could not sign builder preferences")
+	}
+
+	return &ethpb.SignedBuilderPreferencesRPC{
+		Message:   pref,
+		Signature: sig.Marshal(),
+	}, nil
+}
+
 // SignValidatorRegistrationRequest compares and returns either the cached validator registration request or signs a new one.
 func (v *validator) SignValidatorRegistrationRequest(ctx context.Context, signer iface.SigningFunc, newValidatorRegistration *ethpb.ValidatorRegistrationV1) (*ethpb.SignedValidatorRegistrationV1, bool /* isCached */, error) {
 	signedReg, ok := v.signedValidatorRegistrations[bytesutil.ToBytes48(newValidatorRegistration.Pubkey)]
@@ -192,4 +277,19 @@ func chunkSignedValidatorRegistrationV1(regs []*ethpb.SignedValidatorRegistratio
 	}
 
 	return chunks
+}
+
+// signRequestAuthsForBuilders signs a RequestAuth for each configured builder
+// pubkey. Returns nil if no builder pubkeys are configured or if the slot is
+// before the Gloas fork.
+// TODO: populate builder pubkeys from validator config or beacon state builder
+// registry once builder pubkey configuration is supported. Until then, the
+// Builder API bid path in getBuilderAPIBid is unreachable because no auths
+// are provided.
+func (v *validator) signRequestAuthsForBuilders(
+	_ context.Context,
+	_ [fieldparams.BLSPubkeyLength]byte,
+	_ primitives.Slot,
+) []*ethpb.SignedRequestAuth {
+	return nil
 }
