@@ -12,9 +12,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
@@ -25,6 +27,11 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 	if len(graffiti) > 0 {
 		queryParams.Add("graffiti", hexutil.Encode(graffiti))
 	}
+
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		return c.beaconBlockV4(ctx, slot, queryParams)
+	}
+
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v3/validator/blocks/%d", slot), queryParams)
 	data, header, err := c.handler.GetSSZ(ctx, queryUrl)
 	if err != nil {
@@ -53,6 +60,47 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 			json.NewDecoder(bytes.NewReader(produceBlockV3ResponseJson.Data)),
 		)
 	}
+}
+
+func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primitives.Slot, queryParams neturl.Values) (*ethpb.GenericBeaconBlock, error) {
+	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v4/validator/blocks/%d", slot), queryParams)
+	data, header, err := c.handler.GetSSZ(ctx, queryUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType) {
+		payloadIncluded := header.Get(api.ExecutionPayloadIncludedHeader) == "true"
+		if payloadIncluded {
+			contents := &ethpb.BeaconBlockContentsGloas{}
+			if err := contents.UnmarshalSSZ(data); err != nil {
+				return nil, errors.Wrap(err, "failed to unmarshal gloas block contents SSZ")
+			}
+			return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: contents.Block}}, nil
+		}
+		block := &ethpb.BeaconBlockGloas{}
+		if err := block.UnmarshalSSZ(data); err != nil {
+			return nil, errors.Wrap(err, "failed to unmarshal gloas block SSZ")
+		}
+		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: block}}, nil
+	}
+
+	resp := structs.ProduceBlockV4Response{}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, errors.Wrapf(err, "failed to decode v4 response body for %s", queryUrl)
+	}
+	if resp.ExecutionPayloadIncluded {
+		contents := &structs.BlockContentsGloas{}
+		if err := json.Unmarshal(resp.Data, contents); err != nil {
+			return nil, errors.Wrap(err, "failed to decode gloas block contents")
+		}
+		return contents.Block.ToGeneric()
+	}
+	block := &structs.BeaconBlockGloas{}
+	if err := json.Unmarshal(resp.Data, block); err != nil {
+		return nil, errors.Wrap(err, "failed to decode gloas block")
+	}
+	return block.ToGeneric()
 }
 
 // sszBlockCodec defines SSZ unmarshalers for a fork's block and blinded block types.
