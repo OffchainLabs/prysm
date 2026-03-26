@@ -4,12 +4,6 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
-## [Unreleased]
-
-### Changed
-
-- Truncate commit hash to 7 characters in `/eth/v1/node/version` API response.
-
 ## [v7.1.3](https://github.com/prysmaticlabs/prysm/compare/v7.1.2...v7.1.3) - 2026-03-18
 
 This release brings extensive Gloas (next fork) groundwork, a major logging infrastructure overhaul, and numerous performance optimizations across the beacon chain. A security update to go-ethereum v1.16.8 is also included.
