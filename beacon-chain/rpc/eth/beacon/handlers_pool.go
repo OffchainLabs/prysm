@@ -1052,9 +1052,9 @@ func (s *Server) ListPayloadAttestations(w http.ResponseWriter, r *http.Request)
 
 	atts := s.PayloadAttestationPool.PendingPayloadAttestations(primitives.Slot(slot))
 
-	var data []*structs.PayloadAttestation
-	for _, att := range atts {
-		data = append(data, structs.PayloadAttestationFromConsensus(att))
+	data := make([]*structs.PayloadAttestation, len(atts))
+	for i, att := range atts {
+		data[i] = structs.PayloadAttestationFromConsensus(att)
 	}
 
 	w.Header().Set(api.VersionHeader, version.String(version.Gloas))

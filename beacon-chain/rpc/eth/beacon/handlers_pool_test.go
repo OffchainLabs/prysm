@@ -2802,6 +2802,11 @@ func TestListPayloadAttestations(t *testing.T) {
 		resp := &structs.GetPoolPayloadAttestationsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.Equal(t, 0, len(resp.Data))
+
+		// Verify data serializes as [] not null.
+		var raw map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &raw))
+		assert.Equal(t, "[]", string(raw["data"]))
 	})
 	t.Run("returns attestations", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
