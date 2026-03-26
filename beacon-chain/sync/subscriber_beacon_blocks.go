@@ -238,13 +238,14 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			}
 
 			// Try to reconstruct data column constructedSidecars from the execution client.
-			constructedSidecars, partialColumns, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
+			partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
+			isPartialEnabled := partialBroadcaster != nil
+			constructedSidecars, partialColumns, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source, isPartialEnabled)
 			if err != nil {
 				return nil, errors.Wrap(err, "reconstruct data column sidecars")
 			}
 
-			partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
-			if partialBroadcaster != nil {
+			if isPartialEnabled && len(partialColumns) > 0 {
 				log.WithField("len(partialColumns)", len(partialColumns)).Debug("Publishing partial columns")
 				// Publish the partial column. This is idempotent if we republish the same data twice.
 				// Note, the "partial column" may indeed be complete. We still

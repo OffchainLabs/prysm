@@ -143,7 +143,7 @@ type Reconstructor interface {
 		ctx context.Context, blockHashes [][32]byte,
 	) (map[[32]byte]*pb.ExecutionPayloadDeneb, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
-	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error)
+	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator, isPartialEnabled bool) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error)
 	ReconstructExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, error)
 }
 
@@ -933,7 +933,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	return verifiedBlobs, nil
 }
 
-func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
+func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator, isPartialEnabled bool) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
 	root := populator.Root()
 
 	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
@@ -942,14 +942,21 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		return nil, nil, wrapWithBlockRoot(err, root, "commitments")
 	}
 	cp, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
-	log.Info("Received cells and proofs from execution client", "included", cp.Included, "cells count", len(cp.CellsPerBlob), "err", err)
 	if err != nil {
 		return nil, nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
+	log.Debug("Received cells and proofs from execution client", "included", cp.Included, "cells count", len(cp.CellsPerBlob), "err", err)
 
-	partialColumns, err := peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
+	var partialColumns []blocks.PartialDataColumn
+	if isPartialEnabled {
+		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
+		if err != nil {
+			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
+		}
+	}
+
 	haveAllBlobs := cp.Included.Count() == uint64(len(commitments))
-	log.Info("Constructed partial columns", "haveAllBlobs", haveAllBlobs)
+	log.Debug("Constructed partial columns", "haveAllBlobs", haveAllBlobs)
 
 	if haveAllBlobs {
 		// Construct data column sidears from the signed block and cells and proofs.
@@ -965,9 +972,6 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		return verifiedROSidecars, partialColumns, nil
 	}
 
-	if err != nil {
-		return nil, nil, wrapWithBlockRoot(err, populator.Root(), "partial columns from column sidecar")
-	}
 	return nil, partialColumns, nil
 }
 
@@ -1001,10 +1005,12 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	if err != nil {
 		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "compute cells and proofs")
 	}
-	if result.Included.Count() == uint64(len(kzgCommitments)) {
-		getBlobsV3CompleteResponsesTotal.Inc()
-	} else if result.Included.Count() > 0 {
-		getBlobsV3PartialResponsesTotal.Inc()
+	if useV3 {
+		if result.Included.Count() == uint64(len(kzgCommitments)) {
+			getBlobsV3CompleteResponsesTotal.Inc()
+		} else if result.Included.Count() > 0 {
+			getBlobsV3PartialResponsesTotal.Inc()
+		}
 	}
 
 	return result, nil
