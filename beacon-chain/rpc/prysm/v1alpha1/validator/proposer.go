@@ -255,6 +255,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	})
 
 	winningBid := primitives.ZeroWei()
+	selfBuildEnvelope := true
 	var bundle enginev1.BlobsBundler
 	var local *blocks.GetPayloadResponse
 	if sBlk.Version() >= version.Bellatrix {
@@ -285,7 +286,9 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 				return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
 			}
 		} else {
-			if err := vs.setSelfBuildExecutionPayloadBid(ctx, sBlk, local); err != nil {
+			selfBuildOnly := local.OverrideBuilder || skipMevBoost
+			selfBuildEnvelope, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
+			if err != nil {
 				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
 			}
 		}
@@ -299,6 +302,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	}
 	sBlk.SetStateRoot(sr)
 
+<<<<<<< get-block-v4
 	// For Gloas, build and cache the execution payload envelope now that the block
 	// is fully built (state root set). The envelope needs the final block HTR as
 	// BeaconBlockRoot and the post-payload state root as StateRoot.
@@ -311,6 +315,15 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 			envelopeState = postBlockState
 		}
 		if err := vs.storeExecutionPayloadEnvelope(ctx, sBlk, local, envelopeState); err != nil {
+=======
+	// For Gloas self-build, cache the execution payload envelope now that the
+	// block is fully built (state root set). The envelope needs the final block
+	// HTR as BeaconBlockRoot and the post-payload state root as StateRoot.
+	// When a remote P2P bid was selected, the winning builder is responsible
+	// for producing the envelope, so we must not cache a self-build one.
+	if sBlk.Version() >= version.Gloas && selfBuildEnvelope {
+		if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
+>>>>>>> develop
 			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
 		}
 	}

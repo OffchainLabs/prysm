@@ -68,6 +68,7 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.MonitoringHostFlag,
 			flags.MonitoringPortFlag,
 			cmd.DisableMonitoringFlag,
+			cmd.DisableLogColor,
 			cmd.LogFormat,
 			cmd.LogFileName,
 			cmd.ConfigFileFlag,
