@@ -1040,9 +1040,15 @@ func (v *validator) buildProposerPreferences(
 		if err != nil {
 			return nil
 		}
-		if slot < epochStart+params.BeaconConfig().SlotsPerEpoch/2 {
+		midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
+		if slot < midEpoch {
+			log.WithFields(logrus.Fields{
+				"slot":     slot,
+				"midEpoch": midEpoch,
+			}).Debug("Waiting for mid-epoch before submitting proposer preferences")
 			return nil
 		}
+		log.WithField("slot", slot).Info("Mid-epoch reached, submitting pre-fork proposer preferences")
 	}
 
 	v.dutiesLock.RLock()
