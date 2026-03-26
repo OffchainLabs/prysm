@@ -1455,14 +1455,7 @@ func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements any) (
 	}
 
 	if fTrie.FieldReference().Refs() > 1 {
-		var newTrie *fieldtrie.FieldTrie
-		// We choose to only copy the validator
-		// trie as it is pretty expensive to regenerate.
-		if index == types.Validators {
-			newTrie = fTrie.CopyTrie()
-		} else {
-			newTrie = fTrie.TransferTrie()
-		}
+		newTrie := fTrie.CopyTrie()
 		fTrie.FieldReference().MinusRef()
 		b.stateFieldLeaves[index] = newTrie
 		fTrie = newTrie
@@ -1473,6 +1466,20 @@ func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements any) (
 	b.dirtyIndices[index] = slice.SetUint64(b.dirtyIndices[index])
 	// sort indexes again
 	slices.Sort(b.dirtyIndices[index])
+
+	// For overlays with large dirty sets, rebuild from scratch using
+	// vectorized hashing is faster and uses less memory than promote + per-leaf
+	// walk-up recomputation.
+	if fTrie.IsOverlay() && len(b.dirtyIndices[index]) > fieldtrie.OverlayPromotionThreshold {
+		if err := b.resetFieldTrie(index, elements, fTrie.Length()); err != nil {
+			return [32]byte{}, fmt.Errorf("reset field trie: %w", err)
+		}
+
+		fTrie.ReleaseBase()
+		fTrie.FieldReference().MinusRef()
+		return b.stateFieldLeaves[index].TrieRoot()
+	}
+
 	root, err := fTrie.RecomputeTrie(b.dirtyIndices[index], elements)
 	if err != nil {
 		return [32]byte{}, err
@@ -1496,9 +1503,12 @@ func finalizerCleanup(b *BeaconState) {
 	defer b.lock.Unlock()
 	for field, v := range b.sharedFieldReferences {
 		v.MinusRef()
-		if b.stateFieldLeaves[field].FieldReference() != nil {
-			b.stateFieldLeaves[field].FieldReference().MinusRef()
+		t := b.stateFieldLeaves[field]
+		if t.FieldReference() != nil {
+			t.FieldReference().MinusRef()
 		}
+
+		t.ReleaseBase()
 	}
 	for i := range b.dirtyFields {
 		delete(b.dirtyFields, i)
