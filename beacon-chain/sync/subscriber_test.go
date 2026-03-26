@@ -459,8 +459,8 @@ func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
 		return pubsub.ValidationAccept, nil
 	}
 
-	t.Run("next epoch fork digest accepted", func(t *testing.T) {
-		nextTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+	t.Run("proposer preferences next epoch fork digest accepted", func(t *testing.T) {
+		nextTopic := fmt.Sprintf(p2p.SignedProposerPreferencesTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
 		chainStarted := abool.New()
 		chainStarted.SetTo(true)
 		s := &Service{
@@ -476,6 +476,25 @@ func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
 			Message: &pubsubpb.Message{Topic: &nextTopic},
 		})
 		assert.Equal(t, pubsub.ValidationAccept, got)
+	})
+
+	t.Run("non proposer preferences next epoch fork digest rejected", func(t *testing.T) {
+		nextTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+		chainStarted := abool.New()
+		chainStarted.SetTo(true)
+		s := &Service{
+			chainStarted: chainStarted,
+			cfg: &config{
+				chain: mChain,
+				clock: clock,
+			},
+			subHandler: newSubTopicHandler(),
+		}
+		_, v := s.wrapAndReportValidation(nextTopic, acceptValidator)
+		got := v(t.Context(), "", &pubsub.Message{
+			Message: &pubsubpb.Message{Topic: &nextTopic},
+		})
+		assert.Equal(t, pubsub.ValidationIgnore, got)
 	})
 
 	t.Run("wrong fork digest rejected", func(t *testing.T) {
