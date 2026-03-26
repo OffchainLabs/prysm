@@ -1016,6 +1016,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		PayloadIDCache:                   b.payloadIDCache,
 		LCStore:                          b.lcStore,
 		GraffitiInfo:                     web3Service.GraffitiInfo(),
+		BlockProposalEagerPushCells:      b.cliCtx.Bool(flags.BlockProposalEagerPushCells.Name),
 	})
 
 	return b.services.RegisterService(rpcService)

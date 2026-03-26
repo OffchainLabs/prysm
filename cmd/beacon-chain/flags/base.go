@@ -373,4 +373,9 @@ var (
 		Name:  "partial-data-columns",
 		Usage: "Enable cell-level dissemination for PeerDAS data columns",
 	}
+	// BlockProposalEagerPushCells enables eager pushing of all cells when proposing blocks.
+	BlockProposalEagerPushCells = &cli.BoolFlag{
+		Name:  "block-proposal-eager-push-cells",
+		Usage: "When proposing a block, eagerly push all cells and proofs to peers in the initial partial message",
+	}
 )
