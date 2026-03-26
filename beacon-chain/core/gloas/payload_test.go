@@ -298,11 +298,14 @@ func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_Success(t *testing.T) {
 			Slot:              fixture.slot,
 			BuilderIndex:      fixture.envelope.BuilderIndex,
 			BlockHash:         blockHash[:],
+			BeaconBlockRoot:   make([]byte, 32),
 			ExecutionRequests: fixture.envelope.ExecutionRequests,
 		},
 	}
 
-	require.NoError(t, ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), st, stateRoot, envelope))
+	wrappedEnv, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
+	require.NoError(t, err)
+	require.NoError(t, ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), st, stateRoot, wrappedEnv))
 
 	latestHash, err := st.LatestBlockHash()
 	require.NoError(t, err)
@@ -321,10 +324,14 @@ func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_SlotMismatch(t *testing
 
 	envelope := &ethpb.SignedBlindedExecutionPayloadEnvelope{
 		Message: &ethpb.BlindedExecutionPayloadEnvelope{
-			Slot: fixture.slot + 1,
+			Slot:            fixture.slot + 1,
+			BlockHash:       make([]byte, 32),
+			BeaconBlockRoot: make([]byte, 32),
 		},
 	}
-	err := ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, envelope)
+	wrappedEnv, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
+	require.NoError(t, err)
+	err = ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, wrappedEnv)
 	require.ErrorContains(t, "blinded envelope slot does not match state slot", err)
 }
 
@@ -334,12 +341,15 @@ func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_BuilderIndexMismatch(t 
 	blockHash := [32]byte(fixture.payload.BlockHash)
 	envelope := &ethpb.SignedBlindedExecutionPayloadEnvelope{
 		Message: &ethpb.BlindedExecutionPayloadEnvelope{
-			Slot:         fixture.slot,
-			BuilderIndex: 999,
-			BlockHash:    blockHash[:],
+			Slot:            fixture.slot,
+			BuilderIndex:    999,
+			BlockHash:       blockHash[:],
+			BeaconBlockRoot: make([]byte, 32),
 		},
 	}
-	err := ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, envelope)
+	wrappedEnv, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
+	require.NoError(t, err)
+	err = ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, wrappedEnv)
 	require.ErrorContains(t, "builder index does not match", err)
 }
 
@@ -349,12 +359,15 @@ func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_BlockHashMismatch(t *te
 	wrongHash := bytes.Repeat([]byte{0xFF}, 32)
 	envelope := &ethpb.SignedBlindedExecutionPayloadEnvelope{
 		Message: &ethpb.BlindedExecutionPayloadEnvelope{
-			Slot:         fixture.slot,
-			BuilderIndex: fixture.envelope.BuilderIndex,
-			BlockHash:    wrongHash,
+			Slot:            fixture.slot,
+			BuilderIndex:    fixture.envelope.BuilderIndex,
+			BlockHash:       wrongHash,
+			BeaconBlockRoot: make([]byte, 32),
 		},
 	}
-	err := ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, envelope)
+	wrappedEnv, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
+	require.NoError(t, err)
+	err = ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, wrappedEnv)
 	require.ErrorContains(t, "block hash does not match", err)
 }
 
