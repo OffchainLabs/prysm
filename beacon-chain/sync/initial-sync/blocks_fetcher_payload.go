@@ -196,14 +196,14 @@ func (f *blocksFetcher) fetchPayloadEnvelopesFromPeer(
 			continue
 		}
 		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
-		roEnvelopes := make([]interfaces.ROSignedExecutionPayloadEnvelope, len(envelopes))
+		roEnvelopes := make([]interfaces.ROSignedExecutionPayloadEnvelope,0, len(envelopes))
 		for i, env := range envelopes {
 			wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
 			if err != nil {
 				log.WithField("peer", p).WithError(err).Debug("Invalid payload envelope in response")
 				continue
 			}
-			roEnvelopes[i] = wrapped
+			roEnvelopes = append(roEnvelopes, wrapped)
 		}
 		return roEnvelopes, p, nil
 	}
