@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -732,6 +733,73 @@ func TestParentPayloadReady(t *testing.T) {
 		wsb, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
 		require.Equal(t, true, service.ParentPayloadReady(wsb.Block()))
+	})
+}
+
+func TestService_ShouldIgnoreData(t *testing.T) {
+	service, tr := minimalTestService(t)
+	ctx := t.Context()
+	fcs := tr.fcs
+
+	zeroHash := params.BeaconConfig().ZeroHash
+	currentSlot := service.CurrentSlot()
+	currentEpoch := slots.ToEpoch(currentSlot)
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+	// Build a chain in forkchoice:
+	// genesis (slot 0) -> nodeA (slot 1, epoch 0) -> nodeB (slot slotsPerEpoch, epoch 1) -> nodeC (slot 2*slotsPerEpoch, epoch 2)
+	nodeARoot := [32]byte{1}
+	nodeBRoot := [32]byte{2}
+	nodeCRoot := [32]byte{3}
+	nodeASlot := primitives.Slot(1)
+	nodeBSlot := primitives.Slot(slotsPerEpoch)     // epoch 1
+	nodeCSlot := primitives.Slot(2 * slotsPerEpoch) // epoch 2
+
+	stA, robA, err := prepareForkchoiceState(ctx, nodeASlot, nodeARoot, zeroHash, [32]byte{10}, &ethpb.Checkpoint{Epoch: 0, Root: zeroHash[:]}, &ethpb.Checkpoint{Epoch: 0, Root: zeroHash[:]})
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, stA, robA))
+
+	stB, robB, err := prepareForkchoiceState(ctx, nodeBSlot, nodeBRoot, nodeARoot, [32]byte{11}, &ethpb.Checkpoint{Epoch: 0, Root: zeroHash[:]}, &ethpb.Checkpoint{Epoch: 0, Root: zeroHash[:]})
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, stB, robB))
+
+	stC, robC, err := prepareForkchoiceState(ctx, nodeCSlot, nodeCRoot, nodeBRoot, [32]byte{12}, &ethpb.Checkpoint{Epoch: 0, Root: zeroHash[:]}, &ethpb.Checkpoint{Epoch: 0, Root: zeroHash[:]})
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, stC, robC))
+
+	// Set justified checkpoint to nodeB (epoch 1).
+	fcs.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) { return []uint64{}, nil })
+	require.NoError(t, fcs.UpdateJustifiedCheckpoint(ctx, &forkchoicetypes.Checkpoint{Epoch: 1, Root: nodeBRoot}))
+
+	t.Run("past epoch data is not ignored", func(t *testing.T) {
+		pastSlot := primitives.Slot((currentEpoch - 1) * primitives.Epoch(slotsPerEpoch))
+		require.Equal(t, false, service.ShouldIgnoreData(nodeARoot, pastSlot))
+	})
+
+	t.Run("parent not in forkchoice", func(t *testing.T) {
+		unknownRoot := [32]byte{99}
+		require.Equal(t, false, service.ShouldIgnoreData(unknownRoot, currentSlot))
+	})
+
+	t.Run("parent epoch at or after justified", func(t *testing.T) {
+		// nodeB is at epoch 1, justified is epoch 1 => parentEpoch >= justified => false
+		require.Equal(t, false, service.ShouldIgnoreData(nodeBRoot, currentSlot))
+	})
+
+	t.Run("canonical parent before justified is ignored", func(t *testing.T) {
+		// nodeA is at epoch 0 < justified epoch 1, and is canonical => true
+		require.Equal(t, true, service.ShouldIgnoreData(nodeARoot, currentSlot))
+	})
+
+	t.Run("non-canonical parent before justified is not ignored", func(t *testing.T) {
+		// Insert a fork: nodeD at slot 2 (epoch 0) branching from nodeA, not on the canonical chain.
+		nodeDRoot := [32]byte{4}
+		stD, robD, err := prepareForkchoiceState(ctx, 2, nodeDRoot, nodeARoot, [32]byte{13}, &ethpb.Checkpoint{Epoch: 0, Root: zeroHash[:]}, &ethpb.Checkpoint{Epoch: 0, Root: zeroHash[:]})
+		require.NoError(t, err)
+		require.NoError(t, fcs.InsertNode(ctx, stD, robD))
+
+		// nodeD is at epoch 0 < justified epoch 1, but not canonical => false
+		require.Equal(t, false, service.ShouldIgnoreData(nodeDRoot, currentSlot))
 	})
 }
 

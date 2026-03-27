@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -129,12 +130,18 @@ func (rs *stateReplayer) ReplayBlocks(ctx context.Context) (state.BeaconState, e
 				if err != nil {
 					return nil, errors.Wrap(err, "could not compute block root for execution payload envelope lookup")
 				}
-				envelope, err := p.executionPayloadEnvelope(ctx, root)
+				signedEnvelope, err := p.executionPayloadEnvelope(ctx, root)
 				if err != nil && !errors.Is(err, db.ErrNotFound) {
 					return nil, errors.Wrap(err, "could not retrieve execution payload envelope")
 				}
-				if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, s, b.Block().StateRoot(), envelope); err != nil {
-					return nil, errors.Wrap(err, "could not apply execution payload envelope")
+				if signedEnvelope != nil && signedEnvelope.Message != nil {
+					envelope, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(signedEnvelope.Message)
+					if err != nil {
+						return nil, errors.Wrap(err, "could not wrap blinded execution payload envelope")
+					}
+					if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, s, b.Block().StateRoot(), envelope); err != nil {
+						return nil, errors.Wrap(err, "could not apply execution payload envelope")
+					}
 				}
 			}
 		}

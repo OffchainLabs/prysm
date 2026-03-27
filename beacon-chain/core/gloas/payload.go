@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -260,19 +259,18 @@ func ApplyExecutionPayloadStateMutations(
 
 // ApplyBlindedExecutionPayloadEnvelopeForStateGen applies the post-bid state mutations from a
 // blinded execution payload envelope for replay/state-generation paths.
-//
-// This path uses the persisted blinded envelope data (keyed by beacon block root) and validates
-// the minimal consistency required to safely advance state.latest_block_hash and related fields.
+// It patches the latest block header with the previous state root, validates minimal consistency
+// with the committed bid, and then applies the state mutations.
+// A nil envelope is a no-op (the payload was not delivered for that slot).
 func ApplyBlindedExecutionPayloadEnvelopeForStateGen(
 	ctx context.Context,
 	st state.BeaconState,
 	previousStateRoot [32]byte,
-	signedEnvelope *ethpb.SignedBlindedExecutionPayloadEnvelope,
+	envelope interfaces.ROBlindedExecutionPayloadEnvelope,
 ) error {
-	if signedEnvelope == nil {
+	if envelope == nil {
 		return nil
 	}
-	envelope := signedEnvelope.Message
 
 	latestHeader := st.LatestBlockHeader()
 	latestHeader.StateRoot = previousStateRoot[:]
@@ -280,8 +278,8 @@ func ApplyBlindedExecutionPayloadEnvelopeForStateGen(
 		return errors.Wrap(err, "could not set latest block header")
 	}
 
-	if envelope.Slot != st.Slot() {
-		return errors.Errorf("blinded envelope slot does not match state slot: envelope=%d, state=%d", envelope.Slot, st.Slot())
+	if envelope.Slot() != st.Slot() {
+		return errors.Errorf("blinded envelope slot does not match state slot: envelope=%d, state=%d", envelope.Slot(), st.Slot())
 	}
 
 	latestBid, err := st.LatestExecutionPayloadBid()
@@ -291,46 +289,27 @@ func ApplyBlindedExecutionPayloadEnvelopeForStateGen(
 	if latestBid == nil {
 		return errors.New("latest execution payload bid is nil")
 	}
-	if primitives.BuilderIndex(envelope.BuilderIndex) != latestBid.BuilderIndex() {
+	if envelope.BuilderIndex() != latestBid.BuilderIndex() {
 		return errors.Errorf(
 			"blinded envelope builder index does not match committed bid builder index: envelope=%d, bid=%d",
-			envelope.BuilderIndex,
+			envelope.BuilderIndex(),
 			latestBid.BuilderIndex(),
 		)
 	}
 
 	bidBlockHash := latestBid.BlockHash()
-	if !bytes.Equal(envelope.BlockHash, bidBlockHash[:]) {
+	envelopeBlockHash := envelope.BlockHash()
+	if bidBlockHash != envelopeBlockHash {
 		return errors.Errorf(
 			"blinded envelope block hash does not match committed bid block hash: envelope=%#x, bid=%#x",
-			envelope.BlockHash,
+			envelopeBlockHash,
 			bidBlockHash,
 		)
 	}
 
-	reqs := envelope.ExecutionRequests
-	if reqs == nil {
-		reqs = &enginev1.ExecutionRequests{}
-	}
-	if err := processExecutionRequests(ctx, st, reqs); err != nil {
-		return errors.Wrap(err, "could not process execution requests")
-	}
-
-	if err := st.QueueBuilderPayment(); err != nil {
-		return errors.Wrap(err, "could not queue builder payment")
-	}
-
-	if err := st.SetExecutionPayloadAvailability(st.Slot(), true); err != nil {
-		return errors.Wrap(err, "could not set execution payload availability")
-	}
-
-	payloadBlockHash := [32]byte(envelope.BlockHash)
-	if err := st.SetLatestBlockHash(payloadBlockHash); err != nil {
-		return errors.Wrap(err, "could not set latest block hash")
-	}
-
-	return nil
+	return ApplyExecutionPayloadStateMutations(ctx, st, envelope.ExecutionRequests(), envelopeBlockHash)
 }
+
 func envelopePublicKey(st state.BeaconState, builderIdx primitives.BuilderIndex) (bls.PublicKey, error) {
 	if builderIdx == params.BeaconConfig().BuilderIndexSelfBuild {
 		return proposerPublicKey(st)
@@ -386,6 +365,89 @@ func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *en
 		return errors.Wrap(err, "could not process consolidation requests")
 	}
 	return nil
+}
+
+// ExecutionPayloadEnvelopeSignatureBatch extracts the BLS signature from a signed execution payload
+// envelope as a SignatureBatch for deferred batch verification.
+func ExecutionPayloadEnvelopeSignatureBatch(
+	st state.BeaconState,
+	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
+) (*bls.SignatureBatch, error) {
+	envelope, err := signedEnvelope.Envelope()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get envelope: %w", err)
+	}
+
+	builderIdx := envelope.BuilderIndex()
+	publicKey, err := envelopePublicKey(st, builderIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	currentEpoch := slots.ToEpoch(envelope.Slot())
+	domain, err := signing.Domain(
+		st.Fork(),
+		currentEpoch,
+		params.BeaconConfig().DomainBeaconBuilder,
+		st.GenesisValidatorsRoot(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute signing domain: %w", err)
+	}
+
+	signingRoot, err := signedEnvelope.SigningRoot(domain)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute signing root: %w", err)
+	}
+
+	signatureBytes := signedEnvelope.Signature()
+	return &bls.SignatureBatch{
+		Signatures:   [][]byte{signatureBytes[:]},
+		PublicKeys:   []bls.PublicKey{publicKey},
+		Messages:     [][32]byte{signingRoot},
+		Descriptions: []string{"execution payload envelope signature"},
+	}, nil
+}
+
+// ApplyExecutionPayloadNoVerifySig applies the execution payload envelope to the state without
+// verifying the envelope signature (returned as a SignatureBatch for deferred batch verification).
+// The caller provides previousStateRoot instead of recomputing it. After applying the payload,
+// it verifies the post-envelope state root matches the envelope's declared state root.
+func ApplyExecutionPayloadNoVerifySig(
+	ctx context.Context,
+	st state.BeaconState,
+	previousStateRoot [32]byte,
+	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
+) (*bls.SignatureBatch, error) {
+	sigBatch, err := ExecutionPayloadEnvelopeSignatureBatch(st, signedEnvelope)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not extract envelope signature batch")
+	}
+
+	envelope, err := signedEnvelope.Envelope()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get envelope from signed envelope")
+	}
+
+	latestHeader := st.LatestBlockHeader()
+	latestHeader.StateRoot = previousStateRoot[:]
+	if err := st.SetLatestBlockHeader(latestHeader); err != nil {
+		return nil, errors.Wrap(err, "could not set latest block header")
+	}
+
+	if err := ApplyExecutionPayload(ctx, st, envelope); err != nil {
+		return nil, err
+	}
+
+	r, err := st.HashTreeRoot(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compute post-envelope state root")
+	}
+	if r != envelope.StateRoot() {
+		return nil, fmt.Errorf("envelope state root mismatch: expected %#x, got %#x", envelope.StateRoot(), r)
+	}
+
+	return sigBatch, nil
 }
 
 // VerifyExecutionPayloadEnvelopeSignature verifies the BLS signature on a signed execution payload envelope.
