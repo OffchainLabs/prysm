@@ -59,6 +59,7 @@ type ForkchoiceFetcher interface {
 	IsCanonical(ctx context.Context, blockRoot [32]byte) (bool, error)
 	DependentRoot(primitives.Epoch) ([32]byte, error)
 	CanonicalNodeAtSlot(primitives.Slot) ([32]byte, bool)
+	ShouldIgnoreData(parentRoot [32]byte, dataSlot primitives.Slot) bool
 }
 
 // TimeFetcher retrieves the Ethereum consensus data that's related to time.
@@ -597,4 +598,27 @@ func (s *Service) inRegularSync() bool {
 // registered for proposing.
 func (s *Service) validating() bool {
 	return s.cfg.TrackedValidatorsCache.Validating()
+}
+
+// ShouldIgnoreData returns true if the data for the given parent root and slot should be ignored.
+func (s *Service) ShouldIgnoreData(parentRoot [32]byte, dataSlot primitives.Slot) bool {
+	currentEpoch := slots.ToEpoch(s.CurrentSlot())
+	if slots.ToEpoch(dataSlot) < currentEpoch {
+		return false
+	}
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	parentSlot, err := s.cfg.ForkChoiceStore.Slot(parentRoot)
+	if err != nil {
+		// This should not happen. The caller should have already checked the parent is in forkchoice.
+		return false
+	}
+	j := s.cfg.ForkChoiceStore.JustifiedCheckpoint()
+	if j == nil {
+		return false
+	}
+	if slots.ToEpoch(parentSlot) >= j.Epoch {
+		return false
+	}
+	return s.cfg.ForkChoiceStore.IsCanonical(parentRoot)
 }
