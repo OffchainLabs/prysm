@@ -77,6 +77,7 @@ type ChainService struct {
 	DataColumns                 []blocks.VerifiedRODataColumn
 	TargetRoot                  [32]byte
 	MockHeadSlot                *primitives.Slot
+	DependentRootCB             func([32]byte, primitives.Epoch) ([32]byte, error)
 	MockCanonicalRoots          map[primitives.Slot][32]byte
 	MockCanonicalFull           map[primitives.Slot]bool
 	MockPayloadContentLookup    map[[32]byte][32]byte
@@ -757,6 +758,11 @@ func (s *ChainService) HasFullNode(root [32]byte) bool {
 	return false
 }
 
+// ShouldIgnoreData returns true if the data for the given parent root and slot should be ignored.
+func (s *ChainService) ShouldIgnoreData(_ [32]byte, _ primitives.Slot) bool {
+	return false
+}
+
 // PayloadContentLookup mocks the same method in the chain service.
 func (s *ChainService) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
 	if s.ForkChoiceStore != nil {
@@ -862,7 +868,10 @@ func (s *ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool
 }
 
 // DependentRootForEpoch mocks the same method in the chain service
-func (c *ChainService) DependentRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
+func (c *ChainService) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	if c.DependentRootCB != nil {
+		return c.DependentRootCB(root, epoch)
+	}
 	return c.TargetRoot, nil
 }
 
