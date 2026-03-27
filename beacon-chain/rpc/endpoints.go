@@ -421,6 +421,15 @@ func (s *Service) validatorEndpoints(
 			handler: server.SyncCommitteeSelections,
 			methods: []string{http.MethodPost},
 		},
+		{
+			template: "/eth/v1/validator/execution_payload_envelope/{slot}",
+			name:     namespace + ".ExecutionPayloadEnvelope",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.ExecutionPayloadEnvelope,
+			methods: []string{http.MethodGet},
+		},
 	}
 }
 
@@ -919,6 +928,16 @@ func (s *Service) beaconEndpoints(
 			},
 			handler: server.GetExecutionPayloadEnvelope,
 			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/execution_payload_envelope",
+			name:     namespace + ".PublishExecutionPayloadEnvelope",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.PublishExecutionPayloadEnvelope,
+			methods: []string{http.MethodPost},
 		},
 	}
 }
