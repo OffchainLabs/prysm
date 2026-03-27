@@ -3225,7 +3225,7 @@ func TestGetPTCDuties(t *testing.T) {
 	genesisTime := time.Now()
 	// Need enough validators for PTC selection (PTC_SIZE is 512 on mainnet, 2 on minimal)
 	numVals := uint64(fieldparams.PTCSize * 2)
-	st, _ := util.DeterministicGenesisStateFulu(t, numVals)
+	st, _ := util.DeterministicGenesisStateGloas(t, numVals)
 	require.NoError(t, st.SetGenesisTime(genesisTime))
 	// Initialize the committee cache for epoch 0.
 	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), st, 0))

@@ -2,13 +2,14 @@ package gloas_test
 
 import (
 	"bytes"
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -119,7 +120,6 @@ func TestProcessPayloadAttestations_EmptyAggregationBits(t *testing.T) {
 }
 
 func TestProcessPayloadAttestations_HappyPath(t *testing.T) {
-	helpers.ClearCache()
 	setupTestConfig(t)
 
 	sk1, pk1 := newKey(t)
@@ -150,7 +150,6 @@ func TestProcessPayloadAttestations_HappyPath(t *testing.T) {
 }
 
 func TestProcessPayloadAttestations_MultipleAttestations(t *testing.T) {
-	helpers.ClearCache()
 	setupTestConfig(t)
 
 	sk1, pk1 := newKey(t)
@@ -211,12 +210,30 @@ func TestProcessPayloadAttestations_IndexedVerificationError(t *testing.T) {
 		errIndex:    0,
 	}
 	err := gloas.ProcessPayloadAttestations(t.Context(), errState, body)
-	require.ErrorContains(t, "failed to convert to indexed form", err)
-	require.ErrorContains(t, "failed to sample beacon committee 0", err)
+	require.ErrorContains(t, "failed to verify indexed form", err)
 	require.ErrorContains(t, "validator 0", err)
 }
 
 func newTestState(t *testing.T, vals []*eth.Validator, slot primitives.Slot) state.BeaconState {
+	t.Helper()
+
+	st, err := testutil.NewBeaconStateGloas(func(seed *eth.BeaconStateGloas) error {
+		seed.Slot = slot
+		seed.Validators = vals
+		seed.Balances = make([]uint64, len(vals))
+		for i, v := range vals {
+			seed.Balances[i] = v.EffectiveBalance
+		}
+		seed.PtcWindow = deterministicPTCWindow(len(vals))
+		return nil
+	})
+	require.NoError(t, err)
+	return st
+}
+
+func newPhase0TestState(t *testing.T, vals []*eth.Validator, slot primitives.Slot) state.BeaconState {
+	t.Helper()
+
 	st, err := testutil.NewBeaconState()
 	require.NoError(t, err)
 	for _, v := range vals {
@@ -224,8 +241,23 @@ func newTestState(t *testing.T, vals []*eth.Validator, slot primitives.Slot) sta
 		require.NoError(t, st.AppendBalance(v.EffectiveBalance))
 	}
 	require.NoError(t, st.SetSlot(slot))
-	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), st, slots.ToEpoch(slot)))
 	return st
+}
+
+func deterministicPTCWindow(validatorCount int) []*eth.PTCs {
+	window := make([]*eth.PTCs, 3*params.BeaconConfig().SlotsPerEpoch)
+	indices := make([]uint64, fieldparams.PTCSize)
+	if validatorCount > 0 {
+		for i := range indices {
+			indices[i] = uint64(i % validatorCount)
+		}
+	}
+	for i := range window {
+		window[i] = &eth.PTCs{
+			ValidatorIndices: slices.Clone(indices),
+		}
+	}
+	return window
 }
 
 func setupTestConfig(t *testing.T) {

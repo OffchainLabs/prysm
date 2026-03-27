@@ -123,18 +123,24 @@ func TestGetDutiesV2_NextEpochProposerSlots(t *testing.T) {
 			params.OverrideBeaconConfig(cfg)
 
 			genesis := util.NewBeaconBlock()
-			deposits, _, err := util.DeterministicDepositsAndKeys(params.BeaconConfig().MinGenesisActiveValidatorCount)
-			require.NoError(t, err)
-			eth1Data, err := util.DeterministicEth1Data(len(deposits))
-			require.NoError(t, err)
-			bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
-			require.NoError(t, err)
+			var bs beaconstate.BeaconState
+			if tt.gloasForkEpoch == 0 {
+				bs, _ = util.DeterministicGenesisStateGloas(t, params.BeaconConfig().MinGenesisActiveValidatorCount)
+			} else {
+				deposits, _, err := util.DeterministicDepositsAndKeys(params.BeaconConfig().MinGenesisActiveValidatorCount)
+				require.NoError(t, err)
+				eth1Data, err := util.DeterministicEth1Data(len(deposits))
+				require.NoError(t, err)
+				bs, err = transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
+				require.NoError(t, err)
+			}
 			genesisRoot, err := genesis.Block.HashTreeRoot()
 			require.NoError(t, err)
 
-			pubKeys := make([][]byte, len(deposits))
-			for i := range deposits {
-				pubKeys[i] = deposits[i].Data.PublicKey
+			pubKeys := make([][]byte, len(bs.Validators()))
+			for i := range bs.Validators() {
+				pk := bs.PubkeyAtIndex(primitives.ValidatorIndex(i))
+				pubKeys[i] = pk[:]
 			}
 
 			chain := &mockChain.ChainService{
@@ -651,15 +657,11 @@ func TestGetDutiesV2_SyncNotReady(t *testing.T) {
 func ptcTestState(t *testing.T) (beaconstate.BeaconState, [][]byte) {
 	t.Helper()
 	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
-	deposits, _, err := util.DeterministicDepositsAndKeys(depChainStart)
-	require.NoError(t, err)
-	eth1Data, err := util.DeterministicEth1Data(len(deposits))
-	require.NoError(t, err)
-	st, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
-	require.NoError(t, err)
+	st, _ := util.DeterministicGenesisStateGloas(t, depChainStart)
 	pubKeys := make([][]byte, depChainStart)
-	for i, d := range deposits {
-		pubKeys[i] = d.Data.PublicKey
+	for i := range depChainStart {
+		pk := st.PubkeyAtIndex(primitives.ValidatorIndex(i))
+		pubKeys[i] = pk[:]
 	}
 	return st, pubKeys
 }
