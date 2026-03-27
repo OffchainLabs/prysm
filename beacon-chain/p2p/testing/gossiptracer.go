@@ -3,6 +3,7 @@ package testing
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -22,14 +23,14 @@ type topicPeer struct {
 // Individual methods (RemovePeer, Prune, ValidateMessage, etc.) can be extended
 // as needed by future tests.
 type GossipTracer struct {
-	mu       sync.Mutex
-	peers    map[peer.ID]chan struct{}
-	addedSet map[peer.ID]struct{}
+	mu             sync.Mutex
+	addPeerWaiters map[peer.ID]chan struct{}
+	addedPeers     map[peer.ID]struct{}
 
-	joinedTopics map[string]struct{}
+	joinedTopics map[string]bool
 
-	graftSet     map[topicPeer]struct{}
-	grafts       map[topicPeer]chan struct{}
+	graftedPeers map[topicPeer]struct{}
+	graftWaiters map[topicPeer]chan struct{}
 	topicWaiters map[string]*topicEventWaiter
 }
 
@@ -37,25 +38,25 @@ type GossipTracer struct {
 // pubsub.NewGossipSub via pubsub.WithRawTracer(tracer).
 func NewGossipTracer() *GossipTracer {
 	return &GossipTracer{
-		peers:        make(map[peer.ID]chan struct{}),
-		addedSet:     make(map[peer.ID]struct{}),
-		joinedTopics: make(map[string]struct{}),
-		graftSet:     make(map[topicPeer]struct{}),
-		grafts:       make(map[topicPeer]chan struct{}),
-		topicWaiters: make(map[string]*topicEventWaiter),
+		addPeerWaiters: make(map[peer.ID]chan struct{}),
+		addedPeers:     make(map[peer.ID]struct{}),
+		joinedTopics:   make(map[string]bool),
+		graftedPeers:   make(map[topicPeer]struct{}),
+		graftWaiters:   make(map[topicPeer]chan struct{}),
+		topicWaiters:   make(map[string]*topicEventWaiter),
 	}
 }
 
 func (t *GossipTracer) waitForAddPeer(ctx context.Context, pid peer.ID) error {
 	t.mu.Lock()
-	if _, ok := t.addedSet[pid]; ok {
+	if _, ok := t.addedPeers[pid]; ok {
 		t.mu.Unlock()
 		return nil
 	}
-	ch, ok := t.peers[pid]
+	ch, ok := t.addPeerWaiters[pid]
 	if !ok {
 		ch = make(chan struct{})
-		t.peers[pid] = ch
+		t.addPeerWaiters[pid] = ch
 	}
 	t.mu.Unlock()
 
@@ -71,14 +72,14 @@ func (t *GossipTracer) waitForGraft(ctx context.Context, topic string, pid peer.
 	key := topicPeer{topic: topic, peer: pid}
 
 	t.mu.Lock()
-	if _, ok := t.graftSet[key]; ok {
+	if _, ok := t.graftedPeers[key]; ok {
 		t.mu.Unlock()
 		return nil
 	}
-	ch, ok := t.grafts[key]
+	ch, ok := t.graftWaiters[key]
 	if !ok {
 		ch = make(chan struct{})
-		t.grafts[key] = ch
+		t.graftWaiters[key] = ch
 	}
 	t.mu.Unlock()
 
@@ -93,8 +94,7 @@ func (t *GossipTracer) waitForGraft(ctx context.Context, topic string, pid peer.
 func (t *GossipTracer) isSubscribed(topic string) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	_, ok := t.joinedTopics[topic]
-	return ok
+	return t.joinedTopics[topic]
 }
 
 // CanPublishToPeer blocks until the gossipsub event loop is in a state where
@@ -119,9 +119,12 @@ func (t *GossipTracer) CanPublishToPeer(ctx context.Context, topic string, pid p
 		return errors.New("topic waiter not found, please call JoinAndWatchTopic first")
 	}
 	if err := w.waitForPeerJoin(ctx, pid); err != nil {
-		return err
+		return fmt.Errorf("wait for peer join: %w", err)
 	}
-	return t.waitForAddPeer(ctx, pid)
+	if err := t.waitForAddPeer(ctx, pid); err != nil {
+		return fmt.Errorf("wait for add peer: %w", err)
+	}
+	return nil
 }
 
 // topicEventWaiter tracks PeerJoin/PeerLeave events for a single topic.
@@ -135,13 +138,13 @@ type topicJoiner interface {
 	JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topic, error)
 }
 
-func (t *GossipTracer) JoinAndWatchTopic(topic string, joiner topicJoiner) (*pubsub.Topic, error) {
+func (t *GossipTracer) JoinAndWatchTopic(ctx context.Context, topic string, joiner topicJoiner) (*pubsub.Topic, error) {
 	topicHandle, err := joiner.JoinTopic(topic)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("join topic: %w", err)
 	}
-	if err := t.watchTopic(context.Background(), topicHandle); err != nil {
-		return nil, err
+	if err := t.watchTopic(ctx, topicHandle); err != nil {
+		return nil, fmt.Errorf("watch topic: %w", err)
 	}
 	return topicHandle, nil
 }
@@ -149,7 +152,7 @@ func (t *GossipTracer) JoinAndWatchTopic(topic string, joiner topicJoiner) (*pub
 func (t *GossipTracer) watchTopic(ctx context.Context, topicHandle *pubsub.Topic) error {
 	ev, err := topicHandle.EventHandler()
 	if err != nil {
-		return err
+		return fmt.Errorf("event handler: %w", err)
 	}
 
 	w := &topicEventWaiter{
@@ -159,17 +162,17 @@ func (t *GossipTracer) watchTopic(ctx context.Context, topicHandle *pubsub.Topic
 
 	// Register the waiter so CanPublishToPeer can find it.
 	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.topicWaiters[topicHandle.String()] = w
-	t.mu.Unlock()
 
 	go func() {
 		defer ev.Cancel()
 		for {
-			if ctx.Err() != nil {
-				return
-			}
 			pe, err := ev.NextPeerEvent(ctx)
 			if err != nil {
+				if ctx.Err() == nil {
+					log.WithError(err).Debug("NextPeerEvent failed")
+				}
 				return
 			}
 			if pe.Type == pubsub.PeerJoin {
@@ -227,10 +230,10 @@ func (t *GossipTracer) AddPeer(p peer.ID, proto protocol.ID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.addedSet[p] = struct{}{}
-	if ch, ok := t.peers[p]; ok {
+	t.addedPeers[p] = struct{}{}
+	if ch, ok := t.addPeerWaiters[p]; ok {
 		close(ch)
-		delete(t.peers, p)
+		delete(t.addPeerWaiters, p)
 	}
 }
 
@@ -241,7 +244,7 @@ func (t *GossipTracer) RemovePeer(p peer.ID) {}
 func (t *GossipTracer) Join(topic string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.joinedTopics[topic] = struct{}{}
+	t.joinedTopics[topic] = true
 }
 
 // Leave is invoked when we unsubscribe from a topic (mesh is torn down).
@@ -257,10 +260,10 @@ func (t *GossipTracer) Graft(p peer.ID, topic string) {
 	defer t.mu.Unlock()
 
 	key := topicPeer{topic: topic, peer: p}
-	t.graftSet[key] = struct{}{}
-	if ch, ok := t.grafts[key]; ok {
+	t.graftedPeers[key] = struct{}{}
+	if ch, ok := t.graftWaiters[key]; ok {
 		close(ch)
-		delete(t.grafts, key)
+		delete(t.graftWaiters, key)
 	}
 }
 

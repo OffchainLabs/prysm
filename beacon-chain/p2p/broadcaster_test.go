@@ -373,7 +373,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	// External peer subscribes to the topic.
 	topic += p.Encoding().ProtocolSuffix()
 
-	_, err = ps1Tracer.JoinAndWatchTopic(topic, p)
+	_, err = ps1Tracer.JoinAndWatchTopic(t.Context(), topic, p)
 	require.NoError(t, err)
 
 	tpHandle, err := p2.JoinTopic(topic)
