@@ -38,7 +38,7 @@ func (v *ProposerPreferencesVerifier) VerifyNextEpoch(st state.ReadOnlyBeaconSta
 	defer v.record(RequireProposerPreferencesNextEpoch, &err)
 
 	msg := v.message()
-	currentEpoch := slots.ToEpoch(st.Slot())
+	currentEpoch := v.clock.CurrentEpoch()
 	if slots.ToEpoch(msg.ProposalSlot) != currentEpoch+1 {
 		return fmt.Errorf("%w: got %d want %d", ErrProposerPreferencesNotNextEpoch, slots.ToEpoch(msg.ProposalSlot), currentEpoch+1)
 	}
@@ -71,7 +71,11 @@ func (v *ProposerPreferencesVerifier) VerifySignature(st state.ReadOnlyBeaconSta
 
 	msg := v.message()
 	epoch := slots.ToEpoch(msg.ProposalSlot)
-	domain, err := signing.Domain(st.Fork(), epoch, params.BeaconConfig().DomainProposerPreferences, st.GenesisValidatorsRoot())
+	fork, err := params.Fork(epoch)
+	if err != nil {
+		return errors.Wrap(err, "fork")
+	}
+	domain, err := signing.Domain(fork, epoch, params.BeaconConfig().DomainProposerPreferences, st.GenesisValidatorsRoot())
 	if err != nil {
 		return errors.Wrap(err, "domain")
 	}
