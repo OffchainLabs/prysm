@@ -86,7 +86,7 @@ func (s *State) replayBlocks(
 			if err != nil {
 				return nil, errors.Wrapf(err, "could not wrap blinded execution payload envelope for block at slot %d", slot)
 			}
-			if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, state, blk.Block().StateRoot(), wrappedEnvelope); err != nil {
+			if err := gloas.ProcessBlindedExecutionPayload(ctx, state, blk.Block().StateRoot(), wrappedEnvelope); err != nil {
 				return nil, errors.Wrapf(err, "could not apply execution payload envelope for block at slot %d", slot)
 			}
 		}
