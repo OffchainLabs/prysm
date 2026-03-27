@@ -2,6 +2,7 @@ package fieldtrie
 
 import (
 	"reflect"
+	"runtime"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
@@ -35,6 +36,7 @@ type FieldTrie struct {
 	length        uint64
 	numOfElems    int
 	isTransferred bool
+	metrics       *metricsRef
 }
 
 // NewFieldTrie is the constructor for the field trie data structure. It creates the corresponding
@@ -42,14 +44,19 @@ type FieldTrie struct {
 // which is either fixed/variable length, it will appropriately determine the trie.
 func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any, length uint64) (*FieldTrie, error) {
 	if elements == nil {
-		return &FieldTrie{
+		ft := &FieldTrie{
 			field:      field,
 			dataType:   fieldInfo,
 			reference:  stateutil.NewRef(1),
 			RWMutex:    new(sync.RWMutex),
 			length:     length,
 			numOfElems: 0,
-		}, nil
+			metrics:    &metricsRef{field: field},
+		}
+
+		ft.addCleanup()
+
+		return ft, nil
 	}
 
 	fieldRoots, err := fieldConverters(field, []uint64{}, elements, true)
@@ -72,7 +79,7 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 		if err != nil {
 			return nil, err
 		}
-		return &FieldTrie{
+		ft := &FieldTrie{
 			fieldLayers: fl,
 			field:       field,
 			dataType:    fieldInfo,
@@ -80,9 +87,15 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 			RWMutex:     new(sync.RWMutex),
 			length:      length,
 			numOfElems:  numOfElems,
-		}, nil
+			metrics:     &metricsRef{field: field},
+		}
+
+		ft.updateMetrics(ft.nodeSize(), 0)
+		ft.addCleanup()
+
+		return ft, nil
 	case types.CompositeArray, types.CompressedArray:
-		return &FieldTrie{
+		ft := &FieldTrie{
 			fieldLayers: stateutil.ReturnTrieLayerVariable(fieldRoots, length),
 			field:       field,
 			dataType:    fieldInfo,
@@ -90,7 +103,13 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 			RWMutex:     new(sync.RWMutex),
 			length:      length,
 			numOfElems:  numOfElems,
-		}, nil
+			metrics:     &metricsRef{field: field},
+		}
+
+		ft.updateMetrics(ft.nodeSize(), 0)
+		ft.addCleanup()
+
+		return ft, nil
 	default:
 		return nil, errors.Errorf("unrecognized data type in field map: %v", reflect.TypeFor[types.DataType]().Name())
 	}
@@ -120,18 +139,22 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, err
 	} else {
 		f.numOfElems = reflect.Indirect(reflect.ValueOf(elements)).Len()
 	}
+	oldNodeSize := f.nodeSize()
+
 	switch f.dataType {
 	case types.BasicArray:
 		fieldRoot, f.fieldLayers, err = stateutil.RecomputeFromLayer(fieldRoots, indices, f.fieldLayers)
 		if err != nil {
 			return [32]byte{}, err
 		}
+		f.updateMetrics(f.nodeSize()-oldNodeSize, 0)
 		return fieldRoot, nil
 	case types.CompositeArray:
 		fieldRoot, f.fieldLayers, err = stateutil.RecomputeFromLayerVariable(fieldRoots, indices, f.fieldLayers)
 		if err != nil {
 			return [32]byte{}, err
 		}
+		f.updateMetrics(f.nodeSize()-oldNodeSize, 0)
 		return stateutil.AddInMixin(fieldRoot, uint64(len(f.fieldLayers[0])))
 	case types.CompressedArray:
 		numOfElems, err := f.field.ElemsInChunk()
@@ -160,6 +183,7 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, err
 		if err != nil {
 			return [32]byte{}, err
 		}
+		f.updateMetrics(f.nodeSize()-oldNodeSize, 0)
 		return stateutil.AddInMixin(fieldRoot, uint64(f.numOfElems))
 	default:
 		return [32]byte{}, errors.Errorf("unrecognized data type in field map: %v", reflect.TypeFor[types.DataType]().Name())
@@ -169,31 +193,40 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, err
 // CopyTrie copies the references to the elements the trie
 // is built on.
 func (f *FieldTrie) CopyTrie() *FieldTrie {
+	var cp *FieldTrie
 	if f.fieldLayers == nil {
-		return &FieldTrie{
+		cp = &FieldTrie{
 			field:      f.field,
 			dataType:   f.dataType,
 			reference:  stateutil.NewRef(1),
 			RWMutex:    new(sync.RWMutex),
 			length:     f.length,
 			numOfElems: f.numOfElems,
+			metrics:    &metricsRef{field: f.field},
+		}
+	} else {
+		dstFieldTrie := make([][]*[32]byte, len(f.fieldLayers))
+		for i, layer := range f.fieldLayers {
+			dstFieldTrie[i] = make([]*[32]byte, len(layer))
+			copy(dstFieldTrie[i], layer)
+		}
+		cp = &FieldTrie{
+			fieldLayers:   dstFieldTrie,
+			field:         f.field,
+			dataType:      f.dataType,
+			reference:     stateutil.NewRef(1),
+			RWMutex:       new(sync.RWMutex),
+			length:        f.length,
+			numOfElems:    f.numOfElems,
+			isTransferred: f.isTransferred,
+			metrics:       &metricsRef{field: f.field},
 		}
 	}
-	dstFieldTrie := make([][]*[32]byte, len(f.fieldLayers))
-	for i, layer := range f.fieldLayers {
-		dstFieldTrie[i] = make([]*[32]byte, len(layer))
-		copy(dstFieldTrie[i], layer)
-	}
-	return &FieldTrie{
-		fieldLayers:   dstFieldTrie,
-		field:         f.field,
-		dataType:      f.dataType,
-		reference:     stateutil.NewRef(1),
-		RWMutex:       new(sync.RWMutex),
-		length:        f.length,
-		numOfElems:    f.numOfElems,
-		isTransferred: f.isTransferred,
-	}
+
+	cp.updateMetrics(cp.nodeSize(), 0)
+	cp.addCleanup()
+
+	return cp
 }
 
 // Length return the length of the whole field trie.
@@ -209,16 +242,22 @@ func (f *FieldTrie) Length() uint64 {
 // to take care that this isn't called on an empty trie.
 func (f *FieldTrie) TransferTrie() *FieldTrie {
 	if f.fieldLayers == nil {
-		return &FieldTrie{
+		ft := &FieldTrie{
 			field:      f.field,
 			dataType:   f.dataType,
 			reference:  stateutil.NewRef(1),
 			RWMutex:    new(sync.RWMutex),
 			length:     f.length,
 			numOfElems: f.numOfElems,
+			metrics:    &metricsRef{field: f.field},
 		}
+
+		ft.addCleanup()
+
+		return ft
 	}
 	f.isTransferred = true
+	oldNodeSize := f.nodeSize()
 	nTrie := &FieldTrie{
 		fieldLayers: f.fieldLayers,
 		field:       f.field,
@@ -227,9 +266,16 @@ func (f *FieldTrie) TransferTrie() *FieldTrie {
 		RWMutex:     new(sync.RWMutex),
 		length:      f.length,
 		numOfElems:  f.numOfElems,
+		metrics:     &metricsRef{field: f.field},
 	}
+
+	nTrie.updateMetrics(nTrie.nodeSize(), 0)
+	nTrie.addCleanup()
+
 	// Zero out field layers here.
 	f.fieldLayers = nil
+	f.updateMetrics(-oldNodeSize, 0)
+
 	return nTrie
 }
 
@@ -265,6 +311,44 @@ func (f *FieldTrie) FieldReference() *stateutil.Reference {
 // empty or not.
 func (f *FieldTrie) Empty() bool {
 	return f == nil || len(f.fieldLayers) == 0 || f.isTransferred
+}
+
+// nodeSize returns the total number of node entries across all field layers.
+func (f *FieldTrie) nodeSize() int {
+	n := 0
+	for _, layer := range f.fieldLayers {
+		n += len(layer)
+	}
+	return n
+}
+
+// updateMetrics adds the given deltas (in number of [32]byte entries) to the gauges
+// and keeps the cleanup reference in sync.
+func (f *FieldTrie) updateMetrics(nodesDelta, overridesDelta int) {
+	label := f.field.String()
+	fieldTrieNodesBytesGauge.WithLabelValues(label).Add(float64(nodesDelta * 32))
+	fieldTrieOverridesBytesGauge.WithLabelValues(label).Add(float64(overridesDelta * 32))
+	f.metrics.nodes += nodesDelta
+	f.metrics.overrides += overridesDelta
+}
+
+// metricsRef holds the current metric contribution for a FieldTrie,
+// stored separately so runtime.AddCleanup can access it without
+// preventing the FieldTrie from being collected.
+type metricsRef struct {
+	field     types.FieldIndex
+	nodes     int
+	overrides int
+}
+
+// addCleanup registers a cleanup function that subtracts this trie's
+// contribution from the gauges when it is garbage collected.
+func (f *FieldTrie) addCleanup() {
+	runtime.AddCleanup(f, func(m *metricsRef) {
+		label := m.field.String()
+		fieldTrieNodesBytesGauge.WithLabelValues(label).Sub(float64(m.nodes * 32))
+		fieldTrieOverridesBytesGauge.WithLabelValues(label).Sub(float64(m.overrides * 32))
+	}, f.metrics)
 }
 
 // InsertFieldLayer manually inserts a field layer. This method
