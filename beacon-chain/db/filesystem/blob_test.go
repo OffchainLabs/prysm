@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -226,4 +227,55 @@ func TestLayoutNames(t *testing.T) {
 	}
 	_, err := newLayout(badLayoutName, nil, nil, nil)
 	require.ErrorIs(t, err, errInvalidLayoutName)
+}
+
+// TestBlobsPrunedOnStartup verifies that WarmCache prunes all pre-Fulu blobs on startup,
+// including those that were still within the retention window at the time of the Fulu fork
+// but have since aged out.
+func TestBlobsPrunedOnStartup(t *testing.T) {
+	cfg := params.BeaconConfig()
+	// This test is only meaningful on a config where the Deneb and Fulu forks are defined.
+	if cfg.DenebForkEpoch == math.MaxUint64 || cfg.FuluForkEpoch == math.MaxUint64 {
+		t.Skip("skipping: Deneb or Fulu fork epoch not configured")
+	}
+
+	dir := t.TempDir()
+	layout := periodicEpochLayout{}
+
+	// earlyBlobEpoch is shortly after Deneb (when blobs were introduced).
+	// It is well outside the ~4096-epoch retention window and must be pruned.
+	earlyBlobEpoch := cfg.DenebForkEpoch + 1000
+
+	// nearFuluEpoch is just before the Fulu fork. At the time of Fulu it was within
+	// the retention window, but today it is outside it and must also be pruned.
+	nearFuluEpoch := cfg.FuluForkEpoch - 100
+
+	createFakeBlobs := func(epoch primitives.Epoch, roots ...[32]byte) {
+		for _, root := range roots {
+			ident := newBlobIdent(root, epoch, 0)
+			fullPath := filepath.Join(dir, layout.sszPath(ident))
+			require.NoError(t, os.MkdirAll(filepath.Dir(fullPath), 0700))
+			require.NoError(t, os.WriteFile(fullPath, []byte("fake blob data"), 0600))
+		}
+	}
+
+	createFakeBlobs(earlyBlobEpoch, [32]byte{1}, [32]byte{2}, [32]byte{3})
+	createFakeBlobs(nearFuluEpoch, [32]byte{4}, [32]byte{5})
+
+	before, _ := filepath.Glob(filepath.Join(dir, "by-epoch", "*", "*", "*", "*.ssz"))
+	require.Equal(t, 5, len(before))
+
+	bs, err := NewBlobStorage(
+		WithBasePath(dir),
+		WithBlobRetentionEpochs(cfg.MinEpochsForBlobsSidecarsRequest),
+		WithLayout(LayoutNameByEpoch),
+	)
+	require.NoError(t, err)
+	bs.WarmCache()
+
+	// WarmCache spawns an async goroutine for the actual file deletion — wait for it.
+	time.Sleep(500 * time.Millisecond)
+
+	after, _ := filepath.Glob(filepath.Join(dir, "by-epoch", "*", "*", "*", "*.ssz"))
+	require.Equal(t, 0, len(after))
 }
