@@ -17,7 +17,7 @@ import (
 
 // UpgradeToGloas updates inputs a generic state to return the version Gloas state.
 //
-//	<spec fn="upgrade_to_gloas" fork="gloas" hash="6e66df25">
+//	<spec fn="upgrade_to_gloas" fork="gloas" hash="8f67112c">
 //	def upgrade_to_gloas(pre: fulu.BeaconState) -> BeaconState:
 //	    epoch = fulu.get_current_epoch(pre)
 //
@@ -84,6 +84,8 @@ import (
 //	        latest_block_hash=pre.latest_execution_payload_header.block_hash,
 //	        # [New in Gloas:EIP7732]
 //	        payload_expected_withdrawals=[],
+//	        # [New in Gloas:EIP7732]
+//	        ptc_window=initialize_ptc_window(pre),
 //	    )
 //
 //	    # [New in Gloas:EIP7732]
@@ -161,7 +163,7 @@ func UpgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 
 // initializePTCWindow builds the initial PTC window for the Gloas fork upgrade.
 //
-//	<spec fn="initialize_ptc_window" fork="gloas" hash="2c292a1c">
+//	<spec fn="initialize_ptc_window" fork="gloas" hash="3764b7f5">
 //	def initialize_ptc_window(
 //	    state: BeaconState,
 //	) -> Vector[Vector[ValidatorIndex, PTC_SIZE], (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH]:

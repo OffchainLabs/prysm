@@ -705,7 +705,7 @@ func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, err
 // PayloadCommittee returns the payload timeliness committee for a given slot
 // by looking up the cached PTC window in state.
 //
-//	<spec fn="get_ptc" fork="gloas" hash="2c292a1c">
+//	<spec fn="get_ptc" fork="gloas" hash="b55ba184">
 //	def get_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
 //	    """
 //	    Get the payload timeliness committee for the given ``slot``.
