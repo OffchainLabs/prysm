@@ -2983,6 +2983,19 @@ func PayloadAttestationDataFromConsensus(d *eth.PayloadAttestationData) *Payload
 	}
 }
 
+func (b *SignedBeaconBlockGloas) ToGeneric() (*eth.GenericSignedBeaconBlock, error) {
+	if b == nil {
+		return nil, errNilValue
+	}
+	signed, err := b.ToConsensus()
+	if err != nil {
+		return nil, err
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Gloas{Gloas: signed},
+	}, nil
+}
+
 func (b *SignedBeaconBlockGloas) ToConsensus() (*eth.SignedBeaconBlockGloas, error) {
 	if b == nil {
 		return nil, errNilValue
