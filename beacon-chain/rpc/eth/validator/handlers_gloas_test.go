@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -65,6 +66,7 @@ func TestExecutionPayloadEnvelope_OK(t *testing.T) {
 
 	var resp structs.GetValidatorExecutionPayloadEnvelopeResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, version.String(version.Gloas), w.Header().Get(api.VersionHeader))
 	assert.Equal(t, version.String(version.Gloas), resp.Version)
 	require.NotNil(t, resp.Data)
 	assert.Equal(t, "42", resp.Data.BuilderIndex)
