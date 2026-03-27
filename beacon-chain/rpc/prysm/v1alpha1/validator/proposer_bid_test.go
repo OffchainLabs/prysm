@@ -123,7 +123,7 @@ func TestSetSelfBuildExecutionPayloadBid_BlobCommitments(t *testing.T) {
 	}
 
 	vs := &Server{}
-	err = vs.setSelfBuildExecutionPayloadBid(t.Context(), sBlk, local)
+	_, err = vs.setExecutionPayloadBid(t.Context(), sBlk, local, true)
 	require.NoError(t, err)
 
 	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
