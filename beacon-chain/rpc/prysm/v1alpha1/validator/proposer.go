@@ -128,12 +128,16 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 
 func (vs *Server) handleSuccesfulReorgAttempt(ctx context.Context, slot primitives.Slot, parentRoot, _ [32]byte) (state.BeaconState, error) {
 	// Try to get the state from the NSC
-	head := transition.NextSlotState(parentRoot[:], slot)
+	accessRoot := parentRoot
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		accessRoot, _ = vs.ForkchoiceFetcher.PayloadContentLookup(parentRoot)
+	}
+	head := transition.NextSlotState(accessRoot[:], slot)
 	if head != nil {
 		return head, nil
 	}
 	// cache miss
-	head, err := vs.StateGen.StateByRoot(ctx, parentRoot)
+	head, err := vs.StateGen.StateByRoot(ctx, accessRoot)
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "could not obtain head state")
 	}
@@ -151,7 +155,11 @@ func logFailedReorgAttempt(slot primitives.Slot, oldHeadRoot, headRoot [32]byte)
 
 func (vs *Server) getHeadNoReorg(ctx context.Context, slot primitives.Slot, parentRoot [32]byte) (state.BeaconState, error) {
 	// Try to get the state from the NSC
-	head := transition.NextSlotState(parentRoot[:], slot)
+	accessRoot := parentRoot
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		accessRoot, _ = vs.ForkchoiceFetcher.PayloadContentLookup(parentRoot)
+	}
+	head := transition.NextSlotState(accessRoot[:], slot)
 	if head != nil {
 		return head, nil
 	}
@@ -240,13 +248,14 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 		// Set payload attestations. New in Gloas.
 		if sBlk.Version() >= version.Gloas {
-			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head)); err != nil {
+			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head, sBlk.Block().ParentRoot())); err != nil {
 				log.WithError(err).Error("Could not set payload attestations")
 			}
 		}
 	})
 
 	winningBid := primitives.ZeroWei()
+	selfBuildEnvelope := true
 	var bundle enginev1.BlobsBundler
 	var local *blocks.GetPayloadResponse
 	if sBlk.Version() >= version.Bellatrix {
@@ -277,7 +286,9 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 				return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
 			}
 		} else {
-			if err := vs.setSelfBuildExecutionPayloadBid(ctx, sBlk, local); err != nil {
+			selfBuildOnly := local.OverrideBuilder || skipMevBoost
+			selfBuildEnvelope, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
+			if err != nil {
 				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
 			}
 		}
@@ -291,10 +302,12 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	}
 	sBlk.SetStateRoot(sr)
 
-	// For Gloas, build and cache the execution payload envelope now that the block
-	// is fully built (state root set). The envelope needs the final block HTR as
-	// BeaconBlockRoot and the post-payload state root as StateRoot.
-	if sBlk.Version() >= version.Gloas {
+	// For Gloas self-build, cache the execution payload envelope now that the
+	// block is fully built (state root set). The envelope needs the final block
+	// HTR as BeaconBlockRoot and the post-payload state root as StateRoot.
+	// When a remote P2P bid was selected, the winning builder is responsible
+	// for producing the envelope, so we must not cache a self-build one.
+	if sBlk.Version() >= version.Gloas && selfBuildEnvelope {
 		if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
 		}
@@ -635,7 +648,11 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 // computeStateRoot computes the state root after a block has been processed through a state transition and
 // returns it to the validator client.
 func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, error) {
-	beaconState, err := vs.StateGen.StateByRoot(ctx, block.Block().ParentRoot())
+	roblock, err := blocks.NewROBlockWithRoot(block, [32]byte{}) // root is not used
+	if err != nil {
+		return nil, errors.Wrap(err, "could not create ROBlock")
+	}
+	beaconState, err := vs.BlockReceiver.GetPrestateToPropose(ctx, roblock)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve beacon state")
 	}

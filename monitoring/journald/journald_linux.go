@@ -11,11 +11,11 @@ import (
 
 // Enable adds the Journal hook if journal is enabled
 // Sets log output to ioutil.Discard so stdout isn't captured.
-func Enable() error {
+func Enable(logLevel logrus.Level) error {
 	if !journal.Enabled() {
 		logrus.Warning("Journal not available but user requests we log to it. Ignoring")
 	} else {
-		logrus.AddHook(&JournalHook{})
+		logrus.AddHook(&JournalHook{level: logLevel})
 		logrus.SetOutput(io.Discard)
 	}
 	return nil

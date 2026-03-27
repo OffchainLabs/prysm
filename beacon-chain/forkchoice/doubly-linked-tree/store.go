@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -107,14 +108,16 @@ func (s *Store) insert(ctx context.Context,
 	}
 
 	n := &Node{
-		slot:                     slot,
-		root:                     root,
-		parent:                   parent,
-		justifiedEpoch:           justifiedEpoch,
-		unrealizedJustifiedEpoch: justifiedEpoch,
-		finalizedEpoch:           finalizedEpoch,
-		unrealizedFinalizedEpoch: finalizedEpoch,
-		blockHash:                *blockHash,
+		slot:                        slot,
+		root:                        root,
+		parent:                      parent,
+		justifiedEpoch:              justifiedEpoch,
+		unrealizedJustifiedEpoch:    justifiedEpoch,
+		finalizedEpoch:              finalizedEpoch,
+		unrealizedFinalizedEpoch:    finalizedEpoch,
+		blockHash:                   *blockHash,
+		payloadAvailabilityVote:     bitfield.NewBitvector512(),
+		payloadDataAvailabilityVote: bitfield.NewBitvector512(),
 	}
 	// Set the node's target checkpoint
 	if slot%params.BeaconConfig().SlotsPerEpoch == 0 {
@@ -160,6 +163,7 @@ func (s *Store) insert(ctx context.Context,
 		} else {
 			delete(s.emptyNodeByRoot, root)
 			delete(s.fullNodeByRoot, root)
+			updatePayloadNodeMetrics(s)
 			return nil, errInvalidParentRoot
 		}
 	} else {
@@ -193,6 +197,7 @@ func (s *Store) insert(ctx context.Context,
 	// Update metrics.
 	processedBlockCount.Inc()
 	nodeCount.Set(float64(len(s.emptyNodeByRoot)))
+	updatePayloadNodeMetrics(s)
 
 	// Only update received block slot if it's within epoch from current time.
 	if slot+params.BeaconConfig().SlotsPerEpoch > slots.CurrentSlot(s.genesisTime) {
@@ -232,6 +237,7 @@ func (s *Store) pruneFinalizedNodeByRootMap(ctx context.Context, node, finalized
 		fn.children = nil
 		delete(s.fullNodeByRoot, node.root)
 	}
+	updatePayloadNodeMetrics(s)
 	return nil
 }
 

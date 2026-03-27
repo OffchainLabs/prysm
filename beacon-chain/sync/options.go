@@ -12,6 +12,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -210,6 +211,27 @@ func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
 func WithPayloadAttestationCache(c *cache.PayloadAttestationCache) Option {
 	return func(s *Service) error {
 		s.payloadAttestationCache = c
+		return nil
+	}
+}
+
+func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
+	return func(s *Service) error {
+		s.proposerPreferencesCache = c
+		return nil
+	}
+}
+
+func WithHighestExecutionPayloadBidCache(c *cache.HighestExecutionPayloadBidCache) Option {
+	return func(s *Service) error {
+		s.highestExecutionPayloadBidCache = c
+		return nil
+	}
+}
+
+func WithPayloadAttestationPool(pool payloadattestation.PoolManager) Option {
+	return func(s *Service) error {
+		s.cfg.payloadAttestationPool = pool
 		return nil
 	}
 }

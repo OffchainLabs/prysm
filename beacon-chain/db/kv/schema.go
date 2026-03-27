@@ -7,17 +7,18 @@ package kv
 // it easy to scan for keys that have a certain shard number as a prefix and return those
 // corresponding attestations.
 var (
-	blocksBucket                    = []byte("blocks")
-	stateBucket                     = []byte("state")
-	stateSummaryBucket              = []byte("state-summary")
-	chainMetadataBucket             = []byte("chain-metadata")
-	checkpointBucket                = []byte("check-point")
-	powchainBucket                  = []byte("powchain")
-	stateValidatorsBucket           = []byte("state-validators")
-	feeRecipientBucket              = []byte("fee-recipient")
-	registrationBucket              = []byte("registration")
-	stateDiffBucket                 = []byte("state-diff")
-	executionPayloadEnvelopesBucket = []byte("execution-payload-envelopes")
+	blocksBucket                            = []byte("blocks")
+	stateBucket                             = []byte("state")
+	stateSummaryBucket                      = []byte("state-summary")
+	chainMetadataBucket                     = []byte("chain-metadata")
+	checkpointBucket                        = []byte("check-point")
+	powchainBucket                          = []byte("powchain")
+	stateValidatorsBucket                   = []byte("state-validators")
+	feeRecipientBucket                      = []byte("fee-recipient")
+	registrationBucket                      = []byte("registration")
+	stateDiffBucket                         = []byte("state-diff")
+	executionPayloadEnvelopesBucket         = []byte("execution-payload-envelopes")
+	executionPayloadEnvelopeBlockHashBucket = []byte("execution-payload-envelope-block-hash-index")
 
 	// Light Client Updates Bucket
 	lightClientUpdatesBucket       = []byte("light-client-updates")

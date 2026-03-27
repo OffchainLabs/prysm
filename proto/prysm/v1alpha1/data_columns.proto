@@ -47,5 +47,5 @@ message DataColumnSidecar {
 
 message DataColumnsByRootIdentifier {
   bytes block_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  repeated uint64 columns = 2  [ (ethereum.eth.ext.ssz_max) = "128" ];
+  repeated uint64 columns = 2 [ (ethereum.eth.ext.ssz_max) = "128" ];
 }

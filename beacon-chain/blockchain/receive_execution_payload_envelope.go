@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
@@ -29,9 +32,18 @@ type ExecutionPayloadEnvelopeReceiver interface {
 }
 
 // ReceiveExecutionPayloadEnvelope processes a signed execution payload envelope for the Gloas fork.
-func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed interfaces.ROSignedExecutionPayloadEnvelope) error {
+func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed interfaces.ROSignedExecutionPayloadEnvelope) (err error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveExecutionPayloadEnvelope")
 	defer span.End()
+	start := time.Now()
+	defer func() {
+		beaconExecutionPayloadEnvelopeProcessingDurationSeconds.Observe(time.Since(start).Seconds())
+		if err != nil {
+			beaconExecutionPayloadEnvelopeInvalidTotal.Inc()
+			return
+		}
+		beaconExecutionPayloadEnvelopeValidTotal.Inc()
+	}()
 
 	envelope, err := signed.Envelope()
 	if err != nil {
@@ -68,6 +80,16 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
+	// DA check: verify data columns are available before inserting payload.
+	bid, err := preState.LatestExecutionPayloadBid()
+	if err != nil {
+		return errors.Wrap(err, "could not get latest execution payload bid")
+	}
+	if len(bid.BlobKzgCommitments()) > 0 {
+		if err := s.areDataColumnsAvailable(ctx, root, envelope.Slot()); err != nil {
+			return errors.Wrap(err, "data availability check failed for payload envelope")
+		}
+	}
 	if err := s.savePostPayload(ctx, signed, preState); err != nil {
 		return err
 	}
@@ -92,9 +114,25 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		return err
 	}
 
+	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
+		Type: statefeed.PayloadProcessed,
+		Data: &statefeed.PayloadProcessedData{
+			Slot:      envelope.Slot(),
+			BlockRoot: root,
+		},
+	})
+
+	execution, err := envelope.Execution()
+	if err != nil {
+		log.WithError(err).Error("Could not get execution payload from envelope for logging")
+		return nil
+	}
+
 	log.WithFields(logrus.Fields{
-		"slot":      envelope.Slot(),
-		"blockRoot": fmt.Sprintf("%#x", root),
+		"slot":       envelope.Slot(),
+		"blockRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(root[:])),
+		"blockHash":  fmt.Sprintf("%#x", bytesutil.Trunc(execution.BlockHash())),
+		"parentHash": fmt.Sprintf("%#x", bytesutil.Trunc(execution.ParentHash())),
 	}).Info("Processed execution payload envelope")
 	return nil
 }
@@ -111,13 +149,21 @@ func (s *Service) postPayloadHeadUpdate(ctx context.Context, envelope interfaces
 
 	s.headLock.Lock()
 	s.head.state = st
+	s.head.full = true
 	s.headLock.Unlock()
 
-	if err := transition.UpdateNextSlotCache(ctx, blockHash[:], st); err != nil {
-		log.WithError(err).Error("Could not update next slot cache")
-	}
+	go func() {
+		ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
+		defer cancel()
+		if err := transition.UpdateNextSlotCache(ctx, blockHash[:], st); err != nil {
+			log.WithError(err).Error("Could not update next slot cache")
+		}
+		if err := s.handleEpochBoundary(ctx, envelope.Slot(), st, blockHash[:]); err != nil {
+			log.WithError(err).Error("Could not handle epoch boundary")
+		}
+	}()
 
-	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot)
+	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot, blockHash[:])
 	if s.inRegularSync() {
 		go func() {
 			pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)

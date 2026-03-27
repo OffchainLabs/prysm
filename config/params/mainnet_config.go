@@ -111,6 +111,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	EpochsPerEth1VotingPeriod:        64,
 	SlotsPerHistoricalRoot:           8192,
 	MinValidatorWithdrawabilityDelay: 256,
+	MinBuilderWithdrawabilityDelay:   64,
 	ShardCommitteePeriod:             256,
 	MinEpochsToInactivityPenalty:     4,
 	Eth1FollowDistance:               2048,
@@ -123,15 +124,16 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	IntervalsPerSlot:                3,
 
 	// Time-based protocol parameters.
-	ProposerReorgCutoffBPS:  primitives.BP(1667),
-	AttestationDueBPS:       primitives.BP(3333),
-	AggregateDueBPS:         primitives.BP(6667),
-	SyncMessageDueBPS:       primitives.BP(3333),
-	ContributionDueBPS:      primitives.BP(6667),
-	AttestationDueBPSGloas:  primitives.BP(2500),
-	AggregateDueBPSGloas:    primitives.BP(5000),
-	SyncMessageDueBPSGloas:  primitives.BP(2500),
-	ContributionDueBPSGloas: primitives.BP(5000),
+	ProposerReorgCutoffBPS:   primitives.BP(1667),
+	AttestationDueBPS:        primitives.BP(3333),
+	AggregateDueBPS:          primitives.BP(6667),
+	SyncMessageDueBPS:        primitives.BP(3333),
+	ContributionDueBPS:       primitives.BP(6667),
+	AttestationDueBPSGloas:   primitives.BP(2500),
+	AggregateDueBPSGloas:     primitives.BP(5000),
+	SyncMessageDueBPSGloas:   primitives.BP(2500),
+	ContributionDueBPSGloas:  primitives.BP(5000),
+	PayloadAttestationDueBPS: primitives.BP(7500),
 
 	// Ethereum PoW parameters.
 	DepositChainID:         1, // Chain ID of eth1 mainnet.
@@ -175,6 +177,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MaxWithdrawalsPerPayload:         16,
 	MaxBlsToExecutionChanges:         16,
 	MaxValidatorsPerWithdrawalsSweep: 16384,
+	MaxBuildersPerWithdrawalsSweep:   16384,
 
 	// BLS domain values.
 	DomainBeaconProposer:              bytesutil.Uint32ToBytes4(0x00000000),
@@ -192,6 +195,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DomainBLSToExecutionChange:        bytesutil.Uint32ToBytes4(0x0A000000),
 	DomainBeaconBuilder:               bytesutil.Uint32ToBytes4(0x0B000000),
 	DomainPTCAttester:                 bytesutil.Uint32ToBytes4(0x0C000000),
+	DomainProposerPreferences:         bytesutil.Uint32ToBytes4(0x0D000000),
 
 	// Prysm constants.
 	GenesisValidatorsRoot:          [32]byte{75, 54, 61, 185, 78, 40, 97, 32, 215, 110, 185, 5, 52, 15, 221, 78, 84, 191, 233, 240, 107, 243, 63, 246, 207, 90, 210, 127, 81, 27, 254, 149},
@@ -344,6 +348,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Values related to gloas
 	BuilderPaymentThresholdNumerator:   6,
 	BuilderPaymentThresholdDenominator: 10,
+	MaxRequestPayloads:                 128,
 
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB

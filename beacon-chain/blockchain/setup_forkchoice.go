@@ -166,11 +166,11 @@ func (s *Service) setupForkchoiceCheckpoints() error {
 	defer s.cfg.ForkChoiceStore.Unlock()
 	if err := s.cfg.ForkChoiceStore.UpdateJustifiedCheckpoint(s.ctx, &forkchoicetypes.Checkpoint{Epoch: justified.Epoch,
 		Root: bytesutil.ToBytes32(justified.Root)}); err != nil {
-		return errors.Wrap(err, "could not update forkchoice's justified checkpoint")
+		log.WithError(err).Error("Could not update forkchoice's justified checkpoint, trying to update finalized checkpoint anyway")
 	}
 	if err := s.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: finalized.Epoch,
 		Root: fRoot}); err != nil {
-		return errors.Wrap(err, "could not update forkchoice's finalized checkpoint")
+		log.WithError(err).Error("Could not update forkchoice's finalized checkpoint")
 	}
 	s.cfg.ForkChoiceStore.SetGenesisTime(s.genesisTime)
 	return nil

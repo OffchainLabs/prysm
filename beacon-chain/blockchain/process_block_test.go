@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -733,7 +734,7 @@ func TestOnBlock_CanFinalize_WithOnTick(t *testing.T) {
 
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, r)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -785,7 +786,7 @@ func TestOnBlock_CanFinalize(t *testing.T) {
 
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, r)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -849,7 +850,7 @@ func TestOnBlock_CallNewPayloadAndForkchoiceUpdated(t *testing.T) {
 
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, r)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -1324,7 +1325,7 @@ func TestOnBlock_ProcessBlocksParallel(t *testing.T) {
 		go func() {
 			roblock, err := consensusblocks.NewROBlockWithRoot(wsb1, r1)
 			require.NoError(t, err)
-			preState, err := service.getBlockPreState(ctx, roblock)
+			preState, err := service.GetBlockPreState(ctx, roblock)
 			require.NoError(t, err)
 			postState, err := service.validateStateTransition(ctx, preState, wsb1)
 			require.NoError(t, err)
@@ -1338,7 +1339,7 @@ func TestOnBlock_ProcessBlocksParallel(t *testing.T) {
 		go func() {
 			roblock, err := consensusblocks.NewROBlockWithRoot(wsb2, r2)
 			require.NoError(t, err)
-			preState, err := service.getBlockPreState(ctx, roblock)
+			preState, err := service.GetBlockPreState(ctx, roblock)
 			require.NoError(t, err)
 			postState, err := service.validateStateTransition(ctx, preState, wsb2)
 			require.NoError(t, err)
@@ -1352,7 +1353,7 @@ func TestOnBlock_ProcessBlocksParallel(t *testing.T) {
 		go func() {
 			roblock, err := consensusblocks.NewROBlockWithRoot(wsb3, r3)
 			require.NoError(t, err)
-			preState, err := service.getBlockPreState(ctx, roblock)
+			preState, err := service.GetBlockPreState(ctx, roblock)
 			require.NoError(t, err)
 			postState, err := service.validateStateTransition(ctx, preState, wsb3)
 			require.NoError(t, err)
@@ -1366,7 +1367,7 @@ func TestOnBlock_ProcessBlocksParallel(t *testing.T) {
 		go func() {
 			roblock, err := consensusblocks.NewROBlockWithRoot(wsb4, r4)
 			require.NoError(t, err)
-			preState, err := service.getBlockPreState(ctx, roblock)
+			preState, err := service.GetBlockPreState(ctx, roblock)
 			require.NoError(t, err)
 			postState, err := service.validateStateTransition(ctx, preState, wsb4)
 			require.NoError(t, err)
@@ -1444,7 +1445,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 		require.NoError(t, err)
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -1466,7 +1467,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 		require.NoError(t, err)
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -1489,7 +1490,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -1514,7 +1515,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 	require.NoError(t, err)
 	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, firstInvalidRoot)
 	require.NoError(t, err)
-	preState, err := service.getBlockPreState(ctx, roblock)
+	preState, err := service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
@@ -1551,7 +1552,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 
 	rowsb, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	preState, err = service.getBlockPreState(ctx, rowsb)
+	preState, err = service.GetBlockPreState(ctx, rowsb)
 	require.NoError(t, err)
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	require.NoError(t, err)
@@ -1580,7 +1581,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 	require.NoError(t, err)
 	roblock, err = consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	preState, err = service.getBlockPreState(ctx, roblock)
+	preState, err = service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err = service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
@@ -1649,7 +1650,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -1672,7 +1673,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -1694,7 +1695,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	require.NoError(t, err)
 	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, lastValidRoot)
 	require.NoError(t, err)
-	preState, err := service.getBlockPreState(ctx, roblock)
+	preState, err := service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
@@ -1725,7 +1726,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 		require.NoError(t, err)
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, invalidRoots[i-13])
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -1755,7 +1756,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 
 	rowsb, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	preState, err = service.getBlockPreState(ctx, rowsb)
+	preState, err = service.GetBlockPreState(ctx, rowsb)
 	require.NoError(t, err)
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	require.NoError(t, err)
@@ -1795,7 +1796,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	require.NoError(t, err)
 	roblock, err = consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	preState, err = service.getBlockPreState(ctx, roblock)
+	preState, err = service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err = service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
@@ -1822,7 +1823,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 		require.NoError(t, err)
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -1852,7 +1853,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 
 	roblock, err = consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	preState, err = service.getBlockPreState(ctx, roblock)
+	preState, err = service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err = service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
@@ -1914,7 +1915,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 		require.NoError(t, err)
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -1936,7 +1937,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 		require.NoError(t, err)
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -1958,7 +1959,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	require.NoError(t, err)
 	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, lastValidRoot)
 	require.NoError(t, err)
-	preState, err := service.getBlockPreState(ctx, roblock)
+	preState, err := service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
@@ -1991,7 +1992,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 		currStoreFinalizedEpoch := service.FinalizedCheckpt().Epoch
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -2023,7 +2024,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	require.NoError(t, err)
 	rowsb, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	preState, err = service.getBlockPreState(ctx, rowsb)
+	preState, err = service.GetBlockPreState(ctx, rowsb)
 	require.NoError(t, err)
 	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
 	require.NoError(t, err)
@@ -2115,7 +2116,7 @@ func TestOnBlock_HandleBlockAttestations(t *testing.T) {
 		require.NoError(t, err)
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -2183,7 +2184,7 @@ func TestOnBlock_HandleBlockAttestations(t *testing.T) {
 		require.NoError(t, err)
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		preState, err := service.getBlockPreState(ctx, roblock)
+		preState, err := service.GetBlockPreState(ctx, roblock)
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
 		require.NoError(t, err)
@@ -2456,7 +2457,7 @@ func TestRollbackBlock(t *testing.T) {
 	require.NoError(t, err)
 	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	preState, err := service.getBlockPreState(ctx, roblock)
+	preState, err := service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
@@ -2516,7 +2517,7 @@ func TestRollbackBlock_SavePostStateInfo_ContextDeadline(t *testing.T) {
 	require.NoError(t, err)
 	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	preState, err := service.getBlockPreState(ctx, roblock)
+	preState, err := service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
@@ -2574,7 +2575,7 @@ func TestRollbackBlock_ContextDeadline(t *testing.T) {
 	require.NoError(t, err)
 	roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	preState, err := service.getBlockPreState(ctx, roblock)
+	preState, err := service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err := service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
@@ -2591,7 +2592,7 @@ func TestRollbackBlock_ContextDeadline(t *testing.T) {
 	require.NoError(t, err)
 	roblock, err = consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	preState, err = service.getBlockPreState(ctx, roblock)
+	preState, err = service.GetBlockPreState(ctx, roblock)
 	require.NoError(t, err)
 	postState, err = service.validateStateTransition(ctx, preState, wsb)
 	require.NoError(t, err)
@@ -3479,4 +3480,220 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestHandleBlockPayloadAttestations(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	t.Run("pre-Gloas block is no-op", func(t *testing.T) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		blk := util.NewBeaconBlockElectra()
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		st, err := util.NewBeaconStateElectra()
+		require.NoError(t, err)
+		require.NoError(t, s.handleBlockPayloadAttestations(t.Context(), wsb.Block(), st))
+	})
+
+	t.Run("empty payload attestations", func(t *testing.T) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		blk := util.NewBeaconBlockGloas()
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		st, err := util.NewBeaconStateGloas()
+		require.NoError(t, err)
+		require.NoError(t, s.handleBlockPayloadAttestations(t.Context(), wsb.Block(), st))
+	})
+
+	t.Run("unknown root is skipped", func(t *testing.T) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		ctx := t.Context()
+
+		numVals := 2048
+		headState := gloasStateWithValidators(t, 2, numVals)
+
+		unknownRoot := bytesutil.ToBytes32([]byte("unknown"))
+		bits := bitfield.NewBitvector512()
+		bits.SetBitAt(0, true)
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot: 2,
+				Body: &ethpb.BeaconBlockBodyGloas{
+					PayloadAttestations: []*ethpb.PayloadAttestation{
+						{
+							AggregationBits: bits,
+							Data: &ethpb.PayloadAttestationData{
+								BeaconBlockRoot:   unknownRoot[:],
+								Slot:              1,
+								PayloadPresent:    true,
+								BlobDataAvailable: true,
+							},
+							Signature: make([]byte, 96),
+						},
+					},
+				},
+			},
+		})
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.NoError(t, s.handleBlockPayloadAttestations(ctx, wsb.Block(), headState))
+	})
+
+	t.Run("known root sets PTC votes", func(t *testing.T) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		ctx := t.Context()
+
+		blockRoot := bytesutil.ToBytes32([]byte("root1"))
+		parentRoot := params.BeaconConfig().ZeroHash
+		blockHash := bytesutil.ToBytes32([]byte("hash1"))
+
+		numVals := 2048
+		headState := gloasStateWithValidators(t, 2, numVals)
+
+		base, insertBlk := testGloasState(t, 1, parentRoot, blockHash)
+		insertGloasBlock(t, s, base, insertBlk, blockRoot)
+
+		ptc, err := gloas.PayloadCommittee(ctx, headState, 1)
+		require.NoError(t, err)
+		require.NotEqual(t, 0, len(ptc))
+
+		bits := bitfield.NewBitvector512()
+		bits.SetBitAt(0, true)
+		bits.SetBitAt(2, true)
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot: 2,
+				Body: &ethpb.BeaconBlockBodyGloas{
+					PayloadAttestations: []*ethpb.PayloadAttestation{
+						{
+							AggregationBits: bits,
+							Data: &ethpb.PayloadAttestationData{
+								BeaconBlockRoot:   blockRoot[:],
+								Slot:              1,
+								PayloadPresent:    true,
+								BlobDataAvailable: true,
+							},
+							Signature: make([]byte, 96),
+						},
+					},
+				},
+			},
+		})
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.NoError(t, s.handleBlockPayloadAttestations(ctx, wsb.Block(), headState))
+	})
+
+	t.Run("multiple attestations", func(t *testing.T) {
+		s, _ := setupGloasService(t, &mockExecution.EngineClient{})
+		ctx := t.Context()
+
+		blockRoot := bytesutil.ToBytes32([]byte("root1"))
+		parentRoot := params.BeaconConfig().ZeroHash
+		blockHash := bytesutil.ToBytes32([]byte("hash1"))
+
+		numVals := 2048
+		headState := gloasStateWithValidators(t, 2, numVals)
+
+		base, insertBlk := testGloasState(t, 1, parentRoot, blockHash)
+		insertGloasBlock(t, s, base, insertBlk, blockRoot)
+
+		bits1 := bitfield.NewBitvector512()
+		bits1.SetBitAt(0, true)
+		bits2 := bitfield.NewBitvector512()
+		bits2.SetBitAt(1, true)
+		blk := util.HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				Slot: 2,
+				Body: &ethpb.BeaconBlockBodyGloas{
+					PayloadAttestations: []*ethpb.PayloadAttestation{
+						{
+							AggregationBits: bits1,
+							Data: &ethpb.PayloadAttestationData{
+								BeaconBlockRoot:   blockRoot[:],
+								Slot:              1,
+								PayloadPresent:    true,
+								BlobDataAvailable: false,
+							},
+							Signature: make([]byte, 96),
+						},
+						{
+							AggregationBits: bits2,
+							Data: &ethpb.PayloadAttestationData{
+								BeaconBlockRoot:   blockRoot[:],
+								Slot:              1,
+								PayloadPresent:    false,
+								BlobDataAvailable: true,
+							},
+							Signature: make([]byte, 96),
+						},
+					},
+				},
+			},
+		})
+		wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.NoError(t, s.handleBlockPayloadAttestations(ctx, wsb.Block(), headState))
+	})
+}
+
+func TestUpdateCachesAndEpochBoundary_MatchingRoots(t *testing.T) {
+	service := testServiceNoDB(t)
+	st, _ := util.DeterministicGenesisState(t, 1)
+	accessRoot := [32]byte{'a'}
+
+	service.updateCachesAndEpochBoundary(t.Context(), 1, st, accessRoot, accessRoot[:], st)
+
+	cached := transition.NextSlotState(accessRoot[:], 1)
+	require.NotNil(t, cached)
+	require.Equal(t, primitives.Slot(1), cached.Slot())
+}
+
+func TestUpdateCachesAndEpochBoundary_DifferentRoots(t *testing.T) {
+	service := testServiceNoDB(t)
+	headState, _ := util.DeterministicGenesisState(t, 1)
+	lastState, _ := util.DeterministicGenesisState(t, 1)
+	accessRoot := [32]byte{'a'}
+	lastRoot := [32]byte{'b'}
+
+	service.updateCachesAndEpochBoundary(t.Context(), 1, headState, accessRoot, lastRoot[:], lastState)
+
+	// Cache should be keyed by accessRoot, not lastRoot.
+	cached := transition.NextSlotState(accessRoot[:], 1)
+	require.NotNil(t, cached)
+	require.Equal(t, primitives.Slot(1), cached.Slot())
+
+	cached = transition.NextSlotState(lastRoot[:], 1)
+	require.Equal(t, true, cached == nil)
+}
+
+func TestRefreshCaches_NoCachedState(t *testing.T) {
+	service := testServiceNoDB(t)
+	st, _ := util.DeterministicGenesisState(t, 1)
+	headRoot := [32]byte{'h'}
+
+	service.refreshCaches(t.Context(), 1, headRoot, st, headRoot)
+
+	cached := transition.NextSlotState(headRoot[:], 1)
+	require.NotNil(t, cached)
+	require.Equal(t, primitives.Slot(1), cached.Slot())
+}
+
+func TestRefreshCaches_CachedStateMatchesAccessRoot(t *testing.T) {
+	service := testServiceNoDB(t)
+	st, _ := util.DeterministicGenesisState(t, 1)
+	accessRoot := [32]byte{'a'}
+	headRoot := [32]byte{'h'}
+
+	// Pre-populate the cache with accessRoot.
+	require.NoError(t, transition.UpdateNextSlotCache(t.Context(), accessRoot[:], st))
+
+	service.refreshCaches(t.Context(), 1, headRoot, st, accessRoot)
+
+	cached := transition.NextSlotState(accessRoot[:], 1)
+	require.NotNil(t, cached)
+	require.Equal(t, primitives.Slot(1), cached.Slot())
 }

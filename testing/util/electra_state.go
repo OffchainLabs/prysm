@@ -111,7 +111,7 @@ func emptyGenesisStateElectra() (state.BeaconState, error) {
 		ExitBalanceToConsume:          primitives.Gwei(0),
 		ConsolidationBalanceToConsume: primitives.Gwei(0),
 	}
-	return state_native.InitializeFromProtoElectra(st)
+	return state_native.InitializeFromProtoUnsafeElectra(st)
 }
 
 func buildGenesisBeaconStateElectra(genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data, opts ...ElectraStateOption) (state.BeaconState, error) {
@@ -145,7 +145,8 @@ func buildGenesisBeaconStateElectra(genesisTime uint64, preState state.BeaconSta
 
 	slashings := make([]uint64, params.BeaconConfig().EpochsPerSlashingsVector)
 
-	genesisValidatorsRoot, err := stateutil.ValidatorRegistryRoot(preState.Validators())
+	compactValidators := stateutil.CompactValidatorsFromProto(preState.Validators())
+	genesisValidatorsRoot, err := stateutil.ValidatorRegistryRoot(compactValidators)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not hash tree root genesis validators %v", err)
 	}
@@ -301,5 +302,5 @@ func buildGenesisBeaconStateElectra(genesisTime uint64, preState state.BeaconSta
 		WithdrawalsRoot:  make([]byte, 32),
 	}
 
-	return state_native.InitializeFromProtoElectra(st)
+	return state_native.InitializeFromProtoUnsafeElectra(st)
 }

@@ -45,6 +45,8 @@ type BlockReceiver interface {
 	HasBlock(ctx context.Context, root [32]byte) bool
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
 	BlockBeingSynced([32]byte) bool
+	GetBlockPreState(ctx context.Context, b blocks.ROBlock) (state.BeaconState, error)
+	GetPrestateToPropose(ctx context.Context, b blocks.ROBlock) (state.BeaconState, error)
 }
 
 // BlobReceiver interface defines the methods of chain service for receiving new
@@ -100,7 +102,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 		return errors.Wrap(err, "new ro block with root")
 	}
 
-	preState, err := s.getBlockPreState(ctx, roblock)
+	preState, err := s.GetBlockPreState(ctx, roblock)
 	if err != nil {
 		return errors.Wrap(err, "could not get block's prestate")
 	}
@@ -151,7 +153,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 
 	// Have we been finalizing? Should we start saving hot states to db?
 	if err := s.checkSaveHotStateDB(ctx); err != nil {
-		return errors.Wrap(err, "check save hot state db")
+		log.WithError(err).Error("Could not check save hot state DB")
 	}
 
 	// We apply the same heuristic to some of our more important caches.
@@ -364,6 +366,8 @@ func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedSta
 			}
 		}()
 	}
+
+	go s.checkpointStateCache.EvictUpTo(finalized.Epoch)
 }
 
 // ReceiveBlockBatch processes the whole block batch at once, assuming the block batch is linear ,transitioning
