@@ -282,7 +282,7 @@ func (s *ChainService) ReceiveBlockInitialSync(ctx context.Context, block interf
 }
 
 // ReceiveBlockBatch processes blocks in batches from initial-sync.
-func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, _ das.AvailabilityChecker) error {
+func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, _ []interfaces.ROSignedExecutionPayloadEnvelope, _ das.AvailabilityChecker) error {
 	if s.State == nil {
 		return ErrNilState
 	}
@@ -755,6 +755,11 @@ func (s *ChainService) HasFullNode(root [32]byte) bool {
 	if s.ForkchoiceRoots != nil {
 		return s.ForkchoiceRoots[root]
 	}
+	return false
+}
+
+// ShouldIgnoreData returns true if the data for the given parent root and slot should be ignored.
+func (s *ChainService) ShouldIgnoreData(_ [32]byte, _ primitives.Slot) bool {
 	return false
 }
 
