@@ -758,6 +758,11 @@ func (s *ChainService) HasFullNode(root [32]byte) bool {
 	return false
 }
 
+// ShouldIgnoreData returns true if the data for the given parent root and slot should be ignored.
+func (s *ChainService) ShouldIgnoreData(_ [32]byte, _ primitives.Slot) bool {
+	return false
+}
+
 // PayloadContentLookup mocks the same method in the chain service.
 func (s *ChainService) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
 	if s.ForkChoiceStore != nil {
