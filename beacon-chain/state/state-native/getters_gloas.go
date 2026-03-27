@@ -732,6 +732,9 @@ func (b *BeaconState) PayloadCommittee(slot primitives.Slot) ([]primitives.Valid
 		return nil, err
 	}
 
+	if uint64(offset) >= uint64(len(b.ptcWindow)) {
+		return nil, fmt.Errorf("ptc window offset %d out of range for size %d", offset, len(b.ptcWindow))
+	}
 	ptcSlot := b.ptcWindow[offset]
 	if ptcSlot == nil {
 		return nil, fmt.Errorf("ptc window slot %d is nil", offset)

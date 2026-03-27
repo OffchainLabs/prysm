@@ -32,7 +32,7 @@ func TestPayloadAttestationSubscriber_NilData(t *testing.T) {
 }
 
 func TestPayloadAttestationSubscriber_NoPool(t *testing.T) {
-	st, _ := util.DeterministicGenesisState(t, 64)
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
 	ptc, err := st.PayloadCommittee(0)
 	require.NoError(t, err)
 	require.NotEmpty(t, ptc)
@@ -80,7 +80,7 @@ func TestPayloadAttestationSubscriber_HeadStateError(t *testing.T) {
 }
 
 func TestPayloadAttestationSubscriber_ValidatorInPTC(t *testing.T) {
-	st, _ := util.DeterministicGenesisState(t, 64)
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
 	ptc, err := st.PayloadCommittee(0)
 	require.NoError(t, err)
 	require.NotEmpty(t, ptc)
@@ -107,7 +107,7 @@ func TestPayloadAttestationSubscriber_ValidatorInPTC(t *testing.T) {
 }
 
 func TestPayloadAttestationSubscriber_ValidatorNotInPTC(t *testing.T) {
-	st, _ := util.DeterministicGenesisState(t, 64)
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
 	ptc, err := st.PayloadCommittee(0)
 	require.NoError(t, err)
 
