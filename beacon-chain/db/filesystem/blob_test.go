@@ -7,6 +7,7 @@ import (
 	"path"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -132,11 +133,12 @@ func TestBlobIndicesBounds(t *testing.T) {
 
 	okIdx := uint64(params.BeaconConfig().MaxBlobsPerBlock(es)) - 1
 	writeFakeSSZ(t, fs, root, es, okIdx)
-	// Use un-warmed storage and call warmCache directly to avoid a race with the async
-	// pruning goroutine that WarmCache() would spawn for blobs at historical epochs.
-	bs := NewEphemeralBlobStorageUsingFs(t, fs, WithLayout(LayoutNameByEpoch))
-	err := warmCache(bs.layout, bs.cache)
-	require.NoError(t, err)
+	// Set a fake genesis time so that WarmCache computes currentEpoch ≈ ElectraForkEpoch,
+	// keeping the test blob within the retention window and preventing it from being pruned.
+	secondsPerEpoch := time.Duration(params.BeaconConfig().SecondsPerSlot*uint64(params.BeaconConfig().SlotsPerEpoch)) * time.Second
+	fakeGenesis := time.Now().Add(-time.Duration(params.BeaconConfig().ElectraForkEpoch) * secondsPerEpoch)
+	bs := NewWarmedEphemeralBlobStorageUsingFs(t, fs, WithLayout(LayoutNameByEpoch), WithGenesisTime(fakeGenesis))
+
 	indices := bs.Summary(root).mask
 	expected := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(es))
 	expected[okIdx] = true
@@ -146,9 +148,8 @@ func TestBlobIndicesBounds(t *testing.T) {
 
 	oobIdx := uint64(params.BeaconConfig().MaxBlobsPerBlock(es))
 	writeFakeSSZ(t, fs, root, es, oobIdx)
-	// This now fails at cache warmup time.
-	err = warmCache(bs.layout, bs.cache)
-	require.ErrorIs(t, err, errIndexOutOfBounds)
+	// This nw fails at cache warmup time.
+	require.ErrorIs(t, warmCache(bs.layout, bs.cache), errIndexOutOfBounds)
 }
 
 func writeFakeSSZ(t *testing.T, fs afero.Fs, root [32]byte, slot primitives.Slot, idx uint64) {

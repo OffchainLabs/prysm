@@ -65,6 +65,15 @@ func WithFs(fs afero.Fs) BlobStorageOption {
 	}
 }
 
+// WithGenesisTime overrides the genesis time used to compute the current epoch in WarmCache.
+// Used in tests to control which blobs fall within the retention window.
+func WithGenesisTime(t time.Time) BlobStorageOption {
+	return func(b *BlobStorage) error {
+		b.genesisTime = t
+		return nil
+	}
+}
+
 // WithLayout enables the user to specify which layout scheme to use, dictating how blob files are stored on disk.
 func WithLayout(name string) BlobStorageOption {
 	return func(b *BlobStorage) error {
@@ -118,6 +127,7 @@ type BlobStorage struct {
 	layout          fsLayout
 	cache           *blobStorageSummaryCache
 	pruner          *blobPruner
+	genesisTime     time.Time
 }
 
 // WarmCache runs the prune routine with an expiration of slot of 0, so nothing will be pruned, but the pruner's cache
@@ -145,9 +155,11 @@ func (bs *BlobStorage) WarmCache() {
 	// the final ~18 days before Fulu — are pruned. Only trigger when blobs exist on disk
 	// to avoid a spurious pruning goroutine on initially-empty storage.
 	if !bs.cache.isEmpty() {
-		genesisTime := time.Unix(int64(params.BeaconConfig().MinGenesisTime), 0)
-		currentEpoch := slots.EpochsSinceGenesis(genesisTime)
-		bs.pruner.notify(currentEpoch, bs.layout)
+		genesisTime := bs.genesisTime
+		if genesisTime.IsZero() {
+			genesisTime = time.Unix(int64(params.BeaconConfig().MinGenesisTime), 0)
+		}
+		bs.pruner.notify(slots.EpochsSinceGenesis(genesisTime), bs.layout)
 	}
 }
 
