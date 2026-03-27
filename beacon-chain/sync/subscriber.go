@@ -766,7 +766,7 @@ func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Sl
 }
 
 // filterNeededPeers filters out the set of peers required to maintain
-// at least minimumPeersPerSubnet in each wanted subnet. Peers that participate
+// at least minimumPeersPerSubnet in our attestation subnets. Peers that participate
 // in multiple subnets count toward all of them.
 func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
