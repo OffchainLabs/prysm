@@ -29,7 +29,7 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 
 // processDepositRequest processes the specific deposit request
 //
-//	<spec fn="process_deposit_request" fork="gloas" hash="3c6b0310">
+//	<spec fn="process_deposit_request" fork="gloas" hash="0e8b94ab">
 //	def process_deposit_request(state: BeaconState, deposit_request: DepositRequest) -> None:
 //	    # [New in Gloas:EIP7732]
 //	    builder_pubkeys = [b.pubkey for b in state.builders]
@@ -40,8 +40,11 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 //	    # already exists with this pubkey, apply the deposit to their balance
 //	    is_builder = deposit_request.pubkey in builder_pubkeys
 //	    is_validator = deposit_request.pubkey in validator_pubkeys
-//	    is_builder_prefix = is_builder_withdrawal_credential(deposit_request.withdrawal_credentials)
-//	    if is_builder or (is_builder_prefix and not is_validator):
+//	    if is_builder or (
+//	        is_builder_withdrawal_credential(deposit_request.withdrawal_credentials)
+//	        and not is_validator
+//	        and not is_pending_validator(state, deposit_request.pubkey)
+//	    ):
 //	        # Apply builder deposits immediately
 //	        apply_deposit_for_builder(
 //	            state,
