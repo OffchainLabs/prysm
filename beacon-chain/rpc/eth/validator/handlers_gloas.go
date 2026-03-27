@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -64,6 +65,7 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 		httputil.HandleError(w, "could not convert envelope to JSON: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
 	httputil.WriteJson(w, &structs.GetValidatorExecutionPayloadEnvelopeResponse{
 		Version: version.String(version.Gloas),
 		Data:    jsonEnvelope,
