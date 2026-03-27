@@ -102,7 +102,7 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 
 // computePTC computes the payload timeliness committee for a given slot.
 //
-//	<spec fn="compute_ptc" fork="gloas" hash="ae15f761">
+//	<spec fn="compute_ptc" fork="gloas" hash="0f323552">
 //	def compute_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
 //	    """
 //	    Get the payload timeliness committee for the given ``slot``.
@@ -363,7 +363,7 @@ func validIndexedPayloadAttestation(st state.ReadOnlyBeaconState, att *consensus
 // ProcessPTCWindow rotates the cached PTC window at epoch boundaries by computing
 // PTC assignments for the new lookahead epoch and shifting the window.
 //
-//	<spec fn="process_ptc_window" fork="gloas" hash="2c292a1c">
+//	<spec fn="process_ptc_window" fork="gloas" hash="7be3d509">
 //	def process_ptc_window(state: BeaconState) -> None:
 //	    """
 //	    Update the cached PTC window.
