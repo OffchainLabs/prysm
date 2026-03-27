@@ -1,8 +1,10 @@
 package fieldtrie
 
 import (
+	"fmt"
 	"maps"
 	"reflect"
+	"runtime"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
@@ -56,6 +58,7 @@ type FieldTrie struct {
 	length        uint64
 	numOfElems    int
 	isTransferred bool
+	metrics       *metricsRef
 }
 
 // depth returns the trie depth from the offsets table.
@@ -73,14 +76,19 @@ func (f *FieldTrie) levelSize(level int) int {
 // which is either fixed/variable length, it will appropriately determine the trie.
 func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any, length uint64) (*FieldTrie, error) {
 	if elements == nil {
-		return &FieldTrie{
+		ft := &FieldTrie{
 			field:      field,
 			dataType:   fieldInfo,
 			reference:  stateutil.NewRef(1),
 			RWMutex:    new(sync.RWMutex),
 			length:     length,
 			numOfElems: 0,
-		}, nil
+			metrics:    &metricsRef{field: field},
+		}
+
+		ft.addCleanup()
+
+		return ft, nil
 	}
 
 	fieldRoots, err := fieldConverters(field, []uint64{}, elements, true)
@@ -103,7 +111,7 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 		if err != nil {
 			return nil, err
 		}
-		return &FieldTrie{
+		ft := &FieldTrie{
 			nodes:      nodes,
 			offsets:    offsets,
 			field:      field,
@@ -112,10 +120,16 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 			RWMutex:    new(sync.RWMutex),
 			length:     length,
 			numOfElems: numOfElems,
-		}, nil
+			metrics:    &metricsRef{field: field},
+		}
+
+		ft.updateMetrics(ft.nodeSize(), ft.overlaySize())
+		ft.addCleanup()
+
+		return ft, nil
 	case types.CompositeArray, types.CompressedArray:
 		nodes, offsets := stateutil.ReturnTrieLayerVariable(fieldRoots, length)
-		return &FieldTrie{
+		ft := &FieldTrie{
 			nodes:      nodes,
 			offsets:    offsets,
 			field:      field,
@@ -124,7 +138,13 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 			RWMutex:    new(sync.RWMutex),
 			length:     length,
 			numOfElems: numOfElems,
-		}, nil
+			metrics:    &metricsRef{field: field},
+		}
+
+		ft.updateMetrics(ft.nodeSize(), ft.overlaySize())
+		ft.addCleanup()
+
+		return ft, nil
 	default:
 		return nil, errors.Errorf("unrecognized data type in field map: %v", reflect.TypeFor[types.DataType]().Name())
 	}
@@ -155,10 +175,27 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, err
 	}
 
 	// Dispatch to overlay or owned recomputation.
+	oldNodeSize, oldOverrideSize := f.nodeSize(), f.overlaySize()
+
 	if f.base != nil {
-		return f.recomputeOverlayDispatch(indices, fieldRoots)
+		root, err := f.recomputeOverlayDispatch(indices, fieldRoots)
+		if err != nil {
+			return [32]byte{}, fmt.Errorf("recompute overlay dispatch: %w", err)
+		}
+		f.updateMetrics(f.nodeSize()-oldNodeSize, f.overlaySize()-oldOverrideSize)
+		return root, nil
 	}
-	return f.recomputeOwned(indices, fieldRoots)
+
+	root, err := f.recomputeOwned(indices, fieldRoots)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("recompute owned: %w", err)
+	}
+
+	deltaNodeSize := f.nodeSize() - oldNodeSize
+	deltaOverrideSize := f.overlaySize() - oldOverrideSize
+	f.updateMetrics(deltaNodeSize, deltaOverrideSize)
+
+	return root, nil
 }
 
 // CopyTrie creates a lightweight overlay copy of the trie. Instead of
@@ -167,20 +204,21 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, err
 // trie, or O(K) where K is the number of existing overrides when copying
 // from another overlay.
 func (f *FieldTrie) CopyTrie() *FieldTrie {
+	var cp *FieldTrie
 	if f.Empty() {
-		return &FieldTrie{
+		cp = &FieldTrie{
 			field:      f.field,
 			dataType:   f.dataType,
 			reference:  stateutil.NewRef(1),
 			RWMutex:    new(sync.RWMutex),
 			length:     f.length,
 			numOfElems: f.numOfElems,
+			metrics:    &metricsRef{field: f.field},
 		}
-	}
-	if f.base != nil {
+	} else if f.base != nil {
 		// Source is an overlay: new overlay sharing the same base.
 		f.base.reference.AddRef()
-		return &FieldTrie{
+		cp = &FieldTrie{
 			base:       f.base,
 			overrides:  copyOverrides(f.overrides),
 			field:      f.field,
@@ -189,66 +227,35 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 			RWMutex:    new(sync.RWMutex),
 			length:     f.length,
 			numOfElems: f.numOfElems,
+			metrics:    &metricsRef{field: f.field},
 		}
-	}
-	// Source is owned: create an overlay on this trie.
-	f.reference.AddRef()
-	d := f.depth()
-	overrides := make([]map[uint64][32]byte, d+1)
-	return &FieldTrie{
-		base:       f,
-		overrides:  overrides,
-		field:      f.field,
-		dataType:   f.dataType,
-		reference:  stateutil.NewRef(1),
-		RWMutex:    new(sync.RWMutex),
-		length:     f.length,
-		numOfElems: f.numOfElems,
-	}
-}
-
-// Length return the length of the whole field trie.
-func (f *FieldTrie) Length() uint64 {
-	return f.length
-}
-
-// TransferTrie starts the process of transferring all the
-// trie related data to a new trie. This is done if we
-// know that other states which hold references to this
-// trie will unlikely need it for recomputation. This helps
-// us save on a copy. Any caller of this method will need
-// to take care that this isn't called on an empty trie.
-func (f *FieldTrie) TransferTrie() *FieldTrie {
-	// Overlays cannot be transferred (the base is immutable and shared).
-	// Just create a cheap overlay copy instead.
-	if f.base != nil {
-		return f.CopyTrie()
-	}
-	if f.nodes == nil {
-		return &FieldTrie{
+	} else {
+		// Source is owned: create an overlay on this trie.
+		f.reference.AddRef()
+		d := f.depth()
+		overrides := make([]map[uint64][32]byte, d+1)
+		cp = &FieldTrie{
+			base:       f,
+			overrides:  overrides,
 			field:      f.field,
 			dataType:   f.dataType,
 			reference:  stateutil.NewRef(1),
 			RWMutex:    new(sync.RWMutex),
 			length:     f.length,
 			numOfElems: f.numOfElems,
+			metrics:    &metricsRef{field: f.field},
 		}
 	}
-	f.isTransferred = true
-	nTrie := &FieldTrie{
-		nodes:      f.nodes,
-		offsets:    f.offsets,
-		field:      f.field,
-		dataType:   f.dataType,
-		reference:  stateutil.NewRef(1),
-		RWMutex:    new(sync.RWMutex),
-		length:     f.length,
-		numOfElems: f.numOfElems,
-	}
-	// Zero out owned data.
-	f.nodes = nil
-	f.offsets = nil
-	return nTrie
+
+	cp.updateMetrics(cp.nodeSize(), cp.overlaySize())
+	cp.addCleanup()
+
+	return cp
+}
+
+// Length return the length of the whole field trie.
+func (f *FieldTrie) Length() uint64 {
+	return f.length
 }
 
 // TrieRoot returns the corresponding root of the trie.
@@ -323,10 +330,17 @@ func (f *FieldTrie) IsOverlay() bool {
 // allow the base to be garbage collected when no overlays reference it.
 func (f *FieldTrie) ReleaseBase() {
 	if f.base != nil {
+		oldOverrides := f.overlaySize()
 		f.base.reference.MinusRef()
 		f.base = nil
 		f.overrides = nil
+		f.updateMetrics(0, -oldOverrides)
 	}
+}
+
+// nodeSize returns the total number of node entries in the trie.
+func (f *FieldTrie) nodeSize() int {
+	return len(f.nodes)
 }
 
 // overlaySize returns the total number of entries across all override maps.
@@ -681,6 +695,35 @@ func (f *FieldTrie) promoteToOwned() error {
 	f.base = nil
 	f.overrides = nil
 	return nil
+}
+
+// updateMetrics adds the given deltas (in number of [32]byte entries) to the gauges
+// and keeps the cleanup reference in sync.
+func (f *FieldTrie) updateMetrics(nodesDelta, overridesDelta int) {
+	label := f.field.String()
+	fieldTrieNodesBytesGauge.WithLabelValues(label).Add(float64(nodesDelta * 32))
+	fieldTrieOverridesBytesGauge.WithLabelValues(label).Add(float64(overridesDelta * 32))
+	f.metrics.nodes += nodesDelta
+	f.metrics.overrides += overridesDelta
+}
+
+// metricsRef holds the current metric contribution for a FieldTrie,
+// stored separately so runtime.AddCleanup can access it without
+// preventing the FieldTrie from being collected.
+type metricsRef struct {
+	field     types.FieldIndex
+	nodes     int
+	overrides int
+}
+
+// addCleanup registers a cleanup function that subtracts this trie's
+// contribution from the gauges when it is garbage collected.
+func (f *FieldTrie) addCleanup() {
+	runtime.AddCleanup(f, func(m *metricsRef) {
+		label := m.field.String()
+		fieldTrieNodesBytesGauge.WithLabelValues(label).Sub(float64(m.nodes * 32))
+		fieldTrieOverridesBytesGauge.WithLabelValues(label).Sub(float64(m.overrides * 32))
+	}, f.metrics)
 }
 
 // InsertFlatLayers manually inserts flat trie data. This method
