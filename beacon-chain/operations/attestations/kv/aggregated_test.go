@@ -544,3 +544,209 @@ func TestKV_Aggregated_AggregatedAttestationsBySlotIndexElectra(t *testing.T) {
 	returned = cache.AggregatedAttestationsBySlotIndexElectra(ctx, 2, 1)
 	assert.DeepEqual(t, []*ethpb.AttestationElectra{att3}, returned)
 }
+
+func TestKV_SeenAggregated_Cache(t *testing.T) {
+	t.Run("insert on delete from aggregated cache", func(t *testing.T) {
+		cache := NewAttCaches()
+
+		att1 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b1101}})
+		att2 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2}, AggregationBits: bitfield.Bitlist{0b1101}})
+
+		// Save attestations
+		require.NoError(t, cache.SaveAggregatedAttestation(att1))
+		require.NoError(t, cache.SaveAggregatedAttestation(att2))
+
+		// Seen aggregated cache should be empty before deletion
+		assert.Equal(t, 0, cache.SeenAggregatedAttestationCount(), "seen aggregated cache should be empty before deletion")
+
+		// Delete one attestation
+		require.NoError(t, cache.DeleteAggregatedAttestation(att1))
+
+		// Seen aggregated cache should now contain the deleted attestation
+		assert.Equal(t, 1, cache.SeenAggregatedAttestationCount(), "seen aggregated cache should have one entry after deletion")
+
+		// The deleted attestation should be found via HasAggregatedAttestation (through seen aggregated cache)
+		has, err := cache.HasAggregatedAttestation(att1)
+		require.NoError(t, err)
+		assert.Equal(t, true, has, "Deleted attestation should be found in seen aggregated cache")
+	})
+
+	t.Run("has aggregated attestation via seen aggregated cache", func(t *testing.T) {
+		cache := NewAttCaches()
+
+		att := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b1101}})
+
+		// Save and delete attestation to populate seen aggregated cache
+		require.NoError(t, cache.SaveAggregatedAttestation(att))
+		require.NoError(t, cache.DeleteAggregatedAttestation(att))
+
+		// Attestation should not be in aggregated cache
+		assert.Equal(t, 0, cache.AggregatedAttestationCount(), "Aggregated cache should be empty")
+
+		// But should still be found via HasAggregatedAttestation (through seen aggregated cache)
+		has, err := cache.HasAggregatedAttestation(att)
+		require.NoError(t, err)
+		assert.Equal(t, true, has, "Attestation should be found in seen aggregated cache")
+
+		// Subset of bits should also be found
+		attSubset := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b1100}})
+		has, err = cache.HasAggregatedAttestation(attSubset)
+		require.NoError(t, err)
+		assert.Equal(t, true, has, "Subset attestation should be found in seen aggregated cache")
+	})
+
+	t.Run("delete from seen aggregated cache", func(t *testing.T) {
+		cache := NewAttCaches()
+
+		att1 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b1101}})
+		att2 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2}, AggregationBits: bitfield.Bitlist{0b1101}})
+
+		// Save and delete attestations to populate seen aggregated cache
+		require.NoError(t, cache.SaveAggregatedAttestation(att1))
+		require.NoError(t, cache.SaveAggregatedAttestation(att2))
+		require.NoError(t, cache.DeleteAggregatedAttestation(att1))
+		require.NoError(t, cache.DeleteAggregatedAttestation(att2))
+
+		assert.Equal(t, 2, cache.SeenAggregatedAttestationCount(), "seen aggregated cache should have two entries")
+
+		// Delete attestations before slot 2 from seen aggregated cache
+		cache.DeleteSeenAggregatedAttestationsBefore(2)
+		assert.Equal(t, 1, cache.SeenAggregatedAttestationCount(), "seen aggregated cache should have one entry after deletion")
+
+		// att1 should no longer be found (slot 1 < 2)
+		has, err := cache.HasAggregatedAttestation(att1)
+		require.NoError(t, err)
+		assert.Equal(t, false, has, "Deleted seen aggregated attestation should not be found")
+
+		// att2 should still be found (slot 2 >= 2)
+		has, err = cache.HasAggregatedAttestation(att2)
+		require.NoError(t, err)
+		assert.Equal(t, true, has, "Non-deleted seen aggregated attestation should still be found")
+	})
+
+	t.Run("insert on delete from block cache", func(t *testing.T) {
+		cache := NewAttCaches()
+
+		att := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b1101}})
+
+		// Save as block attestation
+		require.NoError(t, cache.SaveBlockAttestation(att))
+
+		// Seen aggregated cache should be empty before deletion
+		assert.Equal(t, 0, cache.SeenAggregatedAttestationCount(), "seen aggregated cache should be empty before deletion")
+
+		// Delete block attestation
+		require.NoError(t, cache.DeleteBlockAttestation(att))
+
+		// Seen aggregated cache should now contain the deleted attestation
+		assert.Equal(t, 1, cache.SeenAggregatedAttestationCount(), "seen aggregated cache should have one entry after block attestation deletion")
+
+		// The deleted attestation should be found via HasAggregatedAttestation (through seen aggregated cache)
+		has, err := cache.HasAggregatedAttestation(att)
+		require.NoError(t, err)
+		assert.Equal(t, true, has, "Deleted block attestation should be found in seen aggregated cache")
+	})
+
+	t.Run("no duplicates in seen aggregated cache", func(t *testing.T) {
+		cache := NewAttCaches()
+
+		att := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b1101}})
+
+		// Save and delete the same attestation multiple times
+		require.NoError(t, cache.SaveAggregatedAttestation(att))
+		require.NoError(t, cache.DeleteAggregatedAttestation(att))
+		require.NoError(t, cache.SaveAggregatedAttestation(att))
+		require.NoError(t, cache.DeleteAggregatedAttestation(att))
+
+		// Seen aggregated cache should only have one entry (no duplicates)
+		assert.Equal(t, 1, cache.SeenAggregatedAttestationCount(), "seen aggregated cache should not have duplicates")
+	})
+
+	t.Run("multiple attestations with different bits for same data", func(t *testing.T) {
+		cache := NewAttCaches()
+
+		// Create attestations with the same data but non-overlapping aggregation bits
+		att1 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b10011}})
+		att2 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b11100}})
+
+		// Directly insert into seen aggregated cache to test the append path
+		require.NoError(t, cache.insertSeenAggregatedAtt(att1))
+		require.NoError(t, cache.insertSeenAggregatedAtt(att2))
+
+		// Seen aggregated cache should have one key with two attestations (since bits don't overlap)
+		assert.Equal(t, 1, cache.SeenAggregatedAttestationCount(), "seen aggregated cache should have one key")
+
+		// Both should be found
+		has, err := cache.HasAggregatedAttestation(att1)
+		require.NoError(t, err)
+		assert.Equal(t, true, has, "First attestation should be found in seen aggregated cache")
+
+		has, err = cache.HasAggregatedAttestation(att2)
+		require.NoError(t, err)
+		assert.Equal(t, true, has, "Second attestation should be found in seen aggregated cache")
+
+		// A subset of att1 should be found
+		attSubset := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b10001}})
+		has, err = cache.HasAggregatedAttestation(attSubset)
+		require.NoError(t, err)
+		assert.Equal(t, true, has, "Subset of first attestation should be found in seen aggregated cache")
+
+		// An attestation with bits not contained in any cached attestation should not be found
+		attNotContained := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b11111}})
+		has, err = cache.HasAggregatedAttestation(attNotContained)
+		require.NoError(t, err)
+		assert.Equal(t, false, has, "Attestation with bits not contained in cache should not be found")
+	})
+
+	t.Run("insert subset attestation into seen aggregated cache", func(t *testing.T) {
+		cache := NewAttCaches()
+
+		// Insert an attestation with some aggregation bits
+		att := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b11111}})
+		require.NoError(t, cache.insertSeenAggregatedAtt(att))
+		assert.Equal(t, 1, cache.SeenAggregatedAttestationCount(), "seen aggregated cache should have one key")
+
+		// Try to insert a subset attestation (bits are contained in the existing attestation)
+		attSubset := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b10011}})
+		require.NoError(t, cache.insertSeenAggregatedAtt(attSubset))
+
+		// Cache should still have only one key (subset was not added)
+		assert.Equal(t, 1, cache.SeenAggregatedAttestationCount(), "seen aggregated cache should still have one key after inserting subset")
+
+		// The subset should still be found via HasAggregatedAttestation (because original contains it)
+		has, err := cache.HasAggregatedAttestation(attSubset)
+		require.NoError(t, err)
+		assert.Equal(t, true, has, "Subset attestation should be found in seen aggregated cache")
+	})
+
+	t.Run("delete before slot from seen aggregated cache with same key", func(t *testing.T) {
+		cache := NewAttCaches()
+
+		// Create attestations with the same data but different slots
+		att1 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1}, AggregationBits: bitfield.Bitlist{0b10011}})
+		att2 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 2}, AggregationBits: bitfield.Bitlist{0b11100}})
+
+		// Insert both into seen aggregated cache
+		require.NoError(t, cache.insertSeenAggregatedAtt(att1))
+		require.NoError(t, cache.insertSeenAggregatedAtt(att2))
+
+		// Verify both are in the cache (different keys due to different slots)
+		assert.Equal(t, 2, cache.SeenAggregatedAttestationCount(), "seen aggregated cache should have two keys")
+
+		// Delete attestations before slot 2 from seen aggregated cache
+		cache.DeleteSeenAggregatedAttestationsBefore(2)
+
+		// Only one key should remain
+		assert.Equal(t, 1, cache.SeenAggregatedAttestationCount(), "seen aggregated cache should have one key")
+
+		// att1 should no longer be found (slot 1 < 2)
+		has, err := cache.HasAggregatedAttestation(att1)
+		require.NoError(t, err)
+		assert.Equal(t, false, has, "Deleted attestation should not be found")
+
+		// att2 should still be found (slot 2 >= 2)
+		has, err = cache.HasAggregatedAttestation(att2)
+		require.NoError(t, err)
+		assert.Equal(t, true, has, "Remaining attestation should still be found")
+	})
+}

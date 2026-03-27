@@ -3766,7 +3766,7 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the BlindedExecutionPayloadEnvelope object to a target array
 func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(116)
+	offset := int(148)
 
 	// Field (0) 'BlockHash'
 	if size := len(b.BlockHash); size != 32 {
@@ -3802,6 +3802,13 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, 
 	}
 	dst = append(dst, b.StateRoot...)
 
+	// Field (6) 'ParentBlockHash'
+	if size := len(b.ParentBlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentBlockHash", size, 32)
+		return
+	}
+	dst = append(dst, b.ParentBlockHash...)
+
 	// Field (1) 'ExecutionRequests'
 	if dst, err = b.ExecutionRequests.MarshalSSZTo(dst); err != nil {
 		return
@@ -3814,7 +3821,7 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, 
 func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 116 {
+	if size < 148 {
 		return ssz.ErrSize
 	}
 
@@ -3832,7 +3839,7 @@ func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o1 != 116 {
+	if o1 != 148 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -3854,6 +3861,12 @@ func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	}
 	b.StateRoot = append(b.StateRoot, buf[84:116]...)
 
+	// Field (6) 'ParentBlockHash'
+	if cap(b.ParentBlockHash) == 0 {
+		b.ParentBlockHash = make([]byte, 0, len(buf[116:148]))
+	}
+	b.ParentBlockHash = append(b.ParentBlockHash, buf[116:148]...)
+
 	// Field (1) 'ExecutionRequests'
 	{
 		buf = tail[o1:]
@@ -3869,7 +3882,7 @@ func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the BlindedExecutionPayloadEnvelope object
 func (b *BlindedExecutionPayloadEnvelope) SizeSSZ() (size int) {
-	size = 116
+	size = 148
 
 	// Field (1) 'ExecutionRequests'
 	if b.ExecutionRequests == nil {
@@ -3920,6 +3933,13 @@ func (b *BlindedExecutionPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err 
 		return
 	}
 	hh.PutBytes(b.StateRoot)
+
+	// Field (6) 'ParentBlockHash'
+	if size := len(b.ParentBlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentBlockHash", size, 32)
+		return
+	}
+	hh.PutBytes(b.ParentBlockHash)
 
 	hh.Merkleize(indx)
 	return

@@ -41,6 +41,7 @@ func TestAllTopics(t *testing.T) {
 	}
 	if cfg.GloasForkEpoch < cfg.FarFutureEpoch {
 		gloasDigest := params.ForkDigest(cfg.GloasForkEpoch)
+		expected = append(expected, "/eth2/"+hex.EncodeToString(gloasDigest[:])+"/execution_payload_bid/ssz_snappy")
 		expected = append(expected, "/eth2/"+hex.EncodeToString(gloasDigest[:])+"/proposer_preferences/ssz_snappy")
 	}
 	for _, e := range expected {

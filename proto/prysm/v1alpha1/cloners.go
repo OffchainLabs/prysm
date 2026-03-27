@@ -241,6 +241,7 @@ func copyBlindedExecutionPayloadEnvelope(env *BlindedExecutionPayloadEnvelope) *
 		BeaconBlockRoot:   bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
 		Slot:              env.Slot,
 		StateRoot:         bytesutil.SafeCopyBytes(env.StateRoot),
+		ParentBlockHash:   bytesutil.SafeCopyBytes(env.ParentBlockHash),
 	}
 }
 

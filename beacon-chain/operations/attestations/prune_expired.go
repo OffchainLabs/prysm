@@ -81,6 +81,14 @@ func (s *Service) pruneExpiredAtts() {
 			expiredBlockAtts.Inc()
 		}
 	}
+
+	expirySlot, err := s.expirySlot()
+	if err != nil {
+		log.WithError(err).Error("Could not get expiry slot for seen aggregated attestations")
+		return
+	}
+
+	s.cfg.Pool.DeleteSeenAggregatedAttestationsBefore(expirySlot)
 }
 
 // Return true if the input slot has been expired.

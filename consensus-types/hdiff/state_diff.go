@@ -1740,9 +1740,6 @@ func diffPendingConsolidations(diff *stateDiff, source, target state.ReadOnlyBea
 // applyValidatorDiff applies the validator diff to the source state in place.
 func applyValidatorDiff(source state.BeaconState, diff []validatorDiff) (state.BeaconState, error) {
 	sVals := source.Validators()
-	if len(sVals) < len(diff) {
-		return nil, errors.Errorf("target validators length %d is less than source %d", len(diff), len(sVals))
-	}
 	for _, d := range diff {
 		if d.index > uint32(len(sVals)) {
 			return nil, errors.Errorf("validator index %d is greater than length %d", d.index, len(sVals))

@@ -289,6 +289,16 @@ var (
 			Help: "Count the number of data column sidecars obtained via the execution layer.",
 		},
 	)
+
+	ignoredPreJustifiedBlockCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "gossip_ignored_pre_justified_block_total",
+		Help: "Count of blocks ignored because their canonical parent is before the justified checkpoint.",
+	})
+
+	ignoredPreJustifiedDataColumnCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "gossip_ignored_pre_justified_data_column_total",
+		Help: "Count of data column sidecars ignored because their canonical parent is before the justified checkpoint.",
+	})
 )
 
 func (s *Service) updateMetrics() {
