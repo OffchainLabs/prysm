@@ -49,6 +49,7 @@ type (
 	FieldTrie struct {
 		mu      sync.RWMutex
 		cleanup runtime.Cleanup
+		metrics *metricsRef
 
 		// Owned mode fields:
 		nodes   [][32]byte // flat buffer with all trie levels packed contiguously
@@ -71,6 +72,17 @@ type (
 	sliceAccessor interface {
 		Len(obj multi_value_slice.Identifiable) int
 		State() multi_value_slice.Identifiable
+	}
+
+	// metricsRef holds the current metric contribution for a FieldTrie,
+	// stored separately so runtime.AddCleanup can access it without
+	// preventing the FieldTrie from being collected.
+	metricsRef struct {
+		field         types.FieldIndex
+		nodes         int
+		overrides     int
+		leafOverrides int
+		overlay       bool
 	}
 )
 
@@ -102,6 +114,11 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 		dataType:   fieldInfo,
 		length:     length,
 		numOfElems: elemCount(elements),
+	}
+
+	if !fieldTrie.empty() {
+		fieldTrie.updateMetrics()
+		fieldTrie.cleanup = runtime.AddCleanup(fieldTrie, cleanupMetrics, fieldTrie.metrics)
 	}
 
 	return fieldTrie, nil
@@ -167,11 +184,6 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 		return copied
 	}
 
-	label := f.field.String() + "_trie"
-	decOnCleanup := func(label string) {
-		FieldReferences.WithLabelValues(label).Dec()
-	}
-
 	// Source is owned. Freeze nodes into an immutable base, convert
 	// both source and copy into overlays on that base.
 	if f.base == nil {
@@ -186,6 +198,11 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 			numOfElems: f.numOfElems,
 		}
 
+		// Track the base's nodes. The base is shared and GC'd when
+		// all overlays referencing it are gone.
+		base.updateMetrics()
+		base.cleanup = runtime.AddCleanup(base, cleanupMetrics, base.metrics)
+
 		// Convert source to overlay.
 		f.nodes = nil
 		f.offsets = nil
@@ -196,10 +213,15 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 		copied.base = base
 		copied.overrides = make([]map[uint64][32]byte, depth+1)
 
-		// Track both new overlays.
-		FieldReferences.WithLabelValues(label).Add(2)
-		f.cleanup = runtime.AddCleanup(f, decOnCleanup, label)
-		copied.cleanup = runtime.AddCleanup(copied, decOnCleanup, label)
+		// Update source metrics (now overlay with nodes=0).
+		f.cleanup.Stop()
+		f.updateMetrics()
+
+		f.cleanup = runtime.AddCleanup(f, cleanupMetrics, f.metrics)
+
+		// Init copy metrics.
+		copied.updateMetrics()
+		copied.cleanup = runtime.AddCleanup(copied, cleanupMetrics, copied.metrics)
 
 		return copied
 	}
@@ -219,9 +241,9 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 
 	copied.overrides = overrides
 
-	// Track new overlay.
-	FieldReferences.WithLabelValues(label).Inc()
-	copied.cleanup = runtime.AddCleanup(copied, decOnCleanup, label)
+	// Init copy metrics.
+	copied.updateMetrics()
+	copied.cleanup = runtime.AddCleanup(copied, cleanupMetrics, copied.metrics)
 
 	return copied
 }
@@ -250,12 +272,13 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, err
 	// Overlay with too many dirty leaves: rebuild from scratch and
 	// cancel the pending overlay metric decrement.
 	if f.base != nil && len(indices) > overlayPromotionThreshold {
+		f.stopCleanup()
+		FieldTriePromotionCounter.WithLabelValues(f.field.String()).Inc()
+
 		root, err := f.rebuild(elements)
 		if err != nil {
 			return [32]byte{}, fmt.Errorf("rebuild overlay trie: %w", err)
 		}
-
-		f.stopCleanup()
 
 		return root, nil
 	}
@@ -310,6 +333,9 @@ func (f *FieldTrie) rebuild(elements any) ([32]byte, error) {
 	f.overrides = nil
 	f.numOfElems = elemCount(elements)
 
+	f.updateMetrics()
+	f.cleanup = runtime.AddCleanup(f, cleanupMetrics, f.metrics)
+
 	root, err := f.trieRoot()
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("trie root: %w", err)
@@ -318,12 +344,29 @@ func (f *FieldTrie) rebuild(elements any) ([32]byte, error) {
 	return root, nil
 }
 
-// stopCleanup cancels the pending overlay metric decrement on GC
-// and immediately decrements the metric.
+// stopCleanup cancels the pending GC cleanup and immediately
+// subtracts all metric contributions that the cleanup would have subtracted.
 func (f *FieldTrie) stopCleanup() {
 	f.cleanup.Stop()
 
-	FieldReferences.WithLabelValues(f.field.String() + "_trie").Dec()
+	if f.metrics != nil {
+		label := f.field.String()
+		fieldTrieEntriesGauge.WithLabelValues(label, "nodes").Sub(float64(f.metrics.nodes))
+		fieldTrieEntriesGauge.WithLabelValues(label, "overrides").Sub(float64(f.metrics.overrides))
+		fieldTrieLeafOverridesGauge.WithLabelValues(label).Sub(float64(f.metrics.leafOverrides))
+
+		mode := "owned"
+		if f.metrics.overlay {
+			mode = "overlay"
+		}
+		fieldTrieCountGauge.WithLabelValues(label, mode).Dec()
+
+		// Zero so subsequent updateMetrics computes correct deltas.
+		f.metrics.nodes = 0
+		f.metrics.overrides = 0
+		f.metrics.leafOverrides = 0
+		f.metrics.overlay = false
+	}
 }
 
 // Length return the length of the whole field trie.
@@ -395,6 +438,8 @@ func (f *FieldTrie) recomputeBranches(elements any, indices []uint64) ([32]byte,
 		root = f.recomputeBranch(idx, hasher)
 	}
 
+	f.updateMetrics()
+
 	rootWithMixin, err := f.rootWithMixin(root)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("root with mixin: %w", err)
@@ -458,6 +503,10 @@ func (f *FieldTrie) promoteOverlay(elements any, indices []uint64) ([32]byte, er
 	f.base = nil
 	f.overrides = nil
 	f.stopCleanup()
+
+	FieldTriePromotionCounter.WithLabelValues(f.field.String()).Inc()
+	f.updateMetrics()
+	f.cleanup = runtime.AddCleanup(f, cleanupMetrics, f.metrics)
 
 	// Return root with appropriate mixin.
 	rootWithMixin, err := f.rootWithMixin(f.nodes[f.offsets[depth]])
@@ -537,6 +586,8 @@ func (f *FieldTrie) recomputeOverlay(elements any, indices []uint64) ([32]byte, 
 
 		currentDirty = parentDirty
 	}
+
+	f.updateMetrics()
 
 	// The root is at overrides[depth][0], or fallback to base.
 	root, err := f.readOverlayNode(depth, 0)
@@ -713,4 +764,96 @@ func (f *FieldTrie) depth() uint64 {
 // levelSize returns the number of nodes at the given level.
 func (f *FieldTrie) levelSize(level uint64) uint64 {
 	return f.offsets[level+1] - f.offsets[level]
+}
+
+// nodeSize returns the total number of node entries in the flat buffer.
+func (f *FieldTrie) nodeSize() int {
+	return len(f.nodes)
+}
+
+// overlaySize returns the total number of entries across all override maps.
+func (f *FieldTrie) overlaySize() int {
+	n := 0
+	for _, m := range f.overrides {
+		n += len(m)
+	}
+	return n
+}
+
+// leafOverrideSize returns the number of entries in the leaf-level (level 0) override map.
+func (f *FieldTrie) leafOverrideSize() int {
+	if len(f.overrides) == 0 {
+		return 0
+	}
+	return len(f.overrides[0])
+}
+
+// updateMetrics syncs the Prometheus gauges with the current trie state.
+// On first call (metrics == nil), it allocates the metricsRef and increments the
+// instance count gauge. On subsequent calls, it computes deltas from the previous
+// snapshot and adjusts gauges accordingly.
+func (f *FieldTrie) updateMetrics() {
+	if f.metrics == nil {
+		mode := "owned"
+		if f.base != nil {
+			mode = "overlay"
+		}
+
+		f.metrics = &metricsRef{field: f.field}
+		fieldTrieCountGauge.WithLabelValues(f.field.String(), mode).Inc()
+		f.syncEntryGauges()
+
+		return
+	}
+
+	isOverlay := f.base != nil
+	if f.metrics.overlay != isOverlay {
+		label := f.field.String()
+		oldMode := "owned"
+		if f.metrics.overlay {
+			oldMode = "overlay"
+		}
+		newMode := "owned"
+		if isOverlay {
+			newMode = "overlay"
+		}
+		fieldTrieCountGauge.WithLabelValues(label, oldMode).Dec()
+		fieldTrieCountGauge.WithLabelValues(label, newMode).Inc()
+	}
+
+	f.syncEntryGauges()
+}
+
+// syncEntryGauges applies entry deltas to Prometheus gauges and updates the metricsRef snapshot.
+func (f *FieldTrie) syncEntryGauges() {
+	label := f.field.String()
+
+	nodes := f.nodeSize()
+	overrides := f.overlaySize()
+	leafOverrides := f.leafOverrideSize()
+
+	fieldTrieEntriesGauge.WithLabelValues(label, "nodes").Add(float64(nodes - f.metrics.nodes))
+	fieldTrieEntriesGauge.WithLabelValues(label, "overrides").Add(float64(overrides - f.metrics.overrides))
+	fieldTrieLeafOverridesGauge.WithLabelValues(label).Add(float64(leafOverrides - f.metrics.leafOverrides))
+
+	f.metrics.nodes = nodes
+	f.metrics.overrides = overrides
+	f.metrics.leafOverrides = leafOverrides
+	f.metrics.overlay = f.base != nil
+}
+
+// cleanupMetrics is the GC cleanup callback registered via runtime.AddCleanup.
+// It subtracts the trie's metric contributions when the FieldTrie is garbage collected.
+func cleanupMetrics(m *metricsRef) {
+	label := m.field.String()
+
+	fieldTrieEntriesGauge.WithLabelValues(label, "nodes").Sub(float64(m.nodes))
+	fieldTrieEntriesGauge.WithLabelValues(label, "overrides").Sub(float64(m.overrides))
+	fieldTrieLeafOverridesGauge.WithLabelValues(label).Sub(float64(m.leafOverrides))
+
+	mode := "owned"
+	if m.overlay {
+		mode = "overlay"
+	}
+	fieldTrieCountGauge.WithLabelValues(label, mode).Dec()
 }

@@ -6,7 +6,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/fieldtrie"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -254,6 +253,10 @@ var (
 		Name: "beacon_late_payload_task_triggered_total",
 		Help: "Count the number of times late payload tasks fired.",
 	})
+	fieldReferences = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "field_references",
+		Help: "The number of states a particular field is shared with.",
+	}, []string{"state"})
 )
 
 // reportSlotMetrics reports slot related metrics.
@@ -393,7 +396,7 @@ func reportEpochMetrics(ctx context.Context, postState, headState state.BeaconSt
 
 	refMap := postState.FieldReferencesCount()
 	for name, val := range refMap {
-		fieldtrie.FieldReferences.WithLabelValues(name).Set(float64(val))
+		fieldReferences.WithLabelValues(name).Set(float64(val))
 	}
 	postState.RecordStateMetrics()
 
