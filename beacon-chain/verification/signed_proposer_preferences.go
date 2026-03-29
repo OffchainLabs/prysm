@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -45,7 +46,14 @@ func (v *ProposerPreferencesVerifier) VerifyNextEpoch(st state.ReadOnlyBeaconSta
 	return nil
 }
 
-// VerifyValidProposalSlot verifies the validator matches the state's next-epoch proposer lookahead entry for the proposal slot.
+// VerifyValidProposalSlot verifies the validator matches the proposer
+// lookahead entry for the proposal slot. The lookahead covers two epochs
+// relative to the state: indices [0, SlotsPerEpoch) for the state's epoch
+// and [SlotsPerEpoch, 2*SlotsPerEpoch) for the next epoch.
+//
+// The caller must ensure that the state's epoch is either equal to or one
+// less than the proposal slot's epoch. If the state is further behind, it
+// should be advanced before calling this method.
 func (v *ProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireProposerPreferencesProposalSlotValid, &err)
 
@@ -55,7 +63,21 @@ func (v *ProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyB
 		return errors.Wrap(err, "failed to get proposer lookahead")
 	}
 
-	slotIndex := params.BeaconConfig().SlotsPerEpoch + (msg.ProposalSlot % params.BeaconConfig().SlotsPerEpoch)
+	spe := params.BeaconConfig().SlotsPerEpoch
+	stateEpoch := slots.ToEpoch(st.Slot())
+	proposalEpoch := slots.ToEpoch(msg.ProposalSlot)
+
+	var slotIndex primitives.Slot
+	switch {
+	case proposalEpoch == stateEpoch:
+		slotIndex = msg.ProposalSlot % spe
+	case proposalEpoch == stateEpoch+1:
+		slotIndex = spe + (msg.ProposalSlot % spe)
+	default:
+		return fmt.Errorf("%w: proposal epoch %d out of range for state epoch %d",
+			ErrProposerPreferencesInvalidProposalSlot, proposalEpoch, stateEpoch)
+	}
+
 	if uint64(len(lookahead)) <= uint64(slotIndex) {
 		return fmt.Errorf("%w: proposer lookahead index %d out of bounds", ErrProposerPreferencesInvalidProposalSlot, slotIndex)
 	}

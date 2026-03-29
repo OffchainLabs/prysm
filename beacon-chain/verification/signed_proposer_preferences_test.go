@@ -29,14 +29,73 @@ func TestProposerPreferencesVerifier_VerifyNextEpoch(t *testing.T) {
 }
 
 func TestProposerPreferencesVerifier_VerifyValidProposalSlot(t *testing.T) {
-	st, _, signed := newSignedProposerPreferencesState(t, 31, 40, 3)
+	t.Run("proposal in next epoch", func(t *testing.T) {
+		// State at slot 31 (epoch 0 with SlotsPerEpoch=32), proposal at slot 40 (epoch 1).
+		// Proposal epoch == stateEpoch+1, so index into next-epoch portion.
+		st, _, signed := newSignedProposerPreferencesState(t, 31, 40, 3)
 
-	verifier := &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesProposalSlotValid), p: signed}
-	require.NoError(t, verifier.VerifyValidProposalSlot(st))
+		verifier := &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesProposalSlotValid), p: signed}
+		require.NoError(t, verifier.VerifyValidProposalSlot(st))
 
-	signed.Message.ValidatorIndex = 4
-	verifier = &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesProposalSlotValid), p: signed}
-	require.ErrorIs(t, verifier.VerifyValidProposalSlot(st), ErrProposerPreferencesInvalidProposalSlot)
+		signed.Message.ValidatorIndex = 4
+		verifier = &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesProposalSlotValid), p: signed}
+		require.ErrorIs(t, verifier.VerifyValidProposalSlot(st), ErrProposerPreferencesInvalidProposalSlot)
+	})
+
+	t.Run("proposal in same epoch", func(t *testing.T) {
+		// State at slot 35 (epoch 1), proposal at slot 40 (epoch 1).
+		// Proposal epoch == stateEpoch, so index into current-epoch portion.
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		validatorIndex := primitives.ValidatorIndex(7)
+		proposalSlot := primitives.Slot(40)
+		stateSlot := primitives.Slot(35)
+
+		st, keys := util.DeterministicGenesisStateFulu(t, 64)
+		require.NoError(t, st.SetSlot(stateSlot))
+		require.NoError(t, st.SetFork(&ethpb.Fork{
+			PreviousVersion: cfg.FuluForkVersion,
+			CurrentVersion:  cfg.GloasForkVersion,
+			Epoch:           0,
+		}))
+
+		spe := params.BeaconConfig().SlotsPerEpoch
+		lookaheadSize := int(uint64(params.BeaconConfig().MinSeedLookahead+1) * uint64(spe))
+		lookahead := make([]primitives.ValidatorIndex, lookaheadSize)
+		// Same epoch: index is proposalSlot % SlotsPerEpoch
+		lookahead[proposalSlot%spe] = validatorIndex
+		require.NoError(t, st.SetProposerLookahead(lookahead))
+
+		signed := &ethpb.SignedProposerPreferences{
+			Message: &ethpb.ProposerPreferences{
+				ProposalSlot:   proposalSlot,
+				ValidatorIndex: validatorIndex,
+				FeeRecipient:   bytes.Repeat([]byte{0x01}, 20),
+				GasLimit:       30_000_000,
+			},
+		}
+		signed.Signature = signProposerPreferencesWithConfigFork(t, keys[validatorIndex], signed.Message, st)
+
+		verifier := &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesProposalSlotValid), p: signed}
+		require.NoError(t, verifier.VerifyValidProposalSlot(st))
+
+		signed.Message.ValidatorIndex = 99
+		verifier = &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesProposalSlotValid), p: signed}
+		require.ErrorIs(t, verifier.VerifyValidProposalSlot(st), ErrProposerPreferencesInvalidProposalSlot)
+	})
+
+	t.Run("proposal epoch too far ahead", func(t *testing.T) {
+		// State at slot 31 (epoch 0), proposal at slot 72 (epoch 2).
+		// proposalEpoch > stateEpoch+1, so should error.
+		st, _, signed := newSignedProposerPreferencesState(t, 31, 40, 3)
+		signed.Message.ProposalSlot = 72
+
+		verifier := &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesProposalSlotValid), p: signed}
+		require.ErrorIs(t, verifier.VerifyValidProposalSlot(st), ErrProposerPreferencesInvalidProposalSlot)
+	})
 }
 
 func TestProposerPreferencesVerifier_VerifySignature(t *testing.T) {
