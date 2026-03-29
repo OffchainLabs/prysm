@@ -1401,7 +1401,8 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 }
 
 func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements any) ([32]byte, error) {
-	root, err := b.stateFieldLeaves[index].RecomputeTrie(b.dirtyIndices[index], elements)
+	trie, root, err := b.stateFieldLeaves[index].RecomputeTrie(b.dirtyIndices[index], elements)
+	b.stateFieldLeaves[index] = trie
 	if err != nil {
 		return [32]byte{}, err
 	}

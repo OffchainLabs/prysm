@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	multi_value_slice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
@@ -48,6 +49,7 @@ type (
 	//     walks the base read-only, substituting override values at modified positions.
 	FieldTrie struct {
 		mu      sync.RWMutex
+		ref     *stateutil.Reference
 		cleanup runtime.Cleanup
 		metrics *metricsRef
 
@@ -108,6 +110,7 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 	}
 
 	fieldTrie := &FieldTrie{
+		ref:        stateutil.NewRef(1),
 		nodes:      nodes,
 		offsets:    offsets,
 		field:      field,
@@ -167,13 +170,64 @@ func (f *FieldTrie) trieRoot() ([32]byte, error) {
 	return rootWithMixin, nil
 }
 
-// CopyTrie creates a lightweight overlay copy of the trie.
-// The copy shares an immutable base and stores only sparse diffs.
+// CopyTrie creates a copy of the trie.
 func (f *FieldTrie) CopyTrie() *FieldTrie {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	mode := "owned"
+	if f.base != nil {
+		mode = "overlay"
+	}
+	fieldTrieCopyCounter.WithLabelValues(f.field.String(), mode).Inc()
+
+	f.ref.AddRef()
+	return f
+}
+
+// RecomputeTrie recomputes the trie for the given changed indices and returns
+// the new trie and root hash. The caller MUST use the returned *FieldTrie
+// in place of the one on which this method was called, even if an error
+// is returned.
+func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) (*FieldTrie, [32]byte, error) {
+	indices = slice.SetUint64(indices)
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	copied := &FieldTrie{
+	// If no changes, return existing root (read-only).
+	if !f.empty() && len(indices) == 0 {
+		root, err := f.trieRoot()
+		return f, root, err
+	}
+
+	// Fork if shared: snapshot source data under the lock, then recompute on the fork.
+	if f.isShared() {
+		f.ref.MinusRef()
+		fieldTrieForkCounter.WithLabelValues(f.field.String()).Inc()
+		forked := f.fork()
+
+		root, err := forked.recomputeInPlace(indices, elements)
+		if err != nil {
+			return forked, [32]byte{}, fmt.Errorf("recompute in place after fork: %w", err)
+		}
+
+		return forked, root, nil
+	}
+
+	root, err := f.recomputeInPlace(indices, elements)
+	if err != nil {
+		return f, [32]byte{}, fmt.Errorf("recompute in place: %w", err)
+	}
+
+	return f, root, nil
+}
+
+// fork creates a new independent trie from the shared source's data.
+// Must be called while holding f.mu.
+func (f *FieldTrie) fork() *FieldTrie {
+	forked := &FieldTrie{
+		ref:        stateutil.NewRef(1),
 		field:      f.field,
 		dataType:   f.dataType,
 		length:     f.length,
@@ -181,15 +235,14 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 	}
 
 	if f.empty() {
-		return copied
+		return forked
 	}
 
-	// Source is owned. Freeze nodes into an immutable base, convert
-	// both source and copy into overlays on that base.
 	if f.base == nil {
+		// Owned mode: wrap source's nodes as immutable base for the fork.
 		depth := f.depth()
-
 		base := &FieldTrie{
+			ref:        stateutil.NewRef(1),
 			nodes:      f.nodes,
 			offsets:    f.offsets,
 			field:      f.field,
@@ -198,36 +251,19 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 			numOfElems: f.numOfElems,
 		}
 
-		// Track the base's nodes. The base is shared and GC'd when
-		// all overlays referencing it are gone.
 		base.updateMetrics()
 		base.cleanup = runtime.AddCleanup(base, cleanupMetrics, base.metrics)
 
-		// Convert source to overlay.
-		f.nodes = nil
-		f.offsets = nil
-		f.base = base
-		f.overrides = make([]map[uint64][32]byte, depth+1)
+		forked.base = base
+		forked.overrides = make([]map[uint64][32]byte, depth+1)
+		forked.updateMetrics()
+		forked.cleanup = runtime.AddCleanup(forked, cleanupMetrics, forked.metrics)
 
-		// Copy is also an overlay on the same base.
-		copied.base = base
-		copied.overrides = make([]map[uint64][32]byte, depth+1)
-
-		// Update source metrics (now overlay with nodes=0).
-		f.cleanup.Stop()
-		f.updateMetrics()
-
-		f.cleanup = runtime.AddCleanup(f, cleanupMetrics, f.metrics)
-
-		// Init copy metrics.
-		copied.updateMetrics()
-		copied.cleanup = runtime.AddCleanup(copied, cleanupMetrics, copied.metrics)
-
-		return copied
+		return forked
 	}
 
-	// Source is an overlay. Share the base, copy the overrides.
-	copied.base = f.base
+	// Overlay mode: deep-copy overrides, share the base.
+	forked.base = f.base
 
 	overrides := make([]map[uint64][32]byte, len(f.overrides))
 	for i, valueByIdx := range f.overrides {
@@ -239,26 +275,15 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 		maps.Copy(overrides[i], valueByIdx)
 	}
 
-	copied.overrides = overrides
+	forked.overrides = overrides
+	forked.updateMetrics()
+	forked.cleanup = runtime.AddCleanup(forked, cleanupMetrics, forked.metrics)
 
-	// Init copy metrics.
-	copied.updateMetrics()
-	copied.cleanup = runtime.AddCleanup(copied, cleanupMetrics, copied.metrics)
-
-	return copied
+	return forked
 }
 
-// RecomputeTrie updates the trie for the given changed indices and returns the
-// new root hash with the appropriate length mixin applied.
-// elements must be the complete collection (e.g., all validators, all balances).
-// If the trie is empty or an overlay exceeds the promotion threshold, it
-// rebuilds from scratch using the provided elements.
-func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, error) {
-	indices = slice.SetUint64(indices)
-
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
+// recomputeInPlace performs the trie recomputation on the current trie..
+func (f *FieldTrie) recomputeInPlace(indices []uint64, elements any) ([32]byte, error) {
 	// Empty trie: rebuild from scratch.
 	if f.empty() {
 		root, err := f.rebuild(elements)
@@ -384,6 +409,10 @@ func (f *FieldTrie) Empty() bool {
 	defer f.mu.RUnlock()
 
 	return f.empty()
+}
+
+func (f *FieldTrie) isShared() bool {
+	return f.ref.Refs() > 1
 }
 
 func (f *FieldTrie) empty() bool {

@@ -21,6 +21,16 @@ var (
 		Help: "Number of leaf-level (level 0) override entries in overlay field tries.",
 	}, []string{"field"})
 
+	fieldTrieCopyCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "field_trie_copy_total",
+		Help: "Total number of CopyTrie calls by field and source mode (owned/overlay).",
+	}, []string{"field", "mode"})
+
+	fieldTrieForkCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "field_trie_fork_total",
+		Help: "Total number of copy-on-write forks triggered by RecomputeTrie on a shared trie.",
+	}, []string{"field"})
+
 	// FieldTriePromotionCounter counts overlay-to-owned promotions.
 	FieldTriePromotionCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "field_trie_promotion_total",

@@ -48,7 +48,7 @@ func TestFieldTrie_RecomputeEquivalence(t *testing.T) {
 		}
 
 		// Recompute in place.
-		recomputedRoot, err := trieA.RecomputeTrie(changedIdx, mixesB)
+		trieA, recomputedRoot, err := trieA.RecomputeTrie(changedIdx, mixesB)
 		require.NoError(t, err)
 
 		// Build fresh trie from B.
@@ -94,7 +94,7 @@ func TestFieldTrie_RecomputeEquivalence(t *testing.T) {
 		valsB[29].ExitEpoch = 40
 
 		// Recompute in place.
-		recomputedRoot, err := trieA.RecomputeTrie(changedIdx, valsB)
+		trieA, recomputedRoot, err := trieA.RecomputeTrie(changedIdx, valsB)
 		require.NoError(t, err)
 
 		// Build fresh trie from B.
@@ -128,7 +128,7 @@ func TestFieldTrie_RecomputeEquivalence(t *testing.T) {
 		balsB[8] = 200_000_000
 
 		// Recompute in place.
-		recomputedRoot, err := trieA.RecomputeTrie(changedIdx, balsB)
+		trieA, recomputedRoot, err := trieA.RecomputeTrie(changedIdx, balsB)
 		require.NoError(t, err)
 
 		// Build fresh trie from B.
@@ -185,7 +185,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 			_, err := rand.Read(mixesB[idx][:])
 			require.NoError(t, err)
 		}
-		rootB, err = trieB.RecomputeTrie(changedIdxB, mixesB)
+		trieB, rootB, err = trieB.RecomputeTrie(changedIdxB, mixesB)
 		require.NoError(t, err)
 
 		// Step 4: Fresh trie from B's data, check root matches.
@@ -214,7 +214,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 			_, err := rand.Read(mixesC[idx][:])
 			require.NoError(t, err)
 		}
-		rootC, err = trieC.RecomputeTrie(changedIdxC, mixesC)
+		trieC, rootC, err = trieC.RecomputeTrie(changedIdxC, mixesC)
 		require.NoError(t, err)
 
 		// Step 8: B's root must be unchanged.
@@ -268,7 +268,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 		valsB[2].ExitEpoch = 20
 		valsB[29].Slashed = true
 		valsB[29].ExitEpoch = 40
-		rootB, err = trieB.RecomputeTrie(changedIdxB, valsB)
+		trieB, rootB, err = trieB.RecomputeTrie(changedIdxB, valsB)
 		require.NoError(t, err)
 
 		// Step 4: Fresh trie from B's data, check root matches.
@@ -297,7 +297,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 		valsC[5].ExitEpoch = 50
 		valsC[15].Slashed = true
 		valsC[15].ExitEpoch = 60
-		rootC, err = trieC.RecomputeTrie(changedIdxC, valsC)
+		trieC, rootC, err = trieC.RecomputeTrie(changedIdxC, valsC)
 		require.NoError(t, err)
 
 		// Step 8: B's root must be unchanged.
@@ -339,7 +339,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 		copy(balsB, balsA)
 		balsB[4] = 100_000_000
 		balsB[8] = 200_000_000
-		rootB, err = trieB.RecomputeTrie(changedIdxB, balsB)
+		trieB, rootB, err = trieB.RecomputeTrie(changedIdxB, balsB)
 		require.NoError(t, err)
 
 		// Step 4: Fresh trie from B's data, check root matches.
@@ -366,7 +366,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 		copy(balsC, balsB)
 		balsC[0] = 500_000_000
 		balsC[16] = 600_000_000
-		rootC, err = trieC.RecomputeTrie(changedIdxC, balsC)
+		trieC, rootC, err = trieC.RecomputeTrie(changedIdxC, balsC)
 		require.NoError(t, err)
 
 		// Step 8: B's root must be unchanged.
@@ -416,7 +416,6 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			require.NoError(t, err)
 
 			trieCopy := trieA.CopyTrie()
-			require.Equal(t, true, trieCopy.IsOverlay(), "copy must be in overlay mode")
 
 			changedIdx := []uint64{0, 5, 63}
 			mixesB := make(customtypes.RandaoMixes, numMixes)
@@ -426,7 +425,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			recomputedRoot, err := trieCopy.RecomputeTrie(changedIdx, mixesB)
+			trieCopy, recomputedRoot, err := trieCopy.RecomputeTrie(changedIdx, mixesB)
 			require.NoError(t, err)
 
 			trieB, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesB, length)
@@ -460,7 +459,6 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			require.NoError(t, err)
 
 			trieCopy := trieA.CopyTrie()
-			require.Equal(t, true, trieCopy.IsOverlay(), "copy must be in overlay mode")
 
 			changedIdx := []uint64{2, 29}
 			valsB := make([]stateutil.CompactValidator, numVals)
@@ -470,7 +468,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			valsB[29].Slashed = true
 			valsB[29].ExitEpoch = 40
 
-			recomputedRoot, err := trieCopy.RecomputeTrie(changedIdx, valsB)
+			trieCopy, recomputedRoot, err := trieCopy.RecomputeTrie(changedIdx, valsB)
 			require.NoError(t, err)
 
 			trieB, err := NewFieldTrie(types.Validators, types.CompositeArray, valsB, length)
@@ -494,7 +492,6 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			require.NoError(t, err)
 
 			trieCopy := trieA.CopyTrie()
-			require.Equal(t, true, trieCopy.IsOverlay(), "copy must be in overlay mode")
 
 			changedIdx := []uint64{4, 8}
 			balsB := make([]uint64, numBals)
@@ -502,7 +499,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			balsB[4] = 100_000_000
 			balsB[8] = 200_000_000
 
-			recomputedRoot, err := trieCopy.RecomputeTrie(changedIdx, balsB)
+			trieCopy, recomputedRoot, err := trieCopy.RecomputeTrie(changedIdx, balsB)
 			require.NoError(t, err)
 
 			trieB, err := NewFieldTrie(types.Balances, types.CompressedArray, balsB, length)
@@ -529,7 +526,6 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			require.NoError(t, err)
 
 			trieCopy := trieA.CopyTrie()
-			require.Equal(t, true, trieCopy.IsOverlay(), "copy must be in overlay mode")
 
 			// First recompute: fill overrides[0] past the threshold.
 			firstBatchSize := overlayPromotionThreshold + 1
@@ -543,14 +539,14 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 				_, err := rand.Read(mixesB[idx][:])
 				require.NoError(t, err)
 			}
-			_, err = trieCopy.RecomputeTrie(firstIdx, mixesB)
+			trieCopy, _, err = trieCopy.RecomputeTrie(firstIdx, mixesB)
 			require.NoError(t, err)
 
 			// Second recompute: triggers promotion.
 			secondIdx := []uint64{uint64(numMixes - 1)}
 			_, err = rand.Read(mixesB[secondIdx[0]][:])
 			require.NoError(t, err)
-			recomputedRoot, err := trieCopy.RecomputeTrie(secondIdx, mixesB)
+			trieCopy, recomputedRoot, err := trieCopy.RecomputeTrie(secondIdx, mixesB)
 			require.NoError(t, err)
 			require.Equal(t, false, trieCopy.IsOverlay(), "trie must have been promoted to owned mode")
 
@@ -586,7 +582,6 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			require.NoError(t, err)
 
 			trieCopy := trieA.CopyTrie()
-			require.Equal(t, true, trieCopy.IsOverlay(), "copy must be in overlay mode")
 
 			// First recompute: fill overrides[0] past the threshold.
 			firstBatchSize := overlayPromotionThreshold + 1
@@ -600,14 +595,14 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 				valsB[idx].Slashed = true
 				valsB[idx].ExitEpoch = primitives.Epoch(idx + 100)
 			}
-			_, err = trieCopy.RecomputeTrie(firstIdx, valsB)
+			trieCopy, _, err = trieCopy.RecomputeTrie(firstIdx, valsB)
 			require.NoError(t, err)
 
 			// Second recompute: triggers promotion.
 			secondIdx := []uint64{uint64(numVals - 1)}
 			valsB[secondIdx[0]].Slashed = true
 			valsB[secondIdx[0]].ExitEpoch = 999
-			recomputedRoot, err := trieCopy.RecomputeTrie(secondIdx, valsB)
+			trieCopy, recomputedRoot, err := trieCopy.RecomputeTrie(secondIdx, valsB)
 			require.NoError(t, err)
 			require.Equal(t, false, trieCopy.IsOverlay(), "trie must have been promoted to owned mode")
 
@@ -634,7 +629,6 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			require.NoError(t, err)
 
 			trieCopy := trieA.CopyTrie()
-			require.Equal(t, true, trieCopy.IsOverlay(), "copy must be in overlay mode")
 
 			// First recompute: change enough balances to fill >10K chunk-level overrides.
 			// 4 balances per chunk → 40,004 balance indices = 10,001 unique chunks.
@@ -648,13 +642,13 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			for _, idx := range firstIdx {
 				balsB[idx] = uint64(idx + 1)
 			}
-			_, err = trieCopy.RecomputeTrie(firstIdx, balsB)
+			trieCopy, _, err = trieCopy.RecomputeTrie(firstIdx, balsB)
 			require.NoError(t, err)
 
 			// Second recompute: triggers promotion.
 			secondIdx := []uint64{uint64(numBals - 1)}
 			balsB[secondIdx[0]] = 999
-			recomputedRoot, err := trieCopy.RecomputeTrie(secondIdx, balsB)
+			trieCopy, recomputedRoot, err := trieCopy.RecomputeTrie(secondIdx, balsB)
 			require.NoError(t, err)
 			require.Equal(t, false, trieCopy.IsOverlay(), "trie must have been promoted to owned mode")
 
@@ -669,9 +663,10 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 	})
 }
 
-// TestFieldTrie_CopyTrieFreezes verifies that CopyTrie on an owned trie
-// converts both source and copy into overlays on a shared frozen base.
-func TestFieldTrie_CopyTrieFreezes(t *testing.T) {
+// TestFieldTrie_CopyTrieSharesRef verifies that CopyTrie returns the same
+// trie with an incremented reference count, and that RecomputeTrie forks
+// into a new independent trie when the reference count exceeds 1.
+func TestFieldTrie_CopyTrieSharesRef(t *testing.T) {
 	const numMixes = 64
 	length := uint64(params.BeaconConfig().EpochsPerHistoricalVector)
 
@@ -686,9 +681,31 @@ func TestFieldTrie_CopyTrieFreezes(t *testing.T) {
 	require.Equal(t, false, trieA.IsOverlay())
 
 	trieB := trieA.CopyTrie()
-	require.Equal(t, true, trieA.IsOverlay(), "A must be converted to overlay")
-	require.Equal(t, true, trieB.IsOverlay())
-	require.Equal(t, true, trieA.base == trieB.base, "A and B must share the same base")
+	require.Equal(t, true, trieA == trieB, "CopyTrie must return the same pointer")
+	require.Equal(t, uint(2), trieA.ref.Refs(), "ref count must be 2 after copy")
+
+	rootA, err := trieA.TrieRoot()
+	require.NoError(t, err)
+
+	// RecomputeTrie on shared trie must fork.
+	changedIdx := []uint64{0, 5, 63}
+	mixesB := make(customtypes.RandaoMixes, numMixes)
+	copy(mixesB, mixesA)
+	for _, idx := range changedIdx {
+		_, err := rand.Read(mixesB[idx][:])
+		require.NoError(t, err)
+	}
+	trieB, _, err = trieB.RecomputeTrie(changedIdx, mixesB)
+	require.NoError(t, err)
+	require.Equal(t, true, trieA != trieB, "RecomputeTrie must return a new trie when shared")
+
+	// Original trie must be unchanged.
+	rootAAfter, err := trieA.TrieRoot()
+	require.NoError(t, err)
+	assert.Equal(t, rootA, rootAAfter, "A must be immutable after forking B")
+
+	// Ref count on original must be back to 1.
+	require.Equal(t, uint(1), trieA.ref.Refs(), "ref count must be 1 after fork")
 }
 
 // TestFieldTrie_EdgeCases verifies error handling and edge cases.
