@@ -242,6 +242,10 @@ func (f *FieldTrie) fork() *FieldTrie {
 
 	if f.base == nil {
 		// Owned mode: wrap source's nodes as immutable base for the fork.
+		// The base shares the source's nodes slice, so we increment the
+		// source's ref to prevent in-place mutation while the base exists.
+		// A GC cleanup on the base decrements the source's ref when the
+		// base (and all its overlays) are collected.
 		depth := f.depth()
 		base := &FieldTrie{
 			ref:        stateutil.NewRef(1),
@@ -253,8 +257,10 @@ func (f *FieldTrie) fork() *FieldTrie {
 			numOfElems: f.numOfElems,
 		}
 
+		f.ref.AddRef()
 		base.updateMetrics()
 		base.cleanup = runtime.AddCleanup(base, cleanupMetrics, base.metrics)
+		runtime.AddCleanup(base, cleanupRef, f.ref)
 
 		logBalancesTrieCreation(f.field, "fork (base from owned)")
 
@@ -384,8 +390,15 @@ func logBalancesTrieCreation(field types.FieldIndex, source string) {
 	log.WithField("source", source).Infof("Balances FieldTrie created\n%s", buf[:n])
 }
 
-// stopCleanup cancels the pending GC cleanup and immediately
-// subtracts all metric contributions that the cleanup would have subtracted.
+// cleanupRef is a GC cleanup callback that decrements a reference count.
+func cleanupRef(ref *stateutil.Reference) {
+	ref.MinusRef()
+}
+
+// stopCleanup cancels the pending GC cleanup and resets entry metrics
+// so that the next updateMetrics call computes correct deltas.
+// The instance count gauge is left unchanged — updateMetrics handles
+// mode transitions.
 func (f *FieldTrie) stopCleanup() {
 	f.cleanup.Stop()
 
