@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -124,6 +125,8 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 		fieldTrie.cleanup = runtime.AddCleanup(fieldTrie, cleanupMetrics, fieldTrie.metrics)
 	}
 
+	logBalancesTrieCreation(field, "NewFieldTrie")
+
 	return fieldTrie, nil
 }
 
@@ -224,7 +227,6 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) (*FieldTrie, [
 }
 
 // fork creates a new independent trie from the shared source's data.
-// Must be called while holding f.mu.
 func (f *FieldTrie) fork() *FieldTrie {
 	forked := &FieldTrie{
 		ref:        stateutil.NewRef(1),
@@ -253,6 +255,8 @@ func (f *FieldTrie) fork() *FieldTrie {
 
 		base.updateMetrics()
 		base.cleanup = runtime.AddCleanup(base, cleanupMetrics, base.metrics)
+
+		logBalancesTrieCreation(f.field, "fork (base from owned)")
 
 		forked.base = base
 		forked.overrides = make([]map[uint64][32]byte, depth+1)
@@ -361,12 +365,23 @@ func (f *FieldTrie) rebuild(elements any) ([32]byte, error) {
 	f.updateMetrics()
 	f.cleanup = runtime.AddCleanup(f, cleanupMetrics, f.metrics)
 
+	logBalancesTrieCreation(f.field, "rebuild")
+
 	root, err := f.trieRoot()
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("trie root: %w", err)
 	}
 
 	return root, nil
+}
+
+func logBalancesTrieCreation(field types.FieldIndex, source string) {
+	if field != types.Balances {
+		return
+	}
+	buf := make([]byte, 4096)
+	n := runtime.Stack(buf, false)
+	log.WithField("source", source).Infof("Balances FieldTrie created\n%s", buf[:n])
 }
 
 // stopCleanup cancels the pending GC cleanup and immediately
