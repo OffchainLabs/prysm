@@ -686,7 +686,7 @@
 - name: BeaconState#heze
   sources: []
   spec: |
-    <spec ssz_object="BeaconState" fork="heze" hash="f73e357a">
+    <spec ssz_object="BeaconState" fork="heze" hash="11cb9d81">
     class BeaconState(Container):
         genesis_time: uint64
         genesis_validators_root: Root
