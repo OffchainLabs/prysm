@@ -112,4 +112,5 @@ type Setter interface {
 	SetBalancesByRooter(BalancesByRooter)
 	InsertSlashedIndex(context.Context, primitives.ValidatorIndex)
 	SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool)
+	MarkFullNode(root [32]byte)
 }
