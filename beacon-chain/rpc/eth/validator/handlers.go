@@ -1245,7 +1245,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 	// Limit how far in the future we can query (current + 1 epoch).
 	cs := s.TimeFetcher.CurrentSlot()
 	currentEpoch := slots.ToEpoch(cs)
-	nextEpoch := currentEpoch + 1
+	nextEpoch := currentEpoch.Add(1)
 	if requestedEpoch > nextEpoch {
 		httputil.HandleError(w,
 			fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", requestedEpoch, nextEpoch),

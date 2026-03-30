@@ -98,7 +98,7 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	if rpcErr != nil {
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
-	nextPTCDuties, rpcErr := vs.CoreService.PTCDuties(ctx, s, req.Epoch+1, requestIndices)
+	nextPTCDuties, rpcErr := vs.CoreService.PTCDuties(ctx, s, req.Epoch.Add(1), requestIndices)
 	if rpcErr != nil {
 		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
