@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -949,6 +950,7 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 
 	envelopes := make([]*ethpb.SignedExecutionPayloadEnvelope, 0, max)
 	var prevSlot primitives.Slot
+	var prevHash []byte
 	for i := uint64(0); i < max+1; i++ {
 		env, err := readChunkedExecutionPayloadEnvelope(stream, p2pProvider.Encoding(), ctxMap)
 		if errors.Is(err, io.EOF) {
@@ -970,6 +972,13 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 		if i > 0 && envSlot <= prevSlot {
 			return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d not greater than previous slot %d", envSlot, prevSlot)
 		}
+		// Validate the hash chain
+		if len(prevHash) != 0 {
+			if !bytes.Equal(env.Message.Payload.ParentHash, prevHash) {
+				return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope parent hash %x does not match previous hash %x", env.Message.Payload.ParentHash, prevHash)
+			}
+		}
+		prevHash = env.Message.Payload.BlockHash
 		prevSlot = envSlot
 		envelopes = append(envelopes, env)
 	}

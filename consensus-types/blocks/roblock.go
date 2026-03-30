@@ -20,6 +20,15 @@ func (b ROBlock) Root() [32]byte {
 	return b.root
 }
 
+// ParentHash returns the parent hash of a beacon block post-Gloas
+func (b ROBlock) ParentHash() ([32]byte, error) {
+	s, err := b.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return [32]byte(s.Message.ParentBlockHash), nil
+}
+
 // RootSlice returns a slice of the value returned by Root(). This is convenient because slicing the result of a func
 // is not allowed, so only offering a fixed-length array version results in boilerplate code to
 func (b ROBlock) RootSlice() []byte {

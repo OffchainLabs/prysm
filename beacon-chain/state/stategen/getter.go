@@ -243,9 +243,13 @@ func (s *State) loadStateByBlockHash(ctx context.Context, blockHash [32]byte, sl
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not load block by resolved beacon block root %#x for execution block hash %#x", blockRoot, blockHash)
 	}
-	envelope, err := s.beaconDB.ExecutionPayloadEnvelope(ctx, blockRoot)
+	signedEnvelope, err := s.beaconDB.ExecutionPayloadEnvelope(ctx, blockRoot)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not retrieve execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
+	}
+	envelope, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(signedEnvelope.GetMessage())
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not wrap blinded execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
 	}
 	if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, blockState, blk.Block().StateRoot(), envelope); err != nil {
 		return nil, errors.Wrapf(err, "could not apply execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
