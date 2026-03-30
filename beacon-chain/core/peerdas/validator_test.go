@@ -176,22 +176,22 @@ func TestDataColumnSidecars(t *testing.T) {
 
 		// Verify each sidecar has the expected structure
 		for i, sidecar := range sidecars {
-			require.Equal(t, uint64(i), sidecar.Index)
-			require.Equal(t, 2, len(sidecar.Column))
-			require.Equal(t, 2, len(sidecar.KzgCommitments))
-			require.Equal(t, 2, len(sidecar.KzgProofs))
+			require.Equal(t, uint64(i), sidecar.Index())
+			require.Equal(t, 2, len(sidecar.Column()))
+			require.Equal(t, 2, len(sidecar.KzgCommitments()))
+			require.Equal(t, 2, len(sidecar.KzgProofs()))
 
 			// Verify commitments match what we set
-			require.DeepEqual(t, commitment1, sidecar.KzgCommitments[0])
-			require.DeepEqual(t, commitment2, sidecar.KzgCommitments[1])
+			require.DeepEqual(t, commitment1, sidecar.KzgCommitments()[0])
+			require.DeepEqual(t, commitment2, sidecar.KzgCommitments()[1])
 
 			// Verify column data comes from the correct cells
-			require.Equal(t, byte(i), sidecar.Column[0][0])
-			require.Equal(t, byte(i+128), sidecar.Column[1][0])
+			require.Equal(t, byte(i), sidecar.Column()[0][0])
+			require.Equal(t, byte(i+128), sidecar.Column()[1][0])
 
 			// Verify proofs come from the correct proofs
-			require.Equal(t, byte(i), sidecar.KzgProofs[0][0])
-			require.Equal(t, byte(i+128), sidecar.KzgProofs[1][0])
+			require.Equal(t, byte(i), sidecar.KzgProofs()[0][0])
+			require.Equal(t, byte(i+128), sidecar.KzgProofs()[1][0])
 		}
 	})
 }

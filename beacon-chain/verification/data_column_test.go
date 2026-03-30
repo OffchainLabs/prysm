@@ -728,8 +728,8 @@ func TestDataColumnsSidecarInclusionProven(t *testing.T) {
 			columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 			if tc.alterate {
 				firstColumn := columns[0]
-				byte0 := firstColumn.SignedBlockHeader.Header.BodyRoot[0]
-				firstColumn.SignedBlockHeader.Header.BodyRoot[0] = byte0 ^ 255
+				byte0 := firstColumn.SignedBlockHeader().Header.BodyRoot[0]
+				firstColumn.SignedBlockHeader().Header.BodyRoot[0] = byte0 ^ 255
 			}
 
 			initializer := Initializer{
@@ -785,7 +785,7 @@ func TestDataColumnsSidecarKzgProofVerified(t *testing.T) {
 
 			verifyDataColumnsCommitment := func(roDataColumns []blocks.RODataColumn) error {
 				for _, roDataColumn := range roDataColumns {
-					require.Equal(t, true, reflect.DeepEqual(firstColumn.KzgCommitments, roDataColumn.KzgCommitments))
+					require.Equal(t, true, reflect.DeepEqual(firstColumn.KzgCommitments(), roDataColumn.KzgCommitments()))
 				}
 
 				return tc.verifyDataColumnsCommitmentError

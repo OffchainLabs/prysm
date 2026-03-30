@@ -127,7 +127,7 @@ func TestDataColumn_Slot(t *testing.T) {
 	slot := primitives.Slot(1)
 
 	dataColumn := &RODataColumn{
-		DataColumnSidecar: &ethpb.DataColumnSidecar{
+		fulu: &ethpb.DataColumnSidecar{
 			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
 				Header: &ethpb.BeaconBlockHeader{
 					Slot: slot,
@@ -142,7 +142,7 @@ func TestDataColumn_Slot(t *testing.T) {
 func TestDataColumn_ParentRoot(t *testing.T) {
 	root := [fieldparams.RootLength]byte{1}
 	dataColumn := &RODataColumn{
-		DataColumnSidecar: &ethpb.DataColumnSidecar{
+		fulu: &ethpb.DataColumnSidecar{
 			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
 				Header: &ethpb.BeaconBlockHeader{
 					ParentRoot: root[:],
@@ -157,7 +157,7 @@ func TestDataColumn_ParentRoot(t *testing.T) {
 func TestDataColumn_ProposerIndex(t *testing.T) {
 	proposerIndex := primitives.ValidatorIndex(1)
 	dataColumn := &RODataColumn{
-		DataColumnSidecar: &ethpb.DataColumnSidecar{
+		fulu: &ethpb.DataColumnSidecar{
 			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
 				Header: &ethpb.BeaconBlockHeader{
 					ProposerIndex: proposerIndex,

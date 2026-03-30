@@ -13,7 +13,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"google.golang.org/protobuf/proto"
 )
 
 // validateExecutionPayloadBidGossip validates execution payload bids on gossip.
@@ -116,7 +115,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	return pubsub.ValidationAccept, nil
 }
 
-func (s *Service) executionPayloadBidSubscriber(_ context.Context, msg proto.Message) error {
+func (s *Service) executionPayloadBidSubscriber(_ context.Context, msg any) error {
 	signedBid, ok := msg.(*ethpb.SignedExecutionPayloadBid)
 	if !ok {
 		return errWrongMessage

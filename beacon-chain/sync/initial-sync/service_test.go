@@ -641,7 +641,7 @@ func TestFetchOriginSidecars(t *testing.T) {
 		// Save all sidecars except what we need.
 		toSave := make([]blocks.VerifiedRODataColumn, 0, uint64(len(verifiedRoSidecars))-samplingSize)
 		for _, sidecar := range verifiedRoSidecars {
-			if !info.CustodyColumns[sidecar.Index] {
+			if !info.CustodyColumns[sidecar.Index()] {
 				toSave = append(toSave, sidecar)
 			}
 		}
@@ -816,7 +816,7 @@ func TestFetchOriginColumns(t *testing.T) {
 			assert.DeepEqual(t, expectedRequests[attempt], actualRequest)
 
 			for _, column := range toRespondByAttempt[attempt] {
-				err = prysmSync.WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedRoSidecars[column].DataColumnSidecar)
+				err = prysmSync.WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedRoSidecars[column].DataColumnSidecar())
 				assert.NoError(t, err)
 			}
 

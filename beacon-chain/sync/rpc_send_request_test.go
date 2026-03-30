@@ -1060,7 +1060,7 @@ func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
 
 			require.Equal(t, len(expected), len(actual))
 			for i := range expected {
-				require.DeepSSZEqual(t, expected[i], actual[i].DataColumnSidecar)
+				require.DeepSSZEqual(t, expected[i], actual[i].DataColumnSidecar())
 			}
 		})
 	}
@@ -1346,7 +1346,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 				}
 
 				for _, sidecar := range expected {
-					err := WriteDataColumnSidecarChunk(stream, clock, p2.Encoding(), sidecar.DataColumnSidecar)
+					err := WriteDataColumnSidecarChunk(stream, clock, p2.Encoding(), sidecar.DataColumnSidecar())
 					assert.NoError(t, err)
 				}
 
@@ -1372,7 +1372,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 
 			require.Equal(t, len(expected), len(actual))
 			for i := range expected {
-				require.DeepSSZEqual(t, expected[i], actual[i])
+				require.DeepSSZEqual(t, expected[i].DataColumnSidecar(), actual[i].DataColumnSidecar())
 			}
 		})
 	}
@@ -1625,7 +1625,7 @@ func TestReadChunkedDataColumnSidecar(t *testing.T) {
 
 			actual, err := readChunkedDataColumnSidecar(stream, p2, ContextByteVersions{[4]byte{1, 2, 3, 4}: version.Fulu})
 			require.NoError(t, err)
-			require.DeepSSZEqual(t, expected, actual.DataColumnSidecar)
+			require.DeepSSZEqual(t, expected, actual.DataColumnSidecar())
 		})
 
 		p1.Connect(p2)

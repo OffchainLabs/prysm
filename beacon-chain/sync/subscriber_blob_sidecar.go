@@ -7,10 +7,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"google.golang.org/protobuf/proto"
 )
 
-func (s *Service) blobSubscriber(ctx context.Context, msg proto.Message) error {
+func (s *Service) blobSubscriber(ctx context.Context, msg any) error {
 	b, ok := msg.(blocks.VerifiedROBlob)
 	if !ok {
 		return fmt.Errorf("message was not type blocks.VerifiedROBlob, type=%T", msg)

@@ -34,7 +34,6 @@ import (
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
 	logTest "github.com/sirupsen/logrus/hooks/test"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestSubscribe_ReceivesValidMessage(t *testing.T) {
@@ -64,7 +63,7 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	r.subscribe(topic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
+	r.subscribe(topic, r.noopValidator, func(_ context.Context, msg any) error {
 		m, ok := msg.(*pb.SignedVoluntaryExit)
 		assert.Equal(t, true, ok, "Object is not of type *pb.SignedVoluntaryExit")
 		if m.Exit == nil || m.Exit.Epoch != 55 {
@@ -110,7 +109,7 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 	p2pService.Digest = nse.ForkDigest
 	topic := "/eth2/%x/voluntary_exit"
 
-	r.subscribe(topic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
+	r.subscribe(topic, r.noopValidator, func(_ context.Context, msg any) error {
 		return nil
 	}, nse)
 	r.markForChainStart()
@@ -162,7 +161,7 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 	wg.Add(1)
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p2pService.Digest = nse.ForkDigest
-	r.subscribe(topic, r.noopValidator, func(ctx context.Context, msg proto.Message) error {
+	r.subscribe(topic, r.noopValidator, func(ctx context.Context, msg any) error {
 		require.NoError(t, r.attesterSlashingSubscriber(ctx, msg))
 		wg.Done()
 		return nil
@@ -217,7 +216,7 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 	params.OverrideBeaconConfig(params.MainnetConfig())
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p2pService.Digest = nse.ForkDigest
-	r.subscribe(topic, r.noopValidator, func(ctx context.Context, msg proto.Message) error {
+	r.subscribe(topic, r.noopValidator, func(ctx context.Context, msg any) error {
 		require.NoError(t, r.proposerSlashingSubscriber(ctx, msg))
 		wg.Done()
 		return nil
@@ -266,7 +265,7 @@ func TestSubscribe_HandlesPanic(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	r.subscribe(topic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
+	r.subscribe(topic, r.noopValidator, func(_ context.Context, msg any) error {
 		defer wg.Done()
 		panic("bad")
 	}, nse)

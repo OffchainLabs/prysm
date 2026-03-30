@@ -94,7 +94,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 
 	for i := uint64(0); uint64(len(toStore4)) < toStoreCount; i++ {
 		sidecar := verifiedSidecars4[minimumColumnsCountToReconstruct+i]
-		if sidecar.Index == 81 {
+		if sidecar.Index() == 81 {
 			continue
 		}
 
@@ -172,19 +172,19 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 		assert.NoError(t, err)
 		assert.DeepEqual(t, expectedRequest, actualRequest)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[31].DataColumnSidecar)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[31].DataColumnSidecar())
 		assert.NoError(t, err)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[81].DataColumnSidecar)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[81].DataColumnSidecar())
 		assert.NoError(t, err)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars4[81].DataColumnSidecar)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars4[81].DataColumnSidecar())
 		assert.NoError(t, err)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[31].DataColumnSidecar)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[31].DataColumnSidecar())
 		assert.NoError(t, err)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[31].DataColumnSidecar)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[31].DataColumnSidecar())
 		assert.NoError(t, err)
 
 		err = stream.CloseWrite()
@@ -228,11 +228,11 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 		assert.NoError(t, err)
 		assert.DeepEqual(t, expectedRequest, actualRequest)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[81].DataColumnSidecar)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[81].DataColumnSidecar())
 		assert.NoError(t, err)
 
 		for _, index := range allBut31And81And106 {
-			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[index].DataColumnSidecar)
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[index].DataColumnSidecar())
 			assert.NoError(t, err)
 		}
 
@@ -272,7 +272,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	for root := range expectedResult {
 		require.Equal(t, len(expectedResult[root]), len(actualResult[root]))
 		for i := range expectedResult[root] {
-			require.DeepSSZEqual(t, expectedResult[root][i], actualResult[root][i])
+			require.DeepSSZEqual(t, expectedResult[root][i].DataColumnSidecar(), actualResult[root][i].DataColumnSidecar())
 		}
 	}
 
@@ -363,7 +363,13 @@ func TestUpdateResults(t *testing.T) {
 
 	actualVerifiedSidecarsByRoot := updateResults(verifiedSidecars, missingIndicesByRoot)
 	require.DeepEqual(t, expectedMissingIndicesByRoot, missingIndicesByRoot)
-	require.DeepEqual(t, expectedVerifiedSidecarsByRoot, actualVerifiedSidecarsByRoot)
+	require.Equal(t, len(expectedVerifiedSidecarsByRoot), len(actualVerifiedSidecarsByRoot))
+	for root := range expectedVerifiedSidecarsByRoot {
+		require.Equal(t, len(expectedVerifiedSidecarsByRoot[root]), len(actualVerifiedSidecarsByRoot[root]))
+		for i := range expectedVerifiedSidecarsByRoot[root] {
+			require.DeepSSZEqual(t, expectedVerifiedSidecarsByRoot[root][i].DataColumnSidecar(), actualVerifiedSidecarsByRoot[root][i].DataColumnSidecar())
+		}
+	}
 }
 
 func TestFetchDataColumnSidecarsFromPeers(t *testing.T) {
@@ -462,7 +468,10 @@ func TestFetchDataColumnSidecarsFromPeers(t *testing.T) {
 	require.Equal(t, len(expectedResponse), len(actualResponse))
 
 	for peerID := range expectedResponse {
-		require.DeepSSZEqual(t, expectedResponse[peerID], actualResponse[peerID])
+		require.Equal(t, len(expectedResponse[peerID]), len(actualResponse[peerID]))
+		for i := range expectedResponse[peerID] {
+			require.DeepSSZEqual(t, expectedResponse[peerID][i].DataColumnSidecar(), actualResponse[peerID][i].DataColumnSidecar())
+		}
 	}
 }
 
@@ -555,7 +564,7 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 
 		actualResponse, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
 		require.NoError(t, err)
-		require.DeepEqual(t, expectedResponse, actualResponse[0])
+		require.DeepSSZEqual(t, expectedResponse.DataColumnSidecar(), actualResponse[0].DataColumnSidecar())
 	})
 
 	t.Run("non contiguous", func(t *testing.T) {
@@ -622,7 +631,7 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 
 		actualResponse, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
 		require.NoError(t, err)
-		require.DeepEqual(t, expectedResponse, actualResponse[0])
+		require.DeepSSZEqual(t, expectedResponse.DataColumnSidecar(), actualResponse[0].DataColumnSidecar())
 	})
 }
 
@@ -799,9 +808,9 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 
 		for i := range actual {
 			actualSidecar := actual[i]
-			index := actualSidecar.Index
+			index := actualSidecar.Index()
 			expectedSidecar := expected[index]
-			require.DeepEqual(t, expectedSidecar, actualSidecar)
+			require.DeepSSZEqual(t, expectedSidecar.DataColumnSidecar(), actualSidecar.DataColumnSidecar())
 		}
 	})
 
@@ -817,10 +826,10 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		_, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
 
 		// Modify one sidecar to ensure proof verification fails.
-		if roDataColumnSidecars[middle].KzgProofs[0][0] == 0 {
-			roDataColumnSidecars[middle].KzgProofs[0][0]++
+		if roDataColumnSidecars[middle].KzgProofs()[0][0] == 0 {
+			roDataColumnSidecars[middle].KzgProofs()[0][0]++
 		} else {
-			roDataColumnSidecars[middle].KzgProofs[0][0]--
+			roDataColumnSidecars[middle].KzgProofs()[0][0]--
 		}
 
 		roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
@@ -844,9 +853,9 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 
 		for i := range actual {
 			actualSidecar := actual[i]
-			index := actualSidecar.Index
+			index := actualSidecar.Index()
 			expectedSidecar := expected[index]
-			require.DeepEqual(t, expectedSidecar, actualSidecar)
+			require.DeepSSZEqual(t, expectedSidecar.DataColumnSidecar(), actualSidecar.DataColumnSidecar())
 		}
 	})
 }

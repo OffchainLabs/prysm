@@ -31,7 +31,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 const pubsubMessageTimeout = 30 * time.Second
@@ -42,10 +41,10 @@ var errInvalidDigest = errors.New("invalid digest")
 type wrappedVal func(context.Context, peer.ID, *pubsub.Message) (pubsub.ValidationResult, error)
 
 // subHandler represents handler for a given subscription.
-type subHandler func(context.Context, proto.Message) error
+type subHandler func(context.Context, any) error
 
 // noopHandler is used for subscriptions that do not require anything to be done.
-var noopHandler subHandler = func(ctx context.Context, msg proto.Message) error {
+var noopHandler subHandler = func(ctx context.Context, msg any) error {
 	return nil
 }
 
@@ -317,8 +316,8 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 		})
 	}
 
-	// New gossip topic in Fulu.
-	if params.BeaconConfig().FuluForkEpoch <= nse.Epoch {
+	// Data column gossip topic (Fulu and Gloas).
+	if params.BeaconConfig().GloasForkEpoch <= nse.Epoch || params.BeaconConfig().FuluForkEpoch <= nse.Epoch {
 		s.spawn(func() {
 			s.subscribeWithParameters(subscribeParameters{
 				topicFormat:              p2p.DataColumnSubnetTopicFormat,
@@ -461,7 +460,7 @@ func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle s
 			return
 		}
 
-		if err := handle(ctx, msg.ValidatorData.(proto.Message)); err != nil {
+		if err := handle(ctx, msg.ValidatorData); err != nil {
 			tracing.AnnotateError(span, err)
 			log.WithError(err).Error("Could not handle p2p pubsub")
 			messageFailedProcessingCounter.WithLabelValues(topic).Inc()

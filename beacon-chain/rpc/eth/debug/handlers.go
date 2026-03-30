@@ -352,32 +352,32 @@ loop:
 func buildDataColumnSidecarsJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) []*structs.DataColumnSidecar {
 	sidecars := make([]*structs.DataColumnSidecar, len(verifiedDataColumns))
 	for i, dc := range verifiedDataColumns {
-		column := make([]string, len(dc.Column))
-		for j, cell := range dc.Column {
+		column := make([]string, len(dc.Column()))
+		for j, cell := range dc.Column() {
 			column[j] = hexutil.Encode(cell)
 		}
 
-		kzgCommitments := make([]string, len(dc.KzgCommitments))
-		for j, commitment := range dc.KzgCommitments {
+		kzgCommitments := make([]string, len(dc.KzgCommitments()))
+		for j, commitment := range dc.KzgCommitments() {
 			kzgCommitments[j] = hexutil.Encode(commitment)
 		}
 
-		kzgProofs := make([]string, len(dc.KzgProofs))
-		for j, proof := range dc.KzgProofs {
+		kzgProofs := make([]string, len(dc.KzgProofs()))
+		for j, proof := range dc.KzgProofs() {
 			kzgProofs[j] = hexutil.Encode(proof)
 		}
 
-		kzgCommitmentsInclusionProof := make([]string, len(dc.KzgCommitmentsInclusionProof))
-		for j, proof := range dc.KzgCommitmentsInclusionProof {
+		kzgCommitmentsInclusionProof := make([]string, len(dc.KzgCommitmentsInclusionProof()))
+		for j, proof := range dc.KzgCommitmentsInclusionProof() {
 			kzgCommitmentsInclusionProof[j] = hexutil.Encode(proof)
 		}
 
 		sidecars[i] = &structs.DataColumnSidecar{
-			Index:                        strconv.FormatUint(dc.Index, 10),
+			Index:                        strconv.FormatUint(dc.Index(), 10),
 			Column:                       column,
 			KzgCommitments:               kzgCommitments,
 			KzgProofs:                    kzgProofs,
-			SignedBeaconBlockHeader:      structs.SignedBeaconBlockHeaderFromConsensus(dc.SignedBlockHeader),
+			SignedBeaconBlockHeader:      structs.SignedBeaconBlockHeaderFromConsensus(dc.SignedBlockHeader()),
 			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
 		}
 	}
@@ -396,7 +396,7 @@ func buildDataColumnSidecarsSSZResponse(verifiedDataColumns []blocks.VerifiedROD
 
 	// Marshal and append each sidecar
 	for i, sidecar := range verifiedDataColumns {
-		sszrep, err := sidecar.MarshalSSZ()
+		sszrep, err := sidecar.SszMarshaler().MarshalSSZ()
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to marshal data column sidecar at index %d", i)
 		}

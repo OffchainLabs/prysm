@@ -147,12 +147,12 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg any
 
 		for _, verifiedRODataColumn := range verifiedRODataColumns {
 			// Filter out data column sidecars that are too old.
-			if verifiedRODataColumn.SignedBlockHeader.Header.Slot < minReqSlot {
+			if verifiedRODataColumn.Slot() < minReqSlot {
 				continue
 			}
 
 			SetStreamWriteDeadline(stream, defaultWriteDuration)
-			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar); chunkErr != nil {
+			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar()); chunkErr != nil {
 				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 				tracing.AnnotateError(span, chunkErr)
 				return chunkErr

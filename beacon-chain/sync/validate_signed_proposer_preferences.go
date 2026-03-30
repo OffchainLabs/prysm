@@ -9,7 +9,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"google.golang.org/protobuf/proto"
 )
 
 func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
@@ -73,7 +72,7 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	return pubsub.ValidationAccept, nil
 }
 
-func (s *Service) signedProposerPreferencesSubscriber(_ context.Context, msg proto.Message) error {
+func (s *Service) signedProposerPreferencesSubscriber(_ context.Context, msg any) error {
 	_, ok := msg.(*ethpb.SignedProposerPreferences)
 	if !ok {
 		return errWrongMessage

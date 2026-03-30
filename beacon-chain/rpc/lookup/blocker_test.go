@@ -1025,12 +1025,12 @@ func TestGetDataColumns(t *testing.T) {
 		// Create a map of expected indices for easier verification
 		expectedIndices := make(map[uint64]bool)
 		for _, expected := range verifiedRoDataColumnSidecars {
-			expectedIndices[expected.RODataColumn.DataColumnSidecar.Index] = true
+			expectedIndices[expected.RODataColumn.Index()] = true
 		}
 
 		// Verify we got data columns with the expected indices
 		for _, actual := range retrievedDataColumns {
-			require.Equal(t, true, expectedIndices[actual.RODataColumn.DataColumnSidecar.Index])
+			require.Equal(t, true, expectedIndices[actual.RODataColumn.Index()])
 		}
 	})
 
@@ -1120,7 +1120,7 @@ func TestGetDataColumns(t *testing.T) {
 		require.Equal(t, 3, len(retrievedDataColumns))
 
 		for i, dataColumn := range retrievedDataColumns {
-			require.Equal(t, uint64(indices[i]), dataColumn.RODataColumn.DataColumnSidecar.Index)
+			require.Equal(t, uint64(indices[i]), dataColumn.RODataColumn.Index())
 		}
 	})
 

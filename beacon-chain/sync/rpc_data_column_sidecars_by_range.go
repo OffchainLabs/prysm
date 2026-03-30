@@ -146,7 +146,7 @@ func (s *Service) streamDataColumnBatch(ctx context.Context, batch blockBatch, q
 
 		// Write the retrieved sidecars to the stream.
 		for _, verifiedRODataColumn := range verifiedRODataColumns {
-			sidecar := verifiedRODataColumn.DataColumnSidecar
+			sidecar := verifiedRODataColumn.DataColumnSidecar()
 			SetStreamWriteDeadline(stream, defaultWriteDuration)
 
 			if err := WriteDataColumnSidecarChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), sidecar); err != nil {

@@ -58,16 +58,25 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	// Reject messages that are not of the expected type.
-	dcsc, ok := m.(*eth.DataColumnSidecar)
-	if !ok {
+	var roDataColumn blocks.RODataColumn
+	switch dc := m.(type) {
+	case *eth.DataColumnSidecar:
+		roDataColumn, err = blocks.NewRODataColumn(dc)
+	case *eth.DataColumnSidecarGloas:
+		roDataColumn, err = blocks.NewRODataColumnGloas(dc)
+	default:
 		return pubsub.ValidationReject, errWrongMessage
 	}
-
-	// Convert to a read-only data column sidecar.
-	roDataColumn, err := blocks.NewRODataColumn(dcsc)
 	if err != nil {
 		return pubsub.ValidationReject, errors.Wrap(err, "roDataColumn conversion failure")
 	}
+
+	log.WithFields(logrus.Fields{
+		"slot":    roDataColumn.Slot(),
+		"index":   roDataColumn.Index(),
+		"root":    fmt.Sprintf("%#x", roDataColumn.BlockRoot()),
+		"isGloas": roDataColumn.IsGloas(),
+	}).Info("Received data column sidecar via gossip")
 
 	if s.cfg.chain.ShouldIgnoreData(roDataColumn.ParentRoot(), roDataColumn.Slot()) {
 		log.WithFields(logging.DataColumnFields(roDataColumn)).Debug("Ignoring data column with canonical parent before justified checkpoint")
@@ -92,7 +101,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	dataColumnSidecarVerificationSuccessesCounter.Inc()
 
 	// Get the time at slot start.
-	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), verifiedRODataColumn.SignedBlockHeader.Header.Slot)
+	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), verifiedRODataColumn.Slot())
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
@@ -105,7 +114,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	select {
 	case s.dataColumnLogCh <- dataColumnLogEntry{
 		slot:           verifiedRODataColumn.Slot(),
-		index:          verifiedRODataColumn.Index,
+		index:          verifiedRODataColumn.Index(),
 		root:           verifiedRODataColumn.BlockRoot(),
 		validationTime: validationTime,
 		sinceStartTime: sinceSlotStartTime,
@@ -119,9 +128,9 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 			Type: operation.DataColumnReceived,
 			Data: &operation.DataColumnReceivedData{
 				Slot:           verifiedRODataColumn.Slot(),
-				Index:          verifiedRODataColumn.Index,
+				Index:          verifiedRODataColumn.Index(),
 				BlockRoot:      verifiedRODataColumn.BlockRoot(),
-				KzgCommitments: bytesutil.SafeCopy2dBytes(verifiedRODataColumn.KzgCommitments),
+				KzgCommitments: bytesutil.SafeCopy2dBytes(verifiedRODataColumn.KzgCommitments()),
 			},
 		})
 	}
@@ -211,7 +220,7 @@ func (s *Service) validateDataColumnFulu(
 
 	// [IGNORE] The sidecar is the first sidecar for the tuple `(block_header.slot, block_header.proposer_index, sidecar.index)`
 	// with valid header signature, sidecar inclusion proof, and kzg proof.
-	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.DataColumnSidecar.Index) {
+	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.Index()) {
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(nil)
 	}
 
@@ -348,7 +357,7 @@ func (s *Service) processDataColumnLogs() {
 						"indices":        helpers.PrettySlice(indices),
 						"validationTime": prettyMinMaxAverage(minValidationTime, maxValidationTime, avgValidationTime),
 						"sinceStartTime": prettyMinMaxAverage(minSinceStartTime, maxSinceStartTime, avgSinceStartTime),
-					}).Debug("Accepted data column sidecars summary")
+					}).Info("Accepted data column sidecars summary")
 				}
 			}
 

@@ -6,10 +6,9 @@ import (
 
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
 
-func (s *Service) voluntaryExitSubscriber(_ context.Context, msg proto.Message) error {
+func (s *Service) voluntaryExitSubscriber(_ context.Context, msg any) error {
 	ve, ok := msg.(*ethpb.SignedVoluntaryExit)
 	if !ok {
 		return fmt.Errorf("wrong type, expected: *ethpb.SignedVoluntaryExit got: %T", msg)
@@ -24,7 +23,7 @@ func (s *Service) voluntaryExitSubscriber(_ context.Context, msg proto.Message) 
 	return nil
 }
 
-func (s *Service) attesterSlashingSubscriber(ctx context.Context, msg proto.Message) error {
+func (s *Service) attesterSlashingSubscriber(ctx context.Context, msg any) error {
 	aSlashing, ok := msg.(ethpb.AttSlashing)
 	if !ok {
 		return fmt.Errorf("wrong type, expected: *ethpb.AttesterSlashing got: %T", msg)
@@ -45,7 +44,7 @@ func (s *Service) attesterSlashingSubscriber(ctx context.Context, msg proto.Mess
 	return nil
 }
 
-func (s *Service) proposerSlashingSubscriber(ctx context.Context, msg proto.Message) error {
+func (s *Service) proposerSlashingSubscriber(ctx context.Context, msg any) error {
 	pSlashing, ok := msg.(*ethpb.ProposerSlashing)
 	if !ok {
 		return fmt.Errorf("wrong type, expected: *ethpb.ProposerSlashing got: %T", msg)

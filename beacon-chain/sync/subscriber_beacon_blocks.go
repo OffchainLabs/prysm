@@ -22,10 +22,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
-func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) error {
+func (s *Service) beaconBlockSubscriber(ctx context.Context, msg any) error {
 	signed, err := blocks.NewSignedBeaconBlock(msg)
 	if err != nil {
 		return err
@@ -290,17 +289,17 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 	unseenIndices := make(map[uint64]bool, len(sidecars))
 	for _, sidecar := range sidecars {
 		// Skip data column sidecars we don't need.
-		if !neededIndices[sidecar.Index] {
+		if !neededIndices[sidecar.Index()] {
 			continue
 		}
 
 		// Skip already seen data column sidecars.
-		if s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index) {
+		if s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index()) {
 			continue
 		}
 
 		unseenSidecars = append(unseenSidecars, sidecar)
-		unseenIndices[sidecar.Index] = true
+		unseenIndices[sidecar.Index()] = true
 	}
 
 	// Exit early if there are no nothing to broadcast or receive.

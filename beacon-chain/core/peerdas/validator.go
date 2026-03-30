@@ -142,6 +142,51 @@ func DataColumnSidecars(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, 
 	return roSidecars, nil
 }
 
+// DataColumnSidecarsGloas constructs Gloas-format data column sidecars from cells and proofs.
+// Unlike the Fulu variant, Gloas sidecars use direct slot and beacon_block_root fields
+// instead of a SignedBlockHeader.
+func DataColumnSidecarsGloas(
+	cellsPerBlob [][]kzg.Cell,
+	proofsPerBlob [][]kzg.Proof,
+	slot primitives.Slot,
+	beaconBlockRoot [32]byte,
+) ([]blocks.RODataColumn, error) {
+	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
+
+	if len(cellsPerBlob) == 0 {
+		return nil, nil
+	}
+	start := time.Now()
+	cells, proofs, err := rotateRowsToCols(cellsPerBlob, proofsPerBlob, numberOfColumns)
+	if err != nil {
+		return nil, errors.Wrap(err, "rotate cells and proofs")
+	}
+
+	roSidecars := make([]blocks.RODataColumn, 0, numberOfColumns)
+	for idx := range numberOfColumns {
+		sidecar := &ethpb.DataColumnSidecarGloas{
+			Index:           idx,
+			Column:          cells[idx],
+			KzgProofs:       proofs[idx],
+			Slot:            slot,
+			BeaconBlockRoot: beaconBlockRoot[:],
+		}
+
+		if len(sidecar.Column) != len(sidecar.KzgProofs) {
+			return nil, ErrSizeMismatch
+		}
+
+		roSidecar, err := blocks.NewRODataColumnGloasWithRoot(sidecar, beaconBlockRoot)
+		if err != nil {
+			return nil, errors.Wrap(err, "new ro data column gloas")
+		}
+		roSidecars = append(roSidecars, roSidecar)
+	}
+
+	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
+	return roSidecars, nil
+}
+
 // Slot returns the slot of the source
 func (s *BlockReconstructionSource) Slot() primitives.Slot {
 	return s.Block().Slot()
@@ -235,7 +280,7 @@ func (s *SidecarReconstructionSource) Root() [fieldparams.RootLength]byte {
 
 // Commmitments returns the blob KZG commitments of the source
 func (s *SidecarReconstructionSource) Commitments() ([][]byte, error) {
-	return s.KzgCommitments, nil
+	return s.KzgCommitments(), nil
 }
 
 // Type returns the type of the source
@@ -246,9 +291,9 @@ func (s *SidecarReconstructionSource) Type() string {
 // extract extracts the block information from the source
 func (s *SidecarReconstructionSource) extract() (*blockInfo, error) {
 	info := &blockInfo{
-		signedBlockHeader: s.SignedBlockHeader,
-		kzgCommitments:    s.KzgCommitments,
-		kzgInclusionProof: s.KzgCommitmentsInclusionProof,
+		signedBlockHeader: s.SignedBlockHeader(),
+		kzgCommitments:    s.KzgCommitments(),
+		kzgInclusionProof: s.KzgCommitmentsInclusionProof(),
 	}
 
 	return info, nil

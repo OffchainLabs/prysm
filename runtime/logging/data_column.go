@@ -10,7 +10,7 @@ import (
 // DataColumnFields extracts a standard set of fields from a DataColumnSidecar into a logrus.Fields struct
 // which can be passed to log.WithFields.
 func DataColumnFields(column blocks.RODataColumn) logrus.Fields {
-	kzgCommitmentCount := len(column.KzgCommitments)
+	kzgCommitmentCount := len(column.KzgCommitments())
 
 	return logrus.Fields{
 		"slot":               column.Slot(),
@@ -18,6 +18,6 @@ func DataColumnFields(column blocks.RODataColumn) logrus.Fields {
 		"blockRoot":          fmt.Sprintf("%#x", column.BlockRoot())[:8],
 		"parentRoot":         fmt.Sprintf("%#x", column.ParentRoot())[:8],
 		"kzgCommitmentCount": kzgCommitmentCount,
-		"colIdx":             column.Index,
+		"colIdx":             column.Index(),
 	}
 }

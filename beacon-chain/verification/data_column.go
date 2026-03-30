@@ -155,7 +155,7 @@ func (dv *RODataColumnsVerifier) CorrectSubnet(dataColumnSidecarSubTopic string,
 		// to match with /eth2/9dc47cc6/data_column_sidecar_120
 		expectedTopic := expectedTopics[i] + "/"
 
-		actualSubnet := peerdas.ComputeSubnetForDataColumnSidecar(dv.dataColumns[i].Index)
+		actualSubnet := peerdas.ComputeSubnetForDataColumnSidecar(dv.dataColumns[i].Index())
 		actualSubTopic := fmt.Sprintf(dataColumnSidecarSubTopic, actualSubnet)
 
 		if !strings.Contains(expectedTopic, actualSubTopic) {
@@ -511,7 +511,7 @@ func columnToSignatureData(d blocks.RODataColumn) signatureData {
 	return signatureData{
 		Root:      d.BlockRoot(),
 		Parent:    d.ParentRoot(),
-		Signature: bytesutil.ToBytes96(d.SignedBlockHeader.Signature),
+		Signature: bytesutil.ToBytes96(d.SignedBlockHeader().Signature),
 		Proposer:  d.ProposerIndex(),
 		Slot:      d.Slot(),
 	}
@@ -529,21 +529,21 @@ func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 		commsIncProofByteCount = commsIncProofLen * 32
 	)
 
-	if len(c.KzgCommitmentsInclusionProof) != commsIncProofLen {
+	if len(c.KzgCommitmentsInclusionProof()) != commsIncProofLen {
 		// This should be already enforced by ssz unmarshaling; still check so we don't panic on array bounds.
 		return [32]byte{}, columnErrBuilder(ErrSidecarInclusionProofInvalid)
 	}
 
-	commsByteCount := len(c.KzgCommitments) * fieldparams.KzgCommitmentSize
+	commsByteCount := len(c.KzgCommitments()) * fieldparams.KzgCommitmentSize
 	unhashedKey := make([]byte, 0, commsIncProofByteCount+fieldparams.RootLength+commsByteCount)
 
 	// Include the commitments inclusion proof in the key.
-	for _, proof := range c.KzgCommitmentsInclusionProof {
+	for _, proof := range c.KzgCommitmentsInclusionProof() {
 		unhashedKey = append(unhashedKey, proof...)
 	}
 
 	// Include the block root in the key.
-	root, err := c.SignedBlockHeader.HashTreeRoot()
+	root, err := c.SignedBlockHeader().HashTreeRoot()
 	if err != nil {
 		return [32]byte{}, columnErrBuilder(errors.Wrap(err, "hash tree root"))
 	}
@@ -551,7 +551,7 @@ func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 	unhashedKey = append(unhashedKey, root[:]...)
 
 	// Include the commitments in the key.
-	for _, commitment := range c.KzgCommitments {
+	for _, commitment := range c.KzgCommitments() {
 		unhashedKey = append(unhashedKey, commitment...)
 	}
 
