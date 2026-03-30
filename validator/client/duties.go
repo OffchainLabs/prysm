@@ -132,6 +132,7 @@ type dutiesFetchResult struct {
 	attNext       *ethpb.AttesterDutiesResponse
 	propNext      *ethpb.ProposerDutiesResponse
 	syncNext      *ethpb.SyncCommitteeDutiesResponse
+	ptcNext       *ethpb.PTCDutiesResponse
 }
 
 // updateDutiesSplit fetches duties from the split V3 endpoints and
@@ -239,7 +240,7 @@ func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, i
 		}
 	})
 	wg.Go(func() {
-		ptcCurr, ptcErr = v.fetchPtcDuties(ctx, epoch, indices)
+		ptcCurr, res.ptcNext, ptcErr = v.fetchPtcDuties(ctx, epoch, indices)
 	})
 	wg.Wait()
 
@@ -296,7 +297,7 @@ func (v *validator) fetchAllDuties(ctx context.Context, epoch primitives.Epoch, 
 		syncCurr, res.syncNext, syncErr = v.fetchSyncDuties(ctx, epoch, indices)
 	})
 	wg.Go(func() {
-		ptcCurr, ptcErr = v.fetchPtcDuties(ctx, epoch, indices)
+		ptcCurr, res.ptcNext, ptcErr = v.fetchPtcDuties(ctx, epoch, indices)
 	})
 	wg.Wait()
 
@@ -375,6 +376,12 @@ func (v *validator) buildNextDuties(res dutiesFetchResult) []*ethpb.ValidatorDut
 			syncSet[d.ValidatorIndex] = true
 		}
 	}
+	ptcSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
+	if res.ptcNext != nil {
+		for _, d := range res.ptcNext.Duties {
+			ptcSlots[d.ValidatorIndex] = append(ptcSlots[d.ValidatorIndex], d.Slot)
+		}
+	}
 	var duties []*ethpb.ValidatorDuty
 	if res.attNext != nil {
 		for _, d := range res.attNext.Duties {
@@ -388,6 +395,7 @@ func (v *validator) buildNextDuties(res dutiesFetchResult) []*ethpb.ValidatorDut
 				AttesterSlot:            d.Slot,
 				ProposerSlots:           proposerSlots[d.ValidatorIndex],
 				IsSyncCommittee:         syncSet[d.ValidatorIndex],
+				PtcSlots:                ptcSlots[d.ValidatorIndex],
 				Status:                  v.statusForPubkey(d.Pubkey),
 			})
 		}
@@ -491,15 +499,31 @@ func (v *validator) fetchSyncDuties(
 	return current, next, nil
 }
 
-// fetchPtcDuties fetches PTC duties for the current epoch.
-// PTC assignments are not stable for the next epoch, so only fetch the current one.
+// fetchPtcDuties fetches PTC duties for the current and next epoch in parallel.
 func (v *validator) fetchPtcDuties(
 	ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex,
-) (*ethpb.PTCDutiesResponse, error) {
+) (current, next *ethpb.PTCDutiesResponse, err error) {
 	if epoch < params.BeaconConfig().GloasForkEpoch {
-		return nil, nil
+		return nil, nil, nil
 	}
-	return v.validatorClient.PTCDuties(ctx, epoch, indices)
+	var (
+		currErr, nextErr error
+		wg               sync.WaitGroup
+	)
+	wg.Go(func() {
+		current, currErr = v.validatorClient.PTCDuties(ctx, epoch, indices)
+	})
+	wg.Go(func() {
+		next, nextErr = v.validatorClient.PTCDuties(ctx, epoch.Add(1), indices)
+	})
+	wg.Wait()
+	if currErr != nil {
+		return nil, nil, currErr
+	}
+	if nextErr != nil {
+		log.WithError(nextErr).Debug("Could not get next epoch PTC duties")
+	}
+	return current, next, nil
 }
 
 // onDutiesUpdated checks for all-exited validators and starts subnet subscriptions.

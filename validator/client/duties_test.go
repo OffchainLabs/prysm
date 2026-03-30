@@ -470,6 +470,9 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		client.EXPECT().PTCDuties(gomock.Any(), epoch, gomock.Any()).Return(&ethpb.PTCDutiesResponse{
 			Duties: []*ethpb.PTCDuty{{Pubkey: keys.pub[:], ValidatorIndex: 42, Slot: primitives.Slot(epoch)*spe + 5}},
 		}, nil)
+		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.PTCDutiesResponse{
+			Duties: []*ethpb.PTCDuty{{Pubkey: keys.pub[:], ValidatorIndex: 42, Slot: primitives.Slot(epoch+1)*spe + 2}},
+		}, nil)
 
 		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub}))
 
@@ -485,12 +488,13 @@ func TestUpdateDutiesSplit(t *testing.T) {
 			assert.Equal(t, primitives.Slot(epoch)*spe+5, d.PtcSlots[0])
 		}
 
-		// Next epoch: attester only — no PTC (not stable for next epoch).
+		// Next epoch: attester + PTC look-ahead.
 		next := v.duties.NextEpochDuties()
 		require.Equal(t, 1, len(next))
 		for _, d := range next {
 			assert.Equal(t, primitives.Slot(epoch+1)*spe+7, d.AttesterSlot)
-			assert.Equal(t, 0, len(d.PtcSlots))
+			require.Equal(t, 1, len(d.PtcSlots))
+			assert.Equal(t, primitives.Slot(epoch+1)*spe+2, d.PtcSlots[0])
 			assert.Equal(t, false, d.IsSyncCommittee)
 		}
 
@@ -545,6 +549,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(&ethpb.ProposerDutiesResponse{}, nil)
 		client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).AnyTimes()
 		client.EXPECT().PTCDuties(gomock.Any(), epoch, gomock.Any()).Return(nil, errors.New("ptc fail"))
+		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil)
 
 		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub}))
 		assert.Equal(t, true, v.duties.IsInitialized())

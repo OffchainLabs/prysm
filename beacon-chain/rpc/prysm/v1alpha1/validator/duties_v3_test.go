@@ -373,9 +373,9 @@ func TestGetPTCDuties_EpochOutOfBound(t *testing.T) {
 		SyncChecker: &mockSync.Sync{IsSyncing: false},
 	}
 	currentEpoch := primitives.Epoch(chain.CurrentSlot() / params.BeaconConfig().SlotsPerEpoch)
-	req := &ethpb.PTCDutiesRequest{Epoch: currentEpoch + 1}
+	req := &ethpb.PTCDutiesRequest{Epoch: currentEpoch + 2}
 	_, err := vs.GetPTCDuties(t.Context(), req)
-	assert.ErrorContains(t, "can not be greater than current epoch", err)
+	assert.ErrorContains(t, "can not be greater than next epoch", err)
 }
 
 func TestGetPTCDuties_PreGloasFork(t *testing.T) {
