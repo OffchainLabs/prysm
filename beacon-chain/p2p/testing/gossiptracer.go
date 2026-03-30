@@ -25,11 +25,11 @@ type topicPeer struct {
 type GossipTracer struct {
 	mu             sync.Mutex
 	addPeerWaiters map[peer.ID]chan struct{}
-	addedPeers     map[peer.ID]struct{}
+	addedPeers     map[peer.ID]bool
 
 	joinedTopics map[string]bool
 
-	graftedPeers map[topicPeer]struct{}
+	graftedPeers map[topicPeer]bool
 	graftWaiters map[topicPeer]chan struct{}
 	topicWaiters map[string]*topicEventWaiter
 }
@@ -39,9 +39,9 @@ type GossipTracer struct {
 func NewGossipTracer() *GossipTracer {
 	return &GossipTracer{
 		addPeerWaiters: make(map[peer.ID]chan struct{}),
-		addedPeers:     make(map[peer.ID]struct{}),
+		addedPeers:     make(map[peer.ID]bool),
 		joinedTopics:   make(map[string]bool),
-		graftedPeers:   make(map[topicPeer]struct{}),
+		graftedPeers:   make(map[topicPeer]bool),
 		graftWaiters:   make(map[topicPeer]chan struct{}),
 		topicWaiters:   make(map[string]*topicEventWaiter),
 	}
@@ -49,7 +49,7 @@ func NewGossipTracer() *GossipTracer {
 
 func (t *GossipTracer) waitForAddPeer(ctx context.Context, pid peer.ID) error {
 	t.mu.Lock()
-	if _, ok := t.addedPeers[pid]; ok {
+	if t.addedPeers[pid] {
 		t.mu.Unlock()
 		return nil
 	}
@@ -72,7 +72,7 @@ func (t *GossipTracer) waitForGraft(ctx context.Context, topic string, pid peer.
 	key := topicPeer{topic: topic, peer: pid}
 
 	t.mu.Lock()
-	if _, ok := t.graftedPeers[key]; ok {
+	if t.graftedPeers[key] {
 		t.mu.Unlock()
 		return nil
 	}
@@ -230,7 +230,7 @@ func (t *GossipTracer) AddPeer(p peer.ID, proto protocol.ID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.addedPeers[p] = struct{}{}
+	t.addedPeers[p] = true
 	if ch, ok := t.addPeerWaiters[p]; ok {
 		close(ch)
 		delete(t.addPeerWaiters, p)
@@ -260,7 +260,7 @@ func (t *GossipTracer) Graft(p peer.ID, topic string) {
 	defer t.mu.Unlock()
 
 	key := topicPeer{topic: topic, peer: p}
-	t.graftedPeers[key] = struct{}{}
+	t.graftedPeers[key] = true
 	if ch, ok := t.graftWaiters[key]; ok {
 		close(ch)
 		delete(t.graftWaiters, key)
