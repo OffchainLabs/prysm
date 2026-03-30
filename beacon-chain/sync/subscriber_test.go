@@ -529,7 +529,10 @@ func TestFilterSubnetPeers(t *testing.T) {
 	flags.Init(gFlags)
 	// Reset config.
 	defer flags.Init(new(flags.GlobalFlags))
-	p := p2ptest.NewTestP2P(t)
+
+	tracer := p2ptest.NewGossipTracer()
+	p := p2ptest.NewTestP2PWithPubsubOptions(t, []pubsub.Option{pubsub.WithRawTracer(tracer)})
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	currSlot := primitives.Slot(100)
@@ -570,17 +573,22 @@ func TestFilterSubnetPeers(t *testing.T) {
 	subnet20 := r.addDigestAndIndexToTopic(defaultTopic, digest, 20)
 	cache.SubnetIDs.AddAttesterSubnetID(currSlot, 20)
 
+	_, err = tracer.JoinAndWatchTopic(t.Context(), subnet10, p)
+	require.NoError(t, err)
+	_, err = tracer.JoinAndWatchTopic(t.Context(), subnet20, p)
+	require.NoError(t, err)
+
 	p1 := createPeer(t, subnet10)
 	p2 := createPeer(t, subnet10, subnet20)
 	p3 := createPeer(t)
 
-	// Connect to all peers.
 	p.Connect(p1)
 	p.Connect(p2)
 	p.Connect(p3)
 
-	// Sleep a while to allow peers to connect.
-	time.Sleep(100 * time.Millisecond)
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet10, p1.PeerID()))
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet10, p2.PeerID()))
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet20, p2.PeerID()))
 
 	wantedPeers := []peer.ID{p1.PeerID(), p2.PeerID(), p3.PeerID()}
 	// Expect Peer 3 to be marked as suitable.
@@ -593,8 +601,9 @@ func TestFilterSubnetPeers(t *testing.T) {
 	for i := 1; i <= flags.Get().MinimumPeersPerSubnet; i++ {
 		nPeer := createPeer(t, subnet20)
 		p.Connect(nPeer)
+		require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet20, nPeer.PeerID()))
+
 		wantedPeers = append(wantedPeers, nPeer.BHost.ID())
-		time.Sleep(100 * time.Millisecond)
 	}
 
 	recPeers = r.filterNeededPeers(wantedPeers)
