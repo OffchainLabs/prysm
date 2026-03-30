@@ -70,22 +70,18 @@ func TestValidateDataColumnGloas(t *testing.T) {
 	gloasFixture := func(t *testing.T) (*ethpb.DataColumnSidecarGloas, interfaces.ReadOnlySignedBeaconBlock) {
 		t.Helper()
 
-		roBlock, roSidecars, _ := util.GenerateTestFuluBlockWithSidecars(t, 1, util.WithSlot(1))
+		_, roSidecars, _ := util.GenerateTestFuluBlockWithSidecars(t, 1, util.WithSlot(1))
 		require.Equal(t, true, len(roSidecars) > 0)
 
 		base := roSidecars[0]
 		bid := util.GenerateTestSignedExecutionPayloadBid(base.Slot())
-		comms, err := roBlock.Block().Body().BlobKzgCommitments()
-		require.NoError(t, err)
-		bid.Message.BlobKzgCommitments = bytesutil.SafeCopy2dBytes(comms)
+		bid.Message.BlobKzgCommitments = bytesutil.SafeCopy2dBytes(base.KzgCommitments())
 
 		pb := util.NewBeaconBlockGloas()
 		pb.Block.Slot = base.Slot()
-		pb.Block.ProposerIndex = roBlock.Block().ProposerIndex()
-		parentRoot := roBlock.Block().ParentRoot()
-		pb.Block.ParentRoot = parentRoot[:]
-		stateRoot := roBlock.Block().StateRoot()
-		pb.Block.StateRoot = stateRoot[:]
+		pb.Block.ProposerIndex = base.ProposerIndex()
+		pb.Block.ParentRoot = bytes.Clone(base.SignedBlockHeader().Header.ParentRoot)
+		pb.Block.StateRoot = bytes.Clone(base.SignedBlockHeader().Header.StateRoot)
 		pb.Block.Body.SignedExecutionPayloadBid = bid
 
 		signedBlock, err := blocks.NewSignedBeaconBlock(pb)
@@ -108,7 +104,6 @@ func TestValidateDataColumnGloas(t *testing.T) {
 	t.Run("ignores unseen block", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()
-		cfg.FuluForkEpoch = 0
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
@@ -122,7 +117,6 @@ func TestValidateDataColumnGloas(t *testing.T) {
 	t.Run("validates against bid commitments", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()
-		cfg.FuluForkEpoch = 0
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
@@ -142,9 +136,9 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationAccept, result)
 
-		validated, ok := message.ValidatorData.(*ethpb.DataColumnSidecarGloas)
+		validated, ok := message.ValidatorData.(blocks.VerifiedRODataColumn)
 		require.Equal(t, true, ok)
-		require.Equal(t, true, bytes.Equal(validated.KzgProofs[0], sidecar.KzgProofs[0]))
+		require.Equal(t, true, bytes.Equal(validated.KzgProofs()[0], sidecar.KzgProofs[0]))
 
 		result, err = service.validateDataColumn(ctx, "aDummyPID", message)
 		require.ErrorContains(t, "data column sidecar already seen for block root", err)
@@ -154,7 +148,6 @@ func TestValidateDataColumnGloas(t *testing.T) {
 	t.Run("rejects slot mismatch", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()
-		cfg.FuluForkEpoch = 0
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 

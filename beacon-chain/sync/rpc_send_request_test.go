@@ -1033,9 +1033,7 @@ func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
 				assert.DeepSSZEqual(t, requestSent, requestReceived)
 
 				for _, sidecar := range expected {
-					ro, err := blocks.NewRODataColumn(sidecar)
-					assert.NoError(t, err)
-					err = WriteDataColumnSidecarChunk(stream, clock, p2.Encoding(), ro)
+					err := WriteDataColumnSidecarChunk(stream, clock, p2.Encoding(), sidecar)
 					assert.NoError(t, err)
 				}
 
@@ -1348,7 +1346,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 				}
 
 				for _, sidecar := range expected {
-					err := WriteDataColumnSidecarChunk(stream, clock, p2.Encoding(), sidecar)
+					err := WriteDataColumnSidecarChunk(stream, clock, p2.Encoding(), sidecar.DataColumnSidecar())
 					assert.NoError(t, err)
 				}
 

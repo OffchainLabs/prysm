@@ -24,18 +24,13 @@ func testGloasDataColumnFixture(t *testing.T) (blocks.RODataColumn, interfaces.S
 
 	base := roSidecars[0]
 	bid := util.GenerateTestSignedExecutionPayloadBid(base.Slot())
-	var err error
-	bid.Message.BlobKzgCommitments, err = base.KzgCommitments()
-	require.NoError(t, err)
+	bid.Message.BlobKzgCommitments = base.KzgCommitments()
 
 	pb := util.NewBeaconBlockGloas()
 	pb.Block.Slot = base.Slot()
-	pb.Block.ProposerIndex, err = base.ProposerIndex()
-	require.NoError(t, err)
-	sbh, err := base.SignedBlockHeader()
-	require.NoError(t, err)
-	pb.Block.ParentRoot = bytes.Clone(sbh.Header.ParentRoot)
-	pb.Block.StateRoot = bytes.Clone(sbh.Header.StateRoot)
+	pb.Block.ProposerIndex = base.ProposerIndex()
+	pb.Block.ParentRoot = bytes.Clone(base.SignedBlockHeader().Header.ParentRoot)
+	pb.Block.StateRoot = bytes.Clone(base.SignedBlockHeader().Header.StateRoot)
 	pb.Block.Body.SignedExecutionPayloadBid = bid
 
 	signedBlock, err := blocks.NewSignedBeaconBlock(pb)
@@ -46,9 +41,7 @@ func testGloasDataColumnFixture(t *testing.T) (blocks.RODataColumn, interfaces.S
 
 	sidecar := proto.Clone(base.DataColumnSidecar()).(*ethpb.DataColumnSidecar)
 	sidecar.SignedBlockHeader = header
-	baseComms, err := base.KzgCommitments()
-	require.NoError(t, err)
-	sidecar.KzgCommitments = [][]byte{bytes.Repeat([]byte{0x42}, len(baseComms[0]))}
+	sidecar.KzgCommitments = [][]byte{bytes.Repeat([]byte{0x42}, len(base.KzgCommitments()[0]))}
 
 	roDataColumn, err := blocks.NewRODataColumn(sidecar)
 	require.NoError(t, err)

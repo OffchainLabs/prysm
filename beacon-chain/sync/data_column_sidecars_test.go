@@ -172,19 +172,19 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 		assert.NoError(t, err)
 		assert.DeepEqual(t, expectedRequest, actualRequest)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[31].RODataColumn)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[31].DataColumnSidecar())
 		assert.NoError(t, err)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[81].RODataColumn)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars3[81].DataColumnSidecar())
 		assert.NoError(t, err)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars4[81].RODataColumn)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars4[81].DataColumnSidecar())
 		assert.NoError(t, err)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[31].RODataColumn)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[31].DataColumnSidecar())
 		assert.NoError(t, err)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[31].RODataColumn)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[31].DataColumnSidecar())
 		assert.NoError(t, err)
 
 		err = stream.CloseWrite()
@@ -228,11 +228,11 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 		assert.NoError(t, err)
 		assert.DeepEqual(t, expectedRequest, actualRequest)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[81].RODataColumn)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars5[81].DataColumnSidecar())
 		assert.NoError(t, err)
 
 		for _, index := range allBut31And81And106 {
-			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[index].RODataColumn)
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedSidecars6[index].DataColumnSidecar())
 			assert.NoError(t, err)
 		}
 
@@ -436,7 +436,7 @@ func TestFetchDataColumnSidecarsFromPeers(t *testing.T) {
 		assert.NoError(t, err)
 		assert.DeepEqual(t, expectedRequest, receivedRequest)
 
-		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponseSidecar)
+		err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponseSidecarPb)
 		assert.NoError(t, err)
 
 		err = stream.CloseWrite()
@@ -547,7 +547,7 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 			assert.NoError(t, err)
 			assert.DeepEqual(t, expectedRequest, receivedRequest)
 
-			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponse)
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponsePb)
 			assert.NoError(t, err)
 
 			err = stream.CloseWrite()
@@ -614,7 +614,7 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 			assert.NoError(t, err)
 			assert.DeepSSZEqual(t, *expectedRequest, *receivedRequest)
 
-			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponse)
+			err = WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), expectedResponsePb)
 			assert.NoError(t, err)
 
 			err = stream.CloseWrite()

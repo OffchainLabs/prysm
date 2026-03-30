@@ -7,12 +7,11 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"google.golang.org/protobuf/proto"
 )
 
 // beaconAggregateProofSubscriber forwards the incoming validated aggregated attestation and proof to the
 // attestation pool for processing.
-func (s *Service) beaconAggregateProofSubscriber(_ context.Context, msg proto.Message) error {
+func (s *Service) beaconAggregateProofSubscriber(_ context.Context, msg any) error {
 	a, ok := msg.(ethpb.SignedAggregateAttAndProof)
 	if !ok {
 		return fmt.Errorf("message was not type ethpb.SignedAggregateAttAndProof, type=%T", msg)

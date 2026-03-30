@@ -22,10 +22,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
-func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) error {
+func (s *Service) beaconBlockSubscriber(ctx context.Context, msg any) error {
 	signed, err := blocks.NewSignedBeaconBlock(msg)
 	if err != nil {
 		return err

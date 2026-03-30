@@ -64,31 +64,6 @@ func (s *Service) Broadcast(ctx context.Context, msg proto.Message) error {
 	return s.broadcastObject(ctx, castMsg, fmt.Sprintf(topic, forkDigest))
 }
 
-// BroadcastForEpoch broadcasts a message using the fork digest for the given epoch.
-// Use this when the target epoch's fork digest differs from the current one,
-// e.g. broadcasting proposer preferences in the epoch before gloas activation.
-func (s *Service) BroadcastForEpoch(ctx context.Context, msg proto.Message, epoch primitives.Epoch) error {
-	ctx, span := trace.StartSpan(ctx, "p2p.BroadcastForEpoch")
-	defer span.End()
-
-	twoSlots := time.Duration(2*params.BeaconConfig().SecondsPerSlot) * time.Second
-	ctx, cancel := context.WithTimeout(ctx, twoSlots)
-	defer cancel()
-
-	forkDigest := params.ForkDigest(epoch)
-
-	topic, ok := GossipTypeMapping[reflect.TypeOf(msg)]
-	if !ok {
-		tracing.AnnotateError(span, ErrMessageNotMapped)
-		return ErrMessageNotMapped
-	}
-	castMsg, ok := msg.(ssz.Marshaler)
-	if !ok {
-		return errors.Errorf("message of %T does not support marshaller interface", msg)
-	}
-	return s.broadcastObject(ctx, castMsg, fmt.Sprintf(topic, forkDigest))
-}
-
 // BroadcastAttestation broadcasts an attestation to the p2p network, the message is assumed to be
 // broadcasted to the current fork.
 func (s *Service) BroadcastAttestation(ctx context.Context, subnet uint64, att ethpb.Att) error {
@@ -438,7 +413,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 			topic, _, _ := topicFunc(sidecar)
 
-			if err := s.batchObject(ctx, &messageBatch, &sidecar, topic); err != nil {
+			if err := s.batchObject(ctx, &messageBatch, sidecar.SszMarshaler(), topic); err != nil {
 				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot batch data column sidecar")
 				return
@@ -468,7 +443,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			}
 
 			// Publish individually (not batched) since we just found peers.
-			if err := s.broadcastObject(ctx, &sidecar, topic); err != nil {
+			if err := s.broadcastObject(ctx, sidecar.SszMarshaler(), topic); err != nil {
 				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot broadcast data column sidecar")
 				return

@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
+	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 var (
@@ -118,62 +119,56 @@ func (dc *RODataColumn) KzgProofs() [][]byte {
 
 // --- Fulu-only accessors ---
 
-// ProposerIndex returns the proposer index. Returns an error for Gloas sidecars.
-func (dc *RODataColumn) ProposerIndex() (primitives.ValidatorIndex, error) {
+// ProposerIndex returns the proposer index. Only valid for Fulu sidecars.
+func (dc *RODataColumn) ProposerIndex() primitives.ValidatorIndex {
 	if dc.gloas != nil {
-		return 0, errNotFuluDataColumn
+		return 0
 	}
-	return dc.fulu.SignedBlockHeader.Header.ProposerIndex, nil
+	return dc.fulu.SignedBlockHeader.Header.ProposerIndex
 }
 
-// ParentRoot returns the parent root. Returns an error for Gloas sidecars.
-func (dc *RODataColumn) ParentRoot() ([fieldparams.RootLength]byte, error) {
+// ParentRoot returns the parent root. Only valid for Fulu sidecars.
+func (dc *RODataColumn) ParentRoot() [fieldparams.RootLength]byte {
 	if dc.gloas != nil {
-		return [fieldparams.RootLength]byte{}, errNotFuluDataColumn
+		return [fieldparams.RootLength]byte{}
 	}
-	return bytesutil.ToBytes32(dc.fulu.SignedBlockHeader.Header.ParentRoot), nil
+	return bytesutil.ToBytes32(dc.fulu.SignedBlockHeader.Header.ParentRoot)
 }
 
-// SignedBlockHeader returns the signed block header. Returns an error for Gloas sidecars.
-func (dc *RODataColumn) SignedBlockHeader() (*ethpb.SignedBeaconBlockHeader, error) {
+// SignedBlockHeader returns the signed block header. Only valid for Fulu sidecars.
+// Returns nil for Gloas sidecars.
+func (dc *RODataColumn) SignedBlockHeader() *ethpb.SignedBeaconBlockHeader {
 	if dc.gloas != nil {
-		return nil, errNotFuluDataColumn
+		return nil
 	}
-	return dc.fulu.SignedBlockHeader, nil
+	return dc.fulu.SignedBlockHeader
 }
 
-// KzgCommitments returns the KZG commitments. Returns an error for Gloas sidecars
-// (commitments come from the block's bid).
-func (dc *RODataColumn) KzgCommitments() ([][]byte, error) {
+// KzgCommitments returns the KZG commitments. Only valid for Fulu sidecars.
+// Returns nil for Gloas sidecars (commitments come from the block's bid).
+func (dc *RODataColumn) KzgCommitments() [][]byte {
 	if dc.gloas != nil {
-		return nil, errNotFuluDataColumn
+		return nil
 	}
-	return dc.fulu.KzgCommitments, nil
+	return dc.fulu.KzgCommitments
 }
 
-// KzgCommitmentsInclusionProof returns the inclusion proof. Returns an error for Gloas sidecars.
-func (dc *RODataColumn) KzgCommitmentsInclusionProof() ([][]byte, error) {
+// KzgCommitmentsInclusionProof returns the inclusion proof. Only valid for Fulu sidecars.
+// Returns nil for Gloas sidecars.
+func (dc *RODataColumn) KzgCommitmentsInclusionProof() [][]byte {
 	if dc.gloas != nil {
-		return nil, errNotFuluDataColumn
+		return nil
 	}
-	return dc.fulu.KzgCommitmentsInclusionProof, nil
+	return dc.fulu.KzgCommitmentsInclusionProof
 }
 
-// MarshalSSZ marshals the underlying proto to SSZ bytes.
+// SszMarshaler returns the underlying proto as an ssz.Marshaler.
 // Works for both Fulu and Gloas sidecars.
-func (dc *RODataColumn) MarshalSSZ() ([]byte, error) {
+func (dc *RODataColumn) SszMarshaler() ssz.Marshaler {
 	if dc.gloas != nil {
-		return dc.gloas.MarshalSSZ()
+		return dc.gloas
 	}
-	return dc.fulu.MarshalSSZ()
-}
-
-// MarshalSSZTo marshals the underlying proto to the provided byte slice.
-func (dc *RODataColumn) MarshalSSZTo(buf []byte) ([]byte, error) {
-	if dc.gloas != nil {
-		return dc.gloas.MarshalSSZTo(buf)
-	}
-	return dc.fulu.MarshalSSZTo(buf)
+	return dc.fulu
 }
 
 // SizeSSZ returns the SSZ encoded size of the underlying proto.

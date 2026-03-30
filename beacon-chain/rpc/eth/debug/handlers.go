@@ -307,11 +307,7 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := buildDataColumnSidecarsJsonResponse(verifiedDataColumns)
-	if err != nil {
-		httputil.HandleError(w, "Could not build data column sidecars response: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	data := buildDataColumnSidecarsJsonResponse(verifiedDataColumns)
 	resp := &structs.GetDebugDataColumnSidecarsResponse{
 		Version:             version.String(blk.Version()),
 		Data:                data,
@@ -353,21 +349,16 @@ loop:
 	return indices, nil
 }
 
-func buildDataColumnSidecarsJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) ([]*structs.DataColumnSidecar, error) {
+func buildDataColumnSidecarsJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) []*structs.DataColumnSidecar {
 	sidecars := make([]*structs.DataColumnSidecar, len(verifiedDataColumns))
 	for i, dc := range verifiedDataColumns {
-		cells := dc.Column()
-		column := make([]string, len(cells))
-		for j, cell := range cells {
+		column := make([]string, len(dc.Column()))
+		for j, cell := range dc.Column() {
 			column[j] = hexutil.Encode(cell)
 		}
 
-		comms, err := dc.KzgCommitments()
-		if err != nil {
-			return nil, err
-		}
-		kzgCommitments := make([]string, len(comms))
-		for j, commitment := range comms {
+		kzgCommitments := make([]string, len(dc.KzgCommitments()))
+		for j, commitment := range dc.KzgCommitments() {
 			kzgCommitments[j] = hexutil.Encode(commitment)
 		}
 
@@ -376,29 +367,21 @@ func buildDataColumnSidecarsJsonResponse(verifiedDataColumns []blocks.VerifiedRO
 			kzgProofs[j] = hexutil.Encode(proof)
 		}
 
-		incProof, err := dc.KzgCommitmentsInclusionProof()
-		if err != nil {
-			return nil, err
-		}
-		kzgCommitmentsInclusionProof := make([]string, len(incProof))
-		for j, proof := range incProof {
+		kzgCommitmentsInclusionProof := make([]string, len(dc.KzgCommitmentsInclusionProof()))
+		for j, proof := range dc.KzgCommitmentsInclusionProof() {
 			kzgCommitmentsInclusionProof[j] = hexutil.Encode(proof)
 		}
 
-		sbh, err := dc.SignedBlockHeader()
-		if err != nil {
-			return nil, err
-		}
 		sidecars[i] = &structs.DataColumnSidecar{
 			Index:                        strconv.FormatUint(dc.Index(), 10),
 			Column:                       column,
 			KzgCommitments:               kzgCommitments,
 			KzgProofs:                    kzgProofs,
-			SignedBeaconBlockHeader:      structs.SignedBeaconBlockHeaderFromConsensus(sbh),
+			SignedBeaconBlockHeader:      structs.SignedBeaconBlockHeaderFromConsensus(dc.SignedBlockHeader()),
 			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
 		}
 	}
-	return sidecars, nil
+	return sidecars
 }
 
 // buildDataColumnSidecarsSSZResponse builds SSZ response for data column sidecars
@@ -413,7 +396,7 @@ func buildDataColumnSidecarsSSZResponse(verifiedDataColumns []blocks.VerifiedROD
 
 	// Marshal and append each sidecar
 	for i, sidecar := range verifiedDataColumns {
-		sszrep, err := sidecar.MarshalSSZ()
+		sszrep, err := sidecar.SszMarshaler().MarshalSSZ()
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to marshal data column sidecar at index %d", i)
 		}

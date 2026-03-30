@@ -20,7 +20,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
 
 func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
@@ -224,7 +223,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 	return pubsub.ValidationIgnore, nil
 }
 
-func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg proto.Message) error {
+func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg any) error {
 	e, ok := msg.(*ethpb.SignedExecutionPayloadEnvelope)
 	if !ok {
 		return errWrongMessage

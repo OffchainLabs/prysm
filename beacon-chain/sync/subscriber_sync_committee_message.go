@@ -6,11 +6,10 @@ import (
 
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
 
 // skipcq: SCC-U1000
-func (s *Service) syncCommitteeMessageSubscriber(_ context.Context, msg proto.Message) error {
+func (s *Service) syncCommitteeMessageSubscriber(_ context.Context, msg any) error {
 	m, ok := msg.(*ethpb.SyncCommitteeMessage)
 	if !ok {
 		return fmt.Errorf("message was not type *ethpb.SyncCommitteeMessage, type=%T", msg)

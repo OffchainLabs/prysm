@@ -36,7 +36,7 @@ func (s *Service) FuzzValidateBeaconBlockPubSub(ctx context.Context, pid peer.ID
 }
 
 // FuzzBeaconBlockSubscriber exports private method beaconBlockSubscriber for fuzz testing.
-func (s *Service) FuzzBeaconBlockSubscriber(ctx context.Context, msg proto.Message) error {
+func (s *Service) FuzzBeaconBlockSubscriber(ctx context.Context, msg any) error {
 	return s.beaconBlockSubscriber(ctx, msg)
 }
 

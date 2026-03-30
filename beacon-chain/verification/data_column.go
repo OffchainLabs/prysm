@@ -243,10 +243,7 @@ func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (er
 
 	for _, dataColumn := range dv.dataColumns {
 		// Extract the signature data from the data column.
-		signatureData, err := columnToSignatureData(dataColumn)
-		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "column to signature data"))
-		}
+		signatureData := columnToSignatureData(dataColumn)
 
 		// Get logging fields.
 		fields := logging.DataColumnFields(dataColumn)
@@ -301,10 +298,7 @@ func (dv *RODataColumnsVerifier) getVerifyingState(ctx context.Context, dataColu
 	if dataColumnEpoch == 0 {
 		return dv.hsp.HeadStateReadOnly(ctx)
 	}
-	parentRoot, err := dataColumn.ParentRoot()
-	if err != nil {
-		return nil, err
-	}
+	parentRoot := dataColumn.ParentRoot()
 	dcDependentRoot, err := dv.fc.DependentRootForEpoch(parentRoot, dataColumnEpoch-1)
 	if err != nil {
 		return nil, err
@@ -361,10 +355,7 @@ func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.
 
 	for _, dataColumn := range dv.dataColumns {
 		// Skip if the parent root has been seen.
-		parentRoot, err := dataColumn.ParentRoot()
-		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "parent root"))
-		}
+		parentRoot := dataColumn.ParentRoot()
 		if parentSeen != nil && parentSeen(parentRoot) {
 			continue
 		}
@@ -385,11 +376,7 @@ func (dv *RODataColumnsVerifier) SidecarParentValid(badParent func([fieldparams.
 	defer dv.recordResult(RequireSidecarParentValid, &err)
 
 	for _, dataColumn := range dv.dataColumns {
-		parentRoot, err := dataColumn.ParentRoot()
-		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "parent root"))
-		}
-		if badParent != nil && badParent(parentRoot) {
+		if badParent != nil && badParent(dataColumn.ParentRoot()) {
 			return columnErrBuilder(errSidecarParentInvalid)
 		}
 	}
@@ -406,11 +393,7 @@ func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
 
 	for _, dataColumn := range dv.dataColumns {
 		// Compute the slot of the parent block.
-		parentRoot, err := dataColumn.ParentRoot()
-		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "parent root"))
-		}
-		parentSlot, err := dv.fc.Slot(parentRoot)
+		parentSlot, err := dv.fc.Slot(dataColumn.ParentRoot())
 		if err != nil {
 			return columnErrBuilder(errors.Wrap(err, "slot"))
 		}
@@ -433,10 +416,7 @@ func (dv *RODataColumnsVerifier) SidecarDescendsFromFinalized() (err error) {
 
 	for _, dataColumn := range dv.dataColumns {
 		// Extract the root of the parent block corresponding to the data column.
-		parentRoot, err := dataColumn.ParentRoot()
-		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "parent root"))
-		}
+		parentRoot := dataColumn.ParentRoot()
 
 		if !dv.fc.HasNode(parentRoot) {
 			return columnErrBuilder(errSidecarNotFinalizedDescendent)
@@ -519,11 +499,7 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 			return columnErrBuilder(errors.Wrap(err, "proposer from lookahead"))
 		}
 
-		proposerIndex, err := dataColumn.ProposerIndex()
-		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "proposer index"))
-		}
-		if idx != proposerIndex {
+		if idx != dataColumn.ProposerIndex() {
 			return columnErrBuilder(errSidecarUnexpectedProposer)
 		}
 	}
@@ -531,26 +507,14 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 	return nil
 }
 
-func columnToSignatureData(d blocks.RODataColumn) (signatureData, error) {
-	parentRoot, err := d.ParentRoot()
-	if err != nil {
-		return signatureData{}, err
-	}
-	sbh, err := d.SignedBlockHeader()
-	if err != nil {
-		return signatureData{}, err
-	}
-	proposerIndex, err := d.ProposerIndex()
-	if err != nil {
-		return signatureData{}, err
-	}
+func columnToSignatureData(d blocks.RODataColumn) signatureData {
 	return signatureData{
 		Root:      d.BlockRoot(),
-		Parent:    parentRoot,
-		Signature: bytesutil.ToBytes96(sbh.Signature),
-		Proposer:  proposerIndex,
+		Parent:    d.ParentRoot(),
+		Signature: bytesutil.ToBytes96(d.SignedBlockHeader().Signature),
+		Proposer:  d.ProposerIndex(),
 		Slot:      d.Slot(),
-	}, nil
+	}
 }
 
 func columnErrBuilder(baseErr error) error {
@@ -565,33 +529,21 @@ func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 		commsIncProofByteCount = commsIncProofLen * 32
 	)
 
-	inclusionProof, err := c.KzgCommitmentsInclusionProof()
-	if err != nil {
-		return [32]byte{}, columnErrBuilder(errors.Wrap(err, "kzg commitments inclusion proof"))
-	}
-	if len(inclusionProof) != commsIncProofLen {
+	if len(c.KzgCommitmentsInclusionProof()) != commsIncProofLen {
 		// This should be already enforced by ssz unmarshaling; still check so we don't panic on array bounds.
 		return [32]byte{}, columnErrBuilder(ErrSidecarInclusionProofInvalid)
 	}
 
-	commitments, err := c.KzgCommitments()
-	if err != nil {
-		return [32]byte{}, columnErrBuilder(errors.Wrap(err, "kzg commitments"))
-	}
-	commsByteCount := len(commitments) * fieldparams.KzgCommitmentSize
+	commsByteCount := len(c.KzgCommitments()) * fieldparams.KzgCommitmentSize
 	unhashedKey := make([]byte, 0, commsIncProofByteCount+fieldparams.RootLength+commsByteCount)
 
 	// Include the commitments inclusion proof in the key.
-	for _, proof := range inclusionProof {
+	for _, proof := range c.KzgCommitmentsInclusionProof() {
 		unhashedKey = append(unhashedKey, proof...)
 	}
 
 	// Include the block root in the key.
-	sbh, err := c.SignedBlockHeader()
-	if err != nil {
-		return [32]byte{}, columnErrBuilder(errors.Wrap(err, "signed block header"))
-	}
-	root, err := sbh.HashTreeRoot()
+	root, err := c.SignedBlockHeader().HashTreeRoot()
 	if err != nil {
 		return [32]byte{}, columnErrBuilder(errors.Wrap(err, "hash tree root"))
 	}
@@ -599,7 +551,7 @@ func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 	unhashedKey = append(unhashedKey, root[:]...)
 
 	// Include the commitments in the key.
-	for _, commitment := range commitments {
+	for _, commitment := range c.KzgCommitments() {
 		unhashedKey = append(unhashedKey, commitment...)
 	}
 

@@ -501,14 +501,8 @@ func ReconstructBlobs(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, 
 func blobSidecarsFromDataColumnSidecars(roBlock blocks.ROBlock, dataColumnSidecars []blocks.VerifiedRODataColumn, indices []int) ([]*blocks.VerifiedROBlob, error) {
 	referenceSidecar := dataColumnSidecars[0]
 
-	kzgCommitments, err := referenceSidecar.KzgCommitments()
-	if err != nil {
-		return nil, errors.Wrap(err, "kzg commitments")
-	}
-	signedBlockHeader, err := referenceSidecar.SignedBlockHeader()
-	if err != nil {
-		return nil, errors.Wrap(err, "signed block header")
-	}
+	kzgCommitments := referenceSidecar.KzgCommitments()
+	signedBlockHeader := referenceSidecar.SignedBlockHeader()
 
 	verifiedROBlobs := make([]*blocks.VerifiedROBlob, 0, len(indices))
 	for _, blobIndex := range indices {

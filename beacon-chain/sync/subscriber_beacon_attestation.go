@@ -12,10 +12,9 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
 
-func (s *Service) committeeIndexBeaconAttestationSubscriber(_ context.Context, msg proto.Message) error {
+func (s *Service) committeeIndexBeaconAttestationSubscriber(_ context.Context, msg any) error {
 	a, ok := msg.(eth.Att)
 	if !ok {
 		return fmt.Errorf("message was not type eth.Att, type=%T", msg)

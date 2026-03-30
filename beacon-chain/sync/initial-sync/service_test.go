@@ -816,7 +816,7 @@ func TestFetchOriginColumns(t *testing.T) {
 			assert.DeepEqual(t, expectedRequests[attempt], actualRequest)
 
 			for _, column := range toRespondByAttempt[attempt] {
-				err = prysmSync.WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedRoSidecars[column].RODataColumn)
+				err = prysmSync.WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedRoSidecars[column].DataColumnSidecar())
 				assert.NoError(t, err)
 			}
 

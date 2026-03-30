@@ -7,10 +7,9 @@ import (
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
 
-func (s *Service) blsToExecutionChangeSubscriber(_ context.Context, msg proto.Message) error {
+func (s *Service) blsToExecutionChangeSubscriber(_ context.Context, msg any) error {
 	blsMsg, ok := msg.(*ethpb.SignedBLSToExecutionChange)
 	if !ok {
 		return errors.Errorf("incorrect type of message received, wanted %T but got %T", &ethpb.SignedBLSToExecutionChange{}, msg)

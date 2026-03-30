@@ -71,17 +71,17 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, errors.Wrap(err, "roDataColumn conversion failure")
 	}
 
-	// Gloas sidecars don't carry a parent root, so skip the ShouldIgnoreData check.
-	if !roDataColumn.IsGloas() {
-		parentRoot, err := roDataColumn.ParentRoot()
-		if err != nil {
-			return pubsub.ValidationReject, err
-		}
-		if s.cfg.chain.ShouldIgnoreData(parentRoot, roDataColumn.Slot()) {
-			log.WithFields(logging.DataColumnFields(roDataColumn)).Debug("Ignoring data column with canonical parent before justified checkpoint")
-			ignoredPreJustifiedDataColumnCount.Inc()
-			return pubsub.ValidationIgnore, nil
-		}
+	log.WithFields(logrus.Fields{
+		"slot":    roDataColumn.Slot(),
+		"index":   roDataColumn.Index(),
+		"root":    fmt.Sprintf("%#x", roDataColumn.BlockRoot()),
+		"isGloas": roDataColumn.IsGloas(),
+	}).Info("Received data column sidecar via gossip")
+
+	if s.cfg.chain.ShouldIgnoreData(roDataColumn.ParentRoot(), roDataColumn.Slot()) {
+		log.WithFields(logging.DataColumnFields(roDataColumn)).Debug("Ignoring data column with canonical parent before justified checkpoint")
+		ignoredPreJustifiedDataColumnCount.Inc()
+		return pubsub.ValidationIgnore, nil
 	}
 
 	var verifiedRODataColumn blocks.VerifiedRODataColumn
@@ -97,11 +97,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		}
 	}
 
-	if verifiedRODataColumn.IsGloas() {
-		msg.ValidatorData = verifiedRODataColumn.DataColumnSidecarGloas()
-	} else {
-		msg.ValidatorData = verifiedRODataColumn.DataColumnSidecar()
-	}
+	msg.ValidatorData = verifiedRODataColumn
 	dataColumnSidecarVerificationSuccessesCounter.Inc()
 
 	// Get the time at slot start.
@@ -131,17 +127,10 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
 			Type: operation.DataColumnReceived,
 			Data: &operation.DataColumnReceivedData{
-				Slot:      verifiedRODataColumn.Slot(),
-				Index:     verifiedRODataColumn.Index(),
-				BlockRoot: verifiedRODataColumn.BlockRoot(),
-				KzgCommitments: func() [][]byte {
-					comms, err := verifiedRODataColumn.KzgCommitments()
-					if err != nil {
-						log.WithError(err).Warn("Failed to get KZG commitments for operation feed")
-						return nil
-					}
-					return bytesutil.SafeCopy2dBytes(comms)
-				}(),
+				Slot:           verifiedRODataColumn.Slot(),
+				Index:          verifiedRODataColumn.Index(),
+				BlockRoot:      verifiedRODataColumn.BlockRoot(),
+				KzgCommitments: bytesutil.SafeCopy2dBytes(verifiedRODataColumn.KzgCommitments()),
 			},
 		})
 	}
@@ -185,11 +174,7 @@ func (s *Service) validateDataColumnFulu(
 	if err := verifier.SidecarParentSeen(s.hasBadBlock); err != nil {
 		go func() {
 			customCtx := context.Background()
-			parentRoot, err := roDataColumn.ParentRoot()
-			if err != nil {
-				log.WithError(err).WithFields(logging.DataColumnFields(roDataColumn)).Debug("Failed to get parent root for batch root request")
-				return
-			}
+			parentRoot := roDataColumn.ParentRoot()
 			roots := [][fieldparams.RootLength]byte{parentRoot}
 			randGenerator := rand.NewGenerator()
 			if reqErr := s.sendBatchRootRequest(customCtx, roots, randGenerator); reqErr != nil {
@@ -235,11 +220,7 @@ func (s *Service) validateDataColumnFulu(
 
 	// [IGNORE] The sidecar is the first sidecar for the tuple `(block_header.slot, block_header.proposer_index, sidecar.index)`
 	// with valid header signature, sidecar inclusion proof, and kzg proof.
-	proposerIndex, err := roDataColumn.ProposerIndex()
-	if err != nil {
-		return blocks.VerifiedRODataColumn{}, errors.Wrap(err, "fulu data column validation")
-	}
-	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), proposerIndex, roDataColumn.Index()) {
+	if s.hasSeenDataColumnIndex(roDataColumn.Slot(), roDataColumn.ProposerIndex(), roDataColumn.Index()) {
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(nil)
 	}
 
@@ -376,7 +357,7 @@ func (s *Service) processDataColumnLogs() {
 						"indices":        helpers.PrettySlice(indices),
 						"validationTime": prettyMinMaxAverage(minValidationTime, maxValidationTime, avgValidationTime),
 						"sinceStartTime": prettyMinMaxAverage(minSinceStartTime, maxSinceStartTime, avgSinceStartTime),
-					}).Debug("Accepted data column sidecars summary")
+					}).Info("Accepted data column sidecars summary")
 				}
 			}
 

@@ -10,32 +10,17 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/protobuf/proto"
 )
 
 // dataColumnSubscriber is the subscriber function for data column sidecars.
-func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) error {
+func (s *Service) dataColumnSubscriber(ctx context.Context, msg any) error {
 	var wg errgroup.Group
 
-	var sidecar blocks.VerifiedRODataColumn
-	switch dc := msg.(type) {
-	case *ethpb.DataColumnSidecar:
-		ro, err := blocks.NewRODataColumn(dc)
-		if err != nil {
-			return err
-		}
-		sidecar = blocks.NewVerifiedRODataColumn(ro)
-	case *ethpb.DataColumnSidecarGloas:
-		ro, err := blocks.NewRODataColumnGloas(dc)
-		if err != nil {
-			return err
-		}
-		sidecar = blocks.NewVerifiedRODataColumn(ro)
-	default:
-		return fmt.Errorf("unexpected data column type: %T", msg)
+	sidecar, ok := msg.(blocks.VerifiedRODataColumn)
+	if !ok {
+		return fmt.Errorf("message was not type blocks.VerifiedRODataColumn, type=%T", msg)
 	}
 
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
@@ -82,14 +67,8 @@ func (s *Service) receiveDataColumnSidecar(ctx context.Context, sidecar blocks.V
 // receiveDataColumnSidecars receives multiple data column sidecars: marks them as seen and saves them to the chain.
 func (s *Service) receiveDataColumnSidecars(ctx context.Context, sidecars []blocks.VerifiedRODataColumn) error {
 	for _, sidecar := range sidecars {
-		if sidecar.IsGloas() {
-			s.setSeenDataColumnRootIndex(sidecar.BlockRoot(), sidecar.Index(), sidecar.Slot())
-		} else {
-			proposerIndex, err := sidecar.ProposerIndex()
-			if err != nil {
-				return err
-			}
-			s.setSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index())
+		if !sidecar.IsGloas() {
+			s.setSeenDataColumnIndex(sidecar.Slot(), sidecar.ProposerIndex(), sidecar.Index())
 		}
 	}
 

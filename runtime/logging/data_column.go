@@ -10,22 +10,14 @@ import (
 // DataColumnFields extracts a standard set of fields from a DataColumnSidecar into a logrus.Fields struct
 // which can be passed to log.WithFields.
 func DataColumnFields(column blocks.RODataColumn) logrus.Fields {
-	fields := logrus.Fields{
-		"slot":      column.Slot(),
-		"blockRoot": fmt.Sprintf("%#x", column.BlockRoot())[:8],
-		"colIdx":    column.Index(),
-	}
+	kzgCommitmentCount := len(column.KzgCommitments())
 
-	// Fulu sidecars carry proposer index, parent root, and KZG commitments
-	// directly. Gloas sidecars don't have these fields.
-	if !column.IsGloas() {
-		propIdx, _ := column.ProposerIndex()
-		fields["propIdx"] = propIdx
-		parentRoot, _ := column.ParentRoot()
-		fields["parentRoot"] = fmt.Sprintf("%#x", parentRoot)[:8]
-		kzgCommitments, _ := column.KzgCommitments()
-		fields["kzgCommitmentCount"] = len(kzgCommitments)
+	return logrus.Fields{
+		"slot":               column.Slot(),
+		"propIdx":            column.ProposerIndex(),
+		"blockRoot":          fmt.Sprintf("%#x", column.BlockRoot())[:8],
+		"parentRoot":         fmt.Sprintf("%#x", column.ParentRoot())[:8],
+		"kzgCommitmentCount": kzgCommitmentCount,
+		"colIdx":             column.Index(),
 	}
-
-	return fields
 }

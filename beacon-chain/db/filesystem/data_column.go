@@ -753,7 +753,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 			}
 
 			// SSZ encode the data column sidecar.
-			sszEncodedDataColumnSidecar, err := dataColumnSidecar.MarshalSSZ()
+			sszEncodedDataColumnSidecar, err := dataColumnSidecar.SszMarshaler().MarshalSSZ()
 			if err != nil {
 				return errors.Wrap(err, "data column sidecar marshal SSZ")
 			}
@@ -851,7 +851,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 			storedCount++
 
 			// SSZ encode the first data column sidecar.
-			sszEncodedDataColumnSidecar, err := dataColumnSidecar.MarshalSSZ()
+			sszEncodedDataColumnSidecar, err := dataColumnSidecar.SszMarshaler().MarshalSSZ()
 			if err != nil {
 				return errors.Wrap(err, "data column sidecar marshal SSZ")
 			}

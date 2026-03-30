@@ -46,21 +46,16 @@ func DataColumnsAlignWithBlock(block blocks.ROBlock, dataColumns []blocks.ROData
 			return ErrRootMismatch
 		}
 
-		dcKzgCommitments, err := dataColumn.KzgCommitments()
-		if err != nil {
-			return errors.Wrap(err, "kzg commitments")
-		}
-
 		// Check if the content length of the data column sidecar matches the block.
 		if len(dataColumn.Column()) != blockCommitmentCount ||
-			len(dcKzgCommitments) != blockCommitmentCount ||
+			len(dataColumn.KzgCommitments()) != blockCommitmentCount ||
 			len(dataColumn.KzgProofs()) != blockCommitmentCount {
 			return ErrBlockColumnSizeMismatch
 		}
 
 		// Check if the commitments of the data column sidecar match the block.
 		for i := range blockCommitments {
-			if !bytes.Equal(blockCommitments[i], dcKzgCommitments[i]) {
+			if !bytes.Equal(blockCommitments[i], dataColumn.KzgCommitments()[i]) {
 				return ErrCommitmentMismatch
 			}
 		}
