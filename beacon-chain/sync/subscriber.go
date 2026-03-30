@@ -318,8 +318,8 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 		})
 	}
 
-	// New gossip topic in Fulu.
-	if params.BeaconConfig().FuluForkEpoch <= nse.Epoch {
+	// Data column gossip topic (Fulu and Gloas).
+	if params.BeaconConfig().GloasForkEpoch <= nse.Epoch || params.BeaconConfig().FuluForkEpoch <= nse.Epoch {
 		s.spawn(func() {
 			s.subscribeWithParameters(subscribeParameters{
 				topicFormat:              p2p.DataColumnSubnetTopicFormat,

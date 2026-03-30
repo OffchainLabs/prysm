@@ -66,10 +66,10 @@ type dataColumnCacheEntry struct {
 // stash will return an error if the given data column Index is out of bounds.
 // It will overwrite any existing entry for the same index.
 func (e *dataColumnCacheEntry) stash(sc blocks.RODataColumn) error {
-	if sc.Index >= fieldparams.NumberOfColumns {
-		return errors.Wrapf(errColumnIndexTooHigh, "index=%d", sc.Index)
+	if sc.Index() >= fieldparams.NumberOfColumns {
+		return errors.Wrapf(errColumnIndexTooHigh, "index=%d", sc.Index())
 	}
-	e.scs[sc.Index] = sc
+	e.scs[sc.Index()] = sc
 	return nil
 }
 
