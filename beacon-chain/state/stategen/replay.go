@@ -143,7 +143,7 @@ func (s *State) maybeApplyAncestorEnvelope(
 		return errors.Wrapf(err, "could not retrieve execution payload envelope for ancestor root %#x", ancestorRoot)
 	}
 	if envelope == nil || envelope.Message == nil {
-		return nil
+		return errors.Errorf("Received nil execution payload envelope for ancestor root %#x", ancestorRoot)
 	}
 	ancestorBlock, err := s.beaconDB.Block(ctx, ancestorRoot)
 	if err != nil {
