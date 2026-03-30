@@ -168,6 +168,91 @@ func TestClient_RegisterValidator(t *testing.T) {
 	})
 }
 
+func TestJSONValidatorRegisterRequest_BatchSizeUnderMaxPayloadSize(t *testing.T) {
+	registrations := fullyPopulatedRegistrations(registerValidatorBatchSize)
+	body, err := jsonValidatorRegisterRequest(registrations)
+	require.NoError(t, err)
+	assert.Equal(t, true, len(body) < int(params.BeaconConfig().MaxPayloadSize))
+}
+
+func TestClient_RegisterValidator_BatchesJSON(t *testing.T) {
+	ctx := t.Context()
+	registrations := fullyPopulatedRegistrations(registerValidatorBatchSize*2 + 1234)
+	var batchSizes []int
+	hc := &http.Client{
+		Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+			require.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
+			require.Equal(t, api.JsonMediaType, r.Header.Get("Accept"))
+			body, err := io.ReadAll(r.Body)
+			defer func() {
+				require.NoError(t, r.Body.Close())
+			}()
+			require.NoError(t, err)
+			var request []*structs.SignedValidatorRegistration
+			require.NoError(t, json.Unmarshal(body, &request))
+			batchSizes = append(batchSizes, len(request))
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBuffer(nil)),
+				Request:    r.Clone(ctx),
+			}, nil
+		}),
+	}
+	c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}}
+	require.NoError(t, c.RegisterValidator(ctx, registrations))
+	require.DeepEqual(t, []int{registerValidatorBatchSize, registerValidatorBatchSize, 1234}, batchSizes)
+}
+
+func TestClient_RegisterValidator_BatchesSSZ(t *testing.T) {
+	ctx := t.Context()
+	registrations := fullyPopulatedRegistrations(registerValidatorBatchSize + 321)
+	var batchSizes []int
+	hc := &http.Client{
+		Transport: roundtrip(func(r *http.Request) (*http.Response, error) {
+			require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Content-Type"))
+			require.Equal(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			body, err := io.ReadAll(r.Body)
+			defer func() {
+				require.NoError(t, r.Body.Close())
+			}()
+			require.NoError(t, err)
+			require.Equal(t, 0, len(body)%vrSize)
+			batchSizes = append(batchSizes, len(body)/vrSize)
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBuffer(nil)),
+				Request:    r.Clone(ctx),
+			}, nil
+		}),
+	}
+	c := &Client{hc: hc, baseURL: &url.URL{Host: "localhost:3500", Scheme: "http"}, sszEnabled: true}
+	require.NoError(t, c.RegisterValidator(ctx, registrations))
+	require.DeepEqual(t, []int{registerValidatorBatchSize, 321}, batchSizes)
+}
+
+func fullyPopulatedRegistrations(count int) []*eth.SignedValidatorRegistrationV1 {
+	registrations := make([]*eth.SignedValidatorRegistrationV1, count)
+	for i := range count {
+		feeRecipient := bytes.Repeat([]byte{0x11}, 20)
+		pubkey := bytes.Repeat([]byte{0x22}, 48)
+		signature := bytes.Repeat([]byte{0x33}, 96)
+		pubkey[0] = byte(i)
+		pubkey[1] = byte(i >> 8)
+		signature[0] = byte(i)
+		signature[1] = byte(i >> 8)
+		registrations[i] = &eth.SignedValidatorRegistrationV1{
+			Message: &eth.ValidatorRegistrationV1{
+				FeeRecipient: feeRecipient,
+				GasLimit:     ^uint64(0),
+				Timestamp:    ^uint64(0),
+				Pubkey:       pubkey,
+			},
+			Signature: signature,
+		}
+	}
+	return registrations
+}
+
 func TestClient_GetHeader(t *testing.T) {
 	ctx := t.Context()
 	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)

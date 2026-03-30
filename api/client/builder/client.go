@@ -35,6 +35,7 @@ const (
 	postBlindedBeaconBlockPath   = "/eth/v1/builder/blinded_blocks"
 	postBlindedBeaconBlockV2Path = "/eth/v2/builder/blinded_blocks"
 	postRegisterValidatorPath    = "/eth/v1/builder/validators"
+	registerValidatorBatchSize   = 10_000
 )
 
 var (
@@ -383,40 +384,55 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 		return err
 	}
 
-	var (
-		body     []byte
-		err      error
-		postOpts reqOption
-	)
-	if c.sszEnabled {
-		postOpts = func(r *http.Request) {
-			r.Header.Set("Content-Type", api.OctetStreamMediaType)
-			r.Header.Set("Accept", api.OctetStreamMediaType)
+	for _, batch := range chunkSignedValidatorRegistrationV1(svr, registerValidatorBatchSize) {
+		var (
+			body     []byte
+			err      error
+			postOpts reqOption
+		)
+		if c.sszEnabled {
+			postOpts = func(r *http.Request) {
+				r.Header.Set("Content-Type", api.OctetStreamMediaType)
+				r.Header.Set("Accept", api.OctetStreamMediaType)
+			}
+			body, err = sszValidatorRegisterRequest(batch)
+			if err != nil {
+				err := errors.Wrap(err, "error ssz encoding the SignedValidatorRegistration value body in RegisterValidator")
+				tracing.AnnotateError(span, err)
+				return err
+			}
+		} else {
+			postOpts = func(r *http.Request) {
+				r.Header.Set("Content-Type", api.JsonMediaType)
+				r.Header.Set("Accept", api.JsonMediaType)
+			}
+			body, err = jsonValidatorRegisterRequest(batch)
+			if err != nil {
+				err := errors.Wrap(err, "error json encoding the SignedValidatorRegistration value body in RegisterValidator")
+				tracing.AnnotateError(span, err)
+				return err
+			}
 		}
-		body, err = sszValidatorRegisterRequest(svr)
-		if err != nil {
-			err := errors.Wrap(err, "error ssz encoding the SignedValidatorRegistration value body in RegisterValidator")
-			tracing.AnnotateError(span, err)
-			return err
-		}
-	} else {
-		postOpts = func(r *http.Request) {
-			r.Header.Set("Content-Type", api.JsonMediaType)
-			r.Header.Set("Accept", api.JsonMediaType)
-		}
-		body, err = jsonValidatorRegisterRequest(svr)
-		if err != nil {
-			err := errors.Wrap(err, "error json encoding the SignedValidatorRegistration value body in RegisterValidator")
-			tracing.AnnotateError(span, err)
-			return err
-		}
-	}
 
-	if _, _, err = c.do(ctx, http.MethodPost, postRegisterValidatorPath, bytes.NewBuffer(body), http.StatusOK, postOpts); err != nil {
-		return errors.Wrap(err, "do")
+		if _, _, err = c.do(ctx, http.MethodPost, postRegisterValidatorPath, bytes.NewBuffer(body), http.StatusOK, postOpts); err != nil {
+			return errors.Wrap(err, "do")
+		}
 	}
 	log.WithField("registrationCount", len(svr)).Debug("Successfully registered validator(s) on builder")
 	return nil
+}
+
+func chunkSignedValidatorRegistrationV1(regs []*ethpb.SignedValidatorRegistrationV1, chunkSize int) [][]*ethpb.SignedValidatorRegistrationV1 {
+	if chunkSize <= 0 || len(regs) <= chunkSize {
+		return [][]*ethpb.SignedValidatorRegistrationV1{regs}
+	}
+	chunksCount := (len(regs) + chunkSize - 1) / chunkSize
+	chunks := make([][]*ethpb.SignedValidatorRegistrationV1, 0, chunksCount)
+	for start := 0; start < len(regs); start += chunkSize {
+		end := min(start+chunkSize, len(regs))
+		chunks = append(chunks, regs[start:end])
+	}
+	return chunks
 }
 
 func jsonValidatorRegisterRequest(svr []*ethpb.SignedValidatorRegistrationV1) ([]byte, error) {
