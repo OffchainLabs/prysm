@@ -58,8 +58,8 @@ func TestValidateSignedProposerPreferencesGossip_ErrorPathsWithMock(t *testing.T
 		wantError bool
 	}{
 		{
-			name:      "not next epoch",
-			verifier:  mockSignedProposerPreferencesVerifier{errNextEpoch: errors.New("wrong epoch")},
+			name:      "not current or next epoch",
+			verifier:  mockSignedProposerPreferencesVerifier{errCurrentOrNextEpoch: errors.New("wrong epoch")},
 			result:    pubsub.ValidationIgnore,
 			wantError: true,
 		},
@@ -134,15 +134,15 @@ func TestSignedProposerPreferencesSubscriber_HappyPath(t *testing.T) {
 }
 
 type mockSignedProposerPreferencesVerifier struct {
-	errNextEpoch         error
-	errValidProposalSlot error
-	errSignature         error
+	errCurrentOrNextEpoch error
+	errValidProposalSlot  error
+	errSignature          error
 }
 
 var _ verification.SignedProposerPreferencesVerifier = &mockSignedProposerPreferencesVerifier{}
 
-func (m *mockSignedProposerPreferencesVerifier) VerifyNextEpoch(state.ReadOnlyBeaconState) error {
-	return m.errNextEpoch
+func (m *mockSignedProposerPreferencesVerifier) VerifyCurrentOrNextEpoch(state.ReadOnlyBeaconState) error {
+	return m.errCurrentOrNextEpoch
 }
 
 func (m *mockSignedProposerPreferencesVerifier) VerifyValidProposalSlot(state.ReadOnlyBeaconState) error {

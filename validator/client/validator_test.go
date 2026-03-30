@@ -2377,6 +2377,74 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			},
 		}
 	})
+
+	t.Run("current epoch proposer slot included", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		currentEpochSlot := primitives.Slot(3)
+
+		v.duties = &dutyStore{}
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{currentEpochSlot},
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+				},
+			},
+		})
+
+		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		require.Equal(t, 1, len(prefs))
+		require.Equal(t, currentEpochSlot, prefs[0].Message.ProposalSlot)
+	})
+
+	t.Run("both current and next epoch proposer slots included", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		currentEpochSlot := primitives.Slot(5)
+		nextEpochSlot := params.BeaconConfig().SlotsPerEpoch + 2
+
+		v.duties = &dutyStore{}
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{currentEpochSlot},
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{nextEpochSlot},
+				},
+			},
+		})
+
+		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		require.Equal(t, 2, len(prefs))
+
+		gotSlots := []primitives.Slot{prefs[0].Message.ProposalSlot, prefs[1].Message.ProposalSlot}
+		slices.Sort(gotSlots)
+		require.Equal(t, currentEpochSlot, gotSlots[0])
+		require.Equal(t, nextEpochSlot, gotSlots[1])
+	})
 }
 
 func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {

@@ -46,12 +46,12 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	}
 
 	v := s.newSignedProposerPreferencesVerifier(signedPreferences, verification.SignedProposerPreferencesGossipRequirements)
-	// [IGNORE] preferences.proposal_slot is in the next epoch.
-	if err := v.VerifyNextEpoch(st); err != nil {
+	// [IGNORE] preferences.proposal_slot is in the current or next epoch and has not already passed.
+	if err := v.VerifyCurrentOrNextEpoch(st); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 	// [REJECT] preferences.validator_index is present at the correct slot in the
-	// next epoch's portion of state.proposer_lookahead.
+	// current or next epoch's portion of state.proposer_lookahead.
 	if err := v.VerifyValidProposalSlot(st); err != nil {
 		return pubsub.ValidationReject, err
 	}

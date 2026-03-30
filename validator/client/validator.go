@@ -1022,7 +1022,7 @@ func (v *validator) buildProposerSettingsRequests(
 }
 
 // buildProposerPreferences creates signed proposer preferences for validators
-// that have proposer slots in the next epoch.
+// that have proposer slots in the current epoch (future slots) or next epoch.
 func (v *validator) buildProposerPreferences(
 	ctx context.Context,
 	km keymanager.IKeymanager,
@@ -1040,8 +1040,9 @@ func (v *validator) buildProposerPreferences(
 		return nil
 	}
 
+	currentDuties := v.duties.CurrentEpochDuties()
 	nextDuties := v.duties.NextEpochDuties()
-	if len(nextDuties) == 0 {
+	if len(currentDuties) == 0 && len(nextDuties) == 0 {
 		return nil
 	}
 
@@ -1049,50 +1050,60 @@ func (v *validator) buildProposerPreferences(
 	var signedPrefs []*ethpb.SignedProposerPreferences
 	var sigFailCount int
 
-	for pk, duty := range nextDuties {
-		if len(duty.ProposerSlots) == 0 {
-			continue
-		}
-		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
-			continue
-		}
+	allDuties := make([]map[pubkey]*ethpb.ValidatorDuty, 0, 2)
+	if len(currentDuties) > 0 {
+		allDuties = append(allDuties, currentDuties)
+	}
+	if len(nextDuties) > 0 {
+		allDuties = append(allDuties, nextDuties)
+	}
 
-		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
-		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
-
-		if ps != nil && ps.DefaultConfig != nil {
-			if ps.DefaultConfig.FeeRecipientConfig != nil {
-				feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
-			}
-			if ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.Enabled {
-				gasLimit = uint64(ps.DefaultConfig.BuilderConfig.GasLimit)
-			}
-		}
-		if ps != nil && ps.ProposeConfig != nil {
-			if config, ok := ps.ProposeConfig[pk]; ok && config != nil {
-				if config.FeeRecipientConfig != nil {
-					feeRecipient = config.FeeRecipientConfig.FeeRecipient
-				}
-				if config.BuilderConfig != nil && config.BuilderConfig.Enabled {
-					gasLimit = uint64(config.BuilderConfig.GasLimit)
-				}
-			}
-		}
-
-		for _, proposalSlot := range duty.ProposerSlots {
-			pref := &ethpb.ProposerPreferences{
-				ProposalSlot:   proposalSlot,
-				ValidatorIndex: duty.ValidatorIndex,
-				FeeRecipient:   feeRecipient[:],
-				GasLimit:       gasLimit,
-			}
-
-			signedPref, err := v.signProposerPreferences(ctx, km, pk, pref)
-			if err != nil {
-				sigFailCount++
+	for _, duties := range allDuties {
+		for pk, duty := range duties {
+			if len(duty.ProposerSlots) == 0 {
 				continue
 			}
-			signedPrefs = append(signedPrefs, signedPref)
+			if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
+				continue
+			}
+
+			feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
+			gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
+
+			if ps != nil && ps.DefaultConfig != nil {
+				if ps.DefaultConfig.FeeRecipientConfig != nil {
+					feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
+				}
+				if ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.Enabled {
+					gasLimit = uint64(ps.DefaultConfig.BuilderConfig.GasLimit)
+				}
+			}
+			if ps != nil && ps.ProposeConfig != nil {
+				if config, ok := ps.ProposeConfig[pk]; ok && config != nil {
+					if config.FeeRecipientConfig != nil {
+						feeRecipient = config.FeeRecipientConfig.FeeRecipient
+					}
+					if config.BuilderConfig != nil && config.BuilderConfig.Enabled {
+						gasLimit = uint64(config.BuilderConfig.GasLimit)
+					}
+				}
+			}
+
+			for _, proposalSlot := range duty.ProposerSlots {
+				pref := &ethpb.ProposerPreferences{
+					ProposalSlot:   proposalSlot,
+					ValidatorIndex: duty.ValidatorIndex,
+					FeeRecipient:   feeRecipient[:],
+					GasLimit:       gasLimit,
+				}
+
+				signedPref, err := v.signProposerPreferences(ctx, km, pk, pref)
+				if err != nil {
+					sigFailCount++
+					continue
+				}
+				signedPrefs = append(signedPrefs, signedPref)
+			}
 		}
 	}
 	if sigFailCount > 0 {
