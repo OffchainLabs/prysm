@@ -4,7 +4,9 @@ go_library(
     name = "go_default_library",
     srcs = [
         "blocks_fetcher.go",
+        "blocks_fetcher_payload.go",
         "blocks_fetcher_peers.go",
+        "blocks_fetcher_sidecar.go",
         "blocks_fetcher_utils.go",
         "blocks_queue.go",
         "blocks_queue_utils.go",
@@ -58,6 +60,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "blocks_fetcher_payload_test.go",
         "blocks_fetcher_peers_test.go",
         "blocks_fetcher_test.go",
         "blocks_fetcher_utils_test.go",
@@ -102,7 +105,9 @@ go_test(
         "//container/slice:go_default_library",
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
