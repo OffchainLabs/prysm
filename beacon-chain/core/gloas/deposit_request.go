@@ -68,37 +68,27 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 //	    )
 //	</spec>
 func processDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest) error {
-	var err error
-	defer func() {
-		if err == nil {
-			builderDepositsProcessedTotal.Inc()
-		}
-	}()
-
 	if request == nil {
-		err = errors.New("nil deposit request")
-		return err
+		return errors.New("nil deposit request")
 	}
 
-	var applied bool
-	applied, err = applyBuilderDepositRequest(beaconState, request)
+	applied, err := applyBuilderDepositRequest(beaconState, request)
 	if err != nil {
-		err = errors.Wrap(err, "could not apply builder deposit")
-		return err
+		return errors.Wrap(err, "could not apply builder deposit")
 	}
 	if applied {
+		builderDepositsProcessedTotal.Inc()
 		return nil
 	}
 
-	if err = beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
+	if err := beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
 		PublicKey:             request.Pubkey,
 		WithdrawalCredentials: request.WithdrawalCredentials,
 		Amount:                request.Amount,
 		Signature:             request.Signature,
 		Slot:                  beaconState.Slot(),
 	}); err != nil {
-		err = errors.Wrap(err, "could not append deposit request")
-		return err
+		return errors.Wrap(err, "could not append deposit request")
 	}
 	return nil
 }
@@ -132,18 +122,26 @@ func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1
 	}
 
 	pubkey := bytesutil.ToBytes48(request.Pubkey)
-	_, isValidator := beaconState.ValidatorIndexByPubkey(pubkey)
 	idx, isBuilder := beaconState.BuilderIndexByPubkey(pubkey)
-	isBuilderPrefix := helpers.IsBuilderWithdrawalCredential(request.WithdrawalCredentials)
-	if !isBuilder && (!isBuilderPrefix || isValidator) {
-		return false, nil
-	}
-
 	if isBuilder {
 		if err := beaconState.IncreaseBuilderBalance(idx, request.Amount); err != nil {
 			return false, err
 		}
 		return true, nil
+	}
+
+	isBuilderPrefix := helpers.IsBuilderWithdrawalCredential(request.WithdrawalCredentials)
+	_, isValidator := beaconState.ValidatorIndexByPubkey(pubkey)
+	if !isBuilderPrefix || isValidator {
+		return false, nil
+	}
+
+	isPending, err := beaconState.IsPendingValidator(request.Pubkey)
+	if err != nil {
+		return false, err
+	}
+	if isPending {
+		return false, nil
 	}
 
 	if err := applyDepositForNewBuilder(
