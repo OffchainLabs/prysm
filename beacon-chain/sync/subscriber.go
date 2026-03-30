@@ -389,13 +389,10 @@ func (s *Service) subscribeLogFields(topic string, nse params.NetworkScheduleEnt
 // subscribe to a given topic with a given validator and subscription handler.
 // The base protobuf message is used to initialize new messages for decoding.
 func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandler, nse params.NetworkScheduleEntry) {
-	if err := s.waitForInitialSync(s.ctx); err != nil {
-		log.WithFields(s.subscribeLogFields(topic, nse)).WithError(err).Debug("Context cancelled while waiting for initial sync, not subscribing to topic")
-		return
-	}
-	// Check if this subscribe request is still valid - we may have crossed another fork epoch while waiting for initial sync.
+	// Subscriptions need to come up before initial sync completes so the node can
+	// follow new gossip immediately after the synced flag flips. Validators already
+	// ignore messages while initial sync is still active.
 	if s.subscriptionRequestExpired(nse) {
-		// If we are already past the next fork epoch, do not subscribe to this topic.
 		log.WithFields(s.subscribeLogFields(topic, nse)).Debug("Not subscribing to topic as we are already past the next fork epoch")
 		return
 	}
@@ -584,10 +581,6 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 	go s.ensurePeers(ctx, tracker)
 	go s.logMinimumPeersPerSubnet(ctx, p)
 
-	if err := s.waitForInitialSync(ctx); err != nil {
-		log.WithFields(p.logFields()).WithError(err).Debug("Could not subscribe to subnets as initial sync failed")
-		return
-	}
 	s.trySubscribeSubnets(tracker)
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
@@ -613,7 +606,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 }
 
 // trySubscribeSubnets attempts to subscribe to any missing subnets that we should be subscribed to.
-// Only if initial sync is complete.
+// Validators gate message processing while initial sync is active, so subscriptions can come up early.
 func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
 	s.pruneNotWanted(t, subnetsToJoin)
