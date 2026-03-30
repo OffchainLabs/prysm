@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -47,7 +48,7 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		StateRoot:         make([]byte, 32), // zeroed; computed lazily in GetExecutionPayloadEnvelope
 	}
 
-	vs.setExecutionPayloadEnvelope(envelope)
+	vs.setExecutionPayloadEnvelope(envelope, local.BlobsBundler)
 	return nil
 }
 
@@ -61,13 +62,14 @@ func extractExecutionPayloadDeneb(local *consensusblocks.GetPayloadResponse) *en
 	return nil
 }
 
-func (vs *Server) setExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope) {
+func (vs *Server) setExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope, blobsBundle enginev1.BlobsBundler) {
 	if envelope == nil {
 		return
 	}
 	vs.executionPayloadEnvelopeMu.Lock()
 	defer vs.executionPayloadEnvelopeMu.Unlock()
 	vs.executionPayloadEnvelope = envelope
+	vs.executionPayloadBlobsBundle = blobsBundle
 }
 
 func (vs *Server) getExecutionPayloadEnvelope(slot primitives.Slot) (*ethpb.ExecutionPayloadEnvelope, bool) {
@@ -81,6 +83,12 @@ func (vs *Server) getExecutionPayloadEnvelope(slot primitives.Slot) (*ethpb.Exec
 		return nil, false
 	}
 	return envelope, true
+}
+
+func (vs *Server) getExecutionPayloadBlobsBundle() enginev1.BlobsBundler {
+	vs.executionPayloadEnvelopeMu.RLock()
+	defer vs.executionPayloadEnvelopeMu.RUnlock()
+	return vs.executionPayloadBlobsBundle
 }
 
 // GetExecutionPayloadEnvelope implements the gRPC endpoint:
@@ -186,6 +194,12 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	})
 	log.Info("Publishing signed execution payload envelope")
 
+	// Build and broadcast data column sidecars before the envelope so that
+	// peers (and our own DA check) can find them when the envelope arrives.
+	if err := vs.buildAndBroadcastDataColumns(ctx, beaconBlockRoot); err != nil {
+		log.WithError(err).Error("Could not build/broadcast data columns for payload envelope")
+	}
+
 	if err := vs.P2P.Broadcast(ctx, req); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to broadcast execution payload envelope: %v", err)
 	}
@@ -198,12 +212,44 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		return nil, status.Errorf(codes.Internal, "failed to receive execution payload envelope: %v", err)
 	}
 
-	// TODO: Build and broadcast data column sidecars from the cached blobs bundle.
-	// In Gloas, blob data is delivered alongside the execution payload envelope
-	// rather than with the beacon block (which only carries the bid). Not needed
-	// for devnet-0.
-
 	log.Info("Successfully published execution payload envelope")
 
 	return &emptypb.Empty{}, nil
+}
+
+// buildAndBroadcastDataColumns builds data column sidecars from the cached
+// blobs bundle and broadcasts them alongside the execution payload envelope.
+// In Gloas, blob data is delivered with the execution payload envelope rather
+// than with the beacon block (which only carries the bid).
+func (vs *Server) buildAndBroadcastDataColumns(ctx context.Context, beaconBlockRoot [32]byte) error {
+	bundle := vs.getExecutionPayloadBlobsBundle()
+	if bundle == nil || len(bundle.GetBlobs()) == 0 {
+		return nil
+	}
+
+	block, err := vs.BeaconDB.Block(ctx, beaconBlockRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not retrieve block for data column construction")
+	}
+
+	rob, err := consensusblocks.NewROBlockWithRoot(block, beaconBlockRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not create read-only block")
+	}
+
+	cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(bundle.GetBlobs(), bundle.GetProofs())
+	if err != nil {
+		return errors.Wrap(err, "compute cells and proofs")
+	}
+
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(rob))
+	if err != nil {
+		return errors.Wrap(err, "data column sidecars")
+	}
+
+	if err := vs.broadcastAndReceiveDataColumns(ctx, roDataColumnSidecars); err != nil {
+		return errors.Wrap(err, "broadcast and receive data columns")
+	}
+
+	return nil
 }

@@ -34,6 +34,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/genesis"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/grpc/codes"
@@ -53,6 +54,7 @@ type Server struct {
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	executionPayloadEnvelopeMu       sync.RWMutex
 	executionPayloadEnvelope         *ethpb.ExecutionPayloadEnvelope
+	executionPayloadBlobsBundle      enginev1.BlobsBundler
 	HeadFetcher                      blockchain.HeadFetcher
 	ForkFetcher                      blockchain.ForkFetcher
 	ForkchoiceFetcher                blockchain.ForkchoiceFetcher
