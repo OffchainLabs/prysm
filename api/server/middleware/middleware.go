@@ -136,6 +136,21 @@ func (g *gzipResponseWriter) Write(b []byte) (int, error) {
 	return g.ResponseWriter.Write(b)
 }
 
+// MaxBodySizeHandler limits the size of incoming request bodies to prevent
+// memory exhaustion from oversized POST requests. When the limit is exceeded,
+// http.MaxBytesReader causes subsequent reads to return an error, which
+// downstream handlers translate into appropriate HTTP error responses.
+func MaxBodySizeHandler(maxBytes int64) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Body != nil && r.Body != http.NoBody {
+				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func MiddlewareChain(h http.Handler, mw []Middleware) http.Handler {
 	if len(mw) < 1 {
 		return h

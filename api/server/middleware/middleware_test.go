@@ -6,9 +6,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
@@ -226,6 +228,52 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMaxBodySizeHandler(t *testing.T) {
+	const limit int64 = 128
+
+	echoHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	})
+
+	handler := MaxBodySizeHandler(limit)(echoHandler)
+
+	t.Run("request within limit is accepted", func(t *testing.T) {
+		body := strings.NewReader("small body")
+		req := httptest.NewRequest(http.MethodPost, "/", body)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, "small body", rr.Body.String())
+	})
+	t.Run("request exceeding limit is rejected", func(t *testing.T) {
+		oversized := strings.Repeat("x", int(limit)+1)
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(oversized))
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
+	})
+	t.Run("request at exact limit is accepted", func(t *testing.T) {
+		exact := strings.Repeat("x", int(limit))
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(exact))
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, int(limit), rr.Body.Len())
+	})
+	t.Run("GET request is not limited", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
 }
 
 func TestAcceptHeaderHandler(t *testing.T) {

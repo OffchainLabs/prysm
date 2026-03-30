@@ -1073,7 +1073,9 @@ func (b *BeaconNode) registerHTTPService(router *http.ServeMux) error {
 		allowedOrigins = strings.Split(flags.HTTPServerCorsDomain.Value, ",")
 	}
 
+	maxHTTPBodySize := int64(2 * params.BeaconConfig().MaxPayloadSize)
 	middlewares := []middleware.Middleware{
+		middleware.MaxBodySizeHandler(maxHTTPBodySize),
 		middleware.NormalizeQueryValuesHandler,
 		middleware.CorsHandler(allowedOrigins),
 	}
