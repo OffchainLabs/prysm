@@ -282,7 +282,7 @@ func (s *ChainService) ReceiveBlockInitialSync(ctx context.Context, block interf
 }
 
 // ReceiveBlockBatch processes blocks in batches from initial-sync.
-func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, _ das.AvailabilityChecker) error {
+func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, _ []interfaces.ROSignedExecutionPayloadEnvelope, _ das.AvailabilityChecker) error {
 	if s.State == nil {
 		return ErrNilState
 	}
