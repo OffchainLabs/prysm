@@ -1245,7 +1245,7 @@ func ptcDuties(
 	epoch primitives.Epoch,
 	validators map[primitives.ValidatorIndex]struct{},
 ) ([]ptcDuty, error) {
-	if len(validators) == 0 {
+	if len(validators) == 0 || st.Version() < version.Gloas {
 		return nil, nil
 	}
 	startSlot, err := slots.EpochStart(epoch)
