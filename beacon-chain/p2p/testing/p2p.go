@@ -223,6 +223,12 @@ func (p *TestP2P) Broadcast(_ context.Context, _ proto.Message) error {
 	return nil
 }
 
+// BroadcastForEpoch satisfies the Broadcaster interface.
+func (p *TestP2P) BroadcastForEpoch(_ context.Context, _ proto.Message, _ primitives.Epoch) error {
+	p.BroadcastCalled.Store(true)
+	return nil
+}
+
 // BroadcastAttestation broadcasts an attestation.
 func (p *TestP2P) BroadcastAttestation(_ context.Context, _ uint64, _ ethpb.Att) error {
 	p.BroadcastCalled.Store(true)
