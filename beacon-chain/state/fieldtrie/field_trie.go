@@ -189,7 +189,7 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) (*FieldTrie, [
 		return f, root, err
 	}
 
-	// Field if shared: snapshot source data under the lock, then recompute on the fork.
+	// If field is shared, snapshot source data under the lock, then recompute on the fork.
 	if f.isShared() {
 		fieldTrieForkCounter.WithLabelValues(f.field.String()).Inc()
 		forked := f.fork()
@@ -202,12 +202,36 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) (*FieldTrie, [
 		return forked, root, nil
 	}
 
+	// If field is not shared, recompute in place.
 	root, err := f.recomputeInPlace(indices, elements)
 	if err != nil {
 		return f, [32]byte{}, fmt.Errorf("recompute in place: %w", err)
 	}
 
 	return f, root, nil
+}
+
+// Empty checks whether the underlying field trie is empty or not.
+// It is only meant to be used in tests.
+func (f *FieldTrie) Empty() bool {
+	if f == nil {
+		return true
+	}
+
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	return f.empty()
+}
+
+// InsertFlatLayers manually inserts flat trie data. This method
+// bypasses the normal method of field computation, it is only
+// meant to be used in tests.
+func (f *FieldTrie) InsertFlatLayers(nodes [][32]byte, offsets []uint64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nodes = nodes
+	f.offsets = offsets
 }
 
 func (f *FieldTrie) trieRoot() ([32]byte, error) {
@@ -391,34 +415,12 @@ func cleanupRef(ref *stateutil.Reference) {
 	ref.MinusRef()
 }
 
-// Empty checks whether the underlying field trie is empty or not.
-func (f *FieldTrie) Empty() bool {
-	if f == nil {
-		return true
-	}
-
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-
-	return f.empty()
-}
-
 func (f *FieldTrie) isShared() bool {
 	return f.ref.Refs() > 1 || f.dataRef.Refs() > 0
 }
 
 func (f *FieldTrie) empty() bool {
 	return f.nodes == nil && f.base == nil
-}
-
-// InsertFlatLayers manually inserts flat trie data. This method
-// bypasses the normal method of field computation, it is only
-// meant to be used in tests.
-func (f *FieldTrie) InsertFlatLayers(nodes [][32]byte, offsets []uint64) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.nodes = nodes
-	f.offsets = offsets
 }
 
 // recomputeBranches recomputes the trie branches for the given changed indices
