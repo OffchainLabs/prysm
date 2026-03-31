@@ -391,11 +391,6 @@ func cleanupRef(ref *stateutil.Reference) {
 	ref.MinusRef()
 }
 
-// Length return the length of the whole field trie.
-func (f *FieldTrie) Length() uint64 {
-	return f.length
-}
-
 // Empty checks whether the underlying field trie is empty or not.
 func (f *FieldTrie) Empty() bool {
 	if f == nil {

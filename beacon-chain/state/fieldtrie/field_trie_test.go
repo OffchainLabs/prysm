@@ -730,7 +730,7 @@ func TestFieldTrie_EdgeCases(t *testing.T) {
 
 		copied := trie.CopyTrie()
 		require.Equal(t, true, copied.Empty(), "copy of empty trie should be empty")
-		require.Equal(t, trie.Length(), copied.Length(), "copy should preserve length")
+		require.Equal(t, trie.length, copied.length, "copy should preserve length")
 	})
 }
 
