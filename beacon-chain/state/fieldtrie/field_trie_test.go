@@ -663,9 +663,9 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 	})
 }
 
-// TestFieldTrie_CopyTrieSharesRef verifies that CopyTrie returns the same
-// trie with an incremented reference count, and that RecomputeTrie forks
-// into a new independent trie when the reference count exceeds 1.
+// TestFieldTrie_CopyTrieSharesRef verifies that CopyTrie returns a new
+// trie sharing the same data with an incremented reference count, and that
+// RecomputeTrie forks into a new independent trie when the reference count exceeds 1.
 func TestFieldTrie_CopyTrieSharesRef(t *testing.T) {
 	const numMixes = 64
 	length := uint64(params.BeaconConfig().EpochsPerHistoricalVector)
@@ -681,7 +681,7 @@ func TestFieldTrie_CopyTrieSharesRef(t *testing.T) {
 	require.Equal(t, false, trieA.IsOverlay())
 
 	trieB := trieA.CopyTrie()
-	require.Equal(t, true, trieA == trieB, "CopyTrie must return the same pointer")
+	require.Equal(t, true, trieA != trieB, "CopyTrie must return a new pointer")
 	require.Equal(t, uint(2), trieA.ref.Refs(), "ref count must be 2 after copy")
 
 	rootA, err := trieA.TrieRoot()
@@ -704,8 +704,9 @@ func TestFieldTrie_CopyTrieSharesRef(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, rootA, rootAAfter, "A must be immutable after forking B")
 
-	// After fork: ref decremented back to 1 (RecomputeTrie minus), dataRef incremented to 1 (base holds ref to protect shared nodes).
-	require.Equal(t, uint(1), trieA.ref.Refs(), "ref count must be 1 after fork (only original state)")
+	// After fork: ref stays at 2 (no eager MinusRef; decremented when holder's BeaconState is GC'd),
+	// dataRef incremented to 1 (base holds ref to protect shared nodes).
+	require.Equal(t, uint(2), trieA.ref.Refs(), "ref count must be 2 after fork (decremented lazily by BeaconState GC)")
 	require.Equal(t, uint(1), trieA.dataRef.Refs(), "dataRef count must be 1 after fork (base protects shared nodes)")
 }
 

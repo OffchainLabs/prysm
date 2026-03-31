@@ -122,6 +122,8 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 		numOfElems: elemCount(elements),
 	}
 
+	runtime.AddCleanup(fieldTrie, cleanupRef, fieldTrie.ref)
+
 	if !fieldTrie.empty() {
 		fieldTrie.updateMetrics()
 		fieldTrie.cleanup = runtime.AddCleanup(fieldTrie, cleanupMetrics, fieldTrie.metrics)
@@ -140,7 +142,7 @@ func (f *FieldTrie) TrieRoot() ([32]byte, error) {
 	return f.trieRoot()
 }
 
-// CopyTrie creates a copy of the trie.
+// CopyTrie creates a lightweight copy that shares the underlying trie data.
 func (f *FieldTrie) CopyTrie() *FieldTrie {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -149,7 +151,23 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 	fieldTrieCopyCounter.WithLabelValues(f.field.String(), mode).Inc()
 
 	f.ref.AddRef()
-	return f
+
+	cp := &FieldTrie{
+		ref:        f.ref,
+		dataRef:    f.dataRef,
+		nodes:      f.nodes,
+		offsets:    f.offsets,
+		base:       f.base,
+		overrides:  f.overrides,
+		field:      f.field,
+		dataType:   f.dataType,
+		length:     f.length,
+		numOfElems: f.numOfElems,
+	}
+
+	runtime.AddCleanup(cp, cleanupRef, f.ref)
+
+	return cp
 }
 
 // RecomputeTrie recomputes the trie for the given changed indices and returns
@@ -168,9 +186,8 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) (*FieldTrie, [
 		return f, root, err
 	}
 
-	// Fork if shared: snapshot source data under the lock, then recompute on the fork.
+	// Field if shared: snapshot source data under the lock, then recompute on the fork.
 	if f.isShared() {
-		f.ref.MinusRef()
 		fieldTrieForkCounter.WithLabelValues(f.field.String()).Inc()
 		forked := f.fork()
 
@@ -236,6 +253,8 @@ func (f *FieldTrie) fork() *FieldTrie {
 		length:     f.length,
 		numOfElems: f.numOfElems,
 	}
+
+	runtime.AddCleanup(forked, cleanupRef, forked.ref)
 
 	if f.empty() {
 		return forked
