@@ -3,10 +3,8 @@ package verification
 import (
 	"bytes"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -20,11 +18,11 @@ import (
 func TestProposerPreferencesVerifier_VerifyNextEpoch(t *testing.T) {
 	st, _, signed := newSignedProposerPreferencesState(t, 31, 40, 0)
 
-	verifier := &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: clockForSlot(t, st.Slot())}, results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
+	verifier := &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
 	require.NoError(t, verifier.VerifyNextEpoch(st))
 
 	signed.Message.ProposalSlot = st.Slot()
-	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: clockForSlot(t, st.Slot())}, results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
+	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
 	require.ErrorIs(t, verifier.VerifyNextEpoch(st), ErrProposerPreferencesNotNextEpoch)
 }
 
@@ -123,14 +121,6 @@ func newSignedProposerPreferencesState(t *testing.T, currentSlot, proposalSlot p
 	}
 	signed.Signature = signProposerPreferencesWithConfigFork(t, keys[validatorIndex], signed.Message, st)
 	return st, keys, signed
-}
-
-func clockForSlot(t *testing.T, slot primitives.Slot) *startup.Clock {
-	t.Helper()
-	sps := params.BeaconConfig().SecondsPerSlot
-	now := time.Unix(int64(sps*(uint64(slot)+1)), 0)
-	genesis := time.Unix(int64(sps), 0)
-	return startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return now }))
 }
 
 // signProposerPreferencesWithConfigFork signs preferences using the config-based fork
