@@ -140,6 +140,7 @@ type config struct {
 // Validator Registration Contract on the eth1 chain to kick off the beacon
 // chain's validator registration process.
 type Service struct {
+	partialColumnsSupported bool
 	connectedETH1           bool
 	isRunning               bool
 	depositRequestsStarted  bool

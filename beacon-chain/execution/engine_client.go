@@ -942,14 +942,21 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		return nil, nil, wrapWithBlockRoot(err, root, "commitments")
 	}
 	cp, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
-	log.Info("Received cells and proofs from execution client", "included", cp.Included, "cells count", len(cp.CellsPerBlob), "err", err)
 	if err != nil {
 		return nil, nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
+	log.Debug("Received cells and proofs from execution client", "included", cp.Included, "cells count", len(cp.CellsPerBlob), "err", err)
 
-	partialColumns, err := peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
+	var partialColumns []blocks.PartialDataColumn
+	if s.partialColumnsSupported {
+		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
+		if err != nil {
+			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
+		}
+	}
+
 	haveAllBlobs := cp.Included.Count() == uint64(len(commitments))
-	log.Info("Constructed partial columns", "haveAllBlobs", haveAllBlobs)
+	log.Debug("Constructed partial columns", "haveAllBlobs", haveAllBlobs)
 
 	if haveAllBlobs {
 		// Construct data column sidears from the signed block and cells and proofs.
@@ -965,9 +972,6 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		return verifiedROSidecars, partialColumns, nil
 	}
 
-	if err != nil {
-		return nil, nil, wrapWithBlockRoot(err, populator.Root(), "partial columns from column sidecar")
-	}
 	return nil, partialColumns, nil
 }
 
@@ -984,7 +988,7 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 
 	// Fetch all blobsAndCellsProofs from the execution client.
 	var err error
-	useV3 := s.capabilityCache.has(GetBlobsV3)
+	useV3 := s.useV3()
 	if useV3 {
 		// v3 can return a partial response. V2 is all or nothing
 		blobAndProofs, err = s.GetBlobsV3(ctx, versionedHashes)
@@ -1001,13 +1005,19 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	if err != nil {
 		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "compute cells and proofs")
 	}
-	if result.Included.Count() == uint64(len(kzgCommitments)) {
-		getBlobsV3CompleteResponsesTotal.Inc()
-	} else if result.Included.Count() > 0 {
-		getBlobsV3PartialResponsesTotal.Inc()
+	if useV3 {
+		if result.Included.Count() == uint64(len(kzgCommitments)) {
+			getBlobsV3CompleteResponsesTotal.Inc()
+		} else if result.Included.Count() > 0 {
+			getBlobsV3PartialResponsesTotal.Inc()
+		}
 	}
 
 	return result, nil
+}
+
+func (s *Service) useV3() bool {
+	return s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported
 }
 
 // upgradeSidecarsToVerifiedSidecars upgrades a list of data column sidecars into verified data column sidecars.

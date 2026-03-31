@@ -806,6 +806,10 @@ func (b *BeaconNode) registerPOWChainService() error {
 		execution.WithVerifierWaiter(b.verifyInitWaiter),
 		execution.WithGraffitiInfo(graffitiInfo),
 	)
+
+	if b.cliCtx.Bool(flags.PartialDataColumns.Name) {
+		opts = append(opts, execution.WithPartialColumnsSupported())
+	}
 	web3Service, err := execution.NewService(b.ctx, opts...)
 	if err != nil {
 		return errors.Wrap(err, "could not register proof-of-work chain web3Service")
