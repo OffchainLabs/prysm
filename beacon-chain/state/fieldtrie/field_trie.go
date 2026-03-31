@@ -301,24 +301,15 @@ func (f *FieldTrie) fork() *FieldTrie {
 
 // recomputeInPlace performs the trie recomputation on the current trie..
 func (f *FieldTrie) recomputeInPlace(indices []uint64, elements any) ([32]byte, error) {
-	// nil indices or empty trie: rebuild from scratch.
-	if indices == nil || f.empty() {
+	promote := f.base != nil && len(indices) > overlayPromotionThreshold
+	if promote {
+		FieldTriePromotionCounter.WithLabelValues(f.field.String()).Inc()
+	}
+
+	if indices == nil || f.empty() || promote {
 		root, err := f.rebuildFromScratch(elements)
 		if err != nil {
 			return [32]byte{}, fmt.Errorf("rebuild from scratch: %w", err)
-		}
-
-		return root, nil
-	}
-
-	// Overlay with too many dirty leaves: rebuild from scratch and
-	// cancel the pending overlay metric decrement.
-	if f.base != nil && len(indices) > overlayPromotionThreshold {
-		FieldTriePromotionCounter.WithLabelValues(f.field.String()).Inc()
-
-		root, err := f.rebuildFromScratch(elements)
-		if err != nil {
-			return [32]byte{}, fmt.Errorf("rebuild overlay from scratch: %w", err)
 		}
 
 		return root, nil
@@ -369,6 +360,7 @@ func (f *FieldTrie) rebuildFromScratch(elements any) ([32]byte, error) {
 	}
 
 	f.releaseBase()
+
 	f.nodes = nodes
 	f.offsets = offsets
 	f.base = nil
@@ -385,12 +377,11 @@ func (f *FieldTrie) rebuildFromScratch(elements any) ([32]byte, error) {
 	return root, nil
 }
 
-// releaseBase eagerly decrements the base's dataRef and cancels the
-// GC cleanup that would do the same, preventing a double-decrement.
 func (f *FieldTrie) releaseBase() {
 	if f.base == nil {
 		return
 	}
+
 	f.dataRefCleanup.Stop()
 	f.base.dataRef.MinusRef()
 }
