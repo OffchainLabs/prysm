@@ -143,6 +143,11 @@ func (*FakeP2P) Broadcast(_ context.Context, _ proto.Message) error {
 	return nil
 }
 
+// BroadcastForEpoch -- fake.
+func (*FakeP2P) BroadcastForEpoch(_ context.Context, _ proto.Message, _ primitives.Epoch) error {
+	return nil
+}
+
 // BroadcastAttestation -- fake.
 func (*FakeP2P) BroadcastAttestation(_ context.Context, _ uint64, _ ethpb.Att) error {
 	return nil

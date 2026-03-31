@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/proto"
 )
@@ -27,6 +28,11 @@ func (m *MockBroadcaster) Broadcast(_ context.Context, msg proto.Message) error 
 	defer m.msgLock.Unlock()
 	m.BroadcastMessages = append(m.BroadcastMessages, msg)
 	return nil
+}
+
+// BroadcastForEpoch satisfies the Broadcaster interface.
+func (m *MockBroadcaster) BroadcastForEpoch(_ context.Context, msg proto.Message, _ primitives.Epoch) error {
+	return m.Broadcast(context.Background(), msg)
 }
 
 // BroadcastAttestation records a broadcast occurred.

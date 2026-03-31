@@ -526,8 +526,13 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			return pubsub.ValidationIgnore
 		}
 		if currDigest != retDigest {
-			log.WithField("topic", topic).Tracef("Received message from outdated fork digest %#x", retDigest)
-			return pubsub.ValidationIgnore
+			// Only proposer preferences are accepted from the next epoch's fork
+			// digest, allowing them to arrive before a fork activates.
+			if !strings.Contains(topic, p2p.GossipSignedProposerPreferencesMessage) ||
+				params.ForkDigest(s.cfg.clock.CurrentEpoch()+1) != retDigest {
+				log.WithField("topic", topic).Tracef("Received message from outdated fork digest %#x", retDigest)
+				return pubsub.ValidationIgnore
+			}
 		}
 		b, err := v(ctx, pid, msg)
 		// We do not penalize peers if we are hitting pubsub timeouts
