@@ -2210,6 +2210,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
+		v.lastProposerPrefsEpoch = ^primitives.Epoch(0) // reset sentinel
 		v.duties = &dutyStore{}
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
@@ -2250,6 +2251,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
+		v.lastProposerPrefsEpoch = ^primitives.Epoch(0) // reset sentinel
 		slot1 := params.BeaconConfig().SlotsPerEpoch + 1
 		slot2 := params.BeaconConfig().SlotsPerEpoch + 5
 
@@ -2315,6 +2317,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
+		v.lastProposerPrefsEpoch = ^primitives.Epoch(0) // reset sentinel
 		customFeeRecipient := feeRecipientFromString(t, "0x2222222222222222222222222222222222222222")
 		v.proposerSettings = &proposer.Settings{
 			DefaultConfig: &proposer.Option{
@@ -2376,6 +2379,44 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 				},
 			},
 		}
+	})
+
+	t.Run("only runs once per epoch", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		v.lastProposerPrefsEpoch = ^primitives.Epoch(0) // reset sentinel
+		v.duties = &dutyStore{}
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+				},
+			},
+		})
+
+		// First call at slot 0 (epoch 0) should produce preferences.
+		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		require.Equal(t, 1, len(prefs))
+
+		// Second call at slot 1 (still epoch 0) should be skipped.
+		prefs = v.buildProposerPreferences(t.Context(), km, 1)
+		require.Equal(t, 0, len(prefs))
+
+		// Call at a slot in the next epoch should produce preferences again.
+		prefs = v.buildProposerPreferences(t.Context(), km, params.BeaconConfig().SlotsPerEpoch)
+		require.Equal(t, 1, len(prefs))
 	})
 }
 

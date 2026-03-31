@@ -99,6 +99,7 @@ type validator struct {
 	walletInitializedChan        chan *wallet.Wallet
 	walletInitializedFeed        *event.Feed
 	graffitiOrderedIndex         uint64
+	lastProposerPrefsEpoch       primitives.Epoch
 	conn                         validatorHelpers.NodeConnection
 	submittedAtts                map[submittedAttKey]*submittedAtt
 	validatorsRegBatchSize       int
@@ -1021,17 +1022,68 @@ func (v *validator) buildProposerSettingsRequests(
 	return prepareProposerReqs
 }
 
+// proposerPreference holds the unsigned preference and the pubkey needed to sign it.
+type proposerPreference struct {
+	pubkey [fieldparams.BLSPubkeyLength]byte
+	pref   *ethpb.ProposerPreferences
+}
+
 // buildProposerPreferences creates signed proposer preferences for validators
-// that have proposer slots in the next epoch.
+// that have proposer slots in the next epoch. It only runs once per epoch to
+// avoid redundant signing and RPC calls on the slot-critical path.
 func (v *validator) buildProposerPreferences(
 	ctx context.Context,
 	km keymanager.IKeymanager,
 	slot primitives.Slot,
 ) []*ethpb.SignedProposerPreferences {
-	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+	currentEpoch := slots.ToEpoch(slot)
+	gloasEpoch := params.BeaconConfig().GloasForkEpoch
+	if currentEpoch+1 < gloasEpoch {
+		return nil
+	}
+	// In the epoch before gloas, wait until mid-epoch so the gossip mesh
+	// has time to stabilize after the fork_watcher subscribes to gloas topics.
+	if currentEpoch+1 == gloasEpoch {
+		epochStart, err := slots.EpochStart(currentEpoch)
+		if err != nil {
+			return nil
+		}
+		if slot < epochStart+params.BeaconConfig().SlotsPerEpoch/2 {
+			return nil
+		}
+	}
+	// Only submit proposer preferences once per epoch.
+	if v.lastProposerPrefsEpoch == currentEpoch {
 		return nil
 	}
 
+	// Collect unsigned preferences under the read lock, then release
+	// it before signing so we don't hold dutiesLock during I/O.
+	unsigned := v.collectProposerPreferences(slot)
+	if len(unsigned) == 0 {
+		return nil
+	}
+
+	var signedPrefs []*ethpb.SignedProposerPreferences
+	var sigFailCount int
+	for _, u := range unsigned {
+		signedPref, err := v.signProposerPreferences(ctx, km, u.pubkey, u.pref)
+		if err != nil {
+			sigFailCount++
+			continue
+		}
+		signedPrefs = append(signedPrefs, signedPref)
+	}
+	if sigFailCount > 0 {
+		log.WithField("count", sigFailCount).Warn("Failed to sign proposer preferences")
+	}
+	v.lastProposerPrefsEpoch = currentEpoch
+	return signedPrefs
+}
+
+// collectProposerPreferences reads duty assignments under dutiesLock and
+// returns unsigned preferences that need signing.
+func (v *validator) collectProposerPreferences(slot primitives.Slot) []proposerPreference {
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
 
@@ -1046,8 +1098,7 @@ func (v *validator) buildProposerPreferences(
 	}
 
 	ps := v.ProposerSettings()
-	var signedPrefs []*ethpb.SignedProposerPreferences
-	var sigFailCount int
+	var unsigned []proposerPreference
 
 	for pk, duty := range nextDuties {
 		if len(duty.ProposerSlots) == 0 {
@@ -1080,25 +1131,18 @@ func (v *validator) buildProposerPreferences(
 		}
 
 		for _, proposalSlot := range duty.ProposerSlots {
-			pref := &ethpb.ProposerPreferences{
-				ProposalSlot:   proposalSlot,
-				ValidatorIndex: duty.ValidatorIndex,
-				FeeRecipient:   feeRecipient[:],
-				GasLimit:       gasLimit,
-			}
-
-			signedPref, err := v.signProposerPreferences(ctx, km, pk, pref)
-			if err != nil {
-				sigFailCount++
-				continue
-			}
-			signedPrefs = append(signedPrefs, signedPref)
+			unsigned = append(unsigned, proposerPreference{
+				pubkey: pk,
+				pref: &ethpb.ProposerPreferences{
+					ProposalSlot:   proposalSlot,
+					ValidatorIndex: duty.ValidatorIndex,
+					FeeRecipient:   feeRecipient[:],
+					GasLimit:       gasLimit,
+				},
+			})
 		}
 	}
-	if sigFailCount > 0 {
-		log.WithField("count", sigFailCount).Warn("Failed to sign proposer preferences")
-	}
-	return signedPrefs
+	return unsigned
 }
 
 func (v *validator) buildSignedRegReqs(
