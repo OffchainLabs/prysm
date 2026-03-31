@@ -39,6 +39,16 @@ func (s *State) replayBlocks(
 	})
 	rLog.Debug("Replaying state")
 
+	// For Gloas states: if the first replay block's bid parentBlockHash doesn't
+	// match the ancestor state's latestBlockHash, the ancestor block's execution
+	// payload was delivered but the state is post-CL (EL not yet applied). Apply
+	// the ancestor's envelope to bring the state to post-EL before replaying.
+	if len(signed) > 0 && state.Version() >= version.Gloas && signed[0].Block().Version() >= version.Gloas {
+		if err := s.maybeApplyAncestorEnvelope(ctx, state, signed[0]); err != nil {
+			return nil, errors.Wrap(err, "could not apply ancestor execution payload envelope")
+		}
+	}
+
 	for i, blk := range signed {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -100,6 +110,50 @@ func (s *State) replayBlocks(
 	replayBlocksSummary.Observe(float64(duration.Milliseconds()))
 
 	return state, nil
+}
+
+// maybeApplyAncestorEnvelope checks whether the ancestor state needs its
+// execution payload envelope applied before block replay can proceed. This is
+// needed when the ancestor state is post-CL (latestBlockHash not yet updated
+// with the delivered payload). The check compares the first replay block's bid
+// parentBlockHash with the state's latestBlockHash: a mismatch means the
+// ancestor's payload was delivered but the state doesn't reflect it.
+func (s *State) maybeApplyAncestorEnvelope(
+	ctx context.Context,
+	st state.BeaconState,
+	firstBlock interfaces.ReadOnlySignedBeaconBlock,
+) error {
+	firstBid, err := firstBlock.Block().Body().SignedExecutionPayloadBid()
+	if err != nil || firstBid == nil || firstBid.Message == nil {
+		return nil
+	}
+	latestHash, err := st.LatestBlockHash()
+	if err != nil {
+		return err
+	}
+	if bytes.Equal(firstBid.Message.ParentBlockHash, latestHash[:]) {
+		return nil
+	}
+	// The first block expects a different latestBlockHash than what the state
+	// has: the ancestor's execution payload was delivered but the state is
+	// post-CL. Apply the ancestor's envelope.
+	ancestorRoot := firstBlock.Block().ParentRoot()
+	envelope, err := s.beaconDB.ExecutionPayloadEnvelope(ctx, ancestorRoot)
+	if err != nil {
+		return errors.Wrapf(err, "could not retrieve execution payload envelope for ancestor root %#x", ancestorRoot)
+	}
+	if envelope == nil || envelope.Message == nil {
+		return errors.Errorf("Received nil execution payload envelope for ancestor root %#x", ancestorRoot)
+	}
+	ancestorBlock, err := s.beaconDB.Block(ctx, ancestorRoot)
+	if err != nil {
+		return errors.Wrapf(err, "could not retrieve ancestor block for root %#x", ancestorRoot)
+	}
+	wrappedEnvelope, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
+	if err != nil {
+		return errors.Wrap(err, "could not wrap ancestor blinded execution payload envelope")
+	}
+	return gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, st, ancestorBlock.Block().StateRoot(), wrappedEnvelope)
 }
 
 // loadBlocks loads the blocks between start slot and end slot by recursively fetching from end block root.
