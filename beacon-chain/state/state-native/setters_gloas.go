@@ -812,12 +812,16 @@ func (b *BeaconState) RotatePTCWindow(newEpochSlots []*ethpb.PTCs) error {
 	b.sharedFieldReferences[types.PTCWindow].MinusRef()
 	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)
 
+	newWindow := make([]*ethpb.PTCs, expected)
+
 	// Shift left by one epoch.
 	lastEpochStart := expected - slotsPerEpoch
-	copy(b.ptcWindow[:lastEpochStart], b.ptcWindow[slotsPerEpoch:])
+	copy(newWindow[:lastEpochStart], b.ptcWindow[slotsPerEpoch:])
 
 	// Fill the last epoch with copied new slots.
-	copy(b.ptcWindow[lastEpochStart:], ethpb.CopyPTCWindow(newEpochSlots))
+	copy(newWindow[lastEpochStart:], ethpb.CopyPTCWindow(newEpochSlots))
+
+	b.ptcWindow = newWindow
 
 	b.markFieldAsDirty(types.PTCWindow)
 	return nil
