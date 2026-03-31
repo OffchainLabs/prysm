@@ -129,7 +129,6 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 
 	if !fieldTrie.empty() {
 		fieldTrie.updateMetrics()
-		fieldTrie.metricsCleanup = runtime.AddCleanup(fieldTrie, cleanupMetrics, fieldTrie.metrics)
 	}
 
 	return fieldTrie, nil
@@ -296,7 +295,6 @@ func (f *FieldTrie) fork() *FieldTrie {
 		forked.overrides = make([]map[uint64][32]byte, f.depth()+1)
 
 		forked.updateMetrics()
-		forked.metricsCleanup = runtime.AddCleanup(forked, cleanupMetrics, forked.metrics)
 
 		return forked
 	}
@@ -318,7 +316,6 @@ func (f *FieldTrie) fork() *FieldTrie {
 
 	forked.overrides = overrides
 	forked.updateMetrics()
-	forked.metricsCleanup = runtime.AddCleanup(forked, cleanupMetrics, forked.metrics)
 
 	return forked
 }
@@ -809,6 +806,7 @@ func (f *FieldTrie) updateMetrics() {
 		mode := overlayMode(f.base != nil)
 		fieldTrieCountGauge.WithLabelValues(f.field.String(), mode).Inc()
 		f.syncEntryGauges()
+		f.metricsCleanup = runtime.AddCleanup(f, cleanupMetrics, f.metrics)
 
 		return
 	}
