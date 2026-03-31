@@ -704,8 +704,9 @@ func TestFieldTrie_CopyTrieSharesRef(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, rootA, rootAAfter, "A must be immutable after forking B")
 
-	// Ref count on original: 1 (state) + 1 (base holds ref to protect shared nodes).
-	require.Equal(t, uint(2), trieA.ref.Refs(), "ref count must be 2 after fork (1 state + 1 base)")
+	// After fork: ref decremented back to 1 (RecomputeTrie minus), dataRef incremented to 1 (base holds ref to protect shared nodes).
+	require.Equal(t, uint(1), trieA.ref.Refs(), "ref count must be 1 after fork (only original state)")
+	require.Equal(t, uint(1), trieA.dataRef.Refs(), "dataRef count must be 1 after fork (base protects shared nodes)")
 }
 
 // TestFieldTrie_EdgeCases verifies error handling and edge cases.

@@ -50,7 +50,8 @@ type (
 	//     walks the base read-only, substituting override values at modified positions.
 	FieldTrie struct {
 		mu      sync.RWMutex
-		ref     *stateutil.Reference
+		ref     *stateutil.Reference // count of holders (BeaconState copies) pointing to this FieldTrie
+		dataRef *stateutil.Reference // count of overlay bases sharing this trie's nodes buffer
 		cleanup runtime.Cleanup
 		metrics *metricsRef
 
@@ -112,6 +113,7 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 
 	fieldTrie := &FieldTrie{
 		ref:        stateutil.NewRef(1),
+		dataRef:    stateutil.NewRef(0),
 		nodes:      nodes,
 		offsets:    offsets,
 		field:      field,
@@ -134,43 +136,8 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 func (f *FieldTrie) TrieRoot() ([32]byte, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
 	return f.trieRoot()
-}
-
-func (f *FieldTrie) trieRoot() ([32]byte, error) {
-	if f.empty() {
-		return [32]byte{}, ErrEmptyFieldTrie
-	}
-
-	// Owned mode: Directly read root from nodes.
-	if f.base == nil {
-		depth := f.depth()
-		if f.levelSize(depth) == 0 {
-			return [32]byte{}, ErrInvalidFieldTrie
-		}
-
-		rootOffset := f.offsets[depth]
-		root := f.nodes[rootOffset]
-		rootWithMixin, err := f.rootWithMixin(root)
-		if err != nil {
-			return [32]byte{}, fmt.Errorf("root with mixin: %w", err)
-		}
-
-		return rootWithMixin, nil
-	}
-
-	// Overlay mode: Read root from overrides and fallback to base.
-	root, err := f.readOverlayNode(f.base.depth(), 0)
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("read overlay node: %w", err)
-	}
-
-	rootWithMixin, err := f.rootWithMixin(root)
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("root with mixin: %w", err)
-	}
-
-	return rootWithMixin, nil
 }
 
 // CopyTrie creates a copy of the trie.
@@ -178,10 +145,7 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	mode := "owned"
-	if f.base != nil {
-		mode = "overlay"
-	}
+	mode := overlayMode(f.base != nil)
 	fieldTrieCopyCounter.WithLabelValues(f.field.String(), mode).Inc()
 
 	f.ref.AddRef()
@@ -226,10 +190,47 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) (*FieldTrie, [
 	return f, root, nil
 }
 
+func (f *FieldTrie) trieRoot() ([32]byte, error) {
+	if f.empty() {
+		return [32]byte{}, ErrEmptyFieldTrie
+	}
+
+	// Owned mode: Directly read root from nodes.
+	if f.base == nil {
+		depth := f.depth()
+		if f.levelSize(depth) == 0 {
+			return [32]byte{}, ErrInvalidFieldTrie
+		}
+
+		rootOffset := f.offsets[depth]
+		root := f.nodes[rootOffset]
+		rootWithMixin, err := f.rootWithMixin(root)
+		if err != nil {
+			return [32]byte{}, fmt.Errorf("root with mixin: %w", err)
+		}
+
+		return rootWithMixin, nil
+	}
+
+	// Overlay mode: Read root from overrides and fallback to base.
+	root, err := f.readOverlayNode(f.base.depth(), 0)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("read overlay node: %w", err)
+	}
+
+	rootWithMixin, err := f.rootWithMixin(root)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("root with mixin: %w", err)
+	}
+
+	return rootWithMixin, nil
+}
+
 // fork creates a new independent trie from the shared source's data.
 func (f *FieldTrie) fork() *FieldTrie {
 	forked := &FieldTrie{
 		ref:        stateutil.NewRef(1),
+		dataRef:    stateutil.NewRef(0),
 		field:      f.field,
 		dataType:   f.dataType,
 		length:     f.length,
@@ -249,6 +250,7 @@ func (f *FieldTrie) fork() *FieldTrie {
 		depth := f.depth()
 		base := &FieldTrie{
 			ref:        stateutil.NewRef(1),
+			dataRef:    stateutil.NewRef(0),
 			nodes:      f.nodes,
 			offsets:    f.offsets,
 			field:      f.field,
@@ -257,10 +259,10 @@ func (f *FieldTrie) fork() *FieldTrie {
 			numOfElems: f.numOfElems,
 		}
 
-		f.ref.AddRef()
+		f.dataRef.AddRef()
 		base.updateMetrics()
 		base.cleanup = runtime.AddCleanup(base, cleanupMetrics, base.metrics)
-		runtime.AddCleanup(base, cleanupRef, f.ref)
+		runtime.AddCleanup(base, cleanupRef, f.dataRef)
 
 		logBalancesTrieCreation(f.field, "fork (base from owned)")
 
@@ -440,7 +442,7 @@ func (f *FieldTrie) Empty() bool {
 }
 
 func (f *FieldTrie) isShared() bool {
-	return f.ref.Refs() > 1
+	return f.ref.Refs() > 1 || f.dataRef.Refs() > 0
 }
 
 func (f *FieldTrie) empty() bool {
@@ -851,12 +853,8 @@ func (f *FieldTrie) leafOverrideSize() int {
 // snapshot and adjusts gauges accordingly.
 func (f *FieldTrie) updateMetrics() {
 	if f.metrics == nil {
-		mode := "owned"
-		if f.base != nil {
-			mode = "overlay"
-		}
-
 		f.metrics = &metricsRef{field: f.field}
+		mode := overlayMode(f.base != nil)
 		fieldTrieCountGauge.WithLabelValues(f.field.String(), mode).Inc()
 		f.syncEntryGauges()
 
@@ -866,15 +864,11 @@ func (f *FieldTrie) updateMetrics() {
 	isOverlay := f.base != nil
 	if f.metrics.overlay != isOverlay {
 		label := f.field.String()
-		oldMode := "owned"
-		if f.metrics.overlay {
-			oldMode = "overlay"
-		}
-		newMode := "owned"
-		if isOverlay {
-			newMode = "overlay"
-		}
+
+		oldMode := overlayMode(f.metrics.overlay)
 		fieldTrieCountGauge.WithLabelValues(label, oldMode).Dec()
+
+		newMode := overlayMode(isOverlay)
 		fieldTrieCountGauge.WithLabelValues(label, newMode).Inc()
 	}
 
@@ -908,9 +902,6 @@ func cleanupMetrics(m *metricsRef) {
 	fieldTrieEntriesGauge.WithLabelValues(label, "overrides").Sub(float64(m.overrides))
 	fieldTrieLeafOverridesGauge.WithLabelValues(label).Sub(float64(m.leafOverrides))
 
-	mode := "owned"
-	if m.overlay {
-		mode = "overlay"
-	}
+	mode := overlayMode(m.overlay)
 	fieldTrieCountGauge.WithLabelValues(label, mode).Dec()
 }

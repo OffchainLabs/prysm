@@ -25,6 +25,8 @@ import (
 //   - nodes: the flat buffer, with leaves first, then each upper level in order.
 //   - offsets: offsets[i] is the start index of level i; offsets[depth+1] = len(nodes).
 //
+// The last item in the offsets array, added for convenience, is the total length of the nodes array.
+//
 // Example 1: 4 leaves, length=4 (depth = 2):
 //
 // Level 2 (root):    H(H(A,B), H(C,D))
@@ -46,7 +48,6 @@ import (
 //
 // nodes   = [A, B, C, D, E, H(A,B), H(C,D), H(E,Z0), H(H(A,B),H(C,D)), H(H(E,Z0),Z1), H(...), root]
 // offsets = [0, 5, 8, 10, 11, 12]
-// The last item in the offsets array, added for convenience, is the total length of the nodes array.
 func buildTrie(field types.FieldIndex, elements any, length uint64) ([][32]byte, []uint64, error) {
 	if elements == nil {
 		return nil, nil, nil
@@ -72,12 +73,8 @@ func buildTrie(field types.FieldIndex, elements any, length uint64) ([][32]byte,
 	trieNodeCount := offsets[depth+1]
 	nodes := make([][32]byte, trieNodeCount)
 
-	// The trie has a total of `trieNodeCount` nodes,
-	// but only the first `count` are filled with leaf data.
-	// The rest will be computed by hashUpFromLeaves.
-	copy(nodes, fieldRoots)
-
 	// Compute all upper levels of the trie from the leaves up to the root.
+	copy(nodes, fieldRoots)
 	hashUpFromLeaves(nodes, offsets)
 
 	return nodes, offsets, nil
@@ -164,21 +161,22 @@ func validateElements(field types.FieldIndex, fieldInfo types.DataType, elements
 	}
 
 	if fieldInfo == types.CompressedArray {
-		comLength, err := field.ElemsInChunk()
+		elemsInChunk, err := field.ElemsInChunk()
 		if err != nil {
 			return fmt.Errorf("elem in chunk: %w", err)
 		}
 
-		length *= comLength
+		length *= elemsInChunk
 	}
 
+	const message = "elements length is larger than expected for field %s: %d > %d"
 	if val, ok := elements.(sliceAccessor); ok {
 		totalLen := uint64(val.Len(val.State()))
 		if totalLen <= length {
 			return nil
 		}
 
-		return fmt.Errorf("elements length is larger than expected for field %s: %d > %d", field.String(), totalLen, length)
+		return fmt.Errorf(message, field.String(), totalLen, length)
 	}
 
 	val := reflect.Indirect(reflect.ValueOf(elements))
@@ -187,7 +185,7 @@ func validateElements(field types.FieldIndex, fieldInfo types.DataType, elements
 		return nil
 	}
 
-	return fmt.Errorf("elements length is larger than expected for field %s: %d > %d", field.String(), totalLen, length)
+	return fmt.Errorf(message, field.String(), totalLen, length)
 }
 
 // fieldConverters converts the complete elements collection to roots for the given changed indices.
@@ -432,4 +430,12 @@ func elemCount(elements any) uint64 {
 	}
 
 	return uint64(reflect.Indirect(reflect.ValueOf(elements)).Len())
+}
+
+func overlayMode(isOverlay bool) string {
+	if isOverlay {
+		return "overlay"
+	}
+
+	return "owned"
 }
