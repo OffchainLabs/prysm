@@ -119,6 +119,7 @@ message ProposerOptionPayload {
   string fee_recipient = 1;
   BuilderConfig builder = 2;
   optional string graffiti = 3;
+  bool gloas_builder = 4;
 }
 
 // BuilderConfig is a property of ProposerOptionPayload

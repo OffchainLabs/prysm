@@ -39,6 +39,7 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 			if optionPayload.Builder != nil {
 				p.BuilderConfig = BuilderConfigFromConsensus(optionPayload.Builder)
 			}
+			p.GloasBuilder = optionPayload.GloasBuilder
 			settings.ProposeConfig[bytesutil.ToBytes48(decodedKey)] = p
 		}
 	}
@@ -58,6 +59,7 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 		if ps.DefaultConfig.Builder != nil {
 			d.BuilderConfig = BuilderConfigFromConsensus(ps.DefaultConfig.Builder)
 		}
+		d.GloasBuilder = ps.DefaultConfig.GloasBuilder
 		settings.DefaultConfig = d
 	}
 	return settings, nil
@@ -150,6 +152,7 @@ type Option struct {
 	FeeRecipientConfig *FeeRecipientConfig
 	BuilderConfig      *BuilderConfig
 	GraffitiConfig     *GraffitiConfig
+	GloasBuilder       bool `json:"gloas_builder,omitempty" yaml:"gloas_builder,omitempty"`
 }
 
 // Clone creates a deep copy of proposer option
@@ -167,6 +170,7 @@ func (po *Option) Clone() *Option {
 	if po.GraffitiConfig != nil {
 		p.GraffitiConfig = po.GraffitiConfig.Clone()
 	}
+	p.GloasBuilder = po.GloasBuilder
 	return p
 }
 
@@ -184,6 +188,7 @@ func (po *Option) ToConsensus() *validatorpb.ProposerOptionPayload {
 	if po.GraffitiConfig != nil {
 		p.Graffiti = &po.GraffitiConfig.Graffiti
 	}
+	p.GloasBuilder = po.GloasBuilder
 	return p
 }
 

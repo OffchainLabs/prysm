@@ -85,6 +85,41 @@ func Test_Proposer_Setting_Cloning(t *testing.T) {
 		require.Equal(t, option.BuilderConfig.GasLimit, option.BuilderConfig.GasLimit)
 		require.Equal(t, option.BuilderConfig.Enabled, option.BuilderConfig.Enabled)
 	})
+	t.Run("GloasBuilder round-trip", func(t *testing.T) {
+		s := &Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				bytesutil.ToBytes48(key1): {
+					FeeRecipientConfig: &FeeRecipientConfig{
+						FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
+					},
+					GloasBuilder: true,
+				},
+			},
+			DefaultConfig: &Option{
+				FeeRecipientConfig: &FeeRecipientConfig{
+					FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
+				},
+				GloasBuilder: false,
+			},
+		}
+		// ToConsensus -> SettingFromConsensus round-trip preserves GloasBuilder.
+		payload := s.ToConsensus()
+		require.Equal(t, true, payload.ProposerConfig[key1hex].GloasBuilder)
+		require.Equal(t, false, payload.DefaultConfig.GloasBuilder)
+		restored, err := SettingFromConsensus(payload)
+		require.NoError(t, err)
+		opt, ok := restored.ProposeConfig[bytesutil.ToBytes48(key1)]
+		require.Equal(t, true, ok)
+		require.Equal(t, true, opt.GloasBuilder)
+		require.Equal(t, false, restored.DefaultConfig.GloasBuilder)
+
+		// Clone preserves GloasBuilder.
+		clone := s.Clone()
+		copt, ok := clone.ProposeConfig[bytesutil.ToBytes48(key1)]
+		require.Equal(t, true, ok)
+		require.Equal(t, true, copt.GloasBuilder)
+		require.Equal(t, false, clone.DefaultConfig.GloasBuilder)
+	})
 }
 
 func TestProposerSettings_ShouldBeSaved(t *testing.T) {
