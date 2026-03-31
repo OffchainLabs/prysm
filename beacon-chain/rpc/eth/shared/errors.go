@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -13,6 +14,10 @@ import (
 // WriteStateFetchError writes an appropriate error based on the supplied argument.
 // The argument error should be a result of fetching state.
 func WriteStateFetchError(w http.ResponseWriter, err error) {
+	if errors.Is(err, stategen.ErrNoDataForSlot) {
+		httputil.HandleError(w, "State not found", http.StatusNotFound)
+		return
+	}
 	var stateNotFoundError *lookup.StateNotFoundError
 	if errors.As(err, &stateNotFoundError) {
 		httputil.HandleError(w, "State not found", http.StatusNotFound)
