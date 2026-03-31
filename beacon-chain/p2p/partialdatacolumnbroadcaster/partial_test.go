@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -96,6 +97,7 @@ type publishedColumn struct {
 }
 
 type mockPubSub struct {
+	mu                       sync.Mutex
 	publishedPartialColumns  []publishedColumn
 	peerFeedbackCalls        []peerFeedbackCall
 	publishPartialMessageErr error
@@ -114,7 +116,7 @@ func newMockPubSub(publisherr, peerFeebackErr error) *mockPubSub {
 func (m *mockPubSub) assertPartialColumnsPublished(t *testing.T, topic string, expected []*blocks.PartialDataColumn) {
 	t.Helper()
 
-	actual := m.publishedPartialColumns
+	actual := m.publishedColumnsSnapshot()
 
 	require.Equal(t, len(expected), len(actual))
 	if len(expected) == 0 {
@@ -128,6 +130,8 @@ func (m *mockPubSub) assertPartialColumnsPublished(t *testing.T, topic string, e
 }
 
 func (m *mockPubSub) peerFeedback(topic string, id peer.ID, kind pubsub.PeerFeedbackKind) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.peerFeedbackCalls = append(m.peerFeedbackCalls, peerFeedbackCall{
 		peerID: id,
 		topic:  topic,
@@ -137,9 +141,35 @@ func (m *mockPubSub) peerFeedback(topic string, id peer.ID, kind pubsub.PeerFeed
 }
 
 func (m *mockPubSub) publishPartialCol(topic string, groupID []byte, col *blocks.PartialDataColumn) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.publishedPartialColumns = append(m.publishedPartialColumns, publishedColumn{col, topic})
 	retErr := m.publishPartialMessageErr
 	return retErr
+}
+
+func (m *mockPubSub) peerFeedbackCallsSnapshot() []peerFeedbackCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return slices.Clone(m.peerFeedbackCalls)
+}
+
+func (m *mockPubSub) publishedColumnsSnapshot() []publishedColumn {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return slices.Clone(m.publishedPartialColumns)
+}
+
+func (m *mockPubSub) peerFeedbackCallCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.peerFeedbackCalls)
+}
+
+func (m *mockPubSub) publishedColumnCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.publishedPartialColumns)
 }
 
 func newBroadcasterHarness(t *testing.T, ps *mockPubSub) *broadcasterHarness {
@@ -419,12 +449,12 @@ func waitForPeerFeedbackCalls(t *testing.T, ps *mockPubSub, expected int) {
 	defer ticker.Stop()
 
 	for {
-		if len(ps.peerFeedbackCalls) >= expected {
+		if ps.peerFeedbackCallCount() >= expected {
 			return
 		}
 		select {
 		case <-deadline.C:
-			t.Fatalf("expected at least %d peer feedback calls, got %d", expected, len(ps.peerFeedbackCalls))
+			t.Fatalf("expected at least %d peer feedback calls, got %d", expected, ps.peerFeedbackCallCount())
 		case <-ticker.C:
 		}
 	}
@@ -965,10 +995,11 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 
 			if tt.expectPeerFeedbackCall {
 				waitForPeerFeedbackCalls(t, ps, 1)
-				require.Equal(t, tt.expectPeerFeedback, ps.peerFeedbackCalls[0].kind)
-				require.Equal(t, setup.inputRPC.from, ps.peerFeedbackCalls[0].peerID)
+				feedbackCalls := ps.peerFeedbackCallsSnapshot()
+				require.Equal(t, tt.expectPeerFeedback, feedbackCalls[0].kind)
+				require.Equal(t, setup.inputRPC.from, feedbackCalls[0].peerID)
 			} else {
-				require.Equal(t, 0, len(ps.peerFeedbackCalls))
+				require.Equal(t, 0, ps.peerFeedbackCallCount())
 			}
 
 			stored := h.broadcaster.getDataColumn(setup.inputRPC.GetTopicID(), setup.inputRPC.GroupID)
@@ -976,7 +1007,7 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				require.NotNil(t, stored)
 				ps.assertPartialColumnsPublished(t, setup.inputRPC.GetTopicID(), []*blocks.PartialDataColumn{stored})
 			} else {
-				require.Equal(t, 0, len(ps.publishedPartialColumns))
+				require.Equal(t, 0, ps.publishedColumnCount())
 			}
 
 			if tt.expectedStoreColumn != nil {
@@ -1202,7 +1233,7 @@ func TestPartialColumnBroadcaster_handleCellsValidated(t *testing.T) {
 				ps.assertPartialColumnsPublished(t, topic, []*blocks.PartialDataColumn{stored})
 
 			} else {
-				require.Equal(t, 0, len(ps.publishedPartialColumns))
+				require.Equal(t, 0, ps.publishedColumnCount())
 			}
 
 			if tt.expectHandle {

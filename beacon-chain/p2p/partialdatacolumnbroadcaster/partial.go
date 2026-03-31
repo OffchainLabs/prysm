@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -71,6 +72,7 @@ type PartialColumnBroadcaster struct {
 	peerFeedback      func(topic string, peer peer.ID, kind pubsub.PeerFeedbackKind) error
 	publishPartialCol func(topic string, groupID []byte, col *blocks.PartialDataColumn) error
 	stop              chan struct{}
+	stopOnce          sync.Once
 	callbacks         ColumnCallbacks
 	// map topic -> *pubsub.Topic
 	topics                           map[string]*pubsub.Topic
@@ -81,7 +83,9 @@ type PartialColumnBroadcaster struct {
 	groupTTL        map[string]int8
 	// validHeaderCache caches validated headers by group ID (works across topics)
 	validHeaderCache map[string]*ethpb.PartialDataColumnHeader
-	incomingReq      chan request
+	// map groupID -> map[peer.ID]bool
+	headerSentCache map[string]map[peer.ID]bool
+	incomingReq     chan request
 }
 
 type requestKind uint8
@@ -159,6 +163,9 @@ func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 		partialMsgStore:  make(map[string]map[string]*verification.PartialColumnVerifier),
 		groupTTL:         make(map[string]int8),
 		validHeaderCache: make(map[string]*ethpb.PartialDataColumnHeader),
+		headerSentCache:  make(map[string]map[peer.ID]bool),
+		stop:             make(chan struct{}),
+
 		// GossipSub sends the messages to this channel. The buffer should be
 		// big enough to avoid dropping messages. We don't want to block the gossipsub event loop for this.
 		incomingReq: make(chan request, 128*16),
@@ -231,7 +238,10 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 		func(ps *pubsub.PubSub) error {
 			p.peerFeedback = ps.PeerFeedback
 			p.publishPartialCol = func(topic string, groupID []byte, col *blocks.PartialDataColumn) error {
-				return pubsub.PublishPartial(ps, topic, groupID, col.PublishActions)
+				if _, ok := p.headerSentCache[string(groupID)]; !ok {
+					p.headerSentCache[string(groupID)] = make(map[peer.ID]bool)
+				}
+				return pubsub.PublishPartial(ps, topic, groupID, col.PublishActionsFn(p.headerSentCache[string(groupID)]))
 			}
 			return nil
 		},
@@ -244,7 +254,6 @@ func (p *PartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubs
 // Note: The event loop is blocking and so the broadcaster should be started in a goroutine.
 func (p *PartialColumnBroadcaster) Start(callbacks ColumnCallbacks) {
 	p.callbacks = callbacks
-	p.stop = make(chan struct{})
 	p.loop()
 }
 
@@ -264,6 +273,7 @@ func (p *PartialColumnBroadcaster) loop() {
 
 				delete(p.groupTTL, groupID)
 				delete(p.validHeaderCache, groupID)
+				delete(p.headerSentCache, groupID)
 				for topic, msgStore := range p.partialMsgStore {
 					delete(msgStore, groupID)
 					if len(msgStore) == 0 {
@@ -416,9 +426,18 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 
 	if ourVerifier == nil && hasMessage {
 		header, headerWasCached := p.getHeader(groupID, message)
-		if len(message.Header) == 0 {
+		if header == nil {
 			return nil
 		}
+
+		// downscore peer if invalid header
+		if header.SignedBlockHeader == nil || header.SignedBlockHeader.Header == nil {
+			p.logger.WithFields(rpc.logFields()).Debug("Header is missing signed block header or header")
+			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+			return errors.New("header is missing signed block header or header")
+		}
+
+		// downscore peer if invalid header
 		root, err := header.SignedBlockHeader.Header.HashTreeRoot()
 		if err != nil {
 			p.logger.WithFields(rpc.logFields()).WithError(err).Debug("Failed to get root from header")
@@ -440,6 +459,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 		}
 
 		if !headerWasCached {
+			p.logger.WithFields(rpc.logFields()).Debug("Handling header as it was previously not cached for this group")
 			p.handleHeader(rpc, header)
 		}
 
@@ -680,9 +700,9 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 }
 
 func (p *PartialColumnBroadcaster) Stop() {
-	if p.stop != nil {
+	p.stopOnce.Do(func() {
 		close(p.stop)
-	}
+	})
 }
 
 // Publish publishes partial columns for the given topics.

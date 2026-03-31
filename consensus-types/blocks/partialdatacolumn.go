@@ -14,8 +14,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var _ partialmessages.PublishActionsFn[PartialDataColumnPeerState] = (*PartialDataColumn)(nil).PublishActions
-
 // CellProofBundle contains a cell, its proof, and the corresponding
 // commitment/index information.
 type CellProofBundle struct {
@@ -219,35 +217,45 @@ func (p *PartialDataColumn) cellsToSendForPeer(peerMeta *ethpb.PartialDataColumn
 // eagerPushBytes builds SSZ-encoded PartialDataColumnSidecar for the initial eager push.
 // When byBlockProposer is true, all available cells and proofs are included.
 // Otherwise, only the header is sent (no cells).
-func (p *PartialDataColumn) eagerPushBytes(includeCellAndProofs bool) ([]byte, error) {
-	outHeader := &ethpb.PartialDataColumnHeader{
-		KzgCommitments:               p.KzgCommitments,
-		SignedBlockHeader:            p.SignedBlockHeader,
-		KzgCommitmentsInclusionProof: p.KzgCommitmentsInclusionProof,
+func (p *PartialDataColumn) eagerPushBytes(remote peer.ID, includeCellAndProofs bool, includeHeader bool) (encoded []byte, err error) {
+	log.WithFields(logrus.Fields{
+		"peer":                 remote,
+		"index":                p.Index,
+		"includeHeader":        includeHeader,
+		"includeCellAndProofs": includeCellAndProofs,
+	}).Debug("Eager push")
+
+	if !includeHeader && (!includeCellAndProofs || p.Included.Count() == 0) {
+		return nil, nil
+	}
+	outMessage := &ethpb.PartialDataColumnSidecar{}
+
+	if includeHeader {
+		outMessage.Header = []*ethpb.PartialDataColumnHeader{{
+			KzgCommitments:               p.KzgCommitments,
+			SignedBlockHeader:            p.SignedBlockHeader,
+			KzgCommitmentsInclusionProof: p.KzgCommitmentsInclusionProof,
+		}}
 	}
 
 	if !includeCellAndProofs {
-		outMessage := &ethpb.PartialDataColumnSidecar{
-			CellsPresentBitmap: bitfield.NewBitlist(uint64(len(p.KzgCommitments))),
-			Header:             []*ethpb.PartialDataColumnHeader{outHeader},
-		}
-		return outMessage.MarshalSSZ()
+		outMessage.CellsPresentBitmap = bitfield.NewBitlist(uint64(len(p.KzgCommitments)))
+		encoded, err = outMessage.MarshalSSZ()
+		return encoded, err
 	}
 
 	nCells := p.Included.Count()
-	outMessage := &ethpb.PartialDataColumnSidecar{
-		CellsPresentBitmap: slices.Clone(p.Included),
-		PartialColumn:      make([][]byte, 0, nCells),
-		KzgProofs:          make([][]byte, 0, nCells),
-		Header:             []*ethpb.PartialDataColumnHeader{outHeader},
-	}
+	outMessage.CellsPresentBitmap = slices.Clone(p.Included)
+	outMessage.PartialColumn = make([][]byte, 0, nCells)
+	outMessage.KzgProofs = make([][]byte, 0, nCells)
 	for i := range p.Included.Len() {
 		if p.Included.BitAt(i) {
 			outMessage.PartialColumn = append(outMessage.PartialColumn, p.Column[i])
 			outMessage.KzgProofs = append(outMessage.KzgProofs, p.KzgProofs[i])
 		}
 	}
-	return outMessage.MarshalSSZ()
+	encoded, err = outMessage.MarshalSSZ()
+	return encoded, err
 }
 
 // PartsMetadata returns SSZ-encoded PartialDataColumnPartsMetadata.
@@ -272,31 +280,44 @@ func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata,
 	return base, nil
 }
 
-func (p *PartialDataColumn) PublishActions(peerStates map[peer.ID]PartialDataColumnPeerState, peerRequestsPartial func(peer.ID) bool) iter.Seq2[peer.ID, partialmessages.PublishAction] {
-	return func(yield func(peer.ID, partialmessages.PublishAction) bool) {
-		for peer, peerState := range peerStates {
-			nextState, action := p.forPeer(peer, peerRequestsPartial(peer), peerState)
-			if action.Err == nil {
-				// Only update state if there was no error.
-				peerStates[peer] = nextState
-			}
-			if !yield(peer, action) {
-				return
+func (p *PartialDataColumn) PublishActionsFn(headerSentCache map[peer.ID]bool) partialmessages.PublishActionsFn[PartialDataColumnPeerState] {
+	return func(peerStates map[peer.ID]PartialDataColumnPeerState, peerRequestsPartial func(peer.ID) bool) iter.Seq2[peer.ID, partialmessages.PublishAction] {
+		return func(yield func(peer.ID, partialmessages.PublishAction) bool) {
+			for peer, peerState := range peerStates {
+				nextState, action, includeHeader := p.forPeer(peer, peerRequestsPartial(peer), peerState, !headerSentCache[peer])
+				if action.Err == nil {
+					v := headerSentCache[peer]
+					headerSentCache[peer] = headerSentCache[peer] || includeHeader
+					if v != headerSentCache[peer] {
+						log.WithFields(logrus.Fields{
+							"peer":            peer,
+							"index":           p.Index,
+							"includeHeader":   includeHeader,
+							"headerSentCache": headerSentCache[peer],
+						}).Debug("Header sent cache updated")
+					}
+					// Only update state if there was no error.
+					peerStates[peer] = nextState
+				}
+				if !yield(peer, action) {
+					return
+				}
 			}
 		}
 	}
 }
 
 // forPeer returns the next peer state and the publish action for this peer
-func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerState PartialDataColumnPeerState) (PartialDataColumnPeerState, partialmessages.PublishAction) {
+func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerState PartialDataColumnPeerState, includeHeader bool) (PartialDataColumnPeerState, partialmessages.PublishAction,
+	bool) {
 	peerState = ClonePeerState(peerState)
 
 	// Eager push - we don't know what the peer has and message has been requested.
 	// Set RecvdState so subsequent calls skip the eager push path.
 	if requestedMessage && peerState.Recvd == nil {
-		encoded, err := p.eagerPushBytes(p.byBlockProposer)
+		encoded, err := p.eagerPushBytes(remote, p.byBlockProposer, includeHeader)
 		if err != nil {
-			return peerState, partialmessages.PublishAction{Err: err}
+			return peerState, partialmessages.PublishAction{Err: err}, false
 		}
 		myPartsMeta := p.newPartsMetadata()
 		if p.byBlockProposer {
@@ -316,12 +337,12 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 		peerState.Sent = myPartsMeta
 		encodedMeta, err := marshalPartsMetadata(myPartsMeta)
 		if err != nil {
-			return peerState, partialmessages.PublishAction{Err: err}
+			return peerState, partialmessages.PublishAction{Err: err}, false
 		}
 		return peerState, partialmessages.PublishAction{
 			EncodedPartialMessage: encoded,
 			EncodedPartsMetadata:  encodedMeta,
-		}
+		}, includeHeader
 	}
 
 	var cellsSent bitfield.Bitlist
@@ -334,12 +355,12 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 		var err error
 		encodedMsg, cellsSent, err = p.cellsToSendForPeer(recvdMeta)
 		if err != nil {
-			return peerState, partialmessages.PublishAction{Err: err}
+			return peerState, partialmessages.PublishAction{Err: err}, false
 		}
 		if cellsSent != nil && cellsSent.Count() != 0 {
 			newRecvd, err := MergeAvailableIntoPartsMetadata(recvdMeta, cellsSent)
 			if err != nil {
-				return peerState, partialmessages.PublishAction{Err: err}
+				return peerState, partialmessages.PublishAction{Err: err}, false
 			}
 			peerState.Recvd = newRecvd
 		}
@@ -356,7 +377,7 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 		} else {
 			contains, err := sentMeta.Available.Contains(myPartsMeta.Available)
 			if err != nil {
-				return peerState, partialmessages.PublishAction{Err: err}
+				return peerState, partialmessages.PublishAction{Err: err}, false
 			}
 			shouldSendPartsMetadata = !contains
 		}
@@ -366,14 +387,14 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 		var err error
 		partsMetadataToSend, err = marshalPartsMetadata(myPartsMeta)
 		if err != nil {
-			return peerState, partialmessages.PublishAction{Err: err}
+			return peerState, partialmessages.PublishAction{Err: err}, false
 		}
 		if sentMeta == nil {
 			peerState.Sent = myPartsMeta
 		} else {
 			sentMeta, err = MergeAvailableIntoPartsMetadata(sentMeta, myPartsMeta.Available)
 			if err != nil {
-				return peerState, partialmessages.PublishAction{Err: err}
+				return peerState, partialmessages.PublishAction{Err: err}, false
 			}
 			sentMeta.Requests = myPartsMeta.Requests
 			peerState.Sent = sentMeta
@@ -383,7 +404,7 @@ func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerS
 	return peerState, partialmessages.PublishAction{
 		EncodedPartialMessage: encodedMsg,
 		EncodedPartsMetadata:  partsMetadataToSend,
-	}
+	}, false
 }
 
 // CellsToVerifyFromPartialMessage returns cells from the partial message that need to be verified.
