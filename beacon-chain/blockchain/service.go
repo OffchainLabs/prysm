@@ -78,8 +78,9 @@ type config struct {
 	BeaconDB                db.HeadAccessDatabase
 	DepositCache            cache.DepositCache
 	PayloadIDCache          *cache.PayloadIDCache
-	TrackedValidatorsCache  *cache.TrackedValidatorsCache
-	AttestationCache        *cache.AttestationCache
+	TrackedValidatorsCache   *cache.TrackedValidatorsCache
+	ProposerPreferencesCache *cache.ProposerPreferencesCache
+	AttestationCache         *cache.AttestationCache
 	AttPool                 attestations.Pool
 	ExitPool                voluntaryexits.PoolManager
 	SlashingPool            slashings.PoolManager
