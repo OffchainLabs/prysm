@@ -1,6 +1,7 @@
 package lookup
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -450,24 +451,24 @@ func TestStateBySlot_AfterHeadSlot(t *testing.T) {
 func TestStateBySlot_EarlierThanEarliestAvailableSlot(t *testing.T) {
 	ctx := t.Context()
 	db := testDB.SetupDB(t)
+	target := primitives.Slot(100)
 
 	genesisRoot := bytesutil.ToBytes32([]byte("genesis"))
 	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisRoot))
 
 	b := util.NewBeaconBlock()
 	b.Block.ParentRoot = genesisRoot[:]
-	b.Block.Slot = 64
+	b.Block.Slot = target + 2
 	util.SaveBlock(t, ctx, db, b)
 
-	target := primitives.Slot(10)
-	currentSlot := target + 1
+	currentSlot := target + 3
 	p := BeaconDbStater{
 		BeaconDB:           db,
 		GenesisTimeFetcher: &chainMock.ChainService{Slot: &currentSlot},
 	}
 
 	_, err := p.StateBySlot(ctx, target)
-	require.ErrorContains(t, "earliest available slot is 64", err)
+	require.ErrorContains(t, fmt.Sprintf("earliest available slot is %d", b.Block.Slot), err)
 	var stateNotFoundErr *StateNotFoundError
 	require.Equal(t, true, errors.As(err, &stateNotFoundErr))
 }
@@ -475,19 +476,14 @@ func TestStateBySlot_EarlierThanEarliestAvailableSlot(t *testing.T) {
 func TestStateBySlot_BeforeBackfillLowSlot(t *testing.T) {
 	ctx := t.Context()
 	db := testDB.SetupDB(t)
+	target := primitives.Slot(100)
 
 	genesisRoot := bytesutil.ToBytes32([]byte("genesis"))
 	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisRoot))
 
-	b := util.NewBeaconBlock()
-	b.Block.ParentRoot = genesisRoot[:]
-	b.Block.Slot = 64
-	util.SaveBlock(t, ctx, db, b)
-
-	lowSlot := primitives.Slot(150)
+	lowSlot := target + 1
 	require.NoError(t, db.SaveBackfillStatus(ctx, &dbval.BackfillStatus{LowSlot: uint64(lowSlot)}))
 
-	target := primitives.Slot(100)
 	currentSlot := lowSlot + 1
 	p := BeaconDbStater{
 		BeaconDB:           db,
@@ -495,17 +491,17 @@ func TestStateBySlot_BeforeBackfillLowSlot(t *testing.T) {
 	}
 
 	_, err := p.StateBySlot(ctx, target)
-	require.ErrorContains(t, "backfill starts at slot 150", err)
+	require.ErrorContains(t, fmt.Sprintf("backfill starts at slot %d", lowSlot), err)
 	var stateNotFoundErr *StateNotFoundError
 	require.Equal(t, true, errors.As(err, &stateNotFoundErr))
 }
 
 func TestStateBySlot_ReplayNoDataForSlotReturnsNotFound(t *testing.T) {
-	target := primitives.Slot(101)
+	target := primitives.Slot(100)
 	currentSlot := target + 1
 	mock := &chainMock.ChainService{Slot: &currentSlot}
 	mockReplayer := mockstategen.NewReplayerBuilder()
-	mockReplayer.SetMockSlotError(target, errors.Wrap(stategen.ErrNoDataForSlot, "slot 101 not in db due to checkpoint sync"))
+	mockReplayer.SetMockSlotError(target, errors.Wrap(stategen.ErrNoDataForSlot, fmt.Sprintf("slot %d not in db due to checkpoint sync", target)))
 
 	p := BeaconDbStater{
 		GenesisTimeFetcher: mock,

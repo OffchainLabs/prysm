@@ -296,7 +296,7 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 		if err != nil && !errors.Is(err, db.ErrNotFound) {
 			return nil, errors.Wrap(err, "could not determine state availability")
 		}
-		if err == nil && target < earliestSlot {
+		if err == nil && target > 0 && target < earliestSlot {
 			return nil, &StateNotFoundError{
 				message: fmt.Sprintf("requested slot %d is unavailable; earliest available slot is %d", target, earliestSlot),
 			}
