@@ -288,6 +288,13 @@ func (c *grpcValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Contex
 	return c.getClient().SubmitSignedExecutionPayloadBid(ctx, in)
 }
 
+func (c *grpcValidatorClient) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, builderIndex primitives.BuilderIndex) (*ethpb.ExecutionPayloadBid, error) {
+	return c.getClient().GetExecutionPayloadBid(ctx, &ethpb.ExecutionPayloadBidRequest{
+		Slot:         slot,
+		BuilderIndex: builderIndex,
+	})
+}
+
 func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*empty.Empty, error) {
 	return c.getClient().SubscribeCommitteeSubnets(ctx, in)
 }

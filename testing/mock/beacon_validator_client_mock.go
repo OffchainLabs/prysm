@@ -723,6 +723,26 @@ func (mr *MockBeaconNodeValidatorClientMockRecorder) SubmitSignedProposerPrefere
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedProposerPreferences", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).SubmitSignedProposerPreferences), varargs...)
 }
 
+// GetExecutionPayloadBid mocks base method.
+func (m *MockBeaconNodeValidatorClient) GetExecutionPayloadBid(arg0 context.Context, arg1 *eth.ExecutionPayloadBidRequest, arg2 ...grpc.CallOption) (*eth.ExecutionPayloadBid, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetExecutionPayloadBid", varargs...)
+	ret0, _ := ret[0].(*eth.ExecutionPayloadBid)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetExecutionPayloadBid indicates an expected call of GetExecutionPayloadBid.
+func (mr *MockBeaconNodeValidatorClientMockRecorder) GetExecutionPayloadBid(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionPayloadBid", reflect.TypeOf((*MockBeaconNodeValidatorClient)(nil).GetExecutionPayloadBid), varargs...)
+}
+
 // SubmitSignedExecutionPayloadBid mocks base method.
 func (m *MockBeaconNodeValidatorClient) SubmitSignedExecutionPayloadBid(arg0 context.Context, arg1 *eth.SignedExecutionPayloadBid, arg2 ...grpc.CallOption) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()

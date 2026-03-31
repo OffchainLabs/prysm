@@ -550,6 +550,21 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitSignedProposerPrefere
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedProposerPreferences", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitSignedProposerPreferences), arg0, arg1)
 }
 
+// GetExecutionPayloadBid mocks base method.
+func (m *MockBeaconNodeValidatorServer) GetExecutionPayloadBid(arg0 context.Context, arg1 *eth.ExecutionPayloadBidRequest) (*eth.ExecutionPayloadBid, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetExecutionPayloadBid", arg0, arg1)
+	ret0, _ := ret[0].(*eth.ExecutionPayloadBid)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetExecutionPayloadBid indicates an expected call of GetExecutionPayloadBid.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) GetExecutionPayloadBid(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionPayloadBid", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetExecutionPayloadBid), arg0, arg1)
+}
+
 // SubmitSignedExecutionPayloadBid mocks base method.
 func (m *MockBeaconNodeValidatorServer) SubmitSignedExecutionPayloadBid(arg0 context.Context, arg1 *eth.SignedExecutionPayloadBid) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()

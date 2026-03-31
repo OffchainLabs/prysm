@@ -32,6 +32,7 @@ go_library(
         "proposer_payload_attestation.go",
         "proposer_payload_envelope.go",
         "proposer_preferences.go",
+        "proposer_builder_bid.go",
         "proposer_submit_bid.go",
         "proposer_slashings.go",
         "proposer_sync_aggregate.go",

@@ -549,6 +549,16 @@ service BeaconNodeValidator {
       body : "*"
     };
   }
+
+  // GetExecutionPayloadBid produces an unsigned execution payload bid from the
+  // local execution engine for a validator acting as a GLOAS builder.
+  rpc GetExecutionPayloadBid(ExecutionPayloadBidRequest)
+      returns (ExecutionPayloadBid) {
+    option deprecated = true;
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/execution_payload_bid/{slot}/{builder_index}"
+    };
+  }
 }
 
 // SyncMessageBlockRootResponse for beacon chain validator to retrieve and
@@ -1476,6 +1486,24 @@ message ExecutionPayloadEnvelopeResponse {
 
   // The execution payload envelope for the requested slot and builder.
   ExecutionPayloadEnvelope envelope = 1;
+}
+
+// ExecutionPayloadBidRequest is the request for producing an unsigned
+// execution payload bid from the local execution engine.
+message ExecutionPayloadBidRequest {
+  option deprecated = true;
+
+  // The slot for which to produce the execution payload bid.
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+
+  // The builder index to use in the bid.
+  uint64 builder_index = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.BuilderIndex"
+  ];
 }
 
 // PayloadAttestationDataRequest is the request for retrieving payload

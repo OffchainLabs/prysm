@@ -402,6 +402,21 @@ func (mr *MockValidatorClientMockRecorder) SubmitSignedProposerPreferences(ctx, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedProposerPreferences", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedProposerPreferences), ctx, in)
 }
 
+// GetExecutionPayloadBid mocks base method.
+func (m *MockValidatorClient) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, builderIndex primitives.BuilderIndex) (*eth.ExecutionPayloadBid, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetExecutionPayloadBid", ctx, slot, builderIndex)
+	ret0, _ := ret[0].(*eth.ExecutionPayloadBid)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetExecutionPayloadBid indicates an expected call of GetExecutionPayloadBid.
+func (mr *MockValidatorClientMockRecorder) GetExecutionPayloadBid(ctx, slot, builderIndex any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionPayloadBid", reflect.TypeOf((*MockValidatorClient)(nil).GetExecutionPayloadBid), ctx, slot, builderIndex)
+}
+
 // SubmitSignedExecutionPayloadBid mocks base method.
 func (m *MockValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Context, in *eth.SignedExecutionPayloadBid) (*empty.Empty, error) {
 	m.ctrl.T.Helper()

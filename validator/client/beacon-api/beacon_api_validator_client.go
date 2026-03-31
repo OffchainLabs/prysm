@@ -269,6 +269,11 @@ func (c *beaconApiValidatorClient) SubmitSignedExecutionPayloadBid(_ context.Con
 	return new(empty.Empty), nil
 }
 
+// TODO(gloas): Wire up actual REST call to GET /eth/v3/validator/execution_payload_bid/{slot}/{builder_index}
+func (c *beaconApiValidatorClient) GetExecutionPayloadBid(_ context.Context, _ primitives.Slot, _ primitives.BuilderIndex) (*ethpb.ExecutionPayloadBid, error) {
+	return nil, errors.New("GetExecutionPayloadBid not yet implemented for beacon API client")
+}
+
 func (c *beaconApiValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, duties []*ethpb.ValidatorDuty) (*empty.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.SubscribeCommitteeSubnets")
 	defer span.End()
