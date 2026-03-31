@@ -183,7 +183,7 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) (*FieldTrie, [
 	defer f.mu.Unlock()
 
 	// If no changes, return existing root (read-only).
-	if !f.empty() && len(indices) == 0 {
+	if !f.empty() && indices != nil && len(indices) == 0 {
 		root, err := f.trieRoot()
 		return f, root, err
 	}
