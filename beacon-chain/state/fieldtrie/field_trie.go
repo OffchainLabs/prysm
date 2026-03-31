@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -49,11 +48,15 @@ type (
 	//     sparse diffs (overrides) against an immutable base trie. Root computation
 	//     walks the base read-only, substituting override values at modified positions.
 	FieldTrie struct {
-		mu      sync.RWMutex
-		ref     *stateutil.Reference // count of holders (BeaconState copies) pointing to this FieldTrie
-		dataRef *stateutil.Reference // count of overlay bases sharing this trie's nodes buffer
-		cleanup runtime.Cleanup
-		metrics *metricsRef
+		mu sync.RWMutex
+
+		ref *stateutil.Reference // count of holders (BeaconState copies) pointing to this FieldTrie
+
+		dataRef        *stateutil.Reference // count of overlay bases sharing this trie's nodes buffer
+		dataRefCleanup runtime.Cleanup
+
+		metrics        *metricsRef
+		metricsCleanup runtime.Cleanup
 
 		// Owned mode fields:
 		nodes   [][32]byte // flat buffer with all trie levels packed contiguously
@@ -126,10 +129,8 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 
 	if !fieldTrie.empty() {
 		fieldTrie.updateMetrics()
-		fieldTrie.cleanup = runtime.AddCleanup(fieldTrie, cleanupMetrics, fieldTrie.metrics)
+		fieldTrie.metricsCleanup = runtime.AddCleanup(fieldTrie, cleanupMetrics, fieldTrie.metrics)
 	}
-
-	logBalancesTrieCreation(field, "NewFieldTrie")
 
 	return fieldTrie, nil
 }
@@ -175,7 +176,9 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 // in place of the one on which this method was called, even if an error
 // is returned.
 func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) (*FieldTrie, [32]byte, error) {
-	indices = slice.SetUint64(indices)
+	if indices != nil {
+		indices = slice.SetUint64(indices)
+	}
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -260,41 +263,24 @@ func (f *FieldTrie) fork() *FieldTrie {
 		return forked
 	}
 
+	// Owned mode: use source directly as immutable base for the fork.
 	if f.base == nil {
-		// Owned mode: wrap source's nodes as immutable base for the fork.
-		// The base shares the source's nodes slice, so we increment the
-		// source's ref to prevent in-place mutation while the base exists.
-		// A GC cleanup on the base decrements the source's ref when the
-		// base (and all its overlays) are collected.
-		depth := f.depth()
-		base := &FieldTrie{
-			ref:        stateutil.NewRef(1),
-			dataRef:    stateutil.NewRef(0),
-			nodes:      f.nodes,
-			offsets:    f.offsets,
-			field:      f.field,
-			dataType:   f.dataType,
-			length:     f.length,
-			numOfElems: f.numOfElems,
-		}
-
 		f.dataRef.AddRef()
-		base.updateMetrics()
-		base.cleanup = runtime.AddCleanup(base, cleanupMetrics, base.metrics)
-		runtime.AddCleanup(base, cleanupRef, f.dataRef)
+		forked.base = f
 
-		logBalancesTrieCreation(f.field, "fork (base from owned)")
+		forked.dataRefCleanup = runtime.AddCleanup(forked, cleanupRef, f.dataRef)
+		forked.overrides = make([]map[uint64][32]byte, f.depth()+1)
 
-		forked.base = base
-		forked.overrides = make([]map[uint64][32]byte, depth+1)
 		forked.updateMetrics()
-		forked.cleanup = runtime.AddCleanup(forked, cleanupMetrics, forked.metrics)
+		forked.metricsCleanup = runtime.AddCleanup(forked, cleanupMetrics, forked.metrics)
 
 		return forked
 	}
 
-	// Overlay mode: deep-copy overrides, share the base.
+	// Overlay mode: share the base and deep-copy overrides.
 	forked.base = f.base
+	f.base.dataRef.AddRef()
+	forked.dataRefCleanup = runtime.AddCleanup(forked, cleanupRef, f.base.dataRef)
 
 	overrides := make([]map[uint64][32]byte, len(f.overrides))
 	for i, valueByIdx := range f.overrides {
@@ -308,18 +294,18 @@ func (f *FieldTrie) fork() *FieldTrie {
 
 	forked.overrides = overrides
 	forked.updateMetrics()
-	forked.cleanup = runtime.AddCleanup(forked, cleanupMetrics, forked.metrics)
+	forked.metricsCleanup = runtime.AddCleanup(forked, cleanupMetrics, forked.metrics)
 
 	return forked
 }
 
 // recomputeInPlace performs the trie recomputation on the current trie..
 func (f *FieldTrie) recomputeInPlace(indices []uint64, elements any) ([32]byte, error) {
-	// Empty trie: rebuild from scratch.
-	if f.empty() {
-		root, err := f.rebuild(elements)
+	// nil indices or empty trie: rebuild from scratch.
+	if indices == nil || f.empty() {
+		root, err := f.rebuildFromScratch(elements)
 		if err != nil {
-			return [32]byte{}, fmt.Errorf("rebuild empty trie: %w", err)
+			return [32]byte{}, fmt.Errorf("rebuild from scratch: %w", err)
 		}
 
 		return root, nil
@@ -328,12 +314,11 @@ func (f *FieldTrie) recomputeInPlace(indices []uint64, elements any) ([32]byte, 
 	// Overlay with too many dirty leaves: rebuild from scratch and
 	// cancel the pending overlay metric decrement.
 	if f.base != nil && len(indices) > overlayPromotionThreshold {
-		f.stopCleanup()
 		FieldTriePromotionCounter.WithLabelValues(f.field.String()).Inc()
 
-		root, err := f.rebuild(elements)
+		root, err := f.rebuildFromScratch(elements)
 		if err != nil {
-			return [32]byte{}, fmt.Errorf("rebuild overlay trie: %w", err)
+			return [32]byte{}, fmt.Errorf("rebuild overlay from scratch: %w", err)
 		}
 
 		return root, nil
@@ -377,12 +362,13 @@ func (f *FieldTrie) recomputeInPlace(indices []uint64, elements any) ([32]byte, 
 }
 
 // rebuild replaces the trie contents by building a fresh trie from elements.
-func (f *FieldTrie) rebuild(elements any) ([32]byte, error) {
+func (f *FieldTrie) rebuildFromScratch(elements any) ([32]byte, error) {
 	nodes, offsets, err := buildTrie(f.field, elements, f.length)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("build trie: %w", err)
 	}
 
+	f.releaseBase()
 	f.nodes = nodes
 	f.offsets = offsets
 	f.base = nil
@@ -390,9 +376,6 @@ func (f *FieldTrie) rebuild(elements any) ([32]byte, error) {
 	f.numOfElems = elemCount(elements)
 
 	f.updateMetrics()
-	f.cleanup = runtime.AddCleanup(f, cleanupMetrics, f.metrics)
-
-	logBalancesTrieCreation(f.field, "rebuild")
 
 	root, err := f.trieRoot()
 	if err != nil {
@@ -402,45 +385,19 @@ func (f *FieldTrie) rebuild(elements any) ([32]byte, error) {
 	return root, nil
 }
 
-func logBalancesTrieCreation(field types.FieldIndex, source string) {
-	if field != types.Balances {
+// releaseBase eagerly decrements the base's dataRef and cancels the
+// GC cleanup that would do the same, preventing a double-decrement.
+func (f *FieldTrie) releaseBase() {
+	if f.base == nil {
 		return
 	}
-	buf := make([]byte, 4096)
-	n := runtime.Stack(buf, false)
-	log.WithField("source", source).Infof("Balances FieldTrie created\n%s", buf[:n])
+	f.dataRefCleanup.Stop()
+	f.base.dataRef.MinusRef()
 }
 
 // cleanupRef is a GC cleanup callback that decrements a reference count.
 func cleanupRef(ref *stateutil.Reference) {
 	ref.MinusRef()
-}
-
-// stopCleanup cancels the pending GC cleanup and resets entry metrics
-// so that the next updateMetrics call computes correct deltas.
-// The instance count gauge is left unchanged — updateMetrics handles
-// mode transitions.
-func (f *FieldTrie) stopCleanup() {
-	f.cleanup.Stop()
-
-	if f.metrics != nil {
-		label := f.field.String()
-		fieldTrieEntriesGauge.WithLabelValues(label, "nodes").Sub(float64(f.metrics.nodes))
-		fieldTrieEntriesGauge.WithLabelValues(label, "overrides").Sub(float64(f.metrics.overrides))
-		fieldTrieLeafOverridesGauge.WithLabelValues(label).Sub(float64(f.metrics.leafOverrides))
-
-		mode := "owned"
-		if f.metrics.overlay {
-			mode = "overlay"
-		}
-		fieldTrieCountGauge.WithLabelValues(label, mode).Dec()
-
-		// Zero so subsequent updateMetrics computes correct deltas.
-		f.metrics.nodes = 0
-		f.metrics.overrides = 0
-		f.metrics.leafOverrides = 0
-		f.metrics.overlay = false
-	}
 }
 
 // Length return the length of the whole field trie.
@@ -578,13 +535,12 @@ func (f *FieldTrie) promoteOverlay(elements any, indices []uint64) ([32]byte, er
 	hashUpFromLeaves(f.nodes, f.offsets)
 
 	// Release the base.
+	f.releaseBase()
 	f.base = nil
 	f.overrides = nil
-	f.stopCleanup()
 
 	FieldTriePromotionCounter.WithLabelValues(f.field.String()).Inc()
 	f.updateMetrics()
-	f.cleanup = runtime.AddCleanup(f, cleanupMetrics, f.metrics)
 
 	// Return root with appropriate mixin.
 	rootWithMixin, err := f.rootWithMixin(f.nodes[f.offsets[depth]])
