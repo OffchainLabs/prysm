@@ -2681,7 +2681,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
-		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), true)
+		_, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		require.ErrorContains(t, "engine_getBlobsV2 is not supported", err)
 	})
 
@@ -2692,7 +2692,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), true)
+		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 	})
@@ -2705,7 +2705,7 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock), true)
+		dataColumns, _, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		require.NoError(t, err)
 		require.Equal(t, 128, len(dataColumns))
 	})

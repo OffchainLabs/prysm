@@ -240,7 +240,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			// Try to reconstruct data column constructedSidecars from the execution client.
 			partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
 			isPartialEnabled := partialBroadcaster != nil
-			constructedSidecars, partialColumns, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source, isPartialEnabled)
+			constructedSidecars, partialColumns, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
 			if err != nil {
 				return nil, errors.Wrap(err, "reconstruct data column sidecars")
 			}

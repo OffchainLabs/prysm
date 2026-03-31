@@ -143,7 +143,7 @@ type Reconstructor interface {
 		ctx context.Context, blockHashes [][32]byte,
 	) (map[[32]byte]*pb.ExecutionPayloadDeneb, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
-	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator, isPartialEnabled bool) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error)
+	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error)
 	ReconstructExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, error)
 }
 
@@ -933,7 +933,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	return verifiedBlobs, nil
 }
 
-func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator, isPartialEnabled bool) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
+func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
 	root := populator.Root()
 
 	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
@@ -948,7 +948,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	log.Debug("Received cells and proofs from execution client", "included", cp.Included, "cells count", len(cp.CellsPerBlob), "err", err)
 
 	var partialColumns []blocks.PartialDataColumn
-	if isPartialEnabled {
+	if s.partialColumnsSupported {
 		partialColumns, err = peerdas.PartialColumns(cp.Included, cp.CellsPerBlob, cp.ProofsPerBlob, populator)
 		if err != nil {
 			return nil, nil, wrapWithBlockRoot(err, root, "construct partial columns")
@@ -988,7 +988,7 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 
 	// Fetch all blobsAndCellsProofs from the execution client.
 	var err error
-	useV3 := s.capabilityCache.has(GetBlobsV3)
+	useV3 := s.useV3()
 	if useV3 {
 		// v3 can return a partial response. V2 is all or nothing
 		blobAndProofs, err = s.GetBlobsV3(ctx, versionedHashes)
@@ -1014,6 +1014,10 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	}
 
 	return result, nil
+}
+
+func (s *Service) useV3() bool {
+	return s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported
 }
 
 // upgradeSidecarsToVerifiedSidecars upgrades a list of data column sidecars into verified data column sidecars.
