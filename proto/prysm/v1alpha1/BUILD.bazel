@@ -308,7 +308,7 @@ ssz_gen_marshal(
 
 ssz_gen_marshal(
     name = "ssz_generated_gloas",
-    out = "gloas.generated.ssz.go",
+    out = "gloas.ssz.go",
     exclude_objs = ssz_phase0_objs + ssz_altair_objs + ssz_bellatrix_objs + ssz_capella_objs + ssz_deneb_objs + ssz_electra_objs + ssz_fulu_objs,
     go_proto = ":go_proto",
     includes = [
@@ -391,7 +391,7 @@ go_library(
         ":ssz_generated_deneb",  # keep
         ":ssz_generated_electra",  # keep
         ":ssz_generated_fulu",  # keep
-        "gloas.ssz.go",  # keep checked-in source until fastssz supports repeated cast_type uint64 fields
+        ":ssz_generated_gloas",  # keep
         ":ssz_generated_non_core",  # keep
         ":ssz_generated_phase0",  # keep
     ],

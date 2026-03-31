@@ -246,10 +246,10 @@ func newPhase0TestState(t *testing.T, vals []*eth.Validator, slot primitives.Slo
 
 func deterministicPTCWindow(validatorCount int) []*eth.PTCs {
 	window := make([]*eth.PTCs, 3*params.BeaconConfig().SlotsPerEpoch)
-	indices := make([]primitives.ValidatorIndex, fieldparams.PTCSize)
+	indices := make([]uint64, fieldparams.PTCSize)
 	if validatorCount > 0 {
 		for i := range indices {
-			indices[i] = primitives.ValidatorIndex(i % validatorCount)
+			indices[i] = uint64(i % validatorCount)
 		}
 	}
 	for i := range window {

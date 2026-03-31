@@ -1,7 +1,6 @@
 package eth
 
 import (
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
@@ -251,7 +250,7 @@ func CopyPTCs(slot *PTCs) *PTCs {
 	if slot == nil {
 		return nil
 	}
-	indices := make([]primitives.ValidatorIndex, len(slot.ValidatorIndices))
+	indices := make([]uint64, len(slot.ValidatorIndices))
 	copy(indices, slot.ValidatorIndices)
 	return &PTCs{ValidatorIndices: indices}
 }

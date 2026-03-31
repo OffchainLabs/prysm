@@ -162,17 +162,17 @@ func computePTC(ctx context.Context, st state.ReadOnlyBeaconState, slot primitiv
 
 func ptcSlotFromValidatorIndices(indices []primitives.ValidatorIndex) *eth.PTCs {
 	result := &eth.PTCs{
-		ValidatorIndices: make([]primitives.ValidatorIndex, fieldparams.PTCSize),
+		ValidatorIndices: make([]uint64, fieldparams.PTCSize),
 	}
 	for i, index := range indices {
-		result.ValidatorIndices[i] = index
+		result.ValidatorIndices[i] = uint64(index)
 	}
 	return result
 }
 
 func emptyPTCs() *eth.PTCs {
 	return &eth.PTCs{
-		ValidatorIndices: make([]primitives.ValidatorIndex, fieldparams.PTCSize),
+		ValidatorIndices: make([]uint64, fieldparams.PTCSize),
 	}
 }
 
