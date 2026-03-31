@@ -251,8 +251,8 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if cfg.EnableProposerPreprocessing {
 		logEnabled(enableProposerPreprocessing)
 	}
-	if ctx.IsSet(prepareAllPayloads.Name) {
-		logEnabled(prepareAllPayloads)
+	if ctx.IsSet(builderFlag.Name) || ctx.IsSet(prepareAllPayloads.Name) {
+		logEnabled(builderFlag)
 		cfg.PrepareAllPayloads = true
 	}
 	if ctx.IsSet(disableResourceManager.Name) {
@@ -392,6 +392,7 @@ func complainOnDeprecatedFlags(ctx *cli.Context) {
 
 var upcomingDeprecationExtra = map[string]string{
 	enableHistoricalSpaceRepresentation.Name: "The node needs to be resynced after flag removal.",
+	prepareAllPayloads.Name:                  "Use --builder instead.",
 }
 
 func warnDeprecationUpcoming(ctx *cli.Context) {

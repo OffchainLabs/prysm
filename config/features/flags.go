@@ -148,7 +148,11 @@ var (
 	}
 	prepareAllPayloads = &cli.BoolFlag{
 		Name:  "prepare-all-payloads",
-		Usage: "Informs the engine to prepare all local payloads. Useful for relayers and builders.",
+		Usage: "Deprecated: Use --builder instead. Informs the engine to prepare all local payloads.",
+	}
+	builderFlag = &cli.BoolFlag{
+		Name:  "builder",
+		Usage: "Informs the engine to prepare all local payloads. Useful for builders.",
 	}
 	EnableLightClient = &cli.BoolFlag{
 		Name:  "enable-light-client",
@@ -269,7 +273,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableFullSSZDataLogging,
 	disableVerboseSigVerification,
 	enableProposerPreprocessing,
-	prepareAllPayloads,
+	builderFlag,
 	aggregateFirstInterval,
 	aggregateSecondInterval,
 	aggregateThirdInterval,

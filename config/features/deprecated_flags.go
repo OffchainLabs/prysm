@@ -21,6 +21,7 @@ var deprecatedFlags = []cli.Flag{}
 
 var upcomingDeprecation = []cli.Flag{
 	enableHistoricalSpaceRepresentation,
+	prepareAllPayloads,
 }
 
 // deprecatedBeaconFlags contains flags that are still used by other components
