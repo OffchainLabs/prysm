@@ -548,7 +548,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			require.NoError(t, err)
 			trieCopy, recomputedRoot, err := trieCopy.RecomputeTrie(secondIdx, mixesB)
 			require.NoError(t, err)
-			require.Equal(t, false, trieCopy.IsOverlay(), "trie must have been promoted to owned mode")
+			require.Equal(t, true, trieCopy.base == nil, "trie must have been promoted to owned mode")
 
 			trieB, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesB, length)
 			require.NoError(t, err)
@@ -604,7 +604,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			valsB[secondIdx[0]].ExitEpoch = 999
 			trieCopy, recomputedRoot, err := trieCopy.RecomputeTrie(secondIdx, valsB)
 			require.NoError(t, err)
-			require.Equal(t, false, trieCopy.IsOverlay(), "trie must have been promoted to owned mode")
+			require.Equal(t, true, trieCopy.base == nil, "trie must have been promoted to owned mode")
 
 			trieB, err := NewFieldTrie(types.Validators, types.CompositeArray, valsB, length)
 			require.NoError(t, err)
@@ -650,7 +650,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			balsB[secondIdx[0]] = 999
 			trieCopy, recomputedRoot, err := trieCopy.RecomputeTrie(secondIdx, balsB)
 			require.NoError(t, err)
-			require.Equal(t, false, trieCopy.IsOverlay(), "trie must have been promoted to owned mode")
+			require.Equal(t, true, trieCopy.base == nil, "trie must have been promoted to owned mode")
 
 			trieB, err := NewFieldTrie(types.Balances, types.CompressedArray, balsB, length)
 			require.NoError(t, err)
@@ -678,7 +678,7 @@ func TestFieldTrie_CopyTrieSharesRef(t *testing.T) {
 
 	trieA, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesA, length)
 	require.NoError(t, err)
-	require.Equal(t, false, trieA.IsOverlay())
+	require.Equal(t, true, trieA.base == nil)
 
 	trieB := trieA.CopyTrie()
 	require.Equal(t, true, trieA != trieB, "CopyTrie must return a new pointer")

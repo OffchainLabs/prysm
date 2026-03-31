@@ -411,17 +411,6 @@ func (f *FieldTrie) empty() bool {
 	return f.nodes == nil && f.base == nil
 }
 
-// IsOverlay returns true if this trie operates in overlay mode,
-// storing sparse diffs against an immutable base.
-func (f *FieldTrie) IsOverlay() bool {
-	if f == nil {
-		return false
-	}
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	return f.base != nil
-}
-
 // InsertFlatLayers manually inserts flat trie data. This method
 // bypasses the normal method of field computation, it is only
 // meant to be used in tests.
