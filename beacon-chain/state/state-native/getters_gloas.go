@@ -3,6 +3,7 @@ package state_native
 import (
 	"bytes"
 	"fmt"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -740,7 +741,7 @@ func (b *BeaconState) PayloadCommittee(slot primitives.Slot) ([]primitives.Valid
 		return nil, fmt.Errorf("ptc window slot %d is nil", offset)
 	}
 
-	return validatorIndicesFromUint64(ptcSlot.ValidatorIndices), nil
+	return slices.Clone(ptcSlot.ValidatorIndices), nil
 }
 
 func ptcWindowOffset(stateSlot, slot primitives.Slot) (primitives.Slot, error) {
@@ -761,12 +762,4 @@ func ptcWindowOffset(stateSlot, slot primitives.Slot) (primitives.Slot, error) {
 
 	offset := slotsPerEpoch.Mul(uint64(epoch-stateEpoch+1)) + (slot % slotsPerEpoch)
 	return offset, nil
-}
-
-func validatorIndicesFromUint64(indices []uint64) []primitives.ValidatorIndex {
-	result := make([]primitives.ValidatorIndex, len(indices))
-	for i, index := range indices {
-		result[i] = primitives.ValidatorIndex(index)
-	}
-	return result
 }

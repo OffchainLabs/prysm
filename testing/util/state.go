@@ -12,6 +12,7 @@ import (
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -529,7 +530,7 @@ func NewBeaconStateGloas(options ...func(state *ethpb.BeaconStateGloas) error) (
 	ptcWindow := make([]*ethpb.PTCs, 3*params.BeaconConfig().SlotsPerEpoch)
 	for i := range ptcWindow {
 		ptcWindow[i] = &ethpb.PTCs{
-			ValidatorIndices: make([]uint64, fieldparams.PTCSize),
+			ValidatorIndices: make([]primitives.ValidatorIndex, fieldparams.PTCSize),
 		}
 	}
 

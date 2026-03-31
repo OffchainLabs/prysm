@@ -194,7 +194,7 @@ func initializePTCWindow(ctx context.Context, st state.ReadOnlyBeaconState) ([]*
 	// Previous epoch has no cached data at fork time — fill with empty slots.
 	for range slotsPerEpoch {
 		window = append(window, &ethpb.PTCs{
-			ValidatorIndices: make([]uint64, fieldparams.PTCSize),
+			ValidatorIndices: make([]primitives.ValidatorIndex, fieldparams.PTCSize),
 		})
 	}
 

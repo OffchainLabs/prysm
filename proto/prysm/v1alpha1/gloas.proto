@@ -387,7 +387,10 @@ message BeaconStateGloas {
 // Vector[ValidatorIndex, PTC_SIZE]
 message PTCs {
   repeated uint64 validator_indices = 1
-      [ (ethereum.eth.ext.ssz_size) = "ptc_committee_indices.size" ];
+      [ (ethereum.eth.ext.ssz_size) = "ptc_committee_indices.size",
+        (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v7/consensus-types/"
+            "primitives.ValidatorIndex" ];
 }
 
 // BuilderPendingPayment represents a pending payment to a builder.

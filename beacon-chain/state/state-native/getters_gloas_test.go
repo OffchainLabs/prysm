@@ -919,8 +919,8 @@ func testPTCWindow(t *testing.T) []*ethpb.PTCs {
 	size := int(expectedPTCWindowSize())
 	window := make([]*ethpb.PTCs, size)
 	for i := range window {
-		indices := make([]uint64, fieldparams.PTCSize)
-		indices[0] = uint64(i) + 1 // non-zero marker
+		indices := make([]primitives.ValidatorIndex, fieldparams.PTCSize)
+		indices[0] = primitives.ValidatorIndex(i) + 1 // non-zero marker
 		window[i] = &ethpb.PTCs{ValidatorIndices: indices}
 	}
 	return window
@@ -1052,13 +1052,13 @@ func TestSetPTCWindow(t *testing.T) {
 
 		got, err := st.PTCWindow()
 		require.NoError(t, err)
-		require.Equal(t, uint64(999), got[0].ValidatorIndices[0])
+		require.Equal(t, primitives.ValidatorIndex(999), got[0].ValidatorIndices[0])
 
 		// Verify it's a copy — mutating the input doesn't affect state.
 		newWindow[0].ValidatorIndices[0] = 0
 		got2, err := st.PTCWindow()
 		require.NoError(t, err)
-		require.Equal(t, uint64(999), got2[0].ValidatorIndices[0])
+		require.Equal(t, primitives.ValidatorIndex(999), got2[0].ValidatorIndices[0])
 	})
 }
 
@@ -1091,8 +1091,8 @@ func TestRotatePTCWindow(t *testing.T) {
 		// Build new epoch slots with distinct markers.
 		newEpoch := make([]*ethpb.PTCs, slotsPerEpoch)
 		for i := range newEpoch {
-			indices := make([]uint64, fieldparams.PTCSize)
-			indices[0] = uint64(1000 + i)
+			indices := make([]primitives.ValidatorIndex, fieldparams.PTCSize)
+			indices[0] = primitives.ValidatorIndex(1000 + i)
 			newEpoch[i] = &ethpb.PTCs{ValidatorIndices: indices}
 		}
 		require.NoError(t, st.RotatePTCWindow(newEpoch))
@@ -1110,7 +1110,7 @@ func TestRotatePTCWindow(t *testing.T) {
 		// Last epoch should be the new epoch slots.
 		lastStart := 2 * slotsPerEpoch
 		for i := range slotsPerEpoch {
-			require.Equal(t, uint64(1000+i), got[lastStart+i].ValidatorIndices[0],
+			require.Equal(t, primitives.ValidatorIndex(1000+i), got[lastStart+i].ValidatorIndices[0],
 				fmt.Sprintf("mismatch at new slot %d", i))
 		}
 	})
