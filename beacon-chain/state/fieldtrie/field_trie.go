@@ -32,21 +32,12 @@ var (
 // the total number of leaves.
 // At ~10K dirty leaves and depth ~40, the overlay's map-heavy random
 // access starts to exceed the cost of a flat sequential rebuild over
-// ~1M leaves. This threshold catches bulk mutations (e.g. epoch
-// boundaries dirtying all ~1.1M validators) early, before populating
-// expensive override maps.
+// ~1M leaves.
 const overlayPromotionThreshold = 10_000
 
 type (
 	// FieldTrie is the representation of the representative
 	// trie of the particular field.
-	//
-	// A FieldTrie operates in one of two modes:
-	//   - Owned mode: nodes != nil, base == nil. The trie owns its full
-	//     layer data as a contiguous flat buffer and mutations happen in-place.
-	//   - Overlay mode: nodes == nil, base != nil. The trie stores only
-	//     sparse diffs (overrides) against an immutable base trie. Root computation
-	//     walks the base read-only, substituting override values at modified positions.
 	FieldTrie struct {
 		mu sync.RWMutex
 
@@ -55,16 +46,11 @@ type (
 		dataRef        *stateutil.Reference // count of overlay bases sharing this trie's nodes buffer
 		dataRefCleanup runtime.Cleanup
 
-		metrics        *metricsRef
-		metricsCleanup runtime.Cleanup
+		nodesData *nodesData // used in owned mode
 
-		// Owned mode fields:
-		nodes   [][32]byte // flat buffer with all trie levels packed contiguously
-		offsets []uint64   // maps each trie level to its start index in nodes. Also offsets[depth+1] = len(nodes)
-
-		// Overlay mode fields:
-		base      *FieldTrie            // immutable base trie (nil in owned mode), kept alive by Go's GC
-		overrides []map[uint64][32]byte // per-level sparse diffs: overrides[level][nodeIdx] = hash
+		// Overlay mode:
+		base          *FieldTrie     // immutable base trie (nil in owned mode)
+		overridesData *overridesData // per-level sparse diffs (nil in owned mode)
 
 		// Field metadata:
 		field      types.FieldIndex // which beacon state field this trie represents
@@ -73,23 +59,29 @@ type (
 		numOfElems uint64           // current number of elems in the field
 	}
 
+	nodesData struct {
+		nodes   [][32]byte // flat buffer with all trie levels packed contiguously
+		offsets []uint64   // maps each trie level to its start index in nodes. Also offsets[depth+1] = len(nodes)
+		met     *entriesMetric
+	}
+
+	overridesData struct {
+		levels  []map[uint64][32]byte // per-level sparse diffs: levels[level][nodeIdx] = hash
+		metrics *entriesMetric
+	}
+
+	entriesMetric struct {
+		field      types.FieldIndex
+		totalCount int // total entries (nodes or override entries)
+		leafCount  int // leaf-level entries
+	}
+
 	// sliceAccessor describes an interface for a multivalue slice
 	// object that returns information about the multivalue slice along with the
 	// particular state instance we are referencing.
 	sliceAccessor interface {
 		Len(obj multi_value_slice.Identifiable) int
 		State() multi_value_slice.Identifiable
-	}
-
-	// metricsRef holds the current metric contribution for a FieldTrie,
-	// stored separately so runtime.AddCleanup can access it without
-	// preventing the FieldTrie from being collected.
-	metricsRef struct {
-		field         types.FieldIndex
-		nodes         int
-		overrides     int
-		leafOverrides int
-		overlay       bool
 	}
 )
 
@@ -117,8 +109,6 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 	fieldTrie := &FieldTrie{
 		ref:        stateutil.NewRef(1),
 		dataRef:    stateutil.NewRef(0),
-		nodes:      nodes,
-		offsets:    offsets,
 		field:      field,
 		dataType:   fieldInfo,
 		length:     length,
@@ -127,8 +117,8 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 
 	runtime.AddCleanup(fieldTrie, cleanupRef, fieldTrie.ref)
 
-	if !fieldTrie.empty() {
-		fieldTrie.updateMetrics()
+	if nodes != nil {
+		fieldTrie.nodesData = newNodesData(field, nodes, offsets)
 	}
 
 	return fieldTrie, nil
@@ -152,22 +142,21 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 
 	f.ref.AddRef()
 
-	cp := &FieldTrie{
-		ref:        f.ref,
-		dataRef:    f.dataRef,
-		nodes:      f.nodes,
-		offsets:    f.offsets,
-		base:       f.base,
-		overrides:  f.overrides,
-		field:      f.field,
-		dataType:   f.dataType,
-		length:     f.length,
-		numOfElems: f.numOfElems,
+	copiedTrie := &FieldTrie{
+		ref:           f.ref,
+		dataRef:       f.dataRef,
+		nodesData:     f.nodesData,
+		base:          f.base,
+		overridesData: f.overridesData,
+		field:         f.field,
+		dataType:      f.dataType,
+		length:        f.length,
+		numOfElems:    f.numOfElems,
 	}
 
-	runtime.AddCleanup(cp, cleanupRef, f.ref)
+	runtime.AddCleanup(copiedTrie, cleanupRef, f.ref)
 
-	return cp
+	return copiedTrie
 }
 
 // RecomputeTrie recomputes the trie for the given changed indices and returns
@@ -230,8 +219,8 @@ func (f *FieldTrie) Empty() bool {
 func (f *FieldTrie) InsertFlatLayers(nodes [][32]byte, offsets []uint64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.nodes = nodes
-	f.offsets = offsets
+
+	f.nodesData = &nodesData{nodes: nodes, offsets: offsets}
 }
 
 func (f *FieldTrie) trieRoot() ([32]byte, error) {
@@ -246,8 +235,8 @@ func (f *FieldTrie) trieRoot() ([32]byte, error) {
 			return [32]byte{}, ErrInvalidFieldTrie
 		}
 
-		rootOffset := f.offsets[depth]
-		root := f.nodes[rootOffset]
+		rootOffset := f.nodesData.offsets[depth]
+		root := f.nodesData.nodes[rootOffset]
 		rootWithMixin, err := f.rootWithMixin(root)
 		if err != nil {
 			return [32]byte{}, fmt.Errorf("root with mixin: %w", err)
@@ -293,9 +282,7 @@ func (f *FieldTrie) fork() *FieldTrie {
 		forked.base = f
 
 		forked.dataRefCleanup = runtime.AddCleanup(forked, cleanupRef, f.dataRef)
-		forked.overrides = make([]map[uint64][32]byte, f.depth()+1)
-
-		forked.updateMetrics()
+		forked.overridesData = newOverridesData(f.field, make([]map[uint64][32]byte, f.depth()+1))
 
 		return forked
 	}
@@ -305,18 +292,17 @@ func (f *FieldTrie) fork() *FieldTrie {
 	f.base.dataRef.AddRef()
 	forked.dataRefCleanup = runtime.AddCleanup(forked, cleanupRef, f.base.dataRef)
 
-	overrides := make([]map[uint64][32]byte, len(f.overrides))
-	for i, valueByIdx := range f.overrides {
+	levels := make([]map[uint64][32]byte, len(f.overridesData.levels))
+	for i, valueByIdx := range f.overridesData.levels {
 		if len(valueByIdx) == 0 {
 			continue
 		}
 
-		overrides[i] = make(map[uint64][32]byte, len(valueByIdx))
-		maps.Copy(overrides[i], valueByIdx)
+		levels[i] = make(map[uint64][32]byte, len(valueByIdx))
+		maps.Copy(levels[i], valueByIdx)
 	}
 
-	forked.overrides = overrides
-	forked.updateMetrics()
+	forked.overridesData = newOverridesData(f.field, levels)
 
 	return forked
 }
@@ -325,7 +311,7 @@ func (f *FieldTrie) fork() *FieldTrie {
 func (f *FieldTrie) recomputeInPlace(indices []uint64, elements any) ([32]byte, error) {
 	promote := f.base != nil && len(indices) > overlayPromotionThreshold
 	if promote {
-		FieldTriePromotionCounter.WithLabelValues(f.field.String()).Inc()
+		fieldTriePromotionCounter.WithLabelValues(f.field.String()).Inc()
 	}
 
 	if indices == nil || f.empty() || promote {
@@ -357,7 +343,7 @@ func (f *FieldTrie) recomputeInPlace(indices []uint64, elements any) ([32]byte, 
 	}
 
 	// Promote when the accumulated leaf-level overrides exceed the threshold.
-	if len(f.overrides[0]) > overlayPromotionThreshold {
+	if len(f.overridesData.levels[0]) > overlayPromotionThreshold {
 		root, err := f.promoteOverlay(elements, indices)
 		if err != nil {
 			return [32]byte{}, fmt.Errorf("promote overlay: %w", err)
@@ -383,13 +369,14 @@ func (f *FieldTrie) rebuildFromScratch(elements any) ([32]byte, error) {
 
 	f.releaseBase()
 
-	f.nodes = nodes
-	f.offsets = offsets
 	f.base = nil
-	f.overrides = nil
+	f.overridesData = nil
 	f.numOfElems = elemCount(elements)
 
-	f.updateMetrics()
+	f.nodesData = nil
+	if nodes != nil {
+		f.nodesData = newNodesData(f.field, nodes, offsets)
+	}
 
 	root, err := f.trieRoot()
 	if err != nil {
@@ -418,7 +405,7 @@ func (f *FieldTrie) isShared() bool {
 }
 
 func (f *FieldTrie) empty() bool {
-	return f.nodes == nil && f.base == nil
+	return f.nodesData == nil && f.base == nil
 }
 
 // recomputeBranches recomputes the trie branches for the given changed indices
@@ -444,11 +431,9 @@ func (f *FieldTrie) recomputeBranches(elements any, indices []uint64) ([32]byte,
 	for i, idx := range indices {
 		f.ensureLeafCapacity(idx + 1)
 
-		f.nodes[idx] = fieldRoots[i]
+		f.nodesData.nodes[idx] = fieldRoots[i]
 		root = f.recomputeBranch(idx, hasher)
 	}
-
-	f.updateMetrics()
 
 	rootWithMixin, err := f.rootWithMixin(root)
 	if err != nil {
@@ -487,38 +472,39 @@ func (f *FieldTrie) promoteOverlay(elements any, indices []uint64) ([32]byte, er
 	}
 
 	// Allocate fresh buffer.
-	f.offsets = computeOffsets(depth, leafCount)
-	f.nodes = make([][32]byte, f.offsets[depth+1])
+	offsets := computeOffsets(depth, leafCount)
+	nodes := make([][32]byte, offsets[depth+1])
 
 	// Skip the base copy when all leaves are being rewritten.
 	if uint64(len(indices)) < leafCount {
 		// Copy base layers into the new buffer.
 		baseCount := min(f.base.levelSize(0), leafCount)
-		copy(f.nodes[:baseCount], f.base.nodes[:baseCount])
+		copy(nodes[:baseCount], f.base.nodesData.nodes[:baseCount])
 
 		// Apply any existing overrides on top of the base copy.
-		for idx, val := range f.overrides[0] {
-			f.nodes[idx] = val
+		for idx, val := range f.overridesData.levels[0] {
+			nodes[idx] = val
 		}
 	}
 
 	// Apply new field roots for changed indices.
 	for i, idx := range indices {
-		f.nodes[idx] = fieldRoots[i]
+		nodes[idx] = fieldRoots[i]
 	}
 
-	hashUpFromLeaves(f.nodes, f.offsets)
+	hashUpFromLeaves(nodes, offsets)
 
 	// Release the base.
 	f.releaseBase()
 	f.base = nil
-	f.overrides = nil
+	f.overridesData = nil
 
-	FieldTriePromotionCounter.WithLabelValues(f.field.String()).Inc()
-	f.updateMetrics()
+	f.nodesData = newNodesData(f.field, nodes, offsets)
+
+	fieldTriePromotionCounter.WithLabelValues(f.field.String()).Inc()
 
 	// Return root with appropriate mixin.
-	rootWithMixin, err := f.rootWithMixin(f.nodes[f.offsets[depth]])
+	rootWithMixin, err := f.rootWithMixin(nodes[offsets[depth]])
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("root with mixin: %w", err)
 	}
@@ -548,11 +534,11 @@ func (f *FieldTrie) recomputeOverlay(elements any, indices []uint64) ([32]byte, 
 		dirtyLeaves[idx] = fieldRoots[i]
 	}
 
-	// Store dirty leaves in overrides[0].
-	if f.overrides[0] == nil {
-		f.overrides[0] = make(map[uint64][32]byte, len(dirtyLeaves))
+	// Store dirty leaves in levels[0].
+	if f.overridesData.levels[0] == nil {
+		f.overridesData.levels[0] = make(map[uint64][32]byte, len(dirtyLeaves))
 	}
-	maps.Copy(f.overrides[0], dirtyLeaves)
+	maps.Copy(f.overridesData.levels[0], dirtyLeaves)
 
 	// Walk up from level 0 to depth-1.
 	currentDirty := dirtyLeaves
@@ -586,19 +572,19 @@ func (f *FieldTrie) recomputeOverlay(elements any, indices []uint64) ([32]byte, 
 			parentHash := hasher(combinedChunks[:])
 
 			parentDirty[parentIdx] = parentHash
-			if f.overrides[level+1] == nil {
-				f.overrides[level+1] = make(map[uint64][32]byte)
+			if f.overridesData.levels[level+1] == nil {
+				f.overridesData.levels[level+1] = make(map[uint64][32]byte)
 			}
 
-			f.overrides[level+1][parentIdx] = parentHash
+			f.overridesData.levels[level+1][parentIdx] = parentHash
 		}
 
 		currentDirty = parentDirty
 	}
 
-	f.updateMetrics()
+	f.overridesData.updateMetrics()
 
-	// The root is at overrides[depth][0], or fallback to base.
+	// The root is at levels[depth][0], or fallback to base.
 	root, err := f.readOverlayNode(depth, 0)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("read overlay root: %w", err)
@@ -615,7 +601,7 @@ func (f *FieldTrie) recomputeOverlay(elements any, indices []uint64) ([32]byte, 
 // readOverlayNode reads a node from the overlay at (level, idx).
 func (f *FieldTrie) readOverlayNode(level uint64, idx uint64) ([32]byte, error) {
 	// First, check if there is an override for this node.
-	if nodeByIdx := f.overrides[level]; nodeByIdx != nil {
+	if nodeByIdx := f.overridesData.levels[level]; nodeByIdx != nil {
 		if root, ok := nodeByIdx[idx]; ok {
 			return root, nil
 		}
@@ -624,7 +610,7 @@ func (f *FieldTrie) readOverlayNode(level uint64, idx uint64) ([32]byte, error) 
 	// If no override, read from base.
 	levelSize := f.base.levelSize(level)
 	if idx < levelSize {
-		return f.base.nodes[f.base.offsets[level]+idx], nil
+		return f.base.nodesData.nodes[f.base.nodesData.offsets[level]+idx], nil
 	}
 
 	// If idx is out of bounds for the base, return zero hash.
@@ -677,11 +663,11 @@ func (f *FieldTrie) ensureLeafCapacity(minLeafCount uint64) {
 	newNodes := make([][32]byte, newOffsets[depth+1])
 
 	for level := range depth + 1 {
-		oldSize := f.offsets[level+1] - f.offsets[level]
+		oldSize := f.nodesData.offsets[level+1] - f.nodesData.offsets[level]
 		newSize := newOffsets[level+1] - newOffsets[level]
 
 		if oldSize > 0 {
-			copy(newNodes[newOffsets[level]:], f.nodes[f.offsets[level]:f.offsets[level]+oldSize])
+			copy(newNodes[newOffsets[level]:], f.nodesData.nodes[f.nodesData.offsets[level]:f.nodesData.offsets[level]+oldSize])
 		}
 
 		// ZeroHashes[0] == [32]byte{}, already zero-filled by make.
@@ -695,25 +681,27 @@ func (f *FieldTrie) ensureLeafCapacity(minLeafCount uint64) {
 		}
 	}
 
-	f.nodes = newNodes
-	f.offsets = newOffsets
+	f.nodesData.nodes = newNodes
+	f.nodesData.offsets = newOffsets
+
+	f.nodesData.updateMetrics()
 }
 
 // recomputeBranch walks from a leaf index up to the root, recomputing parent hashes,
 // and returns the new root hash.
 func (f *FieldTrie) recomputeBranch(idx uint64, hasher func([]byte) [32]byte) [32]byte {
-	root := f.nodes[idx]
+	root := f.nodesData.nodes[idx]
 	currentIndex := idx
 	var combinedChunks [64]byte
 
 	for level := range f.depth() {
 		isLeft := currentIndex%2 == 0
 		neighborIdx := currentIndex ^ 1
-		levelSize := f.offsets[level+1] - f.offsets[level]
+		levelSize := f.nodesData.offsets[level+1] - f.nodesData.offsets[level]
 
 		neighbor := trie.ZeroHashes[level]
 		if neighborIdx < levelSize {
-			neighbor = f.nodes[f.offsets[level]+neighborIdx]
+			neighbor = f.nodesData.nodes[f.nodesData.offsets[level]+neighborIdx]
 		}
 
 		left, right := root, neighbor
@@ -726,7 +714,7 @@ func (f *FieldTrie) recomputeBranch(idx uint64, hasher func([]byte) [32]byte) [3
 
 		root = hasher(combinedChunks[:])
 		parentIdx := currentIndex / 2
-		f.nodes[f.offsets[level+1]+parentIdx] = root
+		f.nodesData.nodes[f.nodesData.offsets[level+1]+parentIdx] = root
 		currentIndex = parentIdx
 	}
 
@@ -767,92 +755,108 @@ func (f *FieldTrie) leafCount() (uint64, error) {
 
 // depth returns the trie depth from the offsets table.
 func (f *FieldTrie) depth() uint64 {
-	return uint64(len(f.offsets) - 2)
+	return uint64(len(f.nodesData.offsets) - 2)
 }
 
 // levelSize returns the number of nodes at the given level.
 func (f *FieldTrie) levelSize(level uint64) uint64 {
-	return f.offsets[level+1] - f.offsets[level]
+	return f.nodesData.offsets[level+1] - f.nodesData.offsets[level]
 }
 
-// nodeSize returns the total number of node entries in the flat buffer.
-func (f *FieldTrie) nodeSize() int {
-	return len(f.nodes)
-}
-
-// overlaySize returns the total number of entries across all override maps.
-func (f *FieldTrie) overlaySize() int {
-	n := 0
-	for _, m := range f.overrides {
-		n += len(m)
+// newNodesData allocates a nodesData, increments the node entry gauge,
+// and registers a GC cleanup to decrement it when the nodesData is collected.
+func newNodesData(field types.FieldIndex, nodes [][32]byte, offsets []uint64) *nodesData {
+	nodesData := &nodesData{
+		nodes:   nodes,
+		offsets: offsets,
+		met:     &entriesMetric{field: field, totalCount: len(nodes)},
 	}
-	return n
+
+	label := field.String()
+	fieldTrieEntriesGauge.WithLabelValues(label, "nodes").Add(float64(len(nodes)))
+	fieldTrieCountGauge.WithLabelValues(label, "owned").Inc()
+	runtime.AddCleanup(nodesData, cleanupNodesMetrics, nodesData.met)
+
+	return nodesData
 }
 
-// leafOverrideSize returns the number of entries in the leaf-level (level 0) override map.
-func (f *FieldTrie) leafOverrideSize() int {
-	if len(f.overrides) == 0 {
-		return 0
-	}
-	return len(f.overrides[0])
-}
-
-// updateMetrics syncs the Prometheus gauges with the current trie state.
-// On first call (metrics == nil), it allocates the metricsRef and increments the
-// instance count gauge. On subsequent calls, it computes deltas from the previous
-// snapshot and adjusts gauges accordingly.
-func (f *FieldTrie) updateMetrics() {
-	if f.metrics == nil {
-		f.metrics = &metricsRef{field: f.field}
-		mode := overlayMode(f.base != nil)
-		fieldTrieCountGauge.WithLabelValues(f.field.String(), mode).Inc()
-		f.syncEntryGauges()
-		f.metricsCleanup = runtime.AddCleanup(f, cleanupMetrics, f.metrics)
-
+// updateMetrics applies the delta between the current nodes length and
+// the last-recorded snapshot, then updates the snapshot.
+func (nd *nodesData) updateMetrics() {
+	if nd.met == nil {
 		return
 	}
 
-	isOverlay := f.base != nil
-	if f.metrics.overlay != isOverlay {
-		label := f.field.String()
+	newCount := len(nd.nodes)
+	fieldTrieEntriesGauge.WithLabelValues(nd.met.field.String(), "nodes").Add(float64(newCount - nd.met.totalCount))
+	nd.met.totalCount = newCount
+}
 
-		oldMode := overlayMode(f.metrics.overlay)
-		fieldTrieCountGauge.WithLabelValues(label, oldMode).Dec()
-
-		newMode := overlayMode(isOverlay)
-		fieldTrieCountGauge.WithLabelValues(label, newMode).Inc()
+// newOverridesData allocates an overridesData, increments the override entry gauges,
+// and registers a GC cleanup to decrement them when the overridesData is collected.
+func newOverridesData(field types.FieldIndex, levels []map[uint64][32]byte) *overridesData {
+	totalCount := 0
+	for _, m := range levels {
+		totalCount += len(m)
 	}
 
-	f.syncEntryGauges()
+	leafCount := 0
+	if len(levels) > 0 {
+		leafCount = len(levels[0])
+	}
+
+	od := &overridesData{
+		levels:  levels,
+		metrics: &entriesMetric{field: field, totalCount: totalCount, leafCount: leafCount},
+	}
+
+	label := field.String()
+	fieldTrieEntriesGauge.WithLabelValues(label, "overrides").Add(float64(totalCount))
+	fieldTrieLeafOverridesGauge.WithLabelValues(label).Add(float64(leafCount))
+	fieldTrieCountGauge.WithLabelValues(label, "overlay").Inc()
+
+	runtime.AddCleanup(od, cleanupOverridesMetrics, od.metrics)
+
+	return od
 }
 
-// syncEntryGauges applies entry deltas to Prometheus gauges and updates the metricsRef snapshot.
-func (f *FieldTrie) syncEntryGauges() {
-	label := f.field.String()
+// updateMetrics applies deltas between the current override counts
+// and the last-recorded snapshot, then updates the snapshot.
+func (od *overridesData) updateMetrics() {
+	if od.metrics == nil {
+		return
+	}
 
-	nodes := f.nodeSize()
-	overrides := f.overlaySize()
-	leafOverrides := f.leafOverrideSize()
+	newCount := 0
+	for _, m := range od.levels {
+		newCount += len(m)
+	}
 
-	fieldTrieEntriesGauge.WithLabelValues(label, "nodes").Add(float64(nodes - f.metrics.nodes))
-	fieldTrieEntriesGauge.WithLabelValues(label, "overrides").Add(float64(overrides - f.metrics.overrides))
-	fieldTrieLeafOverridesGauge.WithLabelValues(label).Add(float64(leafOverrides - f.metrics.leafOverrides))
+	newLeaf := 0
+	if len(od.levels) > 0 {
+		newLeaf = len(od.levels[0])
+	}
 
-	f.metrics.nodes = nodes
-	f.metrics.overrides = overrides
-	f.metrics.leafOverrides = leafOverrides
-	f.metrics.overlay = f.base != nil
+	label := od.metrics.field.String()
+	fieldTrieEntriesGauge.WithLabelValues(label, "overrides").Add(float64(newCount - od.metrics.totalCount))
+	fieldTrieLeafOverridesGauge.WithLabelValues(label).Add(float64(newLeaf - od.metrics.leafCount))
+	od.metrics.totalCount = newCount
+	od.metrics.leafCount = newLeaf
 }
 
-// cleanupMetrics is the GC cleanup callback registered via runtime.AddCleanup.
-// It subtracts the trie's metric contributions when the FieldTrie is garbage collected.
-func cleanupMetrics(m *metricsRef) {
-	label := m.field.String()
+// cleanupNodesMetrics is the GC cleanup callback that decrements node entry gauges
+// when the nodesData becomes unreachable.
+func cleanupNodesMetrics(met *entriesMetric) {
+	label := met.field.String()
+	fieldTrieEntriesGauge.WithLabelValues(label, "nodes").Sub(float64(met.totalCount))
+	fieldTrieCountGauge.WithLabelValues(label, "owned").Dec()
+}
 
-	fieldTrieEntriesGauge.WithLabelValues(label, "nodes").Sub(float64(m.nodes))
-	fieldTrieEntriesGauge.WithLabelValues(label, "overrides").Sub(float64(m.overrides))
-	fieldTrieLeafOverridesGauge.WithLabelValues(label).Sub(float64(m.leafOverrides))
-
-	mode := overlayMode(m.overlay)
-	fieldTrieCountGauge.WithLabelValues(label, mode).Dec()
+// cleanupOverridesMetrics is the GC cleanup callback that decrements override gauges
+// when the overridesData becomes unreachable.
+func cleanupOverridesMetrics(met *entriesMetric) {
+	label := met.field.String()
+	fieldTrieEntriesGauge.WithLabelValues(label, "overrides").Sub(float64(met.totalCount))
+	fieldTrieLeafOverridesGauge.WithLabelValues(label).Sub(float64(met.leafCount))
+	fieldTrieCountGauge.WithLabelValues(label, "overlay").Dec()
 }

@@ -13,7 +13,7 @@ var (
 
 	fieldTrieCountGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "field_trie_count",
-		Help: "Total number of live field trie instances by field and mode (overlay/owned).",
+		Help: "Total number of live field trie data allocations by field and mode (owned/overlay).",
 	}, []string{"field", "mode"})
 
 	fieldTrieLeafOverridesGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -31,8 +31,8 @@ var (
 		Help: "Total number of copy-on-write forks triggered by RecomputeTrie on a shared trie.",
 	}, []string{"field"})
 
-	// FieldTriePromotionCounter counts overlay-to-owned promotions.
-	FieldTriePromotionCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+	// fieldTriePromotionCounter counts overlay-to-owned promotions.
+	fieldTriePromotionCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "field_trie_promotion_total",
 		Help: "Total number of overlay promotions triggered by exceeding the threshold.",
 	}, []string{"field"})

@@ -76,7 +76,7 @@ func TestBalancesSlice_CorrectRoots_Some(t *testing.T) {
 
 func TestValidateIndices_CompressedField(t *testing.T) {
 	fakeTrie := &FieldTrie{
-		field: types.Balances,
+		field:      types.Balances,
 		dataType:   types.CompressedArray,
 		length:     params.BeaconConfig().ValidatorRegistryLimit / 4,
 		numOfElems: 0,
@@ -120,9 +120,9 @@ func TestGrowFlatBuffer_ZeroHashInitialization(t *testing.T) {
 	ft := &FieldTrie{}
 	ft.InsertFlatLayers(nodes, offsets)
 	ft.ensureLeafCapacity(8)
-	ft.nodes[4] = [32]byte{5}
-	hashUpFromLeaves(ft.nodes, ft.offsets)
-	root := ft.nodes[ft.offsets[depth]]
+	ft.nodesData.nodes[4] = [32]byte{5}
+	hashUpFromLeaves(ft.nodesData.nodes, ft.nodesData.offsets)
+	root := ft.nodesData.nodes[ft.nodesData.offsets[depth]]
 
 	assert.Equal(t, expectedRoot, root,
 		"Root mismatch: ensureLeafCapacity must initialize new upper-level entries to ZeroHashes[level]")

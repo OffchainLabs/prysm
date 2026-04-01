@@ -774,8 +774,8 @@ func assertNodesEqual(t *testing.T, a, b *FieldTrie) {
 		minSize := min(sizeA, sizeB)
 
 		for i := range minSize {
-			nodeA := a.nodes[a.offsets[level]+i]
-			nodeB := b.nodes[b.offsets[level]+i]
+			nodeA := a.nodesData.nodes[a.nodesData.offsets[level]+i]
+			nodeB := b.nodesData.nodes[b.nodesData.offsets[level]+i]
 			if nodeA != nodeB {
 				t.Errorf("node mismatch at level %d index %d: got %x, want %x", level, i, nodeA, nodeB)
 			}
