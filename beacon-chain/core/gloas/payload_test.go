@@ -242,6 +242,67 @@ func TestProcessExecutionPayload_Success(t *testing.T) {
 	require.Equal(t, primitives.Gwei(0), payment.Withdrawal.Amount)
 }
 
+func TestProcessExecutionPayloadWithDeferredSig_Success(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+
+	header := fixture.state.LatestBlockHeader()
+	var previousStateRoot [32]byte
+	copy(previousStateRoot[:], header.StateRoot)
+
+	sigBatch, err := ProcessExecutionPayloadWithDeferredSig(t.Context(), fixture.state, previousStateRoot, fixture.signed)
+	require.NoError(t, err)
+	require.NotNil(t, sigBatch)
+	require.Equal(t, 1, len(sigBatch.Signatures))
+	require.Equal(t, 1, len(sigBatch.PublicKeys))
+	require.Equal(t, 1, len(sigBatch.Messages))
+	require.Equal(t, 1, len(sigBatch.Descriptions))
+	require.Equal(t, "execution payload envelope signature", sigBatch.Descriptions[0])
+
+	valid, err := sigBatch.Verify()
+	require.NoError(t, err)
+	require.Equal(t, true, valid)
+
+	latestHash, err := fixture.state.LatestBlockHash()
+	require.NoError(t, err)
+	var expectedHash [32]byte
+	copy(expectedHash[:], fixture.payload.BlockHash)
+	require.Equal(t, expectedHash, latestHash)
+
+	available, err := fixture.state.ExecutionPayloadAvailability(fixture.slot)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), available)
+
+	updatedHeader := fixture.state.LatestBlockHeader()
+	require.DeepEqual(t, previousStateRoot[:], updatedHeader.StateRoot)
+}
+
+func TestProcessExecutionPayloadWithDeferredSig_PreviousStateRootMismatch(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+
+	previousStateRoot := [32]byte{0x42}
+
+	_, err := ProcessExecutionPayloadWithDeferredSig(t.Context(), fixture.state, previousStateRoot, fixture.signed)
+	require.ErrorContains(t, "envelope beacon block root does not match state latest block header root", err)
+}
+
+func TestApplyExecutionPayload_Success(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+
+	envelope, err := fixture.signed.Envelope()
+	require.NoError(t, err)
+	require.NoError(t, ApplyExecutionPayload(t.Context(), fixture.state, envelope))
+
+	latestHash, err := fixture.state.LatestBlockHash()
+	require.NoError(t, err)
+	var expectedHash [32]byte
+	copy(expectedHash[:], fixture.payload.BlockHash)
+	require.Equal(t, expectedHash, latestHash)
+
+	available, err := fixture.state.ExecutionPayloadAvailability(fixture.slot)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), available)
+}
+
 func TestApplyExecutionPayloadStateMutations_UpdatesAvailabilityAndLatestHash(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
 

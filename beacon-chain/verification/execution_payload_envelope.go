@@ -142,12 +142,8 @@ func (v *EnvelopeVerifier) VerifyPayloadHash(bid interfaces.ROExecutionPayloadBi
 	if env.IsBlinded() {
 		return nil
 	}
-	payload, err := env.Execution()
-	if err != nil {
-		return errors.Wrap(err, "failed to get payload execution")
-	}
-	if bid.BlockHash() != [32]byte(payload.BlockHash()) {
-		return fmt.Errorf("%w: payload=%#x bid=%#x", ErrIncorrectEnvelopeBlockHash, payload.BlockHash(), bid.BlockHash())
+	if bid.BlockHash() != env.BlockHash() {
+		return fmt.Errorf("%w: payload=%#x bid=%#x", ErrIncorrectEnvelopeBlockHash, env.BlockHash(), bid.BlockHash())
 	}
 	return nil
 }

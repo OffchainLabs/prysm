@@ -231,11 +231,7 @@ func ApplyExecutionPayload(
 	if err := validatePayloadConsistency(st, envelope); err != nil {
 		return err
 	}
-	payload, err := envelope.Execution()
-	if err != nil {
-		return errors.Wrap(err, "could not get execution payload from envelope")
-	}
-	return applyExecutionPayloadStateMutations(ctx, st, envelope.ExecutionRequests(), [32]byte(payload.BlockHash()))
+	return applyExecutionPayloadStateMutations(ctx, st, envelope.ExecutionRequests(), envelope.BlockHash())
 }
 
 func setLatestBlockHeaderStateRoot(st state.BeaconState, root [32]byte) error {
