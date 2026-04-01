@@ -209,6 +209,12 @@ func (s *Server) produceBlockV3(ctx context.Context, w http.ResponseWriter, r *h
 		handleProduceFuluV3(w, isSSZ, fuluBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
+	gloasBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Gloas)
+	if ok {
+		w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+		handleProduceGloasV4(w, isSSZ, gloasBlock, v1alpha1resp.PayloadValue, consensusBlockValue)
+		return
+	}
 }
 
 func getConsensusBlockValue(ctx context.Context, blockRewardsFetcher rewards.BlockRewardsFetcher, i interface{} /* block as argument */) (string, *httputil.DefaultJsonError) {
