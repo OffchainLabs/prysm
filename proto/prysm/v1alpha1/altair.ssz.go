@@ -126,10 +126,10 @@ func (b *BeaconBlockAltair) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset := int(84)
 
 	// Field (0) 'Slot'
-	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+	dst = ssz.MarshalUint(dst, b.Slot)
 
 	// Field (1) 'ProposerIndex'
-	dst = ssz.MarshalUint64(dst, uint64(b.ProposerIndex))
+	dst = ssz.MarshalUint(dst, b.ProposerIndex)
 
 	// Field (2) 'ParentRoot'
 	if size := len(b.ParentRoot); size != 32 {
@@ -172,10 +172,10 @@ func (b *BeaconBlockAltair) UnmarshalSSZ(buf []byte) error {
 	var o4 uint64
 
 	// Field (0) 'Slot'
-	b.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.Slot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[0:8])
 
 	// Field (1) 'ProposerIndex'
-	b.ProposerIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	b.ProposerIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[8:16])
 
 	// Field (2) 'ParentRoot'
 	if cap(b.ParentRoot) == 0 {
@@ -234,10 +234,10 @@ func (b *BeaconBlockAltair) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Slot'
-	hh.PutUint64(uint64(b.Slot))
+	ssz.PutUint(hh, b.Slot)
 
 	// Field (1) 'ProposerIndex'
-	hh.PutUint64(uint64(b.ProposerIndex))
+	ssz.PutUint(hh, b.ProposerIndex)
 
 	// Field (2) 'ParentRoot'
 	if size := len(b.ParentRoot); size != 32 {
@@ -907,7 +907,7 @@ func (b *BeaconStateAltair) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset := int(2736629)
 
 	// Field (0) 'GenesisTime'
-	dst = ssz.MarshalUint64(dst, b.GenesisTime)
+	dst = ssz.MarshalUint(dst, b.GenesisTime)
 
 	// Field (1) 'GenesisValidatorsRoot'
 	if size := len(b.GenesisValidatorsRoot); size != 32 {
@@ -917,7 +917,7 @@ func (b *BeaconStateAltair) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, b.GenesisValidatorsRoot...)
 
 	// Field (2) 'Slot'
-	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+	dst = ssz.MarshalUint(dst, b.Slot)
 
 	// Field (3) 'Fork'
 	if b.Fork == nil {
@@ -978,7 +978,7 @@ func (b *BeaconStateAltair) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset += len(b.Eth1DataVotes) * 72
 
 	// Field (10) 'Eth1DepositIndex'
-	dst = ssz.MarshalUint64(dst, b.Eth1DepositIndex)
+	dst = ssz.MarshalUint(dst, b.Eth1DepositIndex)
 
 	// Offset (11) 'Validators'
 	dst = ssz.WriteOffset(dst, offset)
@@ -1007,7 +1007,7 @@ func (b *BeaconStateAltair) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 	for ii := 0; ii < 8192; ii++ {
-		dst = ssz.MarshalUint64(dst, b.Slashings[ii])
+		dst = ssz.MarshalUint(dst, b.Slashings[ii])
 	}
 
 	// Offset (15) 'PreviousEpochParticipation'
@@ -1110,7 +1110,7 @@ func (b *BeaconStateAltair) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 	for ii := 0; ii < len(b.Balances); ii++ {
-		dst = ssz.MarshalUint64(dst, b.Balances[ii])
+		dst = ssz.MarshalUint(dst, b.Balances[ii])
 	}
 
 	// Field (15) 'PreviousEpochParticipation'
@@ -1133,7 +1133,7 @@ func (b *BeaconStateAltair) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 	for ii := 0; ii < len(b.InactivityScores); ii++ {
-		dst = ssz.MarshalUint64(dst, b.InactivityScores[ii])
+		dst = ssz.MarshalUint(dst, b.InactivityScores[ii])
 	}
 
 	return
@@ -1151,7 +1151,7 @@ func (b *BeaconStateAltair) UnmarshalSSZ(buf []byte) error {
 	var o7, o9, o11, o12, o15, o16, o21 uint64
 
 	// Field (0) 'GenesisTime'
-	b.GenesisTime = ssz.UnmarshallUint64(buf[0:8])
+	b.GenesisTime = ssz.UnmarshallUint[uint64](buf[0:8])
 
 	// Field (1) 'GenesisValidatorsRoot'
 	if cap(b.GenesisValidatorsRoot) == 0 {
@@ -1160,7 +1160,7 @@ func (b *BeaconStateAltair) UnmarshalSSZ(buf []byte) error {
 	b.GenesisValidatorsRoot = append(b.GenesisValidatorsRoot, buf[8:40]...)
 
 	// Field (2) 'Slot'
-	b.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
+	b.Slot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[40:48])
 
 	// Field (3) 'Fork'
 	if b.Fork == nil {
@@ -1219,7 +1219,7 @@ func (b *BeaconStateAltair) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (10) 'Eth1DepositIndex'
-	b.Eth1DepositIndex = ssz.UnmarshallUint64(buf[524544:524552])
+	b.Eth1DepositIndex = ssz.UnmarshallUint[uint64](buf[524544:524552])
 
 	// Offset (11) 'Validators'
 	if o11 = ssz.ReadOffset(buf[524552:524556]); o11 > size || o9 > o11 {
@@ -1241,9 +1241,9 @@ func (b *BeaconStateAltair) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (14) 'Slashings'
-	b.Slashings = ssz.ExtendUint64(b.Slashings, 8192)
+	b.Slashings = ssz.ExtendUint(b.Slashings, 8192)
 	for ii := 0; ii < 8192; ii++ {
-		b.Slashings[ii] = ssz.UnmarshallUint64(buf[2621712:2687248][ii*8 : (ii+1)*8])
+		b.Slashings[ii] = ssz.UnmarshallUint[uint64](buf[2621712:2687248][ii*8 : (ii+1)*8])
 	}
 
 	// Offset (15) 'PreviousEpochParticipation'
@@ -1366,9 +1366,9 @@ func (b *BeaconStateAltair) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		b.Balances = ssz.ExtendUint64(b.Balances, num)
+		b.Balances = ssz.ExtendUint(b.Balances, num)
 		for ii := 0; ii < num; ii++ {
-			b.Balances[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+			b.Balances[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
 		}
 	}
 
@@ -1403,9 +1403,9 @@ func (b *BeaconStateAltair) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		b.InactivityScores = ssz.ExtendUint64(b.InactivityScores, num)
+		b.InactivityScores = ssz.ExtendUint(b.InactivityScores, num)
 		for ii := 0; ii < num; ii++ {
-			b.InactivityScores[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+			b.InactivityScores[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
 		}
 	}
 	return err
@@ -1449,7 +1449,7 @@ func (b *BeaconStateAltair) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'GenesisTime'
-	hh.PutUint64(b.GenesisTime)
+	ssz.PutUint(hh, b.GenesisTime)
 
 	// Field (1) 'GenesisValidatorsRoot'
 	if size := len(b.GenesisValidatorsRoot); size != 32 {
@@ -1459,7 +1459,7 @@ func (b *BeaconStateAltair) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(b.GenesisValidatorsRoot)
 
 	// Field (2) 'Slot'
-	hh.PutUint64(uint64(b.Slot))
+	ssz.PutUint(hh, b.Slot)
 
 	// Field (3) 'Fork'
 	if err = b.Fork.HashTreeRootWith(hh); err != nil {
@@ -1546,7 +1546,7 @@ func (b *BeaconStateAltair) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 
 	// Field (10) 'Eth1DepositIndex'
-	hh.PutUint64(b.Eth1DepositIndex)
+	ssz.PutUint(hh, b.Eth1DepositIndex)
 
 	// Field (11) 'Validators'
 	{
@@ -1572,7 +1572,7 @@ func (b *BeaconStateAltair) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range b.Balances {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.FillUpTo32()
 
@@ -1605,7 +1605,7 @@ func (b *BeaconStateAltair) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range b.Slashings {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.Merkleize(subIndx)
 	}
@@ -1664,7 +1664,7 @@ func (b *BeaconStateAltair) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range b.InactivityScores {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.FillUpTo32()
 
@@ -1696,10 +1696,10 @@ func (s *SyncAggregatorSelectionData) MarshalSSZTo(buf []byte) (dst []byte, err 
 	dst = buf
 
 	// Field (0) 'Slot'
-	dst = ssz.MarshalUint64(dst, uint64(s.Slot))
+	dst = ssz.MarshalUint(dst, s.Slot)
 
 	// Field (1) 'SubcommitteeIndex'
-	dst = ssz.MarshalUint64(dst, s.SubcommitteeIndex)
+	dst = ssz.MarshalUint(dst, s.SubcommitteeIndex)
 
 	return
 }
@@ -1713,10 +1713,10 @@ func (s *SyncAggregatorSelectionData) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Slot'
-	s.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	s.Slot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[0:8])
 
 	// Field (1) 'SubcommitteeIndex'
-	s.SubcommitteeIndex = ssz.UnmarshallUint64(buf[8:16])
+	s.SubcommitteeIndex = ssz.UnmarshallUint[uint64](buf[8:16])
 
 	return err
 }
@@ -1737,10 +1737,10 @@ func (s *SyncAggregatorSelectionData) HashTreeRootWith(hh *ssz.Hasher) (err erro
 	indx := hh.Index()
 
 	// Field (0) 'Slot'
-	hh.PutUint64(uint64(s.Slot))
+	ssz.PutUint(hh, s.Slot)
 
 	// Field (1) 'SubcommitteeIndex'
-	hh.PutUint64(s.SubcommitteeIndex)
+	ssz.PutUint(hh, s.SubcommitteeIndex)
 
 	hh.Merkleize(indx)
 	return
@@ -1937,7 +1937,7 @@ func (l *LightClientUpdateAltair) MarshalSSZTo(buf []byte) (dst []byte, err erro
 	}
 
 	// Field (6) 'SignatureSlot'
-	dst = ssz.MarshalUint64(dst, uint64(l.SignatureSlot))
+	dst = ssz.MarshalUint(dst, l.SignatureSlot)
 
 	return
 }
@@ -2001,7 +2001,7 @@ func (l *LightClientUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (6) 'SignatureSlot'
-	l.SignatureSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[25360:25368]))
+	l.SignatureSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[25360:25368])
 
 	return err
 }
@@ -2076,7 +2076,7 @@ func (l *LightClientUpdateAltair) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 
 	// Field (6) 'SignatureSlot'
-	hh.PutUint64(uint64(l.SignatureSlot))
+	ssz.PutUint(hh, l.SignatureSlot)
 
 	hh.Merkleize(indx)
 	return
@@ -2129,7 +2129,7 @@ func (l *LightClientFinalityUpdateAltair) MarshalSSZTo(buf []byte) (dst []byte, 
 	}
 
 	// Field (4) 'SignatureSlot'
-	dst = ssz.MarshalUint64(dst, uint64(l.SignatureSlot))
+	dst = ssz.MarshalUint(dst, l.SignatureSlot)
 
 	return
 }
@@ -2176,7 +2176,7 @@ func (l *LightClientFinalityUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (4) 'SignatureSlot'
-	l.SignatureSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[576:584]))
+	l.SignatureSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[576:584])
 
 	return err
 }
@@ -2229,7 +2229,7 @@ func (l *LightClientFinalityUpdateAltair) HashTreeRootWith(hh *ssz.Hasher) (err 
 	}
 
 	// Field (4) 'SignatureSlot'
-	hh.PutUint64(uint64(l.SignatureSlot))
+	ssz.PutUint(hh, l.SignatureSlot)
 
 	hh.Merkleize(indx)
 	return
@@ -2261,7 +2261,7 @@ func (l *LightClientOptimisticUpdateAltair) MarshalSSZTo(buf []byte) (dst []byte
 	}
 
 	// Field (2) 'SignatureSlot'
-	dst = ssz.MarshalUint64(dst, uint64(l.SignatureSlot))
+	dst = ssz.MarshalUint(dst, l.SignatureSlot)
 
 	return
 }
@@ -2291,7 +2291,7 @@ func (l *LightClientOptimisticUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (2) 'SignatureSlot'
-	l.SignatureSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[272:280]))
+	l.SignatureSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[272:280])
 
 	return err
 }
@@ -2322,7 +2322,7 @@ func (l *LightClientOptimisticUpdateAltair) HashTreeRootWith(hh *ssz.Hasher) (er
 	}
 
 	// Field (2) 'SignatureSlot'
-	hh.PutUint64(uint64(l.SignatureSlot))
+	ssz.PutUint(hh, l.SignatureSlot)
 
 	hh.Merkleize(indx)
 	return
@@ -2401,7 +2401,7 @@ func (s *SyncCommitteeMessage) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 	dst = buf
 
 	// Field (0) 'Slot'
-	dst = ssz.MarshalUint64(dst, uint64(s.Slot))
+	dst = ssz.MarshalUint(dst, s.Slot)
 
 	// Field (1) 'BlockRoot'
 	if size := len(s.BlockRoot); size != 32 {
@@ -2411,7 +2411,7 @@ func (s *SyncCommitteeMessage) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 	dst = append(dst, s.BlockRoot...)
 
 	// Field (2) 'ValidatorIndex'
-	dst = ssz.MarshalUint64(dst, uint64(s.ValidatorIndex))
+	dst = ssz.MarshalUint(dst, s.ValidatorIndex)
 
 	// Field (3) 'Signature'
 	if size := len(s.Signature); size != 96 {
@@ -2432,7 +2432,7 @@ func (s *SyncCommitteeMessage) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Slot'
-	s.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	s.Slot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[0:8])
 
 	// Field (1) 'BlockRoot'
 	if cap(s.BlockRoot) == 0 {
@@ -2441,7 +2441,7 @@ func (s *SyncCommitteeMessage) UnmarshalSSZ(buf []byte) error {
 	s.BlockRoot = append(s.BlockRoot, buf[8:40]...)
 
 	// Field (2) 'ValidatorIndex'
-	s.ValidatorIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[40:48]))
+	s.ValidatorIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[40:48])
 
 	// Field (3) 'Signature'
 	if cap(s.Signature) == 0 {
@@ -2468,7 +2468,7 @@ func (s *SyncCommitteeMessage) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Slot'
-	hh.PutUint64(uint64(s.Slot))
+	ssz.PutUint(hh, s.Slot)
 
 	// Field (1) 'BlockRoot'
 	if size := len(s.BlockRoot); size != 32 {
@@ -2478,7 +2478,7 @@ func (s *SyncCommitteeMessage) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(s.BlockRoot)
 
 	// Field (2) 'ValidatorIndex'
-	hh.PutUint64(uint64(s.ValidatorIndex))
+	ssz.PutUint(hh, s.ValidatorIndex)
 
 	// Field (3) 'Signature'
 	if size := len(s.Signature); size != 96 {
@@ -2584,7 +2584,7 @@ func (c *ContributionAndProof) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 	dst = buf
 
 	// Field (0) 'AggregatorIndex'
-	dst = ssz.MarshalUint64(dst, uint64(c.AggregatorIndex))
+	dst = ssz.MarshalUint(dst, c.AggregatorIndex)
 
 	// Field (1) 'Contribution'
 	if c.Contribution == nil {
@@ -2613,7 +2613,7 @@ func (c *ContributionAndProof) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'AggregatorIndex'
-	c.AggregatorIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+	c.AggregatorIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[0:8])
 
 	// Field (1) 'Contribution'
 	if c.Contribution == nil {
@@ -2648,7 +2648,7 @@ func (c *ContributionAndProof) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'AggregatorIndex'
-	hh.PutUint64(uint64(c.AggregatorIndex))
+	ssz.PutUint(hh, c.AggregatorIndex)
 
 	// Field (1) 'Contribution'
 	if err = c.Contribution.HashTreeRootWith(hh); err != nil {
@@ -2676,7 +2676,7 @@ func (s *SyncCommitteeContribution) MarshalSSZTo(buf []byte) (dst []byte, err er
 	dst = buf
 
 	// Field (0) 'Slot'
-	dst = ssz.MarshalUint64(dst, uint64(s.Slot))
+	dst = ssz.MarshalUint(dst, s.Slot)
 
 	// Field (1) 'BlockRoot'
 	if size := len(s.BlockRoot); size != 32 {
@@ -2686,7 +2686,7 @@ func (s *SyncCommitteeContribution) MarshalSSZTo(buf []byte) (dst []byte, err er
 	dst = append(dst, s.BlockRoot...)
 
 	// Field (2) 'SubcommitteeIndex'
-	dst = ssz.MarshalUint64(dst, s.SubcommitteeIndex)
+	dst = ssz.MarshalUint(dst, s.SubcommitteeIndex)
 
 	// Field (3) 'AggregationBits'
 	if size := len(s.AggregationBits); size != 16 {
@@ -2714,7 +2714,7 @@ func (s *SyncCommitteeContribution) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Slot'
-	s.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	s.Slot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[0:8])
 
 	// Field (1) 'BlockRoot'
 	if cap(s.BlockRoot) == 0 {
@@ -2723,7 +2723,7 @@ func (s *SyncCommitteeContribution) UnmarshalSSZ(buf []byte) error {
 	s.BlockRoot = append(s.BlockRoot, buf[8:40]...)
 
 	// Field (2) 'SubcommitteeIndex'
-	s.SubcommitteeIndex = ssz.UnmarshallUint64(buf[40:48])
+	s.SubcommitteeIndex = ssz.UnmarshallUint[uint64](buf[40:48])
 
 	// Field (3) 'AggregationBits'
 	if cap(s.AggregationBits) == 0 {
@@ -2756,7 +2756,7 @@ func (s *SyncCommitteeContribution) HashTreeRootWith(hh *ssz.Hasher) (err error)
 	indx := hh.Index()
 
 	// Field (0) 'Slot'
-	hh.PutUint64(uint64(s.Slot))
+	ssz.PutUint(hh, s.Slot)
 
 	// Field (1) 'BlockRoot'
 	if size := len(s.BlockRoot); size != 32 {
@@ -2766,7 +2766,7 @@ func (s *SyncCommitteeContribution) HashTreeRootWith(hh *ssz.Hasher) (err error)
 	hh.PutBytes(s.BlockRoot)
 
 	// Field (2) 'SubcommitteeIndex'
-	hh.PutUint64(s.SubcommitteeIndex)
+	ssz.PutUint(hh, s.SubcommitteeIndex)
 
 	// Field (3) 'AggregationBits'
 	if size := len(s.AggregationBits); size != 16 {
