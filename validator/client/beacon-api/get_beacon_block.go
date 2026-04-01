@@ -70,6 +70,18 @@ type sszCodecEntry struct {
 // fall through to the latest known fork (matching the original if-cascade).
 var sszCodecs = []sszCodecEntry{
 	{
+		minVersion: version.Gloas,
+		codec: sszBlockCodec{
+			unmarshalBlock: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
+				block := &ethpb.BeaconBlockGloas{}
+				if err := block.UnmarshalSSZ(data); err != nil {
+					return nil, err
+				}
+				return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: block}}, nil
+			},
+		},
+	},
+	{
 		minVersion: version.Fulu,
 		codec: sszBlockCodec{
 			unmarshalBlock: func(data []byte) (*ethpb.GenericBeaconBlock, error) {
@@ -226,6 +238,9 @@ type jsonBlockTypes struct {
 }
 
 var jsonBlockFactories = map[string]jsonBlockTypes{
+	version.String(version.Gloas): {
+		newBlock: func() ethpb.GenericConverter { return &structs.BeaconBlockGloas{} },
+	},
 	version.String(version.Phase0): {
 		newBlock: func() ethpb.GenericConverter { return &structs.BeaconBlock{} },
 	},
