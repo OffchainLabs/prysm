@@ -53,6 +53,7 @@ type Server struct {
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	executionPayloadEnvelopeMu       sync.RWMutex
 	executionPayloadEnvelope         *ethpb.ExecutionPayloadEnvelope
+	lastBidSource                    bidSource // Protected by executionPayloadEnvelopeMu — same lifecycle as envelope.
 	HeadFetcher                      blockchain.HeadFetcher
 	ForkFetcher                      blockchain.ForkFetcher
 	ForkchoiceFetcher                blockchain.ForkchoiceFetcher

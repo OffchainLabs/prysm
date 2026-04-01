@@ -111,7 +111,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		builderBoostFactor = primitives.Gwei(req.BuilderBoostFactor.Value)
 	}
 
-	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor)
+	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, req.SignedRequestAuths)
 	log = log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
@@ -202,7 +202,7 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 	return head, parentRoot, err
 }
 
-func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei) (*ethpb.GenericBeaconBlock, error) {
+func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, signedRequestAuths []*ethpb.SignedRequestAuth) (*ethpb.GenericBeaconBlock, error) {
 	// Build consensus fields in background
 	var wg sync.WaitGroup
 	wg.Go(func() {
@@ -255,7 +255,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	})
 
 	winningBid := primitives.ZeroWei()
-	selfBuildEnvelope := true
+	bidSrc := bidSourceSelfBuild
 	var bundle enginev1.BlobsBundler
 	var local *blocks.GetPayloadResponse
 	if sBlk.Version() >= version.Bellatrix {
@@ -287,7 +287,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 			}
 		} else {
 			selfBuildOnly := local.OverrideBuilder || skipMevBoost
-			selfBuildEnvelope, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
+			bidSrc, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly, signedRequestAuths)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
 			}
@@ -307,9 +307,12 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	// HTR as BeaconBlockRoot and the post-payload state root as StateRoot.
 	// When a remote P2P bid was selected, the winning builder is responsible
 	// for producing the envelope, so we must not cache a self-build one.
-	if sBlk.Version() >= version.Gloas && selfBuildEnvelope {
-		if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
+	if sBlk.Version() >= version.Gloas {
+		vs.lastBidSource = bidSrc
+		if bidSrc == bidSourceSelfBuild {
+			if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
+			}
 		}
 	}
 
@@ -385,6 +388,15 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}
 	if err := <-errChan; err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
+	}
+
+	// For Gloas blocks where the bid was obtained via the Builder API, submit
+	// the signed block to the builder so it can construct and broadcast the
+	// execution payload envelope. This is best-effort — failure here does not
+	// invalidate the proposal since the builder can also learn about the block
+	// via P2P.
+	if block.Version() >= version.Gloas && vs.lastBidSource == bidSourceBuilderAPI {
+		vs.submitBlockToBuilder(ctx, block)
 	}
 
 	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil

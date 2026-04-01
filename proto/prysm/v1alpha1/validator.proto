@@ -950,6 +950,11 @@ message BlockRequest {
   // Percentage multiplier to apply to the builder's payload value when choosing
   // between a builder payload header and payload from the paired execution node
   google.protobuf.UInt64Value builder_boost_factor = 5;
+
+  // Signed request auth messages for authenticating bid requests to builders.
+  // Each entry targets a specific builder (identified by builder_pubkey).
+  // Used from Gloas fork onwards.
+  repeated SignedRequestAuth signed_request_auths = 6;
 }
 
 message ProposeResponse {

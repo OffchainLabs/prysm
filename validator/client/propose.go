@@ -77,11 +77,15 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 		log.WithError(err).Warn("Could not get graffiti")
 	}
 
+	// Sign request auths for configured builders (Gloas onwards).
+	signedAuths := v.signRequestAuthsForBuilders(ctx, pubKey, slot)
+
 	// Request block from beacon node
 	b, err := v.validatorClient.BeaconBlock(ctx, &ethpb.BlockRequest{
-		Slot:         slot,
-		RandaoReveal: randaoReveal,
-		Graffiti:     g,
+		Slot:               slot,
+		RandaoReveal:       randaoReveal,
+		Graffiti:           g,
+		SignedRequestAuths: signedAuths,
 	})
 	if err != nil {
 		log.WithField("slot", slot).WithError(err).Error("Failed to request block from beacon node")

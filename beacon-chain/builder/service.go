@@ -30,6 +30,10 @@ type BlockBuilder interface {
 	RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
 	Configured() bool
+	// Gloas Builder-API (ePBS staked builders)
+	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash [32]byte, parentRoot [32]byte, proposerIndex primitives.ValidatorIndex, auth *ethpb.SignedRequestAuth) (*ethpb.SignedExecutionPayloadBid, error)
+	SubmitSignedBeaconBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error
+	SubmitBuilderPreferences(ctx context.Context, prefs []*ethpb.SignedBuilderPreferencesRPC) error
 }
 
 // config defines a config struct for dependencies into the service.
@@ -210,6 +214,56 @@ func (s *Service) RegistrationByValidatorID(ctx context.Context, id primitives.V
 // Configured returns true if the user has configured a builder client.
 func (s *Service) Configured() bool {
 	return s.c != nil && !reflect.ValueOf(s.c).IsNil()
+}
+
+// GetExecutionPayloadBid requests a SignedExecutionPayloadBid from the builder
+// for the given slot, parent hash, parent root, and proposer index.
+func (s *Service) GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash [32]byte, parentRoot [32]byte, proposerIndex primitives.ValidatorIndex, auth *ethpb.SignedRequestAuth) (*ethpb.SignedExecutionPayloadBid, error) {
+	ctx, span := trace.StartSpan(ctx, "builder.GetExecutionPayloadBid")
+	defer span.End()
+	start := time.Now()
+	defer func() {
+		getExecutionPayloadBidLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+	if s.c == nil {
+		tracing.AnnotateError(span, ErrNoBuilder)
+		return nil, ErrNoBuilder
+	}
+
+	bid, err := s.c.GetExecutionPayloadBid(ctx, slot, parentHash, parentRoot, proposerIndex, auth)
+	tracing.AnnotateError(span, err)
+	return bid, err
+}
+
+// SubmitSignedBeaconBlock sends the full SignedBeaconBlock to the builder,
+// committing the proposer to the embedded execution payload bid.
+func (s *Service) SubmitSignedBeaconBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error {
+	ctx, span := trace.StartSpan(ctx, "builder.SubmitSignedBeaconBlock")
+	defer span.End()
+	start := time.Now()
+	defer func() {
+		submitSignedBeaconBlockLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+	if s.c == nil {
+		return ErrNoBuilder
+	}
+
+	return s.c.SubmitSignedBeaconBlock(ctx, sb)
+}
+
+// SubmitBuilderPreferences sends per-builder preferences to the builder.
+func (s *Service) SubmitBuilderPreferences(ctx context.Context, prefs []*ethpb.SignedBuilderPreferencesRPC) error {
+	ctx, span := trace.StartSpan(ctx, "builder.SubmitBuilderPreferences")
+	defer span.End()
+	start := time.Now()
+	defer func() {
+		submitBuilderPreferencesLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+	if s.c == nil {
+		return ErrNoBuilder
+	}
+
+	return s.c.SubmitBuilderPreferences(ctx, prefs)
 }
 
 func (s *Service) pollRelayerStatus(ctx context.Context) {

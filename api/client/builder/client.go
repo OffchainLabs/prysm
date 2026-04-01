@@ -105,6 +105,10 @@ type BuilderClient interface {
 	SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error)
 	SubmitBlindedBlockPostFulu(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error
 	Status(ctx context.Context) error
+	// Gloas Builder-API
+	GetExecutionPayloadBid(ctx context.Context, slot primitives.Slot, parentHash [32]byte, parentRoot [32]byte, proposerIndex primitives.ValidatorIndex, auth *ethpb.SignedRequestAuth) (*ethpb.SignedExecutionPayloadBid, error)
+	SubmitSignedBeaconBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) error
+	SubmitBuilderPreferences(ctx context.Context, prefs []*ethpb.SignedBuilderPreferencesRPC) error
 }
 
 // Client provides a collection of helper methods for calling Builder API endpoints.

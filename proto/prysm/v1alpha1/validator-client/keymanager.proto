@@ -87,6 +87,10 @@ message SignRequest {
     ethereum.eth.v1alpha1.ExecutionPayloadEnvelope execution_payload_envelope = 124;
     ethereum.eth.v1alpha1.PayloadAttestationData payload_attestation_data = 125;
     ethereum.eth.v1alpha1.ProposerPreferences proposer_preference = 126;
+
+    // Builder-API objects.
+    ethereum.eth.v1alpha1.RequestAuth request_auth = 127;
+    ethereum.eth.v1alpha1.BuilderPreferencesRPC builder_preferences_rpc = 128;
   }
 
   reserved 4, 5; // Reserving old, deleted fields.

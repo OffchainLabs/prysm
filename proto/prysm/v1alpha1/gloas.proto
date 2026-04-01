@@ -112,6 +112,66 @@ message SubmitSignedProposerPreferencesRequest {
   repeated SignedProposerPreferences signed_proposer_preferences = 1;
 }
 
+// RequestAuth is used to authenticate requests to a builder. The proposer
+// signs over the builder's public key and the slot to prevent other builders
+// from querying or replaying requests.
+//
+// Spec (Builder-API):
+// class RequestAuth(Container):
+//     builder_pubkey: BLSPubkey
+//     slot: Slot
+message RequestAuth {
+  bytes builder_pubkey = 1 [ (ethereum.eth.ext.ssz_size) = "48" ];
+  uint64 slot = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+}
+
+// SignedRequestAuth wraps a RequestAuth with the proposer's BLS signature.
+//
+// Spec (Builder-API):
+// class SignedRequestAuth(Container):
+//     message: RequestAuth
+//     signature: BLSSignature
+message SignedRequestAuth {
+  RequestAuth message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// BuilderPreferencesRPC contains per-builder preferences that a validator
+// sends directly to a specific builder via the Builder-API. This is distinct
+// from ProposerPreferences which are broadcast via the gossip topic.
+//
+// Spec (Builder-API):
+// class BuilderPreferences(Container):
+//     builder_pubkey: BLSPubkey
+//     slot: Slot
+//     max_trusted_bid: uint64
+message BuilderPreferencesRPC {
+  bytes builder_pubkey = 1 [ (ethereum.eth.ext.ssz_size) = "48" ];
+  uint64 slot = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  uint64 max_trusted_bid = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+}
+
+// SignedBuilderPreferencesRPC wraps per-builder preferences with the
+// proposer's BLS signature.
+//
+// Spec (Builder-API):
+// class SignedBuilderPreferences(Container):
+//     message: BuilderPreferences
+//     signature: BLSSignature
+message SignedBuilderPreferencesRPC {
+  BuilderPreferencesRPC message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
 // PayloadAttestationData contains the core data for Payload Timeliness
 // Committee (PTC) attestations.
 //
