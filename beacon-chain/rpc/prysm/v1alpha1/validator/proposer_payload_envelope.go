@@ -242,7 +242,7 @@ func (vs *Server) broadcastGloasDataColumns(ctx context.Context) error {
 		"slot":    roSidecars[0].Slot(),
 		"root":    fmt.Sprintf("%#x", roSidecars[0].BlockRoot()),
 		"columns": len(roSidecars),
-	}).Info("Broadcasting Gloas data column sidecars")
+	}).Debug("Broadcasting Gloas data column sidecars")
 
 	if err := vs.broadcastAndReceiveDataColumns(ctx, roSidecars); err != nil {
 		return errors.Wrap(err, "broadcast and receive data columns")

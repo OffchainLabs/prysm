@@ -190,7 +190,7 @@ func WriteDataColumnSidecarChunk(stream libp2pcore.Stream, tor blockchain.Tempor
 	}
 
 	// Sidecar.
-	if _, err := encoding.EncodeWithMaxLength(stream, sidecar.SszMarshaler()); err != nil {
+	if _, err := encoding.EncodeWithMaxLength(stream, &sidecar); err != nil {
 		return errors.Wrap(err, "encode with max length")
 	}
 

@@ -356,8 +356,9 @@ loop:
 func buildDataColumnSidecarsJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) ([]*structs.DataColumnSidecar, error) {
 	sidecars := make([]*structs.DataColumnSidecar, len(verifiedDataColumns))
 	for i, dc := range verifiedDataColumns {
-		column := make([]string, len(dc.Column()))
-		for j, cell := range dc.Column() {
+		cells := dc.Column()
+		column := make([]string, len(cells))
+		for j, cell := range cells {
 			column[j] = hexutil.Encode(cell)
 		}
 
@@ -412,7 +413,7 @@ func buildDataColumnSidecarsSSZResponse(verifiedDataColumns []blocks.VerifiedROD
 
 	// Marshal and append each sidecar
 	for i, sidecar := range verifiedDataColumns {
-		sszrep, err := sidecar.SszMarshaler().MarshalSSZ()
+		sszrep, err := sidecar.MarshalSSZ()
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to marshal data column sidecar at index %d", i)
 		}

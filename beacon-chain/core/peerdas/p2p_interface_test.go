@@ -70,7 +70,8 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 
 	t.Run("size mismatch", func(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
-		sidecars[0].Column()[0] = sidecars[0].Column()[0][:len(sidecars[0].Column()[0])-1] // Remove one byte to create size mismatch
+		column := sidecars[0].Column()
+		column[0] = column[0][:len(column[0])-1] // Remove one byte to create size mismatch
 
 		err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
 		require.ErrorIs(t, err, peerdas.ErrMismatchLength)

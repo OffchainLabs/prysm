@@ -33,14 +33,15 @@ func (Cgc) ENRKey() string { return params.BeaconNetworkConfig().CustodyGroupCou
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar
 func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 	// The sidecar index must be within the valid range.
-	if sidecar.Index() >= fieldparams.NumberOfColumns {
+	index := sidecar.Index()
+	if index >= fieldparams.NumberOfColumns {
 		return ErrIndexTooLarge
 	}
 
 	// A sidecar for zero blobs is invalid.
 	kzgCommitments, err := sidecar.KzgCommitments()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "kzg commitments")
 	}
 	if len(kzgCommitments) == 0 {
 		return ErrNoKzgCommitments
@@ -54,7 +55,9 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 	}
 
 	// The column length must be equal to the number of commitments/proofs.
-	if len(sidecar.Column()) != len(kzgCommitments) || len(sidecar.Column()) != len(sidecar.KzgProofs()) {
+	column := sidecar.Column()
+	kzgProofs := sidecar.KzgProofs()
+	if len(column) != len(kzgCommitments) || len(column) != len(kzgProofs) {
 		return ErrMismatchLength
 	}
 
@@ -73,7 +76,7 @@ func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 	for i := range sidecars {
 		c, err := sidecars[i].KzgCommitments()
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "sidecar %d kzg commitments", i)
 		}
 		commitmentsBySidecar[i] = c
 	}
@@ -95,10 +98,11 @@ func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmen
 	// Compute the total count.
 	count := 0
 	for i, sidecar := range sidecars {
-		if len(sidecar.Column()) != len(commitmentsBySidecar[i]) {
+		column := sidecar.Column()
+		if len(column) != len(commitmentsBySidecar[i]) {
 			return ErrMismatchLength
 		}
-		count += len(sidecar.Column())
+		count += len(column)
 	}
 
 	commitments := make([]kzg.Bytes48, 0, count)
@@ -107,7 +111,10 @@ func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmen
 	proofs := make([]kzg.Bytes48, 0, count)
 
 	for sidecarIndex, sidecar := range sidecars {
-		for i := range sidecar.Column() {
+		column := sidecar.Column()
+		kzgProofs := sidecar.KzgProofs()
+		index := sidecar.Index()
+		for i := range column {
 			var (
 				commitment kzg.Bytes48
 				cell       kzg.Cell
@@ -115,8 +122,8 @@ func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmen
 			)
 
 			commitmentBytes := commitmentsBySidecar[sidecarIndex][i]
-			cellBytes := sidecar.Column()[i]
-			proofBytes := sidecar.KzgProofs()[i]
+			cellBytes := column[i]
+			proofBytes := kzgProofs[i]
 
 			if len(commitmentBytes) != len(commitment) ||
 				len(cellBytes) != len(cell) ||
@@ -129,7 +136,7 @@ func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmen
 			copy(proof[:], proofBytes)
 
 			commitments = append(commitments, commitment)
-			indices = append(indices, sidecar.Index())
+			indices = append(indices, index)
 			cells = append(cells, cell)
 			proofs = append(proofs, proof)
 		}
@@ -153,7 +160,7 @@ func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmen
 func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
 	signedBlockHeader, err := sidecar.SignedBlockHeader()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "signed block header")
 	}
 	if signedBlockHeader == nil || signedBlockHeader.Header == nil {
 		return ErrNilBlockHeader
@@ -166,7 +173,7 @@ func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
 
 	kzgCommitments, err := sidecar.KzgCommitments()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "kzg commitments")
 	}
 	leaves := blocks.LeavesFromCommitments(kzgCommitments)
 
@@ -182,7 +189,7 @@ func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
 
 	kzgInclusionProof, err := sidecar.KzgCommitmentsInclusionProof()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "kzg commitments inclusion proof")
 	}
 	verified := trie.VerifyMerkleProof(root, hashTreeRoot[:], kzgPosition, kzgInclusionProof)
 	if !verified {

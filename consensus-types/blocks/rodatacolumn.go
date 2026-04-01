@@ -6,7 +6,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 var (
@@ -160,13 +159,21 @@ func (dc *RODataColumn) KzgCommitmentsInclusionProof() ([][]byte, error) {
 	return dc.fulu.KzgCommitmentsInclusionProof, nil
 }
 
-// SszMarshaler returns the underlying proto as an ssz.Marshaler.
+// MarshalSSZ marshals the underlying proto to SSZ bytes.
 // Works for both Fulu and Gloas sidecars.
-func (dc *RODataColumn) SszMarshaler() ssz.Marshaler {
+func (dc *RODataColumn) MarshalSSZ() ([]byte, error) {
 	if dc.gloas != nil {
-		return dc.gloas
+		return dc.gloas.MarshalSSZ()
 	}
-	return dc.fulu
+	return dc.fulu.MarshalSSZ()
+}
+
+// MarshalSSZTo marshals the underlying proto to the provided byte slice.
+func (dc *RODataColumn) MarshalSSZTo(buf []byte) ([]byte, error) {
+	if dc.gloas != nil {
+		return dc.gloas.MarshalSSZTo(buf)
+	}
+	return dc.fulu.MarshalSSZTo(buf)
 }
 
 // SizeSSZ returns the SSZ encoded size of the underlying proto.

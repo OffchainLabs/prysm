@@ -16,13 +16,14 @@ func DataColumnFields(column blocks.RODataColumn) logrus.Fields {
 		"colIdx":    column.Index(),
 	}
 
-	if propIdx, err := column.ProposerIndex(); err == nil {
+	// Fulu sidecars carry proposer index, parent root, and KZG commitments
+	// directly. Gloas sidecars don't have these fields.
+	if !column.IsGloas() {
+		propIdx, _ := column.ProposerIndex()
 		fields["propIdx"] = propIdx
-	}
-	if parentRoot, err := column.ParentRoot(); err == nil {
+		parentRoot, _ := column.ParentRoot()
 		fields["parentRoot"] = fmt.Sprintf("%#x", parentRoot)[:8]
-	}
-	if kzgCommitments, err := column.KzgCommitments(); err == nil {
+		kzgCommitments, _ := column.KzgCommitments()
 		fields["kzgCommitmentCount"] = len(kzgCommitments)
 	}
 
