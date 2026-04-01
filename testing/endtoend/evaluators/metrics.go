@@ -84,6 +84,12 @@ var metricComparisonTests = []comparisonTest{
 		topic2:             "hot_state_cache_hit",
 		expectedComparison: 0.01,
 	},
+	{
+		name:               "payload committee cache",
+		topic1:             "payload_committee_cache_miss",
+		topic2:             "payload_committee_cache_hit",
+		expectedComparison: 0.01,
+	},
 }
 
 func metricsTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
@@ -196,7 +202,7 @@ func metricCheckComparison(pageContent, topic1, topic2 string, comparison float6
 }
 
 func valueOfTopic(pageContent, topic string) (int, error) {
-	regexExp, err := regexp.Compile(topic + " ")
+	regexExp, err := regexp.Compile(`(?:^|\s)` + topic + " ")
 	if err != nil {
 		return -1, errors.Wrap(err, "could not create regex expression")
 	}

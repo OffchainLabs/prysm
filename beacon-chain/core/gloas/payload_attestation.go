@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -125,6 +126,37 @@ func PayloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot pr
 		return nil, err
 	}
 
+	// Try cache, then acquire the in-progress lock. If another goroutine
+	// is already computing, wait for it and retry. This loop ensures that
+	// exactly one goroutine computes at a time, avoiding thundering herd
+	// when a prior computation fails without populating the cache.
+	for {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		cached, err := helpers.PayloadCommitteeFromCache(ctx, seed)
+		if err != nil {
+			return nil, err
+		}
+		if cached != nil {
+			return cached, nil
+		}
+		if err := helpers.MarkPayloadCommitteeInProgress(seed); err != nil {
+			if !errors.Is(err, cache.ErrAlreadyInProgress) {
+				return nil, err
+			}
+			// Another goroutine is computing. PayloadCommitteeFromCache
+			// will block (via checkInProgress backoff) until it finishes,
+			// then we loop back to check the cache and retry.
+			continue
+		}
+		// We own the in-progress lock.
+		break
+	}
+	defer func() {
+		_ = helpers.MarkPayloadCommitteeNotInProgress(seed)
+	}()
+
 	activeCount, err := helpers.ActiveValidatorCount(ctx, st, epoch)
 	if err != nil {
 		return nil, err
@@ -155,6 +187,8 @@ func PayloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot pr
 			}
 		}
 	}
+
+	helpers.AddPayloadCommittee(seed, selected)
 
 	return selected, nil
 }

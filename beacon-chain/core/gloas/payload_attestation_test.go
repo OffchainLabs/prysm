@@ -2,7 +2,9 @@ package gloas_test
 
 import (
 	"bytes"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
@@ -15,7 +17,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	testutil "github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -303,4 +308,116 @@ func (s *validatorLookupErrState) ValidatorAtIndexReadOnly(idx primitives.Valida
 		return nil, state.ErrNilValidatorsInState
 	}
 	return s.BeaconState.ValidatorAtIndexReadOnly(idx)
+}
+
+// ptcSeed mirrors the seed derivation in PayloadCommittee so the test can
+// pre-mark the seed as in-progress.
+func ptcSeed(t *testing.T, st state.ReadOnlyBeaconState, slot primitives.Slot) [32]byte {
+	epoch := slots.ToEpoch(slot)
+	seed, err := helpers.Seed(st, epoch, params.BeaconConfig().DomainPTCAttester)
+	require.NoError(t, err)
+	return hash.Hash(append(seed[:], bytesutil.Bytes8(uint64(slot))...))
+}
+
+// TestPayloadCommittee_ConcurrentInProgress verifies that when another
+// goroutine holds the in-progress lock and then releases WITHOUT populating
+// the cache (simulating a failed computation), PayloadCommittee falls through
+// and computes the result itself instead of returning an error.
+func TestPayloadCommittee_ConcurrentInProgress(t *testing.T) {
+	helpers.ClearCache()
+	setupTestConfig(t)
+
+	_, pk1 := newKey(t)
+	_, pk2 := newKey(t)
+	vals := []*eth.Validator{activeValidator(pk1), activeValidator(pk2)}
+	st := newTestState(t, vals, 2)
+
+	slot := primitives.Slot(1)
+	seed := ptcSeed(t, st, slot)
+
+	// Simulate another goroutine holding the lock.
+	require.NoError(t, helpers.MarkPayloadCommitteeInProgress(seed))
+
+	// Release the lock after a short delay WITHOUT adding to cache,
+	// simulating the other goroutine failing.
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		_ = helpers.MarkPayloadCommitteeNotInProgress(seed)
+	}()
+
+	// PayloadCommittee should wait, see no cache entry, and compute itself.
+	ptc, err := gloas.PayloadCommittee(t.Context(), st, slot)
+	require.NoError(t, err)
+	assert.Equal(t, true, len(ptc) > 0, "expected non-empty PTC")
+}
+
+// TestPayloadCommittee_ConcurrentCacheHit verifies that when another goroutine
+// holds the in-progress lock and then populates the cache, a concurrent caller
+// gets the cached result.
+func TestPayloadCommittee_ConcurrentCacheHit(t *testing.T) {
+	helpers.ClearCache()
+	setupTestConfig(t)
+
+	_, pk1 := newKey(t)
+	_, pk2 := newKey(t)
+	vals := []*eth.Validator{activeValidator(pk1), activeValidator(pk2)}
+	st := newTestState(t, vals, 2)
+
+	slot := primitives.Slot(1)
+	seed := ptcSeed(t, st, slot)
+
+	// First, compute the expected result.
+	expected, err := gloas.PayloadCommittee(t.Context(), st, slot)
+	require.NoError(t, err)
+	helpers.ClearCache()
+
+	// Simulate another goroutine that will populate the cache.
+	require.NoError(t, helpers.MarkPayloadCommitteeInProgress(seed))
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		helpers.AddPayloadCommittee(seed, expected)
+		_ = helpers.MarkPayloadCommitteeNotInProgress(seed)
+	}()
+
+	ptc, err := gloas.PayloadCommittee(t.Context(), st, slot)
+	require.NoError(t, err)
+	assert.DeepEqual(t, expected, ptc)
+}
+
+// TestPayloadCommittee_ParallelCallers verifies that multiple concurrent
+// callers all get the correct result without errors.
+func TestPayloadCommittee_ParallelCallers(t *testing.T) {
+	helpers.ClearCache()
+	setupTestConfig(t)
+
+	_, pk1 := newKey(t)
+	_, pk2 := newKey(t)
+	vals := []*eth.Validator{activeValidator(pk1), activeValidator(pk2)}
+	st := newTestState(t, vals, 2)
+
+	slot := primitives.Slot(1)
+
+	// Compute expected result first.
+	expected, err := gloas.PayloadCommittee(t.Context(), st, slot)
+	require.NoError(t, err)
+	helpers.ClearCache()
+
+	const numCallers = 8
+	var wg sync.WaitGroup
+	errs := make([]error, numCallers)
+	results := make([][]primitives.ValidatorIndex, numCallers)
+
+	for i := range numCallers {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			results[idx], errs[idx] = gloas.PayloadCommittee(t.Context(), st, slot)
+		}(i)
+	}
+
+	wg.Wait()
+	for i := range numCallers {
+		require.NoError(t, errs[i], "caller %d returned error", i)
+		assert.DeepEqual(t, expected, results[i], "caller %d got wrong result", i)
+	}
 }

@@ -27,8 +27,9 @@ import (
 )
 
 var (
-	committeeCache       = cache.NewCommitteesCache()
-	proposerIndicesCache = cache.NewProposerIndicesCache()
+	committeeCache        = cache.NewCommitteesCache()
+	proposerIndicesCache  = cache.NewProposerIndicesCache()
+	payloadCommitteeCache = cache.NewPayloadCommitteeCache()
 )
 
 type beaconCommitteeFunc = func(
@@ -613,6 +614,28 @@ func ClearCache() {
 	proposerIndicesCache.Prune(0)
 	syncCommitteeCache.Clear()
 	balanceCache.Clear()
+	payloadCommitteeCache.Clear()
+}
+
+// PayloadCommitteeFromCache returns the cached payload committee for the given seed.
+// Returns nil on cache miss.
+func PayloadCommitteeFromCache(ctx context.Context, seed [32]byte) ([]primitives.ValidatorIndex, error) {
+	return payloadCommitteeCache.Get(ctx, seed)
+}
+
+// AddPayloadCommittee stores a payload committee result in the cache.
+func AddPayloadCommittee(seed [32]byte, indices []primitives.ValidatorIndex) {
+	payloadCommitteeCache.Add(seed, indices)
+}
+
+// MarkPayloadCommitteeInProgress marks a payload committee seed as being computed.
+func MarkPayloadCommitteeInProgress(seed [32]byte) error {
+	return payloadCommitteeCache.MarkInProgress(seed)
+}
+
+// MarkPayloadCommitteeNotInProgress releases the in-progress lock on a payload committee seed.
+func MarkPayloadCommitteeNotInProgress(seed [32]byte) error {
+	return payloadCommitteeCache.MarkNotInProgress(seed)
 }
 
 // ComputeCommittee returns the requested shuffled committee out of the total committees using
