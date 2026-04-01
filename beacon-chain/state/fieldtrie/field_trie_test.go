@@ -35,7 +35,7 @@ func TestFieldTrie_RecomputeEquivalence(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		trieA, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesA, length)
+		trieA, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesA, length, 0)
 		require.NoError(t, err)
 
 		// Build B: copy A, then change indices 0, 5, 63.
@@ -52,7 +52,7 @@ func TestFieldTrie_RecomputeEquivalence(t *testing.T) {
 		require.NoError(t, err)
 
 		// Build fresh trie from B.
-		trieB, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesB, length)
+		trieB, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesB, length, 0)
 		require.NoError(t, err)
 		freshRoot, err := trieB.TrieRoot()
 		require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestFieldTrie_RecomputeEquivalence(t *testing.T) {
 			}
 		}
 
-		trieA, err := NewFieldTrie(types.Validators, types.CompositeArray, valsA, length)
+		trieA, err := NewFieldTrie(types.Validators, types.CompositeArray, valsA, length, 0)
 		require.NoError(t, err)
 
 		// Build B: copy A, then slash validators 2 and 29.
@@ -98,7 +98,7 @@ func TestFieldTrie_RecomputeEquivalence(t *testing.T) {
 		require.NoError(t, err)
 
 		// Build fresh trie from B.
-		trieB, err := NewFieldTrie(types.Validators, types.CompositeArray, valsB, length)
+		trieB, err := NewFieldTrie(types.Validators, types.CompositeArray, valsB, length, 0)
 		require.NoError(t, err)
 		freshRoot, err := trieB.TrieRoot()
 		require.NoError(t, err)
@@ -117,7 +117,7 @@ func TestFieldTrie_RecomputeEquivalence(t *testing.T) {
 			balsA[i] = 32_000_000_000
 		}
 
-		trieA, err := NewFieldTrie(types.Balances, types.CompressedArray, balsA, length)
+		trieA, err := NewFieldTrie(types.Balances, types.CompressedArray, balsA, length, 0)
 		require.NoError(t, err)
 
 		// Build B: copy A, then change balances at indices 4 and 8.
@@ -132,7 +132,7 @@ func TestFieldTrie_RecomputeEquivalence(t *testing.T) {
 		require.NoError(t, err)
 
 		// Build fresh trie from B.
-		trieB, err := NewFieldTrie(types.Balances, types.CompressedArray, balsB, length)
+		trieB, err := NewFieldTrie(types.Balances, types.CompressedArray, balsB, length, 0)
 		require.NoError(t, err)
 		freshRoot, err := trieB.TrieRoot()
 		require.NoError(t, err)
@@ -166,7 +166,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 			_, err := rand.Read(mixesA[i][:])
 			require.NoError(t, err)
 		}
-		trieA, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesA, length)
+		trieA, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesA, length, 0)
 		require.NoError(t, err)
 		rootA, err := trieA.TrieRoot()
 		require.NoError(t, err)
@@ -189,7 +189,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 		require.NoError(t, err)
 
 		// Step 4: Fresh trie from B's data, check root matches.
-		freshB, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesB, length)
+		freshB, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesB, length, 0)
 		require.NoError(t, err)
 		freshRootB, err := freshB.TrieRoot()
 		require.NoError(t, err)
@@ -223,7 +223,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 		assert.Equal(t, rootB, rootBAfter, "B must be immutable after modifying C")
 
 		// Step 9: Fresh trie from C's data, check root matches.
-		freshC, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesC, length)
+		freshC, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesC, length, 0)
 		require.NoError(t, err)
 		freshRootC, err := freshC.TrieRoot()
 		require.NoError(t, err)
@@ -249,7 +249,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 				WithdrawableEpoch:          params.BeaconConfig().FarFutureEpoch,
 			}
 		}
-		trieA, err := NewFieldTrie(types.Validators, types.CompositeArray, valsA, length)
+		trieA, err := NewFieldTrie(types.Validators, types.CompositeArray, valsA, length, 0)
 		require.NoError(t, err)
 		rootA, err := trieA.TrieRoot()
 		require.NoError(t, err)
@@ -272,7 +272,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 		require.NoError(t, err)
 
 		// Step 4: Fresh trie from B's data, check root matches.
-		freshB, err := NewFieldTrie(types.Validators, types.CompositeArray, valsB, length)
+		freshB, err := NewFieldTrie(types.Validators, types.CompositeArray, valsB, length, 0)
 		require.NoError(t, err)
 		freshRootB, err := freshB.TrieRoot()
 		require.NoError(t, err)
@@ -306,7 +306,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 		assert.Equal(t, rootB, rootBAfter, "B must be immutable after modifying C")
 
 		// Step 9: Fresh trie from C's data, check root matches.
-		freshC, err := NewFieldTrie(types.Validators, types.CompositeArray, valsC, length)
+		freshC, err := NewFieldTrie(types.Validators, types.CompositeArray, valsC, length, 0)
 		require.NoError(t, err)
 		freshRootC, err := freshC.TrieRoot()
 		require.NoError(t, err)
@@ -322,7 +322,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 		for i := range balsA {
 			balsA[i] = 32_000_000_000
 		}
-		trieA, err := NewFieldTrie(types.Balances, types.CompressedArray, balsA, length)
+		trieA, err := NewFieldTrie(types.Balances, types.CompressedArray, balsA, length, 0)
 		require.NoError(t, err)
 		rootA, err := trieA.TrieRoot()
 		require.NoError(t, err)
@@ -343,7 +343,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 		require.NoError(t, err)
 
 		// Step 4: Fresh trie from B's data, check root matches.
-		freshB, err := NewFieldTrie(types.Balances, types.CompressedArray, balsB, length)
+		freshB, err := NewFieldTrie(types.Balances, types.CompressedArray, balsB, length, 0)
 		require.NoError(t, err)
 		freshRootB, err := freshB.TrieRoot()
 		require.NoError(t, err)
@@ -375,7 +375,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 		assert.Equal(t, rootB, rootBAfter, "B must be immutable after modifying C")
 
 		// Step 9: Fresh trie from C's data, check root matches.
-		freshC, err := NewFieldTrie(types.Balances, types.CompressedArray, balsC, length)
+		freshC, err := NewFieldTrie(types.Balances, types.CompressedArray, balsC, length, 0)
 		require.NoError(t, err)
 		freshRootC, err := freshC.TrieRoot()
 		require.NoError(t, err)
@@ -397,7 +397,7 @@ func TestFieldTrie_CopyTrieRootEquivalence(t *testing.T) {
 //
 // Two sub-groups exercise both overlay code paths:
 //   - BelowPromotionThreshold: small change set, stays in overlay mode.
-//   - AbovePromotionThreshold: accumulates >overlayPromotionThreshold dirty
+//   - AbovePromotionThreshold: accumulates >defaultPromotionThreshold dirty
 //     leaves, then triggers promoteOverlay on the next RecomputeTrie call.
 //     After promotion the trie is owned, so roots and internal nodes are compared.
 func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
@@ -412,7 +412,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			trieA, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesA, length)
+			trieA, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesA, length, 0)
 			require.NoError(t, err)
 
 			trieCopy := trieA.CopyTrie()
@@ -428,7 +428,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			trieCopy, recomputedRoot, err := trieCopy.RecomputeTrie(changedIdx, mixesB)
 			require.NoError(t, err)
 
-			trieB, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesB, length)
+			trieB, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesB, length, 0)
 			require.NoError(t, err)
 			freshRoot, err := trieB.TrieRoot()
 			require.NoError(t, err)
@@ -455,7 +455,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 				}
 			}
 
-			trieA, err := NewFieldTrie(types.Validators, types.CompositeArray, valsA, length)
+			trieA, err := NewFieldTrie(types.Validators, types.CompositeArray, valsA, length, 0)
 			require.NoError(t, err)
 
 			trieCopy := trieA.CopyTrie()
@@ -471,7 +471,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			trieCopy, recomputedRoot, err := trieCopy.RecomputeTrie(changedIdx, valsB)
 			require.NoError(t, err)
 
-			trieB, err := NewFieldTrie(types.Validators, types.CompositeArray, valsB, length)
+			trieB, err := NewFieldTrie(types.Validators, types.CompositeArray, valsB, length, 0)
 			require.NoError(t, err)
 			freshRoot, err := trieB.TrieRoot()
 			require.NoError(t, err)
@@ -488,7 +488,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 				balsA[i] = 32_000_000_000
 			}
 
-			trieA, err := NewFieldTrie(types.Balances, types.CompressedArray, balsA, length)
+			trieA, err := NewFieldTrie(types.Balances, types.CompressedArray, balsA, length, 0)
 			require.NoError(t, err)
 
 			trieCopy := trieA.CopyTrie()
@@ -502,7 +502,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			trieCopy, recomputedRoot, err := trieCopy.RecomputeTrie(changedIdx, balsB)
 			require.NoError(t, err)
 
-			trieB, err := NewFieldTrie(types.Balances, types.CompressedArray, balsB, length)
+			trieB, err := NewFieldTrie(types.Balances, types.CompressedArray, balsB, length, 0)
 			require.NoError(t, err)
 			freshRoot, err := trieB.TrieRoot()
 			require.NoError(t, err)
@@ -522,13 +522,13 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			trieA, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesA, length)
+			trieA, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesA, length, 0)
 			require.NoError(t, err)
 
 			trieCopy := trieA.CopyTrie()
 
 			// First recompute: fill overrides[0] past the threshold.
-			firstBatchSize := overlayPromotionThreshold + 1
+			firstBatchSize := defaultPromotionThreshold + 1
 			firstIdx := make([]uint64, firstBatchSize)
 			for i := range firstIdx {
 				firstIdx[i] = uint64(i)
@@ -550,7 +550,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, true, trieCopy.base == nil, "trie must have been promoted to owned mode")
 
-			trieB, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesB, length)
+			trieB, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesB, length, 0)
 			require.NoError(t, err)
 			freshRoot, err := trieB.TrieRoot()
 			require.NoError(t, err)
@@ -578,13 +578,13 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 				}
 			}
 
-			trieA, err := NewFieldTrie(types.Validators, types.CompositeArray, valsA, length)
+			trieA, err := NewFieldTrie(types.Validators, types.CompositeArray, valsA, length, 0)
 			require.NoError(t, err)
 
 			trieCopy := trieA.CopyTrie()
 
 			// First recompute: fill overrides[0] past the threshold.
-			firstBatchSize := overlayPromotionThreshold + 1
+			firstBatchSize := defaultPromotionThreshold + 1
 			firstIdx := make([]uint64, firstBatchSize)
 			for i := range firstIdx {
 				firstIdx[i] = uint64(i)
@@ -606,7 +606,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, true, trieCopy.base == nil, "trie must have been promoted to owned mode")
 
-			trieB, err := NewFieldTrie(types.Validators, types.CompositeArray, valsB, length)
+			trieB, err := NewFieldTrie(types.Validators, types.CompositeArray, valsB, length, 0)
 			require.NoError(t, err)
 			freshRoot, err := trieB.TrieRoot()
 			require.NoError(t, err)
@@ -625,14 +625,14 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 				balsA[i] = 32_000_000_000
 			}
 
-			trieA, err := NewFieldTrie(types.Balances, types.CompressedArray, balsA, length)
+			trieA, err := NewFieldTrie(types.Balances, types.CompressedArray, balsA, length, 0)
 			require.NoError(t, err)
 
 			trieCopy := trieA.CopyTrie()
 
 			// First recompute: change enough balances to fill >10K chunk-level overrides.
 			// 4 balances per chunk → 40,004 balance indices = 10,001 unique chunks.
-			firstBatchSize := (overlayPromotionThreshold + 1) * 4
+			firstBatchSize := (defaultPromotionThreshold + 1) * 4
 			firstIdx := make([]uint64, firstBatchSize)
 			for i := range firstIdx {
 				firstIdx[i] = uint64(i)
@@ -652,7 +652,7 @@ func TestFieldTrie_CopyRecomputeEquivalence(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, true, trieCopy.base == nil, "trie must have been promoted to owned mode")
 
-			trieB, err := NewFieldTrie(types.Balances, types.CompressedArray, balsB, length)
+			trieB, err := NewFieldTrie(types.Balances, types.CompressedArray, balsB, length, 0)
 			require.NoError(t, err)
 			freshRoot, err := trieB.TrieRoot()
 			require.NoError(t, err)
@@ -676,7 +676,7 @@ func TestFieldTrie_CopyTrieSharesRef(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	trieA, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesA, length)
+	trieA, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, mixesA, length, 0)
 	require.NoError(t, err)
 	require.Equal(t, true, trieA.base == nil)
 
@@ -713,19 +713,19 @@ func TestFieldTrie_CopyTrieSharesRef(t *testing.T) {
 // TestFieldTrie_EdgeCases verifies error handling and edge cases.
 func TestFieldTrie_EdgeCases(t *testing.T) {
 	t.Run("NilElements", func(t *testing.T) {
-		trie, err := NewFieldTrie(types.BlockRoots, types.BasicArray, nil, 8234)
+		trie, err := NewFieldTrie(types.BlockRoots, types.BasicArray, nil, 8234, 0)
 		require.NoError(t, err)
 		_, err = trie.TrieRoot()
 		require.ErrorIs(t, err, ErrEmptyFieldTrie)
 	})
 
 	t.Run("UnknownType", func(t *testing.T) {
-		_, err := NewFieldTrie(types.Balances, 4, []uint64{1, 2, 3}, 32)
+		_, err := NewFieldTrie(types.Balances, 4, []uint64{1, 2, 3}, 32, 0)
 		require.ErrorContains(t, "unrecognized data type", err)
 	})
 
 	t.Run("CopyEmpty", func(t *testing.T) {
-		trie, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, nil, uint64(params.BeaconConfig().EpochsPerHistoricalVector))
+		trie, err := NewFieldTrie(types.RandaoMixes, types.BasicArray, nil, uint64(params.BeaconConfig().EpochsPerHistoricalVector), 0)
 		require.NoError(t, err)
 
 		copied := trie.CopyTrie()
@@ -753,7 +753,7 @@ func FuzzFieldTrie(f *testing.F) {
 			roots = append(roots, data[i-32:i])
 		}
 
-		trie, err := NewFieldTrie(types.FieldIndex(fieldIdx), types.DataType(dataType), roots, length)
+		trie, err := NewFieldTrie(types.FieldIndex(fieldIdx), types.DataType(dataType), roots, length, 0)
 		if err != nil {
 			return
 		}

@@ -23,7 +23,7 @@ var (
 	ErrEmptyFieldTrie   = errors.New("empty field trie")
 )
 
-// overlayPromotionThreshold is the maximum number of dirty leaves
+// defaultPromotionThreshold is the maximum number of dirty leaves
 // before an overlay is promoted to a full trie rebuild.
 //
 // The overlay path costs O(k × depth) with per-entry map overhead,
@@ -33,7 +33,7 @@ var (
 // At ~10K dirty leaves and depth ~40, the overlay's map-heavy random
 // access starts to exceed the cost of a flat sequential rebuild over
 // ~1M leaves.
-const overlayPromotionThreshold = 10_000
+const defaultPromotionThreshold = 10_000
 
 type (
 	// FieldTrie is the representation of the representative
@@ -56,7 +56,8 @@ type (
 		field      types.FieldIndex // which beacon state field this trie represents
 		dataType   types.DataType   // encoding: BasicArray, CompositeArray, or CompressedArray
 		length     uint64           // maximum capacity (e.g., VALIDATOR_REGISTRY_LIMIT); determines trie depth
-		numOfElems uint64           // current number of elems in the field
+		numOfElems         uint64           // current number of elems in the field
+		promotionThreshold int              // 0 means use defaultPromotionThreshold
 	}
 
 	nodesData struct {
@@ -88,7 +89,12 @@ type (
 // NewFieldTrie creates a new field trie from the given elements.
 // length is the maximum capacity of the field (e.g., VALIDATOR_REGISTRY_LIMIT) and determines
 // the trie depth. The number of elements must be <= length.
-func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any, length uint64) (*FieldTrie, error) {
+// promotionThreshold overrides the default overlay promotion threshold; 0 means use the default.
+func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any, length uint64, promotionThreshold int) (*FieldTrie, error) {
+	if promotionThreshold <= 0 {
+		promotionThreshold = defaultPromotionThreshold
+	}
+
 	if !map[types.DataType]bool{
 		types.BasicArray:      true,
 		types.CompositeArray:  true,
@@ -107,12 +113,13 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 	}
 
 	fieldTrie := &FieldTrie{
-		ref:        stateutil.NewRef(1),
-		dataRef:    stateutil.NewRef(0),
-		field:      field,
-		dataType:   fieldInfo,
-		length:     length,
-		numOfElems: elemCount(elements),
+		ref:                stateutil.NewRef(1),
+		dataRef:            stateutil.NewRef(0),
+		field:              field,
+		dataType:           fieldInfo,
+		length:             length,
+		numOfElems:         elemCount(elements),
+		promotionThreshold: promotionThreshold,
 	}
 
 	runtime.AddCleanup(fieldTrie, cleanupRef, fieldTrie.ref)
@@ -143,15 +150,16 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 	f.ref.AddRef()
 
 	copiedTrie := &FieldTrie{
-		ref:           f.ref,
-		dataRef:       f.dataRef,
-		nodesData:     f.nodesData,
-		base:          f.base,
-		overridesData: f.overridesData,
-		field:         f.field,
-		dataType:      f.dataType,
-		length:        f.length,
-		numOfElems:    f.numOfElems,
+		ref:                f.ref,
+		dataRef:            f.dataRef,
+		nodesData:          f.nodesData,
+		base:               f.base,
+		overridesData:      f.overridesData,
+		field:              f.field,
+		dataType:           f.dataType,
+		length:             f.length,
+		numOfElems:         f.numOfElems,
+		promotionThreshold: f.promotionThreshold,
 	}
 
 	runtime.AddCleanup(copiedTrie, cleanupRef, f.ref)
@@ -263,12 +271,13 @@ func (f *FieldTrie) fork() *FieldTrie {
 	fieldTrieForkCounter.WithLabelValues(f.field.String(), overlayMode(f.base != nil)).Inc()
 
 	forked := &FieldTrie{
-		ref:        stateutil.NewRef(1),
-		dataRef:    stateutil.NewRef(0),
-		field:      f.field,
-		dataType:   f.dataType,
-		length:     f.length,
-		numOfElems: f.numOfElems,
+		ref:                stateutil.NewRef(1),
+		dataRef:            stateutil.NewRef(0),
+		field:              f.field,
+		dataType:           f.dataType,
+		length:             f.length,
+		numOfElems:         f.numOfElems,
+		promotionThreshold: f.promotionThreshold,
 	}
 
 	runtime.AddCleanup(forked, cleanupRef, forked.ref)
@@ -310,7 +319,7 @@ func (f *FieldTrie) fork() *FieldTrie {
 
 // recomputeInPlace performs the trie recomputation on the current trie.
 func (f *FieldTrie) recomputeInPlace(indices []uint64, elements any) ([32]byte, error) {
-	promote := f.base != nil && len(indices) > overlayPromotionThreshold
+	promote := f.base != nil && len(indices) > f.promotionThreshold
 	if promote {
 		fieldTriePromotionCounter.WithLabelValues(f.field.String()).Inc()
 	}
@@ -344,7 +353,7 @@ func (f *FieldTrie) recomputeInPlace(indices []uint64, elements any) ([32]byte, 
 	}
 
 	// Promote when the accumulated leaf-level overrides exceed the threshold.
-	if len(f.overridesData.levels[0]) > overlayPromotionThreshold {
+	if len(f.overridesData.levels[0]) > f.promotionThreshold {
 		root, err := f.promoteOverlay(elements, indices)
 		if err != nil {
 			return [32]byte{}, fmt.Errorf("promote overlay: %w", err)

@@ -139,6 +139,14 @@ var (
 	)
 )
 
+// promotionThresholdByField overrides the default overlay promotion
+// threshold for specific fields. Fields not in this map use 0 (default).
+var promotionThresholdByField = map[types.FieldIndex]int{
+	types.BlockRoots: 1024,
+	types.StateRoots: 1024,
+	types.Validators: 10_000,
+}
+
 const (
 	phase0SharedFieldRefCount    = 5
 	altairSharedFieldRefCount    = 5
@@ -246,7 +254,7 @@ func InitializeFromProtoUnsafePhase0(st *ethpb.BeaconState) (state.BeaconState, 
 		if !ok {
 			continue
 		}
-		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0)
+		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
 			return nil, err
 		}
@@ -325,7 +333,7 @@ func InitializeFromProtoUnsafeAltair(st *ethpb.BeaconStateAltair) (state.BeaconS
 		if !ok {
 			continue
 		}
-		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0)
+		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
 			return nil, err
 		}
@@ -405,7 +413,7 @@ func InitializeFromProtoUnsafeBellatrix(st *ethpb.BeaconStateBellatrix) (state.B
 		if !ok {
 			continue
 		}
-		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0)
+		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
 			return nil, err
 		}
@@ -489,7 +497,7 @@ func InitializeFromProtoUnsafeCapella(st *ethpb.BeaconStateCapella) (state.Beaco
 		if !ok {
 			continue
 		}
-		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0)
+		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
 			return nil, err
 		}
@@ -572,7 +580,7 @@ func InitializeFromProtoUnsafeDeneb(st *ethpb.BeaconStateDeneb) (state.BeaconSta
 		if !ok {
 			continue
 		}
-		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0)
+		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
 			return nil, err
 		}
@@ -664,7 +672,7 @@ func InitializeFromProtoUnsafeElectra(st *ethpb.BeaconStateElectra) (state.Beaco
 		if !ok {
 			continue
 		}
-		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0)
+		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
 			return nil, err
 		}
@@ -769,7 +777,7 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 		if !ok {
 			continue
 		}
-		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0)
+		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
 			return nil, err
 		}
@@ -877,7 +885,7 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 		if !ok {
 			continue
 		}
-		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0)
+		trie, err := fieldtrie.NewFieldTrie(f, dt, nil, 0, promotionThresholdByField[f])
 		if err != nil {
 			return nil, err
 		}
@@ -1441,7 +1449,7 @@ func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements any) (
 }
 
 func (b *BeaconState) resetFieldTrie(index types.FieldIndex, elements any, length uint64) error {
-	fTrie, err := fieldtrie.NewFieldTrie(index, fieldMap[index], elements, length)
+	fTrie, err := fieldtrie.NewFieldTrie(index, fieldMap[index], elements, length, promotionThresholdByField[index])
 	if err != nil {
 		return err
 	}
