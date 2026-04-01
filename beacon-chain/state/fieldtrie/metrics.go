@@ -29,7 +29,7 @@ var (
 	fieldTrieForkCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "field_trie_fork_total",
 		Help: "Total number of copy-on-write forks triggered by RecomputeTrie on a shared trie.",
-	}, []string{"field"})
+	}, []string{"field", "mode"})
 
 	// fieldTriePromotionCounter counts overlay-to-owned promotions.
 	fieldTriePromotionCounter = promauto.NewCounterVec(prometheus.CounterOpts{

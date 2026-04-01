@@ -180,7 +180,6 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) (*FieldTrie, [
 
 	// If field is shared, snapshot source data under the lock, then recompute on the fork.
 	if f.isShared() {
-		fieldTrieForkCounter.WithLabelValues(f.field.String()).Inc()
 		forked := f.fork()
 
 		root, err := forked.recomputeInPlace(indices, elements)
@@ -261,6 +260,8 @@ func (f *FieldTrie) trieRoot() ([32]byte, error) {
 
 // fork creates a new independent trie from the shared source's data.
 func (f *FieldTrie) fork() *FieldTrie {
+	fieldTrieForkCounter.WithLabelValues(f.field.String(), overlayMode(f.base != nil)).Inc()
+
 	forked := &FieldTrie{
 		ref:        stateutil.NewRef(1),
 		dataRef:    stateutil.NewRef(0),
@@ -307,7 +308,7 @@ func (f *FieldTrie) fork() *FieldTrie {
 	return forked
 }
 
-// recomputeInPlace performs the trie recomputation on the current trie..
+// recomputeInPlace performs the trie recomputation on the current trie.
 func (f *FieldTrie) recomputeInPlace(indices []uint64, elements any) ([32]byte, error) {
 	promote := f.base != nil && len(indices) > overlayPromotionThreshold
 	if promote {
