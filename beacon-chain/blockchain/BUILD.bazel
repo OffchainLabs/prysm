@@ -141,6 +141,7 @@ go_test(
         "service_test.go",
         "setup_forkchoice_test.go",
         "setup_test.go",
+        "tracked_proposer_test.go",
         "weak_subjectivity_checks_test.go",
     ],
     embed = [":go_default_library"],
