@@ -394,6 +394,16 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v4/validator/blocks/{slot}",
+			name:     namespace + ".ProduceBlockV4",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.ProduceBlockV4,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/validator/beacon_committee_selections",
 			name:     namespace + ".BeaconCommitteeSelections",
 			middleware: []middleware.Middleware{
