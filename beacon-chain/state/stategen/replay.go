@@ -153,7 +153,7 @@ func (s *State) maybeApplyAncestorEnvelope(
 	if err != nil {
 		return errors.Wrap(err, "could not wrap ancestor blinded execution payload envelope")
 	}
-	return gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, st, ancestorBlock.Block().StateRoot(), wrappedEnvelope)
+	return gloas.ProcessBlindedExecutionPayload(ctx, st, ancestorBlock.Block().StateRoot(), wrappedEnvelope)
 }
 
 // loadBlocks loads the blocks between start slot and end slot by recursively fetching from end block root.
