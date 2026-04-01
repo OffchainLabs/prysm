@@ -1,2 +1,2 @@
-### Added
+### Removed
 - Removed proposer index cache.
