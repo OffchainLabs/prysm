@@ -128,6 +128,14 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 			}
 			return json.Marshal(signedBlock)
 		})
+	case *ethpb.GenericSignedBeaconBlock_Gloas:
+		res, err = buildBlockResult("gloas", false, blockType.Gloas, blockType.Gloas.Block, func() ([]byte, error) {
+			signedBlock, err := structs.SignedBeaconBlockGloasFromConsensus(blockType.Gloas)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to convert gloas beacon block")
+			}
+			return json.Marshal(signedBlock)
+		})
 	case *ethpb.GenericSignedBeaconBlock_Fulu:
 		res, err = buildBlockResult("fulu", false, blockType.Fulu, blockType.Fulu.Block, func() ([]byte, error) {
 			signedBlock, err := structs.SignedBeaconBlockContentsFuluFromConsensus(blockType.Fulu)
