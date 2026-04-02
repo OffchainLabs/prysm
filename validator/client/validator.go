@@ -839,11 +839,16 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 
 	prefs := v.buildProposerPreferences(ctx, km, slot)
 	if len(prefs) > 0 {
-		if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
-			SignedProposerPreferences: prefs,
-		}); err != nil {
-			log.WithError(err).Warn("Failed to submit proposer preferences")
-		}
+		// Delay to mid-slot so the block for this slot is processed first.
+		delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+		go func() {
+			time.Sleep(delay)
+			if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
+				SignedProposerPreferences: prefs,
+			}); err != nil {
+				log.WithError(err).Warn("Failed to submit proposer preferences")
+			}
+		}()
 	}
 
 	// TODO: figure out what to do post gloas for builder apis
@@ -1028,7 +1033,19 @@ func (v *validator) buildProposerPreferences(
 	km keymanager.IKeymanager,
 	slot primitives.Slot,
 ) []*ethpb.SignedProposerPreferences {
-	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+	currentEpoch := slots.ToEpoch(slot)
+	gloasEpoch := params.BeaconConfig().GloasForkEpoch
+	if currentEpoch+1 < gloasEpoch {
+		return nil
+	}
+	// Send once per epoch at mid-epoch so beacon nodes have processed the
+	// epoch transition and updated their ProposerLookahead.
+	epochStart, err := slots.EpochStart(currentEpoch)
+	if err != nil {
+		return nil
+	}
+	midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
+	if slot != midEpoch {
 		return nil
 	}
 

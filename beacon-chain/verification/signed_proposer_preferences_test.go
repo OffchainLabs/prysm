@@ -20,9 +20,8 @@ import (
 func TestProposerPreferencesVerifier_VerifyCurrentOrNextEpoch(t *testing.T) {
 	st, _, signed := newSignedProposerPreferencesState(t, 31, 40, 0)
 
-	// Next epoch slot is accepted.
-	verifier := &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: clockForSlot(t, st.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
-	require.NoError(t, verifier.VerifyCurrentOrNextEpoch(st))
+	verifier := &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
+	require.NoError(t, verifier.VerifyNextEpoch(st))
 
 	// Current epoch future slot is accepted.
 	signed.Message.ProposalSlot = st.Slot() + 1
@@ -31,13 +30,8 @@ func TestProposerPreferencesVerifier_VerifyCurrentOrNextEpoch(t *testing.T) {
 
 	// Current slot (already passed) is rejected.
 	signed.Message.ProposalSlot = st.Slot()
-	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: clockForSlot(t, st.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
-	require.ErrorIs(t, verifier.VerifyCurrentOrNextEpoch(st), ErrProposerPreferencesSlotAlreadyPassed)
-
-	// Two epochs ahead is rejected.
-	signed.Message.ProposalSlot = st.Slot() + primitives.Slot(2*params.BeaconConfig().SlotsPerEpoch)
-	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: clockForSlot(t, st.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
-	require.ErrorIs(t, verifier.VerifyCurrentOrNextEpoch(st), ErrProposerPreferencesNotCurrentOrNextEpoch)
+	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
+	require.ErrorIs(t, verifier.VerifyNextEpoch(st), ErrProposerPreferencesNotNextEpoch)
 }
 
 func TestProposerPreferencesVerifier_VerifyValidProposalSlot(t *testing.T) {
@@ -137,14 +131,6 @@ func newSignedProposerPreferencesState(t *testing.T, currentSlot, proposalSlot p
 	}
 	signed.Signature = signProposerPreferencesWithConfigFork(t, keys[validatorIndex], signed.Message, st)
 	return st, keys, signed
-}
-
-func clockForSlot(t *testing.T, slot primitives.Slot) *startup.Clock {
-	t.Helper()
-	sps := params.BeaconConfig().SecondsPerSlot
-	now := time.Unix(int64(sps*(uint64(slot)+1)), 0)
-	genesis := time.Unix(int64(sps), 0)
-	return startup.NewClock(genesis, [32]byte{}, startup.WithNower(func() time.Time { return now }))
 }
 
 // signProposerPreferencesWithConfigFork signs preferences using the config-based fork

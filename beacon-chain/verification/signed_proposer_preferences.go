@@ -35,23 +35,23 @@ type ProposerPreferencesVerifier struct {
 	p       *ethpb.SignedProposerPreferences
 }
 
-// VerifyCurrentOrNextEpoch verifies the proposal slot is in the current or next epoch and has not already passed.
-func (v *ProposerPreferencesVerifier) VerifyCurrentOrNextEpoch(st state.ReadOnlyBeaconState) (err error) {
-	defer v.record(RequireProposerPreferencesCurrentOrNextEpoch, &err)
+// VerifyNextEpoch verifies the proposal slot is in the next epoch relative to
+// the state epoch, keeping it consistent with the ProposerLookahead index.
+func (v *ProposerPreferencesVerifier) VerifyNextEpoch(st state.ReadOnlyBeaconState) (err error) {
+	defer v.record(RequireProposerPreferencesNextEpoch, &err)
 
 	msg := v.message()
-	currentEpoch := v.clock.CurrentEpoch()
+	stateEpoch := slots.ToEpoch(st.Slot())
 	proposalEpoch := slots.ToEpoch(msg.ProposalSlot)
-	if proposalEpoch < currentEpoch || proposalEpoch > currentEpoch.Add(1) {
-		return fmt.Errorf("%w: got epoch %d, current epoch %d", ErrProposerPreferencesNotCurrentOrNextEpoch, proposalEpoch, currentEpoch)
-	}
-	if msg.ProposalSlot <= st.Slot() {
-		return fmt.Errorf("%w: proposal slot %d <= state slot %d", ErrProposerPreferencesSlotAlreadyPassed, msg.ProposalSlot, st.Slot())
+	if proposalEpoch != stateEpoch.Add(1) {
+		return fmt.Errorf("%w: proposal epoch %d, state epoch %d",
+			ErrProposerPreferencesNotNextEpoch, proposalEpoch, stateEpoch)
 	}
 	return nil
 }
 
-// VerifyValidProposalSlot verifies the validator matches the state's proposer lookahead entry for the proposal slot.
+// VerifyValidProposalSlot verifies the validator matches the next-epoch
+// proposer lookahead entry for the proposal slot.
 func (v *ProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireProposerPreferencesProposalSlotValid, &err)
 

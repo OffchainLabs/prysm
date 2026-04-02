@@ -127,7 +127,7 @@ func (a *AggregateAttestationAndProofElectra) MarshalSSZTo(buf []byte) (dst []by
 	offset := int(108)
 
 	// Field (0) 'AggregatorIndex'
-	dst = ssz.MarshalUint64(dst, uint64(a.AggregatorIndex))
+	dst = ssz.MarshalUint(dst, a.AggregatorIndex)
 
 	// Offset (1) 'Aggregate'
 	dst = ssz.WriteOffset(dst, offset)
@@ -163,7 +163,7 @@ func (a *AggregateAttestationAndProofElectra) UnmarshalSSZ(buf []byte) error {
 	var o1 uint64
 
 	// Field (0) 'AggregatorIndex'
-	a.AggregatorIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+	a.AggregatorIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[0:8])
 
 	// Offset (1) 'Aggregate'
 	if o1 = ssz.ReadOffset(buf[8:12]); o1 > size {
@@ -216,7 +216,7 @@ func (a *AggregateAttestationAndProofElectra) HashTreeRootWith(hh *ssz.Hasher) (
 	indx := hh.Index()
 
 	// Field (0) 'AggregatorIndex'
-	hh.PutUint64(uint64(a.AggregatorIndex))
+	ssz.PutUint(hh, a.AggregatorIndex)
 
 	// Field (1) 'Aggregate'
 	if err = a.Aggregate.HashTreeRootWith(hh); err != nil {
@@ -393,10 +393,10 @@ func (s *SingleAttestation) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 
 	// Field (0) 'CommitteeId'
-	dst = ssz.MarshalUint64(dst, uint64(s.CommitteeId))
+	dst = ssz.MarshalUint(dst, s.CommitteeId)
 
 	// Field (1) 'AttesterIndex'
-	dst = ssz.MarshalUint64(dst, uint64(s.AttesterIndex))
+	dst = ssz.MarshalUint(dst, s.AttesterIndex)
 
 	// Field (2) 'Data'
 	if s.Data == nil {
@@ -425,10 +425,10 @@ func (s *SingleAttestation) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'CommitteeId'
-	s.CommitteeId = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.CommitteeIndex(ssz.UnmarshallUint64(buf[0:8]))
+	s.CommitteeId = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.CommitteeIndex](buf[0:8])
 
 	// Field (1) 'AttesterIndex'
-	s.AttesterIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	s.AttesterIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[8:16])
 
 	// Field (2) 'Data'
 	if s.Data == nil {
@@ -463,10 +463,10 @@ func (s *SingleAttestation) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'CommitteeId'
-	hh.PutUint64(uint64(s.CommitteeId))
+	ssz.PutUint(hh, s.CommitteeId)
 
 	// Field (1) 'AttesterIndex'
-	hh.PutUint64(uint64(s.AttesterIndex))
+	ssz.PutUint(hh, s.AttesterIndex)
 
 	// Field (2) 'Data'
 	if err = s.Data.HashTreeRootWith(hh); err != nil {
@@ -1359,10 +1359,10 @@ func (b *BeaconBlockElectra) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset := int(84)
 
 	// Field (0) 'Slot'
-	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+	dst = ssz.MarshalUint(dst, b.Slot)
 
 	// Field (1) 'ProposerIndex'
-	dst = ssz.MarshalUint64(dst, uint64(b.ProposerIndex))
+	dst = ssz.MarshalUint(dst, b.ProposerIndex)
 
 	// Field (2) 'ParentRoot'
 	if size := len(b.ParentRoot); size != 32 {
@@ -1405,10 +1405,10 @@ func (b *BeaconBlockElectra) UnmarshalSSZ(buf []byte) error {
 	var o4 uint64
 
 	// Field (0) 'Slot'
-	b.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.Slot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[0:8])
 
 	// Field (1) 'ProposerIndex'
-	b.ProposerIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	b.ProposerIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[8:16])
 
 	// Field (2) 'ParentRoot'
 	if cap(b.ParentRoot) == 0 {
@@ -1467,10 +1467,10 @@ func (b *BeaconBlockElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Slot'
-	hh.PutUint64(uint64(b.Slot))
+	ssz.PutUint(hh, b.Slot)
 
 	// Field (1) 'ProposerIndex'
-	hh.PutUint64(uint64(b.ProposerIndex))
+	ssz.PutUint(hh, b.ProposerIndex)
 
 	// Field (2) 'ParentRoot'
 	if size := len(b.ParentRoot); size != 32 {
@@ -2261,10 +2261,10 @@ func (b *BlindedBeaconBlockElectra) MarshalSSZTo(buf []byte) (dst []byte, err er
 	offset := int(84)
 
 	// Field (0) 'Slot'
-	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+	dst = ssz.MarshalUint(dst, b.Slot)
 
 	// Field (1) 'ProposerIndex'
-	dst = ssz.MarshalUint64(dst, uint64(b.ProposerIndex))
+	dst = ssz.MarshalUint(dst, b.ProposerIndex)
 
 	// Field (2) 'ParentRoot'
 	if size := len(b.ParentRoot); size != 32 {
@@ -2307,10 +2307,10 @@ func (b *BlindedBeaconBlockElectra) UnmarshalSSZ(buf []byte) error {
 	var o4 uint64
 
 	// Field (0) 'Slot'
-	b.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.Slot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[0:8])
 
 	// Field (1) 'ProposerIndex'
-	b.ProposerIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	b.ProposerIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[8:16])
 
 	// Field (2) 'ParentRoot'
 	if cap(b.ParentRoot) == 0 {
@@ -2369,10 +2369,10 @@ func (b *BlindedBeaconBlockElectra) HashTreeRootWith(hh *ssz.Hasher) (err error)
 	indx := hh.Index()
 
 	// Field (0) 'Slot'
-	hh.PutUint64(uint64(b.Slot))
+	ssz.PutUint(hh, b.Slot)
 
 	// Field (1) 'ProposerIndex'
-	hh.PutUint64(uint64(b.ProposerIndex))
+	ssz.PutUint(hh, b.ProposerIndex)
 
 	// Field (2) 'ParentRoot'
 	if size := len(b.ParentRoot); size != 32 {
@@ -3206,7 +3206,7 @@ func (i *IndexedAttestationElectra) MarshalSSZTo(buf []byte) (dst []byte, err er
 		return
 	}
 	for ii := 0; ii < len(i.AttestingIndices); ii++ {
-		dst = ssz.MarshalUint64(dst, i.AttestingIndices[ii])
+		dst = ssz.MarshalUint(dst, i.AttestingIndices[ii])
 	}
 
 	return
@@ -3253,9 +3253,9 @@ func (i *IndexedAttestationElectra) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		i.AttestingIndices = ssz.ExtendUint64(i.AttestingIndices, num)
+		i.AttestingIndices = ssz.ExtendUint(i.AttestingIndices, num)
 		for ii := 0; ii < num; ii++ {
-			i.AttestingIndices[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+			i.AttestingIndices[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
 		}
 	}
 	return err
@@ -3288,7 +3288,7 @@ func (i *IndexedAttestationElectra) HashTreeRootWith(hh *ssz.Hasher) (err error)
 		}
 		subIndx := hh.Index()
 		for _, i := range i.AttestingIndices {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.FillUpTo32()
 
@@ -3323,7 +3323,7 @@ func (b *BeaconStateElectra) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset := int(2736713)
 
 	// Field (0) 'GenesisTime'
-	dst = ssz.MarshalUint64(dst, b.GenesisTime)
+	dst = ssz.MarshalUint(dst, b.GenesisTime)
 
 	// Field (1) 'GenesisValidatorsRoot'
 	if size := len(b.GenesisValidatorsRoot); size != 32 {
@@ -3333,7 +3333,7 @@ func (b *BeaconStateElectra) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, b.GenesisValidatorsRoot...)
 
 	// Field (2) 'Slot'
-	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+	dst = ssz.MarshalUint(dst, b.Slot)
 
 	// Field (3) 'Fork'
 	if b.Fork == nil {
@@ -3394,7 +3394,7 @@ func (b *BeaconStateElectra) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset += len(b.Eth1DataVotes) * 72
 
 	// Field (10) 'Eth1DepositIndex'
-	dst = ssz.MarshalUint64(dst, b.Eth1DepositIndex)
+	dst = ssz.MarshalUint(dst, b.Eth1DepositIndex)
 
 	// Offset (11) 'Validators'
 	dst = ssz.WriteOffset(dst, offset)
@@ -3423,7 +3423,7 @@ func (b *BeaconStateElectra) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 	for ii := 0; ii < 8192; ii++ {
-		dst = ssz.MarshalUint64(dst, b.Slashings[ii])
+		dst = ssz.MarshalUint(dst, b.Slashings[ii])
 	}
 
 	// Offset (15) 'PreviousEpochParticipation'
@@ -3493,32 +3493,32 @@ func (b *BeaconStateElectra) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset += b.LatestExecutionPayloadHeader.SizeSSZ()
 
 	// Field (25) 'NextWithdrawalIndex'
-	dst = ssz.MarshalUint64(dst, b.NextWithdrawalIndex)
+	dst = ssz.MarshalUint(dst, b.NextWithdrawalIndex)
 
 	// Field (26) 'NextWithdrawalValidatorIndex'
-	dst = ssz.MarshalUint64(dst, uint64(b.NextWithdrawalValidatorIndex))
+	dst = ssz.MarshalUint(dst, b.NextWithdrawalValidatorIndex)
 
 	// Offset (27) 'HistoricalSummaries'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(b.HistoricalSummaries) * 64
 
 	// Field (28) 'DepositRequestsStartIndex'
-	dst = ssz.MarshalUint64(dst, b.DepositRequestsStartIndex)
+	dst = ssz.MarshalUint(dst, b.DepositRequestsStartIndex)
 
 	// Field (29) 'DepositBalanceToConsume'
-	dst = ssz.MarshalUint64(dst, uint64(b.DepositBalanceToConsume))
+	dst = ssz.MarshalUint(dst, b.DepositBalanceToConsume)
 
 	// Field (30) 'ExitBalanceToConsume'
-	dst = ssz.MarshalUint64(dst, uint64(b.ExitBalanceToConsume))
+	dst = ssz.MarshalUint(dst, b.ExitBalanceToConsume)
 
 	// Field (31) 'EarliestExitEpoch'
-	dst = ssz.MarshalUint64(dst, uint64(b.EarliestExitEpoch))
+	dst = ssz.MarshalUint(dst, b.EarliestExitEpoch)
 
 	// Field (32) 'ConsolidationBalanceToConsume'
-	dst = ssz.MarshalUint64(dst, uint64(b.ConsolidationBalanceToConsume))
+	dst = ssz.MarshalUint(dst, b.ConsolidationBalanceToConsume)
 
 	// Field (33) 'EarliestConsolidationEpoch'
-	dst = ssz.MarshalUint64(dst, uint64(b.EarliestConsolidationEpoch))
+	dst = ssz.MarshalUint(dst, b.EarliestConsolidationEpoch)
 
 	// Offset (34) 'PendingDeposits'
 	dst = ssz.WriteOffset(dst, offset)
@@ -3573,7 +3573,7 @@ func (b *BeaconStateElectra) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 	for ii := 0; ii < len(b.Balances); ii++ {
-		dst = ssz.MarshalUint64(dst, b.Balances[ii])
+		dst = ssz.MarshalUint(dst, b.Balances[ii])
 	}
 
 	// Field (15) 'PreviousEpochParticipation'
@@ -3596,7 +3596,7 @@ func (b *BeaconStateElectra) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 	for ii := 0; ii < len(b.InactivityScores); ii++ {
-		dst = ssz.MarshalUint64(dst, b.InactivityScores[ii])
+		dst = ssz.MarshalUint(dst, b.InactivityScores[ii])
 	}
 
 	// Field (24) 'LatestExecutionPayloadHeader'
@@ -3663,7 +3663,7 @@ func (b *BeaconStateElectra) UnmarshalSSZ(buf []byte) error {
 	var o7, o9, o11, o12, o15, o16, o21, o24, o27, o34, o35, o36 uint64
 
 	// Field (0) 'GenesisTime'
-	b.GenesisTime = ssz.UnmarshallUint64(buf[0:8])
+	b.GenesisTime = ssz.UnmarshallUint[uint64](buf[0:8])
 
 	// Field (1) 'GenesisValidatorsRoot'
 	if cap(b.GenesisValidatorsRoot) == 0 {
@@ -3672,7 +3672,7 @@ func (b *BeaconStateElectra) UnmarshalSSZ(buf []byte) error {
 	b.GenesisValidatorsRoot = append(b.GenesisValidatorsRoot, buf[8:40]...)
 
 	// Field (2) 'Slot'
-	b.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
+	b.Slot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[40:48])
 
 	// Field (3) 'Fork'
 	if b.Fork == nil {
@@ -3731,7 +3731,7 @@ func (b *BeaconStateElectra) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (10) 'Eth1DepositIndex'
-	b.Eth1DepositIndex = ssz.UnmarshallUint64(buf[524544:524552])
+	b.Eth1DepositIndex = ssz.UnmarshallUint[uint64](buf[524544:524552])
 
 	// Offset (11) 'Validators'
 	if o11 = ssz.ReadOffset(buf[524552:524556]); o11 > size || o9 > o11 {
@@ -3753,9 +3753,9 @@ func (b *BeaconStateElectra) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (14) 'Slashings'
-	b.Slashings = ssz.ExtendUint64(b.Slashings, 8192)
+	b.Slashings = ssz.ExtendUint(b.Slashings, 8192)
 	for ii := 0; ii < 8192; ii++ {
-		b.Slashings[ii] = ssz.UnmarshallUint64(buf[2621712:2687248][ii*8 : (ii+1)*8])
+		b.Slashings[ii] = ssz.UnmarshallUint[uint64](buf[2621712:2687248][ii*8 : (ii+1)*8])
 	}
 
 	// Offset (15) 'PreviousEpochParticipation'
@@ -3825,10 +3825,10 @@ func (b *BeaconStateElectra) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (25) 'NextWithdrawalIndex'
-	b.NextWithdrawalIndex = ssz.UnmarshallUint64(buf[2736633:2736641])
+	b.NextWithdrawalIndex = ssz.UnmarshallUint[uint64](buf[2736633:2736641])
 
 	// Field (26) 'NextWithdrawalValidatorIndex'
-	b.NextWithdrawalValidatorIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[2736641:2736649]))
+	b.NextWithdrawalValidatorIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[2736641:2736649])
 
 	// Offset (27) 'HistoricalSummaries'
 	if o27 = ssz.ReadOffset(buf[2736649:2736653]); o27 > size || o24 > o27 {
@@ -3836,22 +3836,22 @@ func (b *BeaconStateElectra) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (28) 'DepositRequestsStartIndex'
-	b.DepositRequestsStartIndex = ssz.UnmarshallUint64(buf[2736653:2736661])
+	b.DepositRequestsStartIndex = ssz.UnmarshallUint[uint64](buf[2736653:2736661])
 
 	// Field (29) 'DepositBalanceToConsume'
-	b.DepositBalanceToConsume = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736661:2736669]))
+	b.DepositBalanceToConsume = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[2736661:2736669])
 
 	// Field (30) 'ExitBalanceToConsume'
-	b.ExitBalanceToConsume = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736669:2736677]))
+	b.ExitBalanceToConsume = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[2736669:2736677])
 
 	// Field (31) 'EarliestExitEpoch'
-	b.EarliestExitEpoch = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736677:2736685]))
+	b.EarliestExitEpoch = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch](buf[2736677:2736685])
 
 	// Field (32) 'ConsolidationBalanceToConsume'
-	b.ConsolidationBalanceToConsume = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736685:2736693]))
+	b.ConsolidationBalanceToConsume = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[2736685:2736693])
 
 	// Field (33) 'EarliestConsolidationEpoch'
-	b.EarliestConsolidationEpoch = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736693:2736701]))
+	b.EarliestConsolidationEpoch = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch](buf[2736693:2736701])
 
 	// Offset (34) 'PendingDeposits'
 	if o34 = ssz.ReadOffset(buf[2736701:2736705]); o34 > size || o27 > o34 {
@@ -3927,9 +3927,9 @@ func (b *BeaconStateElectra) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		b.Balances = ssz.ExtendUint64(b.Balances, num)
+		b.Balances = ssz.ExtendUint(b.Balances, num)
 		for ii := 0; ii < num; ii++ {
-			b.Balances[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+			b.Balances[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
 		}
 	}
 
@@ -3964,9 +3964,9 @@ func (b *BeaconStateElectra) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		b.InactivityScores = ssz.ExtendUint64(b.InactivityScores, num)
+		b.InactivityScores = ssz.ExtendUint(b.InactivityScores, num)
 		for ii := 0; ii < num; ii++ {
-			b.InactivityScores[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+			b.InactivityScores[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
 		}
 	}
 
@@ -4111,7 +4111,7 @@ func (b *BeaconStateElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'GenesisTime'
-	hh.PutUint64(b.GenesisTime)
+	ssz.PutUint(hh, b.GenesisTime)
 
 	// Field (1) 'GenesisValidatorsRoot'
 	if size := len(b.GenesisValidatorsRoot); size != 32 {
@@ -4121,7 +4121,7 @@ func (b *BeaconStateElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(b.GenesisValidatorsRoot)
 
 	// Field (2) 'Slot'
-	hh.PutUint64(uint64(b.Slot))
+	ssz.PutUint(hh, b.Slot)
 
 	// Field (3) 'Fork'
 	if err = b.Fork.HashTreeRootWith(hh); err != nil {
@@ -4208,7 +4208,7 @@ func (b *BeaconStateElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 
 	// Field (10) 'Eth1DepositIndex'
-	hh.PutUint64(b.Eth1DepositIndex)
+	ssz.PutUint(hh, b.Eth1DepositIndex)
 
 	// Field (11) 'Validators'
 	{
@@ -4234,7 +4234,7 @@ func (b *BeaconStateElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range b.Balances {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.FillUpTo32()
 
@@ -4267,7 +4267,7 @@ func (b *BeaconStateElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range b.Slashings {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.Merkleize(subIndx)
 	}
@@ -4326,7 +4326,7 @@ func (b *BeaconStateElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range b.InactivityScores {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.FillUpTo32()
 
@@ -4350,10 +4350,10 @@ func (b *BeaconStateElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 
 	// Field (25) 'NextWithdrawalIndex'
-	hh.PutUint64(b.NextWithdrawalIndex)
+	ssz.PutUint(hh, b.NextWithdrawalIndex)
 
 	// Field (26) 'NextWithdrawalValidatorIndex'
-	hh.PutUint64(uint64(b.NextWithdrawalValidatorIndex))
+	ssz.PutUint(hh, b.NextWithdrawalValidatorIndex)
 
 	// Field (27) 'HistoricalSummaries'
 	{
@@ -4372,22 +4372,22 @@ func (b *BeaconStateElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 
 	// Field (28) 'DepositRequestsStartIndex'
-	hh.PutUint64(b.DepositRequestsStartIndex)
+	ssz.PutUint(hh, b.DepositRequestsStartIndex)
 
 	// Field (29) 'DepositBalanceToConsume'
-	hh.PutUint64(uint64(b.DepositBalanceToConsume))
+	ssz.PutUint(hh, b.DepositBalanceToConsume)
 
 	// Field (30) 'ExitBalanceToConsume'
-	hh.PutUint64(uint64(b.ExitBalanceToConsume))
+	ssz.PutUint(hh, b.ExitBalanceToConsume)
 
 	// Field (31) 'EarliestExitEpoch'
-	hh.PutUint64(uint64(b.EarliestExitEpoch))
+	ssz.PutUint(hh, b.EarliestExitEpoch)
 
 	// Field (32) 'ConsolidationBalanceToConsume'
-	hh.PutUint64(uint64(b.ConsolidationBalanceToConsume))
+	ssz.PutUint(hh, b.ConsolidationBalanceToConsume)
 
 	// Field (33) 'EarliestConsolidationEpoch'
-	hh.PutUint64(uint64(b.EarliestConsolidationEpoch))
+	ssz.PutUint(hh, b.EarliestConsolidationEpoch)
 
 	// Field (34) 'PendingDeposits'
 	{
@@ -4465,7 +4465,7 @@ func (p *PendingDeposit) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, p.WithdrawalCredentials...)
 
 	// Field (2) 'Amount'
-	dst = ssz.MarshalUint64(dst, p.Amount)
+	dst = ssz.MarshalUint(dst, p.Amount)
 
 	// Field (3) 'Signature'
 	if size := len(p.Signature); size != 96 {
@@ -4475,7 +4475,7 @@ func (p *PendingDeposit) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, p.Signature...)
 
 	// Field (4) 'Slot'
-	dst = ssz.MarshalUint64(dst, uint64(p.Slot))
+	dst = ssz.MarshalUint(dst, p.Slot)
 
 	return
 }
@@ -4501,7 +4501,7 @@ func (p *PendingDeposit) UnmarshalSSZ(buf []byte) error {
 	p.WithdrawalCredentials = append(p.WithdrawalCredentials, buf[48:80]...)
 
 	// Field (2) 'Amount'
-	p.Amount = ssz.UnmarshallUint64(buf[80:88])
+	p.Amount = ssz.UnmarshallUint[uint64](buf[80:88])
 
 	// Field (3) 'Signature'
 	if cap(p.Signature) == 0 {
@@ -4510,7 +4510,7 @@ func (p *PendingDeposit) UnmarshalSSZ(buf []byte) error {
 	p.Signature = append(p.Signature, buf[88:184]...)
 
 	// Field (4) 'Slot'
-	p.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[184:192]))
+	p.Slot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[184:192])
 
 	return err
 }
@@ -4545,7 +4545,7 @@ func (p *PendingDeposit) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(p.WithdrawalCredentials)
 
 	// Field (2) 'Amount'
-	hh.PutUint64(p.Amount)
+	ssz.PutUint(hh, p.Amount)
 
 	// Field (3) 'Signature'
 	if size := len(p.Signature); size != 96 {
@@ -4555,7 +4555,7 @@ func (p *PendingDeposit) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(p.Signature)
 
 	// Field (4) 'Slot'
-	hh.PutUint64(uint64(p.Slot))
+	ssz.PutUint(hh, p.Slot)
 
 	hh.Merkleize(indx)
 	return
@@ -4571,13 +4571,13 @@ func (p *PendingPartialWithdrawal) MarshalSSZTo(buf []byte) (dst []byte, err err
 	dst = buf
 
 	// Field (0) 'Index'
-	dst = ssz.MarshalUint64(dst, uint64(p.Index))
+	dst = ssz.MarshalUint(dst, p.Index)
 
 	// Field (1) 'Amount'
-	dst = ssz.MarshalUint64(dst, p.Amount)
+	dst = ssz.MarshalUint(dst, p.Amount)
 
 	// Field (2) 'WithdrawableEpoch'
-	dst = ssz.MarshalUint64(dst, uint64(p.WithdrawableEpoch))
+	dst = ssz.MarshalUint(dst, p.WithdrawableEpoch)
 
 	return
 }
@@ -4591,13 +4591,13 @@ func (p *PendingPartialWithdrawal) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Index'
-	p.Index = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+	p.Index = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[0:8])
 
 	// Field (1) 'Amount'
-	p.Amount = ssz.UnmarshallUint64(buf[8:16])
+	p.Amount = ssz.UnmarshallUint[uint64](buf[8:16])
 
 	// Field (2) 'WithdrawableEpoch'
-	p.WithdrawableEpoch = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[16:24]))
+	p.WithdrawableEpoch = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch](buf[16:24])
 
 	return err
 }
@@ -4618,13 +4618,13 @@ func (p *PendingPartialWithdrawal) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 	indx := hh.Index()
 
 	// Field (0) 'Index'
-	hh.PutUint64(uint64(p.Index))
+	ssz.PutUint(hh, p.Index)
 
 	// Field (1) 'Amount'
-	hh.PutUint64(p.Amount)
+	ssz.PutUint(hh, p.Amount)
 
 	// Field (2) 'WithdrawableEpoch'
-	hh.PutUint64(uint64(p.WithdrawableEpoch))
+	ssz.PutUint(hh, p.WithdrawableEpoch)
 
 	hh.Merkleize(indx)
 	return
@@ -4640,10 +4640,10 @@ func (p *PendingConsolidation) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 	dst = buf
 
 	// Field (0) 'SourceIndex'
-	dst = ssz.MarshalUint64(dst, uint64(p.SourceIndex))
+	dst = ssz.MarshalUint(dst, p.SourceIndex)
 
 	// Field (1) 'TargetIndex'
-	dst = ssz.MarshalUint64(dst, uint64(p.TargetIndex))
+	dst = ssz.MarshalUint(dst, p.TargetIndex)
 
 	return
 }
@@ -4657,10 +4657,10 @@ func (p *PendingConsolidation) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'SourceIndex'
-	p.SourceIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+	p.SourceIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[0:8])
 
 	// Field (1) 'TargetIndex'
-	p.TargetIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	p.TargetIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[8:16])
 
 	return err
 }
@@ -4681,10 +4681,10 @@ func (p *PendingConsolidation) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'SourceIndex'
-	hh.PutUint64(uint64(p.SourceIndex))
+	ssz.PutUint(hh, p.SourceIndex)
 
 	// Field (1) 'TargetIndex'
-	hh.PutUint64(uint64(p.TargetIndex))
+	ssz.PutUint(hh, p.TargetIndex)
 
 	hh.Merkleize(indx)
 	return
@@ -4906,7 +4906,7 @@ func (l *LightClientUpdateElectra) MarshalSSZTo(buf []byte) (dst []byte, err err
 	}
 
 	// Field (6) 'SignatureSlot'
-	dst = ssz.MarshalUint64(dst, uint64(l.SignatureSlot))
+	dst = ssz.MarshalUint(dst, l.SignatureSlot)
 
 	// Field (0) 'AttestedHeader'
 	if dst, err = l.AttestedHeader.MarshalSSZTo(dst); err != nil {
@@ -4981,7 +4981,7 @@ func (l *LightClientUpdateElectra) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (6) 'SignatureSlot'
-	l.SignatureSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[25208:25216]))
+	l.SignatureSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[25208:25216])
 
 	// Field (0) 'AttestedHeader'
 	{
@@ -5090,7 +5090,7 @@ func (l *LightClientUpdateElectra) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 	}
 
 	// Field (6) 'SignatureSlot'
-	hh.PutUint64(uint64(l.SignatureSlot))
+	ssz.PutUint(hh, l.SignatureSlot)
 
 	hh.Merkleize(indx)
 	return
@@ -5142,7 +5142,7 @@ func (l *LightClientFinalityUpdateElectra) MarshalSSZTo(buf []byte) (dst []byte,
 	}
 
 	// Field (4) 'SignatureSlot'
-	dst = ssz.MarshalUint64(dst, uint64(l.SignatureSlot))
+	dst = ssz.MarshalUint(dst, l.SignatureSlot)
 
 	// Field (0) 'AttestedHeader'
 	if dst, err = l.AttestedHeader.MarshalSSZTo(dst); err != nil {
@@ -5200,7 +5200,7 @@ func (l *LightClientFinalityUpdateElectra) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (4) 'SignatureSlot'
-	l.SignatureSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[392:400]))
+	l.SignatureSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[392:400])
 
 	// Field (0) 'AttestedHeader'
 	{
@@ -5287,7 +5287,7 @@ func (l *LightClientFinalityUpdateElectra) HashTreeRootWith(hh *ssz.Hasher) (err
 	}
 
 	// Field (4) 'SignatureSlot'
-	hh.PutUint64(uint64(l.SignatureSlot))
+	ssz.PutUint(hh, l.SignatureSlot)
 
 	hh.Merkleize(indx)
 	return

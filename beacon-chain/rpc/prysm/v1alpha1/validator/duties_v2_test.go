@@ -643,24 +643,19 @@ func TestGetDutiesV2_SyncNotReady(t *testing.T) {
 	assert.ErrorContains(t, "Syncing to latest head", err)
 }
 
-// ptcTestState creates a genesis beacon state suitable for PTC testing:
-// - GloasForkEpoch = 0 (active from genesis)
-// - MaxEffectiveBalanceElectra = MaxEffectiveBalance (all validators accepted into PTC)
-// - MinGenesisActiveValidatorCount validators
+// ptcTestState creates a deterministic Fulu genesis state, upgrades it to Gloas,
+// and returns the upgraded state plus validator pubkeys for duty requests.
 // Callers must have already called params.SetupTestConfigCleanup and overridden
 // GloasForkEpoch and MaxEffectiveBalanceElectra in the beacon config.
 func ptcTestState(t *testing.T) (beaconstate.BeaconState, [][]byte) {
 	t.Helper()
-	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
-	deposits, _, err := util.DeterministicDepositsAndKeys(depChainStart)
+	numVals := params.BeaconConfig().MinGenesisActiveValidatorCount
+	fuluSt, keys := util.DeterministicGenesisStateFulu(t, numVals)
+	st, err := gloas.UpgradeToGloas(fuluSt)
 	require.NoError(t, err)
-	eth1Data, err := util.DeterministicEth1Data(len(deposits))
-	require.NoError(t, err)
-	st, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
-	require.NoError(t, err)
-	pubKeys := make([][]byte, depChainStart)
-	for i, d := range deposits {
-		pubKeys[i] = d.Data.PublicKey
+	pubKeys := make([][]byte, numVals)
+	for i := range numVals {
+		pubKeys[i] = keys[i].PublicKey().Marshal()
 	}
 	return st, pubKeys
 }
@@ -846,5 +841,63 @@ func TestGetDutiesV2_PTC_OK(t *testing.T) {
 	}
 	if currentCount == 0 {
 		t.Error("expected some current-epoch PTC assignments")
+	}
+}
+
+// TestGetDutiesV2_PTC_ForkBoundary verifies that when the current epoch is
+// the last Fulu epoch and the next epoch is GloAS, the endpoint does not
+// crash and next-epoch PTC duties are empty (state is Fulu, not GloAS).
+func TestGetDutiesV2_PTC_ForkBoundary(t *testing.T) {
+	helpers.ClearCache()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1 // Epoch 0 = Fulu, epoch 1 = GloAS.
+	cfg.MaxEffectiveBalanceElectra = cfg.MaxEffectiveBalance
+	params.OverrideBeaconConfig(cfg)
+
+	// Create a Fulu state at epoch 0.
+	numVals := params.BeaconConfig().MinGenesisActiveValidatorCount
+	st, keys := util.DeterministicGenesisStateFulu(t, numVals)
+	pubKeys := make([][]byte, numVals)
+	for i := range numVals {
+		pubKeys[i] = keys[i].PublicKey().Marshal()
+	}
+
+	genesis := util.NewBeaconBlock()
+	genesisRoot, err := genesis.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	chain := &mockChain.ChainService{
+		State: st, Root: genesisRoot[:], Genesis: time.Now(),
+	}
+	vs := &Server{
+		HeadFetcher:       chain,
+		TimeFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
+		CoreService:       &core.Service{},
+	}
+
+	req := &ethpb.DutiesRequest{
+		PublicKeys: pubKeys,
+		Epoch:      0, // Last Fulu epoch.
+	}
+	res, err := vs.GetDutiesV2(t.Context(), req)
+	require.NoError(t, err, "dutiesv2 must not error at the fork boundary")
+
+	// Current epoch (0) is before GloAS fork — no PTC.
+	for _, d := range res.CurrentEpochDuties {
+		if len(d.PtcSlots) > 0 {
+			t.Errorf("validator %d: expected no current-epoch PTC in Fulu, got %v", d.ValidatorIndex, d.PtcSlots)
+		}
+	}
+
+	// Next epoch (1) is GloAS, but the state is Fulu — PTC must be empty.
+	for _, d := range res.NextEpochDuties {
+		if len(d.PtcSlots) > 0 {
+			t.Errorf("validator %d: expected no next-epoch PTC from Fulu state at fork boundary, got %v",
+				d.ValidatorIndex, d.PtcSlots)
+		}
 	}
 }

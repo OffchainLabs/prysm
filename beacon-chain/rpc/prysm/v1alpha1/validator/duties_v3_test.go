@@ -6,6 +6,7 @@ import (
 
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -320,7 +321,9 @@ func TestGetPTCDuties_OK(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	numVals := uint64(fieldparams.PTCSize + 64)
-	bs, _ := util.DeterministicGenesisStateFulu(t, numVals)
+	fuluSt, _ := util.DeterministicGenesisStateFulu(t, numVals)
+	bs, err := gloas.UpgradeToGloas(fuluSt)
+	require.NoError(t, err)
 	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), bs, 0))
 
 	genesisRoot := [32]byte{0xaa}
@@ -373,9 +376,9 @@ func TestGetPTCDuties_EpochOutOfBound(t *testing.T) {
 		SyncChecker: &mockSync.Sync{IsSyncing: false},
 	}
 	currentEpoch := primitives.Epoch(chain.CurrentSlot() / params.BeaconConfig().SlotsPerEpoch)
-	req := &ethpb.PTCDutiesRequest{Epoch: currentEpoch + 1}
+	req := &ethpb.PTCDutiesRequest{Epoch: currentEpoch + 2}
 	_, err := vs.GetPTCDuties(t.Context(), req)
-	assert.ErrorContains(t, "can not be greater than current epoch", err)
+	assert.ErrorContains(t, "can not be greater than next epoch", err)
 }
 
 func TestGetPTCDuties_PreGloasFork(t *testing.T) {
