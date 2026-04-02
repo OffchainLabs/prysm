@@ -1052,13 +1052,13 @@ func TestSetPTCWindow(t *testing.T) {
 
 		got, err := st.PTCWindow()
 		require.NoError(t, err)
-		require.Equal(t, uint64(999), got[0].ValidatorIndices[0])
+		require.Equal(t, primitives.ValidatorIndex(999), got[0].ValidatorIndices[0])
 
 		// Verify it's a copy — mutating the input doesn't affect state.
 		newWindow[0].ValidatorIndices[0] = 0
 		got2, err := st.PTCWindow()
 		require.NoError(t, err)
-		require.Equal(t, uint64(999), got2[0].ValidatorIndices[0])
+		require.Equal(t, primitives.ValidatorIndex(999), got2[0].ValidatorIndices[0])
 	})
 }
 
@@ -1110,7 +1110,7 @@ func TestRotatePTCWindow(t *testing.T) {
 		// Last epoch should be the new epoch slots.
 		lastStart := 2 * slotsPerEpoch
 		for i := range slotsPerEpoch {
-			require.Equal(t, uint64(1000+i), got[lastStart+i].ValidatorIndices[0],
+			require.Equal(t, primitives.ValidatorIndex(1000+i), got[lastStart+i].ValidatorIndices[0],
 				fmt.Sprintf("mismatch at new slot %d", i))
 		}
 	})
