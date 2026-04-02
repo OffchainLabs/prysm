@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -1459,4 +1460,75 @@ func TestStore_EarliestSlot(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, nextEpochSlot, slot)
 	})
+}
+
+func TestStore_LowestRootsAtOrAboveSlot(t *testing.T) {
+	for _, tt := range blockTests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setupDB(t)
+			ctx := t.Context()
+
+			block1, err := tt.newBlock(primitives.Slot(10), nil)
+			require.NoError(t, err)
+			block2, err := tt.newBlock(primitives.Slot(50), nil)
+			require.NoError(t, err)
+			block3, err := tt.newBlock(primitives.Slot(100), nil)
+			require.NoError(t, err)
+
+			require.NoError(t, db.SaveBlock(ctx, block1))
+			require.NoError(t, db.SaveBlock(ctx, block2))
+			require.NoError(t, db.SaveBlock(ctx, block3))
+
+			// Before first block: slot 5 → block at slot 10.
+			foundSlot, roots, err := db.LowestRootsAtOrAboveSlot(ctx, 5)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(roots))
+			assert.Equal(t, primitives.Slot(10), foundSlot)
+
+			// Exact match: slot 10 → block at slot 10.
+			foundSlot, roots, err = db.LowestRootsAtOrAboveSlot(ctx, 10)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(roots))
+			assert.Equal(t, primitives.Slot(10), foundSlot)
+
+			// Gap: slot 11 → block at slot 50 (slots 11-49 missing).
+			foundSlot, roots, err = db.LowestRootsAtOrAboveSlot(ctx, 11)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(roots))
+			assert.Equal(t, primitives.Slot(50), foundSlot)
+
+			// Past last block: slot 101 → nothing.
+			_, roots, err = db.LowestRootsAtOrAboveSlot(ctx, 101)
+			require.NoError(t, err)
+			assert.Equal(t, 0, len(roots))
+
+			// Max-slot: should return empty.
+			_, roots, err = db.LowestRootsAtOrAboveSlot(ctx, math.MaxUint64)
+			require.NoError(t, err)
+			assert.Equal(t, 0, len(roots))
+		})
+	}
+}
+
+func TestStore_LowestRootsAtOrAboveSlot_MultipleBlocksSameSlot(t *testing.T) {
+	for _, tt := range blockTests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setupDB(t)
+			ctx := t.Context()
+
+			// Save two different blocks at the same slot with different parent roots.
+			block1, err := tt.newBlock(primitives.Slot(20), bytesutil.PadTo([]byte{1}, 32))
+			require.NoError(t, err)
+			block2, err := tt.newBlock(primitives.Slot(20), bytesutil.PadTo([]byte{2}, 32))
+			require.NoError(t, err)
+
+			require.NoError(t, db.SaveBlock(ctx, block1))
+			require.NoError(t, db.SaveBlock(ctx, block2))
+
+			foundSlot, roots, err := db.LowestRootsAtOrAboveSlot(ctx, 20)
+			require.NoError(t, err)
+			assert.Equal(t, primitives.Slot(20), foundSlot)
+			assert.Equal(t, 2, len(roots))
+		})
+	}
 }

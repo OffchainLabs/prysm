@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -381,6 +382,29 @@ func WaitOnNodes(ctx context.Context, nodes []e2etypes.ComponentRunner, nodesSta
 	}()
 
 	return g.Wait()
+}
+
+// GracefulStop sends SIGTERM to a process and gives it 5 seconds to exit before
+// sending SIGKILL. It does not call p.Wait() since the caller (cmd.Wait in Start)
+// is expected to handle process reaping.
+func GracefulStop(p *os.Process) error {
+	if p == nil {
+		return nil
+	}
+	if err := p.Signal(syscall.SIGTERM); err != nil {
+		// Process may have already exited; try kill as last resort.
+		return p.Kill()
+	}
+	// Give the process time to handle SIGTERM and exit cleanly.
+	// The parent goroutine's cmd.Wait() will detect the exit.
+	// If still alive after the grace period, force kill.
+	time.AfterFunc(5*time.Second, func() {
+		// Signal(0) checks if the process is still alive without sending a signal.
+		if err := p.Signal(syscall.Signal(0)); err == nil {
+			_ = p.Kill()
+		}
+	})
+	return nil
 }
 
 func MinerRPCClient() (*ethclient.Client, error) {

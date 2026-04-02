@@ -34,6 +34,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/beacon/states/{state_id}/pending_consolidations":      {http.MethodGet},
 		"/eth/v1/beacon/states/{state_id}/proposer_lookahead":          {http.MethodGet},
 		"/eth/v1/beacon/execution_payload_envelope/{block_id}":         {http.MethodGet},
+		"/eth/v2/beacon/execution_payload/bid":                         {http.MethodPost},
 		"/eth/v1/beacon/headers":                                       {http.MethodGet},
 		"/eth/v1/beacon/headers/{block_id}":                            {http.MethodGet},
 		"/eth/v2/beacon/blinded_blocks":                                {http.MethodPost},
@@ -95,6 +96,7 @@ func Test_endpoints(t *testing.T) {
 	validatorRoutes := map[string][]string{
 		"/eth/v1/validator/duties/attester/{epoch}":        {http.MethodPost},
 		"/eth/v1/validator/duties/proposer/{epoch}":        {http.MethodGet},
+		"/eth/v2/validator/duties/proposer/{epoch}":        {http.MethodGet},
 		"/eth/v1/validator/duties/sync/{epoch}":            {http.MethodPost},
 		"/eth/v1/validator/duties/ptc/{epoch}":             {http.MethodPost},
 		"/eth/v3/validator/blocks/{slot}":                  {http.MethodGet},

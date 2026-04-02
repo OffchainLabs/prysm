@@ -5,14 +5,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestSubmitValidatorRegistrations(t *testing.T) {
@@ -144,6 +149,53 @@ func Test_signValidatorRegistration(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func Test_signProposerPreferences(t *testing.T) {
+	kp := randKeypair(t)
+	km := newMockKeymanager(t, kp)
+	pref := &ethpb.ProposerPreferences{
+		ProposalSlot:   123,
+		ValidatorIndex: 456,
+		FeeRecipient:   bytesutil.PadTo([]byte("fee"), 20),
+		GasLimit:       789,
+	}
+
+	domain, err := signing.ComputeDomain(
+		params.BeaconConfig().DomainProposerPreferences,
+		params.BeaconConfig().GenesisForkVersion,
+		params.BeaconConfig().GenesisValidatorsRoot[:],
+	)
+	require.NoError(t, err)
+
+	ctrl := gomock.NewController(t)
+	client := validatormock.NewMockValidatorClient(ctrl)
+	client.EXPECT().
+		DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: domain}, nil)
+
+	cache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
+		NumCounters: 1920,
+		MaxCost:     192,
+		BufferItems: 64,
+	})
+	require.NoError(t, err)
+
+	v := validator{
+		validatorClient: client,
+		domainDataCache: cache,
+	}
+
+	signed, err := v.signProposerPreferences(t.Context(), km, kp.pub, pref)
+	require.NoError(t, err)
+	require.Equal(t, pref, signed.Message)
+
+	root, err := signing.ComputeSigningRoot(pref, domain)
+	require.NoError(t, err)
+
+	sig, err := bls.SignatureFromBytes(signed.Signature)
+	require.NoError(t, err)
+	require.Equal(t, true, sig.Verify(kp.pri.PublicKey(), root[:]))
 }
 
 func TestValidator_SignValidatorRegistrationRequest(t *testing.T) {

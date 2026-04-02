@@ -128,6 +128,7 @@ type Config struct {
 	DataColumnStorage                *filesystem.DataColumnStorage
 	TrackedValidatorsCache           *cache.TrackedValidatorsCache
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
+	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	PayloadIDCache                   *cache.PayloadIDCache
 	LCStore                          *lightClient.Store
 	GraffitiInfo                     *execution.GraffitiInfo
@@ -265,6 +266,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		CoreService:                      coreService,
 		TrackedValidatorsCache:           s.cfg.TrackedValidatorsCache,
 		ProposerPreferencesCache:         s.cfg.ProposerPreferencesCache,
+		HighestBidCache:                  s.cfg.HighestBidCache,
 		PayloadIDCache:                   s.cfg.PayloadIDCache,
 		AttestationStateFetcher:          s.cfg.AttestationReceiver,
 		GraffitiInfo:                     s.cfg.GraffitiInfo,

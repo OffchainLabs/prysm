@@ -33,19 +33,23 @@ type ProposerPreferencesVerifier struct {
 	p       *ethpb.SignedProposerPreferences
 }
 
-// VerifyNextEpoch verifies the proposal slot is in the next epoch.
+// VerifyNextEpoch verifies the proposal slot is in the next epoch relative to
+// the state epoch, keeping it consistent with the ProposerLookahead index.
 func (v *ProposerPreferencesVerifier) VerifyNextEpoch(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireProposerPreferencesNextEpoch, &err)
 
 	msg := v.message()
-	currentEpoch := slots.ToEpoch(st.Slot())
-	if slots.ToEpoch(msg.ProposalSlot) != currentEpoch+1 {
-		return fmt.Errorf("%w: got %d want %d", ErrProposerPreferencesNotNextEpoch, slots.ToEpoch(msg.ProposalSlot), currentEpoch+1)
+	stateEpoch := slots.ToEpoch(st.Slot())
+	proposalEpoch := slots.ToEpoch(msg.ProposalSlot)
+	if proposalEpoch != stateEpoch.Add(1) {
+		return fmt.Errorf("%w: proposal epoch %d, state epoch %d",
+			ErrProposerPreferencesNotNextEpoch, proposalEpoch, stateEpoch)
 	}
 	return nil
 }
 
-// VerifyValidProposalSlot verifies the validator matches the state's next-epoch proposer lookahead entry for the proposal slot.
+// VerifyValidProposalSlot verifies the validator matches the next-epoch
+// proposer lookahead entry for the proposal slot.
 func (v *ProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireProposerPreferencesProposalSlotValid, &err)
 
@@ -71,7 +75,11 @@ func (v *ProposerPreferencesVerifier) VerifySignature(st state.ReadOnlyBeaconSta
 
 	msg := v.message()
 	epoch := slots.ToEpoch(msg.ProposalSlot)
-	domain, err := signing.Domain(st.Fork(), epoch, params.BeaconConfig().DomainBeaconProposer, st.GenesisValidatorsRoot())
+	fork, err := params.Fork(epoch)
+	if err != nil {
+		return errors.Wrap(err, "fork")
+	}
+	domain, err := signing.Domain(fork, epoch, params.BeaconConfig().DomainProposerPreferences, st.GenesisValidatorsRoot())
 	if err != nil {
 		return errors.Wrap(err, "domain")
 	}

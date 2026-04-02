@@ -6,12 +6,15 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
@@ -90,6 +93,43 @@ func signValidatorRegistration(ctx context.Context, signer iface.SigningFunc, re
 		return nil, errors.Wrap(err, "could not sign validator registration")
 	}
 	return sig.Marshal(), nil
+}
+
+func (v *validator) signProposerPreferences(
+	ctx context.Context,
+	km keymanager.IKeymanager,
+	pubkey [fieldparams.BLSPubkeyLength]byte,
+	pref *ethpb.ProposerPreferences,
+) (*ethpb.SignedProposerPreferences, error) {
+	ctx, span := trace.StartSpan(ctx, "validator.signProposerPreferences")
+	defer span.End()
+
+	epoch := slots.ToEpoch(pref.ProposalSlot)
+	resp, err := v.domainData(ctx, epoch, params.BeaconConfig().DomainProposerPreferences[:])
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get proposer preferences domain data")
+	}
+	domain := resp.SignatureDomain
+
+	r, err := signing.ComputeSigningRoot(pref, domain)
+	if err != nil {
+		return nil, errors.Wrap(err, signingRootErr)
+	}
+
+	sig, err := km.Sign(ctx, &validatorpb.SignRequest{
+		PublicKey:       pubkey[:],
+		SigningRoot:     r[:],
+		SignatureDomain: domain,
+		Object:          &validatorpb.SignRequest_ProposerPreference{ProposerPreference: pref},
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "could not sign proposer preferences")
+	}
+
+	return &ethpb.SignedProposerPreferences{
+		Message:   pref,
+		Signature: sig.Marshal(),
+	}, nil
 }
 
 // SignValidatorRegistrationRequest compares and returns either the cached validator registration request or signs a new one.

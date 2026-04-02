@@ -220,7 +220,10 @@
     </spec>
 
 - name: DOMAIN_PROPOSER_PREFERENCES#gloas
-  sources: []
+  sources:
+    - file: config/params/config.go
+      search: DomainProposerPreferences\s+.*yaml:"DOMAIN_PROPOSER_PREFERENCES"
+      regex: true
   spec: |
     <spec constant_var="DOMAIN_PROPOSER_PREFERENCES" fork="gloas" hash="9377ecfb">
     DOMAIN_PROPOSER_PREFERENCES: DomainType = '0x0D000000'

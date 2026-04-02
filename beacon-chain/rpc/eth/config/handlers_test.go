@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -211,6 +213,9 @@ func TestGetSpec(t *testing.T) {
 	var dptc [4]byte
 	copy(dptc[:], []byte{'0', '0', '0', '8'})
 	config.DomainPTCAttester = dptc
+	var dpp [4]byte
+	copy(dpp[:], []byte{'0', '0', '0', '9'})
+	config.DomainProposerPreferences = dpp
 	var dam [4]byte
 	copy(dam[:], []byte{'1', '0', '0', '0'})
 	config.DomainApplicationMask = dam
@@ -226,7 +231,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 197, len(data))
+	assert.Equal(t, 202, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -438,6 +443,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x30303037", v)
 			case "DOMAIN_PTC_ATTESTER":
 				assert.Equal(t, "0x30303038", v)
+			case "DOMAIN_PROPOSER_PREFERENCES":
+				assert.Equal(t, "0x30303039", v)
 			case "DOMAIN_APPLICATION_MASK":
 				assert.Equal(t, "0x31303030", v)
 			case "DOMAIN_SYNC_COMMITTEE":
@@ -646,6 +653,14 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "128", v) // From fieldparams.NumberOfColumns
 			case "UPDATE_TIMEOUT":
 				assert.Equal(t, "1782", v) // SlotsPerEpoch (27) * EpochsPerSyncCommitteePeriod (66)
+			case "PTC_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.PTCSize), 10), v)
+			case "MAX_PAYLOAD_ATTESTATIONS":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxPayloadAttestations), 10), v)
+			case "BUILDER_REGISTRY_LIMIT":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.BuilderRegistryLimit), 10), v)
+			case "BUILDER_PENDING_WITHDRAWALS_LIMIT":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.BuilderPendingWithdrawalsLimit), 10), v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

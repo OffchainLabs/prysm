@@ -767,3 +767,66 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 
 	return nil
 }
+
+// SetPTCWindow is a mutating call to the beacon state which sets the cached PTC window.
+func (b *BeaconState) SetPTCWindow(window []*ethpb.PTCs) error {
+	if b.version < version.Gloas {
+		return errNotSupported("SetPTCWindow", b.version)
+	}
+
+	expected := expectedPTCWindowSize()
+	if uint64(len(window)) != uint64(expected) {
+		return fmt.Errorf("invalid size for ptc window: got %d want %d", len(window), expected)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.sharedFieldReferences[types.PTCWindow].MinusRef()
+	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)
+	b.ptcWindow = ethpb.CopyPTCWindow(window)
+	b.markFieldAsDirty(types.PTCWindow)
+	return nil
+}
+
+// RotatePTCWindow shifts the PTC window left by one epoch and fills the last epoch
+// with the provided new slots. This performs the rotation in-place under lock.
+func (b *BeaconState) RotatePTCWindow(newEpochSlots []*ethpb.PTCs) error {
+	if b.version < version.Gloas {
+		return errNotSupported("RotatePTCWindow", b.version)
+	}
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	if uint64(len(newEpochSlots)) != uint64(slotsPerEpoch) {
+		return fmt.Errorf("invalid new epoch slots size: got %d want %d", len(newEpochSlots), slotsPerEpoch)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	expected := expectedPTCWindowSize()
+	if uint64(len(b.ptcWindow)) != uint64(expected) {
+		return fmt.Errorf("invalid ptc window size: got %d want %d", len(b.ptcWindow), expected)
+	}
+
+	b.sharedFieldReferences[types.PTCWindow].MinusRef()
+	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)
+
+	newWindow := make([]*ethpb.PTCs, expected)
+
+	// Shift left by one epoch.
+	lastEpochStart := expected - slotsPerEpoch
+	copy(newWindow[:lastEpochStart], b.ptcWindow[slotsPerEpoch:])
+
+	// Fill the last epoch with copied new slots.
+	copy(newWindow[lastEpochStart:], ethpb.CopyPTCWindow(newEpochSlots))
+
+	b.ptcWindow = newWindow
+
+	b.markFieldAsDirty(types.PTCWindow)
+	return nil
+}
+
+func expectedPTCWindowSize() primitives.Slot {
+	return params.BeaconConfig().SlotsPerEpoch.Mul(uint64(2 + params.BeaconConfig().MinSeedLookahead))
+}

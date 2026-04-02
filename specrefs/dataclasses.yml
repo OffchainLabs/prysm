@@ -323,6 +323,20 @@
         inclusion_list_transactions: Sequence[Transaction]
     </spec>
 
+- name: Seen#phase0
+  sources: []
+  spec: |
+    <spec dataclass="Seen" fork="phase0" hash="8574ddb3">
+    class Seen(object):
+        proposer_slots: Set[Tuple[ValidatorIndex, Slot]]
+        aggregator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        aggregate_data_roots: Dict[Root, Set[Tuple[boolean, ...]]]
+        voluntary_exit_indices: Set[ValidatorIndex]
+        proposer_slashing_indices: Set[ValidatorIndex]
+        attester_slashing_indices: Set[ValidatorIndex]
+        attestation_validator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+    </spec>
+
 - name: Store#phase0
   sources: []
   spec: |

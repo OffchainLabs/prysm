@@ -179,18 +179,18 @@ func WriteExecutionPayloadEnvelopeChunk(stream libp2pcore.Stream, encoding encod
 
 // WriteDataColumnSidecarChunk writes data column chunk object to stream.
 // response_chunk  ::= <result> | <context-bytes> | <encoding-dependent-header> | <encoded-payload>
-func WriteDataColumnSidecarChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, sidecar *ethpb.DataColumnSidecar) error {
+func WriteDataColumnSidecarChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, sidecar blocks.RODataColumn) error {
 	// Success response code.
 	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
 		return errors.Wrap(err, "stream write")
 	}
-	ctxBytes := params.ForkDigest(slots.ToEpoch(sidecar.SignedBlockHeader.Header.Slot))
+	ctxBytes := params.ForkDigest(slots.ToEpoch(sidecar.Slot()))
 	if err := writeContextToStream(ctxBytes[:], stream); err != nil {
 		return errors.Wrap(err, "write context to stream")
 	}
 
 	// Sidecar.
-	if _, err := encoding.EncodeWithMaxLength(stream, sidecar); err != nil {
+	if _, err := encoding.EncodeWithMaxLength(stream, &sidecar); err != nil {
 		return errors.Wrap(err, "encode with max length")
 	}
 

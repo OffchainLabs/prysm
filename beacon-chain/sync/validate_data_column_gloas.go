@@ -65,7 +65,7 @@ func (s *Service) validateDataColumnGloas(
 	//
 	// Note: If the sidecar fails deferred validation, its forwarding peers MUST be downscored
 	// retroactively. If validation succeeds, the client MUST re-broadcast the sidecar.
-	if s.hasSeenDataColumnRootIndex(roDataColumn.BlockRoot(), roDataColumn.Index) {
+	if s.hasSeenDataColumnRootIndex(roDataColumn.BlockRoot(), roDataColumn.Index()) {
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("data column sidecar already seen for block root"))
 	}
 	verifier.SatisfyRequirement(verification.RequireNotSeenGloas)
@@ -76,7 +76,7 @@ func (s *Service) validateDataColumnGloas(
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
 	}
 
-	s.setSeenDataColumnRootIndex(verifiedRODataColumn.BlockRoot(), verifiedRODataColumn.Index, verifiedRODataColumn.Slot())
+	s.setSeenDataColumnRootIndex(verifiedRODataColumn.BlockRoot(), verifiedRODataColumn.Index(), verifiedRODataColumn.Slot())
 	return verifiedRODataColumn, nil
 }
 
