@@ -7,6 +7,7 @@ import (
 
 	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -68,7 +69,21 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		envelope.StateRoot = stateRoot[:]
 	}
 
-	vs.setExecutionPayloadEnvelope(envelope)
+	// Precompute data column sidecars now (inside ProposeBeaconBlock) so the
+	// expensive KZG cell computation doesn't run during PublishExecutionPayloadEnvelope.
+	var roSidecars []consensusblocks.RODataColumn
+	if bundle := local.BlobsBundler; bundle != nil && len(bundle.GetBlobs()) > 0 {
+		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(bundle.GetBlobs(), bundle.GetProofs())
+		if err != nil {
+			return errors.Wrap(err, "compute cells and proofs from blobs bundle")
+		}
+		roSidecars, err = peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, sBlk.Block().Slot(), blockRoot)
+		if err != nil {
+			return errors.Wrap(err, "build gloas data column sidecars")
+		}
+	}
+
+	vs.setExecutionPayloadEnvelope(envelope, roSidecars)
 	return nil
 }
 
@@ -82,13 +97,14 @@ func extractExecutionPayloadDeneb(local *consensusblocks.GetPayloadResponse) *en
 	return nil
 }
 
-func (vs *Server) setExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope) {
+func (vs *Server) setExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope, dataColumns []consensusblocks.RODataColumn) {
 	if envelope == nil {
 		return
 	}
 	vs.executionPayloadEnvelopeMu.Lock()
 	defer vs.executionPayloadEnvelopeMu.Unlock()
 	vs.executionPayloadEnvelope = envelope
+	vs.executionPayloadDataColumns = dataColumns
 }
 
 func (vs *Server) getExecutionPayloadEnvelope(slot primitives.Slot) (*ethpb.ExecutionPayloadEnvelope, bool) {
@@ -207,6 +223,13 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	})
 	log.Info("Publishing signed execution payload envelope")
 
+	// Broadcast pre-computed data column sidecars BEFORE receiving the envelope,
+	// because ReceiveExecutionPayloadEnvelope checks data availability.
+	// Sidecars were computed during ProposeBeaconBlock (storeExecutionPayloadEnvelope).
+	if err := vs.broadcastGloasDataColumns(ctx); err != nil {
+		log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
+	}
+
 	if err := vs.P2P.Broadcast(ctx, req); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to broadcast execution payload envelope: %v", err)
 	}
@@ -219,12 +242,32 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		return nil, status.Errorf(codes.Internal, "failed to receive execution payload envelope: %v", err)
 	}
 
-	// TODO: Build and broadcast data column sidecars from the cached blobs bundle.
-	// In Gloas, blob data is delivered alongside the execution payload envelope
-	// rather than with the beacon block (which only carries the bid). Not needed
-	// for devnet-0.
-
 	log.Info("Successfully published execution payload envelope")
 
 	return &emptypb.Empty{}, nil
+}
+
+// broadcastGloasDataColumns broadcasts pre-computed DataColumnSidecarGloas from the cache.
+// The sidecars are computed during storeExecutionPayloadEnvelope (inside ProposeBeaconBlock)
+// so no expensive KZG work happens here.
+func (vs *Server) broadcastGloasDataColumns(ctx context.Context) error {
+	vs.executionPayloadEnvelopeMu.RLock()
+	roSidecars := vs.executionPayloadDataColumns
+	vs.executionPayloadEnvelopeMu.RUnlock()
+
+	if len(roSidecars) == 0 {
+		return nil
+	}
+
+	log.WithFields(logrus.Fields{
+		"slot":    roSidecars[0].Slot(),
+		"root":    fmt.Sprintf("%#x", roSidecars[0].BlockRoot()),
+		"columns": len(roSidecars),
+	}).Debug("Broadcasting Gloas data column sidecars")
+
+	if err := vs.broadcastAndReceiveDataColumns(ctx, roSidecars); err != nil {
+		return errors.Wrap(err, "broadcast and receive data columns")
+	}
+
+	return nil
 }

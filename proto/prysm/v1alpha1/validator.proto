@@ -538,6 +538,17 @@ service BeaconNodeValidator {
       body : "*"
     };
   }
+
+  // SubmitSignedExecutionPayloadBid broadcasts a signed execution payload bid
+  // to the P2P gossip network.
+  rpc SubmitSignedExecutionPayloadBid(SignedExecutionPayloadBid)
+      returns (google.protobuf.Empty) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/execution_payload_bid"
+      body : "*"
+    };
+  }
 }
 
 // SyncMessageBlockRootResponse for beacon chain validator to retrieve and

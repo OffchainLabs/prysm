@@ -33,24 +33,31 @@ func (Cgc) ENRKey() string { return params.BeaconNetworkConfig().CustodyGroupCou
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar
 func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 	// The sidecar index must be within the valid range.
-	if sidecar.Index >= fieldparams.NumberOfColumns {
+	index := sidecar.Index()
+	if index >= fieldparams.NumberOfColumns {
 		return ErrIndexTooLarge
 	}
 
 	// A sidecar for zero blobs is invalid.
-	if len(sidecar.KzgCommitments) == 0 {
+	kzgCommitments, err := sidecar.KzgCommitments()
+	if err != nil {
+		return errors.Wrap(err, "kzg commitments")
+	}
+	if len(kzgCommitments) == 0 {
 		return ErrNoKzgCommitments
 	}
 
 	// A sidecar with more commitments than the max blob count for this block is invalid.
 	slot := sidecar.Slot()
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
-	if len(sidecar.KzgCommitments) > maxBlobsPerBlock {
+	if len(kzgCommitments) > maxBlobsPerBlock {
 		return ErrTooManyCommitments
 	}
 
 	// The column length must be equal to the number of commitments/proofs.
-	if len(sidecar.Column) != len(sidecar.KzgCommitments) || len(sidecar.Column) != len(sidecar.KzgProofs) {
+	column := sidecar.Column()
+	kzgProofs := sidecar.KzgProofs()
+	if len(column) != len(kzgCommitments) || len(column) != len(kzgProofs) {
 		return ErrMismatchLength
 	}
 
@@ -67,7 +74,11 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 	commitmentsBySidecar := make([][][]byte, len(sidecars))
 	for i := range sidecars {
-		commitmentsBySidecar[i] = sidecars[i].KzgCommitments
+		c, err := sidecars[i].KzgCommitments()
+		if err != nil {
+			return errors.Wrapf(err, "sidecar %d kzg commitments", i)
+		}
+		commitmentsBySidecar[i] = c
 	}
 	return verifyDataColumnsSidecarKZGProofs(sidecars, commitmentsBySidecar)
 }
@@ -87,10 +98,11 @@ func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmen
 	// Compute the total count.
 	count := 0
 	for i, sidecar := range sidecars {
-		if len(sidecar.Column) != len(commitmentsBySidecar[i]) {
+		column := sidecar.Column()
+		if len(column) != len(commitmentsBySidecar[i]) {
 			return ErrMismatchLength
 		}
-		count += len(sidecar.Column)
+		count += len(column)
 	}
 
 	commitments := make([]kzg.Bytes48, 0, count)
@@ -99,7 +111,10 @@ func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmen
 	proofs := make([]kzg.Bytes48, 0, count)
 
 	for sidecarIndex, sidecar := range sidecars {
-		for i := range sidecar.Column {
+		column := sidecar.Column()
+		kzgProofs := sidecar.KzgProofs()
+		index := sidecar.Index()
+		for i := range column {
 			var (
 				commitment kzg.Bytes48
 				cell       kzg.Cell
@@ -107,8 +122,8 @@ func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmen
 			)
 
 			commitmentBytes := commitmentsBySidecar[sidecarIndex][i]
-			cellBytes := sidecar.Column[i]
-			proofBytes := sidecar.KzgProofs[i]
+			cellBytes := column[i]
+			proofBytes := kzgProofs[i]
 
 			if len(commitmentBytes) != len(commitment) ||
 				len(cellBytes) != len(cell) ||
@@ -121,7 +136,7 @@ func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmen
 			copy(proof[:], proofBytes)
 
 			commitments = append(commitments, commitment)
-			indices = append(indices, sidecar.Index)
+			indices = append(indices, index)
 			cells = append(cells, cell)
 			proofs = append(proofs, proof)
 		}
@@ -143,16 +158,24 @@ func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmen
 // VerifyDataColumnSidecarInclusionProof verifies if the given KZG commitments included in the given beacon block.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_inclusion_proof
 func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
-	if sidecar.SignedBlockHeader == nil || sidecar.SignedBlockHeader.Header == nil {
+	signedBlockHeader, err := sidecar.SignedBlockHeader()
+	if err != nil {
+		return errors.Wrap(err, "signed block header")
+	}
+	if signedBlockHeader == nil || signedBlockHeader.Header == nil {
 		return ErrNilBlockHeader
 	}
 
-	root := sidecar.SignedBlockHeader.Header.BodyRoot
+	root := signedBlockHeader.Header.BodyRoot
 	if len(root) != fieldparams.RootLength {
 		return ErrBadRootLength
 	}
 
-	leaves := blocks.LeavesFromCommitments(sidecar.KzgCommitments)
+	kzgCommitments, err := sidecar.KzgCommitments()
+	if err != nil {
+		return errors.Wrap(err, "kzg commitments")
+	}
+	leaves := blocks.LeavesFromCommitments(kzgCommitments)
 
 	sparse, err := trie.GenerateTrieFromItems(leaves, fieldparams.LogMaxBlobCommitments)
 	if err != nil {
@@ -164,7 +187,11 @@ func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
 		return errors.Wrap(err, "hash tree root")
 	}
 
-	verified := trie.VerifyMerkleProof(root, hashTreeRoot[:], kzgPosition, sidecar.KzgCommitmentsInclusionProof)
+	kzgInclusionProof, err := sidecar.KzgCommitmentsInclusionProof()
+	if err != nil {
+		return errors.Wrap(err, "kzg commitments inclusion proof")
+	}
+	verified := trie.VerifyMerkleProof(root, hashTreeRoot[:], kzgPosition, kzgInclusionProof)
 	if !verified {
 		return ErrInvalidInclusionProof
 	}

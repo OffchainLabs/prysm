@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/proto"
 )
@@ -15,6 +16,7 @@ import (
 type MockBroadcaster struct {
 	BroadcastCalled       atomic.Bool
 	BroadcastMessages     []proto.Message
+	BroadcastEpochs       []primitives.Epoch
 	BroadcastAttestations []ethpb.Att
 	msgLock               sync.Mutex
 	attLock               sync.Mutex
@@ -27,6 +29,14 @@ func (m *MockBroadcaster) Broadcast(_ context.Context, msg proto.Message) error 
 	defer m.msgLock.Unlock()
 	m.BroadcastMessages = append(m.BroadcastMessages, msg)
 	return nil
+}
+
+// BroadcastForEpoch records a broadcast occurred with the target epoch.
+func (m *MockBroadcaster) BroadcastForEpoch(ctx context.Context, msg proto.Message, epoch primitives.Epoch) error {
+	m.msgLock.Lock()
+	m.BroadcastEpochs = append(m.BroadcastEpochs, epoch)
+	m.msgLock.Unlock()
+	return m.Broadcast(ctx, msg)
 }
 
 // BroadcastAttestation records a broadcast occurred.

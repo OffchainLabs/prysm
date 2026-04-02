@@ -440,6 +440,84 @@ func Test_wrapAndReportValidation(t *testing.T) {
 	}
 }
 
+func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	mChain := &mockChain.ChainService{
+		Genesis:        time.Now(),
+		ValidatorsRoot: [32]byte{0x01},
+	}
+	clock := startup.NewClock(mChain.Genesis, mChain.ValidatorsRoot)
+	currDigest := params.ForkDigest(clock.CurrentEpoch())
+	nextDigest := params.ForkDigest(clock.CurrentEpoch() + 1)
+	require.NotEqual(t, currDigest, nextDigest, "test requires different fork digests across epochs")
+
+	acceptValidator := func(ctx context.Context, id peer.ID, message *pubsub.Message) (pubsub.ValidationResult, error) {
+		return pubsub.ValidationAccept, nil
+	}
+
+	t.Run("proposer preferences next epoch fork digest accepted", func(t *testing.T) {
+		nextTopic := fmt.Sprintf(p2p.SignedProposerPreferencesTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+		chainStarted := abool.New()
+		chainStarted.SetTo(true)
+		s := &Service{
+			chainStarted: chainStarted,
+			cfg: &config{
+				chain: mChain,
+				clock: clock,
+			},
+			subHandler: newSubTopicHandler(),
+		}
+		_, v := s.wrapAndReportValidation(nextTopic, acceptValidator)
+		got := v(t.Context(), "", &pubsub.Message{
+			Message: &pubsubpb.Message{Topic: &nextTopic},
+		})
+		assert.Equal(t, pubsub.ValidationAccept, got)
+	})
+
+	t.Run("non proposer preferences next epoch fork digest rejected", func(t *testing.T) {
+		nextTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+		chainStarted := abool.New()
+		chainStarted.SetTo(true)
+		s := &Service{
+			chainStarted: chainStarted,
+			cfg: &config{
+				chain: mChain,
+				clock: clock,
+			},
+			subHandler: newSubTopicHandler(),
+		}
+		_, v := s.wrapAndReportValidation(nextTopic, acceptValidator)
+		got := v(t.Context(), "", &pubsub.Message{
+			Message: &pubsubpb.Message{Topic: &nextTopic},
+		})
+		assert.Equal(t, pubsub.ValidationIgnore, got)
+	})
+
+	t.Run("wrong fork digest rejected", func(t *testing.T) {
+		badDigest := [4]byte{0xde, 0xad, 0xbe, 0xef}
+		badTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, badDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+		chainStarted := abool.New()
+		chainStarted.SetTo(true)
+		s := &Service{
+			chainStarted: chainStarted,
+			cfg: &config{
+				chain: mChain,
+				clock: clock,
+			},
+			subHandler: newSubTopicHandler(),
+		}
+		_, v := s.wrapAndReportValidation(badTopic, acceptValidator)
+		got := v(t.Context(), "", &pubsub.Message{
+			Message: &pubsubpb.Message{Topic: &badTopic},
+		})
+		assert.Equal(t, pubsub.ValidationIgnore, got)
+	})
+}
+
 func TestFilterSubnetPeers(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.MainnetConfig()
@@ -451,7 +529,10 @@ func TestFilterSubnetPeers(t *testing.T) {
 	flags.Init(gFlags)
 	// Reset config.
 	defer flags.Init(new(flags.GlobalFlags))
-	p := p2ptest.NewTestP2P(t)
+
+	tracer := p2ptest.NewGossipTracer()
+	p := p2ptest.NewTestP2PWithPubsubOptions(t, []pubsub.Option{pubsub.WithRawTracer(tracer)})
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	currSlot := primitives.Slot(100)
@@ -492,17 +573,22 @@ func TestFilterSubnetPeers(t *testing.T) {
 	subnet20 := r.addDigestAndIndexToTopic(defaultTopic, digest, 20)
 	cache.SubnetIDs.AddAttesterSubnetID(currSlot, 20)
 
+	_, err = tracer.JoinAndWatchTopic(t.Context(), subnet10, p)
+	require.NoError(t, err)
+	_, err = tracer.JoinAndWatchTopic(t.Context(), subnet20, p)
+	require.NoError(t, err)
+
 	p1 := createPeer(t, subnet10)
 	p2 := createPeer(t, subnet10, subnet20)
 	p3 := createPeer(t)
 
-	// Connect to all peers.
 	p.Connect(p1)
 	p.Connect(p2)
 	p.Connect(p3)
 
-	// Sleep a while to allow peers to connect.
-	time.Sleep(100 * time.Millisecond)
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet10, p1.PeerID()))
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet10, p2.PeerID()))
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet20, p2.PeerID()))
 
 	wantedPeers := []peer.ID{p1.PeerID(), p2.PeerID(), p3.PeerID()}
 	// Expect Peer 3 to be marked as suitable.
@@ -515,8 +601,9 @@ func TestFilterSubnetPeers(t *testing.T) {
 	for i := 1; i <= flags.Get().MinimumPeersPerSubnet; i++ {
 		nPeer := createPeer(t, subnet20)
 		p.Connect(nPeer)
+		require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet20, nPeer.PeerID()))
+
 		wantedPeers = append(wantedPeers, nPeer.BHost.ID())
-		time.Sleep(100 * time.Millisecond)
 	}
 
 	recPeers = r.filterNeededPeers(wantedPeers)

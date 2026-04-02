@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -317,7 +318,7 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 		})
 	}
 
-	// New gossip topic in Fulu.
+	// Data column gossip topic (Fulu and Gloas).
 	if params.BeaconConfig().FuluForkEpoch <= nse.Epoch {
 		s.spawn(func() {
 			s.subscribeWithParameters(subscribeParameters{
@@ -527,8 +528,13 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			return pubsub.ValidationIgnore
 		}
 		if currDigest != retDigest {
-			log.WithField("topic", topic).Debugf("Received message from outdated fork digest %#x", retDigest)
-			return pubsub.ValidationIgnore
+			// Only proposer preferences are accepted from the next epoch's fork
+			// digest, allowing them to arrive before a fork activates.
+			if !strings.Contains(topic, p2p.GossipSignedProposerPreferencesMessage) ||
+				params.ForkDigest(s.cfg.clock.CurrentEpoch()+1) != retDigest {
+				log.WithField("topic", topic).Debugf("Received message from outdated fork digest %#x", retDigest)
+				return pubsub.ValidationIgnore
+			}
 		}
 		b, err := v(ctx, pid, msg)
 		// We do not penalize peers if we are hitting pubsub timeouts
@@ -764,8 +770,9 @@ func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Sl
 	return mapFromSlice(persistentSubnetIndices, aggregatorSubnetIndices)
 }
 
-// filters out required peers for the node to function, not
-// pruning peers who are in our attestation subnets.
+// filterNeededPeers filters out the set of peers required to maintain
+// at least minimumPeersPerSubnet in our attestation subnets. Peers that participate
+// in multiple subnets count toward all of them.
 func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	currentSlot := s.cfg.clock.CurrentSlot()
@@ -792,35 +799,54 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()]
 
-	// Map of peers in subnets
-	peerMap := make(map[peer.ID]bool)
+	pidSet := make(map[peer.ID]bool, len(pids))
+	for _, pid := range pids {
+		pidSet[pid] = true
+	}
+
+	// For each wanted subnet, get the current peer count and track which
+	// candidate peers participate in each subnet.
+	subnetPeerCount := make(map[uint64]int, len(wantedSubnets))
+	peerSubnets := make(map[peer.ID][]uint64)
 	for subnet := range wantedSubnets {
 		subnetTopic := fmt.Sprintf(topic, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
 		peers := s.cfg.p2p.PubSub().ListPeers(subnetTopic)
-		if len(peers) > minimumPeersPerSubnet {
-			// In the event we have more than the minimum, we can
-			// mark the remaining as viable for pruning.
-			peers = peers[:minimumPeersPerSubnet]
-		}
-
-		// Add peer to peer map.
-		for _, peer := range peers {
-			// Even if the peer ID has already been seen we still set it,
-			// as the outcome is the same.
-			peerMap[peer] = true
+		subnetPeerCount[subnet] = len(peers)
+		for _, pid := range peers {
+			if pidSet[pid] {
+				peerSubnets[pid] = append(peerSubnets[pid], subnet)
+			}
 		}
 	}
 
-	// Clear out necessary peers from the peers to prune.
-	newPeers := make([]peer.ID, 0, len(pids))
+	// Sort candidates by ascending subnet count so we try to prune peers
+	// covering fewer subnets first, preserving multi-subnet peers that are
+	// more valuable for maintaining minimums across subnets.
+	slices.SortFunc(pids, func(a, b peer.ID) int {
+		return len(peerSubnets[a]) - len(peerSubnets[b])
+	})
 
+	// Greedily prune each candidate if doing so would not drop any of its
+	// subnets below the minimum peer threshold.
+	prunable := make([]peer.ID, 0, len(pids))
 	for _, pid := range pids {
-		if peerMap[pid] {
-			continue
+		subnets := peerSubnets[pid]
+		canPrune := true
+		for _, subnet := range subnets {
+			if subnetPeerCount[subnet] <= minimumPeersPerSubnet {
+				canPrune = false
+				break
+			}
 		}
-		newPeers = append(newPeers, pid)
+		if canPrune {
+			prunable = append(prunable, pid)
+			for _, subnet := range subnets {
+				subnetPeerCount[subnet]--
+			}
+		}
 	}
-	return newPeers
+
+	return prunable
 }
 
 // Add fork digest to topic.

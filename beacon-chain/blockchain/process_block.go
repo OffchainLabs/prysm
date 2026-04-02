@@ -186,7 +186,7 @@ func (s *Service) applyPayloadIfNeeded(ctx context.Context, b interfaces.ReadOnl
 	if err != nil {
 		return errors.Wrapf(err, "could not wrap blinded execution payload envelope for parent block with root %#x", parentRoot)
 	}
-	return gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, preState, parentBlock.Block().StateRoot(), envelope)
+	return gloas.ProcessBlindedExecutionPayload(ctx, preState, parentBlock.Block().StateRoot(), envelope)
 }
 
 // getBatchPrestate returns the pre-state to apply to the first beacon block in the batch and returns true if it applied the first envelope before
@@ -239,7 +239,7 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 	if err != nil {
 		return nil, false, errors.Wrap(err, "could not get parent block")
 	}
-	if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, blockPreState, parentBlock.Block().StateRoot(), env); err != nil {
+	if err := gloas.ProcessBlindedExecutionPayload(ctx, blockPreState, parentBlock.Block().StateRoot(), env); err != nil {
 		return nil, false, err
 	}
 	return blockPreState, true, nil
@@ -323,7 +323,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			return invalidBlock{error: err}
 		}
 		if b.Root() == br && eidx < len(envelopes) {
-			envSigSet, err := gloas.ApplyExecutionPayloadNoVerifySig(ctx, preState, b.Block().StateRoot(), envelopes[eidx])
+			envSigSet, err := gloas.ProcessExecutionPayloadWithDeferredSig(ctx, preState, b.Block().StateRoot(), envelopes[eidx])
 			if err != nil {
 				return err
 			}
@@ -686,7 +686,7 @@ func (s *Service) handleBlockPayloadAttestations(ctx context.Context, blk interf
 	if len(atts) == 0 {
 		return nil
 	}
-	committee, err := gloas.PayloadCommittee(ctx, st, blk.Slot()-1)
+	committee, err := st.PayloadCommitteeReadOnly(blk.Slot() - 1)
 	if err != nil {
 		return err
 	}

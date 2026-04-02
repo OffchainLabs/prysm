@@ -44,7 +44,7 @@ func TestVerifiedRODataColumnFromDisk(t *testing.T) {
 	blockRoot := originalColumn.BlockRoot()
 
 	// Marshal the data column sidecar to SSZ.
-	sszData, err := originalColumn.MarshalSSZ()
+	sszData, err := originalColumn.DataColumnSidecar().MarshalSSZ()
 	require.NoError(t, err)
 	sszSize := uint32(len(sszData))
 
@@ -88,7 +88,7 @@ func TestVerifiedRODataColumnFromDisk(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify the result.
-		require.Equal(t, originalColumn.Index, verifiedColumn.RODataColumn.Index)
+		require.Equal(t, originalColumn.Index(), verifiedColumn.RODataColumn.Index())
 		require.Equal(t, originalColumn.Slot(), verifiedColumn.RODataColumn.Slot())
 		require.Equal(t, blockRoot, verifiedColumn.RODataColumn.BlockRoot())
 
