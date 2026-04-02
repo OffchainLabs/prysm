@@ -1722,7 +1722,7 @@ func TestRetentionCheckWithOverride(t *testing.T) {
 			blocks := make([]blocks.ROBlock, 0, len(fixtures))
 			for _, fix := range fixtures {
 				for _, col := range fix.cols {
-					if indices.Has(col.Index) {
+					if indices.Has(col.Index()) {
 						require.NoError(t, avs.Persist(current, col))
 					}
 				}

@@ -351,7 +351,7 @@ func requestIndirectSidecarsFromPeers(
 	for root := range roots {
 		alreadyAvailableIndices := make(map[uint64]bool, len(alreadyAvailableByRoot[root]))
 		for _, sidecar := range alreadyAvailableByRoot[root] {
-			alreadyAvailableIndices[sidecar.Index] = true
+			alreadyAvailableIndices[sidecar.Index()] = true
 		}
 
 		storedIndices := storedIndicesByRoot[root]
@@ -491,7 +491,7 @@ func mergeAvailableSidecars(
 		// Compute already available indices.
 		alreadyAvailableIndices := make(map[uint64]bool, len(alreadyAvailable))
 		for _, sidecar := range alreadyAvailable {
-			alreadyAvailableIndices[sidecar.Index] = true
+			alreadyAvailableIndices[sidecar.Index()] = true
 		}
 
 		// Check if reconstruction is needed.
@@ -533,7 +533,7 @@ func mergeAvailableSidecars(
 
 			// Select only sidecars we need.
 			for _, sidecar := range reconstructedSidecars {
-				if requestedIndices[sidecar.Index] {
+				if requestedIndices[sidecar.Index()] {
 					result[root] = append(result[root], sidecar)
 				}
 			}
@@ -587,7 +587,7 @@ func assembleAvailableSidecars(
 
 		allAvailable := result[root]
 		for _, sidecar := range allAvailable {
-			delete(missing, sidecar.Index)
+			delete(missing, sidecar.Index())
 		}
 
 		if len(missing) > 0 {
@@ -697,7 +697,7 @@ func updateResults(
 	verifiedSidecarsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
 	for _, verifiedSidecar := range verifiedSidecars {
 		blockRoot := verifiedSidecar.BlockRoot()
-		index := verifiedSidecar.Index
+		index := verifiedSidecar.Index()
 
 		// Add to the result map grouped by block root
 		verifiedSidecarsByRoot[blockRoot] = append(verifiedSidecarsByRoot[blockRoot], verifiedSidecar)

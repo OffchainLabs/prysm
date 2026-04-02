@@ -398,7 +398,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 	slotPerRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, 1)
 
 	topicFunc := func(sidecar blocks.VerifiedRODataColumn) (topic string, wrappedSubIdx uint64, subnet uint64) {
-		subnet = peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+		subnet = peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index())
 		topic = dataColumnSubnetToTopic(subnet, forkDigest)
 		wrappedSubIdx = subnet + dataColumnSubnetVal
 		return
@@ -438,7 +438,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 			topic, _, _ := topicFunc(sidecar)
 
-			if err := s.batchObject(ctx, &messageBatch, sidecar, topic); err != nil {
+			if err := s.batchObject(ctx, &messageBatch, &sidecar, topic); err != nil {
 				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot batch data column sidecar")
 				return
@@ -446,7 +446,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 			if logLevel >= logrus.DebugLevel {
 				root := sidecar.BlockRoot()
-				timings.Store(rootAndIndex{root: root, index: sidecar.Index}, time.Now())
+				timings.Store(rootAndIndex{root: root, index: sidecar.Index()}, time.Now())
 			}
 		})
 	}
@@ -468,7 +468,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			}
 
 			// Publish individually (not batched) since we just found peers.
-			if err := s.broadcastObject(ctx, sidecar, topic); err != nil {
+			if err := s.broadcastObject(ctx, &sidecar, topic); err != nil {
 				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot broadcast data column sidecar")
 				return
@@ -478,7 +478,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 			if logLevel >= logrus.DebugLevel {
 				root := sidecar.BlockRoot()
-				timings.Store(rootAndIndex{root: root, index: sidecar.Index}, time.Now())
+				timings.Store(rootAndIndex{root: root, index: sidecar.Index()}, time.Now())
 			}
 		})
 	}

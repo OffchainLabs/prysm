@@ -30,6 +30,11 @@ func TestValidateDataColumn(t *testing.T) {
 	err := kzg.Start()
 	require.NoError(t, err)
 
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	ctx := t.Context()
 
 	t.Run("from self", func(t *testing.T) {
@@ -97,7 +102,7 @@ func TestValidateDataColumn(t *testing.T) {
 
 	t.Run("invalid message type", func(t *testing.T) {
 		// Encode a `beaconBlock` message instead of expected.
-		service, message := serviceAndMessage(t, nil, util.NewBeaconBlock())
+		service, message := serviceAndMessage(t, nil, util.NewBeaconBlockFulu())
 		result, err := service.validateDataColumn(ctx, "", message)
 		require.ErrorIs(t, errWrongMessage, err)
 		require.Equal(t, pubsub.ValidationReject, result)
