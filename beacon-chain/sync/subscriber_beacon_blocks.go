@@ -89,6 +89,12 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) error {
+	// In Gloas (ePBS), the execution payload is delivered separately via the
+	// payload envelope, not embedded in the beacon block. Data column sidecars
+	// are constructed from the envelope in dataColumnSubscriber instead.
+	if roBlock.Version() >= version.Gloas {
+		return nil
+	}
 	if roBlock.Version() >= version.Fulu {
 		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
 			// Do not log if the context was cancelled on purpose.

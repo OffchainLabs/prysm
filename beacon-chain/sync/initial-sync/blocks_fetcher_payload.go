@@ -69,12 +69,21 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 	if full {
 		pidx = 1
 	}
+	log.WithFields(logrus.Fields{
+		"blockSlot":      r.bwb[0].Block.Block().Slot(),
+		"envelopeSlot":   envelopeSlotStr(r.envelopes[0]),
+		"numBlocks":      len(r.bwb),
+		"numEnvelopes":   len(r.envelopes),
+		"firstBlockFull": full,
+		"pidx":           pidx,
+	}).Debug("Payload validation start")
 	bh, err := r.bwb[0].Block.ParentHash()
 	if err != nil {
 		r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
 		f.downscorePeer(r.blocksFrom, r.err)
 		return
 	}
+	zeroHash := [32]byte{}
 	for i, b := range r.bwb[1:] {
 		nh, err := b.Block.ParentHash()
 		if err != nil {
@@ -85,6 +94,13 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 		if nh == bh {
 			continue
 		}
+		// When the previous block is genesis (slot 0, parentHash all zeros), the
+		// transition to a new parentHash at the next block is from the genesis
+		// execution payload embedded in the state, not from an envelope.
+		if bh == zeroHash && r.bwb[i].Block.Block().Slot() == 0 {
+			bh = nh
+			continue
+		}
 		if pidx >= len(r.envelopes) {
 			log.Debug("Not enough envelopes corresponding to blocks, truncating the block batch")
 			r.bwb = r.bwb[:i+1]
@@ -93,6 +109,16 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 		env := r.envelopes[pidx]
 		full, err := blocks.BlockBuiltOnEnvelope(env, b.Block)
 		if err != nil || !full {
+			log.WithFields(logrus.Fields{
+				"blockIdx":        i + 1,
+				"blockSlot":       b.Block.Block().Slot(),
+				"blockParentHash": fmt.Sprintf("%#x", nh),
+				"envelopeIdx":     pidx,
+				"envelopeSlot":    envelopeSlotStr(env),
+				"envelopeHash":    envelopeBlockHashStr(env),
+				"prevParentHash":  fmt.Sprintf("%#x", bh),
+				"matchErr":        err,
+			}).Error("Envelope does not match block during initial sync")
 			r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, "envelope does not match block")
 			if r.blocksFrom == r.payloadsFrom {
 				f.downscorePeer(r.blocksFrom, r.err)
@@ -157,6 +183,25 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 	}
 	r.envelopes = envelopes
 	r.payloadsFrom = pid
+	log.WithFields(logrus.Fields{
+		"reqStart":     start,
+		"reqCount":     r.count,
+		"rStart":       r.start,
+		"numBlocks":    len(r.bwb),
+		"numEnvelopes": len(envelopes),
+		"firstBlockSlot": func() primitives.Slot {
+			if len(r.bwb) > 0 {
+				return r.bwb[0].Block.Block().Slot()
+			}
+			return 0
+		}(),
+		"firstEnvelopeSlot": func() string {
+			if len(envelopes) > 0 {
+				return envelopeSlotStr(envelopes[0])
+			}
+			return "none"
+		}(),
+	}).Debug("Fetched payloads for validation")
 	f.validatePayloadBlockConsistency(r)
 }
 
@@ -208,4 +253,24 @@ func (f *blocksFetcher) fetchPayloadEnvelopesFromPeer(
 		return roEnvelopes, p, nil
 	}
 	return nil, "", errNoPeersAvailable
+}
+
+func envelopeSlotStr(env interfaces.ROSignedExecutionPayloadEnvelope) string {
+	msg, err := env.Envelope()
+	if err != nil {
+		return fmt.Sprintf("err:%v", err)
+	}
+	return fmt.Sprintf("%d", msg.Slot())
+}
+
+func envelopeBlockHashStr(env interfaces.ROSignedExecutionPayloadEnvelope) string {
+	msg, err := env.Envelope()
+	if err != nil {
+		return fmt.Sprintf("err:%v", err)
+	}
+	ex, err := msg.Execution()
+	if err != nil {
+		return fmt.Sprintf("err:%v", err)
+	}
+	return fmt.Sprintf("%#x", ex.BlockHash())
 }

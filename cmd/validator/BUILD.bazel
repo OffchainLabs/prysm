@@ -42,6 +42,7 @@ go_binary(
     pure = "off",  # Enabled unless there is a valid reason to include cgo dep.
     visibility = [
         "//testing/endtoend:__pkg__",
+        "//testing/integration:__pkg__",
         "//validator:__subpackages__",
     ],
 )

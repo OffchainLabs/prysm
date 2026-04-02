@@ -36,6 +36,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -419,6 +420,12 @@ func (s *Service) saveGenesisData(ctx context.Context, genesisState state.Beacon
 	}
 	if err := s.cfg.ForkChoiceStore.InsertNode(ctx, genesisState, gb); err != nil {
 		log.WithError(err).Fatal("Could not process genesis block for fork choice")
+	}
+	// In Gloas, blocks start as empty (pending) nodes and become full when the
+	// execution payload envelope arrives. The genesis block has no separate
+	// payload delivery, so mark it as full immediately.
+	if genesisState.Version() >= version.Gloas {
+		s.cfg.ForkChoiceStore.MarkFullNode(genesisBlkRoot)
 	}
 	s.cfg.ForkChoiceStore.SetOriginRoot(genesisBlkRoot)
 	// Set genesis as fully validated
