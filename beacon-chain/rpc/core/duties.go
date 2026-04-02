@@ -220,7 +220,7 @@ func (s *Service) PTCDuties(ctx context.Context, st state.BeaconState, epoch pri
 			return nil, &RpcError{Err: ctx.Err(), Reason: Internal}
 		}
 
-		ptc, err := st.PayloadCommittee(slot)
+		ptc, err := st.PayloadCommitteeReadOnly(slot)
 		if err != nil {
 			return nil, &RpcError{Err: err, Reason: Internal}
 		}

@@ -46,7 +46,7 @@ type readOnlyGloasFields interface {
 	// Bids.
 	LatestExecutionPayloadBid() (interfaces.ROExecutionPayloadBid, error)
 	PTCWindow() ([]*ethpb.PTCs, error)
-	PayloadCommittee(slot primitives.Slot) ([]primitives.ValidatorIndex, error)
+	PayloadCommitteeReadOnly(slot primitives.Slot) ([]primitives.ValidatorIndex, error)
 
 	// Builder pending payments / withdrawals.
 	BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error)

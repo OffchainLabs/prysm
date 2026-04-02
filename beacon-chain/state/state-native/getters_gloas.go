@@ -702,7 +702,7 @@ func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, err
 	return b.nextWithdrawalBuilderIndex, nil
 }
 
-// PayloadCommittee returns the payload timeliness committee for a given slot
+// PayloadCommitteeReadOnly returns the payload timeliness committee for a given slot
 // by looking up the cached PTC window in state.
 //
 //	<spec fn="get_ptc" fork="gloas" hash="b55ba184">
@@ -719,9 +719,9 @@ func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, err
 //	    offset = (epoch - state_epoch + 1) * SLOTS_PER_EPOCH
 //	    return state.ptc_window[offset + slot % SLOTS_PER_EPOCH]
 //	</spec>
-func (b *BeaconState) PayloadCommittee(slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
+func (b *BeaconState) PayloadCommitteeReadOnly(slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
 	if b.version < version.Gloas {
-		return nil, errNotSupported("PayloadCommittee", b.version)
+		return nil, errNotSupported("PayloadCommitteeReadOnly", b.version)
 	}
 
 	b.lock.RLock()
@@ -740,7 +740,7 @@ func (b *BeaconState) PayloadCommittee(slot primitives.Slot) ([]primitives.Valid
 		return nil, fmt.Errorf("ptc window slot %d is nil", offset)
 	}
 
-	return validatorIndicesFromUint64(ptcSlot.ValidatorIndices), nil
+	return ptcSlot.ValidatorIndices, nil
 }
 
 func ptcWindowOffset(stateSlot, slot primitives.Slot) (primitives.Slot, error) {
@@ -761,12 +761,4 @@ func ptcWindowOffset(stateSlot, slot primitives.Slot) (primitives.Slot, error) {
 
 	offset := slotsPerEpoch.Mul(uint64(epoch-stateEpoch+1)) + (slot % slotsPerEpoch)
 	return offset, nil
-}
-
-func validatorIndicesFromUint64(indices []uint64) []primitives.ValidatorIndex {
-	result := make([]primitives.ValidatorIndex, len(indices))
-	for i, index := range indices {
-		result[i] = primitives.ValidatorIndex(index)
-	}
-	return result
 }

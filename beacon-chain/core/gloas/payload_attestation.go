@@ -81,7 +81,7 @@ func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body 
 
 // indexedPayloadAttestation converts a payload attestation into its indexed form.
 func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState, att *eth.PayloadAttestation) (*consensus_types.IndexedPayloadAttestation, error) {
-	committee, err := st.PayloadCommittee(att.Data.Slot)
+	committee, err := st.PayloadCommitteeReadOnly(att.Data.Slot)
 	if err != nil {
 		return nil, err
 	}
@@ -160,22 +160,6 @@ func computePTC(ctx context.Context, st state.ReadOnlyBeaconState, slot primitiv
 	return selected, nil
 }
 
-func ptcSlotFromValidatorIndices(indices []primitives.ValidatorIndex) *eth.PTCs {
-	result := &eth.PTCs{
-		ValidatorIndices: make([]uint64, fieldparams.PTCSize),
-	}
-	for i, index := range indices {
-		result.ValidatorIndices[i] = uint64(index)
-	}
-	return result
-}
-
-func emptyPTCs() *eth.PTCs {
-	return &eth.PTCs{
-		ValidatorIndices: make([]uint64, fieldparams.PTCSize),
-	}
-}
-
 // PayloadCommitteeIndex returns the validator's index position in the payload committee for a slot.
 func PayloadCommitteeIndex(
 	ctx context.Context,
@@ -183,7 +167,7 @@ func PayloadCommitteeIndex(
 	slot primitives.Slot,
 	validatorIndex primitives.ValidatorIndex,
 ) (uint64, error) {
-	ptc, err := st.PayloadCommittee(slot)
+	ptc, err := st.PayloadCommitteeReadOnly(slot)
 	if err != nil {
 		return 0, err
 	}
@@ -394,7 +378,7 @@ func ProcessPTCWindow(ctx context.Context, st state.BeaconState) error {
 		if err != nil {
 			return err
 		}
-		newSlots[i] = ptcSlotFromValidatorIndices(ptc)
+		newSlots[i] = &eth.PTCs{ValidatorIndices: ptc}
 	}
 
 	return st.RotatePTCWindow(newSlots)

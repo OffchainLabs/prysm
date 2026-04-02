@@ -3555,7 +3555,7 @@ func TestHandleBlockPayloadAttestations(t *testing.T) {
 		base, insertBlk := testGloasState(t, 1, parentRoot, blockHash)
 		insertGloasBlock(t, s, base, insertBlk, blockRoot)
 
-		ptc, err := headState.PayloadCommittee(1)
+		ptc, err := headState.PayloadCommitteeReadOnly(1)
 		require.NoError(t, err)
 		require.NotEqual(t, 0, len(ptc))
 

@@ -695,7 +695,7 @@ func TestPTCDuties_PreGloasEpoch(t *testing.T) {
 }
 
 // TestPTCDuties_EmptyIndices verifies that an empty validator
-// index list short-circuits and returns an empty map without calling PayloadCommittee.
+// index list short-circuits and returns an empty map without calling PayloadCommitteeReadOnly.
 func TestPTCDuties_EmptyIndices(t *testing.T) {
 	ptcTestConfig(t)
 
@@ -775,7 +775,7 @@ func TestPTCDuties_CollectsAllSlots(t *testing.T) {
 	for valIdx, assignedSlots := range result {
 		expected := make([]primitives.Slot, 0)
 		for s := epochStart; s < epochEnd; s++ {
-			ptc, err := st.PayloadCommittee(s)
+			ptc, err := st.PayloadCommitteeReadOnly(s)
 			require.NoError(t, err)
 			found := slices.Contains(ptc, valIdx)
 			if found {

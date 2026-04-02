@@ -1260,7 +1260,7 @@ func ptcDuties(
 			return nil, ctx.Err()
 		}
 
-		ptc, err := st.PayloadCommittee(slot)
+		ptc, err := st.PayloadCommitteeReadOnly(slot)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to get PTC for slot %d", slot)
 		}

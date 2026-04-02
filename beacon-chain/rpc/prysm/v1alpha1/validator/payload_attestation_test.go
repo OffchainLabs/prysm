@@ -90,7 +90,7 @@ func TestSubmitPayloadAttestation_OK(t *testing.T) {
 	slot := primitives.Slot(0)
 	root := bytesutil.PadTo([]byte{0xBB}, 32)
 	st, _ := util.DeterministicGenesisStateGloas(t, 64)
-	ptc, err := st.PayloadCommittee(slot)
+	ptc, err := st.PayloadCommitteeReadOnly(slot)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(ptc))
 

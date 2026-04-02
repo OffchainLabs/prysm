@@ -3151,7 +3151,7 @@ func (p *PTCs) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 	for ii := 0; ii < 512; ii++ {
-		dst = ssz.MarshalUint64(dst, p.ValidatorIndices[ii])
+		dst = ssz.MarshalUint(dst, p.ValidatorIndices[ii])
 	}
 
 	return
@@ -3166,9 +3166,9 @@ func (p *PTCs) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'ValidatorIndices'
-	p.ValidatorIndices = ssz.ExtendUint64(p.ValidatorIndices, 512)
+	p.ValidatorIndices = ssz.ExtendUint(p.ValidatorIndices, 512)
 	for ii := 0; ii < 512; ii++ {
-		p.ValidatorIndices[ii] = ssz.UnmarshallUint64(buf[0:4096][ii*8 : (ii+1)*8])
+		p.ValidatorIndices[ii] = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[0:4096][ii*8 : (ii+1)*8])
 	}
 
 	return err
@@ -3197,7 +3197,7 @@ func (p *PTCs) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		subIndx := hh.Index()
 		for _, i := range p.ValidatorIndices {
-			hh.AppendUint64(i)
+			ssz.AppendUint(hh, i)
 		}
 		hh.Merkleize(subIndx)
 	}
