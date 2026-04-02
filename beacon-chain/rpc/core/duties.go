@@ -199,7 +199,7 @@ func (s *Service) PTCDuties(ctx context.Context, st state.BeaconState, epoch pri
 	_, span := trace.StartSpan(ctx, "coreService.PTCDuties")
 	defer span.End()
 
-	if len(indices) == 0 || epoch < params.BeaconConfig().GloasForkEpoch {
+	if len(indices) == 0 || epoch < params.BeaconConfig().GloasForkEpoch || st.Version() < version.Gloas {
 		return []*PTCDutyResult{}, nil
 	}
 

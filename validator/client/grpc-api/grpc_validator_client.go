@@ -284,6 +284,10 @@ func (c *grpcValidatorClient) SubmitSignedProposerPreferences(ctx context.Contex
 	return c.getClient().SubmitSignedProposerPreferences(ctx, in)
 }
 
+func (c *grpcValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Context, in *ethpb.SignedExecutionPayloadBid) (*empty.Empty, error) {
+	return c.getClient().SubmitSignedExecutionPayloadBid(ctx, in)
+}
+
 func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*empty.Empty, error) {
 	return c.getClient().SubscribeCommitteeSubnets(ctx, in)
 }

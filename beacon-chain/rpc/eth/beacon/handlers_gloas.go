@@ -1,6 +1,8 @@
 package beacon
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -9,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
@@ -76,4 +79,55 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 		Finalized:           finalized,
 		Data:                jsonEnvelope,
 	})
+}
+
+// PublishSignedExecutionPayloadBid broadcasts a signed execution payload bid to the P2P network.
+func (s *Server) PublishSignedExecutionPayloadBid(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishSignedExecutionPayloadBid")
+	defer span.End()
+
+	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
+		return
+	}
+
+	versionHeader := r.Header.Get(api.VersionHeader)
+	if versionHeader == "" {
+		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		return
+	}
+
+	var signedBid *eth.SignedExecutionPayloadBid
+	if httputil.IsRequestSsz(r) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			httputil.HandleError(w, "Could not read request body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		signedBid = &eth.SignedExecutionPayloadBid{}
+		if err := signedBid.UnmarshalSSZ(body); err != nil {
+			httputil.HandleError(w, "Could not unmarshal SSZ: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else {
+		var jsonBid structs.SignedExecutionPayloadBid
+		if err := json.NewDecoder(r.Body).Decode(&jsonBid); err != nil {
+			if errors.Is(err, io.EOF) {
+				httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+				return
+			}
+			httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		var err error
+		signedBid, err = jsonBid.ToConsensus()
+		if err != nil {
+			httputil.HandleError(w, "Could not convert bid to consensus type: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	if err := s.Broadcaster.Broadcast(ctx, signedBid); err != nil {
+		httputil.HandleError(w, "Could not broadcast execution payload bid: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

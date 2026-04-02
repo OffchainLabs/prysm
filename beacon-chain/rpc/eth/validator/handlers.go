@@ -1235,18 +1235,18 @@ type ptcDuty struct {
 	slot           primitives.Slot
 }
 
-// ptcDuties returns PTC slot assignments for the requested validators in the epoch derived from the state's slot.
+// ptcDuties returns PTC slot assignments for the requested validators in the given epoch.
+// The state must be from an epoch that allows computing PTC assignments for the target epoch.
 // Validators not in any PTC for the epoch will not appear in the result.
 func ptcDuties(
 	ctx context.Context,
 	st state.ReadOnlyBeaconState,
+	epoch primitives.Epoch,
 	validators map[primitives.ValidatorIndex]struct{},
 ) ([]ptcDuty, error) {
-	if len(validators) == 0 {
+	if len(validators) == 0 || st.Version() < version.Gloas {
 		return nil, nil
 	}
-
-	epoch := slots.ToEpoch(st.Slot())
 	startSlot, err := slots.EpochStart(epoch)
 	if err != nil {
 		return nil, err
@@ -1331,17 +1331,24 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		requestedValIndices[i] = primitives.ValidatorIndex(valIx)
 	}
 
-	// PTC assignments are not stable for the next epoch, so only allow current epoch.
+	// Limit how far in the future we can query (current + 1 epoch).
 	cs := s.TimeFetcher.CurrentSlot()
 	currentEpoch := slots.ToEpoch(cs)
-	if requestedEpoch > currentEpoch {
+	nextEpoch := currentEpoch.Add(1)
+	if requestedEpoch > nextEpoch {
 		httputil.HandleError(w,
-			fmt.Sprintf("Request epoch %d can not be greater than current epoch %d", requestedEpoch, currentEpoch),
+			fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", requestedEpoch, nextEpoch),
 			http.StatusBadRequest)
 		return
 	}
 
-	st, err := s.Stater.StateByEpoch(ctx, requestedEpoch)
+	// For next epoch requests, we use the current epoch's state since PTC
+	// assignments for next epoch can be computed from current epoch's state.
+	epochForState := requestedEpoch
+	if requestedEpoch == nextEpoch {
+		epochForState = currentEpoch
+	}
+	st, err := s.Stater.StateByEpoch(ctx, epochForState)
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
 		return
@@ -1366,7 +1373,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Compute PTC duties.
-	computedDuties, err := ptcDuties(ctx, st, requestedSet)
+	computedDuties, err := ptcDuties(ctx, st, requestedEpoch, requestedSet)
 	if err != nil {
 		httputil.HandleError(w, "Could not compute PTC duties: "+err.Error(), http.StatusInternalServerError)
 		return
