@@ -2185,6 +2185,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2212,6 +2213,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2252,6 +2254,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2281,6 +2284,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2314,6 +2318,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		slot2 := params.BeaconConfig().SlotsPerEpoch + 5
 
 		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2348,6 +2353,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2400,6 +2406,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		}
 
 		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2446,6 +2453,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		currentEpochSlot := primitives.Slot(3)
 
 		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2464,7 +2472,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			},
 		})
 
-		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		// Slot 1 (past epoch start) allows current-epoch preferences.
+		prefs := v.buildProposerPreferences(t.Context(), km, 1)
 		require.Equal(t, 1, len(prefs))
 		require.Equal(t, currentEpochSlot, prefs[0].Message.ProposalSlot)
 	})
@@ -2474,10 +2483,12 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
-		currentEpochSlot := primitives.Slot(5)
+		// Current-epoch slot must be after midEpoch so it's still in the future.
+		currentEpochSlot := midEpochSlot + 3
 		nextEpochSlot := params.BeaconConfig().SlotsPerEpoch + 2
 
 		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2497,13 +2508,172 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			},
 		})
 
-		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		// At mid-epoch, both current and next epoch preferences are eligible.
+		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
 		require.Equal(t, 2, len(prefs))
 
 		gotSlots := []primitives.Slot{prefs[0].Message.ProposalSlot, prefs[1].Message.ProposalSlot}
 		slices.Sort(gotSlots)
 		require.Equal(t, currentEpochSlot, gotSlots[0])
 		require.Equal(t, nextEpochSlot, gotSlots[1])
+	})
+
+	t.Run("epoch start skips current epoch preferences", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{3},
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+				},
+			},
+		})
+
+		// Slot 0 (epoch start) skips current-epoch preferences.
+		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		require.Equal(t, 0, len(prefs))
+	})
+
+	t.Run("second call deduplicates already submitted slots", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{5},
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+				},
+			},
+		})
+
+		prefs := v.buildProposerPreferences(t.Context(), km, 1)
+		require.Equal(t, 1, len(prefs))
+
+		// Second call returns nothing — slot already submitted.
+		prefs = v.buildProposerPreferences(t.Context(), km, 2)
+		require.Equal(t, 0, len(prefs))
+	})
+
+	t.Run("new validator added after initial submission", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		kp2 := randKeypair(t)
+		require.NoError(t, km.add(kp2))
+
+		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{5},
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+				},
+			},
+		})
+
+		prefs := v.buildProposerPreferences(t.Context(), km, 1)
+		require.Equal(t, 1, len(prefs))
+
+		// Simulate new validator added with a different proposal slot.
+		v.pubkeyToStatus[kp2.pub] = &validatorStatus{
+			publicKey: kp2.pub[:],
+			status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE},
+			index:     2,
+		}
+		v.duties = &dutyStore{}
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{5},
+				},
+				{
+					PublicKey:      kp2.pub[:],
+					ValidatorIndex: 2,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{7},
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{},
+		})
+
+		// Only the new validator's slot is submitted.
+		prefs = v.buildProposerPreferences(t.Context(), km, 2)
+		require.Equal(t, 1, len(prefs))
+		require.Equal(t, primitives.Slot(7), prefs[0].Message.ProposalSlot)
+
+		delete(v.pubkeyToStatus, kp2.pub)
+		delete(km.keysMap, kp2.pub)
+	})
+
+	t.Run("next epoch before mid-epoch returns nil", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		v.duties = &dutyStore{}
+		v.submittedPrefSlots = nil
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+				},
+			},
+		})
+
+		// Slot 1 is before mid-epoch, next-epoch prefs should not be sent.
+		prefs := v.buildProposerPreferences(t.Context(), km, 1)
+		require.Equal(t, 0, len(prefs))
 	})
 }
 

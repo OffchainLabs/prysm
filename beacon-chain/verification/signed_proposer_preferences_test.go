@@ -3,10 +3,8 @@ package verification
 import (
 	"bytes"
 	"testing"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -18,20 +16,25 @@ import (
 )
 
 func TestProposerPreferencesVerifier_VerifyCurrentOrNextEpoch(t *testing.T) {
+	// Next epoch future slot is accepted.
 	st, _, signed := newSignedProposerPreferencesState(t, 31, 40, 0)
-
-	verifier := &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
-	require.NoError(t, verifier.VerifyNextEpoch(st))
+	verifier := &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
+	require.NoError(t, verifier.VerifyCurrentOrNextEpoch(st))
 
 	// Current epoch future slot is accepted.
 	signed.Message.ProposalSlot = st.Slot() + 1
-	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: clockForSlot(t, st.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
+	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
 	require.NoError(t, verifier.VerifyCurrentOrNextEpoch(st))
 
 	// Current slot (already passed) is rejected.
 	signed.Message.ProposalSlot = st.Slot()
-	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
-	require.ErrorIs(t, verifier.VerifyNextEpoch(st), ErrProposerPreferencesNotNextEpoch)
+	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
+	require.ErrorIs(t, verifier.VerifyCurrentOrNextEpoch(st), ErrProposerPreferencesSlotAlreadyPassed)
+
+	// Same-epoch future slot with more room.
+	st2, _, signed2 := newSignedProposerPreferencesState(t, 24, 28, 0)
+	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed2}
+	require.NoError(t, verifier.VerifyCurrentOrNextEpoch(st2))
 }
 
 func TestProposerPreferencesVerifier_VerifyValidProposalSlot(t *testing.T) {
