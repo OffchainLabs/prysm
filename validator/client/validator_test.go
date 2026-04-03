@@ -2157,7 +2157,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 				index:     1,
 			},
 		},
-		duties: &dutyStore{},
+		duties:             &dutyStore{},
+		submittedPrefSlots: make(map[primitives.Slot]bool),
 	}
 
 	t.Run("pre-gloas returns nil", func(t *testing.T) {
@@ -2185,7 +2186,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2213,7 +2214,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2254,7 +2255,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2284,7 +2285,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2318,7 +2319,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		slot2 := params.BeaconConfig().SlotsPerEpoch + 5
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2353,7 +2354,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2406,7 +2407,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		}
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2453,7 +2454,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		currentEpochSlot := primitives.Slot(3)
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2488,7 +2489,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		nextEpochSlot := params.BeaconConfig().SlotsPerEpoch + 2
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2524,7 +2525,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2554,7 +2555,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2590,7 +2591,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		require.NoError(t, km.add(kp2))
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{
@@ -2652,7 +2653,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
-		v.submittedPrefSlots = nil
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
 			CurrentEpochDuties: []*ethpb.ValidatorDuty{
 				{

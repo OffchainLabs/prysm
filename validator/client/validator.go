@@ -1030,9 +1030,11 @@ func (v *validator) buildProposerSettingsRequests(
 // buildProposerPreferences creates signed proposer preferences for validators
 // that have proposer slots in the current epoch (future slots) or next epoch.
 //
-// Current-epoch preferences are submitted starting at slot 1 of the epoch
-// (slot 0 is skipped to avoid stale state after epoch transition).
-// Next-epoch preferences are submitted starting at mid-epoch to ensure beacon
+// Current-epoch preferences are submitted after the first slot of the epoch
+// (slot 0 is skipped to avoid stale state after epoch transition). If the
+// validator client starts mid-epoch, preferences are submitted for all
+// remaining future slots in the epoch.
+// Next-epoch preferences are submitted at or after mid-epoch to ensure beacon
 // nodes have processed the epoch transition.
 // Already-submitted slots are tracked to avoid duplicate signing and RPC calls.
 func (v *validator) buildProposerPreferences(
@@ -1103,7 +1105,10 @@ func (v *validator) buildProposerPreferences(
 				if v.submittedPrefSlots[proposalSlot] {
 					continue
 				}
-				if !isNextEpoch && proposalSlot <= slot {
+				// Skip slots that have passed or are too close. Preferences are
+				// submitted at mid-slot, so the proposer needs to be at least 1
+				// full slot away for the beacon node to receive them in time.
+				if !isNextEpoch && proposalSlot <= slot+1 {
 					continue
 				}
 
