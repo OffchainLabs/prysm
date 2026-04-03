@@ -213,6 +213,179 @@ func TestUpdateDuties_AllValidatorsExited(t *testing.T) {
 
 }
 
+func TestUpdateDuties_PartialNewKeys(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	existingPair := randKeypair(t)
+	newPair := randKeypair(t)
+
+	existingResp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{
+				PublicKey:      existingPair.pub[:],
+				ValidatorIndex: 10,
+				AttesterSlot:   5,
+				ProposerSlots:  []primitives.Slot{3},
+			},
+		},
+	}
+	newKeyResp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{
+				PublicKey:      newPair.pub[:],
+				ValidatorIndex: 20,
+				AttesterSlot:   6,
+				ProposerSlots:  []primitives.Slot{7},
+			},
+		},
+	}
+
+	km := newMockKeymanager(t, existingPair)
+	v := validator{
+		km:              km,
+		validatorClient: client,
+		duties:          &dutyStore{},
+	}
+	v.aggSelector = testLocalSelector(t, &v)
+
+	// First call: full refresh sets up existing duties.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(existingResp, nil)
+	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+			wg.Done()
+			return nil, nil
+		})
+	require.NoError(t, v.UpdateDuties(t.Context()))
+	util.WaitTimeout(&wg, 2*time.Second)
+	assert.Equal(t, 1, len(v.duties.CurrentEpochDuties()))
+	assert.Equal(t, true, v.lastDutiesPubkeys[existingPair.pub])
+
+	// Second call: partial refresh with newPair merges without replacing.
+	wg.Add(1)
+	client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(newKeyResp, nil)
+	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+			wg.Done()
+			return nil, nil
+		})
+	require.NoError(t, v.UpdateDuties(t.Context(), [][fieldparams.BLSPubkeyLength]byte{newPair.pub}))
+	util.WaitTimeout(&wg, 2*time.Second)
+
+	// Both validators should now have duties.
+	assert.Equal(t, 2, len(v.duties.CurrentEpochDuties()))
+	d, ok := v.duties.CurrentDuty(existingPair.pub)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, primitives.ValidatorIndex(10), d.ValidatorIndex)
+	d, ok = v.duties.CurrentDuty(newPair.pub)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, primitives.ValidatorIndex(20), d.ValidatorIndex)
+	assert.Equal(t, true, v.lastDutiesPubkeys[newPair.pub])
+}
+
+func TestUpdateDuties_PartialNewKeys_FilterBlacklisted(t *testing.T) {
+	hook := logTest.NewGlobal()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	goodPair := randKeypair(t)
+	badPair := randKeypair(t)
+
+	km := newMockKeymanager(t, goodPair, badPair)
+	v := validator{
+		km:              km,
+		validatorClient: client,
+		duties:          testDutyStore(),
+		lastDutiesPubkeys: map[[fieldparams.BLSPubkeyLength]byte]bool{
+			goodPair.pub: true,
+		},
+		blacklistedPubkeys: map[[fieldparams.BLSPubkeyLength]byte]bool{
+			badPair.pub: true,
+		},
+	}
+	v.aggSelector = testLocalSelector(t, &v)
+
+	resp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{PublicKey: goodPair.pub[:], ValidatorIndex: 10, AttesterSlot: 5},
+		},
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(resp, nil)
+	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*emptypb.Empty, error) {
+			wg.Done()
+			return nil, nil
+		})
+
+	require.NoError(t, v.UpdateDuties(t.Context(), [][fieldparams.BLSPubkeyLength]byte{goodPair.pub, badPair.pub}))
+	util.WaitTimeout(&wg, 2*time.Second)
+	assert.LogsContain(t, hook, "Not including slashable public key")
+}
+
+func TestUpdateDuties_PartialError_DoesNotResetStore(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	pair := randKeypair(t)
+	v := validator{
+		km:              newMockKeymanager(t, pair),
+		validatorClient: client,
+		duties:          testDutyStore(&ethpb.ValidatorDuty{PublicKey: pair.pub[:], ValidatorIndex: 10}),
+		lastDutiesPubkeys: map[[fieldparams.BLSPubkeyLength]byte]bool{
+			pair.pub: true,
+		},
+	}
+
+	newPair := randKeypair(t)
+	client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(nil, errors.New("rpc error"))
+
+	err := v.UpdateDuties(t.Context(), [][fieldparams.BLSPubkeyLength]byte{newPair.pub})
+	require.ErrorContains(t, "rpc error", err)
+	// Existing duties should not be cleared on partial failure.
+	assert.Equal(t, true, v.duties.IsInitialized())
+	assert.Equal(t, 1, len(v.duties.CurrentEpochDuties()))
+}
+
+func TestNewValidatorKeys(t *testing.T) {
+	pair1 := randKeypair(t)
+	pair2 := randKeypair(t)
+	pair3 := randKeypair(t)
+
+	v := validator{
+		duties: testDutyStore(),
+		lastDutiesPubkeys: map[[fieldparams.BLSPubkeyLength]byte]bool{
+			pair1.pub: true,
+			pair2.pub: true,
+		},
+	}
+
+	// No new keys when all are tracked.
+	newKeys := v.newValidatorKeys([][fieldparams.BLSPubkeyLength]byte{pair1.pub, pair2.pub})
+	assert.Equal(t, 0, len(newKeys))
+
+	// pair3 is new.
+	newKeys = v.newValidatorKeys([][fieldparams.BLSPubkeyLength]byte{pair1.pub, pair3.pub})
+	assert.Equal(t, 1, len(newKeys))
+	assert.Equal(t, pair3.pub, newKeys[0])
+}
+
+func TestNewValidatorKeys_NilLastDuties(t *testing.T) {
+	pair := randKeypair(t)
+	v := validator{
+		duties: testDutyStore(),
+	}
+	// Should return nil when lastDutiesPubkeys hasn't been initialized.
+	newKeys := v.newValidatorKeys([][fieldparams.BLSPubkeyLength]byte{pair.pub})
+	assert.Equal(t, 0, len(newKeys))
+}
+
 func TestUpdateDuties_Distributed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

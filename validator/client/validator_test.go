@@ -1698,6 +1698,60 @@ func TestValidator_PushSettings(t *testing.T) {
 	}
 }
 
+func TestPushProposerSettings_RefreshesDutiesForNewKeys(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	ctx := t.Context()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	pair1 := randKeypair(t)
+	pair2 := randKeypair(t)
+	km := newMockKeymanager(t, pair1, pair2)
+
+	db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
+
+	v := validator{
+		validatorClient:              client,
+		km:                           km,
+		db:                           db,
+		duties:                       testDutyStore(),
+		signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
+		// Only pair1 was in the last duties fetch — pair2 is "new".
+		lastDutiesPubkeys: map[[fieldparams.BLSPubkeyLength]byte]bool{
+			pair1.pub: true,
+		},
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			pair1.pub: {publicKey: pair1.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, index: 1},
+			pair2.pub: {publicKey: pair2.pub[:], status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, index: 2},
+		},
+	}
+	v.aggSelector = testLocalSelector(t, &v)
+	require.NoError(t, v.SetProposerSettings(ctx, &proposer.Settings{
+		DefaultConfig: &proposer.Option{
+			FeeRecipientConfig: &proposer.FeeRecipientConfig{
+				FeeRecipient: common.HexToAddress("0x046Fb65722E7b2455043BFEBf6177F1D2e9738D9"),
+			},
+		},
+	}))
+
+	// Expect a partial Duties call for the new key.
+	dutiesResp := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{PublicKey: pair2.pub[:], ValidatorIndex: 2, AttesterSlot: 5},
+		},
+	}
+	client.EXPECT().Duties(gomock.Any(), gomock.Any()).Return(dutiesResp, nil)
+	client.EXPECT().SubscribeCommitteeSubnets(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	client.EXPECT().PrepareBeaconProposer(gomock.Any(), gomock.Any()).Return(nil, nil)
+	client.EXPECT().SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).Return(&empty.Empty{}, nil).AnyTimes()
+	client.EXPECT().SubmitValidatorRegistrations(gomock.Any(), gomock.Any()).Return(&empty.Empty{}, nil).AnyTimes()
+
+	require.NoError(t, v.PushProposerSettings(ctx, 1, false))
+
+	// pair2 should now be tracked.
+	assert.Equal(t, true, v.lastDutiesPubkeys[pair2.pub])
+}
+
 func pubkeyFromString(t *testing.T, stringPubkey string) [fieldparams.BLSPubkeyLength]byte {
 	pubkeyTemp, err := hexutil.Decode(stringPubkey)
 	require.NoError(t, err)

@@ -151,3 +151,38 @@ func (ds *dutyStore) SetFromCombinedDutiesResponse(container *ethpb.ValidatorDut
 	ds.currDependentRoot = container.CurrDependentRoot
 	ds.initialized = true
 }
+
+// MergeDutiesResponse merges duties from a partial response into the existing
+// store without replacing already-tracked validators. This is used when new
+// keys are imported mid-epoch so only the new keys need to be fetched.
+func (ds *dutyStore) MergeDutiesResponse(container *ethpb.ValidatorDutiesContainer) {
+	if container == nil || !ds.initialized {
+		return
+	}
+	for _, d := range container.CurrentEpochDuties {
+		if d == nil {
+			continue
+		}
+		pk := bytesutil.ToBytes48(d.PublicKey)
+		ds.currentDuties[pk] = d
+		if len(d.ProposerSlots) > 0 {
+			ds.proposerSlots[d.ValidatorIndex] = d.ProposerSlots
+		}
+		if d.IsSyncCommittee {
+			ds.syncCurrentMap[d.ValidatorIndex] = true
+		}
+		if len(d.PtcSlots) > 0 {
+			ds.ptcSlots[d.ValidatorIndex] = d.PtcSlots
+		}
+	}
+	for _, d := range container.NextEpochDuties {
+		if d == nil {
+			continue
+		}
+		pk := bytesutil.ToBytes48(d.PublicKey)
+		ds.nextDuties[pk] = d
+		if d.IsSyncCommittee {
+			ds.syncNextMap[d.ValidatorIndex] = true
+		}
+	}
+}
