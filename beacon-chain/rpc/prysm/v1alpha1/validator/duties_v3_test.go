@@ -6,7 +6,6 @@ import (
 
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -321,9 +320,7 @@ func TestGetPTCDuties_OK(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	numVals := uint64(fieldparams.PTCSize + 64)
-	fuluSt, _ := util.DeterministicGenesisStateFulu(t, numVals)
-	bs, err := gloas.UpgradeToGloas(fuluSt)
-	require.NoError(t, err)
+	bs, _ := util.DeterministicGenesisStateGloas(t, numVals)
 	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), bs, 0))
 
 	genesisRoot := [32]byte{0xaa}

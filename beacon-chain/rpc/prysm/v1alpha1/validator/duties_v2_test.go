@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
@@ -124,18 +123,24 @@ func TestGetDutiesV2_NextEpochProposerSlots(t *testing.T) {
 			params.OverrideBeaconConfig(cfg)
 
 			genesis := util.NewBeaconBlock()
-			deposits, _, err := util.DeterministicDepositsAndKeys(params.BeaconConfig().MinGenesisActiveValidatorCount)
-			require.NoError(t, err)
-			eth1Data, err := util.DeterministicEth1Data(len(deposits))
-			require.NoError(t, err)
-			bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
-			require.NoError(t, err)
+			var bs beaconstate.BeaconState
+			if tt.gloasForkEpoch == 0 {
+				bs, _ = util.DeterministicGenesisStateGloas(t, params.BeaconConfig().MinGenesisActiveValidatorCount)
+			} else {
+				deposits, _, err := util.DeterministicDepositsAndKeys(params.BeaconConfig().MinGenesisActiveValidatorCount)
+				require.NoError(t, err)
+				eth1Data, err := util.DeterministicEth1Data(len(deposits))
+				require.NoError(t, err)
+				bs, err = transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
+				require.NoError(t, err)
+			}
 			genesisRoot, err := genesis.Block.HashTreeRoot()
 			require.NoError(t, err)
 
-			pubKeys := make([][]byte, len(deposits))
-			for i := range deposits {
-				pubKeys[i] = deposits[i].Data.PublicKey
+			pubKeys := make([][]byte, len(bs.Validators()))
+			for i := range bs.Validators() {
+				pk := bs.PubkeyAtIndex(primitives.ValidatorIndex(i))
+				pubKeys[i] = pk[:]
 			}
 
 			chain := &mockChain.ChainService{
@@ -649,13 +654,12 @@ func TestGetDutiesV2_SyncNotReady(t *testing.T) {
 // GloasForkEpoch and MaxEffectiveBalanceElectra in the beacon config.
 func ptcTestState(t *testing.T) (beaconstate.BeaconState, [][]byte) {
 	t.Helper()
-	numVals := params.BeaconConfig().MinGenesisActiveValidatorCount
-	fuluSt, keys := util.DeterministicGenesisStateFulu(t, numVals)
-	st, err := gloas.UpgradeToGloas(fuluSt)
-	require.NoError(t, err)
-	pubKeys := make([][]byte, numVals)
-	for i := range numVals {
-		pubKeys[i] = keys[i].PublicKey().Marshal()
+	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
+	st, _ := util.DeterministicGenesisStateGloas(t, depChainStart)
+	pubKeys := make([][]byte, depChainStart)
+	for i := range depChainStart {
+		pk := st.PubkeyAtIndex(primitives.ValidatorIndex(i))
+		pubKeys[i] = pk[:]
 	}
 	return st, pubKeys
 }
@@ -691,7 +695,7 @@ func TestPTCDuties_PreGloasEpoch(t *testing.T) {
 }
 
 // TestPTCDuties_EmptyIndices verifies that an empty validator
-// index list short-circuits and returns an empty map without calling PayloadCommittee.
+// index list short-circuits and returns an empty map without calling PayloadCommitteeReadOnly.
 func TestPTCDuties_EmptyIndices(t *testing.T) {
 	ptcTestConfig(t)
 
@@ -771,7 +775,7 @@ func TestPTCDuties_CollectsAllSlots(t *testing.T) {
 	for valIdx, assignedSlots := range result {
 		expected := make([]primitives.Slot, 0)
 		for s := epochStart; s < epochEnd; s++ {
-			ptc, err := gloas.PayloadCommittee(t.Context(), st, s)
+			ptc, err := st.PayloadCommitteeReadOnly(s)
 			require.NoError(t, err)
 			found := slices.Contains(ptc, valIdx)
 			if found {

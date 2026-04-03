@@ -128,6 +128,7 @@ var (
 		types.BuilderPendingWithdrawals,
 		types.LatestBlockHash,
 		types.PayloadExpectedWithdrawals,
+		types.PTCWindow,
 	}
 
 	gloasFields = slices.Concat(
@@ -148,7 +149,7 @@ const (
 	denebSharedFieldRefCount     = 7
 	electraSharedFieldRefCount   = 10
 	fuluSharedFieldRefCount      = 11
-	gloasSharedFieldRefCount     = 13 // Adds Builders + BuilderPendingWithdrawals to the shared-ref set and LatestExecutionPayloadHeader is removed
+	gloasSharedFieldRefCount     = 14 // Adds Builders + BuilderPendingWithdrawals + PTCWindow to the shared-ref set and LatestExecutionPayloadHeader is removed
 )
 
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
@@ -827,6 +828,7 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 		builderPendingWithdrawals:     st.BuilderPendingWithdrawals,
 		latestBlockHash:               st.LatestBlockHash,
 		payloadExpectedWithdrawals:    st.PayloadExpectedWithdrawals,
+		ptcWindow:                     st.PtcWindow,
 		dirtyFields:                   make(map[types.FieldIndex]bool, fieldCount),
 		dirtyIndices:                  make(map[types.FieldIndex][]uint64, fieldCount),
 		stateFieldLeaves:              make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
@@ -868,6 +870,7 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 	b.sharedFieldReferences[types.ProposerLookahead] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)                  // New in Gloas.
 	b.sharedFieldReferences[types.BuilderPendingWithdrawals] = stateutil.NewRef(1) // New in Gloas.
+	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)                 // New in Gloas.
 
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.
@@ -926,6 +929,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 		eth1DataVotes:             b.eth1DataVotes,
 		slashings:                 b.slashings,
 		proposerLookahead:         b.proposerLookahead,
+		ptcWindow:                 b.ptcWindow,
 
 		// Large arrays, increases over time.
 		balancesMultiValue:         b.balancesMultiValue,
@@ -1411,6 +1415,8 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		return bytesutil.ToBytes32(b.latestBlockHash), nil
 	case types.PayloadExpectedWithdrawals:
 		return ssz.WithdrawalSliceRoot(b.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+	case types.PTCWindow:
+		return stateutil.PTCWindowRoot(b.ptcWindow)
 	}
 	return [32]byte{}, errors.New("invalid field index provided")
 }

@@ -686,7 +686,7 @@ func (s *Service) handleBlockPayloadAttestations(ctx context.Context, blk interf
 	if len(atts) == 0 {
 		return nil
 	}
-	committee, err := gloas.PayloadCommittee(ctx, st, blk.Slot()-1)
+	committee, err := st.PayloadCommitteeReadOnly(blk.Slot() - 1)
 	if err != nil {
 		return err
 	}

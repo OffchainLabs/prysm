@@ -187,6 +187,8 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.DataColumnsByRootIdentifier{}
 	case "MatrixEntry":
 		t.Skip("Unused type")
+	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar":
+		t.Skip("Not yet implemented")
 	default:
 		return nil, errors.New("type not found")
 	}
