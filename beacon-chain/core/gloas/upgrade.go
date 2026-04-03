@@ -292,10 +292,6 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, err
 	}
-	proposerLookaheadU64 := make([]uint64, len(proposerLookahead))
-	for i, v := range proposerLookahead {
-		proposerLookaheadU64[i] = uint64(v)
-	}
 
 	executionPayloadAvailability := make([]byte, int((params.BeaconConfig().SlotsPerHistoricalRoot+7)/8))
 	for i := range executionPayloadAvailability {
@@ -359,7 +355,7 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		PendingDeposits:               pendingDeposits,
 		PendingPartialWithdrawals:     pendingPartialWithdrawals,
 		PendingConsolidations:         pendingConsolidations,
-		ProposerLookahead:             proposerLookaheadU64,
+		ProposerLookahead:             proposerLookahead,
 		Builders:                      []*ethpb.Builder{},
 		NextWithdrawalBuilderIndex:    primitives.BuilderIndex(0),
 		ExecutionPayloadAvailability:  executionPayloadAvailability,
