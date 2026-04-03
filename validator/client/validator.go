@@ -1052,9 +1052,6 @@ func (v *validator) buildProposerPreferences(
 	}
 	midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
 
-	if v.submittedPrefSlots == nil {
-		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-	}
 	for s := range v.submittedPrefSlots {
 		if s < epochStart {
 			delete(v.submittedPrefSlots, s)
