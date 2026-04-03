@@ -1127,19 +1127,41 @@ func (v *validator) buildProposerPreferences(
 		}
 	}
 
+	currentDuties := v.duties.CurrentEpochDuties()
+	nextDuties := v.duties.NextEpochDuties()
+
+	var currentProposerCount, nextProposerCount int
+	for _, d := range currentDuties {
+		currentProposerCount += len(d.ProposerSlots)
+	}
+	for _, d := range nextDuties {
+		nextProposerCount += len(d.ProposerSlots)
+	}
+
 	// Current-epoch: submit after first slot of epoch to avoid stale state.
-	if slot > epochStart {
-		processDuties(v.duties.CurrentEpochDuties(), false)
+	// Only post-gloas — current-epoch prefs before gloas would be rejected.
+	if currentEpoch >= gloasEpoch && slot > epochStart {
+		processDuties(currentDuties, false)
 	}
 
 	// Next-epoch: submit at or after mid-epoch.
 	if slot >= midEpoch {
-		processDuties(v.duties.NextEpochDuties(), true)
+		processDuties(nextDuties, true)
 	}
 
 	if sigFailCount > 0 {
 		log.WithField("count", sigFailCount).Warn("Failed to sign proposer preferences")
 	}
+	log.WithFields(logrus.Fields{
+		"slot":                 slot,
+		"epoch":                currentEpoch,
+		"epochStart":           epochStart,
+		"midEpoch":             midEpoch,
+		"currentProposerSlots": currentProposerCount,
+		"nextProposerSlots":    nextProposerCount,
+		"prefsBuilt":           len(signedPrefs),
+		"alreadySubmitted":     len(v.submittedPrefSlots),
+	}).Debug("Build proposer preferences result")
 	return signedPrefs
 }
 
