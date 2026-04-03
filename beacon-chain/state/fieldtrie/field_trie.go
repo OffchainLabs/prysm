@@ -9,6 +9,7 @@ import (
 	multi_value_slice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	pmath "github.com/OffchainLabs/prysm/v7/math"
 	"github.com/pkg/errors"
+	logrus "github.com/sirupsen/logrus"
 )
 
 var (
@@ -104,6 +105,10 @@ func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, err
 	defer f.Unlock()
 
 	fieldTrieRecomputeIndicesSummary.WithLabelValues(f.field.String()).Observe(float64(len(indices)))
+
+	if f.field == types.Balances {
+		logrus.WithField("indices", indices).Info("RecomputeTrie: balance indices")
+	}
 
 	var fieldRoot [32]byte
 	if len(indices) == 0 {
