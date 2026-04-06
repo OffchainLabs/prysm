@@ -35,7 +35,7 @@ func TestValidateDataColumnGloas(t *testing.T) {
 	ctx := t.Context()
 	genericError := errors.New("generic error")
 
-	serviceAndMessage := func(t *testing.T, newDataColumnsVerifier verification.NewDataColumnsVerifier, msg ssz.Marshaler) (*Service, *pubsub.Message) {
+	serviceAndMessage := func(t *testing.T, newDataColumnsVerifier verification.NewDataColumnsVerifier, msg ssz.Marshaler, columnIndex uint64) (*Service, *pubsub.Message) {
 		t.Helper()
 
 		const genesisNSec = 0
@@ -60,14 +60,14 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		digest, err := service.currentForkDigest()
 		require.NoError(t, err)
 
-		subnet := peerdas.ComputeSubnetForDataColumnSidecar(msg.(*ethpb.DataColumnSidecar).Index)
+		subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
 		topic = service.addDigestAndIndexToTopic(topic, digest, subnet)
 
 		message := &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}}
 		return service, message
 	}
 
-	gloasFixture := func(t *testing.T) (*ethpb.DataColumnSidecar, interfaces.ReadOnlySignedBeaconBlock) {
+	gloasFixture := func(t *testing.T) (*ethpb.DataColumnSidecarGloas, interfaces.ReadOnlySignedBeaconBlock) {
 		t.Helper()
 
 		_, roSidecars, _ := util.GenerateTestFuluBlockWithSidecars(t, 1, util.WithSlot(1))
@@ -75,33 +75,32 @@ func TestValidateDataColumnGloas(t *testing.T) {
 
 		base := roSidecars[0]
 		bid := util.GenerateTestSignedExecutionPayloadBid(base.Slot())
-		bid.Message.BlobKzgCommitments = bytesutil.SafeCopy2dBytes(base.KzgCommitments)
+		comms, err := base.KzgCommitments()
+		require.NoError(t, err)
+		bid.Message.BlobKzgCommitments = bytesutil.SafeCopy2dBytes(comms)
 
 		pb := util.NewBeaconBlockGloas()
 		pb.Block.Slot = base.Slot()
-		pb.Block.ProposerIndex = base.ProposerIndex()
-		pb.Block.ParentRoot = bytes.Clone(base.SignedBlockHeader.Header.ParentRoot)
-		pb.Block.StateRoot = bytes.Clone(base.SignedBlockHeader.Header.StateRoot)
+		pb.Block.ProposerIndex, err = base.ProposerIndex()
+		require.NoError(t, err)
+		sbh, err := base.SignedBlockHeader()
+		require.NoError(t, err)
+		pb.Block.ParentRoot = bytes.Clone(sbh.Header.ParentRoot)
+		pb.Block.StateRoot = bytes.Clone(sbh.Header.StateRoot)
 		pb.Block.Body.SignedExecutionPayloadBid = bid
 
 		signedBlock, err := blocks.NewSignedBeaconBlock(pb)
 		require.NoError(t, err)
 
-		header, err := signedBlock.Header()
+		blockRoot, err := signedBlock.Block().HashTreeRoot()
 		require.NoError(t, err)
 
-		invalidCommitments := make([][]byte, len(base.KzgCommitments))
-		for i := range invalidCommitments {
-			invalidCommitments[i] = bytes.Repeat([]byte{0x42}, len(base.KzgCommitments[i]))
-		}
-
-		sidecar := &ethpb.DataColumnSidecar{
-			Index:                        base.Index,
-			Column:                       bytesutil.SafeCopy2dBytes(base.Column),
-			KzgCommitments:               invalidCommitments,
-			KzgProofs:                    bytesutil.SafeCopy2dBytes(base.KzgProofs),
-			SignedBlockHeader:            header,
-			KzgCommitmentsInclusionProof: bytesutil.SafeCopy2dBytes(base.KzgCommitmentsInclusionProof),
+		sidecar := &ethpb.DataColumnSidecarGloas{
+			Index:           base.Index(),
+			Column:          bytesutil.SafeCopy2dBytes(base.Column()),
+			KzgProofs:       bytesutil.SafeCopy2dBytes(base.KzgProofs()),
+			Slot:            base.Slot(),
+			BeaconBlockRoot: blockRoot[:],
 		}
 
 		return sidecar, signedBlock
@@ -110,11 +109,12 @@ func TestValidateDataColumnGloas(t *testing.T) {
 	t.Run("ignores unseen block", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
 		sidecar, _ := gloasFixture(t)
-		service, message := serviceAndMessage(t, testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrValidFields: genericError}), sidecar)
+		service, message := serviceAndMessage(t, testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrValidFields: genericError}), sidecar, sidecar.Index)
 		result, err := service.validateDataColumn(ctx, "aDummyPID", message)
 		require.ErrorContains(t, "gloas data column block not yet seen", err)
 		require.Equal(t, pubsub.ValidationIgnore, result)
@@ -123,11 +123,12 @@ func TestValidateDataColumnGloas(t *testing.T) {
 	t.Run("validates against bid commitments", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
 		sidecar, signedBlock := gloasFixture(t)
-		service, message := serviceAndMessage(t, testVerifierReturnsAll(&verification.MockDataColumnsVerifier{}), sidecar)
+		service, message := serviceAndMessage(t, testVerifierReturnsAll(&verification.MockDataColumnsVerifier{}), sidecar, sidecar.Index)
 
 		db := dbtest.SetupDB(t)
 		chainService := &mock.ChainService{
@@ -142,9 +143,9 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, pubsub.ValidationAccept, result)
 
-		validated, ok := message.ValidatorData.(blocks.VerifiedRODataColumn)
+		validated, ok := message.ValidatorData.(*ethpb.DataColumnSidecarGloas)
 		require.Equal(t, true, ok)
-		require.Equal(t, true, bytes.Equal(validated.KzgCommitments[0], sidecar.KzgCommitments[0]))
+		require.Equal(t, true, bytes.Equal(validated.KzgProofs[0], sidecar.KzgProofs[0]))
 
 		result, err = service.validateDataColumn(ctx, "aDummyPID", message)
 		require.ErrorContains(t, "data column sidecar already seen for block root", err)
@@ -154,13 +155,14 @@ func TestValidateDataColumnGloas(t *testing.T) {
 	t.Run("rejects slot mismatch", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
 		sidecar, signedBlock := gloasFixture(t)
-		sidecar.SignedBlockHeader.Header.Slot++
+		sidecar.Slot++
 
-		service, _ := serviceAndMessage(t, testVerifierReturnsAll(&verification.MockDataColumnsVerifier{}), sidecar)
+		service, _ := serviceAndMessage(t, testVerifierReturnsAll(&verification.MockDataColumnsVerifier{}), sidecar, sidecar.Index)
 
 		db := dbtest.SetupDB(t)
 		chainService := &mock.ChainService{
@@ -173,12 +175,12 @@ func TestValidateDataColumnGloas(t *testing.T) {
 
 		blockRoot, err := signedBlock.Block().HashTreeRoot()
 		require.NoError(t, err)
-		roDataColumn, err := blocks.NewRODataColumnWithRoot(sidecar, blockRoot)
+		roDataColumn, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
 		require.NoError(t, err)
 
 		digest, err := service.currentForkDigest()
 		require.NoError(t, err)
-		topic := service.addDigestAndIndexToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecar]()], digest, peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index))
+		topic := service.addDigestAndIndexToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecarGloas]()], digest, peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index))
 		msg := &pubsub.Message{Message: &pb.Message{Topic: &topic}}
 
 		_, err = service.validateDataColumnGloas(ctx, msg, roDataColumn, "/data_column_sidecar_%d/")

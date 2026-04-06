@@ -47,6 +47,7 @@ type (
 	// Broadcaster broadcasts messages to peers over the p2p pubsub protocol.
 	Broadcaster interface {
 		Broadcast(context.Context, proto.Message) error
+		BroadcastForEpoch(context.Context, proto.Message, primitives.Epoch) error
 		BroadcastAttestation(ctx context.Context, subnet uint64, att ethpb.Att) error
 		BroadcastSyncCommitteeMessage(ctx context.Context, subnet uint64, sMsg *ethpb.SyncCommitteeMessage) error
 		BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.BlobSidecar) error

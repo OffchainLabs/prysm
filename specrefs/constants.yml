@@ -212,6 +212,13 @@
     DOMAIN_DEPOSIT: DomainType = '0x03000000'
     </spec>
 
+- name: DOMAIN_INCLUSION_LIST_COMMITTEE#heze
+  sources: []
+  spec: |
+    <spec constant_var="DOMAIN_INCLUSION_LIST_COMMITTEE" fork="heze" hash="95ea05fa">
+    DOMAIN_INCLUSION_LIST_COMMITTEE: DomainType = '0x0E000000'
+    </spec>
+
 - name: DOMAIN_PROPOSER_PREFERENCES#gloas
   sources:
     - file: config/params/config.go
@@ -445,22 +452,22 @@
 - name: PAYLOAD_STATUS_EMPTY#gloas
   sources: []
   spec: |
-    <spec constant_var="PAYLOAD_STATUS_EMPTY" fork="gloas" hash="b78dfbcf">
-    PAYLOAD_STATUS_EMPTY: PayloadStatus = 1
+    <spec constant_var="PAYLOAD_STATUS_EMPTY" fork="gloas" hash="84265c9b">
+    PAYLOAD_STATUS_EMPTY: PayloadStatus = 0
     </spec>
 
 - name: PAYLOAD_STATUS_FULL#gloas
   sources: []
   spec: |
-    <spec constant_var="PAYLOAD_STATUS_FULL" fork="gloas" hash="82f773dc">
-    PAYLOAD_STATUS_FULL: PayloadStatus = 2
+    <spec constant_var="PAYLOAD_STATUS_FULL" fork="gloas" hash="357ae377">
+    PAYLOAD_STATUS_FULL: PayloadStatus = 1
     </spec>
 
 - name: PAYLOAD_STATUS_PENDING#gloas
   sources: []
   spec: |
-    <spec constant_var="PAYLOAD_STATUS_PENDING" fork="gloas" hash="640761d7">
-    PAYLOAD_STATUS_PENDING: PayloadStatus = 0
+    <spec constant_var="PAYLOAD_STATUS_PENDING" fork="gloas" hash="6a0d6cbf">
+    PAYLOAD_STATUS_PENDING: PayloadStatus = 2
     </spec>
 
 - name: PRIMITIVE_ROOT_OF_UNITY#deneb
