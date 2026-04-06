@@ -325,15 +325,20 @@ func (f *ForkChoice) updateBalances() error {
 			if pn != nil && vote.currentRoot != zHash {
 				if pending {
 					if pn.node.balance < oldBalance {
-						log.WithFields(logrus.Fields{
-							"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
-							"oldBalance":                 oldBalance,
-							"nodeBalance":                pn.node.balance,
-							"nodeWeight":                 pn.node.weight,
-							"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
-							"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
-							"previousProposerBoostScore": f.store.previousProposerBoostScore,
-						}).Warning("node with invalid balance, setting it to zero")
+						if pn.node.slot == 0 {
+							log.WithField("nodeRoot", fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:]))).
+								Debug("Genesis node pending balance underflow, clamping to zero")
+						} else {
+							log.WithFields(logrus.Fields{
+								"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
+								"oldBalance":                 oldBalance,
+								"nodeBalance":                pn.node.balance,
+								"nodeWeight":                 pn.node.weight,
+								"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
+								"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
+								"previousProposerBoostScore": f.store.previousProposerBoostScore,
+							}).Warning("node with invalid balance, setting it to zero")
+						}
 						pn.node.balance = 0
 					} else {
 						pn.node.balance -= oldBalance
