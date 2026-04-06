@@ -127,7 +127,6 @@ type ReadOnlyValidator interface {
 	GetWithdrawalCredentials() []byte
 	Copy() *ethpb.Validator
 	Slashed() bool
-	IsNil() bool
 	HasETH1WithdrawalCredentials() bool
 	HasCompoundingWithdrawalCredentials() bool
 	HasExecutionWithdrawalCredentials() bool
@@ -239,6 +238,7 @@ type ReadOnlyDeposits interface {
 	DepositBalanceToConsume() (primitives.Gwei, error)
 	DepositRequestsStartIndex() (uint64, error)
 	PendingDeposits() ([]*ethpb.PendingDeposit, error)
+	IsPendingValidator(pubkey []byte) (bool, error)
 }
 
 type ReadOnlyConsolidations interface {

@@ -138,9 +138,9 @@ func (s *Service) getPayloadAttributeGloas(ctx context.Context, st state.ReadOnl
 		return emptyAttri
 	}
 
-	withdrawals, _, err := st.ExpectedWithdrawals()
+	withdrawals, err := st.WithdrawalsForPayload()
 	if err != nil {
-		log.WithError(err).Error("Could not get expected withdrawals to get payload attribute")
+		log.WithError(err).Error("Could not get payload withdrawals to get payload attribute")
 		return emptyAttri
 	}
 
@@ -191,6 +191,7 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	if attr == nil || attr.IsEmpty() {
 		return
 	}
+	beaconLatePayloadTaskTriggeredTotal.Inc()
 	// Head is the empty block.
 	bh, err := st.LatestBlockHash()
 	if err != nil {

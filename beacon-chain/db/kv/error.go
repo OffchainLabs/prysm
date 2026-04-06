@@ -26,6 +26,15 @@ var ErrNotFoundMetadataSeqNum = errors.Wrap(ErrNotFound, "metadata sequence numb
 // but the database was created without state-diff support.
 var ErrStateDiffIncompatible = errors.New("state-diff feature enabled but database was created without state-diff support")
 
+// ErrStateDiffCorrupted is returned when state-diff metadata or data is missing or invalid.
+var ErrStateDiffCorrupted = errors.New("state-diff database corrupted")
+
+// ErrStateDiffExponentMismatch is returned when configured exponents differ from stored metadata.
+var ErrStateDiffExponentMismatch = errors.New("state-diff exponents mismatch")
+
+// ErrStateDiffMissingSnapshot is returned when the offset snapshot is missing.
+var ErrStateDiffMissingSnapshot = errors.New("state-diff offset snapshot missing")
+
 var errEmptyBlockSlice = errors.New("[]blocks.ROBlock is empty")
 var errIncorrectBlockParent = errors.New("unexpected missing or forked blocks in a []ROBlock")
 var errFinalizedChildNotFound = errors.New("unable to find finalized root descending from backfill batch")

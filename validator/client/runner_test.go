@@ -12,7 +12,6 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/async/event"
-	"github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
@@ -552,13 +551,13 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 				},
 			},
 		},
-		signedValidatorRegistrations:   make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
-		duties:                         &dutyStore{},
-		slotFeed:                       &event.Feed{},
-		aggregatedSlotCommitteeIDCache: lru.New(100),
-		submittedAtts:                  make(map[submittedAttKey]*submittedAtt),
-		submittedAggregates:            make(map[submittedAttKey]*submittedAtt),
+		signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
+		duties:                       &dutyStore{},
+		slotFeed:                     &event.Feed{},
+		submittedAtts:                make(map[submittedAttKey]*submittedAtt),
+		submittedAggregates:          make(map[submittedAttKey]*submittedAtt),
 	}
+	v.aggSelector = testLocalSelector(t, v)
 
 	runTest(t, timedCtx, v)
 }

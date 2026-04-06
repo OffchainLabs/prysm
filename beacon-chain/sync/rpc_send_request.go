@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -612,10 +613,10 @@ func areSidecarsOrdered() DataColumnResponseValidation {
 			prevIdx = 0               // reset index tracking for new slot
 			prevSlot = sidecar.Slot() // move slot tracking to new slot
 		}
-		if sidecar.Index < prevIdx {
-			return errors.Wrapf(errSidecarIndicesUnordered, "got=%d, want>=%d", sidecar.Index, prevIdx)
+		if sidecar.Index() < prevIdx {
+			return errors.Wrapf(errSidecarIndicesUnordered, "got=%d, want>=%d", sidecar.Index(), prevIdx)
 		}
-		prevIdx = sidecar.Index
+		prevIdx = sidecar.Index()
 		return nil
 	}
 }
@@ -628,7 +629,7 @@ func isSidecarIndexRequested(request *ethpb.DataColumnSidecarsByRangeRequest) Da
 	}
 
 	return func(sidecar blocks.RODataColumn) error {
-		columnIndex := sidecar.Index
+		columnIndex := sidecar.Index()
 		if !requestedIndices[columnIndex] {
 			requested := helpers.SortedPrettySliceFromMap(requestedIndices)
 			return errors.Wrapf(errSidecarIndexNotRequested, "%d not in %v", columnIndex, requested)
@@ -732,7 +733,7 @@ func isSidecarIndexRootRequested(request p2ptypes.DataColumnsByRootIdentifiers) 
 	}
 
 	return func(sidecar blocks.RODataColumn) error {
-		root, index := sidecar.BlockRoot(), sidecar.Index
+		root, index := sidecar.BlockRoot(), sidecar.Index()
 		indices, ok := columnsIndexFromRoot[root]
 
 		if !ok {
@@ -949,6 +950,7 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 
 	envelopes := make([]*ethpb.SignedExecutionPayloadEnvelope, 0, max)
 	var prevSlot primitives.Slot
+	var prevHash []byte
 	for i := uint64(0); i < max+1; i++ {
 		env, err := readChunkedExecutionPayloadEnvelope(stream, p2pProvider.Encoding(), ctxMap)
 		if errors.Is(err, io.EOF) {
@@ -970,6 +972,13 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 		if i > 0 && envSlot <= prevSlot {
 			return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d not greater than previous slot %d", envSlot, prevSlot)
 		}
+		// Validate the hash chain
+		if len(prevHash) != 0 {
+			if !bytes.Equal(env.Message.Payload.ParentHash, prevHash) {
+				return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope parent hash %x does not match previous hash %x", env.Message.Payload.ParentHash, prevHash)
+			}
+		}
+		prevHash = env.Message.Payload.BlockHash
 		prevSlot = envSlot
 		envelopes = append(envelopes, env)
 	}

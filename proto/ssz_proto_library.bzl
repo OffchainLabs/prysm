@@ -43,6 +43,8 @@ mainnet = {
     "cells_per_blob.size": "128",
     "kzg_commitments_inclusion_proof_depth.size": "4",
     "proposer_lookahead_size": "64",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
+    "ptc_window.size": "96",  # (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH
+    "ptc_committee_indices.size": "512",  # PTC_SIZE
     "ptc.size": "64",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 512)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
@@ -88,6 +90,8 @@ minimal = {
     "cells_per_blob.size": "128",
     "kzg_commitments_inclusion_proof_depth.size": "4",
     "proposer_lookahead_size": "16",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
+    "ptc_window.size": "24",  # (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH
+    "ptc_committee_indices.size": "2",  # PTC_SIZE
     "ptc.size": "1",  # Gloas: Payload Timeliness Committee aggregation bits
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector2",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body

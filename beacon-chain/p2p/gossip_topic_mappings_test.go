@@ -168,4 +168,12 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 	pMessage = GossipTopicMappings(BlockSubnetTopicFormat, gloasForkEpoch)
 	_, ok = pMessage.(*ethpb.SignedBeaconBlockGloas)
 	assert.Equal(t, true, ok)
+	pMessage = GossipTopicMappings(ExecutionPayloadBidTopicFormat, gloasForkEpoch)
+	_, ok = pMessage.(*ethpb.SignedExecutionPayloadBid)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, ExecutionPayloadBidTopicFormat, GossipTypeMapping[reflect.TypeFor[*ethpb.SignedExecutionPayloadBid]()])
+	pMessage = GossipTopicMappings(SignedProposerPreferencesTopicFormat, gloasForkEpoch)
+	_, ok = pMessage.(*ethpb.SignedProposerPreferences)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, SignedProposerPreferencesTopicFormat, GossipTypeMapping[reflect.TypeFor[*ethpb.SignedProposerPreferences]()])
 }

@@ -49,11 +49,25 @@ func (s *Service) HighestReceivedBlockRoot() [32]byte {
 	return s.cfg.ForkChoiceStore.HighestReceivedBlockRoot()
 }
 
+// BlockHash returns the execution payload block hash for the given beacon block root from forkchoice.
+func (s *Service) BlockHash(root [32]byte) ([32]byte, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.BlockHash(root)
+}
+
 // HasFullNode returns the corresponding value from forkchoice
 func (s *Service) HasFullNode(root [32]byte) bool {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.HasFullNode(root)
+}
+
+// PayloadContentLookup returns the preferred payload-content lookup key from forkchoice.
+func (s *Service) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.PayloadContentLookup(root)
 }
 
 // ReceivedBlocksLastEpoch returns the corresponding value from forkchoice
@@ -142,6 +156,13 @@ func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byt
 	}
 	if st.Version() < version.Bellatrix {
 		return nil, nil
+	}
+	if st.Version() >= version.Gloas {
+		h, err := st.LatestBlockHash()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get latest block hash")
+		}
+		return bytesutil.SafeCopyBytes(h[:]), nil
 	}
 	header, err := st.LatestExecutionPayloadHeader()
 	if err != nil {

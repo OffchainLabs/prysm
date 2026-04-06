@@ -70,7 +70,8 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 
 	t.Run("size mismatch", func(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
-		sidecars[0].Column[0] = sidecars[0].Column[0][:len(sidecars[0].Column[0])-1] // Remove one byte to create size mismatch
+		column := sidecars[0].Column()
+		column[0] = column[0][:len(column[0])-1] // Remove one byte to create size mismatch
 
 		err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
 		require.ErrorIs(t, err, peerdas.ErrMismatchLength)
@@ -78,7 +79,7 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 
 	t.Run("invalid proof", func(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
-		sidecars[0].Column[0][0]++ // It is OK to overflow
+		sidecars[0].Column()[0][0]++ // It is OK to overflow
 
 		err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
 		require.ErrorIs(t, err, peerdas.ErrInvalidKZGProof)
@@ -87,6 +88,12 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 	t.Run("nominal", func(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
 		err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
+		require.NoError(t, err)
+	})
+
+	t.Run("with commitments", func(t *testing.T) {
+		sidecars := generateRandomSidecars(t, seed, blobCount)
+		err := peerdas.VerifyDataColumnsSidecarKZGProofsWithCommitments(sidecars, sidecarCommitments(t, sidecars))
 		require.NoError(t, err)
 	})
 }
@@ -196,7 +203,7 @@ func Test_VerifyKZGInclusionProofColumn(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			roDataColumn := blocks.RODataColumn{DataColumnSidecar: tc.dataColumnSidecar}
+			roDataColumn := blocks.NewRODataColumnNoVerify(tc.dataColumnSidecar)
 			err = peerdas.VerifyDataColumnSidecarInclusionProof(roDataColumn)
 			if tc.expectedError == nil {
 				require.NoError(t, err)
@@ -346,6 +353,16 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch4(b *testing
 			require.NoError(b, err)
 		}
 	}
+}
+
+func sidecarCommitments(t *testing.T, sidecars []blocks.RODataColumn) [][][]byte {
+	commitmentsBySidecar := make([][][]byte, len(sidecars))
+	for i := range sidecars {
+		var err error
+		commitmentsBySidecar[i], err = sidecars[i].KzgCommitments()
+		require.NoError(t, err)
+	}
+	return commitmentsBySidecar
 }
 
 func createTestSidecar(t *testing.T, index uint64, column, kzgCommitments, kzgProofs [][]byte) blocks.RODataColumn {

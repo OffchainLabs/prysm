@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"slices"
@@ -22,6 +23,7 @@ import (
 	mathutil "github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -44,7 +46,7 @@ func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) (*fcuConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:])
+	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:], cfg.headRoot[:])
 	return fcuArgs, nil
 }
 
@@ -89,7 +91,7 @@ func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]
 // fcuArgsNonCanonicalBlock returns the arguments to the FCU call when the
 // incoming block is non-canonical, that is, based on the head root.
 func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
-	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot)
+	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot, cfg.headRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -387,6 +389,7 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		return err
 	}
 	root := signed.Block().ParentRoot()
+	child := signed
 	// As long as parent node is not in fork choice store, and parent node is in DB.
 	for !s.cfg.ForkChoiceStore.HasNode(root) && s.cfg.BeaconDB.HasBlock(ctx, root) {
 		b, err := s.getBlock(ctx, root)
@@ -400,10 +403,33 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		if err != nil {
 			return err
 		}
+		hasPayload := false
+		if roblock.Version() >= version.Gloas {
+			sbid, err := child.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", child.Block().Slot())
+			}
+			if sbid == nil || sbid.Message == nil {
+				return fmt.Errorf("missing execution payload bid for block at slot %d", child.Block().Slot())
+			}
+			parentBid, err := b.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", b.Block().Slot())
+			}
+			if parentBid == nil || parentBid.Message == nil {
+				return fmt.Errorf("missing execution payload bid for block at slot %d", b.Block().Slot())
+			}
+			if bytes.Equal(sbid.Message.ParentBlockHash, parentBid.Message.BlockHash) {
+				hasPayload = true
+			}
+		}
 		root = b.Block().ParentRoot()
+		child = b
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
 			JustifiedCheckpoint: jCheckpoint,
-			FinalizedCheckpoint: fCheckpoint}
+			FinalizedCheckpoint: fCheckpoint,
+			HasPayload:          hasPayload,
+		}
 		pendingNodes = append(pendingNodes, args)
 	}
 	if len(pendingNodes) == 0 {

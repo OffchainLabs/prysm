@@ -73,7 +73,7 @@ func (ds *Server) GetInclusionSlot(ctx context.Context, req *pbrpc.InclusionSlot
 			tr := bytesutil.ToBytes32(a.GetData().Target.Root)
 			s, ok := targetStates[tr]
 			if !ok {
-				s, err = ds.StateGen.StateByRoot(ctx, tr)
+				s, err = ds.StateGen.StateByRootNoCopy(ctx, tr)
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "Could not retrieve state: %v", err)
 				}
