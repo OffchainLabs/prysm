@@ -75,6 +75,7 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 		f.downscorePeer(r.blocksFrom, r.err)
 		return
 	}
+
 	for i, b := range r.bwb[1:] {
 		nh, err := b.Block.ParentHash()
 		if err != nil {
@@ -83,6 +84,14 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 			return
 		}
 		if nh == bh {
+			continue
+		}
+
+		// Genesis slot 0 has no execution payload envelope. When the batch starts
+		// from genesis the first parentHash transition (0x00→real hash) does
+		// not correspond to any envelope, so skip the match.
+		if bh == [32]byte{} && r.bwb[i].Block.Block().Slot() == 0 {
+			bh = nh
 			continue
 		}
 		if pidx >= len(r.envelopes) {
