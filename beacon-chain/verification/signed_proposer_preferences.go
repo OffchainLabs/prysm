@@ -41,15 +41,19 @@ func (v *ProposerPreferencesVerifier) VerifyCurrentOrNextEpoch(st state.ReadOnly
 	defer v.record(RequireProposerPreferencesCurrentOrNextEpoch, &err)
 
 	msg := v.message()
-	currentEpoch := slots.ToEpoch(st.Slot())
+	currentSlot := st.Slot()
+	if v.clock != nil && v.clock.CurrentSlot() > currentSlot {
+		currentSlot = v.clock.CurrentSlot()
+	}
+	currentEpoch := slots.ToEpoch(currentSlot)
 	proposalEpoch := slots.ToEpoch(msg.ProposalSlot)
 	if proposalEpoch < currentEpoch || proposalEpoch > currentEpoch.Add(1) {
 		return fmt.Errorf("%w: proposal epoch %d, current epoch %d",
 			ErrProposerPreferencesNotCurrentOrNextEpoch, proposalEpoch, currentEpoch)
 	}
-	if msg.ProposalSlot <= st.Slot() {
-		return fmt.Errorf("%w: proposal slot %d <= state slot %d",
-			ErrProposerPreferencesSlotAlreadyPassed, msg.ProposalSlot, st.Slot())
+	if msg.ProposalSlot <= currentSlot {
+		return fmt.Errorf("%w: proposal slot %d <= current slot %d",
+			ErrProposerPreferencesSlotAlreadyPassed, msg.ProposalSlot, currentSlot)
 	}
 	return nil
 }

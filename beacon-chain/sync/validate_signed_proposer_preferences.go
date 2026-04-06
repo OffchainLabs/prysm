@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -41,6 +42,18 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	}
 
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	headRoot, err := s.cfg.chain.HeadRoot(ctx)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	// HeadStateReadOnly returns the current head state as stored, which may still
+	// be on the previous slot or epoch until the next block arrives. Advance it to
+	// the wall-clock slot so current-epoch proposer preferences are validated
+	// against the same epoch/ProposerLookahead view used elsewhere.
+	st, err = transition.ProcessSlotsIfNeeded(ctx, st, headRoot, s.cfg.clock.CurrentSlot())
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
