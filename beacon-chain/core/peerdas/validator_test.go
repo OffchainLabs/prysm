@@ -275,4 +275,88 @@ func TestReconstructionSource(t *testing.T) {
 
 		require.Equal(t, peerdas.SidecarType, src.Type())
 	})
+
+	t.Run("from bid", func(t *testing.T) {
+		bidCommitment1 := make([]byte, 48)
+		bidCommitment2 := make([]byte, 48)
+		bidCommitment1[0] = 0xAA
+		bidCommitment2[0] = 0xBB
+
+		gloasBlockPb := util.NewBeaconBlockGloas()
+		gloasBlockPb.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = [][]byte{bidCommitment1, bidCommitment2}
+		gloasBlockPb.Block.Slot = 42
+		gloasBlockPb.Block.ProposerIndex = 7
+
+		signedGloasBlock, err := blocks.NewSignedBeaconBlock(gloasBlockPb)
+		require.NoError(t, err)
+
+		gloasRob, err := blocks.NewROBlock(signedGloasBlock)
+		require.NoError(t, err)
+
+		src := peerdas.PopulateFromBid(gloasRob)
+		require.Equal(t, primitives.Slot(42), src.Slot())
+		require.Equal(t, gloasRob.Root(), src.Root())
+		bidPI, err := src.ProposerIndex()
+		require.NoError(t, err)
+		require.Equal(t, primitives.ValidatorIndex(7), bidPI)
+
+		commitments, err := src.Commitments()
+		require.NoError(t, err)
+		require.Equal(t, 2, len(commitments))
+		require.DeepEqual(t, bidCommitment1, commitments[0])
+		require.DeepEqual(t, bidCommitment2, commitments[1])
+
+		require.Equal(t, peerdas.BidType, src.Type())
+	})
+}
+
+func TestPopulateFromBid_DataColumnSidecars(t *testing.T) {
+	const numberOfColumns = fieldparams.NumberOfColumns
+
+	bidCommitment1 := make([]byte, 48)
+	bidCommitment2 := make([]byte, 48)
+	bidCommitment1[0] = 0xAA
+	bidCommitment2[0] = 0xBB
+
+	gloasBlockPb := util.NewBeaconBlockGloas()
+	gloasBlockPb.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = [][]byte{bidCommitment1, bidCommitment2}
+
+	signedGloasBlock, err := blocks.NewSignedBeaconBlock(gloasBlockPb)
+	require.NoError(t, err)
+
+	gloasRob, err := blocks.NewROBlock(signedGloasBlock)
+	require.NoError(t, err)
+
+	cellsPerBlob := [][]kzg.Cell{
+		make([]kzg.Cell, numberOfColumns),
+		make([]kzg.Cell, numberOfColumns),
+	}
+	proofsPerBlob := [][]kzg.Proof{
+		make([]kzg.Proof, numberOfColumns),
+		make([]kzg.Proof, numberOfColumns),
+	}
+
+	for i := range numberOfColumns {
+		cellsPerBlob[0][i][0] = byte(i)
+		proofsPerBlob[0][i][0] = byte(i)
+		cellsPerBlob[1][i][0] = byte(i + 128)
+		proofsPerBlob[1][i][0] = byte(i + 128)
+	}
+
+	sidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBid(gloasRob))
+	require.NoError(t, err)
+	require.Equal(t, int(numberOfColumns), len(sidecars))
+
+	for i, sidecar := range sidecars {
+		require.Equal(t, uint64(i), sidecar.Index())
+		require.Equal(t, 2, len(sidecar.Column()))
+		comms, err := sidecar.KzgCommitments()
+		require.NoError(t, err)
+		require.Equal(t, 2, len(comms))
+		require.Equal(t, 2, len(sidecar.KzgProofs()))
+
+		// Commitments come from the bid
+		require.DeepEqual(t, bidCommitment1, comms[0])
+		require.DeepEqual(t, bidCommitment2, comms[1])
+	}
 }

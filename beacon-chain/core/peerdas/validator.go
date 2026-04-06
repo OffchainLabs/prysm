@@ -23,11 +23,13 @@ var (
 var (
 	_ ConstructionPopulator = (*BlockReconstructionSource)(nil)
 	_ ConstructionPopulator = (*SidecarReconstructionSource)(nil)
+	_ ConstructionPopulator = (*BidReconstructionSource)(nil)
 )
 
 const (
 	BlockType   = "BeaconBlock"
 	SidecarType = "DataColumnSidecar"
+	BidType     = "ExecutionPayloadBid"
 )
 
 type (
@@ -49,9 +51,15 @@ type (
 		blocks.ROBlock
 	}
 
-	// DataColumnSidecar is a ConstructionPopulator that uses a data column sidecar as the source of data
+	// SidecarReconstructionSource is a ConstructionPopulator that uses a data column sidecar as the source of data
 	SidecarReconstructionSource struct {
 		blocks.VerifiedRODataColumn
+	}
+
+	// BidReconstructionSource is a ConstructionPopulator that uses the execution payload bid
+	// from a Gloas beacon block to extract KZG commitments for data column sidecar construction.
+	BidReconstructionSource struct {
+		blocks.ROBlock
 	}
 
 	blockInfo struct {
@@ -69,6 +77,14 @@ func PopulateFromBlock(block blocks.ROBlock) *BlockReconstructionSource {
 // PopulateFromSidecar creates a SidecarReconstructionSource from a data column sidecar
 func PopulateFromSidecar(sidecar blocks.VerifiedRODataColumn) *SidecarReconstructionSource {
 	return &SidecarReconstructionSource{VerifiedRODataColumn: sidecar}
+}
+
+// PopulateFromBid creates a BidReconstructionSource from a Gloas beacon block.
+// In Gloas (ePBS), the execution payload is delivered separately via the payload envelope,
+// but the KZG commitments are available in the bid embedded in the block, allowing
+// data column sidecars to be constructed from the EL as soon as the block arrives.
+func PopulateFromBid(block blocks.ROBlock) *BidReconstructionSource {
+	return &BidReconstructionSource{ROBlock: block}
 }
 
 // ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
@@ -306,5 +322,56 @@ func (s *SidecarReconstructionSource) extract() (*blockInfo, error) {
 		signedBlockHeader: sbh,
 		kzgCommitments:    comms,
 		kzgInclusionProof: incProof,
+	}, nil
+}
+
+// Slot returns the slot of the source
+func (s *BidReconstructionSource) Slot() primitives.Slot {
+	return s.Block().Slot()
+}
+
+// ProposerIndex returns the proposer index of the source
+func (s *BidReconstructionSource) ProposerIndex() (primitives.ValidatorIndex, error) {
+	return s.Block().ProposerIndex(), nil
+}
+
+// Commitments returns the blob KZG commitments from the execution payload bid
+func (s *BidReconstructionSource) Commitments() ([][]byte, error) {
+	bid, err := s.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return nil, errors.Wrap(err, "signed execution payload bid")
+	}
+	return bid.Message.BlobKzgCommitments, nil
+}
+
+// Type returns the type of the source
+func (s *BidReconstructionSource) Type() string {
+	return BidType
+}
+
+// extract extracts the block information from the source.
+// The KZG inclusion proof is a zeroed placeholder because the Gloas DataColumnSidecar
+// does not include it, but the current p2p layer still uses the Fulu proto which
+// requires a proof of exactly 4x32 bytes for SSZ encoding.
+func (s *BidReconstructionSource) extract() (*blockInfo, error) {
+	commitments, err := s.Commitments()
+	if err != nil {
+		return nil, err
+	}
+
+	header, err := s.Header()
+	if err != nil {
+		return nil, errors.Wrap(err, "header")
+	}
+
+	placeholderProof := make([][]byte, 4)
+	for i := range placeholderProof {
+		placeholderProof[i] = make([]byte, 32)
+	}
+
+	return &blockInfo{
+		signedBlockHeader: header,
+		kzgCommitments:    commitments,
+		kzgInclusionProof: placeholderProof,
 	}, nil
 }
