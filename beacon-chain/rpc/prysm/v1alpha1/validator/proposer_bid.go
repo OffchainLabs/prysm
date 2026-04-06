@@ -120,6 +120,6 @@ func (vs *Server) createSelfBuildExecutionPayloadBid(
 		Slot:               block.Slot(),
 		Value:              0,
 		ExecutionPayment:   0,
-		BlobKzgCommitments: [][]byte{}, // TODO: handle DA in gloas
+		BlobKzgCommitments: local.BlobsBundler.GetKzgCommitments(),
 	}, nil
 }

@@ -176,22 +176,24 @@ func TestDataColumnSidecars(t *testing.T) {
 
 		// Verify each sidecar has the expected structure
 		for i, sidecar := range sidecars {
-			require.Equal(t, uint64(i), sidecar.Index)
-			require.Equal(t, 2, len(sidecar.Column))
-			require.Equal(t, 2, len(sidecar.KzgCommitments))
-			require.Equal(t, 2, len(sidecar.KzgProofs))
+			require.Equal(t, uint64(i), sidecar.Index())
+			require.Equal(t, 2, len(sidecar.Column()))
+			comms, err := sidecar.KzgCommitments()
+			require.NoError(t, err)
+			require.Equal(t, 2, len(comms))
+			require.Equal(t, 2, len(sidecar.KzgProofs()))
 
 			// Verify commitments match what we set
-			require.DeepEqual(t, commitment1, sidecar.KzgCommitments[0])
-			require.DeepEqual(t, commitment2, sidecar.KzgCommitments[1])
+			require.DeepEqual(t, commitment1, comms[0])
+			require.DeepEqual(t, commitment2, comms[1])
 
 			// Verify column data comes from the correct cells
-			require.Equal(t, byte(i), sidecar.Column[0][0])
-			require.Equal(t, byte(i+128), sidecar.Column[1][0])
+			require.Equal(t, byte(i), sidecar.Column()[0][0])
+			require.Equal(t, byte(i+128), sidecar.Column()[1][0])
 
 			// Verify proofs come from the correct proofs
-			require.Equal(t, byte(i), sidecar.KzgProofs[0][0])
-			require.Equal(t, byte(i+128), sidecar.KzgProofs[1][0])
+			require.Equal(t, byte(i), sidecar.KzgProofs()[0][0])
+			require.Equal(t, byte(i+128), sidecar.KzgProofs()[1][0])
 		}
 	})
 }
@@ -241,7 +243,9 @@ func TestReconstructionSource(t *testing.T) {
 		src := peerdas.PopulateFromBlock(rob)
 		require.Equal(t, rob.Block().Slot(), src.Slot())
 		require.Equal(t, rob.Root(), src.Root())
-		require.Equal(t, rob.Block().ProposerIndex(), src.ProposerIndex())
+		srcPI, err := src.ProposerIndex()
+		require.NoError(t, err)
+		require.Equal(t, rob.Block().ProposerIndex(), srcPI)
 
 		commitments, err := src.Commitments()
 		require.NoError(t, err)
@@ -257,7 +261,11 @@ func TestReconstructionSource(t *testing.T) {
 		src := peerdas.PopulateFromSidecar(referenceSidecar)
 		require.Equal(t, referenceSidecar.Slot(), src.Slot())
 		require.Equal(t, referenceSidecar.BlockRoot(), src.Root())
-		require.Equal(t, referenceSidecar.ProposerIndex(), src.ProposerIndex())
+		refPI, err := referenceSidecar.ProposerIndex()
+		require.NoError(t, err)
+		srcPI, err := src.ProposerIndex()
+		require.NoError(t, err)
+		require.Equal(t, refPI, srcPI)
 
 		commitments, err := src.Commitments()
 		require.NoError(t, err)

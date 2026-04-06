@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
@@ -243,6 +244,28 @@ func copyBlindedExecutionPayloadEnvelope(env *BlindedExecutionPayloadEnvelope) *
 		StateRoot:         bytesutil.SafeCopyBytes(env.StateRoot),
 		ParentBlockHash:   bytesutil.SafeCopyBytes(env.ParentBlockHash),
 	}
+}
+
+// CopyPTCs creates a deep copy of a PTC slot.
+func CopyPTCs(slot *PTCs) *PTCs {
+	if slot == nil {
+		return nil
+	}
+	indices := make([]primitives.ValidatorIndex, len(slot.ValidatorIndices))
+	copy(indices, slot.ValidatorIndices)
+	return &PTCs{ValidatorIndices: indices}
+}
+
+// CopyPTCWindow creates a deep copy of a PTC window.
+func CopyPTCWindow(window []*PTCs) []*PTCs {
+	if window == nil {
+		return nil
+	}
+	copied := make([]*PTCs, len(window))
+	for i, slot := range window {
+		copied[i] = CopyPTCs(slot)
+	}
+	return copied
 }
 
 // CopyBuilderPendingPayment creates a deep copy of a builder pending payment.

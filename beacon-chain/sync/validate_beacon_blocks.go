@@ -165,6 +165,12 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationIgnore, err
 	}
 
+	if s.cfg.chain.ShouldIgnoreData(blk.Block().ParentRoot(), blk.Block().Slot()) {
+		log.WithFields(getBlockFields(blk)).Debug("Ignoring block with canonical parent before justified checkpoint")
+		ignoredPreJustifiedBlockCount.Inc()
+		return pubsub.ValidationIgnore, nil
+	}
+
 	// Process the block if the clock jitter is less than MAXIMUM_GOSSIP_CLOCK_DISPARITY.
 	// Otherwise queue it for processing in the right slot.
 	if isBlockQueueable(genesisTime, blk.Block().Slot(), receivedTime) {

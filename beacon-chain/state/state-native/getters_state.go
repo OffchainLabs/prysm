@@ -312,6 +312,7 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			BuilderPendingWithdrawals:     b.builderPendingWithdrawals,
 			LatestBlockHash:               b.latestBlockHash,
 			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawals,
+			PtcWindow:                     b.ptcWindow,
 		}
 	default:
 		return nil
@@ -616,6 +617,7 @@ func (b *BeaconState) ToProto() any {
 			BuilderPendingWithdrawals:     b.builderPendingWithdrawalsVal(),
 			LatestBlockHash:               b.latestBlockHashVal(),
 			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawalsVal(),
+			PtcWindow:                     b.ptcWindowVal(),
 		}
 	default:
 		return nil

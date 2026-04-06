@@ -64,6 +64,8 @@ func TestReplayBlocks_AllSkipSlots(t *testing.T) {
 	targetSlot := params.BeaconConfig().SlotsPerEpoch - 1
 	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
+	newState, err = ReplayProcessSlots(t.Context(), newState, targetSlot)
+	require.NoError(t, err)
 	assert.Equal(t, targetSlot, newState.Slot(), "Did not advance slots")
 }
 
@@ -164,13 +166,14 @@ func TestReplayBlocks_IgnoresMissingExecutionPayloadEnvelope_Gloas(t *testing.T)
 	require.NoError(t, err)
 
 	_, err = service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{wsb}, 1)
-	require.Equal(t, 1, wrappedDB.calls)
+	// Single-block list means it's the last block, so no envelope lookup is performed.
+	require.Equal(t, 0, wrappedDB.calls)
 	if err != nil {
 		assert.Equal(t, false, strings.Contains(err.Error(), "could not retrieve execution payload envelope"))
 	}
 }
 
-func TestReplayBlocks_FailsOnExecutionPayloadEnvelopeLookupError_Gloas(t *testing.T) {
+func TestReplayBlocks_NoEnvelopeLookupForLastBlock_Gloas(t *testing.T) {
 	wrappedDB := &envelopeLookupDB{
 		NoHeadAccessDatabase: testDB.SetupDB(t),
 		envelopeErr:          stderrors.New("db unavailable"),
@@ -178,14 +181,11 @@ func TestReplayBlocks_FailsOnExecutionPayloadEnvelopeLookupError_Gloas(t *testin
 
 	service := New(wrappedDB, doublylinkedtree.New())
 	beaconState, _ := util.DeterministicGenesisState(t, 32)
-	b := util.NewBeaconBlockGloas()
-	b.Block.Slot = 1
-	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
-	require.NoError(t, err)
 
-	_, err = service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{wsb}, 1)
-	require.Equal(t, 1, wrappedDB.calls)
-	require.ErrorContains(t, "could not retrieve execution payload envelope", err)
+	// With an empty block list, there is no envelope lookup at all.
+	_, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, 1)
+	require.Equal(t, 0, wrappedDB.calls)
+	require.NoError(t, err)
 }
 
 func TestReplayBlocks_ThroughForkBoundary(t *testing.T) {
@@ -210,6 +210,8 @@ func TestReplayBlocks_ThroughForkBoundary(t *testing.T) {
 	service := New(testDB.SetupDB(t), doublylinkedtree.New())
 	targetSlot := params.BeaconConfig().SlotsPerEpoch
 	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
+	require.NoError(t, err)
+	newState, err = ReplayProcessSlots(t.Context(), newState, targetSlot)
 	require.NoError(t, err)
 
 	// Verify state is version Altair.
@@ -249,12 +251,16 @@ func TestReplayBlocks_ThroughFutureForkBoundaries(t *testing.T) {
 	targetSlot := params.BeaconConfig().SlotsPerEpoch * 2
 	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
+	newState, err = ReplayProcessSlots(t.Context(), newState, targetSlot)
+	require.NoError(t, err)
 
 	// Verify state is version Bellatrix.
 	assert.Equal(t, version.Bellatrix, newState.Version())
 
 	targetSlot = params.BeaconConfig().SlotsPerEpoch * 3
 	newState, err = service.replayBlocks(t.Context(), newState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
+	require.NoError(t, err)
+	newState, err = ReplayProcessSlots(t.Context(), newState, targetSlot)
 	require.NoError(t, err)
 
 	// Verify state is version Capella.
@@ -263,12 +269,16 @@ func TestReplayBlocks_ThroughFutureForkBoundaries(t *testing.T) {
 	targetSlot = params.BeaconConfig().SlotsPerEpoch * 4
 	newState, err = service.replayBlocks(t.Context(), newState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
 	require.NoError(t, err)
+	newState, err = ReplayProcessSlots(t.Context(), newState, targetSlot)
+	require.NoError(t, err)
 
 	// Verify state is version Deneb.
 	assert.Equal(t, version.Deneb, newState.Version())
 
 	targetSlot = params.BeaconConfig().SlotsPerEpoch * 5
 	newState, err = service.replayBlocks(t.Context(), newState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
+	require.NoError(t, err)
+	newState, err = ReplayProcessSlots(t.Context(), newState, targetSlot)
 	require.NoError(t, err)
 
 	// Verify state is version Electra.
@@ -323,6 +333,8 @@ func TestReplayBlocks_ProcessEpoch_Electra(t *testing.T) {
 	service := New(testDB.SetupDB(t), doublylinkedtree.New())
 	targetSlot := (params.BeaconConfig().SlotsPerEpoch * 2) - 1
 	newState, err := service.replayBlocks(t.Context(), beaconState, []interfaces.ReadOnlySignedBeaconBlock{}, targetSlot)
+	require.NoError(t, err)
+	newState, err = ReplayProcessSlots(t.Context(), newState, targetSlot)
 	require.NoError(t, err)
 
 	require.Equal(t, version.Electra, newState.Version())
