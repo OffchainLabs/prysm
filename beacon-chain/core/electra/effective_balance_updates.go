@@ -51,8 +51,10 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) error {
 
 		if balance+downwardThreshold < val.EffectiveBalance() || val.EffectiveBalance()+upwardThreshold < balance {
 			effectiveBal := min(balance-balance%effBalanceInc, effectiveBalanceLimit)
-			newVal = val.Copy()
-			newVal.EffectiveBalance = effectiveBal
+			if effectiveBal != val.EffectiveBalance() {
+				newVal = val.Copy()
+				newVal.EffectiveBalance = effectiveBal
+			}
 		}
 		return newVal, nil
 	}
