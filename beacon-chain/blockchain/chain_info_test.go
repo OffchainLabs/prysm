@@ -820,3 +820,23 @@ func Test_hashForGenesisRoot(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{}, [32]byte(genRoot))
 }
+
+func Test_hashForGenesisRoot_Gloas(t *testing.T) {
+	beaconDB := testDB.SetupDB(t)
+	ctx := t.Context()
+	c := setupBeaconChain(t, beaconDB)
+
+	expectedHash := [32]byte{1, 2, 3, 4, 5}
+	st, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		LatestBlockHash: expectedHash[:],
+	})
+	require.NoError(t, err)
+	genesis.StoreDuringTest(t, genesis.GenesisData{State: st})
+
+	genesisRoot := [32]byte{0xaa}
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, genesisRoot))
+
+	genHash, err := c.hashForGenesisBlock(ctx, genesisRoot)
+	require.NoError(t, err)
+	require.Equal(t, expectedHash, [32]byte(genHash))
+}
