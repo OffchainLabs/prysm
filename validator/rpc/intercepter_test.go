@@ -11,364 +11,369 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
-func TestServer_AuthTokenInterceptor_Verify(t *testing.T) {
+func TestServer_AuthTokenInterceptor(t *testing.T) {
 	token := "cool-token"
-	s := Server{
-		authToken: token,
-	}
-	interceptor := s.AuthTokenInterceptor()
+	interceptor := (&Server{authToken: token}).AuthTokenInterceptor()
 
-	unaryInfo := &grpc.UnaryServerInfo{
-		FullMethod: "Proto.CreateWallet",
+	tests := []struct {
+		name            string
+		metadata        metadata.MD
+		handlerErr      error
+		wantHandlerCall bool
+		wantCode        codes.Code
+		wantErrSubstr   string
+	}{
+		{
+			name:            "calls handler with valid token",
+			metadata:        metadata.MD{"authorization": {"Bearer " + token}},
+			wantHandlerCall: true,
+		},
+		{
+			name:            "propagates handler error after successful auth",
+			metadata:        metadata.MD{"authorization": {"Bearer " + token}},
+			handlerErr:      status.Error(codes.Internal, "handler failure"),
+			wantHandlerCall: true,
+			wantCode:        codes.Internal,
+			wantErrSubstr:   "handler failure",
+		},
+		{
+			name:          "rejects request before handler on invalid token",
+			metadata:      metadata.MD{"authorization": {"Bearer bad-token"}},
+			wantCode:      codes.Unauthenticated,
+			wantErrSubstr: "token value is invalid",
+		},
 	}
-	unaryHandler := func(ctx context.Context, req any) (any, error) {
-		return nil, nil
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			if tt.metadata != nil {
+				ctx = metadata.NewIncomingContext(ctx, tt.metadata)
+			}
+
+			handlerCalled := false
+			_, err := interceptor(ctx, "xyz", &grpc.UnaryServerInfo{FullMethod: "Proto.CreateWallet"}, func(ctx context.Context, req any) (any, error) {
+				handlerCalled = true
+				return nil, tt.handlerErr
+			})
+
+			require.Equal(t, tt.wantHandlerCall, handlerCalled)
+			if tt.wantErrSubstr == "" {
+				require.NoError(t, err)
+				return
+			}
+
+			require.ErrorContains(t, tt.wantErrSubstr, err)
+			require.Equal(t, tt.wantCode, status.Code(err))
+		})
 	}
-	ctxMD := map[string][]string{
-		"authorization": {"Bearer " + token},
-	}
-	ctx := t.Context()
-	ctx = metadata.NewIncomingContext(ctx, ctxMD)
-	_, err := interceptor(ctx, "xyz", unaryInfo, unaryHandler)
-	require.NoError(t, err)
 }
 
-func TestServer_AuthTokenInterceptor_BadToken(t *testing.T) {
-	s := Server{
-		authToken: "cool-token",
-	}
-	interceptor := s.AuthTokenInterceptor()
-
-	unaryInfo := &grpc.UnaryServerInfo{
-		FullMethod: "Proto.CreateWallet",
-	}
-	unaryHandler := func(ctx context.Context, req any) (any, error) {
-		return nil, nil
-	}
-
-	ctxMD := map[string][]string{
-		"authorization": {"Bearer bad-token"},
-	}
-	ctx := t.Context()
-	ctx = metadata.NewIncomingContext(ctx, ctxMD)
-	_, err := interceptor(ctx, "xyz", unaryInfo, unaryHandler)
-	require.ErrorContains(t, "token value is invalid", err)
-}
-
-func TestServer_AuthTokenInterceptor_MalformedBearerPrefix(t *testing.T) {
-	s := Server{
-		authToken: "cool-token",
-	}
-	interceptor := s.AuthTokenInterceptor()
-
-	unaryInfo := &grpc.UnaryServerInfo{
-		FullMethod: "Proto.CreateWallet",
-	}
-	unaryHandler := func(ctx context.Context, req any) (any, error) {
-		return nil, nil
-	}
-
-	ctxMD := map[string][]string{
-		"authorization": {"Bearercool-token"}, // Missing space after Bearer
-	}
-	ctx := t.Context()
-	ctx = metadata.NewIncomingContext(ctx, ctxMD)
-	_, err := interceptor(ctx, "xyz", unaryInfo, unaryHandler)
-	require.ErrorContains(t, "Invalid auth header", err)
-}
-
-func TestServer_AuthTokenInterceptor_EmptyBearerToken(t *testing.T) {
-	s := Server{
-		authToken: "cool-token",
-	}
-	interceptor := s.AuthTokenInterceptor()
-
-	unaryInfo := &grpc.UnaryServerInfo{
-		FullMethod: "Proto.CreateWallet",
-	}
-	unaryHandler := func(ctx context.Context, req any) (any, error) {
-		return nil, nil
-	}
-
-	ctxMD := map[string][]string{
-		"authorization": {"Bearer "}, // Empty token after Bearer
-	}
-	ctx := t.Context()
-	ctx = metadata.NewIncomingContext(ctx, ctxMD)
-	_, err := interceptor(ctx, "xyz", unaryInfo, unaryHandler)
-	require.ErrorContains(t, "token value is invalid", err)
-}
-
-func TestServer_AuthTokenInterceptor_NoMetadata(t *testing.T) {
-	s := Server{
-		authToken: "cool-token",
-	}
-	interceptor := s.AuthTokenInterceptor()
-
-	unaryInfo := &grpc.UnaryServerInfo{
-		FullMethod: "Proto.CreateWallet",
-	}
-	unaryHandler := func(ctx context.Context, req any) (any, error) {
-		return nil, nil
-	}
-
-	ctx := t.Context()
-	// No metadata attached
-	_, err := interceptor(ctx, "xyz", unaryInfo, unaryHandler)
-	require.ErrorContains(t, "Retrieving metadata failed", err)
-}
-
-func TestServer_AuthTokenInterceptor_NoAuthorizationHeader(t *testing.T) {
-	s := Server{
-		authToken: "cool-token",
-	}
-	interceptor := s.AuthTokenInterceptor()
-
-	unaryInfo := &grpc.UnaryServerInfo{
-		FullMethod: "Proto.CreateWallet",
-	}
-	unaryHandler := func(ctx context.Context, req any) (any, error) {
-		return nil, nil
-	}
-
-	ctxMD := map[string][]string{
-		"other-header": {"some-value"},
-	}
-	ctx := t.Context()
-	ctx = metadata.NewIncomingContext(ctx, ctxMD)
-	_, err := interceptor(ctx, "xyz", unaryInfo, unaryHandler)
-	require.ErrorContains(t, "Authorization token could not be found", err)
-}
-
-func TestServer_AuthTokenHandler(t *testing.T) {
+func TestServer_authorize(t *testing.T) {
 	token := "cool-token"
+	server := &Server{authToken: token}
 
-	s := &Server{authToken: token}
-	testHandler := s.AuthTokenHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Your test handler logic here
+	tests := []struct {
+		name          string
+		metadata      metadata.MD
+		wantCode      codes.Code
+		wantErrSubstr string
+	}{
+		{
+			name:          "returns invalid argument when metadata is missing",
+			wantCode:      codes.InvalidArgument,
+			wantErrSubstr: "Retrieving metadata failed",
+		},
+		{
+			name:          "returns unauthenticated when authorization header is missing",
+			metadata:      metadata.MD{"other-header": {"some-value"}},
+			wantCode:      codes.Unauthenticated,
+			wantErrSubstr: "Authorization token could not be found",
+		},
+		{
+			name:          "returns unauthenticated for malformed bearer prefix",
+			metadata:      metadata.MD{"authorization": {"Bearercool-token"}},
+			wantCode:      codes.Unauthenticated,
+			wantErrSubstr: "Invalid auth header",
+		},
+		{
+			name:          "returns unauthenticated for empty bearer token",
+			metadata:      metadata.MD{"authorization": {"Bearer "}},
+			wantCode:      codes.Unauthenticated,
+			wantErrSubstr: "token value is invalid",
+		},
+		{
+			name:          "returns unauthenticated for invalid token value",
+			metadata:      metadata.MD{"authorization": {"Bearer bad-token"}},
+			wantCode:      codes.Unauthenticated,
+			wantErrSubstr: "token value is invalid",
+		},
+		{
+			name:     "accepts matching bearer token",
+			metadata: metadata.MD{"authorization": {"Bearer " + token}},
+		},
+		{
+			name:     "accepts token with surrounding whitespace",
+			metadata: metadata.MD{"authorization": {"Bearer  " + token + "  "}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			if tt.metadata != nil {
+				ctx = metadata.NewIncomingContext(ctx, tt.metadata)
+			}
+
+			err := server.authorize(ctx)
+			if tt.wantErrSubstr == "" {
+				require.NoError(t, err)
+				return
+			}
+
+			require.ErrorContains(t, tt.wantErrSubstr, err)
+			require.Equal(t, tt.wantCode, status.Code(err))
+		})
+	}
+}
+
+func TestServer_AuthTokenHandler_ProtectsRoutes(t *testing.T) {
+	token := "cool-token"
+	handler := (&Server{authToken: token}).AuthTokenHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("Test Response"))
 		require.NoError(t, err)
 	}))
-	t.Run("no auth token was sent", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
-		require.NoError(t, err)
-		testHandler.ServeHTTP(rr, req)
-		require.Equal(t, http.StatusUnauthorized, rr.Code)
-		errJson := &httputil.DefaultJsonError{}
-		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJson))
-		require.StringContains(t, "Unauthorized", errJson.Message)
-	})
-	t.Run("wrong auth token was sent", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
-		require.NoError(t, err)
-		req.Header.Set("Authorization", "Bearer YOUR_JWT_TOKEN") // Replace with a valid JWT token
-		testHandler.ServeHTTP(rr, req)
-		require.Equal(t, http.StatusForbidden, rr.Code)
-		errJson := &httputil.DefaultJsonError{}
-		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJson))
-		require.StringContains(t, "token value is invalid", errJson.Message)
-	})
-	t.Run("good auth token was sent", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
-		require.NoError(t, err)
-		req.Header.Set("Authorization", "Bearer "+token) // Replace with a valid JWT token
-		testHandler.ServeHTTP(rr, req)
-		require.Equal(t, http.StatusOK, rr.Code)
-	})
-	t.Run("web endpoint needs auth token", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodGet, "/api/v2/validator/beacon/status", http.NoBody)
-		require.NoError(t, err)
-		testHandler.ServeHTTP(rr, req)
-		require.Equal(t, http.StatusUnauthorized, rr.Code)
-		errJson := &httputil.DefaultJsonError{}
-		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJson))
-		require.StringContains(t, "Unauthorized", errJson.Message)
-	})
-	t.Run("direct /v2 endpoint also needs auth token (no /api bypass)", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodGet, "/v2/validator/beacon/status", http.NoBody)
-		require.NoError(t, err)
-		testHandler.ServeHTTP(rr, req)
-		require.Equal(t, http.StatusUnauthorized, rr.Code)
-		errJson := &httputil.DefaultJsonError{}
-		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJson))
-		require.StringContains(t, "Unauthorized", errJson.Message)
-	})
-	t.Run("initialize does not need auth", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodGet, api.WebUrlPrefix+"initialize", http.NoBody)
-		require.NoError(t, err)
-		testHandler.ServeHTTP(rr, req)
-		require.Equal(t, http.StatusOK, rr.Code)
-	})
-	t.Run("health does not need auth", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodGet, api.WebUrlPrefix+"health/logs", http.NoBody)
-		require.NoError(t, err)
-		testHandler.ServeHTTP(rr, req)
-		require.Equal(t, http.StatusOK, rr.Code)
-	})
+
+	tests := []struct {
+		name          string
+		path          string
+		authHeader    string
+		wantCode      int
+		wantErrSubstr string
+	}{
+		{
+			name:          "rejects missing token on keymanager endpoint",
+			path:          "/eth/v1/keystores",
+			wantCode:      http.StatusUnauthorized,
+			wantErrSubstr: "Unauthorized",
+		},
+		{
+			name:       "accepts matching token on keymanager endpoint",
+			path:       "/eth/v1/keystores",
+			authHeader: "Bearer " + token,
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:          "requires token on web api endpoint",
+			path:          "/api/v2/validator/beacon/status",
+			wantCode:      http.StatusUnauthorized,
+			wantErrSubstr: "Unauthorized",
+		},
+		{
+			name:          "requires token on direct web endpoint",
+			path:          "/v2/validator/beacon/status",
+			wantCode:      http.StatusUnauthorized,
+			wantErrSubstr: "Unauthorized",
+		},
+		{
+			name:     "allows initialize without auth",
+			path:     api.WebUrlPrefix + "initialize",
+			wantCode: http.StatusOK,
+		},
+		{
+			name:     "allows health without auth",
+			path:     api.WebUrlPrefix + "health/logs",
+			wantCode: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			req := newAuthTestRequest(t, tt.path)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, tt.wantCode, rr.Code)
+			if tt.wantErrSubstr != "" {
+				requireAuthErrorMessage(t, rr, tt.wantErrSubstr)
+			}
+		})
+	}
 }
 
-func TestServer_AuthTokenHandler_MalformedBearerPrefix(t *testing.T) {
+func TestServer_AuthTokenHandler_ValidatesAuthorizationHeader(t *testing.T) {
 	token := "cool-token"
-	s := &Server{authToken: token}
-
-	handler := s.AuthTokenHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := (&Server{authToken: token}).AuthTokenHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	rr := httptest.NewRecorder()
-	req, err := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
+	tests := []struct {
+		name          string
+		authHeader    string
+		wantCode      int
+		wantErrSubstr string
+	}{
+		{
+			name:          "rejects malformed bearer prefix",
+			authHeader:    "Bearertoken",
+			wantCode:      http.StatusBadRequest,
+			wantErrSubstr: "Invalid token format",
+		},
+		{
+			name:          "rejects empty bearer token",
+			authHeader:    "Bearer ",
+			wantCode:      http.StatusForbidden,
+			wantErrSubstr: "token value is invalid",
+		},
+		{
+			name:          "rejects invalid token value",
+			authHeader:    "Bearer bad-token",
+			wantCode:      http.StatusForbidden,
+			wantErrSubstr: "token value is invalid",
+		},
+		{
+			name:       "accepts matching token",
+			authHeader: "Bearer " + token,
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:       "accepts token with surrounding whitespace",
+			authHeader: "Bearer  " + token + "  ",
+			wantCode:   http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			req := newAuthTestRequest(t, "/eth/v1/keystores")
+			req.Header.Set("Authorization", tt.authHeader)
+
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, tt.wantCode, rr.Code)
+			if tt.wantErrSubstr != "" {
+				requireAuthErrorMessage(t, rr, tt.wantErrSubstr)
+			}
+		})
+	}
+}
+
+func BenchmarkServer_AuthTokenHandler(b *testing.B) {
+	token := "cool-token"
+	handler := (&Server{authToken: token}).AuthTokenHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	benchmarks := []struct {
+		name       string
+		authHeader string
+		wantCode   int
+	}{
+		{
+			name:       "valid_token",
+			authHeader: "Bearer " + token,
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:       "invalid_token",
+			authHeader: "Bearer bad-token",
+			wantCode:   http.StatusForbidden,
+		},
+	}
+
+	for _, bb := range benchmarks {
+		b.Run(bb.name, func(b *testing.B) {
+			req, err := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
+			require.NoError(b, err)
+			req.Header.Set("Authorization", bb.authHeader)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				rr := httptest.NewRecorder()
+				handler.ServeHTTP(rr, req)
+				if rr.Code != bb.wantCode {
+					b.Fatalf("unexpected status code: got %d, want %d", rr.Code, bb.wantCode)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkServer_AuthTokenInterceptor(b *testing.B) {
+	token := "cool-token"
+	interceptor := (&Server{authToken: token}).AuthTokenInterceptor()
+	unaryInfo := &grpc.UnaryServerInfo{FullMethod: "Proto.CreateWallet"}
+
+	benchmarks := []struct {
+		name      string
+		metadata  metadata.MD
+		wantCode  codes.Code
+		expectErr bool
+	}{
+		{
+			name:      "valid_token",
+			metadata:  metadata.MD{"authorization": {"Bearer " + token}},
+			wantCode:  codes.OK,
+			expectErr: false,
+		},
+		{
+			name:      "invalid_token",
+			metadata:  metadata.MD{"authorization": {"Bearer bad-token"}},
+			wantCode:  codes.Unauthenticated,
+			expectErr: true,
+		},
+	}
+
+	for _, bb := range benchmarks {
+		b.Run(bb.name, func(b *testing.B) {
+			ctx := metadata.NewIncomingContext(context.Background(), bb.metadata)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, err := interceptor(ctx, "xyz", unaryInfo, authTestUnaryHandler)
+				if bb.expectErr {
+					if status.Code(err) != bb.wantCode {
+						b.Fatalf("unexpected status code: got %v, want %v", status.Code(err), bb.wantCode)
+					}
+					continue
+				}
+				if err != nil {
+					b.Fatalf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func authTestUnaryHandler(ctx context.Context, req any) (any, error) {
+	return nil, nil
+}
+
+func newAuthTestRequest(t *testing.T, path string) *http.Request {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodGet, path, http.NoBody)
 	require.NoError(t, err)
-
-	// Missing space after "Bearer"
-	req.Header.Set("Authorization", "Bearertoken")
-
-	handler.ServeHTTP(rr, req)
-
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-
-	errJson := &httputil.DefaultJsonError{}
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJson))
-	require.StringContains(t, "Invalid token format", errJson.Message)
+	return req
 }
 
-func TestServer_AuthTokenHandler_EmptyBearerToken(t *testing.T) {
-	token := "cool-token"
-	s := &Server{authToken: token}
+func requireAuthErrorMessage(t *testing.T, rr *httptest.ResponseRecorder, want string) {
+	t.Helper()
 
-	handler := s.AuthTokenHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	rr := httptest.NewRecorder()
-	req, err := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
-	require.NoError(t, err)
-
-	// Bearer with empty token
-	req.Header.Set("Authorization", "Bearer ")
-
-	handler.ServeHTTP(rr, req)
-
-	require.Equal(t, http.StatusForbidden, rr.Code)
-
-	errJson := &httputil.DefaultJsonError{}
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJson))
-	require.StringContains(t, "token value is invalid", errJson.Message)
-}
-
-func TestServer_AuthTokenHandler_TokenWithWhitespace(t *testing.T) {
-	token := "cool-token"
-	s := &Server{authToken: token}
-
-	handler := s.AuthTokenHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	rr := httptest.NewRecorder()
-	req, err := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
-	require.NoError(t, err)
-
-	// Token with leading/trailing whitespace (should be trimmed and validated)
-	req.Header.Set("Authorization", "Bearer  "+token+"  ")
-
-	handler.ServeHTTP(rr, req)
-
-	require.Equal(t, http.StatusOK, rr.Code)
-}
-
-// Benchmark tests
-func BenchmarkAuthTokenHandler_ValidToken(b *testing.B) {
-	token := "cool-token"
-	s := &Server{authToken: token}
-
-	handler := s.AuthTokenHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req, _ := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-	}
-}
-
-func BenchmarkAuthTokenHandler_InvalidToken(b *testing.B) {
-	token := "cool-token"
-	s := &Server{authToken: token}
-
-	handler := s.AuthTokenHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req, _ := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
-	req.Header.Set("Authorization", "Bearer bad-token")
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-	}
-}
-
-func BenchmarkAuthTokenInterceptor_ValidToken(b *testing.B) {
-	token := "cool-token"
-	s := Server{
-		authToken: token,
-	}
-	interceptor := s.AuthTokenInterceptor()
-
-	unaryInfo := &grpc.UnaryServerInfo{
-		FullMethod: "Proto.CreateWallet",
-	}
-	unaryHandler := func(ctx context.Context, req any) (any, error) {
-		return nil, nil
-	}
-	ctxMD := map[string][]string{
-		"authorization": {"Bearer " + token},
-	}
-	ctx := context.Background()
-	ctx = metadata.NewIncomingContext(ctx, ctxMD)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = interceptor(ctx, "xyz", unaryInfo, unaryHandler)
-	}
-}
-
-func BenchmarkAuthTokenInterceptor_InvalidToken(b *testing.B) {
-	token := "cool-token"
-	s := Server{
-		authToken: token,
-	}
-	interceptor := s.AuthTokenInterceptor()
-
-	unaryInfo := &grpc.UnaryServerInfo{
-		FullMethod: "Proto.CreateWallet",
-	}
-	unaryHandler := func(ctx context.Context, req any) (any, error) {
-		return nil, nil
-	}
-	ctxMD := map[string][]string{
-		"authorization": {"Bearer bad-token"},
-	}
-	ctx := context.Background()
-	ctx = metadata.NewIncomingContext(ctx, ctxMD)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = interceptor(ctx, "xyz", unaryInfo, unaryHandler)
-	}
+	errJSON := &httputil.DefaultJsonError{}
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJSON))
+	require.StringContains(t, want, errJSON.Message)
 }
