@@ -30,6 +30,36 @@ to the root. For `k` changed leaves in a trie of depth `d`, this costs `O(k * d)
 operations instead of `O(n)` for a full rebuild. In practice, between two consecutive slots,
 only a small fraction of leaves change in most fields, so this is a significant saving.
 
+
+Consider a trie with 8 leaves. Only leaf F changes (to F'):
+
+```
+            R                                R'
+          /   \                            /   \
+        H1     H2                        H1     H2'
+       / \    / \                       / \     / \
+     H3  H4  H5  H6                   H3  H4  H5'  H6
+     /\  /\  /\  /\                   /\  /\  /\   /\
+    A B  C D E F G H                 A B  C D E F' G H
+
+     Full trie before                After updating leaf F
+```
+
+Only the nodes on the path from the changed leaf to the root need recomputing (marked with
+`'`). Everything else is reused as-is:
+
+```
+  Recomputation path:
+
+    1. Hash the new leaf F'
+    2. H5' = Hash(E, F')          ← sibling E is reused
+    3. H2' = Hash(H5', H6)        ← sibling H6 is reused
+    4. R'  = Hash(H1, H2')        ← sibling H1 is reused
+
+  Cost: 4 hashes instead of 15 (full rebuild).
+  In general: O(log n) instead of O(n).
+```
+
 ## 5. Flat Buffer Storage
 
 Trie nodes are stored in a single contiguous flat buffer (`[][32]byte`) rather than as a
