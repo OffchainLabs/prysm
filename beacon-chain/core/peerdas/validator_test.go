@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -312,6 +313,11 @@ func TestReconstructionSource(t *testing.T) {
 
 func TestPopulateFromBid_DataColumnSidecars(t *testing.T) {
 	const numberOfColumns = fieldparams.NumberOfColumns
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 
 	bidCommitment1 := make([]byte, 48)
 	bidCommitment2 := make([]byte, 48)

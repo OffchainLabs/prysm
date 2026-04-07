@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -43,7 +44,7 @@ type (
 		Commitments() ([][]byte, error)
 		Type() string
 
-		buildSidecar(idx uint64, cells [][]byte, proofs [][]byte) (blocks.RODataColumn, error)
+		extract() (*blockInfo, error)
 	}
 
 	// BlockReconstructionSource is a ConstructionPopulator that uses a beacon block as the source of data
@@ -60,6 +61,12 @@ type (
 	// from a Gloas beacon block to extract KZG commitments for data column sidecar construction.
 	BidReconstructionSource struct {
 		blocks.ROBlock
+	}
+
+	blockInfo struct {
+		signedBlockHeader *ethpb.SignedBeaconBlockHeader
+		kzgCommitments    [][]byte
+		kzgInclusionProof [][]byte
 	}
 )
 
@@ -122,13 +129,51 @@ func DataColumnSidecars(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, 
 		return nil, errors.Wrap(err, "rotate cells and proofs")
 	}
 
+	isGloas := slots.ToEpoch(src.Slot()) >= params.BeaconConfig().GloasForkEpoch
+	root := src.Root()
+
 	roSidecars := make([]blocks.RODataColumn, 0, numberOfColumns)
-	for idx := range numberOfColumns {
-		roSidecar, err := src.buildSidecar(idx, cells[idx], proofs[idx])
-		if err != nil {
-			return nil, errors.Wrapf(err, "build sidecar for column %d", idx)
+	if isGloas {
+		for idx := range numberOfColumns {
+			sidecar := &ethpb.DataColumnSidecarGloas{
+				Index:           idx,
+				Column:          cells[idx],
+				KzgProofs:       proofs[idx],
+				Slot:            src.Slot(),
+				BeaconBlockRoot: root[:],
+			}
+			if len(sidecar.Column) != len(sidecar.KzgProofs) {
+				return nil, ErrSizeMismatch
+			}
+			roSidecar, err := blocks.NewRODataColumnGloasWithRoot(sidecar, root)
+			if err != nil {
+				return nil, errors.Wrap(err, "new ro data column gloas")
+			}
+			roSidecars = append(roSidecars, roSidecar)
 		}
-		roSidecars = append(roSidecars, roSidecar)
+	} else {
+		info, err := src.extract()
+		if err != nil {
+			return nil, errors.Wrap(err, "extract block info")
+		}
+		for idx := range numberOfColumns {
+			sidecar := &ethpb.DataColumnSidecar{
+				Index:                        idx,
+				Column:                       cells[idx],
+				KzgCommitments:               info.kzgCommitments,
+				KzgProofs:                    proofs[idx],
+				SignedBlockHeader:            info.signedBlockHeader,
+				KzgCommitmentsInclusionProof: info.kzgInclusionProof,
+			}
+			if len(sidecar.KzgCommitments) != len(sidecar.Column) || len(sidecar.KzgCommitments) != len(sidecar.KzgProofs) {
+				return nil, ErrSizeMismatch
+			}
+			roSidecar, err := blocks.NewRODataColumnWithRoot(sidecar, root)
+			if err != nil {
+				return nil, errors.Wrap(err, "new ro data column")
+			}
+			roSidecars = append(roSidecars, roSidecar)
+		}
 	}
 
 	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
@@ -200,31 +245,24 @@ func (s *BlockReconstructionSource) Type() string {
 	return BlockType
 }
 
-func (b *BlockReconstructionSource) buildSidecar(idx uint64, cells [][]byte, proofs [][]byte) (blocks.RODataColumn, error) {
+func (b *BlockReconstructionSource) extract() (*blockInfo, error) {
 	header, err := b.Header()
 	if err != nil {
-		return blocks.RODataColumn{}, errors.Wrap(err, "header")
+		return nil, errors.Wrap(err, "header")
 	}
 	commitments, err := b.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		return blocks.RODataColumn{}, errors.Wrap(err, "commitments")
+		return nil, errors.Wrap(err, "commitments")
 	}
 	inclusionProof, err := blocks.MerkleProofKZGCommitments(b.Block().Body())
 	if err != nil {
-		return blocks.RODataColumn{}, errors.Wrap(err, "merkle proof kzg commitments")
+		return nil, errors.Wrap(err, "merkle proof kzg commitments")
 	}
-	sidecar := &ethpb.DataColumnSidecar{
-		Index:                        idx,
-		Column:                       cells,
-		KzgCommitments:               commitments,
-		KzgProofs:                    proofs,
-		SignedBlockHeader:            header,
-		KzgCommitmentsInclusionProof: inclusionProof,
-	}
-	if len(sidecar.KzgCommitments) != len(sidecar.Column) || len(sidecar.KzgCommitments) != len(sidecar.KzgProofs) {
-		return blocks.RODataColumn{}, ErrSizeMismatch
-	}
-	return blocks.NewRODataColumnWithRoot(sidecar, b.Root())
+	return &blockInfo{
+		signedBlockHeader: header,
+		kzgCommitments:    commitments,
+		kzgInclusionProof: inclusionProof,
+	}, nil
 }
 
 // rotateRowsToCols takes a 2D slice of cells and proofs, where the x is rows (blobs) and y is columns,
@@ -274,31 +312,24 @@ func (s *SidecarReconstructionSource) Type() string {
 	return SidecarType
 }
 
-func (s *SidecarReconstructionSource) buildSidecar(idx uint64, cells [][]byte, proofs [][]byte) (blocks.RODataColumn, error) {
+func (s *SidecarReconstructionSource) extract() (*blockInfo, error) {
 	sbh, err := s.SignedBlockHeader()
 	if err != nil {
-		return blocks.RODataColumn{}, err
+		return nil, err
 	}
 	comms, err := s.KzgCommitments()
 	if err != nil {
-		return blocks.RODataColumn{}, err
+		return nil, err
 	}
 	incProof, err := s.KzgCommitmentsInclusionProof()
 	if err != nil {
-		return blocks.RODataColumn{}, err
+		return nil, err
 	}
-	sidecar := &ethpb.DataColumnSidecar{
-		Index:                        idx,
-		Column:                       cells,
-		KzgCommitments:               comms,
-		KzgProofs:                    proofs,
-		SignedBlockHeader:            sbh,
-		KzgCommitmentsInclusionProof: incProof,
-	}
-	if len(sidecar.KzgCommitments) != len(sidecar.Column) || len(sidecar.KzgCommitments) != len(sidecar.KzgProofs) {
-		return blocks.RODataColumn{}, ErrSizeMismatch
-	}
-	return blocks.NewRODataColumnWithRoot(sidecar, s.Root())
+	return &blockInfo{
+		signedBlockHeader: sbh,
+		kzgCommitments:    comms,
+		kzgInclusionProof: incProof,
+	}, nil
 }
 
 // Slot returns the slot of the source
@@ -325,17 +356,17 @@ func (s *BidReconstructionSource) Type() string {
 	return BidType
 }
 
-func (s *BidReconstructionSource) buildSidecar(idx uint64, cells [][]byte, proofs [][]byte) (blocks.RODataColumn, error) {
-	root := s.Root()
-	sidecar := &ethpb.DataColumnSidecarGloas{
-		Index:           idx,
-		Column:          cells,
-		KzgProofs:       proofs,
-		Slot:            s.Block().Slot(),
-		BeaconBlockRoot: root[:],
+func (s *BidReconstructionSource) extract() (*blockInfo, error) {
+	commitments, err := s.Commitments()
+	if err != nil {
+		return nil, err
 	}
-	if len(sidecar.Column) != len(sidecar.KzgProofs) {
-		return blocks.RODataColumn{}, ErrSizeMismatch
+	header, err := s.Header()
+	if err != nil {
+		return nil, errors.Wrap(err, "header")
 	}
-	return blocks.NewRODataColumnGloasWithRoot(sidecar, root)
+	return &blockInfo{
+		signedBlockHeader: header,
+		kzgCommitments:    commitments,
+	}, nil
 }
