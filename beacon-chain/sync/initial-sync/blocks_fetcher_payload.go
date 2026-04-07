@@ -94,10 +94,8 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 		if nh == bh {
 			continue
 		}
-		// When the previous block is genesis (slot 0, parentHash all zeros), the
-		// transition to a new parentHash at the next block is from the genesis
-		// execution payload embedded in the state, not from an envelope.
-		if bh == zeroHash && r.bwb[i].Block.Block().Slot() == 0 {
+		// Skip genesis parent hash.
+		if bh == zeroHash {
 			bh = nh
 			continue
 		}

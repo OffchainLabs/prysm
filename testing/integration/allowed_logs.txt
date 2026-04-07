@@ -12,14 +12,13 @@ You are using an insecure gRPC connection
 Number per slot is 0, skipping initializing topic scoring
 Skipping initializing topic scoring
 Fee recipient is the burn address
-Engine did not return a payload ID
 No proposer settings were provided
 Validator client started without proposer settings
 you must provide flag --suggested-fee-recipient
-No responsive beacon node found
 ETH1 data votes are now mocked
 
 # Startup transients (benign races before genesis / EL sync).
 could not check if block arrived early
 Beacon node is not respecting the follow distance
 BlockByTimestamp
+

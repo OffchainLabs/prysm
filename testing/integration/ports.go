@@ -14,11 +14,11 @@ const (
 	gethAuthRPCOffset = 3
 
 	// Beacon ports (per node, offset by index * 100)
-	beaconP2PUDPOffset = 10
-	beaconP2PTCPOffset = 11
-	beaconRPCOffset    = 12
-	beaconGRPCOffset   = 13
-	beaconHTTPOffset   = 14
+	beaconP2PUDPOffset  = 10
+	beaconP2PTCPOffset  = 11
+	beaconRPCOffset     = 12
+	beaconGRPCOffset    = 13
+	beaconHTTPOffset    = 14
 	beaconMonitorOffset = 15
 
 	// Validator ports (per node, offset by index * 100)
@@ -30,11 +30,11 @@ func gethP2PPort(index int) int     { return basePort + index*100 + gethP2POffse
 func gethHTTPPort(index int) int    { return basePort + index*100 + gethHTTPOffset }
 func gethAuthRPCPort(index int) int { return basePort + index*100 + gethAuthRPCOffset }
 
-func beaconP2PUDPPort(index int) int { return basePort + index*100 + beaconP2PUDPOffset }
-func beaconP2PTCPPort(index int) int { return basePort + index*100 + beaconP2PTCPOffset }
-func beaconRPCPort(index int) int    { return basePort + index*100 + beaconRPCOffset }
-func beaconGRPCPort(index int) int   { return basePort + index*100 + beaconGRPCOffset }
-func beaconHTTPPort(index int) int   { return basePort + index*100 + beaconHTTPOffset }
+func beaconP2PUDPPort(index int) int  { return basePort + index*100 + beaconP2PUDPOffset }
+func beaconP2PTCPPort(index int) int  { return basePort + index*100 + beaconP2PTCPOffset }
+func beaconRPCPort(index int) int     { return basePort + index*100 + beaconRPCOffset }
+func beaconGRPCPort(index int) int    { return basePort + index*100 + beaconGRPCOffset }
+func beaconHTTPPort(index int) int    { return basePort + index*100 + beaconHTTPOffset }
 func beaconMonitorPort(index int) int { return basePort + index*100 + beaconMonitorOffset }
 
 func validatorRPCPort(index int) int     { return basePort + index*100 + validatorRPCOffset }

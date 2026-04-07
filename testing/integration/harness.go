@@ -46,6 +46,9 @@ type Harness struct {
 	jwtSecret      string
 	genesisSSZPath string
 	configYAMLPath string
+
+	// Extra log patterns to allow (in addition to allowed_logs.txt).
+	allowedLogPatterns []string
 }
 
 type process struct {
@@ -69,6 +72,12 @@ func NewHarness(t *testing.T, cfg *Config) *Harness {
 		cfg:    cfg,
 		tmpDir: tmpDir,
 	}
+}
+
+// AllowLogPattern adds a substring pattern that will be ignored during
+// post-test log checking. Use this for test-specific expected errors.
+func (h *Harness) AllowLogPattern(pattern string) {
+	h.allowedLogPatterns = append(h.allowedLogPatterns, pattern)
 }
 
 // Start builds binaries, generates genesis, and starts all nodes.
@@ -536,6 +545,12 @@ func (h *Harness) startSyncBeacon(index int, peerENRs ...string) {
 // --- Validator ---
 
 func (h *Harness) startValidator(index int) {
+	h.startValidatorWithRPC(index, beaconRPCPort(index))
+}
+
+// startValidatorWithRPC starts a validator connected to a specific gRPC port.
+// Use this to point a validator at a proxy instead of the real beacon node.
+func (h *Harness) startValidatorWithRPC(index, rpcPort int) {
 	h.t.Helper()
 	dataDir := filepath.Join(h.tmpDir, fmt.Sprintf("validator-%d", index))
 	require.NoError(h.t, os.MkdirAll(dataDir, 0o755))
@@ -548,7 +563,7 @@ func (h *Harness) startValidator(index int) {
 		"--chain-config-file", h.configYAMLPath,
 		"--interop-num-validators", fmt.Sprintf("%d", vpn),
 		"--interop-start-index", fmt.Sprintf("%d", offset),
-		"--beacon-rpc-provider", fmt.Sprintf("127.0.0.1:%d", beaconRPCPort(index)),
+		"--beacon-rpc-provider", fmt.Sprintf("127.0.0.1:%d", rpcPort),
 		"--monitoring-port", fmt.Sprintf("%d", validatorMonitorPort(index)),
 		"--grpc-gateway-port", fmt.Sprintf("%d", validatorRPCPort(index)),
 		"--accept-terms-of-use",
@@ -693,9 +708,17 @@ func (h *Harness) gethRPC(ctx context.Context, index int, method string, params 
 }
 
 func (h *Harness) stopAll() {
+	h.stopValidators()
+	h.stopBeaconsAndGeths()
+}
+
+func (h *Harness) stopValidators() {
 	for _, p := range h.validators {
 		killProcess(p)
 	}
+}
+
+func (h *Harness) stopBeaconsAndGeths() {
 	for _, p := range h.beacons {
 		killProcess(p)
 	}
@@ -744,7 +767,7 @@ func (h *Harness) checkLogsForProblems() {
 		return
 	}
 
-	allowed := loadAllowedPatterns()
+	allowed := append(loadAllowedPatterns(), h.allowedLogPatterns...)
 
 	var errors []string
 	var warnings []string
