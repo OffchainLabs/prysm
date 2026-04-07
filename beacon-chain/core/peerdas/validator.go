@@ -43,7 +43,7 @@ type (
 		Commitments() ([][]byte, error)
 		Type() string
 
-		extract() (*blockInfo, error)
+		buildSidecar(idx uint64, cells [][]byte, proofs [][]byte) (blocks.RODataColumn, error)
 	}
 
 	// BlockReconstructionSource is a ConstructionPopulator that uses a beacon block as the source of data
@@ -60,12 +60,6 @@ type (
 	// from a Gloas beacon block to extract KZG commitments for data column sidecar construction.
 	BidReconstructionSource struct {
 		blocks.ROBlock
-	}
-
-	blockInfo struct {
-		signedBlockHeader *ethpb.SignedBeaconBlockHeader
-		kzgCommitments    [][]byte
-		kzgInclusionProof [][]byte
 	}
 )
 
@@ -127,29 +121,12 @@ func DataColumnSidecars(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, 
 	if err != nil {
 		return nil, errors.Wrap(err, "rotate cells and proofs")
 	}
-	info, err := src.extract()
-	if err != nil {
-		return nil, errors.Wrap(err, "extract block info")
-	}
 
 	roSidecars := make([]blocks.RODataColumn, 0, numberOfColumns)
 	for idx := range numberOfColumns {
-		sidecar := &ethpb.DataColumnSidecar{
-			Index:                        idx,
-			Column:                       cells[idx],
-			KzgCommitments:               info.kzgCommitments,
-			KzgProofs:                    proofs[idx],
-			SignedBlockHeader:            info.signedBlockHeader,
-			KzgCommitmentsInclusionProof: info.kzgInclusionProof,
-		}
-
-		if len(sidecar.KzgCommitments) != len(sidecar.Column) || len(sidecar.KzgCommitments) != len(sidecar.KzgProofs) {
-			return nil, ErrSizeMismatch
-		}
-
-		roSidecar, err := blocks.NewRODataColumnWithRoot(sidecar, src.Root())
+		roSidecar, err := src.buildSidecar(idx, cells[idx], proofs[idx])
 		if err != nil {
-			return nil, errors.Wrap(err, "new ro data column")
+			return nil, errors.Wrapf(err, "build sidecar for column %d", idx)
 		}
 		roSidecars = append(roSidecars, roSidecar)
 	}
@@ -158,9 +135,8 @@ func DataColumnSidecars(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, 
 	return roSidecars, nil
 }
 
-// DataColumnSidecarsGloas constructs Gloas-format data column sidecars from cells and proofs.
-// Unlike the Fulu variant, Gloas sidecars use direct slot and beacon_block_root fields
-// instead of a SignedBlockHeader.
+// DataColumnSidecarsGloas constructs Gloas-format data column sidecars directly from cells, proofs,
+// slot, and block root. Used by the proposer when building sidecars outside the ConstructionPopulator flow.
 func DataColumnSidecarsGloas(
 	cellsPerBlob [][]kzg.Cell,
 	proofsPerBlob [][]kzg.Proof,
@@ -168,7 +144,6 @@ func DataColumnSidecarsGloas(
 	beaconBlockRoot [32]byte,
 ) ([]blocks.RODataColumn, error) {
 	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
-
 	if len(cellsPerBlob) == 0 {
 		return nil, nil
 	}
@@ -177,7 +152,6 @@ func DataColumnSidecarsGloas(
 	if err != nil {
 		return nil, errors.Wrap(err, "rotate cells and proofs")
 	}
-
 	roSidecars := make([]blocks.RODataColumn, 0, numberOfColumns)
 	for idx := range numberOfColumns {
 		sidecar := &ethpb.DataColumnSidecarGloas{
@@ -187,18 +161,15 @@ func DataColumnSidecarsGloas(
 			Slot:            slot,
 			BeaconBlockRoot: beaconBlockRoot[:],
 		}
-
 		if len(sidecar.Column) != len(sidecar.KzgProofs) {
 			return nil, ErrSizeMismatch
 		}
-
 		roSidecar, err := blocks.NewRODataColumnGloasWithRoot(sidecar, beaconBlockRoot)
 		if err != nil {
 			return nil, errors.Wrap(err, "new ro data column gloas")
 		}
 		roSidecars = append(roSidecars, roSidecar)
 	}
-
 	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
 	return roSidecars, nil
 }
@@ -229,32 +200,31 @@ func (s *BlockReconstructionSource) Type() string {
 	return BlockType
 }
 
-// extract extracts the block information from the source
-func (b *BlockReconstructionSource) extract() (*blockInfo, error) {
-	block := b.Block()
-
+func (b *BlockReconstructionSource) buildSidecar(idx uint64, cells [][]byte, proofs [][]byte) (blocks.RODataColumn, error) {
 	header, err := b.Header()
 	if err != nil {
-		return nil, errors.Wrap(err, "header")
+		return blocks.RODataColumn{}, errors.Wrap(err, "header")
 	}
-
-	commitments, err := block.Body().BlobKzgCommitments()
+	commitments, err := b.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		return nil, errors.Wrap(err, "commitments")
+		return blocks.RODataColumn{}, errors.Wrap(err, "commitments")
 	}
-
-	inclusionProof, err := blocks.MerkleProofKZGCommitments(block.Body())
+	inclusionProof, err := blocks.MerkleProofKZGCommitments(b.Block().Body())
 	if err != nil {
-		return nil, errors.Wrap(err, "merkle proof kzg commitments")
+		return blocks.RODataColumn{}, errors.Wrap(err, "merkle proof kzg commitments")
 	}
-
-	info := &blockInfo{
-		signedBlockHeader: header,
-		kzgCommitments:    commitments,
-		kzgInclusionProof: inclusionProof,
+	sidecar := &ethpb.DataColumnSidecar{
+		Index:                        idx,
+		Column:                       cells,
+		KzgCommitments:               commitments,
+		KzgProofs:                    proofs,
+		SignedBlockHeader:            header,
+		KzgCommitmentsInclusionProof: inclusionProof,
 	}
-
-	return info, nil
+	if len(sidecar.KzgCommitments) != len(sidecar.Column) || len(sidecar.KzgCommitments) != len(sidecar.KzgProofs) {
+		return blocks.RODataColumn{}, ErrSizeMismatch
+	}
+	return blocks.NewRODataColumnWithRoot(sidecar, b.Root())
 }
 
 // rotateRowsToCols takes a 2D slice of cells and proofs, where the x is rows (blobs) and y is columns,
@@ -304,25 +274,31 @@ func (s *SidecarReconstructionSource) Type() string {
 	return SidecarType
 }
 
-// extract extracts the block information from the source
-func (s *SidecarReconstructionSource) extract() (*blockInfo, error) {
+func (s *SidecarReconstructionSource) buildSidecar(idx uint64, cells [][]byte, proofs [][]byte) (blocks.RODataColumn, error) {
 	sbh, err := s.SignedBlockHeader()
 	if err != nil {
-		return nil, err
+		return blocks.RODataColumn{}, err
 	}
 	comms, err := s.KzgCommitments()
 	if err != nil {
-		return nil, err
+		return blocks.RODataColumn{}, err
 	}
 	incProof, err := s.KzgCommitmentsInclusionProof()
 	if err != nil {
-		return nil, err
+		return blocks.RODataColumn{}, err
 	}
-	return &blockInfo{
-		signedBlockHeader: sbh,
-		kzgCommitments:    comms,
-		kzgInclusionProof: incProof,
-	}, nil
+	sidecar := &ethpb.DataColumnSidecar{
+		Index:                        idx,
+		Column:                       cells,
+		KzgCommitments:               comms,
+		KzgProofs:                    proofs,
+		SignedBlockHeader:            sbh,
+		KzgCommitmentsInclusionProof: incProof,
+	}
+	if len(sidecar.KzgCommitments) != len(sidecar.Column) || len(sidecar.KzgCommitments) != len(sidecar.KzgProofs) {
+		return blocks.RODataColumn{}, ErrSizeMismatch
+	}
+	return blocks.NewRODataColumnWithRoot(sidecar, s.Root())
 }
 
 // Slot returns the slot of the source
@@ -349,29 +325,17 @@ func (s *BidReconstructionSource) Type() string {
 	return BidType
 }
 
-// extract extracts the block information from the source.
-// The KZG inclusion proof is a zeroed placeholder because the Gloas DataColumnSidecar
-// does not include it, but the current p2p layer still uses the Fulu proto which
-// requires a proof of exactly 4x32 bytes for SSZ encoding.
-func (s *BidReconstructionSource) extract() (*blockInfo, error) {
-	commitments, err := s.Commitments()
-	if err != nil {
-		return nil, err
+func (s *BidReconstructionSource) buildSidecar(idx uint64, cells [][]byte, proofs [][]byte) (blocks.RODataColumn, error) {
+	root := s.Root()
+	sidecar := &ethpb.DataColumnSidecarGloas{
+		Index:           idx,
+		Column:          cells,
+		KzgProofs:       proofs,
+		Slot:            s.Block().Slot(),
+		BeaconBlockRoot: root[:],
 	}
-
-	header, err := s.Header()
-	if err != nil {
-		return nil, errors.Wrap(err, "header")
+	if len(sidecar.Column) != len(sidecar.KzgProofs) {
+		return blocks.RODataColumn{}, ErrSizeMismatch
 	}
-
-	placeholderProof := make([][]byte, 4)
-	for i := range placeholderProof {
-		placeholderProof[i] = make([]byte, 32)
-	}
-
-	return &blockInfo{
-		signedBlockHeader: header,
-		kzgCommitments:    commitments,
-		kzgInclusionProof: placeholderProof,
-	}, nil
+	return blocks.NewRODataColumnGloasWithRoot(sidecar, root)
 }

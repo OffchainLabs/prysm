@@ -348,15 +348,9 @@ func TestPopulateFromBid_DataColumnSidecars(t *testing.T) {
 	require.Equal(t, int(numberOfColumns), len(sidecars))
 
 	for i, sidecar := range sidecars {
+		require.Equal(t, true, sidecar.IsGloas())
 		require.Equal(t, uint64(i), sidecar.Index())
 		require.Equal(t, 2, len(sidecar.Column()))
-		comms, err := sidecar.KzgCommitments()
-		require.NoError(t, err)
-		require.Equal(t, 2, len(comms))
 		require.Equal(t, 2, len(sidecar.KzgProofs()))
-
-		// Commitments come from the bid
-		require.DeepEqual(t, bidCommitment1, comms[0])
-		require.DeepEqual(t, bidCommitment2, comms[1])
 	}
 }
