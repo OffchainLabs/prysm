@@ -317,7 +317,7 @@ func (p *Pool) validatorSlashingPreconditionCheck(
 		return false, err
 	}
 	// Checking if the validator is slashable.
-	if !helpers.IsSlashableValidatorUsingTrie(validator, coretime.CurrentEpoch(state)) {
+	if !helpers.IsSlashableValidatorUsingTrie(&validator, coretime.CurrentEpoch(state)) {
 		return false, nil
 	}
 	return true, nil

@@ -192,11 +192,11 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		}
 
 		// Both validators must be active.
-		if !helpers.IsActiveValidator(srcV, curEpoch) || !helpers.IsActiveValidatorUsingTrie(tgtV, curEpoch) {
+		if !helpers.IsActiveValidator(srcV, curEpoch) || !helpers.IsActiveValidatorUsingTrie(&tgtV, curEpoch) {
 			continue
 		}
 		// Neither validator is exiting.
-		if srcV.ExitEpoch != ffe || tgtV.ExitEpoch() != ffe {
+		if srcV.ExitEpoch != ffe || tgtV.ExitEpoch != ffe {
 			continue
 		}
 
@@ -256,7 +256,7 @@ func isValidSwitchToCompoundingRequest(st state.BeaconState, req *enginev1.Conso
 	}
 
 	sourceAddress := req.SourceAddress
-	withdrawalCreds := srcV.GetWithdrawalCredentials()
+	withdrawalCreds := srcV.WithdrawalCredentials[:]
 	if len(withdrawalCreds) != 32 || len(sourceAddress) != 20 || !bytes.HasSuffix(withdrawalCreds, sourceAddress) {
 		return false
 	}
@@ -266,11 +266,11 @@ func isValidSwitchToCompoundingRequest(st state.BeaconState, req *enginev1.Conso
 	}
 
 	curEpoch := slots.ToEpoch(st.Slot())
-	if !helpers.IsActiveValidatorUsingTrie(srcV, curEpoch) {
+	if !helpers.IsActiveValidatorUsingTrie(&srcV, curEpoch) {
 		return false
 	}
 
-	if srcV.ExitEpoch() != params.BeaconConfig().FarFutureEpoch {
+	if srcV.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
 		return false
 	}
 
@@ -308,10 +308,10 @@ func queueExcessActiveBalance(st state.BeaconState, idx primitives.ValidatorInde
 		if err != nil {
 			return err
 		}
-		pk := val.PublicKey()
+		pk := val.PublicKey
 		return st.AppendPendingDeposit(&eth.PendingDeposit{
 			PublicKey:             pk[:],
-			WithdrawalCredentials: val.GetWithdrawalCredentials(),
+			WithdrawalCredentials: val.WithdrawalCredentials[:],
 			Amount:                excessBalance,
 			Signature:             common.InfiniteSignature[:],
 			Slot:                  params.BeaconConfig().GenesisSlot,

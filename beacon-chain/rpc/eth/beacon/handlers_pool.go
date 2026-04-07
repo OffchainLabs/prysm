@@ -18,7 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -503,7 +503,7 @@ func (s *Server) SubmitVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var val state.ReadOnlyValidator
+	var val stateutil.CompactValidator
 	if !exit.Exit.ValidatorIndex.IsBuilderIndex() {
 		val, err = headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
 		if err != nil {
@@ -515,7 +515,7 @@ func (s *Server) SubmitVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err = blocks.VerifyExitAndSignature(val, headState, exit); err != nil {
+	if err = blocks.VerifyExitAndSignature(&val, headState, exit); err != nil {
 		httputil.HandleError(w, "Invalid exit: "+err.Error(), http.StatusBadRequest)
 		return
 	}

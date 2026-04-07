@@ -480,6 +480,60 @@ func (s *Slice[V]) Reset(obj Identifiable) *Slice[V] {
 	return reset
 }
 
+// ForEach iterates over every element for the given object, calling f with a
+// pointer to each value.
+func (s *Slice[V]) ForEach(obj Identifiable, f func(idx int, val *V) error) error {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	objId := obj.Id()
+
+	// Pre-resolve overrides.
+	overrides := make(map[uint64]*V, len(s.individualItems))
+	for i, item := range s.individualItems {
+		for _, value := range item.Values {
+			if slices.Contains(value.ids, objId) {
+				overrides[i] = &value.val
+				break
+			}
+		}
+	}
+
+	// Iterate shared items.
+	for i := range s.sharedItems {
+		item := &s.sharedItems[i]
+		if override, ok := overrides[uint64(i)]; ok {
+			item = override
+		}
+
+		if err := f(i, item); err != nil {
+			return err
+		}
+	}
+
+	// Iterate appended items.
+	sharedLen := len(s.sharedItems)
+	for i, item := range s.appendedItems {
+		found := false
+		for _, value := range item.Values {
+			if slices.Contains(value.ids, objId) {
+				if err := f(sharedLen+i, &value.val); err != nil {
+					return err
+				}
+
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			break
+		}
+	}
+
+	return nil
+}
+
 func (s *Slice[V]) fillOriginalItems(obj Identifiable, items *[]V) {
 	for i, item := range s.sharedItems {
 		ind, ok := s.individualItems[uint64(i)]

@@ -54,7 +54,7 @@ func TestIsActiveValidatorUsingTrie_OK(t *testing.T) {
 	for _, test := range tests {
 		readOnlyVal, err := beaconState.ValidatorAtIndexReadOnly(0)
 		require.NoError(t, err)
-		assert.Equal(t, test.b, helpers.IsActiveValidatorUsingTrie(readOnlyVal, test.a), "IsActiveValidatorUsingTrie(%d)", test.a)
+		assert.Equal(t, test.b, helpers.IsActiveValidatorUsingTrie(&readOnlyVal, test.a), "IsActiveValidatorUsingTrie(%d)", test.a)
 	}
 }
 
@@ -78,11 +78,8 @@ func TestIsActiveNonSlashedValidatorUsingTrie_OK(t *testing.T) {
 	for _, test := range tests {
 		val := &ethpb.Validator{ActivationEpoch: 10, ExitEpoch: 100}
 		val.Slashed = test.s
-		beaconState, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Validators: []*ethpb.Validator{val}})
-		require.NoError(t, err)
-		readOnlyVal, err := beaconState.ValidatorAtIndexReadOnly(0)
-		require.NoError(t, err)
-		assert.Equal(t, test.b, helpers.IsActiveNonSlashedValidatorUsingTrie(readOnlyVal, test.a), "IsActiveNonSlashedValidatorUsingTrie(%d)", test.a)
+		readOnlyVal := stateutil.CompactValidatorFromProto(val)
+		assert.Equal(t, test.b, helpers.IsActiveNonSlashedValidatorUsingTrie(&readOnlyVal, test.a), "IsActiveNonSlashedValidatorUsingTrie(%d)", test.a)
 	}
 }
 
@@ -171,7 +168,7 @@ func TestIsSlashableValidator_OK(t *testing.T) {
 				require.NoError(t, err)
 				readOnlyVal, err := beaconState.ValidatorAtIndexReadOnly(0)
 				require.NoError(t, err)
-				slashableValidator := helpers.IsSlashableValidatorUsingTrie(readOnlyVal, test.epoch)
+				slashableValidator := helpers.IsSlashableValidatorUsingTrie(&readOnlyVal, test.epoch)
 				assert.Equal(t, test.slashable, slashableValidator, "Expected active validator slashable to be %t", test.slashable)
 			})
 		})
@@ -786,9 +783,8 @@ func TestIsEligibleForActivationQueue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			helpers.ClearCache()
 
-			v, err := state_native.NewValidator(tt.validator)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.want, helpers.IsEligibleForActivationQueue(v, tt.currentEpoch), "IsEligibleForActivationQueue()")
+			v := stateutil.CompactValidatorFromProto(tt.validator)
+			assert.Equal(t, tt.want, helpers.IsEligibleForActivationQueue(&v, tt.currentEpoch), "IsEligibleForActivationQueue()")
 		})
 	}
 }

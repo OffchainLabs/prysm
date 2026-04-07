@@ -9,6 +9,7 @@ import (
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -319,7 +320,7 @@ func (s *Service) headGenesisValidatorsRoot() [32]byte {
 // This returns the validator referenced by the provided index in
 // the head state.
 // This is a lock free version.
-func (s *Service) headValidatorAtIndex(index primitives.ValidatorIndex) (state.ReadOnlyValidator, error) {
+func (s *Service) headValidatorAtIndex(index primitives.ValidatorIndex) (stateutil.CompactValidator, error) {
 	return s.head.state.ValidatorAtIndexReadOnly(index)
 }
 

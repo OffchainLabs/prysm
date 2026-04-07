@@ -266,7 +266,7 @@ func syncDutyStatus(st state.BeaconState, idx primitives.ValidatorIndex) validat
 		return validator.Pending
 	}
 	currentEpoch := coreTime.CurrentEpoch(st)
-	if val.ActivationEpoch() <= currentEpoch && currentEpoch < val.ExitEpoch() {
+	if val.ActivationEpoch <= currentEpoch && currentEpoch < val.ExitEpoch {
 		return validator.Active
 	}
 	return validator.Pending

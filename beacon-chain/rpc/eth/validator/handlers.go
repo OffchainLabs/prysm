@@ -22,6 +22,8 @@ import (
 	rpchelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -433,7 +435,7 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 		return
 	}
 	currEpoch := slots.ToEpoch(st.Slot())
-	validators := make([]state.ReadOnlyValidator, len(req.Data))
+	validators := make([]stateutil.CompactValidator, len(req.Data))
 	subscriptions := make([]*validator2.SyncCommitteeSubscription, len(req.Data))
 	for i, item := range req.Data {
 		consensusItem, err := item.ToConsensus()
@@ -451,7 +453,7 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 			)
 			return
 		}
-		valStatus, err := rpchelpers.ValidatorSubStatus(val, currEpoch)
+		valStatus, err := rpchelpers.ValidatorSubStatus(state_native.NewValidatorFromCompact(val), currEpoch)
 		if err != nil {
 			httputil.HandleError(
 				w,
@@ -498,7 +500,7 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 	}
 
 	for i, sub := range subscriptions {
-		pubkey48 := validators[i].PublicKey()
+		pubkey48 := validators[i].PublicKey
 		// Handle overflow in the event current epoch is less than end epoch.
 		// This is an impossible condition, so it is a defensive check.
 		epochsToWatch, err := sub.UntilEpoch.SafeSub(uint64(startEpoch))
@@ -555,7 +557,7 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 	}
 
 	// Verify validators at the beginning to return early if request is invalid.
-	validators := make([]state.ReadOnlyValidator, len(req.Data))
+	validators := make([]stateutil.CompactValidator, len(req.Data))
 	subscriptions := make([]*validator2.BeaconCommitteeSubscription, len(req.Data))
 	for i, item := range req.Data {
 		consensusItem, err := item.ToConsensus()

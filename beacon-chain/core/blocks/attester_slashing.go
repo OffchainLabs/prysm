@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -121,13 +122,13 @@ func processAttesterSlashing(
 	currentEpoch := slots.ToEpoch(beaconState.Slot())
 	var err error
 	var slashedAny bool
-	var val state.ReadOnlyValidator
+	var val stateutil.CompactValidator
 	for _, validatorIndex := range slashableIndices {
 		val, err = beaconState.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(validatorIndex))
 		if err != nil {
 			return nil, err
 		}
-		if helpers.IsSlashableValidator(val.ActivationEpoch(), val.WithdrawableEpoch(), val.Slashed(), currentEpoch) {
+		if helpers.IsSlashableValidator(val.ActivationEpoch, val.WithdrawableEpoch, val.Slashed, currentEpoch) {
 			beaconState, err = validators.SlashValidator(ctx, beaconState, primitives.ValidatorIndex(validatorIndex), exitInfo)
 			if err != nil {
 				return nil, errors.Wrapf(err, "could not slash validator index %d", validatorIndex)

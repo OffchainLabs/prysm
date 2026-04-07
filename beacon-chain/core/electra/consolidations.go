@@ -60,11 +60,11 @@ func ProcessPendingConsolidations(ctx context.Context, st state.BeaconState) err
 		if err != nil {
 			return err
 		}
-		if sourceValidator.Slashed() {
+		if sourceValidator.Slashed {
 			nextPendingConsolidation++
 			continue
 		}
-		if sourceValidator.WithdrawableEpoch() > nextEpoch {
+		if sourceValidator.WithdrawableEpoch > nextEpoch {
 			break
 		}
 
@@ -72,7 +72,7 @@ func ProcessPendingConsolidations(ctx context.Context, st state.BeaconState) err
 		if err != nil {
 			return err
 		}
-		b := min(validatorBalance, sourceValidator.EffectiveBalance())
+		b := min(validatorBalance, sourceValidator.EffectiveBalance)
 
 		if err := helpers.DecreaseBalance(st, pc.SourceIndex, b); err != nil {
 			return err
@@ -151,7 +151,7 @@ func IsValidSwitchToCompoundingRequest(st state.BeaconState, req *enginev1.Conso
 		return false
 	}
 	sourceAddress := req.SourceAddress
-	withdrawalCreds := srcV.GetWithdrawalCredentials()
+	withdrawalCreds := srcV.WithdrawalCredentials[:]
 	if len(withdrawalCreds) != 32 || len(sourceAddress) != 20 || !bytes.HasSuffix(withdrawalCreds, sourceAddress) {
 		return false
 	}
@@ -161,11 +161,11 @@ func IsValidSwitchToCompoundingRequest(st state.BeaconState, req *enginev1.Conso
 	}
 
 	curEpoch := slots.ToEpoch(st.Slot())
-	if !helpers.IsActiveValidatorUsingTrie(srcV, curEpoch) {
+	if !helpers.IsActiveValidatorUsingTrie(&srcV, curEpoch) {
 		return false
 	}
 
-	if srcV.ExitEpoch() != params.BeaconConfig().FarFutureEpoch {
+	if srcV.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
 		return false
 	}
 	return true

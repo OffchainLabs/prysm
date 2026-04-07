@@ -345,7 +345,7 @@ func (s *Service) HeadValidatorIndexToPublicKey(_ context.Context, index primiti
 	if err != nil {
 		return [fieldparams.BLSPubkeyLength]byte{}, err
 	}
-	return v.PublicKey(), nil
+	return v.PublicKey, nil
 }
 
 // ForkChoicer returns the forkchoice interface.

@@ -130,7 +130,7 @@ func ProcessBlockHeaderNoVerify(
 	if err != nil {
 		return nil, err
 	}
-	if proposer.Slashed() {
+	if proposer.Slashed {
 		return nil, fmt.Errorf("proposer at index %d was previously slashed", idx)
 	}
 

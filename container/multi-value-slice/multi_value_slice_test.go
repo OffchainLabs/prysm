@@ -1,6 +1,7 @@
 package mvslice
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -622,6 +623,106 @@ func assertAppendedNotFound(t *testing.T, slice *Slice[int], id uint64, itemInde
 		}
 	}
 	assert.Equal(t, false, found)
+}
+
+func TestForEach(t *testing.T) {
+	t.Run("first object", func(t *testing.T) {
+		s := setup()
+		first := &testObject{id: 1}
+
+		var vals []int
+		err := s.ForEach(first, func(idx int, val *int) error {
+			assert.Equal(t, len(vals), idx)
+			vals = append(vals, *val)
+			return nil
+		})
+		require.NoError(t, err)
+
+		expected := s.Value(first)
+		require.Equal(t, len(expected), len(vals))
+		for i, e := range expected {
+			assert.Equal(t, e, vals[i])
+		}
+	})
+
+	t.Run("second object", func(t *testing.T) {
+		s := setup()
+		second := &testObject{id: 2}
+
+		var vals []int
+		err := s.ForEach(second, func(idx int, val *int) error {
+			assert.Equal(t, len(vals), idx)
+			vals = append(vals, *val)
+			return nil
+		})
+		require.NoError(t, err)
+
+		expected := s.Value(second)
+		require.Equal(t, len(expected), len(vals))
+		for i, e := range expected {
+			assert.Equal(t, e, vals[i])
+		}
+	})
+
+	t.Run("no appended items", func(t *testing.T) {
+		s := &Slice[int]{}
+		s.Init([]int{1, 2, 3})
+
+		var vals []int
+		err := s.ForEach(&testObject{id: 999}, func(idx int, val *int) error {
+			assert.Equal(t, len(vals), idx)
+			vals = append(vals, *val)
+			return nil
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, 3, len(vals))
+		assert.Equal(t, 1, vals[0])
+		assert.Equal(t, 2, vals[1])
+		assert.Equal(t, 3, vals[2])
+	})
+
+	t.Run("callback error propagated", func(t *testing.T) {
+		s := setup()
+		testErr := fmt.Errorf("stop iteration")
+
+		err := s.ForEach(&testObject{id: 1}, func(idx int, val *int) error {
+			if idx == 2 {
+				return testErr
+			}
+			return nil
+		})
+		assert.Equal(t, testErr, err)
+	})
+
+	t.Run("empty slice", func(t *testing.T) {
+		s := &Slice[int]{}
+		s.Init(nil)
+
+		count := 0
+		err := s.ForEach(&testObject{id: 1}, func(idx int, val *int) error {
+			count++
+			return nil
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 0, count)
+	})
+
+	t.Run("pointers point to actual storage", func(t *testing.T) {
+		s := &Slice[int]{}
+		s.Init([]int{10, 20, 30})
+
+		var ptrs []*int
+		err := s.ForEach(&testObject{id: 1}, func(idx int, val *int) error {
+			ptrs = append(ptrs, val)
+			return nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, 3, len(ptrs))
+		assert.Equal(t, &s.sharedItems[0], ptrs[0])
+		assert.Equal(t, &s.sharedItems[1], ptrs[1])
+		assert.Equal(t, &s.sharedItems[2], ptrs[2])
+	})
 }
 
 func BenchmarkValue(b *testing.B) {

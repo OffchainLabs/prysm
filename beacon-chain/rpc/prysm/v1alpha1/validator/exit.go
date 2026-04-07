@@ -6,7 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -39,7 +39,7 @@ func (vs *Server) ProposeExit(ctx context.Context, req *ethpb.SignedVoluntaryExi
 		}
 	}
 	// Confirm the validator/builder is eligible to exit with the parameters provided.
-	var val state.ReadOnlyValidator
+	var val stateutil.CompactValidator
 	if !req.Exit.ValidatorIndex.IsBuilderIndex() {
 		val, err = s.ValidatorAtIndexReadOnly(req.Exit.ValidatorIndex)
 		if err != nil {
@@ -47,7 +47,7 @@ func (vs *Server) ProposeExit(ctx context.Context, req *ethpb.SignedVoluntaryExi
 		}
 	}
 
-	if err := blocks.VerifyExitAndSignature(val, s, req); err != nil {
+	if err := blocks.VerifyExitAndSignature(&val, s, req); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 

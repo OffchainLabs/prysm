@@ -281,7 +281,7 @@ func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex
 		return false, errors.Wrapf(err, "validator %d", idx)
 	}
 
-	return val.EffectiveBalance()*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue, nil
+	return val.EffectiveBalance*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue, nil
 }
 
 // validIndexedPayloadAttestation verifies the signature of an indexed payload attestation.
@@ -317,7 +317,7 @@ func validIndexedPayloadAttestation(st state.ReadOnlyBeaconState, att *consensus
 		if err != nil {
 			return errors.Wrapf(err, "validator %d", idx)
 		}
-		keyBytes := val.PublicKey()
+		keyBytes := val.PublicKey
 		key, err := bls.PublicKeyFromBytes(keyBytes[:])
 		if err != nil {
 			return errors.Wrapf(err, "pubkey %d", idx)

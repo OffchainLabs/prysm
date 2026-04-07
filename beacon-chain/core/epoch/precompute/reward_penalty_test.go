@@ -286,7 +286,7 @@ func baseReward(state state.ReadOnlyBeaconState, index primitives.ValidatorIndex
 	if err != nil {
 		return 0, err
 	}
-	effectiveBalance := val.EffectiveBalance()
+	effectiveBalance := val.EffectiveBalance
 	baseReward := effectiveBalance * params.BeaconConfig().BaseRewardFactor /
 		math.IntegerSquareRoot(totalBalance) / params.BeaconConfig().BaseRewardsPerEpoch
 	return baseReward, nil

@@ -58,7 +58,7 @@ func (s *Service) validateProposerSlashing(ctx context.Context, pid peer.ID, msg
 	if err != nil {
 		return pubsub.ValidationReject, err
 	}
-	if rov.Slashed() {
+	if rov.Slashed {
 		return pubsub.ValidationIgnore, fmt.Errorf("proposer is already slashed: %d", slashing.Header_1.Header.ProposerIndex)
 	}
 	if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {

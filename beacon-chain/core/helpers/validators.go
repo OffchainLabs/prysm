@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -47,14 +48,14 @@ func IsActiveValidator(validator *ethpb.Validator, epoch primitives.Epoch) bool 
 }
 
 // IsActiveValidatorUsingTrie checks if a read only validator is active.
-func IsActiveValidatorUsingTrie(validator state.ReadOnlyValidator, epoch primitives.Epoch) bool {
-	return checkValidatorActiveStatus(validator.ActivationEpoch(), validator.ExitEpoch(), epoch)
+func IsActiveValidatorUsingTrie(validator *stateutil.CompactValidator, epoch primitives.Epoch) bool {
+	return checkValidatorActiveStatus(validator.ActivationEpoch, validator.ExitEpoch, epoch)
 }
 
 // IsActiveNonSlashedValidatorUsingTrie checks if a read only validator is active and not slashed
-func IsActiveNonSlashedValidatorUsingTrie(validator state.ReadOnlyValidator, epoch primitives.Epoch) bool {
-	active := checkValidatorActiveStatus(validator.ActivationEpoch(), validator.ExitEpoch(), epoch)
-	return active && !validator.Slashed()
+func IsActiveNonSlashedValidatorUsingTrie(validator *stateutil.CompactValidator, epoch primitives.Epoch) bool {
+	active := checkValidatorActiveStatus(validator.ActivationEpoch, validator.ExitEpoch, epoch)
+	return active && !validator.Slashed
 }
 
 func checkValidatorActiveStatus(activationEpoch, exitEpoch, epoch primitives.Epoch) bool {
@@ -76,8 +77,8 @@ func IsSlashableValidator(activationEpoch, withdrawableEpoch primitives.Epoch, s
 }
 
 // IsSlashableValidatorUsingTrie checks if a read only validator is slashable.
-func IsSlashableValidatorUsingTrie(val state.ReadOnlyValidator, epoch primitives.Epoch) bool {
-	return checkValidatorSlashable(val.ActivationEpoch(), val.WithdrawableEpoch(), val.Slashed(), epoch)
+func IsSlashableValidatorUsingTrie(val *stateutil.CompactValidator, epoch primitives.Epoch) bool {
+	return checkValidatorSlashable(val.ActivationEpoch, val.WithdrawableEpoch, val.Slashed, epoch)
 }
 
 func checkValidatorSlashable(activationEpoch, withdrawableEpoch primitives.Epoch, slashed bool, epoch primitives.Epoch) bool {
@@ -137,7 +138,7 @@ func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, ep
 	}()
 
 	var indices []primitives.ValidatorIndex
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	if err := s.ReadFromEveryValidator(func(idx int, val *stateutil.CompactValidator) error {
 		if IsActiveValidatorUsingTrie(val, epoch) {
 			indices = append(indices, primitives.ValidatorIndex(idx))
 		}
@@ -190,7 +191,7 @@ func ActiveValidatorCount(ctx context.Context, s state.ReadOnlyBeaconState, epoc
 	}()
 
 	count := uint64(0)
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	if err := s.ReadFromEveryValidator(func(idx int, val *stateutil.CompactValidator) error {
 		if IsActiveValidatorUsingTrie(val, epoch) {
 			count++
 		}
@@ -418,7 +419,7 @@ func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []prim
 		if err != nil {
 			return 0, err
 		}
-		effectiveBal := v.EffectiveBalance()
+		effectiveBal := v.EffectiveBalance
 		if bState.Version() >= version.Electra {
 			binary.LittleEndian.PutUint64(seedBuffer[len(seed):], i/16)
 			randomBytes := hashFunc(seedBuffer)
@@ -452,11 +453,11 @@ func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []prim
 //	        validator.activation_eligibility_epoch == FAR_FUTURE_EPOCH
 //	        and validator.effective_balance >= MIN_ACTIVATION_BALANCE  # [Modified in Electra:EIP7251]
 //	    )
-func IsEligibleForActivationQueue(validator state.ReadOnlyValidator, currentEpoch primitives.Epoch) bool {
+func IsEligibleForActivationQueue(validator *stateutil.CompactValidator, currentEpoch primitives.Epoch) bool {
 	if currentEpoch >= params.BeaconConfig().ElectraForkEpoch {
-		return isEligibleForActivationQueueElectra(validator.ActivationEligibilityEpoch(), validator.EffectiveBalance())
+		return isEligibleForActivationQueueElectra(validator.ActivationEligibilityEpoch, validator.EffectiveBalance)
 	}
-	return isEligibleForActivationQueue(validator.ActivationEligibilityEpoch(), validator.EffectiveBalance())
+	return isEligibleForActivationQueue(validator.ActivationEligibilityEpoch, validator.EffectiveBalance)
 }
 
 // isEligibleForActivationQueue carries out the logic for IsEligibleForActivationQueue
@@ -511,10 +512,8 @@ func IsEligibleForActivation(state state.ReadOnlyCheckpoint, validator *ethpb.Va
 	finalizedEpoch := state.FinalizedCheckpointEpoch()
 	return isEligibleForActivation(validator.ActivationEligibilityEpoch, validator.ActivationEpoch, finalizedEpoch)
 }
-
-// IsEligibleForActivationUsingROVal checks if the validator is eligible for activation using the provided read only validator.
-func IsEligibleForActivationUsingROVal(state state.ReadOnlyCheckpoint, validator state.ReadOnlyValidator) bool {
-	return isEligibleForActivation(validator.ActivationEligibilityEpoch(), validator.ActivationEpoch(), state.FinalizedCheckpointEpoch())
+func IsEligibleForActivationUsingROVal(state state.ReadOnlyCheckpoint, validator *stateutil.CompactValidator) bool {
+	return isEligibleForActivation(validator.ActivationEligibilityEpoch, validator.ActivationEpoch, state.FinalizedCheckpointEpoch())
 }
 
 // isEligibleForActivation carries out the logic for IsEligibleForActivation*
@@ -534,7 +533,7 @@ func LastActivatedValidatorIndex(ctx context.Context, st state.ReadOnlyBeaconSta
 		if err != nil {
 			return 0, err
 		}
-		if IsActiveValidatorUsingTrie(val, time.CurrentEpoch(st)) {
+		if IsActiveValidatorUsingTrie(&val, time.CurrentEpoch(st)) {
 			lastActivatedvalidatorIndex = primitives.ValidatorIndex(j)
 			break
 		}

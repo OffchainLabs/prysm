@@ -153,13 +153,13 @@ func (s *Service) ComputeValidatorPerformance(
 		if err != nil {
 			return nil, &RpcError{Err: errors.Wrap(err, "could not get validator"), Reason: Internal}
 		}
-		pubKey := val.PublicKey()
+		pubKey := val.PublicKey
 		if uint64(idx) >= uint64(len(validatorSummary)) {
 			// Not listed in validator summary yet; treat it as missing.
 			missingValidators = append(missingValidators, pubKey[:])
 			continue
 		}
-		if !helpers.IsActiveValidatorUsingTrie(val, currentEpoch) {
+		if !helpers.IsActiveValidatorUsingTrie(&val, currentEpoch) {
 			// Inactive validator; treat it as missing.
 			missingValidators = append(missingValidators, pubKey[:])
 			continue
@@ -291,7 +291,7 @@ func (s *Service) IndividualVotes(
 				Reason: Internal,
 			}
 		}
-		pb := val.PublicKey()
+		pb := val.PublicKey
 		votes = append(votes, &ethpb.IndividualVotesRespond_IndividualVote{
 			Epoch:                            req.Epoch,
 			PublicKey:                        pb[:],

@@ -105,7 +105,7 @@ func IsNextPeriodSyncCommittee(
 		if err != nil {
 			return false, err
 		}
-		pk := val.PublicKey()
+		pk := val.PublicKey
 		committee, err := st.NextSyncCommittee()
 		if err != nil {
 			return false, err
@@ -133,7 +133,7 @@ func CurrentPeriodSyncSubcommitteeIndices(
 		if err != nil {
 			return nil, err
 		}
-		pk := val.PublicKey()
+		pk := val.PublicKey
 		committee, err := st.CurrentSyncCommittee()
 		if err != nil {
 			return nil, err
@@ -168,7 +168,7 @@ func NextPeriodSyncSubcommitteeIndices(
 		if err != nil {
 			return nil, err
 		}
-		pk := val.PublicKey()
+		pk := val.PublicKey
 		committee, err := st.NextSyncCommittee()
 		if err != nil {
 			return nil, err

@@ -308,7 +308,7 @@ func (vs *Server) validatorStatus(
 			tracing.AnnotateError(span, err)
 			return resp, idx
 		}
-		resp.ActivationEpoch = val.ActivationEpoch()
+		resp.ActivationEpoch = val.ActivationEpoch
 	}
 
 	switch resp.Status {
@@ -417,18 +417,18 @@ func assignmentStatus(beaconState state.ReadOnlyBeaconState, validatorIndex prim
 
 	currentEpoch := time.CurrentEpoch(beaconState)
 	farFutureEpoch := params.BeaconConfig().FarFutureEpoch
-	validatorBalance := validator.EffectiveBalance()
-	if currentEpoch < validator.ActivationEligibilityEpoch() {
+	validatorBalance := validator.EffectiveBalance
+	if currentEpoch < validator.ActivationEligibilityEpoch {
 		return depositStatus(validatorBalance)
 	}
-	if currentEpoch < validator.ActivationEpoch() {
+	if currentEpoch < validator.ActivationEpoch {
 		return ethpb.ValidatorStatus_PENDING
 	}
-	if validator.ExitEpoch() == farFutureEpoch {
+	if validator.ExitEpoch == farFutureEpoch {
 		return ethpb.ValidatorStatus_ACTIVE
 	}
-	if currentEpoch < validator.ExitEpoch() {
-		if validator.Slashed() {
+	if currentEpoch < validator.ExitEpoch {
+		if validator.Slashed {
 			return ethpb.ValidatorStatus_SLASHING
 		}
 		return ethpb.ValidatorStatus_EXITING

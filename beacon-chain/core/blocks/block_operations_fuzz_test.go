@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -381,9 +382,8 @@ func TestFuzzVerifyExit_10000(t *testing.T) {
 		s, err := state_native.InitializeFromProtoUnsafePhase0(state)
 		require.NoError(t, err)
 
-		val, err := state_native.NewValidator(&ethpb.Validator{})
-		_ = err
-		err = VerifyExitAndSignature(val, s, ve)
+		val := stateutil.CompactValidatorFromProto(&ethpb.Validator{})
+		err = VerifyExitAndSignature(&val, s, ve)
 		_ = err
 		fuzz.FreeMemory(i)
 	}

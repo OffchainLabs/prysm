@@ -58,7 +58,7 @@ func TestStateByRoot_ColdState(t *testing.T) {
 	require.NoError(t, beaconState.UpdateValidatorAtIndex(0, val))
 	roval, err := beaconState.ValidatorAtIndexReadOnly(0)
 	require.NoError(t, err)
-	require.Equal(t, true, roval.Slashed())
+	require.Equal(t, true, roval.Slashed)
 
 	require.NoError(t, service.beaconDB.SaveState(ctx, beaconState, bRoot))
 	util.SaveBlock(t, ctx, service.beaconDB, b)

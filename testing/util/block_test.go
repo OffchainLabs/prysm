@@ -90,7 +90,7 @@ func TestGenerateFullBlock_ValidProposerSlashings(t *testing.T) {
 	require.NoError(t, err)
 
 	slashableIndice := block.Block.Body.ProposerSlashings[0].Header_1.Header.ProposerIndex
-	if val, err := beaconState.ValidatorAtIndexReadOnly(slashableIndice); err != nil || !val.Slashed() {
+	if val, err := beaconState.ValidatorAtIndexReadOnly(slashableIndice); err != nil || !val.Slashed {
 		require.NoError(t, err)
 		t.Fatal("expected validator to be slashed")
 	}
@@ -111,7 +111,7 @@ func TestGenerateFullBlock_ValidAttesterSlashings(t *testing.T) {
 	require.NoError(t, err)
 
 	slashableIndices := block.Block.Body.AttesterSlashings[0].Attestation_1.AttestingIndices
-	if val, err := beaconState.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(slashableIndices[0])); err != nil || !val.Slashed() {
+	if val, err := beaconState.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(slashableIndices[0])); err != nil || !val.Slashed {
 		require.NoError(t, err)
 		t.Fatal("expected validator to be slashed")
 	}
@@ -160,10 +160,10 @@ func TestGenerateFullBlock_ValidDeposits(t *testing.T) {
 	index := valIndexMap[bytesutil.ToBytes48(depositedPubkey)]
 	val, err := beaconState.ValidatorAtIndexReadOnly(index)
 	require.NoError(t, err)
-	if val.EffectiveBalance() != params.BeaconConfig().MaxEffectiveBalance {
+	if val.EffectiveBalance != params.BeaconConfig().MaxEffectiveBalance {
 		t.Fatalf(
 			"expected validator balance to be max effective balance, received %d",
-			val.EffectiveBalance(),
+			val.EffectiveBalance,
 		)
 	}
 }
@@ -187,7 +187,7 @@ func TestGenerateFullBlock_ValidVoluntaryExits(t *testing.T) {
 
 	val, err := beaconState.ValidatorAtIndexReadOnly(exitedIndex)
 	require.NoError(t, err)
-	if val.ExitEpoch() == params.BeaconConfig().FarFutureEpoch {
+	if val.ExitEpoch == params.BeaconConfig().FarFutureEpoch {
 		t.Fatal("expected exiting validator index to be marked as exiting")
 	}
 }
@@ -319,7 +319,7 @@ func TestGenerateVoluntaryExits(t *testing.T) {
 	require.NoError(t, err)
 	val, err := beaconState.ValidatorAtIndexReadOnly(0)
 	require.NoError(t, err)
-	require.NoError(t, coreBlock.VerifyExitAndSignature(val, beaconState, exit))
+	require.NoError(t, coreBlock.VerifyExitAndSignature(&val, beaconState, exit))
 }
 
 func Test_PostDenebPbGenericBlock_ErrorsForPlainBlock(t *testing.T) {

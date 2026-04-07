@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	mathutil "github.com/OffchainLabs/prysm/v7/math"
@@ -33,7 +34,7 @@ func TotalBalance(state state.ReadOnlyValidators, indices []primitives.Validator
 		if err != nil {
 			continue
 		}
-		total += val.EffectiveBalance()
+		total += val.EffectiveBalance
 	}
 
 	// EFFECTIVE_BALANCE_INCREMENT is the lower bound for total balance.
@@ -69,9 +70,9 @@ func TotalActiveBalance(s state.ReadOnlyBeaconState) (uint64, error) {
 
 	total := uint64(0)
 	epoch := slots.ToEpoch(s.Slot())
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	if err := s.ReadFromEveryValidator(func(idx int, val *stateutil.CompactValidator) error {
 		if IsActiveValidatorUsingTrie(val, epoch) {
-			total += val.EffectiveBalance()
+			total += val.EffectiveBalance
 		}
 		return nil
 	}); err != nil {

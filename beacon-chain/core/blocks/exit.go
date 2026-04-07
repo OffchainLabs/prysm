@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -77,7 +78,7 @@ func ProcessVoluntaryExits(
 		if err != nil {
 			return nil, err
 		}
-		if err := VerifyExitAndSignature(val, beaconState, exit); err != nil {
+		if err := VerifyExitAndSignature(&val, beaconState, exit); err != nil {
 			return nil, errors.Wrapf(err, "could not verify exit %d", idx)
 		}
 		beaconState, err = v.InitiateValidatorExit(ctx, beaconState, exit.Exit.ValidatorIndex, exitInfo)
@@ -112,7 +113,7 @@ func ProcessVoluntaryExits(
 //	 # Initiate exit
 //	 initiate_validator_exit(state, voluntary_exit.validator_index)
 func VerifyExitAndSignature(
-	validator state.ReadOnlyValidator,
+	validator *stateutil.CompactValidator,
 	st state.ReadOnlyBeaconState,
 	signed *ethpb.SignedVoluntaryExit,
 ) error {
@@ -146,7 +147,7 @@ func VerifyExitAndSignature(
 	if err != nil {
 		return err
 	}
-	valPubKey := validator.PublicKey()
+	valPubKey := validator.PublicKey
 	if err := signing.VerifySigningRoot(exit, valPubKey[:], signed.Signature, domain); err != nil {
 		return signing.ErrSigFailedToVerify
 	}
@@ -176,28 +177,28 @@ func VerifyExitAndSignature(
 //	 assert bls.Verify(validator.pubkey, signing_root, signed_voluntary_exit.signature)
 //	 # Initiate exit
 //	 initiate_validator_exit(state, voluntary_exit.validator_index)
-func verifyExitConditions(st state.ReadOnlyBeaconState, validator state.ReadOnlyValidator, exit *ethpb.VoluntaryExit) error {
+func verifyExitConditions(st state.ReadOnlyBeaconState, validator *stateutil.CompactValidator, exit *ethpb.VoluntaryExit) error {
 	currentEpoch := slots.ToEpoch(st.Slot())
 	// Verify the validator is active.
 	if !helpers.IsActiveValidatorUsingTrie(validator, currentEpoch) {
 		return errors.New("non-active validator cannot exit")
 	}
 	// Verify the validator has not yet submitted an exit.
-	if validator.ExitEpoch() != params.BeaconConfig().FarFutureEpoch {
-		return fmt.Errorf("validator with index %d %s: %v", exit.ValidatorIndex, ValidatorAlreadyExitedMsg, validator.ExitEpoch())
+	if validator.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
+		return fmt.Errorf("validator with index %d %s: %v", exit.ValidatorIndex, ValidatorAlreadyExitedMsg, validator.ExitEpoch)
 	}
 	// Exits must specify an epoch when they become valid; they are not valid before then.
 	if currentEpoch < exit.Epoch {
 		return fmt.Errorf("expected current epoch >= exit epoch, received %d < %d", currentEpoch, exit.Epoch)
 	}
 	// Verify the validator has been active long enough.
-	if currentEpoch < validator.ActivationEpoch()+params.BeaconConfig().ShardCommitteePeriod {
+	if currentEpoch < validator.ActivationEpoch+params.BeaconConfig().ShardCommitteePeriod {
 		return fmt.Errorf(
 			"%s: %d of %d epochs. Validator will be eligible for exit at epoch %d",
 			ValidatorCannotExitYetMsg,
-			currentEpoch-validator.ActivationEpoch(),
+			currentEpoch-validator.ActivationEpoch,
 			params.BeaconConfig().ShardCommitteePeriod,
-			validator.ActivationEpoch()+params.BeaconConfig().ShardCommitteePeriod,
+			validator.ActivationEpoch+params.BeaconConfig().ShardCommitteePeriod,
 		)
 	}
 

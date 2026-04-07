@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -374,9 +375,9 @@ type validatorLookupErrState struct {
 }
 
 // ValidatorAtIndexReadOnly is overridden to simulate a missing validator lookup.
-func (s *validatorLookupErrState) ValidatorAtIndexReadOnly(idx primitives.ValidatorIndex) (state.ReadOnlyValidator, error) {
+func (s *validatorLookupErrState) ValidatorAtIndexReadOnly(idx primitives.ValidatorIndex) (stateutil.CompactValidator, error) {
 	if idx == s.errIndex {
-		return nil, state.ErrNilValidatorsInState
+		return stateutil.CompactValidator{}, state.ErrNilValidatorsInState
 	}
 	return s.BeaconState.ValidatorAtIndexReadOnly(idx)
 }

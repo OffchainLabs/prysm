@@ -63,7 +63,7 @@ func TestValidatorIndexes(t *testing.T) {
 	t.Run("ValidatorAtIndexReadOnly", func(t *testing.T) {
 		readOnlyState, err := dState.ValidatorAtIndexReadOnly(1)
 		require.NoError(t, err)
-		readOnlyBytes := readOnlyState.PublicKey()
+		readOnlyBytes := readOnlyState.PublicKey
 		require.NotEmpty(t, readOnlyBytes)
 		require.Equal(t, hexutil.Encode(readOnlyBytes[:]), hexutil.Encode(byteValue[:]))
 	})

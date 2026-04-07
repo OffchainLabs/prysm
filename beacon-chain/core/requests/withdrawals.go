@@ -129,7 +129,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 		}
 		// Verify withdrawal credentials
 		hasCorrectCredential := validator.HasExecutionWithdrawalCredentials()
-		wc := validator.GetWithdrawalCredentials()
+		wc := validator.WithdrawalCredentials
 		isCorrectSourceAddress := bytes.Equal(wc[12:], wr.SourceAddress)
 		if !hasCorrectCredential || !isCorrectSourceAddress {
 			log.Debug("Skipping execution layer withdrawal request, wrong withdrawal credentials")
@@ -137,17 +137,17 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 		}
 
 		// Verify the validator is active.
-		if !helpers.IsActiveValidatorUsingTrie(validator, currentEpoch) {
+		if !helpers.IsActiveValidatorUsingTrie(&validator, currentEpoch) {
 			log.Debug("Skipping execution layer withdrawal request, validator not active")
 			continue
 		}
 		// Verify the validator has not yet submitted an exit.
-		if validator.ExitEpoch() != params.BeaconConfig().FarFutureEpoch {
+		if validator.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
 			log.Debug("Skipping execution layer withdrawal request, validator has submitted an exit already")
 			continue
 		}
 		// Verify the validator has been active long enough.
-		if currentEpoch < validator.ActivationEpoch().AddEpoch(params.BeaconConfig().ShardCommitteePeriod) {
+		if currentEpoch < validator.ActivationEpoch.AddEpoch(params.BeaconConfig().ShardCommitteePeriod) {
 			log.Debug("Skipping execution layer withdrawal request, validator has not been active long enough")
 			continue
 		}
@@ -169,7 +169,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 			continue
 		}
 
-		hasSufficientEffectiveBalance := validator.EffectiveBalance() >= params.BeaconConfig().MinActivationBalance
+		hasSufficientEffectiveBalance := validator.EffectiveBalance >= params.BeaconConfig().MinActivationBalance
 		vBal, err := st.BalanceAtIndex(vIdx)
 		if err != nil {
 			return nil, err

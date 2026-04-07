@@ -27,7 +27,7 @@ func (s sortableIndices) Less(i, j int) bool {
 		return false
 	}
 
-	a, b := vi.ActivationEligibilityEpoch(), vj.ActivationEligibilityEpoch()
+	a, b := vi.ActivationEligibilityEpoch, vj.ActivationEligibilityEpoch
 	if a == b {
 		return s.indices[i] < s.indices[j]
 	}

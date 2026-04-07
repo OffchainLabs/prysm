@@ -59,7 +59,7 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 	eligibleForActivation := make([]primitives.ValidatorIndex, 0)
 	eligibleForEjection := make([]primitives.ValidatorIndex, 0)
 
-	if err := st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	if err := st.ReadFromEveryValidator(func(idx int, val *stateutil.CompactValidator) error {
 		// Collect validators eligible to enter the activation queue.
 		if helpers.IsEligibleForActivationQueue(val, currentEpoch) {
 			eligibleForActivationQ = append(eligibleForActivationQ, primitives.ValidatorIndex(idx))
@@ -67,7 +67,7 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 
 		// Collect validators to eject.
 		isActive := helpers.IsActiveValidatorUsingTrie(val, currentEpoch)
-		belowEjectionBalance := val.EffectiveBalance() <= ejectionBal
+		belowEjectionBalance := val.EffectiveBalance <= ejectionBal
 		if isActive && belowEjectionBalance {
 			eligibleForEjection = append(eligibleForEjection, primitives.ValidatorIndex(idx))
 		}
@@ -243,15 +243,15 @@ func ProcessSlashings(st state.BeaconState) error {
 
 	bals := st.Balances()
 	changed := false
-	err = st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		correctEpoch := (currentEpoch + exitLength/2) == val.WithdrawableEpoch()
-		if val.Slashed() && correctEpoch {
+	err = st.ReadFromEveryValidator(func(idx int, val *stateutil.CompactValidator) error {
+		correctEpoch := (currentEpoch + exitLength/2) == val.WithdrawableEpoch
+		if val.Slashed && correctEpoch {
 			var penalty uint64
 			if st.Version() >= version.Electra {
-				effectiveBalanceIncrements := val.EffectiveBalance() / increment
+				effectiveBalanceIncrements := val.EffectiveBalance / increment
 				penalty = penaltyPerEffectiveBalanceIncrement * effectiveBalanceIncrements
 			} else {
-				penaltyNumerator := val.EffectiveBalance() / increment * minSlashing
+				penaltyNumerator := val.EffectiveBalance / increment * minSlashing
 				penalty = penaltyNumerator / totalBalance * increment
 			}
 			bals[idx] = helpers.DecreaseBalanceWithVal(bals[idx], penalty)

@@ -142,7 +142,7 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 		if err != nil {
 			return nil, err
 		}
-		effectiveBal := v.EffectiveBalance()
+		effectiveBal := v.EffectiveBalance
 
 		if s.Version() >= version.Electra {
 			// Use the preallocated seed buffer

@@ -11,7 +11,7 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -808,12 +808,12 @@ func (v *validxStateOverride) NumValidators() int {
 	return len(v.Validators())
 }
 
-func (v *validxStateOverride) ValidatorAtIndexReadOnly(idx primitives.ValidatorIndex) (state.ReadOnlyValidator, error) {
+func (v *validxStateOverride) ValidatorAtIndexReadOnly(idx primitives.ValidatorIndex) (stateutil.CompactValidator, error) {
 	validators := v.Validators()
 	if idx >= primitives.ValidatorIndex(len(validators)) {
-		return nil, fmt.Errorf("validator index %d out of range", idx)
+		return stateutil.CompactValidator{}, fmt.Errorf("validator index %d out of range", idx)
 	}
-	return state_native.NewValidator(validators[idx])
+	return stateutil.CompactValidatorFromProto(validators[idx]), nil
 }
 
 func (v *validxStateOverride) IsNil() bool {
@@ -846,14 +846,11 @@ func (v *validxStateOverride) SetLatestBlockHeader(val *ethpb.BeaconBlockHeader)
 	return nil
 }
 
-func (v *validxStateOverride) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyValidator) error) error {
+func (v *validxStateOverride) ReadFromEveryValidator(f func(idx int, val *stateutil.CompactValidator) error) error {
 	validators := v.Validators()
 	for i, val := range validators {
-		rov, err := state_native.NewValidator(val)
-		if err != nil {
-			return err
-		}
-		if err := f(i, rov); err != nil {
+		rov := stateutil.CompactValidatorFromProto(val)
+		if err := f(i, &rov); err != nil {
 			return err
 		}
 	}

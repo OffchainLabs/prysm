@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -258,11 +259,11 @@ func UpgradeToElectra(beaconState state.BeaconState) (state.BeaconState, error) 
 	earliestExitEpoch := helpers.ActivationExitEpoch(time.CurrentEpoch(beaconState))
 	preActivationIndices := make([]primitives.ValidatorIndex, 0)
 	compoundWithdrawalIndices := make([]primitives.ValidatorIndex, 0)
-	if err = beaconState.ReadFromEveryValidator(func(index int, val state.ReadOnlyValidator) error {
-		if val.ExitEpoch() != params.BeaconConfig().FarFutureEpoch && val.ExitEpoch() > earliestExitEpoch {
-			earliestExitEpoch = val.ExitEpoch()
+	if err = beaconState.ReadFromEveryValidator(func(index int, val *stateutil.CompactValidator) error {
+		if val.ExitEpoch != params.BeaconConfig().FarFutureEpoch && val.ExitEpoch > earliestExitEpoch {
+			earliestExitEpoch = val.ExitEpoch
 		}
-		if val.ActivationEpoch() == params.BeaconConfig().FarFutureEpoch {
+		if val.ActivationEpoch == params.BeaconConfig().FarFutureEpoch {
 			preActivationIndices = append(preActivationIndices, primitives.ValidatorIndex(index))
 		}
 		if val.HasCompoundingWithdrawalCredentials() {

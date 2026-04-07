@@ -337,7 +337,7 @@ func validateSelectionIndex(
 	if err != nil {
 		return nil, err
 	}
-	pk := v.PublicKey()
+	pk := v.PublicKey
 	publicKey, err := bls.PublicKeyFromBytes(pk[:])
 	if err != nil {
 		return nil, err
@@ -368,7 +368,7 @@ func aggSigSet(s state.ReadOnlyBeaconState, a ethpb.SignedAggregateAttAndProof) 
 	if err != nil {
 		return nil, err
 	}
-	pk := v.PublicKey()
+	pk := v.PublicKey
 	publicKey, err := bls.PublicKeyFromBytes(pk[:])
 	if err != nil {
 		return nil, err

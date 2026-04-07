@@ -168,8 +168,8 @@ func VerifyProposerSlashing(
 	if err != nil {
 		return err
 	}
-	if !helpers.IsSlashableValidatorUsingTrie(proposer, time.CurrentEpoch(beaconState)) {
-		return fmt.Errorf("validator with key %#x is not slashable", proposer.PublicKey())
+	if !helpers.IsSlashableValidatorUsingTrie(&proposer, time.CurrentEpoch(beaconState)) {
+		return fmt.Errorf("validator with key %#x is not slashable", proposer.PublicKey)
 	}
 	headers := []*ethpb.SignedBeaconBlockHeader{slashing.Header_1, slashing.Header_2}
 	for _, header := range headers {

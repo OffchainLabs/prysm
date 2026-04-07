@@ -15,8 +15,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -294,13 +294,13 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 				s.cfg.clock = startup.NewClock(time.Now(), [32]byte{'A'})
 				s.initCaches()
 				st, keys := util.DeterministicGenesisStateCapella(t, 128)
-				assert.NoError(t, st.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
-					newCreds := make([]byte, 32)
-					newCreds[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
-					copy(newCreds[12:], wantedExecAddress)
-					newVal := val.Copy()
-					newVal.WithdrawalCredentials = newCreds
-					return newVal, nil
+				assert.NoError(t, st.ApplyToEveryValidator(func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error) {
+					cv := *val
+					cv.WithdrawalCredentials[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+					// Zero out bytes 1..11, then copy the exec address into bytes 12..31.
+					clear(cv.WithdrawalCredentials[1:12])
+					copy(cv.WithdrawalCredentials[12:], wantedExecAddress)
+					return cv, true, nil
 				}))
 				s.cfg.chain = &mockChain.ChainService{
 					State:   st,

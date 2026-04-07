@@ -315,8 +315,8 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 			if err != nil {
 				return errors.Wrap(err, "could not get validator")
 			}
-			isValidatorExited = val.ExitEpoch() < params.BeaconConfig().FarFutureEpoch
-			isValidatorWithdrawn = val.WithdrawableEpoch() < nextEpoch
+			isValidatorExited = val.ExitEpoch < params.BeaconConfig().FarFutureEpoch
+			isValidatorWithdrawn = val.WithdrawableEpoch < nextEpoch
 		}
 
 		if isValidatorWithdrawn {

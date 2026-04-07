@@ -39,7 +39,7 @@ func BaseRewardWithTotalBalance(s state.ReadOnlyBeaconState, index primitives.Va
 		return 0, err
 	}
 	cfg := params.BeaconConfig()
-	increments := val.EffectiveBalance() / cfg.EffectiveBalanceIncrement
+	increments := val.EffectiveBalance / cfg.EffectiveBalanceIncrement
 	baseRewardPerInc, err := BaseRewardPerIncrement(totalBalance)
 	if err != nil {
 		return 0, err

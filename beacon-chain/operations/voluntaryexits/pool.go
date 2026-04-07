@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	types "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	doublylinkedlist "github.com/OffchainLabs/prysm/v7/container/doubly-linked-list"
@@ -89,7 +90,7 @@ func (p *Pool) ExitsForInclusion(st state.ReadOnlyBeaconState, slot types.Slot) 
 			}
 			continue
 		}
-		var validator state.ReadOnlyValidator
+		var validator stateutil.CompactValidator
 		if !exit.Exit.ValidatorIndex.IsBuilderIndex() {
 			var vErr error
 			validator, vErr = st.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
@@ -103,7 +104,7 @@ func (p *Pool) ExitsForInclusion(st state.ReadOnlyBeaconState, slot types.Slot) 
 				continue
 			}
 		}
-		if err = blocks.VerifyExitAndSignature(validator, st, exit); err != nil {
+		if err = blocks.VerifyExitAndSignature(&validator, st, exit); err != nil {
 			logrus.WithError(err).Warning("removing invalid exit from pool")
 			p.lock.RUnlock()
 			// MarkIncluded removes the invalid exit from the pool

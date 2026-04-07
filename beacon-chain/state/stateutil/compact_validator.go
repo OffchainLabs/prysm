@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -85,6 +86,21 @@ func (cv *CompactValidator) ToProto() *ethpb.Validator {
 		WithdrawableEpoch:          cv.WithdrawableEpoch,
 		Slashed:                    cv.Slashed,
 	}
+}
+
+// HasETH1WithdrawalCredentials returns true if the validator has ETH1 withdrawal credentials.
+func (cv *CompactValidator) HasETH1WithdrawalCredentials() bool {
+	return cv.WithdrawalCredentials[0] == params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+}
+
+// HasCompoundingWithdrawalCredentials returns true if the validator has compounding withdrawal credentials.
+func (cv *CompactValidator) HasCompoundingWithdrawalCredentials() bool {
+	return cv.WithdrawalCredentials[0] == params.BeaconConfig().CompoundingWithdrawalPrefixByte
+}
+
+// HasExecutionWithdrawalCredentials returns true if the validator has execution withdrawal credentials.
+func (cv *CompactValidator) HasExecutionWithdrawalCredentials() bool {
+	return cv.HasETH1WithdrawalCredentials() || cv.HasCompoundingWithdrawalCredentials()
 }
 
 // Root computes the hash tree root of a CompactValidator.
