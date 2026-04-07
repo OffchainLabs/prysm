@@ -282,9 +282,7 @@ func BenchmarkServer_AuthTokenHandler(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			b.Fatalf("unexpected status code: got %d, want %d", rr.Code, http.StatusOK)
-		}
+		require.Equal(b, http.StatusOK, rr.Code)
 	}
 }
 
@@ -300,9 +298,7 @@ func BenchmarkServer_AuthTokenInterceptor(b *testing.B) {
 		_, err := interceptor(ctx, "xyz", unaryInfo, func(ctx context.Context, req any) (any, error) {
 			return nil, nil
 		})
-		if err != nil {
-			b.Fatalf("unexpected error: %v", err)
-		}
+		require.NoError(b, err)
 	}
 }
 
