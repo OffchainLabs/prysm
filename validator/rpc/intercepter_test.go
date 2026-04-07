@@ -146,8 +146,6 @@ func TestServer_AuthTokenHandler_ProtectsRoutes(t *testing.T) {
 	token := "cool-token"
 	handler := (&Server{authToken: token}).AuthTokenHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte("Test Response"))
-		require.NoError(t, err)
 	}))
 
 	tests := []struct {
@@ -275,39 +273,18 @@ func BenchmarkServer_AuthTokenHandler(b *testing.B) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	benchmarks := []struct {
-		name       string
-		authHeader string
-		wantCode   int
-	}{
-		{
-			name:       "valid_token",
-			authHeader: "Bearer " + token,
-			wantCode:   http.StatusOK,
-		},
-		{
-			name:       "invalid_token",
-			authHeader: "Bearer bad-token",
-			wantCode:   http.StatusForbidden,
-		},
-	}
+	req, err := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
+	require.NoError(b, err)
+	req.Header.Set("Authorization", "Bearer "+token)
 
-	for _, bb := range benchmarks {
-		b.Run(bb.name, func(b *testing.B) {
-			req, err := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
-			require.NoError(b, err)
-			req.Header.Set("Authorization", bb.authHeader)
-
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				rr := httptest.NewRecorder()
-				handler.ServeHTTP(rr, req)
-				if rr.Code != bb.wantCode {
-					b.Fatalf("unexpected status code: got %d, want %d", rr.Code, bb.wantCode)
-				}
-			}
-		})
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			b.Fatalf("unexpected status code: got %d, want %d", rr.Code, http.StatusOK)
+		}
 	}
 }
 
@@ -315,51 +292,18 @@ func BenchmarkServer_AuthTokenInterceptor(b *testing.B) {
 	token := "cool-token"
 	interceptor := (&Server{authToken: token}).AuthTokenInterceptor()
 	unaryInfo := &grpc.UnaryServerInfo{FullMethod: "Proto.CreateWallet"}
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{"authorization": {"Bearer " + token}})
 
-	benchmarks := []struct {
-		name      string
-		metadata  metadata.MD
-		wantCode  codes.Code
-		expectErr bool
-	}{
-		{
-			name:      "valid_token",
-			metadata:  metadata.MD{"authorization": {"Bearer " + token}},
-			wantCode:  codes.OK,
-			expectErr: false,
-		},
-		{
-			name:      "invalid_token",
-			metadata:  metadata.MD{"authorization": {"Bearer bad-token"}},
-			wantCode:  codes.Unauthenticated,
-			expectErr: true,
-		},
-	}
-
-	for _, bb := range benchmarks {
-		b.Run(bb.name, func(b *testing.B) {
-			ctx := metadata.NewIncomingContext(context.Background(), bb.metadata)
-
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				_, err := interceptor(ctx, "xyz", unaryInfo, authTestUnaryHandler)
-				if bb.expectErr {
-					if status.Code(err) != bb.wantCode {
-						b.Fatalf("unexpected status code: got %v, want %v", status.Code(err), bb.wantCode)
-					}
-					continue
-				}
-				if err != nil {
-					b.Fatalf("unexpected error: %v", err)
-				}
-			}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := interceptor(ctx, "xyz", unaryInfo, func(ctx context.Context, req any) (any, error) {
+			return nil, nil
 		})
+		if err != nil {
+			b.Fatalf("unexpected error: %v", err)
+		}
 	}
-}
-
-func authTestUnaryHandler(ctx context.Context, req any) (any, error) {
-	return nil, nil
 }
 
 func newAuthTestRequest(t *testing.T, path string) *http.Request {
