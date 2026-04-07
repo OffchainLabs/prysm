@@ -334,7 +334,7 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) (state.BeaconState, er
 			}
 		}
 
-		return *val, false, nil
+		return stateutil.CompactValidator{}, false, nil
 	}
 
 	if err := st.ApplyToEveryValidator(validatorFunc); err != nil {
