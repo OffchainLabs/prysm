@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -791,31 +792,34 @@ func TestIsEligibleForActivationQueue(t *testing.T) {
 
 func TestIsIsEligibleForActivation(t *testing.T) {
 	tests := []struct {
-		name      string
-		validator *ethpb.Validator
-		state     *ethpb.BeaconState
-		want      bool
+		name           string
+		validator      *ethpb.Validator
+		finalizedEpoch primitives.Epoch
+		want           bool
 	}{
 		{"Eligible",
 			&ethpb.Validator{ActivationEligibilityEpoch: 1, ActivationEpoch: params.BeaconConfig().FarFutureEpoch},
-			&ethpb.BeaconState{FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 2}},
+			2,
 			true},
 		{"Not yet finalized",
 			&ethpb.Validator{ActivationEligibilityEpoch: 1, ActivationEpoch: params.BeaconConfig().FarFutureEpoch},
-			&ethpb.BeaconState{FinalizedCheckpoint: &ethpb.Checkpoint{Root: make([]byte, 32)}},
+			0,
 			false},
 		{"Incorrect activation epoch",
 			&ethpb.Validator{ActivationEligibilityEpoch: 1},
-			&ethpb.BeaconState{FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 2}},
+			2,
 			false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			helpers.ClearCache()
 
-			s, err := state_native.InitializeFromProtoPhase0(tt.state)
+			s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+				FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: tt.finalizedEpoch, Root: make([]byte, 32)},
+			})
 			require.NoError(t, err)
-			assert.Equal(t, tt.want, helpers.IsEligibleForActivation(s, tt.validator), "IsEligibleForActivation()")
+			cv := stateutil.CompactValidatorFromProto(tt.validator)
+			assert.Equal(t, tt.want, helpers.IsEligibleForActivationUsingROVal(s, &cv), "IsEligibleForActivationUsingROVal()")
 		})
 	}
 }

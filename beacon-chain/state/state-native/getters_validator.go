@@ -103,11 +103,14 @@ func (b *BeaconState) validatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Va
 
 // ValidatorAtIndexReadOnly is the validator at the provided index. This method
 // doesn't clone the validator.
-func (b *BeaconState) ValidatorAtIndexReadOnly(idx primitives.ValidatorIndex) (state.ReadOnlyValidator, error) {
+func (b *BeaconState) ValidatorAtIndexReadOnly(idx primitives.ValidatorIndex) (stateutil.CompactValidator, error) {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	return b.validatorAtIndexReadOnly(idx)
+	if b.validatorsMultiValue == nil {
+		return stateutil.CompactValidator{}, state.ErrNilValidatorsInState
+	}
+	return b.validatorsMultiValue.At(b, uint64(idx))
 }
 
 func (b *BeaconState) validatorAtIndexReadOnly(idx primitives.ValidatorIndex) (state.ReadOnlyValidator, error) {
@@ -202,25 +205,16 @@ func (b *BeaconState) NumValidators() int {
 // ReadFromEveryValidator reads values from every validator and applies it to the provided function.
 //
 // WARNING: This method is potentially unsafe, as it exposes the actual validator registry.
-func (b *BeaconState) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyValidator) error) error {
+func (b *BeaconState) ReadFromEveryValidator(f func(idx int, val *stateutil.CompactValidator) error) error {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
 	if b.validatorsMultiValue == nil {
 		return state.ErrNilValidatorsInState
 	}
-	l := b.validatorsMultiValue.Len(b)
-	for i := range l {
-		v, err := b.validatorsMultiValue.At(b, uint64(i))
-		if err != nil {
-			return err
-		}
-		rov := NewValidatorFromCompact(v)
-		if err = f(i, rov); err != nil {
-			return err
-		}
-	}
-	return nil
+	return b.validatorsMultiValue.ForEach(b, func(idx int, val *stateutil.CompactValidator) error {
+		return f(idx, val)
+	})
 }
 
 // Balances of validators participating in consensus on the beacon chain.

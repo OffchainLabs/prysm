@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // ProcessEffectiveBalanceUpdates processes effective balance updates during epoch processing.
@@ -38,9 +38,9 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) error {
 	bals := st.Balances()
 
 	// Update effective balances with hysteresis.
-	validatorFunc := func(idx int, val state.ReadOnlyValidator) (newVal *ethpb.Validator, err error) {
+	validatorFunc := func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error) {
 		if idx >= len(bals) {
-			return nil, fmt.Errorf("validator index exceeds validator length in state %d >= %d", idx, len(st.Balances()))
+			return stateutil.CompactValidator{}, false, fmt.Errorf("validator index exceeds validator length in state %d >= %d", idx, len(st.Balances()))
 		}
 		balance := bals[idx]
 
@@ -49,14 +49,15 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) error {
 			effectiveBalanceLimit = params.BeaconConfig().MaxEffectiveBalanceElectra
 		}
 
-		if balance+downwardThreshold < val.EffectiveBalance() || val.EffectiveBalance()+upwardThreshold < balance {
+		if balance+downwardThreshold < val.EffectiveBalance || val.EffectiveBalance+upwardThreshold < balance {
 			effectiveBal := min(balance-balance%effBalanceInc, effectiveBalanceLimit)
-			if effectiveBal != val.EffectiveBalance() {
-				newVal = val.Copy()
+			if effectiveBal != val.EffectiveBalance {
+				newVal := *val
 				newVal.EffectiveBalance = effectiveBal
+				return newVal, true, nil
 			}
 		}
-		return newVal, nil
+		return stateutil.CompactValidator{}, false, nil
 	}
 
 	return st.ApplyToEveryValidator(validatorFunc)

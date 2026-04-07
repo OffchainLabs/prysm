@@ -319,23 +319,22 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) (state.BeaconState, er
 	bals := st.Balances()
 
 	// Update effective balances with hysteresis.
-	validatorFunc := func(idx int, val state.ReadOnlyValidator) (newVal *ethpb.Validator, err error) {
-		if val == nil {
-			return nil, fmt.Errorf("validator %d is nil in state", idx)
-		}
+	validatorFunc := func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error) {
 		if idx >= len(bals) {
-			return nil, fmt.Errorf("validator index exceeds validator length in state %d >= %d", idx, len(st.Balances()))
+			return stateutil.CompactValidator{}, false, fmt.Errorf("validator index exceeds validator length in state %d >= %d", idx, len(bals))
 		}
 		balance := bals[idx]
 
-		if balance+downwardThreshold < val.EffectiveBalance() || val.EffectiveBalance()+upwardThreshold < balance {
+		if balance+downwardThreshold < val.EffectiveBalance || val.EffectiveBalance+upwardThreshold < balance {
 			effectiveBal := min(maxEffBalance, balance-balance%effBalanceInc)
-			if effectiveBal != val.EffectiveBalance() {
-				newVal = val.Copy()
-				newVal.EffectiveBalance = effectiveBal
+			if effectiveBal != val.EffectiveBalance {
+				updated := *val
+				updated.EffectiveBalance = effectiveBal
+				return updated, true, nil
 			}
 		}
-		return
+
+		return *val, false, nil
 	}
 
 	if err := st.ApplyToEveryValidator(validatorFunc); err != nil {

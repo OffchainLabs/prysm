@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -559,13 +559,15 @@ func TestValidatorReferences_RemainsConsistent_Phase0(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
-		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error) {
+		cv := *val
+		copy(cv.PublicKey[:], []byte{'V'})
+		return cv, true, nil
 	}))
 
 	// Ensure reference is properly accounted for.
-	assert.NoError(t, a.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey())
+	assert.NoError(t, a.ReadFromEveryValidator(func(idx int, val *stateutil.CompactValidator) error {
+		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey)
 		return nil
 	}))
 }
@@ -594,13 +596,15 @@ func TestValidatorReferences_RemainsConsistent_Altair(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
-		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error) {
+		cv := *val
+		copy(cv.PublicKey[:], []byte{'V'})
+		return cv, true, nil
 	}))
 
 	// Ensure reference is properly accounted for.
-	assert.NoError(t, a.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey())
+	assert.NoError(t, a.ReadFromEveryValidator(func(idx int, val *stateutil.CompactValidator) error {
+		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey)
 		return nil
 	}))
 }
@@ -629,13 +633,15 @@ func TestValidatorReferences_RemainsConsistent_Capella(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
-		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error) {
+		cv := *val
+		copy(cv.PublicKey[:], []byte{'V'})
+		return cv, true, nil
 	}))
 
 	// Ensure reference is properly accounted for.
-	assert.NoError(t, a.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey())
+	assert.NoError(t, a.ReadFromEveryValidator(func(idx int, val *stateutil.CompactValidator) error {
+		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey)
 		return nil
 	}))
 }
@@ -664,13 +670,15 @@ func TestValidatorReferences_RemainsConsistent_Deneb(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
-		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error) {
+		cv := *val
+		copy(cv.PublicKey[:], []byte{'V'})
+		return cv, true, nil
 	}))
 
 	// Ensure reference is properly accounted for.
-	assert.NoError(t, a.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey())
+	assert.NoError(t, a.ReadFromEveryValidator(func(idx int, val *stateutil.CompactValidator) error {
+		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey)
 		return nil
 	}))
 }
@@ -699,13 +707,15 @@ func TestValidatorReferences_RemainsConsistent_Bellatrix(t *testing.T) {
 
 	assert.DeepNotEqual(t, a.Validators()[0], b.Validators()[0], "validators are equal when they are supposed to be different")
 	// Modify all validators from copied state.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
-		return &ethpb.Validator{PublicKey: []byte{'V'}}, nil
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error) {
+		cv := *val
+		copy(cv.PublicKey[:], []byte{'V'})
+		return cv, true, nil
 	}))
 
 	// Ensure reference is properly accounted for.
-	assert.NoError(t, a.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey())
+	assert.NoError(t, a.ReadFromEveryValidator(func(idx int, val *stateutil.CompactValidator) error {
+		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey)
 		return nil
 	}))
 }
@@ -731,14 +741,14 @@ func TestValidatorReferences_ApplyValidator_BalancesRead(t *testing.T) {
 	require.Equal(t, true, ok)
 
 	// Modify all validators from copied state, it should not deadlock.
-	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error) {
-		b, err := b.BalanceAtIndex(0)
+	assert.NoError(t, b.ApplyToEveryValidator(func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error) {
+		bal, err := b.BalanceAtIndex(0)
 		if err != nil {
-			return nil, err
+			return stateutil.CompactValidator{}, false, err
 		}
-		newVal := val.Copy()
-		newVal.EffectiveBalance += b
-		return newVal, nil
+		cv := *val
+		cv.EffectiveBalance += bal
+		return cv, true, nil
 	}))
 }
 

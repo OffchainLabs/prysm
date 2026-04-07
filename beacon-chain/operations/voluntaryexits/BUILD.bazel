@@ -14,6 +14,7 @@ go_library(
     deps = [
         "//beacon-chain/core/blocks:go_default_library",
         "//beacon-chain/state:go_default_library",
+        "//beacon-chain/state/stateutil:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//container/doubly-linked-list:go_default_library",

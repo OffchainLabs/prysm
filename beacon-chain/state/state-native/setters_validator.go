@@ -1,7 +1,6 @@
 package state_native
 
 import (
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -30,32 +29,38 @@ func (b *BeaconState) SetValidators(val []*ethpb.Validator) error {
 
 // ApplyToEveryValidator applies the provided callback function to each validator in the
 // validator registry.
-func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyValidator) (*ethpb.Validator, error)) error {
-	var changedVals []uint64
-	l := b.validatorsMultiValue.Len(b)
-	for i := range l {
-		v, err := b.validatorsMultiValue.At(b, uint64(i))
-		if err != nil {
-			return err
+func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val *stateutil.CompactValidator) (stateutil.CompactValidator, bool, error)) error {
+	type mutation struct {
+		idx uint64
+		val stateutil.CompactValidator
+	}
+	var mutations []mutation
+
+	err := b.validatorsMultiValue.ForEach(b, func(idx int, val *stateutil.CompactValidator) error {
+		newVal, changed, fErr := f(idx, val)
+		if fErr != nil {
+			return fErr
 		}
-		ro := NewValidatorFromCompact(v)
-		newVal, err := f(i, ro)
-		if err != nil {
-			return err
+		if changed {
+			mutations = append(mutations, mutation{idx: uint64(idx), val: newVal})
 		}
-		if newVal != nil {
-			changedVals = append(changedVals, uint64(i))
-			compactValidator := stateutil.CompactValidatorFromProto(newVal)
-			if err := b.validatorsMultiValue.UpdateAt(b, uint64(i), compactValidator); err != nil {
-				return errors.Wrapf(err, "could not update validator at index %d", i)
-			}
-		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
-	b.lock.Lock()
-	defer b.lock.Unlock()
+	if len(mutations) > 0 {
+		changedVals := make([]uint64, len(mutations))
+		for i, m := range mutations {
+			if err := b.validatorsMultiValue.UpdateAt(b, m.idx, m.val); err != nil {
+				return errors.Wrapf(err, "could not update validator at index %d", m.idx)
+			}
+			changedVals[i] = m.idx
+		}
 
-	if len(changedVals) > 0 {
+		b.lock.Lock()
+		defer b.lock.Unlock()
 		b.markFieldAsDirty(types.Validators)
 		b.addDirtyIndices(types.Validators, changedVals)
 	}

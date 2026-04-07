@@ -30,6 +30,8 @@ go_library(
         "//beacon-chain/rpc/eth/shared:go_default_library",
         "//beacon-chain/rpc/lookup:go_default_library",
         "//beacon-chain/state:go_default_library",
+        "//beacon-chain/state/state-native:go_default_library",
+        "//beacon-chain/state/stateutil:go_default_library",
         "//beacon-chain/sync:go_default_library",
         "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",

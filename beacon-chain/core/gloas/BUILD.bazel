@@ -67,6 +67,7 @@ go_test(
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
+        "//beacon-chain/state/stateutil:go_default_library",
         "//beacon-chain/state/testing:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
