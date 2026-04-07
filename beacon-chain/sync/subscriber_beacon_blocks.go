@@ -82,6 +82,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 	}
 
 	go s.processPendingPayloadEnvelope(s.ctx, root)
+	go s.processPendingDataColumnsForRoot(s.ctx, root)
 
 	return nil
 }

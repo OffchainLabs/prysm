@@ -206,6 +206,13 @@ type Service struct {
 	pendingPayloadEnvelopes              map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
 	pendingEnvelopeLock                  sync.RWMutex
 	selfBuildSigFailures                 int
+	// pendingDataColumnsByRoot holds Gloas data column sidecars that arrived before
+	// their block was seen, keyed by block root.
+	pendingDataColumnsByRoot map[[32]byte][]pendingGloasDataColumnEntry
+	pendingDataColumnsLock   sync.RWMutex
+	// pendingDataColumnKeys tracks which (blockRoot, columnIndex) pairs are already
+	// queued to avoid duplicate entries.
+	pendingDataColumnKeys map[string]bool
 }
 
 // NewService initializes new regular sync service.
@@ -224,6 +231,8 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		payloadAttestationCache:  &cache.PayloadAttestationCache{},
 		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		pendingDataColumnsByRoot: make(map[[32]byte][]pendingGloasDataColumnEntry),
+		pendingDataColumnKeys:    make(map[string]bool),
 	}
 
 	for _, opt := range opts {

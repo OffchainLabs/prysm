@@ -88,6 +88,12 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	if slots.ToEpoch(roDataColumn.Slot()) >= params.BeaconConfig().GloasForkEpoch {
 		verifiedRODataColumn, err = s.validateDataColumnGloas(ctx, msg, roDataColumn, dataColumnSidecarSubTopic)
 		if err != nil {
+			// When the block hasn't been seen yet, queue the sidecar for deferred
+			// re-validation once the block arrives. The peer ID is stored so the
+			// forwarding peer can be downscored if re-validation later rejects it.
+			if stderrors.Is(err, errGloasBlockNotSeen) && msg != nil && msg.Topic != nil {
+				s.addDataColumnToPendingQueue(roDataColumn, *msg.Topic, pid)
+			}
 			return validationResultFromError(err), baseValidationErr(err)
 		}
 	} else {
