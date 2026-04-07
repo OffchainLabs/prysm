@@ -300,6 +300,98 @@ func TestProcessSidecarsFromExecutionFromBlock(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("gloas data columns from bid", func(t *testing.T) {
+		custodyRequirement := params.BeaconConfig().CustodyRequirement
+
+		err := kzg.Start()
+		require.NoError(t, err)
+
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.CapellaForkEpoch = 0
+		cfg.DenebForkEpoch = 0
+		cfg.ElectraForkEpoch = 0
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		chainService := &chainMock.ChainService{
+			Genesis: time.Now(),
+		}
+
+		allColumns := make([]blocks.VerifiedRODataColumn, 128)
+		for i := range allColumns {
+			gdc, err := blocks.NewRODataColumnGloas(
+				&ethpb.DataColumnSidecarGloas{
+					Index:           uint64(i),
+					Slot:            primitives.Slot(1),
+					BeaconBlockRoot: make([]byte, 32),
+				})
+			require.NoError(t, err)
+			allColumns[i] = blocks.VerifiedRODataColumn{RODataColumn: gdc}
+		}
+
+		tests := []struct {
+			name                    string
+			dataColumnSidecars      []blocks.VerifiedRODataColumn
+			blobCount               int
+			expectedDataColumnCount int
+		}{
+			{
+				name:                    "Constructed 0 data columns with no blobs",
+				blobCount:               0,
+				dataColumnSidecars:      nil,
+				expectedDataColumnCount: 0,
+			},
+			{
+				name:                    "Constructed 128 data columns with blobs",
+				blobCount:               1,
+				dataColumnSidecars:      allColumns,
+				expectedDataColumnCount: 8,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				s := Service{
+					cfg: &config{
+						p2p:               mockp2p.NewTestP2P(t),
+						chain:             chainService,
+						clock:             startup.NewClock(time.Now(), [32]byte{}),
+						dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
+						executionReconstructor: &mockExecution.EngineClient{
+							DataColumnSidecars: tt.dataColumnSidecars,
+						},
+						operationNotifier: &chainMock.MockOperationNotifier{},
+					},
+					seenDataColumnCache: newSlotAwareCache(1),
+				}
+
+				_, _, err := s.cfg.p2p.UpdateCustodyInfo(0, custodyRequirement)
+				require.NoError(t, err)
+
+				kzgCommitments := make([][]byte, 0, tt.blobCount)
+				for range tt.blobCount {
+					kzgCommitments = append(kzgCommitments, make([]byte, 48))
+				}
+
+				b := util.NewBeaconBlockGloas()
+				b.Block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments = kzgCommitments
+				b.Block.Slot = 1
+
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+
+				roBlock, err := blocks.NewROBlock(sb)
+				require.NoError(t, err)
+
+				err = s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedDataColumnCount, len(chainService.DataColumns))
+			})
+		}
+	})
 }
 
 func TestHaveAllSidecarsBeenSeen(t *testing.T) {
