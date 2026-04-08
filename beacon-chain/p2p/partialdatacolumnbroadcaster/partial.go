@@ -26,11 +26,7 @@ import (
 
 const TTLInSlots = 3
 
-var (
-	maxConcurrentValidators     = params.BeaconConfig().DataColumnSidecarSubnetCount
-	maxConcurrentHeaderHandlers = params.BeaconConfig().DataColumnSidecarSubnetCount
-	errInvalidHeader            = errors.New("invalid header")
-)
+var errInvalidHeader = errors.New("invalid header")
 
 const dataColumnSidecarPrefix = "data_column_sidecar_"
 
@@ -158,6 +154,7 @@ type gossip struct {
 }
 
 func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
+	concurrency := params.BeaconConfig().DataColumnSidecarSubnetCount
 	return &PartialColumnBroadcaster{
 		topics:           make(map[string]*pubsub.Topic),
 		partialMsgStore:  make(map[string]map[string]*verification.PartialColumnVerifier),
@@ -171,8 +168,8 @@ func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 		incomingReq: make(chan request, 128*16),
 		logger:      logger,
 
-		concurrentValidatorSemaphore:     make(chan struct{}, maxConcurrentValidators),
-		concurrentHeaderHandlerSemaphore: make(chan struct{}, maxConcurrentHeaderHandlers),
+		concurrentValidatorSemaphore:     make(chan struct{}, concurrency),
+		concurrentHeaderHandlerSemaphore: make(chan struct{}, concurrency),
 	}
 }
 
@@ -745,7 +742,7 @@ func (p *PartialColumnBroadcaster) gossip(topic string, groupID []byte) {
 	}
 	err := p.publishPartialCol(topic, existing.Column.GroupID(), existing.Column)
 	if err != nil {
-		log.WithFields(logrus.Fields{"err": err}).Warn("Failed to publish gossip")
+		p.logger.WithFields(logrus.Fields{"err": err}).Warn("Failed to publish gossip")
 	}
 }
 
