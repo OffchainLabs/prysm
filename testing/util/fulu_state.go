@@ -104,7 +104,7 @@ func emptyGenesisStateFulu() (state.BeaconState, error) {
 		ConsolidationBalanceToConsume: primitives.Gwei(0),
 
 		// Fulu specific field
-		ProposerLookahead: []uint64{},
+		ProposerLookahead: []primitives.ValidatorIndex{},
 	}
 	return state_native.InitializeFromProtoUnsafeFulu(st)
 }

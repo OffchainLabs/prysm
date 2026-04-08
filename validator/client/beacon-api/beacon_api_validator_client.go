@@ -295,6 +295,12 @@ func (c *beaconApiValidatorClient) SubmitSignedProposerPreferences(_ context.Con
 	return new(empty.Empty), nil
 }
 
+// TODO(gloas): Wire up actual REST call to POST /eth/v2/beacon/execution_payload/bid
+func (c *beaconApiValidatorClient) SubmitSignedExecutionPayloadBid(_ context.Context, _ *ethpb.SignedExecutionPayloadBid) (*empty.Empty, error) {
+	log.Debug("SubmitSignedExecutionPayloadBid not yet implemented for beacon API client, skipping")
+	return new(empty.Empty), nil
+}
+
 func (c *beaconApiValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, duties []*ethpb.ValidatorDuty) (*empty.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon-api.SubscribeCommitteeSubnets")
 	defer span.End()

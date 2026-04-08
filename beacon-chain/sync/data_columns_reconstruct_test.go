@@ -87,7 +87,7 @@ func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
 		// Check received indices before reconstruction.
 		require.Equal(t, minimumCount, uint64(len(chainService.DataColumns)))
 		for i, actual := range chainService.DataColumns {
-			require.Equal(t, uint64(i), actual.Index)
+			require.Equal(t, uint64(i), actual.Index())
 		}
 
 		// Run the reconstruction.
@@ -110,8 +110,8 @@ func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
 
 		require.Equal(t, len(expected), len(chainService.DataColumns))
 		for _, actual := range chainService.DataColumns {
-			require.Equal(t, true, expected[actual.Index])
-			require.Equal(t, true, service.hasSeenDataColumnIndex(slot, proposerIndex, actual.Index))
+			require.Equal(t, true, expected[actual.Index()])
+			require.Equal(t, true, service.hasSeenDataColumnIndex(slot, proposerIndex, actual.Index()))
 		}
 
 		require.Equal(t, true, p2p.BroadcastCalled.Load())
@@ -185,7 +185,7 @@ func TestSemiSupernodeReconstruction(t *testing.T) {
 		// Check received indices before reconstruction.
 		require.Equal(t, minimumCount, uint64(len(chainService.DataColumns)))
 		for i, actual := range chainService.DataColumns {
-			require.Equal(t, uint64(i), actual.Index)
+			require.Equal(t, uint64(i), actual.Index())
 		}
 
 		// Run the reconstruction.

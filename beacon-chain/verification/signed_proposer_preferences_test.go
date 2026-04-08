@@ -18,11 +18,11 @@ import (
 func TestProposerPreferencesVerifier_VerifyNextEpoch(t *testing.T) {
 	st, _, signed := newSignedProposerPreferencesState(t, 31, 40, 0)
 
-	verifier := &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
+	verifier := &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
 	require.NoError(t, verifier.VerifyNextEpoch(st))
 
 	signed.Message.ProposalSlot = st.Slot()
-	verifier = &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
+	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{}, results: newResults(RequireProposerPreferencesNextEpoch), p: signed}
 	require.ErrorIs(t, verifier.VerifyNextEpoch(st), ErrProposerPreferencesNotNextEpoch)
 }
 
@@ -44,10 +44,49 @@ func TestProposerPreferencesVerifier_VerifySignature(t *testing.T) {
 	require.NoError(t, verifier.VerifySignature(st))
 
 	// Signature from the wrong key must fail.
-	badSig := signProposerPreferencesForState(t, keys[6], signed.Message, st)
+	badSig := signProposerPreferencesWithConfigFork(t, keys[6], signed.Message, st)
 	signed.Signature = badSig
 	verifier = &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesSignatureValid), p: signed}
 	require.ErrorContains(t, "verify signature", verifier.VerifySignature(st))
+}
+
+func TestProposerPreferencesVerifier_VerifySignature_ForkBoundary(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	validatorIndex := primitives.ValidatorIndex(5)
+	proposalSlot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch) + 8 // epoch 1
+
+	st, keys := util.DeterministicGenesisStateFulu(t, 64)
+	// State is at epoch 0 (pre-gloas), but proposal is for epoch 1 (gloas).
+	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch-1))
+	require.NoError(t, st.SetFork(&ethpb.Fork{
+		PreviousVersion: cfg.FuluForkVersion,
+		CurrentVersion:  cfg.FuluForkVersion,
+		Epoch:           0,
+	}))
+
+	lookaheadSize := int(uint64(params.BeaconConfig().MinSeedLookahead+1) * uint64(params.BeaconConfig().SlotsPerEpoch))
+	lookahead := make([]primitives.ValidatorIndex, lookaheadSize)
+	index := params.BeaconConfig().SlotsPerEpoch + (proposalSlot % params.BeaconConfig().SlotsPerEpoch)
+	lookahead[index] = validatorIndex
+	require.NoError(t, st.SetProposerLookahead(lookahead))
+
+	signed := &ethpb.SignedProposerPreferences{
+		Message: &ethpb.ProposerPreferences{
+			ProposalSlot:   proposalSlot,
+			ValidatorIndex: validatorIndex,
+			FeeRecipient:   bytes.Repeat([]byte{0x01}, 20),
+			GasLimit:       30_000_000,
+		},
+	}
+	// Sign using config fork (like the DomainData RPC does).
+	signed.Signature = signProposerPreferencesWithConfigFork(t, keys[validatorIndex], signed.Message, st)
+
+	verifier := &ProposerPreferencesVerifier{results: newResults(RequireProposerPreferencesSignatureValid), p: signed}
+	require.NoError(t, verifier.VerifySignature(st))
 }
 
 func newSignedProposerPreferencesState(t *testing.T, currentSlot, proposalSlot primitives.Slot, validatorIndex primitives.ValidatorIndex) (state.BeaconState, []bls.SecretKey, *ethpb.SignedProposerPreferences) {
@@ -80,15 +119,19 @@ func newSignedProposerPreferencesState(t *testing.T, currentSlot, proposalSlot p
 			GasLimit:       30_000_000,
 		},
 	}
-	signed.Signature = signProposerPreferencesForState(t, keys[validatorIndex], signed.Message, st)
+	signed.Signature = signProposerPreferencesWithConfigFork(t, keys[validatorIndex], signed.Message, st)
 	return st, keys, signed
 }
 
-func signProposerPreferencesForState(t *testing.T, sk bls.SecretKey, preferences *ethpb.ProposerPreferences, st state.ReadOnlyBeaconState) []byte {
+// signProposerPreferencesWithConfigFork signs preferences using the config-based fork
+// for the target epoch, matching the DomainData RPC behavior used by the validator client.
+func signProposerPreferencesWithConfigFork(t *testing.T, sk bls.SecretKey, preferences *ethpb.ProposerPreferences, st state.ReadOnlyBeaconState) []byte {
 	t.Helper()
 
 	epoch := slots.ToEpoch(preferences.ProposalSlot)
-	sig, err := signing.ComputeDomainAndSign(st, epoch, preferences, params.BeaconConfig().DomainProposerPreferences, sk)
+	fork, err := params.Fork(epoch)
+	require.NoError(t, err)
+	sig, err := signing.ComputeDomainAndSignWithoutState(fork, epoch, params.BeaconConfig().DomainProposerPreferences, st.GenesisValidatorsRoot(), preferences, sk)
 	require.NoError(t, err)
 	return sig
 }

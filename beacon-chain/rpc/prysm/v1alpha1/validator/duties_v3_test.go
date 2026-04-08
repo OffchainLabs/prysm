@@ -320,7 +320,7 @@ func TestGetPTCDuties_OK(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	numVals := uint64(fieldparams.PTCSize + 64)
-	bs, _ := util.DeterministicGenesisStateFulu(t, numVals)
+	bs, _ := util.DeterministicGenesisStateGloas(t, numVals)
 	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), bs, 0))
 
 	genesisRoot := [32]byte{0xaa}
