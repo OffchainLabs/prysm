@@ -83,6 +83,19 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 			return pubsub.ValidationIgnore, nil
 		}
 	}
+	// Compute a batch of only one data column sidecar.
+	roDataColumns := []blocks.RODataColumn{roDataColumn}
+
+	// Create the verifier.
+	verifier := s.newColumnsVerifier(roDataColumns, verification.GossipDataColumnSidecarRequirements)
+
+	// Start the verification process.
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id
+
+	// [REJECT] The sidecar is valid as verified by `verify_data_column_sidecar(sidecar)`.
+	if err := verifier.ValidFields(); err != nil {
+		return pubsub.ValidationReject, err
+	}
 
 	var verifiedRODataColumn blocks.VerifiedRODataColumn
 	if slots.ToEpoch(roDataColumn.Slot()) >= params.BeaconConfig().GloasForkEpoch {
