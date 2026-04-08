@@ -87,10 +87,8 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 			continue
 		}
 
-		// Genesis slot 0 has no execution payload envelope. When the batch starts
-		// from genesis the first parentHash transition (0x00→real hash) does
-		// not correspond to any envelope, so skip the match.
-		if bh == [32]byte{} && r.bwb[i].Block.Block().Slot() == 0 {
+		// Handle genesis case
+		if bh == [32]byte{} {
 			bh = nh
 			continue
 		}
