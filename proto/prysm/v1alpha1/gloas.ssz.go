@@ -2345,7 +2345,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 	// Field (37) 'ProposerLookahead'
 	b.ProposerLookahead = ssz.ExtendUint(b.ProposerLookahead, 64)
 	for ii := 0; ii < 64; ii++ {
-		b.ProposerLookahead[ii] = ssz.UnmarshallUint[uint64](buf[2736713:2737225][ii*8 : (ii+1)*8])
+		b.ProposerLookahead[ii] = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[2736713:2737225][ii*8 : (ii+1)*8])
 	}
 
 	// Offset (38) 'Builders'

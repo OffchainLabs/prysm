@@ -493,7 +493,7 @@ func NewBeaconStateFulu(options ...func(state *ethpb.BeaconStateFulu) error) (st
 			TransactionsRoot: make([]byte, 32),
 			WithdrawalsRoot:  make([]byte, 32),
 		},
-		ProposerLookahead: make([]uint64, 64),
+		ProposerLookahead: make([]primitives.ValidatorIndex, 64),
 	}
 
 	for _, opt := range options {
@@ -565,7 +565,7 @@ func NewBeaconStateGloas(options ...func(state *ethpb.BeaconStateGloas) error) (
 			Pubkeys:         pubkeys,
 			AggregatePubkey: make([]byte, 48),
 		},
-		ProposerLookahead: make([]uint64, 64),
+		ProposerLookahead: make([]primitives.ValidatorIndex, 64),
 		LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
 			ParentBlockHash:    make([]byte, 32),
 			ParentBlockRoot:    make([]byte, 32),
