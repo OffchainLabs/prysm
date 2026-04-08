@@ -13,6 +13,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+// errGloasBlockNotSeen is the sentinel error returned by validateDataColumnGloas when
+// the sidecar's block has not yet been seen. The caller detects this with errors.Is
+// to queue the sidecar for deferred re-validation once the block arrives.
+var errGloasBlockNotSeen = errors.New("gloas data column block not yet seen")
+
 func (s *Service) validateDataColumnGloas(
 	ctx context.Context,
 	msg *pubsub.Message,
@@ -26,9 +31,7 @@ func (s *Service) validateDataColumnGloas(
 	// If not yet seen, a client MUST queue the sidecar for deferred validation and possible processing once
 	// the block is received or retrieved.
 	if s.cfg.chain == nil || !s.cfg.chain.HasBlock(ctx, roDataColumn.BlockRoot()) {
-		// TODO: Queue the sidecar for deferred validation and possible processing once the
-		// block is received or retrieved
-		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("gloas data column block not yet seen"))
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(errGloasBlockNotSeen)
 	}
 
 	block, err := s.cfg.beaconDB.Block(ctx, roDataColumn.BlockRoot())

@@ -57,14 +57,25 @@ func buildGloasFixture(t *testing.T, svc *Service) (blocks.RODataColumn, interfa
 	require.Equal(t, true, len(roSidecars) > 0)
 	base := roSidecars[0]
 
+	kzgCommitments, err := base.KzgCommitments()
+	require.NoError(t, err)
+	kzgProofs := base.KzgProofs()
+	column := base.Column()
+	kzgCommitmentsInclusionProof, err := base.KzgCommitmentsInclusionProof()
+	require.NoError(t, err)
+	proposerIndex, err := base.ProposerIndex()
+	require.NoError(t, err)
+	signedBlockHeader, err := base.SignedBlockHeader()
+	require.NoError(t, err)
+
 	bid := util.GenerateTestSignedExecutionPayloadBid(base.Slot())
-	bid.Message.BlobKzgCommitments = bytesutil.SafeCopy2dBytes(base.KzgCommitments)
+	bid.Message.BlobKzgCommitments = bytesutil.SafeCopy2dBytes(kzgCommitments)
 
 	gloasProto := util.NewBeaconBlockGloas()
 	gloasProto.Block.Slot = base.Slot()
-	gloasProto.Block.ProposerIndex = base.ProposerIndex()
-	gloasProto.Block.ParentRoot = bytes.Clone(base.SignedBlockHeader.Header.ParentRoot)
-	gloasProto.Block.StateRoot = bytes.Clone(base.SignedBlockHeader.Header.StateRoot)
+	gloasProto.Block.ProposerIndex = proposerIndex
+	gloasProto.Block.ParentRoot = bytes.Clone(signedBlockHeader.Header.ParentRoot)
+	gloasProto.Block.StateRoot = bytes.Clone(signedBlockHeader.Header.StateRoot)
 	gloasProto.Block.Body.SignedExecutionPayloadBid = bid
 
 	signedBlock, err := blocks.NewSignedBeaconBlock(gloasProto)
@@ -75,12 +86,12 @@ func buildGloasFixture(t *testing.T, svc *Service) (blocks.RODataColumn, interfa
 	require.NoError(t, err)
 
 	sidecar := &ethpb.DataColumnSidecar{
-		Index:                        base.Index,
-		Column:                       bytesutil.SafeCopy2dBytes(base.Column),
-		KzgCommitments:               bytesutil.SafeCopy2dBytes(base.KzgCommitments),
-		KzgProofs:                    bytesutil.SafeCopy2dBytes(base.KzgProofs),
+		Index:                        base.Index(),
+		Column:                       bytesutil.SafeCopy2dBytes(column),
+		KzgCommitments:               bytesutil.SafeCopy2dBytes(kzgCommitments),
+		KzgProofs:                    bytesutil.SafeCopy2dBytes(kzgProofs),
 		SignedBlockHeader:            header,
-		KzgCommitmentsInclusionProof: bytesutil.SafeCopy2dBytes(base.KzgCommitmentsInclusionProof),
+		KzgCommitmentsInclusionProof: bytesutil.SafeCopy2dBytes(kzgCommitmentsInclusionProof),
 	}
 
 	rodc, err := blocks.NewRODataColumnWithRoot(sidecar, blockRoot)
@@ -137,7 +148,7 @@ func TestProcessPendingDataColumns_EvictsOldEntries(t *testing.T) {
 	require.Equal(t, true, len(roSidecars) > 0)
 	rodc := roSidecars[0]
 
-	key := computeRootIndexCacheKey(rodc.BlockRoot(), rodc.Index)
+	key := computeRootIndexCacheKey(rodc.BlockRoot(), rodc.Index())
 	root := rodc.BlockRoot()
 
 	// Insert with arrivalSlot=0 — stale relative to current slot.
@@ -189,11 +200,26 @@ func TestValidateDataColumnGloas_QueuesWhenBlockNotSeen(t *testing.T) {
 	genesisSec := time.Now().Unix() - int64(params.BeaconConfig().SecondsPerSlot)
 	chainService := &mock.ChainService{Genesis: time.Unix(genesisSec, 0)}
 	svc := buildGloasService(t, chainService)
-	rodc, _, topic := buildGloasFixture(t, svc)
 
-	// Encode into a pubsub message.
+	// Build a minimal DataColumnSidecarGloas. The block root is random and not in
+	// the DB, which is sufficient to trigger the block-not-seen path.
+	// Column and KzgProofs are empty (zero blobs) which is valid SSZ.
+	blockRoot := [32]byte{0xde, 0xad, 0xbe, 0xef}
+	gloasSidecar := &ethpb.DataColumnSidecarGloas{
+		Index:           0,
+		Column:          [][]byte{},
+		KzgProofs:       [][]byte{},
+		Slot:            1,
+		BeaconBlockRoot: blockRoot[:],
+	}
+
+	digest, err := svc.currentForkDigest()
+	require.NoError(t, err)
+	topicBase := p2p.GossipTypeMapping[reflect.TypeOf(gloasSidecar)]
+	topic := svc.addDigestAndIndexToTopic(topicBase, digest, uint64(0))
+
 	buf := new(bytes.Buffer)
-	_, err := svc.cfg.p2p.Encoding().EncodeGossip(buf, rodc.DataColumnSidecar)
+	_, err = svc.cfg.p2p.Encoding().EncodeGossip(buf, gloasSidecar)
 	require.NoError(t, err)
 	msg := &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}}
 
@@ -264,7 +290,7 @@ func TestProcessPendingDataColumns_MultipleEntriesSameRoot(t *testing.T) {
 	// Both sidecars must belong to the same block root.
 	require.Equal(t, rodc0.BlockRoot(), rodc1.BlockRoot())
 	// And have different column indices so both are accepted by the queue.
-	require.NotEqual(t, rodc0.Index, rodc1.Index)
+	require.NotEqual(t, rodc0.Index(), rodc1.Index())
 
 	root := rodc0.BlockRoot()
 	topic := "t"

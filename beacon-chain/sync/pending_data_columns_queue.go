@@ -49,7 +49,7 @@ func (s *Service) processPendingDataColumnsForRoot(ctx context.Context, root [32
 		var live []pendingGloasDataColumnEntry
 		for _, e := range entries {
 			if currentSlot > e.arrivalSlot+pendingDataColumnExpSlots {
-				delete(s.pendingDataColumnKeys, computeRootIndexCacheKey(e.roDataColumn.BlockRoot(), e.roDataColumn.Index))
+				delete(s.pendingDataColumnKeys, computeRootIndexCacheKey(e.roDataColumn.BlockRoot(), e.roDataColumn.Index()))
 				continue
 			}
 			live = append(live, e)
@@ -71,7 +71,7 @@ func (s *Service) processPendingDataColumnsForRoot(ctx context.Context, root [32
 	}
 
 	for _, entry := range entries {
-		key := computeRootIndexCacheKey(entry.roDataColumn.BlockRoot(), entry.roDataColumn.Index)
+		key := computeRootIndexCacheKey(entry.roDataColumn.BlockRoot(), entry.roDataColumn.Index())
 
 		// Re-run full Gloas validation now that the block is in the DB.
 		// We reconstruct a minimal pubsub.Message with only the topic field set;
@@ -128,7 +128,7 @@ func (s *Service) processPendingDataColumnsForRoot(ctx context.Context, root [32
 // sent us the sidecar; it will be downscored if re-validation rejects it.
 // Duplicate (blockRoot, columnIndex) pairs are silently ignored.
 func (s *Service) addDataColumnToPendingQueue(roDataColumn blocks.RODataColumn, topic string, forwardingPeer peer.ID) {
-	key := computeRootIndexCacheKey(roDataColumn.BlockRoot(), roDataColumn.Index)
+	key := computeRootIndexCacheKey(roDataColumn.BlockRoot(), roDataColumn.Index())
 
 	s.pendingDataColumnsLock.Lock()
 	defer s.pendingDataColumnsLock.Unlock()
