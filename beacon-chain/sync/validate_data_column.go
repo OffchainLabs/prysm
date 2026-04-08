@@ -135,6 +135,9 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 				Index:     verifiedRODataColumn.Index(),
 				BlockRoot: verifiedRODataColumn.BlockRoot(),
 				KzgCommitments: func() [][]byte {
+					if verifiedRODataColumn.IsGloas() {
+						return nil
+					}
 					comms, err := verifiedRODataColumn.KzgCommitments()
 					if err != nil {
 						log.WithError(err).Warn("Failed to get KZG commitments for operation feed")
