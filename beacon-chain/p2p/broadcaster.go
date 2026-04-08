@@ -438,7 +438,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 			topic, _, _ := topicFunc(sidecar)
 
-			if err := s.batchObject(ctx, &messageBatch, sidecar.SszMarshaler(), topic); err != nil {
+			if err := s.batchObject(ctx, &messageBatch, &sidecar, topic); err != nil {
 				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot batch data column sidecar")
 				return
@@ -468,7 +468,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			}
 
 			// Publish individually (not batched) since we just found peers.
-			if err := s.broadcastObject(ctx, sidecar.SszMarshaler(), topic); err != nil {
+			if err := s.broadcastObject(ctx, &sidecar, topic); err != nil {
 				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot broadcast data column sidecar")
 				return

@@ -740,7 +740,7 @@ func (b *BeaconState) PayloadCommittee(slot primitives.Slot) ([]primitives.Valid
 		return nil, fmt.Errorf("ptc window slot %d is nil", offset)
 	}
 
-	return validatorIndicesFromUint64(ptcSlot.ValidatorIndices), nil
+	return ptcSlot.ValidatorIndices, nil
 }
 
 func ptcWindowOffset(stateSlot, slot primitives.Slot) (primitives.Slot, error) {

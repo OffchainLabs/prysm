@@ -194,7 +194,7 @@ func initializePTCWindow(ctx context.Context, st state.ReadOnlyBeaconState) ([]*
 	// Previous epoch has no cached data at fork time — fill with empty slots.
 	for range slotsPerEpoch {
 		window = append(window, &ethpb.PTCs{
-			ValidatorIndices: make([]uint64, fieldparams.PTCSize),
+			ValidatorIndices: make([]primitives.ValidatorIndex, fieldparams.PTCSize),
 		})
 	}
 
@@ -209,7 +209,7 @@ func initializePTCWindow(ctx context.Context, st state.ReadOnlyBeaconState) ([]*
 		if err != nil {
 			return nil, err
 		}
-		window = append(window, ptcSlotFromValidatorIndices(ptc))
+		window = append(window, &ethpb.PTCs{ValidatorIndices: ptc})
 	}
 
 	return window, nil
@@ -292,11 +292,6 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, err
 	}
-	proposerLookaheadU64 := make([]uint64, len(proposerLookahead))
-	for i, v := range proposerLookahead {
-		proposerLookaheadU64[i] = uint64(v)
-	}
-
 	executionPayloadAvailability := make([]byte, int((params.BeaconConfig().SlotsPerHistoricalRoot+7)/8))
 	for i := range executionPayloadAvailability {
 		executionPayloadAvailability[i] = 0xff
@@ -359,7 +354,7 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		PendingDeposits:               pendingDeposits,
 		PendingPartialWithdrawals:     pendingPartialWithdrawals,
 		PendingConsolidations:         pendingConsolidations,
-		ProposerLookahead:             proposerLookaheadU64,
+		ProposerLookahead:             proposerLookahead,
 		Builders:                      []*ethpb.Builder{},
 		NextWithdrawalBuilderIndex:    primitives.BuilderIndex(0),
 		ExecutionPayloadAvailability:  executionPayloadAvailability,

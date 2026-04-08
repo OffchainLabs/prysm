@@ -152,7 +152,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg any
 			}
 
 			SetStreamWriteDeadline(stream, defaultWriteDuration)
-			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar()); chunkErr != nil {
+			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), verifiedRODataColumn.RODataColumn); chunkErr != nil {
 				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 				tracing.AnnotateError(span, chunkErr)
 				return chunkErr

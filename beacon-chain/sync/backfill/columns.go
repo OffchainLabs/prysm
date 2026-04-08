@@ -206,10 +206,14 @@ func (v *validatingColumnRequest) countedValidation(cd blocks.RODataColumn) erro
 	if !expected.remaining.Has(cd.Index()) {
 		return nil
 	}
-	if len(cd.KzgCommitments()) != len(expected.commitments) {
+	comms, err := cd.KzgCommitments()
+	if err != nil {
+		return err
+	}
+	if len(comms) != len(expected.commitments) {
 		return errors.Wrapf(errCommitmentLengthMismatch, "root=%#x, slot=%d, index=%d", root, cd.Slot(), cd.Index())
 	}
-	for i, cmt := range cd.KzgCommitments() {
+	for i, cmt := range comms {
 		if !bytes.Equal(cmt, expected.commitments[i]) {
 			return errors.Wrapf(errCommitmentValueMismatch, "root=%#x, slot=%d, index=%d", root, cd.Slot(), cd.Index())
 		}

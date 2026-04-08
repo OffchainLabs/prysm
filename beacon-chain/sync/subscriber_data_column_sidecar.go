@@ -67,8 +67,14 @@ func (s *Service) receiveDataColumnSidecar(ctx context.Context, sidecar blocks.V
 // receiveDataColumnSidecars receives multiple data column sidecars: marks them as seen and saves them to the chain.
 func (s *Service) receiveDataColumnSidecars(ctx context.Context, sidecars []blocks.VerifiedRODataColumn) error {
 	for _, sidecar := range sidecars {
-		if !sidecar.IsGloas() {
-			s.setSeenDataColumnIndex(sidecar.Slot(), sidecar.ProposerIndex(), sidecar.Index())
+		if sidecar.IsGloas() {
+			s.setSeenDataColumnRootIndex(sidecar.BlockRoot(), sidecar.Index(), sidecar.Slot())
+		} else {
+			proposerIndex, err := sidecar.ProposerIndex()
+			if err != nil {
+				return err
+			}
+			s.setSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index())
 		}
 	}
 
