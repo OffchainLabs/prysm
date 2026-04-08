@@ -1,0 +1,4 @@
+go test fuzz v1
+[]byte("\xd5\xff3\xff\xff\xd3")
+[]byte(".")
+[]byte(".")
