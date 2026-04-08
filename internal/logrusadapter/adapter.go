@@ -10,6 +10,7 @@ import (
 // Handler wraps a logrus.Logger to satisfy slog.Handler.
 type Handler struct {
 	Logger *logrus.Logger
+	entry  *logrus.Entry // carries accumulated fields from WithAttrs, nil if none
 }
 
 // Enabled implements slog.Handler.
@@ -28,9 +29,18 @@ func (h Handler) Enabled(_ context.Context, level slog.Level) bool {
 	}
 }
 
+// logEntry returns the base entry for logging, incorporating any fields
+// accumulated via WithAttrs.
+func (h Handler) logEntry() *logrus.Entry {
+	if h.entry != nil {
+		return h.entry
+	}
+	return logrus.NewEntry(h.Logger)
+}
+
 // Handle converts slog.Record into a logrus.Entry.
 func (h Handler) Handle(_ context.Context, r slog.Record) error {
-	entry := h.Logger.WithTime(r.Time)
+	entry := h.logEntry().WithTime(r.Time)
 
 	r.Attrs(func(a slog.Attr) bool {
 		if a.Value.Kind() == slog.KindLogValuer {
@@ -59,8 +69,7 @@ func (h Handler) Handle(_ context.Context, r slog.Record) error {
 
 // WithAttrs implements slog.Handler.
 func (h Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	logger := h.Logger.WithFields(toFields(attrs))
-	return Handler{Logger: logger.Logger}
+	return Handler{Logger: h.Logger, entry: h.logEntry().WithFields(toFields(attrs))}
 }
 
 // WithGroup implements slog.Handler (no-op for simplicity).
