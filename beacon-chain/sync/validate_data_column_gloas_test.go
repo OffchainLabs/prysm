@@ -70,23 +70,22 @@ func TestValidateDataColumnGloas(t *testing.T) {
 	gloasFixture := func(t *testing.T) (*ethpb.DataColumnSidecarGloas, interfaces.ReadOnlySignedBeaconBlock) {
 		t.Helper()
 
-		_, roSidecars, _ := util.GenerateTestFuluBlockWithSidecars(t, 1, util.WithSlot(1))
+		roBlock, roSidecars, _ := util.GenerateTestFuluBlockWithSidecars(t, 1, util.WithSlot(1))
 		require.Equal(t, true, len(roSidecars) > 0)
 
 		base := roSidecars[0]
 		bid := util.GenerateTestSignedExecutionPayloadBid(base.Slot())
-		comms, err := base.KzgCommitments()
+		comms, err := roBlock.Block().Body().BlobKzgCommitments()
 		require.NoError(t, err)
 		bid.Message.BlobKzgCommitments = bytesutil.SafeCopy2dBytes(comms)
 
 		pb := util.NewBeaconBlockGloas()
 		pb.Block.Slot = base.Slot()
-		pb.Block.ProposerIndex, err = base.ProposerIndex()
-		require.NoError(t, err)
-		sbh, err := base.SignedBlockHeader()
-		require.NoError(t, err)
-		pb.Block.ParentRoot = bytes.Clone(sbh.Header.ParentRoot)
-		pb.Block.StateRoot = bytes.Clone(sbh.Header.StateRoot)
+		pb.Block.ProposerIndex = roBlock.Block().ProposerIndex()
+		parentRoot := roBlock.Block().ParentRoot()
+		pb.Block.ParentRoot = parentRoot[:]
+		stateRoot := roBlock.Block().StateRoot()
+		pb.Block.StateRoot = stateRoot[:]
 		pb.Block.Body.SignedExecutionPayloadBid = bid
 
 		signedBlock, err := blocks.NewSignedBeaconBlock(pb)

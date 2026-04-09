@@ -17,9 +17,10 @@ var (
 // RODataColumn represents a read-only data column sidecar with its block root.
 // It supports both Fulu and Gloas fork variants. Only one of fulu/gloas is non-nil.
 type RODataColumn struct {
-	fulu  *ethpb.DataColumnSidecar
-	gloas *ethpb.DataColumnSidecarGloas
-	root  [fieldparams.RootLength]byte
+	fulu                *ethpb.DataColumnSidecar
+	gloas               *ethpb.DataColumnSidecarGloas
+	root                [fieldparams.RootLength]byte
+	bidCommitmentsGloas [][]byte // KZG commitments from the block's execution payload bid.
 }
 
 // NewRODataColumn creates a new RODataColumn from a Fulu DataColumnSidecar.
@@ -142,13 +143,22 @@ func (dc *RODataColumn) SignedBlockHeader() (*ethpb.SignedBeaconBlockHeader, err
 	return dc.fulu.SignedBlockHeader, nil
 }
 
-// KzgCommitments returns the KZG commitments. Returns an error for Gloas sidecars
-// (commitments come from the block's bid).
+// KzgCommitments returns the KZG commitments.
+// For Fulu these are in the sidecar. For Gloas these come from the block's bid
+// and must be set via SetBidCommitments.
 func (dc *RODataColumn) KzgCommitments() ([][]byte, error) {
 	if dc.gloas != nil {
-		return nil, errNotFuluDataColumn
+		if dc.bidCommitmentsGloas == nil {
+			return nil, errNotFuluDataColumn
+		}
+		return dc.bidCommitmentsGloas, nil
 	}
 	return dc.fulu.KzgCommitments, nil
+}
+
+// SetBidCommitments sets the KZG commitments from the block's bid to be used for gloas.
+func (dc *RODataColumn) SetBidCommitments(c [][]byte) {
+	dc.bidCommitmentsGloas = c
 }
 
 // KzgCommitmentsInclusionProof returns the inclusion proof. Returns an error for Gloas sidecars.
