@@ -278,8 +278,7 @@ func BenchmarkServer_AuthTokenHandler(b *testing.B) {
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		require.Equal(b, http.StatusOK, rr.Code)
@@ -293,8 +292,7 @@ func BenchmarkServer_AuthTokenInterceptor(b *testing.B) {
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{"authorization": {"Bearer " + token}})
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := interceptor(ctx, "xyz", unaryInfo, func(ctx context.Context, req any) (any, error) {
 			return nil, nil
 		})
