@@ -9,12 +9,12 @@ import (
 )
 
 // proposerPreference returns a TrackedValidator from the ProposerPreferencesCache
-// if a preference exists for the given slot.
-func (s *Service) proposerPreference(slot primitives.Slot) (cache.TrackedValidator, bool) {
+// if a preference exists for the given slot and validator index.
+func (s *Service) proposerPreference(slot primitives.Slot, valIdx primitives.ValidatorIndex) (cache.TrackedValidator, bool) {
 	if s.cfg.ProposerPreferencesCache == nil {
 		return cache.TrackedValidator{}, false
 	}
-	pref, ok := s.cfg.ProposerPreferencesCache.Get(slot)
+	pref, ok := s.cfg.ProposerPreferencesCache.Get(slot, valIdx)
 	if !ok {
 		return cache.TrackedValidator{}, false
 	}
@@ -34,7 +34,11 @@ func (s *Service) proposerPreference(slot primitives.Slot) (cache.TrackedValidat
 // default (burn address) is used.
 func (s *Service) trackedProposer(st state.ReadOnlyBeaconState, slot primitives.Slot) (cache.TrackedValidator, bool) {
 	if features.Get().PrepareAllPayloads {
-		if val, ok := s.proposerPreference(slot); ok {
+		id, err := helpers.BeaconProposerIndexAtSlot(s.ctx, st, slot)
+		if err != nil {
+			return cache.TrackedValidator{Active: true}, true
+		}
+		if val, ok := s.proposerPreference(slot, id); ok {
 			return val, true
 		}
 		return cache.TrackedValidator{Active: true}, true
@@ -47,7 +51,7 @@ func (s *Service) trackedProposer(st state.ReadOnlyBeaconState, slot primitives.
 	if !ok {
 		return cache.TrackedValidator{}, false
 	}
-	if pref, ok := s.proposerPreference(slot); ok {
+	if pref, ok := s.proposerPreference(slot, id); ok {
 		return pref, true
 	}
 	return val, val.Active

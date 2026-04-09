@@ -12,58 +12,73 @@ type ProposerPreference struct {
 	GasLimit     uint64
 }
 
-// ProposerPreferencesCache stores proposer preferences by slot.
+// ProposerPreferencesCache stores proposer preferences by slot and validator index,
+// making it safe under chain reorgs where the proposer for a slot may change.
 type ProposerPreferencesCache struct {
-	slotToPreferences map[primitives.Slot]ProposerPreference
-	lock              sync.RWMutex
+	preferences map[primitives.Slot]map[primitives.ValidatorIndex]ProposerPreference
+	lock        sync.RWMutex
 }
 
 // NewProposerPreferencesCache initializes a proposer preferences cache.
 func NewProposerPreferencesCache() *ProposerPreferencesCache {
 	return &ProposerPreferencesCache{
-		slotToPreferences: make(map[primitives.Slot]ProposerPreference),
+		preferences: make(map[primitives.Slot]map[primitives.ValidatorIndex]ProposerPreference),
 	}
 }
 
-// Add stores proposer preferences for a slot. If the slot already exists, the
-// existing value is kept and false is returned.
-func (c *ProposerPreferencesCache) Add(slot primitives.Slot, feeRecipient []byte, gasLimit uint64) bool {
+// Add stores proposer preferences for a slot and validator index. If the
+// (slot, validatorIndex) pair already exists, the existing value is kept and
+// false is returned.
+func (c *ProposerPreferencesCache) Add(slot primitives.Slot, validatorIndex primitives.ValidatorIndex, feeRecipient []byte, gasLimit uint64) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if _, ok := c.slotToPreferences[slot]; ok {
-		return false
+	validators, ok := c.preferences[slot]
+	if ok {
+		if _, exists := validators[validatorIndex]; exists {
+			return false
+		}
+	} else {
+		validators = make(map[primitives.ValidatorIndex]ProposerPreference)
+		c.preferences[slot] = validators
 	}
 
 	// FeeRecipient comes from validated SSZ-decoded proposer preferences, so
 	// retaining the slice reference here is intentional.
-	c.slotToPreferences[slot] = ProposerPreference{
+	validators[validatorIndex] = ProposerPreference{
 		FeeRecipient: feeRecipient,
 		GasLimit:     gasLimit,
 	}
 	return true
 }
 
-// Get returns proposer preferences for a slot.
-func (c *ProposerPreferencesCache) Get(slot primitives.Slot) (ProposerPreference, bool) {
+// Get returns proposer preferences for a slot and validator index.
+func (c *ProposerPreferencesCache) Get(slot primitives.Slot, validatorIndex primitives.ValidatorIndex) (ProposerPreference, bool) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	pref, ok := c.slotToPreferences[slot]
+	validators, ok := c.preferences[slot]
 	if !ok {
 		return ProposerPreference{}, false
 	}
-
+	pref, ok := validators[validatorIndex]
+	if !ok {
+		return ProposerPreference{}, false
+	}
 	return pref, true
 }
 
-// Has returns true if proposer preferences for the slot already exist.
-func (c *ProposerPreferencesCache) Has(slot primitives.Slot) bool {
+// Has returns true if proposer preferences for the slot and validator index already exist.
+func (c *ProposerPreferencesCache) Has(slot primitives.Slot, validatorIndex primitives.ValidatorIndex) bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	_, ok := c.slotToPreferences[slot]
-	return ok
+	validators, ok := c.preferences[slot]
+	if !ok {
+		return false
+	}
+	_, exists := validators[validatorIndex]
+	return exists
 }
 
 // PruneBefore removes all proposer preferences for slots before the provided slot.
@@ -71,9 +86,9 @@ func (c *ProposerPreferencesCache) PruneBefore(slot primitives.Slot) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	for cachedSlot := range c.slotToPreferences {
+	for cachedSlot := range c.preferences {
 		if cachedSlot < slot {
-			delete(c.slotToPreferences, cachedSlot)
+			delete(c.preferences, cachedSlot)
 		}
 	}
 }
@@ -83,5 +98,5 @@ func (c *ProposerPreferencesCache) Clear() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.slotToPreferences = make(map[primitives.Slot]ProposerPreference)
+	c.preferences = make(map[primitives.Slot]map[primitives.ValidatorIndex]ProposerPreference)
 }

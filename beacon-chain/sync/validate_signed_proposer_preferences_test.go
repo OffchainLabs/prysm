@@ -96,7 +96,7 @@ func TestValidateSignedProposerPreferencesGossip_AlreadySeenSlot(t *testing.T) {
 	s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
 	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
 
-	require.Equal(t, true, s.proposerPreferencesCache.Add(signedPreferences.Message.ProposalSlot, []byte{0x01}, 10))
+	require.Equal(t, true, s.proposerPreferencesCache.Add(signedPreferences.Message.ProposalSlot, signedPreferences.Message.ValidatorIndex, []byte{0x01}, 10))
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
@@ -112,7 +112,7 @@ func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationAccept, result)
 
-	got, ok := s.proposerPreferencesCache.Get(signedPreferences.Message.ProposalSlot)
+	got, ok := s.proposerPreferencesCache.Get(signedPreferences.Message.ProposalSlot, signedPreferences.Message.ValidatorIndex)
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, signedPreferences.Message.FeeRecipient, got.FeeRecipient)
 	require.Equal(t, signedPreferences.Message.GasLimit, got.GasLimit)

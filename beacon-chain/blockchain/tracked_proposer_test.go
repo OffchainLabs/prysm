@@ -53,7 +53,7 @@ func TestTrackedProposer_PrepareAllPayloads_WithProposerPreference(t *testing.T)
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 
 	addr := common.HexToAddress("0xabcd")
-	prefCache.Add(0, addr.Bytes(), 42_000_000)
+	prefCache.Add(0, 0, addr.Bytes(), 42_000_000)
 
 	val, ok := service.trackedProposer(st, 0)
 	require.Equal(t, true, ok)
@@ -73,7 +73,7 @@ func TestTrackedProposer_TrackedWithProposerPreferenceOverride(t *testing.T) {
 	trackedAddr := common.HexToAddress("0x1111")
 	prefAddr := common.HexToAddress("0x2222")
 	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, FeeRecipient: primitives.ExecutionAddress(trackedAddr), Index: 0})
-	prefCache.Add(0, prefAddr.Bytes(), 50_000_000)
+	prefCache.Add(0, 0, prefAddr.Bytes(), 50_000_000)
 
 	val, ok := service.trackedProposer(st, 0)
 	require.Equal(t, true, ok)

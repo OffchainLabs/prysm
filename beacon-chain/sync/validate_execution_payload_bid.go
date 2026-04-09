@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -57,14 +58,18 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyCurrentOrNextSlot(); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	// [IGNORE] the SignedProposerPreferences where preferences.proposal_slot is equal to bid.slot has been seen.
-	pref, ok := s.proposerPreferencesCache.Get(bid.Slot())
-	if !ok {
-		return pubsub.ValidationIgnore, nil
-	}
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
+	}
+	// [IGNORE] the SignedProposerPreferences where preferences.proposal_slot is equal to bid.slot has been seen.
+	proposerIdx, err := helpers.BeaconProposerIndexAtSlot(ctx, st, bid.Slot())
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	pref, ok := s.proposerPreferencesCache.Get(bid.Slot(), proposerIdx)
+	if !ok {
+		return pubsub.ValidationIgnore, nil
 	}
 	// [REJECT] bid.builder_index is a valid/active builder index.
 	if err := v.VerifyBuilderActive(st); err != nil {

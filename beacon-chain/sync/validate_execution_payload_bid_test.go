@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -339,6 +340,12 @@ func testNewExecutionPayloadBidVerifier(m mockExecutionPayloadBidVerifier) verif
 func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *ethpb.SignedExecutionPayloadBid) {
 	t.Helper()
 
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	p := p2ptest.NewTestP2P(t)
 	state, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
@@ -363,7 +370,9 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 	}
 	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
 	signedBid.Message.BuilderIndex = 1
-	require.Equal(t, true, s.proposerPreferencesCache.Add(signedBid.Message.Slot, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit))
+	// The Gloas test state has a zero-filled proposer lookahead, so the
+	// proposer for any slot is validator index 0.
+	require.Equal(t, true, s.proposerPreferencesCache.Add(signedBid.Message.Slot, 0, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit))
 	msg := executionPayloadBidToPubsub(t, s, p, signedBid)
 	return s, msg, signedBid
 }

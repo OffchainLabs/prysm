@@ -837,7 +837,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		return err
 	}
 
-	prefs := v.buildProposerPreferences(ctx, km, slot)
+	prefs := v.buildProposerPreferences(ctx, km, slot, false)
 	if len(prefs) > 0 {
 		// Delay to mid-slot so the block for this slot is processed first.
 		delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
@@ -1027,26 +1027,31 @@ func (v *validator) buildProposerSettingsRequests(
 }
 
 // buildProposerPreferences creates signed proposer preferences for validators
-// that have proposer slots in the next epoch.
+// that have proposer slots in the next epoch. During normal operation it is
+// gated to run once at mid-epoch; pass force=true to bypass that gate (e.g.
+// after a reorg triggers a duty change).
 func (v *validator) buildProposerPreferences(
 	ctx context.Context,
 	km keymanager.IKeymanager,
 	slot primitives.Slot,
+	force bool,
 ) []*ethpb.SignedProposerPreferences {
 	currentEpoch := slots.ToEpoch(slot)
 	gloasEpoch := params.BeaconConfig().GloasForkEpoch
 	if currentEpoch+1 < gloasEpoch {
 		return nil
 	}
-	// Send once per epoch at mid-epoch so beacon nodes have processed the
-	// epoch transition and updated their ProposerLookahead.
-	epochStart, err := slots.EpochStart(currentEpoch)
-	if err != nil {
-		return nil
-	}
-	midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
-	if slot != midEpoch {
-		return nil
+	if !force {
+		// Send once per epoch at mid-epoch so beacon nodes have processed the
+		// epoch transition and updated their ProposerLookahead.
+		epochStart, err := slots.EpochStart(currentEpoch)
+		if err != nil {
+			return nil
+		}
+		midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
+		if slot != midEpoch {
+			return nil
+		}
 	}
 
 	v.dutiesLock.RLock()
@@ -1116,6 +1121,37 @@ func (v *validator) buildProposerPreferences(
 		log.WithField("count", sigFailCount).Warn("Failed to sign proposer preferences")
 	}
 	return signedPrefs
+}
+
+// submitProposerPreferences builds and submits proposer preferences for the
+// current slot, bypassing the mid-epoch gate. Called when duties change due to
+// a reorg so that the new proposer's preferences reach the network promptly.
+func (v *validator) submitProposerPreferences(ctx context.Context) {
+	slot := slots.CurrentSlot(v.genesisTime)
+	currentEpoch := slots.ToEpoch(slot)
+	if currentEpoch+1 < params.BeaconConfig().GloasForkEpoch {
+		return
+	}
+	km, err := v.Keymanager()
+	if err != nil {
+		log.WithError(err).Warn("Failed to get keymanager for proposer preference resubmission")
+		return
+	}
+	prefs := v.buildProposerPreferences(ctx, km, slot, true)
+	if len(prefs) == 0 {
+		return
+	}
+	delay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+	go func() {
+		time.Sleep(delay)
+		if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
+			SignedProposerPreferences: prefs,
+		}); err != nil {
+			log.WithError(err).Warn("Failed to resubmit proposer preferences after duty change")
+		} else {
+			log.WithField("count", len(prefs)).Info("Resubmitted proposer preferences after duty change")
+		}
+	}()
 }
 
 func (v *validator) buildSignedRegReqs(

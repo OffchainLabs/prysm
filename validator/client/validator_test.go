@@ -2165,7 +2165,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		cfg.GloasForkEpoch = 2
 		params.OverrideBeaconConfig(cfg)
 
-		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		prefs := v.buildProposerPreferences(t.Context(), km, 0, false)
 		require.Equal(t, 0, len(prefs))
 	})
 
@@ -2175,7 +2175,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		v.duties = &dutyStore{}
-		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
+		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 		require.Equal(t, 0, len(prefs))
 	})
 
@@ -2202,7 +2202,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			},
 		})
 
-		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
+		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 		require.Equal(t, 0, len(prefs))
 	})
 
@@ -2237,7 +2237,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
 			AnyTimes()
 
-		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
+		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 		require.Equal(t, 1, len(prefs))
 		require.Equal(t, primitives.ValidatorIndex(1), prefs[0].Message.ValidatorIndex)
 		require.Equal(t, nextEpochProposerSlot, prefs[0].Message.ProposalSlot)
@@ -2271,7 +2271,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		})
 
 		// Slot 0 is start of epoch 0 (before mid-epoch), should not build yet.
-		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		prefs := v.buildProposerPreferences(t.Context(), km, 0, false)
 		require.Equal(t, 0, len(prefs))
 	})
 
@@ -2300,7 +2300,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		})
 
 		midSlot := params.BeaconConfig().SlotsPerEpoch / 2
-		prefs := v.buildProposerPreferences(t.Context(), km, midSlot)
+		prefs := v.buildProposerPreferences(t.Context(), km, midSlot, false)
 		require.Equal(t, 1, len(prefs))
 		require.Equal(t, nextEpochProposerSlot, prefs[0].Message.ProposalSlot)
 	})
@@ -2333,7 +2333,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		})
 
 		// DomainData calls served from cache (populated in prior subtest).
-		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
+		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 		require.Equal(t, 2, len(prefs))
 
 		gotSlots := []primitives.Slot{prefs[0].Message.ProposalSlot, prefs[1].Message.ProposalSlot}
@@ -2366,7 +2366,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			},
 		})
 
-		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
+		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 		require.Equal(t, 0, len(prefs))
 	})
 
@@ -2419,7 +2419,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		})
 
 		// DomainData calls served from cache (populated in prior subtest).
-		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
+		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 		require.Equal(t, 1, len(prefs))
 		require.DeepEqual(t, customFeeRecipient[:], prefs[0].Message.FeeRecipient)
 		require.Equal(t, uint64(99000000), prefs[0].Message.GasLimit)

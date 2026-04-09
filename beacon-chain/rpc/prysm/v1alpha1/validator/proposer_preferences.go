@@ -58,7 +58,8 @@ func (vs *Server) SubmitSignedProposerPreferences(
 			)
 		}
 
-		if vs.ProposerPreferencesCache.Has(proposalSlot) {
+		valIdx := msg.Message.ValidatorIndex
+		if vs.ProposerPreferencesCache.Has(proposalSlot, valIdx) {
 			duplicate++
 			continue
 		}
@@ -69,7 +70,7 @@ func (vs *Server) SubmitSignedProposerPreferences(
 				broadcast, len(req.SignedProposerPreferences), err)
 		}
 
-		vs.ProposerPreferencesCache.Add(proposalSlot, msg.Message.FeeRecipient, msg.Message.GasLimit)
+		vs.ProposerPreferencesCache.Add(proposalSlot, valIdx, msg.Message.FeeRecipient, msg.Message.GasLimit)
 		broadcast++
 	}
 

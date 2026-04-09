@@ -57,9 +57,10 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	}
 
 	slot := signedPreferences.Message.ProposalSlot
+	valIdx := signedPreferences.Message.ValidatorIndex
 	// [IGNORE] This is the first valid signed proposer preferences message
-	// received for the given proposal slot.
-	if s.proposerPreferencesCache.Has(slot) {
+	// received for the given proposal slot and validator.
+	if s.proposerPreferencesCache.Has(slot, valIdx) {
 		return pubsub.ValidationIgnore, nil
 	}
 	// [REJECT] signed_proposer_preferences.signature is valid with respect to the
@@ -68,7 +69,7 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		return pubsub.ValidationReject, err
 	}
 
-	s.proposerPreferencesCache.Add(slot, signedPreferences.Message.FeeRecipient, signedPreferences.Message.GasLimit)
+	s.proposerPreferencesCache.Add(slot, valIdx, signedPreferences.Message.FeeRecipient, signedPreferences.Message.GasLimit)
 	msg.ValidatorData = signedPreferences
 	return pubsub.ValidationAccept, nil
 }
