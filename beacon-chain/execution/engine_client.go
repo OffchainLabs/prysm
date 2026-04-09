@@ -84,7 +84,7 @@ const (
 	NewPayloadMethodV3 = "engine_newPayloadV3"
 	// NewPayloadMethodV4 is the engine_newPayloadVX method added at Electra.
 	NewPayloadMethodV4 = "engine_newPayloadV4"
-	// NewPayloadMethodV5 is the engine_newPayloadV5 method added for Gloas.
+	// NewPayloadMethodV5 is the engine_newPayloadVX method added at Gloas.
 	NewPayloadMethodV5 = "engine_newPayloadV5"
 	// ForkchoiceUpdatedMethod v1 request string for JSON-RPC.
 	ForkchoiceUpdatedMethod = "engine_forkchoiceUpdatedV1"
@@ -271,7 +271,7 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
-	case version.Deneb, version.Electra, version.Fulu:
+	case version.Deneb, version.Electra, version.Fulu, version.Gloas:
 		a, err := attrs.PbV3()
 		if err != nil {
 			return nil, nil, err
@@ -305,7 +305,7 @@ func (s *Service) ForkchoiceUpdated(
 
 func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
 	epoch := slots.ToEpoch(slot)
-	if epoch >= params.BeaconConfig().FuluForkEpoch {
+	if epoch >= params.BeaconConfig().GloasForkEpoch || epoch >= params.BeaconConfig().FuluForkEpoch {
 		return GetPayloadMethodV5, &pb.ExecutionBundleFulu{}
 	}
 	if epoch >= params.BeaconConfig().ElectraForkEpoch {

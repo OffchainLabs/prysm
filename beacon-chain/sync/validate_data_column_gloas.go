@@ -76,6 +76,12 @@ func (s *Service) validateDataColumnGloas(
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
 	}
 
+	commitments, err := block.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.Wrap(err, "get bid blob kzg commitments"))
+	}
+	verifiedRODataColumn.SetBidCommitments(commitments)
+
 	s.setSeenDataColumnRootIndex(verifiedRODataColumn.BlockRoot(), verifiedRODataColumn.Index(), verifiedRODataColumn.Slot())
 	return verifiedRODataColumn, nil
 }
