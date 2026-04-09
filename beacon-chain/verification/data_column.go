@@ -456,6 +456,9 @@ func (dv *RODataColumnsVerifier) SidecarInclusionProven() (err error) {
 	startTime := time.Now()
 
 	for _, dataColumn := range dv.dataColumns {
+		if dataColumn.IsGloas() {
+			continue
+		}
 		k, keyErr := inclusionProofKey(dataColumn)
 		if keyErr == nil {
 			if _, ok := dv.ic.Get(k); ok {
