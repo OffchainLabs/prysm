@@ -38,6 +38,12 @@ func (c *ProposerPreferencesCache) Add(slot primitives.Slot, validatorIndex prim
 		if _, exists := validators[validatorIndex]; exists {
 			return false
 		}
+		existing := make([]primitives.ValidatorIndex, 0, len(validators))
+		for idx := range validators {
+			existing = append(existing, idx)
+		}
+		log.WithField("slot", slot).WithField("newValidator", validatorIndex).WithField("existingValidators", existing).
+			Debug("New proposer preference for slot that already has a different validator (possible reorg)")
 	} else {
 		validators = make(map[primitives.ValidatorIndex]ProposerPreference)
 		c.preferences[slot] = validators
