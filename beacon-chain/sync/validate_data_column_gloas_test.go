@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -25,6 +26,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/core/peer"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -50,6 +52,7 @@ func TestValidateDataColumnGloas(t *testing.T) {
 			ctx:                 ctx,
 			newColumnsVerifier:  newDataColumnsVerifier,
 			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
 		}
 
 		buf := new(bytes.Buffer)
@@ -184,5 +187,91 @@ func TestValidateDataColumnGloas(t *testing.T) {
 
 		_, err = service.validateDataColumnGloas(ctx, msg, roDataColumn, "/data_column_sidecar_%d/")
 		require.ErrorContains(t, "slot does not match block slot", err)
+	})
+}
+
+func TestPendingGloasColumns(t *testing.T) {
+	clock := startup.NewClock(time.Now(), [32]byte{})
+
+	t.Run("queue and retrieve", func(t *testing.T) {
+		s := &Service{
+			cfg:                 &config{clock: clock},
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+		}
+		root := [32]byte{0xaa}
+		dc := &ethpb.DataColumnSidecarGloas{
+			Index:           5,
+			Slot:            clock.CurrentSlot(),
+			BeaconBlockRoot: root[:],
+			Column:          [][]byte{make([]byte, 2048)},
+			KzgProofs:       [][]byte{make([]byte, 48)},
+		}
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
+		require.NoError(t, err)
+
+		s.queuePendingGloasColumn(roCol, "peer1")
+		require.Equal(t, true, s.hasPendingGloasColumns(root))
+
+		entry := s.pendingGloasColumns[root]
+		require.NotNil(t, entry)
+		require.NotNil(t, entry.columns[5])
+		require.Equal(t, peer.ID("peer1"), entry.columns[5].peer)
+	})
+
+	t.Run("dedup by index", func(t *testing.T) {
+		s := &Service{
+			cfg:                 &config{clock: clock},
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+		}
+		root := [32]byte{0xbb}
+		dc := &ethpb.DataColumnSidecarGloas{
+			Index:           10,
+			Slot:            clock.CurrentSlot(),
+			BeaconBlockRoot: root[:],
+			Column:          [][]byte{make([]byte, 2048)},
+			KzgProofs:       [][]byte{make([]byte, 48)},
+		}
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
+		require.NoError(t, err)
+
+		s.queuePendingGloasColumn(roCol, "peer1")
+		s.queuePendingGloasColumn(roCol, "peer2")
+		require.Equal(t, peer.ID("peer1"), s.pendingGloasColumns[root].columns[10].peer)
+	})
+
+	t.Run("stale entries ignored on process", func(t *testing.T) {
+		s := &Service{
+			cfg:                 &config{clock: clock},
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+		}
+		staleRoot := [32]byte{0xcc}
+		currentSlot := clock.CurrentSlot()
+		if currentSlot == 0 {
+			t.Skip("cannot test at slot 0")
+		}
+		s.pendingGloasColumns[staleRoot] = &pendingGloasEntry{slot: currentSlot - 1}
+
+		s.processPendingGloasColumns(t.Context(), staleRoot, nil)
+		require.Equal(t, false, s.hasPendingGloasColumns(staleRoot))
+	})
+
+	t.Run("index out of bounds rejected", func(t *testing.T) {
+		s := &Service{
+			cfg:                 &config{clock: clock},
+			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+		}
+		root := [32]byte{0xee}
+		dc := &ethpb.DataColumnSidecarGloas{
+			Index:           fieldparams.NumberOfColumns + 1,
+			Slot:            clock.CurrentSlot(),
+			BeaconBlockRoot: root[:],
+			Column:          [][]byte{make([]byte, 2048)},
+			KzgProofs:       [][]byte{make([]byte, 48)},
+		}
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
+		require.NoError(t, err)
+
+		s.queuePendingGloasColumn(roCol, "peer1")
+		require.Equal(t, false, s.hasPendingGloasColumns(root))
 	})
 }

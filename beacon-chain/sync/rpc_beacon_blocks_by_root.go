@@ -97,6 +97,17 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 		return nil
 	}
 
+	filtered := make([]blocks.ROBlock, 0, len(blks))
+	for _, blk := range blks {
+		if !s.hasPendingGloasColumns(blk.Root()) {
+			filtered = append(filtered, blk)
+		}
+	}
+	blks = filtered
+	if len(blks) == 0 {
+		return nil
+	}
+
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
