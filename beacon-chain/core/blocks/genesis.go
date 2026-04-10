@@ -222,6 +222,8 @@ func gloasGenesisBlock(root [fieldparams.RootLength]byte) *ethpb.BeaconBlockGloa
 					ParentBlockHash:    make([]byte, 32),
 					ParentBlockRoot:    make([]byte, 32),
 					BlockHash:          make([]byte, 32),
+					PrevRandao:         make([]byte, 32),
+					FeeRecipient:       make([]byte, 20),
 					BlobKzgCommitments: make([][]byte, 0),
 				},
 				Signature: make([]byte, fieldparams.BLSSignatureLength),

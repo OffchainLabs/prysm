@@ -89,6 +89,15 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) error {
+	if roBlock.Version() >= version.Gloas {
+		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBid(roBlock)); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			return errors.Wrap(err, "process data column sidecars from execution (bid)")
+		}
+		return nil
+	}
 	if roBlock.Version() >= version.Fulu {
 		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
 			// Do not log if the context was cancelled on purpose.

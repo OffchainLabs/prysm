@@ -75,7 +75,7 @@ func prepareGloasForkchoiceState(
 		ExecutionPayloadAvailability: make([]byte, 1024),
 		LatestBlockHash:              make([]byte, 32),
 		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
-		ProposerLookahead:            make([]uint64, 64),
+		ProposerLookahead:            make([]primitives.ValidatorIndex, 64),
 	}
 
 	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
@@ -146,7 +146,7 @@ func testGloasState(t *testing.T, slot primitives.Slot, parentRoot [32]byte, blo
 		ExecutionPayloadAvailability: make([]byte, 1024),
 		LatestBlockHash:              make([]byte, 32),
 		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
-		ProposerLookahead:            make([]uint64, 64),
+		ProposerLookahead:            make([]primitives.ValidatorIndex, 64),
 	}
 
 	bid := util.HydrateSignedExecutionPayloadBid(&ethpb.SignedExecutionPayloadBid{
@@ -797,7 +797,7 @@ func TestSaveHead_GloasForkBoundary_PreforkBidForcesEmptyHead(t *testing.T) {
 		ExecutionPayloadAvailability: make([]byte, 1024),
 		LatestBlockHash:              make([]byte, 32),
 		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
-		ProposerLookahead:            make([]uint64, 64),
+		ProposerLookahead:            make([]primitives.ValidatorIndex, 64),
 	})
 	require.NoError(t, err2)
 	oldRoot := bytesutil.ToBytes32([]byte("oldroot1"))
@@ -874,7 +874,7 @@ func TestSaveHead_GloasForkBoundary_PostforkBidSetsFullHead(t *testing.T) {
 		ExecutionPayloadAvailability: make([]byte, 1024),
 		LatestBlockHash:              make([]byte, 32),
 		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
-		ProposerLookahead:            make([]uint64, 64),
+		ProposerLookahead:            make([]primitives.ValidatorIndex, 64),
 	})
 	require.NoError(t, err2)
 	oldRoot2 := bytesutil.ToBytes32([]byte("oldroot2"))

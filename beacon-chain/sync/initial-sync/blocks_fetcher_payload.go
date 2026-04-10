@@ -75,6 +75,7 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 		f.downscorePeer(r.blocksFrom, r.err)
 		return
 	}
+
 	for i, b := range r.bwb[1:] {
 		nh, err := b.Block.ParentHash()
 		if err != nil {
@@ -83,6 +84,12 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 			return
 		}
 		if nh == bh {
+			continue
+		}
+
+		// Handle genesis case
+		if bh == [32]byte{} {
+			bh = nh
 			continue
 		}
 		if pidx >= len(r.envelopes) {
