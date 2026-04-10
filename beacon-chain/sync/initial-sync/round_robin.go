@@ -425,11 +425,11 @@ func envelopesForBlocks(
 
 	for i, e := range envelopes {
 		// Check if this envelope is the parent envelope for the first block.
+		// Always include it even if already persisted — getBatchPrestate
+		// needs it to apply the parent's execution payload to the replayed
+		// state (replay skips the last block's envelope).
 		builtOn, err := blocks.BlockBuiltOnEnvelope(e, bwb[0].Block)
 		if err == nil && builtOn {
-			if isPayloadProc(ctx, e) {
-				continue
-			}
 			return envelopes[i:]
 		}
 
