@@ -17,3 +17,8 @@ func (b *BeaconState) ProposerLookahead() ([]primitives.ValidatorIndex, error) {
 	defer b.lock.RUnlock()
 	return slices.Clone(b.proposerLookahead), nil
 }
+
+// proposerLookaheadVal returns a copy of the proposer lookahead for use in ToProto.
+func (b *BeaconState) proposerLookaheadVal() []primitives.ValidatorIndex {
+	return slices.Clone(b.proposerLookahead)
+}
