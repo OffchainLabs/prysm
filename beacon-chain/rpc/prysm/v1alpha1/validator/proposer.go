@@ -112,28 +112,32 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	}
 
 	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor)
-	log = log.WithFields(logrus.Fields{
+	l := log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
 	})
 
 	if err != nil {
-		log.WithError(err).Error("Finished building block")
+		l.WithError(err).Error("Finished building block")
 		return nil, errors.Wrap(err, "could not build block in parallel")
 	}
 
-	log.Info("Finished building block")
+	l.Info("Finished building block")
 	return resp, nil
 }
 
 func (vs *Server) handleSuccesfulReorgAttempt(ctx context.Context, slot primitives.Slot, parentRoot, _ [32]byte) (state.BeaconState, error) {
 	// Try to get the state from the NSC
-	head := transition.NextSlotState(parentRoot[:], slot)
+	accessRoot := parentRoot
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		accessRoot, _ = vs.ForkchoiceFetcher.PayloadContentLookup(parentRoot)
+	}
+	head := transition.NextSlotState(accessRoot[:], slot)
 	if head != nil {
 		return head, nil
 	}
 	// cache miss
-	head, err := vs.StateGen.StateByRoot(ctx, parentRoot)
+	head, err := vs.StateGen.StateByRoot(ctx, accessRoot)
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "could not obtain head state")
 	}
@@ -151,7 +155,11 @@ func logFailedReorgAttempt(slot primitives.Slot, oldHeadRoot, headRoot [32]byte)
 
 func (vs *Server) getHeadNoReorg(ctx context.Context, slot primitives.Slot, parentRoot [32]byte) (state.BeaconState, error) {
 	// Try to get the state from the NSC
-	head := transition.NextSlotState(parentRoot[:], slot)
+	accessRoot := parentRoot
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		accessRoot, _ = vs.ForkchoiceFetcher.PayloadContentLookup(parentRoot)
+	}
+	head := transition.NextSlotState(accessRoot[:], slot)
 	if head != nil {
 		return head, nil
 	}
@@ -247,6 +255,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	})
 
 	winningBid := primitives.ZeroWei()
+	selfBuildEnvelope := true
 	var bundle enginev1.BlobsBundler
 	var local *blocks.GetPayloadResponse
 	if sBlk.Version() >= version.Bellatrix {
@@ -277,7 +286,9 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 				return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
 			}
 		} else {
-			if err := vs.setSelfBuildExecutionPayloadBid(ctx, sBlk, local); err != nil {
+			selfBuildOnly := local.OverrideBuilder || skipMevBoost
+			selfBuildEnvelope, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
+			if err != nil {
 				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
 			}
 		}
@@ -291,10 +302,12 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	}
 	sBlk.SetStateRoot(sr)
 
-	// For Gloas, build and cache the execution payload envelope now that the block
-	// is fully built (state root set). The envelope needs the final block HTR as
-	// BeaconBlockRoot and the post-payload state root as StateRoot.
-	if sBlk.Version() >= version.Gloas {
+	// For Gloas self-build, cache the execution payload envelope now that the
+	// block is fully built (state root set). The envelope needs the final block
+	// HTR as BeaconBlockRoot and the post-payload state root as StateRoot.
+	// When a remote P2P bid was selected, the winning builder is responsible
+	// for producing the envelope, so we must not cache a self-build one.
+	if sBlk.Version() >= version.Gloas && selfBuildEnvelope {
 		if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
 		}

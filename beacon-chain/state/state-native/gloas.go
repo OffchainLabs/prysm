@@ -91,3 +91,9 @@ func (b *BeaconState) payloadExpectedWithdrawalsVal() []*enginev1.Withdrawal {
 
 	return withdrawals
 }
+
+// ptcWindowVal returns a copy of the cached PTC window.
+// This assumes that a lock is already held on BeaconState.
+func (b *BeaconState) ptcWindowVal() []*ethpb.PTCs {
+	return ethpb.CopyPTCWindow(b.ptcWindow)
+}

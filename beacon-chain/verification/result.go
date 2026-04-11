@@ -65,6 +65,30 @@ func (r Requirement) String() string {
 		return "RequireEnvelopeSlotMatchesBlock"
 	case RequireBuilderSignatureValid:
 		return "RequireBuilderSignatureValid"
+	case RequireBidCurrentOrNextSlot:
+		return "RequireBidCurrentOrNextSlot"
+	case RequireBidBuilderActive:
+		return "RequireBidBuilderActive"
+	case RequireBidExecutionPaymentZero:
+		return "RequireBidExecutionPaymentZero"
+	case RequireBidFeeRecipientMatches:
+		return "RequireBidFeeRecipientMatches"
+	case RequireBidGasLimitMatches:
+		return "RequireBidGasLimitMatches"
+	case RequireBidParentBlockRootSeen:
+		return "RequireBidParentBlockRootSeen"
+	case RequireBidParentBlockHashValid:
+		return "RequireBidParentBlockHashValid"
+	case RequireBidBuilderCanCover:
+		return "RequireBidBuilderCanCover"
+	case RequireBidSignatureValid:
+		return "RequireBidSignatureValid"
+	case RequireProposerPreferencesNextEpoch:
+		return "RequireProposerPreferencesNextEpoch"
+	case RequireProposerPreferencesProposalSlotValid:
+		return "RequireProposerPreferencesProposalSlotValid"
+	case RequireProposerPreferencesSignatureValid:
+		return "RequireProposerPreferencesSignatureValid"
 	default:
 		return unknownRequirementName
 	}

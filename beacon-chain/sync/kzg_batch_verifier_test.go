@@ -21,7 +21,7 @@ func createInvalidTestDataColumns(t *testing.T, count int) []blocks.RODataColumn
 	dataColumns := createValidTestDataColumns(t, count)
 
 	if len(dataColumns) > 0 {
-		sidecar := dataColumns[0].DataColumnSidecar
+		sidecar := dataColumns[0].DataColumnSidecar()
 		if len(sidecar.Column) > 0 && len(sidecar.Column[0]) > 0 {
 			corruptedSidecar := &ethpb.DataColumnSidecar{
 				Index:                        sidecar.Index,

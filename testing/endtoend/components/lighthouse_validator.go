@@ -237,7 +237,7 @@ func (v *LighthouseValidatorNode) Resume() error {
 
 // Stop stops the component and its underlying process.
 func (v *LighthouseValidatorNode) Stop() error {
-	return v.cmd.Process.Kill()
+	return helpers.GracefulStop(v.cmd.Process)
 }
 
 func (v *LighthouseValidatorNode) UnderlyingProcess() *os.Process {

@@ -1,4 +1,4 @@
-version: v1.7.0-alpha.2
+version: v1.7.0-alpha.4
 style: full
 
 specrefs:
@@ -23,6 +23,8 @@ exceptions:
     - PTC_SIZE#gloas
 
   constants:
+    # heze
+    - DOMAIN_INCLUSION_LIST_COMMITTEE#heze
     # phase0
     - BASIS_POINTS#phase0
     - ENDIANNESS#phase0
@@ -61,7 +63,6 @@ exceptions:
     - ATTESTATION_TIMELINESS_INDEX#gloas
     - BUILDER_INDEX_FLAG#gloas
     - BUILDER_INDEX_SELF_BUILD#gloas
-    - DOMAIN_PROPOSER_PREFERENCES#gloas
     - NUM_BLOCK_TIMELINESS_DEADLINES#gloas
     - PTC_TIMELINESS_INDEX#gloas
 
@@ -72,12 +73,31 @@ exceptions:
     - CONTRIBUTION_DUE_BPS_GLOAS#gloas
     - GLOAS_FORK_EPOCH#gloas
     - GLOAS_FORK_VERSION#gloas
-    - MIN_BUILDER_WITHDRAWABILITY_DELAY#gloas
     - SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
+    # heze
+    - HEZE_FORK_EPOCH#heze
+    - HEZE_FORK_VERSION#heze
+    - INCLUSION_LIST_SUBMISSION_DUE_BPS#heze
+    - MAX_BYTES_PER_INCLUSION_LIST#heze
+    - MAX_REQUEST_INCLUSION_LIST#heze
+    - PROPOSER_INCLUSION_LIST_CUTOFF_BPS#heze
+    - VIEW_FREEZE_CUTOFF_BPS#heze
 
   ssz_objects:
     # phase0
     - Eth1Block#phase0
+    # fulu
+    - PartialDataColumnHeader#fulu
+    - PartialDataColumnPartsMetadata#fulu
+    - PartialDataColumnSidecar#fulu
+    # gloas
+    - PartialDataColumnHeader#gloas
+    # heze
+    - BeaconState#heze
+    - ExecutionPayloadBid#heze
+    - InclusionList#heze
+    - SignedExecutionPayloadBid#heze
+    - SignedInclusionList#heze
     # capella
     - LightClientBootstrap#capella
     - LightClientFinalityUpdate#capella
@@ -107,6 +127,7 @@ exceptions:
   dataclasses:
     # phase0
     - LatestMessage#phase0
+    - Seen#phase0
     - Store#phase0
     # altair
     - LightClientStore#altair
@@ -123,6 +144,11 @@ exceptions:
     - ExpectedWithdrawals#gloas
     - LatestMessage#gloas
     - Store#gloas
+    # heze
+    - GetInclusionListResponse#heze
+    - InclusionListStore#heze
+    - PayloadAttributes#heze
+    - Store#heze
 
   functions:
     # Functions implemented by KZG library for EIP-4844
@@ -179,11 +205,22 @@ exceptions:
     - verify_cell_kzg_proof_batch_impl#fulu
 
     # phase0
+    - compute_attestation_subnet_prefix_bits#phase0
+    - compute_min_epochs_for_block_requests#phase0
+    - compute_time_at_slot_ms#phase0
+    - is_not_from_future_slot#phase0
+    - is_within_slot_range#phase0
     - update_proposer_boost_root#phase0
     - is_proposer_equivocation#phase0
     - record_block_timeliness#phase0
     - compute_proposer_score#phase0
     - get_attestation_score#phase0
+    - validate_attester_slashing_gossip#phase0
+    - validate_beacon_aggregate_and_proof_gossip#phase0
+    - validate_beacon_attestation_gossip#phase0
+    - validate_beacon_block_gossip#phase0
+    - validate_proposer_slashing_gossip#phase0
+    - validate_voluntary_exit_gossip#phase0
     - calculate_committee_fraction#phase0
     - compute_fork_version#phase0
     - compute_pulled_up_tip#phase0
@@ -274,6 +311,7 @@ exceptions:
     - upgrade_lc_store_to_capella#capella
     - upgrade_lc_update_to_capella#capella
     # deneb
+    - compute_max_request_blob_sidecars#deneb
     - get_lc_execution_root#deneb
     - is_valid_light_client_header#deneb
     - prepare_execution_payload#deneb
@@ -284,6 +322,7 @@ exceptions:
     - upgrade_lc_store_to_deneb#deneb
     - upgrade_lc_update_to_deneb#deneb
     # electra
+    - compute_max_request_blob_sidecars#electra
     - compute_weak_subjectivity_period#electra
     - current_sync_committee_gindex_at_slot#electra
     - finalized_root_gindex_at_slot#electra
@@ -305,12 +344,20 @@ exceptions:
     - upgrade_lc_store_to_electra#electra
     - upgrade_lc_update_to_electra#electra
     # fulu
+    - compute_max_request_data_column_sidecars#fulu
     - compute_matrix#fulu
+    - verify_partial_data_column_header_inclusion_proof#fulu
+    - verify_partial_data_column_sidecar_kzg_proofs#fulu
     - get_blob_parameters#fulu
     - get_data_column_sidecars_from_block#fulu
     - get_data_column_sidecars_from_column_sidecar#fulu
     - recover_matrix#fulu
     # gloas
+    - compute_ptc#gloas
+    - initialize_ptc_window#gloas
+    - is_payload_data_available#gloas
+    - is_pending_validator#gloas
+    - process_ptc_window#gloas
     - compute_balance_weighted_acceptance#gloas
     - compute_balance_weighted_selection#gloas
     - compute_fork_version#gloas
@@ -388,10 +435,8 @@ exceptions:
     - get_builder_withdrawals#gloas
     - get_builders_sweep_withdrawals#gloas
     - get_index_for_new_builder#gloas
-    - get_pending_balance_to_withdraw_for_builder#gloas
     - get_proposer_preferences_signature#gloas
     - get_upcoming_proposal_slots#gloas
-    - initiate_builder_exit#gloas
     - is_active_builder#gloas
     - is_builder_index#gloas
     - is_data_available#gloas
@@ -402,7 +447,6 @@ exceptions:
     - is_valid_proposal_slot#gloas
     - onboard_builders_from_pending_deposits#gloas
     - process_deposit_request#gloas
-    - process_voluntary_exit#gloas
     - record_block_timeliness#gloas
     - record_block_timeliness#phase0
     - verify_data_column_sidecar_kzg_proofs#gloas
@@ -411,6 +455,28 @@ exceptions:
     - update_next_withdrawal_builder_index#gloas
     - update_payload_expected_withdrawals#gloas
     - update_proposer_boost_root#gloas
+    # heze
+    - compute_fork_version#heze
+    - get_forkchoice_store#heze
+    - get_inclusion_list_bits#heze
+    - get_inclusion_list_committee_assignment#heze
+    - get_inclusion_list_committee#heze
+    - get_inclusion_list_signature#heze
+    - get_inclusion_list_store#heze
+    - get_inclusion_list_submission_due_ms#heze
+    - get_inclusion_list_transactions#heze
+    - get_proposer_inclusion_list_cutoff_ms#heze
+    - get_view_freeze_cutoff_ms#heze
+    - is_inclusion_list_bits_inclusive#heze
+    - is_payload_inclusion_list_satisfied#heze
+    - is_valid_inclusion_list_signature#heze
+    - on_execution_payload#heze
+    - on_inclusion_list#heze
+    - prepare_execution_payload#heze
+    - process_inclusion_list#heze
+    - record_payload_inclusion_list_satisfaction#heze
+    - should_extend_payload#heze
+    - upgrade_to_heze#heze
 
   presets:
     # gloas
@@ -419,3 +485,5 @@ exceptions:
     - MAX_BUILDERS_PER_WITHDRAWALS_SWEEP#gloas
     - MAX_PAYLOAD_ATTESTATIONS#gloas
     - PTC_SIZE#gloas
+    # heze
+    - INCLUSION_LIST_COMMITTEE_SIZE#heze

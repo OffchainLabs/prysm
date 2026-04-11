@@ -23,7 +23,7 @@ func (s *SSZQueryProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, s.Leaf...)
 
 	// Field (1) 'Gindex'
-	dst = ssz.MarshalUint64(dst, s.Gindex)
+	dst = ssz.MarshalUint(dst, s.Gindex)
 
 	// Offset (2) 'Proofs'
 	dst = ssz.WriteOffset(dst, offset)
@@ -63,7 +63,7 @@ func (s *SSZQueryProof) UnmarshalSSZ(buf []byte) error {
 	s.Leaf = append(s.Leaf, buf[0:32]...)
 
 	// Field (1) 'Gindex'
-	s.Gindex = ssz.UnmarshallUint64(buf[32:40])
+	s.Gindex = ssz.UnmarshallUint[uint64](buf[32:40])
 
 	// Offset (2) 'Proofs'
 	if o2 = ssz.ReadOffset(buf[40:44]); o2 > size {
@@ -119,7 +119,7 @@ func (s *SSZQueryProof) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutBytes(s.Leaf)
 
 	// Field (1) 'Gindex'
-	hh.PutUint64(s.Gindex)
+	ssz.PutUint(hh, s.Gindex)
 
 	// Field (2) 'Proofs'
 	{

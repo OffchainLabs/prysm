@@ -183,7 +183,7 @@ func (v *validatingColumnRequest) validate(cd blocks.RODataColumn) (err error) {
 		if err != nil {
 			validity = "invalid"
 		}
-		dataColumnSidecarDownloadCount.WithLabelValues(fmt.Sprintf("%d", cd.Index), validity).Inc()
+		dataColumnSidecarDownloadCount.WithLabelValues(fmt.Sprintf("%d", cd.Index()), validity).Inc()
 		dataColumnSidecarDownloadBytes.Add(float64(cd.SizeSSZ()))
 	}("valid", time.Now())
 	return v.countedValidation(cd)
@@ -203,22 +203,26 @@ func (v *validatingColumnRequest) countedValidation(cd blocks.RODataColumn) erro
 	}
 	// We don't need this column, but we trust the column state machine verified we asked for it as part of a range request.
 	// So we can just skip over it and not try to persist it.
-	if !expected.remaining.Has(cd.Index) {
+	if !expected.remaining.Has(cd.Index()) {
 		return nil
 	}
-	if len(cd.KzgCommitments) != len(expected.commitments) {
-		return errors.Wrapf(errCommitmentLengthMismatch, "root=%#x, slot=%d, index=%d", root, cd.Slot(), cd.Index)
+	comms, err := cd.KzgCommitments()
+	if err != nil {
+		return err
 	}
-	for i, cmt := range cd.KzgCommitments {
+	if len(comms) != len(expected.commitments) {
+		return errors.Wrapf(errCommitmentLengthMismatch, "root=%#x, slot=%d, index=%d", root, cd.Slot(), cd.Index())
+	}
+	for i, cmt := range comms {
 		if !bytes.Equal(cmt, expected.commitments[i]) {
-			return errors.Wrapf(errCommitmentValueMismatch, "root=%#x, slot=%d, index=%d", root, cd.Slot(), cd.Index)
+			return errors.Wrapf(errCommitmentValueMismatch, "root=%#x, slot=%d, index=%d", root, cd.Slot(), cd.Index())
 		}
 	}
 	if err := v.columnSync.store.Persist(v.columnSync.current, cd); err != nil {
 		return errors.Wrap(err, "persisting data column")
 	}
 	v.bisector.addPeerColumns(v.columnSync.peer, cd)
-	expected.remaining.Unset(cd.Index)
+	expected.remaining.Unset(cd.Index())
 	return nil
 }
 
