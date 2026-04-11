@@ -142,8 +142,7 @@ func TestBlobAlignsWithBlock_AllValidIndicesSucceed(t *testing.T) {
 
 	roBlock, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, ds, nCommitments)
 
-	for i := 0; i < nCommitments; i++ {
-		i := i
+	for i := range nCommitments {
 		t.Run(fmt.Sprintf("index_%d", i), func(t *testing.T) {
 			require.NoError(t, BlobAlignsWithBlock(blobs[i], roBlock))
 		})
