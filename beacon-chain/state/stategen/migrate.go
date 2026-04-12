@@ -121,6 +121,11 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 		s.SaveFinalizedState(fSlot, fRoot, fInfo.state)
 	}
 
+	// Evict epoch boundary states older than the new finalized slot.
+	if err := s.epochBoundaryStateCache.evictOlderThan(fSlot); err != nil {
+		return fmt.Errorf("could not evict old epoch boundary states: %w", err)
+	}
+
 	return nil
 }
 
@@ -208,6 +213,12 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 	if ok {
 		s.SaveFinalizedState(fSlot, fRoot, fInfo.state)
 	}
+
+	// Evict epoch boundary states older than the new finalized slot.
+	if err := s.epochBoundaryStateCache.evictOlderThan(fSlot); err != nil {
+		return fmt.Errorf("could not evict old epoch boundary states: %w", err)
+	}
+
 	return nil
 }
 

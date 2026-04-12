@@ -2,6 +2,7 @@ package stategen
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 
@@ -169,6 +170,41 @@ func (e *epochBoundaryState) getByBlockRootNoCopy(r [32]byte) state.ReadOnlyBeac
 	}
 
 	return s.state
+}
+
+// evictOlderThan removes all entries whose slot is strictly less than the given slot.
+func (e *epochBoundaryState) evictOlderThan(slot primitives.Slot) error {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+
+	for _, key := range e.slotRootCache.ListKeys() {
+		obj, exists, err := e.slotRootCache.GetByKey(key)
+		if err != nil {
+			return fmt.Errorf("slot root cache get by key: %w", err)
+		}
+		if !exists {
+			continue
+		}
+
+		info, ok := obj.(*slotRootInfo)
+		if !ok {
+			continue
+		}
+
+		if info.slot < slot {
+			if err := e.slotRootCache.Delete(info); err != nil {
+				return fmt.Errorf("slot root cache delete: %w", err)
+			}
+
+			if err := e.rootStateCache.Delete(&rootStateInfo{root: info.blockRoot}); err != nil {
+				return fmt.Errorf("root state cache delete: %w", err)
+			}
+		}
+	}
+
+	epochBoundaryCacheSize.Set(float64(len(e.rootStateCache.ListKeys())))
+
+	return nil
 }
 
 // delete the state from the epoch boundary state cache.
