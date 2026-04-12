@@ -148,6 +148,8 @@ func (e *epochBoundaryState) put(blockRoot [32]byte, s state.ReadOnlyBeaconState
 	trim(e.rootStateCache, maxCacheSize)
 	trim(e.slotRootCache, maxCacheSize)
 
+	epochBoundaryCacheSize.Set(float64(len(e.rootStateCache.ListKeys())))
+
 	return nil
 }
 
@@ -187,9 +189,13 @@ func (e *epochBoundaryState) delete(blockRoot [32]byte) error {
 	if err = e.slotRootCache.Delete(slotInfo); err != nil {
 		return err
 	}
-	return e.rootStateCache.Delete(&rootStateInfo{
-		root: blockRoot,
-	})
+	if err = e.rootStateCache.Delete(&rootStateInfo{root: blockRoot}); err != nil {
+		return err
+	}
+
+	epochBoundaryCacheSize.Set(float64(len(e.rootStateCache.ListKeys())))
+
+	return nil
 }
 
 // trim the FIFO queue to the maxSize.

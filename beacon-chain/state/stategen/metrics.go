@@ -25,4 +25,10 @@ var (
 			Help: "Time it took to replay to slot",
 		},
 	)
+	epochBoundaryCacheSize = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "epoch_boundary_state_cache_size",
+			Help: "The number of entries in the epoch boundary state cache",
+		},
+	)
 )
