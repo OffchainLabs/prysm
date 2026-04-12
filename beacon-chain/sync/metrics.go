@@ -126,6 +126,14 @@ var (
 		Help: "Increased when a gossip attestation has a bad signature batch",
 	})
 
+	// Batch signature verification performance.
+	batchSignatureVerificationGossipSummary = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "gossip_batch_signature_verification_milliseconds",
+			Help: "Time to verify gossip signatures via the batch verifier",
+		},
+	)
+
 	// Attestation and block gossip verification performance.
 	aggregateAttestationVerificationGossipSummary = promauto.NewSummary(
 		prometheus.SummaryOpts{

@@ -57,6 +57,11 @@ func (s *Service) validateWithBatchVerifier(ctx context.Context, message string,
 	_, span := trace.StartSpan(ctx, "sync.validateWithBatchVerifier")
 	defer span.End()
 
+	start := time.Now()
+	defer func() {
+		batchSignatureVerificationGossipSummary.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+
 	resChan := make(chan error)
 	verificationSet := &signatureVerifier{set: set, resChan: resChan}
 	s.signatureChan <- verificationSet
