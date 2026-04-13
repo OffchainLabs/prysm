@@ -89,16 +89,17 @@ func testSignedExecutionPayloadBid(
 ) *ethpb.SignedExecutionPayloadBid {
 	return &ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
-			Slot:             slot,
-			ParentBlockHash:  bytes.Clone(parentHash[:]),
-			ParentBlockRoot:  bytes.Clone(parentRoot[:]),
-			BlockHash:        bytes.Repeat([]byte{0x03}, 32),
-			PrevRandao:       bytes.Repeat([]byte{0x04}, 32),
-			FeeRecipient:     bytes.Repeat([]byte{0x05}, 20),
-			GasLimit:         30_000_000,
-			BuilderIndex:     1,
-			Value:            primitives.Gwei(value),
-			ExecutionPayment: 10,
+			Slot:                  slot,
+			ParentBlockHash:       bytes.Clone(parentHash[:]),
+			ParentBlockRoot:       bytes.Clone(parentRoot[:]),
+			BlockHash:             bytes.Repeat([]byte{0x03}, 32),
+			PrevRandao:            bytes.Repeat([]byte{0x04}, 32),
+			FeeRecipient:          bytes.Repeat([]byte{0x05}, 20),
+			GasLimit:              30_000_000,
+			BuilderIndex:          1,
+			Value:                 primitives.Gwei(value),
+			ExecutionPayment:      10,
+			ExecutionRequestsRoot: make([]byte, 32),
 		},
 		Signature: bytes.Repeat([]byte{0x06}, 96),
 	}
