@@ -427,9 +427,6 @@ func envelopesForBlocks(
 		// Check if this envelope is the parent envelope for the first block.
 		builtOn, err := blocks.BlockBuiltOnEnvelope(e, bwb[0].Block)
 		if err == nil && builtOn {
-			if isPayloadProc(ctx, e) {
-				continue
-			}
 			return envelopes[i:]
 		}
 
