@@ -2927,6 +2927,7 @@ func BeaconBlockGloasFromConsensus(b *eth.BeaconBlockGloas) (*BeaconBlockGloas, 
 			BLSToExecutionChanges:     SignedBLSChangesFromConsensus(b.Body.BlsToExecutionChanges),
 			SignedExecutionPayloadBid: SignedExecutionPayloadBidFromConsensus(b.Body.SignedExecutionPayloadBid),
 			PayloadAttestations:       payloadAttestations,
+			ParentExecutionRequests:   ExecutionRequestsFromConsensus(b.Body.ParentExecutionRequests),
 		},
 	}, nil
 }
@@ -2944,17 +2945,18 @@ func ExecutionPayloadBidFromConsensus(b *eth.ExecutionPayloadBid) *ExecutionPayl
 		blobKzgCommitments[i] = hexutil.Encode(b.BlobKzgCommitments[i])
 	}
 	return &ExecutionPayloadBid{
-		ParentBlockHash:    hexutil.Encode(b.ParentBlockHash),
-		ParentBlockRoot:    hexutil.Encode(b.ParentBlockRoot),
-		BlockHash:          hexutil.Encode(b.BlockHash),
-		PrevRandao:         hexutil.Encode(b.PrevRandao),
-		FeeRecipient:       hexutil.Encode(b.FeeRecipient),
-		GasLimit:           fmt.Sprintf("%d", b.GasLimit),
-		BuilderIndex:       fmt.Sprintf("%d", b.BuilderIndex),
-		Slot:               fmt.Sprintf("%d", b.Slot),
-		Value:              fmt.Sprintf("%d", b.Value),
-		ExecutionPayment:   fmt.Sprintf("%d", b.ExecutionPayment),
-		BlobKzgCommitments: blobKzgCommitments,
+		ParentBlockHash:       hexutil.Encode(b.ParentBlockHash),
+		ParentBlockRoot:       hexutil.Encode(b.ParentBlockRoot),
+		BlockHash:             hexutil.Encode(b.BlockHash),
+		PrevRandao:            hexutil.Encode(b.PrevRandao),
+		FeeRecipient:          hexutil.Encode(b.FeeRecipient),
+		GasLimit:              fmt.Sprintf("%d", b.GasLimit),
+		BuilderIndex:          fmt.Sprintf("%d", b.BuilderIndex),
+		Slot:                  fmt.Sprintf("%d", b.Slot),
+		Value:                 fmt.Sprintf("%d", b.Value),
+		ExecutionPayment:      fmt.Sprintf("%d", b.ExecutionPayment),
+		BlobKzgCommitments:    blobKzgCommitments,
+		ExecutionRequestsRoot: hexutil.Encode(b.ExecutionRequestsRoot),
 	}
 }
 
@@ -3113,6 +3115,13 @@ func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) 
 	if err != nil {
 		return nil, server.NewDecodeError(err, "PayloadAttestations")
 	}
+	var parentExecutionRequests *enginev1.ExecutionRequests
+	if b.ParentExecutionRequests != nil {
+		parentExecutionRequests, err = b.ParentExecutionRequests.ToConsensus()
+		if err != nil {
+			return nil, server.NewDecodeError(err, "ParentExecutionRequests")
+		}
+	}
 
 	return &eth.BeaconBlockBodyGloas{
 		RandaoReveal: randaoReveal,
@@ -3134,6 +3143,7 @@ func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) 
 		BlsToExecutionChanges:     blsChanges,
 		SignedExecutionPayloadBid: signedBid,
 		PayloadAttestations:       payloadAttestations,
+		ParentExecutionRequests:   parentExecutionRequests,
 	}, nil
 }
 
@@ -3211,18 +3221,23 @@ func (b *ExecutionPayloadBid) ToConsensus() (*eth.ExecutionPayloadBid, error) {
 		}
 		blobKzgCommitments[i] = kzg
 	}
+	executionRequestsRoot, err := bytesutil.DecodeHexWithLength(b.ExecutionRequestsRoot, fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ExecutionRequestsRoot")
+	}
 	return &eth.ExecutionPayloadBid{
-		ParentBlockHash:    parentBlockHash,
-		ParentBlockRoot:    parentBlockRoot,
-		BlockHash:          blockHash,
-		PrevRandao:         prevRandao,
-		FeeRecipient:       feeRecipient,
-		GasLimit:           gasLimit,
-		BuilderIndex:       primitives.BuilderIndex(builderIndex),
-		Slot:               primitives.Slot(slot),
-		Value:              primitives.Gwei(value),
-		ExecutionPayment:   primitives.Gwei(executionPayment),
-		BlobKzgCommitments: blobKzgCommitments,
+		ParentBlockHash:       parentBlockHash,
+		ParentBlockRoot:       parentBlockRoot,
+		BlockHash:             blockHash,
+		PrevRandao:            prevRandao,
+		FeeRecipient:          feeRecipient,
+		GasLimit:              gasLimit,
+		BuilderIndex:          primitives.BuilderIndex(builderIndex),
+		Slot:                  primitives.Slot(slot),
+		Value:                 primitives.Gwei(value),
+		ExecutionPayment:      primitives.Gwei(executionPayment),
+		BlobKzgCommitments:    blobKzgCommitments,
+		ExecutionRequestsRoot: executionRequestsRoot,
 	}, nil
 }
 
@@ -3301,7 +3316,6 @@ func SignedExecutionPayloadEnvelopeFromConsensus(e *eth.SignedExecutionPayloadEn
 			BuilderIndex:      fmt.Sprintf("%d", e.Message.BuilderIndex),
 			BeaconBlockRoot:   hexutil.Encode(e.Message.BeaconBlockRoot),
 			Slot:              fmt.Sprintf("%d", e.Message.Slot),
-			StateRoot:         hexutil.Encode(e.Message.StateRoot),
 		},
 		Signature: hexutil.Encode(e.Signature),
 	}, nil
