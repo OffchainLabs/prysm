@@ -16,9 +16,9 @@ go_library(
 
 go_test(
     name = "go_default_test",
+    size = "small",
     srcs = ["blob_test.go"],
     embed = [":go_default_library"],
-    size = "small",
     deps = [
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
