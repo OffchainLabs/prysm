@@ -688,7 +688,6 @@ func (s *Service) ReconstructExecutionPayloadEnvelope(
 			BuilderIndex:      envelope.Message.BuilderIndex,
 			BeaconBlockRoot:   envelope.Message.BeaconBlockRoot,
 			Slot:              envelope.Message.Slot,
-			StateRoot:         envelope.Message.StateRoot,
 		},
 		Signature: envelope.Signature,
 	}, nil
