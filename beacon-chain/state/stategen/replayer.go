@@ -5,15 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -112,7 +108,7 @@ func (rs *stateReplayer) ReplayBlocks(ctx context.Context) (state.BeaconState, e
 		"diff":      diff,
 	}).Debug("Replaying canonical blocks from most recent state")
 
-	for i, b := range descendants {
+	for _, b := range descendants {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -122,29 +118,6 @@ func (rs *stateReplayer) ReplayBlocks(ctx context.Context) (state.BeaconState, e
 			return nil, errors.Wrap(err, "could not execute state transition")
 		}
 
-		// Apply the envelope for all blocks except the last one.
-		// The caller is responsible for applying the envelope on the last block if needed.
-		if i < len(descendants)-1 && b.Version() >= version.Gloas {
-			if p, ok := rs.chainer.(executionPayloadEnvelopeProvider); ok {
-				root, err := b.Block().HashTreeRoot()
-				if err != nil {
-					return nil, errors.Wrap(err, "could not compute block root for execution payload envelope lookup")
-				}
-				signedEnvelope, err := p.executionPayloadEnvelope(ctx, root)
-				if err != nil && !errors.Is(err, db.ErrNotFound) {
-					return nil, errors.Wrap(err, "could not retrieve execution payload envelope")
-				}
-				if signedEnvelope != nil && signedEnvelope.Message != nil {
-					envelope, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(signedEnvelope.Message)
-					if err != nil {
-						return nil, errors.Wrap(err, "could not wrap blinded execution payload envelope")
-					}
-					if err := gloas.ProcessBlindedExecutionPayload(ctx, s, b.Block().StateRoot(), envelope); err != nil {
-						return nil, errors.Wrap(err, "could not apply execution payload envelope")
-					}
-				}
-			}
-		}
 	}
 	if rs.target > s.Slot() {
 		s, err = ReplayProcessSlots(ctx, s, rs.target)

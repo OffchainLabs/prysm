@@ -5,7 +5,6 @@ import (
 	stderrors "errors"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
@@ -239,21 +238,9 @@ func (s *State) loadStateByBlockHash(ctx context.Context, blockHash [32]byte, sl
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not load state by resolved beacon block root %#x for execution block hash %#x", blockRoot, blockHash)
 	}
-	blk, err := s.beaconDB.Block(ctx, blockRoot)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not load block by resolved beacon block root %#x for execution block hash %#x", blockRoot, blockHash)
-	}
-	signedEnvelope, err := s.beaconDB.ExecutionPayloadEnvelope(ctx, blockRoot)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not retrieve execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
-	}
-	envelope, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(signedEnvelope.GetMessage())
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not wrap blinded execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
-	}
-	if err := gloas.ProcessBlindedExecutionPayload(ctx, blockState, blk.Block().StateRoot(), envelope); err != nil {
-		return nil, errors.Wrapf(err, "could not apply execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
-	}
+	// With deferred payload processing, state mutations from the execution
+	// payload are applied by ProcessParentExecutionPayload in the next block's
+	// state transition. No separate envelope processing needed here.
 	return blockState, nil
 }
 
