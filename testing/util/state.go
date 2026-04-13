@@ -12,6 +12,7 @@ import (
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -492,7 +493,7 @@ func NewBeaconStateFulu(options ...func(state *ethpb.BeaconStateFulu) error) (st
 			TransactionsRoot: make([]byte, 32),
 			WithdrawalsRoot:  make([]byte, 32),
 		},
-		ProposerLookahead: make([]uint64, 64),
+		ProposerLookahead: make([]primitives.ValidatorIndex, 64),
 	}
 
 	for _, opt := range options {
@@ -523,6 +524,13 @@ func NewBeaconStateGloas(options ...func(state *ethpb.BeaconStateGloas) error) (
 			Withdrawal: &ethpb.BuilderPendingWithdrawal{
 				FeeRecipient: make([]byte, 20),
 			},
+		}
+	}
+
+	ptcWindow := make([]*ethpb.PTCs, 3*params.BeaconConfig().SlotsPerEpoch)
+	for i := range ptcWindow {
+		ptcWindow[i] = &ethpb.PTCs{
+			ValidatorIndices: make([]primitives.ValidatorIndex, fieldparams.PTCSize),
 		}
 	}
 
@@ -557,7 +565,7 @@ func NewBeaconStateGloas(options ...func(state *ethpb.BeaconStateGloas) error) (
 			Pubkeys:         pubkeys,
 			AggregatePubkey: make([]byte, 48),
 		},
-		ProposerLookahead: make([]uint64, 64),
+		ProposerLookahead: make([]primitives.ValidatorIndex, 64),
 		LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
 			ParentBlockHash:    make([]byte, 32),
 			ParentBlockRoot:    make([]byte, 32),
@@ -572,6 +580,7 @@ func NewBeaconStateGloas(options ...func(state *ethpb.BeaconStateGloas) error) (
 		BuilderPendingWithdrawals:    make([]*ethpb.BuilderPendingWithdrawal, 0),
 		LatestBlockHash:              make([]byte, 32),
 		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
+		PtcWindow:                    ptcWindow,
 	}
 
 	for _, opt := range options {

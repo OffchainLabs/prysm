@@ -68,7 +68,7 @@ func TestSetGetExecutionPayloadEnvelope(t *testing.T) {
 	}
 
 	vs := &Server{}
-	vs.setExecutionPayloadEnvelope(envelope)
+	vs.setExecutionPayloadEnvelope(envelope, nil)
 
 	got, found := vs.getExecutionPayloadEnvelope(slot)
 	require.Equal(t, true, found)
@@ -94,7 +94,7 @@ func TestGetExecutionPayloadEnvelope_SlotMismatch(t *testing.T) {
 	}
 
 	vs := &Server{}
-	vs.setExecutionPayloadEnvelope(envelope)
+	vs.setExecutionPayloadEnvelope(envelope, nil)
 
 	_, found := vs.getExecutionPayloadEnvelope(999)
 	require.Equal(t, false, found)
@@ -176,7 +176,7 @@ func TestGetExecutionPayloadEnvelopeRPC_StateRootAlreadySet(t *testing.T) {
 	}
 
 	vs := &Server{}
-	vs.setExecutionPayloadEnvelope(envelope)
+	vs.setExecutionPayloadEnvelope(envelope, nil)
 
 	resp, err := vs.GetExecutionPayloadEnvelope(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{
 		Slot: 1,
@@ -219,7 +219,7 @@ func TestGetExecutionPayloadEnvelopeRPC_ZeroStateRootComputesRoot(t *testing.T) 
 	vs := &Server{
 		StateGen: sg,
 	}
-	vs.setExecutionPayloadEnvelope(envelope)
+	vs.setExecutionPayloadEnvelope(envelope, nil)
 
 	// The call should enter the lazy computation path. It will fail during
 	// ApplyExecutionPayload because the mock state doesn't satisfy all consistency

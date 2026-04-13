@@ -802,7 +802,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 
 	var result ethpb.DataColumnSidecar
 	require.NoError(t, service.Encoding().DecodeGossip(msg.Data, &result))
-	require.DeepEqual(t, &result, verifiedRoSidecar)
+	require.DeepEqual(t, &result, verifiedRoSidecar.DataColumnSidecar())
 }
 
 type topicInvoked struct {

@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	rpchelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
@@ -1245,7 +1244,7 @@ func ptcDuties(
 	epoch primitives.Epoch,
 	validators map[primitives.ValidatorIndex]struct{},
 ) ([]ptcDuty, error) {
-	if len(validators) == 0 {
+	if len(validators) == 0 || st.Version() < version.Gloas {
 		return nil, nil
 	}
 	startSlot, err := slots.EpochStart(epoch)
@@ -1261,7 +1260,7 @@ func ptcDuties(
 			return nil, ctx.Err()
 		}
 
-		ptc, err := gloas.PayloadCommittee(ctx, st, slot)
+		ptc, err := st.PayloadCommitteeReadOnly(slot)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to get PTC for slot %d", slot)
 		}
