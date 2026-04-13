@@ -108,7 +108,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	}
 	if cfg.roblock.Version() < version.Gloas {
 		s.sendFCU(cfg)
-	} else if s.isNewHead(cfg.headRoot, false) { // We reach this only when the incoming block is head.
+	} else if s.isNewHead(cfg.headRoot) { // We reach this only when the incoming block is head.
 		if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState); err != nil {
 			log.WithError(err).Error("Could not save head")
 		}
@@ -145,50 +145,6 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 	return preStateVersion, preStateHeader, nil
 }
 
-// applyPayloadIfNeeded applies the parent block's execution payload envelope to
-// preState when the current block's bid indicates it built on a full parent.
-func (s *Service) applyPayloadIfNeeded(ctx context.Context, b interfaces.ReadOnlyBeaconBlock, parentRoot [32]byte, preState state.BeaconState) error {
-	if b.Version() < version.Gloas || parentRoot == [32]byte{} {
-		return nil
-	}
-	parentBlock, err := s.cfg.BeaconDB.Block(ctx, parentRoot)
-	if err != nil {
-		return errors.Wrapf(err, "could not get parent block with root %#x", parentRoot)
-	}
-	if parentBlock.Version() < version.Gloas {
-		return nil
-	}
-	sb, err := b.Body().SignedExecutionPayloadBid()
-	if err != nil {
-		return errors.Wrap(err, "could not get execution payload bid for block")
-	}
-	if sb == nil || sb.Message == nil {
-		return fmt.Errorf("missing execution payload bid for block at slot %d", b.Slot())
-	}
-	parentBid, err := parentBlock.Block().Body().SignedExecutionPayloadBid()
-	if err != nil {
-		return errors.Wrapf(err, "could not get execution payload bid for parent block with root %#x", parentRoot)
-	}
-	if parentBid == nil || parentBid.Message == nil {
-		return fmt.Errorf("missing execution payload bid for parent block with root %#x", parentRoot)
-	}
-	if !bytes.Equal(sb.Message.ParentBlockHash, parentBid.Message.BlockHash) {
-		return nil
-	}
-	signedEnvelope, err := s.cfg.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
-	if err != nil {
-		return errors.Wrapf(err, "could not get execution payload envelope for parent block with root %#x", parentRoot)
-	}
-	if signedEnvelope == nil || signedEnvelope.Message == nil {
-		return nil
-	}
-	envelope, err := consensusblocks.WrappedROBlindedExecutionPayloadEnvelope(signedEnvelope.Message)
-	if err != nil {
-		return errors.Wrapf(err, "could not wrap blinded execution payload envelope for parent block with root %#x", parentRoot)
-	}
-	return gloas.ProcessBlindedExecutionPayload(ctx, preState, parentBlock.Block().StateRoot(), envelope)
-}
-
 // getBatchPrestate returns the pre-state to apply to the first beacon block in the batch and returns true if it applied the first envelope before
 func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope) (state.BeaconState, bool, error) {
 	if len(envelopes) == 0 || b.Version() < version.Gloas {
@@ -210,37 +166,15 @@ func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBloc
 	if !full {
 		return blockPreState, false, nil
 	}
-	parentBlock, err := s.cfg.BeaconDB.Block(ctx, parentRoot)
-	if err != nil {
-		return nil, false, errors.Wrap(err, "could not get parent block")
-	}
-	if s.cfg.BeaconDB.HasExecutionPayloadEnvelope(ctx, parentRoot) {
-		// The parent envelope was already saved by a previous batch but the
-		// replayed state may not include it (replay skips the last block's
-		// envelope). Load the blinded form from DB and apply it.
-		blindedEnv, err := s.cfg.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
+
+	if !s.cfg.BeaconDB.HasExecutionPayloadEnvelope(ctx, parentRoot) {
+		env, err := envelopes[0].Envelope()
 		if err != nil {
-			return nil, false, errors.Wrap(err, "could not load parent blinded envelope from DB")
+			return nil, false, err
 		}
-		wrappedEnv, err := consensusblocks.WrappedROBlindedExecutionPayloadEnvelope(blindedEnv.Message)
-		if err != nil {
-			return nil, false, errors.Wrap(err, "could not wrap blinded envelope")
+		if _, err := s.notifyNewEnvelope(ctx, blockPreState, env); err != nil {
+			return nil, false, err
 		}
-		if err := gloas.ProcessBlindedExecutionPayload(ctx, blockPreState, parentBlock.Block().StateRoot(), wrappedEnv); err != nil {
-			return nil, false, errors.Wrap(err, "could not apply parent blinded envelope from DB")
-		}
-		return blockPreState, true, nil
-	}
-	env, err := envelopes[0].Envelope()
-	if err != nil {
-		return nil, false, err
-	}
-	// notify the engine of the new envelope
-	if _, err := s.notifyNewEnvelope(ctx, blockPreState, env); err != nil {
-		return nil, false, err
-	}
-	if err := gloas.ProcessBlindedExecutionPayload(ctx, blockPreState, parentBlock.Block().StateRoot(), env); err != nil {
-		return nil, false, err
 	}
 	return blockPreState, true, nil
 }
@@ -323,7 +257,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			return invalidBlock{error: err}
 		}
 		if b.Root() == br && eidx < len(envelopes) {
-			envSigSet, err := gloas.ProcessExecutionPayloadWithDeferredSig(ctx, preState, b.Block().StateRoot(), envelopes[eidx])
+			envSigSet, err := gloas.VerifyExecutionPayloadEnvelopeWithDeferredSig(ctx, preState, envelopes[eidx])
 			if err != nil {
 				return err
 			}
@@ -462,14 +396,6 @@ func (s *Service) notifyEngineAndSaveData(
 					return nil, false, errors.Wrap(err, "could not notify new envelope from block")
 				}
 				args.HasPayload = true
-				bh := env.BlockHash()
-				if err := s.cfg.BeaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{
-					Slot: b.Block().Slot(),
-					Root: bh[:],
-				}); err != nil {
-					tracing.AnnotateError(span, err)
-					return nil, false, err
-				}
 			}
 		}
 		if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
@@ -585,40 +511,38 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 
 // refreshCaches updates the next slot state cache and epoch boundary caches.
 // Before Fulu this is done synchronously, after Fulu it is deferred to a goroutine.
-func (s *Service) refreshCaches(ctx context.Context, currentSlot primitives.Slot, headRoot [32]byte, headState state.BeaconState, accessRoot [32]byte) {
+func (s *Service) refreshCaches(ctx context.Context, currentSlot primitives.Slot, headRoot [32]byte, headState state.BeaconState) {
 	lastRoot, lastState := transition.LastCachedState()
 	if lastState == nil {
 		lastRoot, lastState = headRoot[:], headState
 	}
 	if lastState.Version() < version.Fulu {
-		s.updateCachesAndEpochBoundary(ctx, currentSlot, headState, accessRoot, lastRoot, lastState)
+		s.updateCachesAndEpochBoundary(ctx, currentSlot, headState, headRoot, lastRoot, lastState)
 	} else {
 		go func() {
 			ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
 			defer cancel()
-			s.updateCachesAndEpochBoundary(ctx, currentSlot, headState, accessRoot, lastRoot, lastState)
+			s.updateCachesAndEpochBoundary(ctx, currentSlot, headState, headRoot, lastRoot, lastState)
 		}()
 	}
 }
 
 // updateCachesAndEpochBoundary updates the next slot state cache and handles
-// epoch boundary processing. If the lastRoot matches accessRoot, the cached
+// epoch boundary processing. If the lastRoot matches headRoot, the cached
 // last state is reused; otherwise, the head state is advanced instead.
-func (s *Service) updateCachesAndEpochBoundary(ctx context.Context, currentSlot primitives.Slot, headState state.BeaconState, accessRoot [32]byte, lastRoot []byte, lastState state.BeaconState) {
-	if bytes.Equal(lastRoot, accessRoot[:]) {
-		// Happy case, the last advanced state is head, we thus keep it
+func (s *Service) updateCachesAndEpochBoundary(ctx context.Context, currentSlot primitives.Slot, headState state.BeaconState, headRoot [32]byte, lastRoot []byte, lastState state.BeaconState) {
+	if bytes.Equal(lastRoot, headRoot[:]) {
 		lastState.CopyAllTries()
 		if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
 			log.WithError(err).Debug("Could not update next slot state cache")
 		}
 	} else {
-		// Last advanced state was not head, we do not advance this but rather use headstate
 		headState.CopyAllTries()
-		if err := transition.UpdateNextSlotCache(ctx, accessRoot[:], headState); err != nil {
+		if err := transition.UpdateNextSlotCache(ctx, headRoot[:], headState); err != nil {
 			log.WithError(err).Debug("Could not update next slot state cache")
 		}
 	}
-	if err := s.handleEpochBoundary(ctx, currentSlot, headState, accessRoot[:]); err != nil {
+	if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
 		log.WithError(err).Error("Could not update epoch boundary caches")
 	}
 }
@@ -1217,19 +1141,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	headState := s.headState(ctx)
 	s.headLock.RUnlock()
 
-	var accessRoot [32]byte
-	isFull, err := headState.IsParentBlockFull()
-	gloasFirstSlot, _ := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
-	if err != nil || !isFull || headState.Slot() <= gloasFirstSlot {
-		accessRoot = headRoot
-	} else {
-		accessRoot, err = headState.LatestBlockHash()
-		if err != nil {
-			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve latest block hash, using head root as access root")
-			accessRoot = headRoot
-		}
-	}
-	s.refreshCaches(ctx, currentSlot, headRoot, headState, accessRoot)
+	s.refreshCaches(ctx, currentSlot, headRoot, headState)
 	// return early if we already started building a block for the current
 	// head root
 	_, has := s.cfg.PayloadIDCache.PayloadID(s.CurrentSlot()+1, headRoot)
@@ -1237,17 +1149,21 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		return
 	}
 
-	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:], accessRoot[:])
+	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
 		return
 	}
 
 	if headState.Version() >= version.Gloas {
-		bh, err := headState.LatestBlockHash()
+		bid, err := headState.LatestExecutionPayloadBid()
 		if err != nil {
-			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve latest block hash")
+			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve execution payload bid")
 			return
+		}
+		bh := bid.ParentBlockHash()
+		if s.HasFullNode(headRoot) {
+			bh = bid.BlockHash()
 		}
 		id, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attribute)
 		if err != nil {

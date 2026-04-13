@@ -23,18 +23,20 @@ func ROExecutionPayloadBidFromConsensus(b interfaces.ROExecutionPayloadBid) *Exe
 	for _, commitment := range commitments {
 		blobKzgCommitments = append(blobKzgCommitments, hexutil.Encode(commitment))
 	}
+	erRoot := b.ExecutionRequestsRoot()
 	return &ExecutionPayloadBid{
-		ParentBlockHash:    hexutil.Encode(pbh[:]),
-		ParentBlockRoot:    hexutil.Encode(pbr[:]),
-		BlockHash:          hexutil.Encode(bh[:]),
-		PrevRandao:         hexutil.Encode(pr[:]),
-		FeeRecipient:       hexutil.Encode(fr[:]),
-		GasLimit:           fmt.Sprintf("%d", b.GasLimit()),
-		BuilderIndex:       fmt.Sprintf("%d", b.BuilderIndex()),
-		Slot:               fmt.Sprintf("%d", b.Slot()),
-		Value:              fmt.Sprintf("%d", b.Value()),
-		ExecutionPayment:   fmt.Sprintf("%d", b.ExecutionPayment()),
-		BlobKzgCommitments: blobKzgCommitments,
+		ParentBlockHash:       hexutil.Encode(pbh[:]),
+		ParentBlockRoot:       hexutil.Encode(pbr[:]),
+		BlockHash:             hexutil.Encode(bh[:]),
+		PrevRandao:            hexutil.Encode(pr[:]),
+		FeeRecipient:          hexutil.Encode(fr[:]),
+		GasLimit:              fmt.Sprintf("%d", b.GasLimit()),
+		BuilderIndex:          fmt.Sprintf("%d", b.BuilderIndex()),
+		Slot:                  fmt.Sprintf("%d", b.Slot()),
+		Value:                 fmt.Sprintf("%d", b.Value()),
+		ExecutionPayment:      fmt.Sprintf("%d", b.ExecutionPayment()),
+		BlobKzgCommitments:    blobKzgCommitments,
+		ExecutionRequestsRoot: hexutil.Encode(erRoot[:]),
 	}
 }
 

@@ -370,7 +370,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 		if err != nil {
 			return nil, err
 		}
-		return transition.ProcessSlotsForBlock(ctx, headState, blk.Block())
+		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, parentRoot[:], blk.Block().Slot())
 	}
 	// If head and block are in the same epoch and head is compatible with the parent's dependent root, then use head
 	if blockEpoch == headEpoch {
@@ -399,7 +399,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 	if blockEpoch == parentEpoch {
 		return parentState, nil
 	}
-	return transition.ProcessSlotsForBlock(ctx, parentState, blk.Block())
+	return transition.ProcessSlotsUsingNextSlotCache(ctx, parentState, parentRoot[:], blk.Block().Slot())
 }
 
 func validateDenebBeaconBlock(blk interfaces.ReadOnlyBeaconBlock) error {

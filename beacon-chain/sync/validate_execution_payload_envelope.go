@@ -117,6 +117,10 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err := v.VerifyPayloadHash(bid); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	// [REJECT] hash_tree_root(envelope.execution_requests) == bid.execution_requests_root.
+	if err := v.VerifyExecutionRequestsRoot(bid); err != nil {
+		return pubsub.ValidationReject, err
+	}
 
 	// For self-build, the state is retrived via how we retrieve for beacon block optimization
 	// For builder index, the state is retrived via head state read only

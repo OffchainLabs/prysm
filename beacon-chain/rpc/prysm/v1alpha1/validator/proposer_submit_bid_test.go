@@ -26,15 +26,16 @@ func TestSubmitSignedExecutionPayloadBid_OK(t *testing.T) {
 
 	req := &ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
-			ParentBlockHash: make([]byte, 32),
-			ParentBlockRoot: make([]byte, 32),
-			BlockHash:       make([]byte, 32),
-			PrevRandao:      make([]byte, 32),
-			FeeRecipient:    make([]byte, 20),
-			GasLimit:        30_000_000,
-			BuilderIndex:    1,
-			Slot:            10,
-			Value:           100,
+			ParentBlockHash:       make([]byte, 32),
+			ParentBlockRoot:       make([]byte, 32),
+			BlockHash:             make([]byte, 32),
+			PrevRandao:            make([]byte, 32),
+			FeeRecipient:          make([]byte, 20),
+			GasLimit:              30_000_000,
+			BuilderIndex:          1,
+			Slot:                  10,
+			Value:                 100,
+			ExecutionRequestsRoot: make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	}

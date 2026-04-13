@@ -213,15 +213,15 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 	}
 }
 
-func TestProcessExecutionPayload_Success(t *testing.T) {
+func TestVerifyExecutionPayloadEnvelope_Success(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
-	require.NoError(t, ProcessExecutionPayload(t.Context(), fixture.state, fixture.signed))
+	require.NoError(t, VerifyExecutionPayloadEnvelope(t.Context(), fixture.state, fixture.signed))
 }
 
-func TestProcessExecutionPayloadWithDeferredSig_Success(t *testing.T) {
+func TestVerifyExecutionPayloadEnvelopeWithDeferredSig_Success(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
 
-	sigBatch, err := ProcessExecutionPayloadWithDeferredSig(t.Context(), fixture.state, fixture.signed)
+	sigBatch, err := VerifyExecutionPayloadEnvelopeWithDeferredSig(t.Context(), fixture.state, fixture.signed)
 	require.NoError(t, err)
 	require.NotNil(t, sigBatch)
 	require.Equal(t, 1, len(sigBatch.Signatures))
@@ -235,12 +235,12 @@ func TestProcessExecutionPayloadWithDeferredSig_Success(t *testing.T) {
 	require.Equal(t, true, valid)
 }
 
-func TestProcessExecutionPayload_PrevRandaoMismatch(t *testing.T) {
+func TestVerifyExecutionPayloadEnvelope_PrevRandaoMismatch(t *testing.T) {
 	fixture := buildPayloadFixture(t, func(_ *enginev1.ExecutionPayloadDeneb, bid *ethpb.ExecutionPayloadBid, _ *ethpb.ExecutionPayloadEnvelope) {
 		bid.PrevRandao = bytes.Repeat([]byte{0xFF}, 32)
 	})
 
-	err := ProcessExecutionPayload(t.Context(), fixture.state, fixture.signed)
+	err := VerifyExecutionPayloadEnvelope(t.Context(), fixture.state, fixture.signed)
 	require.ErrorContains(t, "prev randao", err)
 }
 

@@ -5,11 +5,9 @@ import (
 	stderrors "errors"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -17,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -229,34 +226,6 @@ func (s *State) DeleteStateFromCaches(_ context.Context, blockRoot [32]byte) err
 	return s.epochBoundaryStateCache.delete(blockRoot)
 }
 
-// This function is a wrapper that loads the state by block hash, this function would error if the block hash is not in DB.
-func (s *State) loadStateByBlockHash(ctx context.Context, blockHash [32]byte, slot primitives.Slot) (state.BeaconState, error) {
-	blockRoot, err := s.blockRootForExecHash(ctx, blockHash, slot)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not resolve block hash %#x to beacon block root", blockHash)
-	}
-	blockState, err := s.loadStateByRoot(ctx, blockRoot)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not load state by resolved beacon block root %#x for execution block hash %#x", blockRoot, blockHash)
-	}
-	blk, err := s.beaconDB.Block(ctx, blockRoot)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not load block by resolved beacon block root %#x for execution block hash %#x", blockRoot, blockHash)
-	}
-	signedEnvelope, err := s.beaconDB.ExecutionPayloadEnvelope(ctx, blockRoot)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not retrieve execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
-	}
-	envelope, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(signedEnvelope.GetMessage())
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not wrap blinded execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
-	}
-	if err := gloas.ProcessBlindedExecutionPayload(ctx, blockState, blk.Block().StateRoot(), envelope); err != nil {
-		return nil, errors.Wrapf(err, "could not apply execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
-	}
-	return blockState, nil
-}
-
 // This loads a beacon state from either the cache or DB, then replays blocks up the slot of the requested block root.
 func (s *State) loadStateByRoot(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "stateGen.loadStateByRoot")
@@ -322,13 +291,6 @@ func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32
 	}
 	targetSlot := summary.Slot
 
-	// If blockRoot is not a beacon block root (e.g. it's a Gloas execution block hash
-	// used as state key after envelope processing), resolve it to the beacon block root
-	// so that latestAncestor and loadBlocks can walk the block chain.
-	if !s.beaconDB.HasBlock(ctx, blockRoot) {
-		return s.loadStateByBlockHash(ctx, blockRoot, targetSlot)
-	}
-
 	// Since the requested state is not in caches or DB, start replaying using the last
 	// available ancestor state which is retrieved using input block's root.
 	startState, err := s.latestAncestor(ctx, blockRoot)
@@ -350,29 +312,6 @@ func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32
 
 	replayBlockCount.Observe(float64(len(blks)))
 	return s.replayBlocks(ctx, startState, blks, targetSlot)
-}
-
-// blockRootForExecHash resolves a Gloas execution block hash to the corresponding
-// beacon block root by finding the block at the given slot whose bid commits to that hash.
-func (s *State) blockRootForExecHash(ctx context.Context, execHash [32]byte, slot primitives.Slot) ([32]byte, error) {
-	f := filters.NewFilter().SetStartSlot(slot).SetEndSlot(slot)
-	blks, roots, err := s.beaconDB.Blocks(ctx, f)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not query blocks by slot")
-	}
-	for i, blk := range blks {
-		if blk.Block().Version() < version.Gloas {
-			continue
-		}
-		bid, err := blk.Block().Body().SignedExecutionPayloadBid()
-		if err != nil || bid == nil || bid.Message == nil || len(bid.Message.BlockHash) != 32 {
-			continue
-		}
-		if [32]byte(bid.Message.BlockHash) == execHash {
-			return roots[i], nil
-		}
-	}
-	return [32]byte{}, fmt.Errorf("no block at slot %d with execution block hash %#x", slot, execHash)
 }
 
 // latestAncestor returns the highest available ancestor state of the input block root.
