@@ -84,7 +84,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 }
 
 func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
-	log.WithField("slot", sidecar.Slot()).WithField("column", sidecar.Index).Info("Received data column sidecar")
+	log.WithField("slot", sidecar.Slot()).WithField("column", sidecar.Index).Debug("Received data column sidecar")
 
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
 		return errors.Wrap(err, "receive data column sidecar")
