@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -9,6 +10,8 @@ import (
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -17,8 +20,9 @@ import (
 
 // validateExecutionPayloadBid validates execution payload bid gossip rules.
 // [REJECT] The bid's parent (defined by bid.parent_block_root) equals the block's parent (defined by block.parent_root).
-// [REJECT] The length of KZG commitments is less than or equal to the limitation defined in the consensus layer --
-// i.e. validate that len(bid.blob_kzg_commitments) <= get_blob_parameters(get_current_epoch(state)).max_blobs_per_block
+// [REJECT] The length of KZG commitments is less than or equal to the limitation defined in the consensus layer.
+// [REJECT] If parent was FULL, hash_tree_root(block.body.parent_execution_requests) == parent_bid.execution_requests_root.
+// [REJECT] If parent was EMPTY, block.body.parent_execution_requests == ExecutionRequests().
 func (s *Service) validateExecutionPayloadBid(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock) (pubsub.ValidationResult, error) {
 	if blk.Version() < version.Gloas {
 		return pubsub.ValidationAccept, nil
@@ -43,6 +47,52 @@ func (s *Service) validateExecutionPayloadBid(ctx context.Context, blk interface
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(blk.Slot()))
 	if bid.BlobKzgCommitmentCount() > uint64(maxBlobsPerBlock) {
 		return pubsub.ValidationReject, errors.Wrapf(errRejectCommitmentLen, "%d > %d", bid.BlobKzgCommitmentCount(), maxBlobsPerBlock)
+	}
+
+	return pubsub.ValidationAccept, nil
+}
+
+// validateParentExecutionRequests checks the REJECT conditions for parent_execution_requests.
+func (s *Service) validateParentExecutionRequests(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, bid *ethpb.SignedExecutionPayloadBid) (pubsub.ValidationResult, error) {
+	parentRoot := blk.ParentRoot()
+	parentBlock, err := s.cfg.beaconDB.Block(ctx, parentRoot)
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "could not get parent block")
+	}
+	// Pre-Gloas parent: parent_execution_requests must be empty.
+	if parentBlock.Block().Version() < version.Gloas {
+		parentExecutionRequests, err := blk.Body().ParentExecutionRequests()
+		if err != nil {
+			return pubsub.ValidationIgnore, errors.Wrap(err, "could not get parent execution requests")
+		}
+		if !isEmptyExecutionRequests(parentExecutionRequests) {
+			return pubsub.ValidationReject, errors.New("pre-Gloas parent but parent_execution_requests is non-empty")
+		}
+		return pubsub.ValidationAccept, nil
+	}
+	parentSignedBid, err := parentBlock.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "could not get parent bid")
+	}
+
+	parentExecutionRequests, err := blk.Body().ParentExecutionRequests()
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "could not get parent execution requests")
+	}
+
+	isParentFull := bytes.Equal(bid.Message.ParentBlockHash, parentSignedBid.Message.BlockHash)
+	if isParentFull {
+		root, err := parentExecutionRequests.HashTreeRoot()
+		if err != nil {
+			return pubsub.ValidationIgnore, errors.Wrap(err, "could not compute parent execution requests root")
+		}
+		if !bytes.Equal(root[:], parentSignedBid.Message.ExecutionRequestsRoot) {
+			return pubsub.ValidationReject, errors.New("parent execution requests root does not match parent bid commitment")
+		}
+	} else {
+		if !isEmptyExecutionRequests(parentExecutionRequests) {
+			return pubsub.ValidationReject, errors.New("parent was empty but parent_execution_requests is non-empty")
+		}
 	}
 	return pubsub.ValidationAccept, nil
 }
@@ -108,4 +158,11 @@ func (s *Service) requestPayloadEnvelope(root [32]byte) {
 			log.WithError(err).Debug("Could not process requested payload envelope")
 		}
 	}
+}
+
+func isEmptyExecutionRequests(r *enginev1.ExecutionRequests) bool {
+	if r == nil {
+		return true
+	}
+	return len(r.Deposits) == 0 && len(r.Withdrawals) == 0 && len(r.Consolidations) == 0
 }
