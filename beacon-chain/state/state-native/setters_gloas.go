@@ -91,18 +91,20 @@ func (b *BeaconState) SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid)
 	randao := h.PrevRandao()
 	blobKzgCommitments := h.BlobKzgCommitments()
 	feeRecipient := h.FeeRecipient()
+	executionRequestsRoot := h.ExecutionRequestsRoot()
 	b.latestExecutionPayloadBid = &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:    parentBlockHash[:],
-		ParentBlockRoot:    parentBlockRoot[:],
-		BlockHash:          blockHash[:],
-		PrevRandao:         randao[:],
-		GasLimit:           h.GasLimit(),
-		BuilderIndex:       h.BuilderIndex(),
-		Slot:               h.Slot(),
-		Value:              h.Value(),
-		ExecutionPayment:   h.ExecutionPayment(),
-		BlobKzgCommitments: blobKzgCommitments,
-		FeeRecipient:       feeRecipient[:],
+		ParentBlockHash:       parentBlockHash[:],
+		ParentBlockRoot:       parentBlockRoot[:],
+		BlockHash:             blockHash[:],
+		PrevRandao:            randao[:],
+		GasLimit:              h.GasLimit(),
+		BuilderIndex:          h.BuilderIndex(),
+		Slot:                  h.Slot(),
+		Value:                 h.Value(),
+		ExecutionPayment:      h.ExecutionPayment(),
+		BlobKzgCommitments:    blobKzgCommitments,
+		FeeRecipient:          feeRecipient[:],
+		ExecutionRequestsRoot: executionRequestsRoot[:],
 	}
 	b.markFieldAsDirty(types.LatestExecutionPayloadBid)
 
@@ -141,13 +143,37 @@ func (b *BeaconState) QueueBuilderPayment() error {
 	if b.version < version.Gloas {
 		return errNotSupported("QueueBuilderPayment", b.version)
 	}
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	paymentIndex := slotsPerEpoch + (b.slot % slotsPerEpoch)
+	return b.queueBuilderPaymentAtIndex(paymentIndex)
+}
 
+// QueueBuilderPaymentForSlot queues the builder payment at the epoch-relative
+// index for the given slot. Used by process_parent_execution_payload to clear
+// the parent slot's payment entry.
+func (b *BeaconState) QueueBuilderPaymentForSlot(parentSlot primitives.Slot) error {
+	if b.version < version.Gloas {
+		return errNotSupported("QueueBuilderPaymentForSlot", b.version)
+	}
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	currentEpoch := slots.ToEpoch(b.slot)
+	parentEpoch := slots.ToEpoch(parentSlot)
+
+	var paymentIndex primitives.Slot
+	if parentEpoch == currentEpoch {
+		paymentIndex = slotsPerEpoch + (parentSlot % slotsPerEpoch)
+	} else if parentEpoch+1 == currentEpoch {
+		paymentIndex = parentSlot % slotsPerEpoch
+	} else {
+		return nil
+	}
+	return b.queueBuilderPaymentAtIndex(paymentIndex)
+}
+
+func (b *BeaconState) queueBuilderPaymentAtIndex(paymentIndex primitives.Slot) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	slot := b.slot
-	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-	paymentIndex := slotsPerEpoch + (slot % slotsPerEpoch)
 	if uint64(paymentIndex) >= uint64(len(b.builderPendingPayments)) {
 		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", paymentIndex, len(b.builderPendingPayments))
 	}
