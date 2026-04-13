@@ -220,16 +220,12 @@ var (
 		Name:  "ignore-unviable-attestations",
 		Usage: "Ignores attestations whose target state is not viable with respect to the current head (avoid expensive state replay from lagging attesters).",
 	}
-	// Activate ZKVM execution proof mode
+	// EnableZkvmFlag enables ZKVM execution proof mode.
 	EnableZkvmFlag = &cli.BoolFlag{
-		Name: "activate-zkvm",
-		Usage: `
-			Activates ZKVM execution proof mode. Enables the node to subscribe to the
-        	execution_proof gossip topic, receive and verify execution proofs from peers,
-        	and advertise zkVM support in its ENR for peer discovery.
-        	Use --zkvm-generation-proof-types to specify which proof types this node
-        	should generate (optional - nodes can verify without generating).
-		`,
+		Name: "enable-zkvm",
+		Usage: "Enables ZKVM execution proof mode. The node subscribes to the " +
+			"execution_proof gossip topic, verifies proofs via the verifier endpoint, " +
+			"and advertises zkVM support in its ENR. Requires --verifier-rest-api-provider.",
 	}
 )
 

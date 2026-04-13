@@ -2,6 +2,7 @@ package verification
 
 import (
 	"context"
+	"net/http"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
@@ -55,6 +56,7 @@ type sharedResources struct {
 	hsp   HeadStateProvider
 	ic    *inclusionProofCache
 	sg    singleflight.Group
+	zpv   *zkProofVerifier
 }
 
 // Initializer is used to create different Verifiers.
@@ -114,6 +116,13 @@ type InitializerOption func(waiter *InitializerWaiter)
 func WithForkLookup(fl forkLookup) InitializerOption {
 	return func(iw *InitializerWaiter) {
 		iw.getFork = fl
+	}
+}
+
+// WithVerifierEndpoint sets the zkboost REST API endpoint used for proof verification.
+func WithVerifierEndpoint(endpoint string) InitializerOption {
+	return func(iw *InitializerWaiter) {
+		iw.ini.shared.zpv = &zkProofVerifier{endpoint: endpoint, http: &http.Client{}}
 	}
 }
 

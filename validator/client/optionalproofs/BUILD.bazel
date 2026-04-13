@@ -1,0 +1,33 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "log.go",
+        "service.go",
+        "types.go",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v7/validator/client/optionalproofs",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//api:go_default_library",
+        "//api/client:go_default_library",
+        "//api/client/event:go_default_library",
+        "//api/server/structs:go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
+        "//config/params:go_default_library",
+        "//encoding/bytesutil:go_default_library",
+        "//proto/engine/v1:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//proto/prysm/v1alpha1/validator-client:go_default_library",
+        "//time/slots:go_default_library",
+        "//validator/accounts/iface:go_default_library",
+        "//validator/accounts/wallet:go_default_library",
+        "//validator/client/beacon-api:go_default_library",
+        "//validator/client/iface:go_default_library",
+        "//validator/keymanager:go_default_library",
+        "@com_github_sirupsen_logrus//:go_default_library",
+        "@io_opentelemetry_go_contrib_instrumentation_net_http_otelhttp//:go_default_library",
+        "@org_golang_google_protobuf//types/known/emptypb:go_default_library",
+    ],
+)

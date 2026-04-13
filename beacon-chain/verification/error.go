@@ -94,6 +94,12 @@ var (
 	// ErrInvalidProverSignature means RequireValidProverSignature failed.
 	ErrInvalidProverSignature = errors.Join(ErrProofInvalid, errors.New("prover signature could not be verified"))
 
+	// ErrProofVerificationFailed means the prover returned INVALID for the proof.
+	ErrProofVerificationFailed = errors.Join(ErrProofInvalid, errors.New("prover returned INVALID for execution proof"))
+
+	// ErrProofVerificationEndpoint means the prover verification endpoint returned an error.
+	ErrProofVerificationEndpoint = errors.Join(ErrProofInvalid, errors.New("prover verification endpoint error"))
+
 	// errProofsInvalid is a general error for proof verification failures.
 	errProofsInvalid = errors.New("execution proofs failed verification")
 )

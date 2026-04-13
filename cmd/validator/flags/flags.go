@@ -52,6 +52,18 @@ var (
 		To provide multiple values for the same key, specify the same key for each value. 
 		Example: --grpc-headers=key1=value1,key1=value2,key2=value3`,
 	}
+	// ProverRESTApiProviderFlag defines the prover (zkboost) REST API endpoint.
+	ProverRESTApiProviderFlag = &cli.StringFlag{
+		Name:  "prover-rest-api-provider",
+		Usage: "Prover (zkboost) REST API endpoint for subscribing to execution proof events.",
+	}
+	// GenerateProofsFlag enables execution proof generation.
+	GenerateProofsFlag = &cli.BoolFlag{
+		Name: "generate-proofs",
+		Usage: "Enables execution proof generation. The validator client will subscribe to " +
+			"block events, submit payloads to the prover, sign completed proofs, and broadcast " +
+			"them to the beacon node. Requires --prover-rest-api-provider.",
+	}
 	// CertFlag defines a flag for the node's TLS certificate.
 	CertFlag = &cli.StringFlag{
 		Name:  "tls-cert",

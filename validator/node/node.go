@@ -32,6 +32,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/prereqs"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
+	"github.com/OffchainLabs/prysm/v7/validator/client/optionalproofs"
 	"github.com/OffchainLabs/prysm/v7/validator/db"
 	"github.com/OffchainLabs/prysm/v7/validator/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
@@ -241,6 +242,10 @@ func (c *ValidatorClient) registerServices(cliCtx *cli.Context) error {
 		return errors.Wrapf(err, "could not register validator service")
 	}
 
+	if err := c.registerOptionalProofsService(cliCtx); err != nil {
+		return errors.Wrapf(err, "could not register optional proofs service")
+	}
+
 	if err := c.registerRPCService(cliCtx); err != nil {
 		return errors.Wrapf(err, "could not register RPC service")
 	}
@@ -441,6 +446,30 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 	}
 
 	return c.services.RegisterService(validatorService)
+}
+
+func (c *ValidatorClient) registerOptionalProofsService(cliCtx *cli.Context) error {
+	if !cliCtx.Bool(flags.GenerateProofsFlag.Name) {
+		return nil
+	}
+
+	proverApiEndpoint := cliCtx.String(flags.ProverRESTApiProviderFlag.Name)
+	if proverApiEndpoint == "" {
+		return fmt.Errorf("--%s requires --%s to be set", flags.GenerateProofsFlag.Name, flags.ProverRESTApiProviderFlag.Name)
+	}
+
+	beaconApiEndpoint := cliCtx.String(flags.BeaconRESTApiProviderFlag.Name)
+	if beaconApiEndpoint == "" {
+		return fmt.Errorf("--%s requires --%s to be set", flags.GenerateProofsFlag.Name, flags.BeaconRESTApiProviderFlag.Name)
+	}
+
+	s := optionalproofs.NewService(cliCtx.Context, &optionalproofs.Config{
+		BeaconApiEndpoint: beaconApiEndpoint,
+		ProverApiEndpoint: proverApiEndpoint,
+		Wallet:            c.wallet,
+	})
+
+	return c.services.RegisterService(s)
 }
 
 func Web3SignerConfig(cliCtx *cli.Context) (*remoteweb3signer.SetupConfig, error) {

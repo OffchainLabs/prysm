@@ -344,6 +344,12 @@ var (
 		Name:  "semi-supernode",
 		Usage: "Custodies just enough data to serve the blobs and blob sidecars beacon API. Cannot be used with --supernode.",
 	}
+	// VerifierRESTApiProviderFlag defines the verifier (zkboost) REST API endpoint.
+	VerifierRESTApiProviderFlag = &cli.StringFlag{
+		Name: "verifier-rest-api-provider",
+		Usage: "Verifier (zkboost) REST API endpoint for verifying execution proofs. " +
+			"Required when --enable-zkvm is set.",
+	}
 	// BatchVerifierLimit sets the maximum number of signatures to batch verify at once.
 	BatchVerifierLimit = &cli.IntFlag{
 		Name:  "batch-verifier-limit",

@@ -39,7 +39,7 @@ func (s *Server) SubmitExecutionProof(w http.ResponseWriter, r *http.Request) {
 		"proofDataSize":         len(proof.Message.ProofData),
 		"newPayloadRequestRoot": hexutil.Encode(proof.Message.PublicInput.NewPayloadRequestRoot),
 		"signature":             hexutil.Encode(proof.Signature),
-	}).Info("Received and broadcast execution proof")
+	}).Info("Gossiped new execution proof")
 
 	w.WriteHeader(http.StatusOK)
 }

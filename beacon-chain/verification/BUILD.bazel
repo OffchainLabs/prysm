@@ -17,6 +17,7 @@ go_library(
         "metrics.go",
         "mock.go",
         "result.go",
+        "verifier_client.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/verification",
     visibility = ["//visibility:public"],

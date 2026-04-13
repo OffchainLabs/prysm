@@ -169,8 +169,8 @@ func (v *ROSignedExecutionProofsVerifier) ProofDataNotTooLarge() (err error) {
 	return nil
 }
 
-// ProofVerified performs zkVM proof verification.
-// Currently a no-op, will be implemented when actual proof verification is added.
+// ProofVerified verifies each proof by calling the verifier's verification endpoint.
+// If no verifier is configured, verification is skipped.
 func (v *ROSignedExecutionProofsVerifier) ProofVerified() (err error) {
 	if ok, err := v.results.cached(RequireProofVerified); ok {
 		return err
@@ -178,7 +178,16 @@ func (v *ROSignedExecutionProofsVerifier) ProofVerified() (err error) {
 
 	defer v.recordResult(RequireProofVerified, &err)
 
-	// TODO: To implement
+	if v.zpv == nil {
+		return proofErrBuilder(ErrProofVerificationEndpoint)
+	}
+
+	for _, proof := range v.proofs {
+		if err := v.zpv.VerifyProof(proof); err != nil {
+			return proofErrBuilder(err)
+		}
+	}
+
 	return nil
 }
 

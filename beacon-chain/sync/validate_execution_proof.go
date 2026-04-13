@@ -122,7 +122,7 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 
 	log.WithFields(logrus.Fields{
 		"blockRoot": fmt.Sprintf("%#x", roSignedProof.BlockRoot()),
-		"type":      roSignedProof.Message.ProofType,
+		"type":      ethpb.ProofTypeName(roSignedProof.Message.ProofType[0]),
 		"signature": fmt.Sprintf("%#x", roSignedProof.Signature),
 	}).Debug("Accepted execution proof")
 

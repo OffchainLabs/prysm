@@ -140,6 +140,13 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	if err := configureBeacon(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not set beacon configuration options")
 	}
+
+	// Validate zkVM flag and verifier endpoint consistency.
+	verifierEndpoint := cliCtx.String(flags.VerifierRESTApiProviderFlag.Name)
+	if features.Get().EnableZkvm && verifierEndpoint == "" {
+		return nil, fmt.Errorf("--%s requires --%s to be set", features.EnableZkvmFlag.Name, flags.VerifierRESTApiProviderFlag.Name)
+	}
+
 	ctx := cliCtx.Context
 
 	beacon := &BeaconNode{
@@ -245,7 +252,10 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 
 	beacon.lhsp = &verification.LazyHeadStateProvider{}
 	beacon.verifyInitWaiter = verification.NewInitializerWaiter(
-		beacon.ClockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen, beacon.lhsp)
+		beacon.ClockWaiter,
+		forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen, beacon.lhsp,
+		verification.WithVerifierEndpoint(verifierEndpoint),
+	)
 
 	beacon.BackfillOpts = append(
 		beacon.BackfillOpts,
