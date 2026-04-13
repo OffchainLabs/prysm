@@ -186,6 +186,10 @@ func (m *mockExecutionPayloadEnvelopeVerifier) VerifyPayloadHash(_ interfaces.RO
 	return m.errPayloadHash
 }
 
+func (m *mockExecutionPayloadEnvelopeVerifier) VerifyExecutionRequestsRoot(_ interfaces.ROExecutionPayloadBid) error {
+	return nil
+}
+
 func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ state.ReadOnlyBeaconState) error {
 	return m.errSignature
 }
@@ -359,7 +363,6 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 			BuilderIndex:    builderIdx,
 			BeaconBlockRoot: root[:],
 			Slot:            slot,
-			StateRoot:       bytes.Repeat([]byte{0xBB}, 32),
 		},
 		Signature: bytes.Repeat([]byte{0xAA}, 96),
 	}

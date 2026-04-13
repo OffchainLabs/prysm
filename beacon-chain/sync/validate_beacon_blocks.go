@@ -231,6 +231,18 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return res, err
 	}
 
+	if blk.Block().Version() >= version.Gloas {
+		signedBid, _ := blk.Block().Body().SignedExecutionPayloadBid()
+		if signedBid != nil {
+			if res, err := s.validateParentExecutionRequests(ctx, blk.Block(), signedBid); err != nil {
+				if res == pubsub.ValidationReject {
+					s.setBadBlock(ctx, blockRoot)
+				}
+				return res, err
+			}
+		}
+	}
+
 	err = s.validateBeaconBlock(ctx, blk, blockRoot)
 	if err != nil {
 		if s.hasBadBlock(blockRoot) {
@@ -370,7 +382,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 		if err != nil {
 			return nil, err
 		}
-		return transition.ProcessSlotsForBlock(ctx, headState, blk.Block())
+		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, parentRoot[:], blk.Block().Slot())
 	}
 	// If head and block are in the same epoch and head is compatible with the parent's dependent root, then use head
 	if blockEpoch == headEpoch {
@@ -399,7 +411,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 	if blockEpoch == parentEpoch {
 		return parentState, nil
 	}
-	return transition.ProcessSlotsForBlock(ctx, parentState, blk.Block())
+	return transition.ProcessSlotsUsingNextSlotCache(ctx, parentState, parentRoot[:], blk.Block().Slot())
 }
 
 func validateDenebBeaconBlock(blk interfaces.ReadOnlyBeaconBlock) error {

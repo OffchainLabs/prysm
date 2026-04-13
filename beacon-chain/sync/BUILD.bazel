@@ -140,6 +140,7 @@ go_library(
         "//math:go_default_library",
         "//monitoring/tracing:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
+        "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/attestation:go_default_library",
         "//proto/prysm/v1alpha1/metadata:go_default_library",
