@@ -38,7 +38,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 			if err != nil {
 				log.Error("Failed to get current fork digest")
 			} else {
-				err := broadcaster.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+				err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 					subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
 					topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
 					yield(topic, blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar))

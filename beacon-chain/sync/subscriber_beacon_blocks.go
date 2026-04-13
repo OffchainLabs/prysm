@@ -250,7 +250,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				// Publish the partial column. This is idempotent if we republish the same data twice.
 				// Note, the "partial column" may indeed be complete. We still
 				// should publish to help our peers.
-				err = partialBroadcaster.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+				err = partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 					for i := range uint64(len(partialColumns)) {
 						if !columnIndicesToSample[i] {
 							continue

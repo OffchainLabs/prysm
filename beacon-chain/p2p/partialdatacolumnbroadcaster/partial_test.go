@@ -1345,7 +1345,7 @@ func TestPartialColumnBroadcaster_Publish(t *testing.T) {
 			h.start(recorder)
 			defer h.Stop()
 
-			err := h.broadcaster.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+			err := h.broadcaster.Publish(t.Context(), func(yield func(string, blocks.PartialDataColumn) bool) {
 				yield(topic, *column)
 			})
 			if tt.expectedErrContains != "" {
@@ -1423,7 +1423,7 @@ func TestPartialColumnBroadcaster_Subscribe(t *testing.T) {
 			h.start(recorder)
 			defer h.Stop()
 
-			err := h.broadcaster.Subscribe(topic)
+			err := h.broadcaster.Subscribe(t.Context(), topic)
 			if tt.expectedErr != "" {
 				require.ErrorContains(t, tt.expectedErr, err)
 			} else {
@@ -1488,7 +1488,7 @@ func TestPartialColumnBroadcaster_Unsubscribe(t *testing.T) {
 			h.start(recorder)
 			defer h.Stop()
 
-			err := h.broadcaster.Unsubscribe(topicName)
+			err := h.broadcaster.Unsubscribe(t.Context(), topicName)
 			if tt.expectedErr != "" {
 				require.ErrorContains(t, tt.expectedErr, err)
 			} else {

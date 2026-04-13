@@ -221,9 +221,9 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		go broadcaster1.Start(newTestCallbacks(node1Complete, "Node 1"))
 		go broadcaster2.Start(newTestCallbacks(node2Complete, "Node 2"))
 
-		err = broadcaster1.Subscribe(topic1)
+		err = broadcaster1.Subscribe(ctx, topic1)
 		require.NoError(t, err)
-		err = broadcaster2.Subscribe(topic2)
+		err = broadcaster2.Subscribe(ctx, topic2)
 		require.NoError(t, err)
 
 		// Wait for mesh to form
@@ -231,7 +231,7 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 
 		// Publish
 		t.Log("Publishing from Node 1")
-		err = broadcaster1.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+		err = broadcaster1.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 			yield(topicStr, pc1)
 		})
 		require.NoError(t, err)
@@ -239,7 +239,7 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 
 		t.Log("Publishing from Node 2")
-		err = broadcaster2.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+		err = broadcaster2.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 			yield(topicStr, pc2)
 		})
 		require.NoError(t, err)
