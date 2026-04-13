@@ -215,6 +215,13 @@ func Test_VerifyKZGInclusionProofColumn(t *testing.T) {
 	}
 }
 
+func TestVerifyDataColumnSidecarInclusionProof_SkipsGloas(t *testing.T) {
+	dc := &ethpb.DataColumnSidecarGloas{Index: 0, Column: [][]byte{{0x01}}, KzgProofs: [][]byte{make([]byte, 48)}}
+	roCol, err := blocks.NewRODataColumnGloas(dc)
+	require.NoError(t, err)
+	require.NoError(t, peerdas.VerifyDataColumnSidecarInclusionProof(roCol))
+}
+
 func TestComputeSubnetForDataColumnSidecar(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
