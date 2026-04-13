@@ -91,20 +91,20 @@ func TestGetState(t *testing.T) {
 	})
 
 	t.Run("finalized", func(t *testing.T) {
-		// Use a block root distinct from the state root to verify
-		// we look up by checkpoint root, not by state root.
-		blockRoot := bytesutil.ToBytes32([]byte("finalized-block-root"))
 		stateGen := mockstategen.NewService()
-		stateGen.StatesByRoot[blockRoot] = newBeaconState
+		replayer := mockstategen.NewReplayerBuilder()
+		replayer.SetMockStateForSlot(newBeaconState, params.BeaconConfig().SlotsPerEpoch*10)
+		stateGen.StatesByRoot[stateRoot] = newBeaconState
 
 		p := BeaconDbStater{
 			ChainInfoFetcher: &chainMock.ChainService{
 				FinalizedCheckPoint: &ethpb.Checkpoint{
-					Root:  blockRoot[:],
+					Root:  stateRoot[:],
 					Epoch: 10,
 				},
 			},
 			StateGenService: stateGen,
+			ReplayerBuilder: replayer,
 		}
 
 		s, err := p.State(ctx, []byte("finalized"))
@@ -115,18 +115,20 @@ func TestGetState(t *testing.T) {
 	})
 
 	t.Run("justified", func(t *testing.T) {
-		blockRoot := bytesutil.ToBytes32([]byte("justified-block-root"))
 		stateGen := mockstategen.NewService()
-		stateGen.StatesByRoot[blockRoot] = newBeaconState
+		replayer := mockstategen.NewReplayerBuilder()
+		replayer.SetMockStateForSlot(newBeaconState, params.BeaconConfig().SlotsPerEpoch*10)
+		stateGen.StatesByRoot[stateRoot] = newBeaconState
 
 		p := BeaconDbStater{
 			ChainInfoFetcher: &chainMock.ChainService{
 				CurrentJustifiedCheckPoint: &ethpb.Checkpoint{
-					Root:  blockRoot[:],
+					Root:  stateRoot[:],
 					Epoch: 10,
 				},
 			},
 			StateGenService: stateGen,
+			ReplayerBuilder: replayer,
 		}
 
 		s, err := p.State(ctx, []byte("justified"))
