@@ -788,14 +788,20 @@ func readChunkedDataColumnSidecar(
 		)
 	}
 
-	// Decode the data column sidecar from the stream.
-	dataColumnSidecar := new(ethpb.DataColumnSidecar)
-	if err := p2pApi.Encoding().DecodeWithMaxLength(stream, dataColumnSidecar); err != nil {
-		return nil, errors.Wrap(err, "failed to decode the protobuf-encoded BlobSidecar message from RPC chunk stream")
+	var roDataColumn blocks.RODataColumn
+	if msgVersion >= version.Gloas {
+		dc := new(ethpb.DataColumnSidecarGloas)
+		if err := p2pApi.Encoding().DecodeWithMaxLength(stream, dc); err != nil {
+			return nil, errors.Wrap(err, "failed to decode Gloas DataColumnSidecar from RPC chunk stream")
+		}
+		roDataColumn, err = blocks.NewRODataColumnGloas(dc)
+	} else {
+		dc := new(ethpb.DataColumnSidecar)
+		if err := p2pApi.Encoding().DecodeWithMaxLength(stream, dc); err != nil {
+			return nil, errors.Wrap(err, "failed to decode Fulu DataColumnSidecar from RPC chunk stream")
+		}
+		roDataColumn, err = blocks.NewRODataColumn(dc)
 	}
-
-	// Create a read-only data column from the data column sidecar.
-	roDataColumn, err := blocks.NewRODataColumn(dataColumnSidecar)
 	if err != nil {
 		return nil, errors.Wrap(err, "new read only data column")
 	}
