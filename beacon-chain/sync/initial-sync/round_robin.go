@@ -447,8 +447,7 @@ func envelopesForBlocks(
 }
 
 func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWithROSidecars, envelopes []interfaces.ROSignedExecutionPayloadEnvelope, bFunc batchBlockReceiverFn) (uint64, error) {
-	bwbCount := uint64(len(bwb))
-	if bwbCount == 0 {
+	if len(bwb) == 0 {
 		return 0, errors.New("0 blocks provided into method")
 	}
 
@@ -457,6 +456,7 @@ func (s *Service) processBatchedBlocks(ctx context.Context, bwb []blocks.BlockWi
 	if err != nil {
 		return 0, err
 	}
+	bwbCount := uint64(len(bwb))
 
 	firstBlock := bwb[0].Block
 	if !s.cfg.Chain.HasBlock(ctx, firstBlock.Block().ParentRoot()) {
