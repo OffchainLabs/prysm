@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 
+	requests "github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -105,7 +106,7 @@ func ApplyParentExecutionPayload(
 	}
 	parentSlot := parentBid.Slot()
 
-	if err := processExecutionRequests(ctx, st, reqs); err != nil {
+	if err := ProcessExecutionRequests(ctx, st, reqs); err != nil {
 		return errors.Wrap(err, "could not process parent execution requests")
 	}
 
@@ -129,7 +130,15 @@ func ApplyParentExecutionPayload(
 // Called by ApplyParentExecutionPayload during block processing and by the
 // validator during block production before computing withdrawals.
 func ProcessExecutionRequests(ctx context.Context, st state.BeaconState, rqs *enginev1.ExecutionRequests) error {
-	return processExecutionRequests(ctx, st, rqs)
+	if err := processDepositRequests(ctx, st, rqs.Deposits); err != nil {
+		return errors.Wrap(err, "could not process deposit requests")
+	}
+	var err error
+	st, err = requests.ProcessWithdrawalRequests(ctx, st, rqs.Withdrawals)
+	if err != nil {
+		return errors.Wrap(err, "could not process withdrawal requests")
+	}
+	return requests.ProcessConsolidationRequests(ctx, st, rqs.Consolidations)
 }
 
 // IsEmptyExecutionRequests returns true if the execution requests contain no entries.

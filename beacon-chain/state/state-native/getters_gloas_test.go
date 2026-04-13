@@ -462,16 +462,16 @@ func TestExecutionPayloadAvailability(t *testing.T) {
 	})
 }
 
-func TestIsParentBlockFull(t *testing.T) {
+func TestLatestBlockHashMatchesBidBlockHash(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
 		st := &BeaconState{version: version.Fulu}
-		_, err := st.IsParentBlockFull()
+		_, err := st.LatestBlockHashMatchesBidBlockHash()
 		require.ErrorContains(t, "is not supported", err)
 	})
 
 	t.Run("returns false when bid is nil", func(t *testing.T) {
 		st := &BeaconState{version: version.Gloas}
-		got, err := st.IsParentBlockFull()
+		got, err := st.LatestBlockHashMatchesBidBlockHash()
 		require.NoError(t, err)
 		require.Equal(t, false, got)
 	})
@@ -486,7 +486,7 @@ func TestIsParentBlockFull(t *testing.T) {
 			latestBlockHash: hash,
 		}
 
-		got, err := st.IsParentBlockFull()
+		got, err := st.LatestBlockHashMatchesBidBlockHash()
 		require.NoError(t, err)
 		require.Equal(t, true, got)
 	})
@@ -502,7 +502,7 @@ func TestIsParentBlockFull(t *testing.T) {
 			latestBlockHash: other,
 		}
 
-		got, err := st.IsParentBlockFull()
+		got, err := st.LatestBlockHashMatchesBidBlockHash()
 		require.NoError(t, err)
 		require.Equal(t, false, got)
 	})

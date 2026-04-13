@@ -43,7 +43,7 @@ import (
 // </spec>
 func ProcessWithdrawals(st state.BeaconState) error {
 	// Must be called before ProcessExecutionPayloadBid for the current block.
-	full, err := st.IsParentBlockFull()
+	full, err := st.LatestBlockHashMatchesBidBlockHash()
 	if err != nil {
 		return errors.Wrap(err, "could not get parent block full status")
 	}

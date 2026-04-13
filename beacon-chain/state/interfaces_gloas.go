@@ -72,7 +72,7 @@ type readOnlyGloasFields interface {
 	NextWithdrawalBuilderIndex() (primitives.BuilderIndex, error)
 
 	// Withdrawals
-	IsParentBlockFull() (bool, error)
+	LatestBlockHashMatchesBidBlockHash() (bool, error)
 	ExpectedWithdrawalsGloas() (ExpectedWithdrawalsGloasResult, error)
 	PayloadExpectedWithdrawals() ([]*enginev1.Withdrawal, error)
 	WithdrawalsForPayload() ([]*enginev1.Withdrawal, error)
