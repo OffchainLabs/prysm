@@ -23,6 +23,7 @@ type ExecutionPayloadEnvelopeVerifier interface {
 	VerifySlotMatchesBlock(primitives.Slot) error
 	VerifyBuilderValid(interfaces.ROExecutionPayloadBid) error
 	VerifyPayloadHash(interfaces.ROExecutionPayloadBid) error
+	VerifyExecutionRequestsRoot(interfaces.ROExecutionPayloadBid) error
 	VerifySignature(state.ReadOnlyBeaconState) error
 	SatisfyRequirement(Requirement)
 }
@@ -40,6 +41,7 @@ var ExecutionPayloadEnvelopeGossipRequirements = []Requirement{
 	RequireEnvelopeSlotMatchesBlock,
 	RequireBuilderValid,
 	RequirePayloadHashValid,
+	RequireExecutionRequestsRootValid,
 	RequireBuilderSignatureValid,
 }
 
@@ -47,12 +49,13 @@ var ExecutionPayloadEnvelopeGossipRequirements = []Requirement{
 var GossipExecutionPayloadEnvelopeRequirements = requirementList(ExecutionPayloadEnvelopeGossipRequirements)
 
 var (
-	ErrEnvelopeBlockRootNotSeen    = errors.New("block root not seen")
-	ErrEnvelopeBlockRootInvalid    = errors.New("block root invalid")
-	ErrEnvelopeSlotBeforeFinalized = errors.New("envelope slot is before finalized checkpoint")
-	ErrEnvelopeSlotMismatch        = errors.New("envelope slot does not match block slot")
-	ErrIncorrectEnvelopeBuilder    = errors.New("builder index does not match committed header")
-	ErrIncorrectEnvelopeBlockHash  = errors.New("block hash does not match committed header")
+	ErrEnvelopeBlockRootNotSeen       = errors.New("block root not seen")
+	ErrEnvelopeBlockRootInvalid       = errors.New("block root invalid")
+	ErrEnvelopeSlotBeforeFinalized    = errors.New("envelope slot is before finalized checkpoint")
+	ErrEnvelopeSlotMismatch           = errors.New("envelope slot does not match block slot")
+	ErrIncorrectEnvelopeBuilder       = errors.New("builder index does not match committed header")
+	ErrIncorrectEnvelopeBlockHash     = errors.New("block hash does not match committed header")
+	ErrIncorrectExecutionRequestsRoot = errors.New("execution requests root does not match committed bid")
 )
 
 var _ ExecutionPayloadEnvelopeVerifier = &EnvelopeVerifier{}
@@ -144,6 +147,24 @@ func (v *EnvelopeVerifier) VerifyPayloadHash(bid interfaces.ROExecutionPayloadBi
 	}
 	if bid.BlockHash() != env.BlockHash() {
 		return fmt.Errorf("%w: payload=%#x bid=%#x", ErrIncorrectEnvelopeBlockHash, env.BlockHash(), bid.BlockHash())
+	}
+	return nil
+}
+
+// VerifyExecutionRequestsRoot checks that hash_tree_root(envelope.execution_requests) == bid.execution_requests_root.
+func (v *EnvelopeVerifier) VerifyExecutionRequestsRoot(bid interfaces.ROExecutionPayloadBid) (err error) {
+	defer v.record(RequireExecutionRequestsRootValid, &err)
+	env, err := v.e.Envelope()
+	if err != nil {
+		return errors.Wrap(err, "failed to get envelope")
+	}
+	requestsRoot, err := env.ExecutionRequests().HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not compute execution requests root")
+	}
+	bidRoot := bid.ExecutionRequestsRoot()
+	if requestsRoot != bidRoot {
+		return fmt.Errorf("%w: envelope=%#x bid=%#x", ErrIncorrectExecutionRequestsRoot, requestsRoot, bidRoot)
 	}
 	return nil
 }

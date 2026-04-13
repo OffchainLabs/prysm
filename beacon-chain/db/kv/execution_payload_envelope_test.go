@@ -40,7 +40,6 @@ func testEnvelope(t *testing.T) *ethpb.SignedExecutionPayloadEnvelope {
 			BuilderIndex:      primitives.BuilderIndex(42),
 			BeaconBlockRoot:   bytesutil.PadTo([]byte("beaconroot"), 32),
 			Slot:              primitives.Slot(99),
-			StateRoot:         bytesutil.PadTo([]byte("envelopestateroot"), 32),
 		},
 		Signature: bytesutil.PadTo([]byte("sig"), 96),
 	}
@@ -71,7 +70,6 @@ func TestStore_SaveAndRetrieveExecutionPayloadEnvelope(t *testing.T) {
 	assert.Equal(t, env.Message.Slot, loaded.Message.Slot)
 	assert.Equal(t, env.Message.BuilderIndex, loaded.Message.BuilderIndex)
 	assert.DeepEqual(t, env.Message.BeaconBlockRoot, loaded.Message.BeaconBlockRoot)
-	assert.DeepEqual(t, env.Message.StateRoot, loaded.Message.StateRoot)
 	assert.DeepEqual(t, env.Signature, loaded.Signature)
 
 	// BlockHash should be the payload's block hash (not a hash tree root).
@@ -168,6 +166,5 @@ func TestBlindEnvelope_PreservesBlockHash(t *testing.T) {
 	assert.Equal(t, env.Message.BuilderIndex, blinded.Message.BuilderIndex)
 	assert.Equal(t, env.Message.Slot, blinded.Message.Slot)
 	assert.DeepEqual(t, env.Message.BeaconBlockRoot, blinded.Message.BeaconBlockRoot)
-	assert.DeepEqual(t, env.Message.StateRoot, blinded.Message.StateRoot)
 	assert.DeepEqual(t, env.Signature, blinded.Signature)
 }
