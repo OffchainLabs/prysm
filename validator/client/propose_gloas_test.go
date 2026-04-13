@@ -57,7 +57,6 @@ func testExecutionPayloadEnvelope(slot primitives.Slot, builderIndex primitives.
 		Slot:              slot,
 		BuilderIndex:      builderIndex,
 		BeaconBlockRoot:   make([]byte, 32),
-		StateRoot:         make([]byte, 32),
 	}
 }
 

@@ -1531,6 +1531,9 @@ func HydrateBeaconBlockBodyGloas(b *ethpb.BeaconBlockBodyGloas) *ethpb.BeaconBlo
 	if b.PayloadAttestations == nil {
 		b.PayloadAttestations = make([]*ethpb.PayloadAttestation, 0)
 	}
+	if b.ParentExecutionRequests == nil {
+		b.ParentExecutionRequests = &enginev1.ExecutionRequests{}
+	}
 	return b
 }
 
@@ -1570,6 +1573,9 @@ func HydrateExecutionPayloadBid(b *ethpb.ExecutionPayloadBid) *ethpb.ExecutionPa
 	}
 	if b.BlobKzgCommitments == nil {
 		b.BlobKzgCommitments = make([][]byte, 0)
+	}
+	if b.ExecutionRequestsRoot == nil {
+		b.ExecutionRequestsRoot = make([]byte, fieldparams.RootLength)
 	}
 	return b
 }
@@ -1641,17 +1647,18 @@ func GenerateTestSignedExecutionPayloadBid(slot primitives.Slot) *ethpb.SignedEx
 
 	return &ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
-			Slot:               slot,
-			BuilderIndex:       1,
-			ParentBlockHash:    parentBlockHash,
-			ParentBlockRoot:    parentBlockRoot,
-			BlockHash:          blockHash,
-			GasLimit:           30000000,
-			PrevRandao:         prevRandao,
-			FeeRecipient:       feeRecipient,
-			Value:              1000000,
-			ExecutionPayment:   2000000,
-			BlobKzgCommitments: [][]byte{blobKzgCommitment},
+			Slot:                  slot,
+			BuilderIndex:          1,
+			ParentBlockHash:       parentBlockHash,
+			ParentBlockRoot:       parentBlockRoot,
+			BlockHash:             blockHash,
+			GasLimit:              30000000,
+			PrevRandao:            prevRandao,
+			FeeRecipient:          feeRecipient,
+			Value:                 1000000,
+			ExecutionPayment:      2000000,
+			BlobKzgCommitments:    [][]byte{blobKzgCommitment},
+			ExecutionRequestsRoot: make([]byte, fieldparams.RootLength),
 		},
 		Signature: signature,
 	}

@@ -52,7 +52,6 @@ func TestGetExecutionPayloadEnvelope_AcceptsSlotID(t *testing.T) {
 			BuilderIndex:      primitives.BuilderIndex(42),
 			BeaconBlockRoot:   root[:],
 			Slot:              primitives.Slot(177),
-			StateRoot:         bytesutil.PadTo([]byte("envelope-state"), 32),
 		},
 		Signature: bytesutil.PadTo([]byte("sig"), 96),
 	}
@@ -132,7 +131,6 @@ func testSignedEnvelope() *ethpb.SignedExecutionPayloadEnvelope {
 			BuilderIndex:      primitives.BuilderIndex(42),
 			BeaconBlockRoot:   bytesutil.PadTo([]byte("beacon-root"), 32),
 			Slot:              primitives.Slot(100),
-			StateRoot:         bytesutil.PadTo([]byte("envelope-state"), 32),
 		},
 		Signature: bytesutil.PadTo([]byte("sig"), 96),
 	}

@@ -63,19 +63,16 @@ func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, bl
 		return errors.Wrap(err, "could not get parent execution requests")
 	}
 
-	// Determine parent payload status from block data.
 	parentBidBlockHash := parentBid.BlockHash()
 	isParentFull := bytes.Equal(bid.ParentBlockHash, parentBidBlockHash[:])
 
 	if !isParentFull {
-		// Parent was EMPTY — no execution requests expected.
 		if !IsEmptyExecutionRequests(parentExecutionRequests) {
 			return errors.New("parent was empty but parent_execution_requests is non-empty")
 		}
 		return nil
 	}
 
-	// Parent was FULL — verify requests root then apply.
 	requestsRoot, err := parentExecutionRequests.HashTreeRoot()
 	if err != nil {
 		return errors.Wrap(err, "could not compute parent execution requests root")

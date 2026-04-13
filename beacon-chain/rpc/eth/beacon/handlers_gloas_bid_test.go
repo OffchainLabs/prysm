@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -27,17 +27,18 @@ func testJSONSignedBid() *structs.SignedExecutionPayloadBid {
 	hex96 := "0x" + strings.Repeat("00", 96)
 	return &structs.SignedExecutionPayloadBid{
 		Message: &structs.ExecutionPayloadBid{
-			ParentBlockHash:    hex32,
-			ParentBlockRoot:    hex32,
-			BlockHash:          hex32,
-			PrevRandao:         hex32,
-			FeeRecipient:       hex20,
-			GasLimit:           "30000000",
-			BuilderIndex:       "1",
-			Slot:               "100",
-			Value:              "0",
-			ExecutionPayment:   "0",
-			BlobKzgCommitments: []string{},
+			ParentBlockHash:       hex32,
+			ParentBlockRoot:       hex32,
+			BlockHash:             hex32,
+			PrevRandao:            hex32,
+			FeeRecipient:          hex20,
+			GasLimit:              "30000000",
+			BuilderIndex:          "1",
+			Slot:                  "100",
+			Value:                 "0",
+			ExecutionPayment:      "0",
+			BlobKzgCommitments:    []string{},
+			ExecutionRequestsRoot: hex32,
 		},
 		Signature: hex96,
 	}
@@ -165,16 +166,17 @@ func TestPublishSignedExecutionPayloadBid_SSZ(t *testing.T) {
 
 	bid := &ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
-			ParentBlockHash:  make([]byte, 32),
-			ParentBlockRoot:  make([]byte, 32),
-			BlockHash:        make([]byte, 32),
-			PrevRandao:       make([]byte, 32),
-			FeeRecipient:     make([]byte, 20),
-			GasLimit:         30000000,
-			BuilderIndex:     1,
-			Slot:             100,
-			Value:            0,
-			ExecutionPayment: 0,
+			ParentBlockHash:       make([]byte, 32),
+			ParentBlockRoot:       make([]byte, 32),
+			BlockHash:             make([]byte, 32),
+			PrevRandao:            make([]byte, 32),
+			FeeRecipient:          make([]byte, 20),
+			GasLimit:              30000000,
+			BuilderIndex:          1,
+			Slot:                  100,
+			Value:                 0,
+			ExecutionPayment:      0,
+			ExecutionRequestsRoot: make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	}

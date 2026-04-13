@@ -87,7 +87,7 @@ func RunExecutionPayloadTest(t *testing.T, config string) {
 				t.Skip("Skipping invalid execution engine test as it's never supported")
 			}
 
-			err = gloas.ProcessExecutionPayload(context.Background(), preBeaconState, signedEnvelope)
+			err = gloas.VerifyExecutionPayloadEnvelope(context.Background(), preBeaconState, signedEnvelope)
 			if postSSZExists {
 				require.NoError(t, err)
 				comparePostState(t, postSSZFilepath, preBeaconState)

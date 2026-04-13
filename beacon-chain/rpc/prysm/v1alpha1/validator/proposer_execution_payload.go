@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -70,7 +71,8 @@ func (vs *Server) getLocalPayloadFromEngine(
 	st state.BeaconState,
 	parentRoot [32]byte,
 	slot primitives.Slot,
-	proposerId primitives.ValidatorIndex) (*consensusblocks.GetPayloadResponse, error) {
+	proposerId primitives.ValidatorIndex,
+) (*consensusblocks.GetPayloadResponse, error) {
 	logFields := logrus.Fields{
 		"validatorIndex": proposerId,
 		"slot":           slot,
@@ -102,7 +104,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		}
 	}
 	log.WithFields(logFields).Debug("Payload ID cache miss")
-	parentHash, err := vs.getParentBlockHash(ctx, st, slot)
+	parentHash, err := vs.getParentBlockHash(ctx, st, slot, parentRoot)
 	switch {
 	case errors.Is(err, errActivationNotReached) || errors.Is(err, errNoTerminalBlockHash):
 		return consensusblocks.NewGetPayloadResponse(emptyPayload())
@@ -137,7 +139,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 	var attr payloadattribute.Attributer
 	switch {
 	case st.Version() >= version.Gloas:
-		withdrawals, err := st.WithdrawalsForPayload()
+		withdrawals, err := vs.computePayloadWithdrawals(ctx, st, parentRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -255,7 +257,8 @@ func (vs *Server) getTerminalBlockHashIfExists(ctx context.Context, transitionTi
 func (vs *Server) getBuilderPayloadAndBlobs(ctx context.Context,
 	slot primitives.Slot,
 	vIdx primitives.ValidatorIndex,
-	parentGasLimit uint64) (builder.Bid, error) {
+	parentGasLimit uint64,
+) (builder.Bid, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.getBuilderPayloadAndBlobs")
 	defer span.End()
 
@@ -274,8 +277,42 @@ func (vs *Server) getBuilderPayloadAndBlobs(ctx context.Context,
 	return vs.getPayloadHeaderFromBuilder(ctx, slot, vIdx, parentGasLimit)
 }
 
-var errActivationNotReached = errors.New("activation epoch not reached")
-var errNoTerminalBlockHash = errors.New("no terminal block hash")
+var (
+	errActivationNotReached = errors.New("activation epoch not reached")
+	errNoTerminalBlockHash  = errors.New("no terminal block hash")
+)
+
+// computePayloadWithdrawals returns the withdrawals for the next payload.
+func (vs *Server) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte) ([]*enginev1.Withdrawal, error) {
+	if !vs.ForkchoiceFetcher.HasFullNode(parentRoot) {
+		return st.PayloadExpectedWithdrawals()
+	}
+	parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get parent block slot")
+	}
+	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
+		result, err := st.ExpectedWithdrawalsGloas()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute expected withdrawals")
+		}
+		return result.Withdrawals, nil
+	}
+	stCopy := st.Copy()
+	// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).
+	envelope, err := vs.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get parent execution payload envelope")
+	}
+	if err := coregloas.ApplyParentExecutionPayload(ctx, stCopy, envelope.Message.ExecutionRequests); err != nil {
+		return nil, errors.Wrap(err, "could not apply parent execution payload")
+	}
+	result, err := stCopy.ExpectedWithdrawalsGloas()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compute expected withdrawals")
+	}
+	return result.Withdrawals, nil
+}
 
 // getParentBlockHash retrieves the parent block hash of the block at the given slot.
 // The function's behavior varies depending on the state version and whether the merge has been completed.
@@ -287,13 +324,25 @@ var errNoTerminalBlockHash = errors.New("no terminal block hash")
 // If the activation epoch has not been reached, an errActivationNotReached error is returned.
 //
 // Otherwise, the terminal block hash is fetched based on the slot's time, and an error is returned if it doesn't exist.
-func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, slot primitives.Slot) ([]byte, error) {
+func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot [32]byte) ([]byte, error) {
 	if st.Version() >= version.Gloas {
-		latestBlockHash, err := st.LatestBlockHash()
+		parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(headRoot)
 		if err != nil {
-			return nil, errors.Wrap(err, "could not get latest block hash")
+			return nil, errors.Wrap(err, "could not get parent block slot")
 		}
-		return latestBlockHash[:], nil
+		if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
+			return getParentBlockHashPostCapella(st)
+		}
+		bid, err := st.LatestExecutionPayloadBid()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get latest execution payload bid")
+		}
+		if vs.ForkchoiceFetcher.HasFullNode(headRoot) {
+			bh := bid.BlockHash()
+			return bh[:], nil
+		}
+		pbh := bid.ParentBlockHash()
+		return pbh[:], nil
 	}
 	if st.Version() >= version.Capella {
 		return getParentBlockHashPostCapella(st)

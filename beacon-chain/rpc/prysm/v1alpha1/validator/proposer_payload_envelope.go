@@ -1,11 +1,9 @@
 package validator
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
-	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -16,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -26,13 +25,9 @@ import (
 
 // storeExecutionPayloadEnvelope creates and caches the execution payload envelope
 // after the block is fully built (state root set). If postBlockState is non-nil,
-// the envelope state root is eagerly computed; otherwise it is left zeroed for
-// lazy computation by GetExecutionPayloadEnvelope.
 func (vs *Server) storeExecutionPayloadEnvelope(
-	ctx context.Context,
 	sBlk interfaces.SignedBeaconBlock,
 	local *consensusblocks.GetPayloadResponse,
-	postBlockState state.BeaconState,
 ) error {
 	blockRoot, err := sBlk.Block().HashTreeRoot()
 	if err != nil {
@@ -47,26 +42,6 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		BuilderIndex:      params.BeaconConfig().BuilderIndexSelfBuild,
 		BeaconBlockRoot:   blockRoot[:],
 		Slot:              sBlk.Block().Slot(),
-		StateRoot:         make([]byte, 32),
-	}
-
-	// When postBlockState is provided, eagerly compute the post-payload state
-	// root so the envelope is immediately usable by ProduceBlockV4.
-	// Otherwise, leave the state root zeroed for lazy computation later.
-	if postBlockState != nil {
-		stateCopy := postBlockState.Copy()
-		roEnvelope, err := consensusblocks.WrappedROExecutionPayloadEnvelope(envelope)
-		if err != nil {
-			return errors.Wrap(err, "could not wrap envelope")
-		}
-		if err := coregloas.ApplyExecutionPayload(ctx, stateCopy, roEnvelope); err != nil {
-			return errors.Wrap(err, "could not apply execution payload for envelope state root")
-		}
-		stateRoot, err := stateCopy.HashTreeRoot(ctx)
-		if err != nil {
-			return errors.Wrap(err, "could not compute post-payload state root")
-		}
-		envelope.StateRoot = stateRoot[:]
 	}
 
 	// Precompute data column sidecars now (inside ProposeBeaconBlock) so the
@@ -128,7 +103,7 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 	ctx context.Context,
 	req *ethpb.ExecutionPayloadEnvelopeRequest,
 ) (*ethpb.ExecutionPayloadEnvelopeResponse, error) {
-	ctx, span := trace.StartSpan(ctx, "ProposerServer.GetExecutionPayloadEnvelope")
+	_, span := trace.StartSpan(ctx, "ProposerServer.GetExecutionPayloadEnvelope")
 	defer span.End()
 
 	if req == nil {
@@ -147,46 +122,9 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 			"execution payload envelope not found for slot %d", req.Slot)
 	}
 
-	if bytes.Equal(envelope.StateRoot, make([]byte, 32)) {
-		// Lazily set the state root in the envelope by applying the payload evelope on the post block state
-		roEnvelope, err := consensusblocks.WrappedROExecutionPayloadEnvelope(envelope)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "could not wrap envelope: %v", err)
-		}
-		stateRoot, err := vs.computePostPayloadStateRoot(ctx, roEnvelope)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "could not compute post-payload state root: %v", err)
-		}
-		vs.executionPayloadEnvelopeMu.Lock()
-		envelope.StateRoot = stateRoot
-		vs.executionPayloadEnvelopeMu.Unlock()
-	}
-
 	return &ethpb.ExecutionPayloadEnvelopeResponse{
 		Envelope: envelope,
 	}, nil
-}
-
-// computePostPayloadStateRoot retrieves the post-block state (after the block has
-// been submitted and processed) and applies the execution payload state mutations
-// to compute the post-payload state root for the envelope.
-func (vs *Server) computePostPayloadStateRoot(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) ([]byte, error) {
-	ctx, span := trace.StartSpan(ctx, "ProposerServer.computePostPayloadStateRoot")
-	defer span.End()
-
-	beaconState, err := vs.StateGen.StateByRoot(ctx, envelope.BeaconBlockRoot())
-	if err != nil {
-		return nil, errors.Wrap(err, "could not retrieve post-block state")
-	}
-	beaconState = beaconState.Copy()
-	if err := coregloas.ApplyExecutionPayload(ctx, beaconState, envelope); err != nil {
-		return nil, errors.Wrapf(err, "could not apply execution payload at slot %d", beaconState.Slot())
-	}
-	root, err := beaconState.HashTreeRoot(ctx)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not compute post-payload state root at slot %d", beaconState.Slot())
-	}
-	return root[:], nil
 }
 
 // PublishExecutionPayloadEnvelope validates and broadcasts a signed execution payload envelope.
@@ -270,4 +208,28 @@ func (vs *Server) broadcastGloasDataColumns(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// setParentExecutionRequests populates the parent_execution_requests field
+// in the block body based on the parent's execution payload envelope.
+func (vs *Server) setParentExecutionRequests(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState) error {
+	if head.Version() < version.Gloas {
+		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequests{})
+	}
+
+	parentRoot := sBlk.Block().ParentRoot()
+	parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not get parent block slot")
+	}
+	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch || !vs.ForkchoiceFetcher.HasFullNode(parentRoot) {
+		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequests{})
+	}
+
+	// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).
+	signedEnvelope, err := vs.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not get parent execution payload envelope")
+	}
+	return sBlk.SetParentExecutionRequests(signedEnvelope.Message.ExecutionRequests)
 }

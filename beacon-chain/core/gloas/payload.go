@@ -15,14 +15,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ProcessExecutionPayload is a verification function called by fork-choice when
+// VerifyExecutionPayloadEnvelope is a verification function called by fork-choice when
 // importing a signed execution payload. It verifies the payload against the
 // execution engine without processing execution requests or updating state.
 // Actual state mutations are deferred to process_parent_execution_payload in
 // the next block.
 //
-//	<spec fn="process_execution_payload" fork="gloas" hash="defer_payload">
-//	def process_execution_payload(state, signed_envelope, execution_engine, verify=True):
+//	<spec fn="verify_execution_payload_envelope" fork="gloas" hash="defer_payload">
+//	def verify_execution_payload_envelope(state, signed_envelope, execution_engine):
 //	    envelope = signed_envelope.message
 //	    payload = envelope.payload
 //	    if verify:
@@ -49,7 +49,7 @@ import (
 //	        )
 //	    )
 //	</spec>
-func ProcessExecutionPayload(
+func VerifyExecutionPayloadEnvelope(
 	ctx context.Context,
 	st state.BeaconState,
 	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
@@ -66,10 +66,10 @@ func ProcessExecutionPayload(
 	return validatePayloadConsistency(ctx, st, envelope)
 }
 
-// ProcessExecutionPayloadWithDeferredSig is the init-sync entry point: extract
+// VerifyExecutionPayloadEnvelopeWithDeferredSig is the init-sync entry point: extract
 // the signature for deferred batch verification and validate consistency.
 // No state mutations are performed.
-func ProcessExecutionPayloadWithDeferredSig(
+func VerifyExecutionPayloadEnvelopeWithDeferredSig(
 	ctx context.Context,
 	st state.BeaconState,
 	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
