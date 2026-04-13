@@ -21,34 +21,20 @@ func TestService_isNewHead(t *testing.T) {
 	service := setupBeaconChain(t, beaconDB)
 
 	// Zero root is always a new head
-	require.Equal(t, true, service.isNewHead([32]byte{}, false))
-	require.Equal(t, true, service.isNewHead([32]byte{}, true))
+	require.Equal(t, true, service.isNewHead([32]byte{}))
 
 	// Different root is a new head
 	service.head = &head{root: [32]byte{1}}
-	require.Equal(t, true, service.isNewHead([32]byte{2}, false))
+	require.Equal(t, true, service.isNewHead([32]byte{2}))
 
-	// Same root and same full status is not a new head
-	require.Equal(t, false, service.isNewHead([32]byte{1}, false))
-
-	// Same root but different full status is a new head
-	require.Equal(t, true, service.isNewHead([32]byte{1}, true))
-
-	// Same root and both full is not a new head
-	service.head = &head{root: [32]byte{1}, full: true}
-	require.Equal(t, false, service.isNewHead([32]byte{1}, true))
-
-	// Same root, head is full but incoming is not full, is a new head
-	require.Equal(t, true, service.isNewHead([32]byte{1}, false))
+	// Same root is not a new head.
+	require.Equal(t, false, service.isNewHead([32]byte{1}))
 
 	// Nil head should use origin root
 	service.head = nil
 	service.originBlockRoot = [32]byte{3}
-	require.Equal(t, true, service.isNewHead([32]byte{2}, false))
-	require.Equal(t, false, service.isNewHead([32]byte{3}, false))
-
-	// Nil head with full=true is always a new head (originBlockRoot has full=false)
-	require.Equal(t, true, service.isNewHead([32]byte{3}, true))
+	require.Equal(t, true, service.isNewHead([32]byte{2}))
+	require.Equal(t, false, service.isNewHead([32]byte{3}))
 }
 
 func TestService_getHeadStateAndBlock(t *testing.T) {

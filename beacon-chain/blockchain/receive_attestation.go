@@ -134,49 +134,48 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 
 	start = time.Now()
 	// return early if we haven't changed head
-	newHeadRoot, newHeadBlockHash, full, err := s.cfg.ForkChoiceStore.FullHead(ctx)
+	newHeadRoot, _, _, err := s.cfg.ForkChoiceStore.FullHead(ctx)
 	if err != nil {
 		log.WithError(err).Error("Could not compute head from new attestations")
 		return
 	}
-	if !s.isNewHead(newHeadRoot, full) {
+	if !s.isNewHead(newHeadRoot) {
 		return
 	}
 	log.WithField("newHeadRoot", fmt.Sprintf("%#x", newHeadRoot)).Debug("Head changed due to attestations")
-	var accessRoot [32]byte
-	postGloas := slots.ToEpoch(proposingSlot) >= params.BeaconConfig().GloasForkEpoch
-	if full && postGloas {
-		accessRoot = newHeadBlockHash
-	} else {
-		accessRoot = newHeadRoot
-	}
-	headState, headBlock, err := s.getStateAndBlock(ctx, newHeadRoot, accessRoot)
+	headState, headBlock, err := s.getStateAndBlock(ctx, newHeadRoot, newHeadRoot)
 	if err != nil {
 		log.WithError(err).Error("Could not get head block and state")
 		return
 	}
 	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	if s.inRegularSync() {
-		attr := s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:], accessRoot[:])
+		attr := s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:], newHeadRoot[:])
 		if attr != nil && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
 			return
 		}
+		postGloas := slots.ToEpoch(proposingSlot) >= params.BeaconConfig().GloasForkEpoch
 		if postGloas {
-			go func() {
-				pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, newHeadBlockHash, attr)
-				if err != nil {
-					log.WithError(err).Error("Could not update forkchoice with engine")
-				}
-				if pid == nil {
-					if attr != nil {
-						log.Warn("Engine did not return a payload ID for the fork choice update with attributes")
+			blockHash, hashErr := s.cfg.ForkChoiceStore.BlockHash(newHeadRoot)
+			if hashErr != nil {
+				log.WithError(hashErr).Error("Could not get block hash from forkchoice for FCU")
+			} else {
+				go func() {
+					pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
+					if err != nil {
+						log.WithError(err).Error("Could not update forkchoice with engine")
 					}
-					return
-				}
-				var pId [8]byte
-				copy(pId[:], pid[:])
-				s.cfg.PayloadIDCache.Set(proposingSlot, newHeadRoot, pId)
-			}()
+					if pid == nil {
+						if attr != nil {
+							log.Warn("Engine did not return a payload ID for the fork choice update with attributes")
+						}
+						return
+					}
+					var pId [8]byte
+					copy(pId[:], pid[:])
+					s.cfg.PayloadIDCache.Set(proposingSlot, newHeadRoot, pId)
+				}()
+			}
 		} else {
 			fcuArgs := &fcuConfig{
 				headState:     headState,

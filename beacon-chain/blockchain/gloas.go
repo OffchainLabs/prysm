@@ -10,13 +10,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/pkg/errors"
 )
 
 func (s *Service) waitUntilEpoch(target primitives.Epoch, secondsPerSlot uint64) error {
@@ -35,42 +33,6 @@ func (s *Service) waitUntilEpoch(target primitives.Epoch, secondsPerSlot uint64)
 			return s.ctx.Err()
 		}
 	}
-}
-
-// getLookupParentRoot returns the root that serves as key to generate the parent state for the passed beacon block.
-// if it is based on empty or it is pre-Gloas, it is the parent root of the block, otherwise if it is based on full it is
-// the parent hash.
-// The caller of this function should not hold a lock on forkchoice.
-func (s *Service) getLookupParentRoot(b consensus_blocks.ROBlock) ([32]byte, error) {
-	bl := b.Block()
-	parentRoot := bl.ParentRoot()
-	if b.Version() < version.Gloas {
-		return parentRoot, nil
-	}
-	parentSlot, err := s.cfg.ForkChoiceStore.Slot(parentRoot)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "failed to get slot for parent root")
-	}
-
-	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
-		return parentRoot, nil
-	}
-	blockHash, err := s.cfg.ForkChoiceStore.BlockHash(parentRoot)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "failed to get block hash for parent root")
-	}
-	bid, err := bl.Body().SignedExecutionPayloadBid()
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "failed to get signed execution payload bid from block body")
-	}
-	if bid == nil || bid.Message == nil || len(bid.Message.ParentBlockHash) != 32 {
-		return [32]byte{}, errors.New("invalid signed execution payload bid message")
-	}
-	parentHash := [32]byte(bid.Message.ParentBlockHash)
-	if blockHash == parentHash {
-		return parentHash, nil
-	}
-	return parentRoot, nil
 }
 
 func (s *Service) runLatePayloadTasks() {
@@ -193,9 +155,9 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	}
 	beaconLatePayloadTaskTriggeredTotal.Inc()
 	// Head is the empty block.
-	bh, err := st.LatestBlockHash()
+	bh, err := s.BlockHash(hr)
 	if err != nil {
-		log.WithError(err).Error("Could not get latest block hash to notify engine")
+		log.WithError(err).Error("Could not get block hash from forkchoice to notify engine")
 		return
 	}
 	pid, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attr)

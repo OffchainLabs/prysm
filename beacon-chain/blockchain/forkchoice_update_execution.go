@@ -18,18 +18,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func (s *Service) isNewHead(r [32]byte, full bool) bool {
+func (s *Service) isNewHead(r [32]byte) bool {
 	s.headLock.RLock()
 	defer s.headLock.RUnlock()
 
 	currentHeadRoot := s.originBlockRoot
-	currentFull := false
 	if s.head != nil {
 		currentHeadRoot = s.headRoot()
-		currentFull = s.head.full
 	}
 
-	return r != currentHeadRoot || full != currentFull || r == [32]byte{}
+	return r != currentHeadRoot || r == [32]byte{}
 }
 
 func (s *Service) getStateAndBlock(ctx context.Context, r, h [32]byte) (state.BeaconState, interfaces.ReadOnlySignedBeaconBlock, error) {
@@ -72,7 +70,7 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig) {
 		return
 	}
 	// If head has not been updated and attributes are nil, we can skip the FCU.
-	if !s.isNewHead(cfg.headRoot, false) && (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) {
+	if !s.isNewHead(cfg.headRoot) && (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) {
 		return
 	}
 	// If we are proposing and we aim to reorg the block, we have already sent FCU with attributes on lateBlockTasks
@@ -83,7 +81,7 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig) {
 		go s.forkchoiceUpdateWithExecution(cfg.ctx, fcuArgs)
 	}
 
-	if s.isNewHead(fcuArgs.headRoot, false) {
+	if s.isNewHead(fcuArgs.headRoot) {
 		if err := s.saveHead(cfg.ctx, fcuArgs.headRoot, fcuArgs.headBlock, fcuArgs.headState); err != nil {
 			log.WithError(err).Error("Could not save head")
 		}
