@@ -667,10 +667,6 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 		// Track useful cells (cells that extended our data)
 		partialMessageUsefulCellsTotal.WithLabelValues(columnIndexStr).Add(float64(len(cells.cells)))
 
-		// TODO: we could use the heuristic here that if this data was
-		// useful to us, it's likely useful to our peers and we should
-		// republish eagerly
-
 		col, ok, err := ourVerifier.Complete()
 		if err != nil {
 			p.logger.WithError(err).WithFields(cells.logFields()).Error("Failed to complete partial column verifier")
