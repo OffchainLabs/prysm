@@ -158,6 +158,9 @@ func verifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn, commitmen
 // VerifyDataColumnSidecarInclusionProof verifies if the given KZG commitments included in the given beacon block.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_inclusion_proof
 func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
+	if sidecar.IsGloas() {
+		return nil
+	}
 	signedBlockHeader, err := sidecar.SignedBlockHeader()
 	if err != nil {
 		return errors.Wrap(err, "signed block header")

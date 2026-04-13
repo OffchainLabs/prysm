@@ -546,7 +546,7 @@ func (dcs *DataColumnStorage) Get(root [fieldparams.RootLength]byte, indices []u
 			return nil, errors.Wrap(err, "seek")
 		}
 
-		verifiedRODataColumn, err := verification.VerifiedRODataColumnFromDisk(file, root, metadata.sszEncodedDataColumnSidecarSize)
+		verifiedRODataColumn, err := verification.VerifiedRODataColumnFromDisk(file, root, metadata.sszEncodedDataColumnSidecarSize, summary.epoch)
 		if err != nil {
 			return nil, errors.Wrap(err, "verified RO data column from disk")
 		}
