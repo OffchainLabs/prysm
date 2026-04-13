@@ -102,17 +102,13 @@ func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar bl
 	wg.Go(func() error {
 		// Broadcast our complete column for peers that don't use partial messages
 		if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, []blocks.VerifiedRODataColumn{sidecar}, nil); err != nil {
-			return errors.Wrap(err, "process data column sidecars from execution")
+			return errors.Wrap(err, "broadcast data column sidecars")
 		}
 
 		return nil
 	})
 
-	if err := wg.Wait(); err != nil {
-		return err
-	}
-
-	return nil
+	return wg.Wait()
 }
 
 // receiveDataColumnSidecar receives a single data column sidecar: marks it as seen and saves it to the chain.
