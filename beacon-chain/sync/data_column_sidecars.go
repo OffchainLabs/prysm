@@ -79,6 +79,8 @@ func FetchDataColumnSidecars(
 	slotByRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, blockCount)
 	storedIndicesByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, blockCount)
 
+	commitmentsByRoot := make(map[[fieldparams.RootLength]byte][][]byte, blockCount)
+
 	for _, roBlock := range roBlocks {
 		block := roBlock.Block()
 
@@ -97,6 +99,7 @@ func FetchDataColumnSidecars(
 		incompleteRoots[root] = true
 		slotByRoot[root] = slot
 		slotsWithCommitments[slot] = true
+		commitmentsByRoot[root] = commitments
 
 		storedIndices := params.Storage.Summary(root).Stored()
 		if len(storedIndices) > 0 {
@@ -120,7 +123,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Request direct sidecars from peers.
-	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, slotByRoot, requestedIndices, slotsWithCommitments, storedIndicesByRoot, incompleteRoots)
+	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, slotByRoot, requestedIndices, slotsWithCommitments, storedIndicesByRoot, incompleteRoots, commitmentsByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "request direct sidecars from peers")
 	}
@@ -139,7 +142,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Request all possible indirect sidecars from peers which are neither stored nor in `directSidecarsByRoot`
-	indirectSidecarsByRoot, err := requestIndirectSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, storedIndicesByRoot, directSidecarsByRoot, requestedIndices, incompleteRoots)
+	indirectSidecarsByRoot, err := requestIndirectSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, storedIndicesByRoot, directSidecarsByRoot, requestedIndices, incompleteRoots, commitmentsByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "request all sidecars from peers")
 	}
@@ -230,6 +233,7 @@ func requestDirectSidecarsFromPeers(
 	slotsWithCommitments map[primitives.Slot]bool,
 	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	incompleteRoots map[[fieldparams.RootLength]byte]bool,
+	commitmentsByRoot map[[fieldparams.RootLength]byte][][]byte,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	start := time.Now()
 
@@ -286,6 +290,9 @@ func requestDirectSidecarsFromPeers(
 		// Fetch the sidecars from the chosen peers.
 		roDataColumnsByPeer := fetchDataColumnSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
 
+		// Set bid commitments on Gloas columns before verification.
+		setBidCommitments(commitmentsByRoot, roDataColumnsByPeer)
+
 		// Verify the received data column sidecars.
 		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(params.P2P, params.NewVerifier, roDataColumnsByPeer)
 		if err != nil {
@@ -336,6 +343,7 @@ func requestIndirectSidecarsFromPeers(
 	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
 	requestedIndices map[uint64]bool,
 	roots map[[fieldparams.RootLength]byte]bool,
+	commitmentsByRoot map[[fieldparams.RootLength]byte][][]byte,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	start := time.Now()
 
@@ -403,6 +411,9 @@ func requestIndirectSidecarsFromPeers(
 
 		// Fetch the sidecars from the chosen peers.
 		roDataColumnsByPeer := fetchDataColumnSidecarsFromPeers(p, slotByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
+
+		// Set bid commitments on Gloas columns before verification.
+		setBidCommitments(commitmentsByRoot, roDataColumnsByPeer)
 
 		// Verify the received data column sidecars.
 		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(p.P2P, p.NewVerifier, roDataColumnsByPeer)
@@ -1012,6 +1023,23 @@ func verifyByRootDataColumnSidecars(newVerifier verification.NewDataColumnsVerif
 	}
 
 	return verifiedRoDataColumns, nil
+}
+
+// setBidCommitments sets bid KZG commitments on Gloas data columns so verification can proceed.
+func setBidCommitments(commitmentsByRoot map[[fieldparams.RootLength]byte][][]byte, columnsByPeer map[goPeer.ID][]blocks.RODataColumn) {
+	if len(commitmentsByRoot) == 0 {
+		return
+	}
+	for _, columns := range columnsByPeer {
+		for i := range columns {
+			if !columns[i].IsGloas() {
+				continue
+			}
+			if comms, ok := commitmentsByRoot[columns[i].BlockRoot()]; ok {
+				columns[i].SetBidCommitments(comms)
+			}
+		}
+	}
 }
 
 // computeIndicesByRootByPeer returns a peers->root->indices map only for
