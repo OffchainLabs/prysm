@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -111,7 +110,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		log.WithError(err).Error("Could not get head root")
 		return nil
 	}
-	if err := s.postPayloadHeadUpdate(ctx, envelope, preState, root, headRoot); err != nil {
+	if err := s.postPayloadTasks(ctx, envelope, preState, root, headRoot); err != nil {
 		return err
 	}
 
@@ -138,7 +137,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	return nil
 }
 
-func (s *Service) postPayloadHeadUpdate(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, st state.BeaconState, root [32]byte, headRoot []byte) error {
+func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope, st state.BeaconState, root [32]byte, headRoot []byte) error {
 	if !bytes.Equal(headRoot, root[:]) {
 		return nil
 	}
@@ -148,17 +147,9 @@ func (s *Service) postPayloadHeadUpdate(ctx context.Context, envelope interfaces
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 
-	s.headLock.Lock()
-	s.head.state = st
-	s.head.full = true
-	s.headLock.Unlock()
-
 	go func() {
 		ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
 		defer cancel()
-		if err := transition.UpdateNextSlotCache(ctx, blockHash[:], st); err != nil {
-			log.WithError(err).Error("Could not update next slot cache")
-		}
 		if err := s.handleEpochBoundary(ctx, envelope.Slot(), st, blockHash[:]); err != nil {
 			log.WithError(err).Error("Could not handle epoch boundary")
 		}
