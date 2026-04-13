@@ -22,7 +22,11 @@ func WriteStateFetchError(w http.ResponseWriter, err error) {
 	if errors.As(err, &stateNotFoundError) {
 		httputil.HandleError(w, "State not found", http.StatusNotFound)
 		return
-	}
+var stateNotFoundError *lookup.StateNotFoundError
+if errors.As(err, &stateNotFoundError) || errors.Is(err, stategen.ErrNoDataForSlot) {
+    httputil.HandleError(w, "State not found", http.StatusNotFound)
+    return
+}
 	var parseErr *lookup.StateIdParseError
 	if errors.As(err, &parseErr) {
 		httputil.HandleError(w, "Invalid state ID: "+parseErr.Error(), http.StatusBadRequest)
