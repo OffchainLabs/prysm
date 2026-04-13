@@ -206,7 +206,6 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	// Build consensus fields in background
 	var wg sync.WaitGroup
 	wg.Go(func() {
-
 		// Set eth1 data.
 		eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
 		if err != nil {
@@ -250,6 +249,9 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		if sBlk.Version() >= version.Gloas {
 			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head, sBlk.Block().ParentRoot())); err != nil {
 				log.WithError(err).Error("Could not set payload attestations")
+			}
+			if err := vs.setParentExecutionRequests(ctx, sBlk, head); err != nil {
+				log.WithError(err).Error("Could not set parent execution requests")
 			}
 		}
 	})
@@ -595,7 +597,6 @@ func (vs *Server) PrepareBeaconProposer(
 
 	if len(validatorIndices) == 0 {
 		return &emptypb.Empty{}, nil
-
 	}
 
 	log := log.WithField("validatorCount", len(validatorIndices))
@@ -652,10 +653,12 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedB
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create ROBlock")
 	}
-	beaconState, err := vs.BlockReceiver.GetPrestateToPropose(ctx, roblock)
+
+	beaconState, err := vs.StateGen.StateByRoot(ctx, roblock.Block().ParentRoot())
 	if err != nil {
-		return nil, errors.Wrap(err, "could not retrieve beacon state")
+		return nil, errors.Wrapf(err, "could not get pre state for slot %d", roblock.Block().Slot())
 	}
+
 	root, err := transition.CalculateStateRoot(
 		ctx,
 		beaconState,
@@ -671,8 +674,10 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedB
 
 type computeStateRootAttemptsKeyType string
 
-const computeStateRootAttemptsKey = computeStateRootAttemptsKeyType("compute-state-root-attempts")
-const maxComputeStateRootAttempts = 3
+const (
+	computeStateRootAttemptsKey = computeStateRootAttemptsKeyType("compute-state-root-attempts")
+	maxComputeStateRootAttempts = 3
+)
 
 // handleStateRootError retries block construction in some error cases.
 func (vs *Server) handleStateRootError(ctx context.Context, block interfaces.SignedBeaconBlock, err error) ([]byte, error) {

@@ -45,7 +45,6 @@ func TestGetExecutionPayloadEnvelope_AcceptsSlotID(t *testing.T) {
 			BuilderIndex:      primitives.BuilderIndex(42),
 			BeaconBlockRoot:   root[:],
 			Slot:              primitives.Slot(177),
-			StateRoot:         bytesutil.PadTo([]byte("envelope-state"), 32),
 		},
 		Signature: bytesutil.PadTo([]byte("sig"), 96),
 	}

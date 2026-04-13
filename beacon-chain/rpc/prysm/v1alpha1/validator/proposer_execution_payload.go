@@ -102,7 +102,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		}
 	}
 	log.WithFields(logFields).Debug("Payload ID cache miss")
-	parentHash, err := vs.getParentBlockHash(ctx, st, slot)
+	parentHash, err := vs.getParentBlockHash(ctx, st, slot, parentRoot)
 	switch {
 	case errors.Is(err, errActivationNotReached) || errors.Is(err, errNoTerminalBlockHash):
 		return consensusblocks.NewGetPayloadResponse(emptyPayload())
@@ -287,13 +287,13 @@ var errNoTerminalBlockHash = errors.New("no terminal block hash")
 // If the activation epoch has not been reached, an errActivationNotReached error is returned.
 //
 // Otherwise, the terminal block hash is fetched based on the slot's time, and an error is returned if it doesn't exist.
-func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, slot primitives.Slot) ([]byte, error) {
+func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot [32]byte) ([]byte, error) {
 	if st.Version() >= version.Gloas {
-		latestBlockHash, err := st.LatestBlockHash()
+		blockHash, err := vs.ForkchoiceFetcher.BlockHash(headRoot)
 		if err != nil {
-			return nil, errors.Wrap(err, "could not get latest block hash")
+			return nil, errors.Wrap(err, "could not get block hash from forkchoice")
 		}
-		return latestBlockHash[:], nil
+		return blockHash[:], nil
 	}
 	if st.Version() >= version.Capella {
 		return getParentBlockHashPostCapella(st)

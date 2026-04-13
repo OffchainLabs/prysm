@@ -178,14 +178,18 @@ func TestServer_getExecutionPayload(t *testing.T) {
 
 func TestServer_getParentBlockHash_Gloas(t *testing.T) {
 	want := bytesutil.ToBytes32([]byte("gloas-parent-hash"))
+	headRoot := bytesutil.ToBytes32([]byte("head-root"))
 	st, err := util.NewBeaconStateGloas(func(state *ethpb.BeaconStateGloas) error {
-		state.LatestBlockHash = want[:]
 		return nil
 	})
 	require.NoError(t, err)
 
-	vs := &Server{}
-	got, err := vs.getParentBlockHash(context.Background(), st, 0)
+	vs := &Server{
+		ForkchoiceFetcher: &chainMock.ChainService{
+			ForkchoiceBlockHashes: map[[32]byte][32]byte{headRoot: want},
+		},
+	}
+	got, err := vs.getParentBlockHash(context.Background(), st, 0, headRoot)
 	require.NoError(t, err)
 	require.DeepEqual(t, want[:], got)
 }
