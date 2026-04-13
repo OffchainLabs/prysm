@@ -71,6 +71,7 @@ type ReadOnlyBeaconBlockBody interface {
 	ExecutionRequests() (*enginev1.ExecutionRequests, error)
 	PayloadAttestations() ([]*ethpb.PayloadAttestation, error)
 	SignedExecutionPayloadBid() (*ethpb.SignedExecutionPayloadBid, error)
+	ParentExecutionRequests() (*enginev1.ExecutionRequests, error)
 }
 
 type SignedBeaconBlock interface {
@@ -95,6 +96,7 @@ type SignedBeaconBlock interface {
 	SetExecutionRequests(er *enginev1.ExecutionRequests) error
 	SetPayloadAttestations(pa []*ethpb.PayloadAttestation) error
 	SetSignedExecutionPayloadBid(header *ethpb.SignedExecutionPayloadBid) error
+	SetParentExecutionRequests(r *enginev1.ExecutionRequests) error
 	Unblind(e ExecutionData) error
 }
 

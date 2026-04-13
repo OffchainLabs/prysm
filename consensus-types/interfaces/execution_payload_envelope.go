@@ -22,7 +22,6 @@ type ROBlindedExecutionPayloadEnvelope interface {
 	BuilderIndex() primitives.BuilderIndex
 	BeaconBlockRoot() [field_params.RootLength]byte
 	Slot() primitives.Slot
-	StateRoot() [field_params.RootLength]byte
 	BlockHash() [field_params.RootLength]byte
 	IsBlinded() bool
 	IsNil() bool
