@@ -226,10 +226,12 @@ func verifyKzgBatch(kzgBatch []*kzgVerifier) {
 	var verificationErr error
 	start := time.Now()
 	segments, err := peerdas.BatchVerifyDataColumnsCellsKZGProofs(sizeHint, cellProofIters)
+	elapsed := float64(time.Since(start).Milliseconds())
 	if err != nil {
 		verificationErr = errors.Wrap(err, "batch KZG verification failed")
+		verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("batch_failed").Observe(elapsed)
 	} else {
-		verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("batch").Observe(float64(time.Since(start).Milliseconds()))
+		verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("batch").Observe(elapsed)
 	}
 
 	segmentAvailable := verificationErr != nil && len(segments) == len(kzgBatch)
