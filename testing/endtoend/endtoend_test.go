@@ -330,6 +330,7 @@ func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, 
 	flags := slices.Clone(r.config.BeaconFlags)
 	flags = append(flags, fmt.Sprintf("--checkpoint-sync-url=%s", bnAPI))
 	flags = append(flags, fmt.Sprintf("--genesis-beacon-api-url=%s", bnAPI))
+	flags = append(flags, "--disable-get-blobs-v2")
 
 	cfgcp := new(e2etypes.E2EConfig)
 	*cfgcp = *r.config
