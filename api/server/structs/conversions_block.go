@@ -2983,6 +2983,19 @@ func PayloadAttestationDataFromConsensus(d *eth.PayloadAttestationData) *Payload
 	}
 }
 
+func (b *SignedBeaconBlockGloas) ToGeneric() (*eth.GenericSignedBeaconBlock, error) {
+	if b == nil {
+		return nil, errNilValue
+	}
+	signed, err := b.ToConsensus()
+	if err != nil {
+		return nil, err
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Gloas{Gloas: signed},
+	}, nil
+}
+
 func (b *SignedBeaconBlockGloas) ToConsensus() (*eth.SignedBeaconBlockGloas, error) {
 	if b == nil {
 		return nil, errNilValue
@@ -3284,25 +3297,52 @@ func (d *PayloadAttestationData) ToConsensus() (*eth.PayloadAttestationData, err
 	}, nil
 }
 
-// SignedExecutionPayloadEnvelopeFromConsensus converts a proto envelope to the API struct.
-func SignedExecutionPayloadEnvelopeFromConsensus(e *eth.SignedExecutionPayloadEnvelope) (*SignedExecutionPayloadEnvelope, error) {
-	payload, err := ExecutionPayloadDenebFromConsensus(e.Message.Payload)
+// ExecutionPayloadEnvelopeFromConsensus converts a proto envelope to the API struct.
+func ExecutionPayloadEnvelopeFromConsensus(e *eth.ExecutionPayloadEnvelope) (*ExecutionPayloadEnvelope, error) {
+	payload, err := ExecutionPayloadDenebFromConsensus(e.Payload)
 	if err != nil {
 		return nil, err
 	}
 	var requests *ExecutionRequests
-	if e.Message.ExecutionRequests != nil {
-		requests = ExecutionRequestsFromConsensus(e.Message.ExecutionRequests)
+	if e.ExecutionRequests != nil {
+		requests = ExecutionRequestsFromConsensus(e.ExecutionRequests)
+	}
+	return &ExecutionPayloadEnvelope{
+		Payload:           payload,
+		ExecutionRequests: requests,
+		BuilderIndex:      fmt.Sprintf("%d", e.BuilderIndex),
+		BeaconBlockRoot:   hexutil.Encode(e.BeaconBlockRoot),
+		Slot:              fmt.Sprintf("%d", e.Slot),
+		StateRoot:         hexutil.Encode(e.StateRoot),
+	}, nil
+}
+
+// SignedExecutionPayloadEnvelopeFromConsensus converts a signed proto envelope to the API struct.
+func SignedExecutionPayloadEnvelopeFromConsensus(e *eth.SignedExecutionPayloadEnvelope) (*SignedExecutionPayloadEnvelope, error) {
+	envelope, err := ExecutionPayloadEnvelopeFromConsensus(e.Message)
+	if err != nil {
+		return nil, err
 	}
 	return &SignedExecutionPayloadEnvelope{
-		Message: &ExecutionPayloadEnvelope{
-			Payload:           payload,
-			ExecutionRequests: requests,
-			BuilderIndex:      fmt.Sprintf("%d", e.Message.BuilderIndex),
-			BeaconBlockRoot:   hexutil.Encode(e.Message.BeaconBlockRoot),
-			Slot:              fmt.Sprintf("%d", e.Message.Slot),
-			StateRoot:         hexutil.Encode(e.Message.StateRoot),
-		},
+		Message:   envelope,
 		Signature: hexutil.Encode(e.Signature),
+	}, nil
+}
+
+// BlockContentsGloasFromConsensus converts a proto Gloas block and envelope to the API struct.
+func BlockContentsGloasFromConsensus(block *eth.BeaconBlockGloas, envelope *eth.ExecutionPayloadEnvelope) (*BlockContentsGloas, error) {
+	b, err := BeaconBlockGloasFromConsensus(block)
+	if err != nil {
+		return nil, err
+	}
+	env, err := ExecutionPayloadEnvelopeFromConsensus(envelope)
+	if err != nil {
+		return nil, err
+	}
+	return &BlockContentsGloas{
+		Block:                    b,
+		ExecutionPayloadEnvelope: env,
+		KzgProofs:                []string{}, // TODO: populate from blobs bundle
+		Blobs:                    []string{}, // TODO: populate from blobs bundle
 	}, nil
 }

@@ -647,6 +647,7 @@ func TestDataColumnSidecars(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
+		request.SetPathValue("block_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -682,6 +683,7 @@ func TestDataColumnSidecars(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
+		request.SetPathValue("block_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -718,6 +720,7 @@ func TestDataColumnSidecars(t *testing.T) {
 
 		// Test with invalid index (out of range)
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head?indices=9999", nil)
+		request.SetPathValue("block_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -754,6 +757,7 @@ func TestDataColumnSidecars(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
+		request.SetPathValue("block_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -797,6 +801,7 @@ func TestDataColumnSidecars(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
+		request.SetPathValue("block_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 

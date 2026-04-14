@@ -95,7 +95,7 @@ func TestServer_GetBeaconBlock_Phase0(t *testing.T) {
 
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	// Use a separate mock for BlockReceiver with an independent state copy.
-	// This mirrors production where computeStateRoot calls StateByRoot (fresh from DB),
+	// This mirrors production where computePostBlockStateAndRoot calls StateByRoot (fresh from DB),
 	// not the same head state object mutated by the getSlashings goroutine.
 	proposerServer.BlockReceiver = &mock.ChainService{
 		State:           beaconState.Copy(),
@@ -1354,12 +1354,12 @@ func TestProposer_ComputeStateRoot_OK(t *testing.T) {
 
 	wsb, err := blocks.NewSignedBeaconBlock(req)
 	require.NoError(t, err)
-	_, err = proposerServer.computeStateRoot(t.Context(), wsb)
+	_, _, err = proposerServer.computePostBlockStateAndRoot(t.Context(), wsb)
 	require.NoError(t, err)
 }
 
-func TestHandleStateRootError_MaxAttemptsReached(t *testing.T) {
-	// Test that handleStateRootError returns an error when max attempts is reached
+func TestHandlePostBlockStateError_MaxAttemptsReached(t *testing.T) {
+	// Test that handlePostBlockStateError returns an error when max attempts is reached
 	// instead of recursing infinitely.
 	ctx := t.Context()
 	vs := &Server{}
@@ -1372,15 +1372,15 @@ func TestHandleStateRootError_MaxAttemptsReached(t *testing.T) {
 	// Pre-seed the context with max attempts already reached
 	ctx = context.WithValue(ctx, computeStateRootAttemptsKey, maxComputeStateRootAttempts)
 
-	// Call handleStateRootError with a retryable error
-	_, err = vs.handleStateRootError(ctx, wsb, transition.ErrAttestationsSignatureInvalid)
+	// Call handlePostBlockStateError with a retryable error
+	_, err = vs.handlePostBlockStateError(ctx, wsb, transition.ErrAttestationsSignatureInvalid)
 
 	// Should return an error about max attempts instead of recursing
 	require.ErrorContains(t, "attempted max compute state root attempts", err)
 }
 
-func TestHandleStateRootError_IncrementsAttempts(t *testing.T) {
-	// Test that handleStateRootError properly increments the attempts counter
+func TestHandlePostBlockStateError_IncrementsAttempts(t *testing.T) {
+	// Test that handlePostBlockStateError properly increments the attempts counter
 	// and eventually fails after max attempts.
 	db := dbutil.SetupDB(t)
 	ctx := t.Context()
@@ -1403,10 +1403,10 @@ func TestHandleStateRootError_IncrementsAttempts(t *testing.T) {
 	// Add a state for the parent root so StateByRoot succeeds
 	require.NoError(t, stateGen.SaveState(ctx, parentRoot, beaconState))
 
-	// Call handleStateRootError with a retryable error - it will recurse
-	// but eventually hit the max attempts limit since CalculateStateRoot
+	// Call handlePostBlockStateError with a retryable error - it will recurse
+	// but eventually hit the max attempts limit since CalculatePostState
 	// will keep failing (no valid attestations, randao, etc.)
-	_, err = vs.handleStateRootError(ctx, wsb, transition.ErrAttestationsSignatureInvalid)
+	_, err = vs.handlePostBlockStateError(ctx, wsb, transition.ErrAttestationsSignatureInvalid)
 
 	// Should eventually fail - either with max attempts or another error
 	require.NotNil(t, err)
