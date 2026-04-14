@@ -227,6 +227,7 @@ func TestRemoveTrustedPeer(t *testing.T) {
 
 	url := "http://anything.is.fine.but.last.is.important/16Uiu2HAm1n583t4huDMMqEUUBuQs6bLts21mxCfX3tiqu9JfHvRJ"
 	request := httptest.NewRequest("DELETE", url, nil)
+	request.SetPathValue("peer_id", "16Uiu2HAm1n583t4huDMMqEUUBuQs6bLts21mxCfX3tiqu9JfHvRJ")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 	s.RemoveTrustedPeer(writer, request)

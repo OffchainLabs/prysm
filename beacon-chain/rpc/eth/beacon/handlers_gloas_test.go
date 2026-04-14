@@ -2,10 +2,12 @@ package beacon
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	executiontesting "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
@@ -17,7 +19,12 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestGetExecutionPayloadEnvelope_AcceptsSlotID(t *testing.T) {
@@ -104,4 +111,85 @@ func TestGetExecutionPayloadEnvelope_BlockNotFound(t *testing.T) {
 	s.GetExecutionPayloadEnvelope(w, req)
 	require.Equal(t, http.StatusNotFound, w.Code)
 	assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte("Block not found")))
+}
+
+func testSignedEnvelope() *ethpb.SignedExecutionPayloadEnvelope {
+	return &ethpb.SignedExecutionPayloadEnvelope{
+		Message: &ethpb.ExecutionPayloadEnvelope{
+			Payload: &enginev1.ExecutionPayloadDeneb{
+				ParentHash:    bytesutil.PadTo([]byte("parent"), 32),
+				FeeRecipient:  bytesutil.PadTo([]byte("fee"), 20),
+				StateRoot:     bytesutil.PadTo([]byte("state"), 32),
+				ReceiptsRoot:  bytesutil.PadTo([]byte("receipts"), 32),
+				LogsBloom:     make([]byte, 256),
+				PrevRandao:    bytesutil.PadTo([]byte("randao"), 32),
+				BaseFeePerGas: bytesutil.PadTo([]byte{1}, 32),
+				BlockHash:     bytesutil.PadTo([]byte("blockhash"), 32),
+				Transactions:  [][]byte{},
+				Withdrawals:   []*enginev1.Withdrawal{},
+			},
+			ExecutionRequests: &enginev1.ExecutionRequests{},
+			BuilderIndex:      primitives.BuilderIndex(42),
+			BeaconBlockRoot:   bytesutil.PadTo([]byte("beacon-root"), 32),
+			Slot:              primitives.Slot(100),
+			StateRoot:         bytesutil.PadTo([]byte("envelope-state"), 32),
+		},
+		Signature: bytesutil.PadTo([]byte("sig"), 96),
+	}
+}
+
+func TestPublishExecutionPayloadEnvelope_OK(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	signed := testSignedEnvelope()
+
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+		gomock.Any(), gomock.Any(),
+	).Return(&emptypb.Empty{}, nil)
+
+	jsonEnvelope, err := structs.SignedExecutionPayloadEnvelopeFromConsensus(signed)
+	require.NoError(t, err)
+	body, err := json.Marshal(jsonEnvelope)
+	require.NoError(t, err)
+
+	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestPublishExecutionPayloadEnvelope_InvalidBody(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader([]byte("not json")))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+		gomock.Any(), gomock.Any(),
+	).Return(nil, status.Error(codes.Internal, "broadcast failed"))
+
+	signed := testSignedEnvelope()
+	jsonEnvelope, err := structs.SignedExecutionPayloadEnvelopeFromConsensus(signed)
+	require.NoError(t, err)
+	body, err := json.Marshal(jsonEnvelope)
+	require.NoError(t, err)
+
+	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusInternalServerError, w.Code)
 }
