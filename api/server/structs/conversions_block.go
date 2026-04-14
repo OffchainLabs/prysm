@@ -3150,14 +3150,6 @@ func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) 
 	}, nil
 }
 
-func (b *BeaconBlockGloas) ToGeneric() (*eth.GenericBeaconBlock, error) {
-	block, err := b.ToConsensus()
-	if err != nil {
-		return nil, err
-	}
-	return &eth.GenericBeaconBlock{Block: &eth.GenericBeaconBlock_Gloas{Gloas: block}}, nil
-}
-
 func (b *SignedExecutionPayloadBid) ToConsensus() (*eth.SignedExecutionPayloadBid, error) {
 	if b == nil {
 		return nil, errNilValue
