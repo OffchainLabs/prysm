@@ -162,7 +162,7 @@ func TestSubmitSignedProposerPreferences_InvalidEpoch(t *testing.T) {
 		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 
-	// Same epoch (current), not next epoch.
+	// Current slot (already passed) should fail.
 	req := &ethpb.SubmitSignedProposerPreferencesRequest{
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
@@ -177,12 +177,50 @@ func TestSubmitSignedProposerPreferences_InvalidEpoch(t *testing.T) {
 		},
 	}
 	_, err := vs.SubmitSignedProposerPreferences(t.Context(), req)
-	require.ErrorContains(t, "next epoch", err)
+	require.ErrorContains(t, "already passed", err)
 
-	// Two epochs ahead.
+	// Two epochs ahead should fail.
 	req.SignedProposerPreferences[0].Message.ProposalSlot = currentSlot + primitives.Slot(2*params.BeaconConfig().SlotsPerEpoch)
 	_, err = vs.SubmitSignedProposerPreferences(t.Context(), req)
-	require.ErrorContains(t, "next epoch", err)
+	require.ErrorContains(t, "current or next epoch", err)
+}
+
+func TestSubmitSignedProposerPreferences_CurrentEpochFutureSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	currentSlot := primitives.Slot(33)
+	proposalSlot := currentSlot + 1 // future slot in current epoch
+	chain := &chainMock.ChainService{Slot: &currentSlot}
+	p2p := &p2pmock.MockBroadcaster{}
+	cache := cache.NewProposerPreferencesCache()
+	vs := &Server{
+		SyncChecker:              &mockSync.Sync{IsSyncing: false},
+		TimeFetcher:              chain,
+		P2P:                      p2p,
+		ProposerPreferencesCache: cache,
+	}
+
+	req := &ethpb.SubmitSignedProposerPreferencesRequest{
+		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
+			{
+				Message: &ethpb.ProposerPreferences{
+					ProposalSlot:   proposalSlot,
+					ValidatorIndex: 2,
+					FeeRecipient:   make([]byte, 20),
+					GasLimit:       30_000_000,
+				},
+				Signature: make([]byte, 96),
+			},
+		},
+	}
+
+	resp, err := vs.SubmitSignedProposerPreferences(t.Context(), req)
+	require.NoError(t, err)
+	require.DeepEqual(t, &emptypb.Empty{}, resp)
+	assert.Equal(t, true, p2p.BroadcastCalled.Load())
 }
 
 func TestSubmitSignedProposerPreferences_Syncing(t *testing.T) {
