@@ -253,8 +253,6 @@ func TestFieldTrie_RecomputePromotion(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// --- Test direct promotion ---
-
 			ft, err := NewFieldTrie(tc.field, tc.dataType, tc.elements, tc.length, 0)
 			require.NoError(t, err)
 			// Set an absolute threshold small enough so promotion triggers with few indices.
@@ -274,79 +272,81 @@ func TestFieldTrie_RecomputePromotion(t *testing.T) {
 			forked, forkedRoot, err := ft.RecomputeTrie(tc.changedIndices, tc.elements)
 			require.NoError(t, err)
 
-			// The forked root returned by RecomputeTrie must match TrieRoot() on the returned trie.
-			forkedTrieRoot, err := forked.TrieRoot()
-			require.NoError(t, err)
-			require.Equal(t, forkedRoot, forkedTrieRoot)
+			t.Run("direct promotion", func(t *testing.T) {
+				// The forked root returned by RecomputeTrie must match TrieRoot() on the returned trie.
+				forkedTrieRoot, err := forked.TrieRoot()
+				require.NoError(t, err)
+				require.Equal(t, forkedRoot, forkedTrieRoot)
 
-			// The recomputed root must match a fresh trie built from the same elements.
-			requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, forkedRoot)
+				// The recomputed root must match a fresh trie built from the same elements.
+				requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, forkedRoot)
 
-			// The original's dataRef is 0: the fork was promoted to an owned trie,
-			// so it released its base reference during rebuildFromScratch.
-			require.Equal(t, uint(0), ft.dataRef.Refs())
+				// The original's dataRef is 0: the fork was promoted to an owned trie,
+				// so it released its base reference during rebuildFromScratch.
+				require.Equal(t, uint(0), ft.dataRef.Refs())
 
-			// The promoted trie's dataRef is 0: it is an independent owned trie.
-			require.Equal(t, uint(0), forked.dataRef.Refs())
+				// The promoted trie's dataRef is 0: it is an independent owned trie.
+				require.Equal(t, uint(0), forked.dataRef.Refs())
 
-			// The original's root must be unchanged.
-			rootAfterPromotion, err := ft.TrieRoot()
-			require.NoError(t, err)
-			require.Equal(t, originalRoot, rootAfterPromotion)
+				// The original's root must be unchanged.
+				rootAfterPromotion, err := ft.TrieRoot()
+				require.NoError(t, err)
+				require.Equal(t, originalRoot, rootAfterPromotion)
+			})
 
-			// --- Test promotion from a copy of an overlay ---
+			t.Run("promotion from a copy of an overlay", func(t *testing.T) {
+				// Make the promoted (owned) trie shared by copying it.
+				forkedCp2 := forked.CopyTrie()
+				_ = forkedCp2
 
-			// Make the promoted (owned) trie shared by copying it.
-			forkedCp2 := forked.CopyTrie()
-			_ = forkedCp2
+				// Mutate elements to new values and recompute with a small subset (≤ threshold)
+				// to create an overlay (not promoted).
+				tc.mutate2()
+				overlay, overlayRoot, err := forked.RecomputeTrie(tc.changedIndices[:2], tc.elements)
+				require.NoError(t, err)
+				overlayTrieRoot, err := overlay.TrieRoot()
+				require.NoError(t, err)
+				require.Equal(t, overlayRoot, overlayTrieRoot)
 
-			// Mutate elements to new values and recompute with a small subset (≤ threshold)
-			// to create an overlay (not promoted).
-			tc.mutate2()
-			overlay, overlayRoot, err := forked.RecomputeTrie(tc.changedIndices[:2], tc.elements)
-			require.NoError(t, err)
-			overlayTrieRoot, err := overlay.TrieRoot()
-			require.NoError(t, err)
-			require.Equal(t, overlayRoot, overlayTrieRoot)
+				// The overlay root must match a fresh trie built from the same elements.
+				requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, overlayRoot)
 
-			// The overlay root must match a fresh trie built from the same elements.
-			requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, overlayRoot)
+				// The overlay references forked as its base, so forked.dataRef is now 1.
+				require.Equal(t, uint(1), forked.dataRef.Refs())
+				// The overlay's own dataRef is 0: nobody references the overlay's data yet.
+				require.Equal(t, uint(0), overlay.dataRef.Refs())
 
-			// The overlay references forked as its base, so forked.dataRef is now 1.
-			require.Equal(t, uint(1), forked.dataRef.Refs())
-			// The overlay's own dataRef is 0: nobody references the overlay's data yet.
-			require.Equal(t, uint(0), overlay.dataRef.Refs())
+				// Copy the overlay to make it shared (ref=2), forcing the next RecomputeTrie to fork.
+				overlayCp := overlay.CopyTrie()
+				_ = overlayCp
 
-			// Copy the overlay to make it shared (ref=2), forcing the next RecomputeTrie to fork.
-			overlayCp := overlay.CopyTrie()
-			_ = overlayCp
+				// Mutate elements again and recompute with > threshold indices.
+				// Since the overlay is shared, RecomputeTrie forks it (overlay-mode fork path
+				// that deep-copies overrides and shares the base), then promotes because
+				// len(changedIndices) > promotionThreshold.
+				tc.mutate()
+				promoted, promotedRoot, err := overlay.RecomputeTrie(tc.changedIndices, tc.elements)
+				require.NoError(t, err)
 
-			// Mutate elements again and recompute with > threshold indices.
-			// Since the overlay is shared, RecomputeTrie forks it (overlay-mode fork path
-			// that deep-copies overrides and shares the base), then promotes because
-			// len(changedIndices) > promotionThreshold.
-			tc.mutate()
-			promoted, promotedRoot, err := overlay.RecomputeTrie(tc.changedIndices, tc.elements)
-			require.NoError(t, err)
+				// The promoted root returned by RecomputeTrie must match TrieRoot() on the returned trie.
+				promotedTrieRoot, err := promoted.TrieRoot()
+				require.NoError(t, err)
+				require.Equal(t, promotedRoot, promotedTrieRoot)
 
-			// The promoted root returned by RecomputeTrie must match TrieRoot() on the returned trie.
-			promotedTrieRoot, err := promoted.TrieRoot()
-			require.NoError(t, err)
-			require.Equal(t, promotedRoot, promotedTrieRoot)
+				// The promoted root must match a fresh trie built from the same elements.
+				requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, promotedRoot)
 
-			// The promoted root must match a fresh trie built from the same elements.
-			requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, promotedRoot)
+				// The overlay's dataRef is 0: the fork used overlay.base (not overlay itself) as its base.
+				require.Equal(t, uint(0), overlay.dataRef.Refs())
 
-			// The overlay's dataRef is 0: the fork used overlay.base (not overlay itself) as its base.
-			require.Equal(t, uint(0), overlay.dataRef.Refs())
+				// The promoted trie's dataRef is 0: it is an independent owned trie.
+				require.Equal(t, uint(0), promoted.dataRef.Refs())
 
-			// The promoted trie's dataRef is 0: it is an independent owned trie.
-			require.Equal(t, uint(0), promoted.dataRef.Refs())
-
-			// The overlay's root must be unchanged.
-			overlayRootAfterPromotion, err := overlay.TrieRoot()
-			require.NoError(t, err)
-			require.Equal(t, overlayRoot, overlayRootAfterPromotion)
+				// The overlay's root must be unchanged.
+				overlayRootAfterPromotion, err := overlay.TrieRoot()
+				require.NoError(t, err)
+				require.Equal(t, overlayRoot, overlayRootAfterPromotion)
+			})
 		})
 	}
 }
