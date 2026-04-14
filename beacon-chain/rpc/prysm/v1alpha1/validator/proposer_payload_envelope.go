@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
