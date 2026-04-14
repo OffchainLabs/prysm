@@ -1032,3 +1032,50 @@ func TestComputeTotalCount(t *testing.T) {
 	actual := computeTotalCount(input)
 	require.Equal(t, expected, actual)
 }
+
+func TestSetBidCommitments(t *testing.T) {
+	root := [fieldparams.RootLength]byte{1}
+	comms := [][]byte{{0xaa}, {0xbb}}
+
+	// Fulu column should be untouched.
+	fuluDC := &ethpb.DataColumnSidecar{
+		SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+			Header: &ethpb.BeaconBlockHeader{
+				ParentRoot: make([]byte, 32),
+				StateRoot:  make([]byte, 32),
+				BodyRoot:   make([]byte, 32),
+			},
+			Signature: make([]byte, 96),
+		},
+	}
+	fuluCol := blocks.NewRODataColumnNoVerify(fuluDC)
+
+	// Gloas column should get commitments set.
+	gloasDC := &ethpb.DataColumnSidecarGloas{
+		Index:           5,
+		BeaconBlockRoot: root[:],
+		Column:          [][]byte{make([]byte, 2048)},
+		KzgProofs:       [][]byte{make([]byte, 48)},
+	}
+	gloasCol, err := blocks.NewRODataColumnGloasWithRoot(gloasDC, root)
+	require.NoError(t, err)
+
+	pid := peer.ID("test-peer")
+	columnsByPeer := map[peer.ID][]blocks.RODataColumn{
+		pid: {fuluCol, gloasCol},
+	}
+	commitmentsByRoot := map[[fieldparams.RootLength]byte][][]byte{
+		root: comms,
+	}
+
+	setBidCommitments(commitmentsByRoot, columnsByPeer)
+
+	// Fulu column should not have bid commitments.
+	_, err = columnsByPeer[pid][0].KzgCommitments()
+	require.NoError(t, err)
+
+	// Gloas column should now have bid commitments.
+	got, err := columnsByPeer[pid][1].KzgCommitments()
+	require.NoError(t, err)
+	require.Equal(t, 2, len(got))
+}

@@ -513,6 +513,64 @@ func TestService_processBlockBatch(t *testing.T) {
 	})
 }
 
+func TestService_processBatchedBlocksReturnsFilteredCount(t *testing.T) {
+	beaconDB := dbtest.SetupDB(t)
+	genesisBlk := util.NewBeaconBlock()
+	genesisBlkRoot, err := genesisBlk.Block.HashTreeRoot()
+	require.NoError(t, err)
+	util.SaveBlock(t, t.Context(), beaconDB, genesisBlk)
+	st, err := util.NewBeaconState()
+	require.NoError(t, err)
+	s := NewService(t.Context(), &Config{
+		P2P: p2pt.NewTestP2P(t),
+		DB:  beaconDB,
+		Chain: &mock.ChainService{
+			State: st,
+			Root:  genesisBlkRoot[:],
+			DB:    beaconDB,
+			FinalizedCheckPoint: &eth.Checkpoint{
+				Epoch: 0,
+			},
+		},
+		StateNotifier: &mock.MockStateNotifier{},
+	})
+	s.genesisTime = makeGenesisTime(32)
+	ctx := t.Context()
+
+	// Build a linear chain of 9 blocks (slots 1–9).
+	var allBlocks []blocks.BlockWithROSidecars
+	currRoot := genesisBlkRoot
+	for i := primitives.Slot(1); i <= 9; i++ {
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = i
+		blk.Block.ParentRoot = currRoot[:]
+		root, err := blk.Block.HashTreeRoot()
+		require.NoError(t, err)
+		util.SaveBlock(t, ctx, beaconDB, blk)
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		rob, err := blocks.NewROBlock(wsb)
+		require.NoError(t, err)
+		allBlocks = append(allBlocks, blocks.BlockWithROSidecars{Block: rob})
+		currRoot = root
+	}
+
+	// Process slots 1–5 so they are in the DB and head advances to slot 5.
+	cb := func(ctx context.Context, blks []blocks.ROBlock, _ []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error {
+		return s.cfg.Chain.ReceiveBlockBatch(ctx, blks, nil, avs)
+	}
+	count, err := s.processBatchedBlocks(ctx, allBlocks[:5], nil, cb)
+	require.NoError(t, err)
+	require.Equal(t, uint64(5), count)
+	require.Equal(t, primitives.Slot(5), s.cfg.Chain.HeadSlot())
+
+	// Now process the full batch (slots 1–9). Slots 1–5 are already processed,
+	// so only slots 6–9 should be counted.
+	count, err = s.processBatchedBlocks(ctx, allBlocks, nil, cb)
+	require.NoError(t, err)
+	require.Equal(t, uint64(4), count, "count should reflect only unprocessed blocks, not the entire batch")
+}
+
 func TestService_blockProviderScoring(t *testing.T) {
 	currentPeriod := blockLimiterPeriod
 	blockLimiterPeriod = 1 * time.Second
