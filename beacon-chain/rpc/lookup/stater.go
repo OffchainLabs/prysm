@@ -140,13 +140,29 @@ func (p *BeaconDbStater) State(ctx context.Context, stateId []byte) (state.Beaco
 		}
 	case "finalized":
 		checkpoint := p.ChainInfoFetcher.FinalizedCheckpt()
-		s, err = p.StateGenService.StateByRoot(ctx, bytesutil.ToBytes32(checkpoint.Root))
+		targetSlot, err := slots.EpochStart(checkpoint.Epoch)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get start slot")
+		}
+		// We use the stategen replayer to fetch the finalized state and then
+		// replay it to the start slot of our checkpoint's epoch. The replayer
+		// only ever accesses our canonical history, so the state retrieved will
+		// always be the finalized state at that epoch.
+		s, err = p.ReplayerBuilder.ReplayerForSlot(targetSlot).ReplayToSlot(ctx, targetSlot)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get finalized state")
 		}
 	case "justified":
 		checkpoint := p.ChainInfoFetcher.CurrentJustifiedCheckpt()
-		s, err = p.StateGenService.StateByRoot(ctx, bytesutil.ToBytes32(checkpoint.Root))
+		targetSlot, err := slots.EpochStart(checkpoint.Epoch)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get start slot")
+		}
+		// We use the stategen replayer to fetch the justified state and then
+		// replay it to the start slot of our checkpoint's epoch. The replayer
+		// only ever accesses our canonical history, so the state retrieved will
+		// always be the justified state at that epoch.
+		s, err = p.ReplayerBuilder.ReplayerForSlot(targetSlot).ReplayToSlot(ctx, targetSlot)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get justified state")
 		}
@@ -275,8 +291,37 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 		return nil, errors.New("requested slot is in the future")
 	}
 
+	if p.BeaconDB != nil {
+		earliestSlot, err := p.BeaconDB.EarliestSlot(ctx)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			return nil, errors.Wrap(err, "could not determine state availability")
+		}
+		if err == nil && target > 0 && target < earliestSlot {
+			return nil, &StateNotFoundError{
+				message: fmt.Sprintf("requested slot %d is unavailable; earliest available slot is %d", target, earliestSlot),
+			}
+		}
+
+		backfillStatus, err := p.BeaconDB.BackfillStatus(ctx)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			return nil, errors.Wrap(err, "could not determine state availability")
+		}
+		if err == nil && backfillStatus != nil {
+			if target > 0 && target < primitives.Slot(backfillStatus.LowSlot) {
+				return nil, &StateNotFoundError{
+					message: fmt.Sprintf("requested slot %d is unavailable; backfill starts at slot %d", target, backfillStatus.LowSlot),
+				}
+			}
+		}
+	}
+
 	st, err := p.ReplayerBuilder.ReplayerForSlot(target).ReplayBlocks(ctx)
 	if err != nil {
+		if errors.Is(err, stategen.ErrNoDataForSlot) {
+			return nil, &StateNotFoundError{
+				message: fmt.Sprintf("requested slot %d is unavailable; historical data not available", target),
+			}
+		}
 		msg := fmt.Sprintf("error while replaying history to slot=%d", target)
 		return nil, errors.Wrap(err, msg)
 	}
