@@ -192,8 +192,44 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 			Block:     electraGenesisBlock(root),
 			Signature: params.BeaconConfig().EmptySignature[:],
 		})
+	case *ethpb.BeaconStateGloas:
+		return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
+			Block:     gloasGenesisBlock(root),
+			Signature: params.BeaconConfig().EmptySignature[:],
+		})
 	default:
 		return nil, ErrUnrecognizedState
+	}
+}
+
+func gloasGenesisBlock(root [fieldparams.RootLength]byte) *ethpb.BeaconBlockGloas {
+	return &ethpb.BeaconBlockGloas{
+		ParentRoot: params.BeaconConfig().ZeroHash[:],
+		StateRoot:  root[:],
+		Body: &ethpb.BeaconBlockBodyGloas{
+			RandaoReveal: make([]byte, 96),
+			Eth1Data: &ethpb.Eth1Data{
+				DepositRoot: make([]byte, 32),
+				BlockHash:   make([]byte, 32),
+			},
+			Graffiti: make([]byte, 32),
+			SyncAggregate: &ethpb.SyncAggregate{
+				SyncCommitteeBits:      make([]byte, fieldparams.SyncCommitteeLength/8),
+				SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			SignedExecutionPayloadBid: &ethpb.SignedExecutionPayloadBid{
+				Message: &ethpb.ExecutionPayloadBid{
+					ParentBlockHash:    make([]byte, 32),
+					ParentBlockRoot:    make([]byte, 32),
+					BlockHash:          make([]byte, 32),
+					PrevRandao:         make([]byte, 32),
+					FeeRecipient:       make([]byte, 20),
+					BlobKzgCommitments: make([][]byte, 0),
+				},
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			PayloadAttestations: make([]*ethpb.PayloadAttestation, 0),
+		},
 	}
 }
 

@@ -17,10 +17,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -819,4 +819,24 @@ func Test_hashForGenesisRoot(t *testing.T) {
 	genRoot, err = c.hashForGenesisBlock(ctx, root)
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{}, [32]byte(genRoot))
+}
+
+func Test_hashForGenesisRoot_Gloas(t *testing.T) {
+	beaconDB := testDB.SetupDB(t)
+	ctx := t.Context()
+	c := setupBeaconChain(t, beaconDB)
+
+	expectedHash := [32]byte{1, 2, 3, 4, 5}
+	st, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+		LatestBlockHash: expectedHash[:],
+	})
+	require.NoError(t, err)
+	genesis.StoreDuringTest(t, genesis.GenesisData{State: st})
+
+	genesisRoot := [32]byte{0xaa}
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, genesisRoot))
+
+	genHash, err := c.hashForGenesisBlock(ctx, genesisRoot)
+	require.NoError(t, err)
+	require.Equal(t, expectedHash, [32]byte(genHash))
 }

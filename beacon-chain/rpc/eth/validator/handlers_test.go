@@ -3225,7 +3225,7 @@ func TestGetPTCDuties(t *testing.T) {
 	genesisTime := time.Now()
 	// Need enough validators for PTC selection (PTC_SIZE is 512 on mainnet, 2 on minimal)
 	numVals := uint64(fieldparams.PTCSize * 2)
-	st, _ := util.DeterministicGenesisStateFulu(t, numVals)
+	st, _ := util.DeterministicGenesisStateGloas(t, numVals)
 	require.NoError(t, st.SetGenesisTime(genesisTime))
 	// Initialize the committee cache for epoch 0.
 	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), st, 0))
@@ -3505,6 +3505,64 @@ func TestGetPTCDuties(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.StringContains(t, "can not be greater than next epoch", e.Message)
+	})
+}
+
+// TestGetPTCDuties_ForkBoundary verifies that requesting PTC duties for the
+// first GloAS epoch while the state is still Fulu returns empty data instead of
+// crashing or returning wrong committee assignments.
+func TestGetPTCDuties_ForkBoundary(t *testing.T) {
+	helpers.ClearCache()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 1 // Epoch 0 = Fulu, epoch 1 = GloAS.
+	params.OverrideBeaconConfig(cfg)
+
+	slot := primitives.Slot(0)
+	genesisTime := time.Now()
+	numVals := uint64(fieldparams.PTCSize * 2)
+	st, _ := util.DeterministicGenesisStateFulu(t, numVals)
+	require.NoError(t, st.SetGenesisTime(genesisTime))
+	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), st, 0))
+
+	genesisRoot := [32]byte{1, 2, 3}
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
+
+	mockChainService := &mockChain.ChainService{Genesis: genesisTime, State: st, Slot: &slot}
+	s := &Server{
+		Stater:                &testutil.MockStater{BeaconState: st},
+		SyncChecker:           &mockSync.Sync{IsSyncing: false},
+		TimeFetcher:           mockChainService,
+		HeadFetcher:           mockChainService,
+		OptimisticModeFetcher: mockChainService,
+		BeaconDB:              db,
+	}
+
+	t.Run("next epoch at GloAS boundary returns empty on Fulu state", func(t *testing.T) {
+		// Request PTC duties for epoch 1 (GloasForkEpoch). The handler accepts
+		// this as a next-epoch request but the state is Fulu — PTC data must be empty.
+		var indices []string
+		for i := range numVals {
+			indices = append(indices, strconv.FormatUint(i, 10))
+		}
+		indicesJSON, err := json.Marshal(indices)
+		require.NoError(t, err)
+
+		request := httptest.NewRequest(http.MethodPost,
+			"http://www.example.com/eth/v1/validator/duties/ptc/{epoch}",
+			bytes.NewReader(indicesJSON))
+		request.SetPathValue("epoch", "1")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code,
+			"endpoint must not error at the fork boundary")
+		resp := &structs.GetPTCDutiesResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, 0, len(resp.Data),
+			"PTC duties must be empty when state is Fulu and requested epoch is GloAS")
 	})
 }
 

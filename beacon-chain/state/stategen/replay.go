@@ -96,7 +96,7 @@ func (s *State) replayBlocks(
 			if err != nil {
 				return nil, errors.Wrapf(err, "could not wrap blinded execution payload envelope for block at slot %d", slot)
 			}
-			if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, state, blk.Block().StateRoot(), wrappedEnvelope); err != nil {
+			if err := gloas.ProcessBlindedExecutionPayload(ctx, state, blk.Block().StateRoot(), wrappedEnvelope); err != nil {
 				return nil, errors.Wrapf(err, "could not apply execution payload envelope for block at slot %d", slot)
 			}
 		}
@@ -153,7 +153,7 @@ func (s *State) maybeApplyAncestorEnvelope(
 	if err != nil {
 		return errors.Wrap(err, "could not wrap ancestor blinded execution payload envelope")
 	}
-	return gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, st, ancestorBlock.Block().StateRoot(), wrappedEnvelope)
+	return gloas.ProcessBlindedExecutionPayload(ctx, st, ancestorBlock.Block().StateRoot(), wrappedEnvelope)
 }
 
 // loadBlocks loads the blocks between start slot and end slot by recursively fetching from end block root.

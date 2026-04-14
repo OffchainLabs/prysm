@@ -746,6 +746,11 @@ func FuluEnabled() bool {
 	return BeaconConfig().FuluForkEpoch < math.MaxUint64
 }
 
+// GloasEnabled centralizes the check to determine if code paths that are specific to Gloas should be allowed to execute.
+func GloasEnabled() bool {
+	return BeaconConfig().GloasForkEpoch < math.MaxUint64
+}
+
 // WithinDAPeriod checks if the block epoch is within the data availability retention period.
 func WithinDAPeriod(block, current primitives.Epoch) bool {
 	if block >= BeaconConfig().FuluForkEpoch {

@@ -36,7 +36,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
 
 		// Arbitrarily alter the column with index 3
-		verifiedRoSidecars[3].Column = verifiedRoSidecars[3].Column[1:]
+		verifiedRoSidecars[3].DataColumnSidecar().Column = verifiedRoSidecars[3].DataColumnSidecar().Column[1:]
 
 		_, err := peerdas.ReconstructDataColumnSidecars(verifiedRoSidecars)
 		require.ErrorIs(t, err, peerdas.ErrColumnLengthsDiffer)
@@ -88,7 +88,10 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify that the reconstructed sidecars are equal to the original ones.
-		require.DeepSSZEqual(t, inputVerifiedRoSidecars, reconstructedVerifiedRoSidecars)
+		require.Equal(t, len(inputVerifiedRoSidecars), len(reconstructedVerifiedRoSidecars))
+		for i := range inputVerifiedRoSidecars {
+			require.DeepSSZEqual(t, inputVerifiedRoSidecars[i].DataColumnSidecar(), reconstructedVerifiedRoSidecars[i].DataColumnSidecar())
+		}
 	})
 }
 

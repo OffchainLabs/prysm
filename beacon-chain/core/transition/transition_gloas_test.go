@@ -183,7 +183,7 @@ func newGloasForkBoundaryState(
 		CurrentJustifiedCheckpoint:  &ethpb.Checkpoint{Root: make([]byte, 32)},
 		FinalizedCheckpoint:         &ethpb.Checkpoint{Root: make([]byte, 32)},
 		PayloadExpectedWithdrawals:  make([]*engine.Withdrawal, 0),
-		ProposerLookahead:           make([]uint64, 0),
+		ProposerLookahead:           make([]primitives.ValidatorIndex, 0),
 		Builders:                    make([]*ethpb.Builder, 0),
 	}
 	for i := range protoState.BlockRoots {

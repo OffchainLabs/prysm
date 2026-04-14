@@ -29,7 +29,7 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 
 // processDepositRequest processes the specific deposit request
 //
-//	<spec fn="process_deposit_request" fork="gloas" hash="3c6b0310">
+//	<spec fn="process_deposit_request" fork="gloas" hash="0e8b94ab">
 //	def process_deposit_request(state: BeaconState, deposit_request: DepositRequest) -> None:
 //	    # [New in Gloas:EIP7732]
 //	    builder_pubkeys = [b.pubkey for b in state.builders]
@@ -40,8 +40,11 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 //	    # already exists with this pubkey, apply the deposit to their balance
 //	    is_builder = deposit_request.pubkey in builder_pubkeys
 //	    is_validator = deposit_request.pubkey in validator_pubkeys
-//	    is_builder_prefix = is_builder_withdrawal_credential(deposit_request.withdrawal_credentials)
-//	    if is_builder or (is_builder_prefix and not is_validator):
+//	    if is_builder or (
+//	        is_builder_withdrawal_credential(deposit_request.withdrawal_credentials)
+//	        and not is_validator
+//	        and not is_pending_validator(state, deposit_request.pubkey)
+//	    ):
 //	        # Apply builder deposits immediately
 //	        apply_deposit_for_builder(
 //	            state,
@@ -65,37 +68,27 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 //	    )
 //	</spec>
 func processDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest) error {
-	var err error
-	defer func() {
-		if err == nil {
-			builderDepositsProcessedTotal.Inc()
-		}
-	}()
-
 	if request == nil {
-		err = errors.New("nil deposit request")
-		return err
+		return errors.New("nil deposit request")
 	}
 
-	var applied bool
-	applied, err = applyBuilderDepositRequest(beaconState, request)
+	applied, err := applyBuilderDepositRequest(beaconState, request)
 	if err != nil {
-		err = errors.Wrap(err, "could not apply builder deposit")
-		return err
+		return errors.Wrap(err, "could not apply builder deposit")
 	}
 	if applied {
+		builderDepositsProcessedTotal.Inc()
 		return nil
 	}
 
-	if err = beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
+	if err := beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
 		PublicKey:             request.Pubkey,
 		WithdrawalCredentials: request.WithdrawalCredentials,
 		Amount:                request.Amount,
 		Signature:             request.Signature,
 		Slot:                  beaconState.Slot(),
 	}); err != nil {
-		err = errors.Wrap(err, "could not append deposit request")
-		return err
+		return errors.Wrap(err, "could not append deposit request")
 	}
 	return nil
 }
@@ -129,18 +122,26 @@ func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1
 	}
 
 	pubkey := bytesutil.ToBytes48(request.Pubkey)
-	_, isValidator := beaconState.ValidatorIndexByPubkey(pubkey)
 	idx, isBuilder := beaconState.BuilderIndexByPubkey(pubkey)
-	isBuilderPrefix := helpers.IsBuilderWithdrawalCredential(request.WithdrawalCredentials)
-	if !isBuilder && (!isBuilderPrefix || isValidator) {
-		return false, nil
-	}
-
 	if isBuilder {
 		if err := beaconState.IncreaseBuilderBalance(idx, request.Amount); err != nil {
 			return false, err
 		}
 		return true, nil
+	}
+
+	isBuilderPrefix := helpers.IsBuilderWithdrawalCredential(request.WithdrawalCredentials)
+	_, isValidator := beaconState.ValidatorIndexByPubkey(pubkey)
+	if !isBuilderPrefix || isValidator {
+		return false, nil
+	}
+
+	isPending, err := beaconState.IsPendingValidator(request.Pubkey)
+	if err != nil {
+		return false, err
+	}
+	if isPending {
+		return false, nil
 	}
 
 	if err := applyDepositForNewBuilder(

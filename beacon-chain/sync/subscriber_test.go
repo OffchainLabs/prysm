@@ -440,6 +440,84 @@ func Test_wrapAndReportValidation(t *testing.T) {
 	}
 }
 
+func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	mChain := &mockChain.ChainService{
+		Genesis:        time.Now(),
+		ValidatorsRoot: [32]byte{0x01},
+	}
+	clock := startup.NewClock(mChain.Genesis, mChain.ValidatorsRoot)
+	currDigest := params.ForkDigest(clock.CurrentEpoch())
+	nextDigest := params.ForkDigest(clock.CurrentEpoch() + 1)
+	require.NotEqual(t, currDigest, nextDigest, "test requires different fork digests across epochs")
+
+	acceptValidator := func(ctx context.Context, id peer.ID, message *pubsub.Message) (pubsub.ValidationResult, error) {
+		return pubsub.ValidationAccept, nil
+	}
+
+	t.Run("proposer preferences next epoch fork digest accepted", func(t *testing.T) {
+		nextTopic := fmt.Sprintf(p2p.SignedProposerPreferencesTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+		chainStarted := abool.New()
+		chainStarted.SetTo(true)
+		s := &Service{
+			chainStarted: chainStarted,
+			cfg: &config{
+				chain: mChain,
+				clock: clock,
+			},
+			subHandler: newSubTopicHandler(),
+		}
+		_, v := s.wrapAndReportValidation(nextTopic, acceptValidator)
+		got := v(t.Context(), "", &pubsub.Message{
+			Message: &pubsubpb.Message{Topic: &nextTopic},
+		})
+		assert.Equal(t, pubsub.ValidationAccept, got)
+	})
+
+	t.Run("non proposer preferences next epoch fork digest rejected", func(t *testing.T) {
+		nextTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+		chainStarted := abool.New()
+		chainStarted.SetTo(true)
+		s := &Service{
+			chainStarted: chainStarted,
+			cfg: &config{
+				chain: mChain,
+				clock: clock,
+			},
+			subHandler: newSubTopicHandler(),
+		}
+		_, v := s.wrapAndReportValidation(nextTopic, acceptValidator)
+		got := v(t.Context(), "", &pubsub.Message{
+			Message: &pubsubpb.Message{Topic: &nextTopic},
+		})
+		assert.Equal(t, pubsub.ValidationIgnore, got)
+	})
+
+	t.Run("wrong fork digest rejected", func(t *testing.T) {
+		badDigest := [4]byte{0xde, 0xad, 0xbe, 0xef}
+		badTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, badDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+		chainStarted := abool.New()
+		chainStarted.SetTo(true)
+		s := &Service{
+			chainStarted: chainStarted,
+			cfg: &config{
+				chain: mChain,
+				clock: clock,
+			},
+			subHandler: newSubTopicHandler(),
+		}
+		_, v := s.wrapAndReportValidation(badTopic, acceptValidator)
+		got := v(t.Context(), "", &pubsub.Message{
+			Message: &pubsubpb.Message{Topic: &badTopic},
+		})
+		assert.Equal(t, pubsub.ValidationIgnore, got)
+	})
+}
+
 func TestFilterSubnetPeers(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.MainnetConfig()

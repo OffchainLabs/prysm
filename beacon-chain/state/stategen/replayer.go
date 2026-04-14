@@ -139,7 +139,7 @@ func (rs *stateReplayer) ReplayBlocks(ctx context.Context) (state.BeaconState, e
 					if err != nil {
 						return nil, errors.Wrap(err, "could not wrap blinded execution payload envelope")
 					}
-					if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, s, b.Block().StateRoot(), envelope); err != nil {
+					if err := gloas.ProcessBlindedExecutionPayload(ctx, s, b.Block().StateRoot(), envelope); err != nil {
 						return nil, errors.Wrap(err, "could not apply execution payload envelope")
 					}
 				}

@@ -79,7 +79,7 @@ func prepareGloasForkchoiceState(
 		ExecutionPayloadAvailability: make([]byte, 1024),
 		LatestBlockHash:              make([]byte, 32),
 		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
-		ProposerLookahead:            make([]uint64, 64),
+		ProposerLookahead:            make([]primitives.ValidatorIndex, 64),
 	}
 
 	st, err := state_native.InitializeFromProtoUnsafeGloas(base)

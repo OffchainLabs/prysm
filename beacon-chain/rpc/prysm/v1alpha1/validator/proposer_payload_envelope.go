@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -23,13 +25,14 @@ import (
 )
 
 // storeExecutionPayloadEnvelope creates and caches the execution payload envelope
-// after the block is fully built (state root set). The envelope is cached with a
-// zeroed state root; the actual post-payload state root is computed lazily in
-// GetExecutionPayloadEnvelope once the block has been submitted and the post-block
-// state is available via StateGen.
+// after the block is fully built (state root set). If postBlockState is non-nil,
+// the envelope state root is eagerly computed; otherwise it is left zeroed for
+// lazy computation by GetExecutionPayloadEnvelope.
 func (vs *Server) storeExecutionPayloadEnvelope(
+	ctx context.Context,
 	sBlk interfaces.SignedBeaconBlock,
 	local *consensusblocks.GetPayloadResponse,
+	postBlockState state.BeaconState,
 ) error {
 	blockRoot, err := sBlk.Block().HashTreeRoot()
 	if err != nil {
@@ -44,10 +47,43 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		BuilderIndex:      params.BeaconConfig().BuilderIndexSelfBuild,
 		BeaconBlockRoot:   blockRoot[:],
 		Slot:              sBlk.Block().Slot(),
-		StateRoot:         make([]byte, 32), // zeroed; computed lazily in GetExecutionPayloadEnvelope
+		StateRoot:         make([]byte, 32),
 	}
 
-	vs.setExecutionPayloadEnvelope(envelope)
+	// When postBlockState is provided, eagerly compute the post-payload state
+	// root so the envelope is immediately usable by ProduceBlockV4.
+	// Otherwise, leave the state root zeroed for lazy computation later.
+	if postBlockState != nil {
+		stateCopy := postBlockState.Copy()
+		roEnvelope, err := consensusblocks.WrappedROExecutionPayloadEnvelope(envelope)
+		if err != nil {
+			return errors.Wrap(err, "could not wrap envelope")
+		}
+		if err := coregloas.ApplyExecutionPayload(ctx, stateCopy, roEnvelope); err != nil {
+			return errors.Wrap(err, "could not apply execution payload for envelope state root")
+		}
+		stateRoot, err := stateCopy.HashTreeRoot(ctx)
+		if err != nil {
+			return errors.Wrap(err, "could not compute post-payload state root")
+		}
+		envelope.StateRoot = stateRoot[:]
+	}
+
+	// Precompute data column sidecars now (inside ProposeBeaconBlock) so the
+	// expensive KZG cell computation doesn't run during PublishExecutionPayloadEnvelope.
+	var roSidecars []consensusblocks.RODataColumn
+	if bundle := local.BlobsBundler; bundle != nil && len(bundle.GetBlobs()) > 0 {
+		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(bundle.GetBlobs(), bundle.GetProofs())
+		if err != nil {
+			return errors.Wrap(err, "compute cells and proofs from blobs bundle")
+		}
+		roSidecars, err = peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, sBlk.Block().Slot(), blockRoot)
+		if err != nil {
+			return errors.Wrap(err, "build gloas data column sidecars")
+		}
+	}
+
+	vs.setExecutionPayloadEnvelope(envelope, roSidecars)
 	return nil
 }
 
@@ -61,13 +97,14 @@ func extractExecutionPayloadDeneb(local *consensusblocks.GetPayloadResponse) *en
 	return nil
 }
 
-func (vs *Server) setExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope) {
+func (vs *Server) setExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope, dataColumns []consensusblocks.RODataColumn) {
 	if envelope == nil {
 		return
 	}
 	vs.executionPayloadEnvelopeMu.Lock()
 	defer vs.executionPayloadEnvelopeMu.Unlock()
 	vs.executionPayloadEnvelope = envelope
+	vs.executionPayloadDataColumns = dataColumns
 }
 
 func (vs *Server) getExecutionPayloadEnvelope(slot primitives.Slot) (*ethpb.ExecutionPayloadEnvelope, bool) {
@@ -186,6 +223,13 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	})
 	log.Info("Publishing signed execution payload envelope")
 
+	// Broadcast pre-computed data column sidecars BEFORE receiving the envelope,
+	// because ReceiveExecutionPayloadEnvelope checks data availability.
+	// Sidecars were computed during ProposeBeaconBlock (storeExecutionPayloadEnvelope).
+	if err := vs.broadcastGloasDataColumns(ctx); err != nil {
+		log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
+	}
+
 	if err := vs.P2P.Broadcast(ctx, req); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to broadcast execution payload envelope: %v", err)
 	}
@@ -198,12 +242,32 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		return nil, status.Errorf(codes.Internal, "failed to receive execution payload envelope: %v", err)
 	}
 
-	// TODO: Build and broadcast data column sidecars from the cached blobs bundle.
-	// In Gloas, blob data is delivered alongside the execution payload envelope
-	// rather than with the beacon block (which only carries the bid). Not needed
-	// for devnet-0.
-
 	log.Info("Successfully published execution payload envelope")
 
 	return &emptypb.Empty{}, nil
+}
+
+// broadcastGloasDataColumns broadcasts pre-computed DataColumnSidecarGloas from the cache.
+// The sidecars are computed during storeExecutionPayloadEnvelope (inside ProposeBeaconBlock)
+// so no expensive KZG work happens here.
+func (vs *Server) broadcastGloasDataColumns(ctx context.Context) error {
+	vs.executionPayloadEnvelopeMu.RLock()
+	roSidecars := vs.executionPayloadDataColumns
+	vs.executionPayloadEnvelopeMu.RUnlock()
+
+	if len(roSidecars) == 0 {
+		return nil
+	}
+
+	log.WithFields(logrus.Fields{
+		"slot":    roSidecars[0].Slot(),
+		"root":    fmt.Sprintf("%#x", roSidecars[0].BlockRoot()),
+		"columns": len(roSidecars),
+	}).Debug("Broadcasting Gloas data column sidecars")
+
+	if err := vs.broadcastAndReceiveDataColumns(ctx, roSidecars); err != nil {
+		return errors.Wrap(err, "broadcast and receive data columns")
+	}
+
+	return nil
 }

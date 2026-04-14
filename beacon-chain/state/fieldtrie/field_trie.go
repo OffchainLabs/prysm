@@ -102,6 +102,9 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) ([32]byte, error) {
 	f.Lock()
 	defer f.Unlock()
+
+	fieldTrieRecomputeIndicesSummary.WithLabelValues(f.field.String()).Observe(float64(len(indices)))
+
 	var fieldRoot [32]byte
 	if len(indices) == 0 {
 		return f.TrieRoot()
