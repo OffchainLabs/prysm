@@ -366,6 +366,13 @@ func TestFieldTrie_RecomputePromotion(t *testing.T) {
 func TestFieldTrie_RecomputeAccumulatedPromotion(t *testing.T) {
 	const promotionThreshold = 3
 
+	type step int
+	const (
+		createOverlay step = iota
+		accumulate
+		triggerPromotion
+	)
+
 	type testCase struct {
 		name     string
 		field    types.FieldIndex
@@ -375,10 +382,10 @@ func TestFieldTrie_RecomputeAccumulatedPromotion(t *testing.T) {
 		// steps[0]: creates the overlay via fork (3 leaf overrides).
 		// steps[1]: adds 1 more override via recomputeOverlay (4 total, still no promotion because check is before add).
 		// steps[2]: triggers promoteOverlay because len(levels[0])=4 > 3.
-		steps []recomputeStep
+		steps [3]recomputeStep
 		// overlayCopySteps mirrors the same 3-step pattern but on a copy of an overlay,
 		// exercising the overlay-mode branch of fork() before accumulated promotion.
-		overlayCopySteps []recomputeStep
+		overlayCopySteps [3]recomputeStep
 	}
 
 	blockRoots, votes, balances := newTestElements()
@@ -390,7 +397,7 @@ func TestFieldTrie_RecomputeAccumulatedPromotion(t *testing.T) {
 			dataType: types.BasicArray,
 			elements: blockRoots,
 			length:   testBlockRootsSize,
-			steps: []recomputeStep{
+			steps: [3]recomputeStep{
 				{
 					changedIndices: []uint64{0, 10, 20},
 					mutate: func() {
@@ -412,7 +419,7 @@ func TestFieldTrie_RecomputeAccumulatedPromotion(t *testing.T) {
 					},
 				},
 			},
-			overlayCopySteps: []recomputeStep{
+			overlayCopySteps: [3]recomputeStep{
 				{
 					changedIndices: []uint64{50, 60, 70},
 					mutate: func() {
@@ -441,7 +448,7 @@ func TestFieldTrie_RecomputeAccumulatedPromotion(t *testing.T) {
 			dataType: types.CompositeArray,
 			elements: votes,
 			length:   testVotesSize,
-			steps: []recomputeStep{
+			steps: [3]recomputeStep{
 				{
 					changedIndices: []uint64{0, 5, 10},
 					mutate: func() {
@@ -463,7 +470,7 @@ func TestFieldTrie_RecomputeAccumulatedPromotion(t *testing.T) {
 					},
 				},
 			},
-			overlayCopySteps: []recomputeStep{
+			overlayCopySteps: [3]recomputeStep{
 				{
 					changedIndices: []uint64{25, 30, 35},
 					mutate: func() {
@@ -494,8 +501,8 @@ func TestFieldTrie_RecomputeAccumulatedPromotion(t *testing.T) {
 			length:   testNumBalances / 4,
 			// Balances pack 4 uint64s per chunk. Use indices in distinct chunks
 			// so each element-level index maps to a unique chunk-level override.
-			// idx 0 → chunk 0, idx 4 → chunk 1, idx 8 → chunk 2, idx 12 → chunk 3, idx 16 → chunk 4.
-			steps: []recomputeStep{
+			// idx 0 -> chunk 0, idx 4 -> chunk 1, idx 8 -> chunk 2, idx 12 -> chunk 3, idx 16 -> chunk 4.
+			steps: [3]recomputeStep{
 				{
 					changedIndices: []uint64{0, 4, 8},
 					mutate: func() {
@@ -517,7 +524,7 @@ func TestFieldTrie_RecomputeAccumulatedPromotion(t *testing.T) {
 					},
 				},
 			},
-			overlayCopySteps: []recomputeStep{
+			overlayCopySteps: [3]recomputeStep{
 				{
 					changedIndices: []uint64{20, 24, 28},
 					mutate: func() {
@@ -544,133 +551,151 @@ func TestFieldTrie_RecomputeAccumulatedPromotion(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// --- Test accumulated promotion ---
+			t.Run("accumulated promotion", func(t *testing.T) {
+				ft, err := NewFieldTrie(tc.field, tc.dataType, tc.elements, tc.length, 0)
+				require.NoError(t, err)
 
-			ft, err := NewFieldTrie(tc.field, tc.dataType, tc.elements, tc.length, 0)
-			require.NoError(t, err)
-			// Set an absolute threshold small enough so promotion triggers with few indices.
-			ft.promotionThreshold = promotionThreshold
+				// Set an absolute threshold small enough so promotion triggers with few indices.
+				ft.promotionThreshold = promotionThreshold
 
-			originalRoot, err := ft.TrieRoot()
-			require.NoError(t, err)
-			require.Equal(t, uint(0), ft.dataRef.Refs())
+				originalRoot, err := ft.TrieRoot()
+				require.NoError(t, err)
+				require.Equal(t, uint(0), ft.dataRef.Refs())
 
-			// Copy to make the trie shared (ref=2), which forces the first RecomputeTrie to fork.
-			cp := ft.CopyTrie()
-			_ = cp
+				// Copy to make the trie shared (ref=2), which forces the first RecomputeTrie to fork.
+				cp := ft.CopyTrie()
 
-			// Step 1: Fork into an overlay with 3 leaf overrides (at the threshold, not above).
-			tc.steps[0].mutate()
-			overlay, step0Root, err := ft.RecomputeTrie(tc.steps[0].changedIndices, tc.elements)
-			require.NoError(t, err)
-			require.Equal(t, uint(1), ft.dataRef.Refs())
+				// Step 1: Fork into an overlay with 3 leaf overrides (at the threshold, not above).
+				tc.steps[createOverlay].mutate()
+				overlay, step0Root, err := ft.RecomputeTrie(tc.steps[0].changedIndices, tc.elements)
+				require.NoError(t, err)
 
-			// The recomputed root must match a fresh trie built from the same elements.
-			requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, step0Root)
+				// Prevent the GC from collecting cp before RecomputeTrie, which would
+				// decrement the ref count and skip the fork path we intend to test.
+				runtime.KeepAlive(cp)
+				require.Equal(t, uint(1), ft.dataRef.Refs())
 
-			// Step 2: Add 1 more override via recomputeOverlay. The check (len(levels[0]) > 3)
-			// evaluates BEFORE the new override is added, so 3 > 3 is false — no promotion yet.
-			tc.steps[1].mutate()
-			overlay, step1Root, err := overlay.RecomputeTrie(tc.steps[1].changedIndices, tc.elements)
-			require.NoError(t, err)
-			// Still an overlay referencing the original as base.
-			require.Equal(t, uint(1), ft.dataRef.Refs())
+				// The recomputed root must match a fresh trie built from the same elements.
+				requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, step0Root)
 
-			// The recomputed root must match a fresh trie built from the same elements.
-			requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, step1Root)
+				// Step 2: Add 1 more override via recomputeOverlay. The check (len(levels[0]) > 3)
+				// evaluates BEFORE the new override is added, so 3 > 3 is false — no promotion yet.
+				tc.steps[accumulate].mutate()
+				overlay, step1Root, err := overlay.RecomputeTrie(tc.steps[1].changedIndices, tc.elements)
+				require.NoError(t, err)
 
-			// Step 3: Now len(levels[0]) = 4 > 3, which triggers promoteOverlay.
-			// The overlay is rebuilt into an owned trie and releases its base reference.
-			tc.steps[2].mutate()
-			promoted, promotedRoot, err := overlay.RecomputeTrie(tc.steps[2].changedIndices, tc.elements)
-			require.NoError(t, err)
+				// Still an overlay referencing the original as base.
+				require.Equal(t, uint(1), ft.dataRef.Refs())
 
-			// The promoted root returned by RecomputeTrie must match TrieRoot() on the returned trie.
-			promotedTrieRoot, err := promoted.TrieRoot()
-			require.NoError(t, err)
-			require.Equal(t, promotedRoot, promotedTrieRoot)
+				// The recomputed root must match a fresh trie built from the same elements.
+				requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, step1Root)
 
-			// The recomputed root must match a fresh trie built from the same elements.
-			requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, promotedRoot)
+				// Step 3: Now len(levels[0]) = 4 > 3, which triggers promoteOverlay.
+				// The overlay is rebuilt into an owned trie and releases its base reference.
+				tc.steps[triggerPromotion].mutate()
+				promoted, promotedRoot, err := overlay.RecomputeTrie(tc.steps[2].changedIndices, tc.elements)
+				require.NoError(t, err)
 
-			// The original's dataRef is 0: the base reference was released during promotion.
-			require.Equal(t, uint(0), ft.dataRef.Refs())
+				// The promoted root returned by RecomputeTrie must match TrieRoot() on the returned trie.
+				promotedTrieRoot, err := promoted.TrieRoot()
+				require.NoError(t, err)
+				require.Equal(t, promotedRoot, promotedTrieRoot)
 
-			// The promoted trie's dataRef is 0: it is an independent owned trie.
-			require.Equal(t, uint(0), promoted.dataRef.Refs())
+				// The recomputed root must match a fresh trie built from the same elements.
+				requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, promotedRoot)
 
-			// The original's root must be unchanged.
-			rootAfterPromotion, err := ft.TrieRoot()
-			require.NoError(t, err)
-			require.Equal(t, originalRoot, rootAfterPromotion)
+				// The original's dataRef is 0: the base reference was released during promotion.
+				require.Equal(t, uint(0), ft.dataRef.Refs())
 
-			// --- Test accumulated promotion from a copy of an overlay ---
+				// The promoted trie's dataRef is 0: it is an independent owned trie.
+				require.Equal(t, uint(0), promoted.dataRef.Refs())
 
-			// Make the promoted (owned) trie shared by copying it.
-			promotedCp := promoted.CopyTrie()
-			_ = promotedCp
+				// The original's root must be unchanged.
+				rootAfterPromotion, err := ft.TrieRoot()
+				require.NoError(t, err)
+				require.Equal(t, originalRoot, rootAfterPromotion)
+			})
 
-			// Step A: Fork into an overlay with 3 leaf overrides (at the threshold, not above).
-			tc.overlayCopySteps[0].mutate()
-			overlay2, overlay2Root, err := promoted.RecomputeTrie(tc.overlayCopySteps[0].changedIndices, tc.elements)
-			require.NoError(t, err)
+			t.Run("overlay copy promotion", func(t *testing.T) {
+				ft, err := NewFieldTrie(tc.field, tc.dataType, tc.elements, tc.length, 0)
+				require.NoError(t, err)
 
-			// The overlay references promoted as its base, so promoted.dataRef is now 1.
-			require.Equal(t, uint(1), promoted.dataRef.Refs())
-			// The overlay's own dataRef is 0: nobody references the overlay's data yet.
-			require.Equal(t, uint(0), overlay2.dataRef.Refs())
+				// Set an absolute threshold small enough so promotion triggers with few indices.
+				ft.promotionThreshold = promotionThreshold
 
-			// The recomputed root must match a fresh trie built from the same elements.
-			requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, overlay2Root)
+				// Copy to make the trie shared (ref=2), which forces the first RecomputeTrie to fork.
+				cp := ft.CopyTrie()
 
-			// Save step A's root before making the overlay shared.
-			stepARoot := overlay2Root
+				// Step A: Fork into an overlay with 3 leaf overrides (at the threshold, not above).
+				tc.overlayCopySteps[createOverlay].mutate()
+				overlay, overlayRoot, err := ft.RecomputeTrie(tc.overlayCopySteps[0].changedIndices, tc.elements)
+				require.NoError(t, err)
 
-			// Copy the overlay to make it shared (ref=2), forcing the next RecomputeTrie to fork.
-			overlay2Cp := overlay2.CopyTrie()
-			_ = overlay2Cp
+				// Prevent the GC from collecting cp before RecomputeTrie, which would
+				// decrement the ref count and skip the fork path we intend to test.
+				runtime.KeepAlive(cp)
 
-			// Step B: Fork the overlay (overlay-mode fork: deep-copy overrides, share base),
-			// then add 1 more override via recomputeOverlay. The check (len(levels[0]) > 3)
-			// evaluates BEFORE the new override is added, so 3 > 3 is false — no promotion yet.
-			// Use a new variable (overlay3) so the original overlay2 struct stays reachable
-			// and its GC cleanup does not prematurely decrement promoted.dataRef.
-			tc.overlayCopySteps[1].mutate()
-			overlay3, overlay3Root, err := overlay2.RecomputeTrie(tc.overlayCopySteps[1].changedIndices, tc.elements)
-			require.NoError(t, err)
+				// The overlay references ft as its base, so ft.dataRef is now 1.
+				require.Equal(t, uint(1), ft.dataRef.Refs())
 
-			// The recomputed root must match a fresh trie built from the same elements.
-			requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, overlay3Root)
+				// The overlay's own dataRef is 0: nobody references the overlay's data yet.
+				require.Equal(t, uint(0), overlay.dataRef.Refs())
 
-			// Step C: overlay3 (from step B) is not shared (ref=1), so recompute happens in place.
-			// Now len(levels[0]) = 4 > 3, which triggers promoteOverlay.
-			// The overlay is rebuilt into an owned trie and releases its base reference.
-			tc.overlayCopySteps[2].mutate()
-			promoted2, promoted2Root, err := overlay3.RecomputeTrie(tc.overlayCopySteps[2].changedIndices, tc.elements)
-			require.NoError(t, err)
+				// The recomputed root must match a fresh trie built from the same elements.
+				requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, overlayRoot)
 
-			// The promoted root returned by RecomputeTrie must match TrieRoot() on the returned trie.
-			promoted2TrieRoot, err := promoted2.TrieRoot()
-			require.NoError(t, err)
-			require.Equal(t, promoted2Root, promoted2TrieRoot)
+				// Save step A's root before making the overlay shared.
+				stepARoot := overlayRoot
 
-			// The recomputed root must match a fresh trie built from the same elements.
-			requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, promoted2Root)
+				// Copy the overlay to make it shared (ref=2), forcing the next RecomputeTrie to fork.
+				overlayCp := overlay.CopyTrie()
 
-			// promoted.dataRef is 1: step B's fork released its ref during step C's promotion,
-			// but overlay2 (step A) still holds a base reference to promoted.
-			require.Equal(t, uint(1), promoted.dataRef.Refs())
+				// Step B: Fork the overlay (overlay-mode fork: deep-copy overrides, share base),
+				// then add 1 more override via recomputeOverlay. The check (len(levels[0]) > 3)
+				// evaluates BEFORE the new override is added, so 3 > 3 is false — no promotion yet.
+				// Use a new variable (overlay2) so the original overlay struct stays reachable
+				// and its GC cleanup does not prematurely decrement ft.dataRef.
+				tc.overlayCopySteps[accumulate].mutate()
+				overlay2, overlay2Root, err := overlay.RecomputeTrie(tc.overlayCopySteps[1].changedIndices, tc.elements)
+				require.NoError(t, err)
 
-			// The promoted trie's dataRef is 0: it is an independent owned trie.
-			require.Equal(t, uint(0), promoted2.dataRef.Refs())
+				// Prevent the GC from collecting overlayCp before RecomputeTrie, which would
+				// decrement the ref count and skip the overlay-mode fork path we intend to test.
+				runtime.KeepAlive(overlayCp)
 
-			// The step A overlay's root must be unchanged.
-			overlay2RootAfterPromotion, err := overlay2.TrieRoot()
-			require.NoError(t, err)
-			require.Equal(t, stepARoot, overlay2RootAfterPromotion)
+				// The recomputed root must match a fresh trie built from the same elements.
+				requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, overlay2Root)
 
-			// Keep overlay2 alive so its GC cleanup does not fire before the dataRef check above.
-			runtime.KeepAlive(overlay2)
+				// Step C: overlay2 (from step B) is not shared (ref=1), so recompute happens in place.
+				// Now len(levels[0]) = 4 > 3, which triggers promoteOverlay.
+				// The overlay is rebuilt into an owned trie and releases its base reference.
+				tc.overlayCopySteps[triggerPromotion].mutate()
+				promoted, promotedRoot, err := overlay2.RecomputeTrie(tc.overlayCopySteps[2].changedIndices, tc.elements)
+				require.NoError(t, err)
+
+				// The promoted root returned by RecomputeTrie must match TrieRoot() on the returned trie.
+				promotedTrieRoot, err := promoted.TrieRoot()
+				require.NoError(t, err)
+				require.Equal(t, promotedRoot, promotedTrieRoot)
+
+				// The recomputed root must match a fresh trie built from the same elements.
+				requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, promotedRoot)
+
+				// ft.dataRef is 1: step B's fork released its ref during step C's promotion,
+				// but overlay (step A) still holds a base reference to ft.
+				require.Equal(t, uint(1), ft.dataRef.Refs())
+
+				// The promoted trie's dataRef is 0: it is an independent owned trie.
+				require.Equal(t, uint(0), promoted.dataRef.Refs())
+
+				// The step A overlay's root must be unchanged.
+				overlayRootAfterPromotion, err := overlay.TrieRoot()
+				require.NoError(t, err)
+				require.Equal(t, stepARoot, overlayRootAfterPromotion)
+
+				// Keep overlay alive so its GC cleanup does not fire before the dataRef check above.
+				runtime.KeepAlive(overlay)
+			})
 		})
 	}
 }
