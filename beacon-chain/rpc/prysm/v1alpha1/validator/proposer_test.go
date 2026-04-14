@@ -95,7 +95,7 @@ func TestServer_GetBeaconBlock_Phase0(t *testing.T) {
 
 	proposerServer := getProposerServer(ctx, db, beaconState, parentRoot[:])
 	// Use a separate mock for BlockReceiver with an independent state copy.
-	// This mirrors production where computeStateRoot calls StateByRoot (fresh from DB),
+	// This mirrors production where computePostBlockStateAndRoot calls StateByRoot (fresh from DB),
 	// not the same head state object mutated by the getSlashings goroutine.
 	proposerServer.BlockReceiver = &mock.ChainService{
 		State:           beaconState.Copy(),
@@ -1354,7 +1354,7 @@ func TestProposer_ComputeStateRoot_OK(t *testing.T) {
 
 	wsb, err := blocks.NewSignedBeaconBlock(req)
 	require.NoError(t, err)
-	_, _, err = proposerServer.computeStateRoot(t.Context(), wsb)
+	_, _, err = proposerServer.computePostBlockStateAndRoot(t.Context(), wsb)
 	require.NoError(t, err)
 }
 

@@ -217,3 +217,44 @@ func TestSubmitSignedProposerPreferences_Syncing(t *testing.T) {
 	_, err := vs.SubmitSignedProposerPreferences(t.Context(), req)
 	require.ErrorContains(t, "not ready to respond", err)
 }
+
+func TestSubmitSignedProposerPreferences_BroadcastsForProposalEpoch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	// Current slot is in epoch 0 (one epoch before gloas).
+	currentSlot := primitives.Slot(cfg.SlotsPerEpoch - 1)
+	// Proposal slot is in epoch 1 (the gloas epoch).
+	proposalSlot := primitives.Slot(cfg.SlotsPerEpoch + 1)
+	chain := &chainMock.ChainService{Slot: &currentSlot}
+	p2p := &p2pmock.MockBroadcaster{}
+	vs := &Server{
+		SyncChecker:              &mockSync.Sync{IsSyncing: false},
+		TimeFetcher:              chain,
+		P2P:                      p2p,
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+	}
+
+	req := &ethpb.SubmitSignedProposerPreferencesRequest{
+		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
+			{
+				Message: &ethpb.ProposerPreferences{
+					ProposalSlot:   proposalSlot,
+					ValidatorIndex: 2,
+					FeeRecipient:   make([]byte, 20),
+					GasLimit:       30_000_000,
+				},
+				Signature: make([]byte, 96),
+			},
+		},
+	}
+
+	resp, err := vs.SubmitSignedProposerPreferences(t.Context(), req)
+	require.NoError(t, err)
+	require.DeepEqual(t, &emptypb.Empty{}, resp)
+	assert.Equal(t, true, p2p.BroadcastCalled.Load())
+	require.Equal(t, 1, len(p2p.BroadcastEpochs))
+	require.Equal(t, primitives.Epoch(1), p2p.BroadcastEpochs[0])
+}

@@ -204,7 +204,7 @@ func (s *LazilyPersistentStoreColumn) columnsNotStored(sidecars []blocks.RODataC
 			sum = s.store.Summary(sc.BlockRoot())
 			lastRoot = sc.BlockRoot()
 		}
-		if sum.HasIndex(sc.Index) {
+		if sum.HasIndex(sc.Index()) {
 			stored[i] = struct{}{}
 		}
 	}

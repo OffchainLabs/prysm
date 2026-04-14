@@ -251,7 +251,7 @@ func (s *State) loadStateByBlockHash(ctx context.Context, blockHash [32]byte, sl
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not wrap blinded execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
 	}
-	if err := gloas.ApplyBlindedExecutionPayloadEnvelopeForStateGen(ctx, blockState, blk.Block().StateRoot(), envelope); err != nil {
+	if err := gloas.ProcessBlindedExecutionPayload(ctx, blockState, blk.Block().StateRoot(), envelope); err != nil {
 		return nil, errors.Wrapf(err, "could not apply execution payload envelope for block with root %#x at slot %d", blockRoot, slot)
 	}
 	return blockState, nil

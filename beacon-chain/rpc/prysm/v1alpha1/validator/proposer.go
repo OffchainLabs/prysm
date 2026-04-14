@@ -112,17 +112,17 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	}
 
 	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, req.EagerPayloadStateRoot)
-	log = log.WithFields(logrus.Fields{
+	l := log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
 	})
 
 	if err != nil {
-		log.WithError(err).Error("Finished building block")
+		l.WithError(err).Error("Finished building block")
 		return nil, errors.Wrap(err, "could not build block in parallel")
 	}
 
-	log.Info("Finished building block")
+	l.Info("Finished building block")
 	return resp, nil
 }
 
@@ -296,7 +296,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 	wg.Wait()
 
-	sr, postBlockState, err := vs.computeStateRoot(ctx, sBlk)
+	sr, postBlockState, err := vs.computePostBlockStateAndRoot(ctx, sBlk)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not compute state root: %v", err)
 	}
@@ -655,9 +655,9 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 	}, nil
 }
 
-// computeStateRoot computes the state root after a block has been processed through a state transition and
+// computePostBlockStateAndRoot computes the state root after a block has been processed through a state transition and
 // returns both the state root bytes and the full post-block state.
-func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, state.BeaconState, error) {
+func (vs *Server) computePostBlockStateAndRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, state.BeaconState, error) {
 	st, err := vs.computePostBlockState(ctx, block)
 	if err != nil {
 		return nil, nil, err

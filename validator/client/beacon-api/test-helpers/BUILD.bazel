@@ -10,7 +10,6 @@ go_library(
         "deneb_beacon_block_test_helpers.go",
         "electra_beacon_block_test_helpers.go",
         "fulu_beacon_block_test_helpers.go",
-        "gloas_beacon_block_test_helpers.go",
         "phase0_beacon_block_test_helpers.go",
         "test_helpers.go",
     ],

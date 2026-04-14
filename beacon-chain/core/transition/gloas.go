@@ -130,7 +130,7 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 //
 // Spec definition:
 //
-//	<spec fn="process_epoch" fork="gloas" hash="393b69ef">
+//	<spec fn="process_epoch" fork="gloas" hash="bf3575a9">
 //	def process_epoch(state: BeaconState) -> None:
 //	    process_justification_and_finalization(state)
 //	    process_inactivity_updates(state)
@@ -149,6 +149,8 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 //	    process_participation_flag_updates(state)
 //	    process_sync_committee_updates(state)
 //	    process_proposer_lookahead(state)
+//	    # [New in Gloas:EIP7732]
+//	    process_ptc_window(state)
 //	</spec>
 func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	_, span := trace.StartSpan(ctx, "gloas.ProcessEpoch")
@@ -222,5 +224,5 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err := fulu.ProcessProposerLookahead(ctx, state); err != nil {
 		return err
 	}
-	return nil
+	return gloas.ProcessPTCWindow(ctx, state)
 }

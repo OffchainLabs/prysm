@@ -250,6 +250,8 @@ message SignedBeaconBlockGloas {
 //     latest_block_hash: Hash32
 //     payload_expected_withdrawals: List[Withdrawal,
 //     MAX_WITHDRAWALS_PER_PAYLOAD]
+//     ptc_window:
+//     Vector[PTCs, (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH]
 message BeaconStateGloas {
   // Versioning [1001-2000]
   uint64 genesis_time = 1001;
@@ -356,8 +358,12 @@ message BeaconStateGloas {
       [ (ethereum.eth.ext.ssz_max) = "pending_consolidations_limit" ];
 
   // Fields introduced in Fulu fork [13001-14000]
-  repeated uint64 proposer_lookahead = 13001
-      [ (ethereum.eth.ext.ssz_size) = "proposer_lookahead_size" ];
+  repeated uint64 proposer_lookahead = 13001 [
+    (ethereum.eth.ext.ssz_size) = "proposer_lookahead_size",
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
 
   // Fields introduced in Gloas fork [14001-15000]
   repeated Builder builders = 14001
@@ -375,6 +381,21 @@ message BeaconStateGloas {
   bytes latest_block_hash = 14006 [ (ethereum.eth.ext.ssz_size) = "32" ];
   repeated ethereum.engine.v1.Withdrawal payload_expected_withdrawals = 14007
       [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
+  repeated PTCs ptc_window = 14008
+      [ (ethereum.eth.ext.ssz_size) = "ptc_window.size" ];
+}
+
+// PTCs represents the payload timeliness committee for a single slot.
+//
+// Spec:
+// Vector[ValidatorIndex, PTC_SIZE]
+message PTCs {
+  repeated uint64 validator_indices = 1 [
+    (ethereum.eth.ext.ssz_size) = "ptc_committee_indices.size",
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
 }
 
 // BeaconBlockContentsGloas bundles a Gloas beacon block with the execution

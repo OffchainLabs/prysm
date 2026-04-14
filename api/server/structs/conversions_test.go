@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -488,7 +489,7 @@ func TestBeaconStateGloasFromConsensus(t *testing.T) {
 		state.GenesisTime = 123
 		state.GenesisValidatorsRoot = bytes.Repeat([]byte{0x10}, 32)
 		state.Slot = 5
-		state.ProposerLookahead = []uint64{1, 2}
+		state.ProposerLookahead = []primitives.ValidatorIndex{1, 2}
 		state.LatestExecutionPayloadBid = &eth.ExecutionPayloadBid{
 			ParentBlockHash:    bytes.Repeat([]byte{0x11}, 32),
 			ParentBlockRoot:    bytes.Repeat([]byte{0x12}, 32),

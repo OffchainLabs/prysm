@@ -372,6 +372,28 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 	return nodes, nil
 }
 
+// MarkFullNode creates a full payload node for an existing empty node at the
+// given beacon block root. This is used during forkchoice tree reconstruction on
+// startup to mark blocks whose execution payload was delivered. The caller must
+// hold the forkchoice write lock.
+func (f *ForkChoice) MarkFullNode(root [32]byte) {
+	s := f.store
+	en := s.emptyNodeByRoot[root]
+	if en == nil {
+		return
+	}
+	if _, ok := s.fullNodeByRoot[root]; ok {
+		return
+	}
+	s.fullNodeByRoot[root] = &PayloadNode{
+		node:       en.node,
+		optimistic: true,
+		timestamp:  time.Now(),
+		full:       true,
+		children:   make([]*Node, 0),
+	}
+}
+
 // InsertPayload inserts a full node into forkchoice after the Gloas fork.
 func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) error {
 	if pe.IsNil() {

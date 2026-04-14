@@ -1165,7 +1165,7 @@ func TestBeaconProposerIndexAtSlotFulu(t *testing.T) {
 	cfg := params.BeaconConfig().Copy()
 	cfg.FuluForkEpoch = 1
 	params.OverrideBeaconConfig(cfg)
-	lookahead := make([]uint64, 64)
+	lookahead := make([]primitives.ValidatorIndex, 64)
 	lookahead[0] = 15
 	lookahead[1] = 16
 	lookahead[34] = 42

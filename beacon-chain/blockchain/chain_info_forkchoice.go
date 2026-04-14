@@ -157,6 +157,13 @@ func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byt
 	if st.Version() < version.Bellatrix {
 		return nil, nil
 	}
+	if st.Version() >= version.Gloas {
+		h, err := st.LatestBlockHash()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get latest block hash")
+		}
+		return bytesutil.SafeCopyBytes(h[:]), nil
+	}
 	header, err := st.LatestExecutionPayloadHeader()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get latest execution payload header")

@@ -242,13 +242,74 @@ func TestProcessExecutionPayload_Success(t *testing.T) {
 	require.Equal(t, primitives.Gwei(0), payment.Withdrawal.Amount)
 }
 
+func TestProcessExecutionPayloadWithDeferredSig_Success(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+
+	header := fixture.state.LatestBlockHeader()
+	var previousStateRoot [32]byte
+	copy(previousStateRoot[:], header.StateRoot)
+
+	sigBatch, err := ProcessExecutionPayloadWithDeferredSig(t.Context(), fixture.state, previousStateRoot, fixture.signed)
+	require.NoError(t, err)
+	require.NotNil(t, sigBatch)
+	require.Equal(t, 1, len(sigBatch.Signatures))
+	require.Equal(t, 1, len(sigBatch.PublicKeys))
+	require.Equal(t, 1, len(sigBatch.Messages))
+	require.Equal(t, 1, len(sigBatch.Descriptions))
+	require.Equal(t, "execution payload envelope signature", sigBatch.Descriptions[0])
+
+	valid, err := sigBatch.Verify()
+	require.NoError(t, err)
+	require.Equal(t, true, valid)
+
+	latestHash, err := fixture.state.LatestBlockHash()
+	require.NoError(t, err)
+	var expectedHash [32]byte
+	copy(expectedHash[:], fixture.payload.BlockHash)
+	require.Equal(t, expectedHash, latestHash)
+
+	available, err := fixture.state.ExecutionPayloadAvailability(fixture.slot)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), available)
+
+	updatedHeader := fixture.state.LatestBlockHeader()
+	require.DeepEqual(t, previousStateRoot[:], updatedHeader.StateRoot)
+}
+
+func TestProcessExecutionPayloadWithDeferredSig_PreviousStateRootMismatch(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+
+	previousStateRoot := [32]byte{0x42}
+
+	_, err := ProcessExecutionPayloadWithDeferredSig(t.Context(), fixture.state, previousStateRoot, fixture.signed)
+	require.ErrorContains(t, "envelope beacon block root does not match state latest block header root", err)
+}
+
+func TestApplyExecutionPayload_Success(t *testing.T) {
+	fixture := buildPayloadFixture(t, nil)
+
+	envelope, err := fixture.signed.Envelope()
+	require.NoError(t, err)
+	require.NoError(t, ApplyExecutionPayload(t.Context(), fixture.state, envelope))
+
+	latestHash, err := fixture.state.LatestBlockHash()
+	require.NoError(t, err)
+	var expectedHash [32]byte
+	copy(expectedHash[:], fixture.payload.BlockHash)
+	require.Equal(t, expectedHash, latestHash)
+
+	available, err := fixture.state.ExecutionPayloadAvailability(fixture.slot)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), available)
+}
+
 func TestApplyExecutionPayloadStateMutations_UpdatesAvailabilityAndLatestHash(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
 
 	newHash := [32]byte{}
 	newHash[0] = 0x99
 
-	require.NoError(t, ApplyExecutionPayloadStateMutations(t.Context(), fixture.state, fixture.envelope.ExecutionRequests, newHash))
+	require.NoError(t, applyExecutionPayloadStateMutations(t.Context(), fixture.state, fixture.envelope.ExecutionRequests, newHash))
 
 	latestHash, err := fixture.state.LatestBlockHash()
 	require.NoError(t, err)
@@ -282,12 +343,12 @@ func TestQueueBuilderPayment_ZeroAmountClearsSlot(t *testing.T) {
 	require.Equal(t, primitives.Gwei(0), payment.Withdrawal.Amount)
 }
 
-func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_NilEnvelope(t *testing.T) {
+func TestProcessBlindedExecutionPayload_NilEnvelope(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
-	require.NoError(t, ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, nil))
+	require.NoError(t, ProcessBlindedExecutionPayload(t.Context(), fixture.state, [32]byte{}, nil))
 }
 
-func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_Success(t *testing.T) {
+func TestProcessBlindedExecutionPayload_Success(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
 	st := fixture.state
 
@@ -305,7 +366,7 @@ func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_Success(t *testing.T) {
 
 	wrappedEnv, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
 	require.NoError(t, err)
-	require.NoError(t, ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), st, stateRoot, wrappedEnv))
+	require.NoError(t, ProcessBlindedExecutionPayload(t.Context(), st, stateRoot, wrappedEnv))
 
 	latestHash, err := st.LatestBlockHash()
 	require.NoError(t, err)
@@ -319,7 +380,7 @@ func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_Success(t *testing.T) {
 	require.DeepEqual(t, stateRoot[:], header.StateRoot)
 }
 
-func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_SlotMismatch(t *testing.T) {
+func TestProcessBlindedExecutionPayload_SlotMismatch(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
 
 	envelope := &ethpb.SignedBlindedExecutionPayloadEnvelope{
@@ -331,11 +392,11 @@ func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_SlotMismatch(t *testing
 	}
 	wrappedEnv, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
 	require.NoError(t, err)
-	err = ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, wrappedEnv)
+	err = ProcessBlindedExecutionPayload(t.Context(), fixture.state, [32]byte{}, wrappedEnv)
 	require.ErrorContains(t, "blinded envelope slot does not match state slot", err)
 }
 
-func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_BuilderIndexMismatch(t *testing.T) {
+func TestProcessBlindedExecutionPayload_BuilderIndexMismatch(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
 
 	blockHash := [32]byte(fixture.payload.BlockHash)
@@ -349,11 +410,11 @@ func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_BuilderIndexMismatch(t 
 	}
 	wrappedEnv, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
 	require.NoError(t, err)
-	err = ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, wrappedEnv)
+	err = ProcessBlindedExecutionPayload(t.Context(), fixture.state, [32]byte{}, wrappedEnv)
 	require.ErrorContains(t, "builder index does not match", err)
 }
 
-func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_BlockHashMismatch(t *testing.T) {
+func TestProcessBlindedExecutionPayload_BlockHashMismatch(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
 
 	wrongHash := bytes.Repeat([]byte{0xFF}, 32)
@@ -367,7 +428,7 @@ func TestApplyBlindedExecutionPayloadEnvelopeForStateGen_BlockHashMismatch(t *te
 	}
 	wrappedEnv, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
 	require.NoError(t, err)
-	err = ApplyBlindedExecutionPayloadEnvelopeForStateGen(t.Context(), fixture.state, [32]byte{}, wrappedEnv)
+	err = ProcessBlindedExecutionPayload(t.Context(), fixture.state, [32]byte{}, wrappedEnv)
 	require.ErrorContains(t, "block hash does not match", err)
 }
 
@@ -403,14 +464,14 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 		signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
 		require.NoError(t, err)
 
-		require.NoError(t, VerifyExecutionPayloadEnvelopeSignature(st, signed))
+		require.NoError(t, verifyExecutionPayloadEnvelopeSignature(st, signed))
 	})
 
 	t.Run("builder", func(t *testing.T) {
 		signed, err := blocks.WrappedROSignedExecutionPayloadEnvelope(fixture.signedProto)
 		require.NoError(t, err)
 
-		require.NoError(t, VerifyExecutionPayloadEnvelopeSignature(fixture.state, signed))
+		require.NoError(t, verifyExecutionPayloadEnvelopeSignature(fixture.state, signed))
 	})
 
 	t.Run("invalid signature", func(t *testing.T) {
@@ -436,7 +497,7 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 			badSigned, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
 			require.NoError(t, err)
 
-			err = VerifyExecutionPayloadEnvelopeSignature(st, badSigned)
+			err = verifyExecutionPayloadEnvelopeSignature(st, badSigned)
 			require.ErrorContains(t, "invalid signature format", err)
 		})
 
@@ -448,7 +509,7 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 			badSigned, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedProto)
 			require.NoError(t, err)
 
-			err = VerifyExecutionPayloadEnvelopeSignature(fixture.state, badSigned)
+			err = verifyExecutionPayloadEnvelopeSignature(fixture.state, badSigned)
 			require.ErrorContains(t, "invalid signature format", err)
 		})
 	})
