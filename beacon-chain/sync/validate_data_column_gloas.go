@@ -22,6 +22,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// maxPendingGloasRoots caps the number of distinct block roots in the pending queue.
+const maxPendingGloasRoots = 8
+
 type pendingColumnEntry struct {
 	sidecar *ethpb.DataColumnSidecarGloas
 	peer    peer.ID
@@ -138,6 +141,9 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 
 	entry := s.pendingGloasColumns[root]
 	if entry == nil {
+		if len(s.pendingGloasColumns) >= maxPendingGloasRoots {
+			return
+		}
 		entry = &pendingGloasEntry{slot: slot}
 		s.pendingGloasColumns[root] = entry
 	}
@@ -148,13 +154,17 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 	entry.columns[idx] = &pendingColumnEntry{sidecar: dc, peer: pid}
 }
 
-func (s *Service) processPendingGloasColumns(_ context.Context, root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {
+func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {
+	if blk == nil || blk.IsNil() {
+		return
+	}
+
 	s.pendingGloasColumnsLock.Lock()
 	entry := s.pendingGloasColumns[root]
 	delete(s.pendingGloasColumns, root)
 	s.pendingGloasColumnsLock.Unlock()
 
-	if entry == nil || blk == nil || blk.IsNil() {
+	if entry == nil {
 		return
 	}
 
@@ -164,15 +174,24 @@ func (s *Service) processPendingGloasColumns(_ context.Context, root [fieldparam
 		return
 	}
 
-	var verified []blocks.VerifiedRODataColumn
+	// Count pending sidecars for pre-allocation.
+	count := 0
+	for _, pe := range entry.columns {
+		if pe != nil {
+			count++
+		}
+	}
+
+	verified := make([]blocks.VerifiedRODataColumn, 0, count)
 	var skipped int
-	var badPeers []peer.ID
+	badPeers := make(map[peer.ID]bool)
 	for _, pe := range entry.columns {
 		if pe == nil {
 			continue
 		}
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(pe.sidecar, root)
 		if err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Failed to wrap pending Gloas column")
 			skipped++
 			continue
 		}
@@ -182,29 +201,27 @@ func (s *Service) processPendingGloasColumns(_ context.Context, root [fieldparam
 			continue
 		}
 
-		verifier := verification.NewGloasDataColumnVerifier(roCol, blk.Block(), verification.GossipDataColumnSidecarRequirementsGloas)
-		verifier.SatisfyRequirement(verification.RequireBlockSeenGloas)
-		verifier.SatisfyRequirement(verification.RequireNotSeenGloas)
-		verifier.SatisfyRequirement(verification.RequireCorrectSubnet)
+		verifier := verification.NewGloasDataColumnVerifier(roCol, blk.Block(), verification.PendingGloasColumnRequirements)
 
 		if err := verifier.VerifyDataColumnSidecarSlotMatchesBlockGloas(); err != nil {
 			skipped++
-			badPeers = append(badPeers, pe.peer)
+			badPeers[pe.peer] = true
 			continue
 		}
 		if err := verifier.VerifyDataColumnSidecarGloas(); err != nil {
 			skipped++
-			badPeers = append(badPeers, pe.peer)
+			badPeers[pe.peer] = true
 			continue
 		}
 		if err := verifier.VerifyDataColumnSidecarKzgProofsGloas(); err != nil {
 			skipped++
-			badPeers = append(badPeers, pe.peer)
+			badPeers[pe.peer] = true
 			continue
 		}
 
 		v, err := verifier.VerifiedRODataColumn()
 		if err != nil {
+			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Failed to get verified pending Gloas column")
 			skipped++
 			continue
 		}
@@ -214,21 +231,22 @@ func (s *Service) processPendingGloasColumns(_ context.Context, root [fieldparam
 		verified = append(verified, v)
 	}
 
-	for _, pid := range badPeers {
+	for pid := range badPeers {
 		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(pid)
 	}
 
 	if len(verified) > 0 {
 		if err := s.cfg.dataColumnStorage.Save(verified); err != nil {
 			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Warn("Failed to save pending Gloas columns")
-		} else {
-			log.WithFields(logrus.Fields{
-				"root":    fmt.Sprintf("%#x", root),
-				"count":   len(verified),
-				"skipped": skipped,
-				"slot":    entry.slot,
-			}).Debug("Processed pending Gloas data columns")
+			return
 		}
+
+		log.WithFields(logrus.Fields{
+			"root":    fmt.Sprintf("%#x", root),
+			"count":   len(verified),
+			"skipped": skipped,
+			"slot":    entry.slot,
+		}).Debug("Processed pending Gloas data columns")
 	}
 }
 
@@ -248,7 +266,7 @@ func (s *Service) prunePendingGloasColumns() {
 		case currentSlot := <-slotTicker.C():
 			s.pendingGloasColumnsLock.Lock()
 			for r, e := range s.pendingGloasColumns {
-				if e.slot < currentSlot {
+				if e.slot+1 < currentSlot {
 					delete(s.pendingGloasColumns, r)
 				}
 			}

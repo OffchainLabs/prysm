@@ -21,6 +21,13 @@ var GossipDataColumnSidecarRequirementsGloas = []Requirement{
 	RequireNotSeenGloas,
 }
 
+// PendingGloasColumnRequirements defines the requirements for columns queued before their block arrived.
+var PendingGloasColumnRequirements = []Requirement{
+	RequireSlotMatchesBlockGloas,
+	RequireValidFieldsGloas,
+	RequireSidecarKzgProofVerifiedGloas,
+}
+
 type ROGloasDataColumnVerifier struct {
 	sidecar blocks.RODataColumn
 	block   interfaces.ReadOnlyBeaconBlock
