@@ -54,6 +54,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "conversions_block_execution_test.go",
+        "conversions_block_gloas_test.go",
         "conversions_test.go",
     ],
     embed = [":go_default_library"],

@@ -584,6 +584,13 @@ func (s *SignedBeaconBlockGloas) SigString() string {
 	return s.Signature
 }
 
+type BlockContentsGloas struct {
+	Block                    *BeaconBlockGloas         `json:"block"`
+	ExecutionPayloadEnvelope *ExecutionPayloadEnvelope `json:"execution_payload_envelope"`
+	KzgProofs                []string                  `json:"kzg_proofs"`
+	Blobs                    []string                  `json:"blobs"`
+}
+
 type ExecutionPayloadEnvelope struct {
 	Payload           *ExecutionPayloadDeneb `json:"payload"`
 	ExecutionRequests *ExecutionRequests     `json:"execution_requests"`
