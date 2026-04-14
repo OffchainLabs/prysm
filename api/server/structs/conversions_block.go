@@ -3346,3 +3346,64 @@ func BlockContentsGloasFromConsensus(block *eth.BeaconBlockGloas, envelope *eth.
 		Blobs:                    []string{}, // TODO: populate from blobs bundle
 	}, nil
 }
+
+// ToConsensus converts the API struct to a proto ExecutionPayloadEnvelope.
+func (e *ExecutionPayloadEnvelope) ToConsensus() (*eth.ExecutionPayloadEnvelope, error) {
+	if e == nil {
+		return nil, server.NewDecodeError(errNilValue, "ExecutionPayloadEnvelope")
+	}
+	payload, err := e.Payload.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Payload")
+	}
+	var requests *enginev1.ExecutionRequests
+	if e.ExecutionRequests != nil {
+		requests, err = e.ExecutionRequests.ToConsensus()
+		if err != nil {
+			return nil, server.NewDecodeError(err, "ExecutionRequests")
+		}
+	}
+	builderIndex, err := strconv.ParseUint(e.BuilderIndex, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "BuilderIndex")
+	}
+	beaconBlockRoot, err := bytesutil.DecodeHexWithLength(e.BeaconBlockRoot, fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "BeaconBlockRoot")
+	}
+	slot, err := strconv.ParseUint(e.Slot, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Slot")
+	}
+	stateRoot, err := bytesutil.DecodeHexWithLength(e.StateRoot, fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "StateRoot")
+	}
+	return &eth.ExecutionPayloadEnvelope{
+		Payload:           payload,
+		ExecutionRequests: requests,
+		BuilderIndex:      primitives.BuilderIndex(builderIndex),
+		BeaconBlockRoot:   beaconBlockRoot,
+		Slot:              primitives.Slot(slot),
+		StateRoot:         stateRoot,
+	}, nil
+}
+
+// ToConsensus converts the API struct to a proto SignedExecutionPayloadEnvelope.
+func (e *SignedExecutionPayloadEnvelope) ToConsensus() (*eth.SignedExecutionPayloadEnvelope, error) {
+	if e == nil {
+		return nil, server.NewDecodeError(errNilValue, "SignedExecutionPayloadEnvelope")
+	}
+	msg, err := e.Message.ToConsensus()
+	if err != nil {
+		return nil, err
+	}
+	sig, err := bytesutil.DecodeHexWithLength(e.Signature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Signature")
+	}
+	return &eth.SignedExecutionPayloadEnvelope{
+		Message:   msg,
+		Signature: sig,
+	}, nil
+}

@@ -275,8 +275,37 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 		return nil, errors.New("requested slot is in the future")
 	}
 
+	if p.BeaconDB != nil {
+		earliestSlot, err := p.BeaconDB.EarliestSlot(ctx)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			return nil, errors.Wrap(err, "could not determine state availability")
+		}
+		if err == nil && target > 0 && target < earliestSlot {
+			return nil, &StateNotFoundError{
+				message: fmt.Sprintf("requested slot %d is unavailable; earliest available slot is %d", target, earliestSlot),
+			}
+		}
+
+		backfillStatus, err := p.BeaconDB.BackfillStatus(ctx)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			return nil, errors.Wrap(err, "could not determine state availability")
+		}
+		if err == nil && backfillStatus != nil {
+			if target > 0 && target < primitives.Slot(backfillStatus.LowSlot) {
+				return nil, &StateNotFoundError{
+					message: fmt.Sprintf("requested slot %d is unavailable; backfill starts at slot %d", target, backfillStatus.LowSlot),
+				}
+			}
+		}
+	}
+
 	st, err := p.ReplayerBuilder.ReplayerForSlot(target).ReplayBlocks(ctx)
 	if err != nil {
+		if errors.Is(err, stategen.ErrNoDataForSlot) {
+			return nil, &StateNotFoundError{
+				message: fmt.Sprintf("requested slot %d is unavailable; historical data not available", target),
+			}
+		}
 		msg := fmt.Sprintf("error while replaying history to slot=%d", target)
 		return nil, errors.Wrap(err, msg)
 	}
