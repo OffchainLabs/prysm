@@ -1360,6 +1360,23 @@ func TestBlockFetcher_HasSufficientBandwidth(t *testing.T) {
 	assert.Equal(t, 2, len(receivedPeers))
 }
 
+// TestBuildBlobPeerList_NoDuplicatePid verifies that the preferred peer does not
+// appear more than once in the peer list produced by buildBlobPeerList.
+func TestBuildBlobPeerList_NoDuplicatePid(t *testing.T) {
+	bf := newBlocksFetcher(t.Context(), &blocksFetcherConfig{})
+	pid := peer.ID("preferred")
+
+	peers := bf.buildBlobPeerList(pid, []peer.ID{"a", "b", "c"}, 1)
+
+	count := 0
+	for _, p := range peers {
+		if p == pid {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "preferred peer must appear exactly once in the peer list")
+}
+
 func TestFetchSidecars(t *testing.T) {
 	ctx := t.Context()
 	t.Run("No blocks", func(t *testing.T) {

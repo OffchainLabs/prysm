@@ -322,13 +322,7 @@ func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.Blo
 		return "", nil
 	}
 	peers = f.filterPeers(ctx, peers, peersPercentagePerRequest)
-	// We dial the initial peer first to ensure that we get the desired set of blobs.
-	peers = append([]peer.ID{pid}, peers...)
-	peers = f.hasSufficientBandwidth(peers, req.Count)
-	// We append the best peers to the front so that higher capacity
-	// peers are dialed first. If all of them fail, we fallback to the
-	// initial peer we wanted to request blobs from.
-	peers = append(peers, pid)
+	peers = f.buildBlobPeerList(pid, peers, req.Count)
 	for i := 0; i < len(peers); i++ {
 		p := peers[i]
 		blobs, err := f.requestBlobs(ctx, req, p)
@@ -344,6 +338,17 @@ func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.Blo
 		return p, err
 	}
 	return "", errNoPeersAvailable
+}
+
+// buildBlobPeerList constructs the ordered peer list for blob fetching.
+// pid is placed first for priority. After bandwidth filtering, pid is appended
+// as a last-resort fallback in case it was filtered out.
+func (f *blocksFetcher) buildBlobPeerList(pid peer.ID, peers []peer.ID, count uint64) []peer.ID {
+	peers = append([]peer.ID{pid}, peers...)
+	peers = f.hasSufficientBandwidth(peers, count)
+	peers = append(peers, pid)
+	peers = dedupPeers(peers)
+	return peers
 }
 
 func (f *blocksFetcher) requestBlobs(ctx context.Context, req *p2ppb.BlobSidecarsByRangeRequest, pid peer.ID) ([]blocks.ROBlob, error) {
