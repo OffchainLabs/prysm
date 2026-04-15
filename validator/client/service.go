@@ -223,6 +223,7 @@ func (v *ValidatorService) Start() {
 		emitAccountMetrics:           v.emitAccountMetrics,
 		enableAPI:                    v.enableAPI,
 		duties:                       &dutyStore{},
+		submittedPrefSlots:           make(map[primitives.Slot]bool),
 		distributed:                  v.distributed,
 		disableDutiesPolling:         v.disableDutiesPolling,
 		accountsChangedChannel:       make(chan [][fieldparams.BLSPubkeyLength]byte, 1),

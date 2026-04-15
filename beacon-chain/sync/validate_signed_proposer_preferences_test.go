@@ -58,8 +58,8 @@ func TestValidateSignedProposerPreferencesGossip_ErrorPathsWithMock(t *testing.T
 		wantError bool
 	}{
 		{
-			name:      "not next epoch",
-			verifier:  mockSignedProposerPreferencesVerifier{errNextEpoch: errors.New("wrong epoch")},
+			name:      "not current or next epoch",
+			verifier:  mockSignedProposerPreferencesVerifier{errCurrentOrNextEpoch: errors.New("wrong epoch")},
 			result:    pubsub.ValidationIgnore,
 			wantError: true,
 		},
@@ -134,22 +134,26 @@ func TestSignedProposerPreferencesSubscriber_HappyPath(t *testing.T) {
 }
 
 type mockSignedProposerPreferencesVerifier struct {
-	errNextEpoch         error
-	errValidProposalSlot error
-	errSignature         error
+	errCurrentOrNextEpoch error
+	errValidProposalSlot  error
+	errSignature          error
+	lastStateSlot         primitives.Slot
 }
 
 var _ verification.SignedProposerPreferencesVerifier = &mockSignedProposerPreferencesVerifier{}
 
-func (m *mockSignedProposerPreferencesVerifier) VerifyNextEpoch(state.ReadOnlyBeaconState) error {
-	return m.errNextEpoch
+func (m *mockSignedProposerPreferencesVerifier) VerifyCurrentOrNextEpoch(st state.ReadOnlyBeaconState) error {
+	m.lastStateSlot = st.Slot()
+	return m.errCurrentOrNextEpoch
 }
 
-func (m *mockSignedProposerPreferencesVerifier) VerifyValidProposalSlot(state.ReadOnlyBeaconState) error {
+func (m *mockSignedProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyBeaconState) error {
+	m.lastStateSlot = st.Slot()
 	return m.errValidProposalSlot
 }
 
-func (m *mockSignedProposerPreferencesVerifier) VerifySignature(state.ReadOnlyBeaconState) error {
+func (m *mockSignedProposerPreferencesVerifier) VerifySignature(st state.ReadOnlyBeaconState) error {
+	m.lastStateSlot = st.Slot()
 	return m.errSignature
 }
 
@@ -160,6 +164,36 @@ func testNewSignedProposerPreferencesVerifier(m mockSignedProposerPreferencesVer
 		clone := m
 		return &clone
 	}
+}
+
+func testNewSignedProposerPreferencesVerifierCapture(slot *primitives.Slot) verification.NewSignedProposerPreferencesVerifier {
+	return func(*ethpb.SignedProposerPreferences, []verification.Requirement) verification.SignedProposerPreferencesVerifier {
+		return &mockSignedProposerPreferencesVerifierWithCapture{slot: slot}
+	}
+}
+
+type mockSignedProposerPreferencesVerifierWithCapture struct {
+	slot *primitives.Slot
+}
+
+var _ verification.SignedProposerPreferencesVerifier = &mockSignedProposerPreferencesVerifierWithCapture{}
+
+func (m *mockSignedProposerPreferencesVerifierWithCapture) VerifyCurrentOrNextEpoch(st state.ReadOnlyBeaconState) error {
+	*m.slot = st.Slot()
+	return nil
+}
+
+func (m *mockSignedProposerPreferencesVerifierWithCapture) VerifyValidProposalSlot(st state.ReadOnlyBeaconState) error {
+	*m.slot = st.Slot()
+	return nil
+}
+
+func (m *mockSignedProposerPreferencesVerifierWithCapture) VerifySignature(st state.ReadOnlyBeaconState) error {
+	*m.slot = st.Slot()
+	return nil
+}
+
+func (*mockSignedProposerPreferencesVerifierWithCapture) SatisfyRequirement(verification.Requirement) {
 }
 
 func setupSignedProposerPreferencesService(t *testing.T) (*Service, *pubsub.Message, *ethpb.SignedProposerPreferences) {
@@ -192,6 +226,28 @@ func setupSignedProposerPreferencesService(t *testing.T) (*Service, *pubsub.Mess
 	}
 	msg := signedProposerPreferencesToPubsub(t, s, p, signedPreferences)
 	return s, msg, signedPreferences
+}
+
+func TestValidateSignedProposerPreferencesGossip_AdvancesHeadStateToCurrentSlot(t *testing.T) {
+	ctx := context.Background()
+	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
+
+	chainService, ok := s.cfg.chain.(*mock.ChainService)
+	require.Equal(t, true, ok)
+	st, _ := util.DeterministicGenesisStateFulu(t, 64)
+	require.NoError(t, st.SetSlot(31))
+	chainService.State = st
+	currentSlot := primitives.Slot(32)
+	s.cfg.clock = startup.NewClock(s.cfg.chain.GenesisTime(), s.cfg.chain.GenesisValidatorsRoot(), startup.WithSlotAsNow(currentSlot))
+	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
+
+	var verifiedSlot primitives.Slot
+	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifierCapture(&verifiedSlot)
+
+	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, result)
+	require.Equal(t, currentSlot, verifiedSlot)
 }
 
 func signedProposerPreferencesToPubsub(t *testing.T, s *Service, p p2p.P2P, preferences *ethpb.SignedProposerPreferences) *pubsub.Message {

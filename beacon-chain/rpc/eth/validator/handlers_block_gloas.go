@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -19,6 +20,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -187,16 +190,49 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 
 // ExecutionPayloadEnvelope retrieves a cached execution payload envelope.
 //
-// TODO: Implement envelope retrieval from cache.
-// Endpoint: GET /eth/v1/validator/execution_payload_envelope/{slot}/{builder_index}
+// Endpoint: GET /eth/v1/validator/execution_payload_envelope/{slot}
 func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request) {
-	httputil.HandleError(w, "ExecutionPayloadEnvelope not yet implemented", http.StatusNotImplemented)
-}
+	ctx, span := trace.StartSpan(r.Context(), "validator.ExecutionPayloadEnvelope")
+	defer span.End()
 
-// PublishExecutionPayloadEnvelope broadcasts a signed execution payload envelope.
-//
-// TODO: Implement envelope validation and broadcast.
-// Endpoint: POST /eth/v1/beacon/execution_payload_envelope
-func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request) {
-	httputil.HandleError(w, "PublishExecutionPayloadEnvelope not yet implemented", http.StatusNotImplemented)
+	rawSlot := r.PathValue("slot")
+	if rawSlot == "" {
+		httputil.HandleError(w, "slot is required in URL params", http.StatusBadRequest)
+		return
+	}
+	slot, err := strconv.ParseUint(rawSlot, 10, 64)
+	if err != nil {
+		httputil.HandleError(w, "invalid slot: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	resp, err := s.V1Alpha1Server.GetExecutionPayloadEnvelope(ctx, &eth.ExecutionPayloadEnvelopeRequest{
+		Slot: primitives.Slot(slot),
+	})
+	if err != nil {
+		if st, ok := status.FromError(err); ok {
+			switch st.Code() {
+			case codes.NotFound:
+				httputil.HandleError(w, st.Message(), http.StatusNotFound)
+			case codes.InvalidArgument:
+				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
+			default:
+				httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
+			}
+			return
+		}
+		httputil.HandleError(w, "could not get execution payload envelope: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonEnvelope, err := structs.ExecutionPayloadEnvelopeFromConsensus(resp.Envelope)
+	if err != nil {
+		httputil.HandleError(w, "could not convert envelope to JSON: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+	httputil.WriteJson(w, &structs.GetValidatorExecutionPayloadEnvelopeResponse{
+		Version: version.String(version.Gloas),
+		Data:    jsonEnvelope,
+	})
 }
