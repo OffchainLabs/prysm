@@ -417,6 +417,89 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 	})
 }
 
+// TestValidator_CheckDependentRoots_NoEmptyWindowDuringRefetch asserts that
+// concurrent readers of the duty store never observe an empty store while
+// checkDependentRoots is refetching. A previous implementation called
+// clearDuties() before UpdateDuties(), leaving a window in which other
+// goroutines would fail with "no duties for validators".
+func TestValidator_CheckDependentRoots_NoEmptyWindowDuringRefetch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	ctx := t.Context()
+	client := validatormock.NewMockValidatorClient(ctrl)
+
+	oldContainer := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+			AttesterSlot:    params.BeaconConfig().SlotsPerEpoch,
+			ValidatorIndex:  200,
+			CommitteeIndex:  100,
+			CommitteeLength: 4,
+			PublicKey:       []byte("testPubKey_1"),
+		}},
+		PrevDependentRoot: bytesutil.PadTo([]byte{0x01, 0x02, 0x03}, fieldparams.RootLength),
+		CurrDependentRoot: bytesutil.PadTo([]byte{0x04, 0x05, 0x06}, fieldparams.RootLength),
+	}
+	newContainer := &ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: oldContainer.CurrentEpochDuties,
+		PrevDependentRoot:  bytesutil.PadTo([]byte{0xaa, 0xbb, 0xcc}, fieldparams.RootLength),
+		CurrDependentRoot:  bytesutil.PadTo([]byte{0xdd, 0xee, 0xff}, fieldparams.RootLength),
+	}
+	ds := &dutyStore{}
+	ds.SetFromCombinedDutiesResponse(oldContainer)
+	v := &validator{
+		km:              newMockKeymanager(t, randKeypair(t)),
+		validatorClient: client,
+		duties:          ds,
+	}
+	v.aggSelector = testLocalSelector(t, v)
+
+	// Block the RPC inside UpdateDuties until we release it, and signal when
+	// the goroutine is actually inside the call so we can probe store state.
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	client.EXPECT().Duties(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
+			close(entered)
+			<-release
+			return newContainer, nil
+		},
+	)
+	client.EXPECT().SubscribeCommitteeSubnets(
+		gomock.Any(), gomock.Any(), gomock.Any(),
+	).Return(&emptypb.Empty{}, nil).AnyTimes()
+
+	// Head event with a prev root that differs from stored — triggers
+	// needsPrevUpdate.
+	head := &structs.HeadEvent{
+		Slot:                      "1",
+		PreviousDutyDependentRoot: "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
+		CurrentDutyDependentRoot:  "0xe3f7a1b2c489d56f03a6b8d9c7e1fa2456bb09f3de42a67c8910fc3e7a5d4b12",
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- v.checkDependentRoots(ctx, head) }()
+
+	<-entered // refetch is in flight
+
+	// The bug: with clearDuties() before UpdateDuties(), DependentRoots()
+	// would return (nil, nil) here. The fix keeps the OLD values visible
+	// until the atomic swap at the end of updateDuties.
+	prev, curr := v.duties.DependentRoots()
+	require.NotNil(t, prev, "duty store was cleared mid-refetch (prev)")
+	require.NotNil(t, curr, "duty store was cleared mid-refetch (curr)")
+	require.DeepEqual(t, oldContainer.PrevDependentRoot, prev)
+	require.DeepEqual(t, oldContainer.CurrDependentRoot, curr)
+	require.Equal(t, true, v.duties.IsInitialized())
+
+	close(release)
+	require.NoError(t, <-done)
+
+	// After completion, the new roots must be in place.
+	prev, curr = v.duties.DependentRoots()
+	require.DeepEqual(t, newContainer.PrevDependentRoot, prev)
+	require.DeepEqual(t, newContainer.CurrDependentRoot, curr)
+}
+
 func TestUpdateDutiesSplit(t *testing.T) {
 	epoch := primitives.Epoch(5)
 

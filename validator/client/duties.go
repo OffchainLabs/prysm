@@ -703,7 +703,6 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	v.dutiesLock.RUnlock()
 
 	if needsPrevUpdate {
-		v.clearDuties()
 		if err := v.UpdateDuties(dutiesCtx); err != nil {
 			return errors.Wrap(err, "failed to update duties")
 		}
@@ -725,7 +724,6 @@ func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadE
 	if !needsCurrUpdate {
 		return nil
 	}
-	v.clearDuties()
 	if err := v.UpdateDuties(dutiesCtx); err != nil {
 		return errors.Wrap(err, "failed to update duties")
 	}
