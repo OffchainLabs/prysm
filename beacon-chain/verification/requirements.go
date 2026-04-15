@@ -49,7 +49,7 @@ const (
 	RequireBidSignatureValid
 
 	// Signed proposer preferences specific.
-	RequireProposerPreferencesNextEpoch
+	RequireProposerPreferencesCurrentOrNextEpoch
 	RequireProposerPreferencesProposalSlotValid
 	RequireProposerPreferencesSignatureValid
 )
