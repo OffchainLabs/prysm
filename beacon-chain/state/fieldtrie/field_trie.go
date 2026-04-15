@@ -453,12 +453,12 @@ func (f *FieldTrie) empty() bool {
 func (f *FieldTrie) recomputeBranches(elements any, indices []uint64) ([32]byte, error) {
 	f.numOfElems = elemCount(elements)
 
-	indices, err := f.compressedIndicesToChunks(indices)
+	chunkIndices, err := f.compressedIndicesToChunks(indices)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("compressed indices to chunks: %w", err)
 	}
 
-	fieldRoots, err := fieldConverters(f.field, elements, indices)
+	fieldRoots, err := fieldConverters(f.field, elements, chunkIndices)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("field converters: %w", err)
 	}
@@ -466,7 +466,7 @@ func (f *FieldTrie) recomputeBranches(elements any, indices []uint64) ([32]byte,
 	hasher := hash.CustomSHA256Hasher()
 
 	var root [32]byte
-	for i, idx := range indices {
+	for i, idx := range chunkIndices {
 		f.ensureLeafCapacity(idx + 1)
 
 		f.nodesData.nodes[idx] = fieldRoots[i]
@@ -489,12 +489,12 @@ func (f *FieldTrie) promoteOverlay(elements any, indices []uint64) ([32]byte, er
 	f.numOfElems = elemCount(elements)
 	depth := f.base.depth()
 
-	indices, err := f.compressedIndicesToChunks(indices)
+	chunkIndices, err := f.compressedIndicesToChunks(indices)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("compressed indices to chunks: %w", err)
 	}
 
-	fieldRoots, err := fieldConverters(f.field, elements, indices)
+	fieldRoots, err := fieldConverters(f.field, elements, chunkIndices)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("field converters: %w", err)
 	}
@@ -505,7 +505,7 @@ func (f *FieldTrie) promoteOverlay(elements any, indices []uint64) ([32]byte, er
 		return [32]byte{}, fmt.Errorf("leaf count: %w", err)
 	}
 
-	for _, idx := range indices {
+	for _, idx := range chunkIndices {
 		leafCount = max(leafCount, idx+1)
 	}
 
@@ -514,7 +514,7 @@ func (f *FieldTrie) promoteOverlay(elements any, indices []uint64) ([32]byte, er
 	nodes := make([][32]byte, offsets[depth+1])
 
 	// Skip the base copy when all leaves are being rewritten.
-	if uint64(len(indices)) < leafCount {
+	if uint64(len(chunkIndices)) < leafCount {
 		// Copy base layers into the new buffer.
 		baseCount := min(f.base.levelSize(0), leafCount)
 		copy(nodes[:baseCount], f.base.nodesData.nodes[:baseCount])
@@ -526,7 +526,7 @@ func (f *FieldTrie) promoteOverlay(elements any, indices []uint64) ([32]byte, er
 	}
 
 	// Apply new field roots for changed indices.
-	for i, idx := range indices {
+	for i, idx := range chunkIndices {
 		nodes[idx] = fieldRoots[i]
 	}
 
@@ -557,18 +557,18 @@ func (f *FieldTrie) promoteOverlay(elements any, indices []uint64) ([32]byte, er
 func (f *FieldTrie) recomputeOverlay(elements any, indices []uint64) ([32]byte, error) {
 	f.numOfElems = elemCount(elements)
 
-	indices, err := f.compressedIndicesToChunks(indices)
+	chunkIndices, err := f.compressedIndicesToChunks(indices)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("compressed indices to chunks: %w", err)
 	}
 
-	fieldRoots, err := fieldConverters(f.field, elements, indices)
+	fieldRoots, err := fieldConverters(f.field, elements, chunkIndices)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("field converters: %w", err)
 	}
 
-	dirtyLeaves := make(map[uint64][32]byte, len(indices))
-	for i, idx := range indices {
+	dirtyLeaves := make(map[uint64][32]byte, len(chunkIndices))
+	for i, idx := range chunkIndices {
 		dirtyLeaves[idx] = fieldRoots[i]
 	}
 
