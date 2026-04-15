@@ -2,14 +2,11 @@ package verification
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	sszutil "github.com/OffchainLabs/prysm/v7/encoding/ssz"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // GossipSignedExecutionProofRequirements defines the set of requirements that SignedExecutionProofs received on gossip
@@ -23,7 +20,7 @@ var GossipSignedExecutionProofRequirements = []Requirement{
 }
 
 func proofToSignatureData(proof blocks.ROSignedExecutionProof) (executionProofSignatureData, error) {
-	proofRoot, err := executionProofHashTreeRoot(proof.Message)
+	proofRoot, err := blocks.ExecutionProofHashTreeRoot(proof.Message)
 	if err != nil {
 		return executionProofSignatureData{}, fmt.Errorf("hash tree root: %w", err)
 	}
@@ -196,51 +193,4 @@ func (v *ROSignedExecutionProofsVerifier) ProofVerified() (err error) {
 
 func proofErrBuilder(baseErr error) error {
 	return fmt.Errorf("%w: %w", errProofsInvalid, baseErr)
-}
-
-// executionProofHashTreeRoot computes the SSZ hash tree root of an ExecutionProof.
-func executionProofHashTreeRoot(ep *ethpb.ExecutionProof) ([32]byte, error) {
-	const maxProofDataChunks = (307200 + 31) / 32 // ceil(MAX_PROOF_SIZE / 32)
-
-	// Field 0: proof_data — ByteList[MAX_PROOF_SIZE]
-	proofDataChunks := packBytes(ep.ProofData)
-	proofDataRoot, err := sszutil.BitwiseMerkleize(proofDataChunks, uint64(len(proofDataChunks)), maxProofDataChunks)
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("merkleize proof_data: %w", err)
-	}
-	var lengthBuf [32]byte
-	binary.LittleEndian.PutUint64(lengthBuf[:8], uint64(len(ep.ProofData)))
-	field0 := sszutil.MixInLength(proofDataRoot, lengthBuf[:])
-
-	// Field 1: proof_type — uint8 (fixed, 1 byte)
-	if len(ep.ProofType) != 1 {
-		return [32]byte{}, fmt.Errorf("invalid ProofType length: %d", len(ep.ProofType))
-	}
-	field1 := [32]byte{ep.ProofType[0]}
-
-	// Field 2: public_input — PublicInput container (single 32-byte Root field)
-	if ep.PublicInput == nil || len(ep.PublicInput.NewPayloadRequestRoot) != 32 {
-		return [32]byte{}, fmt.Errorf("invalid PublicInput")
-	}
-	field2 := [32]byte(ep.PublicInput.NewPayloadRequestRoot)
-
-	// Container merkleization: 3 fields, padded to next power of 2 (4).
-	return sszutil.BitwiseMerkleize([][32]byte{field0, field1, field2}, 3, 4)
-}
-
-// packBytes packs a byte slice into 32-byte chunks.
-func packBytes(data []byte) [][32]byte {
-	if len(data) == 0 {
-		return [][32]byte{}
-	}
-
-	numChunks := (len(data) + 31) / 32
-	chunks := make([][32]byte, numChunks)
-	for i := range chunks {
-		start := i * 32
-		end := min(start+32, len(data))
-		copy(chunks[i][:], data[start:end])
-	}
-
-	return chunks
 }

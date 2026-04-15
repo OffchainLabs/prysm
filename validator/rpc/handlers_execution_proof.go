@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -108,7 +109,12 @@ func (s *Server) SignExecutionProof(w http.ResponseWriter, r *http.Request) {
 
 	// Compute the full signing root by combining the object root with the domain
 	// This follows the same pattern as other signing operations (e.g., attestations)
-	signingRoot, err := signing.ComputeSigningRoot(executionProof, domainResp.SignatureDomain)
+	proofRoot, err := blocks.ExecutionProofHashTreeRoot(executionProof)
+	if err != nil {
+		httputil.HandleError(w, fmt.Errorf("execution proof hash tree root: %w", err).Error(), http.StatusInternalServerError)
+		return
+	}
+	signingRoot, err := signing.ComputeSigningRootForRoot(proofRoot, domainResp.SignatureDomain)
 	if err != nil {
 		httputil.HandleError(w, fmt.Errorf("compute signing root: %w", err).Error(), http.StatusInternalServerError)
 		return

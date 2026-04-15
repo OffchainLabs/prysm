@@ -40,6 +40,7 @@ go_library(
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//config/proposer:go_default_library",
+        "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",
         "//crypto/bls:go_default_library",

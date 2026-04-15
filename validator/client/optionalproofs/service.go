@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -398,7 +399,11 @@ func (s *Service) signExecutionProof(proofData []byte, proofType uint8, newPaylo
 		return nil, fmt.Errorf("fetch domain data: %w", err)
 	}
 
-	signingRoot, err := signing.ComputeSigningRoot(executionProof, domainResp.SignatureDomain)
+	proofRoot, err := blocks.ExecutionProofHashTreeRoot(executionProof)
+	if err != nil {
+		return nil, fmt.Errorf("execution proof hash tree root: %w", err)
+	}
+	signingRoot, err := signing.ComputeSigningRootForRoot(proofRoot, domainResp.SignatureDomain)
 	if err != nil {
 		return nil, fmt.Errorf("compute signing root: %w", err)
 	}
