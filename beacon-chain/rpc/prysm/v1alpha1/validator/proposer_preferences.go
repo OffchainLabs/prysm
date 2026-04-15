@@ -49,16 +49,27 @@ func (vs *Server) SubmitSignedProposerPreferences(
 			)
 		}
 
-		if slots.ToEpoch(proposalSlot) != currentEpoch+1 {
+		proposalEpoch := slots.ToEpoch(proposalSlot)
+		if proposalEpoch < currentEpoch || proposalEpoch > currentEpoch.Add(1) {
 			return nil, status.Errorf(
 				codes.InvalidArgument,
-				"signed proposer preferences proposal slot must be in the next epoch: slot %d currentEpoch %d",
+				"signed proposer preferences proposal slot must be in the current or next epoch: slot %d currentEpoch %d",
 				proposalSlot,
 				currentEpoch,
 			)
 		}
 
 		valIdx := msg.Message.ValidatorIndex
+		currentSlot := vs.TimeFetcher.CurrentSlot()
+		if proposalSlot <= currentSlot {
+			return nil, status.Errorf(
+				codes.InvalidArgument,
+				"signed proposer preferences proposal slot has already passed: proposalSlot %d currentSlot %d",
+				proposalSlot,
+				currentSlot,
+			)
+		}
+
 		if vs.ProposerPreferencesCache.Has(proposalSlot, valIdx) {
 			duplicate++
 			continue

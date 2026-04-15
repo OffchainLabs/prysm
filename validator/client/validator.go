@@ -89,6 +89,7 @@ type validator struct {
 	interopKeysConfig            *local.InteropKeymanagerConfig
 	duties                       *dutyStore
 	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
+	submittedPrefSlots           map[primitives.Slot]bool
 	proposerSettings             *proposer.Settings
 	web3SignerConfig             *remoteweb3signer.SetupConfig
 	startBalances                map[[fieldparams.BLSPubkeyLength]byte]uint64
@@ -1027,9 +1028,17 @@ func (v *validator) buildProposerSettingsRequests(
 }
 
 // buildProposerPreferences creates signed proposer preferences for validators
-// that have proposer slots in the next epoch. During normal operation it is
+// that have proposer slots in the current epoch (future slots) or next epoch. During normal operation it is
 // gated to run once at mid-epoch; pass force=true to bypass that gate (e.g.
 // after a reorg triggers a duty change).
+//
+// Current-epoch preferences are submitted after the first slot of the epoch
+// (slot 0 is skipped to avoid stale state after epoch transition). If the
+// validator client starts mid-epoch, preferences are submitted for all
+// remaining future slots in the epoch.
+// Next-epoch preferences are submitted at or after mid-epoch to ensure beacon
+// nodes have processed the epoch transition.
+// Already-submitted slots are tracked to avoid duplicate signing and RPC calls.
 func (v *validator) buildProposerPreferences(
 	ctx context.Context,
 	km keymanager.IKeymanager,
@@ -1042,28 +1051,22 @@ func (v *validator) buildProposerPreferences(
 		return nil
 	}
 	if !force {
-		// Send once per epoch at mid-epoch so beacon nodes have processed the
-		// epoch transition and updated their ProposerLookahead.
-		epochStart, err := slots.EpochStart(currentEpoch)
-		if err != nil {
-			return nil
-		}
-		midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
-		if slot != midEpoch {
-			return nil
-		}
-	}
+    epochStart, err := slots.EpochStart(currentEpoch)
+    if err != nil {
+      return nil
+    }
+    midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
 
+    for s := range v.submittedPrefSlots {
+      if s < epochStart {
+        delete(v.submittedPrefSlots, s)
+      }
+    }
+  }
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
 
 	if !v.duties.IsInitialized() {
-		log.Debug("Duties not yet initialized, skipping proposer preferences")
-		return nil
-	}
-
-	nextDuties := v.duties.NextEpochDuties()
-	if len(nextDuties) == 0 {
 		return nil
 	}
 
@@ -1071,55 +1074,99 @@ func (v *validator) buildProposerPreferences(
 	var signedPrefs []*ethpb.SignedProposerPreferences
 	var sigFailCount int
 
-	for pk, duty := range nextDuties {
-		if len(duty.ProposerSlots) == 0 {
-			continue
-		}
-		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
-			continue
-		}
-
-		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
-		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
-
-		if ps != nil && ps.DefaultConfig != nil {
-			if ps.DefaultConfig.FeeRecipientConfig != nil {
-				feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
-			}
-			if ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.Enabled {
-				gasLimit = uint64(ps.DefaultConfig.BuilderConfig.GasLimit)
-			}
-		}
-		if ps != nil && ps.ProposeConfig != nil {
-			if config, ok := ps.ProposeConfig[pk]; ok && config != nil {
-				if config.FeeRecipientConfig != nil {
-					feeRecipient = config.FeeRecipientConfig.FeeRecipient
-				}
-				if config.BuilderConfig != nil && config.BuilderConfig.Enabled {
-					gasLimit = uint64(config.BuilderConfig.GasLimit)
-				}
-			}
-		}
-
-		for _, proposalSlot := range duty.ProposerSlots {
-			pref := &ethpb.ProposerPreferences{
-				ProposalSlot:   proposalSlot,
-				ValidatorIndex: duty.ValidatorIndex,
-				FeeRecipient:   feeRecipient[:],
-				GasLimit:       gasLimit,
-			}
-
-			signedPref, err := v.signProposerPreferences(ctx, km, pk, pref)
-			if err != nil {
-				sigFailCount++
+	processDuties := func(duties map[pubkey]*ethpb.ValidatorDuty, isNextEpoch bool) {
+		for pk, duty := range duties {
+			if len(duty.ProposerSlots) == 0 {
 				continue
 			}
-			signedPrefs = append(signedPrefs, signedPref)
+			if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
+				continue
+			}
+
+			feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
+			gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
+			if ps != nil && ps.DefaultConfig != nil {
+				if ps.DefaultConfig.FeeRecipientConfig != nil {
+					feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
+				}
+				if ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.Enabled {
+					gasLimit = uint64(ps.DefaultConfig.BuilderConfig.GasLimit)
+				}
+			}
+			if ps != nil && ps.ProposeConfig != nil {
+				if config, ok := ps.ProposeConfig[pk]; ok && config != nil {
+					if config.FeeRecipientConfig != nil {
+						feeRecipient = config.FeeRecipientConfig.FeeRecipient
+					}
+					if config.BuilderConfig != nil && config.BuilderConfig.Enabled {
+						gasLimit = uint64(config.BuilderConfig.GasLimit)
+					}
+				}
+			}
+
+			for _, proposalSlot := range duty.ProposerSlots {
+				if v.submittedPrefSlots[proposalSlot] {
+					continue
+				}
+				// Skip slots that have passed or are too close. Preferences are
+				// submitted at mid-slot, so the proposer needs to be at least 1
+				// full slot away for the beacon node to receive them in time.
+				if !isNextEpoch && proposalSlot <= slot+1 {
+					continue
+				}
+
+				pref := &ethpb.ProposerPreferences{
+					ProposalSlot:   proposalSlot,
+					ValidatorIndex: duty.ValidatorIndex,
+					FeeRecipient:   feeRecipient[:],
+					GasLimit:       gasLimit,
+				}
+				signedPref, err := v.signProposerPreferences(ctx, km, pk, pref)
+				if err != nil {
+					sigFailCount++
+					continue
+				}
+				signedPrefs = append(signedPrefs, signedPref)
+				v.submittedPrefSlots[proposalSlot] = true
+			}
 		}
 	}
+
+	currentDuties := v.duties.CurrentEpochDuties()
+	nextDuties := v.duties.NextEpochDuties()
+
+	var currentProposerCount, nextProposerCount int
+	for _, d := range currentDuties {
+		currentProposerCount += len(d.ProposerSlots)
+	}
+	for _, d := range nextDuties {
+		nextProposerCount += len(d.ProposerSlots)
+	}
+
+	// Current-epoch: submit after first slot of epoch to avoid stale state.
+	// Only post-gloas — current-epoch prefs before gloas would be rejected.
+	if currentEpoch >= gloasEpoch && slot > epochStart {
+		processDuties(currentDuties, false)
+	}
+
+	// Next-epoch: submit at or after mid-epoch.
+	if slot >= midEpoch {
+		processDuties(nextDuties, true)
+	}
+
 	if sigFailCount > 0 {
 		log.WithField("count", sigFailCount).Warn("Failed to sign proposer preferences")
 	}
+	log.WithFields(logrus.Fields{
+		"slot":                 slot,
+		"epoch":                currentEpoch,
+		"epochStart":           epochStart,
+		"midEpoch":             midEpoch,
+		"currentProposerSlots": currentProposerCount,
+		"nextProposerSlots":    nextProposerCount,
+		"prefsBuilt":           len(signedPrefs),
+		"alreadySubmitted":     len(v.submittedPrefSlots),
+	}).Debug("Build proposer preferences result")
 	return signedPrefs
 }
 
