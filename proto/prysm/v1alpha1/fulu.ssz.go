@@ -2492,15 +2492,18 @@ func (e *ExecutionProof) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the ExecutionProof object to a target array
 func (e *ExecutionProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(40)
+	offset := int(37)
 
 	// Offset (0) 'ProofData'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(e.ProofData)
 
-	// Offset (1) 'ProofType'
-	dst = ssz.WriteOffset(dst, offset)
-	offset += len(e.ProofType)
+	// Field (1) 'ProofType'
+	if size := len(e.ProofType); size != 1 {
+		err = ssz.ErrBytesLengthFn("--.ProofType", size, 1)
+		return
+	}
+	dst = append(dst, e.ProofType...)
 
 	// Field (2) 'PublicInput'
 	if e.PublicInput == nil {
@@ -2517,13 +2520,6 @@ func (e *ExecutionProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 	dst = append(dst, e.ProofData...)
 
-	// Field (1) 'ProofType'
-	if size := len(e.ProofType); size > 1 {
-		err = ssz.ErrBytesLengthFn("--.ProofType", size, 1)
-		return
-	}
-	dst = append(dst, e.ProofType...)
-
 	return
 }
 
@@ -2531,38 +2527,39 @@ func (e *ExecutionProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (e *ExecutionProof) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 40 {
+	if size < 37 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o0, o1 uint64
+	var o0 uint64
 
 	// Offset (0) 'ProofData'
 	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
 		return ssz.ErrOffset
 	}
 
-	if o0 != 40 {
+	if o0 != 37 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
-	// Offset (1) 'ProofType'
-	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
-		return ssz.ErrOffset
+	// Field (1) 'ProofType'
+	if cap(e.ProofType) == 0 {
+		e.ProofType = make([]byte, 0, len(buf[4:5]))
 	}
+	e.ProofType = append(e.ProofType, buf[4:5]...)
 
 	// Field (2) 'PublicInput'
 	if e.PublicInput == nil {
 		e.PublicInput = new(PublicInput)
 	}
-	if err = e.PublicInput.UnmarshalSSZ(buf[8:40]); err != nil {
+	if err = e.PublicInput.UnmarshalSSZ(buf[5:37]); err != nil {
 		return err
 	}
 
 	// Field (0) 'ProofData'
 	{
-		buf = tail[o0:o1]
+		buf = tail[o0:]
 		if len(buf) > 307200 {
 			return ssz.ErrBytesLength
 		}
@@ -2571,30 +2568,15 @@ func (e *ExecutionProof) UnmarshalSSZ(buf []byte) error {
 		}
 		e.ProofData = append(e.ProofData, buf...)
 	}
-
-	// Field (1) 'ProofType'
-	{
-		buf = tail[o1:]
-		if len(buf) > 1 {
-			return ssz.ErrBytesLength
-		}
-		if cap(e.ProofType) == 0 {
-			e.ProofType = make([]byte, 0, len(buf))
-		}
-		e.ProofType = append(e.ProofType, buf...)
-	}
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the ExecutionProof object
 func (e *ExecutionProof) SizeSSZ() (size int) {
-	size = 40
+	size = 37
 
 	// Field (0) 'ProofData'
 	size += len(e.ProofData)
-
-	// Field (1) 'ProofType'
-	size += len(e.ProofType)
 
 	return
 }
@@ -2621,16 +2603,11 @@ func (e *ExecutionProof) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 
 	// Field (1) 'ProofType'
-	{
-		elemIndx := hh.Index()
-		byteLen := uint64(len(e.ProofType))
-		if byteLen > 1 {
-			err = ssz.ErrIncorrectListSize
-			return
-		}
-		hh.PutBytes(e.ProofType)
-		hh.MerkleizeWithMixin(elemIndx, byteLen, (1+31)/32)
+	if size := len(e.ProofType); size != 1 {
+		err = ssz.ErrBytesLengthFn("--.ProofType", size, 1)
+		return
 	}
+	hh.PutBytes(e.ProofType)
 
 	// Field (2) 'PublicInput'
 	if err = e.PublicInput.HashTreeRootWith(hh); err != nil {

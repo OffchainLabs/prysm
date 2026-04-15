@@ -21,8 +21,7 @@ message SignedExecutionProof {
 // https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8025/beacon-chain.md#new-executionproof
 message ExecutionProof {
     bytes proof_data = 1 [ (ethereum.eth.ext.ssz_max) = "proof.size" ];
-    // proof_type should be an uint8
-    bytes proof_type = 2 [ (ethereum.eth.ext.ssz_max) = "1" ];
+    bytes proof_type = 2 [ (ethereum.eth.ext.ssz_size) = "1" ];
     PublicInput public_input = 3;
 }
 
