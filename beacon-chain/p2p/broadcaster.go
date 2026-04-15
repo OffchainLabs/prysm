@@ -490,10 +490,10 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		close(batchDone)
 	}()
 
-	var partialsWithPeers atomic.Int64
 	// Publish partial columns that already have peers.
 	if s.partialColumnBroadcaster != nil {
-		if err := s.partialColumnBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+		var partialsWithPeers atomic.Int64
+		iterFunc := func(yield func(string, blocks.PartialDataColumn) bool) {
 			for _, item := range itemsWithPeers {
 				if item.partialColumn == nil {
 					continue
@@ -504,7 +504,8 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 					return
 				}
 			}
-		}); err != nil {
+		}
+		if err := s.partialColumnBroadcaster.Publish(ctx, iterFunc); err != nil {
 			log.WithError(err).Error("Cannot publish partial data columns")
 		} else {
 			partialDataColumnBroadcasts.Add(float64(partialsWithPeers.Load()))
