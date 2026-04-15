@@ -252,7 +252,11 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 		duties:          &dutyStore{},
 		genesisTime:     genesis,
 		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			keys.pub: {publicKey: keys.pub[:], index: 200},
+			keys.pub: {
+				publicKey: keys.pub[:],
+				status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE},
+				index:     200,
+			},
 		},
 	}
 	v.aggSelector = newDistributedSelector(&v)
