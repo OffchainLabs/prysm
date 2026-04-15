@@ -2474,7 +2474,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		})
 
 		// Slot 1 (past epoch start) allows current-epoch preferences.
-		prefs := v.buildProposerPreferences(t.Context(), km, 1)
+		prefs := v.buildProposerPreferences(t.Context(), km, 1, false)
 		require.Equal(t, 1, len(prefs))
 		require.Equal(t, currentEpochSlot, prefs[0].Message.ProposalSlot)
 	})
@@ -2510,7 +2510,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		})
 
 		// At mid-epoch, both current and next epoch preferences are eligible.
-		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
+		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 		require.Equal(t, 2, len(prefs))
 
 		gotSlots := []primitives.Slot{prefs[0].Message.ProposalSlot, prefs[1].Message.ProposalSlot}
@@ -2545,7 +2545,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		})
 
 		// Slot 0 (epoch start) skips current-epoch preferences.
-		prefs := v.buildProposerPreferences(t.Context(), km, 0)
+		prefs := v.buildProposerPreferences(t.Context(), km, 0, false)
 		require.Equal(t, 0, len(prefs))
 	})
 
@@ -2574,11 +2574,11 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			},
 		})
 
-		prefs := v.buildProposerPreferences(t.Context(), km, 1)
+		prefs := v.buildProposerPreferences(t.Context(), km, 1, false)
 		require.Equal(t, 1, len(prefs))
 
 		// Second call returns nothing — slot already submitted.
-		prefs = v.buildProposerPreferences(t.Context(), km, 2)
+		prefs = v.buildProposerPreferences(t.Context(), km, 2, false)
 		require.Equal(t, 0, len(prefs))
 	})
 
@@ -2610,7 +2610,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			},
 		})
 
-		prefs := v.buildProposerPreferences(t.Context(), km, 1)
+		prefs := v.buildProposerPreferences(t.Context(), km, 1, false)
 		require.Equal(t, 1, len(prefs))
 
 		// Simulate new validator added with a different proposal slot.
@@ -2639,7 +2639,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		})
 
 		// Only the new validator's slot is submitted.
-		prefs = v.buildProposerPreferences(t.Context(), km, 2)
+		prefs = v.buildProposerPreferences(t.Context(), km, 2, false)
 		require.Equal(t, 1, len(prefs))
 		require.Equal(t, primitives.Slot(7), prefs[0].Message.ProposalSlot)
 
@@ -2673,7 +2673,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		})
 
 		// Slot 1 is before mid-epoch, next-epoch prefs should not be sent.
-		prefs := v.buildProposerPreferences(t.Context(), km, 1)
+		prefs := v.buildProposerPreferences(t.Context(), km, 1, false)
 		require.Equal(t, 0, len(prefs))
 	})
 }

@@ -1050,19 +1050,19 @@ func (v *validator) buildProposerPreferences(
 	if currentEpoch+1 < gloasEpoch {
 		return nil
 	}
-	if !force {
-    epochStart, err := slots.EpochStart(currentEpoch)
-    if err != nil {
-      return nil
-    }
-    midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
+	epochStart, err := slots.EpochStart(currentEpoch)
+	if err != nil {
+		return nil
+	}
+	midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
 
-    for s := range v.submittedPrefSlots {
-      if s < epochStart {
-        delete(v.submittedPrefSlots, s)
-      }
-    }
-  }
+	if !force {
+		for s := range v.submittedPrefSlots {
+			if s < epochStart {
+				delete(v.submittedPrefSlots, s)
+			}
+		}
+	}
 	v.dutiesLock.RLock()
 	defer v.dutiesLock.RUnlock()
 
