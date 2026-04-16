@@ -1056,7 +1056,16 @@ func (v *validator) buildProposerPreferences(
 	}
 	midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
 
-	if !force {
+	if force {
+		log.WithFields(logrus.Fields{
+			"slot":              slot,
+			"epoch":             currentEpoch,
+			"previouslyTracked": len(v.submittedPrefSlots),
+		}).Debug("Force rebuilding proposer preferences (duty change), clearing submitted tracking")
+		for s := range v.submittedPrefSlots {
+			delete(v.submittedPrefSlots, s)
+		}
+	} else {
 		for s := range v.submittedPrefSlots {
 			if s < epochStart {
 				delete(v.submittedPrefSlots, s)
@@ -1144,12 +1153,13 @@ func (v *validator) buildProposerPreferences(
 	}
 
 	// Current-epoch: submit after first slot of epoch to avoid stale state.
-	// Only post-gloas — current-epoch prefs before gloas would be rejected.
-	if currentEpoch >= gloasEpoch && slot > epochStart {
+	// force bypasses the timing gate for reorg resubmission.
+	if currentEpoch >= gloasEpoch && (force || slot > epochStart) {
 		processDuties(currentDuties, false)
 	}
 
-	// Next-epoch: submit at or after mid-epoch.
+	// Next-epoch: submit at or after mid-epoch. The gate is not bypassed
+	// by force because the beacon node may not have the next-epoch state ready.
 	if slot >= midEpoch {
 		processDuties(nextDuties, true)
 	}
