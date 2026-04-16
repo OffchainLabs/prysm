@@ -145,7 +145,7 @@ func GenerateJsonGloasBeaconBlock() *structs.BeaconBlockGloas {
 
 func GenerateProtoExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 	return &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
+		Payload: &enginev1.ExecutionPayloadGloas{
 			ParentHash:    FillByteSlice(32, 200),
 			FeeRecipient:  FillByteSlice(20, 201),
 			StateRoot:     FillByteSlice(32, 202),

@@ -135,7 +135,7 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 			continue
 		}
 
-		payloadByHash, batchErr := s.cfg.executionReconstructor.ReconstructFullExecutionPayloadsByHash(ctx, batchHashes)
+		payloadByHash, batchErr := s.cfg.executionReconstructor.ReconstructFullGloasExecutionPayloadsByHash(ctx, batchHashes)
 		if batchErr != nil {
 			recordResult(executionPayloadEnvelopeRPCResultError)
 			log.WithError(batchErr).Debug("Could not batch reconstruct full execution payload envelopes")

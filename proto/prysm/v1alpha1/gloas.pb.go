@@ -1519,7 +1519,7 @@ func (x *DataColumnSidecarGloas) GetBeaconBlockRoot() []byte {
 
 type ExecutionPayloadEnvelope struct {
 	state             protoimpl.MessageState                                                   `protogen:"open.v1"`
-	Payload           *v1.ExecutionPayloadDeneb                                                `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
+	Payload           *v1.ExecutionPayloadGloas                                                `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
 	ExecutionRequests *v1.ExecutionRequests                                                    `protobuf:"bytes,2,opt,name=execution_requests,json=executionRequests,proto3" json:"execution_requests,omitempty"`
 	BuilderIndex      github_com_OffchainLabs_prysm_v7_consensus_types_primitives.BuilderIndex `protobuf:"varint,3,opt,name=builder_index,json=builderIndex,proto3" json:"builder_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.BuilderIndex"`
 	BeaconBlockRoot   []byte                                                                   `protobuf:"bytes,4,opt,name=beacon_block_root,json=beaconBlockRoot,proto3" json:"beacon_block_root,omitempty" ssz-size:"32"`
@@ -1559,7 +1559,7 @@ func (*ExecutionPayloadEnvelope) Descriptor() ([]byte, []int) {
 	return file_proto_prysm_v1alpha1_gloas_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *ExecutionPayloadEnvelope) GetPayload() *v1.ExecutionPayloadDeneb {
+func (x *ExecutionPayloadEnvelope) GetPayload() *v1.ExecutionPayloadGloas {
 	if x != nil {
 		return x.Payload
 	}
@@ -2480,8 +2480,8 @@ var file_proto_prysm_v1alpha1_gloas_proto_rawDesc = []byte{
 	0x45, 0x6e, 0x76, 0x65, 0x6c, 0x6f, 0x70, 0x65, 0x12, 0x43, 0x0a, 0x07, 0x70, 0x61, 0x79, 0x6c,
 	0x6f, 0x61, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x29, 0x2e, 0x65, 0x74, 0x68, 0x65,
 	0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x45,
-	0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x50, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x44,
-	0x65, 0x6e, 0x65, 0x62, 0x52, 0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x12, 0x54, 0x0a,
+	0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x50, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x47,
+	0x6c, 0x6f, 0x61, 0x73, 0x52, 0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x12, 0x54, 0x0a,
 	0x12, 0x65, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x72, 0x65, 0x71, 0x75, 0x65,
 	0x73, 0x74, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x25, 0x2e, 0x65, 0x74, 0x68, 0x65,
 	0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x2e, 0x76, 0x31, 0x2e, 0x45,
@@ -2646,7 +2646,7 @@ var file_proto_prysm_v1alpha1_gloas_proto_goTypes = []any{
 	(*PendingPartialWithdrawal)(nil),               // 37: ethereum.eth.v1alpha1.PendingPartialWithdrawal
 	(*PendingConsolidation)(nil),                   // 38: ethereum.eth.v1alpha1.PendingConsolidation
 	(*v1.Withdrawal)(nil),                          // 39: ethereum.engine.v1.Withdrawal
-	(*v1.ExecutionPayloadDeneb)(nil),               // 40: ethereum.engine.v1.ExecutionPayloadDeneb
+	(*v1.ExecutionPayloadGloas)(nil),               // 40: ethereum.engine.v1.ExecutionPayloadGloas
 	(*v1.ExecutionRequests)(nil),                   // 41: ethereum.engine.v1.ExecutionRequests
 }
 var file_proto_prysm_v1alpha1_gloas_proto_depIdxs = []int32{
@@ -2690,7 +2690,7 @@ var file_proto_prysm_v1alpha1_gloas_proto_depIdxs = []int32{
 	8,  // 37: ethereum.eth.v1alpha1.BeaconBlockContentsGloas.block:type_name -> ethereum.eth.v1alpha1.BeaconBlockGloas
 	17, // 38: ethereum.eth.v1alpha1.BeaconBlockContentsGloas.execution_payload_envelope:type_name -> ethereum.eth.v1alpha1.ExecutionPayloadEnvelope
 	15, // 39: ethereum.eth.v1alpha1.BuilderPendingPayment.withdrawal:type_name -> ethereum.eth.v1alpha1.BuilderPendingWithdrawal
-	40, // 40: ethereum.eth.v1alpha1.ExecutionPayloadEnvelope.payload:type_name -> ethereum.engine.v1.ExecutionPayloadDeneb
+	40, // 40: ethereum.eth.v1alpha1.ExecutionPayloadEnvelope.payload:type_name -> ethereum.engine.v1.ExecutionPayloadGloas
 	41, // 41: ethereum.eth.v1alpha1.ExecutionPayloadEnvelope.execution_requests:type_name -> ethereum.engine.v1.ExecutionRequests
 	17, // 42: ethereum.eth.v1alpha1.SignedExecutionPayloadEnvelope.message:type_name -> ethereum.eth.v1alpha1.ExecutionPayloadEnvelope
 	41, // 43: ethereum.eth.v1alpha1.BlindedExecutionPayloadEnvelope.execution_requests:type_name -> ethereum.engine.v1.ExecutionRequests

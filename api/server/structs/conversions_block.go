@@ -3307,7 +3307,7 @@ func (d *PayloadAttestationData) ToConsensus() (*eth.PayloadAttestationData, err
 
 // ExecutionPayloadEnvelopeFromConsensus converts a proto envelope to the API struct.
 func ExecutionPayloadEnvelopeFromConsensus(e *eth.ExecutionPayloadEnvelope) (*ExecutionPayloadEnvelope, error) {
-	payload, err := ExecutionPayloadDenebFromConsensus(e.Payload)
+	payload, err := ExecutionPayloadGloasFromConsensus(e.Payload)
 	if err != nil {
 		return nil, err
 	}

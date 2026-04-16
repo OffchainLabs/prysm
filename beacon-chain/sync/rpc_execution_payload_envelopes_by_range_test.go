@@ -35,7 +35,7 @@ func testSignedEnvelope(slot primitives.Slot, beaconBlockRoot []byte) *pb.Signed
 	copy(root, beaconBlockRoot)
 	return &pb.SignedExecutionPayloadEnvelope{
 		Message: &pb.ExecutionPayloadEnvelope{
-			Payload: &engpb.ExecutionPayloadDeneb{
+			Payload: &engpb.ExecutionPayloadGloas{
 				ParentHash:    make([]byte, 32),
 				FeeRecipient:  make([]byte, 20),
 				StateRoot:     make([]byte, 32),

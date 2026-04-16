@@ -36,7 +36,7 @@ func makeEnvelope(t *testing.T, slot primitives.Slot, blockHash [32]byte, parent
 			BeaconBlockRoot:   make([]byte, fieldparams.RootLength),
 			StateRoot:         make([]byte, fieldparams.RootLength),
 			ExecutionRequests: &enginev1.ExecutionRequests{},
-			Payload: &enginev1.ExecutionPayloadDeneb{
+			Payload: &enginev1.ExecutionPayloadGloas{
 				ParentHash:    parentHash[:],
 				FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
 				StateRoot:     make([]byte, fieldparams.RootLength),

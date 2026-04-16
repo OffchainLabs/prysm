@@ -78,7 +78,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 
 	// Standard types that also exist in gloas
 	case "ExecutionPayload":
-		obj = &enginev1.ExecutionPayloadDeneb{}
+		obj = &enginev1.ExecutionPayloadGloas{}
 	case "ExecutionPayloadHeader":
 		obj = &enginev1.ExecutionPayloadHeaderDeneb{}
 	case "Attestation":

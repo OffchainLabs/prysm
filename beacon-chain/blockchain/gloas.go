@@ -144,12 +144,13 @@ func (s *Service) getPayloadAttributeGloas(ctx context.Context, st state.ReadOnl
 		return emptyAttri
 	}
 
-	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV3{
+	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
 		Timestamp:             uint64(t.Unix()),
 		PrevRandao:            prevRando,
 		SuggestedFeeRecipient: val.FeeRecipient[:],
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: headRoot,
+		SlotNumber:            uint64(slot),
 	})
 	if err != nil {
 		log.WithError(err).Error("Could not get payload attribute")

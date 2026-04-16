@@ -15,7 +15,7 @@ import (
 )
 
 func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
-	payload := &enginev1.ExecutionPayloadDeneb{
+	payload := &enginev1.ExecutionPayloadGloas{
 		ParentHash:    bytes.Repeat([]byte{0x01}, 32),
 		FeeRecipient:  bytes.Repeat([]byte{0x02}, 20),
 		StateRoot:     bytes.Repeat([]byte{0x03}, 32),

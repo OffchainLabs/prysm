@@ -3827,7 +3827,7 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err err
 	// Offset (0) 'Payload'
 	dst = ssz.WriteOffset(dst, offset)
 	if e.Payload == nil {
-		e.Payload = new(v1.ExecutionPayloadDeneb)
+		e.Payload = new(v1.ExecutionPayloadGloas)
 	}
 	offset += e.Payload.SizeSSZ()
 
@@ -3918,7 +3918,7 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o0:o1]
 		if e.Payload == nil {
-			e.Payload = new(v1.ExecutionPayloadDeneb)
+			e.Payload = new(v1.ExecutionPayloadGloas)
 		}
 		if err = e.Payload.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -3944,7 +3944,7 @@ func (e *ExecutionPayloadEnvelope) SizeSSZ() (size int) {
 
 	// Field (0) 'Payload'
 	if e.Payload == nil {
-		e.Payload = new(v1.ExecutionPayloadDeneb)
+		e.Payload = new(v1.ExecutionPayloadGloas)
 	}
 	size += e.Payload.SizeSSZ()
 

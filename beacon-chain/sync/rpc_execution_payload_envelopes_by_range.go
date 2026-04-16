@@ -187,7 +187,7 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 		batchHashes = append(batchHashes, c.blockHash)
 	}
 
-	payloadByHash, err := s.cfg.executionReconstructor.ReconstructFullExecutionPayloadsByHash(ctx, batchHashes)
+	payloadByHash, err := s.cfg.executionReconstructor.ReconstructFullGloasExecutionPayloadsByHash(ctx, batchHashes)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 		return errors.Wrap(err, "could not batch reconstruct full execution payload envelopes")
