@@ -57,6 +57,7 @@ go_test(
         "factory_test.go",
         "getters_test.go",
         "kzg_test.go",
+        "partialdatacolumn_mutation_test.go",
         "partialdatacolumn_test.go",
         "proofs_test.go",
         "proto_test.go",
