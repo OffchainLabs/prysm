@@ -988,3 +988,168 @@ var (
 	ExecutionPayloadHeaderFuluFromConsensus = ExecutionPayloadHeaderDenebFromConsensus
 	BeaconBlockFuluFromConsensus            = BeaconBlockElectraFromConsensus
 )
+
+func ExecutionPayloadGloasFromConsensus(payload *enginev1.ExecutionPayloadGloas) (*ExecutionPayloadGloas, error) {
+	baseFeePerGas, err := sszBytesToUint256String(payload.BaseFeePerGas)
+	if err != nil {
+		return nil, err
+	}
+	transactions := make([]string, len(payload.Transactions))
+	for i, tx := range payload.Transactions {
+		transactions[i] = hexutil.Encode(tx)
+	}
+
+	return &ExecutionPayloadGloas{
+		ParentHash:      hexutil.Encode(payload.ParentHash),
+		FeeRecipient:    hexutil.Encode(payload.FeeRecipient),
+		StateRoot:       hexutil.Encode(payload.StateRoot),
+		ReceiptsRoot:    hexutil.Encode(payload.ReceiptsRoot),
+		LogsBloom:       hexutil.Encode(payload.LogsBloom),
+		PrevRandao:      hexutil.Encode(payload.PrevRandao),
+		BlockNumber:     fmt.Sprintf("%d", payload.BlockNumber),
+		GasLimit:        fmt.Sprintf("%d", payload.GasLimit),
+		GasUsed:         fmt.Sprintf("%d", payload.GasUsed),
+		Timestamp:       fmt.Sprintf("%d", payload.Timestamp),
+		ExtraData:       hexutil.Encode(payload.ExtraData),
+		BaseFeePerGas:   baseFeePerGas,
+		BlockHash:       hexutil.Encode(payload.BlockHash),
+		Transactions:    transactions,
+		Withdrawals:     WithdrawalsFromConsensus(payload.Withdrawals),
+		BlobGasUsed:     fmt.Sprintf("%d", payload.BlobGasUsed),
+		ExcessBlobGas:   fmt.Sprintf("%d", payload.ExcessBlobGas),
+		BlockAccessList: hexutil.Encode(payload.BlockAccessList),
+	}, nil
+}
+
+func (e *ExecutionPayloadGloas) ToConsensus() (*enginev1.ExecutionPayloadGloas, error) {
+	if e == nil {
+		return nil, server.NewDecodeError(errNilValue, "ExecutionPayloadGloas")
+	}
+	payloadParentHash, err := bytesutil.DecodeHexWithLength(e.ParentHash, common.HashLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ParentHash")
+	}
+	payloadFeeRecipient, err := bytesutil.DecodeHexWithLength(e.FeeRecipient, fieldparams.FeeRecipientLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "FeeRecipient")
+	}
+	payloadStateRoot, err := bytesutil.DecodeHexWithLength(e.StateRoot, fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "StateRoot")
+	}
+	payloadReceiptsRoot, err := bytesutil.DecodeHexWithLength(e.ReceiptsRoot, fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ReceiptsRoot")
+	}
+	payloadLogsBloom, err := bytesutil.DecodeHexWithLength(e.LogsBloom, fieldparams.LogsBloomLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "LogsBloom")
+	}
+	payloadPrevRandao, err := bytesutil.DecodeHexWithLength(e.PrevRandao, fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "PrevRandao")
+	}
+	payloadBlockNumber, err := strconv.ParseUint(e.BlockNumber, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "BlockNumber")
+	}
+	payloadGasLimit, err := strconv.ParseUint(e.GasLimit, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "GasLimit")
+	}
+	payloadGasUsed, err := strconv.ParseUint(e.GasUsed, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "GasUsed")
+	}
+	payloadTimestamp, err := strconv.ParseUint(e.Timestamp, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Timestamp")
+	}
+	payloadExtraData, err := bytesutil.DecodeHexWithMaxLength(e.ExtraData, fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ExtraData")
+	}
+	payloadBaseFeePerGas, err := bytesutil.Uint256ToSSZBytes(e.BaseFeePerGas)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "BaseFeePerGas")
+	}
+	payloadBlockHash, err := bytesutil.DecodeHexWithLength(e.BlockHash, common.HashLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "BlockHash")
+	}
+	err = slice.VerifyMaxLength(e.Transactions, fieldparams.MaxTxsPerPayloadLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Transactions")
+	}
+	txs := make([][]byte, len(e.Transactions))
+	for i, tx := range e.Transactions {
+		txs[i], err = bytesutil.DecodeHexWithMaxLength(tx, fieldparams.MaxBytesPerTxLength)
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("Transactions[%d]", i))
+		}
+	}
+	err = slice.VerifyMaxLength(e.Withdrawals, fieldparams.MaxWithdrawalsPerPayload)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Withdrawals")
+	}
+	withdrawals := make([]*enginev1.Withdrawal, len(e.Withdrawals))
+	for i, w := range e.Withdrawals {
+		withdrawalIndex, err := strconv.ParseUint(w.WithdrawalIndex, 10, 64)
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("Withdrawals[%d].WithdrawalIndex", i))
+		}
+		validatorIndex, err := strconv.ParseUint(w.ValidatorIndex, 10, 64)
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("Withdrawals[%d].ValidatorIndex", i))
+		}
+		address, err := bytesutil.DecodeHexWithLength(w.ExecutionAddress, common.AddressLength)
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("Withdrawals[%d].ExecutionAddress", i))
+		}
+		amount, err := strconv.ParseUint(w.Amount, 10, 64)
+		if err != nil {
+			return nil, server.NewDecodeError(err, fmt.Sprintf("Withdrawals[%d].Amount", i))
+		}
+		withdrawals[i] = &enginev1.Withdrawal{
+			Index:          withdrawalIndex,
+			ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
+			Address:        address,
+			Amount:         amount,
+		}
+	}
+	payloadBlobGasUsed, err := strconv.ParseUint(e.BlobGasUsed, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "BlobGasUsed")
+	}
+	payloadExcessBlobGas, err := strconv.ParseUint(e.ExcessBlobGas, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ExcessBlobGas")
+	}
+	var bal []byte
+	if e.BlockAccessList != "" {
+		bal, err = hexutil.Decode(e.BlockAccessList)
+		if err != nil {
+			return nil, server.NewDecodeError(err, "BlockAccessList")
+		}
+	}
+	return &enginev1.ExecutionPayloadGloas{
+		ParentHash:      payloadParentHash,
+		FeeRecipient:    payloadFeeRecipient,
+		StateRoot:       payloadStateRoot,
+		ReceiptsRoot:    payloadReceiptsRoot,
+		LogsBloom:       payloadLogsBloom,
+		PrevRandao:      payloadPrevRandao,
+		BlockNumber:     payloadBlockNumber,
+		GasLimit:        payloadGasLimit,
+		GasUsed:         payloadGasUsed,
+		Timestamp:       payloadTimestamp,
+		ExtraData:       payloadExtraData,
+		BaseFeePerGas:   payloadBaseFeePerGas,
+		BlockHash:       payloadBlockHash,
+		Transactions:    txs,
+		Withdrawals:     withdrawals,
+		BlobGasUsed:     payloadBlobGasUsed,
+		ExcessBlobGas:   payloadExcessBlobGas,
+		BlockAccessList: bal,
+	}, nil
+}

@@ -116,48 +116,40 @@ func (e *EngineClient) ReconstructFullBellatrixBlockBatch(
 	return fullBlocks, nil
 }
 
-// ReconstructFullExecutionPayloadByHash --
-func (e *EngineClient) ReconstructFullExecutionPayloadByHash(
-	_ context.Context, blockHash [32]byte,
-) (*pb.ExecutionPayloadDeneb, error) {
-	if p, ok := e.ExecutionPayloadByBlockHash[blockHash]; ok {
-		return &pb.ExecutionPayloadDeneb{
-			ParentHash:    p.ParentHash,
-			FeeRecipient:  p.FeeRecipient,
-			StateRoot:     p.StateRoot,
-			ReceiptsRoot:  p.ReceiptsRoot,
-			LogsBloom:     p.LogsBloom,
-			PrevRandao:    p.PrevRandao,
-			BlockNumber:   p.BlockNumber,
-			GasLimit:      p.GasLimit,
-			GasUsed:       p.GasUsed,
-			Timestamp:     p.Timestamp,
-			ExtraData:     p.ExtraData,
-			BaseFeePerGas: p.BaseFeePerGas,
-			BlockHash:     p.BlockHash,
-			Transactions:  p.Transactions,
-			Withdrawals:   []*pb.Withdrawal{},
-		}, nil
-	}
-	if e.GetPayloadResponse != nil && e.GetPayloadResponse.ExecutionData != nil {
-		if p, ok := e.GetPayloadResponse.ExecutionData.Proto().(*pb.ExecutionPayloadDeneb); ok {
-			return p, nil
-		}
-	}
-	return nil, errors.New("payload not found")
-}
-
-// ReconstructFullExecutionPayloadsByHash --
-func (e *EngineClient) ReconstructFullExecutionPayloadsByHash(
+// ReconstructFullGloasExecutionPayloadsByHash --
+func (e *EngineClient) ReconstructFullGloasExecutionPayloadsByHash(
 	_ context.Context, blockHashes [][32]byte,
-) (map[[32]byte]*pb.ExecutionPayloadDeneb, error) {
-	payloads := make(map[[32]byte]*pb.ExecutionPayloadDeneb, len(blockHashes))
+) (map[[32]byte]*pb.ExecutionPayloadGloas, error) {
+	payloads := make(map[[32]byte]*pb.ExecutionPayloadGloas, len(blockHashes))
 	for i := range blockHashes {
-		p, err := e.ReconstructFullExecutionPayloadByHash(context.Background(), blockHashes[i])
-		if err != nil {
-			return nil, err
+		blockHash := blockHashes[i]
+		if p, ok := e.ExecutionPayloadByBlockHash[blockHash]; ok {
+			payloads[blockHash] = &pb.ExecutionPayloadGloas{
+				ParentHash:    p.ParentHash,
+				FeeRecipient:  p.FeeRecipient,
+				StateRoot:     p.StateRoot,
+				ReceiptsRoot:  p.ReceiptsRoot,
+				LogsBloom:     p.LogsBloom,
+				PrevRandao:    p.PrevRandao,
+				BlockNumber:   p.BlockNumber,
+				GasLimit:      p.GasLimit,
+				GasUsed:       p.GasUsed,
+				Timestamp:     p.Timestamp,
+				ExtraData:     p.ExtraData,
+				BaseFeePerGas: p.BaseFeePerGas,
+				BlockHash:     p.BlockHash,
+				Transactions:  p.Transactions,
+				Withdrawals:   []*pb.Withdrawal{},
+			}
+			continue
 		}
-		payloads[blockHashes[i]] = p
+		if e.GetPayloadResponse != nil && e.GetPayloadResponse.ExecutionData != nil {
+			if p, ok := e.GetPayloadResponse.ExecutionData.Proto().(*pb.ExecutionPayloadGloas); ok {
+				payloads[blockHash] = p
+				continue
+			}
+		}
+		return nil, errors.New("payload not found")
 	}
 	return payloads, nil
 }
@@ -185,7 +177,7 @@ func (e *EngineClient) ReconstructExecutionPayloadEnvelope(
 	}
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload:           payloadToPayloadDeneb(payload),
+			Payload:           payloadToPayloadGloas(payload),
 			ExecutionRequests: envelope.Message.ExecutionRequests,
 			BuilderIndex:      envelope.Message.BuilderIndex,
 			BeaconBlockRoot:   envelope.Message.BeaconBlockRoot,
@@ -196,8 +188,8 @@ func (e *EngineClient) ReconstructExecutionPayloadEnvelope(
 	}, nil
 }
 
-func payloadToPayloadDeneb(p *pb.ExecutionPayload) *pb.ExecutionPayloadDeneb {
-	return &pb.ExecutionPayloadDeneb{
+func payloadToPayloadGloas(p *pb.ExecutionPayload) *pb.ExecutionPayloadGloas {
+	return &pb.ExecutionPayloadGloas{
 		ParentHash:    p.ParentHash,
 		FeeRecipient:  p.FeeRecipient,
 		StateRoot:     p.StateRoot,

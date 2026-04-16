@@ -20,7 +20,7 @@ import (
 
 func testProtoEnvelope() *ethpb.ExecutionPayloadEnvelope {
 	return &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
+		Payload: &enginev1.ExecutionPayloadGloas{
 			ParentHash:    bytesutil.PadTo([]byte("parent"), 32),
 			FeeRecipient:  bytesutil.PadTo([]byte("fee"), 20),
 			StateRoot:     bytesutil.PadTo([]byte("state"), 32),

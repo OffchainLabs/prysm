@@ -17,7 +17,7 @@ func testEnvelope(t *testing.T) *ethpb.SignedExecutionPayloadEnvelope {
 	t.Helper()
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload: &enginev1.ExecutionPayloadDeneb{
+			Payload: &enginev1.ExecutionPayloadGloas{
 				ParentHash:    bytesutil.PadTo([]byte("parent"), 32),
 				FeeRecipient:  bytesutil.PadTo([]byte("fee"), 20),
 				StateRoot:     bytesutil.PadTo([]byte("stateroot"), 32),

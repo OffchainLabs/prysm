@@ -25,11 +25,11 @@ type payloadFixture struct {
 	signed      interfaces.ROSignedExecutionPayloadEnvelope
 	signedProto *ethpb.SignedExecutionPayloadEnvelope
 	envelope    *ethpb.ExecutionPayloadEnvelope
-	payload     *enginev1.ExecutionPayloadDeneb
+	payload     *enginev1.ExecutionPayloadGloas
 	slot        primitives.Slot
 }
 
-func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPayloadDeneb, bid *ethpb.ExecutionPayloadBid, envelope *ethpb.ExecutionPayloadEnvelope)) payloadFixture {
+func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPayloadGloas, bid *ethpb.ExecutionPayloadBid, envelope *ethpb.ExecutionPayloadEnvelope)) payloadFixture {
 	t.Helper()
 
 	cfg := params.BeaconConfig()
@@ -48,7 +48,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		{Index: 0, ValidatorIndex: 1, Address: bytes.Repeat([]byte{0x01}, 20), Amount: 0},
 	}
 
-	payload := &enginev1.ExecutionPayloadDeneb{
+	payload := &enginev1.ExecutionPayloadGloas{
 		ParentHash:    parentHash,
 		FeeRecipient:  bytes.Repeat([]byte{0x01}, 20),
 		StateRoot:     bytes.Repeat([]byte{0x02}, 32),
@@ -321,7 +321,7 @@ func TestApplyExecutionPayloadStateMutations_UpdatesAvailabilityAndLatestHash(t 
 }
 
 func TestProcessExecutionPayload_PrevRandaoMismatch(t *testing.T) {
-	fixture := buildPayloadFixture(t, func(_ *enginev1.ExecutionPayloadDeneb, bid *ethpb.ExecutionPayloadBid, _ *ethpb.ExecutionPayloadEnvelope) {
+	fixture := buildPayloadFixture(t, func(_ *enginev1.ExecutionPayloadGloas, bid *ethpb.ExecutionPayloadBid, _ *ethpb.ExecutionPayloadEnvelope) {
 		bid.PrevRandao = bytes.Repeat([]byte{0xFF}, 32)
 	})
 

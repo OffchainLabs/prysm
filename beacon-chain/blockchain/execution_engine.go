@@ -373,7 +373,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	v := st.Version()
 	switch {
 	case v >= version.Gloas:
-		return payloadAttributesGloas(st, uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot)
+		return payloadAttributesGloas(st, uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot, slot)
 	case v >= version.Deneb:
 		return payloadAttributesDeneb(st, uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot)
 	case v >= version.Capella:
@@ -386,18 +386,19 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	}
 }
 
-func payloadAttributesGloas(st state.BeaconState, timestamp uint64, prevRandao, feeRecipient, parentBeaconBlockRoot []byte) payloadattribute.Attributer {
+func payloadAttributesGloas(st state.BeaconState, timestamp uint64, prevRandao, feeRecipient, parentBeaconBlockRoot []byte, slot primitives.Slot) payloadattribute.Attributer {
 	withdrawals, err := st.WithdrawalsForPayload()
 	if err != nil {
 		log.WithError(err).Error("Could not get payload withdrawals to get payload attribute")
 		return payloadattribute.EmptyWithVersion(st.Version())
 	}
-	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV3{
+	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
 		Timestamp:             timestamp,
 		PrevRandao:            prevRandao,
 		SuggestedFeeRecipient: feeRecipient,
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: parentBeaconBlockRoot,
+		SlotNumber:            uint64(slot),
 	})
 	if err != nil {
 		log.WithError(err).Error("Could not get payload attribute")

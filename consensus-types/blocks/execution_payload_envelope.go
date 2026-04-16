@@ -104,7 +104,7 @@ func (p *executionPayloadEnvelope) IsBlinded() bool {
 
 // Execution returns the execution payload as a read-only interface.
 func (p *executionPayloadEnvelope) Execution() (interfaces.ExecutionData, error) {
-	return WrappedExecutionPayloadDeneb(p.p.Payload)
+	return WrappedExecutionPayloadGloas(p.p.Payload)
 }
 
 // ExecutionRequests returns the execution requests attached to the envelope.

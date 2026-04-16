@@ -20,7 +20,7 @@ import (
 func testGloasBlock(t *testing.T) (*consensusblocks.GetPayloadResponse, interfaces.SignedBeaconBlock) {
 	t.Helper()
 
-	payload := &enginev1.ExecutionPayloadDeneb{
+	payload := &enginev1.ExecutionPayloadGloas{
 		ParentHash:    make([]byte, 32),
 		FeeRecipient:  make([]byte, 20),
 		StateRoot:     make([]byte, 32),
@@ -31,7 +31,7 @@ func testGloasBlock(t *testing.T) (*consensusblocks.GetPayloadResponse, interfac
 		BlockHash:     make([]byte, 32),
 		ExtraData:     make([]byte, 0),
 	}
-	ed, err := consensusblocks.WrappedExecutionPayloadDeneb(payload)
+	ed, err := consensusblocks.WrappedExecutionPayloadGloas(payload)
 	require.NoError(t, err)
 
 	local := &consensusblocks.GetPayloadResponse{
@@ -73,8 +73,8 @@ func TestStoreExecutionPayloadEnvelope_WithState(t *testing.T) {
 	require.ErrorContains(t, "could not apply execution payload for envelope state root", err)
 }
 
-func TestExtractExecutionPayloadDeneb(t *testing.T) {
-	payload := &enginev1.ExecutionPayloadDeneb{
+func TestExtractExecutionPayloadGloas(t *testing.T) {
+	payload := &enginev1.ExecutionPayloadGloas{
 		ParentHash:    make([]byte, 32),
 		FeeRecipient:  make([]byte, 20),
 		StateRoot:     make([]byte, 32),
@@ -85,7 +85,7 @@ func TestExtractExecutionPayloadDeneb(t *testing.T) {
 		BlockHash:     make([]byte, 32),
 		ExtraData:     make([]byte, 0),
 	}
-	ed, err := consensusblocks.WrappedExecutionPayloadDeneb(payload)
+	ed, err := consensusblocks.WrappedExecutionPayloadGloas(payload)
 	require.NoError(t, err)
 
 	local := &consensusblocks.GetPayloadResponse{
@@ -93,21 +93,21 @@ func TestExtractExecutionPayloadDeneb(t *testing.T) {
 		Bid:           big.NewInt(0),
 	}
 
-	result := extractExecutionPayloadDeneb(local)
+	result := extractExecutionPayloadGloas(local)
 	require.NotNil(t, result)
 	require.DeepEqual(t, payload, result)
 }
 
-func TestExtractExecutionPayloadDeneb_Nil(t *testing.T) {
-	require.Equal(t, true, extractExecutionPayloadDeneb(nil) == nil)
-	require.Equal(t, true, extractExecutionPayloadDeneb(&consensusblocks.GetPayloadResponse{}) == nil)
+func TestExtractExecutionPayloadGloas_Nil(t *testing.T) {
+	require.Equal(t, true, extractExecutionPayloadGloas(nil) == nil)
+	require.Equal(t, true, extractExecutionPayloadGloas(&consensusblocks.GetPayloadResponse{}) == nil)
 }
 
 func TestSetGetExecutionPayloadEnvelope(t *testing.T) {
 	slot := primitives.Slot(42)
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
+		Payload: &enginev1.ExecutionPayloadGloas{
 			ParentHash:    make([]byte, 32),
 			FeeRecipient:  make([]byte, 20),
 			StateRoot:     make([]byte, 32),
@@ -133,7 +133,7 @@ func TestSetGetExecutionPayloadEnvelope(t *testing.T) {
 
 func TestGetExecutionPayloadEnvelope_SlotMismatch(t *testing.T) {
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
+		Payload: &enginev1.ExecutionPayloadGloas{
 			ParentHash:    make([]byte, 32),
 			FeeRecipient:  make([]byte, 20),
 			StateRoot:     make([]byte, 32),
@@ -215,7 +215,7 @@ func TestGetExecutionPayloadEnvelopeRPC_StateRootAlreadySet(t *testing.T) {
 	stateRoot[0] = 0xAB // Non-zero state root
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
+		Payload: &enginev1.ExecutionPayloadGloas{
 			ParentHash:    make([]byte, 32),
 			FeeRecipient:  make([]byte, 20),
 			StateRoot:     make([]byte, 32),
@@ -250,7 +250,7 @@ func TestGetExecutionPayloadEnvelopeRPC_ZeroStateRootComputesRoot(t *testing.T) 
 	params.OverrideBeaconConfig(cfg)
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
+		Payload: &enginev1.ExecutionPayloadGloas{
 			ParentHash:    make([]byte, 32),
 			FeeRecipient:  make([]byte, 20),
 			StateRoot:     make([]byte, 32),
@@ -301,7 +301,7 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 
 	req := &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload: &enginev1.ExecutionPayloadDeneb{
+			Payload: &enginev1.ExecutionPayloadGloas{
 				ParentHash:    make([]byte, 32),
 				FeeRecipient:  make([]byte, 20),
 				StateRoot:     make([]byte, 32),
