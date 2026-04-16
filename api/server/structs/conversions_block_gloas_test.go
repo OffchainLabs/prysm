@@ -13,7 +13,7 @@ import (
 
 func testEnvelopeProto() *eth.ExecutionPayloadEnvelope {
 	return &eth.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
+		Payload: &enginev1.ExecutionPayloadGloas{
 			ParentHash:    fillByteSlice(common.HashLength, 0xaa),
 			FeeRecipient:  fillByteSlice(20, 0xbb),
 			StateRoot:     fillByteSlice(32, 0xcc),

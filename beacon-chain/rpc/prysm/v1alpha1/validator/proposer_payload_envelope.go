@@ -39,7 +39,7 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		return errors.Wrap(err, "could not compute block hash tree root")
 	}
 
-	payload := extractExecutionPayloadDeneb(local)
+	payload := extractExecutionPayloadGloas(local)
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
 		Payload:           payload,
@@ -87,11 +87,11 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 	return nil
 }
 
-func extractExecutionPayloadDeneb(local *consensusblocks.GetPayloadResponse) *enginev1.ExecutionPayloadDeneb {
+func extractExecutionPayloadGloas(local *consensusblocks.GetPayloadResponse) *enginev1.ExecutionPayloadGloas {
 	if local == nil || local.ExecutionData == nil || local.ExecutionData.IsNil() {
 		return nil
 	}
-	if p, ok := local.ExecutionData.Proto().(*enginev1.ExecutionPayloadDeneb); ok {
+	if p, ok := local.ExecutionData.Proto().(*enginev1.ExecutionPayloadGloas); ok {
 		return p
 	}
 	return nil
