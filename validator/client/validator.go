@@ -1057,14 +1057,7 @@ func (v *validator) buildProposerPreferences(
 	midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
 
 	if force {
-		log.WithFields(logrus.Fields{
-			"slot":              slot,
-			"epoch":             currentEpoch,
-			"previouslyTracked": len(v.submittedPrefSlots),
-		}).Debug("Force rebuilding proposer preferences (duty change), clearing submitted tracking")
-		for s := range v.submittedPrefSlots {
-			delete(v.submittedPrefSlots, s)
-		}
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
 	} else {
 		for s := range v.submittedPrefSlots {
 			if s < epochStart {

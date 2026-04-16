@@ -2676,6 +2676,78 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		prefs := v.buildProposerPreferences(t.Context(), km, 1, false)
 		require.Equal(t, 0, len(prefs))
 	})
+
+	t.Run("force clears submitted tracking and resubmits", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		client.EXPECT().
+			DomainData(gomock.Any(), gomock.Any()).
+			Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
+			AnyTimes()
+
+		v.duties = &dutyStore{}
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{midEpochSlot + 2},
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{},
+		})
+
+		// Normal submission at mid-epoch so the slot is in the future.
+		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
+		require.Equal(t, 1, len(prefs))
+
+		// Normal second call — already submitted, returns nothing.
+		prefs = v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
+		require.Equal(t, 0, len(prefs))
+
+		// Force call — clears tracking and resubmits the same slot.
+		prefs = v.buildProposerPreferences(t.Context(), km, midEpochSlot, true)
+		require.Equal(t, 1, len(prefs))
+		require.Equal(t, midEpochSlot+2, prefs[0].Message.ProposalSlot)
+	})
+
+	t.Run("force bypasses epoch start gate", func(t *testing.T) {
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		client.EXPECT().
+			DomainData(gomock.Any(), gomock.Any()).
+			Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
+			AnyTimes()
+
+		v.duties = &dutyStore{}
+		v.submittedPrefSlots = make(map[primitives.Slot]bool)
+		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{
+				{
+					PublicKey:      kp.pub[:],
+					ValidatorIndex: 1,
+					Status:         ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots:  []primitives.Slot{5},
+				},
+			},
+			NextEpochDuties: []*ethpb.ValidatorDuty{},
+		})
+
+		// slot == epochStart (0) with force=false — gate blocks current-epoch duties.
+		prefs := v.buildProposerPreferences(t.Context(), km, 0, false)
+		require.Equal(t, 0, len(prefs))
+
+		// slot == epochStart (0) with force=true — gate is bypassed.
+		prefs = v.buildProposerPreferences(t.Context(), km, 0, true)
+		require.Equal(t, 1, len(prefs))
+		require.Equal(t, primitives.Slot(5), prefs[0].Message.ProposalSlot)
+	})
 }
 
 func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
