@@ -454,7 +454,7 @@ func (vs *Server) handleUnblindedBlock(
 		// Construct data column sidecars from the signed block and cells and proofs.
 		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
 		if err != nil {
-			return nil, nil, nil, errors.Wrap(err, "data column sidcars")
+			return nil, nil, nil, errors.Wrap(err, "data column sidecars")
 		}
 
 		if len(cellsPerBlob) == 0 {
@@ -470,7 +470,7 @@ func (vs *Server) handleUnblindedBlock(
 		}
 		partialColumns, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block), partialColumnOpts...)
 		if err != nil {
-			return nil, nil, nil, errors.Wrap(err, "data column sidcars")
+			return nil, nil, nil, errors.Wrap(err, "data column sidecars")
 		}
 
 		return nil, roDataColumnSidecars, partialColumns, nil

@@ -430,28 +430,29 @@ func (p *PartialDataColumn) CellsToVerifyFromPartialMessage(message *ethpb.Parti
 
 	cellIndices := make([]uint64, 0, includedCells)
 	cellsToVerify := make([]CellProofBundle, 0, includedCells)
-	// Filter out cells we already have
+	// Filter out cells we already have.
+	// j tracks position in the compact PartialColumn/KzgProofs arrays.
+	var j int
 	for i := range included.Len() {
-		if len(message.PartialColumn) == 0 {
-			break
-		}
 		if !included.BitAt(i) {
 			continue
+		}
+		if j >= len(message.PartialColumn) {
+			break
 		}
 
 		if !ourIncludedList.BitAt(i) {
 			cellIndices = append(cellIndices, i)
 			cellsToVerify = append(cellsToVerify, CellProofBundle{
 				ColumnIndex: p.Index,
-				Cell:        message.PartialColumn[0],
-				Proof:       message.KzgProofs[0],
+				Cell:        message.PartialColumn[j],
+				Proof:       message.KzgProofs[j],
 				// Use the commitment from our datacolumn, indexed by i since we
 				// have all commitments.
 				Commitment: p.KzgCommitments[i],
 			})
 		}
-		message.PartialColumn = message.PartialColumn[1:]
-		message.KzgProofs = message.KzgProofs[1:]
+		j++
 	}
 	return cellIndices, cellsToVerify, nil
 }

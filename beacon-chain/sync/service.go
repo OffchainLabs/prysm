@@ -491,7 +491,7 @@ func (c *partialColumnCallbacks) HandleHeader(header *ethpb.PartialDataColumnHea
 		log.WithError(err).Error("Failed to populate from partial data column header")
 		return
 	}
-	log.WithField("slot", source.Slot()).Info("Received data column header")
+	log.WithField("slot", source.Slot()).Debug("Received data column header")
 	err = c.s.processDataColumnSidecarsFromExecution(ctx, source)
 	if err != nil {
 		log.WithError(err).Error("Failed to process partial data column header")

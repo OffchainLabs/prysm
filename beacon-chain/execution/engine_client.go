@@ -959,10 +959,10 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	log.Debug("Constructed partial columns", "haveAllBlobs", haveAllBlobs)
 
 	if haveAllBlobs {
-		// Construct data column sidears from the signed block and cells and proofs.
+		// Construct data column sidecars from the signed block and cells and proofs.
 		roSidecars, err := peerdas.DataColumnSidecars(cp.CellsPerBlob, cp.ProofsPerBlob, populator)
 		if err != nil {
-			return nil, nil, wrapWithBlockRoot(err, populator.Root(), "data column sidcars from column sidecar")
+			return nil, nil, wrapWithBlockRoot(err, populator.Root(), "data column sidecars from column sidecar")
 		}
 
 		// Upgrade the sidecars to verified sidecars.

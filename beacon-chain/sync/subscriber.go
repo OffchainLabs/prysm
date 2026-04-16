@@ -623,7 +623,6 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 		requestPartial := t.partial != nil
 
 		if requestPartial {
-			// TODO: do we want the ability to support partial messages without requesting them?
 			topicOpts = append(topicOpts, pubsub.RequestPartialMessages())
 		}
 
