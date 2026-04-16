@@ -823,4 +823,12 @@ func Test_SetAggregatorIndexEpochSeen(t *testing.T) {
 
 	second := r.setAggregatorIndexEpochSeen(epoch, aggIndex)
 	require.Equal(t, false, second)
+
+	// Regression guard: seen state must not be evicted within the same epoch
+	// just because a fixed-size LRU reached capacity.
+	for i := 0; i < 64; i++ {
+		idx := primitives.ValidatorIndex(1000 + i)
+		require.Equal(t, true, r.setAggregatorIndexEpochSeen(epoch, idx))
+	}
+	require.Equal(t, true, r.hasSeenAggregatorIndexEpoch(epoch, aggIndex))
 }

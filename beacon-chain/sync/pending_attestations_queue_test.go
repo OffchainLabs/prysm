@@ -42,6 +42,14 @@ import (
 
 var verifierLimit = 1000
 
+type saveAggregateErrPool struct {
+	attestations.Pool
+}
+
+func (p *saveAggregateErrPool) SaveAggregatedAttestation(_ ethpb.Att) error {
+	return fmt.Errorf("injected save aggregated attestation failure")
+}
+
 func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 	hook := logTest.NewGlobal()
 	db := dbtest.SetupDB(t)
@@ -633,6 +641,97 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAtt(t *testing.T) {
 	atts := r.cfg.attPool.UnaggregatedAttestations()
 	assert.Equal(t, 0, len(atts), "Did save aggregated att")
 	require.LogsContain(t, hook, "Verified and saved pending attestations to pool")
+	cancel()
+}
+
+func TestProcessPendingAtts_SaveAggregatedAttFailureDoesNotMarkSeen(t *testing.T) {
+	db := dbtest.SetupDB(t)
+	p1 := p2ptest.NewTestP2P(t)
+	validators := uint64(256)
+
+	beaconState, privKeys := util.DeterministicGenesisState(t, validators)
+
+	sb := util.NewBeaconBlock()
+	util.SaveBlock(t, t.Context(), db, sb)
+	root, err := sb.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	aggBits := bitfield.NewBitlist(validators / uint64(params.BeaconConfig().SlotsPerEpoch))
+	aggBits.SetBitAt(0, true)
+	aggBits.SetBitAt(1, true)
+	att := &ethpb.Attestation{
+		Data: &ethpb.AttestationData{
+			BeaconBlockRoot: root[:],
+			Source:          &ethpb.Checkpoint{Epoch: 0, Root: bytesutil.PadTo([]byte("hello-world"), 32)},
+			Target:          &ethpb.Checkpoint{Epoch: 0, Root: root[:]},
+		},
+		AggregationBits: aggBits,
+	}
+
+	committee, err := helpers.BeaconCommitteeFromState(t.Context(), beaconState, att.Data.Slot, att.Data.CommitteeIndex)
+	assert.NoError(t, err)
+	attestingIndices, err := attestation.AttestingIndices(att, committee)
+	require.NoError(t, err)
+	attesterDomain, err := signing.Domain(beaconState.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, beaconState.GenesisValidatorsRoot())
+	require.NoError(t, err)
+	hashTreeRoot, err := signing.ComputeSigningRoot(att.Data, attesterDomain)
+	assert.NoError(t, err)
+	sigs := make([]bls.Signature, len(attestingIndices))
+	for i, indice := range attestingIndices {
+		sig := privKeys[indice].Sign(hashTreeRoot[:])
+		sigs[i] = sig
+	}
+	att.Signature = bls.AggregateSignatures(sigs).Marshal()
+
+	aggregatorIndex := committee[0]
+	sszUint := primitives.SSZUint64(att.Data.Slot)
+	sig, err := signing.ComputeDomainAndSign(beaconState, 0, &sszUint, params.BeaconConfig().DomainSelectionProof, privKeys[aggregatorIndex])
+	require.NoError(t, err)
+	aggregateAndProof := &ethpb.AggregateAttestationAndProof{
+		SelectionProof:  sig,
+		Aggregate:       att,
+		AggregatorIndex: aggregatorIndex,
+	}
+	aggreSig, err := signing.ComputeDomainAndSign(beaconState, 0, aggregateAndProof, params.BeaconConfig().DomainAggregateAndProof, privKeys[aggregatorIndex])
+	require.NoError(t, err)
+
+	require.NoError(t, beaconState.SetGenesisTime(time.Now()))
+
+	basePool := attestations.NewPool()
+	failingPool := &saveAggregateErrPool{Pool: basePool}
+
+	chain := &mock.ChainService{Genesis: time.Now(),
+		DB:    db,
+		State: beaconState,
+		FinalizedCheckPoint: &ethpb.Checkpoint{
+			Root:  aggregateAndProof.Aggregate.Data.BeaconBlockRoot,
+			Epoch: 0,
+		}}
+	ctx, cancel := context.WithCancel(t.Context())
+	r := &Service{
+		ctx: ctx,
+		cfg: &config{
+			p2p:      p1,
+			beaconDB: db,
+			chain:    chain,
+			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			attPool:  failingPool,
+		},
+		blkRootToPendingAtts:           make(map[[32]byte][]any),
+		seenAggregatedAttestationCache: lruwrpr.New(10),
+		signatureChan:                  make(chan *signatureVerifier, verifierLimit),
+	}
+	go r.verifierRoutine()
+	s, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
+
+	r.blkRootToPendingAtts[root] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: aggreSig}}
+	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
+
+	assert.Equal(t, 0, len(basePool.AggregatedAttestations()), "aggregate should not be saved on injected failure")
+	assert.Equal(t, false, p1.BroadcastCalled.Load(), "aggregate should not be broadcast on injected save failure")
+	assert.Equal(t, false, r.hasSeenAggregatorIndexEpoch(att.GetData().Target.Epoch, aggregatorIndex), "seen flag should not be set when save fails")
 	cancel()
 }
 
