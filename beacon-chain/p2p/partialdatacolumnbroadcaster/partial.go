@@ -150,14 +150,6 @@ func (r request) finish(err error) {
 // A nil ctx is permitted for fire-and-forget requests that have no cancellation.
 func (p *PartialColumnBroadcaster) enqueue(ctx context.Context, kind requestKind, v requestValues) (request, error) {
 	req := newRequest(ctx, kind, v)
-	if ctx == nil {
-		select {
-		case p.incomingReq <- req:
-			return req, nil
-		case <-p.stop:
-			return req, errPartialBroadcasterStopped
-		}
-	}
 	select {
 	case p.incomingReq <- req:
 		return req, nil
@@ -170,8 +162,8 @@ func (p *PartialColumnBroadcaster) enqueue(ctx context.Context, kind requestKind
 
 // tryEnqueue creates and enqueues a request without blocking.
 // Returns false if the request channel is full.
-func (p *PartialColumnBroadcaster) tryEnqueue(ctx context.Context, kind requestKind, v requestValues) (request, bool) {
-	req := newRequest(ctx, kind, v)
+func (p *PartialColumnBroadcaster) tryEnqueue(kind requestKind, v requestValues) (request, bool) {
+	req := newRequest(context.Background(), kind, v)
 	select {
 	case p.incomingReq <- req:
 		return req, true
@@ -183,9 +175,6 @@ func (p *PartialColumnBroadcaster) tryEnqueue(ctx context.Context, kind requestK
 // waitForResponse blocks until the request has been processed and returns the result.
 // If the request's context is cancelled before a response arrives, it returns the context error.
 func (r request) waitForResponse() error {
-	if r.ctx == nil {
-		return <-r.response
-	}
 	select {
 	case err := <-r.response:
 		return err
@@ -264,7 +253,7 @@ func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 // onEmitGossip enqueues a gossip request for the broadcaster's event loop.
 func (p *PartialColumnBroadcaster) onEmitGossip(topic string, groupID []byte, _ []peer.ID, _ map[peer.ID]blocks.PartialDataColumnPeerState) {
 	// Drop gossip emission if we have too many pending requests.
-	p.tryEnqueue(nil, requestKindGossip, requestValues{
+	p.tryEnqueue(requestKindGossip, requestValues{
 		gossip: gossip{
 			topic:   topic,
 			groupID: groupID,
@@ -294,7 +283,7 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 	if err != nil {
 		return err
 	}
-	_, ok := p.tryEnqueue(nil, requestKindHandleIncomingRPC, requestValues{
+	_, ok := p.tryEnqueue(requestKindHandleIncomingRPC, requestValues{
 		incomingRPC: incomingPartialRPC{rpc, from, message},
 	})
 	if !ok {
@@ -348,7 +337,7 @@ func (p *PartialColumnBroadcaster) loop() {
 		select {
 		case req := <-p.incomingReq:
 			// This check enables the requester to cancel the request by cancelling the given context.
-			if req.ctx != nil && req.ctx.Err() != nil {
+			if req.ctx.Err() != nil {
 				p.logger.WithError(req.ctx.Err()).WithField("kind", req.kind.String()).
 					Debug("Context canceled for PartialColumnBroadcaster event.") // Debug log level to avoid log storm at node shutdown.
 				req.finish(req.ctx.Err())
@@ -715,7 +704,7 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 				return
 			}
 			_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackUsefulMessage)
-			_, _ = p.enqueue(nil, requestKindCellsValidated, requestValues{
+			_, _ = p.enqueue(context.Background(), requestKindCellsValidated, requestValues{
 				cellsValidated: &cellsValidated{
 					validationTook: time.Since(start),
 					topic:          topicId,
