@@ -3312,7 +3312,6 @@ func ExecutionPayloadEnvelopeFromConsensus(e *eth.ExecutionPayloadEnvelope) (*Ex
 		ExecutionRequests: requests,
 		BuilderIndex:      fmt.Sprintf("%d", e.BuilderIndex),
 		BeaconBlockRoot:   hexutil.Encode(e.BeaconBlockRoot),
-		Slot:              fmt.Sprintf("%d", e.Slot),
 		StateRoot:         hexutil.Encode(e.StateRoot),
 	}, nil
 }
@@ -3371,10 +3370,6 @@ func (e *ExecutionPayloadEnvelope) ToConsensus() (*eth.ExecutionPayloadEnvelope,
 	if err != nil {
 		return nil, server.NewDecodeError(err, "BeaconBlockRoot")
 	}
-	slot, err := strconv.ParseUint(e.Slot, 10, 64)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Slot")
-	}
 	stateRoot, err := bytesutil.DecodeHexWithLength(e.StateRoot, fieldparams.RootLength)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "StateRoot")
@@ -3384,7 +3379,6 @@ func (e *ExecutionPayloadEnvelope) ToConsensus() (*eth.ExecutionPayloadEnvelope,
 		ExecutionRequests: requests,
 		BuilderIndex:      primitives.BuilderIndex(builderIndex),
 		BeaconBlockRoot:   beaconBlockRoot,
-		Slot:              primitives.Slot(slot),
 		StateRoot:         stateRoot,
 	}, nil
 }

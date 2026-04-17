@@ -183,13 +183,14 @@ func (e *EngineClient) ReconstructExecutionPayloadEnvelope(
 	if !ok {
 		return nil, errors.New("execution payload not found for block hash")
 	}
+	p := payloadToPayloadGloas(payload)
+	p.SlotNumber = envelope.Message.Slot
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload:           payloadToPayloadGloas(payload),
+			Payload:           p,
 			ExecutionRequests: envelope.Message.ExecutionRequests,
 			BuilderIndex:      envelope.Message.BuilderIndex,
 			BeaconBlockRoot:   envelope.Message.BeaconBlockRoot,
-			Slot:              envelope.Message.Slot,
 			StateRoot:         envelope.Message.StateRoot,
 		},
 		Signature: envelope.Signature,

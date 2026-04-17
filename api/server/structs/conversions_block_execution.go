@@ -1018,6 +1018,7 @@ func ExecutionPayloadGloasFromConsensus(payload *enginev1.ExecutionPayloadGloas)
 		BlobGasUsed:     fmt.Sprintf("%d", payload.BlobGasUsed),
 		ExcessBlobGas:   fmt.Sprintf("%d", payload.ExcessBlobGas),
 		BlockAccessList: hexutil.Encode(payload.BlockAccessList),
+		SlotNumber:      fmt.Sprintf("%d", payload.SlotNumber),
 	}, nil
 }
 
@@ -1132,6 +1133,10 @@ func (e *ExecutionPayloadGloas) ToConsensus() (*enginev1.ExecutionPayloadGloas, 
 			return nil, server.NewDecodeError(err, "BlockAccessList")
 		}
 	}
+	payloadSlotNumber, err := strconv.ParseUint(e.SlotNumber, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "SlotNumber")
+	}
 	return &enginev1.ExecutionPayloadGloas{
 		ParentHash:      payloadParentHash,
 		FeeRecipient:    payloadFeeRecipient,
@@ -1151,5 +1156,6 @@ func (e *ExecutionPayloadGloas) ToConsensus() (*enginev1.ExecutionPayloadGloas, 
 		BlobGasUsed:     payloadBlobGasUsed,
 		ExcessBlobGas:   payloadExcessBlobGas,
 		BlockAccessList: bal,
+		SlotNumber:      primitives.Slot(payloadSlotNumber),
 	}, nil
 }

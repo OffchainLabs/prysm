@@ -179,4 +179,5 @@ type ExecutionPayloadGloas struct {
 	BlobGasUsed     string        `json:"blob_gas_used"`
 	ExcessBlobGas   string        `json:"excess_blob_gas"`
 	BlockAccessList string        `json:"block_access_list"`
+	SlotNumber      string        `json:"slot_number"`
 }

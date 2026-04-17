@@ -494,11 +494,7 @@ message ExecutionPayloadEnvelope {
                                  "github.com/OffchainLabs/prysm/v7/"
                                  "consensus-types/primitives.BuilderIndex" ];
   bytes beacon_block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  uint64 slot = 5 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
-  ];
-  bytes state_root = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes state_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // SignedExecutionPayloadEnvelope wraps an execution payload envelope with a

@@ -1799,7 +1799,7 @@ func (e *ExecutionPayloadGloas) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the ExecutionPayloadGloas object to a target array
 func (e *ExecutionPayloadGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(532)
+	offset := int(540)
 
 	// Field (0) 'ParentHash'
 	if size := len(e.ParentHash); size != 32 {
@@ -1894,6 +1894,9 @@ func (e *ExecutionPayloadGloas) MarshalSSZTo(buf []byte) (dst []byte, err error)
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(e.BlockAccessList)
 
+	// Field (18) 'SlotNumber'
+	dst = ssz.MarshalUint(dst, e.SlotNumber)
+
 	// Field (10) 'ExtraData'
 	if size := len(e.ExtraData); size > 32 {
 		err = ssz.ErrBytesLengthFn("--.ExtraData", size, 32)
@@ -1946,7 +1949,7 @@ func (e *ExecutionPayloadGloas) MarshalSSZTo(buf []byte) (dst []byte, err error)
 func (e *ExecutionPayloadGloas) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 532 {
+	if size < 540 {
 		return ssz.ErrSize
 	}
 
@@ -2006,7 +2009,7 @@ func (e *ExecutionPayloadGloas) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o10 != 532 {
+	if o10 != 540 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -2042,6 +2045,9 @@ func (e *ExecutionPayloadGloas) UnmarshalSSZ(buf []byte) error {
 	if o17 = ssz.ReadOffset(buf[528:532]); o17 > size || o14 > o17 {
 		return ssz.ErrOffset
 	}
+
+	// Field (18) 'SlotNumber'
+	e.SlotNumber = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[532:540])
 
 	// Field (10) 'ExtraData'
 	{
@@ -2112,7 +2118,7 @@ func (e *ExecutionPayloadGloas) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayloadGloas object
 func (e *ExecutionPayloadGloas) SizeSSZ() (size int) {
-	size = 532
+	size = 540
 
 	// Field (10) 'ExtraData'
 	size += len(e.ExtraData)
@@ -2277,6 +2283,9 @@ func (e *ExecutionPayloadGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		hh.PutBytes(e.BlockAccessList)
 		hh.MerkleizeWithMixin(elemIndx, byteLen, (1073741824+31)/32)
 	}
+
+	// Field (18) 'SlotNumber'
+	ssz.PutUint(hh, e.SlotNumber)
 
 	hh.Merkleize(indx)
 	return

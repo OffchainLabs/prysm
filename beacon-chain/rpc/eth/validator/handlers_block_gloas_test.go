@@ -39,10 +39,10 @@ func testEnvelope() *eth.ExecutionPayloadEnvelope {
 			PrevRandao:    make([]byte, 32),
 			BaseFeePerGas: make([]byte, 32),
 			BlockHash:     make([]byte, 32),
+			SlotNumber:    1,
 		},
 		BuilderIndex:    0,
 		BeaconBlockRoot: make([]byte, 32),
-		Slot:            1,
 		StateRoot:       make([]byte, 32),
 	}
 }
