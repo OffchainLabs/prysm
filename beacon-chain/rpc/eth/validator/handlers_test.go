@@ -2809,6 +2809,93 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 		require.Equal(t, 1, len(duty.ValidatorSyncCommitteeIndices))
 		assert.Equal(t, "1", duty.ValidatorSyncCommitteeIndices[0])
 	})
+	t.Run("past sync committee period", func(t *testing.T) {
+		// Chain is two periods ahead, the request targets epoch 0 (a past period).
+		// The handler must load the state at the requested period's start epoch and
+		// use its CurrentSyncCommittee, NOT the current state's committee.
+		pastEpochStartSlot := primitives.Slot(0)
+		currentSlot := primitives.Slot(uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod) * 2 * uint64(params.BeaconConfig().SlotsPerEpoch))
+
+		pastSt, _ := util.DeterministicGenesisStateAltair(t, numVals)
+		require.NoError(t, pastSt.SetSlot(pastEpochStartSlot))
+		require.NoError(t, pastSt.SetGenesisTime(genesisTime))
+
+		pastVals := pastSt.Validators()
+		pastCommittee := &ethpbalpha.SyncCommittee{AggregatePubkey: make([]byte, 48)}
+
+		for i := range 5 {
+			pastCommittee.Pubkeys = append(pastCommittee.Pubkeys, pastVals[i].PublicKey)
+		}
+
+		require.NoError(t, pastSt.SetCurrentSyncCommittee(pastCommittee))
+
+		pastNextCommittee := &ethpbalpha.SyncCommittee{AggregatePubkey: make([]byte, 48)}
+		for i := 5; i < 10; i++ {
+			pastNextCommittee.Pubkeys = append(pastNextCommittee.Pubkeys, pastVals[i].PublicKey)
+		}
+
+		require.NoError(t, pastSt.SetNextSyncCommittee(pastNextCommittee))
+
+		// Current state has different sync committees so that if the handler used
+		// the current state instead of the past state, assertions below would fail.
+		currentSt, _ := util.DeterministicGenesisStateAltair(t, numVals)
+		require.NoError(t, currentSt.SetSlot(currentSlot))
+		require.NoError(t, currentSt.SetGenesisTime(genesisTime))
+
+		currentVals := currentSt.Validators()
+		currentCommittee := &ethpbalpha.SyncCommittee{AggregatePubkey: make([]byte, 48)}
+
+		for i := 5; i < 10; i++ {
+			currentCommittee.Pubkeys = append(currentCommittee.Pubkeys, currentVals[i].PublicKey)
+		}
+
+		require.NoError(t, currentSt.SetCurrentSyncCommittee(currentCommittee))
+
+		currentNextCommittee := &ethpbalpha.SyncCommittee{AggregatePubkey: make([]byte, 48)}
+		for i := range 5 {
+			currentNextCommittee.Pubkeys = append(currentNextCommittee.Pubkeys, currentVals[i].PublicKey)
+		}
+
+		require.NoError(t, currentSt.SetNextSyncCommittee(currentNextCommittee))
+
+		mockChainService := &mockChain.ChainService{Genesis: genesisTime, Slot: &currentSlot, State: currentSt}
+		s := &Server{
+			Stater: &testutil.MockStater{StatesByEpoch: map[primitives.Epoch]state.BeaconState{
+				0: pastSt,
+				primitives.Epoch(uint64(params.BeaconConfig().EpochsPerSyncCommitteePeriod) * 2): currentSt,
+			}},
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			TimeFetcher:           mockChainService,
+			HeadFetcher:           mockChainService,
+			OptimisticModeFetcher: mockChainService,
+		}
+
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"1\"]")
+		require.NoError(t, err)
+
+		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/sync/{epoch}", &body)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetSyncCommitteeDuties(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.GetSyncCommitteeDutiesResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, 1, len(resp.Data))
+
+		duty := resp.Data[0]
+		// Validator 1 is in pastSt's CurrentSyncCommittee at index 1. If the handler
+		// had loaded currentSt instead, validator 1 would not appear in its
+		// CurrentSyncCommittee and no duty would be returned.
+		require.Equal(t, hexutil.Encode(pastVals[1].PublicKey), duty.Pubkey)
+		require.Equal(t, "1", duty.ValidatorIndex)
+		require.Equal(t, 1, len(duty.ValidatorSyncCommitteeIndices))
+		require.Equal(t, "1", duty.ValidatorSyncCommitteeIndices[0])
+	})
+
 	t.Run("epoch too far in the future", func(t *testing.T) {
 		var body bytes.Buffer
 		_, err := body.WriteString("[\"5\"]")
