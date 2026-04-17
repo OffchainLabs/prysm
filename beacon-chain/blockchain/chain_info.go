@@ -76,6 +76,7 @@ type GenesisFetcher interface {
 // directly retrieve head related data.
 type HeadFetcher interface {
 	HeadSlot() primitives.Slot
+	HeadFull() bool
 	HeadRoot(ctx context.Context) ([]byte, error)
 	HeadBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HeadState(ctx context.Context) (state.BeaconState, error)

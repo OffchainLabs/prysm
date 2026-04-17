@@ -74,6 +74,7 @@ type FastGetter interface {
 	FinalizedPayloadBlockHash() [32]byte
 	HasFullNode([32]byte) bool
 	HasNode([32]byte) bool
+	IsFullNode([32]byte) bool
 	HighestReceivedBlockSlot() primitives.Slot
 	HighestReceivedBlockRoot() [32]byte
 	IsCanonical(root [32]byte) bool

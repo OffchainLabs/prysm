@@ -160,6 +160,5 @@ func GenerateProtoExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 		BuilderIndex:      121,
 		BeaconBlockRoot:   FillByteSlice(32, 210),
 		Slot:              1,
-		StateRoot:         FillByteSlice(32, 211),
 	}
 }

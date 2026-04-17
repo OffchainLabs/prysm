@@ -25,8 +25,7 @@ import (
 //	def verify_execution_payload_envelope(state, signed_envelope, execution_engine):
 //	    envelope = signed_envelope.message
 //	    payload = envelope.payload
-//	    if verify:
-//	        assert verify_execution_payload_envelope_signature(state, signed_envelope)
+//	    assert verify_execution_payload_envelope_signature(state, signed_envelope)
 //	    header = copy(state.latest_block_header)
 //	    header.state_root = hash_tree_root(state)
 //	    assert envelope.beacon_block_root == hash_tree_root(header)
@@ -93,25 +92,6 @@ func VerifyExecutionPayloadEnvelopeWithDeferredSig(
 // validatePayloadConsistency checks that the envelope and payload are consistent
 // with the beacon block header, the committed bid, and the current state.
 func validatePayloadConsistency(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) error {
-	// Cache latest block header state root (local copy, no state mutation).
-	header := st.LatestBlockHeader()
-	if len(header.StateRoot) == 0 || bytes.Equal(header.StateRoot, make([]byte, 32)) {
-		stateRoot, err := st.HashTreeRoot(ctx)
-		if err != nil {
-			return errors.Wrap(err, "could not compute state root")
-		}
-		header.StateRoot = stateRoot[:]
-	}
-	blockHeaderRoot, err := header.HashTreeRoot()
-	if err != nil {
-		return errors.Wrap(err, "could not compute block header root")
-	}
-
-	beaconBlockRoot := envelope.BeaconBlockRoot()
-	if !bytes.Equal(beaconBlockRoot[:], blockHeaderRoot[:]) {
-		return errors.Errorf("envelope beacon block root does not match state latest block header root: envelope=%#x, header=%#x", beaconBlockRoot, blockHeaderRoot)
-	}
-
 	if envelope.Slot() != st.Slot() {
 		return errors.Errorf("envelope slot does not match state slot: envelope=%d, state=%d", envelope.Slot(), st.Slot())
 	}

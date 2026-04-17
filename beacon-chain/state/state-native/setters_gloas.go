@@ -130,27 +130,6 @@ func (b *BeaconState) ClearBuilderPendingPayment(index primitives.Slot) error {
 	return nil
 }
 
-// QueueBuilderPayment implements the builder payment queuing logic for Gloas.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// payment = state.builder_pending_payments[SLOTS_PER_EPOCH + state.slot % SLOTS_PER_EPOCH]
-// amount = payment.withdrawal.amount
-// if amount > 0:
-//
-//	state.builder_pending_withdrawals.append(payment.withdrawal)
-//
-// state.builder_pending_payments[SLOTS_PER_EPOCH + state.slot % SLOTS_PER_EPOCH] = BuilderPendingPayment()
-func (b *BeaconState) QueueBuilderPayment() error {
-	if b.version < version.Gloas {
-		return errNotSupported("QueueBuilderPayment", b.version)
-	}
-	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-	paymentIndex := slotsPerEpoch + (b.slot % slotsPerEpoch)
-	return b.queueBuilderPaymentAtIndex(paymentIndex)
-}
-
-// QueueBuilderPaymentForSlot queues the builder payment at the epoch-relative
-// index for the given slot. Used by process_parent_execution_payload to clear
-// the parent slot's payment entry.
 func (b *BeaconState) QueueBuilderPaymentForSlot(parentSlot primitives.Slot) error {
 	if b.version < version.Gloas {
 		return errNotSupported("QueueBuilderPaymentForSlot", b.version)
@@ -159,15 +138,21 @@ func (b *BeaconState) QueueBuilderPaymentForSlot(parentSlot primitives.Slot) err
 	currentEpoch := slots.ToEpoch(b.slot)
 	parentEpoch := slots.ToEpoch(parentSlot)
 
-	var paymentIndex primitives.Slot
 	if parentEpoch == currentEpoch {
-		paymentIndex = slotsPerEpoch + (parentSlot % slotsPerEpoch)
-	} else if parentEpoch+1 == currentEpoch {
-		paymentIndex = parentSlot % slotsPerEpoch
-	} else {
+		return b.queueBuilderPaymentAtIndex(slotsPerEpoch + (parentSlot % slotsPerEpoch))
+	}
+	if parentEpoch+1 == currentEpoch {
+		return b.queueBuilderPaymentAtIndex(parentSlot % slotsPerEpoch)
+	}
+	bid := b.latestExecutionPayloadBid
+	if bid == nil || bid.Value == 0 {
 		return nil
 	}
-	return b.queueBuilderPaymentAtIndex(paymentIndex)
+	return b.AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal{{
+		FeeRecipient: bytesutil.SafeCopyBytes(bid.FeeRecipient),
+		Amount:       bid.Value,
+		BuilderIndex: bid.BuilderIndex,
+	}})
 }
 
 func (b *BeaconState) queueBuilderPaymentAtIndex(paymentIndex primitives.Slot) error {
