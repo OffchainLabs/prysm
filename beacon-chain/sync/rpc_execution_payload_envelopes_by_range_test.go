@@ -44,11 +44,11 @@ func testSignedEnvelope(slot primitives.Slot, beaconBlockRoot []byte) *pb.Signed
 				PrevRandao:    make([]byte, 32),
 				BaseFeePerGas: make([]byte, 32),
 				BlockHash:     root,
+				SlotNumber:    slot,
 			},
 			ExecutionRequests: &engpb.ExecutionRequests{},
 			BeaconBlockRoot:   root,
 			StateRoot:         make([]byte, 32),
-			Slot:              slot,
 		},
 		Signature: make([]byte, 96),
 	}
@@ -281,7 +281,7 @@ func TestExecutionPayloadEnvelopesByRangeRPCHandler(t *testing.T) {
 				}
 				assert.NoError(t, readErr)
 				if env != nil {
-					receivedSlots = append(receivedSlots, env.Message.Slot)
+					receivedSlots = append(receivedSlots, primitives.Slot(env.Message.Payload.SlotNumber))
 				}
 			}
 		})
@@ -386,7 +386,7 @@ func TestExecutionPayloadEnvelopesByRangeRPCHandler(t *testing.T) {
 				}
 				assert.NoError(t, readErr)
 				if env != nil {
-					receivedSlots = append(receivedSlots, env.Message.Slot)
+					receivedSlots = append(receivedSlots, primitives.Slot(env.Message.Payload.SlotNumber))
 				}
 			}
 		})
@@ -461,9 +461,9 @@ func TestSendExecutionPayloadEnvelopesByRangeRequest(t *testing.T) {
 		envelopes, recvErr := SendExecutionPayloadEnvelopesByRangeRequest(ctx, clock, p1, p2.PeerID(), ctxMap, req)
 		require.NoError(t, recvErr)
 		require.Equal(t, int(count), len(envelopes))
-		assert.Equal(t, startSlot, envelopes[0].Message.Slot)
-		assert.Equal(t, startSlot+1, envelopes[1].Message.Slot)
-		assert.Equal(t, startSlot+2, envelopes[2].Message.Slot)
+		assert.Equal(t, startSlot, primitives.Slot(envelopes[0].Message.Payload.SlotNumber))
+		assert.Equal(t, startSlot+1, primitives.Slot(envelopes[1].Message.Payload.SlotNumber))
+		assert.Equal(t, startSlot+2, primitives.Slot(envelopes[2].Message.Payload.SlotNumber))
 	})
 
 	t.Run("empty response from remote peer", func(t *testing.T) {

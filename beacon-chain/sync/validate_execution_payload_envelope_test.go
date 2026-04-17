@@ -348,6 +348,7 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 		Withdrawals:   []*enginev1.Withdrawal{},
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
+		SlotNumber:    slot,
 	}
 
 	return &ethpb.SignedExecutionPayloadEnvelope{
@@ -358,7 +359,6 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 			},
 			BuilderIndex:    builderIdx,
 			BeaconBlockRoot: root[:],
-			Slot:            slot,
 			StateRoot:       bytes.Repeat([]byte{0xBB}, 32),
 		},
 		Signature: bytes.Repeat([]byte{0xAA}, 96),

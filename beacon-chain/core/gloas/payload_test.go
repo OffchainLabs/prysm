@@ -66,6 +66,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		Withdrawals:   withdrawals,
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
+		SlotNumber:    slot,
 	}
 
 	bid := &ethpb.ExecutionPayloadBid{
@@ -91,7 +92,6 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 	require.NoError(t, err)
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Slot:              slot,
 		BuilderIndex:      builderIdx,
 		BeaconBlockRoot:   headerRoot[:],
 		Payload:           payload,
@@ -450,7 +450,7 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 		msg := proto.Clone(fixture.signedProto.Message).(*ethpb.ExecutionPayloadEnvelope)
 		msg.BuilderIndex = params.BeaconConfig().BuilderIndexSelfBuild
 
-		epoch := slots.ToEpoch(msg.Slot)
+		epoch := slots.ToEpoch(msg.Payload.SlotNumber)
 		domain, err := signing.Domain(st.Fork(), epoch, params.BeaconConfig().DomainBeaconBuilder, st.GenesisValidatorsRoot())
 		require.NoError(t, err)
 		signingRoot, err := signing.ComputeSigningRoot(msg, domain)
