@@ -101,7 +101,7 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 					if err != nil {
 						log.Error("Failed to get current fork digest")
 					} else {
-						err := broadcaster.Publish(func(yield func(string, blocks.PartialDataColumn) bool) {
+						err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 							for _, sc := range reconstructedSidecars {
 								if !unseenIndices[sc.Index] {
 									continue

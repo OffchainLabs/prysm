@@ -2,6 +2,7 @@ package partialdatacolumnbroadcaster
 
 import (
 	"bytes"
+	"context"
 	stderrors "errors"
 	"iter"
 	"log/slog"
@@ -95,15 +96,91 @@ const (
 	requestKindCellsValidated
 )
 
-type request struct {
-	kind           requestKind
+func (k requestKind) String() string {
+	switch k {
+	case requestKindPublish:
+		return "publish"
+	case requestKindSubscribe:
+		return "subscribe"
+	case requestKindUnsubscribe:
+		return "unsubscribe"
+	case requestKindGossip:
+		return "gossip"
+	case requestKindHandleIncomingRPC:
+		return "handle_incoming_rpc"
+	case requestKindCellsValidated:
+		return "cells_validated"
+	default:
+		return "unknown"
+	}
+}
+
+type requestValues struct {
 	cellsValidated *cellsValidated
-	response       chan error
 	unsub          unsubscribe
 	incomingRPC    incomingPartialRPC
 	sub            subscribe
 	publish        publish
 	gossip         gossip
+}
+
+type request struct {
+	requestValues
+	ctx      context.Context
+	kind     requestKind
+	response chan error
+}
+
+func newRequest(ctx context.Context, kind requestKind, v requestValues) request {
+	return request{
+		requestValues: v,
+		ctx:           ctx,
+		kind:          kind,
+		response:      make(chan error, 1),
+	}
+}
+
+// finish sends the result to the caller waiting on the response channel.
+func (r request) finish(err error) {
+	r.response <- err
+}
+
+// enqueue creates and enqueues a request, blocking until it is accepted.
+// Returns an error if the broadcaster has stopped or the context has been cancelled.
+// A nil ctx is permitted for fire-and-forget requests that have no cancellation.
+func (p *PartialColumnBroadcaster) enqueue(ctx context.Context, kind requestKind, v requestValues) (request, error) {
+	req := newRequest(ctx, kind, v)
+	select {
+	case p.incomingReq <- req:
+		return req, nil
+	case <-p.stop:
+		return req, errPartialBroadcasterStopped
+	case <-ctx.Done():
+		return req, ctx.Err()
+	}
+}
+
+// tryEnqueue creates and enqueues a request without blocking.
+// Returns false if the request channel is full.
+func (p *PartialColumnBroadcaster) tryEnqueue(kind requestKind, v requestValues) (request, bool) {
+	req := newRequest(context.Background(), kind, v)
+	select {
+	case p.incomingReq <- req:
+		return req, true
+	default:
+		return req, false
+	}
+}
+
+// waitForResponse blocks until the request has been processed and returns the result.
+// If the request's context is cancelled before a response arrives, it returns the context error.
+func (r request) waitForResponse() error {
+	select {
+	case err := <-r.response:
+		return err
+	case <-r.ctx.Done():
+		return r.ctx.Err()
+	}
 }
 
 type publish struct {
@@ -175,17 +252,13 @@ func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 
 // onEmitGossip enqueues a gossip request for the broadcaster's event loop.
 func (p *PartialColumnBroadcaster) onEmitGossip(topic string, groupID []byte, _ []peer.ID, _ map[peer.ID]blocks.PartialDataColumnPeerState) {
-	select {
-	case p.incomingReq <- request{
-		kind: requestKindGossip,
+	// Drop gossip emission if we have too many pending requests.
+	p.tryEnqueue(requestKindGossip, requestValues{
 		gossip: gossip{
 			topic:   topic,
 			groupID: groupID,
 		},
-	}:
-	default:
-		// Drop gossip emission if we have too many pending requests
-	}
+	})
 }
 
 // onIncomingRPC processes an incoming partial message RPC by updating peer state
@@ -210,12 +283,10 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 	if err != nil {
 		return err
 	}
-	select {
-	case p.incomingReq <- request{
-		kind:        requestKindHandleIncomingRPC,
+	_, ok := p.tryEnqueue(requestKindHandleIncomingRPC, requestValues{
 		incomingRPC: incomingPartialRPC{rpc, from, message},
-	}:
-	default:
+	})
+	if !ok {
 		p.logger.Warn("Dropping incoming partial RPC", "rpc", rpc)
 		return errors.New("incomingReq channel is full, dropping RPC")
 	}
@@ -254,13 +325,57 @@ func (p *PartialColumnBroadcaster) Start(callbacks ColumnCallbacks) {
 	p.loop()
 }
 
+var (
+	errPartialBroadcasterStopped = errors.New("partial column broadcaster stopped")
+	errUnknownRequestKind        = errors.New("unknown request kind")
+)
+
 func (p *PartialColumnBroadcaster) loop() {
 	cleanup := time.NewTicker(time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot))
 	defer cleanup.Stop()
 	for {
 		select {
+		case req := <-p.incomingReq:
+			// This check enables the requester to cancel the request by cancelling the given context.
+			if req.ctx.Err() != nil {
+				p.logger.WithError(req.ctx.Err()).WithField("kind", req.kind.String()).
+					Debug("Context canceled for PartialColumnBroadcaster event.") // Debug log level to avoid log storm at node shutdown.
+				req.finish(req.ctx.Err())
+				continue
+			}
+			var err error
+			switch req.kind {
+			case requestKindPublish:
+				err = p.publish(req.publish.topicsAndColumns)
+			case requestKindSubscribe:
+				err = p.subscribe(req.sub.t)
+			case requestKindUnsubscribe:
+				err = p.unsubscribe(req.unsub.topic)
+			case requestKindGossip:
+				p.gossip(req.gossip.topic, req.gossip.groupID)
+			case requestKindHandleIncomingRPC:
+				err = p.handleIncomingRPC(req.incomingRPC)
+			case requestKindCellsValidated:
+				err = p.handleCellsValidated(req.cellsValidated)
+			default:
+				err = errUnknownRequestKind
+			}
+			if err != nil {
+				p.logger.WithField("kind", req.kind.String()).WithError(err).
+					Error("Failure handling PartialColumnBroadcaster event.")
+				err = errors.Wrap(err, "partial column broadcaster "+req.kind.String()+" event")
+			}
+			req.finish(err)
 		case <-p.stop:
-			return
+			// Drain remaining requests before exiting the loop.
+			for {
+				select {
+				case req := <-p.incomingReq:
+					req.finish(errPartialBroadcasterStopped)
+				default:
+					return
+				}
+			}
 		case <-cleanup.C:
 			for groupID, ttl := range p.groupTTL {
 				if ttl > 0 {
@@ -277,29 +392,6 @@ func (p *PartialColumnBroadcaster) loop() {
 						delete(p.partialMsgStore, topic)
 					}
 				}
-			}
-		case req := <-p.incomingReq:
-			switch req.kind {
-			case requestKindPublish:
-				req.response <- p.publish(req.publish.topicsAndColumns)
-			case requestKindSubscribe:
-				req.response <- p.subscribe(req.sub.t)
-			case requestKindUnsubscribe:
-				req.response <- p.unsubscribe(req.unsub.topic)
-			case requestKindGossip:
-				p.gossip(req.gossip.topic, req.gossip.groupID)
-			case requestKindHandleIncomingRPC:
-				err := p.handleIncomingRPC(req.incomingRPC)
-				if err != nil {
-					p.logger.Error("Failed to handle incoming partial RPC", "err", err)
-				}
-			case requestKindCellsValidated:
-				err := p.handleCellsValidated(req.cellsValidated)
-				if err != nil {
-					p.logger.Error("Failed to handle cells validated", "err", err)
-				}
-			default:
-				p.logger.Error("Unknown request kind", "kind", req.kind)
 			}
 		}
 	}
@@ -612,8 +704,7 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 				return
 			}
 			_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackUsefulMessage)
-			p.incomingReq <- request{
-				kind: requestKindCellsValidated,
+			_, _ = p.enqueue(context.Background(), requestKindCellsValidated, requestValues{
 				cellsValidated: &cellsValidated{
 					validationTook: time.Since(start),
 					topic:          topicId,
@@ -621,7 +712,7 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 					cells:          cellsToVerify,
 					cellIndices:    cellIndices,
 				},
-			}
+			})
 		}()
 	}
 	return nil
@@ -699,25 +790,19 @@ func (p *PartialColumnBroadcaster) Stop() {
 }
 
 // Publish publishes partial columns for the given topics.
-func (p *PartialColumnBroadcaster) Publish(topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error {
+func (p *PartialColumnBroadcaster) Publish(ctx context.Context, topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error {
 	if p.peerFeedback == nil || p.publishPartialCol == nil {
 		return errors.New("pubsub not initialized")
 	}
-	respCh := make(chan error)
-
-	select {
-	case p.incomingReq <- request{
-		kind: requestKindPublish,
+	req, err := p.enqueue(ctx, requestKindPublish, requestValues{
 		publish: publish{
 			topicsAndColumns: topicsAndColumns,
 		},
-		response: respCh,
-	}:
-	case <-p.stop:
-		return errors.New("broadcaster has stopped")
+	})
+	if err != nil {
+		return err
 	}
-
-	return <-respCh
+	return req.waitForResponse()
 }
 
 func (p *PartialColumnBroadcaster) gossip(topic string, groupID []byte) {
@@ -786,20 +871,16 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 	return aggErr
 }
 
-func (p *PartialColumnBroadcaster) Subscribe(t *pubsub.Topic) error {
-	respCh := make(chan error)
-	select {
-	case <-p.stop:
-		return errors.New("broadcaster stopped")
-	case p.incomingReq <- request{
-		kind: requestKindSubscribe,
+func (p *PartialColumnBroadcaster) Subscribe(ctx context.Context, t *pubsub.Topic) error {
+	req, err := p.enqueue(ctx, requestKindSubscribe, requestValues{
 		sub: subscribe{
 			t: t,
 		},
-		response: respCh,
-	}:
+	})
+	if err != nil {
+		return err
 	}
-	return <-respCh
+	return req.waitForResponse()
 }
 
 func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic) error {
@@ -812,20 +893,16 @@ func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic) error {
 	return nil
 }
 
-func (p *PartialColumnBroadcaster) Unsubscribe(topic string) error {
-	respCh := make(chan error)
-	select {
-	case <-p.stop:
-		return errors.New("broadcaster stopped")
-	case p.incomingReq <- request{
-		kind: requestKindUnsubscribe,
+func (p *PartialColumnBroadcaster) Unsubscribe(ctx context.Context, topic string) error {
+	req, err := p.enqueue(ctx, requestKindUnsubscribe, requestValues{
 		unsub: unsubscribe{
 			topic: topic,
 		},
-		response: respCh,
-	}:
+	})
+	if err != nil {
+		return err
 	}
-	return <-respCh
+	return req.waitForResponse()
 }
 func (p *PartialColumnBroadcaster) unsubscribe(topic string) error {
 	t, ok := p.topics[topic]

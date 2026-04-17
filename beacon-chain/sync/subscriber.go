@@ -568,7 +568,7 @@ func (s *Service) pruneNotWanted(t *subnetTracker, wantedSubnets map[uint64]bool
 		t.cancelSubscription(subnet)
 		topic := t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix())
 		if t.partial != nil {
-			_ = t.partial.broadcaster.Unsubscribe(topic)
+			_ = t.partial.broadcaster.Unsubscribe(s.ctx, topic)
 		}
 		s.unSubscribeFromTopic(topic)
 	}
@@ -634,7 +634,7 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 
 		if requestPartial {
 			log.Info("Subscribing to partial columns on", topicStr)
-			err = t.partial.broadcaster.Subscribe(topic)
+			err = t.partial.broadcaster.Subscribe(s.ctx, topic)
 
 			if err != nil {
 				log.WithError(err).Error("Failed to subscribe to partial column")
