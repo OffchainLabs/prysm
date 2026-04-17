@@ -160,6 +160,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 
 			// Process synchronously because it's likely that the next pending block depends on it.
 			s.processPendingPayloadEnvelope(ctx, blkRoot)
+			s.processPendingGloasColumns(blkRoot, b)
 			blkRoots = append(blkRoots, blkRoot)
 
 			// Remove the processed block from the queue.
