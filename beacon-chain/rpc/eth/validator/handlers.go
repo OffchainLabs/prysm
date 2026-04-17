@@ -1189,9 +1189,28 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	startingEpoch := min(requestedEpoch, currentEpoch)
+	currentCommitteeFirstEpoch, err := slots.SyncCommitteePeriodStartEpoch(currentEpoch)
+	if err != nil {
+		httputil.HandleError(w, "Could not get sync committee period start epoch: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	st, err := s.Stater.StateByEpoch(ctx, startingEpoch)
+	requestedCommitteeFirstEpoch, err := slots.SyncCommitteePeriodStartEpoch(requestedEpoch)
+	if err != nil {
+		httputil.HandleError(w, "Could not get sync committee period start epoch: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Sync committee assignments are computed at the start of the sync committee period and don't change during the period.
+	// - For the current period we use the current epoch to avoid expensive state replays.
+	// - For the next period we also use the current epoch and later read NextSyncCommittee (known one period in advance) to avoid fetching a future state.
+	// - For a past period we fall back to the first epoch of that period.
+	targetEpoch := currentEpoch
+	if requestedCommitteeFirstEpoch < currentCommitteeFirstEpoch {
+		targetEpoch = requestedCommitteeFirstEpoch
+	}
+
+	st, err := s.Stater.StateByEpoch(ctx, targetEpoch)
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
 		return
