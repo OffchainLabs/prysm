@@ -472,21 +472,21 @@ func TestService_processBlockBatch(t *testing.T) {
 			currBlockRoot = blk1Root
 		}
 
-		cbnormal := func(ctx context.Context, blks []blocks.ROBlock, avs das.AvailabilityChecker) error {
-			assert.NoError(t, s.cfg.Chain.ReceiveBlockBatch(ctx, blks, avs))
+		cbnormal := func(ctx context.Context, blks []blocks.ROBlock, _ []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error {
+			assert.NoError(t, s.cfg.Chain.ReceiveBlockBatch(ctx, blks, nil, avs))
 			return nil
 		}
 		// Process block normally.
-		count, err := s.processBatchedBlocks(ctx, batch, cbnormal)
+		count, err := s.processBatchedBlocks(ctx, batch, nil, cbnormal)
 		assert.NoError(t, err)
 		require.Equal(t, uint64(len(batch)), count)
 
-		cbnil := func(ctx context.Context, blocks []blocks.ROBlock, _ das.AvailabilityChecker) error {
+		cbnil := func(ctx context.Context, blocks []blocks.ROBlock, _ []interfaces.ROSignedExecutionPayloadEnvelope, _ das.AvailabilityChecker) error {
 			return nil
 		}
 
 		// Duplicate processing should trigger error.
-		count, err = s.processBatchedBlocks(ctx, batch, cbnil)
+		count, err = s.processBatchedBlocks(ctx, batch, nil, cbnil)
 		assert.ErrorContains(t, "block is already processed", err)
 		require.Equal(t, uint64(0), count)
 
@@ -500,17 +500,75 @@ func TestService_processBlockBatch(t *testing.T) {
 		}
 
 		// Bad batch should fail because it is non linear
-		count, err = s.processBatchedBlocks(ctx, badBatch2, cbnil)
+		count, err = s.processBatchedBlocks(ctx, badBatch2, nil, cbnil)
 		expectedSubErr := "expected linear block list"
 		assert.ErrorContains(t, expectedSubErr, err)
 		require.Equal(t, uint64(0), count)
 
 		// Continue normal processing, should proceed w/o errors.
-		count, err = s.processBatchedBlocks(ctx, batch2, cbnormal)
+		count, err = s.processBatchedBlocks(ctx, batch2, nil, cbnormal)
 		assert.NoError(t, err)
 		assert.Equal(t, primitives.Slot(19), s.cfg.Chain.HeadSlot(), "Unexpected head slot")
 		require.Equal(t, uint64(len(batch2)), count)
 	})
+}
+
+func TestService_processBatchedBlocksReturnsFilteredCount(t *testing.T) {
+	beaconDB := dbtest.SetupDB(t)
+	genesisBlk := util.NewBeaconBlock()
+	genesisBlkRoot, err := genesisBlk.Block.HashTreeRoot()
+	require.NoError(t, err)
+	util.SaveBlock(t, t.Context(), beaconDB, genesisBlk)
+	st, err := util.NewBeaconState()
+	require.NoError(t, err)
+	s := NewService(t.Context(), &Config{
+		P2P: p2pt.NewTestP2P(t),
+		DB:  beaconDB,
+		Chain: &mock.ChainService{
+			State: st,
+			Root:  genesisBlkRoot[:],
+			DB:    beaconDB,
+			FinalizedCheckPoint: &eth.Checkpoint{
+				Epoch: 0,
+			},
+		},
+		StateNotifier: &mock.MockStateNotifier{},
+	})
+	s.genesisTime = makeGenesisTime(32)
+	ctx := t.Context()
+
+	// Build a linear chain of 9 blocks (slots 1–9).
+	var allBlocks []blocks.BlockWithROSidecars
+	currRoot := genesisBlkRoot
+	for i := primitives.Slot(1); i <= 9; i++ {
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = i
+		blk.Block.ParentRoot = currRoot[:]
+		root, err := blk.Block.HashTreeRoot()
+		require.NoError(t, err)
+		util.SaveBlock(t, ctx, beaconDB, blk)
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		rob, err := blocks.NewROBlock(wsb)
+		require.NoError(t, err)
+		allBlocks = append(allBlocks, blocks.BlockWithROSidecars{Block: rob})
+		currRoot = root
+	}
+
+	// Process slots 1–5 so they are in the DB and head advances to slot 5.
+	cb := func(ctx context.Context, blks []blocks.ROBlock, _ []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error {
+		return s.cfg.Chain.ReceiveBlockBatch(ctx, blks, nil, avs)
+	}
+	count, err := s.processBatchedBlocks(ctx, allBlocks[:5], nil, cb)
+	require.NoError(t, err)
+	require.Equal(t, uint64(5), count)
+	require.Equal(t, primitives.Slot(5), s.cfg.Chain.HeadSlot())
+
+	// Now process the full batch (slots 1–9). Slots 1–5 are already processed,
+	// so only slots 6–9 should be counted.
+	count, err = s.processBatchedBlocks(ctx, allBlocks, nil, cb)
+	require.NoError(t, err)
+	require.Equal(t, uint64(4), count, "count should reflect only unprocessed blocks, not the entire batch")
 }
 
 func TestService_blockProviderScoring(t *testing.T) {
@@ -708,9 +766,11 @@ func TestService_ValidUnprocessed(t *testing.T) {
 		currBlockRoot = blk1Root
 	}
 
-	retBlocks, err := validUnprocessed(t.Context(), batch, 2, func(ctx context.Context, block blocks.ROBlock) bool {
+	retBlocks, _, err := validUnprocessed(t.Context(), batch, nil, 2, func(ctx context.Context, block blocks.ROBlock) bool {
 		// Ignore first 2 blocks in the batch.
 		return block.Block().Slot() <= 2
+	}, func(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) bool {
+		return false
 	})
 	require.NoError(t, err)
 
@@ -813,7 +873,7 @@ func TestService_processBlocksWithDataColumns(t *testing.T) {
 		require.NoError(t, err)
 
 		service := new(Service)
-		err = service.processBlocksWithDataColumns(ctx, nil, nil, roFuluBlock)
+		err = service.processBlocksWithDataColumns(ctx, nil, nil, nil, roFuluBlock)
 		require.NoError(t, err)
 	})
 
@@ -854,12 +914,12 @@ func TestService_processBlocksWithDataColumns(t *testing.T) {
 			counter: ratecounter.NewRateCounter(counterSeconds * time.Second),
 		}
 
-		receiverFunc := func(ctx context.Context, blks []blocks.ROBlock, avs das.AvailabilityChecker) error {
+		receiverFunc := func(ctx context.Context, blks []blocks.ROBlock, _ []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error {
 			require.Equal(t, 1, len(blks))
 			return nil
 		}
 
-		err = service.processBlocksWithDataColumns(ctx, blocksWithSidecars, receiverFunc, roFuluBlock)
+		err = service.processBlocksWithDataColumns(ctx, blocksWithSidecars, nil, receiverFunc, roFuluBlock)
 		require.NoError(t, err)
 
 		// Verify that the data columns were saved correctly.

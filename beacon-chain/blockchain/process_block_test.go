@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -164,7 +163,7 @@ func TestStore_OnBlockBatch(t *testing.T) {
 		require.NoError(t, err)
 		blks = append(blks, rwsb)
 	}
-	err := service.onBlockBatch(ctx, blks, &das.MockAvailabilityStore{})
+	err := service.onBlockBatch(ctx, blks, nil, &das.MockAvailabilityStore{})
 	require.NoError(t, err)
 	jcp := service.CurrentJustifiedCheckpt()
 	jroot := bytesutil.ToBytes32(jcp.Root)
@@ -194,7 +193,7 @@ func TestStore_OnBlockBatch_NotifyNewPayload(t *testing.T) {
 		require.NoError(t, service.saveInitSyncBlock(ctx, rwsb.Root(), wsb))
 		blks = append(blks, rwsb)
 	}
-	require.NoError(t, service.onBlockBatch(ctx, blks, &das.MockAvailabilityStore{}))
+	require.NoError(t, service.onBlockBatch(ctx, blks, nil, &das.MockAvailabilityStore{}))
 }
 
 func TestCachedPreState_CanGetFromStateSummary(t *testing.T) {
@@ -2074,7 +2073,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	rwsb, err := consensusblocks.NewROBlock(wsb)
 	require.NoError(t, err)
 	// We use onBlockBatch here because the valid chain is missing in forkchoice
-	require.NoError(t, service.onBlockBatch(ctx, []consensusblocks.ROBlock{rwsb}, &das.MockAvailabilityStore{}))
+	require.NoError(t, service.onBlockBatch(ctx, []consensusblocks.ROBlock{rwsb}, nil, &das.MockAvailabilityStore{}))
 	// Check that the head is now VALID and the node is not optimistic
 	require.Equal(t, genesisRoot, service.ensureRootNotZeros(service.cfg.ForkChoiceStore.CachedHeadRoot()))
 	headRoot, err = service.HeadRoot(ctx)
@@ -3556,7 +3555,7 @@ func TestHandleBlockPayloadAttestations(t *testing.T) {
 		base, insertBlk := testGloasState(t, 1, parentRoot, blockHash)
 		insertGloasBlock(t, s, base, insertBlk, blockRoot)
 
-		ptc, err := gloas.PayloadCommittee(ctx, headState, 1)
+		ptc, err := headState.PayloadCommitteeReadOnly(1)
 		require.NoError(t, err)
 		require.NotEqual(t, 0, len(ptc))
 

@@ -2,13 +2,14 @@ package gloas_test
 
 import (
 	"bytes"
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -119,7 +120,6 @@ func TestProcessPayloadAttestations_EmptyAggregationBits(t *testing.T) {
 }
 
 func TestProcessPayloadAttestations_HappyPath(t *testing.T) {
-	helpers.ClearCache()
 	setupTestConfig(t)
 
 	sk1, pk1 := newKey(t)
@@ -150,7 +150,6 @@ func TestProcessPayloadAttestations_HappyPath(t *testing.T) {
 }
 
 func TestProcessPayloadAttestations_MultipleAttestations(t *testing.T) {
-	helpers.ClearCache()
 	setupTestConfig(t)
 
 	sk1, pk1 := newKey(t)
@@ -216,6 +215,25 @@ func TestProcessPayloadAttestations_IndexedVerificationError(t *testing.T) {
 }
 
 func newTestState(t *testing.T, vals []*eth.Validator, slot primitives.Slot) state.BeaconState {
+	t.Helper()
+
+	st, err := testutil.NewBeaconStateGloas(func(seed *eth.BeaconStateGloas) error {
+		seed.Slot = slot
+		seed.Validators = vals
+		seed.Balances = make([]uint64, len(vals))
+		for i, v := range vals {
+			seed.Balances[i] = v.EffectiveBalance
+		}
+		seed.PtcWindow = deterministicPTCWindow(len(vals))
+		return nil
+	})
+	require.NoError(t, err)
+	return st
+}
+
+func newPhase0TestState(t *testing.T, vals []*eth.Validator, slot primitives.Slot) state.BeaconState {
+	t.Helper()
+
 	st, err := testutil.NewBeaconState()
 	require.NoError(t, err)
 	for _, v := range vals {
@@ -223,8 +241,23 @@ func newTestState(t *testing.T, vals []*eth.Validator, slot primitives.Slot) sta
 		require.NoError(t, st.AppendBalance(v.EffectiveBalance))
 	}
 	require.NoError(t, st.SetSlot(slot))
-	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), st, slots.ToEpoch(slot)))
 	return st
+}
+
+func deterministicPTCWindow(validatorCount int) []*eth.PTCs {
+	window := make([]*eth.PTCs, 3*params.BeaconConfig().SlotsPerEpoch)
+	indices := make([]primitives.ValidatorIndex, fieldparams.PTCSize)
+	if validatorCount > 0 {
+		for i := range indices {
+			indices[i] = primitives.ValidatorIndex(i % validatorCount)
+		}
+	}
+	for i := range window {
+		window[i] = &eth.PTCs{
+			ValidatorIndices: slices.Clone(indices),
+		}
+	}
+	return window
 }
 
 func setupTestConfig(t *testing.T) {
@@ -289,6 +322,50 @@ func signAttestation(t *testing.T, st state.ReadOnlyBeaconState, data *eth.Paylo
 	}
 	agg := bls.AggregateSignatures(sigs)
 	return agg.Marshal()
+}
+
+func TestProcessPTCWindow(t *testing.T) {
+	fuluSt, _ := testutil.DeterministicGenesisStateFulu(t, 256)
+	st, err := gloas.UpgradeToGloas(fuluSt)
+	require.NoError(t, err)
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+	// Get original window.
+	origWindow, err := st.PTCWindow()
+	require.NoError(t, err)
+	windowSize := int(slotsPerEpoch.Mul(uint64(2 + params.BeaconConfig().MinSeedLookahead)))
+	require.Equal(t, windowSize, len(origWindow))
+
+	// Advance state to next epoch boundary so process_ptc_window sees a new epoch.
+	require.NoError(t, st.SetSlot(slotsPerEpoch))
+
+	// Process PTC window — should rotate.
+	require.NoError(t, gloas.ProcessPTCWindow(t.Context(), st))
+
+	newWindow, err := st.PTCWindow()
+	require.NoError(t, err)
+	require.Equal(t, windowSize, len(newWindow))
+
+	// The first two epochs should be the old epochs 1 and 2 (shifted left by one epoch).
+	for i := range 2 * slotsPerEpoch {
+		require.DeepEqual(t, origWindow[slotsPerEpoch+i], newWindow[i])
+	}
+
+	// The last epoch should be freshly computed — not all zeros.
+	lastStart := 2 * slotsPerEpoch
+	for i := range slotsPerEpoch {
+		ptcSlot := newWindow[lastStart+i]
+		require.NotNil(t, ptcSlot)
+		nonZero := false
+		for _, idx := range ptcSlot.ValidatorIndices {
+			if idx != 0 {
+				nonZero = true
+				break
+			}
+		}
+		require.Equal(t, true, nonZero, "last epoch slot %d should have non-zero validator indices", i)
+	}
 }
 
 type validatorLookupErrState struct {

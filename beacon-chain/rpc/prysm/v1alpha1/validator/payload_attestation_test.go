@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
@@ -90,8 +89,8 @@ func TestSubmitPayloadAttestation_OK(t *testing.T) {
 
 	slot := primitives.Slot(0)
 	root := bytesutil.PadTo([]byte{0xBB}, 32)
-	st, _ := util.DeterministicGenesisState(t, 64)
-	ptc, err := gloas.PayloadCommittee(t.Context(), st, slot)
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
+	ptc, err := st.PayloadCommitteeReadOnly(slot)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(ptc))
 

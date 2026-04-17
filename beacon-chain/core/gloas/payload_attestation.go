@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -80,7 +81,7 @@ func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body 
 
 // indexedPayloadAttestation converts a payload attestation into its indexed form.
 func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState, att *eth.PayloadAttestation) (*consensus_types.IndexedPayloadAttestation, error) {
-	committee, err := PayloadCommittee(ctx, st, att.Data.Slot)
+	committee, err := st.PayloadCommitteeReadOnly(att.Data.Slot)
 	if err != nil {
 		return nil, err
 	}
@@ -99,10 +100,10 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 	}, nil
 }
 
-// PayloadCommittee returns the payload timeliness committee for a given slot for the state.
+// computePTC computes the payload timeliness committee for a given slot.
 //
-//	<spec fn="get_ptc" fork="gloas" hash="ae15f761">
-//	def get_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
+//	<spec fn="compute_ptc" fork="gloas" hash="0f323552">
+//	def compute_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
 //	    """
 //	    Get the payload timeliness committee for the given ``slot``.
 //	    """
@@ -118,7 +119,7 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 //	        state, indices, seed, size=PTC_SIZE, shuffle_indices=False
 //	    )
 //	</spec>
-func PayloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
+func computePTC(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
 	epoch := slots.ToEpoch(slot)
 	seed, err := ptcSeed(st, epoch, slot)
 	if err != nil {
@@ -166,7 +167,7 @@ func PayloadCommitteeIndex(
 	slot primitives.Slot,
 	validatorIndex primitives.ValidatorIndex,
 ) (uint64, error) {
-	ptc, err := PayloadCommittee(ctx, st, slot)
+	ptc, err := st.PayloadCommitteeReadOnly(slot)
 	if err != nil {
 		return 0, err
 	}
@@ -275,12 +276,12 @@ func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex
 	offset := (round % 16) * 2
 	randomValue := uint64(binary.LittleEndian.Uint16(random[offset : offset+2])) // 16-bit draw per spec
 
-	val, err := st.ValidatorAtIndex(idx)
+	val, err := st.ValidatorAtIndexReadOnly(idx)
 	if err != nil {
 		return false, errors.Wrapf(err, "validator %d", idx)
 	}
 
-	return val.EffectiveBalance*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue, nil
+	return val.EffectiveBalance()*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue, nil
 }
 
 // validIndexedPayloadAttestation verifies the signature of an indexed payload attestation.
@@ -341,4 +342,44 @@ func validIndexedPayloadAttestation(st state.ReadOnlyBeaconState, att *consensus
 		return errors.New("invalid signature")
 	}
 	return nil
+}
+
+// ProcessPTCWindow rotates the cached PTC window at epoch boundaries by computing
+// PTC assignments for the new lookahead epoch and shifting the window.
+//
+//	<spec fn="process_ptc_window" fork="gloas" hash="7be3d509">
+//	def process_ptc_window(state: BeaconState) -> None:
+//	    """
+//	    Update the cached PTC window.
+//	    """
+//	    # Shift all epochs forward by one
+//	    state.ptc_window[: len(state.ptc_window) - SLOTS_PER_EPOCH] = state.ptc_window[SLOTS_PER_EPOCH:]
+//	    # Fill in the last epoch
+//	    next_epoch = Epoch(get_current_epoch(state) + MIN_SEED_LOOKAHEAD + 1)
+//	    start_slot = compute_start_slot_at_epoch(next_epoch)
+//	    state.ptc_window[len(state.ptc_window) - SLOTS_PER_EPOCH :] = [
+//	        compute_ptc(state, Slot(slot)) for slot in range(start_slot, start_slot + SLOTS_PER_EPOCH)
+//	    ]
+//	</spec>
+func ProcessPTCWindow(ctx context.Context, st state.BeaconState) error {
+	_, span := trace.StartSpan(ctx, "gloas.ProcessPTCWindow")
+	defer span.End()
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	lastEpoch := slots.ToEpoch(st.Slot()) + params.BeaconConfig().MinSeedLookahead + 1
+	startSlot, err := slots.EpochStart(lastEpoch)
+	if err != nil {
+		return err
+	}
+
+	newSlots := make([]*eth.PTCs, slotsPerEpoch)
+	for i := range slotsPerEpoch {
+		ptc, err := computePTC(ctx, st, startSlot+primitives.Slot(i))
+		if err != nil {
+			return err
+		}
+		newSlots[i] = &eth.PTCs{ValidatorIndices: ptc}
+	}
+
+	return st.RotatePTCWindow(newSlots)
 }

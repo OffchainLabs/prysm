@@ -75,6 +75,7 @@ type BeaconChainConfig struct {
 	EpochsPerEth1VotingPeriod        primitives.Epoch `yaml:"EPOCHS_PER_ETH1_VOTING_PERIOD" spec:"true"`       // EpochsPerEth1VotingPeriod defines how often the merkle root of deposit receipts get updated in beacon node on per epoch basis.
 	SlotsPerHistoricalRoot           primitives.Slot  `yaml:"SLOTS_PER_HISTORICAL_ROOT" spec:"true"`           // SlotsPerHistoricalRoot defines how often the historical root is saved.
 	MinValidatorWithdrawabilityDelay primitives.Epoch `yaml:"MIN_VALIDATOR_WITHDRAWABILITY_DELAY" spec:"true"` // MinValidatorWithdrawabilityDelay is the shortest amount of time a validator has to wait to withdraw.
+	MinBuilderWithdrawabilityDelay   primitives.Epoch `yaml:"MIN_BUILDER_WITHDRAWABILITY_DELAY" spec:"true"`   // MinBuilderWithdrawabilityDelay is the shortest amount of time a builder has to wait to withdraw after exit.
 	ShardCommitteePeriod             primitives.Epoch `yaml:"SHARD_COMMITTEE_PERIOD" spec:"true"`              // ShardCommitteePeriod is the minimum amount of epochs a validator must participate before exiting.
 	MinEpochsToInactivityPenalty     primitives.Epoch `yaml:"MIN_EPOCHS_TO_INACTIVITY_PENALTY" spec:"true"`    // MinEpochsToInactivityPenalty defines the minimum amount of epochs since finality to begin penalizing inactivity.
 	Eth1FollowDistance               uint64           `yaml:"ETH1_FOLLOW_DISTANCE" spec:"true"`                // Eth1FollowDistance is the number of eth1.0 blocks to wait before considering a new deposit for voting. This only applies after the chain as been started.
@@ -149,6 +150,7 @@ type BeaconChainConfig struct {
 	DomainBLSToExecutionChange        [4]byte `yaml:"DOMAIN_BLS_TO_EXECUTION_CHANGE" spec:"true"`        // DomainBLSToExecutionChange defines the BLS signature domain to change withdrawal addresses to ETH1 prefix
 	DomainBeaconBuilder               [4]byte `yaml:"DOMAIN_BEACON_BUILDER" spec:"true"`                 // DomainBeaconBuilder defines the BLS signature domain for beacon block builder.
 	DomainPTCAttester                 [4]byte `yaml:"DOMAIN_PTC_ATTESTER" spec:"true"`                   // DomainPTCAttester defines the BLS signature domain for payload transaction committee attester.
+	DomainProposerPreferences         [4]byte `yaml:"DOMAIN_PROPOSER_PREFERENCES" spec:"true"`           // DomainProposerPreferences defines the BLS signature domain for proposer preferences.
 
 	// Prysm constants.
 	GenesisValidatorsRoot          [32]byte        // GenesisValidatorsRoot is the root hash of the genesis validators.
@@ -742,6 +744,11 @@ func ElectraEnabled() bool {
 // This will make it easier to find call sites that do this kind of check and remove them post-fulu.
 func FuluEnabled() bool {
 	return BeaconConfig().FuluForkEpoch < math.MaxUint64
+}
+
+// GloasEnabled centralizes the check to determine if code paths that are specific to Gloas should be allowed to execute.
+func GloasEnabled() bool {
+	return BeaconConfig().GloasForkEpoch < math.MaxUint64
 }
 
 // WithinDAPeriod checks if the block epoch is within the data availability retention period.

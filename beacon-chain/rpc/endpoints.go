@@ -320,13 +320,23 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
-			template: "/eth/v1/validator/duties/proposer/{epoch}",
+			template: "/eth/v1/validator/duties/proposer/{epoch}", // Deprecated: use /eth/v2/validator/duties/proposer/{epoch}
 			name:     namespace + ".GetProposerDuties",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetProposerDuties,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v2/validator/duties/proposer/{epoch}",
+			name:     namespace + ".GetProposerDutiesV2",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetProposerDutiesV2,
 			methods: []string{http.MethodGet},
 		},
 		{
@@ -384,6 +394,16 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			template: "/eth/v4/validator/blocks/{slot}",
+			name:     namespace + ".ProduceBlockV4",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.ProduceBlockV4,
+			methods: []string{http.MethodGet},
+		},
+		{
 			template: "/eth/v1/validator/beacon_committee_selections",
 			name:     namespace + ".BeaconCommitteeSelections",
 			middleware: []middleware.Middleware{
@@ -400,6 +420,15 @@ func (s *Service) validatorEndpoints(
 			},
 			handler: server.SyncCommitteeSelections,
 			methods: []string{http.MethodPost},
+		},
+		{
+			template: "/eth/v1/validator/execution_payload_envelope/{slot}",
+			name:     namespace + ".ExecutionPayloadEnvelope",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.ExecutionPayloadEnvelope,
+			methods: []string{http.MethodGet},
 		},
 	}
 }
@@ -892,13 +921,33 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
-			template: "/eth/v1/beacon/execution_payload_envelope/{block_root}",
+			template: "/eth/v1/beacon/execution_payload_envelope/{block_id}",
 			name:     namespace + ".GetExecutionPayloadEnvelope",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 			},
 			handler: server.GetExecutionPayloadEnvelope,
 			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/execution_payload_envelope",
+			name:     namespace + ".PublishExecutionPayloadEnvelope",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.PublishExecutionPayloadEnvelope,
+			methods: []string{http.MethodPost},
+		},
+		{
+			template: "/eth/v2/beacon/execution_payload/bid",
+			name:     namespace + ".PublishSignedExecutionPayloadBid",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+			},
+			handler: server.PublishSignedExecutionPayloadBid,
+			methods: []string{http.MethodPost},
 		},
 	}
 }

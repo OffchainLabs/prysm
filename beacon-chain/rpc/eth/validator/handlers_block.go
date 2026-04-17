@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -49,8 +48,7 @@ func (s *Server) ProduceBlockV3(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	segments := strings.Split(r.URL.Path, "/")
-	rawSlot := segments[len(segments)-1]
+	rawSlot := r.PathValue("slot")
 	rawRandaoReveal := r.URL.Query().Get("randao_reveal")
 	rawGraffiti := r.URL.Query().Get("graffiti")
 	rawSkipRandaoVerification := r.URL.Query().Get("skip_randao_verification")

@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
@@ -92,6 +91,83 @@ func TestGetDutiesV2_OK(t *testing.T) {
 	require.NoError(t, err, "Could not call epoch committee assignment")
 	for i := 0; i < len(res.CurrentEpochDuties); i++ {
 		assert.Equal(t, primitives.ValidatorIndex(i), res.CurrentEpochDuties[i].ValidatorIndex)
+	}
+}
+
+func TestGetDutiesV2_NextEpochProposerSlots(t *testing.T) {
+	tests := []struct {
+		name           string
+		fuluForkEpoch  primitives.Epoch
+		gloasForkEpoch primitives.Epoch
+		wantNextSlots  bool
+	}{
+		{
+			name:           "post-Fulu populates next epoch proposer slots",
+			fuluForkEpoch:  0,
+			gloasForkEpoch: 0,
+			wantNextSlots:  true,
+		},
+		{
+			name:           "pre-Fulu returns nil next epoch proposer slots",
+			fuluForkEpoch:  10,
+			gloasForkEpoch: 11,
+			wantNextSlots:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig().Copy()
+			cfg.FuluForkEpoch = tt.fuluForkEpoch
+			cfg.GloasForkEpoch = tt.gloasForkEpoch
+			params.OverrideBeaconConfig(cfg)
+
+			genesis := util.NewBeaconBlock()
+			var bs beaconstate.BeaconState
+			if tt.gloasForkEpoch == 0 {
+				bs, _ = util.DeterministicGenesisStateGloas(t, params.BeaconConfig().MinGenesisActiveValidatorCount)
+			} else {
+				deposits, _, err := util.DeterministicDepositsAndKeys(params.BeaconConfig().MinGenesisActiveValidatorCount)
+				require.NoError(t, err)
+				eth1Data, err := util.DeterministicEth1Data(len(deposits))
+				require.NoError(t, err)
+				bs, err = transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
+				require.NoError(t, err)
+			}
+			genesisRoot, err := genesis.Block.HashTreeRoot()
+			require.NoError(t, err)
+
+			pubKeys := make([][]byte, len(bs.Validators()))
+			for i := range bs.Validators() {
+				pk := bs.PubkeyAtIndex(primitives.ValidatorIndex(i))
+				pubKeys[i] = pk[:]
+			}
+
+			chain := &mockChain.ChainService{
+				State: bs, Root: genesisRoot[:], Genesis: time.Now(),
+			}
+			vs := &Server{
+				HeadFetcher:       chain,
+				TimeFetcher:       chain,
+				ForkchoiceFetcher: chain,
+				SyncChecker:       &mockSync.Sync{IsSyncing: false},
+				PayloadIDCache:    cache.NewPayloadIDCache(),
+				CoreService:       &core.Service{},
+			}
+
+			res, err := vs.GetDutiesV2(t.Context(), &ethpb.DutiesRequest{PublicKeys: pubKeys, Epoch: 0})
+			require.NoError(t, err)
+
+			nextCount := 0
+			for _, d := range res.NextEpochDuties {
+				nextCount += len(d.ProposerSlots)
+			}
+			if tt.wantNextSlots {
+				assert.Equal(t, true, nextCount > 0, "expected next epoch proposer slots")
+			} else {
+				assert.Equal(t, 0, nextCount, "expected no next epoch proposer slots pre-Fulu")
+			}
+		})
 	}
 }
 
@@ -572,24 +648,18 @@ func TestGetDutiesV2_SyncNotReady(t *testing.T) {
 	assert.ErrorContains(t, "Syncing to latest head", err)
 }
 
-// ptcTestState creates a genesis beacon state suitable for PTC testing:
-// - GloasForkEpoch = 0 (active from genesis)
-// - MaxEffectiveBalanceElectra = MaxEffectiveBalance (all validators accepted into PTC)
-// - MinGenesisActiveValidatorCount validators
+// ptcTestState creates a deterministic Fulu genesis state, upgrades it to Gloas,
+// and returns the upgraded state plus validator pubkeys for duty requests.
 // Callers must have already called params.SetupTestConfigCleanup and overridden
 // GloasForkEpoch and MaxEffectiveBalanceElectra in the beacon config.
 func ptcTestState(t *testing.T) (beaconstate.BeaconState, [][]byte) {
 	t.Helper()
 	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
-	deposits, _, err := util.DeterministicDepositsAndKeys(depChainStart)
-	require.NoError(t, err)
-	eth1Data, err := util.DeterministicEth1Data(len(deposits))
-	require.NoError(t, err)
-	st, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
-	require.NoError(t, err)
+	st, _ := util.DeterministicGenesisStateGloas(t, depChainStart)
 	pubKeys := make([][]byte, depChainStart)
-	for i, d := range deposits {
-		pubKeys[i] = d.Data.PublicKey
+	for i := range depChainStart {
+		pk := st.PubkeyAtIndex(primitives.ValidatorIndex(i))
+		pubKeys[i] = pk[:]
 	}
 	return st, pubKeys
 }
@@ -625,7 +695,7 @@ func TestPTCDuties_PreGloasEpoch(t *testing.T) {
 }
 
 // TestPTCDuties_EmptyIndices verifies that an empty validator
-// index list short-circuits and returns an empty map without calling PayloadCommittee.
+// index list short-circuits and returns an empty map without calling PayloadCommitteeReadOnly.
 func TestPTCDuties_EmptyIndices(t *testing.T) {
 	ptcTestConfig(t)
 
@@ -705,7 +775,7 @@ func TestPTCDuties_CollectsAllSlots(t *testing.T) {
 	for valIdx, assignedSlots := range result {
 		expected := make([]primitives.Slot, 0)
 		for s := epochStart; s < epochEnd; s++ {
-			ptc, err := gloas.PayloadCommittee(t.Context(), st, s)
+			ptc, err := st.PayloadCommitteeReadOnly(s)
 			require.NoError(t, err)
 			found := slices.Contains(ptc, valIdx)
 			if found {
@@ -775,5 +845,63 @@ func TestGetDutiesV2_PTC_OK(t *testing.T) {
 	}
 	if currentCount == 0 {
 		t.Error("expected some current-epoch PTC assignments")
+	}
+}
+
+// TestGetDutiesV2_PTC_ForkBoundary verifies that when the current epoch is
+// the last Fulu epoch and the next epoch is GloAS, the endpoint does not
+// crash and next-epoch PTC duties are empty (state is Fulu, not GloAS).
+func TestGetDutiesV2_PTC_ForkBoundary(t *testing.T) {
+	helpers.ClearCache()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1 // Epoch 0 = Fulu, epoch 1 = GloAS.
+	cfg.MaxEffectiveBalanceElectra = cfg.MaxEffectiveBalance
+	params.OverrideBeaconConfig(cfg)
+
+	// Create a Fulu state at epoch 0.
+	numVals := params.BeaconConfig().MinGenesisActiveValidatorCount
+	st, keys := util.DeterministicGenesisStateFulu(t, numVals)
+	pubKeys := make([][]byte, numVals)
+	for i := range numVals {
+		pubKeys[i] = keys[i].PublicKey().Marshal()
+	}
+
+	genesis := util.NewBeaconBlock()
+	genesisRoot, err := genesis.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	chain := &mockChain.ChainService{
+		State: st, Root: genesisRoot[:], Genesis: time.Now(),
+	}
+	vs := &Server{
+		HeadFetcher:       chain,
+		TimeFetcher:       chain,
+		ForkchoiceFetcher: chain,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		PayloadIDCache:    cache.NewPayloadIDCache(),
+		CoreService:       &core.Service{},
+	}
+
+	req := &ethpb.DutiesRequest{
+		PublicKeys: pubKeys,
+		Epoch:      0, // Last Fulu epoch.
+	}
+	res, err := vs.GetDutiesV2(t.Context(), req)
+	require.NoError(t, err, "dutiesv2 must not error at the fork boundary")
+
+	// Current epoch (0) is before GloAS fork — no PTC.
+	for _, d := range res.CurrentEpochDuties {
+		if len(d.PtcSlots) > 0 {
+			t.Errorf("validator %d: expected no current-epoch PTC in Fulu, got %v", d.ValidatorIndex, d.PtcSlots)
+		}
+	}
+
+	// Next epoch (1) is GloAS, but the state is Fulu — PTC must be empty.
+	for _, d := range res.NextEpochDuties {
+		if len(d.PtcSlots) > 0 {
+			t.Errorf("validator %d: expected no next-epoch PTC from Fulu state at fork boundary, got %v",
+				d.ValidatorIndex, d.PtcSlots)
+		}
 	}
 }

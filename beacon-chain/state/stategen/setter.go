@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -51,6 +52,18 @@ func (s *State) ForceCheckpoint(ctx context.Context, blockRoot []byte) error {
 func (s *State) saveStateByRoot(ctx context.Context, blockRoot [32]byte, st state.BeaconState) error {
 	ctx, span := trace.StartSpan(ctx, "stateGen.saveStateByRoot")
 	defer span.End()
+
+	// When state-diff is enabled, persist states that land on diff-tree
+	// boundaries unconditionally. The DB's SaveState dispatches to
+	// saveStateByDiff which no-ops for non-boundary slots, so this is
+	// safe to call on every slot. This bounds restart replay to the
+	// finest diff-tree granularity (~32 slots) instead of the entire
+	// finalized-to-head gap.
+	if features.Get().EnableStateDiff {
+		if err := s.beaconDB.SaveState(ctx, st, blockRoot); err != nil {
+			return err
+		}
+	}
 
 	// Duration can't be 0 to prevent panic for division.
 	duration := uint64(max(float64(s.saveHotStateDB.duration), 1))

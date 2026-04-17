@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	rpchelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
@@ -956,7 +955,8 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, response)
 }
 
-// GetProposerDuties requests beacon node to provide all validators that are scheduled to propose a block in the given epoch.
+// Deprecated: GetProposerDuties requests beacon node to provide all validators that are scheduled to propose a block in the given epoch.
+// Use GetProposerDutiesV2 instead, which computes a fork-aware dependent root.
 func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.GetProposerDuties")
 	defer span.End()
@@ -983,7 +983,6 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	} else if requestedEpoch == nextEpoch {
-		// If the request is for the next epoch, we use the current epoch's state to compute duties.
 		requestedEpoch = currentEpoch
 		nextEpochLookahead = true
 	}
@@ -1013,33 +1012,123 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	var dependentRoot []byte
-	if requestedEpoch == 0 {
-		r, err := s.BeaconDB.GenesisBlockRoot(ctx)
-		if err != nil {
-			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		dependentRoot = r[:]
-	} else {
-		dependentRoot, err = core.ProposalDependentRoot(st, requestedEpoch)
-		if err != nil {
-			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
 		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	resp := &structs.GetProposerDutiesResponse{
+	var dependentRoot []byte
+	if requestedEpoch == 0 {
+		root, err := s.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		dependentRoot = root[:]
+	} else {
+		root, err := core.ProposalDependentRoot(st, requestedEpoch)
+		if err != nil {
+			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		dependentRoot = root
+	}
+
+	httputil.WriteJson(w, &structs.GetProposerDutiesResponse{
 		DependentRoot:       hexutil.Encode(dependentRoot),
 		Data:                duties,
 		ExecutionOptimistic: isOptimistic,
+	})
+}
+
+// GetProposerDutiesV2 requests beacon node to provide all validators that are scheduled to propose a block in the given epoch.
+// V2 computes a fork-aware dependent root using core.ProposalDependentRootV2.
+// Post-Fulu (EIP-7917) this follows the previous-epoch dependency semantics.
+func (s *Server) GetProposerDutiesV2(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.GetProposerDutiesV2")
+	defer span.End()
+
+	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
+		return
 	}
-	httputil.WriteJson(w, resp)
+
+	_, requestedEpochUint, ok := shared.UintFromRoute(w, r, "epoch")
+	if !ok {
+		return
+	}
+	requestedEpoch := primitives.Epoch(requestedEpochUint)
+	dutiesEpoch := requestedEpoch
+
+	cs := s.TimeFetcher.CurrentSlot()
+	currentEpoch := slots.ToEpoch(cs)
+	nextEpoch := currentEpoch + 1
+	var nextEpochLookahead bool
+	if requestedEpoch > nextEpoch {
+		httputil.HandleError(
+			w,
+			fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", requestedEpoch, currentEpoch+1),
+			http.StatusBadRequest,
+		)
+		return
+	} else if requestedEpoch == nextEpoch {
+		requestedEpoch = currentEpoch
+		nextEpochLookahead = true
+	}
+
+	st, err := s.Stater.StateByEpoch(ctx, requestedEpoch)
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+
+	dutyEpoch := requestedEpoch
+	if nextEpochLookahead {
+		dutyEpoch = nextEpoch
+	}
+	coreDuties, rpcErr := s.CoreService.ProposerDuties(ctx, st, dutyEpoch)
+	if rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
+		return
+	}
+
+	duties := make([]*structs.ProposerDuty, 0, len(coreDuties))
+	for _, d := range coreDuties {
+		duties = append(duties, &structs.ProposerDuty{
+			Pubkey:         hexutil.Encode(d.Pubkey[:]),
+			ValidatorIndex: strconv.FormatUint(uint64(d.ValidatorIndex), 10),
+			Slot:           strconv.FormatUint(uint64(d.Slot), 10),
+		})
+	}
+
+	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var dependentRoot []byte
+	if dutiesEpoch == 0 || (dutiesEpoch == 1 && st.Version() >= version.Fulu) {
+		root, err := s.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		dependentRoot = root[:]
+	} else {
+		root, err := core.ProposalDependentRootV2(st, dutiesEpoch)
+		if err != nil {
+			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		dependentRoot = root
+	}
+
+	httputil.WriteJson(w, &structs.GetProposerDutiesResponse{
+		DependentRoot:       hexutil.Encode(dependentRoot),
+		Data:                duties,
+		ExecutionOptimistic: isOptimistic,
+	})
 }
 
 // GetSyncCommitteeDuties provides a set of sync committee duties for a particular epoch.
@@ -1146,18 +1235,18 @@ type ptcDuty struct {
 	slot           primitives.Slot
 }
 
-// ptcDuties returns PTC slot assignments for the requested validators in the epoch derived from the state's slot.
+// ptcDuties returns PTC slot assignments for the requested validators in the given epoch.
+// The state must be from an epoch that allows computing PTC assignments for the target epoch.
 // Validators not in any PTC for the epoch will not appear in the result.
 func ptcDuties(
 	ctx context.Context,
 	st state.ReadOnlyBeaconState,
+	epoch primitives.Epoch,
 	validators map[primitives.ValidatorIndex]struct{},
 ) ([]ptcDuty, error) {
-	if len(validators) == 0 {
+	if len(validators) == 0 || st.Version() < version.Gloas {
 		return nil, nil
 	}
-
-	epoch := slots.ToEpoch(st.Slot())
 	startSlot, err := slots.EpochStart(epoch)
 	if err != nil {
 		return nil, err
@@ -1171,7 +1260,7 @@ func ptcDuties(
 			return nil, ctx.Err()
 		}
 
-		ptc, err := gloas.PayloadCommittee(ctx, st, slot)
+		ptc, err := st.PayloadCommitteeReadOnly(slot)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to get PTC for slot %d", slot)
 		}
@@ -1245,7 +1334,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 	// Limit how far in the future we can query (current + 1 epoch).
 	cs := s.TimeFetcher.CurrentSlot()
 	currentEpoch := slots.ToEpoch(cs)
-	nextEpoch := currentEpoch + 1
+	nextEpoch := currentEpoch.Add(1)
 	if requestedEpoch > nextEpoch {
 		httputil.HandleError(w,
 			fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", requestedEpoch, nextEpoch),
@@ -1255,8 +1344,6 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 
 	// For next epoch requests, we use the current epoch's state since PTC
 	// assignments for next epoch can be computed from current epoch's state.
-	// This mirrors the spec's get_ptc_assignment which asserts epoch <= next_epoch
-	// and uses the current state to compute assignments.
 	epochForState := requestedEpoch
 	if requestedEpoch == nextEpoch {
 		epochForState = currentEpoch
@@ -1286,7 +1373,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Compute PTC duties.
-	computedDuties, err := ptcDuties(ctx, st, requestedSet)
+	computedDuties, err := ptcDuties(ctx, st, requestedEpoch, requestedSet)
 	if err != nil {
 		httputil.HandleError(w, "Could not compute PTC duties: "+err.Error(), http.StatusInternalServerError)
 		return

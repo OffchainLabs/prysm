@@ -111,29 +111,33 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 		builderBoostFactor = primitives.Gwei(req.BuilderBoostFactor.Value)
 	}
 
-	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor)
-	log = log.WithFields(logrus.Fields{
+	resp, err := vs.BuildBlockParallel(ctx, sBlk, head, req.SkipMevBoost, builderBoostFactor, req.EagerPayloadStateRoot)
+	l := log.WithFields(logrus.Fields{
 		"sinceSlotStartTime": time.Since(t),
 		"validator":          sBlk.Block().ProposerIndex(),
 	})
 
 	if err != nil {
-		log.WithError(err).Error("Finished building block")
+		l.WithError(err).Error("Finished building block")
 		return nil, errors.Wrap(err, "could not build block in parallel")
 	}
 
-	log.Info("Finished building block")
+	l.Info("Finished building block")
 	return resp, nil
 }
 
 func (vs *Server) handleSuccesfulReorgAttempt(ctx context.Context, slot primitives.Slot, parentRoot, _ [32]byte) (state.BeaconState, error) {
 	// Try to get the state from the NSC
-	head := transition.NextSlotState(parentRoot[:], slot)
+	accessRoot := parentRoot
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		accessRoot, _ = vs.ForkchoiceFetcher.PayloadContentLookup(parentRoot)
+	}
+	head := transition.NextSlotState(accessRoot[:], slot)
 	if head != nil {
 		return head, nil
 	}
 	// cache miss
-	head, err := vs.StateGen.StateByRoot(ctx, parentRoot)
+	head, err := vs.StateGen.StateByRoot(ctx, accessRoot)
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "could not obtain head state")
 	}
@@ -151,7 +155,11 @@ func logFailedReorgAttempt(slot primitives.Slot, oldHeadRoot, headRoot [32]byte)
 
 func (vs *Server) getHeadNoReorg(ctx context.Context, slot primitives.Slot, parentRoot [32]byte) (state.BeaconState, error) {
 	// Try to get the state from the NSC
-	head := transition.NextSlotState(parentRoot[:], slot)
+	accessRoot := parentRoot
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		accessRoot, _ = vs.ForkchoiceFetcher.PayloadContentLookup(parentRoot)
+	}
+	head := transition.NextSlotState(accessRoot[:], slot)
 	if head != nil {
 		return head, nil
 	}
@@ -194,7 +202,7 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 	return head, parentRoot, err
 }
 
-func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei) (*ethpb.GenericBeaconBlock, error) {
+func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, eagerPayloadStateRoot bool) (*ethpb.GenericBeaconBlock, error) {
 	// Build consensus fields in background
 	var wg sync.WaitGroup
 	wg.Go(func() {
@@ -247,6 +255,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	})
 
 	winningBid := primitives.ZeroWei()
+	selfBuildEnvelope := true
 	var bundle enginev1.BlobsBundler
 	var local *blocks.GetPayloadResponse
 	if sBlk.Version() >= version.Bellatrix {
@@ -277,7 +286,9 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 				return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
 			}
 		} else {
-			if err := vs.setSelfBuildExecutionPayloadBid(ctx, sBlk, local); err != nil {
+			selfBuildOnly := local.OverrideBuilder || skipMevBoost
+			selfBuildEnvelope, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
+			if err != nil {
 				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
 			}
 		}
@@ -285,17 +296,29 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 	wg.Wait()
 
-	sr, err := vs.computeStateRoot(ctx, sBlk)
+	sr, postBlockState, err := vs.computePostBlockStateAndRoot(ctx, sBlk)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not compute state root: %v", err)
 	}
 	sBlk.SetStateRoot(sr)
 
-	// For Gloas, build and cache the execution payload envelope now that the block
-	// is fully built (state root set). The envelope needs the final block HTR as
-	// BeaconBlockRoot and the post-payload state root as StateRoot.
-	if sBlk.Version() >= version.Gloas {
-		if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
+	// For Gloas self-build, build and cache the execution payload envelope now
+	// that the block is fully built (state root set). The envelope needs the
+	// final block HTR as BeaconBlockRoot and the post-payload state root as
+	// StateRoot.
+	//
+	// When a remote P2P bid was selected, the winning builder is responsible
+	// for producing the envelope, so we must not cache a self-build one.
+	//
+	// When eagerPayloadStateRoot is true, the post-block state is passed so the
+	// envelope StateRoot is computed immediately. Otherwise it is left zeroed
+	// and computed lazily when GetExecutionPayloadEnvelope is called.
+	if sBlk.Version() >= version.Gloas && selfBuildEnvelope {
+		var envelopeState state.BeaconState
+		if eagerPayloadStateRoot {
+			envelopeState = postBlockState
+		}
+		if err := vs.storeExecutionPayloadEnvelope(ctx, sBlk, local, envelopeState); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
 		}
 	}
@@ -632,9 +655,25 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 	}, nil
 }
 
-// computeStateRoot computes the state root after a block has been processed through a state transition and
-// returns it to the validator client.
-func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, error) {
+// computePostBlockStateAndRoot computes the state root after a block has been processed through a state transition and
+// returns both the state root bytes and the full post-block state.
+func (vs *Server) computePostBlockStateAndRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, state.BeaconState, error) {
+	st, err := vs.computePostBlockState(ctx, block)
+	if err != nil {
+		return nil, nil, err
+	}
+	root, err := st.HashTreeRoot(ctx)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "could not compute state root")
+	}
+	log.WithField("beaconStateRoot", fmt.Sprintf("%#x", root)).Debugf("Computed state root")
+	return root[:], st, nil
+}
+
+// computePostBlockState computes the post-block state by running the state transition.
+// It uses the same logic as CalculateStateRoot (Copy, feature flags, slot processing)
+// but returns the full state instead of just its hash.
+func (vs *Server) computePostBlockState(ctx context.Context, block interfaces.SignedBeaconBlock) (state.BeaconState, error) {
 	roblock, err := blocks.NewROBlockWithRoot(block, [32]byte{}) // root is not used
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create ROBlock")
@@ -643,17 +682,11 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedB
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve beacon state")
 	}
-	root, err := transition.CalculateStateRoot(
-		ctx,
-		beaconState,
-		block,
-	)
+	st, err := transition.CalculatePostState(ctx, beaconState, block)
 	if err != nil {
-		return vs.handleStateRootError(ctx, block, err)
+		return vs.handlePostBlockStateError(ctx, block, err)
 	}
-
-	log.WithField("beaconStateRoot", fmt.Sprintf("%#x", root)).Debugf("Computed state root")
-	return root[:], nil
+	return st, nil
 }
 
 type computeStateRootAttemptsKeyType string
@@ -661,8 +694,8 @@ type computeStateRootAttemptsKeyType string
 const computeStateRootAttemptsKey = computeStateRootAttemptsKeyType("compute-state-root-attempts")
 const maxComputeStateRootAttempts = 3
 
-// handleStateRootError retries block construction in some error cases.
-func (vs *Server) handleStateRootError(ctx context.Context, block interfaces.SignedBeaconBlock, err error) ([]byte, error) {
+// handlePostBlockStateError retries block construction in some error cases.
+func (vs *Server) handlePostBlockStateError(ctx context.Context, block interfaces.SignedBeaconBlock, err error) (state.BeaconState, error) {
 	if ctx.Err() != nil {
 		return nil, status.Errorf(codes.Canceled, "context error: %v", ctx.Err())
 	}
@@ -711,8 +744,8 @@ func (vs *Server) handleStateRootError(ctx context.Context, block interfaces.Sig
 	} else {
 		ctx = context.WithValue(ctx, computeStateRootAttemptsKey, v+1)
 	}
-	// recursive call to compute state root again
-	return vs.computeStateRoot(ctx, block)
+	// recursive call to compute post-block state again
+	return vs.computePostBlockState(ctx, block)
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.

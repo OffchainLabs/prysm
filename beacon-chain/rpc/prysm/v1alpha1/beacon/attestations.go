@@ -433,7 +433,7 @@ func blockIndexedAttestations[T ethpb.IndexedAtt](
 	mappedAttestations := mapAttestationsByTargetRoot(attsArray)
 	indexed := make([]T, 0, numAttestations)
 	for targetRoot, atts := range mappedAttestations {
-		attState, err := stateGen.StateByRoot(ctx, targetRoot)
+		attState, err := stateGen.StateByRootNoCopy(ctx, targetRoot)
 		if err != nil && strings.Contains(err.Error(), "unknown state summary") {
 			// We shouldn't stop the request if we encounter an attestation we don't have the state for.
 			log.Debugf("Could not get state for attestation target root %#x", targetRoot)

@@ -3,6 +3,7 @@ package state_native
 import (
 	"context"
 	"fmt"
+	"math/bits"
 	"runtime"
 	"slices"
 
@@ -127,6 +128,7 @@ var (
 		types.BuilderPendingWithdrawals,
 		types.LatestBlockHash,
 		types.PayloadExpectedWithdrawals,
+		types.PTCWindow,
 	}
 
 	gloasFields = slices.Concat(
@@ -147,7 +149,7 @@ const (
 	denebSharedFieldRefCount     = 7
 	electraSharedFieldRefCount   = 10
 	fuluSharedFieldRefCount      = 11
-	gloasSharedFieldRefCount     = 13 // Adds Builders + BuilderPendingWithdrawals to the shared-ref set and LatestExecutionPayloadHeader is removed
+	gloasSharedFieldRefCount     = 14 // Adds Builders + BuilderPendingWithdrawals + PTCWindow to the shared-ref set and LatestExecutionPayloadHeader is removed
 )
 
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
@@ -826,6 +828,7 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 		builderPendingWithdrawals:     st.BuilderPendingWithdrawals,
 		latestBlockHash:               st.LatestBlockHash,
 		payloadExpectedWithdrawals:    st.PayloadExpectedWithdrawals,
+		ptcWindow:                     st.PtcWindow,
 		dirtyFields:                   make(map[types.FieldIndex]bool, fieldCount),
 		dirtyIndices:                  make(map[types.FieldIndex][]uint64, fieldCount),
 		stateFieldLeaves:              make(map[types.FieldIndex]*fieldtrie.FieldTrie, fieldCount),
@@ -867,6 +870,7 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 	b.sharedFieldReferences[types.ProposerLookahead] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)                  // New in Gloas.
 	b.sharedFieldReferences[types.BuilderPendingWithdrawals] = stateutil.NewRef(1) // New in Gloas.
+	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)                 // New in Gloas.
 
 	state.Count.Inc()
 	// Finalizer runs when dst is being destroyed in garbage collection.
@@ -925,6 +929,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 		eth1DataVotes:             b.eth1DataVotes,
 		slashings:                 b.slashings,
 		proposerLookahead:         b.proposerLookahead,
+		ptcWindow:                 b.ptcWindow,
 
 		// Large arrays, increases over time.
 		balancesMultiValue:         b.balancesMultiValue,
@@ -1195,6 +1200,66 @@ func (b *BeaconState) RecordStateMetrics() {
 		multiValueAppendedElementsCountGauge.WithLabelValues(types.RandaoMixes.String()).Set(float64(stats.TotalAppendedElements))
 		multiValueAppendedElementReferencesCountGauge.WithLabelValues(types.RandaoMixes.String()).Set(float64(stats.TotalAppendedElemReferences))
 	}
+
+	recordGloasStateMetrics(b)
+}
+
+func recordGloasStateMetrics(b *BeaconState) {
+	if b.version < version.Gloas {
+		gloasExecutionPayloadAvailabilityRatio.Set(0)
+		gloasBuilderPendingWithdrawalsCount.Set(0)
+		gloasBuilderPendingWithdrawalsGwei.Set(0)
+		gloasPayloadExpectedWithdrawalsCount.Set(0)
+		gloasActiveBuildersCount.Set(0)
+		gloasActiveBuildersBalanceGwei.Set(0)
+		return
+	}
+
+	slotsPerHistoricalRoot := uint64(params.BeaconConfig().SlotsPerHistoricalRoot)
+	if slotsPerHistoricalRoot == 0 {
+		gloasExecutionPayloadAvailabilityRatio.Set(0)
+	} else {
+		availableCount := 0
+		for i, availabilityByte := range b.executionPayloadAvailability {
+			if i == len(b.executionPayloadAvailability)-1 && slotsPerHistoricalRoot%8 != 0 {
+				mask := byte((1 << (slotsPerHistoricalRoot % 8)) - 1)
+				availableCount += bits.OnesCount8(availabilityByte & mask)
+				continue
+			}
+			availableCount += bits.OnesCount8(availabilityByte)
+		}
+		gloasExecutionPayloadAvailabilityRatio.Set(float64(availableCount) / float64(slotsPerHistoricalRoot))
+	}
+
+	var pendingWithdrawalsGwei uint64
+	for _, withdrawal := range b.builderPendingWithdrawals {
+		if withdrawal == nil {
+			continue
+		}
+		pendingWithdrawalsGwei += uint64(withdrawal.Amount)
+	}
+	gloasBuilderPendingWithdrawalsCount.Set(float64(len(b.builderPendingWithdrawals)))
+	gloasBuilderPendingWithdrawalsGwei.Set(float64(pendingWithdrawalsGwei))
+	gloasPayloadExpectedWithdrawalsCount.Set(float64(len(b.payloadExpectedWithdrawals)))
+
+	var activeBuildersCount uint64
+	var activeBuildersBalanceGwei uint64
+	finalizedEpoch := primitives.Epoch(0)
+	if b.finalizedCheckpoint != nil {
+		finalizedEpoch = b.finalizedCheckpoint.Epoch
+	}
+	for _, builder := range b.builders {
+		if builder == nil {
+			continue
+		}
+		if builder.DepositEpoch >= finalizedEpoch || builder.WithdrawableEpoch != params.BeaconConfig().FarFutureEpoch {
+			continue
+		}
+		activeBuildersCount++
+		activeBuildersBalanceGwei += uint64(builder.Balance)
+	}
+	gloasActiveBuildersCount.Set(float64(activeBuildersCount))
+	gloasActiveBuildersBalanceGwei.Set(float64(activeBuildersBalanceGwei))
 }
 
 // IsNil checks if the state and the underlying proto
@@ -1350,6 +1415,8 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		return bytesutil.ToBytes32(b.latestBlockHash), nil
 	case types.PayloadExpectedWithdrawals:
 		return ssz.WithdrawalSliceRoot(b.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+	case types.PTCWindow:
+		return stateutil.PTCWindowRoot(b.ptcWindow)
 	}
 	return [32]byte{}, errors.New("invalid field index provided")
 }
@@ -1517,7 +1584,7 @@ func (b *BeaconState) stateRootsRootSelector(field types.FieldIndex) ([32]byte, 
 
 func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, error) {
 	if b.rebuildTrie[field] {
-		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[*ethpb.Validator]{
+		err := b.resetFieldTrie(field, mvslice.MultiValueSliceComposite[stateutil.CompactValidator]{
 			Identifiable:    b,
 			MultiValueSlice: b.validatorsMultiValue,
 		}, fieldparams.ValidatorRegistryLimit)
@@ -1528,7 +1595,7 @@ func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, 
 		delete(b.rebuildTrie, field)
 		return b.stateFieldLeaves[field].TrieRoot()
 	}
-	return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[*ethpb.Validator]{
+	return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[stateutil.CompactValidator]{
 		Identifiable:    b,
 		MultiValueSlice: b.validatorsMultiValue,
 	})

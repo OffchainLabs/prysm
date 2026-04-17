@@ -49,6 +49,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.EpochsPerEth1VotingPeriod = 4
 	minimalConfig.SlotsPerHistoricalRoot = 64
 	minimalConfig.MinValidatorWithdrawabilityDelay = 256
+	minimalConfig.MinBuilderWithdrawabilityDelay = 2
 	minimalConfig.ShardCommitteePeriod = 64
 	minimalConfig.MinEpochsToInactivityPenalty = 4
 	minimalConfig.Eth1FollowDistance = 16
@@ -79,6 +80,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.MaxWithdrawalsPerPayload = 4
 	minimalConfig.MaxBlsToExecutionChanges = 16
 	minimalConfig.MaxValidatorsPerWithdrawalsSweep = 16
+	minimalConfig.MaxBuildersPerWithdrawalsSweep = 16
 
 	// Signature domains
 	minimalConfig.DomainBeaconProposer = bytesutil.ToBytes4(bytesutil.Bytes4(0))

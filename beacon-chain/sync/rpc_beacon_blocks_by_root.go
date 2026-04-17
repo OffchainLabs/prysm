@@ -97,6 +97,11 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 		return nil
 	}
 
+	// Process any gossip columns queued before the block arrived.
+	for _, blk := range blks {
+		s.processPendingGloasColumns(blk.Root(), blk)
+	}
+
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)

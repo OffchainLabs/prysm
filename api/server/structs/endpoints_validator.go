@@ -95,6 +95,14 @@ type ProduceBlockV3Response struct {
 	Data                    json.RawMessage `json:"data"` // represents the block values based on the version
 }
 
+// ProduceBlockV4Response is a wrapper json object for the returned block from the ProduceBlockV4 endpoint
+type ProduceBlockV4Response struct {
+	Version                  string          `json:"version"`
+	ConsensusBlockValue      string          `json:"consensus_block_value"`
+	ExecutionPayloadIncluded bool            `json:"execution_payload_included"`
+	Data                     json.RawMessage `json:"data"`
+}
+
 type GetLivenessResponse struct {
 	Data []*Liveness `json:"data"`
 }
@@ -149,6 +157,11 @@ type ValidatorParticipation struct {
 	PreviousEpochAttestingGwei       string `json:"previous_epoch_attesting_gwei"`
 	PreviousEpochTargetAttestingGwei string `json:"previous_epoch_target_attesting_gwei"`
 	PreviousEpochHeadAttestingGwei   string `json:"previous_epoch_head_attesting_gwei"`
+}
+
+type GetValidatorExecutionPayloadEnvelopeResponse struct {
+	Version string                    `json:"version"`
+	Data    *ExecutionPayloadEnvelope `json:"data"`
 }
 
 type ActiveSetChanges struct {
