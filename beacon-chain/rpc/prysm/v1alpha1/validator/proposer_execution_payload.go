@@ -284,7 +284,7 @@ var (
 
 // computePayloadWithdrawals returns the withdrawals for the next payload.
 func (vs *Server) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte) ([]*enginev1.Withdrawal, error) {
-	if !vs.ForkchoiceFetcher.HasFullNode(parentRoot) {
+	if !vs.HeadFetcher.HeadFull() {
 		return st.PayloadExpectedWithdrawals()
 	}
 	parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
@@ -298,16 +298,15 @@ func (vs *Server) computePayloadWithdrawals(ctx context.Context, st state.Beacon
 		}
 		return result.Withdrawals, nil
 	}
-	stCopy := st.Copy()
 	// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).
 	envelope, err := vs.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get parent execution payload envelope")
 	}
-	if err := coregloas.ApplyParentExecutionPayload(ctx, stCopy, envelope.Message.ExecutionRequests); err != nil {
+	if err := coregloas.ApplyParentExecutionPayload(ctx, st, envelope.Message.ExecutionRequests); err != nil {
 		return nil, errors.Wrap(err, "could not apply parent execution payload")
 	}
-	result, err := stCopy.ExpectedWithdrawalsGloas()
+	result, err := st.ExpectedWithdrawalsGloas()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute expected withdrawals")
 	}
@@ -337,7 +336,7 @@ func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, 
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get latest execution payload bid")
 		}
-		if vs.ForkchoiceFetcher.HasFullNode(headRoot) {
+		if vs.HeadFetcher.HeadFull() {
 			bh := bid.BlockHash()
 			return bh[:], nil
 		}

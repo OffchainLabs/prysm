@@ -244,19 +244,6 @@ func TestVerifyExecutionPayloadEnvelope_PrevRandaoMismatch(t *testing.T) {
 	require.ErrorContains(t, "prev randao", err)
 }
 
-func TestQueueBuilderPayment_ZeroAmountClearsSlot(t *testing.T) {
-	fixture := buildPayloadFixture(t, nil)
-
-	require.NoError(t, fixture.state.QueueBuilderPayment())
-
-	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-	paymentIndex := slotsPerEpoch + (fixture.slot % slotsPerEpoch)
-	payments, err := fixture.state.BuilderPendingPayments()
-	require.NoError(t, err)
-	payment := payments[paymentIndex]
-	require.NotNil(t, payment)
-	require.Equal(t, primitives.Gwei(0), payment.Withdrawal.Amount)
-}
 
 func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)

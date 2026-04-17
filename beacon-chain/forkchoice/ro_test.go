@@ -18,6 +18,7 @@ const (
 	rlockCalled
 	runlockCalled
 	hasFullNodeCalled
+	isFullNodeCalled
 	hasNodeCalled
 	proposerBoostCalled
 	isCanonicalCalled
@@ -66,6 +67,11 @@ func TestROLocking(t *testing.T) {
 			name: "hasFullNodeCalled",
 			call: hasFullNodeCalled,
 			cb:   func(g FastGetter) { g.HasFullNode([32]byte{}) },
+		},
+		{
+			name: "isFullNodeCalled",
+			call: isFullNodeCalled,
+			cb:   func(g FastGetter) { g.IsFullNode([32]byte{}) },
 		},
 		{
 			name: "hasNodeCalled",
@@ -211,6 +217,11 @@ func (ro *mockROForkchoice) RUnlock() {
 
 func (ro *mockROForkchoice) HasFullNode(_ [32]byte) bool {
 	ro.calls = append(ro.calls, hasFullNodeCalled)
+	return false
+}
+
+func (ro *mockROForkchoice) IsFullNode(_ [32]byte) bool {
+	ro.calls = append(ro.calls, isFullNodeCalled)
 	return false
 }
 

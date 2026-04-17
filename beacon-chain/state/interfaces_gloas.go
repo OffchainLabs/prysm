@@ -17,7 +17,6 @@ type writeOnlyGloasFields interface {
 	// Builder pending payments / withdrawals.
 	SetBuilderPendingPayment(index primitives.Slot, payment *ethpb.BuilderPendingPayment) error
 	ClearBuilderPendingPayment(index primitives.Slot) error
-	QueueBuilderPayment() error
 	QueueBuilderPaymentForSlot(parentSlot primitives.Slot) error
 	RotateBuilderPendingPayments() error
 	AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal) error

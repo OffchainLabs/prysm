@@ -460,6 +460,20 @@ func (f *ForkChoice) HasFullNode(root [32]byte) bool {
 	return ok
 }
 
+// IsFullNode returns whether fork choice would select the full payload variant
+// for the given beacon block root. The caller MUST hold the forkchoice lock.
+func (f *ForkChoice) IsFullNode(root [32]byte) bool {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return false
+	}
+	if slots.ToEpoch(en.node.slot) < params.BeaconConfig().GloasForkEpoch {
+		return false
+	}
+	pn := f.store.choosePayloadContent(en.node)
+	return pn != nil && pn.full
+}
+
 // BlockHash returns the hash committed in the given block
 func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 	s := f.store

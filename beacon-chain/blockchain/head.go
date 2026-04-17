@@ -50,6 +50,7 @@ type head struct {
 	block      interfaces.ReadOnlySignedBeaconBlock // current head block.
 	state      state.BeaconState                    // current head state.
 	slot       primitives.Slot                      // the head block slot number
+	full       bool                                 // whether the head's execution payload has been delivered (post-Gloas)
 	optimistic bool                                 // optimistic status when saved head
 }
 
@@ -60,8 +61,8 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	ctx, span := trace.StartSpan(ctx, "blockChain.saveHead")
 	defer span.End()
 
-	// Do nothing if head hasn't changed.
-	if !s.isNewHead(newHeadRoot) {
+	full := s.cfg.ForkChoiceStore.IsFullNode(newHeadRoot)
+	if !s.isNewHead(newHeadRoot, full) {
 		return nil
 	}
 
@@ -157,6 +158,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 		state:      headState,
 		optimistic: isOptimistic,
 		slot:       headBlock.Block().Slot(),
+		full:       full,
 	}
 	if err := s.setHead(newHead); err != nil {
 		return errors.Wrap(err, "could not set head")
@@ -219,6 +221,7 @@ func (s *Service) setHead(newHead *head) error {
 		state:      newHead.state.Copy(),
 		optimistic: newHead.optimistic,
 		slot:       newHead.slot,
+		full:       newHead.full,
 	}
 	return nil
 }
@@ -269,6 +272,16 @@ func (s *Service) headRoot() [32]byte {
 // This is a lock free version.
 func (s *Service) headBlock() (interfaces.ReadOnlySignedBeaconBlock, error) {
 	return s.head.block.Copy()
+}
+
+// HeadFull returns whether the current head's execution payload has been delivered.
+func (s *Service) HeadFull() bool {
+	s.headLock.RLock()
+	defer s.headLock.RUnlock()
+	if s.head == nil {
+		return false
+	}
+	return s.head.full
 }
 
 // This returns the head state.
