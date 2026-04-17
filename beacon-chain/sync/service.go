@@ -160,6 +160,8 @@ type Service struct {
 	seenBlobLock                         sync.RWMutex
 	seenBlobCache                        *lru.Cache
 	seenDataColumnCache                  *slotAwareCache
+	pendingGloasColumnsLock              sync.RWMutex
+	pendingGloasColumns                  map[[32]byte]*pendingGloasEntry
 	seenAggregatedAttestationLock        sync.RWMutex
 	seenAggregatedAttestationCache       *lru.Cache
 	seenAggregatedAttestationByEpoch     map[primitives.Epoch]map[primitives.ValidatorIndex]struct{}
@@ -222,6 +224,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		slotToPendingBlocks:      gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:        make(map[[32]byte]bool),
 		blkRootToPendingAtts:     make(map[[32]byte][]any),
+		pendingGloasColumns:      make(map[[32]byte]*pendingGloasEntry),
 		dataColumnLogCh:          make(chan dataColumnLogEntry, 1000),
 		reconstructionRandGen:    rand.NewGenerator(),
 		payloadAttestationCache:  &cache.PayloadAttestationCache{},
@@ -331,6 +334,8 @@ func (s *Service) Start() {
 
 	// Prune data column cache periodically on finalization.
 	async.RunEvery(s.ctx, 30*time.Second, s.pruneDataColumnCache)
+
+	go s.prunePendingGloasColumns()
 
 	if !params.FuluEnabled() {
 		return
