@@ -173,7 +173,7 @@ func (f *FieldTrie) TrieRoot() ([32]byte, error) {
 // RecomputeTrie recomputes the trie for the given changed indices and returns
 // the new trie and root hash. When indices is nil, the trie is rebuilt from
 // scratch using elements. The caller MUST use the returned *FieldTrie
-// in place of the one on which this method was called, even if an error
+// in place of the one on which this method was called with, even if an error
 // is returned.
 func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) (*FieldTrie, [32]byte, error) {
 	if indices != nil {
