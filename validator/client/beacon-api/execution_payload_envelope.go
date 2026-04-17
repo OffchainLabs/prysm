@@ -20,12 +20,16 @@ func (c *beaconApiValidatorClient) getExecutionPayloadEnvelope(
 	endpoint := fmt.Sprintf("/eth/v1/validator/execution_payload_envelope/%d", slot)
 	var resp structs.GetValidatorExecutionPayloadEnvelopeResponse
 	if err := c.handler.Get(ctx, endpoint, &resp); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not get execution payload envelope")
 	}
 	if resp.Data == nil {
 		return nil, errors.New("execution payload envelope data is nil")
 	}
-	return resp.Data.ToConsensus()
+	envelope, err := resp.Data.ToConsensus()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert execution payload envelope to consensus")
+	}
+	return envelope, nil
 }
 
 func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
@@ -41,7 +45,7 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 		return nil, errors.Wrap(err, "could not marshal envelope")
 	}
 	if err := c.handler.Post(ctx, "/eth/v1/beacon/execution_payload_envelope", nil, bytes.NewBuffer(body), nil); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not publish execution payload envelope")
 	}
 	return &empty.Empty{}, nil
 }

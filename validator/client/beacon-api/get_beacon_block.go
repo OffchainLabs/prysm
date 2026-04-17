@@ -66,7 +66,7 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v4/validator/blocks/%d", slot), queryParams)
 	data, header, err := c.handler.GetSSZ(ctx, queryUrl)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not get v4 beacon block")
 	}
 
 	if strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType) {
@@ -94,13 +94,21 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 		if err := json.Unmarshal(resp.Data, contents); err != nil {
 			return nil, errors.Wrap(err, "failed to decode gloas block contents")
 		}
-		return contents.Block.ToGeneric()
+		blk, err := contents.Block.ToGeneric()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not convert gloas block contents to generic")
+		}
+		return blk, nil
 	}
 	block := &structs.BeaconBlockGloas{}
 	if err := json.Unmarshal(resp.Data, block); err != nil {
 		return nil, errors.Wrap(err, "failed to decode gloas block")
 	}
-	return block.ToGeneric()
+	blk, err := block.ToGeneric()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert gloas block to generic")
+	}
+	return blk, nil
 }
 
 // sszBlockCodec defines SSZ unmarshalers for a fork's block and blinded block types.
