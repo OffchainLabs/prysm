@@ -177,7 +177,7 @@ func (f *FieldTrie) TrieRoot() ([32]byte, error) {
 // is returned.
 func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) (*FieldTrie, [32]byte, error) {
 	if indices != nil {
-		// Deduplicateing indices to avoid redundant recomputation.
+		// Deduplicating indices to avoid redundant recomputation.
 		indices = slice.SetUint64(indices)
 	}
 
