@@ -313,6 +313,24 @@ func TestProcessPendingDeposits(t *testing.T) {
 	}
 }
 
+func TestProcessPendingDeposits_NilPendingDeposit(t *testing.T) {
+	st := stateWithActiveBalanceETH(t, 0)
+	nativeSt, ok := st.(*state_native.BeaconState)
+	require.Equal(t, true, ok)
+
+	pb, ok := nativeSt.ToProtoUnsafe().(*eth.BeaconStateElectra)
+	require.Equal(t, true, ok)
+	pb.PendingDeposits = []*eth.PendingDeposit{nil}
+
+	st, err := state_native.InitializeFromProtoUnsafeElectra(pb)
+	require.NoError(t, err)
+	require.NoError(t, electra.ProcessPendingDeposits(context.TODO(), st, 0))
+
+	remaining, err := st.PendingDeposits()
+	require.NoError(t, err)
+	require.Equal(t, 0, len(remaining))
+}
+
 func TestBatchProcessNewPendingDeposits(t *testing.T) {
 	t.Run("one valid deposit one garbage deposit", func(t *testing.T) {
 		st := stateWithActiveBalanceETH(t, 0)

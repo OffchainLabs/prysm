@@ -1071,6 +1071,18 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		require.Equal(t, 0, len(st.builders))
 	})
 
+	t.Run("ignores nil pending deposits", func(t *testing.T) {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		builderCreds := builderWithdrawalCredentials(0xAD)
+		deposit := newPendingDeposit(t, sk, builderCreds, 10, 0, true)
+
+		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{nil, deposit}, 0)
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.Equal(t, 0, len(st.pendingDeposits))
+		require.Equal(t, 1, len(st.builders))
+	})
+
 	t.Run("creates builder for valid builder deposit", func(t *testing.T) {
 		sk, err := bls.RandKey()
 		require.NoError(t, err)

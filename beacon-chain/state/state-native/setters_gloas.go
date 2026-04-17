@@ -703,6 +703,9 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 	newValidatorPubkeys := make(map[[fieldparams.BLSPubkeyLength]byte]bool)
 
 	for _, deposit := range pendingDeposits {
+		if deposit == nil {
+			continue
+		}
 		pubkey := bytesutil.ToBytes48(deposit.PublicKey)
 		if _, ok := newValidatorPubkeys[pubkey]; ok {
 			newPendingDeposits = append(newPendingDeposits, deposit)

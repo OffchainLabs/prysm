@@ -44,6 +44,11 @@ func (b *BeaconState) SetPendingDeposits(val []*ethpb.PendingDeposit) error {
 	if b.version < version.Electra {
 		return errNotSupported("SetPendingDeposits", b.version)
 	}
+	for _, pd := range val {
+		if pd == nil {
+			return errors.New("cannot set nil pending deposit")
+		}
+	}
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
