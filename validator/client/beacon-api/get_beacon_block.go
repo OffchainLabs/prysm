@@ -94,6 +94,9 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 		if err := json.Unmarshal(resp.Data, contents); err != nil {
 			return nil, errors.Wrap(err, "failed to decode gloas block contents")
 		}
+		if contents.Block == nil {
+			return nil, errors.New("gloas block contents has nil block")
+		}
 		blk, err := contents.Block.ToGeneric()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not convert gloas block contents to generic")
