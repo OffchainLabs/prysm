@@ -1169,20 +1169,18 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 
 	nextSyncCommitteeFirstEpoch := currentCommitteeFirstEpoch + params.BeaconConfig().EpochsPerSyncCommitteePeriod
 	isCurrentCommitteeRequested := requestedEpoch < nextSyncCommitteeFirstEpoch
-	var committee *ethpbalpha.SyncCommittee
+
+	syncCommitteeFunc := st.NextSyncCommittee
 	if isCurrentCommitteeRequested {
-		committee, err = st.CurrentSyncCommittee()
-		if err != nil {
-			httputil.HandleError(w, "Could not get sync committee: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	} else {
-		committee, err = st.NextSyncCommittee()
-		if err != nil {
-			httputil.HandleError(w, "Could not get sync committee: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+		syncCommitteeFunc = st.CurrentSyncCommittee
 	}
+
+	committee, err := syncCommitteeFunc()
+	if err != nil {
+		httputil.HandleError(w, "Could not get sync committee: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	committeePubkeys := make(map[[fieldparams.BLSPubkeyLength]byte][]string)
 	for j, pubkey := range committee.Pubkeys {
 		pubkey48 := bytesutil.ToBytes48(pubkey)
