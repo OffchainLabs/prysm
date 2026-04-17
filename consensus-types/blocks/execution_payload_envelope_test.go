@@ -32,6 +32,7 @@ func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 		Withdrawals:   []*enginev1.Withdrawal{},
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
+		SlotNumber:    9,
 	}
 
 	return &ethpb.ExecutionPayloadEnvelope{
@@ -47,7 +48,6 @@ func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 		},
 		BuilderIndex:    10,
 		BeaconBlockRoot: bytes.Repeat([]byte{0xAA}, 32),
-		Slot:            9,
 		StateRoot:       bytes.Repeat([]byte{0xBB}, 32),
 	}
 }

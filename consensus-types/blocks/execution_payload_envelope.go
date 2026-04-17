@@ -122,9 +122,9 @@ func (p *executionPayloadEnvelope) BeaconBlockRoot() [field_params.RootLength]by
 	return [field_params.RootLength]byte(p.p.BeaconBlockRoot)
 }
 
-// Slot returns the slot of the envelope.
+// Slot returns the slot derived from the payload's slot_number field.
 func (p *executionPayloadEnvelope) Slot() primitives.Slot {
-	return p.p.Slot
+	return primitives.Slot(p.p.Payload.SlotNumber)
 }
 
 // StateRoot returns the state root carried by the envelope.

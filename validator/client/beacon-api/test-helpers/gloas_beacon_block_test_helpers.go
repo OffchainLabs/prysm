@@ -155,11 +155,11 @@ func GenerateProtoExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 			BaseFeePerGas: FillByteSlice(32, 206),
 			BlockHash:     FillByteSlice(32, 207),
 			ExtraData:     make([]byte, 0),
+			SlotNumber:    1,
 		},
 		ExecutionRequests: &enginev1.ExecutionRequests{},
 		BuilderIndex:      121,
 		BeaconBlockRoot:   FillByteSlice(32, 210),
-		Slot:              1,
 		StateRoot:         FillByteSlice(32, 211),
 	}
 }

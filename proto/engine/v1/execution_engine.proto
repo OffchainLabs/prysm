@@ -118,6 +118,11 @@ message ExecutionPayloadGloas {
   // [New in Gloas:EIP7928] RLP-encoded block access list.
   bytes block_access_list = 18
       [ (ethereum.eth.ext.ssz_max) = "1073741824" ];
+  // [New in Gloas:EIP7843]
+  uint64 slot_number = 19 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
 }
 
 message ExecutionPayloadCapellaWithValue {

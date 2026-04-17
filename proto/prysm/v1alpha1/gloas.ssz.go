@@ -3822,7 +3822,7 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the ExecutionPayloadEnvelope object to a target array
 func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(88)
+	offset := int(80)
 
 	// Offset (0) 'Payload'
 	dst = ssz.WriteOffset(dst, offset)
@@ -3848,10 +3848,7 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err err
 	}
 	dst = append(dst, e.BeaconBlockRoot...)
 
-	// Field (4) 'Slot'
-	dst = ssz.MarshalUint(dst, e.Slot)
-
-	// Field (5) 'StateRoot'
+	// Field (4) 'StateRoot'
 	if size := len(e.StateRoot); size != 32 {
 		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
 		return
@@ -3875,7 +3872,7 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err err
 func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 88 {
+	if size < 80 {
 		return ssz.ErrSize
 	}
 
@@ -3887,7 +3884,7 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o0 != 88 {
+	if o0 != 80 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -3905,14 +3902,11 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	}
 	e.BeaconBlockRoot = append(e.BeaconBlockRoot, buf[16:48]...)
 
-	// Field (4) 'Slot'
-	e.Slot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[48:56])
-
-	// Field (5) 'StateRoot'
+	// Field (4) 'StateRoot'
 	if cap(e.StateRoot) == 0 {
-		e.StateRoot = make([]byte, 0, len(buf[56:88]))
+		e.StateRoot = make([]byte, 0, len(buf[48:80]))
 	}
-	e.StateRoot = append(e.StateRoot, buf[56:88]...)
+	e.StateRoot = append(e.StateRoot, buf[48:80]...)
 
 	// Field (0) 'Payload'
 	{
@@ -3940,7 +3934,7 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayloadEnvelope object
 func (e *ExecutionPayloadEnvelope) SizeSSZ() (size int) {
-	size = 88
+	size = 80
 
 	// Field (0) 'Payload'
 	if e.Payload == nil {
@@ -3986,10 +3980,7 @@ func (e *ExecutionPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 	}
 	hh.PutBytes(e.BeaconBlockRoot)
 
-	// Field (4) 'Slot'
-	ssz.PutUint(hh, e.Slot)
-
-	// Field (5) 'StateRoot'
+	// Field (4) 'StateRoot'
 	if size := len(e.StateRoot); size != 32 {
 		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
 		return
