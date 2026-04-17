@@ -33,6 +33,7 @@ go_test(
         "config_test.go",
         "gossip_logger_test.go",
         "partial_test.go",
+        "publish_blocking_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
