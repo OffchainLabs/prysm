@@ -240,6 +240,12 @@ func (s *Store) prune(ctx context.Context) error {
 			}
 		}
 	}
+
+	finalizedNode.hasEnoughProofs = true
+	if err := finalizedNode.tryMarkValid(ctx); err != nil {
+		return fmt.Errorf("try mark valid after finalization: %w", err)
+	}
+
 	return nil
 }
 
