@@ -61,7 +61,7 @@ type Node struct {
 	balance                  uint64                       // the balance that voted for this node directly
 	weight                   uint64                       // weight of this node: the total balance including children
 	bestDescendant           *Node                        // bestDescendant node of this node.
-	optimistic               bool                         // whether the block has been fully validated or not
+	optimistic               bool                         // a node is non-optimistic (fully validated) iff it is EL validated AND itself and all its unfinalized ancestors have enough proofs
 	elValidated              bool                         // whether the execution layer has validated this block's payload
 	hasEnoughProofs          bool                         // whether this block has enough execution proofs (zkvm only)
 	timestamp                time.Time                    // The timestamp when the node was inserted.
