@@ -1866,12 +1866,12 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 
-	// Offset (24) 'LatestExecutionPayloadBid'
-	dst = ssz.WriteOffset(dst, offset)
-	if b.LatestExecutionPayloadBid == nil {
-		b.LatestExecutionPayloadBid = new(ExecutionPayloadBid)
+	// Field (24) 'LatestBlockHash'
+	if size := len(b.LatestBlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.LatestBlockHash", size, 32)
+		return
 	}
-	offset += b.LatestExecutionPayloadBid.SizeSSZ()
+	dst = append(dst, b.LatestBlockHash...)
 
 	// Field (25) 'NextWithdrawalIndex'
 	dst = ssz.MarshalUint(dst, b.NextWithdrawalIndex)
@@ -1951,12 +1951,12 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(b.BuilderPendingWithdrawals) * 36
 
-	// Field (43) 'LatestBlockHash'
-	if size := len(b.LatestBlockHash); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.LatestBlockHash", size, 32)
-		return
+	// Offset (43) 'LatestExecutionPayloadBid'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.LatestExecutionPayloadBid == nil {
+		b.LatestExecutionPayloadBid = new(ExecutionPayloadBid)
 	}
-	dst = append(dst, b.LatestBlockHash...)
+	offset += b.LatestExecutionPayloadBid.SizeSSZ()
 
 	// Offset (44) 'PayloadExpectedWithdrawals'
 	dst = ssz.WriteOffset(dst, offset)
@@ -2040,11 +2040,6 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = ssz.MarshalUint(dst, b.InactivityScores[ii])
 	}
 
-	// Field (24) 'LatestExecutionPayloadBid'
-	if dst, err = b.LatestExecutionPayloadBid.MarshalSSZTo(dst); err != nil {
-		return
-	}
-
 	// Field (27) 'HistoricalSummaries'
 	if size := len(b.HistoricalSummaries); size > 16777216 {
 		err = ssz.ErrListTooBigFn("--.HistoricalSummaries", size, 16777216)
@@ -2111,6 +2106,11 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		}
 	}
 
+	// Field (43) 'LatestExecutionPayloadBid'
+	if dst, err = b.LatestExecutionPayloadBid.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
 	// Field (44) 'PayloadExpectedWithdrawals'
 	if size := len(b.PayloadExpectedWithdrawals); size > 16 {
 		err = ssz.ErrListTooBigFn("--.PayloadExpectedWithdrawals", size, 16)
@@ -2134,7 +2134,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 	}
 
 	tail := buf
-	var o7, o9, o11, o12, o15, o16, o21, o24, o27, o34, o35, o36, o38, o42, o44 uint64
+	var o7, o9, o11, o12, o15, o16, o21, o27, o34, o35, o36, o38, o42, o43, o44 uint64
 
 	// Field (0) 'GenesisTime'
 	b.GenesisTime = ssz.UnmarshallUint[uint64](buf[0:8])
@@ -2293,74 +2293,75 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		return err
 	}
 
-	// Offset (24) 'LatestExecutionPayloadBid'
-	if o24 = ssz.ReadOffset(buf[2736629:2736633]); o24 > size || o21 > o24 {
-		return ssz.ErrOffset
+	// Field (24) 'LatestBlockHash'
+	if cap(b.LatestBlockHash) == 0 {
+		b.LatestBlockHash = make([]byte, 0, len(buf[2736629:2736661]))
 	}
+	b.LatestBlockHash = append(b.LatestBlockHash, buf[2736629:2736661]...)
 
 	// Field (25) 'NextWithdrawalIndex'
-	b.NextWithdrawalIndex = ssz.UnmarshallUint[uint64](buf[2736633:2736641])
+	b.NextWithdrawalIndex = ssz.UnmarshallUint[uint64](buf[2736661:2736669])
 
 	// Field (26) 'NextWithdrawalValidatorIndex'
-	b.NextWithdrawalValidatorIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[2736641:2736649])
+	b.NextWithdrawalValidatorIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[2736669:2736677])
 
 	// Offset (27) 'HistoricalSummaries'
-	if o27 = ssz.ReadOffset(buf[2736649:2736653]); o27 > size || o24 > o27 {
+	if o27 = ssz.ReadOffset(buf[2736677:2736681]); o27 > size || o21 > o27 {
 		return ssz.ErrOffset
 	}
 
 	// Field (28) 'DepositRequestsStartIndex'
-	b.DepositRequestsStartIndex = ssz.UnmarshallUint[uint64](buf[2736653:2736661])
+	b.DepositRequestsStartIndex = ssz.UnmarshallUint[uint64](buf[2736681:2736689])
 
 	// Field (29) 'DepositBalanceToConsume'
-	b.DepositBalanceToConsume = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[2736661:2736669])
+	b.DepositBalanceToConsume = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[2736689:2736697])
 
 	// Field (30) 'ExitBalanceToConsume'
-	b.ExitBalanceToConsume = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[2736669:2736677])
+	b.ExitBalanceToConsume = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[2736697:2736705])
 
 	// Field (31) 'EarliestExitEpoch'
-	b.EarliestExitEpoch = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch](buf[2736677:2736685])
+	b.EarliestExitEpoch = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch](buf[2736705:2736713])
 
 	// Field (32) 'ConsolidationBalanceToConsume'
-	b.ConsolidationBalanceToConsume = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[2736685:2736693])
+	b.ConsolidationBalanceToConsume = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei](buf[2736713:2736721])
 
 	// Field (33) 'EarliestConsolidationEpoch'
-	b.EarliestConsolidationEpoch = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch](buf[2736693:2736701])
+	b.EarliestConsolidationEpoch = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch](buf[2736721:2736729])
 
 	// Offset (34) 'PendingDeposits'
-	if o34 = ssz.ReadOffset(buf[2736701:2736705]); o34 > size || o27 > o34 {
+	if o34 = ssz.ReadOffset(buf[2736729:2736733]); o34 > size || o27 > o34 {
 		return ssz.ErrOffset
 	}
 
 	// Offset (35) 'PendingPartialWithdrawals'
-	if o35 = ssz.ReadOffset(buf[2736705:2736709]); o35 > size || o34 > o35 {
+	if o35 = ssz.ReadOffset(buf[2736733:2736737]); o35 > size || o34 > o35 {
 		return ssz.ErrOffset
 	}
 
 	// Offset (36) 'PendingConsolidations'
-	if o36 = ssz.ReadOffset(buf[2736709:2736713]); o36 > size || o35 > o36 {
+	if o36 = ssz.ReadOffset(buf[2736737:2736741]); o36 > size || o35 > o36 {
 		return ssz.ErrOffset
 	}
 
 	// Field (37) 'ProposerLookahead'
 	b.ProposerLookahead = ssz.ExtendUint(b.ProposerLookahead, 64)
 	for ii := 0; ii < 64; ii++ {
-		b.ProposerLookahead[ii] = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[2736713:2737225][ii*8 : (ii+1)*8])
+		b.ProposerLookahead[ii] = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[2736741:2737253][ii*8 : (ii+1)*8])
 	}
 
 	// Offset (38) 'Builders'
-	if o38 = ssz.ReadOffset(buf[2737225:2737229]); o38 > size || o36 > o38 {
+	if o38 = ssz.ReadOffset(buf[2737253:2737257]); o38 > size || o36 > o38 {
 		return ssz.ErrOffset
 	}
 
 	// Field (39) 'NextWithdrawalBuilderIndex'
-	b.NextWithdrawalBuilderIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.BuilderIndex](buf[2737229:2737237])
+	b.NextWithdrawalBuilderIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.BuilderIndex](buf[2737257:2737265])
 
 	// Field (40) 'ExecutionPayloadAvailability'
 	if cap(b.ExecutionPayloadAvailability) == 0 {
-		b.ExecutionPayloadAvailability = make([]byte, 0, len(buf[2737237:2738261]))
+		b.ExecutionPayloadAvailability = make([]byte, 0, len(buf[2737265:2738289]))
 	}
-	b.ExecutionPayloadAvailability = append(b.ExecutionPayloadAvailability, buf[2737237:2738261]...)
+	b.ExecutionPayloadAvailability = append(b.ExecutionPayloadAvailability, buf[2737265:2738289]...)
 
 	// Field (41) 'BuilderPendingPayments'
 	b.BuilderPendingPayments = make([]*BuilderPendingPayment, 64)
@@ -2368,24 +2369,23 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		if b.BuilderPendingPayments[ii] == nil {
 			b.BuilderPendingPayments[ii] = new(BuilderPendingPayment)
 		}
-		if err = b.BuilderPendingPayments[ii].UnmarshalSSZ(buf[2738261:2741077][ii*44 : (ii+1)*44]); err != nil {
+		if err = b.BuilderPendingPayments[ii].UnmarshalSSZ(buf[2738289:2741105][ii*44 : (ii+1)*44]); err != nil {
 			return err
 		}
 	}
 
 	// Offset (42) 'BuilderPendingWithdrawals'
-	if o42 = ssz.ReadOffset(buf[2741077:2741081]); o42 > size || o38 > o42 {
+	if o42 = ssz.ReadOffset(buf[2741105:2741109]); o42 > size || o38 > o42 {
 		return ssz.ErrOffset
 	}
 
-	// Field (43) 'LatestBlockHash'
-	if cap(b.LatestBlockHash) == 0 {
-		b.LatestBlockHash = make([]byte, 0, len(buf[2741081:2741113]))
+	// Offset (43) 'LatestExecutionPayloadBid'
+	if o43 = ssz.ReadOffset(buf[2741109:2741113]); o43 > size || o42 > o43 {
+		return ssz.ErrOffset
 	}
-	b.LatestBlockHash = append(b.LatestBlockHash, buf[2741081:2741113]...)
 
 	// Offset (44) 'PayloadExpectedWithdrawals'
-	if o44 = ssz.ReadOffset(buf[2741113:2741117]); o44 > size || o42 > o44 {
+	if o44 = ssz.ReadOffset(buf[2741113:2741117]); o44 > size || o43 > o44 {
 		return ssz.ErrOffset
 	}
 
@@ -2491,7 +2491,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 
 	// Field (21) 'InactivityScores'
 	{
-		buf = tail[o21:o24]
+		buf = tail[o21:o27]
 		num, err := ssz.DivideInt2(len(buf), 8, 1099511627776)
 		if err != nil {
 			return err
@@ -2499,17 +2499,6 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		b.InactivityScores = ssz.ExtendUint(b.InactivityScores, num)
 		for ii := 0; ii < num; ii++ {
 			b.InactivityScores[ii] = ssz.UnmarshallUint[uint64](buf[ii*8 : (ii+1)*8])
-		}
-	}
-
-	// Field (24) 'LatestExecutionPayloadBid'
-	{
-		buf = tail[o24:o27]
-		if b.LatestExecutionPayloadBid == nil {
-			b.LatestExecutionPayloadBid = new(ExecutionPayloadBid)
-		}
-		if err = b.LatestExecutionPayloadBid.UnmarshalSSZ(buf); err != nil {
-			return err
 		}
 	}
 
@@ -2605,7 +2594,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 
 	// Field (42) 'BuilderPendingWithdrawals'
 	{
-		buf = tail[o42:o44]
+		buf = tail[o42:o43]
 		num, err := ssz.DivideInt2(len(buf), 36, 1048576)
 		if err != nil {
 			return err
@@ -2618,6 +2607,17 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 			if err = b.BuilderPendingWithdrawals[ii].UnmarshalSSZ(buf[ii*36 : (ii+1)*36]); err != nil {
 				return err
 			}
+		}
+	}
+
+	// Field (43) 'LatestExecutionPayloadBid'
+	{
+		buf = tail[o43:o44]
+		if b.LatestExecutionPayloadBid == nil {
+			b.LatestExecutionPayloadBid = new(ExecutionPayloadBid)
+		}
+		if err = b.LatestExecutionPayloadBid.UnmarshalSSZ(buf); err != nil {
+			return err
 		}
 	}
 
@@ -2666,12 +2666,6 @@ func (b *BeaconStateGloas) SizeSSZ() (size int) {
 	// Field (21) 'InactivityScores'
 	size += len(b.InactivityScores) * 8
 
-	// Field (24) 'LatestExecutionPayloadBid'
-	if b.LatestExecutionPayloadBid == nil {
-		b.LatestExecutionPayloadBid = new(ExecutionPayloadBid)
-	}
-	size += b.LatestExecutionPayloadBid.SizeSSZ()
-
 	// Field (27) 'HistoricalSummaries'
 	size += len(b.HistoricalSummaries) * 64
 
@@ -2689,6 +2683,12 @@ func (b *BeaconStateGloas) SizeSSZ() (size int) {
 
 	// Field (42) 'BuilderPendingWithdrawals'
 	size += len(b.BuilderPendingWithdrawals) * 36
+
+	// Field (43) 'LatestExecutionPayloadBid'
+	if b.LatestExecutionPayloadBid == nil {
+		b.LatestExecutionPayloadBid = new(ExecutionPayloadBid)
+	}
+	size += b.LatestExecutionPayloadBid.SizeSSZ()
 
 	// Field (44) 'PayloadExpectedWithdrawals'
 	size += len(b.PayloadExpectedWithdrawals) * 44
@@ -2939,10 +2939,12 @@ func (b *BeaconStateGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		return
 	}
 
-	// Field (24) 'LatestExecutionPayloadBid'
-	if err = b.LatestExecutionPayloadBid.HashTreeRootWith(hh); err != nil {
+	// Field (24) 'LatestBlockHash'
+	if size := len(b.LatestBlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.LatestBlockHash", size, 32)
 		return
 	}
+	hh.PutBytes(b.LatestBlockHash)
 
 	// Field (25) 'NextWithdrawalIndex'
 	ssz.PutUint(hh, b.NextWithdrawalIndex)
@@ -3098,12 +3100,10 @@ func (b *BeaconStateGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		hh.MerkleizeWithMixin(subIndx, num, 1048576)
 	}
 
-	// Field (43) 'LatestBlockHash'
-	if size := len(b.LatestBlockHash); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.LatestBlockHash", size, 32)
+	// Field (43) 'LatestExecutionPayloadBid'
+	if err = b.LatestExecutionPayloadBid.HashTreeRootWith(hh); err != nil {
 		return
 	}
-	hh.PutBytes(b.LatestBlockHash)
 
 	// Field (44) 'PayloadExpectedWithdrawals'
 	{
