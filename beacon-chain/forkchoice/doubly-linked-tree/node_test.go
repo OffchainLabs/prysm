@@ -225,7 +225,7 @@ func TestNode_SetFullyValidated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, true, opt)
 
-	require.NoError(t, f.store.nodeByRoot[indexToHash(4)].setELValidatedWithParents(ctx))
+	require.NoError(t, f.MarkELValidated(ctx, indexToHash(4)))
 
 	// block 5 should still be optimistic
 	opt, err = f.IsOptimistic(indexToHash(5))

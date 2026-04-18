@@ -113,7 +113,9 @@ func (n *Node) leadsToViableHead(justifiedEpoch, currentEpoch primitives.Epoch) 
 }
 
 // isNodeReady returns true if this node's local conditions for being
-// non-optimistic are met (EL-validated AND has enough proofs when required).
+// non-optimistic are met: the node is EL-validated, and if the ZKVM feature
+// is enabled and the node's slot is at or after the Fulu fork, it also has
+// enough execution proofs.
 func (n *Node) isNodeReady() (bool, error) {
 	if !n.elValidated {
 		return false, nil
@@ -135,7 +137,8 @@ func (n *Node) isNodeReady() (bool, error) {
 }
 
 // tryMarkValid transitions this node from optimistic to valid if it is locally
-// ready and its parent is non-optimistic, then propagates to children.
+// ready and its parent is non-optimistic, then recursively propagates the
+// transition to all descendants by invoking itself on each child.
 func (n *Node) tryMarkValid(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -163,28 +166,6 @@ func (n *Node) tryMarkValid(ctx context.Context) error {
 		if err := child.tryMarkValid(ctx); err != nil {
 			return fmt.Errorf("try mark valid child: %w", err)
 		}
-	}
-
-	return nil
-}
-
-// setELValidatedWithParents sets elValidated = true on this node and all
-// ancestors (stopping at the first already-EL-validated node), then propagates
-// optimistic status changes downward.
-func (n *Node) setELValidatedWithParents(ctx context.Context) error {
-	topChanged, node := n, n
-	for node != nil && !node.elValidated {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		node.elValidated = true
-		topChanged = node
-		node = node.parent
-	}
-
-	if err := topChanged.tryMarkValid(ctx); err != nil {
-		return fmt.Errorf("try mark valid after EL validation: %w", err)
 	}
 
 	return nil

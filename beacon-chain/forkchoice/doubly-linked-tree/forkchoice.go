@@ -681,24 +681,35 @@ func (f *ForkChoice) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) (
 	return f.TargetRootForEpoch(targetNode.root, epoch)
 }
 
-// MarkELValidated marks the node with the given root as EL-validated and walks
-// parents to set elValidated (since EL validation of a child implies ancestor
-// payloads are valid).
+// MarkELValidated marks the node with the given root as EL-validated, along
+// with all its ancestors up to the first already-EL-validated one. It then
+// recursively transitions those newly-validated nodes from optimistic to
+// valid where their readiness conditions are met.
 func (f *ForkChoice) MarkELValidated(ctx context.Context, root [32]byte) error {
 	node, ok := f.store.nodeByRoot[root]
 	if !ok || node == nil {
 		return fmt.Errorf("mark EL validated: %w", ErrNilNode)
 	}
 
-	if err := node.setELValidatedWithParents(ctx); err != nil {
-		return fmt.Errorf("set EL validated with parents: %w", err)
+	topChanged := node
+	for n := node; n != nil && !n.elValidated; n = n.parent {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		n.elValidated = true
+		topChanged = n
+	}
+
+	if err := topChanged.tryMarkValid(ctx); err != nil {
+		return fmt.Errorf("try mark valid after EL validation: %w", err)
 	}
 
 	return nil
 }
 
 // MarkHasEnoughProofs marks the node with the given root as having enough
-// execution proofs and propagates optimistic status changes.
+// execution proofs, then recursively transitions it and its descendants
+// from optimistic to valid where their readiness conditions are met.
 func (f *ForkChoice) MarkHasEnoughProofs(ctx context.Context, root [32]byte) error {
 	node, ok := f.store.nodeByRoot[root]
 	if !ok || node == nil {
