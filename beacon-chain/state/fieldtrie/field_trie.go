@@ -157,6 +157,11 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 		promotionThreshold: f.promotionThreshold,
 	}
 
+	if f.base != nil {
+		f.base.dataRef.AddRef()
+		copiedTrie.dataRefCleanup = runtime.AddCleanup(copiedTrie, cleanupRef, f.base.dataRef)
+	}
+
 	runtime.AddCleanup(copiedTrie, cleanupRef, f.ref)
 
 	return copiedTrie
