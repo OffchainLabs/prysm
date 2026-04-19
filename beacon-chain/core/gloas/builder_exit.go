@@ -14,22 +14,14 @@ import (
 //	    """
 //	    Initiate the exit of the builder with index ``index``.
 //	    """
-//	    # Return if builder already initiated exit
-//	    builder = state.builders[builder_index]
-//	    if builder.withdrawable_epoch != FAR_FUTURE_EPOCH:
-//	        return
-//
 //	    # Set builder exit epoch
+//	    builder = state.builders[builder_index]
 //	    builder.withdrawable_epoch = get_current_epoch(state) + MIN_BUILDER_WITHDRAWABILITY_DELAY
 //	</spec>
 func InitiateBuilderExit(s state.BeaconState, builderIndex primitives.BuilderIndex) error {
 	builder, err := s.Builder(builderIndex)
 	if err != nil {
 		return err
-	}
-	// Return if builder already initiated exit.
-	if builder.WithdrawableEpoch != params.BeaconConfig().FarFutureEpoch {
-		return nil
 	}
 	currentEpoch := slots.ToEpoch(s.Slot())
 	builder.WithdrawableEpoch = currentEpoch + params.BeaconConfig().MinBuilderWithdrawabilityDelay

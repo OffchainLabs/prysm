@@ -235,7 +235,6 @@ func TestVerifyExecutionPayloadEnvelopeWithDeferredSig_Success(t *testing.T) {
 	require.Equal(t, true, valid)
 }
 
-
 func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
 
