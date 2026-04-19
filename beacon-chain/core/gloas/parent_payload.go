@@ -34,9 +34,10 @@ func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, bl
 	}
 
 	parentBidBlockHash := parentBid.BlockHash()
-	isParentFull := bytes.Equal(bid.ParentBlockHash, parentBidBlockHash[:])
+	isGenesisBlock := parentBidBlockHash == [32]byte{}
+	isParentBlockEmpty := !bytes.Equal(bid.ParentBlockHash, parentBidBlockHash[:])
 
-	if !isParentFull {
+	if isGenesisBlock || isParentBlockEmpty {
 		if !IsEmptyExecutionRequests(parentExecutionRequests) {
 			return errors.New("parent was empty but parent_execution_requests is non-empty")
 		}
