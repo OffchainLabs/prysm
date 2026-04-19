@@ -18,6 +18,7 @@ const (
 	rlockCalled
 	runlockCalled
 	hasFullNodeCalled
+	isFullNodeCalled
 	hasNodeCalled
 	proposerBoostCalled
 	isCanonicalCalled
@@ -45,7 +46,6 @@ const (
 	dependentRootForEpochCalled
 	canonicalNodeAtSlotCalled
 	payloadWeightsCalled
-	payloadContentLookupCalled
 )
 
 func _discard(t *testing.T, e error) {
@@ -67,6 +67,11 @@ func TestROLocking(t *testing.T) {
 			name: "hasFullNodeCalled",
 			call: hasFullNodeCalled,
 			cb:   func(g FastGetter) { g.HasFullNode([32]byte{}) },
+		},
+		{
+			name: "isFullNodeCalled",
+			call: isFullNodeCalled,
+			cb:   func(g FastGetter) { g.IsFullNode([32]byte{}) },
 		},
 		{
 			name: "hasNodeCalled",
@@ -173,11 +178,6 @@ func TestROLocking(t *testing.T) {
 			call: canonicalNodeAtSlotCalled,
 			cb:   func(g FastGetter) { g.CanonicalNodeAtSlot(0) },
 		},
-		{
-			name: "payloadContentLookupCalled",
-			call: payloadContentLookupCalled,
-			cb:   func(g FastGetter) { g.PayloadContentLookup([32]byte{}) },
-		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -217,6 +217,11 @@ func (ro *mockROForkchoice) RUnlock() {
 
 func (ro *mockROForkchoice) HasFullNode(_ [32]byte) bool {
 	ro.calls = append(ro.calls, hasFullNodeCalled)
+	return false
+}
+
+func (ro *mockROForkchoice) IsFullNode(_ [32]byte) bool {
+	ro.calls = append(ro.calls, isFullNodeCalled)
 	return false
 }
 
@@ -350,10 +355,5 @@ func (ro *mockROForkchoice) BlockHash(_ [32]byte) ([32]byte, error) {
 
 func (ro *mockROForkchoice) CanonicalNodeAtSlot(_ primitives.Slot) ([32]byte, bool) {
 	ro.calls = append(ro.calls, canonicalNodeAtSlotCalled)
-	return [32]byte{}, false
-}
-
-func (ro *mockROForkchoice) PayloadContentLookup(_ [32]byte) ([32]byte, bool) {
-	ro.calls = append(ro.calls, payloadContentLookupCalled)
 	return [32]byte{}, false
 }

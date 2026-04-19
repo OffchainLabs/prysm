@@ -3483,20 +3483,12 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		require.LogsContain(t, hook, "Late block attempted reorg failed")
 	})
 
-	t.Run("successful reorg uses payload content lookup access root", func(tt *testing.T) {
-		fullAccessRoot := bytesutil.ToBytes32([]byte("full-access-root"))
-		require.NoError(t, transition.UpdateNextSlotCache(ctx, fullAccessRoot[:], parentState))
+	t.Run("successful reorg uses parent root for NSC lookup", func(tt *testing.T) {
+		require.NoError(t, transition.UpdateNextSlotCache(ctx, parentRoot[:], parentState))
 
 		proposerServer := &Server{
-			ForkchoiceFetcher: &mock.ChainService{
-				MockPayloadContentLookup: map[[32]byte][32]byte{
-					parentRoot: fullAccessRoot,
-				},
-				MockPayloadContentIsFull: map[[32]byte]bool{
-					parentRoot: true,
-				},
-			},
-			StateGen: stategen.New(db, doublylinkedtree.New()),
+			ForkchoiceFetcher: &mock.ChainService{},
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
 		}
 
 		head, err := proposerServer.getParentStateFromReorgData(ctx, 1, parentRoot, parentRoot, headRoot)
@@ -3511,19 +3503,11 @@ func TestProposer_GetParentHeadState(t *testing.T) {
 		require.Equal(t, [32]byte(str), [32]byte(headStr))
 	})
 
-	t.Run("no reorg uses payload content lookup access root", func(tt *testing.T) {
-		fullAccessRoot := bytesutil.ToBytes32([]byte("full-access-root-no-reorg"))
-		require.NoError(t, transition.UpdateNextSlotCache(ctx, fullAccessRoot[:], parentState))
+	t.Run("no reorg uses parent root for NSC lookup", func(tt *testing.T) {
+		require.NoError(t, transition.UpdateNextSlotCache(ctx, headRoot[:], parentState))
 
 		proposerServer := &Server{
-			ForkchoiceFetcher: &mock.ChainService{
-				MockPayloadContentLookup: map[[32]byte][32]byte{
-					headRoot: fullAccessRoot,
-				},
-				MockPayloadContentIsFull: map[[32]byte]bool{
-					headRoot: true,
-				},
-			},
+			ForkchoiceFetcher: &mock.ChainService{},
 			HeadFetcher: &mock.ChainService{
 				State: headState,
 				Root:  headRoot[:],

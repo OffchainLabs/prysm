@@ -176,18 +176,56 @@ func TestServer_getExecutionPayload(t *testing.T) {
 	}
 }
 
-func TestServer_getParentBlockHash_Gloas(t *testing.T) {
-	want := bytesutil.ToBytes32([]byte("gloas-parent-hash"))
+func TestServer_getParentBlockHash_Gloas_Full(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	blockHash := bytesutil.ToBytes32([]byte("block-hash"))
+	parentBlockHash := bytesutil.ToBytes32([]byte("parent-block-hash"))
+	headRoot := bytesutil.ToBytes32([]byte("head-root"))
 	st, err := util.NewBeaconStateGloas(func(state *ethpb.BeaconStateGloas) error {
-		state.LatestBlockHash = want[:]
+		state.LatestExecutionPayloadBid.BlockHash = blockHash[:]
+		state.LatestExecutionPayloadBid.ParentBlockHash = parentBlockHash[:]
 		return nil
 	})
 	require.NoError(t, err)
 
-	vs := &Server{}
-	got, err := vs.getParentBlockHash(context.Background(), st, 0)
+	chain := &chainMock.ChainService{FullHead: true}
+	vs := &Server{
+		ForkchoiceFetcher: chain,
+		HeadFetcher:       chain,
+	}
+	got, err := vs.getParentBlockHash(context.Background(), st, 0, headRoot)
 	require.NoError(t, err)
-	require.DeepEqual(t, want[:], got)
+	require.DeepEqual(t, blockHash[:], got)
+}
+
+func TestServer_getParentBlockHash_Gloas_Empty(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	blockHash := bytesutil.ToBytes32([]byte("block-hash"))
+	parentBlockHash := bytesutil.ToBytes32([]byte("parent-block-hash"))
+	headRoot := bytesutil.ToBytes32([]byte("head-root"))
+	st, err := util.NewBeaconStateGloas(func(state *ethpb.BeaconStateGloas) error {
+		state.LatestExecutionPayloadBid.BlockHash = blockHash[:]
+		state.LatestExecutionPayloadBid.ParentBlockHash = parentBlockHash[:]
+		return nil
+	})
+	require.NoError(t, err)
+
+	chain := &chainMock.ChainService{}
+	vs := &Server{
+		ForkchoiceFetcher: chain,
+		HeadFetcher:       chain,
+	}
+	got, err := vs.getParentBlockHash(context.Background(), st, 0, headRoot)
+	require.NoError(t, err)
+	require.DeepEqual(t, parentBlockHash[:], got)
 }
 
 func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {

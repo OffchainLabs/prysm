@@ -40,13 +40,6 @@ func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) 
 	return pn.node.root, pn.full
 }
 
-// PayloadContentLookup returns the preferred lookup key for a given beacon block root.
-// If full payload content wins, it returns the block hash and true.
-// If empty payload content wins, it returns the beacon block root and false.
-func (f *ForkChoice) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
-	return f.store.payloadContentLookup(root)
-}
-
 func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte) error {
 	sb, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
@@ -300,21 +293,6 @@ func (s *Store) choosePayloadContent(n *Node) *PayloadNode {
 	return en
 }
 
-func (s *Store) payloadContentLookup(root [32]byte) ([32]byte, bool) {
-	en := s.emptyNodeByRoot[root]
-	if en == nil || en.node == nil {
-		return [32]byte{}, false
-	}
-	pn := s.choosePayloadContent(en.node)
-	if pn == nil || pn.node == nil {
-		return [32]byte{}, false
-	}
-	if pn.full {
-		return pn.node.blockHash, true
-	}
-	return pn.node.root, false
-}
-
 // nodeTreeDump appends to the given list all the nodes descending from this one
 func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.Node) ([]*forkchoice2.Node, error) {
 	if ctx.Err() != nil {
@@ -480,6 +458,20 @@ func (s *Store) resolveVoteNode(r [32]byte, slot primitives.Slot, payloadStatus 
 func (f *ForkChoice) HasFullNode(root [32]byte) bool {
 	_, ok := f.store.fullNodeByRoot[root]
 	return ok
+}
+
+// IsFullNode returns whether fork choice would select the full payload variant
+// for the given beacon block root. The caller MUST hold the forkchoice lock.
+func (f *ForkChoice) IsFullNode(root [32]byte) bool {
+	en := f.store.emptyNodeByRoot[root]
+	if en == nil || en.node == nil {
+		return false
+	}
+	if slots.ToEpoch(en.node.slot) < params.BeaconConfig().GloasForkEpoch {
+		return false
+	}
+	pn := f.store.choosePayloadContent(en.node)
+	return pn != nil && pn.full
 }
 
 // BlockHash returns the hash committed in the given block

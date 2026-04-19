@@ -74,6 +74,7 @@ type FastGetter interface {
 	FinalizedPayloadBlockHash() [32]byte
 	HasFullNode([32]byte) bool
 	HasNode([32]byte) bool
+	IsFullNode([32]byte) bool
 	HighestReceivedBlockSlot() primitives.Slot
 	HighestReceivedBlockRoot() [32]byte
 	IsCanonical(root [32]byte) bool
@@ -97,7 +98,6 @@ type FastGetter interface {
 	ParentRoot(root [32]byte) ([32]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
 	CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool)
-	PayloadContentLookup(root [32]byte) ([32]byte, bool)
 }
 
 // Setter allows to set forkchoice information

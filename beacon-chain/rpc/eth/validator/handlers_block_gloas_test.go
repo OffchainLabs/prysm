@@ -43,7 +43,6 @@ func testEnvelope() *eth.ExecutionPayloadEnvelope {
 		BuilderIndex:    0,
 		BeaconBlockRoot: make([]byte, 32),
 		Slot:            1,
-		StateRoot:       make([]byte, 32),
 	}
 }
 

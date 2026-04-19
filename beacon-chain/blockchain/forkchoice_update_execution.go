@@ -59,14 +59,13 @@ type fcuConfig struct {
 // when processing an incoming block during regular sync. It
 // always updates the shuffling caches and handles epoch transitions .
 func (s *Service) sendFCU(cfg *postBlockProcessConfig) {
+	// Release forkchoice lock; attribute computation acquires RLock internally.
+	s.ForkChoicer().Unlock()
 	if cfg.postState.Version() < version.Fulu {
-		// update the caches to compute the right proposer index
-		// this function is called under a forkchoice lock which we need to release.
-		s.ForkChoicer().Unlock()
 		s.updateCachesPostBlockProcessing(cfg)
-		s.ForkChoicer().Lock()
 	}
 	fcuArgs, err := s.getFCUArgs(cfg)
+	s.ForkChoicer().Lock()
 	if err != nil {
 		log.WithError(err).Error("Could not get forkchoice update argument")
 		return

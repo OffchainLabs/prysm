@@ -38,6 +38,7 @@ var ErrNilState = errors.New("nil state")
 type ChainService struct {
 	NotFinalized                bool
 	Optimistic                  bool
+	FullHead                    bool
 	ValidAttestation            bool
 	ValidatorsRoot              [32]byte
 	PublicKey                   [fieldparams.BLSPubkeyLength]byte
@@ -80,11 +81,10 @@ type ChainService struct {
 	DependentRootCB             func([32]byte, primitives.Epoch) ([32]byte, error)
 	MockCanonicalRoots          map[primitives.Slot][32]byte
 	MockCanonicalFull           map[primitives.Slot]bool
-	MockPayloadContentLookup    map[[32]byte][32]byte
-	MockPayloadContentIsFull    map[[32]byte]bool
-	ParentPayloadReadyVal       *bool
-	ForkchoiceRoots             map[[32]byte]bool
-	ForkchoiceBlockHashes       map[[32]byte][32]byte
+
+	ParentPayloadReadyVal *bool
+	ForkchoiceRoots       map[[32]byte]bool
+	ForkchoiceBlockHashes map[[32]byte][32]byte
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -350,6 +350,11 @@ func (s *ChainService) GetBlockPreState(_ context.Context, _ blocks.ROBlock) (st
 // GetPrestateToPropose mocks the same method in the chain service.
 func (s *ChainService) GetPrestateToPropose(_ context.Context, _ blocks.ROBlock) (state.BeaconState, error) {
 	return s.State.Copy(), nil
+}
+
+// HeadFull mocks HeadFull method in chain service.
+func (s *ChainService) HeadFull() bool {
+	return s.FullHead
 }
 
 // HeadSlot mocks HeadSlot method in chain service.
@@ -758,22 +763,17 @@ func (s *ChainService) HasFullNode(root [32]byte) bool {
 	return false
 }
 
-// ShouldIgnoreData returns true if the data for the given parent root and slot should be ignored.
-func (s *ChainService) ShouldIgnoreData(_ [32]byte, _ primitives.Slot) bool {
+// IsFullNode mocks the same method in the chain service.
+func (s *ChainService) IsFullNode(root [32]byte) bool {
+	if s.ForkChoiceStore != nil {
+		return s.ForkChoiceStore.IsFullNode(root)
+	}
 	return false
 }
 
-// PayloadContentLookup mocks the same method in the chain service.
-func (s *ChainService) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
-	if s.ForkChoiceStore != nil {
-		return s.ForkChoiceStore.PayloadContentLookup(root)
-	}
-	if s.MockPayloadContentLookup != nil {
-		if value, ok := s.MockPayloadContentLookup[root]; ok {
-			return value, s.MockPayloadContentIsFull[root]
-		}
-	}
-	return root, false
+// ShouldIgnoreData returns true if the data for the given parent root and slot should be ignored.
+func (s *ChainService) ShouldIgnoreData(_ [32]byte, _ primitives.Slot) bool {
+	return false
 }
 
 // InsertNode mocks the same method in the chain service

@@ -56,6 +56,7 @@ import (
 //	        # [New in Gloas:EIP7732]
 //	        latest_execution_payload_bid=ExecutionPayloadBid(
 //	            block_hash=pre.latest_execution_payload_header.block_hash,
+//	            execution_requests_root=hash_tree_root(ExecutionRequests()),
 //	        ),
 //	        next_withdrawal_index=pre.next_withdrawal_index,
 //	        next_withdrawal_validator_index=pre.next_withdrawal_validator_index,
@@ -307,6 +308,11 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		}
 	}
 
+	emptyExecutionRequestsRoot, err := (&enginev1.ExecutionRequests{}).HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compute empty execution requests root")
+	}
+
 	s := &ethpb.BeaconStateGloas{
 		GenesisTime:           uint64(beaconState.GenesisTime().Unix()),
 		GenesisValidatorsRoot: beaconState.GenesisValidatorsRoot(),
@@ -337,11 +343,12 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		CurrentSyncCommittee:        currentSyncCommittee,
 		NextSyncCommittee:           nextSyncCommittee,
 		LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
-			BlockHash:       payloadHeader.BlockHash(),
-			FeeRecipient:    make([]byte, fieldparams.FeeRecipientLength),
-			ParentBlockHash: make([]byte, fieldparams.RootLength),
-			ParentBlockRoot: make([]byte, fieldparams.RootLength),
-			PrevRandao:      make([]byte, fieldparams.RootLength),
+			BlockHash:             payloadHeader.BlockHash(),
+			FeeRecipient:          make([]byte, fieldparams.FeeRecipientLength),
+			ParentBlockHash:       make([]byte, fieldparams.RootLength),
+			ParentBlockRoot:       make([]byte, fieldparams.RootLength),
+			PrevRandao:            make([]byte, fieldparams.RootLength),
+			ExecutionRequestsRoot: emptyExecutionRequestsRoot[:],
 		},
 		NextWithdrawalIndex:           wi,
 		NextWithdrawalValidatorIndex:  vi,

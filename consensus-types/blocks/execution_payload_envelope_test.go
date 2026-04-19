@@ -48,7 +48,6 @@ func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 		BuilderIndex:    10,
 		BeaconBlockRoot: bytes.Repeat([]byte{0xAA}, 32),
 		Slot:            9,
-		StateRoot:       bytes.Repeat([]byte{0xBB}, 32),
 	}
 }
 
@@ -75,7 +74,6 @@ func TestWrappedROExecutionPayloadEnvelope(t *testing.T) {
 		require.Equal(t, primitives.BuilderIndex(10), wrapped.BuilderIndex())
 		require.Equal(t, primitives.Slot(9), wrapped.Slot())
 		assert.DeepEqual(t, [32]byte(bytes.Repeat([]byte{0xAA}, 32)), wrapped.BeaconBlockRoot())
-		assert.DeepEqual(t, [32]byte(bytes.Repeat([]byte{0xBB}, 32)), wrapped.StateRoot())
 
 		reqs := wrapped.ExecutionRequests()
 		require.NotNil(t, reqs)

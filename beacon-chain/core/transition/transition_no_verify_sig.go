@@ -63,7 +63,8 @@ func ExecuteStateTransitionNoVerifyAnySig(
 	interop.WriteBlockToDisk(signed, false /* Has the block failed */)
 	interop.WriteStateToDisk(st)
 
-	st, err = ProcessSlotsForBlock(ctx, st, signed.Block())
+	parentRoot := signed.Block().ParentRoot()
+	st, err = ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not process slots")
 	}
@@ -149,7 +150,8 @@ func CalculatePostState(
 
 	// Execute per slots transition.
 	var err error
-	state, err = ProcessSlotsForBlock(ctx, state, signed.Block())
+	parentRoot := signed.Block().ParentRoot()
+	state, err = ProcessSlotsUsingNextSlotCache(ctx, state, parentRoot[:], signed.Block().Slot())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process slots")
 	}
@@ -411,6 +413,13 @@ func ProcessBlockForStateRoot(
 
 	blk := signed.Block()
 	body := blk.Body()
+
+	if state.Version() >= version.Gloas {
+		if err := gloas.ProcessParentExecutionPayload(ctx, state, blk); err != nil {
+			return nil, errors.Wrap(err, "could not process parent execution payload")
+		}
+	}
+
 	bodyRoot, err := body.HashTreeRoot()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not hash tree root beacon block body")
@@ -423,18 +432,14 @@ func ProcessBlockForStateRoot(
 	}
 
 	if state.Version() >= version.Gloas {
-		// <spec fn="process_block" fork="gloas" hash="cc0f05ee">
+		// <spec fn="process_block" fork="gloas" hash="defer_payload">
 		// def process_block(state: BeaconState, block: BeaconBlock) -> None:
-		//     process_block_header(state, block)
-		//     # [Modified in Gloas:EIP7732]
+		//     process_parent_execution_payload(state, block)  # already called above
+		//     process_block_header(state, block)              # already called above
 		//     process_withdrawals(state)
-		//     # [Modified in Gloas:EIP7732]
-		//     # Removed `process_execution_payload`
-		//     # [New in Gloas:EIP7732]
 		//     process_execution_payload_bid(state, block)
 		//     process_randao(state, block.body)
 		//     process_eth1_data(state, block.body)
-		//     # [Modified in Gloas:EIP7732]
 		//     process_operations(state, block.body)
 		//     process_sync_aggregate(state, block.body.sync_aggregate)
 		// </spec>

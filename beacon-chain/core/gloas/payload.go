@@ -5,106 +5,50 @@ import (
 	"context"
 	"fmt"
 
-	requests "github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
-	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
-// ProcessExecutionPayload is the gossip entry point: verify signature, validate
-// consistency, apply state mutations, and verify the post-payload state root.
+// VerifyExecutionPayloadEnvelope is a verification function called by fork-choice when
+// importing a signed execution payload. It verifies the payload against the
+// execution engine without processing execution requests or updating state.
+// Actual state mutations are deferred to process_parent_execution_payload in
+// the next block.
 //
-//	<spec fn="process_execution_payload" fork="gloas" hash="36bd3af3">
-//	def process_execution_payload(
-//	    state: BeaconState,
-//	    # [Modified in Gloas:EIP7732]
-//	    # Removed `body`
-//	    # [New in Gloas:EIP7732]
-//	    signed_envelope: SignedExecutionPayloadEnvelope,
-//	    execution_engine: ExecutionEngine,
-//	    # [New in Gloas:EIP7732]
-//	    verify: bool = True,
-//	) -> None:
+//	<spec fn="verify_execution_payload_envelope" fork="gloas" hash="defer_payload">
+//	def verify_execution_payload_envelope(state, signed_envelope, execution_engine):
 //	    envelope = signed_envelope.message
 //	    payload = envelope.payload
-//
-//	    # Verify signature
-//	    if verify:
-//	        assert verify_execution_payload_envelope_signature(state, signed_envelope)
-//
-//	    # Cache latest block header state root
-//	    previous_state_root = hash_tree_root(state)
-//	    if state.latest_block_header.state_root == Root():
-//	        state.latest_block_header.state_root = previous_state_root
-//
-//	    # Verify consistency with the beacon block
-//	    assert envelope.beacon_block_root == hash_tree_root(state.latest_block_header)
+//	    assert verify_execution_payload_envelope_signature(state, signed_envelope)
+//	    header = copy(state.latest_block_header)
+//	    header.state_root = hash_tree_root(state)
+//	    assert envelope.beacon_block_root == hash_tree_root(header)
 //	    assert envelope.slot == state.slot
-//
-//	    # Verify consistency with the committed bid
 //	    committed_bid = state.latest_execution_payload_bid
 //	    assert envelope.builder_index == committed_bid.builder_index
 //	    assert committed_bid.prev_randao == payload.prev_randao
-//
-//	    # Verify consistency with expected withdrawals
+//	    assert hash_tree_root(envelope.execution_requests) == committed_bid.execution_requests_root
 //	    assert hash_tree_root(payload.withdrawals) == hash_tree_root(state.payload_expected_withdrawals)
-//
-//	    # Verify the gas_limit
 //	    assert committed_bid.gas_limit == payload.gas_limit
-//	    # Verify the block hash
 //	    assert committed_bid.block_hash == payload.block_hash
-//	    # Verify consistency of the parent hash with respect to the previous execution payload
 //	    assert payload.parent_hash == state.latest_block_hash
-//	    # Verify timestamp
 //	    assert payload.timestamp == compute_time_at_slot(state, state.slot)
-//	    # Verify the execution payload is valid
-//	    versioned_hashes = [
-//	        kzg_commitment_to_versioned_hash(commitment)
-//	        # [Modified in Gloas:EIP7732]
-//	        for commitment in committed_bid.blob_kzg_commitments
-//	    ]
-//	    requests = envelope.execution_requests
 //	    assert execution_engine.verify_and_notify_new_payload(
 //	        NewPayloadRequest(
 //	            execution_payload=payload,
-//	            versioned_hashes=versioned_hashes,
+//	            versioned_hashes=[kzg_commitment_to_versioned_hash(c) for c in committed_bid.blob_kzg_commitments],
 //	            parent_beacon_block_root=state.latest_block_header.parent_root,
-//	            execution_requests=requests,
+//	            execution_requests=envelope.execution_requests,
 //	        )
 //	    )
-//
-//	    def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
-//	        for operation in operations:
-//	            fn(state, operation)
-//
-//	    for_ops(requests.deposits, process_deposit_request)
-//	    for_ops(requests.withdrawals, process_withdrawal_request)
-//	    for_ops(requests.consolidations, process_consolidation_request)
-//
-//	    # Queue the builder payment
-//	    payment = state.builder_pending_payments[SLOTS_PER_EPOCH + state.slot % SLOTS_PER_EPOCH]
-//	    amount = payment.withdrawal.amount
-//	    if amount > 0:
-//	        state.builder_pending_withdrawals.append(payment.withdrawal)
-//	    state.builder_pending_payments[SLOTS_PER_EPOCH + state.slot % SLOTS_PER_EPOCH] = (
-//	        BuilderPendingPayment()
-//	    )
-//
-//	    # Cache the execution payload hash
-//	    state.execution_payload_availability[state.slot % SLOTS_PER_HISTORICAL_ROOT] = 0b1
-//	    state.latest_block_hash = payload.block_hash
-//
-//	    # Verify the state root
-//	    if verify:
-//	        assert envelope.state_root == hash_tree_root(state)
 //	</spec>
-func ProcessExecutionPayload(
+func VerifyExecutionPayloadEnvelope(
 	ctx context.Context,
 	st state.BeaconState,
 	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
@@ -118,26 +62,15 @@ func ProcessExecutionPayload(
 		return errors.Wrap(err, "could not get envelope from signed envelope")
 	}
 
-	if err := cacheLatestBlockHeaderStateRoot(ctx, st); err != nil {
-		return err
-	}
-	if err := validatePayloadConsistency(st, envelope); err != nil {
-		return err
-	}
-	if err := applyExecutionPayloadStateMutations(ctx, st, envelope.ExecutionRequests(), envelope.BlockHash()); err != nil {
-		return err
-	}
-	return verifyPostStateRoot(ctx, st, envelope)
+	return validatePayloadConsistency(ctx, st, envelope)
 }
 
-// ProcessExecutionPayloadWithDeferredSig is the init-sync entry point: extract the
-// signature for deferred verification, validate consistency, apply state
-// mutations, and verify the post-payload state root. The caller provides the
-// previousStateRoot to avoid recomputing it.
-func ProcessExecutionPayloadWithDeferredSig(
+// VerifyExecutionPayloadEnvelopeWithDeferredSig is the init-sync entry point: extract
+// the signature for deferred batch verification and validate consistency.
+// No state mutations are performed.
+func VerifyExecutionPayloadEnvelopeWithDeferredSig(
 	ctx context.Context,
 	st state.BeaconState,
-	previousStateRoot [32]byte,
 	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
 ) (*bls.SignatureBatch, error) {
 	sigBatch, err := ExecutionPayloadEnvelopeSignatureBatch(st, signedEnvelope)
@@ -150,128 +83,15 @@ func ProcessExecutionPayloadWithDeferredSig(
 		return nil, errors.Wrap(err, "could not get envelope from signed envelope")
 	}
 
-	if err := setLatestBlockHeaderStateRoot(st, previousStateRoot); err != nil {
-		return nil, errors.Wrap(err, "could not set latest block header state root")
-	}
-
-	if err := validatePayloadConsistency(st, envelope); err != nil {
-		return nil, err
-	}
-	if err := applyExecutionPayloadStateMutations(ctx, st, envelope.ExecutionRequests(), envelope.BlockHash()); err != nil {
-		return nil, err
-	}
-	if err := verifyPostStateRoot(ctx, st, envelope); err != nil {
+	if err := validatePayloadConsistency(ctx, st, envelope); err != nil {
 		return nil, err
 	}
 	return sigBatch, nil
 }
 
-// ProcessBlindedExecutionPayload is the replay/stategen entry
-// point: patch the block header, do minimal bid consistency checks, and apply
-// state mutations. No payload data is available — only the blinded envelope.
-// A nil envelope is a no-op (the payload was not delivered for that slot).
-func ProcessBlindedExecutionPayload(
-	ctx context.Context,
-	st state.BeaconState,
-	previousStateRoot [32]byte,
-	envelope interfaces.ROBlindedExecutionPayloadEnvelope,
-) error {
-	if envelope == nil {
-		return nil
-	}
-
-	if err := setLatestBlockHeaderStateRoot(st, previousStateRoot); err != nil {
-		return errors.Wrap(err, "could not set latest block header state root")
-	}
-
-	if envelope.Slot() != st.Slot() {
-		return errors.Errorf("blinded envelope slot does not match state slot: envelope=%d, state=%d", envelope.Slot(), st.Slot())
-	}
-
-	latestBid, err := st.LatestExecutionPayloadBid()
-	if err != nil {
-		return errors.Wrap(err, "could not get latest execution payload bid")
-	}
-	if latestBid == nil {
-		return errors.New("latest execution payload bid is nil")
-	}
-	if envelope.BuilderIndex() != latestBid.BuilderIndex() {
-		return errors.Errorf(
-			"blinded envelope builder index does not match committed bid builder index: envelope=%d, bid=%d",
-			envelope.BuilderIndex(),
-			latestBid.BuilderIndex(),
-		)
-	}
-
-	bidBlockHash := latestBid.BlockHash()
-	envelopeBlockHash := envelope.BlockHash()
-	if bidBlockHash != envelopeBlockHash {
-		return errors.Errorf(
-			"blinded envelope block hash does not match committed bid block hash: envelope=%#x, bid=%#x",
-			envelopeBlockHash,
-			bidBlockHash,
-		)
-	}
-
-	return applyExecutionPayloadStateMutations(ctx, st, envelope.ExecutionRequests(), envelopeBlockHash)
-}
-
-// ApplyExecutionPayload patches the block header state root, validates
-// consistency, and applies state mutations. No signature or post-state-root
-// verification is performed. Used by the proposer path to compute the
-// post-payload state root for the envelope.
-func ApplyExecutionPayload(
-	ctx context.Context,
-	st state.BeaconState,
-	envelope interfaces.ROExecutionPayloadEnvelope,
-) error {
-	if err := cacheLatestBlockHeaderStateRoot(ctx, st); err != nil {
-		return err
-	}
-	if err := validatePayloadConsistency(st, envelope); err != nil {
-		return err
-	}
-	return applyExecutionPayloadStateMutations(ctx, st, envelope.ExecutionRequests(), envelope.BlockHash())
-}
-
-func setLatestBlockHeaderStateRoot(st state.BeaconState, root [32]byte) error {
-	latestHeader := st.LatestBlockHeader()
-	latestHeader.StateRoot = root[:]
-	return st.SetLatestBlockHeader(latestHeader)
-}
-
-// cacheLatestBlockHeaderStateRoot fills in the state root on the latest block
-// header if it hasn't been set yet (the spec's "cache latest block header
-// state root" step).
-func cacheLatestBlockHeaderStateRoot(ctx context.Context, st state.BeaconState) error {
-	latestHeader := st.LatestBlockHeader()
-	if len(latestHeader.StateRoot) == 0 || bytes.Equal(latestHeader.StateRoot, make([]byte, 32)) {
-		previousStateRoot, err := st.HashTreeRoot(ctx)
-		if err != nil {
-			return errors.Wrap(err, "could not compute state root")
-		}
-		latestHeader.StateRoot = previousStateRoot[:]
-		if err := st.SetLatestBlockHeader(latestHeader); err != nil {
-			return errors.Wrap(err, "could not set latest block header")
-		}
-	}
-	return nil
-}
-
 // validatePayloadConsistency checks that the envelope and payload are consistent
 // with the beacon block header, the committed bid, and the current state.
-func validatePayloadConsistency(st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) error {
-	latestHeader := st.LatestBlockHeader()
-	blockHeaderRoot, err := latestHeader.HashTreeRoot()
-	if err != nil {
-		return errors.Wrap(err, "could not compute block header root")
-	}
-
-	beaconBlockRoot := envelope.BeaconBlockRoot()
-	if !bytes.Equal(beaconBlockRoot[:], blockHeaderRoot[:]) {
-		return errors.Errorf("envelope beacon block root does not match state latest block header root: envelope=%#x, header=%#x", beaconBlockRoot, blockHeaderRoot)
-	}
-
+func validatePayloadConsistency(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) error {
 	if envelope.Slot() != st.Slot() {
 		return errors.Errorf("envelope slot does not match state slot: envelope=%d, state=%d", envelope.Slot(), st.Slot())
 	}
@@ -285,6 +105,16 @@ func validatePayloadConsistency(st state.BeaconState, envelope interfaces.ROExec
 	}
 	if envelope.BuilderIndex() != latestBid.BuilderIndex() {
 		return errors.Errorf("envelope builder index does not match committed bid builder index: envelope=%d, bid=%d", envelope.BuilderIndex(), latestBid.BuilderIndex())
+	}
+
+	// Verify execution_requests_root matches the bid commitment.
+	executionRequestsRoot, err := envelope.ExecutionRequests().HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not compute execution requests root")
+	}
+	bidExecutionRequestsRoot := latestBid.ExecutionRequestsRoot()
+	if executionRequestsRoot != bidExecutionRequestsRoot {
+		return errors.Errorf("execution requests root mismatch: envelope=%#x, bid=%#x", executionRequestsRoot, bidExecutionRequestsRoot)
 	}
 
 	payload, err := envelope.Execution()
@@ -332,47 +162,6 @@ func validatePayloadConsistency(st state.BeaconState, envelope interfaces.ROExec
 	}
 	if payload.Timestamp() != uint64(t.Unix()) {
 		return errors.Errorf("payload timestamp does not match expected timestamp: payload=%d, expected=%d", payload.Timestamp(), uint64(t.Unix()))
-	}
-
-	return nil
-}
-
-// verifyPostStateRoot checks that the post-payload state root matches the
-// envelope's declared state root.
-func verifyPostStateRoot(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) error {
-	r, err := st.HashTreeRoot(ctx)
-	if err != nil {
-		return errors.Wrap(err, "could not compute post-envelope state root")
-	}
-	if r != envelope.StateRoot() {
-		return fmt.Errorf("state root mismatch: expected %#x, got %#x", envelope.StateRoot(), r)
-	}
-	return nil
-}
-
-// applyExecutionPayloadStateMutations applies the state-changing operations
-// from an execution payload: process execution requests, queue builder payment,
-// set execution payload availability, and update the latest block hash.
-func applyExecutionPayloadStateMutations(
-	ctx context.Context,
-	st state.BeaconState,
-	executionRequests *enginev1.ExecutionRequests,
-	blockHash [32]byte,
-) error {
-	if err := processExecutionRequests(ctx, st, executionRequests); err != nil {
-		return errors.Wrap(err, "could not process execution requests")
-	}
-
-	if err := st.QueueBuilderPayment(); err != nil {
-		return errors.Wrap(err, "could not queue builder payment")
-	}
-
-	if err := st.SetExecutionPayloadAvailability(st.Slot(), true); err != nil {
-		return errors.Wrap(err, "could not set execution payload availability")
-	}
-
-	if err := st.SetLatestBlockHash(blockHash); err != nil {
-		return errors.Wrap(err, "could not set latest block hash")
 	}
 
 	return nil
@@ -512,22 +301,4 @@ func builderPublicKey(st state.BeaconState, builderIdx primitives.BuilderIndex) 
 		return nil, fmt.Errorf("invalid builder public key: %w", err)
 	}
 	return publicKey, nil
-}
-
-// processExecutionRequests processes deposits, withdrawals, and consolidations from execution requests.
-func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *enginev1.ExecutionRequests) error {
-	if err := processDepositRequests(ctx, st, rqs.Deposits); err != nil {
-		return errors.Wrap(err, "could not process deposit requests")
-	}
-
-	var err error
-	st, err = requests.ProcessWithdrawalRequests(ctx, st, rqs.Withdrawals)
-	if err != nil {
-		return errors.Wrap(err, "could not process withdrawal requests")
-	}
-	err = requests.ProcessConsolidationRequests(ctx, st, rqs.Consolidations)
-	if err != nil {
-		return errors.Wrap(err, "could not process consolidation requests")
-	}
-	return nil
 }

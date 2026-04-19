@@ -48,7 +48,6 @@ type ForkchoiceFetcher interface {
 	HighestReceivedBlockSlot() primitives.Slot
 	HighestReceivedBlockRoot() [32]byte
 	HasFullNode([32]byte) bool
-	PayloadContentLookup([32]byte) ([32]byte, bool)
 	ReceivedBlocksLastEpoch() (uint64, error)
 	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error
 	InsertPayload(interfaces.ROExecutionPayloadEnvelope) error
@@ -77,6 +76,7 @@ type GenesisFetcher interface {
 // directly retrieve head related data.
 type HeadFetcher interface {
 	HeadSlot() primitives.Slot
+	HeadFull() bool
 	HeadRoot(ctx context.Context) ([]byte, error)
 	HeadBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HeadState(ctx context.Context) (state.BeaconState, error)
