@@ -331,8 +331,8 @@ func (h *BeaconBlockHeader) MarshalJSON() ([]byte, error) {
 		StateRoot     hexutil.Bytes `json:"state_root"`
 		BodyRoot      hexutil.Bytes `json:"body_root"`
 	}{
-		Slot:          fmt.Sprintf("%d", h.BeaconBlockHeader.Slot),
-		ProposerIndex: fmt.Sprintf("%d", h.BeaconBlockHeader.ProposerIndex),
+		Slot:          strconv.FormatUint(uint64(h.BeaconBlockHeader.Slot), 10),
+		ProposerIndex: strconv.FormatUint(uint64(h.BeaconBlockHeader.ProposerIndex), 10),
 		ParentRoot:    h.BeaconBlockHeader.ParentRoot,
 		StateRoot:     h.BeaconBlockHeader.StateRoot,
 		BodyRoot:      h.BeaconBlockHeader.BodyRoot,
