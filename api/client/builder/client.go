@@ -9,8 +9,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
-	"text/template"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/client"
@@ -24,13 +24,13 @@ import (
 	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const (
-	getExecHeaderPath            = "/eth/v1/builder/header/{{.Slot}}/{{.ParentHash}}/{{.Pubkey}}"
 	getStatus                    = "/eth/v1/builder/status"
 	postBlindedBeaconBlockPath   = "/eth/v1/builder/blinded_blocks"
 	postBlindedBeaconBlockV2Path = "/eth/v2/builder/blinded_blocks"
@@ -68,7 +68,7 @@ func WithSSZ() ClientOpt {
 type requestLogger struct{}
 
 func (*requestLogger) observe(r *http.Request) (e error) {
-	b := bytes.NewBuffer(nil)
+	b := &bytes.Buffer{}
 	if r.Body == nil {
 		log.WithFields(logrus.Fields{
 			"bodyBase64": "(nil value)",
@@ -203,32 +203,18 @@ func (c *Client) do(ctx context.Context, method string, path string, body io.Rea
 	return
 }
 
-var execHeaderTemplate = template.Must(template.New("").Parse(getExecHeaderPath))
-
-func execHeaderPath(slot primitives.Slot, parentHash [32]byte, pubkey [48]byte) (string, error) {
-	v := struct {
-		Slot       primitives.Slot
-		ParentHash string
-		Pubkey     string
-	}{
-		Slot:       slot,
-		ParentHash: fmt.Sprintf("%#x", parentHash),
-		Pubkey:     fmt.Sprintf("%#x", pubkey),
-	}
-	b := bytes.NewBuffer(nil)
-	err := execHeaderTemplate.Execute(b, v)
-	if err != nil {
-		return "", errors.Wrapf(err, "error rendering exec header template with slot=%d, parentHash=%#x, pubkey=%#x", slot, parentHash, pubkey)
-	}
-	return b.String(), nil
+// execHeaderPath builds the execution header request path by direct string
+// concatenation, avoiding the overhead of text/template reflection and
+// intermediate buffer allocations.
+func execHeaderPath(slot primitives.Slot, parentHash [32]byte, pubkey [48]byte) string {
+	return "/eth/v1/builder/header/" +
+		strconv.FormatUint(uint64(slot), 10) + "/" +
+		hexutil.Encode(parentHash[:]) + "/" +
+		hexutil.Encode(pubkey[:])
 }
 
 // GetHeader is used by a proposing validator to request an execution payload header from the Builder node.
 func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubkey [48]byte) (SignedBid, error) {
-	path, err := execHeaderPath(slot, parentHash, pubkey)
-	if err != nil {
-		return nil, err
-	}
 	var getOpts reqOption
 	if c.sszEnabled {
 		getOpts = func(r *http.Request) {
@@ -239,7 +225,7 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 			r.Header.Set("Accept", api.JsonMediaType)
 		}
 	}
-	data, header, err := c.do(ctx, http.MethodGet, path, nil, http.StatusOK, getOpts)
+	data, header, err := c.do(ctx, http.MethodGet, execHeaderPath(slot, parentHash, pubkey), nil, http.StatusOK, getOpts)
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting header from builder server")
 	}
@@ -248,7 +234,7 @@ func (c *Client) GetHeader(ctx context.Context, slot primitives.Slot, parentHash
 	if err != nil {
 		return nil, errors.Wrapf(
 			err,
-			"error rendering exec header template with slot=%d, parentHash=%#x, pubkey=%#x",
+			"error parsing exec header response with slot=%d, parentHash=%#x, pubkey=%#x",
 			slot,
 			parentHash,
 			pubkey,
@@ -275,7 +261,7 @@ func (c *Client) parseHeaderResponse(data []byte, header http.Header, slot primi
 
 	ver, err := version.FromString(versionHeader)
 	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("unsupported header version %s", versionHeader))
+		return nil, errors.Wrapf(err, "unsupported header version %s", versionHeader)
 	}
 
 	if ver >= version.Electra {
@@ -682,9 +668,18 @@ func (c *Client) Status(ctx context.Context) error {
 	return err
 }
 
+// unmarshalErrMessage attempts to decode a JSON error message from bodyBytes.
+// Returns the decoded message if successful, or wraps the unmarshal error otherwise.
+func unmarshalErrMessage(bodyBytes []byte, sentinel error) error {
+	var errMessage ErrorMessage
+	if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
+		return errors.Wrap(jsonErr, "unable to read response body")
+	}
+	return errors.Wrap(sentinel, errMessage.Message)
+}
+
 func unexpectedStatusErr(response *http.Response, expected int) error {
 	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, client.MaxErrBodySize))
-	var errMessage ErrorMessage
 	var body string
 	if err != nil {
 		body = "(Unable to read response body.)"
@@ -695,45 +690,27 @@ func unexpectedStatusErr(response *http.Response, expected int) error {
 	switch response.StatusCode {
 	case http.StatusUnsupportedMediaType:
 		log.WithError(ErrUnsupportedMediaType).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
-		}
-		return errors.Wrap(ErrUnsupportedMediaType, errMessage.Message)
+		return unmarshalErrMessage(bodyBytes, ErrUnsupportedMediaType)
 	case http.StatusNotAcceptable:
 		log.WithError(ErrNotAcceptable).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
-		}
-		return errors.Wrap(ErrNotAcceptable, errMessage.Message)
+		return unmarshalErrMessage(bodyBytes, ErrNotAcceptable)
 	case http.StatusNoContent:
 		log.WithError(ErrNoContent).Debug(msg)
 		return ErrNoContent
 	case http.StatusBadRequest:
 		log.WithError(ErrBadRequest).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
-		}
-		return errors.Wrap(ErrBadRequest, errMessage.Message)
+		return unmarshalErrMessage(bodyBytes, ErrBadRequest)
 	case http.StatusNotFound:
 		log.WithError(ErrNotFound).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
-		}
-		return errors.Wrap(ErrNotFound, errMessage.Message)
+		return unmarshalErrMessage(bodyBytes, ErrNotFound)
 	case http.StatusInternalServerError:
 		log.WithError(ErrNotOK).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
-		}
-		return errors.Wrap(ErrNotOK, errMessage.Message)
+		return unmarshalErrMessage(bodyBytes, ErrNotOK)
 	case http.StatusBadGateway:
 		log.WithError(ErrBadGateway).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
-		}
-		return errors.Wrap(ErrBadGateway, errMessage.Message)
+		return unmarshalErrMessage(bodyBytes, ErrBadGateway)
 	default:
 		log.WithError(ErrNotOK).Debug(msg)
-		return errors.Wrap(ErrNotOK, fmt.Sprintf("unsupported error code: %d", response.StatusCode))
+		return errors.Wrapf(ErrNotOK, "unsupported error code: %d", response.StatusCode)
 	}
 }
