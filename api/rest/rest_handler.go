@@ -19,6 +19,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// sszAcceptHeader is precomputed because the components are compile-time constants.
+const sszAcceptHeader = api.OctetStreamMediaType + ";q=0.95," + api.JsonMediaType + ";q=0.9"
+
 type reqOption func(*http.Request)
 
 // Handler defines the interface for making REST API requests.
@@ -129,10 +132,7 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", url)
 	}
 
-	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
-	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
-	acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
-	req.Header.Set("Accept", acceptHeaderString)
+	req.Header.Set("Accept", sszAcceptHeader)
 
 	for _, o := range c.reqOverrides {
 		o(req)
@@ -164,9 +164,8 @@ func (c *handler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Hea
 
 	// non-2XX codes are a failure
 	if !strings.HasPrefix(httpResp.Status, "2") {
-		decoder := json.NewDecoder(bytes.NewBuffer(body))
 		errorJson := &httputil.DefaultJsonError{}
-		if err = decoder.Decode(errorJson); err != nil {
+		if err = json.Unmarshal(body, errorJson); err != nil {
 			return nil, nil, fmt.Errorf("HTTP request for %s unsuccessful (%d: %s)", httpResp.Request.URL, httpResp.StatusCode, string(body))
 		}
 		return nil, nil, errorJson
@@ -229,10 +228,7 @@ func (c *handler) PostSSZ(
 	}
 
 	// Accept header: prefer octet-stream (SSZ), fall back to JSON
-	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
-	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
-	acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
-	req.Header.Set("Accept", acceptHeaderString)
+	req.Header.Set("Accept", sszAcceptHeader)
 
 	// User-supplied headers
 	for headerKey, headerValue := range headers {
@@ -270,9 +266,8 @@ func (c *handler) PostSSZ(
 
 	// non-2XX codes are a failure
 	if !strings.HasPrefix(httpResp.Status, "2") {
-		decoder := json.NewDecoder(bytes.NewBuffer(body))
 		errorJson := &httputil.DefaultJsonError{}
-		if err = decoder.Decode(errorJson); err != nil {
+		if err = json.Unmarshal(body, errorJson); err != nil {
 			return nil, nil, fmt.Errorf("HTTP request for %s unsuccessful (%d: %s)", httpResp.Request.URL, httpResp.StatusCode, string(body))
 		}
 		return nil, nil, errorJson
@@ -295,18 +290,17 @@ func decodeResp(httpResp *http.Response, resp any) error {
 		return &httputil.DefaultJsonError{Code: httpResp.StatusCode, Message: string(body)}
 	}
 
-	decoder := json.NewDecoder(bytes.NewBuffer(body))
 	// non-2XX codes are a failure
 	if !strings.HasPrefix(httpResp.Status, "2") {
 		errorJson := &httputil.DefaultJsonError{}
-		if err = decoder.Decode(errorJson); err != nil {
+		if err = json.Unmarshal(body, errorJson); err != nil {
 			return errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
 		}
 		return errorJson
 	}
 	// resp is nil for requests that do not return anything.
 	if resp != nil {
-		if err = decoder.Decode(resp); err != nil {
+		if err = json.Unmarshal(body, resp); err != nil {
 			return errors.Wrapf(err, "failed to decode response body into json for %s", httpResp.Request.URL)
 		}
 	}
