@@ -75,10 +75,9 @@ func requireFreshTrieRoot(t *testing.T, field types.FieldIndex, dataType types.D
 }
 
 // TestFieldTrie_RefCount verifies the copy-on-write reference counting of FieldTrie.
-// It creates a trie, copies it (bumping the shared ref count to 2), then drops one of the
-// two pointers and triggers garbage collection. The GC cleanup callback should decrement
-// the ref count back to 1 on the surviving trie.
 func TestFieldTrie_RefCount(t *testing.T) {
+	// Copy a trie (bumping the shared ref count to 2), drop the copy and trigger GC.
+	// The cleanup callback must decrement the ref count back to 1 on the surviving original.
 	t.Run("drop copy", func(t *testing.T) {
 		ft, err := NewFieldTrie(types.FieldIndex(5), types.BasicArray, customtypes.BlockRoots{}, 8192, 0)
 		require.NoError(t, err)
@@ -98,6 +97,8 @@ func TestFieldTrie_RefCount(t *testing.T) {
 		require.Equal(t, uint(1), ft.RefCount())
 	})
 
+	// Mirror of "drop copy": drop the original and trigger GC. The cleanup must
+	// decrement the ref count back to 1 on the surviving copy.
 	t.Run("drop original", func(t *testing.T) {
 		ft, err := NewFieldTrie(types.FieldIndex(5), types.BasicArray, customtypes.BlockRoots{}, 8192, 0)
 		require.NoError(t, err)
@@ -115,6 +116,66 @@ func TestFieldTrie_RefCount(t *testing.T) {
 		runtime.GC()
 
 		require.Equal(t, uint(1), cp.RefCount())
+	})
+
+	// Fork a shared owned trie A into an overlay B (B.base = A), then copy B to B1.
+	// Dropping B and triggering GC must not release A's dataRef.
+	t.Run("copy of overlay keeps base dataRef alive", func(t *testing.T) {
+		blockRoots, _, _ := newTestElements()
+
+		a, err := NewFieldTrie(types.BlockRoots, types.BasicArray, blockRoots, testBlockRootsSize, 0)
+		require.NoError(t, err)
+		require.Equal(t, uint(1), a.ref.Refs())
+		require.Equal(t, uint(0), a.dataRef.Refs())
+
+		// Share A so the next Recompute forks into an overlay.
+		// A and A1 share the same ref/dataRef pointers.
+		a1 := a.CopyTrie()
+		require.Equal(t, uint(2), a.ref.Refs())
+		require.Equal(t, uint(2), a1.ref.Refs())
+		require.Equal(t, uint(0), a.dataRef.Refs())
+		require.Equal(t, uint(0), a1.dataRef.Refs())
+
+		// Fork into overlay B. B gets fresh ref/dataRef counters and bumps A's dataRef.
+		binary.LittleEndian.PutUint64(blockRoots[0][:8], 42)
+		b, _, err := a.RecomputeTrie([]uint64{0}, blockRoots)
+		require.NoError(t, err)
+		require.Equal(t, a, b.base)
+		require.Equal(t, uint(2), a.ref.Refs())
+		require.Equal(t, uint(1), a.dataRef.Refs())
+		require.Equal(t, uint(2), a1.ref.Refs())
+		require.Equal(t, uint(1), a1.dataRef.Refs())
+		require.Equal(t, uint(1), b.ref.Refs())
+		require.Equal(t, uint(0), b.dataRef.Refs())
+
+		// B1 now also depends on A as its immutable base.
+		// B and B1 share the same ref/dataRef pointers. A's dataRef must be bumped
+		// again so that B1 keeps A alive as an immutable base.
+		b1 := b.CopyTrie()
+		require.Equal(t, a, b1.base)
+		require.Equal(t, uint(2), a.ref.Refs())
+		require.Equal(t, uint(2), a.dataRef.Refs())
+		require.Equal(t, uint(2), a1.ref.Refs())
+		require.Equal(t, uint(2), a1.dataRef.Refs())
+		require.Equal(t, uint(2), b.ref.Refs())
+		require.Equal(t, uint(2), b1.ref.Refs())
+		require.Equal(t, uint(0), b.dataRef.Refs())
+		require.Equal(t, uint(0), b1.dataRef.Refs())
+
+		// Drop B and run GC. B1 is still alive and still references A.
+		b = nil
+		runtime.GC()
+		runtime.GC()
+
+		require.Equal(t, uint(2), a.ref.Refs())
+		require.Equal(t, uint(1), a.dataRef.Refs())
+		require.Equal(t, uint(2), a1.ref.Refs())
+		require.Equal(t, uint(1), a1.dataRef.Refs())
+		require.Equal(t, uint(1), b1.ref.Refs())
+		require.Equal(t, uint(0), b1.dataRef.Refs())
+
+		runtime.KeepAlive(a1)
+		runtime.KeepAlive(b1)
 	})
 }
 
@@ -681,9 +742,9 @@ func TestFieldTrie_RecomputeAccumulatedPromotion(t *testing.T) {
 				// The recomputed root must match a fresh trie built from the same elements.
 				requireFreshTrieRoot(t, tc.field, tc.dataType, tc.elements, tc.length, promotionThreshold, promotedRoot)
 
-				// ft.dataRef is 1: step B's fork released its ref during step C's promotion,
-				// but overlay (step A) still holds a base reference to ft.
-				require.Equal(t, uint(1), ft.dataRef.Refs())
+				// ft.dataRef is 2: step B's fork released its ref during step C's promotion,
+				// but the step A overlay and its copy (overlayCp) both still hold a base reference to ft.
+				require.Equal(t, uint(2), ft.dataRef.Refs())
 
 				// The promoted trie's dataRef is 0: it is an independent owned trie.
 				require.Equal(t, uint(0), promoted.dataRef.Refs())
@@ -693,8 +754,10 @@ func TestFieldTrie_RecomputeAccumulatedPromotion(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, stepARoot, overlayRootAfterPromotion)
 
-				// Keep overlay alive so its GC cleanup does not fire before the dataRef check above.
+				// Keep overlay and overlayCp alive so their GC cleanups do not fire
+				// before the dataRef check above.
 				runtime.KeepAlive(overlay)
+				runtime.KeepAlive(overlayCp)
 			})
 		})
 	}
