@@ -2280,7 +2280,10 @@ func (e *ExecutionPayloadGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		hh.PutBytes(e.BlockAccessList)
+		// AppendBytes32 (not PutBytes): fastssz's PutBytes auto-merkleizes when
+		// len > 32, which conflicts with the outer MerkleizeWithMixin below.
+		// Re-apply this patch after running hack/update-go-ssz.sh.
+		hh.AppendBytes32(e.BlockAccessList)
 		hh.MerkleizeWithMixin(elemIndx, byteLen, (1073741824+31)/32)
 	}
 

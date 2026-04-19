@@ -76,10 +76,17 @@ def _ssz_go_proto_library_impl(ctx):
         command = """
       export GOROOT=$(pwd)/{goroot} &&
       export PATH=$GOROOT/bin:$PATH &&
-      {cmd} {args}""".format(
+      {cmd} {args} &&
+      # fastssz emits `hh.PutBytes(e.BlockAccessList)` for the top-level ByteList[1GB]
+      # field, which auto-merkleizes when len>32 and double-hashes against the outer
+      # MerkleizeWithMixin. AppendBytes32 matches the helper used for Transaction
+      # elements and yields the correct root.
+      sed -i.bak 's/hh\\.PutBytes(e\\.BlockAccessList)/hh.AppendBytes32(e.BlockAccessList)/' {out} && rm -f {out}.bak
+      """.format(
             goroot = goroot,
             cmd = ctx.executable.sszgen.path,
             args = " ".join(args),
+            out = output.path,
         ),
         tools = [
             ctx.executable.sszgen,
