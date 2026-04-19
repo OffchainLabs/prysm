@@ -327,6 +327,12 @@ func (b *BeaconState) LatestBlockHashMatchesBidBlockHash() (bool, error) {
 		return false, nil
 	}
 
+	// gloas genesis case
+	zero := params.BeaconConfig().ZeroHash
+	if bytes.Equal(b.latestBlockHash, zero[:]) {
+		return false, nil
+	}
+
 	return bytes.Equal(b.latestExecutionPayloadBid.BlockHash, b.latestBlockHash), nil
 }
 

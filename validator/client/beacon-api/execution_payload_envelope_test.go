@@ -36,7 +36,6 @@ func testProtoEnvelope() *ethpb.ExecutionPayloadEnvelope {
 		ExecutionRequests: &enginev1.ExecutionRequests{},
 		BuilderIndex:      primitives.BuilderIndex(42),
 		BeaconBlockRoot:   bytesutil.PadTo([]byte("beacon-root"), 32),
-		StateRoot:         bytesutil.PadTo([]byte("envelope-state"), 32),
 	}
 }
 
@@ -165,6 +164,5 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 	assert.Equal(t, envelope.BuilderIndex, roundTripped.BuilderIndex)
 	assert.Equal(t, envelope.Payload.SlotNumber, roundTripped.Payload.SlotNumber)
 	assert.DeepEqual(t, envelope.BeaconBlockRoot, roundTripped.BeaconBlockRoot)
-	assert.DeepEqual(t, envelope.StateRoot, roundTripped.StateRoot)
 	assert.Equal(t, hexutil.Encode(envelope.Payload.BlockHash), hexutil.Encode(roundTripped.Payload.BlockHash))
 }

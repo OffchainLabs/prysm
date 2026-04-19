@@ -7,6 +7,5 @@ import (
 )
 
 func TestMainnet_Gloas_Operations_ProposerSlashing(t *testing.T) {
-	t.Skip("gloas spec tests disabled until https://github.com/OffchainLabs/prysm/pull/16658")
 	operations.RunProposerSlashingTest(t, "mainnet")
 }

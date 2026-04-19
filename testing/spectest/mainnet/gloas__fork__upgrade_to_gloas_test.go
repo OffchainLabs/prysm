@@ -7,6 +7,5 @@ import (
 )
 
 func TestMainnet_UpgradeToGloas(t *testing.T) {
-	t.Skip("gloas spec tests disabled until https://github.com/OffchainLabs/prysm/pull/16658")
 	fork.RunUpgradeToGloas(t, "mainnet")
 }

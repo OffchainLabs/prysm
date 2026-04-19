@@ -7,6 +7,5 @@ import (
 )
 
 func TestMainnet_Gloas_Operations_PayloadAttestation(t *testing.T) {
-	t.Skip("gloas spec tests disabled until https://github.com/OffchainLabs/prysm/pull/16658")
 	operations.RunPayloadAttestationTest(t, "mainnet")
 }
