@@ -506,6 +506,21 @@ func TestLatestBlockHashMatchesBidBlockHash(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, false, got)
 	})
+
+	t.Run("returns false at genesis when both hashes are zero", func(t *testing.T) {
+		zero := make([]byte, 32)
+		st := &BeaconState{
+			version: version.Gloas,
+			latestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
+				BlockHash: zero,
+			},
+			latestBlockHash: zero,
+		}
+
+		got, err := st.LatestBlockHashMatchesBidBlockHash()
+		require.NoError(t, err)
+		require.Equal(t, false, got)
+	})
 }
 
 func TestAppendBuilderWithdrawals(t *testing.T) {

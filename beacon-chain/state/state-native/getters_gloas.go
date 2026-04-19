@@ -327,6 +327,12 @@ func (b *BeaconState) LatestBlockHashMatchesBidBlockHash() (bool, error) {
 		return false, nil
 	}
 
+	// At Gloas genesis both hashes can be zero; treat as empty parent since no payload was delivered.
+	zero := params.BeaconConfig().ZeroHash
+	if bytes.Equal(b.latestBlockHash, zero[:]) {
+		return false, nil
+	}
+
 	return bytes.Equal(b.latestExecutionPayloadBid.BlockHash, b.latestBlockHash), nil
 }
 
