@@ -143,12 +143,13 @@ func (vs *Server) getLocalPayloadFromEngine(
 		if err != nil {
 			return nil, err
 		}
-		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV3{
+		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV4{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
 			SuggestedFeeRecipient: val.FeeRecipient[:],
 			Withdrawals:           withdrawals,
 			ParentBeaconBlockRoot: parentRoot[:],
+			SlotNumber:            uint64(slot),
 		})
 		if err != nil {
 			return nil, err

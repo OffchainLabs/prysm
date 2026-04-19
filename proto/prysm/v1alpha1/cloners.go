@@ -216,7 +216,6 @@ func copyExecutionPayloadEnvelope(env *ExecutionPayloadEnvelope) *ExecutionPaylo
 		ExecutionRequests: env.ExecutionRequests,
 		BuilderIndex:      env.BuilderIndex,
 		BeaconBlockRoot:   bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
-		Slot:              env.Slot,
 	}
 }
 

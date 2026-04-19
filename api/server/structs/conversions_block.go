@@ -3322,7 +3322,7 @@ func (d *PayloadAttestationData) ToConsensus() (*eth.PayloadAttestationData, err
 
 // ExecutionPayloadEnvelopeFromConsensus converts a proto envelope to the API struct.
 func ExecutionPayloadEnvelopeFromConsensus(e *eth.ExecutionPayloadEnvelope) (*ExecutionPayloadEnvelope, error) {
-	payload, err := ExecutionPayloadDenebFromConsensus(e.Payload)
+	payload, err := ExecutionPayloadGloasFromConsensus(e.Payload)
 	if err != nil {
 		return nil, err
 	}
@@ -3335,7 +3335,6 @@ func ExecutionPayloadEnvelopeFromConsensus(e *eth.ExecutionPayloadEnvelope) (*Ex
 		ExecutionRequests: requests,
 		BuilderIndex:      fmt.Sprintf("%d", e.BuilderIndex),
 		BeaconBlockRoot:   hexutil.Encode(e.BeaconBlockRoot),
-		Slot:              fmt.Sprintf("%d", e.Slot),
 	}, nil
 }
 
@@ -3393,16 +3392,11 @@ func (e *ExecutionPayloadEnvelope) ToConsensus() (*eth.ExecutionPayloadEnvelope,
 	if err != nil {
 		return nil, server.NewDecodeError(err, "BeaconBlockRoot")
 	}
-	slot, err := strconv.ParseUint(e.Slot, 10, 64)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Slot")
-	}
 	return &eth.ExecutionPayloadEnvelope{
 		Payload:           payload,
 		ExecutionRequests: requests,
 		BuilderIndex:      primitives.BuilderIndex(builderIndex),
 		BeaconBlockRoot:   beaconBlockRoot,
-		Slot:              primitives.Slot(slot),
 	}, nil
 }
 

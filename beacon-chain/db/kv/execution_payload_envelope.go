@@ -134,7 +134,6 @@ func blindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope) *ethpb.SignedBlind
 			ExecutionRequests: env.Message.ExecutionRequests,
 			BuilderIndex:      env.Message.BuilderIndex,
 			BeaconBlockRoot:   env.Message.BeaconBlockRoot,
-			Slot:              env.Message.Slot,
 			ParentBlockHash:   env.Message.Payload.ParentHash,
 		},
 		Signature: env.Signature,

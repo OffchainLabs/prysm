@@ -119,9 +119,9 @@ func (e *EngineClient) ReconstructFullBellatrixBlockBatch(
 // ReconstructFullExecutionPayloadByHash --
 func (e *EngineClient) ReconstructFullExecutionPayloadByHash(
 	_ context.Context, blockHash [32]byte,
-) (*pb.ExecutionPayloadDeneb, error) {
+) (*pb.ExecutionPayloadGloas, error) {
 	if p, ok := e.ExecutionPayloadByBlockHash[blockHash]; ok {
-		return &pb.ExecutionPayloadDeneb{
+		return &pb.ExecutionPayloadGloas{
 			ParentHash:    p.ParentHash,
 			FeeRecipient:  p.FeeRecipient,
 			StateRoot:     p.StateRoot,
@@ -140,7 +140,7 @@ func (e *EngineClient) ReconstructFullExecutionPayloadByHash(
 		}, nil
 	}
 	if e.GetPayloadResponse != nil && e.GetPayloadResponse.ExecutionData != nil {
-		if p, ok := e.GetPayloadResponse.ExecutionData.Proto().(*pb.ExecutionPayloadDeneb); ok {
+		if p, ok := e.GetPayloadResponse.ExecutionData.Proto().(*pb.ExecutionPayloadGloas); ok {
 			return p, nil
 		}
 	}
@@ -150,8 +150,8 @@ func (e *EngineClient) ReconstructFullExecutionPayloadByHash(
 // ReconstructFullExecutionPayloadsByHash --
 func (e *EngineClient) ReconstructFullExecutionPayloadsByHash(
 	_ context.Context, blockHashes [][32]byte,
-) (map[[32]byte]*pb.ExecutionPayloadDeneb, error) {
-	payloads := make(map[[32]byte]*pb.ExecutionPayloadDeneb, len(blockHashes))
+) (map[[32]byte]*pb.ExecutionPayloadGloas, error) {
+	payloads := make(map[[32]byte]*pb.ExecutionPayloadGloas, len(blockHashes))
 	for i := range blockHashes {
 		p, err := e.ReconstructFullExecutionPayloadByHash(context.Background(), blockHashes[i])
 		if err != nil {
@@ -183,20 +183,21 @@ func (e *EngineClient) ReconstructExecutionPayloadEnvelope(
 	if !ok {
 		return nil, errors.New("execution payload not found for block hash")
 	}
+	p := payloadToPayloadGloas(payload)
+	p.SlotNumber = envelope.Message.Slot
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload:           payloadToPayloadDeneb(payload),
+			Payload:           p,
 			ExecutionRequests: envelope.Message.ExecutionRequests,
 			BuilderIndex:      envelope.Message.BuilderIndex,
 			BeaconBlockRoot:   envelope.Message.BeaconBlockRoot,
-			Slot:              envelope.Message.Slot,
 		},
 		Signature: envelope.Signature,
 	}, nil
 }
 
-func payloadToPayloadDeneb(p *pb.ExecutionPayload) *pb.ExecutionPayloadDeneb {
-	return &pb.ExecutionPayloadDeneb{
+func payloadToPayloadGloas(p *pb.ExecutionPayload) *pb.ExecutionPayloadGloas {
+	return &pb.ExecutionPayloadGloas{
 		ParentHash:    p.ParentHash,
 		FeeRecipient:  p.FeeRecipient,
 		StateRoot:     p.StateRoot,
