@@ -179,9 +179,10 @@ type EvaluationContext struct {
 	DepositBalancer
 	// ExitedVals maps validator pubkey to the epoch when their exit was submitted.
 	// The actual exit takes effect at: submission_epoch + 1 + MaxSeedLookahead
-	ExitedVals           map[[48]byte]primitives.Epoch
-	SeenVotes            map[primitives.Slot][]byte
-	ExpectedEth1DataVote []byte
+	ExitedVals                 map[[48]byte]primitives.Epoch
+	SeenVotes                  map[primitives.Slot][]byte
+	ExpectedEth1DataVote       []byte
+	ExpectedEth1DataVotePeriod uint64
 	// Eth1DataMismatchCount tracks how many eth1data vote mismatches have been seen
 	// in the current voting period. Some tolerance is allowed for timing differences.
 	Eth1DataMismatchCount int

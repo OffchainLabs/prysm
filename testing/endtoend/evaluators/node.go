@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/policies"
@@ -24,6 +26,14 @@ import (
 
 // Allow a very short delay after disconnecting to prevent connection refused issues.
 var connTimeDelay = 50 * time.Millisecond
+
+const (
+	httpCheckAttempts              = 5
+	httpCheckRetryDelay            = 200 * time.Millisecond
+	headComparePollDelay           = time.Second
+	headCompareRequiredConsecutive = 2
+	minPeersForHeadCheck           = 1
+)
 
 // PeersConnect checks all beacon nodes and returns whether they are connected to each other as peers.
 var PeersConnect = e2etypes.Evaluator{
@@ -46,8 +56,12 @@ var FinishedSyncing = e2etypes.Evaluator{
 	Evaluation: finishedSyncing,
 }
 
-// AllNodesHaveSameHead ensures all nodes have the same head epoch. Checks finality and justification as well.
-// Not checking head block root as it may change irregularly for the validator connected nodes.
+// AllNodesHaveSameHead ensures all nodes converge on the same canonical head:
+// epoch, head block root, justified root, previous justified root, and finalized root.
+// We intentionally check head block root (unlike older behavior) because only comparing
+// epochs can hide real divergence where nodes are on different blocks in the same slot/epoch.
+// To avoid reintroducing flake, the evaluator now waits for readiness and requires
+// convergence across consecutive samples before passing.
 var AllNodesHaveSameHead = e2etypes.Evaluator{
 	Name:       "all_nodes_have_same_head_%d",
 	Policy:     policies.AllEpochs,
@@ -57,43 +71,64 @@ var AllNodesHaveSameHead = e2etypes.Evaluator{
 func healthzCheck(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	count := len(conns)
 	for i := range count {
-		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/healthz", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i))
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_, err := getURLBodyWithRetries(ctx, fmt.Sprintf("http://localhost:%d/healthz", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i), httpCheckAttempts, httpCheckRetryDelay)
+		cancel()
 		if err != nil {
-			// Continue if the connection fails, regular flake.
-			continue
-		}
-		if resp.StatusCode != http.StatusOK {
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return err
-			}
-			return fmt.Errorf("expected status code OK for beacon node %d, received %v with body %s", i, resp.StatusCode, body)
-		}
-		if err = resp.Body.Close(); err != nil {
-			return err
+			return fmt.Errorf("healthz check failed for beacon node %d: %w", i, err)
 		}
 		time.Sleep(connTimeDelay)
 	}
 
 	for i := range count {
-		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/healthz", e2e.TestParams.Ports.ValidatorMetricsPort+i))
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_, err := getURLBodyWithRetries(ctx, fmt.Sprintf("http://localhost:%d/healthz", e2e.TestParams.Ports.ValidatorMetricsPort+i), httpCheckAttempts, httpCheckRetryDelay)
+		cancel()
 		if err != nil {
-			// Continue if the connection fails, regular flake.
-			continue
-		}
-		if resp.StatusCode != http.StatusOK {
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return err
-			}
-			return fmt.Errorf("expected status code OK for validator client %d, received %v with body %s", i, resp.StatusCode, body)
-		}
-		if err = resp.Body.Close(); err != nil {
-			return err
+			return fmt.Errorf("healthz check failed for validator client %d: %w", i, err)
 		}
 		time.Sleep(connTimeDelay)
 	}
 	return nil
+}
+
+func getURLBodyWithRetries(ctx context.Context, url string, attempts int, retryDelay time.Duration) ([]byte, error) {
+	var lastErr error
+	for attempt := range attempts {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			lastErr = err
+		} else {
+			body, readErr := io.ReadAll(resp.Body)
+			closeErr := resp.Body.Close()
+			if readErr != nil {
+				lastErr = readErr
+			} else if closeErr != nil {
+				lastErr = closeErr
+			} else if resp.StatusCode != http.StatusOK {
+				lastErr = fmt.Errorf("status code=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+			} else {
+				return body, nil
+			}
+		}
+
+		if attempt < attempts-1 {
+			err := sleepWithContext(ctx, retryDelay)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return nil, fmt.Errorf("request to %s failed after %d attempts: %w", url, attempts, lastErr)
 }
 
 func peersConnect(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
@@ -172,81 +207,216 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 		return errors.Wrap(err, "failed waiting for mid-epoch")
 	}
 
-	headEpochs := make([]primitives.Epoch, len(conns))
-	headBlockRoots := make([][]byte, len(conns))
-	justifiedRoots := make([][]byte, len(conns))
-	prevJustifiedRoots := make([][]byte, len(conns))
-	finalizedRoots := make([][]byte, len(conns))
-	chainHeads := make([]*eth.ChainHead, len(conns))
-	g, _ := errgroup.WithContext(context.Background())
+	consecutiveSuccesses := 0
+	var lastErr error
+	var lastHeads []*eth.ChainHead
+	var lastPeers []int
+	attempt := 0
+	for {
+		attempt++
+		if ctx.Err() != nil {
+			break
+		}
 
+		chainHeads, err := fetchAllChainHeads(ctx, conns)
+		if err != nil {
+			lastErr = errors.Wrap(err, "fetch chain heads")
+			consecutiveSuccesses = 0
+			if err := sleepWithContext(ctx, headComparePollDelay); err != nil {
+				break
+			}
+			continue
+		}
+		lastHeads = chainHeads
+
+		peerCounts, err := fetchPeerCounts(ctx, conns)
+		if err != nil {
+			lastErr = errors.Wrap(err, "fetch peer counts")
+			consecutiveSuccesses = 0
+			if err := sleepWithContext(ctx, headComparePollDelay); err != nil {
+				break
+			}
+			continue
+		}
+		lastPeers = peerCounts
+
+		if !allPeerCountsAtLeast(peerCounts, minPeersForHeadCheck) {
+			lastErr = fmt.Errorf("nodes not ready: insufficient peers (min=%d)\n%s", minPeersForHeadCheck, summarizeHeads(chainHeads, peerCounts))
+			consecutiveSuccesses = 0
+			log.WithField("attempt", attempt).Warn("Insufficient peers for stable head comparison, retrying")
+			if err := sleepWithContext(ctx, headComparePollDelay); err != nil {
+				break
+			}
+			continue
+		}
+
+		if anyOptimistic(chainHeads) {
+			log.WithField("attempt", attempt).Warn("Optimistic head(s) observed, proceeding with head comparison anyway")
+		}
+
+		if err := compareChainHeads(chainHeads); err != nil {
+			lastErr = fmt.Errorf("%w\n%s", err, summarizeHeads(chainHeads, peerCounts))
+			consecutiveSuccesses = 0
+			log.WithField("attempt", attempt).Warn("Chain head mismatch, retrying")
+			if err := sleepWithContext(ctx, headComparePollDelay); err != nil {
+				break
+			}
+			continue
+		}
+
+		consecutiveSuccesses++
+		if consecutiveSuccesses >= headCompareRequiredConsecutive {
+			return nil
+		}
+		if err := sleepWithContext(ctx, headComparePollDelay); err != nil {
+			break
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = errors.New("head comparison did not converge before timeout")
+	}
+	if len(lastHeads) > 0 {
+		return fmt.Errorf("head comparison failed: %w\n%s", lastErr, summarizeHeads(lastHeads, lastPeers))
+	}
+	return fmt.Errorf("head comparison failed: %w", lastErr)
+}
+
+// fetchAllChainHeads queries all beacon nodes for their chain head in parallel.
+func fetchAllChainHeads(ctx context.Context, conns []*grpc.ClientConn) ([]*eth.ChainHead, error) {
+	chainHeads := make([]*eth.ChainHead, len(conns))
+	g, gctx := errgroup.WithContext(ctx)
 	for i, conn := range conns {
 		conIdx := i
 		currConn := conn
 		g.Go(func() error {
 			beaconClient := eth.NewBeaconChainClient(currConn)
-			chainHead, err := beaconClient.GetChainHead(context.Background(), &emptypb.Empty{})
+			chainHead, err := beaconClient.GetChainHead(gctx, &emptypb.Empty{})
 			if err != nil {
 				return errors.Wrapf(err, "connection number=%d", conIdx)
 			}
-			headEpochs[conIdx] = chainHead.HeadEpoch
-			headBlockRoots[conIdx] = chainHead.HeadBlockRoot
-			justifiedRoots[conIdx] = chainHead.JustifiedBlockRoot
-			prevJustifiedRoots[conIdx] = chainHead.PreviousJustifiedBlockRoot
-			finalizedRoots[conIdx] = chainHead.FinalizedBlockRoot
 			chainHeads[conIdx] = chainHead
 			return nil
 		})
 	}
 	if err := g.Wait(); err != nil {
-		return err
+		return nil, err
 	}
+	return chainHeads, nil
+}
 
-	for i := range conns {
-		if headEpochs[0] != headEpochs[i] {
+func fetchPeerCounts(ctx context.Context, conns []*grpc.ClientConn) ([]int, error) {
+	peerCounts := make([]int, len(conns))
+	g, gctx := errgroup.WithContext(ctx)
+	for i, conn := range conns {
+		conIdx := i
+		currConn := conn
+		g.Go(func() error {
+			nodeClient := eth.NewNodeClient(currConn)
+			peersResp, err := nodeClient.ListPeers(gctx, &emptypb.Empty{})
+			if err != nil {
+				return errors.Wrapf(err, "failed to list peers for connection number=%d", conIdx)
+			}
+			peerCounts[conIdx] = len(peersResp.Peers)
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	return peerCounts, nil
+}
+
+func allPeerCountsAtLeast(peerCounts []int, minPeers int) bool {
+	for _, count := range peerCounts {
+		if count < minPeers {
+			return false
+		}
+	}
+	return true
+}
+
+func anyOptimistic(chainHeads []*eth.ChainHead) bool {
+	for _, head := range chainHeads {
+		if head.GetOptimisticStatus() {
+			return true
+		}
+	}
+	return false
+}
+
+func summarizeHeads(chainHeads []*eth.ChainHead, peerCounts []int) string {
+	var b strings.Builder
+	for i, head := range chainHeads {
+		peers := -1
+		if i < len(peerCounts) {
+			peers = peerCounts[i]
+		}
+		_, _ = fmt.Fprintf(
+			&b,
+			"node=%d slot=%d epoch=%d optimistic=%t peers=%d head=%#x justified=%#x finalized=%#x\n",
+			i,
+			head.HeadSlot,
+			head.HeadEpoch,
+			head.GetOptimisticStatus(),
+			peers,
+			head.HeadBlockRoot,
+			head.JustifiedBlockRoot,
+			head.FinalizedBlockRoot,
+		)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// compareChainHeads checks that all chain heads agree on epoch, head root,
+// justified root, previous justified root, and finalized root.
+func compareChainHeads(chainHeads []*eth.ChainHead) error {
+	for i := 1; i < len(chainHeads); i++ {
+		if chainHeads[0].HeadEpoch != chainHeads[i].HeadEpoch {
 			return fmt.Errorf(
 				"received conflicting head epochs on node %d, expected %d, received %d",
 				i,
-				headEpochs[0],
-				headEpochs[i],
+				chainHeads[0].HeadEpoch,
+				chainHeads[i].HeadEpoch,
 			)
 		}
-		if !bytes.Equal(headBlockRoots[0], headBlockRoots[i]) {
+		if !bytes.Equal(chainHeads[0].HeadBlockRoot, chainHeads[i].HeadBlockRoot) {
 			return fmt.Errorf(
-				"received conflicting head block roots on node %d, expected %#x, received %#x",
+				"received conflicting head block roots on node %d (slot %d vs %d), expected %#x, received %#x",
 				i,
-				headBlockRoots[0],
-				headBlockRoots[i],
+				chainHeads[0].HeadSlot,
+				chainHeads[i].HeadSlot,
+				chainHeads[0].HeadBlockRoot,
+				chainHeads[i].HeadBlockRoot,
 			)
 		}
-		if !bytes.Equal(justifiedRoots[0], justifiedRoots[i]) {
+		if !bytes.Equal(chainHeads[0].JustifiedBlockRoot, chainHeads[i].JustifiedBlockRoot) {
 			return fmt.Errorf(
 				"received conflicting justified block roots on node %d, expected %#x, received %#x: %s and %s",
 				i,
-				justifiedRoots[0],
-				justifiedRoots[i],
+				chainHeads[0].JustifiedBlockRoot,
+				chainHeads[i].JustifiedBlockRoot,
 				chainHeads[0].String(),
 				chainHeads[i].String(),
 			)
 		}
-		if !bytes.Equal(prevJustifiedRoots[0], prevJustifiedRoots[i]) {
+		if !bytes.Equal(chainHeads[0].PreviousJustifiedBlockRoot, chainHeads[i].PreviousJustifiedBlockRoot) {
 			return fmt.Errorf(
 				"received conflicting previous justified block roots on node %d, expected %#x, received %#x",
 				i,
-				prevJustifiedRoots[0],
-				prevJustifiedRoots[i],
+				chainHeads[0].PreviousJustifiedBlockRoot,
+				chainHeads[i].PreviousJustifiedBlockRoot,
 			)
 		}
-		if !bytes.Equal(finalizedRoots[0], finalizedRoots[i]) {
+		if !bytes.Equal(chainHeads[0].FinalizedBlockRoot, chainHeads[i].FinalizedBlockRoot) {
 			return fmt.Errorf(
 				"received conflicting finalized epoch roots on node %d, expected %#x, received %#x",
 				i,
-				finalizedRoots[0],
-				finalizedRoots[i],
+				chainHeads[0].FinalizedBlockRoot,
+				chainHeads[i].FinalizedBlockRoot,
 			)
 		}
 	}
-
 	return nil
 }
 

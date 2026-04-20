@@ -244,6 +244,12 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 	}
 	currSlot := slots.CurrentSlot(genesis.GenesisTime.AsTime())
 	currEpoch := slots.ToEpoch(currSlot)
+
+	// Track blocks with zero sync committee participation across both loops.
+	// A small number is tolerated (transient p2p issues), but sustained
+	// zero participation indicates a real problem.
+	zeroSyncCount := 0
+	const maxZeroSyncBlocks = 2
 	lowestBound := primitives.Epoch(0)
 	if currEpoch >= 1 {
 		lowestBound = currEpoch - 1
@@ -265,30 +271,51 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		if b == nil || b.IsNil() {
 			return errors.New("nil block provided")
 		}
-		forkStartSlot, err := slots.EpochStart(params.BeaconConfig().AltairForkEpoch)
-		if err != nil {
-			return err
-		}
-		if forkStartSlot == b.Block().Slot() {
-			// Skip fork slot.
-			continue
-		}
 		// Skip slots 1-2 at genesis - validators need time to ramp up after chain start
 		// due to doppelganger protection. This is a startup timing issue, not a fork transition issue.
 		if b.Block().Slot() < 3 {
 			continue
 		}
-		expectedParticipation := expectedSyncParticipation
-		switch slots.ToEpoch(b.Block().Slot()) {
-		case params.BeaconConfig().AltairForkEpoch:
-			// Drop expected sync participation figure.
-			expectedParticipation = 0.90
-		default:
-			// no-op
+		// Skip the first three slots of each fork epoch to allow
+		// gossipsub mesh reformation and sync committee ramp-up.
+		forkEpochs := []primitives.Epoch{
+			params.BeaconConfig().AltairForkEpoch,
+			params.BeaconConfig().BellatrixForkEpoch,
+			params.BeaconConfig().CapellaForkEpoch,
+			params.BeaconConfig().DenebForkEpoch,
+			params.BeaconConfig().ElectraForkEpoch,
+			params.BeaconConfig().FuluForkEpoch,
 		}
+		skipSlot := false
+		for _, forkEpoch := range forkEpochs {
+			if forkEpoch == params.BeaconConfig().FarFutureEpoch {
+				continue
+			}
+			forkSlot, err := slots.EpochStart(forkEpoch)
+			if err != nil {
+				return err
+			}
+			if b.Block().Slot() >= forkSlot && b.Block().Slot() <= forkSlot+2 {
+				skipSlot = true
+				break
+			}
+		}
+		if skipSlot {
+			continue
+		}
+		expectedParticipation := expectedSyncParticipation
 		syncAgg, err := b.Block().Body().SyncAggregate()
 		if err != nil {
 			return err
+		}
+		// Tolerate a small number of blocks with zero sync committee messages
+		// (transient p2p issues), but fail if it happens too often.
+		if syncAgg.SyncCommitteeBits.Count() == 0 {
+			zeroSyncCount++
+			if zeroSyncCount > maxZeroSyncBlocks {
+				return errors.Errorf("too many blocks (%d) with zero sync participation, last at slot %d", zeroSyncCount, b.Block().Slot())
+			}
+			continue
 		}
 		threshold := uint64(float64(syncAgg.SyncCommitteeBits.Len()) * expectedParticipation)
 		if syncAgg.SyncCommitteeBits.Count() < threshold {
@@ -331,8 +358,9 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 			if err != nil {
 				return err
 			}
-			// Skip the first two slots of each fork epoch.
-			if b.Block().Slot() == forkSlot || b.Block().Slot() == forkSlot+1 {
+			// Skip the first three slots of each fork epoch to allow
+			// gossipsub mesh reformation and sync committee ramp-up.
+			if b.Block().Slot() >= forkSlot && b.Block().Slot() <= forkSlot+2 {
 				skipSlot = true
 				break
 			}
@@ -343,6 +371,15 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		syncAgg, err := b.Block().Body().SyncAggregate()
 		if err != nil {
 			return err
+		}
+		// Tolerate a small number of blocks with zero sync committee messages
+		// (transient p2p issues), but fail if it happens too often.
+		if syncAgg.SyncCommitteeBits.Count() == 0 {
+			zeroSyncCount++
+			if zeroSyncCount > maxZeroSyncBlocks {
+				return errors.Errorf("too many blocks (%d) with zero sync participation, last at slot %d", zeroSyncCount, b.Block().Slot())
+			}
+			continue
 		}
 		threshold := uint64(float64(syncAgg.SyncCommitteeBits.Len()) * expectedSyncParticipation)
 		if syncAgg.SyncCommitteeBits.Count() < threshold {

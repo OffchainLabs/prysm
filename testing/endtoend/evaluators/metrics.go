@@ -3,8 +3,6 @@ package evaluators
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -91,19 +89,13 @@ func metricsTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 	currentEpoch := slots.ToEpoch(currentSlot)
 	forkDigest := params.ForkDigest(currentEpoch)
 	for i := range conns {
-		response, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i))
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		dataInBytes, err := getURLBodyWithRetries(ctx, fmt.Sprintf("http://localhost:%d/metrics", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i), httpCheckAttempts, httpCheckRetryDelay)
+		cancel()
 		if err != nil {
-			// Continue if the connection fails, regular flake.
-			continue
-		}
-		dataInBytes, err := io.ReadAll(response.Body)
-		if err != nil {
-			return err
+			return fmt.Errorf("metrics check failed for beacon node %d: %w", i, err)
 		}
 		pageContent := string(dataInBytes)
-		if err = response.Body.Close(); err != nil {
-			return err
-		}
 		time.Sleep(connTimeDelay)
 
 		beaconClient := eth.NewBeaconChainClient(conns[i])

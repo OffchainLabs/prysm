@@ -3,6 +3,7 @@ package evaluators
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -58,16 +59,24 @@ var SlashedValidatorsLoseBalanceAfterEpoch = func(n primitives.Epoch) e2eTypes.E
 	}
 }
 
-var slashedIndices []uint64
+var (
+	slashedMu      sync.Mutex
+	slashedIndices []uint64
+)
 
 func validatorsSlashed(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	ctx := context.Background()
 	client := eth.NewBeaconChainClient(conn)
 
+	slashedMu.Lock()
+	indices := make([]uint64, len(slashedIndices))
+	copy(indices, slashedIndices)
+	slashedMu.Unlock()
+
 	actualSlashedIndices := 0
 
-	for _, slashedIndex := range slashedIndices {
+	for _, slashedIndex := range indices {
 		req := &eth.GetValidatorRequest{
 			QueryFilter: &eth.GetValidatorRequest_Index{
 				Index: primitives.ValidatorIndex(slashedIndex),
@@ -83,8 +92,8 @@ func validatorsSlashed(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientConn)
 		}
 	}
 
-	if actualSlashedIndices != len(slashedIndices) {
-		return fmt.Errorf("expected %d indices to be slashed, received %d", len(slashedIndices), actualSlashedIndices)
+	if actualSlashedIndices != len(indices) {
+		return fmt.Errorf("expected %d indices to be slashed, received %d", len(indices), actualSlashedIndices)
 	}
 	return nil
 }
@@ -94,7 +103,12 @@ func validatorsLoseBalance(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientC
 	ctx := context.Background()
 	client := eth.NewBeaconChainClient(conn)
 
-	for i, slashedIndex := range slashedIndices {
+	slashedMu.Lock()
+	indices := make([]uint64, len(slashedIndices))
+	copy(indices, slashedIndices)
+	slashedMu.Unlock()
+
+	for i, slashedIndex := range indices {
 		req := &eth.GetValidatorRequest{
 			QueryFilter: &eth.GetValidatorRequest_Index{
 				Index: primitives.ValidatorIndex(slashedIndex),
@@ -139,7 +153,10 @@ func insertDoubleAttestationIntoPool(_ *e2eTypes.EvaluationContext, conns ...*gr
 	for i := uint64(0); i < valsToSlash; i++ {
 		valIdx := h.validatorIndexAtCommitteeIndex(i)
 
-		if len(slice.IntersectionUint64(slashedIndices, []uint64{uint64(valIdx)})) > 0 {
+		slashedMu.Lock()
+		alreadySlashed := len(slice.IntersectionUint64(slashedIndices, []uint64{uint64(valIdx)})) > 0
+		slashedMu.Unlock()
+		if alreadySlashed {
 			valsToSlash++
 			continue
 		}
@@ -164,7 +181,9 @@ func insertDoubleAttestationIntoPool(_ *e2eTypes.EvaluationContext, conns ...*gr
 			return errors.Wrap(err, "could not propose attestation")
 		}
 
+		slashedMu.Lock()
 		slashedIndices = append(slashedIndices, uint64(valIdx))
+		slashedMu.Unlock()
 	}
 	return nil
 }
@@ -232,7 +251,9 @@ func proposeDoubleBlock(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientConn
 		return errors.New("expected block to fail processing")
 	}
 
+	slashedMu.Lock()
 	slashedIndices = append(slashedIndices, uint64(proposerIndex))
+	slashedMu.Unlock()
 	return nil
 }
 

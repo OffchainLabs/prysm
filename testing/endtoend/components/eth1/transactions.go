@@ -8,6 +8,7 @@ import (
 	"math/big"
 	mathRand "math/rand"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -38,7 +39,7 @@ type TransactionGenerator struct {
 	seed          int64
 	started       chan struct{}
 	cancel        context.CancelFunc
-	paused        bool
+	paused        atomic.Bool
 	useLargeBlobs bool // Use large blob transactions (6 blobs per tx) for BPO testing
 }
 
@@ -110,7 +111,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			if t.paused {
+			if t.paused.Load() {
 				continue
 			}
 			backend := ethclient.NewClient(client)
@@ -267,13 +268,13 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 
 // Pause pauses the component and its underlying process.
 func (t *TransactionGenerator) Pause() error {
-	t.paused = true
+	t.paused.Store(true)
 	return nil
 }
 
 // Resume resumes the component and its underlying process.
 func (t *TransactionGenerator) Resume() error {
-	t.paused = false
+	t.paused.Store(false)
 	return nil
 }
 
