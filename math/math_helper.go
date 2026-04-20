@@ -123,7 +123,7 @@ func PowerOf2(n uint64) uint64 {
 func Mul64(a, b uint64) (uint64, error) {
 	overflows, val := bits.Mul64(a, b)
 	if overflows > 0 {
-		return 0, errors.New("multiplication overflows")
+		return 0, ErrMulOverflow
 	}
 	return val, nil
 }
@@ -143,7 +143,7 @@ func Div64(a, b uint64) (uint64, error) {
 func Add64(a, b uint64) (uint64, error) {
 	res, carry := bits.Add64(a, b, 0 /* carry */)
 	if carry > 0 {
-		return 0, errors.New("addition overflows")
+		return 0, ErrAddOverflow
 	}
 	return res, nil
 }
@@ -152,7 +152,7 @@ func Add64(a, b uint64) (uint64, error) {
 func Sub64(a, b uint64) (uint64, error) {
 	res, borrow := bits.Sub64(a, b, 0 /* borrow */)
 	if borrow > 0 {
-		return 0, errors.New("subtraction underflow")
+		return 0, ErrSubUnderflow
 	}
 	return res, nil
 }
