@@ -757,10 +757,10 @@ func (s *ChainService) HasFullNode(root [32]byte) bool {
 	return false
 }
 
-// IsFullNode mocks the same method in the chain service.
-func (s *ChainService) IsFullNode(root [32]byte) bool {
+// FullBeatsEmpty mocks the same method in the chain service.
+func (s *ChainService) FullBeatsEmpty(root [32]byte) bool {
 	if s.ForkChoiceStore != nil {
-		return s.ForkChoiceStore.IsFullNode(root)
+		return s.ForkChoiceStore.FullBeatsEmpty(root)
 	}
 	if s.ForkchoiceRoots != nil {
 		return s.ForkchoiceRoots[root]

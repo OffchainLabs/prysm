@@ -109,7 +109,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	if cfg.roblock.Version() < version.Gloas {
 		s.sendFCU(cfg)
 	} else { // We reach this only when the incoming block is head.
-		full := s.cfg.ForkChoiceStore.IsFullNode(cfg.headRoot)
+		full := s.cfg.ForkChoiceStore.FullBeatsEmpty(cfg.headRoot)
 		if s.isNewHead(cfg.headRoot, full) {
 			if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState, full); err != nil {
 				log.WithError(err).Error("Could not save head")
@@ -371,9 +371,11 @@ func (s *Service) notifyEngineAndSaveData(
 
 	for i, b := range blks {
 		root := b.Root()
-		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,
+		args := &forkchoicetypes.BlockAndCheckpoints{
+			Block:               b,
 			JustifiedCheckpoint: jCheckpoints[i],
-			FinalizedCheckpoint: fCheckpoints[i]}
+			FinalizedCheckpoint: fCheckpoints[i],
+		}
 		if b.Version() < version.Gloas {
 			isValidPayload, err = s.notifyNewPayload(ctx,
 				postVersionAndHeaders[i].version,

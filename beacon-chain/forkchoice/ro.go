@@ -37,11 +37,11 @@ func (ro *ROForkChoice) HasFullNode(root [32]byte) bool {
 	return ro.getter.HasFullNode(root)
 }
 
-// IsFullNode delegates to the underlying forkchoice call, under a lock.
-func (ro *ROForkChoice) IsFullNode(root [32]byte) bool {
+// FullBeatsEmpty delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) FullBeatsEmpty(root [32]byte) bool {
 	ro.l.RLock()
 	defer ro.l.RUnlock()
-	return ro.getter.IsFullNode(root)
+	return ro.getter.FullBeatsEmpty(root)
 }
 
 // HasNode delegates to the underlying forkchoice call, under a lock.

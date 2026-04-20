@@ -89,7 +89,7 @@ func (s *Service) computePayloadWithdrawals(ctx context.Context, st state.Beacon
 		}
 		return result.Withdrawals, nil
 	}
-	if !s.IsFullNode(parentRoot) {
+	if !s.FullBeatsEmpty(parentRoot) {
 		return st.PayloadExpectedWithdrawals()
 	}
 	// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).

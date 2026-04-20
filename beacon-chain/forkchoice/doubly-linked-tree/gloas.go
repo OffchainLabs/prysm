@@ -460,9 +460,9 @@ func (f *ForkChoice) HasFullNode(root [32]byte) bool {
 	return ok
 }
 
-// IsFullNode returns whether fork choice would select the full payload variant
+// FullBeatsEmpty returns whether fork choice would select the full payload variant
 // for the given beacon block root. The caller MUST hold the forkchoice lock.
-func (f *ForkChoice) IsFullNode(root [32]byte) bool {
+func (f *ForkChoice) FullBeatsEmpty(root [32]byte) bool {
 	en := f.store.emptyNodeByRoot[root]
 	if en == nil || en.node == nil {
 		return false

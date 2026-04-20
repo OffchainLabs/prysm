@@ -71,7 +71,7 @@ func TestROLocking(t *testing.T) {
 		{
 			name: "isFullNodeCalled",
 			call: isFullNodeCalled,
-			cb:   func(g FastGetter) { g.IsFullNode([32]byte{}) },
+			cb:   func(g FastGetter) { g.FullBeatsEmpty([32]byte{}) },
 		},
 		{
 			name: "hasNodeCalled",
@@ -220,7 +220,7 @@ func (ro *mockROForkchoice) HasFullNode(_ [32]byte) bool {
 	return false
 }
 
-func (ro *mockROForkchoice) IsFullNode(_ [32]byte) bool {
+func (ro *mockROForkchoice) FullBeatsEmpty(_ [32]byte) bool {
 	ro.calls = append(ro.calls, isFullNodeCalled)
 	return false
 }

@@ -41,7 +41,7 @@ func (s *Service) UpdateAndSaveHeadWithBalances(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "could not retrieve head state in DB")
 	}
-	full := s.cfg.ForkChoiceStore.IsFullNode(headRoot)
+	full := s.cfg.ForkChoiceStore.FullBeatsEmpty(headRoot)
 	return s.saveHead(ctx, headRoot, headBlock, headState, full)
 }
 

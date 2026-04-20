@@ -284,7 +284,7 @@ var (
 
 // computePayloadWithdrawals returns the withdrawals for the next payload.
 func (vs *Server) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte) ([]*enginev1.Withdrawal, error) {
-	if !vs.ForkchoiceFetcher.IsFullNode(parentRoot) {
+	if !vs.ForkchoiceFetcher.FullBeatsEmpty(parentRoot) {
 		return st.PayloadExpectedWithdrawals()
 	}
 	parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
@@ -336,7 +336,7 @@ func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, 
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get latest execution payload bid")
 		}
-		if vs.ForkchoiceFetcher.IsFullNode(headRoot) {
+		if vs.ForkchoiceFetcher.FullBeatsEmpty(headRoot) {
 			bh := bid.BlockHash()
 			return bh[:], nil
 		}
