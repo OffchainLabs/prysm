@@ -314,21 +314,52 @@ func TestProcessPendingDeposits(t *testing.T) {
 }
 
 func TestProcessPendingDeposits_NilPendingDeposit(t *testing.T) {
-	st := stateWithActiveBalanceETH(t, 0)
-	nativeSt, ok := st.(*state_native.BeaconState)
-	require.Equal(t, true, ok)
+	t.Run("drops nil-only pending deposits", func(t *testing.T) {
+		st := stateWithActiveBalanceETH(t, 0)
+		nativeSt, ok := st.(*state_native.BeaconState)
+		require.Equal(t, true, ok)
 
-	pb, ok := nativeSt.ToProtoUnsafe().(*eth.BeaconStateElectra)
-	require.Equal(t, true, ok)
-	pb.PendingDeposits = []*eth.PendingDeposit{nil}
+		pb, ok := nativeSt.ToProtoUnsafe().(*eth.BeaconStateElectra)
+		require.Equal(t, true, ok)
+		pb.PendingDeposits = []*eth.PendingDeposit{nil}
 
-	st, err := state_native.InitializeFromProtoUnsafeElectra(pb)
-	require.NoError(t, err)
-	require.NoError(t, electra.ProcessPendingDeposits(context.TODO(), st, 0))
+		st, err := state_native.InitializeFromProtoUnsafeElectra(pb)
+		require.NoError(t, err)
+		require.NoError(t, electra.ProcessPendingDeposits(context.TODO(), st, 0))
 
-	remaining, err := st.PendingDeposits()
-	require.NoError(t, err)
-	require.Equal(t, 0, len(remaining))
+		remaining, err := st.PendingDeposits()
+		require.NoError(t, err)
+		require.Equal(t, 0, len(remaining))
+	})
+
+	t.Run("keeps mixed valid pending deposits processable", func(t *testing.T) {
+		st := stateWithActiveBalanceETH(t, 0)
+		nativeSt, ok := st.(*state_native.BeaconState)
+		require.Equal(t, true, ok)
+
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		wc := make([]byte, 32)
+		wc[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+		validDep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, bytesutil.ToBytes32(wc), 0)
+
+		pb, ok := nativeSt.ToProtoUnsafe().(*eth.BeaconStateElectra)
+		require.Equal(t, true, ok)
+		pb.PendingDeposits = []*eth.PendingDeposit{nil, validDep}
+
+		st, err = state_native.InitializeFromProtoUnsafeElectra(pb)
+		require.NoError(t, err)
+		require.NoError(t, electra.ProcessPendingDeposits(context.TODO(), st, 0))
+
+		remaining, err := st.PendingDeposits()
+		require.NoError(t, err)
+		require.Equal(t, 0, len(remaining))
+		require.Equal(t, 1, len(st.Validators()))
+		require.Equal(t, 1, len(st.Balances()))
+		b, err := st.BalanceAtIndex(0)
+		require.NoError(t, err)
+		require.Equal(t, params.BeaconConfig().MinActivationBalance, b)
+	})
 }
 
 func TestBatchProcessNewPendingDeposits(t *testing.T) {

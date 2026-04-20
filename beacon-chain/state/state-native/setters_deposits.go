@@ -44,6 +44,9 @@ func (b *BeaconState) SetPendingDeposits(val []*ethpb.PendingDeposit) error {
 	if b.version < version.Electra {
 		return errNotSupported("SetPendingDeposits", b.version)
 	}
+	// ProcessPendingDeposits strips nil entries defensively before this setter is called,
+	// but InitializeFromProtoUnsafe* can bypass that path. Keep this guard as a fail-fast
+	// contract for any callers that pass malformed pending deposits.
 	for _, pd := range val {
 		if pd == nil {
 			return errors.New("cannot set nil pending deposit")

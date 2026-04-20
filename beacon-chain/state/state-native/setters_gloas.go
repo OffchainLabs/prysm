@@ -704,6 +704,7 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 
 	for _, deposit := range pendingDeposits {
 		if deposit == nil {
+			log.Warn("Skipping nil pending deposit in OnboardBuildersFromPendingDeposits; state may be malformed")
 			continue
 		}
 		pubkey := bytesutil.ToBytes48(deposit.PublicKey)
