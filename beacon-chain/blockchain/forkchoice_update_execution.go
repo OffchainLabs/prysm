@@ -83,7 +83,8 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig) {
 	}
 
 	if s.isNewHead(fcuArgs.headRoot, false) {
-		if err := s.saveHead(cfg.ctx, fcuArgs.headRoot, fcuArgs.headBlock, fcuArgs.headState); err != nil {
+		// sendFCU is only reached for pre gloas blocks
+		if err := s.saveHead(cfg.ctx, fcuArgs.headRoot, fcuArgs.headBlock, fcuArgs.headState, false); err != nil {
 			log.WithError(err).Error("Could not save head")
 		}
 		s.pruneAttsFromPool(s.ctx, fcuArgs.headState, fcuArgs.headBlock)

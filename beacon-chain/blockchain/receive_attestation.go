@@ -186,7 +186,7 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 			go s.forkchoiceUpdateWithExecution(s.ctx, fcuArgs)
 		}
 	}
-	if err := s.saveHead(s.ctx, newHeadRoot, headBlock, headState); err != nil {
+	if err := s.saveHead(s.ctx, newHeadRoot, headBlock, headState, full); err != nil {
 		log.WithError(err).Error("Could not save head")
 	}
 	s.pruneAttsFromPool(s.ctx, headState, headBlock)

@@ -41,7 +41,8 @@ func (s *Service) UpdateAndSaveHeadWithBalances(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "could not retrieve head state in DB")
 	}
-	return s.saveHead(ctx, headRoot, headBlock, headState)
+	full := s.cfg.ForkChoiceStore.IsFullNode(headRoot)
+	return s.saveHead(ctx, headRoot, headBlock, headState, full)
 }
 
 // This defines the current chain service's view of head.
@@ -57,11 +58,10 @@ type head struct {
 // This saves head info to the local service cache, it also saves the
 // new head root to the DB.
 // Caller of the method MUST acquire a lock on forkchoice.
-func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock interfaces.ReadOnlySignedBeaconBlock, headState state.BeaconState) error {
+func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock interfaces.ReadOnlySignedBeaconBlock, headState state.BeaconState, full bool) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.saveHead")
 	defer span.End()
 
-	full := s.cfg.ForkChoiceStore.IsFullNode(newHeadRoot)
 	if !s.isNewHead(newHeadRoot, full) {
 		return nil
 	}
@@ -272,16 +272,6 @@ func (s *Service) headRoot() [32]byte {
 // This is a lock free version.
 func (s *Service) headBlock() (interfaces.ReadOnlySignedBeaconBlock, error) {
 	return s.head.block.Copy()
-}
-
-// HeadFull returns whether the current head's execution payload has been delivered.
-func (s *Service) HeadFull() bool {
-	s.headLock.RLock()
-	defer s.headLock.RUnlock()
-	if s.head == nil {
-		return false
-	}
-	return s.head.full
 }
 
 // This returns the head state.

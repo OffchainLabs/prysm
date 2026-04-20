@@ -192,7 +192,7 @@ func TestServer_getParentBlockHash_Gloas_Full(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	chain := &chainMock.ChainService{FullHead: true}
+	chain := &chainMock.ChainService{ForkchoiceRoots: map[[32]byte]bool{headRoot: true}}
 	vs := &Server{
 		ForkchoiceFetcher: chain,
 		HeadFetcher:       chain,

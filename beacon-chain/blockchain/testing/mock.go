@@ -38,7 +38,6 @@ var ErrNilState = errors.New("nil state")
 type ChainService struct {
 	NotFinalized                bool
 	Optimistic                  bool
-	FullHead                    bool
 	ValidAttestation            bool
 	ValidatorsRoot              [32]byte
 	PublicKey                   [fieldparams.BLSPubkeyLength]byte
@@ -350,11 +349,6 @@ func (s *ChainService) GetBlockPreState(_ context.Context, _ blocks.ROBlock) (st
 // GetPrestateToPropose mocks the same method in the chain service.
 func (s *ChainService) GetPrestateToPropose(_ context.Context, _ blocks.ROBlock) (state.BeaconState, error) {
 	return s.State.Copy(), nil
-}
-
-// HeadFull mocks HeadFull method in chain service.
-func (s *ChainService) HeadFull() bool {
-	return s.FullHead
 }
 
 // HeadSlot mocks HeadSlot method in chain service.
@@ -767,6 +761,9 @@ func (s *ChainService) HasFullNode(root [32]byte) bool {
 func (s *ChainService) IsFullNode(root [32]byte) bool {
 	if s.ForkChoiceStore != nil {
 		return s.ForkChoiceStore.IsFullNode(root)
+	}
+	if s.ForkchoiceRoots != nil {
+		return s.ForkchoiceRoots[root]
 	}
 	return false
 }
