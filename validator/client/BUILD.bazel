@@ -63,6 +63,7 @@ go_library(
         "//time/slots:go_default_library",
         "//validator/accounts/iface:go_default_library",
         "//validator/accounts/wallet:go_default_library",
+        "//validator/client/beacon-api:go_default_library",
         "//validator/client/beacon-chain-client-factory:go_default_library",
         "//validator/client/iface:go_default_library",
         "//validator/client/node-client-factory:go_default_library",

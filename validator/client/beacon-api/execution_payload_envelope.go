@@ -17,6 +17,9 @@ func (c *beaconApiValidatorClient) getExecutionPayloadEnvelope(
 	ctx context.Context,
 	slot primitives.Slot,
 ) (*ethpb.ExecutionPayloadEnvelope, error) {
+	if cached := c.envelopeCache.Take(slot); cached != nil {
+		return cached, nil
+	}
 	endpoint := fmt.Sprintf("/eth/v1/validator/execution_payload_envelope/%d", slot)
 	var resp structs.GetValidatorExecutionPayloadEnvelopeResponse
 	if err := c.handler.Get(ctx, endpoint, &resp); err != nil {

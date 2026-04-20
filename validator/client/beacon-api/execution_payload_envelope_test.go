@@ -40,6 +40,29 @@ func testProtoEnvelope() *ethpb.ExecutionPayloadEnvelope {
 	}
 }
 
+func TestGetExecutionPayloadEnvelope_CachedHit(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	// No Get expectation: cache hit must skip the HTTP call.
+
+	envelope := testProtoEnvelope()
+	client := &beaconApiValidatorClient{
+		handler:       handler,
+		envelopeCache: newExecutionPayloadEnvelopeCache(),
+	}
+	client.envelopeCache.Add(100, envelope)
+
+	resp, err := client.getExecutionPayloadEnvelope(t.Context(), 100)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, primitives.BuilderIndex(42), resp.BuilderIndex)
+
+	// Cache must be evicted after first read so subsequent calls hit HTTP.
+	assert.Equal(t, (*ethpb.ExecutionPayloadEnvelope)(nil), client.envelopeCache.Take(100))
+}
+
 func TestGetExecutionPayloadEnvelope_Valid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

@@ -63,6 +63,7 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 }
 
 func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primitives.Slot, queryParams neturl.Values) (*ethpb.GenericBeaconBlock, error) {
+	queryParams.Set("include_payload", strconv.FormatBool(c.stateless))
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v4/validator/blocks/%d", slot), queryParams)
 	data, header, err := c.handler.GetSSZ(ctx, queryUrl)
 	if err != nil {
@@ -75,6 +76,9 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 			contents := &ethpb.BeaconBlockContentsGloas{}
 			if err := contents.UnmarshalSSZ(data); err != nil {
 				return nil, errors.Wrap(err, "failed to unmarshal gloas block contents SSZ")
+			}
+			if c.stateless && contents.ExecutionPayloadEnvelope != nil {
+				c.envelopeCache.Add(slot, contents.ExecutionPayloadEnvelope)
 			}
 			return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: contents.Block}}, nil
 		}
@@ -100,6 +104,13 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 		blk, err := contents.Block.ToGeneric()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not convert gloas block contents to generic")
+		}
+		if c.stateless && contents.ExecutionPayloadEnvelope != nil {
+			envelope, err := contents.ExecutionPayloadEnvelope.ToConsensus()
+			if err != nil {
+				return nil, errors.Wrap(err, "could not convert execution payload envelope to consensus")
+			}
+			c.envelopeCache.Add(slot, envelope)
 		}
 		return blk, nil
 	}
