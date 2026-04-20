@@ -31,6 +31,18 @@ var (
 	respTimeout = params.BeaconConfig().RespTimeoutDuration()
 )
 
+// RefreshRPCTimeoutsFromConfig refreshes package-level RPC timeout values from
+// the current active beacon config.
+//
+// This should be called after runtime config overrides (for example
+// --chain-config-file) are applied.
+func RefreshRPCTimeoutsFromConfig() {
+	ttfbTimeout = params.BeaconConfig().TtfbTimeoutDuration()
+	respTimeout = params.BeaconConfig().RespTimeoutDuration()
+	defaultReadDuration = ttfbTimeout
+	defaultWriteDuration = respTimeout
+}
+
 // rpcHandler is responsible for handling and responding to any incoming message.
 // This method may return an error to internal monitoring, but the error will
 // not be relayed to the peer.
