@@ -42,7 +42,8 @@ func init() {
 // Run executes "forkchoice"  and "sync" test.
 func Run(t *testing.T, config string, fork int) {
 	runTest(t, config, fork, "fork_choice")
-	if fork >= version.Bellatrix {
+	// Gloas spec tarballs do not ship a "sync" test directory.
+	if fork >= version.Bellatrix && fork < version.Gloas {
 		runTest(t, config, fork, "sync")
 	}
 }
@@ -56,7 +57,19 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 		t.Fatalf("No test folders found for %s/%s/%s", config, version.String(fork), basePath)
 	}
 
+	// Gloas introduces fork_choice suites that depend on the on_execution_payload_envelope
+	// handler, which Prysm does not yet wire into the spectest runner. Skip those suites here
+	// rather than at the test-case level.
+	gloasSkipSuites := map[string]bool{
+		"on_execution_payload_envelope": true,
+		"get_parent_payload_status":     true,
+	}
+
 	for _, folder := range testFolders {
+		if fork == version.Gloas && gloasSkipSuites[folder.Name()] {
+			t.Logf("Skipping gloas fork_choice suite %q (envelope path not yet wired)", folder.Name())
+			continue
+		}
 		folderPath := path.Join(basePath, folder.Name(), "pyspec_tests")
 		testFolders, testsFolderPath := utils.TestFolders(t, config, version.String(fork), folderPath)
 		if len(testFolders) == 0 {
@@ -114,6 +127,9 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 				case version.Fulu:
 					beaconState = unmarshalFuluState(t, preBeaconStateSSZ)
 					beaconBlock = unmarshalFuluBlock(t, blockSSZ)
+				case version.Gloas:
+					beaconState = unmarshalGloasState(t, preBeaconStateSSZ)
+					beaconBlock = unmarshalGloasBlock(t, blockSSZ)
 				default:
 					t.Fatalf("unknown fork version: %v", fork)
 				}
@@ -156,6 +172,8 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 							beaconBlock = unmarshalSignedElectraBlock(t, blockSSZ)
 						case version.Fulu:
 							beaconBlock = unmarshalSignedFuluBlock(t, blockSSZ)
+						case version.Gloas:
+							beaconBlock = unmarshalSignedGloasBlock(t, blockSSZ)
 						default:
 							t.Fatalf("unknown fork version: %v", fork)
 						}
@@ -666,6 +684,34 @@ func unmarshalFuluBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
 
 func unmarshalSignedFuluBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
 	base := &ethpb.SignedBeaconBlockFulu{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(base)
+	require.NoError(t, err)
+	return blk
+}
+
+// ----------------------------------------------------------------------------
+// Gloas
+// ----------------------------------------------------------------------------
+
+func unmarshalGloasState(t *testing.T, raw []byte) state.BeaconState {
+	base := &ethpb.BeaconStateGloas{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
+	require.NoError(t, err)
+	return st
+}
+
+func unmarshalGloasBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
+	base := &ethpb.BeaconBlockGloas{}
+	require.NoError(t, base.UnmarshalSSZ(raw))
+	blk, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{Block: base, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	require.NoError(t, err)
+	return blk
+}
+
+func unmarshalSignedGloasBlock(t *testing.T, raw []byte) interfaces.SignedBeaconBlock {
+	base := &ethpb.SignedBeaconBlockGloas{}
 	require.NoError(t, base.UnmarshalSSZ(raw))
 	blk, err := blocks.NewSignedBeaconBlock(base)
 	require.NoError(t, err)

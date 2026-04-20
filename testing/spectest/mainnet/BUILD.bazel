@@ -204,6 +204,7 @@ go_test(
         "gloas__finality__finality_test.go",
         "gloas__fork__upgrade_to_gloas_test.go",
         "gloas__fork_transition__transition_test.go",
+        "gloas__forkchoice__forkchoice_test.go",
         "gloas__operations__attestation_test.go",
         "gloas__operations__execution_payload_header_test.go",
         "gloas__operations__parent_execution_payload_test.go",
