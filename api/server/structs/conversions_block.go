@@ -3150,6 +3150,14 @@ func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) 
 	}, nil
 }
 
+func (b *BeaconBlockGloas) ToGeneric() (*eth.GenericBeaconBlock, error) {
+	block, err := b.ToConsensus()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert gloas block to consensus")
+	}
+	return &eth.GenericBeaconBlock{Block: &eth.GenericBeaconBlock_Gloas{Gloas: block}}, nil
+}
+
 func (b *SignedExecutionPayloadBid) ToConsensus() (*eth.SignedExecutionPayloadBid, error) {
 	if b == nil {
 		return nil, errNilValue
@@ -3396,7 +3404,7 @@ func (e *SignedExecutionPayloadEnvelope) ToConsensus() (*eth.SignedExecutionPayl
 	}
 	msg, err := e.Message.ToConsensus()
 	if err != nil {
-		return nil, err
+		return nil, server.NewDecodeError(err, "Message")
 	}
 	sig, err := bytesutil.DecodeHexWithLength(e.Signature, fieldparams.BLSSignatureLength)
 	if err != nil {
