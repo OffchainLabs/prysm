@@ -749,18 +749,11 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 	requestHashes := make([]common.Hash, 0, len(uniqueHashes))
 	for i := range uniqueHashes {
 		if uniqueHashes[i] == params.BeaconConfig().ZeroHash {
-			payloads[uniqueHashes[i]] = &pb.ExecutionPayloadGloas{
-				ParentHash:    make([]byte, fieldparams.RootLength),
-				FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
-				StateRoot:     make([]byte, fieldparams.RootLength),
-				ReceiptsRoot:  make([]byte, fieldparams.RootLength),
-				LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
-				PrevRandao:    make([]byte, fieldparams.RootLength),
-				BaseFeePerGas: make([]byte, fieldparams.RootLength),
-				BlockHash:     make([]byte, fieldparams.RootLength),
-				Transactions:  make([][]byte, 0),
-				Withdrawals:   make([]*pb.Withdrawal, 0),
+			empty, err := EmptyExecutionPayload(version.Gloas)
+			if err != nil {
+				return nil, err
 			}
+			payloads[uniqueHashes[i]] = empty.(*pb.ExecutionPayloadGloas)
 			continue
 		}
 		requestHashes = append(requestHashes, uniqueHashes[i])
@@ -1192,6 +1185,23 @@ func tDStringToUint256(td string) (*uint256.Int, error) {
 }
 
 func EmptyExecutionPayload(v int) (proto.Message, error) {
+	if v >= version.Gloas {
+		return &pb.ExecutionPayloadGloas{
+			ParentHash:      make([]byte, fieldparams.RootLength),
+			FeeRecipient:    make([]byte, fieldparams.FeeRecipientLength),
+			StateRoot:       make([]byte, fieldparams.RootLength),
+			ReceiptsRoot:    make([]byte, fieldparams.RootLength),
+			LogsBloom:       make([]byte, fieldparams.LogsBloomLength),
+			PrevRandao:      make([]byte, fieldparams.RootLength),
+			ExtraData:       make([]byte, 0),
+			BaseFeePerGas:   make([]byte, fieldparams.RootLength),
+			BlockHash:       make([]byte, fieldparams.RootLength),
+			Transactions:    make([][]byte, 0),
+			Withdrawals:     make([]*pb.Withdrawal, 0),
+			BlockAccessList: make([]byte, 0),
+		}, nil
+	}
+
 	if v >= version.Deneb {
 		return &pb.ExecutionPayloadDeneb{
 			ParentHash:    make([]byte, fieldparams.RootLength),
