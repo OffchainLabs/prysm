@@ -32,6 +32,7 @@ go_library(
         "rpc_chunked_response.go",
         "rpc_data_column_sidecars_by_range.go",
         "rpc_data_column_sidecars_by_root.go",
+        "rpc_execution_proofs_by_range.go",
         "rpc_execution_proofs_by_root.go",
         "rpc_goodbye.go",
         "rpc_light_client.go",

@@ -11,6 +11,7 @@ import (
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
@@ -458,6 +459,60 @@ func (e ExecutionProofsByRootReq) SizeSSZ() int {
 	}
 
 	return size
+}
+
+// =================================
+// ExecutionProofsByRangeReq section
+// =================================
+var _ ssz.Marshaler = (*ExecutionProofsByRangeReq)(nil)
+var _ ssz.Unmarshaler = (*ExecutionProofsByRangeReq)(nil)
+
+// executionProofsByRangeReqSize is the fixed SSZ size of an
+// ExecutionProofsByRangeReq container (two consecutive uint64 fields).
+const executionProofsByRangeReqSize = 16
+
+// ExecutionProofsByRangeReq is the SSZ container for the ExecutionProofsByRange
+// RPC request per EIP-8025: a starting slot and a slot count.
+//
+//	(
+//	  start_slot: Slot
+//	  count:      uint64
+//	)
+type ExecutionProofsByRangeReq struct {
+	StartSlot primitives.Slot
+	Count     uint64
+}
+
+// SizeSSZ returns the fixed serialized size of the container.
+func (r *ExecutionProofsByRangeReq) SizeSSZ() int {
+	return executionProofsByRangeReqSize
+}
+
+// MarshalSSZ serializes the container to a byte slice.
+func (r *ExecutionProofsByRangeReq) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, executionProofsByRangeReqSize)
+	binary.LittleEndian.PutUint64(buf[0:8], uint64(r.StartSlot))
+	binary.LittleEndian.PutUint64(buf[8:16], r.Count)
+	return buf, nil
+}
+
+// MarshalSSZTo appends the serialized container to the provided byte slice.
+func (r *ExecutionProofsByRangeReq) MarshalSSZTo(dst []byte) ([]byte, error) {
+	obj, err := r.MarshalSSZ()
+	if err != nil {
+		return nil, fmt.Errorf("marshal ssz: %w", err)
+	}
+	return append(dst, obj...), nil
+}
+
+// UnmarshalSSZ decodes the fixed-size container from the given byte slice.
+func (r *ExecutionProofsByRangeReq) UnmarshalSSZ(buf []byte) error {
+	if len(buf) != executionProofsByRangeReqSize {
+		return fmt.Errorf("expected %d bytes for ExecutionProofsByRangeReq, got %d", executionProofsByRangeReqSize, len(buf))
+	}
+	r.StartSlot = primitives.Slot(binary.LittleEndian.Uint64(buf[0:8]))
+	r.Count = binary.LittleEndian.Uint64(buf[8:16])
+	return nil
 }
 
 func init() {
