@@ -390,7 +390,7 @@ func TestProcessPTCWindow_GoldenVector(t *testing.T) {
 	lastStart := len(window) - slotsPerEpoch
 	h := sha256.New()
 	var buf [8]byte
-	for i := 0; i < slotsPerEpoch; i++ {
+	for i := range slotsPerEpoch {
 		for _, idx := range window[lastStart+i].ValidatorIndices {
 			binary.LittleEndian.PutUint64(buf[:], uint64(idx))
 			h.Write(buf[:])
