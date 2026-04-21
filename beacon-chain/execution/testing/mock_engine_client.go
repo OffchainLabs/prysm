@@ -33,6 +33,7 @@ type EngineClient struct {
 	ErrForkchoiceUpdated        error
 	ErrNewPayload               error
 	ExecutionPayloadByBlockHash map[[32]byte]*pb.ExecutionPayload
+	SlotByBlockHash             map[[32]byte]primitives.Slot
 	BlockByHashMap              map[[32]byte]*pb.ExecutionBlock
 	NumReconstructedPayloads    uint64
 	TerminalBlockHash           []byte
@@ -137,6 +138,7 @@ func (e *EngineClient) ReconstructFullExecutionPayloadByHash(
 			BlockHash:     p.BlockHash,
 			Transactions:  p.Transactions,
 			Withdrawals:   []*pb.Withdrawal{},
+			SlotNumber:    e.SlotByBlockHash[blockHash],
 		}, nil
 	}
 	if e.GetPayloadResponse != nil && e.GetPayloadResponse.ExecutionData != nil {

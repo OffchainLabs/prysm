@@ -1651,6 +1651,9 @@ func (e *ExecutionBundleGloas) UnmarshalJSON(enc []byte) error {
 	if dec.ExecutionPayload.ExcessBlobGas == nil {
 		return errors.New("missing required field 'excessBlobGas' for ExecutionPayload")
 	}
+	if dec.ExecutionPayload.SlotNumber == nil {
+		return errors.New("missing required field 'slotNumber' for ExecutionPayload")
+	}
 
 	*e = ExecutionBundleGloas{Payload: &ExecutionPayloadGloas{}}
 	e.Payload.ParentHash = dec.ExecutionPayload.ParentHash.Bytes()
@@ -1688,6 +1691,7 @@ func (e *ExecutionBundleGloas) UnmarshalJSON(enc []byte) error {
 		return errors.New("missing required field 'blockAccessList' for ExecutionPayload")
 	}
 	e.Payload.BlockAccessList = *dec.ExecutionPayload.BlockAccessList
+	e.Payload.SlotNumber = primitives.Slot(*dec.ExecutionPayload.SlotNumber)
 
 	v, err := hexutil.DecodeBig(dec.BlockValue)
 	if err != nil {
