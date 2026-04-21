@@ -776,3 +776,80 @@ func TestBlsSig(t *testing.T) {
 	require.NoError(t, json.Unmarshal(b, um))
 	require.Equal(t, *tm.V, *um.V)
 }
+
+// TestExecutionBundleGloas_UnmarshalJSON_PreservesSlotNumber guards against a
+// regression where engine_getPayloadV6 responses lost the EIP-7843 slotNumber
+// field during JSON decoding, causing self-build execution payload envelopes
+// to be rejected by the beacon node's cache lookup
+// (envelope.Payload.SlotNumber != request.Slot) and preventing the execution
+// chain from advancing past the Gloas fork boundary.
+func TestExecutionBundleGloas_UnmarshalJSON_PreservesSlotNumber(t *testing.T) {
+	const wantSlot primitives.Slot = 42
+	raw := fmt.Sprintf(`{
+		"executionPayload": {
+			"parentHash": "0x%064x",
+			"feeRecipient": "0x%040x",
+			"stateRoot": "0x%064x",
+			"receiptsRoot": "0x%064x",
+			"logsBloom": "0x%0512x",
+			"prevRandao": "0x%064x",
+			"blockNumber": "0x1",
+			"gasLimit": "0x1c9c380",
+			"gasUsed": "0x0",
+			"timestamp": "0x64",
+			"extraData": "0x",
+			"baseFeePerGas": "0x7",
+			"blockHash": "0x%064x",
+			"transactions": [],
+			"withdrawals": [],
+			"blobGasUsed": "0x0",
+			"excessBlobGas": "0x0",
+			"blockAccessList": "0x",
+			"slotNumber": "0x%x"
+		},
+		"blockValue": "0x0",
+		"blobsBundle": null,
+		"shouldOverrideBuilder": false,
+		"executionRequests": []
+	}`, 1, 2, 3, 4, 5, 6, 7, uint64(wantSlot))
+
+	bundle := &enginev1.ExecutionBundleGloas{}
+	require.NoError(t, json.Unmarshal([]byte(raw), bundle))
+	require.NotNil(t, bundle.Payload)
+	require.Equal(t, wantSlot, bundle.Payload.SlotNumber)
+}
+
+// TestExecutionBundleGloas_UnmarshalJSON_RequiresSlotNumber ensures the
+// required-field guard fires when slotNumber is absent.
+func TestExecutionBundleGloas_UnmarshalJSON_RequiresSlotNumber(t *testing.T) {
+	raw := fmt.Sprintf(`{
+		"executionPayload": {
+			"parentHash": "0x%064x",
+			"feeRecipient": "0x%040x",
+			"stateRoot": "0x%064x",
+			"receiptsRoot": "0x%064x",
+			"logsBloom": "0x%0512x",
+			"prevRandao": "0x%064x",
+			"blockNumber": "0x1",
+			"gasLimit": "0x1c9c380",
+			"gasUsed": "0x0",
+			"timestamp": "0x64",
+			"extraData": "0x",
+			"baseFeePerGas": "0x7",
+			"blockHash": "0x%064x",
+			"transactions": [],
+			"withdrawals": [],
+			"blobGasUsed": "0x0",
+			"excessBlobGas": "0x0",
+			"blockAccessList": "0x"
+		},
+		"blockValue": "0x0",
+		"blobsBundle": null,
+		"shouldOverrideBuilder": false,
+		"executionRequests": []
+	}`, 1, 2, 3, 4, 5, 6, 7)
+
+	bundle := &enginev1.ExecutionBundleGloas{}
+	err := json.Unmarshal([]byte(raw), bundle)
+	require.ErrorContains(t, "missing required field 'slotNumber'", err)
+}
