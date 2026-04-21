@@ -231,7 +231,7 @@ func selectByBalanceFill(
 	copy(buf[:], seed[:])
 	maxBalance := params.BeaconConfig().MaxEffectiveBalanceElectra
 
-	// Cache the hash and only refresh on a 16-round boundary 
+	// Cache the hash and only refresh on a 16-round boundary -
 	// see consensus-specs PR#5079.
 	var randomBytes [32]byte
 	cachedBlock := ^uint64(0)
