@@ -330,7 +330,7 @@ type ExecutionPayloadGloasJSON struct {
 	Transactions    []hexutil.Bytes `json:"transactions"`
 	Withdrawals     []*Withdrawal   `json:"withdrawals"`
 	BlockAccessList *hexutil.Bytes  `json:"blockAccessList"`
-	SlotNumber      *hexutil.Uint64 `json:"slotNumber,omitempty"`
+	SlotNumber      *hexutil.Uint64 `json:"slotNumber"`
 }
 
 type GetPayloadV6ResponseJson struct {
@@ -1541,17 +1541,6 @@ func (b *BlobAndProofV2) UnmarshalJSON(enc []byte) error {
 }
 
 func (e *ExecutionPayloadGloas) MarshalJSON() ([]byte, error) {
-	return e.marshalGloasJSON(nil)
-}
-
-// MarshalJSONWithSlot marshals the Gloas payload as Amsterdam ExecutionPayloadV4
-// including slotNumber which is not part of the consensus SSZ container.
-func (e *ExecutionPayloadGloas) MarshalJSONWithSlot(slotNumber uint64) ([]byte, error) {
-	slot := hexutil.Uint64(slotNumber)
-	return e.marshalGloasJSON(&slot)
-}
-
-func (e *ExecutionPayloadGloas) marshalGloasJSON(slotNumber *hexutil.Uint64) ([]byte, error) {
 	transactions := make([]hexutil.Bytes, len(e.Transactions))
 	for i, tx := range e.Transactions {
 		transactions[i] = tx
@@ -1576,6 +1565,7 @@ func (e *ExecutionPayloadGloas) marshalGloasJSON(slotNumber *hexutil.Uint64) ([]
 	blobGasUsed := hexutil.Uint64(e.BlobGasUsed)
 	excessBlobGas := hexutil.Uint64(e.ExcessBlobGas)
 	bal := hexutil.Bytes(e.BlockAccessList)
+	slotNumber := hexutil.Uint64(e.SlotNumber)
 
 	return json.Marshal(ExecutionPayloadGloasJSON{
 		ParentHash:      &pHash,
@@ -1596,7 +1586,7 @@ func (e *ExecutionPayloadGloas) marshalGloasJSON(slotNumber *hexutil.Uint64) ([]
 		BlobGasUsed:     &blobGasUsed,
 		ExcessBlobGas:   &excessBlobGas,
 		BlockAccessList: &bal,
-		SlotNumber:      slotNumber,
+		SlotNumber:      &slotNumber,
 	})
 }
 

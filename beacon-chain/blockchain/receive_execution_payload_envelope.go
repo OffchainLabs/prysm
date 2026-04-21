@@ -211,7 +211,7 @@ func (s *Service) callNewPayload(
 	requests *enginev1.ExecutionRequests,
 	slot primitives.Slot,
 ) (bool, error) {
-	_, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests, slot)
+	_, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)
 	if err == nil {
 		return true, nil
 	}
