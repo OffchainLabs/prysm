@@ -231,12 +231,23 @@ func selectByBalanceFill(
 	copy(buf[:], seed[:])
 	maxBalance := params.BeaconConfig().MaxEffectiveBalanceElectra
 
+	// Cache the hash and only refresh on a 16-round boundary 
+	// see consensus-specs PR#5079.
+	var randomBytes [32]byte
+	cachedBlock := ^uint64(0)
+
 	for _, idx := range candidates {
 		if ctx.Err() != nil {
 			return nil, i, ctx.Err()
 		}
 
-		ok, err := acceptByBalance(st, idx, buf[:], hashFunc, maxBalance, i)
+		if block := i / 16; block != cachedBlock {
+			binary.LittleEndian.PutUint64(buf[len(buf)-8:], block)
+			randomBytes = hashFunc(buf[:])
+			cachedBlock = block
+		}
+
+		ok, err := acceptByBalance(st, idx, randomBytes, maxBalance, i)
 		if err != nil {
 			return nil, i, err
 		}
@@ -269,10 +280,7 @@ func selectByBalanceFill(
 //	    effective_balance = state.validators[index].effective_balance
 //	    return effective_balance * MAX_RANDOM_VALUE >= MAX_EFFECTIVE_BALANCE_ELECTRA * random_value
 //	</spec>
-func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex, seedBuf []byte, hashFunc func([]byte) [32]byte, maxBalance uint64, round uint64) (bool, error) {
-	// Reuse the seed buffer by overwriting the last 8 bytes with the round counter.
-	binary.LittleEndian.PutUint64(seedBuf[len(seedBuf)-8:], round/16)
-	random := hashFunc(seedBuf)
+func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex, random [32]byte, maxBalance uint64, round uint64) (bool, error) {
 	offset := (round % 16) * 2
 	randomValue := uint64(binary.LittleEndian.Uint16(random[offset : offset+2])) // 16-bit draw per spec
 

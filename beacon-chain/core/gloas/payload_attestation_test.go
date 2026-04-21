@@ -2,6 +2,9 @@ package gloas_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"slices"
 	"testing"
 
@@ -368,6 +371,35 @@ func TestProcessPTCWindow(t *testing.T) {
 	}
 }
 
+// TestProcessPTCWindow_GoldenVector pins a fingerprint of the validator
+// indices produced by the balance-weighted PTC selection for a deterministic
+// state, guarding against unintended behavioral drift.
+func TestProcessPTCWindow_GoldenVector(t *testing.T) {
+	fuluSt, _ := testutil.DeterministicGenesisStateFulu(t, 256)
+	st, err := gloas.UpgradeToGloas(fuluSt)
+	require.NoError(t, err)
+	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch))
+	require.NoError(t, gloas.ProcessPTCWindow(t.Context(), st))
+
+	window, err := st.PTCWindow()
+	require.NoError(t, err)
+
+	// Fingerprint the newly-computed (last) epoch by sha256'ing the little-endian
+	// encoding of every validator index, slot-by-slot.
+	slotsPerEpoch := int(params.BeaconConfig().SlotsPerEpoch)
+	lastStart := len(window) - slotsPerEpoch
+	h := sha256.New()
+	var buf [8]byte
+	for i := 0; i < slotsPerEpoch; i++ {
+		for _, idx := range window[lastStart+i].ValidatorIndices {
+			binary.LittleEndian.PutUint64(buf[:], uint64(idx))
+			h.Write(buf[:])
+		}
+	}
+	const expected = "bfdb357dbb3f2abe4bba9a0d5d0d6d8ae9e19335e83f64f21b5a2f727a0f3ee9"
+	require.Equal(t, expected, hex.EncodeToString(h.Sum(nil)))
+}
+
 type validatorLookupErrState struct {
 	state.BeaconState
 	errIndex primitives.ValidatorIndex
@@ -379,4 +411,30 @@ func (s *validatorLookupErrState) ValidatorAtIndexReadOnly(idx primitives.Valida
 		return nil, state.ErrNilValidatorsInState
 	}
 	return s.BeaconState.ValidatorAtIndexReadOnly(idx)
+}
+
+// BenchmarkProcessPTCWindow measures end-to-end PTC window rotation, which
+// is dominated by the balance-weighted selection loop.
+//
+// Apple M4 Pro, mainnet config, 2048 validators:
+//
+//	before caching: 87.64 ms/op   136.9 MiB/op   1.230M allocs/op
+//	with caching:   47.20 ms/op   136.9 MiB/op   1.230M allocs/op
+//
+// The caching optimization (hash(seed || i/16) reused across 16 rounds)
+// cuts wall time by ~46% with no change to allocation profile — exactly
+// what's expected: we skipped SHA256 work, not memory traffic.
+func BenchmarkProcessPTCWindow(b *testing.B) {
+	fuluSt, _ := testutil.DeterministicGenesisStateFulu(b, 2048)
+	st, err := gloas.UpgradeToGloas(fuluSt)
+	require.NoError(b, err)
+	require.NoError(b, st.SetSlot(params.BeaconConfig().SlotsPerEpoch))
+
+	ctx := b.Context()
+	b.ResetTimer()
+	for b.Loop() {
+		if err := gloas.ProcessPTCWindow(ctx, st); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
