@@ -330,3 +330,27 @@ func TestNode_TimeStampsChecks(t *testing.T) {
 	require.ErrorContains(t, "invalid timestamp", err)
 	require.Equal(t, false, late)
 }
+
+// TestNode_TimeStampsChecks_TreeRoot verifies that arrivedEarly and
+// arrivedAfterOrphanCheck do not error when called on the tree root node, even
+// if the node was inserted with a timestamp before the slot start time. This
+// can happen on a fresh beacon node that starts up before MIN_GENESIS_TIME: the
+// genesis node's timestamp field is sourced from time.Now() at insertion rather
+// than the real arrival time, and can land before genesis time.
+func TestNode_TimeStampsChecks_TreeRoot(t *testing.T) {
+	f := setup(0, 0)
+
+	// Simulate a beacon node that started before genesis by setting the tree
+	// root's timestamp earlier than the forkchoice genesis time.
+	f.store.genesisTime = time.Now()
+	treeRoot := f.store.choosePayloadContent(f.store.treeRootNode)
+	require.NotNil(t, treeRoot)
+	treeRoot.timestamp = f.store.genesisTime.Add(-24 * time.Second)
+
+	early, err := treeRoot.arrivedEarly(f.store.genesisTime)
+	require.NoError(t, err)
+	require.Equal(t, true, early)
+	late, err := treeRoot.arrivedAfterOrphanCheck(f.store.genesisTime)
+	require.NoError(t, err)
+	require.Equal(t, false, late)
+}
