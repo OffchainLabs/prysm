@@ -607,13 +607,11 @@ func (s *Service) refreshCaches(ctx context.Context, currentSlot primitives.Slot
 func (s *Service) updateCachesAndEpochBoundary(ctx context.Context, currentSlot primitives.Slot, headState state.BeaconState, accessRoot [32]byte, lastRoot []byte, lastState state.BeaconState) {
 	if bytes.Equal(lastRoot, accessRoot[:]) {
 		// Happy case, the last advanced state is head, we thus keep it
-		lastState.CopyAllTries()
 		if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
 			log.WithError(err).Debug("Could not update next slot state cache")
 		}
 	} else {
 		// Last advanced state was not head, we do not advance this but rather use headstate
-		headState.CopyAllTries()
 		if err := transition.UpdateNextSlotCache(ctx, accessRoot[:], headState); err != nil {
 			log.WithError(err).Debug("Could not update next slot state cache")
 		}
