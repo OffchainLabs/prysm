@@ -196,3 +196,16 @@ func WriteExecutionProofChunk(stream libp2pcore.Stream, encoding encoder.Network
 
 	return nil
 }
+
+// WriteExecutionProofStatusChunk writes the single-chunk response of the
+// ExecutionProofStatus RPC. Per EIP-8025 the method declares no
+// ForkDigest-context, so the frame is `<status-byte> | <encoded-payload>`.
+func WriteExecutionProofStatusChunk(stream libp2pcore.Stream, encoding encoder.NetworkEncoding, status *types.ExecutionProofStatus) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return errors.Wrap(err, "stream write")
+	}
+	if _, err := encoding.EncodeWithMaxLength(stream, status); err != nil {
+		return errors.Wrap(err, "encode with max length")
+	}
+	return nil
+}

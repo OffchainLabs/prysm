@@ -73,6 +73,9 @@ const (
 
 	// ExecutionProofsByRangeName is the name for the ExecutionProofsByRange v1 message topic.
 	ExecutionProofsByRangeName = "/execution_proofs_by_range"
+
+	// ExecutionProofStatusName is the name for the ExecutionProofStatus v1 message topic.
+	ExecutionProofStatusName = "/execution_proof_status"
 )
 
 const (
@@ -118,6 +121,9 @@ const (
 	// RPCExecutionProofsByRangeTopicV1 is a topic for requesting execution proofs by slot range.
 	// /eth2/beacon_chain/req/execution_proofs_by_range/1 - New in Fulu (EIP-8025).
 	RPCExecutionProofsByRangeTopicV1 = protocolPrefix + ExecutionProofsByRangeName + SchemaVersionV1
+	// RPCExecutionProofStatusTopicV1 is a topic for exchanging the peer's most recent proof-validated block.
+	// /eth2/beacon_chain/req/execution_proof_status/1 - New in Fulu (EIP-8025).
+	RPCExecutionProofStatusTopicV1 = protocolPrefix + ExecutionProofStatusName + SchemaVersionV1
 
 	// V2 RPC Topics
 	// RPCStatusTopicV2 defines the v1 topic for the status rpc method.
@@ -188,6 +194,9 @@ var (
 
 		// ExecutionProofsByRange v1 Message
 		RPCExecutionProofsByRangeTopicV1: &p2ptypes.ExecutionProofsByRangeReq{},
+
+		// ExecutionProofStatus v1 Message
+		RPCExecutionProofStatusTopicV1: &p2ptypes.ExecutionProofStatus{},
 	}
 
 	// Maps all registered protocol prefixes.
@@ -213,6 +222,7 @@ var (
 		DataColumnSidecarsByRangeName:   true,
 		ExecutionProofsByRootName:       true,
 		ExecutionProofsByRangeName:      true,
+		ExecutionProofStatusName:        true,
 	}
 
 	// Maps all the RPC messages which are to updated in altair.

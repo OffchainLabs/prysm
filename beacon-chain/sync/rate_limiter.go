@@ -106,6 +106,7 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	executionProofs := leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, blockBucketPeriod, false /* deleteEmptyBuckets */)
 	topicMap[addEncoding(p2p.RPCExecutionProofsByRootTopicV1)] = executionProofs
 	topicMap[addEncoding(p2p.RPCExecutionProofsByRangeTopicV1)] = executionProofs
+	topicMap[addEncoding(p2p.RPCExecutionProofStatusTopicV1)] = executionProofs
 
 	// General topic for all rpc requests.
 	topicMap[rpcLimiterTopic] = leakybucket.NewCollector(5, defaultBurstLimit*2, leakyBucketPeriod, false /* deleteEmptyBuckets */)

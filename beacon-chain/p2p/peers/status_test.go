@@ -1400,16 +1400,10 @@ func TestZkvmEnabledPeers(t *testing.T) {
 	// Should return only pid1 and pid3 (connected peers with zkVM enabled)
 	assert.Equal(t, 2, len(zkvmPeers), "Expected 2 zkVM enabled peers")
 
-	// Verify the returned peers are correct
-	zkvmPeerMap := make(map[peer.ID]bool)
-	for _, pid := range zkvmPeers {
-		zkvmPeerMap[pid] = true
-	}
-
-	assert.Equal(t, true, zkvmPeerMap[pid1], "pid1 should be in zkVM enabled peers")
-	assert.Equal(t, true, zkvmPeerMap[pid3], "pid3 should be in zkVM enabled peers")
-	assert.Equal(t, false, zkvmPeerMap[pid2], "pid2 should not be in zkVM enabled peers (disabled)")
-	assert.Equal(t, false, zkvmPeerMap[pid4], "pid4 should not be in zkVM enabled peers (disconnected)")
-	assert.Equal(t, false, zkvmPeerMap[pid5], "pid5 should not be in zkVM enabled peers (no ENR)")
-	assert.Equal(t, false, zkvmPeerMap[pid6], "pid6 should not be in zkVM enabled peers (no zkVM key)")
+	assert.Equal(t, true, zkvmPeers[pid1], "pid1 should be in zkVM enabled peers")
+	assert.Equal(t, true, zkvmPeers[pid3], "pid3 should be in zkVM enabled peers")
+	assert.Equal(t, false, zkvmPeers[pid2], "pid2 should not be in zkVM enabled peers (disabled)")
+	assert.Equal(t, false, zkvmPeers[pid4], "pid4 should not be in zkVM enabled peers (disconnected)")
+	assert.Equal(t, false, zkvmPeers[pid5], "pid5 should not be in zkVM enabled peers (no ENR)")
+	assert.Equal(t, false, zkvmPeers[pid6], "pid6 should not be in zkVM enabled peers (no zkVM key)")
 }

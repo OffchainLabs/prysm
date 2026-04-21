@@ -942,6 +942,45 @@ func (s *Service) sendExecutionProofsByRootRequest(
 	return roSignedProofs, nil
 }
 
+// sendExecutionProofStatusRequest sends our local execution-proof status to
+// the peer and returns the peer's reply. Per EIP-8025 the method uses the
+// same SSZ container for both request and response, carries no
+// <context-bytes>, and the response is a single chunk.
+func (s *Service) sendExecutionProofStatusRequest(ctx context.Context, pid peer.ID) (*p2ptypes.ExecutionProofStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, respTimeout)
+	defer cancel()
+
+	local := s.localExecutionProofStatus(ctx)
+
+	topic, err := p2p.TopicFromMessage(p2p.ExecutionProofStatusName, slots.ToEpoch(s.cfg.clock.CurrentSlot()))
+	if err != nil {
+		return nil, fmt.Errorf("topic from message: %w", err)
+	}
+
+	stream, err := s.cfg.p2p.Send(ctx, local, topic, pid)
+	if err != nil {
+		return nil, fmt.Errorf("send: %w", err)
+	}
+	defer closeStream(stream, log)
+
+	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
+	if err != nil {
+		return nil, fmt.Errorf("read status code: %w", err)
+	}
+	if code != 0 {
+		return nil, fmt.Errorf("execution proof status: %s", errMsg)
+	}
+
+	remote := new(p2ptypes.ExecutionProofStatus)
+	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, remote); err != nil {
+		return nil, fmt.Errorf("decode execution proof status: %w", err)
+	}
+	// Cache the reply so peer selection can query the peer's most recent
+	// proof-validated block alongside statuses received from inbound peers.
+	s.cfg.p2p.Peers().SetExecutionProofStatus(pid, remote)
+	return remote, nil
+}
+
 // readChunkedExecutionProof reads a single chunked SignedExecutionProof from
 // the stream. Per EIP-8025's p2p-interface.md, this RPC does not declare a
 // ForkDigest-context, so <context-bytes> is empty and the payload is read

@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
+        "//beacon-chain/p2p/types:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/metadata:go_default_library",
         "@com_github_ethereum_go_ethereum//p2p/enr:go_default_library",

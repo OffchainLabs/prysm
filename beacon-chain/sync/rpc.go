@@ -53,6 +53,7 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 			p2p.RPCDataColumnSidecarsByRangeTopicV1: s.dataColumnSidecarsByRangeRPCHandler, // Added in Fulu
 			p2p.RPCExecutionProofsByRootTopicV1:     s.executionProofsByRootRPCHandler,     // Added in Fulu
 			p2p.RPCExecutionProofsByRangeTopicV1:    s.executionProofsByRangeRPCHandler,    // Added in Fulu
+			p2p.RPCExecutionProofStatusTopicV1:      s.executionProofStatusRPCHandler,      // Added in Fulu (EIP-8025)
 		}, nil
 	}
 

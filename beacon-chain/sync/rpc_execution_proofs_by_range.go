@@ -169,13 +169,7 @@ func validateExecutionProofsByRange(req *p2ptypes.ExecutionProofsByRangeReq, cur
 	if err != nil {
 		return rangeParams{}, fmt.Errorf("%w: start + count - 1 overflow", p2ptypes.ErrInvalidRequest)
 	}
-	rp.end = end
-	if rp.end > current {
-		rp.end = current
-	}
-	if rp.end < rp.start {
-		rp.end = rp.start
-	}
+	rp.end = max(min(end, current), rp.start)
 	return rp, nil
 }
 

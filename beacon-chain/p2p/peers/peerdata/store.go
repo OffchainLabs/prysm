@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -57,6 +58,7 @@ type PeerData struct {
 	ChainState                *ethpb.StatusV2
 	ChainStateLastUpdated     time.Time
 	ChainStateValidationError error
+	ExecutionProofStatus      *p2ptypes.ExecutionProofStatus
 	// Scorers internal data.
 	BadResponses         int
 	ProcessedBlocks      uint64

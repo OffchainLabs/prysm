@@ -60,13 +60,14 @@ func (s *Service) fetchMissingExecutionProofs() {
 		return
 	}
 
+	// TODO: We don't take into account the latest root/slot with proof of the peer
 	peers := s.cfg.p2p.Peers().ZkvmEnabledPeers()
 	if len(peers) == 0 {
 		log.Warning("No zkvm-enabled peers available to fetch execution proofs")
 		return
 	}
 
-	for _, peer := range peers {
+	for peer := range peers {
 		request := s.buildMissingExecutionProofsRequest(roots)
 		if len(request) == 0 {
 			log.Debug("No execution proofs to fetch")

@@ -33,6 +33,7 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -222,6 +223,21 @@ func (p *Status) SetChainState(pid peer.ID, chainState *pb.StatusV2) {
 // This will error if there is no known chain state for the peer.
 func (p *Status) ChainState(pid peer.ID) (*pb.StatusV2, error) {
 	return p.scorers.PeerStatusScorer().PeerStatus(pid)
+}
+
+func (p *Status) SetExecutionProofStatus(pid peer.ID, status *p2ptypes.ExecutionProofStatus) {
+	if status == nil {
+		return
+	}
+
+	p.store.Lock()
+	defer p.store.Unlock()
+
+	peerData := p.store.PeerDataGetOrCreate(pid)
+
+	// Defensive copy to decouple the stored value from the RPC buffer.
+	cached := *status
+	peerData.ExecutionProofStatus = &cached
 }
 
 // IsActive checks if a peers is active and returns the result appropriately.
@@ -602,16 +618,21 @@ func (p *Status) All() []peer.ID {
 	return pids
 }
 
-// ZkvmEnabledPeers returns all connected peers that have zkvm enabled in their ENR.
-func (p *Status) ZkvmEnabledPeers() []peer.ID {
+func (p *Status) ZkvmEnabledPeers() map[peer.ID]bool {
 	p.store.RLock()
 	defer p.store.RUnlock()
 
-	peers := make([]peer.ID, 0)
+	peers := make(map[peer.ID]bool)
 	for pid, peerData := range p.store.Peers() {
 		if peerData.ConnState != Connected {
 			continue
 		}
+
+		if peerData.ExecutionProofStatus != nil {
+			peers[pid] = true
+			continue
+		}
+
 		if peerData.Enr == nil {
 			continue
 		}
@@ -623,7 +644,7 @@ func (p *Status) ZkvmEnabledPeers() []peer.ID {
 		}
 
 		if enabled {
-			peers = append(peers, pid)
+			peers[pid] = true
 		}
 	}
 	return peers

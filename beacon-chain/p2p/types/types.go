@@ -515,6 +515,61 @@ func (r *ExecutionProofsByRangeReq) UnmarshalSSZ(buf []byte) error {
 	return nil
 }
 
+// ==============================
+// ExecutionProofStatus section
+// ==============================
+var _ ssz.Marshaler = (*ExecutionProofStatus)(nil)
+var _ ssz.Unmarshaler = (*ExecutionProofStatus)(nil)
+
+// executionProofStatusSize is the fixed SSZ size of an ExecutionProofStatus
+// container: 32-byte block root followed by an 8-byte slot.
+const executionProofStatusSize = fieldparams.RootLength + 8
+
+// ExecutionProofStatus is the SSZ container exchanged in both directions by
+// the ExecutionProofStatus RPC per EIP-8025. It identifies the most recent
+// block for which the node has verified sufficient execution proofs.
+//
+//	(
+//	  block_root: Root
+//	  slot:       Slot
+//	)
+type ExecutionProofStatus struct {
+	BlockRoot [fieldparams.RootLength]byte
+	Slot      primitives.Slot
+}
+
+// SizeSSZ returns the fixed serialized size of the container.
+func (s *ExecutionProofStatus) SizeSSZ() int {
+	return executionProofStatusSize
+}
+
+// MarshalSSZ serializes the container to a byte slice.
+func (s *ExecutionProofStatus) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, executionProofStatusSize)
+	copy(buf[0:fieldparams.RootLength], s.BlockRoot[:])
+	binary.LittleEndian.PutUint64(buf[fieldparams.RootLength:executionProofStatusSize], uint64(s.Slot))
+	return buf, nil
+}
+
+// MarshalSSZTo appends the serialized container to the provided byte slice.
+func (s *ExecutionProofStatus) MarshalSSZTo(dst []byte) ([]byte, error) {
+	obj, err := s.MarshalSSZ()
+	if err != nil {
+		return nil, fmt.Errorf("marshal ssz: %w", err)
+	}
+	return append(dst, obj...), nil
+}
+
+// UnmarshalSSZ decodes the fixed-size container from the given byte slice.
+func (s *ExecutionProofStatus) UnmarshalSSZ(buf []byte) error {
+	if len(buf) != executionProofStatusSize {
+		return fmt.Errorf("expected %d bytes for ExecutionProofStatus, got %d", executionProofStatusSize, len(buf))
+	}
+	copy(s.BlockRoot[:], buf[0:fieldparams.RootLength])
+	s.Slot = primitives.Slot(binary.LittleEndian.Uint64(buf[fieldparams.RootLength:executionProofStatusSize]))
+	return nil
+}
+
 func init() {
 	blobSizer := &eth.BlobIdentifier{}
 	blobIdSize = blobSizer.SizeSSZ()

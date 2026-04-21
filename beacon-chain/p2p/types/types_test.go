@@ -358,6 +358,38 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 	require.DeepEqual(t, req, unmarshalled)
 }
 
+func TestExecutionProofStatus_SSZRoundTrip(t *testing.T) {
+	var blockRoot [fieldparams.RootLength]byte
+	for i := range blockRoot {
+		blockRoot[i] = byte(i)
+	}
+	original := &ExecutionProofStatus{
+		BlockRoot: blockRoot,
+		Slot:      primitives.Slot(1234),
+	}
+
+	buf, err := original.MarshalSSZ()
+	require.NoError(t, err)
+	require.Equal(t, executionProofStatusSize, len(buf))
+	require.Equal(t, executionProofStatusSize, original.SizeSSZ())
+
+	var decoded ExecutionProofStatus
+	require.NoError(t, decoded.UnmarshalSSZ(buf))
+	require.DeepEqual(t, original.BlockRoot, decoded.BlockRoot)
+	require.Equal(t, original.Slot, decoded.Slot)
+
+	// MarshalSSZTo appends to an existing buffer without losing existing bytes.
+	prefix := []byte{0x01, 0x02, 0x03}
+	buf, err = original.MarshalSSZTo(append([]byte{}, prefix...))
+	require.NoError(t, err)
+	require.Equal(t, len(prefix)+executionProofStatusSize, len(buf))
+	require.DeepEqual(t, prefix, buf[:len(prefix)])
+
+	// UnmarshalSSZ rejects a buffer of the wrong size.
+	err = decoded.UnmarshalSSZ([]byte{0x00})
+	require.NotNil(t, err)
+}
+
 func TestExecutionProofsByRangeReq_SSZRoundTrip(t *testing.T) {
 	original := &ExecutionProofsByRangeReq{
 		StartSlot: primitives.Slot(42),
