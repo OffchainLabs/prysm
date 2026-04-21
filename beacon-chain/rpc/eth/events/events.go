@@ -715,22 +715,23 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		})
 	}
 
-	if v >= version.Gloas {
-		return payloadattribute.New(&engine.PayloadAttributesV4{
+	if v < version.Gloas {
+		return payloadattribute.New(&engine.PayloadAttributesV3{
 			Timestamp:             timestamp,
 			PrevRandao:            randao,
 			SuggestedFeeRecipient: feeRecpt,
 			Withdrawals:           w,
 			ParentBeaconBlockRoot: root[:],
-			SlotNumber:            uint64(slot),
 		})
 	}
-	return payloadattribute.New(&engine.PayloadAttributesV3{
+
+	return payloadattribute.New(&engine.PayloadAttributesV4{
 		Timestamp:             timestamp,
 		PrevRandao:            randao,
 		SuggestedFeeRecipient: feeRecpt,
 		Withdrawals:           w,
 		ParentBeaconBlockRoot: root[:],
+		SlotNumber:            uint64(slot),
 	})
 }
 
