@@ -98,13 +98,7 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 		filesystem.WithDataColumnBasePath(dataColumnStoragePath(c)),
 	)
 
-	executionProofRetentionEpoch, err := executionProofRetentionEpoch(c)
-	if err != nil {
-		return nil, errors.Wrap(err, "execution proof retention epoch")
-	}
-
 	proofStorageOption := node.WithProofStorageOption(
-		filesystem.WithProofRetentionEpochs(executionProofRetentionEpoch),
 		filesystem.WithProofBasePath(executionProofStoragePath(c)),
 	)
 

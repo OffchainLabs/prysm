@@ -95,5 +95,6 @@ func (s *Store) removeNodeAndChildren(ctx context.Context, node *Node, invalidRo
 	}
 	delete(s.nodeByRoot, node.root)
 	delete(s.nodeByPayload, node.payloadHash)
+	delete(s.nodeByNewPayloadRequest, node.newPayloadRequestRoot)
 	return invalidRoots, nil
 }

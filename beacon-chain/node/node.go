@@ -237,7 +237,18 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	}
 
 	if beacon.ProofStorage == nil {
-		proofStorage, err := filesystem.NewProofStorage(cliCtx.Context, beacon.ProofStorageOptions...)
+		finalizedEpochProvider := func() primitives.Epoch {
+			beacon.forkChoicer.RLock()
+			defer beacon.forkChoicer.RUnlock()
+
+			finalizedCheckpoint := beacon.forkChoicer.FinalizedCheckpoint()
+			return finalizedCheckpoint.Epoch
+		}
+
+		finalizedEpochProviderOption := filesystem.WithProofFinalizedEpochProvider(finalizedEpochProvider)
+
+		proofStorageOpts := append(beacon.ProofStorageOptions, finalizedEpochProviderOption)
+		proofStorage, err := filesystem.NewProofStorage(cliCtx.Context, proofStorageOpts...)
 		if err != nil {
 			return nil, errors.Wrap(err, "new proof storage")
 		}

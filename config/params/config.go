@@ -328,6 +328,7 @@ type BeaconChainConfig struct {
 	MaxProofDataBytes                  uint64           `yaml:"MAX_PROOF_DATA_BYTES" spec:"true"`                    // MaxProofDataBytes is the maximum number of bytes for execution proof data.
 	MinProofsRequired                  uint64           `yaml:"MIN_PROOFS_REQUIRED" spec:"true"`                     // MinProofsRequired is the minimum number of execution proofs required for a block to be considered valid.
 	MinEpochsForExecutionProofRequests primitives.Epoch `yaml:"MIN_EPOCHS_FOR_EXECUTION_PROOF_REQUESTS" spec:"true"` // MinEpochsForExecutionProofRequests is the minimum number of epochs the node will keep the execution proofs for.
+	MaxExecutionProofsPerPayload       uint64           `yaml:"MAX_EXECUTION_PROOFS_PER_PAYLOAD" spec:"true"`        // MaxExecutionProofsPerPayload is the maximum number of execution proofs per payload (EIP-8025).
 
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.

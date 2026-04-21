@@ -10,6 +10,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sirupsen/logrus"
@@ -53,15 +55,13 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 	// (a client MAY queue proofs for processing once the new payload request is
 	// retrieved).
 	newPayloadRequestRoot := bytesutil.ToBytes32(executionProof.PublicInput.NewPayloadRequestRoot)
-	ok, blockRootEpoch := s.hasSeenNewPayloadRequest(newPayloadRequestRoot)
+	blockRoot, blockSlot, ok := s.cfg.chain.BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot)
 	if !ok {
 		return pubsub.ValidationIgnore, fmt.Errorf("new payload request root %#x not seen", newPayloadRequestRoot)
 	}
 
-	blockRoot, blockEpoch := blockRootEpoch.root, blockRootEpoch.epoch
-
 	// Convert to ROSignedExecutionProof.
-	roSignedProof, err := blocks.NewROSignedExecutionProof(signedExecutionProof, blockRoot, blockEpoch)
+	roSignedProof, err := blocks.NewROSignedExecutionProof(signedExecutionProof, blockRoot, blockSlot)
 	if err != nil {
 		return pubsub.ValidationReject, err
 	}
@@ -120,11 +120,16 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 		return pubsub.ValidationIgnore, err
 	}
 
-	log.WithFields(logrus.Fields{
+	fields := logrus.Fields{
 		"blockRoot": fmt.Sprintf("%#x", roSignedProof.BlockRoot()),
+		"slot":      roSignedProof.Slot(),
 		"type":      ethpb.ProofTypeName(roSignedProof.Message.ProofType[0]),
 		"signature": fmt.Sprintf("%#x...", roSignedProof.Signature[:8]),
-	}).Debug("Accepted execution proof")
+	}
+	if slotStart, err := slots.StartTime(s.cfg.clock.GenesisTime(), roSignedProof.Slot()); err == nil {
+		fields["timeIntoSlot"] = prysmTime.Now().Sub(slotStart)
+	}
+	log.WithFields(fields).Debug("Accepted execution proof")
 
 	// Set validator data to the verified proof.
 	msg.ValidatorData = verifiedProofs[0]

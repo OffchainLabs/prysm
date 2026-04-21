@@ -37,6 +37,7 @@ type Store struct {
 	headNode                      *Node                                  // last head Node
 	nodeByRoot                    map[[fieldparams.RootLength]byte]*Node // nodes indexed by roots.
 	nodeByPayload                 map[[fieldparams.RootLength]byte]*Node // nodes indexed by payload Hash
+	nodeByNewPayloadRequest       map[[fieldparams.RootLength]byte]*Node // nodes indexed by NewPayloadRequest hash tree root (EIP-8025).
 	slashedIndices                map[primitives.ValidatorIndex]bool     // the list of equivocating validator indices
 	originRoot                    [fieldparams.RootLength]byte           // The genesis block root
 	genesisTime                   time.Time
@@ -51,6 +52,7 @@ type Node struct {
 	slot                     primitives.Slot              // slot of the block converted to the node.
 	root                     [fieldparams.RootLength]byte // root of the block converted to the node.
 	payloadHash              [fieldparams.RootLength]byte // payloadHash of the block converted to the node.
+	newPayloadRequestRoot    [fieldparams.RootLength]byte // NewPayloadRequest hash tree root (EIP-8025). Computed once at insertion.
 	parent                   *Node                        // parent index of this node.
 	target                   *Node                        // target checkpoint for
 	children                 []*Node                      // the list of direct children of this Node

@@ -2680,6 +2680,119 @@ func (p *PublicInput) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the ProofByRootIdentifier object
+func (p *ProofByRootIdentifier) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the ProofByRootIdentifier object to a target array
+func (p *ProofByRootIdentifier) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(36)
+
+	// Field (0) 'BlockRoot'
+	if size := len(p.BlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockRoot", size, 32)
+		return
+	}
+	dst = append(dst, p.BlockRoot...)
+
+	// Offset (1) 'ProofTypes'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.ProofTypes)
+
+	// Field (1) 'ProofTypes'
+	if size := len(p.ProofTypes); size > 4 {
+		err = ssz.ErrBytesLengthFn("--.ProofTypes", size, 4)
+		return
+	}
+	dst = append(dst, p.ProofTypes...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ProofByRootIdentifier object
+func (p *ProofByRootIdentifier) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 36 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o1 uint64
+
+	// Field (0) 'BlockRoot'
+	if cap(p.BlockRoot) == 0 {
+		p.BlockRoot = make([]byte, 0, len(buf[0:32]))
+	}
+	p.BlockRoot = append(p.BlockRoot, buf[0:32]...)
+
+	// Offset (1) 'ProofTypes'
+	if o1 = ssz.ReadOffset(buf[32:36]); o1 > size {
+		return ssz.ErrOffset
+	}
+
+	if o1 != 36 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'ProofTypes'
+	{
+		buf = tail[o1:]
+		if len(buf) > 4 {
+			return ssz.ErrBytesLength
+		}
+		if cap(p.ProofTypes) == 0 {
+			p.ProofTypes = make([]byte, 0, len(buf))
+		}
+		p.ProofTypes = append(p.ProofTypes, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ProofByRootIdentifier object
+func (p *ProofByRootIdentifier) SizeSSZ() (size int) {
+	size = 36
+
+	// Field (1) 'ProofTypes'
+	size += len(p.ProofTypes)
+
+	return
+}
+
+// HashTreeRoot ssz hashes the ProofByRootIdentifier object
+func (p *ProofByRootIdentifier) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the ProofByRootIdentifier object with a hasher
+func (p *ProofByRootIdentifier) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'BlockRoot'
+	if size := len(p.BlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockRoot", size, 32)
+		return
+	}
+	hh.PutBytes(p.BlockRoot)
+
+	// Field (1) 'ProofTypes'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(p.ProofTypes))
+		if byteLen > 4 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.PutBytes(p.ProofTypes)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (4+31)/32)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the StatusV2 object
 func (s *StatusV2) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(s)

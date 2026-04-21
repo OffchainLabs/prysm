@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -184,14 +183,10 @@ func WriteDataColumnSidecarChunk(stream libp2pcore.Stream, tor blockchain.Tempor
 	return nil
 }
 
-func WriteExecutionProofChunk(stream libp2pcore.Stream, encoding encoder.NetworkEncoding, slot primitives.Slot, proof *ethpb.SignedExecutionProof) error {
+func WriteExecutionProofChunk(stream libp2pcore.Stream, encoding encoder.NetworkEncoding, proof *ethpb.SignedExecutionProof) error {
 	// Success response code.
 	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
 		return errors.Wrap(err, "stream write")
-	}
-	ctxBytes := params.ForkDigest(slots.ToEpoch(slot))
-	if err := writeContextToStream(ctxBytes[:], stream); err != nil {
-		return errors.Wrap(err, "write context to stream")
 	}
 
 	// Signed execution proof.

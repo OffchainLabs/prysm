@@ -86,6 +86,8 @@ type FastGetter interface {
 	UnrealizedJustifiedPayloadBlockHash() [32]byte
 	Weight(root [32]byte) (uint64, error)
 	ParentRoot(root [32]byte) ([32]byte, error)
+	RootsMissingExecutionProofs() ([][32]byte, error)
+	BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot [fieldparams.RootLength]byte) ([fieldparams.RootLength]byte, primitives.Slot, bool)
 }
 
 // Setter allows to set forkchoice information
@@ -100,4 +102,5 @@ type Setter interface {
 	InsertSlashedIndex(context.Context, primitives.ValidatorIndex)
 	MarkELValidated(context.Context, [32]byte) error
 	MarkHasEnoughProofs(context.Context, [32]byte) error
+	SetNewPayloadRequestRoot(blockRoot, newPayloadRequestRoot [fieldparams.RootLength]byte)
 }

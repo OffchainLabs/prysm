@@ -39,11 +39,6 @@ var (
 	ErrSlashingSignatureFailure = errors.New("proposer slashing signature verification failed")
 )
 
-type rootEpoch struct {
-	root  [32]byte
-	epoch primitives.Epoch
-}
-
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
 // Blocks that have already been seen are ignored. If the BLS signature is any valid signature,
 // this method rebroadcasts the message.
@@ -64,14 +59,8 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			return pubsub.ValidationReject, errors.New("msg is not ethpb.ReadOnlySignedBeaconBlock")
 		}
 
-		roBlock, err := cBlocks.NewROBlock(blk)
-		if err != nil {
+		if _, err := cBlocks.NewROBlock(blk); err != nil {
 			return pubsub.ValidationReject, fmt.Errorf("new beacon block: %w", err)
-		}
-
-		// Cache the new payload request hash tree root corresponding to this block.
-		if err := s.cacheNewPayloadRequestRoot(roBlock); err != nil {
-			return pubsub.ValidationReject, fmt.Errorf("cacheNewPayloadRequestRoot: %w", err)
 		}
 
 		return pubsub.ValidationAccept, nil
@@ -498,25 +487,6 @@ func (s *Service) setSeenBlockIndexSlot(slot primitives.Slot, proposerIdx primit
 	defer s.seenBlockLock.Unlock()
 	b := append(bytesutil.Bytes32(uint64(slot)), bytesutil.Bytes32(uint64(proposerIdx))...)
 	s.seenBlockCache.Add(string(b), true)
-}
-
-func (s *Service) hasSeenNewPayloadRequest(newPayloadRequestRoot [32]byte) (bool, rootEpoch) {
-	v, ok := s.seenNewPayloadRequestCache.Get(newPayloadRequestRoot)
-	if !ok {
-		return false, rootEpoch{}
-	}
-
-	re, ok := v.(rootEpoch)
-	if !ok {
-		log.Error("Cannot cast value to rootEpoch")
-		return false, rootEpoch{}
-	}
-
-	return true, re
-}
-
-func (s *Service) setSeenNewPayloadRequest(newPayloadRequestRoot [32]byte, re rootEpoch) {
-	s.seenNewPayloadRequestCache.Add(newPayloadRequestRoot, re)
 }
 
 // Returns true if the block is marked as a bad block.

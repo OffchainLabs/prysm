@@ -80,6 +80,20 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		s.rollbackBlock(ctx, cfg.roblock.Root())
 		return errors.Wrapf(err, "could not insert block %d to fork choice store", cfg.roblock.Block().Slot())
 	}
+
+	if cfg.roblock.Version() >= version.Fulu {
+		newPayloadRequestRoot, err := consensusblocks.ComputeNewPayloadRequestRoot(cfg.roblock)
+		if err != nil {
+			return fmt.Errorf("compute new payload request root: %w", err)
+		}
+
+		if err := s.cfg.BeaconDB.SaveNewPayloadRequestRoot(ctx, cfg.roblock.Root(), newPayloadRequestRoot); err != nil {
+			return fmt.Errorf("save new payload request root: %w", err)
+		}
+
+		s.cfg.ForkChoiceStore.SetNewPayloadRequestRoot(cfg.roblock.Root(), newPayloadRequestRoot)
+	}
+
 	if err := s.handleBlockAttestations(ctx, cfg.roblock.Block(), cfg.postState); err != nil {
 		return errors.Wrap(err, "could not handle block's attestations")
 	}
@@ -249,6 +263,16 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,
 			JustifiedCheckpoint: jCheckpoints[i],
 			FinalizedCheckpoint: fCheckpoints[i]}
+		if b.Version() >= version.Fulu {
+			npr, err := consensusblocks.ComputeNewPayloadRequestRoot(b)
+			if err != nil {
+				return errors.Wrap(err, "compute new payload request root")
+			}
+			if err := s.cfg.BeaconDB.SaveNewPayloadRequestRoot(ctx, root, npr); err != nil {
+				return errors.Wrap(err, "save new payload request root")
+			}
+			args.NewPayloadRequestRoot = npr
+		}
 		pendingNodes[i] = args
 		if err := s.saveInitSyncBlock(ctx, root, b); err != nil {
 			tracing.AnnotateError(span, err)

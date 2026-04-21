@@ -35,6 +35,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -149,7 +150,6 @@ type Service struct {
 	rateLimiter                      *limiter
 	seenBlockLock                    sync.RWMutex
 	seenBlockCache                   *lru.Cache
-	seenNewPayloadRequestCache       *lru.Cache
 	seenBlobLock                     sync.RWMutex
 	seenBlobCache                    *lru.Cache
 	seenDataColumnCache              *slotAwareCache
@@ -303,6 +303,11 @@ func (s *Service) Start() {
 		log.WithError(err).Error("Failed to maintain custody info")
 	}
 
+	if !features.Get().EnableZkvm {
+		return
+	}
+
+	go s.executionProofsFetcherLoop()
 }
 
 // Stop the regular sync service.
@@ -373,7 +378,6 @@ func (s *Service) initCaches() {
 	s.seenAttesterSlashingCache = make(map[uint64]bool)
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
-	s.seenNewPayloadRequestCache = lruwrpr.New(seenBlockSize)
 }
 
 func (s *Service) waitForChainStart() {

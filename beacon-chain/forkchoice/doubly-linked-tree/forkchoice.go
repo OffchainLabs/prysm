@@ -33,6 +33,7 @@ func New() *ForkChoice {
 		proposerBoostRoot:             [32]byte{},
 		nodeByRoot:                    make(map[[fieldparams.RootLength]byte]*Node),
 		nodeByPayload:                 make(map[[fieldparams.RootLength]byte]*Node),
+		nodeByNewPayloadRequest:       make(map[[fieldparams.RootLength]byte]*Node),
 		slashedIndices:                make(map[primitives.ValidatorIndex]bool),
 		receivedBlocksLastEpoch:       [fieldparams.SlotsPerEpoch]primitives.Slot{},
 	}
@@ -471,6 +472,7 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 			bcp.JustifiedCheckpoint.Epoch, bcp.FinalizedCheckpoint.Epoch); err != nil {
 			return err
 		}
+		f.SetNewPayloadRequestRoot(bcp.Block.Root(), bcp.NewPayloadRequestRoot)
 		if err := f.updateCheckpoints(ctx, bcp.JustifiedCheckpoint, bcp.FinalizedCheckpoint); err != nil {
 			return err
 		}
@@ -722,6 +724,60 @@ func (f *ForkChoice) MarkHasEnoughProofs(ctx context.Context, root [32]byte) err
 	}
 
 	return nil
+}
+
+// SetNewPayloadRequestRoot records the EIP-8025 NewPayloadRequest hash tree
+// root for a previously inserted block. Callers (blockchain.Service on live
+// receive, setupForkchoice on startup rebuild) compute the value once while
+// the full payload is available, then register it here so proofs can be
+// attributed by content. A zero value or an unknown block root is a no-op.
+func (f *ForkChoice) SetNewPayloadRequestRoot(blockRoot, newPayloadRequestRoot [fieldparams.RootLength]byte) {
+	if newPayloadRequestRoot == ([fieldparams.RootLength]byte{}) {
+		return
+	}
+	node, ok := f.store.nodeByRoot[blockRoot]
+	if !ok || node == nil {
+		return
+	}
+	node.newPayloadRequestRoot = newPayloadRequestRoot
+	f.store.nodeByNewPayloadRequest[newPayloadRequestRoot] = node
+}
+
+// BlockRootByNewPayloadRequestRoot returns the (block root, slot) of the
+// unfinalized node whose execution NewPayloadRequest hashes to the given
+// value, or ok=false if no such node exists in the tree. This is the
+// authoritative attribution for incoming EIP-8025 execution proofs: entries
+// live exactly as long as the underlying block is unfinalized.
+func (f *ForkChoice) BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot [fieldparams.RootLength]byte) ([fieldparams.RootLength]byte, primitives.Slot, bool) {
+	node, ok := f.store.nodeByNewPayloadRequest[newPayloadRequestRoot]
+	if !ok || node == nil {
+		return [fieldparams.RootLength]byte{}, 0, false
+	}
+	return node.root, node.slot, true
+}
+
+// RootsMissingExecutionProofs returns roots of all post-Fulu nodes that
+// not yet have enough execution proofs.
+func (f *ForkChoice) RootsMissingExecutionProofs() ([][32]byte, error) {
+	fuluStart, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
+	if err != nil {
+		return nil, fmt.Errorf("fulu fork epoch start: %w", err)
+	}
+
+	roots := make([][32]byte, 0, len(f.store.nodeByRoot))
+	for root, node := range f.store.nodeByRoot {
+		if node == nil || node.hasEnoughProofs {
+			continue
+		}
+
+		if node.slot < fuluStart {
+			continue
+		}
+
+		roots = append(roots, root)
+	}
+
+	return roots, nil
 }
 
 // ParentRoot returns the block root of the parent node if it is in forkchoice.

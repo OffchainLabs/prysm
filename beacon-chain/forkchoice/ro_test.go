@@ -41,6 +41,8 @@ const (
 	parentRootCalled
 	dependentRootCalled
 	dependentRootForEpochCalled
+	rootsMissingExecutionProofsCalled
+	blockRootByNewPayloadRequestRootCalled
 )
 
 func _discard(t *testing.T, e error) {
@@ -162,6 +164,16 @@ func TestROLocking(t *testing.T) {
 			name: "dependentRootCalled",
 			call: dependentRootCalled,
 			cb:   func(g FastGetter) { _, err := g.DependentRoot(0); _discard(t, err) },
+		},
+		{
+			name: "rootsMissingExecutionProofsCalled",
+			call: rootsMissingExecutionProofsCalled,
+			cb:   func(g FastGetter) { _, err := g.RootsMissingExecutionProofs(); _discard(t, err) },
+		},
+		{
+			name: "blockRootByNewPayloadRequestRootCalled",
+			call: blockRootByNewPayloadRequestRootCalled,
+			cb:   func(g FastGetter) { g.BlockRootByNewPayloadRequestRoot([32]byte{}) },
 		},
 	}
 	for _, c := range cases {
@@ -321,4 +333,14 @@ func (ro *mockROForkchoice) TargetRootForEpoch(_ [32]byte, _ primitives.Epoch) (
 func (ro *mockROForkchoice) ParentRoot(_ [32]byte) ([32]byte, error) {
 	ro.calls = append(ro.calls, parentRootCalled)
 	return [32]byte{}, nil
+}
+
+func (ro *mockROForkchoice) RootsMissingExecutionProofs() ([][32]byte, error) {
+	ro.calls = append(ro.calls, rootsMissingExecutionProofsCalled)
+	return nil, nil
+}
+
+func (ro *mockROForkchoice) BlockRootByNewPayloadRequestRoot(_ [fieldparams.RootLength]byte) ([fieldparams.RootLength]byte, primitives.Slot, bool) {
+	ro.calls = append(ro.calls, blockRootByNewPayloadRequestRootCalled)
+	return [fieldparams.RootLength]byte{}, 0, false
 }

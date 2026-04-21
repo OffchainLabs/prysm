@@ -178,7 +178,7 @@ var (
 		RPCDataColumnSidecarsByRootTopicV1: p2ptypes.DataColumnsByRootIdentifiers{},
 
 		// ExecutionProofsByRoot v1 Message
-		RPCExecutionProofsByRootTopicV1: new(pb.ExecutionProofsByRootRequest),
+		RPCExecutionProofsByRootTopicV1: p2ptypes.ExecutionProofsByRootReq{},
 	}
 
 	// Maps all registered protocol prefixes.

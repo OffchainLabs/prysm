@@ -68,6 +68,9 @@ type ReadOnlyDatabase interface {
 
 	// P2P Metadata operations.
 	MetadataSeqNum(ctx context.Context) (uint64, error)
+
+	// NewPayloadRequest hash tree root by block root.
+	NewPayloadRequestRoot(ctx context.Context, blockRoot [32]byte) ([32]byte, bool, error)
 }
 
 // ReadOnlyDatabaseWithSeqNum defines a struct which has read access to database methods
@@ -136,6 +139,9 @@ type NoHeadAccessDatabase interface {
 
 	// P2P Metadata operations.
 	SaveMetadataSeqNum(ctx context.Context, seqNum uint64) error
+
+	// EIP-8025 Execution Proofs: persist the NewPayloadRequest hash tree root for a block root.
+	SaveNewPayloadRequestRoot(ctx context.Context, blockRoot, newPayloadRequestRoot [32]byte) error
 }
 
 // HeadAccessDatabase defines a struct with access to reading chain head data.

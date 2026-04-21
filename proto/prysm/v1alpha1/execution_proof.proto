@@ -30,6 +30,8 @@ message PublicInput {
     bytes new_payload_request_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
-message ExecutionProofsByRootRequest {
-  bytes block_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8025/p2p-interface.md#proofbyrootidentifier
+message ProofByRootIdentifier {
+    bytes block_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+    bytes proof_types = 2 [ (ethereum.eth.ext.ssz_max) = "max_execution_proofs_per_payload.size" ];
 }

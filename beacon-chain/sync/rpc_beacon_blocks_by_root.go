@@ -11,13 +11,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/verify"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -89,82 +87,7 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 		return errors.Wrap(err, "request and save missing data columns")
 	}
 
-	if err := s.requestAndSaveMissingExecutionProofs(postFuluBlocks); err != nil {
-		return errors.Wrap(err, "request and save missing execution proofs")
-	}
-
 	return err
-}
-
-func (s *Service) requestAndSaveMissingExecutionProofs(blks []blocks.ROBlock) error {
-	if len(blks) == 0 {
-		return nil
-	}
-
-	// TODO: Parallelize requests for multiple blocks.
-	for _, blk := range blks {
-		if err := s.sendAndSaveExecutionProofs(s.ctx, blk); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (s *Service) sendAndSaveExecutionProofs(ctx context.Context, block blocks.ROBlock) error {
-	if !features.Get().EnableZkvm {
-		return nil
-	}
-
-	// Check proof retention period.
-	blockEpoch := slots.ToEpoch(block.Block().Slot())
-	currentEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
-	if !params.WithinExecutionProofPeriod(blockEpoch, currentEpoch) {
-		return nil
-	}
-	// Check how many proofs are needed with Execution Proof Pool.
-	// TODO: All should return the same type ExecutionProofId.
-	root := block.Root()
-	proofStorage := s.cfg.proofStorage
-	storedIds := proofStorage.Summary(root).All()
-
-	count := uint64(len(storedIds))
-	if count >= params.BeaconConfig().MinProofsRequired {
-		return nil
-	}
-
-	// Construct request
-	request := &ethpb.ExecutionProofsByRootRequest{
-		BlockRoot: root[:],
-	}
-
-	// Call SendExecutionProofByRootRequest
-	zkvmEnabledPeers := s.cfg.p2p.Peers().ZkvmEnabledPeers()
-	if len(zkvmEnabledPeers) == 0 {
-		return fmt.Errorf("no zkVM enabled peers available to request execution proofs")
-	}
-
-	// TODO: For simplicity, just pick the first peer for now.
-	// In the future, we can implement better peer selection logic.
-	pid := zkvmEnabledPeers[0]
-	proofs, err := SendExecutionProofsByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, pid, request, blockEpoch)
-	if err != nil {
-		return fmt.Errorf("send execution proofs by root request: %w", err)
-	}
-
-	// TODO: Verify really instead of blindly converting to verified sidecars.
-	verifiedProofs := make([]blocks.VerifiedROSignedExecutionProof, 0, len(proofs))
-	for _, proof := range proofs {
-		verifiedProof := blocks.NewVerifiedROSignedExecutionProof(proof)
-		verifiedProofs = append(verifiedProofs, verifiedProof)
-	}
-
-	// Save the proofs into storage.
-	if err := proofStorage.Save(verifiedProofs); err != nil {
-		return fmt.Errorf("proof storage save: %w", err)
-	}
-
-	return nil
 }
 
 // requestAndSaveMissingDataColumns checks if the data columns are missing for the given block.

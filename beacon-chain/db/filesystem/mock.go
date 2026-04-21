@@ -166,7 +166,6 @@ func NewEphemeralProofStorageAndFs(t testing.TB, opts ...ProofStorageOption) (af
 // NewEphemeralProofStorageUsingFs creates a ProofStorage backed by the provided filesystem.
 func NewEphemeralProofStorageUsingFs(t testing.TB, fs afero.Fs, opts ...ProofStorageOption) *ProofStorage {
 	defaultOpts := []ProofStorageOption{
-		WithProofRetentionEpochs(params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest),
 		WithProofFs(fs),
 	}
 	// User opts come last so they can override defaults

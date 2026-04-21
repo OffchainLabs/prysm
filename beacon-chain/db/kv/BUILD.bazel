@@ -24,6 +24,7 @@ go_library(
         "migration_block_slot_index.go",
         "migration_finalized_parent.go",
         "migration_state_validators.go",
+        "new_payload_request_root.go",
         "p2p.go",
         "schema.go",
         "state.go",

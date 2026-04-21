@@ -126,6 +126,7 @@ var Buckets = [][]byte{
 	feeRecipientBucket,
 	registrationBucket,
 	custodyBucket,
+	newPayloadRequestRootsBucket,
 }
 
 // KVStoreOption is a functional option that modifies a kv.Store.

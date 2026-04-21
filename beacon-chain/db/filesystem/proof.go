@@ -66,12 +66,12 @@ type (
 
 	// ProofStorage is the concrete implementation of the filesystem backend for saving and retrieving ExecutionProofs.
 	ProofStorage struct {
-		base            string
-		retentionEpochs primitives.Epoch
-		fs              afero.Fs
-		cache           *proofCache
-		proofFeed       *event.Feed
-		pruneMu         sync.RWMutex
+		base                   string
+		finalizedEpochProvider FinalizedEpochProvider
+		fs                     afero.Fs
+		cache                  *proofCache
+		proofFeed              *event.Feed
+		pruneMu                sync.RWMutex
 
 		mu      sync.Mutex // protects muChans
 		muChans map[[fieldparams.RootLength]byte]*proofMuChan
@@ -79,6 +79,12 @@ type (
 
 	// ProofStorageOption is a functional option for configuring a ProofStorage.
 	ProofStorageOption func(*ProofStorage) error
+
+	// FinalizedEpochProvider returns the current finalized epoch as seen by the
+	// chain. When configured on a ProofStorage, pruning will never remove
+	// proofs whose block epoch is greater than or equal to the finalized epoch,
+	// guaranteeing that unfinalized blocks always have their proofs available.
+	FinalizedEpochProvider func() primitives.Epoch
 
 	proofMuChan struct {
 		mu      *sync.RWMutex
@@ -110,19 +116,22 @@ func WithProofBasePath(base string) ProofStorageOption {
 	}
 }
 
-// WithProofRetentionEpochs is an option that changes the number of epochs proofs will be persisted.
-func WithProofRetentionEpochs(e primitives.Epoch) ProofStorageOption {
-	return func(ps *ProofStorage) error {
-		ps.retentionEpochs = e
-		return nil
-	}
-}
-
 // WithProofFs allows the afero.Fs implementation to be customized.
 // Used by tests to substitute an in-memory filesystem.
 func WithProofFs(fs afero.Fs) ProofStorageOption {
 	return func(ps *ProofStorage) error {
 		ps.fs = fs
+		return nil
+	}
+}
+
+// WithProofFinalizedEpochProvider configures a hook returning the current
+// finalized epoch. The pruner uses it to delete proofs for finalized blocks
+// only: anything at or above the finalized epoch is retained, guaranteeing
+// that unfinalized blocks always have their proofs available.
+func WithProofFinalizedEpochProvider(p FinalizedEpochProvider) ProofStorageOption {
+	return func(ps *ProofStorage) error {
+		ps.finalizedEpochProvider = p
 		return nil
 	}
 }
@@ -764,20 +773,26 @@ func (ps *ProofStorage) readHeader(file afero.File) (proofOffsetTable, int64, er
 }
 
 // prune cleans the cache, the filesystem and mutexes.
+// Only proofs for finalized blocks are removed: anything with epoch >= the
+// current finalized epoch is retained, guaranteeing that unfinalized blocks
+// always have their proofs available. If no finalized-epoch provider is wired
+// (e.g. in unit tests), pruning is a no-op.
 func (ps *ProofStorage) prune() {
 	startTime := time.Now()
 	defer func() {
 		proofPruneLatency.Observe(float64(time.Since(startTime).Milliseconds()))
 	}()
 
-	highestStoredEpoch := ps.cache.HighestEpoch()
-
-	// Check if we need to prune.
-	if highestStoredEpoch < ps.retentionEpochs {
+	if ps.finalizedEpochProvider == nil {
 		return
 	}
-
-	highestEpochToPrune := highestStoredEpoch - ps.retentionEpochs
+	finalizedEpoch := ps.finalizedEpochProvider()
+	if finalizedEpoch == 0 {
+		return
+	}
+	// Prune strictly below the finalized epoch: the finalized checkpoint
+	// block and everything above it remain.
+	highestEpochToPrune := finalizedEpoch - 1
 	highestPeriodToPrune := proofPeriod(highestEpochToPrune)
 
 	// Prune the cache.

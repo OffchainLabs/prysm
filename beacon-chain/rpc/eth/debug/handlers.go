@@ -202,6 +202,8 @@ func (s *Server) GetForkChoice(w http.ResponseWriter, r *http.Request) {
 				UnrealizedFinalizedEpoch: fmt.Sprintf("%d", n.UnrealizedFinalizedEpoch),
 				Balance:                  fmt.Sprintf("%d", n.Balance),
 				ExecutionOptimistic:      n.ExecutionOptimistic,
+				ExecutionValidated:       n.ExecutionValidated,
+				NewPayloadRequestRoot:    hexutil.Encode(n.NewPayloadRequestRoot),
 				TimeStamp:                n.Timestamp.String(),
 				Target:                   fmt.Sprintf("%#x", n.Target),
 			},

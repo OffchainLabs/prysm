@@ -79,4 +79,7 @@ var (
 	groupCountKey              = []byte("group-count")
 	earliestAvailableSlotKey   = []byte("earliest-available-slot")
 	subscribeAllDataSubnetsKey = []byte("subscribe-all-data-subnets")
+
+	// EIP-8025 Execution Proofs: maps block root -> NewPayloadRequest hash tree root.
+	newPayloadRequestRootsBucket = []byte("new-payload-request-roots")
 )

@@ -128,6 +128,22 @@ func (ro *ROForkChoice) HighestReceivedBlockDelay() primitives.Slot {
 	return ro.getter.HighestReceivedBlockDelay()
 }
 
+// RootsMissingExecutionProofs delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) RootsMissingExecutionProofs() ([][32]byte, error) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+
+	return ro.getter.RootsMissingExecutionProofs()
+}
+
+// BlockRootByNewPayloadRequestRoot delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot [fieldparams.RootLength]byte) ([fieldparams.RootLength]byte, primitives.Slot, bool) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+
+	return ro.getter.BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot)
+}
+
 // ReceivedBlocksLastEpoch delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) ReceivedBlocksLastEpoch() (uint64, error) {
 	ro.l.RLock()

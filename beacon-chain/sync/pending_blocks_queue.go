@@ -259,10 +259,6 @@ func (s *Service) processBlock(ctx context.Context, b interfaces.ReadOnlySignedB
 			return errors.Wrap(err, "request and save missing data column sidecars")
 		}
 
-		if err := s.requestAndSaveMissingExecutionProofs([]blocks.ROBlock{roBlock}); err != nil {
-			return errors.Wrap(err, "request and save missing execution proofs")
-		}
-
 		return nil
 	}
 

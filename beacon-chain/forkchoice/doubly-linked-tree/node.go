@@ -216,7 +216,9 @@ func (n *Node) nodeTreeDump(ctx context.Context, nodes []*forkchoice2.Node) ([]*
 		Balance:                  n.balance,
 		Weight:                   n.weight,
 		ExecutionOptimistic:      n.optimistic,
+		ExecutionValidated:       n.elValidated,
 		ExecutionBlockHash:       n.payloadHash[:],
+		NewPayloadRequestRoot:    n.newPayloadRequestRoot[:],
 		Timestamp:                n.timestamp,
 		Target:                   target[:],
 	}

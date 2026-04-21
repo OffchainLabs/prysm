@@ -100,9 +100,10 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	topicMap[addEncoding(p2p.RPCDataColumnSidecarsByRootTopicV1)] = dataColumnSidecars
 	// DataColumnSidecarsByRangeV1
 	topicMap[addEncoding(p2p.RPCDataColumnSidecarsByRangeTopicV1)] = dataColumnSidecars
-	
-	executionProofs := leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */);
-	// ExecutionProofsByRootV1
+
+	// ExecutionProofsByRootV1: each identifier targets one block
+	// TODO: To adapt
+	executionProofs := leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, blockBucketPeriod, false /* deleteEmptyBuckets */)
 	topicMap[addEncoding(p2p.RPCExecutionProofsByRootTopicV1)] = executionProofs
 
 	// General topic for all rpc requests.

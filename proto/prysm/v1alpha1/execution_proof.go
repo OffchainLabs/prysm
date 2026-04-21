@@ -6,8 +6,12 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
-// Proof type indices matching the zkvm ordering in the prover config.
+// Proof type indices matching the zkboost configuration:
+// https://github.com/eth-act/zkboost#configuration
 const (
+	// ProofTypeEthrexRisc0 uint8 = iota
+	// ProofTypeEthrexSP1
+	// ProofTypeEthrexZisk
 	ProofTypeRethOpenVM uint8 = iota + 3
 	ProofTypeRethRisc0
 	ProofTypeRethSP1
@@ -15,6 +19,9 @@ const (
 )
 
 var proofTypeNames = map[uint8]string{
+	// ProofTypeEthrexRisc0: "ethrex-risc0",
+	// ProofTypeEthrexSP1:   "ethrex-sp1",
+	// ProofTypeEthrexZisk:  "ethrex-zisk",
 	ProofTypeRethOpenVM: "reth-openvm",
 	ProofTypeRethRisc0:  "reth-risc0",
 	ProofTypeRethSP1:    "reth-sp1",

@@ -78,6 +78,14 @@ type ChainService struct {
 	Proofs                      []blocks.VerifiedROSignedExecutionProof
 	TargetRoot                  [32]byte
 	MockHeadSlot                *primitives.Slot
+	MissingExecutionProofRoots  [][32]byte
+	NewPayloadRequestRoots      map[[32]byte]MockRootSlot
+}
+
+// MockRootSlot is a simple (root, slot) pair for mocking forkchoice lookups.
+type MockRootSlot struct {
+	Root [32]byte
+	Slot primitives.Slot
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -762,6 +770,25 @@ func (c *ChainService) ReceiveDataColumns(dcs []blocks.VerifiedRODataColumn) err
 func (c *ChainService) ReceiveProof(proof blocks.VerifiedROSignedExecutionProof) error {
 	c.Proofs = append(c.Proofs, proof)
 	return nil
+}
+
+// RootsMissingExecutionProofs mocks the same method in the chain service.
+func (c *ChainService) RootsMissingExecutionProofs() ([][32]byte, error) {
+	return c.MissingExecutionProofRoots, nil
+}
+
+// BlockRootByNewPayloadRequestRoot mocks the same method in the chain service.
+func (c *ChainService) BlockRootByNewPayloadRequestRoot(npr [32]byte) ([32]byte, primitives.Slot, bool) {
+	if c.NewPayloadRequestRoots == nil {
+		return [32]byte{}, 0, false
+	}
+
+	rootSlot, ok := c.NewPayloadRequestRoots[npr]
+	if !ok {
+		return [32]byte{}, 0, false
+	}
+
+	return rootSlot.Root, rootSlot.Slot, true
 }
 
 // DependentRootForEpoch mocks the same method in the chain service

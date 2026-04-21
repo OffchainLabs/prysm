@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	sszutil "github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 var (
@@ -21,7 +22,7 @@ var (
 type ROSignedExecutionProof struct {
 	*ethpb.SignedExecutionProof
 	blockRoot [fieldparams.RootLength]byte
-	epoch     primitives.Epoch
+	slot      primitives.Slot
 }
 
 func roSignedExecutionProofNilCheck(sep *ethpb.SignedExecutionProof) error {
@@ -46,7 +47,7 @@ func roSignedExecutionProofNilCheck(sep *ethpb.SignedExecutionProof) error {
 func NewROSignedExecutionProof(
 	signedExecutionProof *ethpb.SignedExecutionProof,
 	root [fieldparams.RootLength]byte,
-	epoch primitives.Epoch,
+	slot primitives.Slot,
 ) (ROSignedExecutionProof, error) {
 	if err := roSignedExecutionProofNilCheck(signedExecutionProof); err != nil {
 		return ROSignedExecutionProof{}, fmt.Errorf("ro signed execution proof nil check: %w", err)
@@ -55,7 +56,7 @@ func NewROSignedExecutionProof(
 	roSignedExecutionProof := ROSignedExecutionProof{
 		SignedExecutionProof: signedExecutionProof,
 		blockRoot:            root,
-		epoch:                epoch,
+		slot:                 slot,
 	}
 
 	return roSignedExecutionProof, nil
@@ -66,9 +67,14 @@ func (p *ROSignedExecutionProof) BlockRoot() [fieldparams.RootLength]byte {
 	return p.blockRoot
 }
 
-// Epoch returns the epoch of the execution proof.
+// Slot returns the slot of the block the execution proof attests to.
+func (p *ROSignedExecutionProof) Slot() primitives.Slot {
+	return p.slot
+}
+
+// Epoch returns the epoch derived from the proof's block slot.
 func (p *ROSignedExecutionProof) Epoch() primitives.Epoch {
-	return p.epoch
+	return slots.ToEpoch(p.slot)
 }
 
 // // ProofType returns the proof type of the execution proof.
