@@ -500,6 +500,7 @@ func TestBlobValidatorFromRootReq(t *testing.T) {
 		ids      []*ethpb.BlobIdentifier
 		response []blocks.ROBlob
 		err      error
+		errAt    int
 	}{
 		{
 			name:     "expected",
@@ -516,16 +517,28 @@ func TestBlobValidatorFromRootReq(t *testing.T) {
 			name:     "wrong index",
 			ids:      []*ethpb.BlobIdentifier{{BlockRoot: rootA, Index: 0}},
 			response: []blocks.ROBlob{blobSidecarA1},
-			err:      errUnrequested,
+			err:      errBlobDuplicateOrUnexpected,
+		},
+		{
+			name:     "duplicate blob rejected",
+			ids:      []*ethpb.BlobIdentifier{{BlockRoot: rootA, Index: 0}, {BlockRoot: rootA, Index: 1}},
+			response: []blocks.ROBlob{blobSidecarA0, blobSidecarA0},
+			err:      errBlobDuplicateOrUnexpected,
+			errAt:    1,
+		},
+		{
+			name:     "multiple blobs valid",
+			ids:      []*ethpb.BlobIdentifier{{BlockRoot: rootA, Index: 0}, {BlockRoot: rootA, Index: 1}},
+			response: []blocks.ROBlob{blobSidecarA0, blobSidecarA1},
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			r := p2pTypes.BlobSidecarsByRootReq(c.ids)
 			vf := blobValidatorFromRootReq(&r)
-			for _, sc := range c.response {
+			for i, sc := range c.response {
 				err := vf(sc)
-				if c.err != nil {
+				if c.err != nil && i == c.errAt {
 					require.ErrorIs(t, err, c.err)
 					return
 				}
@@ -1135,63 +1148,66 @@ func TestIsSidecarSlotWithinBounds(t *testing.T) {
 }
 
 func TestIsSidecarIndexRequested(t *testing.T) {
-	request := &ethpb.DataColumnSidecarsByRangeRequest{
-		Columns: []uint64{2, 9, 4},
-	}
+	createSidecar := func(slot primitives.Slot, index uint64) blocks.RODataColumn {
+		const count = 4
+		kzgCommitmentsInclusionProof := make([][]byte, 0, count)
+		for range count {
+			kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
+		}
 
-	validator := isSidecarIndexRequested(request)
-
-	testCases := []struct {
-		name            string
-		index           uint64
-		isErrorExpected bool
-	}{
-		{
-			name:            "not requested",
-			index:           1,
-			isErrorExpected: true,
-		},
-		{
-			name:            "requested",
-			index:           9,
-			isErrorExpected: false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			const count = 4
-			kzgCommitmentsInclusionProof := make([][]byte, 0, count)
-			for range count {
-				kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
-			}
-
-			sidecarPb := &ethpb.DataColumnSidecar{
-				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
-					Header: &ethpb.BeaconBlockHeader{
-						Slot:       0,
-						ParentRoot: make([]byte, fieldparams.RootLength),
-						StateRoot:  make([]byte, fieldparams.RootLength),
-						BodyRoot:   make([]byte, fieldparams.RootLength),
-					},
-					Signature: make([]byte, fieldparams.BLSSignatureLength),
+		sidecarPb := &ethpb.DataColumnSidecar{
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					Slot:       slot,
+					ParentRoot: make([]byte, fieldparams.RootLength),
+					StateRoot:  make([]byte, fieldparams.RootLength),
+					BodyRoot:   make([]byte, fieldparams.RootLength),
 				},
-				KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
-				Index:                        tc.index,
-			}
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+			Index:                        index,
+		}
 
-			sidecar, err := blocks.NewRODataColumn(sidecarPb)
-			require.NoError(t, err)
-
-			err = validator(sidecar)
-			if tc.isErrorExpected {
-				require.NotNil(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-		})
+		sidecar, _ := blocks.NewRODataColumn(sidecarPb)
+		return sidecar
 	}
+
+	t.Run("not requested index", func(t *testing.T) {
+		request := &ethpb.DataColumnSidecarsByRangeRequest{Columns: []uint64{2, 9, 4}}
+		validator := isSidecarIndexRequested(request)
+		err := validator(createSidecar(0, 1))
+		require.ErrorIs(t, err, errSidecarIndexNotRequested)
+	})
+
+	t.Run("requested index", func(t *testing.T) {
+		request := &ethpb.DataColumnSidecarsByRangeRequest{Columns: []uint64{2, 9, 4}}
+		validator := isSidecarIndexRequested(request)
+		err := validator(createSidecar(0, 9))
+		require.NoError(t, err)
+	})
+
+	t.Run("duplicate sidecar same slot rejected", func(t *testing.T) {
+		request := &ethpb.DataColumnSidecarsByRangeRequest{Columns: []uint64{2, 9, 4}}
+		validator := isSidecarIndexRequested(request)
+
+		err := validator(createSidecar(0, 2))
+		require.NoError(t, err)
+
+		err = validator(createSidecar(0, 2))
+		require.ErrorIs(t, err, errSidecarDuplicate)
+	})
+
+	t.Run("same index different slots allowed", func(t *testing.T) {
+		request := &ethpb.DataColumnSidecarsByRangeRequest{Columns: []uint64{2, 9, 4}}
+		validator := isSidecarIndexRequested(request)
+
+		err := validator(createSidecar(0, 2))
+		require.NoError(t, err)
+
+		err = validator(createSidecar(1, 2))
+		require.NoError(t, err)
+	})
 }
 
 func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
@@ -1381,72 +1397,82 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 }
 
 func TestIsSidecarIndexRootRequested(t *testing.T) {
-	testCases := []struct {
-		name            string
-		root            [fieldparams.RootLength]byte
-		index           uint64
-		isErrorExpected bool
-	}{
-		{
-			name:            "non requested root",
-			root:            [fieldparams.RootLength]byte{2},
-			isErrorExpected: true,
-		},
-		{
-			name:            "non requested index",
-			root:            [fieldparams.RootLength]byte{1},
-			index:           3,
-			isErrorExpected: true,
-		},
-		{
-			name:            "nominal",
-			root:            [fieldparams.RootLength]byte{1},
-			index:           2,
-			isErrorExpected: false,
-		},
-	}
+	createSidecar := func(root [fieldparams.RootLength]byte, index uint64) blocks.RODataColumn {
+		const count = 4
+		kzgCommitmentsInclusionProof := make([][]byte, 0, count)
+		for range count {
+			kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
+		}
 
-	request := types.DataColumnsByRootIdentifiers{
-		{BlockRoot: []byte{1}, Columns: []uint64{1, 2}},
-	}
-
-	validator := isSidecarIndexRootRequested(request)
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			const count = 4
-			kzgCommitmentsInclusionProof := make([][]byte, 0, count)
-			for range count {
-				kzgCommitmentsInclusionProof = append(kzgCommitmentsInclusionProof, make([]byte, 32))
-			}
-
-			sidecarPb := &ethpb.DataColumnSidecar{
-				SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
-					Header: &ethpb.BeaconBlockHeader{
-						ParentRoot: make([]byte, fieldparams.RootLength),
-						StateRoot:  make([]byte, fieldparams.RootLength),
-						BodyRoot:   make([]byte, fieldparams.RootLength),
-					},
-					Signature: make([]byte, fieldparams.BLSSignatureLength),
+		sidecarPb := &ethpb.DataColumnSidecar{
+			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
+				Header: &ethpb.BeaconBlockHeader{
+					ParentRoot: make([]byte, fieldparams.RootLength),
+					StateRoot:  make([]byte, fieldparams.RootLength),
+					BodyRoot:   make([]byte, fieldparams.RootLength),
 				},
-				KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
-				Index:                        tc.index,
-			}
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+			Index:                        index,
+		}
 
-			// There is a discrepancy between `tc.root` and the real root,
-			// but we don't care about it here.
-			sidecar, err := blocks.NewRODataColumnWithRoot(sidecarPb, tc.root)
-			require.NoError(t, err)
-
-			err = validator(sidecar)
-			if tc.isErrorExpected {
-				require.NotNil(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-		})
+		sidecar, _ := blocks.NewRODataColumnWithRoot(sidecarPb, root)
+		return sidecar
 	}
+
+	t.Run("non requested root", func(t *testing.T) {
+		request := types.DataColumnsByRootIdentifiers{
+			{BlockRoot: []byte{1}, Columns: []uint64{1, 2}},
+		}
+		validator := isSidecarIndexRootRequested(request)
+		err := validator(createSidecar([fieldparams.RootLength]byte{2}, 1))
+		require.ErrorContains(t, "not requested", err)
+	})
+
+	t.Run("non requested index", func(t *testing.T) {
+		request := types.DataColumnsByRootIdentifiers{
+			{BlockRoot: []byte{1}, Columns: []uint64{1, 2}},
+		}
+		validator := isSidecarIndexRootRequested(request)
+		err := validator(createSidecar([fieldparams.RootLength]byte{1}, 3))
+		require.ErrorIs(t, err, errSidecarDuplicate)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		request := types.DataColumnsByRootIdentifiers{
+			{BlockRoot: []byte{1}, Columns: []uint64{1, 2}},
+		}
+		validator := isSidecarIndexRootRequested(request)
+		err := validator(createSidecar([fieldparams.RootLength]byte{1}, 2))
+		require.NoError(t, err)
+	})
+
+	t.Run("duplicate sidecar rejected", func(t *testing.T) {
+		request := types.DataColumnsByRootIdentifiers{
+			{BlockRoot: []byte{1}, Columns: []uint64{1, 2}},
+		}
+		validator := isSidecarIndexRootRequested(request)
+
+		err := validator(createSidecar([fieldparams.RootLength]byte{1}, 1))
+		require.NoError(t, err)
+
+		err = validator(createSidecar([fieldparams.RootLength]byte{1}, 1))
+		require.ErrorIs(t, err, errSidecarDuplicate)
+	})
+
+	t.Run("multiple valid sidecars", func(t *testing.T) {
+		request := types.DataColumnsByRootIdentifiers{
+			{BlockRoot: []byte{1}, Columns: []uint64{1, 2}},
+		}
+		validator := isSidecarIndexRootRequested(request)
+
+		err := validator(createSidecar([fieldparams.RootLength]byte{1}, 1))
+		require.NoError(t, err)
+
+		err = validator(createSidecar([fieldparams.RootLength]byte{1}, 2))
+		require.NoError(t, err)
+	})
 }
 
 func TestReadChunkedDataColumnSidecar(t *testing.T) {
