@@ -151,7 +151,6 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 				log.WithField("root", fmt.Sprintf("%#x", req.root)).Debug("Missing reconstructed payload after successful batch call")
 				continue
 			}
-			payload.SlotNumber = req.env.Message.Slot
 			envelope := &ethpb.SignedExecutionPayloadEnvelope{
 				Message: &ethpb.ExecutionPayloadEnvelope{
 					Payload:           payload,
