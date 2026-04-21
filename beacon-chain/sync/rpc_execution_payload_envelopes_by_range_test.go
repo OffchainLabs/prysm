@@ -243,8 +243,9 @@ func TestExecutionPayloadEnvelopesByRangeRPCHandler(t *testing.T) {
 
 		mockEngine := &mockExecution.EngineClient{
 			ExecutionPayloadByBlockHash: make(map[[32]byte]*engpb.ExecutionPayload, len(roots)),
+			SlotByBlockHash:             make(map[[32]byte]primitives.Slot, len(roots)),
 		}
-		for _, root := range roots[:3] {
+		for i, root := range roots[:3] {
 			mockEngine.ExecutionPayloadByBlockHash[root] = &engpb.ExecutionPayload{
 				ParentHash:    make([]byte, 32),
 				FeeRecipient:  make([]byte, 20),
@@ -255,6 +256,7 @@ func TestExecutionPayloadEnvelopesByRangeRPCHandler(t *testing.T) {
 				BaseFeePerGas: make([]byte, 32),
 				BlockHash:     root[:],
 			}
+			mockEngine.SlotByBlockHash[root] = blockSlots[i]
 		}
 
 		svc := &Service{
@@ -348,8 +350,9 @@ func TestExecutionPayloadEnvelopesByRangeRPCHandler(t *testing.T) {
 
 		mockEngine := &mockExecution.EngineClient{
 			ExecutionPayloadByBlockHash: make(map[[32]byte]*engpb.ExecutionPayload, len(roots)),
+			SlotByBlockHash:             make(map[[32]byte]primitives.Slot, len(roots)),
 		}
-		for _, root := range roots[:3] {
+		for i, root := range roots[:3] {
 			mockEngine.ExecutionPayloadByBlockHash[root] = &engpb.ExecutionPayload{
 				ParentHash:    make([]byte, 32),
 				FeeRecipient:  make([]byte, 20),
@@ -360,6 +363,7 @@ func TestExecutionPayloadEnvelopesByRangeRPCHandler(t *testing.T) {
 				BaseFeePerGas: make([]byte, 32),
 				BlockHash:     root[:],
 			}
+			mockEngine.SlotByBlockHash[root] = blockSlots[i]
 		}
 
 		svc := &Service{

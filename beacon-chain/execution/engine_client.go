@@ -845,6 +845,9 @@ func gloasPayloadFromExecutionBlock(
 	if blk.ExcessBlobGas == nil {
 		return nil, errors.New("execution block excess blob gas is nil")
 	}
+	if blk.SlotNumber == nil {
+		return nil, errors.New("execution block slot number is nil")
+	}
 
 	return &pb.ExecutionPayloadGloas{
 		ParentHash:    blk.ParentHash.Bytes(),
@@ -862,6 +865,7 @@ func gloasPayloadFromExecutionBlock(
 		BlockHash:     blk.Hash.Bytes(),
 		BlobGasUsed:   *blk.BlobGasUsed,
 		ExcessBlobGas: *blk.ExcessBlobGas,
+		SlotNumber:    primitives.Slot(*blk.SlotNumber),
 	}, nil
 }
 

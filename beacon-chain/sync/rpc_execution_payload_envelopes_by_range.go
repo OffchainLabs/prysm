@@ -199,7 +199,6 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 			return errors.Errorf("missing reconstructed payload for block hash %#x", c.blockHash)
 		}
-		payload.SlotNumber = c.env.Message.Slot
 		fullEnv := &pb.SignedExecutionPayloadEnvelope{
 			Message: &pb.ExecutionPayloadEnvelope{
 				Payload:           payload,
