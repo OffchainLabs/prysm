@@ -32,6 +32,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -758,35 +759,26 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 		return payloads, nil
 	}
 
-	type blocksResult struct {
-		blocks []*pb.ExecutionBlock
-		err    error
+	var execBlocks []*pb.ExecutionBlock
+	bodiesV2 := make([]*pb.ExecutionPayloadBodyV2, 0)
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		blks, err := s.ExecutionBlocksByHashes(gctx, requestHashes, false)
+		if err != nil {
+			return errors.Wrap(err, "could not fetch execution blocks by hash")
+		}
+		execBlocks = blks
+		return nil
+	})
+	g.Go(func() error {
+		if err := s.rpcClient.CallContext(gctx, &bodiesV2, GetPayloadBodiesByHashV2, requestHashes); err != nil {
+			return errors.Wrap(err, "could not fetch payload bodies V2 by hash")
+		}
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
-	type bodiesResult struct {
-		bodies []*pb.ExecutionPayloadBodyV2
-		err    error
-	}
-	blocksCh := make(chan blocksResult, 1)
-	bodiesCh := make(chan bodiesResult, 1)
-	go func() {
-		blks, err := s.ExecutionBlocksByHashes(ctx, requestHashes, false)
-		blocksCh <- blocksResult{blocks: blks, err: err}
-	}()
-	go func() {
-		b := make([]*pb.ExecutionPayloadBodyV2, 0)
-		err := s.rpcClient.CallContext(ctx, &b, GetPayloadBodiesByHashV2, requestHashes)
-		bodiesCh <- bodiesResult{bodies: b, err: err}
-	}()
-	br := <-blocksCh
-	if br.err != nil {
-		return nil, errors.Wrap(br.err, "could not fetch execution blocks by hash")
-	}
-	execBlocks := br.blocks
-	bdr := <-bodiesCh
-	if bdr.err != nil {
-		return nil, errors.Wrap(bdr.err, "could not fetch payload bodies V2 by hash")
-	}
-	bodiesV2 := bdr.bodies
 	if len(bodiesV2) != len(requestHashes) {
 		return nil, errors.Errorf("payload bodies V2 count mismatch: got %d, want %d", len(bodiesV2), len(requestHashes))
 	}
