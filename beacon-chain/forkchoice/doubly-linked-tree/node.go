@@ -38,6 +38,13 @@ func (n *Node) leadsToViableHead(justifiedEpoch, currentEpoch primitives.Epoch) 
 // inequality < here. For example a block that arrives 3.9999 seconds into the
 // slot will have secs = 3 below.
 func (n *PayloadNode) arrivedEarly(genesis time.Time) (bool, error) {
+	// The tree root node (genesis or the finalized checkpoint on checkpoint-sync)
+	// carries an insertion timestamp sourced from time.Now() at process startup,
+	// not actual network arrival time. It can never be a reorg target anyway, so
+	// treat it as always having arrived early.
+	if n.node.parent == nil {
+		return true, nil
+	}
 	sss, err := slots.SinceSlotStart(n.node.slot, genesis, n.timestamp.Truncate(time.Second)) // Truncate such that 3.9999 seconds will have a value of 3.
 	votingWindow := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AttestationDueBPS)
 	return sss < votingWindow, err
@@ -49,6 +56,10 @@ func (n *PayloadNode) arrivedEarly(genesis time.Time) (bool, error) {
 // inequality >= here. For example a block that arrives 10.00001 seconds into the
 // slot will have secs = 10 below.
 func (n *PayloadNode) arrivedAfterOrphanCheck(genesis time.Time) (bool, error) {
+	// See arrivedEarly: the tree root's timestamp is not meaningful here.
+	if n.node.parent == nil {
+		return false, nil
+	}
 	secs, err := slots.SinceSlotStart(n.node.slot, genesis, n.timestamp.Truncate(time.Second)) // Truncate such that 10.00001 seconds will have a value of 10.
 	return secs >= ProcessAttestationsThreshold, err
 }
