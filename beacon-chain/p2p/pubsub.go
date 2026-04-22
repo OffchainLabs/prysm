@@ -52,6 +52,10 @@ func (s *Service) JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topi
 	s.joinedTopicsLock.Lock()
 	defer s.joinedTopicsLock.Unlock()
 
+	if strings.Contains(topic, DataColumnSubnetTopicFormat) && s.partialColumnBroadcaster != nil {
+		opts = append(opts, pubsub.RequestPartialMessages())
+	}
+
 	if _, ok := s.joinedTopics[topic]; !ok {
 		topicHandle, err := s.pubsub.Join(topic, opts...)
 		if err != nil {
