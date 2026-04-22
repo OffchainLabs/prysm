@@ -215,7 +215,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 				time.Sleep(2 * time.Second)
 			}
 
-			_err := stream.Reset()
+			_err := stream.ResetWithError(network.StreamShutdown)
 			_ = _err
 		}()
 

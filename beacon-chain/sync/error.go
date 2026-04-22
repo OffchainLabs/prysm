@@ -120,7 +120,7 @@ func closeStream(stream network.Stream, log *logrus.Entry) {
 
 func closeStreamAndWait(stream network.Stream, log *logrus.Entry) {
 	if err := stream.CloseWrite(); err != nil {
-		_err := stream.Reset()
+		_err := stream.ResetWithError(network.StreamNoError)
 		_ = _err
 		if isValidStreamError(err) {
 			log.WithError(err).

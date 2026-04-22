@@ -52,7 +52,7 @@ func (s *Service) Send(ctx context.Context, message any, baseTopic string, pid p
 
 		if _, err := s.Encoding().EncodeWithMaxLength(stream, castedMsg); err != nil {
 			tracing.AnnotateError(span, err)
-			_err := stream.Reset()
+			_err := stream.ResetWithError(network.StreamProtocolViolation)
 			_ = _err
 			return nil, errors.Wrap(err, "encode with max length")
 		}
@@ -61,7 +61,7 @@ func (s *Service) Send(ctx context.Context, message any, baseTopic string, pid p
 	// Close stream for writing.
 	if err := stream.CloseWrite(); err != nil {
 		tracing.AnnotateError(span, err)
-		_err := stream.Reset()
+		_err := stream.ResetWithError(network.StreamNoError)
 		_ = _err
 		return nil, errors.Wrap(err, "close write")
 	}

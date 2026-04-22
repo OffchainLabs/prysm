@@ -33,7 +33,7 @@ func (c *client) registerRPCHandler(baseTopic string, handle rpcHandler) {
 		// Close here because we may have only written a partial
 		// response.
 		defer func() {
-			_err := stream.Reset()
+			_err := stream.ResetWithError(corenet.StreamShutdown)
 			_ = _err
 		}()
 
