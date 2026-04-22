@@ -74,6 +74,7 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 			}
 			if len(eReqs.Consolidations) > 0 {
 				log = log.WithField("consolidationRequestCount", len(eReqs.Consolidations))
+				consolidationRequestCount.Add(float64(len(eReqs.Consolidations)))
 			}
 			if len(eReqs.Withdrawals) > 0 {
 				log = log.WithField("withdrawalRequestCount", len(eReqs.Withdrawals))

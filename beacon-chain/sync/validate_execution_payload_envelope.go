@@ -202,7 +202,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 		s.pendingPayloadEnvelopes[root] = inner
 	} else {
 		for _, existing := range inner {
-			if existing.Message.Slot != signedEnvelope.Message.Slot {
+			if existing.Message.Payload.SlotNumber != signedEnvelope.Message.Payload.SlotNumber {
 				log.Debug("Ignoring payload envelope with mismatched slot")
 				return pubsub.ValidationIgnore, nil
 			}

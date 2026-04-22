@@ -241,7 +241,7 @@ message SignedBeaconBlockGloas {
 // class BeaconState(Container):
 //     [All previous fields from earlier forks]
 //     # Replaced existing latest execution header position
-//     latest_execution_payload_bid: ExecutionPayloadBid
+//     latest_block_hash: Hash32
 //     builders: List[Builder, BUILDER_REGISTRY_LIMIT]
 //     # [New in Gloas:EIP7732]
 //     next_withdrawal_builder_index: BuilderIndex
@@ -250,7 +250,7 @@ message SignedBeaconBlockGloas {
 //     builder_pending_payments: Vector[BuilderPendingPayment, 2 *
 //     SLOTS_PER_EPOCH] builder_pending_withdrawals:
 //     List[BuilderPendingWithdrawal, BUILDER_PENDING_WITHDRAWALS_LIMIT]
-//     latest_block_hash: Hash32
+//     latest_execution_payload_bid: ExecutionPayloadBid
 //     payload_expected_withdrawals: List[Withdrawal,
 //     MAX_WITHDRAWALS_PER_PAYLOAD]
 //     ptc_window:
@@ -318,9 +318,9 @@ message BeaconStateGloas {
   SyncCommittee current_sync_committee = 9002;
   SyncCommittee next_sync_committee = 9003;
 
-  // Note: latest_execution_payload_header replaced with ExecutionPayloadBid in
+  // Note: latest_execution_payload_header replaced with latest_block_hash in
   // Gloas
-  ExecutionPayloadBid latest_execution_payload_bid = 10001;
+  bytes latest_block_hash = 10001 [ (ethereum.eth.ext.ssz_size) = "32" ];
 
   // Fields introduced in Capella fork [11001-12000]
   uint64 next_withdrawal_index = 11001;
@@ -381,7 +381,7 @@ message BeaconStateGloas {
       [ (ethereum.eth.ext.ssz_size) = "builder_pending_payments.size" ];
   repeated BuilderPendingWithdrawal builder_pending_withdrawals = 14005
       [ (ethereum.eth.ext.ssz_max) = "1048576" ];
-  bytes latest_block_hash = 14006 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  ExecutionPayloadBid latest_execution_payload_bid = 14006;
   repeated ethereum.engine.v1.Withdrawal payload_expected_withdrawals = 14007
       [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
   repeated PTCs ptc_window = 14008
@@ -488,18 +488,13 @@ message DataColumnSidecarGloas {
 //     execution_requests: ExecutionRequests
 //     builder_index: BuilderIndex
 //     beacon_block_root: Root
-//     slot: Slot
 message ExecutionPayloadEnvelope {
-  ethereum.engine.v1.ExecutionPayloadDeneb payload = 1;
+  ethereum.engine.v1.ExecutionPayloadGloas payload = 1;
   ethereum.engine.v1.ExecutionRequests execution_requests = 2;
   uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
                                  "github.com/OffchainLabs/prysm/v7/"
                                  "consensus-types/primitives.BuilderIndex" ];
   bytes beacon_block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  uint64 slot = 5 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
-  ];
 }
 
 // SignedExecutionPayloadEnvelope wraps an execution payload envelope with a

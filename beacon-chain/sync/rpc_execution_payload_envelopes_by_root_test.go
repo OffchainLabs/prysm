@@ -40,7 +40,7 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 	makeEnvelope := func(root [32]byte, slot primitives.Slot) *ethpb.SignedExecutionPayloadEnvelope {
 		return &ethpb.SignedExecutionPayloadEnvelope{
 			Message: &ethpb.ExecutionPayloadEnvelope{
-				Payload: &enginev1.ExecutionPayloadDeneb{
+				Payload: &enginev1.ExecutionPayloadGloas{
 					ParentHash:    make([]byte, fieldparams.RootLength),
 					FeeRecipient:  make([]byte, 20),
 					StateRoot:     make([]byte, fieldparams.RootLength),
@@ -49,9 +49,9 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 					PrevRandao:    make([]byte, fieldparams.RootLength),
 					BaseFeePerGas: make([]byte, fieldparams.RootLength),
 					BlockHash:     make([]byte, fieldparams.RootLength),
+					SlotNumber:    slot,
 				},
 				BeaconBlockRoot: root[:],
-				Slot:            slot,
 			},
 			Signature: make([]byte, fieldparams.BLSSignatureLength),
 		}

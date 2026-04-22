@@ -24,11 +24,11 @@ type payloadFixture struct {
 	signed      interfaces.ROSignedExecutionPayloadEnvelope
 	signedProto *ethpb.SignedExecutionPayloadEnvelope
 	envelope    *ethpb.ExecutionPayloadEnvelope
-	payload     *enginev1.ExecutionPayloadDeneb
+	payload     *enginev1.ExecutionPayloadGloas
 	slot        primitives.Slot
 }
 
-func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPayloadDeneb, bid *ethpb.ExecutionPayloadBid, envelope *ethpb.ExecutionPayloadEnvelope)) payloadFixture {
+func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPayloadGloas, bid *ethpb.ExecutionPayloadBid, envelope *ethpb.ExecutionPayloadEnvelope)) payloadFixture {
 	t.Helper()
 
 	cfg := params.BeaconConfig()
@@ -47,7 +47,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		{Index: 0, ValidatorIndex: 1, Address: bytes.Repeat([]byte{0x01}, 20), Amount: 0},
 	}
 
-	payload := &enginev1.ExecutionPayloadDeneb{
+	payload := &enginev1.ExecutionPayloadGloas{
 		ParentHash:    parentHash,
 		FeeRecipient:  bytes.Repeat([]byte{0x01}, 20),
 		StateRoot:     bytes.Repeat([]byte{0x02}, 32),
@@ -65,6 +65,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		Withdrawals:   withdrawals,
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
+		SlotNumber:    slot,
 	}
 
 	emptyRequestsRoot, err := (&enginev1.ExecutionRequests{}).HashTreeRoot()
@@ -93,7 +94,6 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 	require.NoError(t, err)
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Slot:              slot,
 		BuilderIndex:      builderIdx,
 		BeaconBlockRoot:   headerRoot[:],
 		Payload:           payload,
@@ -235,16 +235,6 @@ func TestVerifyExecutionPayloadEnvelopeWithDeferredSig_Success(t *testing.T) {
 	require.Equal(t, true, valid)
 }
 
-func TestVerifyExecutionPayloadEnvelope_PrevRandaoMismatch(t *testing.T) {
-	fixture := buildPayloadFixture(t, func(_ *enginev1.ExecutionPayloadDeneb, bid *ethpb.ExecutionPayloadBid, _ *ethpb.ExecutionPayloadEnvelope) {
-		bid.PrevRandao = bytes.Repeat([]byte{0xFF}, 32)
-	})
-
-	err := VerifyExecutionPayloadEnvelope(t.Context(), fixture.state, fixture.signed)
-	require.ErrorContains(t, "prev randao", err)
-}
-
-
 func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
 
@@ -263,7 +253,7 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 		msg := proto.Clone(fixture.signedProto.Message).(*ethpb.ExecutionPayloadEnvelope)
 		msg.BuilderIndex = params.BeaconConfig().BuilderIndexSelfBuild
 
-		epoch := slots.ToEpoch(msg.Slot)
+		epoch := slots.ToEpoch(msg.Payload.SlotNumber)
 		domain, err := signing.Domain(st.Fork(), epoch, params.BeaconConfig().DomainBeaconBuilder, st.GenesisValidatorsRoot())
 		require.NoError(t, err)
 		signingRoot, err := signing.ComputeSigningRoot(msg, domain)

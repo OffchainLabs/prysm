@@ -34,14 +34,13 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		return errors.Wrap(err, "could not compute block hash tree root")
 	}
 
-	payload := extractExecutionPayloadDeneb(local)
+	payload := extractExecutionPayloadGloas(local)
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
 		Payload:           payload,
 		ExecutionRequests: local.ExecutionRequests,
 		BuilderIndex:      params.BeaconConfig().BuilderIndexSelfBuild,
 		BeaconBlockRoot:   blockRoot[:],
-		Slot:              sBlk.Block().Slot(),
 	}
 
 	// Precompute data column sidecars now (inside ProposeBeaconBlock) so the
@@ -62,11 +61,11 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 	return nil
 }
 
-func extractExecutionPayloadDeneb(local *consensusblocks.GetPayloadResponse) *enginev1.ExecutionPayloadDeneb {
+func extractExecutionPayloadGloas(local *consensusblocks.GetPayloadResponse) *enginev1.ExecutionPayloadGloas {
 	if local == nil || local.ExecutionData == nil || local.ExecutionData.IsNil() {
 		return nil
 	}
-	if p, ok := local.ExecutionData.Proto().(*enginev1.ExecutionPayloadDeneb); ok {
+	if p, ok := local.ExecutionData.Proto().(*enginev1.ExecutionPayloadGloas); ok {
 		return p
 	}
 	return nil
@@ -89,7 +88,7 @@ func (vs *Server) getExecutionPayloadEnvelope(slot primitives.Slot) (*ethpb.Exec
 	if envelope == nil {
 		return nil, false
 	}
-	if envelope.Slot != slot {
+	if envelope.Payload == nil || primitives.Slot(envelope.Payload.SlotNumber) != slot {
 		return nil, false
 	}
 	return envelope, true
@@ -138,24 +137,25 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.PublishExecutionPayloadEnvelope")
 	defer span.End()
 
-	if req == nil || req.Message == nil {
-		return nil, status.Error(codes.InvalidArgument, "signed envelope cannot be nil")
+	if req == nil || req.Message == nil || req.Message.Payload == nil {
+		return nil, status.Error(codes.InvalidArgument, "signed envelope or payload cannot be nil")
 	}
 
-	if slots.ToEpoch(req.Message.Slot) < params.BeaconConfig().GloasForkEpoch {
+	envSlot := primitives.Slot(req.Message.Payload.SlotNumber)
+	if slots.ToEpoch(envSlot) < params.BeaconConfig().GloasForkEpoch {
 		return nil, status.Errorf(codes.InvalidArgument,
-			"execution payload envelopes are not supported before Gloas fork (slot %d)", req.Message.Slot)
+			"execution payload envelopes are not supported before Gloas fork (slot %d)", envSlot)
 	}
 
 	beaconBlockRoot := bytesutil.ToBytes32(req.Message.BeaconBlockRoot)
 	span.SetAttributes(
-		trace.Int64Attribute("slot", int64(req.Message.Slot)),
+		trace.Int64Attribute("slot", int64(envSlot)), // lint:ignore uintcast -- safe for tracing.
 		trace.Int64Attribute("builderIndex", int64(req.Message.BuilderIndex)),
 		trace.StringAttribute("beaconBlockRoot", fmt.Sprintf("%#x", beaconBlockRoot[:8])),
 	)
 
 	log := log.WithFields(logrus.Fields{
-		"slot":            req.Message.Slot,
+		"slot":            envSlot,
 		"builderIndex":    req.Message.BuilderIndex,
 		"beaconBlockRoot": fmt.Sprintf("%#x", beaconBlockRoot[:8]),
 	})

@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -202,7 +203,7 @@ func TestPrunePendingPayloadEnvelopes(t *testing.T) {
 	oldRoot := [32]byte{0x01}
 	oldEnv := &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Slot:            primitives.Slot(finalizedEpoch-1) * slotsPerEpoch,
+			Payload:         &enginev1.ExecutionPayloadGloas{SlotNumber: primitives.Slot(finalizedEpoch-1) * slotsPerEpoch},
 			BeaconBlockRoot: oldRoot[:],
 		},
 		Signature: bytes.Repeat([]byte{0xAA}, 96),
@@ -211,7 +212,7 @@ func TestPrunePendingPayloadEnvelopes(t *testing.T) {
 	atFinalizedRoot := [32]byte{0x03}
 	atFinalizedEnv := &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Slot:            primitives.Slot(finalizedEpoch) * slotsPerEpoch,
+			Payload:         &enginev1.ExecutionPayloadGloas{SlotNumber: primitives.Slot(finalizedEpoch) * slotsPerEpoch},
 			BeaconBlockRoot: atFinalizedRoot[:],
 		},
 		Signature: bytes.Repeat([]byte{0xCC}, 96),
@@ -220,7 +221,7 @@ func TestPrunePendingPayloadEnvelopes(t *testing.T) {
 	freshRoot := [32]byte{0x02}
 	freshEnv := &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Slot:            primitives.Slot(finalizedEpoch+1) * slotsPerEpoch,
+			Payload:         &enginev1.ExecutionPayloadGloas{SlotNumber: primitives.Slot(finalizedEpoch+1) * slotsPerEpoch},
 			BeaconBlockRoot: freshRoot[:],
 		},
 		Signature: bytes.Repeat([]byte{0xBB}, 96),
@@ -381,7 +382,7 @@ func TestQueuePendingPayloadEnvelope_RootCountBound(t *testing.T) {
 	for i := range maxPendingPayloadRoots {
 		root := [32]byte{byte(i + 1)}
 		env := &ethpb.SignedExecutionPayloadEnvelope{
-			Message: &ethpb.ExecutionPayloadEnvelope{Slot: 1, BeaconBlockRoot: root[:]},
+			Message: &ethpb.ExecutionPayloadEnvelope{Payload: &enginev1.ExecutionPayloadGloas{SlotNumber: 1}, BeaconBlockRoot: root[:]},
 		}
 		s.pendingPayloadEnvelopes[root] = map[uint64]*ethpb.SignedExecutionPayloadEnvelope{uint64(i): env}
 	}
@@ -412,7 +413,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildBypassesRootBound(t *testing.T) {
 	for i := range maxPendingPayloadRoots {
 		root := [32]byte{byte(i + 1)}
 		env := &ethpb.SignedExecutionPayloadEnvelope{
-			Message: &ethpb.ExecutionPayloadEnvelope{Slot: 1, BeaconBlockRoot: root[:]},
+			Message: &ethpb.ExecutionPayloadEnvelope{Payload: &enginev1.ExecutionPayloadGloas{SlotNumber: 1}, BeaconBlockRoot: root[:]},
 		}
 		s.pendingPayloadEnvelopes[root] = map[uint64]*ethpb.SignedExecutionPayloadEnvelope{uint64(i): env}
 	}

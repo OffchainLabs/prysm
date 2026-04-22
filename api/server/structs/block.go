@@ -594,11 +594,10 @@ type BlockContentsGloas struct {
 }
 
 type ExecutionPayloadEnvelope struct {
-	Payload           *ExecutionPayloadDeneb `json:"payload"`
+	Payload           *ExecutionPayloadGloas `json:"payload"`
 	ExecutionRequests *ExecutionRequests     `json:"execution_requests"`
 	BuilderIndex      string                 `json:"builder_index"`
 	BeaconBlockRoot   string                 `json:"beacon_block_root"`
-	Slot              string                 `json:"slot"`
 }
 
 type SignedExecutionPayloadEnvelope struct {

@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -134,7 +135,7 @@ func blindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope) *ethpb.SignedBlind
 			ExecutionRequests: env.Message.ExecutionRequests,
 			BuilderIndex:      env.Message.BuilderIndex,
 			BeaconBlockRoot:   env.Message.BeaconBlockRoot,
-			Slot:              env.Message.Slot,
+			Slot:              primitives.Slot(env.Message.Payload.SlotNumber),
 			ParentBlockHash:   env.Message.Payload.ParentHash,
 		},
 		Signature: env.Signature,
