@@ -510,6 +510,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			}
 		}
 		if err := s.partialColumnBroadcaster.Publish(ctx, iterFunc); err != nil {
+			tracing.AnnotateError(span, err)
 			log.WithError(err).Error("Cannot publish partial data columns")
 		} else {
 			partialDataColumnBroadcasts.Add(float64(partialsWithPeers.Load()))
