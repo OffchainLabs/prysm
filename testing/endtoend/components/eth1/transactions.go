@@ -5,12 +5,12 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"math/big"
 	mathRand "math/rand"
 	"os"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
@@ -31,7 +31,16 @@ import (
 
 const txCount = 20
 
-var fundedAccount *keystore.Key
+// fundedAccount holds V0-sidecar blob tx funds (pre-Osaka submissions).
+// fundedAccountV1 holds V1-sidecar blob tx funds (post-Osaka submissions).
+// Two accounts are required because geth's blobpool iterates each account's
+// queue in nonce order and breaks on the first version mismatch
+// (core/txpool/blobpool.Pending), so V0 txs left over pre-Osaka would
+// permanently block V1 inclusion if they shared a pool slot.
+var (
+	fundedAccount   *keystore.Key
+	fundedAccountV1 *keystore.Key
+)
 
 type TransactionGenerator struct {
 	keystore      string
@@ -86,8 +95,13 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		return err
 	}
 	fundedAccount = newKey
-	// Ensure funding tx is mined before generating txs that rely on balance.
-	// Mine 1 block using the miner key to include the funding transfer.
+	newKeyV1 := keystore.NewKeyForDirectICAP(newGen)
+	if err := fundAccount(client, mineKey, newKeyV1); err != nil {
+		return err
+	}
+	fundedAccountV1 = newKeyV1
+	// Ensure funding txs are mined before generating txs that rely on balance.
+	// Mine 1 block using the miner key to include the funding transfers.
 	backend := ethclient.NewClient(client)
 	defer backend.Close()
 
@@ -95,10 +109,13 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		return errors.Wrap(err, "failed to mine block for funding tx")
 	}
 
-	// Ensure the funded account has a comfortable minimum balance for blob and fuzzed txs.
+	// Ensure each funded account has a comfortable minimum balance for blob and fuzzed txs.
 	minWei := new(big.Int).Mul(big.NewInt(1000), big.NewInt(0).SetUint64(params.BeaconConfig().GweiPerEth))
 	minWei.Mul(minWei, big.NewInt(1e9)) // 1000 ETH in wei
 	if err := ensureMinBalance(ctx, client, backend, mineKey, fundedAccount, minWei); err != nil {
+		return err
+	}
+	if err := ensureMinBalance(ctx, client, backend, mineKey, fundedAccountV1, minWei); err != nil {
 		return err
 	}
 	// Broadcast Transactions every slot
@@ -130,10 +147,6 @@ func (s *TransactionGenerator) Started() <-chan struct{} {
 
 func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.Int, addr string, txCount uint64, backend *ethclient.Client, al bool, useLargeBlobs bool) error {
 	sender := common.HexToAddress(addr)
-	nonce, err := backend.PendingNonceAt(context.Background(), fundedAccount.Address)
-	if err != nil {
-		return err
-	}
 	chainid, err := backend.ChainID(context.Background())
 	if err != nil {
 		return err
@@ -146,76 +159,87 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 		gasPrice = expectedPrice
 	}
 
-	// Check if we're post-Fulu fork
-	clock := startup.NewClock(e2e.TestParams.CLGenesisTime, [32]byte{})
-	isPostFulu := clock.CurrentEpoch() >= params.BeaconConfig().FuluForkEpoch
-
-	g, _ := errgroup.WithContext(context.Background())
-	txs := make([]*types.Transaction, 10)
-
-	// Send blob transactions - use different versions pre/post Fulu
-	if isPostFulu {
-		logrus.Info("Sending blob transactions with cell proofs")
-		// Reduced from 10 to 5 to reduce load and prevent builder/EL timeouts
-		for index := range uint64(5) {
-
-			g.Go(func() error {
-				tx, err := RandomBlobCellTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
-				if err != nil {
-					return errors.Wrap(err, "Could not create blob cell tx")
-				}
-
-				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
-				if err != nil {
-					return errors.Wrap(err, "Could not sign blob cell tx")
-				}
-
-				txs[index] = signedTx
-				return nil
-			})
-		}
-	} else {
-		logrus.Info("Sending blob transactions with sidecars")
-		// Reduced from 10 to 5 to reduce load and prevent builder/EL timeouts
-		for index := range uint64(5) {
-
-			g.Go(func() error {
-				tx, err := RandomBlobTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
-				if err != nil {
-					logrus.WithError(err).Error("Could not create blob tx")
-					// In the event the transaction constructed is not valid, we continue with the routine
-					// rather than complete stop it.
-					//nolint:nilerr
-					return nil
-				}
-
-				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
-				if err != nil {
-					logrus.WithError(err).Error("Could not sign blob tx")
-					// We continue on in the event there is a reason we can't sign this
-					// transaction(unlikely).
-					//nolint:nilerr
-					return nil
-				}
-
-				txs[index] = signedTx
-				return nil
-			})
-		}
+	// Pick the blob sidecar version from the EL head's timestamp, not from the
+	// CL clock. Geth v1.17+ rejects any blob tx whose sidecar version doesn't
+	// match IsOsaka(head.Number, head.Time), and the 2h V0→V1 conversion window
+	// was removed. Keying on CL epoch races the EL head at the fork boundary
+	// and causes V1 sidecars to be rejected while the EL head is still pre-Osaka.
+	cfg := params.BeaconConfig()
+	var osakaUnix int64 = math.MaxInt64
+	if cfg.FuluForkEpoch != math.MaxUint64 {
+		osakaUnix = e2e.TestParams.Eth1GenesisTime.Unix() +
+			int64(uint64(cfg.FuluForkEpoch)*uint64(cfg.SlotsPerEpoch)*cfg.SecondsPerSlot)
 	}
+	head, err := backend.HeaderByNumber(context.Background(), nil)
+	if err != nil {
+		return errors.Wrap(err, "could not fetch EL head to pick blob sidecar version")
+	}
+	isPostOsaka := int64(head.Time) >= osakaUnix
 
-	if err := g.Wait(); err != nil {
+	// Route blob txs through a per-version account. The blobpool's Pending()
+	// iterates each account's queue in nonce order and breaks on the first
+	// version mismatch, so V0 txs left in the pool pre-Osaka would permanently
+	// block V1 inclusion if both shared one account.
+	blobAccount := fundedAccount
+	if isPostOsaka {
+		blobAccount = fundedAccountV1
+	}
+	nonce, err := backend.PendingNonceAt(context.Background(), blobAccount.Address)
+	if err != nil {
 		return err
 	}
-	for _, tx := range txs {
-		if tx == nil {
-			continue
-		}
 
-		err = backend.SendTransaction(context.Background(), tx)
+	// Throttle by blobpool headroom: geth caps per-account blob txs at 16
+	// (core/txpool/blobpool.maxBlobsPerAccount). If we keep pushing 5/slot
+	// while the EL drains more slowly (target blobs per block / blobs per tx),
+	// the pool saturates and every subsequent submission fails with
+	// "account limit exceeded". Submit at most what fits, including 0.
+	const (
+		desiredBlobTxsPerSlot = 5
+		blobPoolAccountLimit  = 16
+	)
+	stateNonce, err := backend.NonceAt(context.Background(), blobAccount.Address, nil)
+	if err != nil {
+		return errors.Wrap(err, "could not read blob account state nonce")
+	}
+	inPool := nonce - stateNonce // PendingNonceAt - confirmed = in-flight count
+	numBlobTxs := uint64(desiredBlobTxsPerSlot)
+	if inPool >= blobPoolAccountLimit {
+		numBlobTxs = 0
+	} else if blobPoolAccountLimit-inPool < numBlobTxs {
+		numBlobTxs = blobPoolAccountLimit - inPool
+	}
+	if numBlobTxs == 0 {
+		logrus.WithField("inPool", inPool).Info("Blob pool saturated; skipping blob submissions this slot")
+	} else if isPostOsaka {
+		logrus.WithField("count", numBlobTxs).Info("Sending blob transactions with cell proofs")
+	} else {
+		logrus.WithField("count", numBlobTxs).Info("Sending blob transactions with sidecars")
+	}
+	// Submit blob txs strictly in nonce order, stopping at the first failure.
+	// geth >=v1.17 drops blob txs that arrive with a nonce gap (fixed upstream
+	// by go-ethereum#32717, not yet in v1.17.2), so a single skipped tx would
+	// cause every subsequent blob tx from this account to be dropped.
+	for index := range numBlobTxs {
+		var tx *types.Transaction
+		var buildErr error
+		if isPostOsaka {
+			tx, buildErr = RandomBlobCellTx(client, blobAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
+		} else {
+			tx, buildErr = RandomBlobTx(client, blobAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
+		}
+		if buildErr != nil {
+			logrus.WithError(buildErr).Error("Could not create blob tx; stopping batch to avoid nonce gap")
+			break
+		}
+		signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), blobAccount.PrivateKey)
 		if err != nil {
-			// Do nothing
-			continue
+			logrus.WithError(err).Error("Could not sign blob tx; stopping batch to avoid nonce gap")
+			break
+		}
+		if err := backend.SendTransaction(context.Background(), signedTx); err != nil {
+			logrus.WithError(err).Warn("Blob tx submission failed; stopping batch to avoid nonce gap")
+			break
 		}
 	}
 
@@ -224,7 +248,8 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 		return err
 	}
 
-	txs = make([]*types.Transaction, txCount)
+	g, _ := errgroup.WithContext(context.Background())
+	txs := make([]*types.Transaction, txCount)
 	for index := range txCount {
 
 		g.Go(func() error {
@@ -822,13 +847,49 @@ func generateRandomEVMCode(maxLen int) []byte {
 	return code
 }
 
+// intrinsicGasFloor returns a safe lower bound for tx.Gas that satisfies
+// EIP-7623 (Prague) for a plain value transfer with the given calldata and no
+// access list. Access list costs and contract-creation costs are not modeled
+// because randomValidTx never sets them on its own; callers that add them must
+// budget for the extra gas themselves.
+func intrinsicGasFloor(data []byte) uint64 {
+	const (
+		txGas              = 21000
+		zeroByteToken      = 1
+		nonZeroByteToken   = 4
+		floorCostPerToken  = 10
+		stdZeroByteCost    = 4
+		stdNonZeroByteCost = 16
+	)
+	var zero, nonZero uint64
+	for _, b := range data {
+		if b == 0 {
+			zero++
+		} else {
+			nonZero++
+		}
+	}
+	tokens := zero*zeroByteToken + nonZero*nonZeroByteToken
+	floor := uint64(txGas) + tokens*floorCostPerToken
+	standard := uint64(txGas) + zero*stdZeroByteCost + nonZero*stdNonZeroByteCost
+	if floor > standard {
+		return floor
+	}
+	return standard
+}
+
 // randomValidTx generates a random valid transaction
 // This replaces tx-fuzz's RandomValidTx functionality
 func randomValidTx(sender common.Address, nonce uint64, gasPrice, chainID *big.Int, forceAccessList bool) (*types.Transaction, error) {
-	gas := uint64(21000 + mathRand.Intn(100000)) // #nosec G404
 	to := randomAddress()
 	code := generateRandomEVMCode(mathRand.Intn(256)) // #nosec G404
 	value := big.NewInt(0)
+	// Gas must clear EIP-7623's floor data gas cost (10 per token, where each
+	// non-zero byte is 4 tokens and each zero byte is 1 token) plus the
+	// standard intrinsic cost, otherwise geth rejects the tx at the pool with
+	// "insufficient gas for floor data gas cost" / "intrinsic gas too low",
+	// which then cascades into nonce gaps for this account.
+	gas := intrinsicGasFloor(code) + uint64(mathRand.Intn(100000)) // #nosec G404
 
 	// Randomly choose transaction type
 	// 0: Legacy, 1: AccessList, 2: DynamicFee
@@ -870,12 +931,18 @@ func randomValidTx(sender common.Address, nonce uint64, gasPrice, chainID *big.I
 				})
 			}
 		}
+		// Top up gas to cover access list intrinsic cost (EIP-2930):
+		// 2400 per address, 1900 per storage key.
+		alGas := uint64(0)
+		for _, entry := range accessList {
+			alGas += 2400 + 1900*uint64(len(entry.StorageKeys))
+		}
 		return types.NewTx(&types.AccessListTx{
 			ChainID:    chainID,
 			Nonce:      nonce,
 			To:         &to,
 			Value:      value,
-			Gas:        gas,
+			Gas:        gas + alGas,
 			GasPrice:   gasPrice,
 			Data:       code,
 			AccessList: accessList,
