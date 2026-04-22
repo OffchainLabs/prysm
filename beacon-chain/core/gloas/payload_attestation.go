@@ -190,7 +190,7 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 
 // selectByBalance selects a balance-weighted subset of input candidates.
 //
-//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="2c9f1c23">
+//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="f99b3e37">
 //	def compute_balance_weighted_selection(
 //	    state: BeaconState,
 //	    indices: Sequence[ValidatorIndex],
@@ -204,17 +204,24 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 //	    are themselves sampled from ``indices`` by shuffling it, otherwise
 //	    ``indices`` is traversed in order.
 //	    """
+//	    MAX_RANDOM_VALUE = 2**16 - 1
 //	    total = uint64(len(indices))
 //	    assert total > 0
+//	    effective_balances = [state.validators[index].effective_balance for index in indices]
 //	    selected: List[ValidatorIndex] = []
 //	    i = uint64(0)
 //	    while len(selected) < size:
+//	        offset = i % 16 * 2
+//	        if offset == 0:
+//	            random_bytes = hash(seed + uint_to_bytes(i // 16))
 //	        next_index = i % total
 //	        if shuffle_indices:
 //	            next_index = compute_shuffled_index(next_index, total, seed)
-//	        candidate_index = indices[next_index]
-//	        if compute_balance_weighted_acceptance(state, candidate_index, seed, i):
-//	            selected.append(candidate_index)
+//	        weight = effective_balances[next_index] * MAX_RANDOM_VALUE
+//	        random_value = bytes_to_uint64(random_bytes[offset : offset + 2])
+//	        threshold = MAX_EFFECTIVE_BALANCE_ELECTRA * random_value
+//	        if weight >= threshold:
+//	            selected.append(indices[next_index])
 //	        i += 1
 //	    return selected
 //	</spec>

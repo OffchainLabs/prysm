@@ -21,28 +21,43 @@ import (
 // Actual state mutations are deferred to process_parent_execution_payload in
 // the next block.
 //
-//	<spec fn="verify_execution_payload_envelope" fork="gloas" hash="defer_payload">
-//	def verify_execution_payload_envelope(state, signed_envelope, execution_engine):
+//	<spec fn="verify_execution_payload_envelope" fork="gloas" hash="0261931f">
+//	def verify_execution_payload_envelope(
+//	    state: BeaconState,
+//	    signed_envelope: SignedExecutionPayloadEnvelope,
+//	    execution_engine: ExecutionEngine,
+//	) -> None:
 //	    envelope = signed_envelope.message
 //	    payload = envelope.payload
+//
+//	    # Verify signature
 //	    assert verify_execution_payload_envelope_signature(state, signed_envelope)
+//
+//	    # Verify consistency with the beacon block
 //	    header = copy(state.latest_block_header)
 //	    header.state_root = hash_tree_root(state)
 //	    assert envelope.beacon_block_root == hash_tree_root(header)
-//	    assert envelope.slot == state.slot
-//	    committed_bid = state.latest_execution_payload_bid
-//	    assert envelope.builder_index == committed_bid.builder_index
-//	    assert committed_bid.prev_randao == payload.prev_randao
-//	    assert hash_tree_root(envelope.execution_requests) == committed_bid.execution_requests_root
-//	    assert hash_tree_root(payload.withdrawals) == hash_tree_root(state.payload_expected_withdrawals)
-//	    assert committed_bid.gas_limit == payload.gas_limit
-//	    assert committed_bid.block_hash == payload.block_hash
+//
+//	    # Verify consistency with the committed bid
+//	    bid = state.latest_execution_payload_bid
+//	    assert envelope.builder_index == bid.builder_index
+//	    assert payload.prev_randao == bid.prev_randao
+//	    assert payload.gas_limit == bid.gas_limit
+//	    assert payload.block_hash == bid.block_hash
+//	    assert hash_tree_root(envelope.execution_requests) == bid.execution_requests_root
+//
+//	    # Verify the execution payload is valid
+//	    assert payload.slot_number == state.slot
 //	    assert payload.parent_hash == state.latest_block_hash
 //	    assert payload.timestamp == compute_time_at_slot(state, state.slot)
+//	    assert hash_tree_root(payload.withdrawals) == hash_tree_root(state.payload_expected_withdrawals)
 //	    assert execution_engine.verify_and_notify_new_payload(
 //	        NewPayloadRequest(
 //	            execution_payload=payload,
-//	            versioned_hashes=[kzg_commitment_to_versioned_hash(c) for c in committed_bid.blob_kzg_commitments],
+//	            versioned_hashes=[
+//	                kzg_commitment_to_versioned_hash(commitment)
+//	                for commitment in bid.blob_kzg_commitments
+//	            ],
 //	            parent_beacon_block_root=state.latest_block_header.parent_root,
 //	            execution_requests=envelope.execution_requests,
 //	        )

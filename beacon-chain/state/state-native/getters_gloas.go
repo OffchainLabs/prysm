@@ -310,11 +310,6 @@ func withdrawalsEqual(a, b []*enginev1.Withdrawal) bool {
 // WARNING: This must be called on a beacon state before processing the bid for the current block
 // (process_execution_payload_bid), otherwise it will compare against the in-flight bid and produce
 // incorrect results.
-//
-//	<spec fn="is_parent_block_full" fork="gloas" hash="b59640c9">
-//	def is_parent_block_full(state: BeaconState) -> bool:
-//	    return state.latest_execution_payload_bid.block_hash == state.latest_block_hash
-//	</spec>
 func (b *BeaconState) LatestBlockHashMatchesBidBlockHash() (bool, error) {
 	if b.version < version.Gloas {
 		return false, errNotSupported("LatestBlockHashMatchesBidBlockHash", b.version)

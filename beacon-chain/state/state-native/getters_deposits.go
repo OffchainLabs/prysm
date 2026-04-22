@@ -38,24 +38,22 @@ func (b *BeaconState) PendingDeposits() ([]*ethpb.PendingDeposit, error) {
 // given pubkey. This method requires access to the RLock on the state and only applies in
 // electra or later.
 //
-// <spec fn="is_pending_validator" fork="gloas" hash="f3f06b56">
+// <spec fn="is_pending_validator" fork="gloas" hash="9b409bab">
 // def is_pending_validator(state: BeaconState, pubkey: BLSPubkey) -> bool:
-//
-//	"""
-//	Check if a pending deposit with a valid signature is in the queue for the given pubkey.
-//	"""
-//	for pending_deposit in state.pending_deposits:
-//	    if pending_deposit.pubkey != pubkey:
-//	        continue
-//	    if is_valid_deposit_signature(
-//	        pending_deposit.pubkey,
-//	        pending_deposit.withdrawal_credentials,
-//	        pending_deposit.amount,
-//	        pending_deposit.signature,
-//	    ):
-//	        return True
-//	return False
-//
+//     """
+//     Check if a pending deposit with a valid signature is in the queue for the given pubkey.
+//     """
+//     for pending_deposit in state.pending_deposits:
+//         if pending_deposit.pubkey != pubkey:
+//             continue
+//         if is_valid_deposit_signature(
+//             pending_deposit.pubkey,
+//             pending_deposit.withdrawal_credentials,
+//             pending_deposit.amount,
+//             pending_deposit.signature,
+//         ):
+//             return True
+//     return False
 // </spec>
 func (b *BeaconState) IsPendingValidator(pubkey []byte) (bool, error) {
 	if b.version < version.Electra {
