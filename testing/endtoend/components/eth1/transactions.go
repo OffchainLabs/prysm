@@ -147,53 +147,76 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 		gasPrice = expectedPrice
 	}
 
+	cfg := params.BeaconConfig()
 	clock := startup.NewClock(e2e.TestParams.CLGenesisTime, [32]byte{})
-	isPostFulu := clock.CurrentEpoch() >= params.BeaconConfig().FuluForkEpoch
+	isPostFulu := clock.CurrentEpoch() >= cfg.FuluForkEpoch
+	// Skip pre-Fulu V0 sends only when Fulu is scheduled: V0 sidecars left in
+	// the pool at the Osaka boundary become invalid under geth >= v1.17 and
+	// occupy maxTxsPerAccount=16, blocking later V1 cell-proof txs. When Fulu
+	// is never scheduled (Deneb/Electra-only tests), V0 is the only path.
+	fuluScheduled := cfg.FuluForkEpoch != cfg.FarFutureEpoch
 
 	g, _ := errgroup.WithContext(context.Background())
 	var txs []*types.Transaction
 
-	// Pre-Fulu V0 sidecars become invalid once the EL crosses Osaka and then
-	// permanently occupy the blobpool (maxTxsPerAccount=16), so skip them.
-	if isPostFulu {
+	switch {
+	case isPostFulu:
 		logrus.Info("Sending blob transactions with cell proofs")
 		txs = make([]*types.Transaction, 5)
 		for index := range uint64(5) {
-
 			g.Go(func() error {
 				tx, err := RandomBlobCellTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
 				if err != nil {
 					return errors.Wrap(err, "Could not create blob cell tx")
 				}
-
 				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
 				if err != nil {
 					return errors.Wrap(err, "Could not sign blob cell tx")
 				}
-
 				txs[index] = signedTx
 				return nil
 			})
 		}
-
-		if err := g.Wait(); err != nil {
-			return err
-		}
-		// Stop on first failure: any nonce gap trips geth's gapped-queue
-		// allowance=log10(nonce+1), which rejects every subsequent nonce.
-		for i, tx := range txs {
-			if tx == nil {
-				continue
-			}
-			if err := backend.SendTransaction(context.Background(), tx); err != nil {
-				entry := logrus.WithError(err).WithField("index", i).WithField("nonce", tx.Nonce())
-				if strings.Contains(err.Error(), "account limit exceeded") {
-					entry.Debug("Blob tx send stopped: pool full (backpressure)")
-				} else {
-					entry.Warn("Blob tx send failed; stopping batch to avoid nonce gap")
+	case !fuluScheduled:
+		logrus.Info("Sending blob transactions with sidecars")
+		txs = make([]*types.Transaction, 5)
+		for index := range uint64(5) {
+			g.Go(func() error {
+				tx, err := RandomBlobTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
+				if err != nil {
+					logrus.WithError(err).Error("Could not create blob tx")
+					//nolint:nilerr
+					return nil
 				}
-				break
+				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
+				if err != nil {
+					logrus.WithError(err).Error("Could not sign blob tx")
+					//nolint:nilerr
+					return nil
+				}
+				txs[index] = signedTx
+				return nil
+			})
+		}
+	}
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+	// Stop on first failure: any nonce gap trips geth's gapped-queue
+	// allowance=log10(nonce+1), which rejects every subsequent nonce.
+	for i, tx := range txs {
+		if tx == nil {
+			continue
+		}
+		if err := backend.SendTransaction(context.Background(), tx); err != nil {
+			entry := logrus.WithError(err).WithField("index", i).WithField("nonce", tx.Nonce())
+			if strings.Contains(err.Error(), "account limit exceeded") {
+				entry.Debug("Blob tx send stopped: pool full (backpressure)")
+			} else {
+				entry.Warn("Blob tx send failed; stopping batch to avoid nonce gap")
 			}
+			break
 		}
 	}
 
