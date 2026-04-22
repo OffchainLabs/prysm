@@ -492,6 +492,10 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 	// Publish partial columns that already have peers.
 	if s.partialColumnBroadcaster != nil {
+		_, span := trace.StartSpan(ctx, "p2p.broadcastDataColumnSidecars")
+		ctx := trace.NewContext(s.ctx, span)
+		defer span.End()
+
 		var partialsWithPeers atomic.Int64
 		iterFunc := func(yield func(string, blocks.PartialDataColumn) bool) {
 			for _, item := range itemsWithPeers {
