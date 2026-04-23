@@ -605,6 +605,31 @@ func TestBlockRootForExecHash_SkipsPreGloas(t *testing.T) {
 	require.ErrorContains(t, "no block at slot", err)
 }
 
+func TestLoadStateByBlockHash_GenesisExecHash_DoesNotRequireEnvelope(t *testing.T) {
+	ctx := t.Context()
+	beaconDB := testDB.SetupDB(t)
+	service := New(beaconDB, doublylinkedtree.New())
+
+	genesisState, _ := util.DeterministicGenesisState(t, 32)
+	genesisBlock := util.NewBeaconBlockGloas()
+	genesisBlock.Block.Slot = 0
+	blockHash := bytesutil.PadTo([]byte{0xCC}, 32)
+	genesisBlock.Block.Body.SignedExecutionPayloadBid.Message.BlockHash = blockHash
+
+	wsb, err := blt.NewSignedBeaconBlock(genesisBlock)
+	require.NoError(t, err)
+	require.NoError(t, beaconDB.SaveBlock(ctx, wsb))
+
+	genesisRoot, err := genesisBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, beaconDB.SaveState(ctx, genesisState, genesisRoot))
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, genesisRoot))
+
+	got, err := service.loadStateByBlockHash(ctx, bytesutil.ToBytes32(blockHash), 0)
+	require.NoError(t, err)
+	require.DeepSSZEqual(t, got.ToProtoUnsafe(), genesisState.ToProtoUnsafe())
+}
+
 func TestLastAncestorState_CanGetUsingDB(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
