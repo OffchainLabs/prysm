@@ -147,13 +147,11 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 
-	s.headLock.Lock()
-	if s.head != nil && s.head.root == root {
+	if s.head != nil {
 		s.head.full = true
 	}
-	s.headLock.Unlock()
 
-	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot[:])
+	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot[:], true)
 	if s.inRegularSync() {
 		go func() {
 			pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)

@@ -77,19 +77,15 @@ func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives
 // If the parent's payload was delivered (full), it applies the parent's
 // execution requests on a state copy before computing withdrawals.
 // If the parent was empty, it returns the existing payload_expected_withdrawals.
-func (s *Service) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte) ([]*enginev1.Withdrawal, error) {
-	parentSlot, err := s.RecentBlockSlot(parentRoot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get parent block slot")
-	}
-	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
+func (s *Service) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte, headFull bool) ([]*enginev1.Withdrawal, error) {
+	if slots.ToEpoch(s.head.slot) < params.BeaconConfig().GloasForkEpoch {
 		result, err := st.ExpectedWithdrawalsGloas()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute expected withdrawals")
 		}
 		return result.Withdrawals, nil
 	}
-	if !s.FullBeatsEmpty(parentRoot) {
+	if !headFull {
 		return st.PayloadExpectedWithdrawals()
 	}
 	// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).

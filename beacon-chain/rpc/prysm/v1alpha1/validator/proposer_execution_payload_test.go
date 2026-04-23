@@ -165,7 +165,7 @@ func TestServer_getExecutionPayload(t *testing.T) {
 			blk.Block.ParentRoot = bytesutil.PadTo([]byte{'a'}, 32)
 			b, err := blocks.NewSignedBeaconBlock(blk)
 			require.NoError(t, err)
-			res, err := vs.getLocalPayload(t.Context(), b.Block(), tt.st)
+			res, err := vs.getLocalPayload(t.Context(), b.Block(), tt.st, false)
 			if tt.errString != "" {
 				require.ErrorContains(t, tt.errString, err)
 			} else {
@@ -197,7 +197,7 @@ func TestServer_getParentBlockHash_Gloas_Full(t *testing.T) {
 		ForkchoiceFetcher: chain,
 		HeadFetcher:       chain,
 	}
-	got, err := vs.getParentBlockHash(context.Background(), st, 0, headRoot)
+	got, err := vs.getParentBlockHash(context.Background(), st, 0, headRoot, true)
 	require.NoError(t, err)
 	require.DeepEqual(t, blockHash[:], got)
 }
@@ -223,7 +223,7 @@ func TestServer_getParentBlockHash_Gloas_Empty(t *testing.T) {
 		ForkchoiceFetcher: chain,
 		HeadFetcher:       chain,
 	}
-	got, err := vs.getParentBlockHash(context.Background(), st, 0, headRoot)
+	got, err := vs.getParentBlockHash(context.Background(), st, 0, headRoot, false)
 	require.NoError(t, err)
 	require.DeepEqual(t, parentBlockHash[:], got)
 }
@@ -263,7 +263,7 @@ func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {
 	blk.Block.ParentRoot = bytesutil.PadTo([]byte{'a'}, 32)
 	b, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	_, err = vs.getLocalPayload(t.Context(), b.Block(), nonTransitionSt)
+	_, err = vs.getLocalPayload(t.Context(), b.Block(), nonTransitionSt, false)
 	require.NoError(t, err)
 }
 
@@ -320,7 +320,7 @@ func TestServer_getExecutionPayload_UnexpectedFeeRecipient(t *testing.T) {
 	blk.Block.ParentRoot = bytesutil.PadTo([]byte{}, 32)
 	b, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
-	res, err := vs.getLocalPayload(t.Context(), b.Block(), transitionSt)
+	res, err := vs.getLocalPayload(t.Context(), b.Block(), transitionSt, false)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	require.Equal(t, common.Address(res.ExecutionData.FeeRecipient()), feeRecipient)
@@ -333,7 +333,7 @@ func TestServer_getExecutionPayload_UnexpectedFeeRecipient(t *testing.T) {
 	payload.FeeRecipient = evilRecipientAddress[:]
 	vs.PayloadIDCache = cache.NewPayloadIDCache()
 
-	res, err = vs.getLocalPayload(t.Context(), b.Block(), transitionSt)
+	res, err = vs.getLocalPayload(t.Context(), b.Block(), transitionSt, false)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 

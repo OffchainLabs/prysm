@@ -40,13 +40,14 @@ func (s *Service) CurrentSlot() primitives.Slot {
 }
 
 // getFCUArgs returns the arguments to call forkchoice update
+// this function is only called pre-gloas hence we pass in full to getPayloadAttribute
 func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) (*fcuConfig, error) {
 
 	fcuArgs, err := s.getFCUArgsEarlyBlock(cfg)
 	if err != nil {
 		return nil, err
 	}
-	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:])
+	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:], true)
 	return fcuArgs, nil
 }
 

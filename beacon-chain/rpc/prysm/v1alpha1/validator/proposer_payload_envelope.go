@@ -212,7 +212,7 @@ func (vs *Server) broadcastGloasDataColumns(ctx context.Context) error {
 
 // setParentExecutionRequests populates the parent_execution_requests field
 // in the block body based on the parent's execution payload envelope.
-func (vs *Server) setParentExecutionRequests(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState) error {
+func (vs *Server) setParentExecutionRequests(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, parentFull bool) error {
 	if head.Version() < version.Gloas {
 		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequests{})
 	}
@@ -222,7 +222,7 @@ func (vs *Server) setParentExecutionRequests(ctx context.Context, sBlk interface
 	if err != nil {
 		return errors.Wrap(err, "could not get parent block slot")
 	}
-	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch || !vs.ForkchoiceFetcher.HasFullNode(parentRoot) {
+	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch || !parentFull {
 		return sBlk.SetParentExecutionRequests(&enginev1.ExecutionRequests{})
 	}
 

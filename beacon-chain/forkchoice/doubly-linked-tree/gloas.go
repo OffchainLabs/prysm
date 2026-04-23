@@ -539,8 +539,17 @@ func (f *ForkChoice) FullHead(ctx context.Context) ([32]byte, [32]byte, bool, er
 		return [32]byte{}, [32]byte{}, false, err
 	}
 	n := f.store.headNode
+	if n == nil {
+		return hr, [32]byte{}, false, nil
+	}
+	if slots.ToEpoch(n.slot) < params.BeaconConfig().GloasForkEpoch {
+		return hr, n.blockHash, true, nil
+	}
 	pn := f.store.choosePayloadContent(n)
-	if pn.full && slots.ToEpoch(n.slot) >= params.BeaconConfig().GloasForkEpoch {
+	if pn == nil {
+		return hr, [32]byte{}, false, nil
+	}
+	if pn.full {
 		return hr, pn.node.blockHash, true, nil
 	}
 	fullAncestor := f.store.fullParent(pn)

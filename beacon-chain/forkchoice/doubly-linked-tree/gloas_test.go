@@ -1463,7 +1463,7 @@ func TestFullHead_EmptyPayload(t *testing.T) {
 // fullNodeByRoot entry with full=true for them (for EL optimistic validation tracking).
 // Without the epoch guard in FullHead, isNewHead would spuriously fire every ticker
 // tick because FullHead returned full=true while saveHead stored head.full=false.
-func TestFullHead_PreGloasBlock_ReturnsFalse(t *testing.T) {
+func TestFullHead_PreGloasBlock_ReturnsTrue(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.GloasForkEpoch = 100 // Gloas activates far in the future; slot 1 is pre-Gloas
@@ -1485,7 +1485,7 @@ func TestFullHead_PreGloasBlock_ReturnsFalse(t *testing.T) {
 	hr, _, full, err := f.FullHead(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, rootA, hr)
-	assert.Equal(t, false, full, "pre-Gloas block must return full=false from FullHead")
+	assert.Equal(t, true, full, "pre-Gloas block must return full=true from FullHead")
 }
 
 func TestUpdateBalances_SlotChangeMovesBalance(t *testing.T) {

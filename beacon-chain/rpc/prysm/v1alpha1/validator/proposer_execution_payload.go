@@ -49,7 +49,7 @@ func setFeeRecipientIfBurnAddress(val *cache.TrackedValidator) {
 }
 
 // This returns the local execution payload of a given slot. The function has full awareness of pre and post merge.
-func (vs *Server) getLocalPayload(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, st state.BeaconState) (*consensusblocks.GetPayloadResponse, error) {
+func (vs *Server) getLocalPayload(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, st state.BeaconState, parentFull bool) (*consensusblocks.GetPayloadResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.getLocalPayload")
 	defer span.End()
 
@@ -61,7 +61,7 @@ func (vs *Server) getLocalPayload(ctx context.Context, blk interfaces.ReadOnlyBe
 	vIdx := blk.ProposerIndex()
 	headRoot := blk.ParentRoot()
 
-	return vs.getLocalPayloadFromEngine(ctx, st, headRoot, slot, vIdx)
+	return vs.getLocalPayloadFromEngine(ctx, st, headRoot, slot, vIdx, parentFull)
 }
 
 // This returns the local execution payload of a slot, proposer ID, and parent root assuming payload Is cached.
@@ -72,6 +72,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 	parentRoot [32]byte,
 	slot primitives.Slot,
 	proposerId primitives.ValidatorIndex,
+	parentFull bool,
 ) (*consensusblocks.GetPayloadResponse, error) {
 	logFields := logrus.Fields{
 		"validatorIndex": proposerId,
@@ -104,7 +105,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		}
 	}
 	log.WithFields(logFields).Debug("Payload ID cache miss")
-	parentHash, err := vs.getParentBlockHash(ctx, st, slot, parentRoot)
+	parentHash, err := vs.getParentBlockHash(ctx, st, slot, parentRoot, parentFull)
 	switch {
 	case errors.Is(err, errActivationNotReached) || errors.Is(err, errNoTerminalBlockHash):
 		return consensusblocks.NewGetPayloadResponse(emptyPayload())
@@ -139,7 +140,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 	var attr payloadattribute.Attributer
 	switch {
 	case st.Version() >= version.Gloas:
-		withdrawals, err := vs.computePayloadWithdrawals(ctx, st, parentRoot)
+		withdrawals, err := vs.computePayloadWithdrawals(ctx, st, parentRoot, parentFull)
 		if err != nil {
 			return nil, err
 		}
@@ -284,28 +285,23 @@ var (
 )
 
 // computePayloadWithdrawals returns the withdrawals for the next payload.
-func (vs *Server) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte) ([]*enginev1.Withdrawal, error) {
-	if !vs.ForkchoiceFetcher.FullBeatsEmpty(parentRoot) {
+func (vs *Server) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte, parentFull bool) ([]*enginev1.Withdrawal, error) {
+	if !parentFull {
 		return st.PayloadExpectedWithdrawals()
 	}
 	parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get parent block slot")
 	}
-	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
-		result, err := st.ExpectedWithdrawalsGloas()
+	if slots.ToEpoch(parentSlot) >= params.BeaconConfig().GloasForkEpoch {
+		// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).
+		envelope, err := vs.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
 		if err != nil {
-			return nil, errors.Wrap(err, "could not compute expected withdrawals")
+			return nil, errors.Wrap(err, "could not get parent execution payload envelope")
 		}
-		return result.Withdrawals, nil
-	}
-	// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).
-	envelope, err := vs.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get parent execution payload envelope")
-	}
-	if err := coregloas.ApplyParentExecutionPayload(ctx, st, envelope.Message.ExecutionRequests); err != nil {
-		return nil, errors.Wrap(err, "could not apply parent execution payload")
+		if err := coregloas.ApplyParentExecutionPayload(ctx, st, envelope.Message.ExecutionRequests); err != nil {
+			return nil, errors.Wrap(err, "could not apply parent execution payload")
+		}
 	}
 	result, err := st.ExpectedWithdrawalsGloas()
 	if err != nil {
@@ -324,7 +320,7 @@ func (vs *Server) computePayloadWithdrawals(ctx context.Context, st state.Beacon
 // If the activation epoch has not been reached, an errActivationNotReached error is returned.
 //
 // Otherwise, the terminal block hash is fetched based on the slot's time, and an error is returned if it doesn't exist.
-func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot [32]byte) ([]byte, error) {
+func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot [32]byte, parentFull bool) ([]byte, error) {
 	if st.Version() >= version.Gloas {
 		parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(headRoot)
 		if err != nil {
@@ -337,7 +333,7 @@ func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, 
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get latest execution payload bid")
 		}
-		if vs.ForkchoiceFetcher.FullBeatsEmpty(headRoot) {
+		if parentFull {
 			bh := bid.BlockHash()
 			return bh[:], nil
 		}

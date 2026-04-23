@@ -149,7 +149,7 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 	}
 	newAttHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	if s.inRegularSync() {
-		attr := s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:])
+		attr := s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:], full)
 		if attr != nil && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
 			return
 		}

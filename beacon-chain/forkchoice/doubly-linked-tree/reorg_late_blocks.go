@@ -122,6 +122,12 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	}
 	// Only reorg blocks that arrive late
 	head := f.store.choosePayloadContent(consensusHead)
+	if slots.ToEpoch(consensusHead.slot) >= params.BeaconConfig().GloasForkEpoch {
+		head = f.store.emptyNodeByRoot[consensusHead.root]
+	}
+	if head == nil {
+		return consensusHead.root
+	}
 	early, err := head.arrivedEarly(f.store.genesisTime)
 	if err != nil {
 		log.WithError(err).Error("could not check if block arrived early")

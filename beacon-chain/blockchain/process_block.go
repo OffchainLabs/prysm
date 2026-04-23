@@ -108,8 +108,8 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	}
 	if cfg.roblock.Version() < version.Gloas {
 		s.sendFCU(cfg)
-	} else { // We reach this only when the incoming block is head.
-		full := s.cfg.ForkChoiceStore.FullBeatsEmpty(cfg.headRoot)
+	} else {
+		full := false
 		if s.isNewHead(cfg.headRoot, full) {
 			if err := s.saveHead(ctx, cfg.headRoot, cfg.roblock, cfg.postState, full); err != nil {
 				log.WithError(err).Error("Could not save head")
@@ -1142,6 +1142,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	s.headLock.RLock()
 	headRoot := s.headRoot()
 	headState := s.headState(ctx)
+	full := s.head.full
 	s.headLock.RUnlock()
 
 	s.refreshCaches(ctx, currentSlot, headRoot, headState)
@@ -1152,7 +1153,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		return
 	}
 
-	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
+	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:], full)
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
 		return
