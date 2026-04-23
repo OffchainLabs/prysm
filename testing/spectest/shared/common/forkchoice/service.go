@@ -146,4 +146,3 @@ func (m *engineMock) GetTerminalBlockHash(context.Context, uint64) ([]byte, bool
 func (m *engineMock) GetClientVersionV1(context.Context) ([]*structs.ClientVersionV1, error) {
 	return nil, nil
 }
-
