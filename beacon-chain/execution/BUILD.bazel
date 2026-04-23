@@ -140,6 +140,7 @@ go_test(
         "//encoding/bytesutil:go_default_library",
         "//genesis:go_default_library",
         "//monitoring/clientstats:go_default_library",
+        "//network:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",

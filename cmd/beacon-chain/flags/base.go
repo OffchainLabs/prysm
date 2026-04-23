@@ -76,6 +76,12 @@ var (
 		Usage: "An execution client http endpoint. Can contain auth header as well in the format",
 		Value: "http://localhost:8551",
 	}
+	// DisableSSZRouting disables EIP-8161 SSZ REST routing to the execution engine.
+	DisableSSZRouting = &cli.BoolFlag{
+		Name:  "disable-ssz-routing",
+		Usage: "Disables EIP-8161 SSZ REST routing to the execution engine. Engine API calls continue over JSON-RPC.",
+		Value: false,
+	}
 	// ExecutionEngineHeaders defines a list of HTTP headers to send with all execution client requests.
 	ExecutionEngineHeaders = &cli.StringFlag{
 		Name: "execution-headers",

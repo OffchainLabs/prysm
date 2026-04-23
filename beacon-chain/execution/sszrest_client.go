@@ -153,6 +153,14 @@ func handleSSZRestError(e *sszRestError) error {
 // Engine API JSON-RPC endpoint. SSZ-REST routes are served on the same port
 // under /engine/* paths. Auto-probes availability on first use.
 func (s *Service) setupSSZRestClient() {
+	if s.cfg.disableSSZRouting {
+		s.sszRestClientLock.Lock()
+		defer s.sszRestClientLock.Unlock()
+		s.sszRestClient = nil
+		log.Info("SSZ-REST Engine API transport disabled by flag")
+		return
+	}
+
 	engineURL := s.cfg.currHttpEndpoint.Url
 	if engineURL == "" {
 		s.sszRestClientLock.Lock()

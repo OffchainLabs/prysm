@@ -12,6 +12,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/network"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -367,6 +368,30 @@ func TestIsSSZRestAvailable(t *testing.T) {
 	})
 	t.Run("not available when client nil", func(t *testing.T) {
 		s := &Service{}
+		assert.Equal(t, false, s.isSSZRestAvailable())
+	})
+}
+
+func TestSetupSSZRestClientDisableFlag(t *testing.T) {
+	t.Run("enabled by default", func(t *testing.T) {
+		s := &Service{
+			cfg: &config{
+				currHttpEndpoint: network.HttpEndpoint("http://localhost:8551"),
+			},
+		}
+		s.setupSSZRestClient()
+		assert.Equal(t, true, s.isSSZRestAvailable())
+	})
+
+	t.Run("disabled clears client", func(t *testing.T) {
+		s := &Service{
+			cfg: &config{
+				currHttpEndpoint:  network.HttpEndpoint("http://localhost:8551"),
+				disableSSZRouting: true,
+			},
+			sszRestClient: &sszRestClient{},
+		}
+		s.setupSSZRestClient()
 		assert.Equal(t, false, s.isSSZRestAvailable())
 	})
 }
