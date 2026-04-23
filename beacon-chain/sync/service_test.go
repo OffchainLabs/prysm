@@ -54,6 +54,19 @@ func TestService_StatusZeroEpoch(t *testing.T) {
 	assert.NoError(t, r.Status(), "Wanted non failing status")
 }
 
+func TestNewService_PreservesInjectedHighestExecutionPayloadBidCache(t *testing.T) {
+	p2p := p2ptest.NewTestP2P(t)
+	injected := cache.NewHighestExecutionPayloadBidCache()
+
+	s := NewService(
+		t.Context(),
+		WithP2P(p2p),
+		WithHighestExecutionPayloadBidCache(injected),
+	)
+	require.NotNil(t, s)
+	require.Equal(t, injected, s.highestExecutionPayloadBidCache)
+}
+
 func TestSyncHandlers_WaitToSync(t *testing.T) {
 	p2p := p2ptest.NewTestP2P(t)
 	chainService := &mockChain.ChainService{
