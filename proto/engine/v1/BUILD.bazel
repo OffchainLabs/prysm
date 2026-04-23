@@ -83,6 +83,9 @@ go_library(
         "fulu.go",
         "gloas.go",
         "json_marshal_unmarshal.go",
+        "sszrest_getpayload.ssz.go",
+        "sszrest_types.go",
+        "sszrest_types.ssz.go",
         ":ssz_generated_files",  # keep
     ],
     embed = [

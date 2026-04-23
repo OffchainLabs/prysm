@@ -155,6 +155,8 @@ func handleSSZRestError(e *sszRestError) error {
 func (s *Service) setupSSZRestClient() {
 	engineURL := s.cfg.currHttpEndpoint.Url
 	if engineURL == "" {
+		s.sszRestClientLock.Lock()
+		defer s.sszRestClientLock.Unlock()
 		s.sszRestClient = nil
 		return
 	}
@@ -162,13 +164,21 @@ func (s *Service) setupSSZRestClient() {
 	// Derive SSZ-REST base URL from the execution endpoint (same host:port).
 	baseURL := strings.TrimRight(engineURL, "/")
 	httpClient := s.cfg.currHttpEndpoint.HttpClient()
+	s.sszRestClientLock.Lock()
+	defer s.sszRestClientLock.Unlock()
 	s.sszRestClient = newSSZRestClient(baseURL, httpClient)
 	log.WithField("url", baseURL).Info("SSZ-REST Engine API transport enabled (EIP-8161)")
 }
 
+func (s *Service) getSSZRestClient() *sszRestClient {
+	s.sszRestClientLock.RLock()
+	defer s.sszRestClientLock.RUnlock()
+	return s.sszRestClient
+}
+
 // isSSZRestAvailable returns true if the SSZ-REST client is configured and ready to use.
 func (s *Service) isSSZRestAvailable() bool {
-	return s.sszRestClient != nil
+	return s.getSSZRestClient() != nil
 }
 
 // SSZ-REST Engine API method implementations.
@@ -184,6 +194,11 @@ func (s *Service) newPayloadSSZRest(
 ) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayloadSSZRest")
 	defer span.End()
+
+	client := s.getSSZRestClient()
+	if client == nil {
+		return nil, errors.New("SSZ-REST client unavailable")
+	}
 
 	// Determine the version path based on payload type.
 	var versionPath string
@@ -210,7 +225,7 @@ func (s *Service) newPayloadSSZRest(
 		return nil, errors.Wrap(err, "marshal SSZ-REST new_payload request")
 	}
 
-	respBody, err := s.sszRestClient.doRequest(ctx, versionPath, reqBody)
+	respBody, err := client.doRequest(ctx, versionPath, reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -233,13 +248,18 @@ func (s *Service) forkchoiceUpdatedSSZRest(
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ForkchoiceUpdatedSSZRest")
 	defer span.End()
 
+	client := s.getSSZRestClient()
+	if client == nil {
+		return nil, nil, errors.New("SSZ-REST client unavailable")
+	}
+
 	// Build the SSZ-encoded request body.
 	reqBody, err := marshalForkchoiceUpdatedRequest(state, attrs)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "marshal SSZ-REST forkchoice_updated request")
 	}
 
-	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v3/forkchoice_updated", reqBody)
+	respBody, err := client.doRequest(ctx, "/engine/v3/forkchoice_updated", reqBody)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -279,6 +299,11 @@ func (s *Service) getPayloadSSZRest(ctx context.Context, payloadId [8]byte, slot
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetPayloadSSZRest")
 	defer span.End()
 
+	client := s.getSSZRestClient()
+	if client == nil {
+		return nil, errors.New("SSZ-REST client unavailable")
+	}
+
 	// Determine version path based on slot/epoch.
 	epoch := slots.ToEpoch(slot)
 	cfg := params.BeaconConfig()
@@ -301,18 +326,16 @@ func (s *Service) getPayloadSSZRest(ctx context.Context, payloadId [8]byte, slot
 	// POST /engine/v{N}/get_payload with 8-byte payload ID body
 	versionPath := fmt.Sprintf("/engine/v%d/get_payload", version)
 
-	respBody, err := s.sszRestClient.doRequest(ctx, versionPath, payloadId[:])
+	respBody, err := client.doRequest(ctx, versionPath, payloadId[:])
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse the GetPayloadResponse SSZ.
-	parsed, err := unmarshalGetPayloadResponseSSZ(respBody, version)
+	resp, err := unmarshalGetPayloadResponseSSZ(respBody, version)
 	if err != nil {
 		return nil, errors.Wrap(err, "unmarshal SSZ-REST get_payload response")
 	}
-
-	return getPayloadResponseFromSSZ(parsed, version)
+	return resp, nil
 }
 
 // getBlobsSSZRest sends a GetBlobs request via SSZ-REST.
@@ -320,9 +343,14 @@ func (s *Service) getBlobsSSZRest(ctx context.Context, versionedHashes []common.
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsSSZRest")
 	defer span.End()
 
+	client := s.getSSZRestClient()
+	if client == nil {
+		return nil, errors.New("SSZ-REST client unavailable")
+	}
+
 	reqBody := marshalGetBlobsRequest(versionedHashes)
 
-	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v1/get_blobs", reqBody)
+	respBody, err := client.doRequest(ctx, "/engine/v1/get_blobs", reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -335,9 +363,14 @@ func (s *Service) exchangeCapabilitiesSSZRest(ctx context.Context, capabilities 
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilitiesSSZRest")
 	defer span.End()
 
+	client := s.getSSZRestClient()
+	if client == nil {
+		return nil, errors.New("SSZ-REST client unavailable")
+	}
+
 	reqBody := marshalExchangeCapabilitiesRequest(capabilities)
 
-	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v1/exchange_capabilities", reqBody)
+	respBody, err := client.doRequest(ctx, "/engine/v1/exchange_capabilities", reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -350,6 +383,11 @@ func (s *Service) getClientVersionSSZRest(ctx context.Context) ([]*structs.Clien
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionSSZRest")
 	defer span.End()
 
+	client := s.getSSZRestClient()
+	if client == nil {
+		return nil, errors.New("SSZ-REST client unavailable")
+	}
+
 	commit := version.GitCommit()
 	if len(commit) >= 8 {
 		commit = commit[:8]
@@ -357,7 +395,7 @@ func (s *Service) getClientVersionSSZRest(ctx context.Context) ([]*structs.Clien
 
 	reqBody := marshalClientVersionRequest("PM", "Prysm", version.SemanticVersion(), commit)
 
-	respBody, err := s.sszRestClient.doRequest(ctx, "/engine/v1/get_client_version", reqBody)
+	respBody, err := client.doRequest(ctx, "/engine/v1/get_client_version", reqBody)
 	if err != nil {
 		return nil, err
 	}

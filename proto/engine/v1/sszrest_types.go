@@ -28,6 +28,47 @@ type ForkchoiceUpdatedResponseSSZ struct {
 	PayloadId     [][]byte `ssz-size:"?,8" ssz-max:"1"`
 }
 
+// GetPayloadV2ResponseSSZ is the SSZ wire format for getPayloadV2 responses.
+type GetPayloadV2ResponseSSZ struct {
+	Payload    *ExecutionPayloadCapella
+	BlockValue [32]byte `ssz-size:"32"`
+}
+
+// GetPayloadV3ResponseSSZ is the SSZ wire format for getPayloadV3 responses.
+type GetPayloadV3ResponseSSZ struct {
+	Payload               *ExecutionPayloadDeneb
+	BlockValue            [32]byte `ssz-size:"32"`
+	BlobsBundle           *BlobsBundle
+	ShouldOverrideBuilder bool
+}
+
+// GetPayloadV4ResponseSSZ is the SSZ wire format for getPayloadV4 responses.
+type GetPayloadV4ResponseSSZ struct {
+	Payload               *ExecutionPayloadDeneb
+	BlockValue            [32]byte `ssz-size:"32"`
+	BlobsBundle           *BlobsBundle
+	ShouldOverrideBuilder bool
+	ExecutionRequests     *ExecutionRequests
+}
+
+// GetPayloadV5ResponseSSZ is the SSZ wire format for getPayloadV5 responses.
+type GetPayloadV5ResponseSSZ struct {
+	Payload               *ExecutionPayloadDeneb
+	BlockValue            [32]byte `ssz-size:"32"`
+	BlobsBundle           *BlobsBundleV2
+	ShouldOverrideBuilder bool
+	ExecutionRequests     *ExecutionRequests
+}
+
+// GetPayloadV6ResponseSSZ is the SSZ wire format for getPayloadV6 responses.
+type GetPayloadV6ResponseSSZ struct {
+	Payload               *ExecutionPayloadGloas
+	BlockValue            [32]byte `ssz-size:"32"`
+	BlobsBundle           *BlobsBundleV2
+	ShouldOverrideBuilder bool
+	ExecutionRequests     *ExecutionRequests
+}
+
 // PayloadAttributesV3SSZ is the SSZ wire format for PayloadAttributesV3.
 //
 //	timestamp:                 uint64                   (8 bytes, fixed)
@@ -37,10 +78,10 @@ type ForkchoiceUpdatedResponseSSZ struct {
 //	parent_beacon_block_root:  Root                     (32 bytes, fixed)
 type PayloadAttributesV3SSZ struct {
 	Timestamp             uint64
-	PrevRandao            [32]byte              `ssz-size:"32"`
-	SuggestedFeeRecipient [20]byte              `ssz-size:"20"`
-	Withdrawals           []*WithdrawalSSZ      `ssz-max:"16"`
-	ParentBeaconBlockRoot [32]byte              `ssz-size:"32"`
+	PrevRandao            [32]byte         `ssz-size:"32"`
+	SuggestedFeeRecipient [20]byte         `ssz-size:"20"`
+	Withdrawals           []*WithdrawalSSZ `ssz-max:"16"`
+	ParentBeaconBlockRoot [32]byte         `ssz-size:"32"`
 }
 
 // WithdrawalSSZ is the SSZ wire format for Withdrawal (44 bytes fixed).

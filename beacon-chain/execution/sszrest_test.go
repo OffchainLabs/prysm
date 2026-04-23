@@ -481,63 +481,63 @@ func TestHandleSSZRestErrorAllCodes(t *testing.T) {
 
 // Tests for get_payload SSZ encoding/decoding.
 
-func buildGetPayloadResponseSSZ(
-	payloadSSZ, blobsBundleSSZ, requestsSSZ []byte,
-	blockValue [32]byte,
-	overrideBuilder bool,
-) []byte {
-	const fixedSize = 45 // 4+32+4+1+4
-	payloadOffset := uint32(fixedSize)
-	blobsOffset := payloadOffset + uint32(len(payloadSSZ))
-	requestsOffset := blobsOffset + uint32(len(blobsBundleSSZ))
-
-	var overrideByte byte
-	if overrideBuilder {
-		overrideByte = 1
-	}
-
-	buf := make([]byte, 0, fixedSize+len(payloadSSZ)+len(blobsBundleSSZ)+len(requestsSSZ))
-	buf = binary.LittleEndian.AppendUint32(buf, payloadOffset)
-	buf = append(buf, blockValue[:]...)
-	buf = binary.LittleEndian.AppendUint32(buf, blobsOffset)
-	buf = append(buf, overrideByte)
-	buf = binary.LittleEndian.AppendUint32(buf, requestsOffset)
-	buf = append(buf, payloadSSZ...)
-	buf = append(buf, blobsBundleSSZ...)
-	buf = append(buf, requestsSSZ...)
-	return buf
-}
-
 func TestUnmarshalGetPayloadResponseSSZ(t *testing.T) {
-	t.Run("valid response with all fields", func(t *testing.T) {
-		payloadSSZ := []byte{1, 2, 3, 4, 5}
-		bundleSSZ := []byte{10, 20, 30}
-		requestsSSZ := []byte{} // empty requests
+	t.Run("v4 generated response with all fields", func(t *testing.T) {
 		var blockValue [32]byte
 		blockValue[0] = 0x42
+		wire := &pb.GetPayloadV4ResponseSSZ{
+			Payload:               testExecutionPayloadDeneb(),
+			BlockValue:            blockValue,
+			BlobsBundle:           &pb.BlobsBundle{},
+			ShouldOverrideBuilder: true,
+			ExecutionRequests:     &pb.ExecutionRequests{},
+		}
 
-		data := buildGetPayloadResponseSSZ(payloadSSZ, bundleSSZ, requestsSSZ, blockValue, true)
+		data, err := wire.MarshalSSZ()
+		require.NoError(t, err)
 		resp, err := unmarshalGetPayloadResponseSSZ(data, 4)
 		require.NoError(t, err)
-		require.DeepEqual(t, payloadSSZ, resp.ExecutionPayloadSSZ)
-		require.DeepEqual(t, bundleSSZ, resp.BlobsBundleSSZ)
+		require.NotNil(t, resp.ExecutionData)
+		require.NotNil(t, resp.BlobsBundler)
+		require.NotNil(t, resp.ExecutionRequests)
 		assert.Equal(t, true, resp.OverrideBuilder)
-		assert.Equal(t, byte(0x42), resp.BlockValue[0])
+		require.DeepEqual(t, blockValueToWei(blockValue[:]), resp.Bid)
 	})
 
-	t.Run("override builder false", func(t *testing.T) {
-		payloadSSZ := []byte{1}
+	t.Run("v3 override builder false", func(t *testing.T) {
 		var blockValue [32]byte
-		data := buildGetPayloadResponseSSZ(payloadSSZ, nil, nil, blockValue, false)
-		resp, err := unmarshalGetPayloadResponseSSZ(data, 4)
+		wire := &pb.GetPayloadV3ResponseSSZ{
+			Payload:     testExecutionPayloadDeneb(),
+			BlockValue:  blockValue,
+			BlobsBundle: &pb.BlobsBundle{},
+		}
+		data, err := wire.MarshalSSZ()
+		require.NoError(t, err)
+		resp, err := unmarshalGetPayloadResponseSSZ(data, 3)
 		require.NoError(t, err)
 		assert.Equal(t, false, resp.OverrideBuilder)
 	})
 
 	t.Run("too short data", func(t *testing.T) {
 		_, err := unmarshalGetPayloadResponseSSZ([]byte{0, 1, 2, 3}, 4)
-		require.ErrorContains(t, "too short", err)
+		require.NotNil(t, err)
 	})
+}
+
+func testExecutionPayloadDeneb() *pb.ExecutionPayloadDeneb {
+	return &pb.ExecutionPayloadDeneb{
+		ParentHash:    make([]byte, 32),
+		FeeRecipient:  make([]byte, 20),
+		StateRoot:     make([]byte, 32),
+		ReceiptsRoot:  make([]byte, 32),
+		LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
+		PrevRandao:    make([]byte, 32),
+		ExtraData:     []byte{},
+		BaseFeePerGas: make([]byte, 32),
+		BlockHash:     make([]byte, 32),
+		Transactions:  [][]byte{},
+		Withdrawals:   []*pb.Withdrawal{},
+	}
 }
 
 // Tests for get_blobs SSZ encoding/decoding.

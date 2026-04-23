@@ -1,7 +1,6 @@
 package execution
 
 import (
-	"encoding/binary"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -266,183 +265,120 @@ func unmarshalForkchoiceUpdatedResponseSSZ(data []byte) (*forkchoiceUpdatedRespo
 
 // --- GetPayload Response ---
 
-// getPayloadResponseSSZ holds parsed get_payload response data.
-type getPayloadResponseSSZ struct {
-	ExecutionPayloadSSZ []byte
-	BlockValue          []byte // 32 bytes, uint256 LE
-	BlobsBundleSSZ      []byte
-	OverrideBuilder     bool
-	ExecutionRequests   *pb.ExecutionRequests
-}
-
-// unmarshalGetPayloadResponseSSZ decodes an SSZ-encoded get_payload response.
-// The inner payload and blob bundle remain raw until the caller selects the
-// correct fork-specific protobuf type.
-func unmarshalGetPayloadResponseSSZ(data []byte, version int) (*getPayloadResponseSSZ, error) {
+func unmarshalGetPayloadResponseSSZ(data []byte, version int) (*blocks.GetPayloadResponse, error) {
 	switch version {
 	case 1:
-		return &getPayloadResponseSSZ{
-			ExecutionPayloadSSZ: data,
-			BlockValue:          make([]byte, 32),
+		payload := &pb.ExecutionPayload{}
+		if err := payload.UnmarshalSSZ(data); err != nil {
+			return nil, errors.Wrap(err, "unmarshal execution payload SSZ")
+		}
+		ed, err := blocks.WrappedExecutionPayload(payload)
+		if err != nil {
+			return nil, err
+		}
+		return &blocks.GetPayloadResponse{
+			ExecutionData: ed,
+			Bid:           primitives.ZeroWei(),
 		}, nil
 	case 2:
-		if len(data) < 36 {
-			return nil, fmt.Errorf("SSZ get_payload response too short: %d bytes", len(data))
-		}
-		return unmarshalGetPayloadResponseV2Shape(data)
+		return unmarshalGetPayloadV2ResponseSSZ(data)
 	case 3:
-		if len(data) < 41 {
-			return nil, fmt.Errorf("SSZ get_payload response too short: %d bytes", len(data))
-		}
-		return unmarshalGetPayloadResponseV3Shape(data)
+		return unmarshalGetPayloadV3ResponseSSZ(data)
+	case 4:
+		return unmarshalGetPayloadV4ResponseSSZ(data)
+	case 5:
+		return unmarshalGetPayloadV5ResponseSSZ(data)
+	case 6:
+		return unmarshalGetPayloadV6ResponseSSZ(data)
 	default:
-		if len(data) < 45 {
-			return nil, fmt.Errorf("SSZ get_payload response too short: %d bytes", len(data))
-		}
-		return unmarshalGetPayloadResponseV4Shape(data)
+		return nil, fmt.Errorf("unsupported SSZ get_payload version: %d", version)
 	}
 }
 
-func unmarshalGetPayloadResponseV2Shape(data []byte) (*getPayloadResponseSSZ, error) {
-	payloadOffset := ssz.ReadOffset(data[0:4])
-	if payloadOffset > uint64(len(data)) {
-		return nil, fmt.Errorf("SSZ get_payload response truncated")
+func unmarshalGetPayloadV2ResponseSSZ(data []byte) (*blocks.GetPayloadResponse, error) {
+	wire := &pb.GetPayloadV2ResponseSSZ{}
+	if err := wire.UnmarshalSSZ(data); err != nil {
+		return nil, errors.Wrap(err, "unmarshal SSZ get_payload v2 response")
 	}
-	resp := &getPayloadResponseSSZ{
-		ExecutionPayloadSSZ: data[payloadOffset:],
-		BlockValue:          make([]byte, 32),
-	}
-	copy(resp.BlockValue, data[4:36])
-	return resp, nil
-}
-
-func unmarshalGetPayloadResponseV3Shape(data []byte) (*getPayloadResponseSSZ, error) {
-	payloadOffset := ssz.ReadOffset(data[0:4])
-	blockValue := data[4:36]
-	blobsOffset := ssz.ReadOffset(data[36:40])
-	overrideBuilder := data[40] != 0
-
-	dataLen := uint64(len(data))
-	if payloadOffset > dataLen || blobsOffset > dataLen {
-		return nil, fmt.Errorf("SSZ get_payload response truncated")
-	}
-	if payloadOffset > blobsOffset {
-		return nil, fmt.Errorf("SSZ get_payload response offsets out of order")
-	}
-
-	resp := &getPayloadResponseSSZ{
-		ExecutionPayloadSSZ: data[payloadOffset:blobsOffset],
-		BlockValue:          make([]byte, 32),
-		BlobsBundleSSZ:      data[blobsOffset:],
-		OverrideBuilder:     overrideBuilder,
-	}
-	copy(resp.BlockValue, blockValue)
-	return resp, nil
-}
-
-func unmarshalGetPayloadResponseV4Shape(data []byte) (*getPayloadResponseSSZ, error) {
-	const fixedSize = 4 + 32 + 4 + 1 + 4 // = 45
-	payloadOffset := ssz.ReadOffset(data[0:4])
-	blockValue := data[4:36]
-	blobsOffset := ssz.ReadOffset(data[36:40])
-	overrideBuilder := data[40] != 0
-	requestsOffset := ssz.ReadOffset(data[41:45])
-
-	dataLen := uint64(len(data))
-	if payloadOffset > dataLen || blobsOffset > dataLen || requestsOffset > dataLen {
-		return nil, fmt.Errorf("SSZ get_payload response truncated")
-	}
-	if payloadOffset > blobsOffset || blobsOffset > requestsOffset {
-		return nil, fmt.Errorf("SSZ get_payload response offsets out of order")
-	}
-
-	resp := &getPayloadResponseSSZ{
-		ExecutionPayloadSSZ: data[payloadOffset:blobsOffset],
-		BlockValue:          make([]byte, 32),
-		BlobsBundleSSZ:      data[blobsOffset:requestsOffset],
-		OverrideBuilder:     overrideBuilder,
-	}
-	copy(resp.BlockValue, blockValue)
-
-	if requestsOffset < dataLen {
-		reqData := data[requestsOffset:]
-		requests := &pb.ExecutionRequests{}
-		if err := requests.UnmarshalSSZ(reqData); err != nil {
-			return nil, errors.Wrap(err, "unmarshal execution requests SSZ")
-		}
-		resp.ExecutionRequests = requests
-	}
-
-	return resp, nil
-}
-
-func getPayloadResponseFromSSZ(parsed *getPayloadResponseSSZ, version int) (*blocks.GetPayloadResponse, error) {
-	ed, err := executionDataFromSSZ(parsed.ExecutionPayloadSSZ, version)
+	ed, err := blocks.WrappedExecutionPayloadCapella(wire.Payload)
 	if err != nil {
 		return nil, err
 	}
-	bundler, err := blobsBundleFromSSZ(parsed.BlobsBundleSSZ, version)
+	return &blocks.GetPayloadResponse{
+		ExecutionData: ed,
+		Bid:           blockValueToWei(wire.BlockValue[:]),
+	}, nil
+}
+
+func unmarshalGetPayloadV3ResponseSSZ(data []byte) (*blocks.GetPayloadResponse, error) {
+	wire := &pb.GetPayloadV3ResponseSSZ{}
+	if err := wire.UnmarshalSSZ(data); err != nil {
+		return nil, errors.Wrap(err, "unmarshal SSZ get_payload v3 response")
+	}
+	ed, err := blocks.WrappedExecutionPayloadDeneb(wire.Payload)
+	if err != nil {
+		return nil, err
+	}
+	return &blocks.GetPayloadResponse{
+		ExecutionData:   ed,
+		BlobsBundler:    wire.BlobsBundle,
+		OverrideBuilder: wire.ShouldOverrideBuilder,
+		Bid:             blockValueToWei(wire.BlockValue[:]),
+	}, nil
+}
+
+func unmarshalGetPayloadV4ResponseSSZ(data []byte) (*blocks.GetPayloadResponse, error) {
+	wire := &pb.GetPayloadV4ResponseSSZ{}
+	if err := wire.UnmarshalSSZ(data); err != nil {
+		return nil, errors.Wrap(err, "unmarshal SSZ get_payload v4 response")
+	}
+	ed, err := blocks.WrappedExecutionPayloadDeneb(wire.Payload)
 	if err != nil {
 		return nil, err
 	}
 	return &blocks.GetPayloadResponse{
 		ExecutionData:     ed,
-		BlobsBundler:      bundler,
-		OverrideBuilder:   parsed.OverrideBuilder,
-		Bid:               blockValueToWei(parsed.BlockValue),
-		ExecutionRequests: parsed.ExecutionRequests,
+		BlobsBundler:      wire.BlobsBundle,
+		OverrideBuilder:   wire.ShouldOverrideBuilder,
+		Bid:               blockValueToWei(wire.BlockValue[:]),
+		ExecutionRequests: wire.ExecutionRequests,
 	}, nil
 }
 
-func executionDataFromSSZ(payloadSSZ []byte, version int) (interfaces.ExecutionData, error) {
-	switch version {
-	case 1:
-		payload := &pb.ExecutionPayload{}
-		if err := payload.UnmarshalSSZ(payloadSSZ); err != nil {
-			return nil, errors.Wrap(err, "unmarshal execution payload SSZ")
-		}
-		return blocks.WrappedExecutionPayload(payload)
-	case 2:
-		payload := &pb.ExecutionPayloadCapella{}
-		if err := payload.UnmarshalSSZ(payloadSSZ); err != nil {
-			return nil, errors.Wrap(err, "unmarshal capella execution payload SSZ")
-		}
-		return blocks.WrappedExecutionPayloadCapella(payload)
-	case 6:
-		payload := &pb.ExecutionPayloadGloas{}
-		if err := payload.UnmarshalSSZ(payloadSSZ); err != nil {
-			return nil, errors.Wrap(err, "unmarshal gloas execution payload SSZ")
-		}
-		return blocks.WrappedExecutionPayloadGloas(payload)
-	default:
-		payload := &pb.ExecutionPayloadDeneb{}
-		if err := payload.UnmarshalSSZ(payloadSSZ); err != nil {
-			return nil, errors.Wrap(err, "unmarshal deneb execution payload SSZ")
-		}
-		return blocks.WrappedExecutionPayloadDeneb(payload)
+func unmarshalGetPayloadV5ResponseSSZ(data []byte) (*blocks.GetPayloadResponse, error) {
+	wire := &pb.GetPayloadV5ResponseSSZ{}
+	if err := wire.UnmarshalSSZ(data); err != nil {
+		return nil, errors.Wrap(err, "unmarshal SSZ get_payload v5 response")
 	}
+	ed, err := blocks.WrappedExecutionPayloadDeneb(wire.Payload)
+	if err != nil {
+		return nil, err
+	}
+	return &blocks.GetPayloadResponse{
+		ExecutionData:     ed,
+		BlobsBundler:      wire.BlobsBundle,
+		OverrideBuilder:   wire.ShouldOverrideBuilder,
+		Bid:               blockValueToWei(wire.BlockValue[:]),
+		ExecutionRequests: wire.ExecutionRequests,
+	}, nil
 }
 
-func blobsBundleFromSSZ(bundleSSZ []byte, version int) (pb.BlobsBundler, error) {
-	if version < 3 {
-		return nil, nil
+func unmarshalGetPayloadV6ResponseSSZ(data []byte) (*blocks.GetPayloadResponse, error) {
+	wire := &pb.GetPayloadV6ResponseSSZ{}
+	if err := wire.UnmarshalSSZ(data); err != nil {
+		return nil, errors.Wrap(err, "unmarshal SSZ get_payload v6 response")
 	}
-	if version >= 5 {
-		bundle := &pb.BlobsBundleV2{}
-		if len(bundleSSZ) > 0 {
-			if err := bundle.UnmarshalSSZ(bundleSSZ); err != nil {
-				return nil, errors.Wrap(err, "unmarshal blobs bundle v2 SSZ")
-			}
-		}
-		return bundle, nil
+	ed, err := blocks.WrappedExecutionPayloadGloas(wire.Payload)
+	if err != nil {
+		return nil, err
 	}
-	bundle := &pb.BlobsBundle{}
-	if len(bundleSSZ) > 0 {
-		if err := bundle.UnmarshalSSZ(bundleSSZ); err != nil {
-			return nil, errors.Wrap(err, "unmarshal blobs bundle SSZ")
-		}
-	}
-	return bundle, nil
+	return &blocks.GetPayloadResponse{
+		ExecutionData:     ed,
+		BlobsBundler:      wire.BlobsBundle,
+		OverrideBuilder:   wire.ShouldOverrideBuilder,
+		Bid:               blockValueToWei(wire.BlockValue[:]),
+		ExecutionRequests: wire.ExecutionRequests,
+	}, nil
 }
 
 // --- GetBlobs ---
@@ -592,6 +528,3 @@ func appendHash(buf []byte, hash []byte) []byte {
 	copy(padded, hash)
 	return append(buf, padded...)
 }
-
-// Used only by unmarshalGetPayloadResponseSSZ for reading raw SSZ offsets.
-var _ = binary.LittleEndian
