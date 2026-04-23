@@ -266,4 +266,3 @@ func (e *EngineClient) GetTerminalBlockHash(ctx context.Context, transitionTime 
 func (e *EngineClient) GetClientVersionV1(context.Context) ([]*structs.ClientVersionV1, error) {
 	return e.ClientVersion, e.ErrorClientVersion
 }
-
