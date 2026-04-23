@@ -87,10 +87,10 @@ func marshalNewPayloadV3Container(payloadSSZ []byte, versionedHashes []common.Ha
 	hashesSize := len(versionedHashes) * 32
 	buf := make([]byte, 0, fixedSize+len(payloadSSZ)+hashesSize)
 
-	offset := uint32(fixedSize)
-	buf = ssz.WriteOffset(buf, int(offset))
-	offset += uint32(len(payloadSSZ))
-	buf = ssz.WriteOffset(buf, int(offset))
+	offset := fixedSize
+	buf = ssz.WriteOffset(buf, offset)
+	offset += len(payloadSSZ)
+	buf = ssz.WriteOffset(buf, offset)
 	buf = append(buf, parentBlockRoot[:]...)
 
 	buf = append(buf, payloadSSZ...)
@@ -106,13 +106,13 @@ func marshalNewPayloadV4Container(payloadSSZ []byte, versionedHashes []common.Ha
 	hashesSize := len(versionedHashes) * 32
 	buf := make([]byte, 0, fixedSize+len(payloadSSZ)+hashesSize+len(requestsSSZ))
 
-	offset := uint32(fixedSize)
-	buf = ssz.WriteOffset(buf, int(offset))
-	offset += uint32(len(payloadSSZ))
-	buf = ssz.WriteOffset(buf, int(offset))
-	offset += uint32(hashesSize)
+	offset := fixedSize
+	buf = ssz.WriteOffset(buf, offset)
+	offset += len(payloadSSZ)
+	buf = ssz.WriteOffset(buf, offset)
+	offset += hashesSize
 	buf = append(buf, parentBlockRoot[:]...)
-	buf = ssz.WriteOffset(buf, int(offset))
+	buf = ssz.WriteOffset(buf, offset)
 
 	buf = append(buf, payloadSSZ...)
 	for _, h := range versionedHashes {
