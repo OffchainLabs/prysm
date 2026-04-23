@@ -125,14 +125,14 @@ var (
 		types.ExecutionPayloadAvailability,
 		types.BuilderPendingPayments,
 		types.BuilderPendingWithdrawals,
-		types.LatestBlockHash,
+		types.LatestExecutionPayloadBid,
 		types.PayloadExpectedWithdrawals,
 		types.PTCWindow,
 	}
 
 	gloasFields = slices.Concat(
 		altairFields,
-		[]types.FieldIndex{types.LatestExecutionPayloadBid},
+		[]types.FieldIndex{types.LatestBlockHash},
 		withdrawalAndHistoricalSummaryFields,
 		electraAdditionalFields,
 		[]types.FieldIndex{types.ProposerLookahead},

@@ -7,5 +7,6 @@ import (
 )
 
 func TestMainnet_Gloas_SSZStatic(t *testing.T) {
+	t.Skip("gloas spec tests disabled until https://github.com/OffchainLabs/prysm/pull/16658")
 	ssz_static.RunSSZStaticTests(t, "mainnet")
 }

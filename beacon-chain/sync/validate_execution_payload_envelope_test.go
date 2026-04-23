@@ -331,7 +331,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildInvalidSignature(t *testing.T) {
 func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, builderIdx primitives.BuilderIndex, root, blockHash [32]byte) *ethpb.SignedExecutionPayloadEnvelope {
 	t.Helper()
 
-	payload := &enginev1.ExecutionPayloadDeneb{
+	payload := &enginev1.ExecutionPayloadGloas{
 		ParentHash:    bytes.Repeat([]byte{0x01}, 32),
 		FeeRecipient:  bytes.Repeat([]byte{0x02}, 20),
 		StateRoot:     bytes.Repeat([]byte{0x03}, 32),
@@ -348,6 +348,7 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 		Withdrawals:   []*enginev1.Withdrawal{},
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
+		SlotNumber:    slot,
 	}
 
 	return &ethpb.SignedExecutionPayloadEnvelope{
@@ -358,7 +359,6 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 			},
 			BuilderIndex:    builderIdx,
 			BeaconBlockRoot: root[:],
-			Slot:            slot,
 			StateRoot:       bytes.Repeat([]byte{0xBB}, 32),
 		},
 		Signature: bytes.Repeat([]byte{0xAA}, 96),

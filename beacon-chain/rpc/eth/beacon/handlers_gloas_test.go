@@ -36,7 +36,7 @@ func TestGetExecutionPayloadEnvelope_AcceptsSlotID(t *testing.T) {
 
 	env := &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload: &enginev1.ExecutionPayloadDeneb{
+			Payload: &enginev1.ExecutionPayloadGloas{
 				ParentHash:    bytesutil.PadTo([]byte("parent"), 32),
 				FeeRecipient:  bytesutil.PadTo([]byte("fee"), 20),
 				StateRoot:     bytesutil.PadTo([]byte("state"), 32),
@@ -47,11 +47,11 @@ func TestGetExecutionPayloadEnvelope_AcceptsSlotID(t *testing.T) {
 				BlockHash:     blockHash[:],
 				Transactions:  [][]byte{},
 				Withdrawals:   []*enginev1.Withdrawal{},
+				SlotNumber:    primitives.Slot(177),
 			},
 			ExecutionRequests: &enginev1.ExecutionRequests{},
 			BuilderIndex:      primitives.BuilderIndex(42),
 			BeaconBlockRoot:   root[:],
-			Slot:              primitives.Slot(177),
 			StateRoot:         bytesutil.PadTo([]byte("envelope-state"), 32),
 		},
 		Signature: bytesutil.PadTo([]byte("sig"), 96),
@@ -116,7 +116,7 @@ func TestGetExecutionPayloadEnvelope_BlockNotFound(t *testing.T) {
 func testSignedEnvelope() *ethpb.SignedExecutionPayloadEnvelope {
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload: &enginev1.ExecutionPayloadDeneb{
+			Payload: &enginev1.ExecutionPayloadGloas{
 				ParentHash:    bytesutil.PadTo([]byte("parent"), 32),
 				FeeRecipient:  bytesutil.PadTo([]byte("fee"), 20),
 				StateRoot:     bytesutil.PadTo([]byte("state"), 32),
@@ -127,11 +127,11 @@ func testSignedEnvelope() *ethpb.SignedExecutionPayloadEnvelope {
 				BlockHash:     bytesutil.PadTo([]byte("blockhash"), 32),
 				Transactions:  [][]byte{},
 				Withdrawals:   []*enginev1.Withdrawal{},
+				SlotNumber:    primitives.Slot(100),
 			},
 			ExecutionRequests: &enginev1.ExecutionRequests{},
 			BuilderIndex:      primitives.BuilderIndex(42),
 			BeaconBlockRoot:   bytesutil.PadTo([]byte("beacon-root"), 32),
-			Slot:              primitives.Slot(100),
 			StateRoot:         bytesutil.PadTo([]byte("envelope-state"), 32),
 		},
 		Signature: bytesutil.PadTo([]byte("sig"), 96),

@@ -145,7 +145,7 @@ func GenerateJsonGloasBeaconBlock() *structs.BeaconBlockGloas {
 
 func GenerateProtoExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 	return &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
+		Payload: &enginev1.ExecutionPayloadGloas{
 			ParentHash:    FillByteSlice(32, 200),
 			FeeRecipient:  FillByteSlice(20, 201),
 			StateRoot:     FillByteSlice(32, 202),
@@ -155,11 +155,11 @@ func GenerateProtoExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 			BaseFeePerGas: FillByteSlice(32, 206),
 			BlockHash:     FillByteSlice(32, 207),
 			ExtraData:     make([]byte, 0),
+			SlotNumber:    1,
 		},
 		ExecutionRequests: &enginev1.ExecutionRequests{},
 		BuilderIndex:      121,
 		BeaconBlockRoot:   FillByteSlice(32, 210),
-		Slot:              1,
 		StateRoot:         FillByteSlice(32, 211),
 	}
 }
