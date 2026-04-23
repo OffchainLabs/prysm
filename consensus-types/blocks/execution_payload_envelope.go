@@ -1,6 +1,8 @@
 package blocks
 
 import (
+	"bytes"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
@@ -102,7 +104,7 @@ func (p *executionPayloadEnvelope) IsBlinded() bool {
 
 // Execution returns the execution payload as a read-only interface.
 func (p *executionPayloadEnvelope) Execution() (interfaces.ExecutionData, error) {
-	return WrappedExecutionPayloadDeneb(p.p.Payload)
+	return WrappedExecutionPayloadGloas(p.p.Payload)
 }
 
 // ExecutionRequests returns the execution requests attached to the envelope.
@@ -120,12 +122,88 @@ func (p *executionPayloadEnvelope) BeaconBlockRoot() [field_params.RootLength]by
 	return [field_params.RootLength]byte(p.p.BeaconBlockRoot)
 }
 
-// Slot returns the slot of the envelope.
+// Slot returns the slot derived from the payload's slot_number field.
 func (p *executionPayloadEnvelope) Slot() primitives.Slot {
-	return p.p.Slot
+	return primitives.Slot(p.p.Payload.SlotNumber)
 }
 
 // StateRoot returns the state root carried by the envelope.
 func (p *executionPayloadEnvelope) StateRoot() [field_params.RootLength]byte {
 	return [field_params.RootLength]byte(p.p.StateRoot)
+}
+
+// BlockHash returns the block hash from the execution payload.
+func (p *executionPayloadEnvelope) BlockHash() [field_params.RootLength]byte {
+	return [field_params.RootLength]byte(p.p.Payload.BlockHash)
+}
+
+type blindedExecutionPayloadEnvelope struct {
+	p *ethpb.BlindedExecutionPayloadEnvelope
+}
+
+// WrappedROBlindedExecutionPayloadEnvelope wraps a blinded execution payload envelope proto in a read-only interface.
+func WrappedROBlindedExecutionPayloadEnvelope(p *ethpb.BlindedExecutionPayloadEnvelope) (interfaces.ROBlindedExecutionPayloadEnvelope, error) {
+	w := &blindedExecutionPayloadEnvelope{p: p}
+	if w.IsNil() {
+		return nil, consensus_types.ErrNilObjectWrapped
+	}
+	return w, nil
+}
+
+func (p *blindedExecutionPayloadEnvelope) IsNil() bool {
+	if p.p == nil {
+		return true
+	}
+	if len(p.p.BeaconBlockRoot) != field_params.RootLength {
+		return true
+	}
+	if len(p.p.BlockHash) != field_params.RootLength {
+		return true
+	}
+	return false
+}
+
+func (p *blindedExecutionPayloadEnvelope) IsBlinded() bool {
+	return true
+}
+
+func (p *blindedExecutionPayloadEnvelope) ExecutionRequests() *enginev1.ExecutionRequests {
+	return ethpb.CopyExecutionRequests(p.p.ExecutionRequests)
+}
+
+func (p *blindedExecutionPayloadEnvelope) BuilderIndex() primitives.BuilderIndex {
+	return p.p.BuilderIndex
+}
+
+func (p *blindedExecutionPayloadEnvelope) BeaconBlockRoot() [field_params.RootLength]byte {
+	return [field_params.RootLength]byte(p.p.BeaconBlockRoot)
+}
+
+func (p *blindedExecutionPayloadEnvelope) Slot() primitives.Slot {
+	return p.p.Slot
+}
+
+func (p *blindedExecutionPayloadEnvelope) StateRoot() [field_params.RootLength]byte {
+	return [field_params.RootLength]byte(p.p.StateRoot)
+}
+
+func (p *blindedExecutionPayloadEnvelope) BlockHash() [field_params.RootLength]byte {
+	return [field_params.RootLength]byte(p.p.BlockHash)
+}
+
+// BlockBuiltOnEnvelope checks if the block's parent hash matches the envelope's execution block hash.
+func BlockBuiltOnEnvelope(env interfaces.ROSignedExecutionPayloadEnvelope, blk ROBlock) (bool, error) {
+	msg, err := env.Envelope()
+	if err != nil {
+		return false, err
+	}
+	ex, err := msg.Execution()
+	if err != nil {
+		return false, err
+	}
+	ph, err := blk.ParentHash()
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(ex.BlockHash(), ph[:]), nil
 }

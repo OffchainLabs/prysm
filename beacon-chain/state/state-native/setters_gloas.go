@@ -261,6 +261,35 @@ func (b *BeaconState) SetExecutionPayloadAvailability(index primitives.Slot, ava
 	return nil
 }
 
+// UpdateBuilderAtIndex updates the builder at the given index.
+func (b *BeaconState) UpdateBuilderAtIndex(index primitives.BuilderIndex, builder *ethpb.Builder) error {
+	if b.version < version.Gloas {
+		return errNotSupported("UpdateBuilderAtIndex", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	idx := uint64(index)
+	if idx >= uint64(len(b.builders)) {
+		return fmt.Errorf("builder index %d out of range (len=%d)", index, len(b.builders))
+	}
+
+	builders := b.builders
+	if b.sharedFieldReferences[types.Builders].Refs() > 1 {
+		builders = make([]*ethpb.Builder, len(b.builders))
+		copy(builders, b.builders)
+		b.sharedFieldReferences[types.Builders].MinusRef()
+		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
+	}
+
+	builders[idx] = ethpb.CopyBuilder(builder)
+	b.builders = builders
+
+	b.markFieldAsDirty(types.Builders)
+	return nil
+}
+
 // IncreaseBuilderBalance increases the balance of the builder at the given index.
 func (b *BeaconState) IncreaseBuilderBalance(index primitives.BuilderIndex, amount uint64) error {
 	if b.version < version.Gloas {
@@ -613,7 +642,7 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 // OnboardBuildersFromPendingDeposits applies any pending builder deposits at the fork.
 // It mutates the state and prunes pending deposits accordingly.
 //
-//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas">
+//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="2bd662c7">
 //	def onboard_builders_from_pending_deposits(state: BeaconState) -> None:
 //	    """
 //	    Applies any pending deposit for builders, effectively
@@ -737,4 +766,67 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 	b.markFieldAsDirty(types.PendingDeposits)
 
 	return nil
+}
+
+// SetPTCWindow is a mutating call to the beacon state which sets the cached PTC window.
+func (b *BeaconState) SetPTCWindow(window []*ethpb.PTCs) error {
+	if b.version < version.Gloas {
+		return errNotSupported("SetPTCWindow", b.version)
+	}
+
+	expected := expectedPTCWindowSize()
+	if uint64(len(window)) != uint64(expected) {
+		return fmt.Errorf("invalid size for ptc window: got %d want %d", len(window), expected)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.sharedFieldReferences[types.PTCWindow].MinusRef()
+	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)
+	b.ptcWindow = ethpb.CopyPTCWindow(window)
+	b.markFieldAsDirty(types.PTCWindow)
+	return nil
+}
+
+// RotatePTCWindow shifts the PTC window left by one epoch and fills the last epoch
+// with the provided new slots. This performs the rotation in-place under lock.
+func (b *BeaconState) RotatePTCWindow(newEpochSlots []*ethpb.PTCs) error {
+	if b.version < version.Gloas {
+		return errNotSupported("RotatePTCWindow", b.version)
+	}
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	if uint64(len(newEpochSlots)) != uint64(slotsPerEpoch) {
+		return fmt.Errorf("invalid new epoch slots size: got %d want %d", len(newEpochSlots), slotsPerEpoch)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	expected := expectedPTCWindowSize()
+	if uint64(len(b.ptcWindow)) != uint64(expected) {
+		return fmt.Errorf("invalid ptc window size: got %d want %d", len(b.ptcWindow), expected)
+	}
+
+	b.sharedFieldReferences[types.PTCWindow].MinusRef()
+	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)
+
+	newWindow := make([]*ethpb.PTCs, expected)
+
+	// Shift left by one epoch.
+	lastEpochStart := expected - slotsPerEpoch
+	copy(newWindow[:lastEpochStart], b.ptcWindow[slotsPerEpoch:])
+
+	// Fill the last epoch with copied new slots.
+	copy(newWindow[lastEpochStart:], ethpb.CopyPTCWindow(newEpochSlots))
+
+	b.ptcWindow = newWindow
+
+	b.markFieldAsDirty(types.PTCWindow)
+	return nil
+}
+
+func expectedPTCWindowSize() primitives.Slot {
+	return params.BeaconConfig().SlotsPerEpoch.Mul(uint64(2 + params.BeaconConfig().MinSeedLookahead))
 }

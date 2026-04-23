@@ -18,11 +18,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -160,7 +162,7 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	var failedBroadcasts []*server.IndexedError
 
 	if v >= version.Electra {
-		attFailures, failedBroadcasts, err = s.handleAttestationsElectra(ctx, req.Data)
+		attFailures, failedBroadcasts, err = s.handleAttestationsPostElectra(ctx, req.Data)
 	} else {
 		attFailures, failedBroadcasts, err = s.handleAttestations(ctx, req.Data)
 	}
@@ -189,7 +191,7 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleAttestationsElectra(
+func (s *Server) handleAttestationsPostElectra(
 	ctx context.Context,
 	data json.RawMessage,
 ) (attFailures []*server.IndexedError, failedBroadcasts []*server.IndexedError, err error) {
@@ -223,6 +225,41 @@ func (s *Server) handleAttestationsElectra(
 				Message: "Incorrect attestation signature: " + err.Error(),
 			})
 			continue
+		}
+		attEpoch := slots.ToEpoch(att.Data.Slot)
+		if attEpoch >= params.BeaconConfig().ElectraForkEpoch && attEpoch < params.BeaconConfig().GloasForkEpoch {
+			if att.Data.CommitteeIndex != 0 {
+				attFailures = append(attFailures, &server.IndexedError{
+					Index:   i,
+					Message: "Committee index must be 0 in Electra and Fulu",
+				})
+				continue
+			}
+		} else if attEpoch >= params.BeaconConfig().GloasForkEpoch {
+			if att.Data.CommitteeIndex >= 2 {
+				attFailures = append(attFailures, &server.IndexedError{
+					Index:   i,
+					Message: "Index must be < 2 post-Gloas",
+				})
+				continue
+			}
+			if att.Data.CommitteeIndex != 0 {
+				blockSlot, err := s.ForkchoiceFetcher.RecentBlockSlot(bytesutil.ToBytes32(att.Data.BeaconBlockRoot))
+				if err != nil {
+					attFailures = append(attFailures, &server.IndexedError{
+						Index:   i,
+						Message: "Could not determine block slot: " + err.Error(),
+					})
+					continue
+				}
+				if blockSlot == att.Data.Slot {
+					attFailures = append(attFailures, &server.IndexedError{
+						Index:   i,
+						Message: "Same slot attestations must use index 0 post-Gloas",
+					})
+					continue
+				}
+			}
 		}
 		validAttestations = append(validAttestations, att)
 	}
@@ -458,14 +495,25 @@ func (s *Server) SubmitVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not process slots: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	val, err := headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
-	if err != nil {
-		if errors.Is(err, mvslice.ErrOutOfBounds) {
-			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
+
+	// Builder exits are only valid from Gloas onwards.
+	if exit.Exit.ValidatorIndex.IsBuilderIndex() {
+		if headState.Version() < version.Gloas {
+			httputil.HandleError(w, "Builder exits not supported before Gloas", http.StatusBadRequest)
 			return
 		}
-		httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
-		return
+	}
+	var val state.ReadOnlyValidator
+	if !exit.Exit.ValidatorIndex.IsBuilderIndex() {
+		val, err = headState.ValidatorAtIndexReadOnly(exit.Exit.ValidatorIndex)
+		if err != nil {
+			if errors.Is(err, mvslice.ErrOutOfBounds) {
+				httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			httputil.HandleError(w, "Could not get validator: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	if err = blocks.VerifyExitAndSignature(val, headState, exit); err != nil {
 		httputil.HandleError(w, "Invalid exit: "+err.Error(), http.StatusBadRequest)

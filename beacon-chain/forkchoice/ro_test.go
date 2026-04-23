@@ -17,6 +17,7 @@ const (
 	unlockCalled
 	rlockCalled
 	runlockCalled
+	hasFullNodeCalled
 	hasNodeCalled
 	proposerBoostCalled
 	isCanonicalCalled
@@ -43,6 +44,8 @@ const (
 	dependentRootCalled
 	dependentRootForEpochCalled
 	canonicalNodeAtSlotCalled
+	payloadWeightsCalled
+	payloadContentLookupCalled
 )
 
 func _discard(t *testing.T, e error) {
@@ -60,6 +63,11 @@ func TestROLocking(t *testing.T) {
 		call mockCall
 		cb   func(FastGetter)
 	}{
+		{
+			name: "hasFullNodeCalled",
+			call: hasFullNodeCalled,
+			cb:   func(g FastGetter) { g.HasFullNode([32]byte{}) },
+		},
 		{
 			name: "hasNodeCalled",
 			call: hasNodeCalled,
@@ -165,6 +173,11 @@ func TestROLocking(t *testing.T) {
 			call: canonicalNodeAtSlotCalled,
 			cb:   func(g FastGetter) { g.CanonicalNodeAtSlot(0) },
 		},
+		{
+			name: "payloadContentLookupCalled",
+			call: payloadContentLookupCalled,
+			cb:   func(g FastGetter) { g.PayloadContentLookup([32]byte{}) },
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -200,6 +213,11 @@ func (ro *mockROForkchoice) Unlock() {
 
 func (ro *mockROForkchoice) RUnlock() {
 	ro.calls = append(ro.calls, runlockCalled)
+}
+
+func (ro *mockROForkchoice) HasFullNode(_ [32]byte) bool {
+	ro.calls = append(ro.calls, hasFullNodeCalled)
+	return false
 }
 
 func (ro *mockROForkchoice) HasNode(_ [32]byte) bool {
@@ -282,6 +300,11 @@ func (ro *mockROForkchoice) ConsensusNodeWeight(_ [32]byte) (uint64, error) {
 	return 0, nil
 }
 
+func (ro *mockROForkchoice) PayloadWeights(_ [32]byte) (uint64, uint64, error) {
+	ro.calls = append(ro.calls, payloadWeightsCalled)
+	return 0, 0, nil
+}
+
 func (ro *mockROForkchoice) IsOptimistic(_ [32]byte) (bool, error) {
 	ro.calls = append(ro.calls, isOptimisticCalled)
 	return false, nil
@@ -327,5 +350,10 @@ func (ro *mockROForkchoice) BlockHash(_ [32]byte) ([32]byte, error) {
 
 func (ro *mockROForkchoice) CanonicalNodeAtSlot(_ primitives.Slot) ([32]byte, bool) {
 	ro.calls = append(ro.calls, canonicalNodeAtSlotCalled)
+	return [32]byte{}, false
+}
+
+func (ro *mockROForkchoice) PayloadContentLookup(_ [32]byte) ([32]byte, bool) {
+	ro.calls = append(ro.calls, payloadContentLookupCalled)
 	return [32]byte{}, false
 }

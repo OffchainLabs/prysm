@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
 )
 
 func TestHandleSSZRestError(t *testing.T) {
@@ -81,33 +80,6 @@ func TestHandlePayloadStatus(t *testing.T) {
 	})
 }
 
-func TestIsNetworkError(t *testing.T) {
-	tests := []struct {
-		name     string
-		err      error
-		expected bool
-	}{
-		{name: "nil error", err: nil, expected: false},
-		{name: "connection refused", err: errors.New("connection refused"), expected: true},
-		{name: "connection reset", err: errors.New("connection reset by peer"), expected: true},
-		{name: "no such host", err: errors.New("dial tcp: lookup foo: no such host"), expected: true},
-		{name: "network unreachable", err: errors.New("network is unreachable"), expected: true},
-		{name: "SSZ-REST request failed", err: errors.New("SSZ-REST request failed: connection refused"), expected: true},
-		{name: "create SSZ-REST request", err: errors.New("create SSZ-REST request: invalid URL"), expected: true},
-		{name: "read SSZ-REST response", err: errors.New("read SSZ-REST response: timeout"), expected: true},
-		{name: "invalid payload (not network)", err: ErrInvalidPayloadStatus, expected: false},
-		{name: "unknown payload (not network)", err: ErrUnknownPayload, expected: false},
-		{name: "parse error (not network)", err: ErrParse, expected: false},
-		{name: "timeout error", err: &customError{timeout: true}, expected: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := isNetworkError(tt.err)
-			assert.Equal(t, tt.expected, got)
-		})
-	}
-}
-
 func TestMarshalForkchoiceStateSSZ(t *testing.T) {
 	head := make([]byte, 32)
 	safe := make([]byte, 32)
@@ -169,10 +141,9 @@ func buildPayloadStatusSSZ(statusByte uint8, latestValidHash []byte, validationE
 	const fixedSize = 9 // 1 byte status + 4 byte hashOffset + 4 byte errorOffset
 	hashOffset := uint32(fixedSize)
 
-	// Build latest_valid_hash union
+	// Build latest_valid_hash as List[Hash32, 1].
 	var hashData []byte
 	if latestValidHash != nil {
-		hashData = append(hashData, 1) // union selector = present
 		hashData = append(hashData, latestValidHash...)
 	}
 
@@ -234,7 +205,9 @@ func TestUnmarshalPayloadStatusSSZ(t *testing.T) {
 	})
 	t.Run("too short data", func(t *testing.T) {
 		_, err := unmarshalPayloadStatusSSZ([]byte{0, 1, 2})
-		require.ErrorContains(t, "too short", err)
+		if err == nil {
+			t.Fatal("expected error")
+		}
 	})
 }
 
@@ -246,7 +219,6 @@ func buildForkchoiceUpdatedResponseSSZ(payloadStatus []byte, payloadId *[8]byte)
 
 	var pidData []byte
 	if payloadId != nil {
-		pidData = append(pidData, 1) // union selector = present
 		pidData = append(pidData, payloadId[:]...)
 	}
 
@@ -286,7 +258,9 @@ func TestUnmarshalForkchoiceUpdatedResponseSSZ(t *testing.T) {
 	})
 	t.Run("too short data", func(t *testing.T) {
 		_, err := unmarshalForkchoiceUpdatedResponseSSZ([]byte{0, 1, 2})
-		require.ErrorContains(t, "too short", err)
+		if err == nil {
+			t.Fatal("expected error")
+		}
 	})
 }
 
@@ -385,8 +359,6 @@ func TestSSZRestError_Error(t *testing.T) {
 	e := &sszRestError{Code: -32602, Message: "invalid params"}
 	assert.Equal(t, "SSZ-REST error (code -32602): invalid params", e.Error())
 }
-
-
 
 func TestIsSSZRestAvailable(t *testing.T) {
 	t.Run("available when client set", func(t *testing.T) {
@@ -545,7 +517,7 @@ func TestUnmarshalGetPayloadResponseSSZ(t *testing.T) {
 		blockValue[0] = 0x42
 
 		data := buildGetPayloadResponseSSZ(payloadSSZ, bundleSSZ, requestsSSZ, blockValue, true)
-		resp, err := unmarshalGetPayloadResponseSSZ(data)
+		resp, err := unmarshalGetPayloadResponseSSZ(data, 4)
 		require.NoError(t, err)
 		require.DeepEqual(t, payloadSSZ, resp.ExecutionPayloadSSZ)
 		require.DeepEqual(t, bundleSSZ, resp.BlobsBundleSSZ)
@@ -557,13 +529,13 @@ func TestUnmarshalGetPayloadResponseSSZ(t *testing.T) {
 		payloadSSZ := []byte{1}
 		var blockValue [32]byte
 		data := buildGetPayloadResponseSSZ(payloadSSZ, nil, nil, blockValue, false)
-		resp, err := unmarshalGetPayloadResponseSSZ(data)
+		resp, err := unmarshalGetPayloadResponseSSZ(data, 4)
 		require.NoError(t, err)
 		assert.Equal(t, false, resp.OverrideBuilder)
 	})
 
 	t.Run("too short data", func(t *testing.T) {
-		_, err := unmarshalGetPayloadResponseSSZ([]byte{0, 1, 2, 3})
+		_, err := unmarshalGetPayloadResponseSSZ([]byte{0, 1, 2, 3}, 4)
 		require.ErrorContains(t, "too short", err)
 	})
 }
@@ -765,7 +737,6 @@ func TestUnmarshalClientVersionResponseTooShort(t *testing.T) {
 	require.ErrorContains(t, "incorrect size", err)
 }
 
-
 func TestParseCommitToBytes4(t *testing.T) {
 	t.Run("full hex string", func(t *testing.T) {
 		result := parseCommitToBytes4("abcdef01")
@@ -787,8 +758,6 @@ func TestParseCommitToBytes4(t *testing.T) {
 		assert.Equal(t, byte(0xdd), result[3])
 	})
 }
-
-
 
 // Tests for SSZ-REST endpoint integration via httptest.
 

@@ -686,63 +686,96 @@ func Test_validateCommitteeIndexAndCount_Boundary(t *testing.T) {
 }
 
 func Test_validateGloasCommitteeIndex(t *testing.T) {
+	blockRoot := bytesutil.PadTo([]byte("blockroot"), 32)
+	blockRoot32 := bytesutil.ToBytes32(blockRoot)
+
 	tests := []struct {
-		name           string
-		committeeIndex primitives.CommitteeIndex
+		name            string
+		committeeIndex  primitives.CommitteeIndex
 		attestationSlot primitives.Slot
-		blockSlot      primitives.Slot
-		wantResult     pubsub.ValidationResult
-		wantErr        string
+		blockSlot       primitives.Slot
+		hasFullNode     bool
+		hasBadPayload   bool
+		wantResult      pubsub.ValidationResult
+		wantErr         string
 	}{
 		{
-			name:           "committee index >= 2 should reject",
-			committeeIndex: 2,
+			name:            "committee index >= 2 should reject",
+			committeeIndex:  2,
 			attestationSlot: 10,
-			blockSlot:      10,
-			wantResult:     pubsub.ValidationReject,
-			wantErr:        "committee index must be < 2",
+			blockSlot:       10,
+			wantResult:      pubsub.ValidationReject,
+			wantErr:         "committee index must be < 2",
 		},
 		{
-			name:           "committee index 0 should accept",
-			committeeIndex: 0,
+			name:            "committee index 0 should accept",
+			committeeIndex:  0,
 			attestationSlot: 10,
-			blockSlot:      10,
-			wantResult:     pubsub.ValidationAccept,
-			wantErr:        "",
+			blockSlot:       10,
+			wantResult:      pubsub.ValidationAccept,
+			wantErr:         "",
 		},
 		{
-			name:           "committee index 1 different-slot should accept",
-			committeeIndex: 1,
+			name:            "committee index 1 same-slot should reject",
+			committeeIndex:  1,
 			attestationSlot: 10,
-			blockSlot:      9,
-			wantResult:     pubsub.ValidationAccept,
-			wantErr:        "",
+			blockSlot:       10,
+			wantResult:      pubsub.ValidationReject,
+			wantErr:         "same slot attestations must use committee index 0",
 		},
 		{
-			name:           "committee index 1 same-slot should reject",
-			committeeIndex: 1,
+			name:            "committee index 1 different-slot with bad payload should reject",
+			committeeIndex:  1,
 			attestationSlot: 10,
-			blockSlot:      10,
-			wantResult:     pubsub.ValidationReject,
-			wantErr:        "same slot attestations must use committee index 0",
+			blockSlot:       9,
+			hasBadPayload:   true,
+			wantResult:      pubsub.ValidationReject,
+			wantErr:         "execution payload for attested block is invalid",
+		},
+		{
+			name:            "committee index 1 different-slot without full node should ignore",
+			committeeIndex:  1,
+			attestationSlot: 10,
+			blockSlot:       9,
+			hasFullNode:     false,
+			wantResult:      pubsub.ValidationIgnore,
+			wantErr:         "execution payload for attested block has not been seen",
+		},
+		{
+			name:            "committee index 1 different-slot with full node should accept",
+			committeeIndex:  1,
+			attestationSlot: 10,
+			blockSlot:       9,
+			hasFullNode:     true,
+			wantResult:      pubsub.ValidationAccept,
+			wantErr:         "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockChain := &mockChain.ChainService{
-				BlockSlot: tt.blockSlot,
+			mc := &mockChain.ChainService{
+				BlockSlot:           tt.blockSlot,
+				FinalizedCheckPoint: &ethpb.Checkpoint{Root: make([]byte, 32)},
+			}
+			if tt.hasFullNode {
+				mc.ForkchoiceRoots = map[[32]byte]bool{blockRoot32: true}
 			}
 			s := &Service{
 				cfg: &config{
-					chain: mockChain,
+					chain: mc,
+					p2p:   p2ptest.NewTestP2P(t),
 				},
+				badPayloadCache: lruwrpr.New(10),
+			}
+			if tt.hasBadPayload {
+				s.badPayloadCache.Add(string(blockRoot32[:]), true)
 			}
 
 			data := &ethpb.AttestationData{
 				Slot:            tt.attestationSlot,
 				CommitteeIndex:  tt.committeeIndex,
-				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot"), 32),
+				BeaconBlockRoot: blockRoot,
 			}
 
 			result, err := s.validateGloasCommitteeIndex(data)

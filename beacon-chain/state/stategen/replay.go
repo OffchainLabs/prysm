@@ -1,10 +1,12 @@
 package stategen
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -12,12 +14,14 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 // ReplayBlocks replays the input blocks on the input state until the target slot is reached.
-func (*State) replayBlocks(
+func (s *State) replayBlocks(
 	ctx context.Context,
 	state state.BeaconState,
 	signed []interfaces.ReadOnlySignedBeaconBlock,
@@ -34,29 +38,67 @@ func (*State) replayBlocks(
 		"diff":      targetSlot - state.Slot(),
 	})
 	rLog.Debug("Replaying state")
-	// The input block list is sorted in decreasing slots order.
-	for _, blk := range signed {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		if state.Slot() >= targetSlot {
-			break
-		}
-		// A node shouldn't process the block if the block slot is lower than the state slot.
-		if state.Slot() >= blk.Block().Slot() {
-			continue
-		}
-		state, err = executeStateTransitionStateGen(ctx, state, blk)
-		if err != nil {
-			return nil, err
+
+	// For Gloas states: if the first replay block's bid parentBlockHash doesn't
+	// match the ancestor state's latestBlockHash, the ancestor block's execution
+	// payload was delivered but the state is post-CL (EL not yet applied). Apply
+	// the ancestor's envelope to bring the state to post-EL before replaying.
+	if len(signed) > 0 && state.Version() >= version.Gloas && signed[0].Block().Version() >= version.Gloas {
+		if err := s.maybeApplyAncestorEnvelope(ctx, state, signed[0]); err != nil {
+			return nil, errors.Wrap(err, "could not apply ancestor execution payload envelope")
 		}
 	}
 
-	// If there are skip slots at the end.
-	if targetSlot > state.Slot() {
-		state, err = ReplayProcessSlots(ctx, state, targetSlot)
+	for i, blk := range signed {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		stateSlot := state.Slot()
+		if stateSlot >= targetSlot {
+			break
+		}
+		slot := blk.Block().Slot()
+		if stateSlot >= slot {
+			continue
+		}
+
+		var envelope *ethpb.SignedBlindedExecutionPayloadEnvelope
+		if i < len(signed)-1 && blk.Block().Version() >= version.Gloas {
+			bid, err := blk.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return nil, errors.Wrapf(err, "could not get execution payload bid for block at slot %d", blk.Block().Slot())
+			}
+			if bid == nil || bid.Message == nil {
+				return nil, fmt.Errorf("missing execution payload bid for block at slot %d", blk.Block().Slot())
+			}
+			child := signed[i+1].Block()
+			childBid, err := child.Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return nil, errors.Wrapf(err, "could not get execution payload bid for block at slot %d", child.Slot())
+			}
+			if childBid == nil || childBid.Message == nil {
+				return nil, fmt.Errorf("missing execution payload bid for block at slot %d", child.Slot())
+			}
+			if bytes.Equal(childBid.Message.ParentBlockHash, bid.Message.BlockHash) {
+				root := child.ParentRoot()
+				envelope, err = s.beaconDB.ExecutionPayloadEnvelope(ctx, root)
+				if err != nil {
+					return nil, errors.Wrapf(err, "could not retrieve execution payload envelope for block with root %#x at slot %d", root, slot)
+				}
+			}
+		}
+		state, err = executeStateTransitionStateGen(ctx, state, blk)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "could not execute state transition for block at slot %d", slot)
+		}
+		if envelope != nil && envelope.Message != nil {
+			wrappedEnvelope, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
+			if err != nil {
+				return nil, errors.Wrapf(err, "could not wrap blinded execution payload envelope for block at slot %d", slot)
+			}
+			if err := gloas.ProcessBlindedExecutionPayload(ctx, state, blk.Block().StateRoot(), wrappedEnvelope); err != nil {
+				return nil, errors.Wrapf(err, "could not apply execution payload envelope for block at slot %d", slot)
+			}
 		}
 	}
 
@@ -68,6 +110,50 @@ func (*State) replayBlocks(
 	replayBlocksSummary.Observe(float64(duration.Milliseconds()))
 
 	return state, nil
+}
+
+// maybeApplyAncestorEnvelope checks whether the ancestor state needs its
+// execution payload envelope applied before block replay can proceed. This is
+// needed when the ancestor state is post-CL (latestBlockHash not yet updated
+// with the delivered payload). The check compares the first replay block's bid
+// parentBlockHash with the state's latestBlockHash: a mismatch means the
+// ancestor's payload was delivered but the state doesn't reflect it.
+func (s *State) maybeApplyAncestorEnvelope(
+	ctx context.Context,
+	st state.BeaconState,
+	firstBlock interfaces.ReadOnlySignedBeaconBlock,
+) error {
+	firstBid, err := firstBlock.Block().Body().SignedExecutionPayloadBid()
+	if err != nil || firstBid == nil || firstBid.Message == nil {
+		return nil
+	}
+	latestHash, err := st.LatestBlockHash()
+	if err != nil {
+		return err
+	}
+	if bytes.Equal(firstBid.Message.ParentBlockHash, latestHash[:]) {
+		return nil
+	}
+	// The first block expects a different latestBlockHash than what the state
+	// has: the ancestor's execution payload was delivered but the state is
+	// post-CL. Apply the ancestor's envelope.
+	ancestorRoot := firstBlock.Block().ParentRoot()
+	envelope, err := s.beaconDB.ExecutionPayloadEnvelope(ctx, ancestorRoot)
+	if err != nil {
+		return errors.Wrapf(err, "could not retrieve execution payload envelope for ancestor root %#x", ancestorRoot)
+	}
+	if envelope == nil || envelope.Message == nil {
+		return errors.Errorf("Received nil execution payload envelope for ancestor root %#x", ancestorRoot)
+	}
+	ancestorBlock, err := s.beaconDB.Block(ctx, ancestorRoot)
+	if err != nil {
+		return errors.Wrapf(err, "could not retrieve ancestor block for root %#x", ancestorRoot)
+	}
+	wrappedEnvelope, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
+	if err != nil {
+		return errors.Wrap(err, "could not wrap ancestor blinded execution payload envelope")
+	}
+	return gloas.ProcessBlindedExecutionPayload(ctx, st, ancestorBlock.Block().StateRoot(), wrappedEnvelope)
 }
 
 // loadBlocks loads the blocks between start slot and end slot by recursively fetching from end block root.
@@ -93,7 +179,7 @@ func (s *State) loadBlocks(ctx context.Context, startSlot, endSlot primitives.Sl
 // WARNING: This method should not be used on an unverified new block.
 func executeStateTransitionStateGen(
 	ctx context.Context,
-	state state.BeaconState,
+	st state.BeaconState,
 	signed interfaces.ReadOnlySignedBeaconBlock,
 ) (state.BeaconState, error) {
 	if ctx.Err() != nil {
@@ -108,7 +194,7 @@ func executeStateTransitionStateGen(
 
 	// Execute per slots transition.
 	// Given this is for state gen, a node uses the version of process slots without skip slots cache.
-	state, err = ReplayProcessSlots(ctx, state, signed.Block().Slot())
+	st, err = ReplayProcessSlots(ctx, st, signed.Block().Slot())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process slot")
 	}
@@ -116,11 +202,32 @@ func executeStateTransitionStateGen(
 	// Execute per block transition.
 	// Given this is for state gen, a node only cares about the post state without proposer
 	// and randao signature verifications.
-	state, err = transition.ProcessBlockForStateRoot(ctx, state, signed)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not process block")
+	st, err = transition.ProcessBlockForStateRoot(ctx, st, signed)
+	if err == nil {
+		return st, nil
 	}
-	return state, nil
+	fields := logrus.Fields{
+		"blockSlot":    signed.Block().Slot(),
+		"parentRoot":   fmt.Sprintf("%#x", signed.Block().ParentRoot()),
+		"blockVersion": signed.Block().Version(),
+	}
+	if st != nil && !st.IsNil() {
+		fields["stateSlot"] = st.Slot()
+		if st.Version() >= version.Gloas {
+			latestHash, hashErr := st.LatestBlockHash()
+			if hashErr == nil {
+				fields["stateLatestBlockHash"] = fmt.Sprintf("%#x", latestHash)
+			}
+		}
+	}
+	if signed.Block().Version() >= version.Gloas {
+		signedBid, bidErr := signed.Block().Body().SignedExecutionPayloadBid()
+		if bidErr == nil && signedBid != nil && signedBid.Message != nil && len(signedBid.Message.ParentBlockHash) == 32 {
+			fields["bidParentBlockHash"] = fmt.Sprintf("%#x", [32]byte(signedBid.Message.ParentBlockHash))
+		}
+	}
+	log.WithError(err).WithFields(fields).Debug("Failed to process block during stategen replay")
+	return nil, errors.Wrap(err, "could not process block")
 }
 
 // ReplayProcessSlots to process old slots for state gen usages.

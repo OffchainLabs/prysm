@@ -26,7 +26,7 @@ func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	}
 
 	htrs = append(htrs, func(s any) ([32]byte, error) {
-		beaconState, err := state_native.InitializeFromProtoGloas(s.(*ethpb.BeaconStateGloas))
+		beaconState, err := state_native.InitializeFromProtoUnsafeGloas(s.(*ethpb.BeaconStateGloas))
 		require.NoError(t, err)
 
 		return beaconState.HashTreeRoot(context.Background())
@@ -78,7 +78,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 
 	// Standard types that also exist in gloas
 	case "ExecutionPayload":
-		obj = &enginev1.ExecutionPayloadDeneb{}
+		obj = &enginev1.ExecutionPayloadGloas{}
 	case "ExecutionPayloadHeader":
 		obj = &enginev1.ExecutionPayloadHeaderDeneb{}
 	case "Attestation":
@@ -187,6 +187,8 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.DataColumnsByRootIdentifier{}
 	case "MatrixEntry":
 		t.Skip("Unused type")
+	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar":
+		t.Skip("Not yet implemented")
 	default:
 		return nil, errors.New("type not found")
 	}

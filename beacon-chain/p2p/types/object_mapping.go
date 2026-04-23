@@ -10,6 +10,7 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
+	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func init() {
@@ -43,6 +44,8 @@ var (
 	// LightClientFinalityUpdateMap maps the fork-version to the underlying data type for that
 	// particular fork period.
 	LightClientFinalityUpdateMap map[[4]byte]func() (interfaces.LightClientFinalityUpdate, error)
+	// DataColumnSidecarMap maps the fork-version to the underlying data column sidecar type.
+	DataColumnSidecarMap map[[4]byte]func() (ssz.Unmarshaler, error)
 )
 
 // InitializeDataMaps initializes all the relevant object maps. This function is called to
@@ -113,7 +116,7 @@ func InitializeDataMaps() {
 			return wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion): func() (metadata.Metadata, error) {
-			return wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{}), nil
+			return wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{}), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (metadata.Metadata, error) {
 			return wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{}), nil
@@ -251,6 +254,15 @@ func InitializeDataMaps() {
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
 			return lightclientConsensusTypes.NewEmptyFinalityUpdateElectra(), nil
+		},
+	}
+
+	DataColumnSidecarMap = map[[4]byte]func() (ssz.Unmarshaler, error){
+		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (ssz.Unmarshaler, error) {
+			return &ethpb.DataColumnSidecar{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion): func() (ssz.Unmarshaler, error) {
+			return &ethpb.DataColumnSidecarGloas{}, nil
 		},
 	}
 }

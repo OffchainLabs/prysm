@@ -73,29 +73,30 @@ type Service struct {
 
 // config options for the service.
 type config struct {
-	BeaconBlockBuf          int
-	ChainStartFetcher       execution.ChainStartFetcher
-	BeaconDB                db.HeadAccessDatabase
-	DepositCache            cache.DepositCache
-	PayloadIDCache          *cache.PayloadIDCache
-	TrackedValidatorsCache  *cache.TrackedValidatorsCache
-	AttestationCache        *cache.AttestationCache
-	AttPool                 attestations.Pool
-	ExitPool                voluntaryexits.PoolManager
-	SlashingPool            slashings.PoolManager
-	BLSToExecPool           blstoexec.PoolManager
-	P2P                     p2p.Accessor
-	MaxRoutines             int
-	StateNotifier           statefeed.Notifier
-	ForkChoiceStore         f.ForkChoicer
-	AttService              *attestations.Service
-	StateGen                *stategen.State
-	SlasherAttestationsFeed *event.Feed
-	WeakSubjectivityCheckpt *ethpb.Checkpoint
-	BlockFetcher            execution.POWBlockFetcher
-	FinalizedStateAtStartUp state.BeaconState
-	ExecutionEngineCaller   execution.EngineCaller
-	SyncChecker             Checker
+	BeaconBlockBuf           int
+	ChainStartFetcher        execution.ChainStartFetcher
+	BeaconDB                 db.HeadAccessDatabase
+	DepositCache             cache.DepositCache
+	PayloadIDCache           *cache.PayloadIDCache
+	TrackedValidatorsCache   *cache.TrackedValidatorsCache
+	ProposerPreferencesCache *cache.ProposerPreferencesCache
+	AttestationCache         *cache.AttestationCache
+	AttPool                  attestations.Pool
+	ExitPool                 voluntaryexits.PoolManager
+	SlashingPool             slashings.PoolManager
+	BLSToExecPool            blstoexec.PoolManager
+	P2P                      p2p.Accessor
+	MaxRoutines              int
+	StateNotifier            statefeed.Notifier
+	ForkChoiceStore          f.ForkChoicer
+	AttService               *attestations.Service
+	StateGen                 *stategen.State
+	SlasherAttestationsFeed  *event.Feed
+	WeakSubjectivityCheckpt  *ethpb.Checkpoint
+	BlockFetcher             execution.POWBlockFetcher
+	FinalizedStateAtStartUp  state.BeaconState
+	ExecutionEngineCaller    execution.EngineCaller
+	SyncChecker              Checker
 }
 
 // Checker is an interface used to determine if a node is in initial sync
@@ -213,6 +214,7 @@ func (s *Service) Start() {
 	}
 	s.spawnProcessAttestationsRoutine()
 	go s.runLateBlockTasks()
+	go s.runLatePayloadTasks()
 }
 
 // Stop the blockchain service's main event loop and associated goroutines.
@@ -343,7 +345,7 @@ func (s *Service) initializeHead(ctx context.Context, st state.BeaconState) erro
 			return errors.Wrap(err, "could not get head state")
 		}
 	}
-	if err := s.setHead(&head{root, blk, st, blk.Block().Slot(), false}); err != nil {
+	if err := s.setHead(&head{root, blk, st, blk.Block().Slot(), false, false}); err != nil {
 		return errors.Wrap(err, "could not set head")
 	}
 	log.WithFields(logrus.Fields{
@@ -431,6 +433,7 @@ func (s *Service) saveGenesisData(ctx context.Context, genesisState state.Beacon
 		genesisBlk,
 		genesisState,
 		genesisBlk.Block().Slot(),
+		false,
 		false,
 	}); err != nil {
 		log.WithError(err).Fatal("Could not set head")

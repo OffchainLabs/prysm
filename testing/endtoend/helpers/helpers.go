@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -211,12 +212,14 @@ func LogOutput(t *testing.T) {
 			t.Fatal(err)
 		}
 		LogErrorOutput(t, beaconLogFile, "beacon chain node", i)
+		_ = beaconLogFile.Close()
 
 		validatorLogFile, err := os.Open(path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.ValidatorLogFileName, i)))
 		if err != nil {
 			t.Fatal(err)
 		}
 		LogErrorOutput(t, validatorLogFile, "validator client", i)
+		_ = validatorLogFile.Close()
 	}
 
 	t.Logf("Ending time: %s\n", time.Now().String())
@@ -277,10 +280,10 @@ func writeURLRespAtPath(url, fp string) error {
 	}
 
 	file, err := os.Create(filepath.Clean(fp))
-
 	if err != nil {
 		return err
 	}
+	defer func() { _ = file.Close() }()
 	if _, err = file.Write(body); err != nil {
 		return err
 	}
@@ -379,6 +382,29 @@ func WaitOnNodes(ctx context.Context, nodes []e2etypes.ComponentRunner, nodesSta
 	}()
 
 	return g.Wait()
+}
+
+// GracefulStop sends SIGTERM to a process and gives it 5 seconds to exit before
+// sending SIGKILL. It does not call p.Wait() since the caller (cmd.Wait in Start)
+// is expected to handle process reaping.
+func GracefulStop(p *os.Process) error {
+	if p == nil {
+		return nil
+	}
+	if err := p.Signal(syscall.SIGTERM); err != nil {
+		// Process may have already exited; try kill as last resort.
+		return p.Kill()
+	}
+	// Give the process time to handle SIGTERM and exit cleanly.
+	// The parent goroutine's cmd.Wait() will detect the exit.
+	// If still alive after the grace period, force kill.
+	time.AfterFunc(5*time.Second, func() {
+		// Signal(0) checks if the process is still alive without sending a signal.
+		if err := p.Signal(syscall.Signal(0)); err == nil {
+			_ = p.Kill()
+		}
+	})
+	return nil
 }
 
 func MinerRPCClient() (*ethclient.Client, error) {

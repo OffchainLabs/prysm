@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"slices"
-	"sort"
 	"strconv"
 	"time"
 
@@ -18,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	rpchelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
@@ -30,7 +28,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	validator2 "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -40,8 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // GetAggregateAttestationV2 aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
@@ -625,11 +620,13 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isPostGloas := slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch
+
 	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
 	if !ok {
 		return
 	}
-	_, committeeIndex, ok := shared.UintFromQuery(w, r, "committee_index", true)
+	_, committeeIndex, ok := shared.UintFromQuery(w, r, "committee_index", !isPostGloas)
 	if !ok {
 		return
 	}
@@ -910,47 +907,22 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	assignments, err := helpers.CommitteeAssignments(ctx, st, requestedEpoch, requestedValIndices)
-	if err != nil {
-		httputil.HandleError(w, "Could not compute committee assignments: "+err.Error(), http.StatusInternalServerError)
+	coreDuties, rpcErr := s.CoreService.AttesterDuties(ctx, st, requestedEpoch, requestedValIndices)
+	if rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 		return
 	}
-	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, st, requestedEpoch)
-	if err != nil {
-		httputil.HandleError(w, "Could not get active validator count: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	committeesAtSlot := helpers.SlotCommitteeCount(activeValidatorCount)
 
-	duties := make([]*structs.AttesterDuty, 0, len(requestedValIndices))
-	for _, index := range requestedValIndices {
-		pubkey := st.PubkeyAtIndex(index)
-		var zeroPubkey [fieldparams.BLSPubkeyLength]byte
-		if bytes.Equal(pubkey[:], zeroPubkey[:]) {
-			httputil.HandleError(w, fmt.Sprintf("Invalid validator index %d", index), http.StatusBadRequest)
-			return
-		}
-		committee := assignments[index]
-		if committee == nil {
-			continue
-		}
-		var valIndexInCommittee int
-		// valIndexInCommittee will be 0 in case we don't get a match. This is a potential false positive,
-		// however it's an impossible condition because every validator must be assigned to a committee.
-		for cIndex, vIndex := range committee.Committee {
-			if vIndex == index {
-				valIndexInCommittee = cIndex
-				break
-			}
-		}
+	duties := make([]*structs.AttesterDuty, 0, len(coreDuties))
+	for _, d := range coreDuties {
 		duties = append(duties, &structs.AttesterDuty{
-			Pubkey:                  hexutil.Encode(pubkey[:]),
-			ValidatorIndex:          strconv.FormatUint(uint64(index), 10),
-			CommitteeIndex:          strconv.FormatUint(uint64(committee.CommitteeIndex), 10),
-			CommitteeLength:         strconv.Itoa(len(committee.Committee)),
-			CommitteesAtSlot:        strconv.FormatUint(committeesAtSlot, 10),
-			ValidatorCommitteeIndex: strconv.Itoa(valIndexInCommittee),
-			Slot:                    strconv.FormatUint(uint64(committee.AttesterSlot), 10),
+			Pubkey:                  hexutil.Encode(d.Pubkey[:]),
+			ValidatorIndex:          strconv.FormatUint(uint64(d.ValidatorIndex), 10),
+			CommitteeIndex:          strconv.FormatUint(uint64(d.CommitteeIndex), 10),
+			CommitteeLength:         strconv.FormatUint(d.CommitteeLength, 10),
+			CommitteesAtSlot:        strconv.FormatUint(d.CommitteesAtSlot, 10),
+			ValidatorCommitteeIndex: strconv.FormatUint(d.ValidatorCommitteeIndex, 10),
+			Slot:                    strconv.FormatUint(uint64(d.Slot), 10),
 		})
 	}
 
@@ -963,7 +935,7 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = r[:]
 	} else {
-		dependentRoot, err = attestationDependentRoot(st, requestedEpoch)
+		dependentRoot, err = core.AttestationDependentRoot(st, requestedEpoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -983,7 +955,8 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, response)
 }
 
-// GetProposerDuties requests beacon node to provide all validators that are scheduled to propose a block in the given epoch.
+// Deprecated: GetProposerDuties requests beacon node to provide all validators that are scheduled to propose a block in the given epoch.
+// Use GetProposerDutiesV2 instead, which computes a fork-aware dependent root.
 func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.GetProposerDuties")
 	defer span.End()
@@ -1010,7 +983,6 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	} else if requestedEpoch == nextEpoch {
-		// If the request is for the next epoch, we use the current epoch's state to compute duties.
 		requestedEpoch = currentEpoch
 		nextEpochLookahead = true
 	}
@@ -1021,66 +993,142 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var assignments map[primitives.ValidatorIndex][]primitives.Slot
+	dutyEpoch := requestedEpoch
 	if nextEpochLookahead {
-		assignments, err = helpers.ProposerAssignments(ctx, st, nextEpoch)
-	} else {
-		assignments, err = helpers.ProposerAssignments(ctx, st, requestedEpoch)
+		dutyEpoch = nextEpoch
 	}
-	if err != nil {
-		httputil.HandleError(w, "Could not compute committee assignments: "+err.Error(), http.StatusInternalServerError)
+	coreDuties, rpcErr := s.CoreService.ProposerDuties(ctx, st, dutyEpoch)
+	if rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 		return
 	}
 
-	duties := make([]*structs.ProposerDuty, 0)
-	for index, proposalSlots := range assignments {
-		val, err := st.ValidatorAtIndexReadOnly(index)
-		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %v", index, err), http.StatusInternalServerError)
-			return
-		}
-		pubkey48 := val.PublicKey()
-		pubkey := pubkey48[:]
-		for _, slot := range proposalSlots {
-			duties = append(duties, &structs.ProposerDuty{
-				Pubkey:         hexutil.Encode(pubkey),
-				ValidatorIndex: strconv.FormatUint(uint64(index), 10),
-				Slot:           strconv.FormatUint(uint64(slot), 10),
-			})
-		}
+	duties := make([]*structs.ProposerDuty, 0, len(coreDuties))
+	for _, d := range coreDuties {
+		duties = append(duties, &structs.ProposerDuty{
+			Pubkey:         hexutil.Encode(d.Pubkey[:]),
+			ValidatorIndex: strconv.FormatUint(uint64(d.ValidatorIndex), 10),
+			Slot:           strconv.FormatUint(uint64(d.Slot), 10),
+		})
 	}
 
-	var dependentRoot []byte
-	if requestedEpoch == 0 {
-		r, err := s.BeaconDB.GenesisBlockRoot(ctx)
-		if err != nil {
-			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		dependentRoot = r[:]
-	} else {
-		dependentRoot, err = proposalDependentRoot(st, requestedEpoch)
-		if err != nil {
-			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
 		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err = sortProposerDuties(duties); err != nil {
-		httputil.HandleError(w, "Could not sort proposer duties: "+err.Error(), http.StatusInternalServerError)
-		return
+
+	var dependentRoot []byte
+	if requestedEpoch == 0 {
+		root, err := s.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		dependentRoot = root[:]
+	} else {
+		root, err := core.ProposalDependentRoot(st, requestedEpoch)
+		if err != nil {
+			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		dependentRoot = root
 	}
 
-	resp := &structs.GetProposerDutiesResponse{
+	httputil.WriteJson(w, &structs.GetProposerDutiesResponse{
 		DependentRoot:       hexutil.Encode(dependentRoot),
 		Data:                duties,
 		ExecutionOptimistic: isOptimistic,
+	})
+}
+
+// GetProposerDutiesV2 requests beacon node to provide all validators that are scheduled to propose a block in the given epoch.
+// V2 computes a fork-aware dependent root using core.ProposalDependentRootV2.
+// Post-Fulu (EIP-7917) this follows the previous-epoch dependency semantics.
+func (s *Server) GetProposerDutiesV2(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.GetProposerDutiesV2")
+	defer span.End()
+
+	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
+		return
 	}
-	httputil.WriteJson(w, resp)
+
+	_, requestedEpochUint, ok := shared.UintFromRoute(w, r, "epoch")
+	if !ok {
+		return
+	}
+	requestedEpoch := primitives.Epoch(requestedEpochUint)
+	dutiesEpoch := requestedEpoch
+
+	cs := s.TimeFetcher.CurrentSlot()
+	currentEpoch := slots.ToEpoch(cs)
+	nextEpoch := currentEpoch + 1
+	var nextEpochLookahead bool
+	if requestedEpoch > nextEpoch {
+		httputil.HandleError(
+			w,
+			fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", requestedEpoch, currentEpoch+1),
+			http.StatusBadRequest,
+		)
+		return
+	} else if requestedEpoch == nextEpoch {
+		requestedEpoch = currentEpoch
+		nextEpochLookahead = true
+	}
+
+	st, err := s.Stater.StateByEpoch(ctx, requestedEpoch)
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+
+	dutyEpoch := requestedEpoch
+	if nextEpochLookahead {
+		dutyEpoch = nextEpoch
+	}
+	coreDuties, rpcErr := s.CoreService.ProposerDuties(ctx, st, dutyEpoch)
+	if rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
+		return
+	}
+
+	duties := make([]*structs.ProposerDuty, 0, len(coreDuties))
+	for _, d := range coreDuties {
+		duties = append(duties, &structs.ProposerDuty{
+			Pubkey:         hexutil.Encode(d.Pubkey[:]),
+			ValidatorIndex: strconv.FormatUint(uint64(d.ValidatorIndex), 10),
+			Slot:           strconv.FormatUint(uint64(d.Slot), 10),
+		})
+	}
+
+	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var dependentRoot []byte
+	if dutiesEpoch == 0 || (dutiesEpoch == 1 && st.Version() >= version.Fulu) {
+		root, err := s.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		dependentRoot = root[:]
+	} else {
+		root, err := core.ProposalDependentRootV2(st, dutiesEpoch)
+		if err != nil {
+			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		dependentRoot = root
+	}
+
+	httputil.WriteJson(w, &structs.GetProposerDutiesResponse{
+		DependentRoot:       hexutil.Encode(dependentRoot),
+		Data:                duties,
+		ExecutionOptimistic: isOptimistic,
+	})
 }
 
 // GetSyncCommitteeDuties provides a set of sync committee duties for a particular epoch.
@@ -1135,69 +1183,56 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 	}
 
 	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
-	lastValidEpoch := syncCommitteeDutiesLastValidEpoch(currentEpoch)
+	lastValidEpoch := core.SyncCommitteeDutiesLastValidEpoch(currentEpoch)
 	if requestedEpoch > lastValidEpoch {
 		httputil.HandleError(w, fmt.Sprintf("Epoch is too far in the future, maximum valid epoch is %d", lastValidEpoch), http.StatusBadRequest)
 		return
 	}
 
-	startingEpoch := min(requestedEpoch, currentEpoch)
+	currentCommitteeFirstEpoch, err := slots.SyncCommitteePeriodStartEpoch(currentEpoch)
+	if err != nil {
+		httputil.HandleError(w, "Could not get sync committee period start epoch: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	st, err := s.Stater.StateByEpoch(ctx, startingEpoch)
+	requestedCommitteeFirstEpoch, err := slots.SyncCommitteePeriodStartEpoch(requestedEpoch)
+	if err != nil {
+		httputil.HandleError(w, "Could not get sync committee period start epoch: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Sync committee assignments are computed at the start of the sync committee period and don't change during the period.
+	// - For the current period we use the current epoch to avoid expensive state replays.
+	// - For the next period we also use the current epoch and later read NextSyncCommittee (known one period in advance) to avoid fetching a future state.
+	// - For a past period we fall back to the first epoch of that period.
+	targetEpoch := currentEpoch
+	if requestedCommitteeFirstEpoch < currentCommitteeFirstEpoch {
+		targetEpoch = requestedCommitteeFirstEpoch
+	}
+
+	st, err := s.Stater.StateByEpoch(ctx, targetEpoch)
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
 		return
 	}
 
-	currentSyncCommitteeFirstEpoch, err := slots.SyncCommitteePeriodStartEpoch(startingEpoch)
-	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee period start epoch: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	nextSyncCommitteeFirstEpoch := currentSyncCommitteeFirstEpoch + params.BeaconConfig().EpochsPerSyncCommitteePeriod
-	isCurrentCommitteeRequested := requestedEpoch < nextSyncCommitteeFirstEpoch
-	var committee *ethpbalpha.SyncCommittee
-	if isCurrentCommitteeRequested {
-		committee, err = st.CurrentSyncCommittee()
-		if err != nil {
-			httputil.HandleError(w, "Could not get sync committee: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	} else {
-		committee, err = st.NextSyncCommittee()
-		if err != nil {
-			httputil.HandleError(w, "Could not get sync committee: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-	committeePubkeys := make(map[[fieldparams.BLSPubkeyLength]byte][]string)
-	for j, pubkey := range committee.Pubkeys {
-		pubkey48 := bytesutil.ToBytes48(pubkey)
-		committeePubkeys[pubkey48] = append(committeePubkeys[pubkey48], strconv.FormatUint(uint64(j), 10))
-	}
-	duties, vals, err := syncCommitteeDutiesAndVals(st, requestedValIndices, committeePubkeys)
-	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+	coreDuties, rpcErr := s.CoreService.SyncCommitteeDuties(ctx, st, requestedEpoch, currentEpoch, requestedValIndices)
+	if rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 		return
 	}
 
-	var registerSyncSubnet func(state.BeaconState, primitives.Epoch, []byte, validator2.Status) error
-	if isCurrentCommitteeRequested {
-		registerSyncSubnet = core.RegisterSyncSubnetCurrentPeriod
-	} else {
-		registerSyncSubnet = core.RegisterSyncSubnetNextPeriod
-	}
-	for _, v := range vals {
-		pk := v.PublicKey()
-		valStatus, err := rpchelpers.ValidatorStatus(v, requestedEpoch)
-		if err != nil {
-			httputil.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
-			return
+	duties := make([]*structs.SyncCommitteeDuty, 0, len(coreDuties))
+	for _, d := range coreDuties {
+		syncIndices := make([]string, len(d.ValidatorSyncCommitteeIndices))
+		for i, idx := range d.ValidatorSyncCommitteeIndices {
+			syncIndices[i] = strconv.FormatUint(idx, 10)
 		}
-		if err := registerSyncSubnet(st, requestedEpoch, pk[:], valStatus); err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not register sync subnet for pubkey %#x", pk), http.StatusInternalServerError)
-			return
-		}
+		duties = append(duties, &structs.SyncCommitteeDuty{
+			Pubkey:                        hexutil.Encode(d.Pubkey[:]),
+			ValidatorIndex:                strconv.FormatUint(uint64(d.ValidatorIndex), 10),
+			ValidatorSyncCommitteeIndices: syncIndices,
+		})
 	}
 
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
@@ -1219,18 +1254,18 @@ type ptcDuty struct {
 	slot           primitives.Slot
 }
 
-// ptcDuties returns PTC slot assignments for the requested validators in the epoch derived from the state's slot.
+// ptcDuties returns PTC slot assignments for the requested validators in the given epoch.
+// The state must be from an epoch that allows computing PTC assignments for the target epoch.
 // Validators not in any PTC for the epoch will not appear in the result.
 func ptcDuties(
 	ctx context.Context,
 	st state.ReadOnlyBeaconState,
+	epoch primitives.Epoch,
 	validators map[primitives.ValidatorIndex]struct{},
 ) ([]ptcDuty, error) {
-	if len(validators) == 0 {
+	if len(validators) == 0 || st.Version() < version.Gloas {
 		return nil, nil
 	}
-
-	epoch := slots.ToEpoch(st.Slot())
 	startSlot, err := slots.EpochStart(epoch)
 	if err != nil {
 		return nil, err
@@ -1244,7 +1279,7 @@ func ptcDuties(
 			return nil, ctx.Err()
 		}
 
-		ptc, err := gloas.PayloadCommittee(ctx, st, slot)
+		ptc, err := st.PayloadCommitteeReadOnly(slot)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to get PTC for slot %d", slot)
 		}
@@ -1318,7 +1353,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 	// Limit how far in the future we can query (current + 1 epoch).
 	cs := s.TimeFetcher.CurrentSlot()
 	currentEpoch := slots.ToEpoch(cs)
-	nextEpoch := currentEpoch + 1
+	nextEpoch := currentEpoch.Add(1)
 	if requestedEpoch > nextEpoch {
 		httputil.HandleError(w,
 			fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", requestedEpoch, nextEpoch),
@@ -1328,8 +1363,6 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 
 	// For next epoch requests, we use the current epoch's state since PTC
 	// assignments for next epoch can be computed from current epoch's state.
-	// This mirrors the spec's get_ptc_assignment which asserts epoch <= next_epoch
-	// and uses the current state to compute assignments.
 	epochForState := requestedEpoch
 	if requestedEpoch == nextEpoch {
 		epochForState = currentEpoch
@@ -1359,7 +1392,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Compute PTC duties.
-	computedDuties, err := ptcDuties(ctx, st, requestedSet)
+	computedDuties, err := ptcDuties(ctx, st, requestedEpoch, requestedSet)
 	if err != nil {
 		httputil.HandleError(w, "Could not compute PTC duties: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -1388,7 +1421,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = r[:]
 	} else {
-		dependentRoot, err = attestationDependentRoot(st, requestedEpoch)
+		dependentRoot, err = core.AttestationDependentRoot(st, requestedEpoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -1524,103 +1557,4 @@ func (s *Server) BeaconCommitteeSelections(w http.ResponseWriter, _ *http.Reques
 // https://ethereum.github.io/beacon-APIs/#/Validator/submitSyncCommitteeSelections.
 func (s *Server) SyncCommitteeSelections(w http.ResponseWriter, _ *http.Request) {
 	httputil.HandleError(w, "Endpoint not implemented", 501)
-}
-
-// attestationDependentRoot is get_block_root_at_slot(state, compute_start_slot_at_epoch(epoch - 1) - 1)
-// or the genesis block root in the case of underflow.
-func attestationDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
-	var dependentRootSlot primitives.Slot
-	if epoch <= 1 {
-		dependentRootSlot = 0
-	} else {
-		prevEpochStartSlot, err := slots.EpochStart(epoch.Sub(1))
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
-		}
-		dependentRootSlot = prevEpochStartSlot.Sub(1)
-	}
-	root, err := helpers.BlockRootAtSlot(s, dependentRootSlot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get block root")
-	}
-	return root, nil
-}
-
-// proposalDependentRoot is get_block_root_at_slot(state, compute_start_slot_at_epoch(epoch) - 1)
-// or the genesis block root in the case of underflow.
-func proposalDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
-	var dependentRootSlot primitives.Slot
-	if epoch == 0 {
-		dependentRootSlot = 0
-	} else {
-		epochStartSlot, err := slots.EpochStart(epoch)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
-		}
-		dependentRootSlot = epochStartSlot.Sub(1)
-	}
-	root, err := helpers.BlockRootAtSlot(s, dependentRootSlot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get block root")
-	}
-	return root, nil
-}
-
-func syncCommitteeDutiesLastValidEpoch(currentEpoch primitives.Epoch) primitives.Epoch {
-	currentSyncPeriodIndex := currentEpoch / params.BeaconConfig().EpochsPerSyncCommitteePeriod
-	// Return the last epoch of the next sync committee.
-	// To do this we go two periods ahead to find the first invalid epoch, and then subtract 1.
-	return (currentSyncPeriodIndex+2)*params.BeaconConfig().EpochsPerSyncCommitteePeriod - 1
-}
-
-// syncCommitteeDutiesAndVals takes a list of requested validator indices and the actual sync committee pubkeys.
-// It returns duties for the validator indices that are part of the sync committee.
-// Additionally, it returns read-only validator objects for these validator indices.
-func syncCommitteeDutiesAndVals(
-	st state.BeaconState,
-	requestedValIndices []primitives.ValidatorIndex,
-	committeePubkeys map[[fieldparams.BLSPubkeyLength]byte][]string,
-) ([]*structs.SyncCommitteeDuty, []state.ReadOnlyValidator, error) {
-	duties := make([]*structs.SyncCommitteeDuty, 0)
-	vals := make([]state.ReadOnlyValidator, 0)
-	for _, index := range requestedValIndices {
-		duty := &structs.SyncCommitteeDuty{
-			ValidatorIndex: strconv.FormatUint(uint64(index), 10),
-		}
-		valPubkey := st.PubkeyAtIndex(index)
-		var zeroPubkey [fieldparams.BLSPubkeyLength]byte
-		if bytes.Equal(valPubkey[:], zeroPubkey[:]) {
-			return nil, nil, errors.Errorf("Invalid validator index %d", index)
-		}
-		duty.Pubkey = hexutil.Encode(valPubkey[:])
-		indices, ok := committeePubkeys[valPubkey]
-		if ok {
-			duty.ValidatorSyncCommitteeIndices = indices
-			duties = append(duties, duty)
-			v, err := st.ValidatorAtIndexReadOnly(index)
-			if err != nil {
-				return nil, nil, fmt.Errorf("could not get validator at index %d", index)
-			}
-			vals = append(vals, v)
-		}
-	}
-	return duties, vals, nil
-}
-
-func sortProposerDuties(duties []*structs.ProposerDuty) error {
-	var err error
-	sort.Slice(duties, func(i, j int) bool {
-		si, parseErr := strconv.ParseUint(duties[i].Slot, 10, 64)
-		if parseErr != nil {
-			err = errors.Wrap(parseErr, "could not parse slot")
-			return false
-		}
-		sj, parseErr := strconv.ParseUint(duties[j].Slot, 10, 64)
-		if parseErr != nil {
-			err = errors.Wrap(parseErr, "could not parse slot")
-			return false
-		}
-		return si < sj
-	})
-	return err
 }

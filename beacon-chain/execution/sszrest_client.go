@@ -3,11 +3,11 @@ package execution
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -35,7 +35,6 @@ const (
 type sszRestClient struct {
 	baseURL    string
 	httpClient *http.Client
-	mu         sync.RWMutex
 }
 
 // newSSZRestClient creates a new SSZ-REST client with the given base URL and HTTP client.
@@ -96,12 +95,17 @@ func (c *sszRestClient) doHTTP(ctx context.Context, method, path string, body []
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		// Error responses use text/plain per execution-apis SSZ spec
+		var restErr sszRestError
+		if jsonErr := json.Unmarshal(respBody, &restErr); jsonErr == nil && restErr.Code != 0 {
+			return nil, handleSSZRestError(&restErr)
+		}
+
+		// Error responses use text/plain per execution-apis SSZ spec.
 		errMsg := string(respBody)
 		if errMsg == "" {
 			errMsg = resp.Status
 		}
-		return nil, fmt.Errorf("SSZ-REST %s %s: %d %s", method, path, resp.StatusCode, errMsg)
+		return nil, fmt.Errorf("SSZ-REST %s %s returned status %d: %s", method, path, resp.StatusCode, errMsg)
 	}
 
 	return respBody, nil
@@ -194,6 +198,8 @@ func (s *Service) newPayloadSSZRest(
 		} else {
 			versionPath = "/engine/v3/new_payload"
 		}
+	case *pb.ExecutionPayloadGloas:
+		versionPath = "/engine/v5/new_payload"
 	default:
 		return nil, errors.New("unknown execution data type for SSZ-REST")
 	}
@@ -247,35 +253,6 @@ func (s *Service) forkchoiceUpdatedSSZRest(
 	return fcuResp.PayloadId, fcuResp.Status.LatestValidHash, handlePayloadStatus(fcuResp.Status)
 }
 
-// isNetworkError returns true if the error is a network-level error (connection refused,
-// timeout, DNS failure, etc.) that warrants falling back to JSON-RPC.
-// Non-network errors (invalid payload, protocol-level errors) should not trigger fallback.
-func isNetworkError(err error) bool {
-	if err == nil {
-		return false
-	}
-	// Timeout errors are network errors.
-	if isTimeout(err) {
-		return true
-	}
-	// Check for common network error patterns.
-	errStr := err.Error()
-	for _, pattern := range []string{
-		"connection refused",
-		"connection reset",
-		"no such host",
-		"network is unreachable",
-		"SSZ-REST request failed",
-		"create SSZ-REST request",
-		"read SSZ-REST response",
-	} {
-		if strings.Contains(errStr, pattern) {
-			return true
-		}
-	}
-	return false
-}
-
 // handlePayloadStatus converts a PayloadStatus proto into the standard error handling.
 func handlePayloadStatus(status *pb.PayloadStatus) error {
 	if status.ValidationError != "" {
@@ -307,6 +284,8 @@ func (s *Service) getPayloadSSZRest(ctx context.Context, payloadId [8]byte, slot
 	cfg := params.BeaconConfig()
 	var version int
 	switch {
+	case epoch >= cfg.GloasForkEpoch:
+		version = 6
 	case epoch >= cfg.FuluForkEpoch:
 		version = 5
 	case epoch >= cfg.ElectraForkEpoch:
@@ -328,51 +307,12 @@ func (s *Service) getPayloadSSZRest(ctx context.Context, payloadId [8]byte, slot
 	}
 
 	// Parse the GetPayloadResponse SSZ.
-	parsed, err := unmarshalGetPayloadResponseSSZ(respBody)
+	parsed, err := unmarshalGetPayloadResponseSSZ(respBody, version)
 	if err != nil {
 		return nil, errors.Wrap(err, "unmarshal SSZ-REST get_payload response")
 	}
 
-	// Reconstruct the proto types from the SSZ data.
-	payload := &pb.ExecutionPayloadDeneb{}
-	if err := payload.UnmarshalSSZ(parsed.ExecutionPayloadSSZ); err != nil {
-		return nil, errors.Wrap(err, "unmarshal execution payload SSZ")
-	}
-
-	ed, err := blocks.WrappedExecutionPayloadDeneb(payload)
-	if err != nil {
-		return nil, errors.Wrap(err, "wrap execution payload")
-	}
-
-	// Use BlobsBundleV2 for Fulu and later, BlobsBundle (v1) otherwise.
-	var bundler pb.BlobsBundler
-	if epoch >= cfg.FuluForkEpoch {
-		bundle := &pb.BlobsBundleV2{}
-		if len(parsed.BlobsBundleSSZ) > 0 {
-			if err := bundle.UnmarshalSSZ(parsed.BlobsBundleSSZ); err != nil {
-				return nil, errors.Wrap(err, "unmarshal blobs bundle v2 SSZ")
-			}
-		}
-		bundler = bundle
-	} else {
-		bundle := &pb.BlobsBundle{}
-		if len(parsed.BlobsBundleSSZ) > 0 {
-			if err := bundle.UnmarshalSSZ(parsed.BlobsBundleSSZ); err != nil {
-				return nil, errors.Wrap(err, "unmarshal blobs bundle SSZ")
-			}
-		}
-		bundler = bundle
-	}
-
-	resp := &blocks.GetPayloadResponse{
-		ExecutionData:     ed,
-		BlobsBundler:      bundler,
-		OverrideBuilder:   parsed.OverrideBuilder,
-		Bid:               blockValueToWei(parsed.BlockValue),
-		ExecutionRequests: parsed.ExecutionRequests,
-	}
-
-	return resp, nil
+	return getPayloadResponseFromSSZ(parsed, version)
 }
 
 // getBlobsSSZRest sends a GetBlobs request via SSZ-REST.
@@ -424,5 +364,3 @@ func (s *Service) getClientVersionSSZRest(ctx context.Context) ([]*structs.Clien
 
 	return unmarshalClientVersionResponse(respBody)
 }
-
-

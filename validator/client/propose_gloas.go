@@ -87,17 +87,21 @@ func (v *validator) proposeSelfBuildEnvelope(
 
 	envelope, err := v.validatorClient.GetExecutionPayloadEnvelope(ctx, slot)
 	if err != nil {
+		validatorSelfBuildEnvelopeSubmissionTotal.WithLabelValues("failed").Inc()
 		return errors.Wrap(err, "failed to get execution payload envelope for self-build")
 	}
 
 	signedEnvelope, err := v.signExecutionPayloadEnvelope(ctx, pubKey, slot, envelope)
 	if err != nil {
+		validatorSelfBuildEnvelopeSubmissionTotal.WithLabelValues("failed").Inc()
 		return errors.Wrap(err, "could not sign execution payload envelope")
 	}
 
 	if _, err := v.validatorClient.PublishExecutionPayloadEnvelope(ctx, signedEnvelope); err != nil {
+		validatorSelfBuildEnvelopeSubmissionTotal.WithLabelValues("failed").Inc()
 		return errors.Wrap(err, "failed to publish execution payload envelope")
 	}
+	validatorSelfBuildEnvelopeSubmissionTotal.WithLabelValues("success").Inc()
 
 	return nil
 }

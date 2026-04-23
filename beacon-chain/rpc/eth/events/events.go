@@ -74,6 +74,13 @@ const (
 	LightClientOptimisticUpdateTopic = "light_client_optimistic_update"
 	// DataColumnTopic represents a data column sidecar event topic
 	DataColumnTopic = "data_column_sidecar"
+	// ExecutionPayloadTopic represents a new execution payload envelope event topic
+	ExecutionPayloadTopic = "execution_payload_available"
+	// ExecutionPayloadBidTopic represents a new execution payload bid event topic.
+	// This topic is currently not triggered but is recognized to avoid client subscription errors.
+	ExecutionPayloadBidTopic = "execution_payload_bid"
+	// PayloadAttestationMessageTopic represents a new payload attestation message event topic.
+	PayloadAttestationMessageTopic = "payload_attestation_message"
 )
 
 var (
@@ -108,6 +115,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.ProposerSlashingReceived:          ProposerSlashingTopic,
 	operation.BlockGossipReceived:               BlockGossipTopic,
 	operation.DataColumnReceived:                DataColumnTopic,
+	operation.PayloadAttestationMessageReceived: PayloadAttestationMessageTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -118,9 +126,14 @@ var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.Reorg:                       ChainReorgTopic,
 	statefeed.BlockProcessed:              BlockTopic,
 	statefeed.PayloadAttributes:           PayloadAttributesTopic,
+	statefeed.PayloadProcessed:            ExecutionPayloadTopic,
 }
 
-var topicsForStateFeed = topicsForFeed(stateFeedEventTopics)
+var topicsForStateFeed = func() map[string]bool {
+	m := topicsForFeed(stateFeedEventTopics)
+	m[ExecutionPayloadBidTopic] = true
+	return m
+}()
 var topicsForOpsFeed = topicsForFeed(opsFeedEventTopics)
 
 func topicsForFeed(em map[feed.EventType]string) map[string]bool {
@@ -466,6 +479,10 @@ func topicForEvent(event *feed.Event) string {
 		return PayloadAttributesTopic
 	case *operation.DataColumnReceivedData:
 		return DataColumnTopic
+	case *operation.PayloadAttestationMessageReceivedData:
+		return PayloadAttestationMessageTopic
+	case *statefeed.PayloadProcessedData:
+		return ExecutionPayloadTopic
 	default:
 		return InvalidTopic
 	}
@@ -638,6 +655,17 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 			}
 			return jsonMarshalReader(eventName, blk)
 		}, nil
+	case *operation.PayloadAttestationMessageReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.PayloadAttestationMessageFromConsensus(v.Message))
+		}, nil
+	case *statefeed.PayloadProcessedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.PayloadEvent{
+				Slot:      fmt.Sprintf("%d", v.Slot),
+				BlockRoot: hexutil.Encode(v.BlockRoot[:]),
+			})
+		}, nil
 	default:
 		return nil, errors.Wrapf(errUnhandledEventData, "event data type %T unsupported", v)
 	}
@@ -646,7 +674,7 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 var errUnsupportedPayloadAttribute = errors.New("cannot compute payload attributes pre-Bellatrix")
 var errPayloadAttributeExpired = errors.New("skipping payload attribute event for past slot")
 
-func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnlyBeaconState, root [32]byte, proposer primitives.ValidatorIndex, timestamp uint64, randao []byte) (payloadattribute.Attributer, error) {
+func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnlyBeaconState, root [32]byte, proposer primitives.ValidatorIndex, timestamp uint64, randao []byte, slot primitives.Slot) (payloadattribute.Attributer, error) {
 	v := st.Version()
 	if v < version.Bellatrix {
 		return nil, errors.Wrapf(errUnsupportedPayloadAttribute, "%s is not supported", version.String(v))
@@ -666,7 +694,15 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		})
 	}
 
-	w, _, err := st.ExpectedWithdrawals()
+	var (
+		w   []*engine.Withdrawal
+		err error
+	)
+	if v >= version.Gloas {
+		w, err = st.WithdrawalsForPayload()
+	} else {
+		w, _, err = st.ExpectedWithdrawals()
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get withdrawals from head state")
 	}
@@ -679,12 +715,23 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		})
 	}
 
-	return payloadattribute.New(&engine.PayloadAttributesV3{
+	if v < version.Gloas {
+		return payloadattribute.New(&engine.PayloadAttributesV3{
+			Timestamp:             timestamp,
+			PrevRandao:            randao,
+			SuggestedFeeRecipient: feeRecpt,
+			Withdrawals:           w,
+			ParentBeaconBlockRoot: root[:],
+		})
+	}
+
+	return payloadattribute.New(&engine.PayloadAttributesV4{
 		Timestamp:             timestamp,
 		PrevRandao:            randao,
 		SuggestedFeeRecipient: feeRecpt,
 		Withdrawals:           w,
 		ParentBeaconBlockRoot: root[:],
+		SlotNumber:            uint64(slot),
 	})
 }
 
@@ -714,38 +761,45 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 		return ev, errors.New("head root is empty")
 	}
 
-	var err error
-	var st state.BeaconState
+	var rost state.ReadOnlyBeaconState
 
 	// If head is in the same block as the proposal slot, we can use the "read only" state cache.
 	pse := slots.ToEpoch(ev.ProposalSlot)
 	if slots.ToEpoch(ev.HeadBlock.Block().Slot()) == pse {
-		st = s.StateGen.StateByRootIfCachedNoCopy(ev.HeadRoot)
+		rost = s.StateGen.StateByRootIfCachedNoCopy(ev.HeadRoot)
 	}
-	// If st is nil, we couldn't get the state from the cache, or it isn't in the same epoch.
-	if st == nil || st.IsNil() {
-		st, err = s.StateGen.StateByRoot(ctx, ev.HeadRoot)
+
+	// If rost is nil, we couldn't get the state from the cache, or it isn't in the same epoch.
+	if rost == nil || rost.IsNil() {
+		st, err := s.StateGen.StateByRoot(ctx, ev.HeadRoot)
 		if err != nil {
 			return ev, errors.Wrap(err, "could not get head state")
 		}
-		// double check that we need to process_slots, just in case we got here via a hot state cache miss.
+
+		// Double check that we need to process_slots, just in case we got here via a hot state cache miss.
 		if slots.ToEpoch(st.Slot()) < pse {
 			start, err := slots.EpochStart(pse)
 			if err != nil {
 				return ev, errors.Wrap(err, "invalid state slot; could not compute epoch start")
 			}
+
 			st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, ev.HeadRoot[:], start)
 			if err != nil {
 				return ev, errors.Wrap(err, "could not run process blocks on head state into the proposal slot epoch")
 			}
 		}
+
+		rost = st
 	}
 
-	ev.ProposerIndex, err = helpers.BeaconProposerIndexAtSlot(ctx, st, ev.ProposalSlot)
+	proposerIndex, err := helpers.BeaconProposerIndexAtSlot(ctx, rost, ev.ProposalSlot)
 	if err != nil {
 		return ev, errors.Wrap(err, "failed to compute proposer index")
 	}
-	randao, err := helpers.RandaoMix(st, pse)
+
+	ev.ProposerIndex = proposerIndex
+
+	randao, err := helpers.RandaoMix(rost, pse)
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state randado")
 	}
@@ -757,11 +811,12 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 	ev.ParentBlockHash = payload.BlockHash()
 	ev.ParentBlockNumber = payload.BlockNumber()
 
-	t, err := slots.StartTime(st.GenesisTime(), ev.ProposalSlot)
+	t, err := slots.StartTime(rost.GenesisTime(), ev.ProposalSlot)
 	if err != nil {
 		return ev, errors.Wrap(err, "could not get head state slot time")
 	}
-	ev.Attributer, err = s.computePayloadAttributes(ctx, st, ev.HeadRoot, ev.ProposerIndex, uint64(t.Unix()), randao)
+
+	ev.Attributer, err = s.computePayloadAttributes(ctx, rost, ev.HeadRoot, ev.ProposerIndex, uint64(t.Unix()), randao, ev.ProposalSlot)
 	return ev, err
 }
 
