@@ -134,6 +134,28 @@ func TestValidateEnvelopesByRange(t *testing.T) {
 	}
 }
 
+func TestValidateExecutionPayloadEnvelopeByRangeResponseRejectsMalformedEnvelope(t *testing.T) {
+	req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: 5, Count: 1}
+
+	t.Run("nil message", func(t *testing.T) {
+		env := testSignedEnvelope(5, make([]byte, 32))
+		env.Message = nil
+
+		_, _, err := validateExecutionPayloadEnvelopeByRangeResponse(env, req, 0, nil, false)
+		require.NotNil(t, err)
+		assert.ErrorContains(t, "invalid execution payload envelope", err)
+	})
+
+	t.Run("nil payload", func(t *testing.T) {
+		env := testSignedEnvelope(5, make([]byte, 32))
+		env.Message.Payload = nil
+
+		_, _, err := validateExecutionPayloadEnvelopeByRangeResponse(env, req, 0, nil, false)
+		require.NotNil(t, err)
+		assert.ErrorContains(t, "invalid execution payload envelope", err)
+	})
+}
+
 // ---------------------------------------------------------------------------
 // executionPayloadEnvelopesByRangeRPCHandler (server handler)
 // ---------------------------------------------------------------------------

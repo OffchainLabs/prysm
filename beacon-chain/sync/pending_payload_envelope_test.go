@@ -374,6 +374,29 @@ func TestQueuePendingPayloadEnvelope_DoesNotOverwrite(t *testing.T) {
 	require.Equal(t, first, s.pendingPayloadEnvelopes[root][1])
 }
 
+func TestQueuePendingPayloadEnvelope_PrunesMalformedExistingEnvelope(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, root := setupExecutionPayloadEnvelopeService(t, 1, 1)
+
+	s.pendingPayloadEnvelopes[root] = map[uint64]*ethpb.SignedExecutionPayloadEnvelope{
+		1: {Signature: bytes.Repeat([]byte{0xAA}, 96)},
+	}
+
+	blockHash := [32]byte{0x02}
+	next := testSignedExecutionPayloadEnvelope(t, 1, 1, root, blockHash)
+	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(next)
+	require.NoError(t, err)
+	env, err := e.Envelope()
+	require.NoError(t, err)
+
+	v := &mockExecutionPayloadEnvelopeVerifier{}
+	result, err := s.queuePendingPayloadEnvelope(ctx, v, env, next)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, 1, len(s.pendingPayloadEnvelopes[root]))
+	require.Equal(t, next, s.pendingPayloadEnvelopes[root][1])
+}
+
 func TestQueuePendingPayloadEnvelope_RootCountBound(t *testing.T) {
 	ctx := context.Background()
 	s, _, _, _ := setupExecutionPayloadEnvelopeService(t, 1, 1)

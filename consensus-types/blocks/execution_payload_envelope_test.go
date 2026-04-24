@@ -107,6 +107,14 @@ func TestWrappedROSignedExecutionPayloadEnvelope(t *testing.T) {
 		require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
 	})
 
+	t.Run("returns error on nil message", func(t *testing.T) {
+		signed := &ethpb.SignedExecutionPayloadEnvelope{
+			Signature: bytes.Repeat([]byte{0xAA}, 96),
+		}
+		_, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signed)
+		require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
+	})
+
 	t.Run("wraps and provides envelope/signing data", func(t *testing.T) {
 		sig := bytes.Repeat([]byte{0xAB}, 96)
 		signed := &ethpb.SignedExecutionPayloadEnvelope{
