@@ -42,7 +42,7 @@ func (s *Service) prepareForkChoiceAtts() {
 			switch slotInterval.Interval {
 			case 0:
 				duration := time.Since(t)
-				log.WithField("duration", duration).Debug("Aggregated unaggregated attestations")
+				log.WithField("duration", duration).Trace("Aggregated unaggregated attestations")
 				batchForkChoiceAttsT1.Observe(float64(duration.Milliseconds()))
 			case 1:
 				batchForkChoiceAttsT2.Observe(float64(time.Since(t).Milliseconds()))

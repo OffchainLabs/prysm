@@ -433,7 +433,7 @@ func (s *Service) processBlockHeader(header *types.HeaderInfo) {
 	log.WithFields(logrus.Fields{
 		"blockNumber": s.latestEth1Data.BlockHeight,
 		"blockHash":   hexutil.Encode(s.latestEth1Data.BlockHash),
-	}).Debug("Latest eth1 chain event")
+	}).Trace("Latest eth1 chain event")
 }
 
 // batchRequestHeaders requests the block range specified in the arguments. Instead of requesting
