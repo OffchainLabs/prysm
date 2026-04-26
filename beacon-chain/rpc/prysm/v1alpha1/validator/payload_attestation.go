@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
@@ -12,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -46,6 +48,20 @@ func (vs *Server) PayloadAttestationData(
 	if cached := vs.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
 		return cached, nil
 	}
+	root := vs.ForkchoiceFetcher.HighestReceivedBlockRoot()
+	if root == [32]byte{} {
+		return nil, status.Errorf(codes.Internal, "could not retrieve highest received block root for slot %d", slot)
+	}
+	payloadPresent := vs.ForkchoiceFetcher.HasFullNode(root)
+	payloadStr := "empty"
+	if payloadPresent {
+		payloadStr = "full"
+	}
+	log.WithFields(logrus.Fields{
+		"slot":      slot,
+		"blockRoot": fmt.Sprintf("%#x", root),
+		"payload":   payloadStr,
+	}).Info("PTC request")
 
 	// dedupe concurrent callers at the PTC deadline.
 	v, err, _ := vs.payloadAttestationFlight.Do(strconv.FormatUint(uint64(slot), 10), func() (any, error) {
