@@ -424,7 +424,8 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 // associated with a particular set of sync committee messages.
 func (s *Service) AggregatedSigAndAggregationBits(
 	ctx context.Context,
-	req *ethpb.AggregatedSigAndAggregationBitsRequest) ([]byte, []byte, error) {
+	req *ethpb.AggregatedSigAndAggregationBitsRequest,
+) ([]byte, []byte, error) {
 	subCommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
 	sigs := make([][]byte, 0, subCommitteeSize)
 	bits := ethpb.NewSyncCommitteeAggregationBits()
@@ -558,6 +559,25 @@ func (s *Service) GetAttestationData(
 			}).Error("Forkchoice head root does not match head root")
 		}
 		isPayloadFull = full
+	}
+
+	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
+		headSlot, err := s.ChainInfoFetcher.RecentBlockSlot(bytesutil.ToBytes32(headRoot))
+		if err != nil {
+			return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head block slot")}
+		}
+		payloadStr := "empty"
+		if headSlot == req.Slot {
+			payloadStr = "pending"
+		} else if isPayloadFull {
+			payloadStr = "full"
+		}
+		log.WithFields(logrus.Fields{
+			"slot":     req.Slot,
+			"headRoot": fmt.Sprintf("%#x", headRoot),
+			"headSlot": headSlot,
+			"payload":  payloadStr,
+		}).Info("Attester request")
 	}
 
 	if err = s.AttestationCache.Put(&cache.AttestationConsensusData{
@@ -969,6 +989,14 @@ func (s *Service) PayloadAttestationData(
 		if rpcErr != nil {
 			return rpcErr, nil
 		}
+
+		log.WithFields(logrus.Fields{
+			"slot":      slot,
+			"blockRoot": fmt.Sprintf("%#x", data.BeaconBlockRoot),
+			"payload":   data.PayloadPresent,
+			"blobData":  data.BlobDataAvailable,
+		}).Info("PTC request")
+
 		// Before the deadline only the final result is safe to return: the payload
 		// arrived timely and the data is available. Otherwise both flags may still
 		// flip, so wait for the deadline.
