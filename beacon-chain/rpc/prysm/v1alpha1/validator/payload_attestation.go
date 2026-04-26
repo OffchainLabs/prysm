@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -10,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -55,6 +57,15 @@ func (vs *Server) PayloadAttestationData(
 		return nil, status.Errorf(codes.Internal, "could not retrieve highest received block root for slot %d", slot)
 	}
 	payloadPresent := vs.ForkchoiceFetcher.HasFullNode(root)
+	payloadStr := "empty"
+	if payloadPresent {
+		payloadStr = "full"
+	}
+	log.WithFields(logrus.Fields{
+		"slot":      slot,
+		"blockRoot": fmt.Sprintf("%#x", root),
+		"payload":   payloadStr,
+	}).Info("PTC request")
 
 	return &ethpb.PayloadAttestationData{
 		BeaconBlockRoot:   root[:],

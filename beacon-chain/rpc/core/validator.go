@@ -560,6 +560,25 @@ func (s *Service) GetAttestationData(
 		isPayloadFull = full
 	}
 
+	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
+		headSlot, err := s.ChainInfoFetcher.RecentBlockSlot(bytesutil.ToBytes32(headRoot))
+		if err != nil {
+			return nil, &RpcError{Reason: Internal, Err: errors.Wrap(err, "could not get head block slot")}
+		}
+		payloadStr := "empty"
+		if headSlot == req.Slot {
+			payloadStr = "pending"
+		} else if isPayloadFull {
+			payloadStr = "full"
+		}
+		log.WithFields(logrus.Fields{
+			"slot":     req.Slot,
+			"headRoot": fmt.Sprintf("%#x", headRoot),
+			"headSlot": headSlot,
+			"payload":  payloadStr,
+		}).Info("Attester request")
+	}
+
 	if err = s.AttestationCache.Put(&cache.AttestationConsensusData{
 		Slot:          req.Slot,
 		HeadRoot:      headRoot,
