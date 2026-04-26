@@ -77,6 +77,7 @@ type ExecutionBlock struct {
 	Transactions    []*gethtypes.Transaction `json:"transactions"`
 	TotalDifficulty string                   `json:"totalDifficulty"`
 	Withdrawals     []*Withdrawal            `json:"withdrawals"`
+	BlockAccessList hexutil.Bytes            `json:"blockAccessList"`
 }
 
 func (e *ExecutionBlock) MarshalJSON() ([]byte, error) {
@@ -94,6 +95,9 @@ func (e *ExecutionBlock) MarshalJSON() ([]byte, error) {
 
 	if e.Version == version.Capella {
 		decoded["withdrawals"] = e.Withdrawals
+	}
+	if len(e.BlockAccessList) > 0 {
+		decoded["blockAccessList"] = e.BlockAccessList
 	}
 
 	return json.Marshal(decoded)
@@ -124,6 +128,14 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 	}
 	e.Hash = common.BytesToHash(decodedHash)
 	e.TotalDifficulty, _ = decoded["totalDifficulty"].(string)
+
+	if balStr, ok := decoded["blockAccessList"].(string); ok {
+		balBytes, err := hexutil.Decode(balStr)
+		if err != nil {
+			return errors.Wrap(err, "could not decode blockAccessList hex")
+		}
+		e.BlockAccessList = balBytes
+	}
 
 	rawWithdrawals, ok := decoded["withdrawals"]
 	if !ok || rawWithdrawals == nil {
