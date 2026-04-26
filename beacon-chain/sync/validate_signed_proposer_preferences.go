@@ -65,8 +65,10 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	}
 	// [REJECT] preferences.validator_index is present at the correct slot in the
 	// current or next epoch's portion of state.proposer_lookahead.
+	// TODO: spec says REJECT but we IGNORE because the lookahead is computed
+	// from head state
 	if err := v.VerifyValidProposalSlot(st); err != nil {
-		return pubsub.ValidationReject, err
+		return pubsub.ValidationIgnore, err
 	}
 
 	slot := signedPreferences.Message.ProposalSlot

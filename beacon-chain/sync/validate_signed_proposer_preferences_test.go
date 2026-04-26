@@ -66,7 +66,7 @@ func TestValidateSignedProposerPreferencesGossip_ErrorPathsWithMock(t *testing.T
 		{
 			name:      "invalid proposer slot",
 			verifier:  mockSignedProposerPreferencesVerifier{errValidProposalSlot: errors.New("invalid slot")},
-			result:    pubsub.ValidationReject,
+			result:    pubsub.ValidationIgnore,
 			wantError: true,
 		},
 		{
