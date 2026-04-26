@@ -73,39 +73,66 @@ func (s *Service) validateExecutionPayloadBidParentValid(_ context.Context, blk 
 	return pubsub.ValidationAccept, nil
 }
 
-// requestPayloadEnvelope asks a random peer for the execution payload
-// envelope identified by root and feeds any response through
-// ReceiveExecutionPayloadEnvelope.
+// requestPayloadEnvelope fetches the envelope for root, retrying across
+// shuffled peers. Singleflight collapses concurrent calls for the same root.
 func (s *Service) requestPayloadEnvelope(root [32]byte) {
+	if s.cfg.chain.HasFullNode(root) || s.hasBadPayload(root) {
+		return
+	}
+	_, _, _ = s.payloadEnvelopeRequestSingleFlight.Do(string(root[:]), func() (any, error) {
+		s.fetchPayloadEnvelope(root)
+		return nil, nil
+	})
+}
+
+// Cap per-call peer attempts; the drain loop retries on later ticks.
+const maxPayloadEnvelopeFetchAttempts = 3
+
+func (s *Service) fetchPayloadEnvelope(root [32]byte) {
 	bestPeers := s.getBestPeers()
 	if len(bestPeers) == 0 {
 		return
 	}
-	pid := bestPeers[rand.NewGenerator().Int()%len(bestPeers)]
+	gen := rand.NewGenerator()
+	gen.Shuffle(len(bestPeers), func(i, j int) { bestPeers[i], bestPeers[j] = bestPeers[j], bestPeers[i] })
+	if len(bestPeers) > maxPayloadEnvelopeFetchAttempts {
+		bestPeers = bestPeers[:maxPayloadEnvelopeFetchAttempts]
+	}
 	req := p2ptypes.ExecutionPayloadEnvelopesByRootReq{root}
-	envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(s.ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &req)
-	if err != nil {
-		log.WithError(err).Debug("Could not request payload envelope by root")
-		return
-	}
-	if len(envelopes) == 0 {
-		log.Debug("No payload envelopes returned by peer")
-		return
-	}
-	if len(envelopes) > 1 {
-		log.Warn("Multiple payload envelopes returned by peer, expected at most one")
-	}
-	for _, env := range envelopes {
-		wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(env)
+	for _, pid := range bestPeers {
+		if s.cfg.chain.HasFullNode(root) {
+			return
+		}
+		envelopes, err := SendExecutionPayloadEnvelopesByRootRequest(s.ctx, s.cfg.clock, s.cfg.p2p, pid, s.ctxMap, &req)
 		if err != nil {
-			log.WithError(err).Debug("Could not wrap requested payload envelope")
+			log.WithError(err).WithField("peer", pid).Debug("Could not request payload envelope by root")
 			continue
 		}
-		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
-			if blockchain.IsInvalidBlock(err) {
-				s.setBadPayload(s.ctx, root)
+		if len(envelopes) == 0 {
+			continue
+		}
+		if len(envelopes) > 1 {
+			log.Warn("Multiple payload envelopes returned by peer, expected at most one")
+		}
+		processed := false
+		for _, env := range envelopes {
+			wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(env)
+			if err != nil {
+				log.WithError(err).Debug("Could not wrap requested payload envelope")
+				continue
 			}
-			log.WithError(err).Debug("Could not process requested payload envelope")
+			if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
+				if blockchain.IsInvalidBlock(err) {
+					s.setBadPayload(s.ctx, root)
+					return
+				}
+				log.WithError(err).Debug("Could not process requested payload envelope")
+				continue
+			}
+			processed = true
+		}
+		if processed {
+			return
 		}
 	}
 }
