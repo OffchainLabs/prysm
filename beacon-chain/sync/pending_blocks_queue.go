@@ -147,27 +147,10 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 				continue
 			}
 
-			// Calculate the deadline time by adding three slots duration to the current time
-			secondsPerSlot := params.BeaconConfig().SecondsPerSlot
-			threeSlotDuration := 3 * time.Duration(secondsPerSlot) * time.Second
-			ctxWithTimeout, cancelFunction := context.WithTimeout(ctx, threeSlotDuration)
-			// Process and broadcast the block.
-			if err := s.processAndBroadcastBlock(ctxWithTimeout, b, blkRoot); err != nil {
-				s.handleBlockProcessingError(ctxWithTimeout, err, b, blkRoot)
-				cancelFunction()
+			if !s.processAndCleanupQueuedBlock(ctx, b, blkRoot) {
 				continue
 			}
-			cancelFunction()
-
-			// Process synchronously because it's likely that the next pending block depends on it.
-			s.processPendingPayloadEnvelope(ctx, blkRoot)
-			s.processPendingGloasColumns(blkRoot, b)
 			blkRoots = append(blkRoots, blkRoot)
-
-			// Remove the processed block from the queue.
-			if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
-				return err
-			}
 
 			duration := time.Since(start)
 			totalDuration += duration
@@ -191,6 +174,67 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	}
 
 	return s.sendBatchRootRequest(ctx, parentRoots, randGen)
+}
+
+// processPendingBlocksForParent drains children of parentRoot whose
+// ParentPayloadReady gate just flipped, without waiting for the next drain tick.
+func (s *Service) processPendingBlocksForParent(ctx context.Context, parentRoot [32]byte) {
+	if !s.chainIsStarted() {
+		return
+	}
+	currentSlot := s.cfg.clock.CurrentSlot()
+	for _, slot := range s.sortedPendingSlots() {
+		if slot > currentSlot {
+			continue
+		}
+		for _, b := range s.getBlocksInQueue(slot) {
+			if blocks.BeaconBlockIsNil(b) != nil {
+				continue
+			}
+			if b.Block().ParentRoot() != parentRoot {
+				continue
+			}
+			blkRoot, err := b.Block().HashTreeRoot()
+			if err != nil {
+				continue
+			}
+			if s.cfg.chain.BlockBeingSynced(blkRoot) {
+				continue
+			}
+			if s.cfg.beaconDB.HasBlock(ctx, blkRoot) {
+				if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
+					log.WithError(err).Debug("Could not remove already-stored block from pending queue")
+				}
+				continue
+			}
+			if !s.cfg.chain.ParentPayloadReady(b.Block()) {
+				continue
+			}
+			if !s.processAndCleanupQueuedBlock(ctx, b, blkRoot) {
+				continue
+			}
+			if err := s.processPendingAttsForBlock(ctx, blkRoot); err != nil {
+				log.WithError(err).Debug("Failed to process pending attestations for block")
+			}
+		}
+	}
+}
+
+// processAndCleanupQueuedBlock processes a queued block under a 3-slot
+// deadline, runs envelope/column post-processing, and removes it from the queue.
+func (s *Service) processAndCleanupQueuedBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock, blkRoot [32]byte) bool {
+	cctx, cancel := context.WithTimeout(ctx, slots.MultiplySlotBy(3))
+	defer cancel()
+	if err := s.processAndBroadcastBlock(cctx, b, blkRoot); err != nil {
+		s.handleBlockProcessingError(cctx, err, b, blkRoot)
+		return false
+	}
+	s.processPendingPayloadEnvelope(ctx, blkRoot)
+	s.processPendingGloasColumns(blkRoot, b)
+	if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
+		log.WithError(err).Debug("Could not remove processed block from pending queue")
+	}
+	return true
 }
 
 // startInnerSpan starts a new tracing span for an inner loop and returns the new context and span.

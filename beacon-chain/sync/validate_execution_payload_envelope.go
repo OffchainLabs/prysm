@@ -248,6 +248,11 @@ func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg pr
 		}
 		return err
 	}
+	envelope, envErr := env.Envelope()
+	if envErr != nil {
+		return nil
+	}
+	go s.processPendingBlocksForParent(s.ctx, envelope.BeaconBlockRoot())
 	return nil
 }
 
