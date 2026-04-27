@@ -147,9 +147,11 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 
+	s.headLock.Lock()
 	if s.head != nil {
 		s.head.full = true
 	}
+	s.headLock.Unlock()
 
 	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot[:], true)
 	if s.inRegularSync() {
@@ -163,6 +165,7 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 				var pId [8]byte
 				copy(pId[:], pid[:])
 				s.cfg.PayloadIDCache.Set(envelope.Slot()+1, root, pId)
+				log.WithFields(logrus.Fields{"slot": envelope.Slot() + 1, "blockRoot": fmt.Sprintf("%#x", root), "payloadID": fmt.Sprintf("%#x", pid[:])}).Info("Cached payload ID for next slot")
 			}
 		}()
 	}
