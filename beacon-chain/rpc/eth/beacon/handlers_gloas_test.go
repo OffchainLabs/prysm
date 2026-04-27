@@ -13,6 +13,7 @@ import (
 	executiontesting "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -137,6 +138,11 @@ func testSignedEnvelope() *ethpb.SignedExecutionPayloadEnvelope {
 }
 
 func TestPublishExecutionPayloadEnvelope_OK(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
 
@@ -169,7 +175,41 @@ func TestPublishExecutionPayloadEnvelope_InvalidBody(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+func TestPublishExecutionPayloadEnvelope_StatelessContents_NoBlobs(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctrl := gomock.NewController(t)
+	signed := testSignedEnvelope()
+	contents, err := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(signed, nil, nil)
+	require.NoError(t, err)
+	body, err := json.Marshal(contents)
+	require.NoError(t, err)
+
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+		gomock.Any(), gomock.Any(),
+	).Return(&emptypb.Empty{}, nil)
+
+	// With no blobs in the request, the sidecar broadcast/receive branch is
+	// skipped, so the handler does not need a Broadcaster or DataColumnReceiver.
+	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	ctrl := gomock.NewController(t)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)

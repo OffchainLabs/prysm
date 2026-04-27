@@ -70,15 +70,25 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 		return nil, errors.Wrap(err, "could not get v4 beacon block")
 	}
 
-	if strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType) {
-		payloadIncluded := header.Get(api.ExecutionPayloadIncludedHeader) == "true"
+	payloadIncluded := header.Get(api.ExecutionPayloadIncludedHeader) == "true"
+	isSSZ := strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType)
+
+	// JSON is only acceptable when the response carries the block alone. The
+	// full BlockContents body (block + envelope + blobs + KZG proofs) is
+	// multi-MB and impractical over JSON, so payload-included responses must
+	// be SSZ.
+	if payloadIncluded && !isSSZ {
+		return nil, errors.Errorf("v4 payload-included response must be SSZ, got content-type %q", header.Get("Content-Type"))
+	}
+
+	if isSSZ {
 		if payloadIncluded {
 			contents := &ethpb.BeaconBlockContentsGloas{}
 			if err := contents.UnmarshalSSZ(data); err != nil {
 				return nil, errors.Wrap(err, "failed to unmarshal gloas block contents SSZ")
 			}
 			if c.stateless && contents.ExecutionPayloadEnvelope != nil {
-				c.envelopeCache.Add(slot, contents.ExecutionPayloadEnvelope)
+				c.envelopeCache.Add(slot, contents.ExecutionPayloadEnvelope, contents.Blobs, contents.KzgProofs)
 			}
 			return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: contents.Block}}, nil
 		}
@@ -89,30 +99,10 @@ func (c *beaconApiValidatorClient) beaconBlockV4(ctx context.Context, slot primi
 		return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: block}}, nil
 	}
 
+	// JSON, payload not included: parse the bare block.
 	resp := structs.ProduceBlockV4Response{}
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, errors.Wrapf(err, "failed to decode v4 response body for %s", queryUrl)
-	}
-	if resp.ExecutionPayloadIncluded {
-		contents := &structs.BlockContentsGloas{}
-		if err := json.Unmarshal(resp.Data, contents); err != nil {
-			return nil, errors.Wrap(err, "failed to decode gloas block contents")
-		}
-		if contents.Block == nil {
-			return nil, errors.New("gloas block contents has nil block")
-		}
-		blk, err := contents.Block.ToGeneric()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not convert gloas block contents to generic")
-		}
-		if c.stateless && contents.ExecutionPayloadEnvelope != nil {
-			envelope, err := contents.ExecutionPayloadEnvelope.ToConsensus()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not convert execution payload envelope to consensus")
-			}
-			c.envelopeCache.Add(slot, envelope)
-		}
-		return blk, nil
 	}
 	block := &structs.BeaconBlockGloas{}
 	if err := json.Unmarshal(resp.Data, block); err != nil {

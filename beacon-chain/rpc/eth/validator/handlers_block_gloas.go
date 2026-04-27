@@ -126,11 +126,18 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, errors.Wrap(err, "could not get execution payload envelope").Error(), http.StatusInternalServerError)
 			return
 		}
+		var blobs, kzgProofs [][]byte
+		if contents, ok := s.ExecutionPayloadEnvelopeCache.Contents(); ok &&
+			contents.Envelope.Payload.SlotNumber == primitives.Slot(slot) {
+			blobs, kzgProofs = contents.Blobs, contents.KzgProofs
+		}
 
 		if isSSZ {
 			sszResp, err := (&eth.BeaconBlockContentsGloas{
 				Block:                    gloasBlock.Gloas,
 				ExecutionPayloadEnvelope: envelopeResp.Envelope,
+				KzgProofs:                kzgProofs,
+				Blobs:                    blobs,
 			}).MarshalSSZ()
 			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
@@ -140,7 +147,7 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		blockContents, err := structs.BlockContentsGloasFromConsensus(gloasBlock.Gloas, envelopeResp.Envelope)
+		blockContents, err := structs.BlockContentsGloasFromConsensus(gloasBlock.Gloas, envelopeResp.Envelope, kzgProofs, blobs)
 		if err != nil {
 			httputil.HandleError(w, errors.Wrap(err, "could not convert block contents").Error(), http.StatusInternalServerError)
 			return

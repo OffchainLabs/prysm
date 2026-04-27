@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -46,8 +47,11 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 	// Precompute data column sidecars now (inside ProposeBeaconBlock) so the
 	// expensive KZG cell computation doesn't run during PublishExecutionPayloadEnvelope.
 	var roSidecars []consensusblocks.RODataColumn
+	var rawBlobs, rawProofs [][]byte
 	if bundle := local.BlobsBundler; bundle != nil && len(bundle.GetBlobs()) > 0 {
-		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(bundle.GetBlobs(), bundle.GetProofs())
+		rawBlobs = bundle.GetBlobs()
+		rawProofs = bundle.GetProofs()
+		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, rawProofs)
 		if err != nil {
 			return errors.Wrap(err, "compute cells and proofs from blobs bundle")
 		}
@@ -57,7 +61,12 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		}
 	}
 
-	vs.setExecutionPayloadEnvelope(envelope, roSidecars)
+	vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{
+		Envelope:    envelope,
+		DataColumns: roSidecars,
+		Blobs:       rawBlobs,
+		KzgProofs:   rawProofs,
+	})
 	return nil
 }
 
@@ -69,29 +78,6 @@ func extractExecutionPayloadGloas(local *consensusblocks.GetPayloadResponse) *en
 		return p
 	}
 	return nil
-}
-
-func (vs *Server) setExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope, dataColumns []consensusblocks.RODataColumn) {
-	if envelope == nil {
-		return
-	}
-	vs.executionPayloadEnvelopeMu.Lock()
-	defer vs.executionPayloadEnvelopeMu.Unlock()
-	vs.executionPayloadEnvelope = envelope
-	vs.executionPayloadDataColumns = dataColumns
-}
-
-func (vs *Server) getExecutionPayloadEnvelope(slot primitives.Slot) (*ethpb.ExecutionPayloadEnvelope, bool) {
-	vs.executionPayloadEnvelopeMu.RLock()
-	envelope := vs.executionPayloadEnvelope
-	vs.executionPayloadEnvelopeMu.RUnlock()
-	if envelope == nil {
-		return nil, false
-	}
-	if envelope.Payload == nil || primitives.Slot(envelope.Payload.SlotNumber) != slot {
-		return nil, false
-	}
-	return envelope, true
 }
 
 // GetExecutionPayloadEnvelope implements the gRPC endpoint:
@@ -115,14 +101,14 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 			"execution payload envelopes are not supported before Gloas fork (slot %d)", req.Slot)
 	}
 
-	envelope, found := vs.getExecutionPayloadEnvelope(req.Slot)
-	if !found {
+	contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
+	if !ok || contents.Envelope.Payload.SlotNumber != req.Slot {
 		return nil, status.Errorf(codes.NotFound,
 			"execution payload envelope not found for slot %d", req.Slot)
 	}
 
 	return &ethpb.ExecutionPayloadEnvelopeResponse{
-		Envelope: envelope,
+		Envelope: contents.Envelope,
 	}, nil
 }
 
@@ -189,13 +175,11 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 // The sidecars are computed during storeExecutionPayloadEnvelope (inside ProposeBeaconBlock)
 // so no expensive KZG work happens here.
 func (vs *Server) broadcastGloasDataColumns(ctx context.Context) error {
-	vs.executionPayloadEnvelopeMu.RLock()
-	roSidecars := vs.executionPayloadDataColumns
-	vs.executionPayloadEnvelopeMu.RUnlock()
-
-	if len(roSidecars) == 0 {
+	contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
+	if !ok || len(contents.DataColumns) == 0 {
 		return nil
 	}
+	roSidecars := contents.DataColumns
 
 	log.WithFields(logrus.Fields{
 		"slot":    roSidecars[0].Slot(),

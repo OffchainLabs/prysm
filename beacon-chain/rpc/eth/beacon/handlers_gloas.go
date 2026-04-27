@@ -1,14 +1,19 @@
 package beacon
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -84,6 +89,9 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 }
 
 // PublishExecutionPayloadEnvelope broadcasts a signed execution payload envelope.
+// The request body may be either:
+//   - SignedExecutionPayloadEnvelope (stateful: receiving node already has blobs cached)
+//   - SignedExecutionPayloadEnvelopeContents (stateless: includes blobs and KZG proofs)
 //
 // Endpoint: POST /eth/v1/beacon/execution_payload_envelope
 func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +101,19 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		httputil.HandleError(w, "could not read request body: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Detect stateless Contents body by the presence of the wrapper key. The
+	// stateful body has top-level `message`/`signature`; Contents wraps those
+	// inside `signed_execution_payload_envelope` alongside `blobs`/`kzg_proofs`.
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(body, &probe); err != nil {
+		httputil.HandleError(w, "could not decode request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, isContents := probe["signed_execution_payload_envelope"]; isContents {
+		s.publishExecutionPayloadEnvelopeContents(ctx, w, body)
 		return
 	}
 
@@ -122,6 +143,67 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 		return
 	}
 
+	w.WriteHeader(http.StatusOK)
+}
+
+// publishExecutionPayloadEnvelopeContents handles the stateless variant of the
+// publish endpoint. It builds Gloas data column sidecars from the
+// caller-supplied blobs/proofs, stashes them in the envelope cache so the
+// existing PublishExecutionPayloadEnvelope path will pick them up, and then
+// delegates to that regular bare-envelope publish handler.
+func (s *Server) publishExecutionPayloadEnvelopeContents(ctx context.Context, w http.ResponseWriter, body []byte) {
+	var contents structs.SignedExecutionPayloadEnvelopeContents
+	if err := json.Unmarshal(body, &contents); err != nil {
+		httputil.HandleError(w, "could not decode envelope contents: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	signed, kzgProofs, blobs, err := contents.ToConsensus()
+	if err != nil {
+		httputil.HandleError(w, "invalid signed execution payload envelope contents: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if len(blobs) > 0 {
+		blockRoot := bytesutil.ToBytes32(signed.Message.BeaconBlockRoot)
+		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, kzgProofs)
+		if err != nil {
+			httputil.HandleError(w, "could not compute cells and proofs: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		roSidecars, err := peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, primitives.Slot(signed.Message.Payload.SlotNumber), blockRoot)
+		if err != nil {
+			httputil.HandleError(w, "could not build data column sidecars: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		// Trust the validator-supplied data columns: the envelope signature
+		// cryptographically commits to them indirectly via the block bid.
+		verifiedSidecars := make([]consensusblocks.VerifiedRODataColumn, 0, len(roSidecars))
+		for _, sc := range roSidecars {
+			verifiedSidecars = append(verifiedSidecars, consensusblocks.NewVerifiedRODataColumn(sc))
+		}
+		if err := s.Broadcaster.BroadcastDataColumnSidecars(ctx, verifiedSidecars); err != nil {
+			httputil.HandleError(w, "could not broadcast data column sidecars: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := s.DataColumnReceiver.ReceiveDataColumns(verifiedSidecars); err != nil {
+			httputil.HandleError(w, "could not receive data column sidecars: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, signed); err != nil {
+		if st, ok := status.FromError(err); ok {
+			switch st.Code() {
+			case codes.InvalidArgument:
+				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
+			default:
+				httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
+			}
+			return
+		}
+		httputil.HandleError(w, "could not publish execution payload envelope contents: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
