@@ -969,7 +969,7 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 			return nil, errMaxRequestEnvelopesExceeded
 		}
 		// Validate slot is within requested range.
-		envSlot := env.Message.Slot
+		envSlot := primitives.Slot(env.Message.Payload.SlotNumber)
 		endSlot := req.StartSlot.Add(req.Count)
 		if envSlot < req.StartSlot || envSlot >= endSlot {
 			return nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d outside requested range [%d, %d)", envSlot, req.StartSlot, endSlot)

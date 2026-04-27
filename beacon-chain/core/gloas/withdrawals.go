@@ -9,7 +9,7 @@ import (
 
 // ProcessWithdrawals applies withdrawals to the state for Gloas.
 //
-// <spec fn="process_withdrawals" fork="gloas" hash="16d9ad2a">
+// <spec fn="process_withdrawals" fork="gloas" hash="38b3bb77">
 // def process_withdrawals(
 //
 //	state: BeaconState,
@@ -20,7 +20,9 @@ import (
 //
 //	# [New in Gloas:EIP7732]
 //	# Return early if the parent block is empty
-//	if not is_parent_block_full(state):
+//	is_genesis_block = state.latest_block_hash == Hash32()
+//	is_parent_block_empty = state.latest_block_hash != state.latest_execution_payload_bid.block_hash
+//	if is_genesis_block or is_parent_block_empty:
 //	    return
 //
 //	# Get expected withdrawals
@@ -43,7 +45,7 @@ import (
 // </spec>
 func ProcessWithdrawals(st state.BeaconState) error {
 	// Must be called before ProcessExecutionPayloadBid for the current block.
-	full, err := st.IsParentBlockFull()
+	full, err := st.LatestBlockHashMatchesBidBlockHash()
 	if err != nil {
 		return errors.Wrap(err, "could not get parent block full status")
 	}

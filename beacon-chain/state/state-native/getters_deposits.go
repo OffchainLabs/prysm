@@ -38,7 +38,7 @@ func (b *BeaconState) PendingDeposits() ([]*ethpb.PendingDeposit, error) {
 // given pubkey. This method requires access to the RLock on the state and only applies in
 // electra or later.
 //
-// <spec fn="is_pending_validator" fork="gloas" hash="f3f06b56">
+// <spec fn="is_pending_validator" fork="gloas" hash="9b409bab">
 // def is_pending_validator(state: BeaconState, pubkey: BLSPubkey) -> bool:
 //
 //	"""

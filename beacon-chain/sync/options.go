@@ -222,13 +222,6 @@ func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
 	}
 }
 
-func WithHighestExecutionPayloadBidCache(c *cache.HighestExecutionPayloadBidCache) Option {
-	return func(s *Service) error {
-		s.highestExecutionPayloadBidCache = c
-		return nil
-	}
-}
-
 func WithPayloadAttestationPool(pool payloadattestation.PoolManager) Option {
 	return func(s *Service) error {
 		s.cfg.payloadAttestationPool = pool

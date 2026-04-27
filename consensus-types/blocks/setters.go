@@ -192,6 +192,15 @@ func (b *SignedBeaconBlock) SetPayloadAttestations(pa []*eth.PayloadAttestation)
 	return nil
 }
 
+// SetParentExecutionRequests sets the parent execution requests in the block.
+func (b *SignedBeaconBlock) SetParentExecutionRequests(r *enginev1.ExecutionRequests) error {
+	if b.version < version.Gloas {
+		return consensus_types.ErrNotSupported("SetParentExecutionRequests", b.version)
+	}
+	b.block.body.parentExecutionRequests = r
+	return nil
+}
+
 // SetSignedExecutionPayloadBid sets the signed execution payload header in the block.
 func (b *SignedBeaconBlock) SetSignedExecutionPayloadBid(header *eth.SignedExecutionPayloadBid) error {
 	if b.version < version.Gloas {

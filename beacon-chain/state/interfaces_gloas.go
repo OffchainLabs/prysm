@@ -17,7 +17,7 @@ type writeOnlyGloasFields interface {
 	// Builder pending payments / withdrawals.
 	SetBuilderPendingPayment(index primitives.Slot, payment *ethpb.BuilderPendingPayment) error
 	ClearBuilderPendingPayment(index primitives.Slot) error
-	QueueBuilderPayment() error
+	QueueBuilderPaymentForSlot(parentSlot primitives.Slot) error
 	RotateBuilderPendingPayments() error
 	AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal) error
 
@@ -71,7 +71,7 @@ type readOnlyGloasFields interface {
 	NextWithdrawalBuilderIndex() (primitives.BuilderIndex, error)
 
 	// Withdrawals
-	IsParentBlockFull() (bool, error)
+	LatestBlockHashMatchesBidBlockHash() (bool, error)
 	ExpectedWithdrawalsGloas() (ExpectedWithdrawalsGloasResult, error)
 	PayloadExpectedWithdrawals() ([]*enginev1.Withdrawal, error)
 	WithdrawalsForPayload() ([]*enginev1.Withdrawal, error)
