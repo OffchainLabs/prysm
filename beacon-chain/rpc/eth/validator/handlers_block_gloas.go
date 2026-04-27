@@ -8,9 +8,11 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -129,7 +131,11 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		var blobs, kzgProofs [][]byte
 		if contents, ok := s.ExecutionPayloadEnvelopeCache.Contents(); ok &&
 			contents.Envelope.Payload.SlotNumber == primitives.Slot(slot) {
-			blobs, kzgProofs = contents.Blobs, contents.KzgProofs
+			blobs, kzgProofs, err = blobsAndProofsFromDataColumns(contents.DataColumns)
+			if err != nil {
+				httputil.HandleError(w, errors.Wrap(err, "could not derive blobs from cached data columns").Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 
 		if isSSZ {
@@ -242,4 +248,45 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 		Version: version.String(version.Gloas),
 		Data:    jsonEnvelope,
 	})
+}
+
+// blobsAndProofsFromDataColumns reconstructs raw blobs and the flat KZG proofs
+// vector (indexed [blob*numCols + col]) from the producer's pre-computed data
+// column sidecars. The cheap path: the producer always has every column, so
+// each blob's bytes live in the first CellsPerBlob columns and proofs are
+// re-flattened from the per-column slices. No KZG ops, just memory shuffling.
+func blobsAndProofsFromDataColumns(sidecars []consensusblocks.RODataColumn) ([][]byte, [][]byte, error) {
+	if len(sidecars) == 0 {
+		return nil, nil, nil
+	}
+	const numColumns = fieldparams.NumberOfColumns
+	if len(sidecars) != numColumns {
+		return nil, nil, errors.Errorf("expected %d data column sidecars, got %d", numColumns, len(sidecars))
+	}
+	for i, sc := range sidecars {
+		if sc.Index() != uint64(i) {
+			return nil, nil, errors.Errorf("data column sidecars must be ordered by index; got index %d at position %d", sc.Index(), i)
+		}
+	}
+
+	blobCount := len(sidecars[0].Column())
+	blobs := make([][]byte, blobCount)
+	for blobIdx := 0; blobIdx < blobCount; blobIdx++ {
+		blob := make([]byte, fieldparams.BlobSize)
+		for col := 0; col < fieldparams.CellsPerBlob; col++ {
+			cell := sidecars[col].Column()[blobIdx]
+			if copy(blob[col*kzg.BytesPerCell:], cell) != kzg.BytesPerCell {
+				return nil, nil, errors.New("unexpected cell size")
+			}
+		}
+		blobs[blobIdx] = blob
+	}
+
+	proofs := make([][]byte, blobCount*numColumns)
+	for blobIdx := 0; blobIdx < blobCount; blobIdx++ {
+		for col := 0; col < numColumns; col++ {
+			proofs[blobIdx*numColumns+col] = sidecars[col].KzgProofs()[blobIdx]
+		}
+	}
+	return blobs, proofs, nil
 }

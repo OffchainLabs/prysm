@@ -44,16 +44,26 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		BeaconBlockRoot:   blockRoot[:],
 	}
 
-	var rawBlobs, rawProofs [][]byte
+	// Precompute data column sidecars now (inside ProposeBeaconBlock) so the
+	// expensive KZG cell computation doesn't run during
+	// PublishExecutionPayloadEnvelope. Raw blobs and KZG proofs can be
+	// reconstructed from the cached sidecars when the v4 producer response
+	// needs them.
+	var roSidecars []consensusblocks.RODataColumn
 	if bundle := local.BlobsBundler; bundle != nil && len(bundle.GetBlobs()) > 0 {
-		rawBlobs = bundle.GetBlobs()
-		rawProofs = bundle.GetProofs()
+		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(bundle.GetBlobs(), bundle.GetProofs())
+		if err != nil {
+			return errors.Wrap(err, "compute cells and proofs from blobs bundle")
+		}
+		roSidecars, err = peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, sBlk.Block().Slot(), blockRoot)
+		if err != nil {
+			return errors.Wrap(err, "build gloas data column sidecars")
+		}
 	}
 
 	vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{
-		Envelope:  envelope,
-		Blobs:     rawBlobs,
-		KzgProofs: rawProofs,
+		Envelope:    envelope,
+		DataColumns: roSidecars,
 	})
 	return nil
 }
@@ -138,7 +148,7 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	// Broadcast pre-computed data column sidecars BEFORE receiving the envelope,
 	// because ReceiveExecutionPayloadEnvelope checks data availability.
 	// Sidecars were computed during ProposeBeaconBlock (storeExecutionPayloadEnvelope).
-	if err := vs.broadcastGloasDataColumns(ctx); err != nil {
+	if err := vs.broadcastGloasDataColumns(ctx, envSlot); err != nil {
 		log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
 	}
 
@@ -159,26 +169,20 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	return &emptypb.Empty{}, nil
 }
 
-// broadcastGloasDataColumns derives DataColumnSidecarGloas from the cached
-// raw blobs and KZG proofs and broadcasts them. The KZG cell computation runs
-// here at publish time rather than at block-production time so the cache only
-// holds the source-of-truth raw bytes and avoids drift between blobs and
-// derived sidecars.
-func (vs *Server) broadcastGloasDataColumns(ctx context.Context) error {
+// broadcastGloasDataColumns broadcasts the pre-computed DataColumnSidecarGloas
+// from the cache. The slot match guard prevents broadcasting sidecars for an
+// older block when a stateless publish for a different slot reaches a BN that
+// produced for an unrelated slot.
+func (vs *Server) broadcastGloasDataColumns(ctx context.Context, envSlot primitives.Slot) error {
 	contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
-	if !ok || len(contents.Blobs) == 0 {
+	if !ok || len(contents.DataColumns) == 0 {
 		return nil
 	}
-	cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(contents.Blobs, contents.KzgProofs)
-	if err != nil {
-		return errors.Wrap(err, "compute cells and proofs from cached blobs")
-	}
-	blockRoot := bytesutil.ToBytes32(contents.Envelope.BeaconBlockRoot)
-	roSidecars, err := peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, primitives.Slot(contents.Envelope.Payload.SlotNumber), blockRoot)
-	if err != nil {
-		return errors.Wrap(err, "build gloas data column sidecars")
+	if contents.Envelope.Payload.SlotNumber != envSlot {
+		return nil
 	}
 
+	roSidecars := contents.DataColumns
 	log.WithFields(logrus.Fields{
 		"slot":    roSidecars[0].Slot(),
 		"root":    fmt.Sprintf("%#x", roSidecars[0].BlockRoot()),

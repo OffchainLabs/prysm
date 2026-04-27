@@ -3,23 +3,25 @@ package cache
 import (
 	"sync"
 
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // ExecutionPayloadContents bundles the latest self-built execution payload
-// envelope with the raw blob bundle the producer used. Data column sidecars
-// are derived from Blobs and KzgProofs at consumption time; storing only the
-// source data avoids drift between the two representations.
+// envelope with the precomputed data column sidecars. Raw blobs and KZG cell
+// proofs can be reconstructed from the data columns via cell-shuffling at
+// response time; caching the derived form lets the publish hot path avoid
+// the KZG cell extension computation.
 type ExecutionPayloadContents struct {
-	Envelope  *ethpb.ExecutionPayloadEnvelope
-	Blobs     [][]byte
-	KzgProofs [][]byte
+	Envelope    *ethpb.ExecutionPayloadEnvelope
+	DataColumns []consensusblocks.RODataColumn
 }
 
 // ExecutionPayloadEnvelopeCache holds the most recent ExecutionPayloadContents
 // produced by the proposer. It backs:
 //   - The Gloas validator gRPC GetExecutionPayloadEnvelope endpoint.
-//   - The v4 ProduceBlock include_payload=true response (raw blobs/proofs).
+//   - The v4 ProduceBlock include_payload=true response (blobs/proofs derived
+//     from the cached data columns).
 //   - The publish-time data column broadcast that runs before
 //     ReceiveExecutionPayloadEnvelope checks data availability.
 //
