@@ -95,6 +95,13 @@
     BYTES_PER_PROOF: uint64 = 48
     </spec>
 
+- name: COMMITTEE_WEIGHT_ESTIMATION_ADJUSTMENT_FACTOR#phase0
+  sources: []
+  spec: |
+    <spec constant_var="COMMITTEE_WEIGHT_ESTIMATION_ADJUSTMENT_FACTOR" fork="phase0" hash="e8e1efcf">
+    COMMITTEE_WEIGHT_ESTIMATION_ADJUSTMENT_FACTOR: uint64 = 5
+    </spec>
+
 - name: COMPOUNDING_WITHDRAWAL_PREFIX#electra
   sources:
     - file: config/params/config.go

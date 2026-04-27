@@ -40,13 +40,14 @@ func (s *Service) CurrentSlot() primitives.Slot {
 }
 
 // getFCUArgs returns the arguments to call forkchoice update
+// this function is only called pre-gloas hence we pass in full to getPayloadAttribute
 func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) (*fcuConfig, error) {
 
 	fcuArgs, err := s.getFCUArgsEarlyBlock(cfg)
 	if err != nil {
 		return nil, err
 	}
-	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:], cfg.headRoot[:])
+	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:], true)
 	return fcuArgs, nil
 }
 
@@ -195,25 +196,14 @@ func (s *Service) updateCachesPostBlockProcessing(cfg *postBlockProcessConfig) {
 	}
 }
 
-// reportProcessingTime reports the metric of how long it took to process the
-// current block
-func reportProcessingTime(startTime time.Time) {
-	onBlockProcessingTime.Observe(float64(time.Since(startTime).Milliseconds()))
-}
-
 // GetPrestateToPropose returns the pre-state for a proposer to base its block on.
-// It is similar to GetBlockPreState but it lacks unnecessary verifications.
 func (s *Service) GetPrestateToPropose(ctx context.Context, b consensus_blocks.ROBlock) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.GetPreStateToPropose")
 	defer span.End()
 
-	accessRoot, err := s.getLookupParentRoot(b)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get lookup parent root")
-	}
-
+	parentRoot := b.Block().ParentRoot()
 	bl := b.Block()
-	preState, err := s.cfg.StateGen.StateByRoot(ctx, accessRoot)
+	preState, err := s.cfg.StateGen.StateByRoot(ctx, parentRoot)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not get pre state for slot %d", bl.Slot())
 	}
@@ -223,6 +213,12 @@ func (s *Service) GetPrestateToPropose(ctx context.Context, b consensus_blocks.R
 	return preState, nil
 }
 
+// reportProcessingTime reports the metric of how long it took to process the
+// current block
+func reportProcessingTime(startTime time.Time) {
+	onBlockProcessingTime.Observe(float64(time.Since(startTime).Milliseconds()))
+}
+
 // GetBlockPreState returns the pre state of an incoming block. It uses the parent root of the block
 // to retrieve the state in DB. It verifies the pre state's validity and the incoming block
 // is in the correct time window.
@@ -230,17 +226,14 @@ func (s *Service) GetBlockPreState(ctx context.Context, b consensus_blocks.ROBlo
 	ctx, span := trace.StartSpan(ctx, "blockChain.getBlockPreState")
 	defer span.End()
 
-	accessRoot, err := s.getLookupParentRoot(b)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get lookup parent root")
-	}
+	parentRoot := b.Block().ParentRoot()
 	// Verify incoming block has a valid pre state.
-	if err := s.verifyBlkPreState(ctx, accessRoot); err != nil {
+	if err := s.verifyBlkPreState(ctx, parentRoot); err != nil {
 		return nil, err
 	}
 
 	bl := b.Block()
-	preState, err := s.cfg.StateGen.StateByRoot(ctx, accessRoot)
+	preState, err := s.cfg.StateGen.StateByRoot(ctx, parentRoot)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not get pre state for slot %d", bl.Slot())
 	}

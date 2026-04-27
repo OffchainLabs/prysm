@@ -20,7 +20,7 @@ import (
 
 func testProtoEnvelope() *ethpb.ExecutionPayloadEnvelope {
 	return &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
+		Payload: &enginev1.ExecutionPayloadGloas{
 			ParentHash:    bytesutil.PadTo([]byte("parent"), 32),
 			FeeRecipient:  bytesutil.PadTo([]byte("fee"), 20),
 			StateRoot:     bytesutil.PadTo([]byte("state"), 32),
@@ -31,12 +31,11 @@ func testProtoEnvelope() *ethpb.ExecutionPayloadEnvelope {
 			BlockHash:     bytesutil.PadTo([]byte("blockhash"), 32),
 			Transactions:  [][]byte{},
 			Withdrawals:   []*enginev1.Withdrawal{},
+			SlotNumber:    primitives.Slot(100),
 		},
 		ExecutionRequests: &enginev1.ExecutionRequests{},
 		BuilderIndex:      primitives.BuilderIndex(42),
 		BeaconBlockRoot:   bytesutil.PadTo([]byte("beacon-root"), 32),
-		Slot:              primitives.Slot(100),
-		StateRoot:         bytesutil.PadTo([]byte("envelope-state"), 32),
 	}
 }
 
@@ -89,7 +88,7 @@ func TestGetExecutionPayloadEnvelope_Valid(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Equal(t, primitives.BuilderIndex(42), resp.BuilderIndex)
-	assert.Equal(t, primitives.Slot(100), resp.Slot)
+	assert.Equal(t, primitives.Slot(100), resp.Payload.SlotNumber)
 	assert.DeepEqual(t, envelope.BeaconBlockRoot, resp.BeaconBlockRoot)
 }
 
@@ -186,8 +185,7 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, envelope.BuilderIndex, roundTripped.BuilderIndex)
-	assert.Equal(t, envelope.Slot, roundTripped.Slot)
+	assert.Equal(t, envelope.Payload.SlotNumber, roundTripped.Payload.SlotNumber)
 	assert.DeepEqual(t, envelope.BeaconBlockRoot, roundTripped.BeaconBlockRoot)
-	assert.DeepEqual(t, envelope.StateRoot, roundTripped.StateRoot)
 	assert.Equal(t, hexutil.Encode(envelope.Payload.BlockHash), hexutil.Encode(roundTripped.Payload.BlockHash))
 }

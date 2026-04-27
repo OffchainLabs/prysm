@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
@@ -91,7 +92,7 @@ func (s *Service) prunePendingPayloadEnvelopes() {
 	deleted := false
 	for root, inner := range s.pendingPayloadEnvelopes {
 		for _, env := range inner {
-			if slots.ToEpoch(env.Message.Slot) < finalizedEpoch {
+			if env.Message != nil && env.Message.Payload != nil && slots.ToEpoch(primitives.Slot(env.Message.Payload.SlotNumber)) < finalizedEpoch {
 				delete(s.pendingPayloadEnvelopes, root)
 				deleted = true
 			}

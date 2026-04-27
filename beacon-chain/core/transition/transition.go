@@ -160,12 +160,12 @@ func ProcessSlot(ctx context.Context, state state.BeaconState) (state.BeaconStat
 }
 
 // ProcessSlotsIfNeeded takes a ReadOnlyBeaconState and processes it only if its needed, it returns a ReadOnlyBeaconState
-func ProcessSlotsIfNeeded(ctx context.Context, state state.ReadOnlyBeaconState, accessRoot []byte, slot primitives.Slot) (state.ReadOnlyBeaconState, error) {
+func ProcessSlotsIfNeeded(ctx context.Context, state state.ReadOnlyBeaconState, parentRoot []byte, slot primitives.Slot) (state.ReadOnlyBeaconState, error) {
 	if slot <= state.Slot() {
 		return state, nil
 	}
 	copied := state.Copy()
-	return ProcessSlotsUsingNextSlotCache(ctx, copied, accessRoot, slot)
+	return ProcessSlotsUsingNextSlotCache(ctx, copied, parentRoot, slot)
 }
 
 // ProcessSlotsUsingNextSlotCache processes slots by using next slot cache for higher efficiency.

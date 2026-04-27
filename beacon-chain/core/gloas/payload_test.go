@@ -2,7 +2,6 @@ package gloas
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -25,11 +24,11 @@ type payloadFixture struct {
 	signed      interfaces.ROSignedExecutionPayloadEnvelope
 	signedProto *ethpb.SignedExecutionPayloadEnvelope
 	envelope    *ethpb.ExecutionPayloadEnvelope
-	payload     *enginev1.ExecutionPayloadDeneb
+	payload     *enginev1.ExecutionPayloadGloas
 	slot        primitives.Slot
 }
 
-func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPayloadDeneb, bid *ethpb.ExecutionPayloadBid, envelope *ethpb.ExecutionPayloadEnvelope)) payloadFixture {
+func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPayloadGloas, bid *ethpb.ExecutionPayloadBid, envelope *ethpb.ExecutionPayloadEnvelope)) payloadFixture {
 	t.Helper()
 
 	cfg := params.BeaconConfig()
@@ -48,7 +47,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		{Index: 0, ValidatorIndex: 1, Address: bytes.Repeat([]byte{0x01}, 20), Amount: 0},
 	}
 
-	payload := &enginev1.ExecutionPayloadDeneb{
+	payload := &enginev1.ExecutionPayloadGloas{
 		ParentHash:    parentHash,
 		FeeRecipient:  bytes.Repeat([]byte{0x01}, 20),
 		StateRoot:     bytes.Repeat([]byte{0x02}, 32),
@@ -66,19 +65,23 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		Withdrawals:   withdrawals,
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
+		SlotNumber:    slot,
 	}
 
+	emptyRequestsRoot, err := (&enginev1.ExecutionRequests{}).HashTreeRoot()
+	require.NoError(t, err)
 	bid := &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:  parentHash,
-		ParentBlockRoot:  bytes.Repeat([]byte{0xDD}, 32),
-		BlockHash:        blockHash,
-		PrevRandao:       randao,
-		GasLimit:         1,
-		BuilderIndex:     builderIdx,
-		Slot:             slot,
-		Value:            0,
-		ExecutionPayment: 0,
-		FeeRecipient:     bytes.Repeat([]byte{0xEE}, 20),
+		ParentBlockHash:       parentHash,
+		ParentBlockRoot:       bytes.Repeat([]byte{0xDD}, 32),
+		BlockHash:             blockHash,
+		PrevRandao:            randao,
+		GasLimit:              1,
+		BuilderIndex:          builderIdx,
+		Slot:                  slot,
+		Value:                 0,
+		ExecutionPayment:      0,
+		FeeRecipient:          bytes.Repeat([]byte{0xEE}, 20),
+		ExecutionRequestsRoot: emptyRequestsRoot[:],
 	}
 
 	header := &ethpb.BeaconBlockHeader{
@@ -91,7 +94,6 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 	require.NoError(t, err)
 
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Slot:              slot,
 		BuilderIndex:      builderIdx,
 		BeaconBlockRoot:   headerRoot[:],
 		Payload:           payload,
@@ -187,18 +189,6 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 	st, err := state_native.InitializeFromProtoGloas(stProto)
 	require.NoError(t, err)
 
-	expected := st.Copy()
-	ctx := context.Background()
-	require.NoError(t, processExecutionRequests(ctx, expected, envelope.ExecutionRequests))
-	require.NoError(t, expected.QueueBuilderPayment())
-	require.NoError(t, expected.SetExecutionPayloadAvailability(slot, true))
-	var blockHashArr [32]byte
-	copy(blockHashArr[:], payload.BlockHash)
-	require.NoError(t, expected.SetLatestBlockHash(blockHashArr))
-	expectedRoot, err := expected.HashTreeRoot(ctx)
-	require.NoError(t, err)
-	envelope.StateRoot = expectedRoot[:]
-
 	epoch := slots.ToEpoch(slot)
 	domain, err := signing.Domain(st.Fork(), epoch, cfg.DomainBeaconBuilder, st.GenesisValidatorsRoot())
 	require.NoError(t, err)
@@ -223,33 +213,15 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 	}
 }
 
-func TestProcessExecutionPayload_Success(t *testing.T) {
+func TestVerifyExecutionPayloadEnvelope_Success(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
-	require.NoError(t, ProcessExecutionPayload(t.Context(), fixture.state, fixture.signed))
-
-	latestHash, err := fixture.state.LatestBlockHash()
-	require.NoError(t, err)
-	var expectedHash [32]byte
-	copy(expectedHash[:], fixture.payload.BlockHash)
-	require.Equal(t, expectedHash, latestHash)
-
-	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-	paymentIndex := slotsPerEpoch + (fixture.slot % slotsPerEpoch)
-	payments, err := fixture.state.BuilderPendingPayments()
-	require.NoError(t, err)
-	payment := payments[paymentIndex]
-	require.NotNil(t, payment)
-	require.Equal(t, primitives.Gwei(0), payment.Withdrawal.Amount)
+	require.NoError(t, VerifyExecutionPayloadEnvelope(t.Context(), fixture.state, fixture.signed))
 }
 
-func TestProcessExecutionPayloadWithDeferredSig_Success(t *testing.T) {
+func TestVerifyExecutionPayloadEnvelopeWithDeferredSig_Success(t *testing.T) {
 	fixture := buildPayloadFixture(t, nil)
 
-	header := fixture.state.LatestBlockHeader()
-	var previousStateRoot [32]byte
-	copy(previousStateRoot[:], header.StateRoot)
-
-	sigBatch, err := ProcessExecutionPayloadWithDeferredSig(t.Context(), fixture.state, previousStateRoot, fixture.signed)
+	sigBatch, err := VerifyExecutionPayloadEnvelopeWithDeferredSig(t.Context(), fixture.state, fixture.signed)
 	require.NoError(t, err)
 	require.NotNil(t, sigBatch)
 	require.Equal(t, 1, len(sigBatch.Signatures))
@@ -261,175 +233,6 @@ func TestProcessExecutionPayloadWithDeferredSig_Success(t *testing.T) {
 	valid, err := sigBatch.Verify()
 	require.NoError(t, err)
 	require.Equal(t, true, valid)
-
-	latestHash, err := fixture.state.LatestBlockHash()
-	require.NoError(t, err)
-	var expectedHash [32]byte
-	copy(expectedHash[:], fixture.payload.BlockHash)
-	require.Equal(t, expectedHash, latestHash)
-
-	available, err := fixture.state.ExecutionPayloadAvailability(fixture.slot)
-	require.NoError(t, err)
-	require.Equal(t, uint64(1), available)
-
-	updatedHeader := fixture.state.LatestBlockHeader()
-	require.DeepEqual(t, previousStateRoot[:], updatedHeader.StateRoot)
-}
-
-func TestProcessExecutionPayloadWithDeferredSig_PreviousStateRootMismatch(t *testing.T) {
-	fixture := buildPayloadFixture(t, nil)
-
-	previousStateRoot := [32]byte{0x42}
-
-	_, err := ProcessExecutionPayloadWithDeferredSig(t.Context(), fixture.state, previousStateRoot, fixture.signed)
-	require.ErrorContains(t, "envelope beacon block root does not match state latest block header root", err)
-}
-
-func TestApplyExecutionPayload_Success(t *testing.T) {
-	fixture := buildPayloadFixture(t, nil)
-
-	envelope, err := fixture.signed.Envelope()
-	require.NoError(t, err)
-	require.NoError(t, ApplyExecutionPayload(t.Context(), fixture.state, envelope))
-
-	latestHash, err := fixture.state.LatestBlockHash()
-	require.NoError(t, err)
-	var expectedHash [32]byte
-	copy(expectedHash[:], fixture.payload.BlockHash)
-	require.Equal(t, expectedHash, latestHash)
-
-	available, err := fixture.state.ExecutionPayloadAvailability(fixture.slot)
-	require.NoError(t, err)
-	require.Equal(t, uint64(1), available)
-}
-
-func TestApplyExecutionPayloadStateMutations_UpdatesAvailabilityAndLatestHash(t *testing.T) {
-	fixture := buildPayloadFixture(t, nil)
-
-	newHash := [32]byte{}
-	newHash[0] = 0x99
-
-	require.NoError(t, applyExecutionPayloadStateMutations(t.Context(), fixture.state, fixture.envelope.ExecutionRequests, newHash))
-
-	latestHash, err := fixture.state.LatestBlockHash()
-	require.NoError(t, err)
-	require.Equal(t, newHash, latestHash)
-
-	available, err := fixture.state.ExecutionPayloadAvailability(fixture.slot)
-	require.NoError(t, err)
-	require.Equal(t, uint64(1), available)
-}
-
-func TestProcessExecutionPayload_PrevRandaoMismatch(t *testing.T) {
-	fixture := buildPayloadFixture(t, func(_ *enginev1.ExecutionPayloadDeneb, bid *ethpb.ExecutionPayloadBid, _ *ethpb.ExecutionPayloadEnvelope) {
-		bid.PrevRandao = bytes.Repeat([]byte{0xFF}, 32)
-	})
-
-	err := ProcessExecutionPayload(t.Context(), fixture.state, fixture.signed)
-	require.ErrorContains(t, "prev randao", err)
-}
-
-func TestQueueBuilderPayment_ZeroAmountClearsSlot(t *testing.T) {
-	fixture := buildPayloadFixture(t, nil)
-
-	require.NoError(t, fixture.state.QueueBuilderPayment())
-
-	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-	paymentIndex := slotsPerEpoch + (fixture.slot % slotsPerEpoch)
-	payments, err := fixture.state.BuilderPendingPayments()
-	require.NoError(t, err)
-	payment := payments[paymentIndex]
-	require.NotNil(t, payment)
-	require.Equal(t, primitives.Gwei(0), payment.Withdrawal.Amount)
-}
-
-func TestProcessBlindedExecutionPayload_NilEnvelope(t *testing.T) {
-	fixture := buildPayloadFixture(t, nil)
-	require.NoError(t, ProcessBlindedExecutionPayload(t.Context(), fixture.state, [32]byte{}, nil))
-}
-
-func TestProcessBlindedExecutionPayload_Success(t *testing.T) {
-	fixture := buildPayloadFixture(t, nil)
-	st := fixture.state
-
-	blockHash := [32]byte(fixture.payload.BlockHash)
-	stateRoot := [32]byte{0xAA}
-	envelope := &ethpb.SignedBlindedExecutionPayloadEnvelope{
-		Message: &ethpb.BlindedExecutionPayloadEnvelope{
-			Slot:              fixture.slot,
-			BuilderIndex:      fixture.envelope.BuilderIndex,
-			BlockHash:         blockHash[:],
-			BeaconBlockRoot:   make([]byte, 32),
-			ExecutionRequests: fixture.envelope.ExecutionRequests,
-		},
-	}
-
-	wrappedEnv, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
-	require.NoError(t, err)
-	require.NoError(t, ProcessBlindedExecutionPayload(t.Context(), st, stateRoot, wrappedEnv))
-
-	latestHash, err := st.LatestBlockHash()
-	require.NoError(t, err)
-	require.Equal(t, blockHash, latestHash)
-
-	available, err := st.ExecutionPayloadAvailability(fixture.slot)
-	require.NoError(t, err)
-	require.Equal(t, uint64(1), available)
-
-	header := st.LatestBlockHeader()
-	require.DeepEqual(t, stateRoot[:], header.StateRoot)
-}
-
-func TestProcessBlindedExecutionPayload_SlotMismatch(t *testing.T) {
-	fixture := buildPayloadFixture(t, nil)
-
-	envelope := &ethpb.SignedBlindedExecutionPayloadEnvelope{
-		Message: &ethpb.BlindedExecutionPayloadEnvelope{
-			Slot:            fixture.slot + 1,
-			BlockHash:       make([]byte, 32),
-			BeaconBlockRoot: make([]byte, 32),
-		},
-	}
-	wrappedEnv, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
-	require.NoError(t, err)
-	err = ProcessBlindedExecutionPayload(t.Context(), fixture.state, [32]byte{}, wrappedEnv)
-	require.ErrorContains(t, "blinded envelope slot does not match state slot", err)
-}
-
-func TestProcessBlindedExecutionPayload_BuilderIndexMismatch(t *testing.T) {
-	fixture := buildPayloadFixture(t, nil)
-
-	blockHash := [32]byte(fixture.payload.BlockHash)
-	envelope := &ethpb.SignedBlindedExecutionPayloadEnvelope{
-		Message: &ethpb.BlindedExecutionPayloadEnvelope{
-			Slot:            fixture.slot,
-			BuilderIndex:    999,
-			BlockHash:       blockHash[:],
-			BeaconBlockRoot: make([]byte, 32),
-		},
-	}
-	wrappedEnv, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
-	require.NoError(t, err)
-	err = ProcessBlindedExecutionPayload(t.Context(), fixture.state, [32]byte{}, wrappedEnv)
-	require.ErrorContains(t, "builder index does not match", err)
-}
-
-func TestProcessBlindedExecutionPayload_BlockHashMismatch(t *testing.T) {
-	fixture := buildPayloadFixture(t, nil)
-
-	wrongHash := bytes.Repeat([]byte{0xFF}, 32)
-	envelope := &ethpb.SignedBlindedExecutionPayloadEnvelope{
-		Message: &ethpb.BlindedExecutionPayloadEnvelope{
-			Slot:            fixture.slot,
-			BuilderIndex:    fixture.envelope.BuilderIndex,
-			BlockHash:       wrongHash,
-			BeaconBlockRoot: make([]byte, 32),
-		},
-	}
-	wrappedEnv, err := blocks.WrappedROBlindedExecutionPayloadEnvelope(envelope.Message)
-	require.NoError(t, err)
-	err = ProcessBlindedExecutionPayload(t.Context(), fixture.state, [32]byte{}, wrappedEnv)
-	require.ErrorContains(t, "block hash does not match", err)
 }
 
 func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
@@ -450,7 +253,7 @@ func TestVerifyExecutionPayloadEnvelopeSignature(t *testing.T) {
 		msg := proto.Clone(fixture.signedProto.Message).(*ethpb.ExecutionPayloadEnvelope)
 		msg.BuilderIndex = params.BeaconConfig().BuilderIndexSelfBuild
 
-		epoch := slots.ToEpoch(msg.Slot)
+		epoch := slots.ToEpoch(msg.Payload.SlotNumber)
 		domain, err := signing.Domain(st.Fork(), epoch, params.BeaconConfig().DomainBeaconBuilder, st.GenesisValidatorsRoot())
 		require.NoError(t, err)
 		signingRoot, err := signing.ComputeSigningRoot(msg, domain)

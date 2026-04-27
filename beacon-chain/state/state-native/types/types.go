@@ -189,7 +189,7 @@ func (f FieldIndex) RealPosition() int {
 		return 22
 	case NextSyncCommittee:
 		return 23
-	case LatestExecutionPayloadHeader, LatestExecutionPayloadHeaderCapella, LatestExecutionPayloadHeaderDeneb, LatestExecutionPayloadBid:
+	case LatestExecutionPayloadHeader, LatestExecutionPayloadHeaderCapella, LatestExecutionPayloadHeaderDeneb, LatestBlockHash:
 		return 24
 	case NextWithdrawalIndex:
 		return 25
@@ -227,7 +227,7 @@ func (f FieldIndex) RealPosition() int {
 		return 41
 	case BuilderPendingWithdrawals:
 		return 42
-	case LatestBlockHash:
+	case LatestExecutionPayloadBid:
 		return 43
 	case PayloadExpectedWithdrawals:
 		return 44
