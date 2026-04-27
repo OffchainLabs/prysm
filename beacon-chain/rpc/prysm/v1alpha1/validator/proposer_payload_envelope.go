@@ -44,11 +44,7 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		BeaconBlockRoot:   blockRoot[:],
 	}
 
-	// Precompute data column sidecars now (inside ProposeBeaconBlock) so the
-	// expensive KZG cell computation doesn't run during
-	// PublishExecutionPayloadEnvelope. Raw blobs and KZG proofs can be
-	// reconstructed from the cached sidecars when the v4 producer response
-	// needs them.
+	// Precompute sidecars here (during ProposeBeaconBlock slack) so publish stays fast.
 	var roSidecars []consensusblocks.RODataColumn
 	if bundle := local.BlobsBundler; bundle != nil && len(bundle.GetBlobs()) > 0 {
 		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(bundle.GetBlobs(), bundle.GetProofs())
@@ -145,11 +141,8 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	})
 	log.Info("Publishing signed execution payload envelope")
 
-	// Broadcast pre-computed data column sidecars BEFORE receiving the envelope,
-	// because ReceiveExecutionPayloadEnvelope checks data availability. Sidecars
-	// were computed during ProposeBeaconBlock (storeExecutionPayloadEnvelope).
-	// The slot guard prevents broadcasting sidecars whose block root commits to
-	// a different slot than the envelope being published.
+	// Broadcast sidecars BEFORE receiving the envelope so the DA check sees them.
+	// Slot guard avoids broadcasting cached sidecars from an unrelated slot.
 	if contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok &&
 		contents.Envelope.Payload.SlotNumber == envSlot && len(contents.DataColumns) > 0 {
 		log.WithField("columns", len(contents.DataColumns)).Debug("Broadcasting Gloas data column sidecars")

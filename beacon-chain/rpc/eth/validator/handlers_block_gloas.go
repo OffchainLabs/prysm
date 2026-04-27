@@ -8,7 +8,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -250,11 +250,9 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// blobsAndProofsFromDataColumns reconstructs raw blobs and the flat KZG proofs
-// vector (indexed [blob*numCols + col]) from the producer's pre-computed data
-// column sidecars. The cheap path: the producer always has every column, so
-// each blob's bytes live in the first CellsPerBlob columns and proofs are
-// re-flattened from the per-column slices. No KZG ops, just memory shuffling.
+// blobsAndProofsFromDataColumns derives raw blobs and the flat KZG proofs
+// vector (indexed [blob*numCols + col]) from cached sidecars. Pure memory
+// shuffling: ReconstructBlobs hits its cheap branch since we have every column.
 func blobsAndProofsFromDataColumns(sidecars []consensusblocks.RODataColumn) ([][]byte, [][]byte, error) {
 	if len(sidecars) == 0 {
 		return nil, nil, nil
@@ -263,23 +261,15 @@ func blobsAndProofsFromDataColumns(sidecars []consensusblocks.RODataColumn) ([][
 	if len(sidecars) != numColumns {
 		return nil, nil, errors.Errorf("expected %d data column sidecars, got %d", numColumns, len(sidecars))
 	}
-	for i, sc := range sidecars {
-		if sc.Index() != uint64(i) {
-			return nil, nil, errors.Errorf("data column sidecars must be ordered by index; got index %d at position %d", sc.Index(), i)
-		}
-	}
 
+	verified := make([]consensusblocks.VerifiedRODataColumn, len(sidecars))
+	for i, sc := range sidecars {
+		verified[i] = consensusblocks.NewVerifiedRODataColumn(sc)
+	}
 	blobCount := len(sidecars[0].Column())
-	blobs := make([][]byte, blobCount)
-	for blobIdx := 0; blobIdx < blobCount; blobIdx++ {
-		blob := make([]byte, fieldparams.BlobSize)
-		for col := 0; col < fieldparams.CellsPerBlob; col++ {
-			cell := sidecars[col].Column()[blobIdx]
-			if copy(blob[col*kzg.BytesPerCell:], cell) != kzg.BytesPerCell {
-				return nil, nil, errors.New("unexpected cell size")
-			}
-		}
-		blobs[blobIdx] = blob
+	blobs, err := peerdas.ReconstructBlobs(verified, nil, blobCount)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "reconstruct blobs from data columns")
 	}
 
 	proofs := make([][]byte, blobCount*numColumns)

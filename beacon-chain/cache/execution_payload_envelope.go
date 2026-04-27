@@ -7,39 +7,27 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
-// ExecutionPayloadContents bundles the latest self-built execution payload
-// envelope with the precomputed data column sidecars. Raw blobs and KZG cell
-// proofs can be reconstructed from the data columns via cell-shuffling at
-// response time; caching the derived form lets the publish hot path avoid
-// the KZG cell extension computation.
+// ExecutionPayloadContents holds the producer's envelope with precomputed
+// data column sidecars; raw blobs/proofs are derived from the columns at read
+// time so the publish hot path skips the KZG cell extension.
 type ExecutionPayloadContents struct {
 	Envelope    *ethpb.ExecutionPayloadEnvelope
 	DataColumns []consensusblocks.RODataColumn
 }
 
 // ExecutionPayloadEnvelopeCache holds the most recent ExecutionPayloadContents
-// produced by the proposer. It backs:
-//   - The Gloas validator gRPC GetExecutionPayloadEnvelope endpoint.
-//   - The v4 ProduceBlock include_payload=true response (blobs/proofs derived
-//     from the cached data columns).
-//   - The publish-time data column broadcast that runs before
-//     ReceiveExecutionPayloadEnvelope checks data availability.
-//
-// The cache holds at most one entry; Set replaces the current entry.
+// produced by the proposer. Single-entry; Set replaces.
 type ExecutionPayloadEnvelopeCache struct {
 	mu       sync.RWMutex
 	contents *ExecutionPayloadContents
 }
 
-// NewExecutionPayloadEnvelopeCache returns an empty cache.
 func NewExecutionPayloadEnvelopeCache() *ExecutionPayloadEnvelopeCache {
 	return &ExecutionPayloadEnvelopeCache{}
 }
 
-// Set replaces the cached contents atomically. No-op on a nil receiver, nil
-// contents, or contents without a fully-populated envelope. Enforcing
-// Envelope.Payload != nil here lets readers treat that field as a guaranteed
-// invariant of any cache hit.
+// Set replaces the cached contents. No-op on nil receiver/contents/envelope so
+// readers can treat Envelope and Envelope.Payload as non-nil on a hit.
 func (c *ExecutionPayloadEnvelopeCache) Set(contents *ExecutionPayloadContents) {
 	if c == nil || contents == nil || contents.Envelope == nil || contents.Envelope.Payload == nil {
 		return
@@ -49,12 +37,8 @@ func (c *ExecutionPayloadEnvelopeCache) Set(contents *ExecutionPayloadContents) 
 	c.contents = contents
 }
 
-// Contents returns the current cached bundle as a snapshot and a boolean
-// indicating whether the cache held a valid entry. The returned struct is a
-// fresh value; the slices inside are shared with the cache but the cache only
-// ever re-assigns them whole, so a caller's reference remains stable for the
-// lifetime of its snapshot. When ok is true, Envelope and Envelope.Payload are
-// guaranteed non-nil.
+// Contents returns a snapshot of the cached bundle. The struct is freshly
+// allocated; inner slices alias the cache (safe — Set re-assigns whole).
 func (c *ExecutionPayloadEnvelopeCache) Contents() (*ExecutionPayloadContents, bool) {
 	if c == nil {
 		return nil, false
