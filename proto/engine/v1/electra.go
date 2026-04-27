@@ -30,10 +30,14 @@ type ExecutionRequestLimits struct {
 }
 
 func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests(limits ExecutionRequestLimits) (*ExecutionRequests, error) {
+	return decodeExecutionRequestList(ebe.ExecutionRequests, limits)
+}
+
+func decodeExecutionRequestList(raw [][]byte, limits ExecutionRequestLimits) (*ExecutionRequests, error) {
 	requests := &ExecutionRequests{}
 	var prevTypeNum *uint8
-	for i := range ebe.ExecutionRequests {
-		requestType, requestListInSSZBytes, err := decodeExecutionRequest(ebe.ExecutionRequests[i])
+	for i := range raw {
+		requestType, requestListInSSZBytes, err := decodeExecutionRequest(raw[i])
 		if err != nil {
 			return nil, err
 		}

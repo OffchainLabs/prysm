@@ -34,6 +34,7 @@ option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
 //     value: Gwei
 //     execution_payment: Gwei
 //     blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+//     execution_requests_root: Root
 message ExecutionPayloadBid {
   bytes parent_block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes parent_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
@@ -60,6 +61,7 @@ message ExecutionPayloadBid {
     (ethereum.eth.ext.ssz_size) = "?,48",
     (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
   ];
+  bytes execution_requests_root = 12 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // SignedExecutionPayloadBid wraps an execution payload bid with a signature.
@@ -182,7 +184,7 @@ message BeaconBlockGloas {
 }
 
 // BeaconBlockBodyGloas represents the body of a beacon block in the Gloas fork.
-// New fields: signed_execution_payload_bid and payload_attestations
+// New fields: signed_execution_payload_bid, payload_attestations, parent_execution_requests
 // Removed fields: execution_payload, blob_kzg_commitments, execution_requests
 //
 // Spec:
@@ -191,15 +193,15 @@ message BeaconBlockGloas {
 //     eth1_data: Eth1Data
 //     graffiti: Bytes32
 //     proposer_slashings: List[ProposerSlashing, MAX_PROPOSER_SLASHINGS]
-//     attester_slashings: List[AttesterSlashing,
-//     MAX_ATTESTER_SLASHINGS_ELECTRA] attestations: List[Attestation,
-//     MAX_ATTESTATIONS_ELECTRA] deposits: List[Deposit, MAX_DEPOSITS]
+//     attester_slashings: List[AttesterSlashing, MAX_ATTESTER_SLASHINGS_ELECTRA]
+//     attestations: List[Attestation, MAX_ATTESTATIONS_ELECTRA]
+//     deposits: List[Deposit, MAX_DEPOSITS]
 //     voluntary_exits: List[SignedVoluntaryExit, MAX_VOLUNTARY_EXITS]
 //     sync_aggregate: SyncAggregate
-//     bls_to_execution_changes: List[SignedBLSToExecutionChange,
-//     MAX_BLS_TO_EXECUTION_CHANGES] signed_execution_payload_bid:
-//     SignedExecutionPayloadBid payload_attestations: List[PayloadAttestation,
-//     MAX_PAYLOAD_ATTESTATIONS]
+//     bls_to_execution_changes: List[SignedBLSToExecutionChange, MAX_BLS_TO_EXECUTION_CHANGES]
+//     signed_execution_payload_bid: SignedExecutionPayloadBid
+//     payload_attestations: List[PayloadAttestation, MAX_PAYLOAD_ATTESTATIONS]
+//     parent_execution_requests: ExecutionRequests
 message BeaconBlockBodyGloas {
   bytes randao_reveal = 1 [ (ethereum.eth.ext.ssz_size) = "96" ];
   Eth1Data eth1_data = 2;
@@ -221,6 +223,7 @@ message BeaconBlockBodyGloas {
   SignedExecutionPayloadBid signed_execution_payload_bid = 11;
   repeated PayloadAttestation payload_attestations = 12
       [ (ethereum.eth.ext.ssz_max) = "payload_attestation.size" ];
+  ethereum.engine.v1.ExecutionRequests parent_execution_requests = 13;
 }
 
 // SignedBeaconBlockGloas represents a signed beacon block in the Gloas fork.
@@ -238,7 +241,7 @@ message SignedBeaconBlockGloas {
 // class BeaconState(Container):
 //     [All previous fields from earlier forks]
 //     # Replaced existing latest execution header position
-//     latest_execution_payload_bid: ExecutionPayloadBid
+//     latest_block_hash: Hash32
 //     builders: List[Builder, BUILDER_REGISTRY_LIMIT]
 //     # [New in Gloas:EIP7732]
 //     next_withdrawal_builder_index: BuilderIndex
@@ -247,7 +250,7 @@ message SignedBeaconBlockGloas {
 //     builder_pending_payments: Vector[BuilderPendingPayment, 2 *
 //     SLOTS_PER_EPOCH] builder_pending_withdrawals:
 //     List[BuilderPendingWithdrawal, BUILDER_PENDING_WITHDRAWALS_LIMIT]
-//     latest_block_hash: Hash32
+//     latest_execution_payload_bid: ExecutionPayloadBid
 //     payload_expected_withdrawals: List[Withdrawal,
 //     MAX_WITHDRAWALS_PER_PAYLOAD]
 //     ptc_window:
@@ -315,9 +318,9 @@ message BeaconStateGloas {
   SyncCommittee current_sync_committee = 9002;
   SyncCommittee next_sync_committee = 9003;
 
-  // Note: latest_execution_payload_header replaced with ExecutionPayloadBid in
+  // Note: latest_execution_payload_header replaced with latest_block_hash in
   // Gloas
-  ExecutionPayloadBid latest_execution_payload_bid = 10001;
+  bytes latest_block_hash = 10001 [ (ethereum.eth.ext.ssz_size) = "32" ];
 
   // Fields introduced in Capella fork [11001-12000]
   uint64 next_withdrawal_index = 11001;
@@ -378,7 +381,7 @@ message BeaconStateGloas {
       [ (ethereum.eth.ext.ssz_size) = "builder_pending_payments.size" ];
   repeated BuilderPendingWithdrawal builder_pending_withdrawals = 14005
       [ (ethereum.eth.ext.ssz_max) = "1048576" ];
-  bytes latest_block_hash = 14006 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  ExecutionPayloadBid latest_execution_payload_bid = 14006;
   repeated ethereum.engine.v1.Withdrawal payload_expected_withdrawals = 14007
       [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
   repeated PTCs ptc_window = 14008
@@ -485,20 +488,13 @@ message DataColumnSidecarGloas {
 //     execution_requests: ExecutionRequests
 //     builder_index: BuilderIndex
 //     beacon_block_root: Root
-//     slot: Slot
-//     state_root: Root
 message ExecutionPayloadEnvelope {
-  ethereum.engine.v1.ExecutionPayloadDeneb payload = 1;
+  ethereum.engine.v1.ExecutionPayloadGloas payload = 1;
   ethereum.engine.v1.ExecutionRequests execution_requests = 2;
   uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
                                  "github.com/OffchainLabs/prysm/v7/"
                                  "consensus-types/primitives.BuilderIndex" ];
   bytes beacon_block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  uint64 slot = 5 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
-  ];
-  bytes state_root = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // SignedExecutionPayloadEnvelope wraps an execution payload envelope with a
@@ -529,7 +525,6 @@ message BlindedExecutionPayloadEnvelope {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
-  bytes state_root = 6 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes parent_block_hash = 7 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 

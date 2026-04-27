@@ -5,12 +5,12 @@ import (
 	"math"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -35,42 +35,6 @@ func (s *Service) waitUntilEpoch(target primitives.Epoch, secondsPerSlot uint64)
 			return s.ctx.Err()
 		}
 	}
-}
-
-// getLookupParentRoot returns the root that serves as key to generate the parent state for the passed beacon block.
-// if it is based on empty or it is pre-Gloas, it is the parent root of the block, otherwise if it is based on full it is
-// the parent hash.
-// The caller of this function should not hold a lock on forkchoice.
-func (s *Service) getLookupParentRoot(b consensus_blocks.ROBlock) ([32]byte, error) {
-	bl := b.Block()
-	parentRoot := bl.ParentRoot()
-	if b.Version() < version.Gloas {
-		return parentRoot, nil
-	}
-	parentSlot, err := s.cfg.ForkChoiceStore.Slot(parentRoot)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "failed to get slot for parent root")
-	}
-
-	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
-		return parentRoot, nil
-	}
-	blockHash, err := s.cfg.ForkChoiceStore.BlockHash(parentRoot)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "failed to get block hash for parent root")
-	}
-	bid, err := bl.Body().SignedExecutionPayloadBid()
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "failed to get signed execution payload bid from block body")
-	}
-	if bid == nil || bid.Message == nil || len(bid.Message.ParentBlockHash) != 32 {
-		return [32]byte{}, errors.New("invalid signed execution payload bid message")
-	}
-	parentHash := [32]byte(bid.Message.ParentBlockHash)
-	if blockHash == parentHash {
-		return parentHash, nil
-	}
-	return parentRoot, nil
 }
 
 func (s *Service) runLatePayloadTasks() {
@@ -109,47 +73,84 @@ func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives
 	return cache.TrackedValidator{}, false
 }
 
+// computePayloadWithdrawals returns the withdrawals for the next payload.
+// If the parent's payload was delivered (full), it applies the parent's
+// execution requests on a state copy before computing withdrawals.
+// If the parent was empty, it returns the existing payload_expected_withdrawals.
+func (s *Service) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte, headFull bool) ([]*enginev1.Withdrawal, error) {
+	if slots.ToEpoch(s.head.slot) < params.BeaconConfig().GloasForkEpoch {
+		result, err := st.ExpectedWithdrawalsGloas()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute expected withdrawals")
+		}
+		return result.Withdrawals, nil
+	}
+	if !headFull {
+		return st.PayloadExpectedWithdrawals()
+	}
+	// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).
+	envelope, err := s.cfg.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get parent execution payload envelope")
+	}
+	if err := coregloas.ApplyParentExecutionPayload(ctx, st, envelope.Message.ExecutionRequests); err != nil {
+		return nil, errors.Wrap(err, "could not apply parent execution payload")
+	}
+	result, err := st.ExpectedWithdrawalsGloas()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compute expected withdrawals")
+	}
+	return result.Withdrawals, nil
+}
+
 // This is a Gloas version of getPayloadAttribute that avoids all the clutter that was originally due to the proposer Index.
 // It is guaranteed to be called for the current slot + 1 and the head state to have been advanced to at least the current epoch.
-func (s *Service) getPayloadAttributeGloas(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot, headRoot, accessRoot []byte) payloadattribute.Attributer {
+func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot, headRoot []byte) payloadattribute.Attributer {
 	emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
 	val, proposing := s.checkIfProposing(st, slot)
 	if !proposing {
 		return emptyAttri
 	}
 
-	st, err := transition.ProcessSlotsIfNeeded(ctx, st, accessRoot, slot)
-	if err != nil {
-		log.WithError(err).Error("Could not process slots to get payload attribute")
-		return emptyAttri
+	var err error
+	if slot > st.Slot() {
+		writable, ok := st.(state.BeaconState)
+		if !ok {
+			log.Error("head state is not writable; cannot advance slots")
+			return emptyAttri
+		}
+		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, writable, headRoot, slot)
+		if err != nil {
+			log.WithError(err).Error("Could not process slots to get payload attribute")
+			return emptyAttri
+		}
 	}
 
-	// Get previous randao.
 	prevRando, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	if err != nil {
 		log.WithError(err).Error("Could not get randao mix to get payload attribute")
 		return emptyAttri
 	}
 
-	// Get timestamp.
 	t, err := slots.StartTime(s.genesisTime, slot)
 	if err != nil {
 		log.WithError(err).Error("Could not get timestamp to get payload attribute")
 		return emptyAttri
 	}
 
-	withdrawals, err := st.WithdrawalsForPayload()
+	withdrawals, err := st.PayloadExpectedWithdrawals()
 	if err != nil {
 		log.WithError(err).Error("Could not get payload withdrawals to get payload attribute")
 		return emptyAttri
 	}
 
-	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV3{
+	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
 		Timestamp:             uint64(t.Unix()),
 		PrevRandao:            prevRando,
 		SuggestedFeeRecipient: val.FeeRecipient[:],
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: headRoot,
+		SlotNumber:            uint64(slot),
 	})
 	if err != nil {
 		log.WithError(err).Error("Could not get payload attribute")
@@ -158,9 +159,8 @@ func (s *Service) getPayloadAttributeGloas(ctx context.Context, st state.ReadOnl
 	return attr
 }
 
-// latePayloadTasks updates the NSC and epoch boundary caches when there is no payload in the current slot (and there is a block)
+// latePayloadTasks sends an FCU when no payload arrived for the current slot's block.
 // The case where the block was also missing would have been dealt by lateBlockTasks already.
-// We call FCU only if we are proposing next slot, as the execution head is assumed to not have changed.
 func (s *Service) latePayloadTasks(ctx context.Context) {
 	currentSlot := s.CurrentSlot()
 	if currentSlot != s.HeadSlot() {
@@ -187,15 +187,14 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 	if !s.inRegularSync() {
 		return
 	}
-	attr := s.getPayloadAttributeGloas(ctx, st, currentSlot+1, r, r)
+	attr := s.getLatePayloadAttribute(ctx, st, currentSlot+1, r)
 	if attr == nil || attr.IsEmpty() {
 		return
 	}
 	beaconLatePayloadTaskTriggeredTotal.Inc()
-	// Head is the empty block.
 	bh, err := st.LatestBlockHash()
 	if err != nil {
-		log.WithError(err).Error("Could not get latest block hash to notify engine")
+		log.WithError(err).Error("Could not get latest block hash")
 		return
 	}
 	pid, err := s.notifyForkchoiceUpdateGloas(ctx, bh, attr)

@@ -49,8 +49,9 @@ func (t testExecutionPayloadBid) BlobKzgCommitments() [][]byte { return t.blobKz
 func (t testExecutionPayloadBid) BlobKzgCommitmentCount() uint64 {
 	return uint64(len(t.blobKzgCommitments))
 }
-func (t testExecutionPayloadBid) FeeRecipient() [20]byte { return t.feeRecipient }
-func (t testExecutionPayloadBid) IsNil() bool            { return false }
+func (t testExecutionPayloadBid) FeeRecipient() [20]byte          { return t.feeRecipient }
+func (t testExecutionPayloadBid) ExecutionRequestsRoot() [32]byte { return [32]byte{} }
+func (t testExecutionPayloadBid) IsNil() bool                     { return false }
 
 func TestSetExecutionPayloadBid(t *testing.T) {
 	t.Run("previous fork returns expected error", func(t *testing.T) {
@@ -186,80 +187,6 @@ func TestClearBuilderPendingPayment(t *testing.T) {
 
 		require.ErrorContains(t, "out of range", err)
 		require.Equal(t, false, st.dirtyFields[types.BuilderPendingPayments])
-	})
-}
-
-func TestQueueBuilderPayment(t *testing.T) {
-	t.Run("previous fork returns expected error", func(t *testing.T) {
-		st := &BeaconState{version: version.Fulu}
-		err := st.QueueBuilderPayment()
-		require.ErrorContains(t, "is not supported", err)
-	})
-
-	t.Run("appends withdrawal, clears payment, and marks dirty", func(t *testing.T) {
-		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-		slot := primitives.Slot(3)
-		paymentIndex := slotsPerEpoch + (slot % slotsPerEpoch)
-
-		st := &BeaconState{
-			version:                   version.Gloas,
-			slot:                      slot,
-			dirtyFields:               make(map[types.FieldIndex]bool),
-			rebuildTrie:               make(map[types.FieldIndex]bool),
-			sharedFieldReferences:     make(map[types.FieldIndex]*stateutil.Reference),
-			builderPendingPayments:    make([]*ethpb.BuilderPendingPayment, slotsPerEpoch*2),
-			builderPendingWithdrawals: []*ethpb.BuilderPendingWithdrawal{},
-		}
-		st.builderPendingPayments[paymentIndex] = &ethpb.BuilderPendingPayment{
-			Weight: 1,
-			Withdrawal: &ethpb.BuilderPendingWithdrawal{
-				FeeRecipient: bytes.Repeat([]byte{0xAB}, 20),
-				Amount:       99,
-				BuilderIndex: 1,
-			},
-		}
-
-		require.NoError(t, st.QueueBuilderPayment())
-		require.DeepEqual(t, emptyBuilderPendingPayment, st.builderPendingPayments[paymentIndex])
-		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
-		require.Equal(t, true, st.dirtyFields[types.BuilderPendingWithdrawals])
-		require.Equal(t, 1, len(st.builderPendingWithdrawals))
-		require.DeepEqual(t, bytes.Repeat([]byte{0xAB}, 20), st.builderPendingWithdrawals[0].FeeRecipient)
-		require.Equal(t, primitives.Gwei(99), st.builderPendingWithdrawals[0].Amount)
-
-		// Ensure copied withdrawal is not aliased.
-		st.builderPendingPayments[paymentIndex].Withdrawal.FeeRecipient[0] = 0x01
-		require.Equal(t, byte(0xAB), st.builderPendingWithdrawals[0].FeeRecipient[0])
-	})
-
-	t.Run("zero amount does not append withdrawal", func(t *testing.T) {
-		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-		slot := primitives.Slot(3)
-		paymentIndex := slotsPerEpoch + (slot % slotsPerEpoch)
-
-		st := &BeaconState{
-			version:                   version.Gloas,
-			slot:                      slot,
-			dirtyFields:               make(map[types.FieldIndex]bool),
-			rebuildTrie:               make(map[types.FieldIndex]bool),
-			sharedFieldReferences:     make(map[types.FieldIndex]*stateutil.Reference),
-			builderPendingPayments:    make([]*ethpb.BuilderPendingPayment, slotsPerEpoch*2),
-			builderPendingWithdrawals: []*ethpb.BuilderPendingWithdrawal{},
-		}
-		st.builderPendingPayments[paymentIndex] = &ethpb.BuilderPendingPayment{
-			Weight: 1,
-			Withdrawal: &ethpb.BuilderPendingWithdrawal{
-				FeeRecipient: bytes.Repeat([]byte{0xAB}, 20),
-				Amount:       0,
-				BuilderIndex: 1,
-			},
-		}
-
-		require.NoError(t, st.QueueBuilderPayment())
-		require.DeepEqual(t, emptyBuilderPendingPayment, st.builderPendingPayments[paymentIndex])
-		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
-		require.Equal(t, false, st.dirtyFields[types.BuilderPendingWithdrawals])
-		require.Equal(t, 0, len(st.builderPendingWithdrawals))
 	})
 }
 

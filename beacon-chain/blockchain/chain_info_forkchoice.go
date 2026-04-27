@@ -63,11 +63,11 @@ func (s *Service) HasFullNode(root [32]byte) bool {
 	return s.cfg.ForkChoiceStore.HasFullNode(root)
 }
 
-// PayloadContentLookup returns the preferred payload-content lookup key from forkchoice.
-func (s *Service) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
+// FullBeatsEmpty returns whether forkchoice would select the full payload variant for the given root.
+func (s *Service) FullBeatsEmpty(root [32]byte) bool {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
-	return s.cfg.ForkChoiceStore.PayloadContentLookup(root)
+	return s.cfg.ForkChoiceStore.FullBeatsEmpty(root)
 }
 
 // ReceivedBlocksLastEpoch returns the corresponding value from forkchoice

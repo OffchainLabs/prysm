@@ -395,6 +395,12 @@ func (s *Service) Status() error {
 	return nil
 }
 
+// HighestExecutionPayloadBidCache exposes sync's cache to the proposer RPC.
+// Sync is the sole writer (gossip); the proposer is a reader.
+func (s *Service) HighestExecutionPayloadBidCache() *cache.HighestExecutionPayloadBidCache {
+	return s.highestExecutionPayloadBidCache
+}
+
 // This initializes the caches to update seen beacon objects coming in from the wire
 // and prevent DoS.
 func (s *Service) initCaches() {
