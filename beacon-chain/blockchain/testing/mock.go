@@ -851,6 +851,14 @@ func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *et
 	return nil
 }
 
+// PtcLookupState implements the same method in the chain service.
+func (c *ChainService) PtcLookupState(_ context.Context, _ [32]byte, _ primitives.Slot) (state.ReadOnlyBeaconState, error) {
+	if c.State == nil {
+		return nil, nil
+	}
+	return c.State, nil
+}
+
 // ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
 func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
 	return nil
