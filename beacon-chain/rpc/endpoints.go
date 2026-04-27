@@ -221,7 +221,7 @@ func (s *Service) validatorEndpoints(
 		CoreService:                   coreService,
 		BlockRewardFetcher:            rewardFetcher,
 	}
-	
+
 	const namespace = "validator"
 	return []endpoint{
 		{
