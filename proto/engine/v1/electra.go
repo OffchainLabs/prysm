@@ -18,16 +18,12 @@ var (
 )
 
 // emptyRequestsRootOnce merkleizes a zero-value ExecutionRequests.
-var emptyRequestsRootOnce = sync.OnceValue(func() [32]byte {
-	root, err := (&ExecutionRequests{}).HashTreeRoot()
-	if err != nil {
-		panic("enginev1: failed to merkleize zero-value ExecutionRequests: " + err.Error())
-	}
-	return root
+var emptyRequestsRootOnce = sync.OnceValues(func() ([32]byte, error) {
+	return (&ExecutionRequests{}).HashTreeRoot()
 })
 
 // EmptyExecutionRequestsHashTreeRoot returns the merkle root of an empty ExecutionRequests.
-func EmptyExecutionRequestsHashTreeRoot() [32]byte {
+func EmptyExecutionRequestsHashTreeRoot() ([32]byte, error) {
 	return emptyRequestsRootOnce()
 }
 
