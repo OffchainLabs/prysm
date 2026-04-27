@@ -146,10 +146,15 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	log.Info("Publishing signed execution payload envelope")
 
 	// Broadcast pre-computed data column sidecars BEFORE receiving the envelope,
-	// because ReceiveExecutionPayloadEnvelope checks data availability.
-	// Sidecars were computed during ProposeBeaconBlock (storeExecutionPayloadEnvelope).
-	if err := vs.broadcastGloasDataColumns(ctx, envSlot); err != nil {
-		log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
+	// because ReceiveExecutionPayloadEnvelope checks data availability. Sidecars
+	// were computed during ProposeBeaconBlock (storeExecutionPayloadEnvelope).
+	// The slot guard prevents broadcasting sidecars whose block root commits to
+	// a different slot than the envelope being published.
+	if contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents(); ok &&
+		contents.Envelope.Payload.SlotNumber == envSlot && len(contents.DataColumns) > 0 {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, contents.DataColumns); err != nil {
+			log.WithError(err).Error("Failed to broadcast Gloas data column sidecars")
+		}
 	}
 
 	if err := vs.P2P.Broadcast(ctx, req); err != nil {
@@ -167,32 +172,6 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	log.Info("Successfully published execution payload envelope")
 
 	return &emptypb.Empty{}, nil
-}
-
-// broadcastGloasDataColumns broadcasts the pre-computed DataColumnSidecarGloas
-// from the cache. The slot match guard prevents broadcasting sidecars for an
-// older block when a stateless publish for a different slot reaches a BN that
-// produced for an unrelated slot.
-func (vs *Server) broadcastGloasDataColumns(ctx context.Context, envSlot primitives.Slot) error {
-	contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
-	if !ok || len(contents.DataColumns) == 0 {
-		return nil
-	}
-	if contents.Envelope.Payload.SlotNumber != envSlot {
-		return nil
-	}
-
-	roSidecars := contents.DataColumns
-	log.WithFields(logrus.Fields{
-		"slot":    roSidecars[0].Slot(),
-		"root":    fmt.Sprintf("%#x", roSidecars[0].BlockRoot()),
-		"columns": len(roSidecars),
-	}).Debug("Broadcasting Gloas data column sidecars")
-
-	if err := vs.broadcastAndReceiveDataColumns(ctx, roSidecars); err != nil {
-		return errors.Wrap(err, "broadcast and receive data columns")
-	}
-	return nil
 }
 
 // setParentExecutionRequests populates the parent_execution_requests field
