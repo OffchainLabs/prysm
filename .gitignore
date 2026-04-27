@@ -44,3 +44,6 @@ tmp
 
 # spectest coverage reports
 report.txt
+
+# Environment variables
+.env
