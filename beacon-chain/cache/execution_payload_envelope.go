@@ -3,19 +3,17 @@ package cache
 import (
 	"sync"
 
-	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // ExecutionPayloadContents bundles the latest self-built execution payload
-// envelope with its precomputed data column sidecars and the raw blob bundle
-// the producer used. The fields are always written and read together so
-// callers never see an envelope from one block alongside blobs from another.
+// envelope with the raw blob bundle the producer used. Data column sidecars
+// are derived from Blobs and KzgProofs at consumption time; storing only the
+// source data avoids drift between the two representations.
 type ExecutionPayloadContents struct {
-	Envelope    *ethpb.ExecutionPayloadEnvelope
-	DataColumns []consensusblocks.RODataColumn
-	Blobs       [][]byte
-	KzgProofs   [][]byte
+	Envelope  *ethpb.ExecutionPayloadEnvelope
+	Blobs     [][]byte
+	KzgProofs [][]byte
 }
 
 // ExecutionPayloadEnvelopeCache holds the most recent ExecutionPayloadContents

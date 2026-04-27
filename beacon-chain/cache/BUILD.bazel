@@ -15,6 +15,7 @@ go_library(
         "common.go",
         "doc.go",
         "error.go",
+        "execution_payload_envelope.go",
         "highest_execution_payload_bid.go",
         "interfaces.go",
         "log.go",

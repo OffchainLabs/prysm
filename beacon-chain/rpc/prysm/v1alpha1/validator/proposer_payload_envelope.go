@@ -44,28 +44,16 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 		BeaconBlockRoot:   blockRoot[:],
 	}
 
-	// Precompute data column sidecars now (inside ProposeBeaconBlock) so the
-	// expensive KZG cell computation doesn't run during PublishExecutionPayloadEnvelope.
-	var roSidecars []consensusblocks.RODataColumn
 	var rawBlobs, rawProofs [][]byte
 	if bundle := local.BlobsBundler; bundle != nil && len(bundle.GetBlobs()) > 0 {
 		rawBlobs = bundle.GetBlobs()
 		rawProofs = bundle.GetProofs()
-		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, rawProofs)
-		if err != nil {
-			return errors.Wrap(err, "compute cells and proofs from blobs bundle")
-		}
-		roSidecars, err = peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, sBlk.Block().Slot(), blockRoot)
-		if err != nil {
-			return errors.Wrap(err, "build gloas data column sidecars")
-		}
 	}
 
 	vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{
-		Envelope:    envelope,
-		DataColumns: roSidecars,
-		Blobs:       rawBlobs,
-		KzgProofs:   rawProofs,
+		Envelope:  envelope,
+		Blobs:     rawBlobs,
+		KzgProofs: rawProofs,
 	})
 	return nil
 }
@@ -171,15 +159,25 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 	return &emptypb.Empty{}, nil
 }
 
-// broadcastGloasDataColumns broadcasts pre-computed DataColumnSidecarGloas from the cache.
-// The sidecars are computed during storeExecutionPayloadEnvelope (inside ProposeBeaconBlock)
-// so no expensive KZG work happens here.
+// broadcastGloasDataColumns derives DataColumnSidecarGloas from the cached
+// raw blobs and KZG proofs and broadcasts them. The KZG cell computation runs
+// here at publish time rather than at block-production time so the cache only
+// holds the source-of-truth raw bytes and avoids drift between blobs and
+// derived sidecars.
 func (vs *Server) broadcastGloasDataColumns(ctx context.Context) error {
 	contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
-	if !ok || len(contents.DataColumns) == 0 {
+	if !ok || len(contents.Blobs) == 0 {
 		return nil
 	}
-	roSidecars := contents.DataColumns
+	cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(contents.Blobs, contents.KzgProofs)
+	if err != nil {
+		return errors.Wrap(err, "compute cells and proofs from cached blobs")
+	}
+	blockRoot := bytesutil.ToBytes32(contents.Envelope.BeaconBlockRoot)
+	roSidecars, err := peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, primitives.Slot(contents.Envelope.Payload.SlotNumber), blockRoot)
+	if err != nil {
+		return errors.Wrap(err, "build gloas data column sidecars")
+	}
 
 	log.WithFields(logrus.Fields{
 		"slot":    roSidecars[0].Slot(),
@@ -190,7 +188,6 @@ func (vs *Server) broadcastGloasDataColumns(ctx context.Context) error {
 	if err := vs.broadcastAndReceiveDataColumns(ctx, roSidecars); err != nil {
 		return errors.Wrap(err, "broadcast and receive data columns")
 	}
-
 	return nil
 }
 
