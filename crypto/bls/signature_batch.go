@@ -3,6 +3,7 @@ package bls
 import (
 	"encoding/hex"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -10,6 +11,13 @@ import (
 
 // AggregatedSignature represents aggregated signature produced by AggregateBatch()
 const AggregatedSignature = "bls aggregated signature"
+
+// skipBLSVerify short-circuits SignatureBatch.Verify / VerifyVerbosely to
+// return (true, nil) unconditionally. It's intended ONLY for running spec
+// tests whose meta.yaml declares bls_setting: 2 ("signatures may be skipped").
+// Prysm does not otherwise parse bls_setting; this env-var is the escape hatch.
+// Never set this in production — it disables all batched signature checks.
+var skipBLSVerify = os.Getenv("PRYSM_SPECTEST_SKIP_BLS") == "1"
 
 // SignatureBatch refers to the defined set of
 // signatures and its respective public keys and
@@ -42,12 +50,18 @@ func (s *SignatureBatch) Join(set *SignatureBatch) *SignatureBatch {
 
 // Verify the current signature batch using the batch verify algorithm.
 func (s *SignatureBatch) Verify() (bool, error) {
+	if skipBLSVerify {
+		return true, nil
+	}
 	return VerifyMultipleSignatures(s.Signatures, s.Messages, s.PublicKeys)
 }
 
 // VerifyVerbosely verifies signatures as a whole at first, if fails, fallback
 // to verify each single signature to identify invalid ones.
 func (s *SignatureBatch) VerifyVerbosely() (bool, error) {
+	if skipBLSVerify {
+		return true, nil
+	}
 	valid, err := s.Verify()
 	if err != nil || valid {
 		return valid, err
