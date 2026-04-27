@@ -940,7 +940,7 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
-			template: "/eth/v2/beacon/execution_payload/bid",
+			template: "/eth/v1/beacon/execution_payload_bid",
 			name:     namespace + ".PublishSignedExecutionPayloadBid",
 			middleware: []middleware.Middleware{
 				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),

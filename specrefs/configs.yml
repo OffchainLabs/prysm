@@ -181,6 +181,13 @@
     CHURN_LIMIT_QUOTIENT: uint64 = 65536
     </spec>
 
+- name: CONFIRMATION_BYZANTINE_THRESHOLD#phase0
+  sources: []
+  spec: |
+    <spec config_var="CONFIRMATION_BYZANTINE_THRESHOLD" fork="phase0" hash="60de2e33">
+    CONFIRMATION_BYZANTINE_THRESHOLD: uint64 = 25
+    </spec>
+
 - name: CONTRIBUTION_DUE_BPS#altair
   sources:
     - file: config/params/config.go

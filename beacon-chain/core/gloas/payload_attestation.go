@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	stderrors "errors"
 	"fmt"
+	"math"
 	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -189,7 +190,7 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 
 // selectByBalance selects a balance-weighted subset of input candidates.
 //
-//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="2c9f1c23">
+//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="f99b3e37">
 //	def compute_balance_weighted_selection(
 //	    state: BeaconState,
 //	    indices: Sequence[ValidatorIndex],
@@ -203,17 +204,24 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 //	    are themselves sampled from ``indices`` by shuffling it, otherwise
 //	    ``indices`` is traversed in order.
 //	    """
+//	    MAX_RANDOM_VALUE = 2**16 - 1
 //	    total = uint64(len(indices))
 //	    assert total > 0
+//	    effective_balances = [state.validators[index].effective_balance for index in indices]
 //	    selected: List[ValidatorIndex] = []
 //	    i = uint64(0)
 //	    while len(selected) < size:
+//	        offset = i % 16 * 2
+//	        if offset == 0:
+//	            random_bytes = hash(seed + uint_to_bytes(i // 16))
 //	        next_index = i % total
 //	        if shuffle_indices:
 //	            next_index = compute_shuffled_index(next_index, total, seed)
-//	        candidate_index = indices[next_index]
-//	        if compute_balance_weighted_acceptance(state, candidate_index, seed, i):
-//	            selected.append(candidate_index)
+//	        weight = effective_balances[next_index] * MAX_RANDOM_VALUE
+//	        random_value = bytes_to_uint64(random_bytes[offset : offset + 2])
+//	        threshold = MAX_EFFECTIVE_BALANCE_ELECTRA * random_value
+//	        if weight >= threshold:
+//	            selected.append(indices[next_index])
 //	        i += 1
 //	    return selected
 //	</spec>
@@ -231,16 +239,28 @@ func selectByBalanceFill(
 	copy(buf[:], seed[:])
 	maxBalance := params.BeaconConfig().MaxEffectiveBalanceElectra
 
+	var randomBytes [32]byte
+	cachedBlock := uint64(math.MaxUint64)
+
 	for _, idx := range candidates {
 		if ctx.Err() != nil {
 			return nil, i, ctx.Err()
 		}
 
-		ok, err := acceptByBalance(st, idx, buf[:], hashFunc, maxBalance, i)
-		if err != nil {
-			return nil, i, err
+		if block := i / 16; block != cachedBlock {
+			binary.LittleEndian.PutUint64(buf[len(buf)-8:], block)
+			randomBytes = hashFunc(buf[:])
+			cachedBlock = block
 		}
-		if ok {
+
+		offset := (i % 16) * 2
+		randomValue := uint64(binary.LittleEndian.Uint16(randomBytes[offset : offset+2]))
+
+		val, err := st.ValidatorAtIndexReadOnly(idx)
+		if err != nil {
+			return nil, i, errors.Wrapf(err, "validator %d", idx)
+		}
+		if val.EffectiveBalance()*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue {
 			selected = append(selected, idx)
 		}
 		if uint64(len(selected)) == fieldparams.PTCSize {
@@ -250,38 +270,6 @@ func selectByBalanceFill(
 	}
 
 	return selected, i, nil
-}
-
-// acceptByBalance determines if a validator is accepted based on its effective balance.
-//
-//	<spec fn="compute_balance_weighted_acceptance" fork="gloas" hash="9954dcd0">
-//	def compute_balance_weighted_acceptance(
-//	    state: BeaconState, index: ValidatorIndex, seed: Bytes32, i: uint64
-//	) -> bool:
-//	    """
-//	    Return whether to accept the selection of the validator ``index``, with probability
-//	    proportional to its ``effective_balance``, and randomness given by ``seed`` and ``i``.
-//	    """
-//	    MAX_RANDOM_VALUE = 2**16 - 1
-//	    random_bytes = hash(seed + uint_to_bytes(i // 16))
-//	    offset = i % 16 * 2
-//	    random_value = bytes_to_uint64(random_bytes[offset : offset + 2])
-//	    effective_balance = state.validators[index].effective_balance
-//	    return effective_balance * MAX_RANDOM_VALUE >= MAX_EFFECTIVE_BALANCE_ELECTRA * random_value
-//	</spec>
-func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex, seedBuf []byte, hashFunc func([]byte) [32]byte, maxBalance uint64, round uint64) (bool, error) {
-	// Reuse the seed buffer by overwriting the last 8 bytes with the round counter.
-	binary.LittleEndian.PutUint64(seedBuf[len(seedBuf)-8:], round/16)
-	random := hashFunc(seedBuf)
-	offset := (round % 16) * 2
-	randomValue := uint64(binary.LittleEndian.Uint16(random[offset : offset+2])) // 16-bit draw per spec
-
-	val, err := st.ValidatorAtIndexReadOnly(idx)
-	if err != nil {
-		return false, errors.Wrapf(err, "validator %d", idx)
-	}
-
-	return val.EffectiveBalance()*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue, nil
 }
 
 // validIndexedPayloadAttestation verifies the signature of an indexed payload attestation.

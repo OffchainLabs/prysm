@@ -9,6 +9,7 @@ go_library(
         "deposit_request.go",
         "log.go",
         "metrics.go",
+        "parent_payload.go",
         "payload.go",
         "payload_attestation.go",
         "pending_payment.go",

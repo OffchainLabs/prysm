@@ -63,9 +63,6 @@ func (s signedExecutionPayloadEnvelope) IsNil() bool {
 	if len(s.s.Message.BeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
-	if len(s.s.Message.StateRoot) != field_params.RootLength {
-		return true
-	}
 	if s.s.Message.ExecutionRequests == nil {
 		return true
 	}
@@ -107,7 +104,7 @@ func (p *executionPayloadEnvelope) IsBlinded() bool {
 
 // Execution returns the execution payload as a read-only interface.
 func (p *executionPayloadEnvelope) Execution() (interfaces.ExecutionData, error) {
-	return WrappedExecutionPayloadDeneb(p.p.Payload)
+	return WrappedExecutionPayloadGloas(p.p.Payload)
 }
 
 // ExecutionRequests returns the execution requests attached to the envelope.
@@ -125,14 +122,9 @@ func (p *executionPayloadEnvelope) BeaconBlockRoot() [field_params.RootLength]by
 	return [field_params.RootLength]byte(p.p.BeaconBlockRoot)
 }
 
-// Slot returns the slot of the envelope.
+// Slot returns the slot derived from the payload's slot_number field.
 func (p *executionPayloadEnvelope) Slot() primitives.Slot {
-	return p.p.Slot
-}
-
-// StateRoot returns the state root carried by the envelope.
-func (p *executionPayloadEnvelope) StateRoot() [field_params.RootLength]byte {
-	return [field_params.RootLength]byte(p.p.StateRoot)
+	return primitives.Slot(p.p.Payload.SlotNumber)
 }
 
 // BlockHash returns the block hash from the execution payload.
@@ -184,10 +176,6 @@ func (p *blindedExecutionPayloadEnvelope) BeaconBlockRoot() [field_params.RootLe
 
 func (p *blindedExecutionPayloadEnvelope) Slot() primitives.Slot {
 	return p.p.Slot
-}
-
-func (p *blindedExecutionPayloadEnvelope) StateRoot() [field_params.RootLength]byte {
-	return [field_params.RootLength]byte(p.p.StateRoot)
 }
 
 func (p *blindedExecutionPayloadEnvelope) BlockHash() [field_params.RootLength]byte {

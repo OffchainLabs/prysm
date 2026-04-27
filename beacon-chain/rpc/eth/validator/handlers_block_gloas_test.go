@@ -30,7 +30,7 @@ var (
 
 func testEnvelope() *eth.ExecutionPayloadEnvelope {
 	return &eth.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
+		Payload: &enginev1.ExecutionPayloadGloas{
 			ParentHash:    make([]byte, 32),
 			FeeRecipient:  make([]byte, 20),
 			StateRoot:     make([]byte, 32),
@@ -39,11 +39,10 @@ func testEnvelope() *eth.ExecutionPayloadEnvelope {
 			PrevRandao:    make([]byte, 32),
 			BaseFeePerGas: make([]byte, 32),
 			BlockHash:     make([]byte, 32),
+			SlotNumber:    1,
 		},
 		BuilderIndex:    0,
 		BeaconBlockRoot: make([]byte, 32),
-		Slot:            1,
-		StateRoot:       make([]byte, 32),
 	}
 }
 
