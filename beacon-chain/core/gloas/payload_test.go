@@ -68,8 +68,7 @@ func buildPayloadFixture(t *testing.T, mutate func(payload *enginev1.ExecutionPa
 		SlotNumber:    slot,
 	}
 
-	emptyRequestsRoot, err := (&enginev1.ExecutionRequests{}).HashTreeRoot()
-	require.NoError(t, err)
+	emptyRequestsRoot := enginev1.EmptyExecutionRequestsHashTreeRoot()
 	bid := &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:       parentHash,
 		ParentBlockRoot:       bytes.Repeat([]byte{0xDD}, 32),

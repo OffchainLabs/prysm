@@ -308,10 +308,7 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		}
 	}
 
-	emptyExecutionRequestsRoot, err := (&enginev1.ExecutionRequests{}).HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not compute empty execution requests root")
-	}
+	emptyExecutionRequestsRoot := enginev1.EmptyExecutionRequestsHashTreeRoot()
 
 	s := &ethpb.BeaconStateGloas{
 		GenesisTime:           uint64(beaconState.GenesisTime().Unix()),

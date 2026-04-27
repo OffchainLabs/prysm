@@ -2,6 +2,7 @@ package enginev1
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -15,6 +16,20 @@ var (
 	crExample = &ConsolidationRequest{}
 	crSize    = crExample.SizeSSZ()
 )
+
+// emptyRequestsRootOnce merkleizes a zero-value ExecutionRequests.
+var emptyRequestsRootOnce = sync.OnceValue(func() [32]byte {
+	root, err := (&ExecutionRequests{}).HashTreeRoot()
+	if err != nil {
+		panic("enginev1: failed to merkleize zero-value ExecutionRequests: " + err.Error())
+	}
+	return root
+})
+
+// EmptyExecutionRequestsHashTreeRoot returns the merkle root of an empty ExecutionRequests.
+func EmptyExecutionRequestsHashTreeRoot() [32]byte {
+	return emptyRequestsRootOnce()
+}
 
 const (
 	DepositRequestType = iota
