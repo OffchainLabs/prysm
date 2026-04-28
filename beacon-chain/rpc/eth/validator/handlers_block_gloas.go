@@ -273,8 +273,8 @@ func blobsAndProofsFromDataColumns(sidecars []consensusblocks.RODataColumn) ([][
 	}
 
 	proofs := make([][]byte, blobCount*numColumns)
-	for blobIdx := 0; blobIdx < blobCount; blobIdx++ {
-		for col := 0; col < numColumns; col++ {
+	for blobIdx := range blobCount {
+		for col := range numColumns {
 			proofs[blobIdx*numColumns+col] = sidecars[col].KzgProofs()[blobIdx]
 		}
 	}
