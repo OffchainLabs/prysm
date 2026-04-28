@@ -40,13 +40,11 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 	ctx context.Context,
 	envelope *ethpb.SignedExecutionPayloadEnvelope,
 ) (*empty.Empty, error) {
-	// In stateless mode, drain the envelope cache for this slot so the publish
-	// includes blobs and KZG proofs the receiving beacon node may not have. A
-	// missing cache entry (e.g. running stateless against a node that never
-	// returned blobs) falls through to the bare-envelope path so the call still
-	// reaches the receiver.
+	// In stateless mode, drain the envelope cache and publish Contents (envelope
+	// + blobs + proofs). On cache miss, log and fall through to bare publish.
 	if c.stateless && envelope != nil && envelope.Message != nil && envelope.Message.Payload != nil {
-		cachedEnv, blobs, kzgProofs := c.envelopeCache.Take(primitives.Slot(envelope.Message.Payload.SlotNumber))
+		slot := primitives.Slot(envelope.Message.Payload.SlotNumber)
+		cachedEnv, blobs, kzgProofs := c.envelopeCache.Take(slot)
 		if cachedEnv != nil {
 			contents, err := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(envelope, kzgProofs, blobs)
 			if err != nil {
@@ -61,6 +59,7 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 			}
 			return &empty.Empty{}, nil
 		}
+		log.WithField("slot", slot).Warn("Stateless publish: envelope cache miss; falling back to bare envelope publish")
 	}
 
 	jsonEnvelope, err := structs.SignedExecutionPayloadEnvelopeFromConsensus(envelope)
