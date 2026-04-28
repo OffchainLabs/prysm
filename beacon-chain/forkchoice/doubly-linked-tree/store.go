@@ -288,6 +288,18 @@ func (s *Store) prune(ctx context.Context) error {
 			}
 		}
 	}
+	// Remove the children of the full finalized node that are incompatible with it as well.
+	ffn := s.fullNodeByRoot[finalizedRoot]
+	if ffn == nil {
+		return nil
+	}
+	for _, child := range ffn.children {
+		if child != nil && child.slot <= checkpointMaxSlot {
+			if err := s.pruneFinalizedNodeByRootMap(ctx, child, fn); err != nil {
+				return errors.Wrap(err, "could not prune incompatible finalized child")
+			}
+		}
+	}
 	return nil
 }
 
