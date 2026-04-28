@@ -63,7 +63,18 @@ func (b *BeaconState) exitEpochAndUpdateChurn(totalActiveBalance primitives.Gwei
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	earliestExitEpoch := max(b.earliestExitEpoch, helpers.ActivationExitEpoch(slots.ToEpoch(b.slot)))
+	activationExitEpoch := helpers.ActivationExitEpoch(slots.ToEpoch(b.slot))
+	earliestExitEpoch := max(b.earliestExitEpoch, activationExitEpoch)
+
+	// [New in Gloas:EIP8080] Route exits through the consolidation queue when shorter.
+	if b.version >= version.Gloas {
+		earliestConsolidationEpoch := max(b.earliestConsolidationEpoch, activationExitEpoch)
+		consolidationChurn := helpers.ConsolidationChurnLimit(totalActiveBalance)
+		if earliestExitEpoch > earliestConsolidationEpoch && consolidationChurn > 0 {
+			return b.consolidationEpochAndUpdateChurnLocked(totalActiveBalance, 2*exitBalance/3)
+		}
+	}
+
 	perEpochChurn := helpers.ActivationExitChurnLimit(totalActiveBalance) // Guaranteed to be non-zero.
 
 	// New epoch for exits
@@ -90,6 +101,35 @@ func (b *BeaconState) exitEpochAndUpdateChurn(totalActiveBalance primitives.Gwei
 	b.markFieldAsDirty(types.EarliestExitEpoch)
 
 	return b.earliestExitEpoch, nil
+}
+
+// consolidationEpochAndUpdateChurnLocked is the lock-free body of the consolidation
+// churn update.
+func (b *BeaconState) consolidationEpochAndUpdateChurnLocked(totalActiveBalance, consolidationBalance primitives.Gwei) (primitives.Epoch, error) {
+	earliestConsolidationEpoch := max(b.earliestConsolidationEpoch, helpers.ActivationExitEpoch(slots.ToEpoch(b.slot)))
+	perEpochChurn := helpers.ConsolidationChurnLimit(totalActiveBalance)
+
+	var balanceToConsume primitives.Gwei
+	if b.earliestConsolidationEpoch < earliestConsolidationEpoch {
+		balanceToConsume = perEpochChurn
+	} else {
+		balanceToConsume = b.consolidationBalanceToConsume
+	}
+
+	if consolidationBalance > balanceToConsume {
+		balanceToProcess := consolidationBalance - balanceToConsume
+		additionalEpochs := primitives.Epoch((balanceToProcess-1)/perEpochChurn + 1)
+		earliestConsolidationEpoch += additionalEpochs
+		balanceToConsume += primitives.Gwei(additionalEpochs) * perEpochChurn
+	}
+
+	b.consolidationBalanceToConsume = balanceToConsume - consolidationBalance
+	b.earliestConsolidationEpoch = earliestConsolidationEpoch
+
+	b.markFieldAsDirty(types.ConsolidationBalanceToConsume)
+	b.markFieldAsDirty(types.EarliestConsolidationEpoch)
+
+	return b.earliestConsolidationEpoch, nil
 }
 
 // SetExitBalanceToConsume sets the exit balance to consume. This method mutates the state.
