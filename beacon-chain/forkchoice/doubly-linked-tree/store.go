@@ -288,6 +288,7 @@ func (s *Store) prune(ctx context.Context) error {
 			}
 		}
 	}
+	fen.children = nil
 	// Remove the children of the full finalized node that are incompatible with it as well.
 	ffn := s.fullNodeByRoot[finalizedRoot]
 	if ffn == nil {
@@ -300,6 +301,7 @@ func (s *Store) prune(ctx context.Context) error {
 			}
 		}
 	}
+	ffn.children = nil
 	return nil
 }
 
