@@ -235,6 +235,52 @@ message SignedBeaconBlockGloas {
   bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
+// GossipBeaconBlockGloas is the Gloas beacon block gossip wire form. It omits
+// parent_execution_requests because receivers recover them from the parent
+// execution payload envelope before signature verification and state transition.
+message GossipBeaconBlockGloas {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  uint64 proposer_index = 2 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v7/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+  bytes parent_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes state_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  GossipBeaconBlockBodyGloas body = 5;
+}
+
+// GossipBeaconBlockBodyGloas is BeaconBlockBodyGloas without
+// parent_execution_requests.
+message GossipBeaconBlockBodyGloas {
+  bytes randao_reveal = 1 [ (ethereum.eth.ext.ssz_size) = "96" ];
+  Eth1Data eth1_data = 2;
+  bytes graffiti = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated ProposerSlashing proposer_slashings = 4
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  repeated AttesterSlashingElectra attester_slashings = 5
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+  repeated AttestationElectra attestations = 6
+      [ (ethereum.eth.ext.ssz_max) = "8" ];
+  repeated Deposit deposits = 7 [ (ethereum.eth.ext.ssz_max) = "16" ];
+  repeated SignedVoluntaryExit voluntary_exits = 8
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  SyncAggregate sync_aggregate = 9;
+  repeated SignedBLSToExecutionChange bls_to_execution_changes = 10
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  SignedExecutionPayloadBid signed_execution_payload_bid = 11;
+  repeated PayloadAttestation payload_attestations = 12
+      [ (ethereum.eth.ext.ssz_max) = "payload_attestation.size" ];
+}
+
+// SignedGossipBeaconBlockGloas is the signed Gloas beacon block gossip wire
+// form.
+message SignedGossipBeaconBlockGloas {
+  GossipBeaconBlockGloas block = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
 // BeaconStateGloas represents the beacon state in the Gloas fork.
 //
 // Spec:

@@ -4,11 +4,13 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -45,6 +47,35 @@ func (s *Service) validateExecutionPayloadBid(ctx context.Context, blk interface
 	}
 
 	return pubsub.ValidationAccept, nil
+}
+
+func (s *Service) canonicalBlockFromPubsub(ctx context.Context, msg any) (interfaces.ReadOnlySignedBeaconBlock, bool, error) {
+	if blk, ok := msg.(interfaces.ReadOnlySignedBeaconBlock); ok {
+		return blk, true, nil
+	}
+	gossip, ok := msg.(*ethpb.SignedGossipBeaconBlockGloas)
+	if !ok {
+		return nil, false, errors.New("msg is not ethpb.ReadOnlySignedBeaconBlock")
+	}
+	blk, err := consensusblocks.SignedBeaconBlockGloasFromGossip(gossip, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	if !s.cfg.chain.ParentPayloadReady(blk.Block()) {
+		return blk, false, nil
+	}
+	envelope, err := s.cfg.beaconDB.ExecutionPayloadEnvelope(ctx, blk.Block().ParentRoot())
+	if err != nil {
+		if db.IsNotFound(err) {
+			return blk, false, nil
+		}
+		return nil, false, err
+	}
+	if envelope == nil || envelope.Message == nil {
+		return nil, false, errors.New("parent execution payload envelope is nil")
+	}
+	blk, err = consensusblocks.SignedBeaconBlockGloasFromGossip(gossip, envelope.Message.ExecutionRequests)
+	return blk, true, err
 }
 
 // validateExecutionPayloadBidParentSeen validates parent payload gossip rules.

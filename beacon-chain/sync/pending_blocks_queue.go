@@ -21,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	prysmTrace "github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
@@ -303,6 +304,9 @@ func (s *Service) receiveAndBroadCastBlock(ctx context.Context, b interfaces.Rea
 	s.setSeenBlockIndexSlot(blockSlot, b.Block().ProposerIndex())
 
 	pb, err := b.Proto()
+	if b.Version() == version.Gloas {
+		pb, err = blocks.SignedGossipBeaconBlockGloasFromBlock(b)
+	}
 	if err != nil {
 		log.WithError(err).Debug("Could not get protobuf block")
 		return err

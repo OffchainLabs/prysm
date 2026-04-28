@@ -99,6 +99,10 @@ func TestInitializeDataMaps_Gloas(t *testing.T) {
 	b, err := bFunc()
 	require.NoError(t, err)
 	assert.Equal(t, version.Gloas, b.Version())
+	pb, err := b.Proto()
+	require.NoError(t, err)
+	_, ok = pb.(*ethpb.SignedBeaconBlockGloas)
+	assert.Equal(t, true, ok)
 
 	mdFunc, ok := MetaDataMap[gloasVersion]
 	require.Equal(t, true, ok)

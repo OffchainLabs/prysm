@@ -487,6 +487,9 @@ func (vs *Server) broadcastBlock(ctx context.Context, wg *sync.WaitGroup, block 
 	defer wg.Done()
 
 	protoBlock, err := block.Proto()
+	if block.Version() == version.Gloas {
+		protoBlock, err = blocks.SignedGossipBeaconBlockGloasFromBlock(block)
+	}
 	if err != nil {
 		return errors.Wrap(err, "protobuf conversion failed")
 	}

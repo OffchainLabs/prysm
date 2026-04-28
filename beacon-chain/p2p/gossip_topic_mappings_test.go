@@ -166,7 +166,7 @@ func TestGossipTopicMappings_CorrectType(t *testing.T) {
 
 	// Gloas Fork
 	pMessage = GossipTopicMappings(BlockSubnetTopicFormat, gloasForkEpoch)
-	_, ok = pMessage.(*ethpb.SignedBeaconBlockGloas)
+	_, ok = pMessage.(*ethpb.SignedGossipBeaconBlockGloas)
 	assert.Equal(t, true, ok)
 	pMessage = GossipTopicMappings(ExecutionPayloadBidTopicFormat, gloasForkEpoch)
 	_, ok = pMessage.(*ethpb.SignedExecutionPayloadBid)

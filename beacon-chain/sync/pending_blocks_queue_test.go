@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"math"
 	"sync"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -30,6 +32,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	gcache "github.com/patrickmn/go-cache"
 	logTest "github.com/sirupsen/logrus/hooks/test"
+	"google.golang.org/protobuf/proto"
 )
 
 //	/- b1 - b2
@@ -116,6 +119,37 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks1(t *testing.T) {
 
 	assert.Equal(t, 2, len(r.slotToPendingBlocks.Items()), "Incorrect size for slot to pending blocks cache")
 	assert.Equal(t, 2, len(r.seenPendingBlocks), "Incorrect size for seen pending block")
+}
+
+func TestService_ReceiveAndBroadCastBlock_GloasUsesGossipBlock(t *testing.T) {
+	p2p := &capturingP2P{TestP2P: p2ptest.NewTestP2P(t)}
+	st, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+	s := &Service{
+		cfg: &config{
+			p2p:   p2p,
+			chain: &mock.ChainService{State: st, Root: make([]byte, fieldparams.RootLength)},
+		},
+	}
+	s.initCaches()
+	block, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockGloas())
+	require.NoError(t, err)
+
+	require.NoError(t, s.receiveAndBroadCastBlock(t.Context(), block, [32]byte{}, 0))
+
+	require.Equal(t, 1, len(p2p.messages))
+	_, ok := p2p.messages[0].(*ethpb.SignedGossipBeaconBlockGloas)
+	require.Equal(t, true, ok)
+}
+
+type capturingP2P struct {
+	*p2ptest.TestP2P
+	messages []proto.Message
+}
+
+func (p *capturingP2P) Broadcast(ctx context.Context, msg proto.Message) error {
+	p.messages = append(p.messages, msg)
+	return p.TestP2P.Broadcast(ctx, msg)
 }
 
 func TestRegularSyncBeaconBlockSubscriber_OptimisticStatus(t *testing.T) {
