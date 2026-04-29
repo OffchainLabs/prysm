@@ -58,7 +58,7 @@ func (c *testColumnCallbacks) ValidateColumn(_ []blocks.CellProofBundle) error {
 }
 
 func (c *testColumnCallbacks) HandleColumn(_ string, col blocks.VerifiedRODataColumn) {
-	c.t.Logf("%s: Completed! Column has %d cells", c.label, len(col.Column))
+	c.t.Logf("%s: Completed! Column has %d cells", c.label, len(col.Column()))
 	c.completeCh <- col
 }
 
@@ -148,19 +148,26 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 			},
 		})
 
-		headerRoot, err := roDC[0].DataColumnSidecar.SignedBlockHeader.Header.HashTreeRoot()
+		header := roDC[0].DataColumnSidecar().SignedBlockHeader
+		headerRoot, err := header.Header.HashTreeRoot()
 		require.NoError(t, err)
-		pc1, err := blocks.NewPartialDataColumn(headerRoot, roDC[0].DataColumnSidecar.SignedBlockHeader, roDC[0].Index, roDC[0].KzgCommitments, roDC[0].KzgCommitmentsInclusionProof)
+		kcs, err := roDC[0].KzgCommitments()
 		require.NoError(t, err)
-		pc2, err := blocks.NewPartialDataColumn(headerRoot, roDC[0].DataColumnSidecar.SignedBlockHeader, roDC[0].Index, roDC[0].KzgCommitments, roDC[0].KzgCommitmentsInclusionProof)
+		incp, err := roDC[0].KzgCommitmentsInclusionProof()
+		require.NoError(t, err)
+		pc1, err := blocks.NewPartialDataColumn(headerRoot, header, roDC[0].Index(), kcs, incp)
+		require.NoError(t, err)
+		pc2, err := blocks.NewPartialDataColumn(headerRoot, header, roDC[0].Index(), kcs, incp)
 		require.NoError(t, err)
 
+		col := roDC[0].Column()
+		kps := roDC[0].KzgProofs()
 		// Split data
 		for i := range numCells {
 			if i%2 == 0 {
-				pc1.ExtendFromVerifiedCell(uint64(i), roDC[0].Column[i], roDC[0].KzgProofs[i])
+				pc1.ExtendFromVerifiedCell(uint64(i), col[i], kps[i])
 			} else {
-				pc2.ExtendFromVerifiedCell(uint64(i), roDC[0].Column[i], roDC[0].KzgProofs[i])
+				pc2.ExtendFromVerifiedCell(uint64(i), col[i], kps[i])
 			}
 		}
 
@@ -263,9 +270,9 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		}
 
 		// Verify both columns have all cells
-		assert.Equal(t, numCells, len(col1.Column), "Node 1 should have all cells")
-		assert.Equal(t, numCells, len(col2.Column), "Node 2 should have all cells")
-		assert.DeepSSZEqual(t, cells, col1.Column, "Node 1 cell mismatch")
-		assert.DeepSSZEqual(t, cells, col2.Column, "Node 2 cell mismatch")
+		assert.Equal(t, numCells, len(col1.Column()), "Node 1 should have all cells")
+		assert.Equal(t, numCells, len(col2.Column()), "Node 2 should have all cells")
+		assert.DeepSSZEqual(t, cells, col1.Column(), "Node 1 cell mismatch")
+		assert.DeepSSZEqual(t, cells, col2.Column(), "Node 2 cell mismatch")
 	})
 }

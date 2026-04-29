@@ -95,7 +95,8 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 
 	t.Run("with commitments", func(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
-		err := peerdas.VerifyDataColumnsSidecarKZGProofsWithCommitments(sidecars, sidecarCommitments(t, sidecars))
+		bundle := blocks.RODataColumnsToCellProofBundlesWithSize(sidecars...)
+		_, err := peerdas.BatchVerifyDataColumnsCellsKZGProofs(bundle.Size, []iter.Seq[blocks.CellProofBundle]{bundle.Iterator})
 		require.NoError(t, err)
 	})
 }
