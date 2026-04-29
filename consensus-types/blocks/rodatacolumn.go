@@ -224,15 +224,37 @@ func NewVerifiedRODataColumn(roDataColumn RODataColumn) VerifiedRODataColumn {
 	return VerifiedRODataColumn{RODataColumn: roDataColumn}
 }
 
+type CellProofBundleWithSize struct {
+	Size     int
+	Iterator iter.Seq[CellProofBundle]
+}
+
+func RODataColumnsToCellProofBundlesWithSize(sidecars ...RODataColumn) CellProofBundleWithSize {
+	if len(sidecars) == 0 {
+		return CellProofBundleWithSize{Size: 0, Iterator: func(_ func(CellProofBundle) bool) {}}
+	}
+	return CellProofBundleWithSize{
+		Size:     len(sidecars) * len(sidecars[0].Column()), // assuming all sidecars have the same number of cells
+		Iterator: RODataColumnsToCellProofBundles(sidecars),
+	}
+}
+
 func RODataColumnsToCellProofBundles(sidecars []RODataColumn) iter.Seq[CellProofBundle] {
 	return func(yield func(CellProofBundle) bool) {
 		for _, sidecar := range sidecars {
-			for i := range sidecar.Column {
+			cells := sidecar.Column()
+			kcs, err := sidecar.KzgCommitments()
+			if err != nil {
+				log.WithError(err).Error("kzg commitments not present on sidecar")
+				return
+			}
+			kps := sidecar.KzgProofs()
+			for i := range cells {
 				if !yield(CellProofBundle{
-					ColumnIndex: sidecar.Index,
-					Commitment:  sidecar.KzgCommitments[i],
-					Cell:        sidecar.Column[i],
-					Proof:       sidecar.KzgProofs[i],
+					ColumnIndex: sidecar.Index(),
+					Commitment:  kcs[i],
+					Cell:        cells[i],
+					Proof:       kps[i],
 				}) {
 					return
 				}

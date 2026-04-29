@@ -203,7 +203,7 @@ func (vs *Server) broadcastGloasDataColumns(ctx context.Context) error {
 		"columns": len(roSidecars),
 	}).Debug("Broadcasting Gloas data column sidecars")
 
-	if err := vs.broadcastAndReceiveDataColumns(ctx, roSidecars); err != nil {
+	if err := vs.broadcastAndReceiveDataColumns(ctx, roSidecars, nil); err != nil {
 		return errors.Wrap(err, "broadcast and receive data columns")
 	}
 

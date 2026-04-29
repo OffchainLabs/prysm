@@ -61,11 +61,16 @@ func WithByBlockProposer() PartialDataColumnOption {
 }
 
 func NewPartialDataColumnFromVerifiedRODataColumn(c VerifiedRODataColumn) PartialDataColumn {
-	included := bitfield.NewBitlist(uint64(len(c.KzgCommitments)))
+	commitments, err := c.KzgCommitments()
+	if err != nil {
+		log.WithError(err).Error("Failed to get KZG commitments")
+		return PartialDataColumn{}
+	}
+	included := bitfield.NewBitlist(uint64(len(commitments)))
 	included = included.Not()
 
 	return PartialDataColumn{
-		DataColumnSidecar: c.DataColumnSidecar,
+		DataColumnSidecar: c.DataColumnSidecar(),
 		root:              c.root,
 		Included:          included,
 		groupID:           groupIdFromRoot(c.root),

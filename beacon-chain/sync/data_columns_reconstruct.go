@@ -106,10 +106,10 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 					} else {
 						err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 							for _, sc := range reconstructedSidecars {
-								if !unseenIndices[sc.Index] {
+								if !unseenIndices[sc.Index()] {
 									continue
 								}
-								subnet := peerdas.ComputeSubnetForDataColumnSidecar(sc.Index)
+								subnet := peerdas.ComputeSubnetForDataColumnSidecar(sc.Index())
 								topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
 								if !yield(topic, blocks.NewPartialDataColumnFromVerifiedRODataColumn(sc)) {
 									return

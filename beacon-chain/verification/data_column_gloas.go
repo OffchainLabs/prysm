@@ -119,10 +119,9 @@ func (v *ROGloasDataColumnVerifier) VerifyDataColumnSidecarKzgProofsGloas() (err
 	if err != nil {
 		return err
 	}
-	return peerdas.VerifyDataColumnsSidecarKZGProofsWithCommitments(
-		[]blocks.RODataColumn{v.sidecar},
-		[][][]byte{kzgCommitments},
-	)
+	v.sidecar.SetBidCommitments(kzgCommitments)
+	bundle := blocks.RODataColumnsToCellProofBundlesWithSize(v.sidecar)
+	return peerdas.VerifyDataColumnsCellsKZGProofs(bundle.Size, bundle.Iterator)
 }
 
 func (v *ROGloasDataColumnVerifier) blobKzgCommitments() ([][]byte, error) {

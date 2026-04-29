@@ -90,7 +90,7 @@ func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColu
 			}
 			var sizeHint int
 			if len(rc) > 0 {
-				sizeHint = len(rc[0].Column)
+				sizeHint = len(rc[0].Column())
 			}
 			sizeHint *= len(rc)
 			return peerdas.VerifyDataColumnsCellsKZGProofs(sizeHint, blocks.RODataColumnsToCellProofBundles(rc))

@@ -41,10 +41,12 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	}
 
 	// Track useful full columns received via gossip (not previously seen)
-	slot := sidecar.SignedBlockHeader.Header.Slot
-	proposerIndex := sidecar.SignedBlockHeader.Header.ProposerIndex
-	if !s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index) {
-		usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index, 10)).Inc()
+	proposerIndex, err := sidecar.ProposerIndex()
+	if err != nil {
+		return errors.Wrap(err, "proposer index")
+	}
+	if !s.hasSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index()) {
+		usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index(), 10)).Inc()
 		// re-publish the full column on the partial column extension as we don't send full columns to peers
 		// who have explicitly requested for partial columns. This method is idempotent so this is fine.
 		if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
@@ -53,7 +55,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 				log.Error("Failed to get current fork digest")
 			} else {
 				err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
-					subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+					subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index())
 					topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
 					yield(topic, blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar))
 				})
