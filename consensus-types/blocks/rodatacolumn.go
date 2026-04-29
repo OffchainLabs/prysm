@@ -160,6 +160,10 @@ func (dc *RODataColumn) KzgCommitments() ([][]byte, error) {
 
 // SetBidCommitments sets the KZG commitments from the block's bid to be used for gloas.
 func (dc *RODataColumn) SetBidCommitments(c [][]byte) {
+	if dc.fulu != nil {
+		dc.fulu.KzgCommitments = c
+		return
+	}
 	dc.bidCommitmentsGloas = c
 }
 
