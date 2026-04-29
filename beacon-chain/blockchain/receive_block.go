@@ -182,15 +182,8 @@ func (s *Service) updateCheckpoints(
 	preState, postState state.BeaconState,
 	blockRoot [32]byte,
 ) error {
-	if coreTime.CurrentEpoch(postState) > cp.c && s.cfg.ForkChoiceStore.IsCanonical(blockRoot) {
-		headSt, err := s.HeadState(ctx)
-		if err != nil {
-			return errors.Wrap(err, "could not get head state")
-		}
-		if err := reportEpochMetrics(ctx, postState, headSt); err != nil {
-			log.WithError(err).Error("Could not report epoch metrics")
-		}
-	}
+	s.reportEpochMetrics(postState, cp.c, blockRoot)
+
 	if err := s.updateJustificationOnBlock(ctx, preState, postState, cp.j); err != nil {
 		return errors.Wrap(err, "could not update justified checkpoint")
 	}
@@ -205,6 +198,24 @@ func (s *Service) updateCheckpoints(
 		s.executePostFinalizationTasks(ctx, postState)
 	}
 	return nil
+}
+
+func (s *Service) reportEpochMetrics(postState state.BeaconState, prevEpoch primitives.Epoch, blockRoot [32]byte) {
+	if coreTime.CurrentEpoch(postState) <= prevEpoch || !s.cfg.ForkChoiceStore.IsCanonical(blockRoot) {
+		return
+	}
+
+	go func() {
+		headSt, err := s.HeadState(s.ctx)
+		if err != nil {
+			log.WithError(err).Error("Could not get head state for epoch metrics")
+			return
+		}
+
+		if err := reportEpochMetrics(s.ctx, postState, headSt); err != nil {
+			log.WithError(err).Error("Could not report epoch metrics")
+		}
+	}()
 }
 
 func (s *Service) validateExecutionAndConsensus(
