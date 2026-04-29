@@ -70,7 +70,16 @@ func (vs *Server) SubmitSignedProposerPreferences(
 			)
 		}
 
-		if vs.ProposerPreferencesCache.Has(proposalSlot, valIdx) {
+		if len(msg.Message.CheckpointRoot) != 32 {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"signed proposer preferences checkpoint_root must be 32 bytes (got %d)",
+				len(msg.Message.CheckpointRoot),
+			)
+		}
+		var checkpointRoot [32]byte
+		copy(checkpointRoot[:], msg.Message.CheckpointRoot)
+
+		if vs.ProposerPreferencesCache.Has(checkpointRoot, proposalSlot) {
 			duplicate++
 			continue
 		}
@@ -81,7 +90,7 @@ func (vs *Server) SubmitSignedProposerPreferences(
 				broadcast, len(req.SignedProposerPreferences), err)
 		}
 
-		vs.ProposerPreferencesCache.Add(proposalSlot, valIdx, msg.Message.FeeRecipient, msg.Message.GasLimit)
+		vs.ProposerPreferencesCache.Add(checkpointRoot, proposalSlot, valIdx, msg.Message.FeeRecipient, msg.Message.GasLimit)
 		broadcast++
 	}
 

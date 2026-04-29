@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -349,6 +350,14 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 	p := p2ptest.NewTestP2P(t)
 	state, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
+	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
+	signedBid.Message.BuilderIndex = 1
+	// Bid validation derives checkpoint_root via Ancestor(parent_block_root,
+	// EpochStart(epoch(slot)-1)). At slot 1, epoch is 0 so we treat that as
+	// IGNORE in production code; for the test we override Gloas/Fulu fork
+	// epochs to 0 and stub the ancestor lookup.
+	parentBlockRoot := bytesutil.ToBytes32(signedBid.Message.ParentBlockRoot)
+	checkpointRoot := [32]byte{0xcc}
 	chainService := &mock.ChainService{
 		Genesis: time.Now(),
 		State:   state,
@@ -356,6 +365,9 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 			[32]byte{0x02}: true,
 		},
 		ForkchoiceBlockHashes: map[[32]byte][32]byte{[32]byte{0x02}: [32]byte{0x01}},
+		Ancestors: map[[32]byte][32]byte{
+			parentBlockRoot: checkpointRoot,
+		},
 	}
 	s := &Service{
 		seenExecutionPayloadBidCache:    newSlotAwareCache(10),
@@ -368,11 +380,9 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 			clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 		},
 	}
-	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
-	signedBid.Message.BuilderIndex = 1
 	// The Gloas test state has a zero-filled proposer lookahead, so the
 	// proposer for any slot is validator index 0.
-	require.Equal(t, true, s.proposerPreferencesCache.Add(signedBid.Message.Slot, 0, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit))
+	require.Equal(t, true, s.proposerPreferencesCache.Add(checkpointRoot, signedBid.Message.Slot, 0, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit))
 	msg := executionPayloadBidToPubsub(t, s, p, signedBid)
 	return s, msg, signedBid
 }

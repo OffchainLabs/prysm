@@ -80,21 +80,23 @@ message SignedExecutionPayloadBid {
 //
 // Spec:
 // class ProposerPreferences(Container):
+//     checkpoint_root: Root
 //     proposal_slot: Slot
 //     validator_index: ValidatorIndex
 //     fee_recipient: ExecutionAddress
 //     gas_limit: uint64
 message ProposerPreferences {
-  uint64 proposal_slot = 1 [
+  bytes checkpoint_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 proposal_slot = 2 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
-  uint64 validator_index = 2
+  uint64 validator_index = 3
       [ (ethereum.eth.ext.cast_type) =
             "github.com/OffchainLabs/prysm/v7/consensus-types/"
             "primitives.ValidatorIndex" ];
-  bytes fee_recipient = 3 [ (ethereum.eth.ext.ssz_size) = "20" ];
-  uint64 gas_limit = 4;
+  bytes fee_recipient = 4 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  uint64 gas_limit = 5;
 }
 
 // SignedProposerPreferences wraps proposer preferences with a signature.

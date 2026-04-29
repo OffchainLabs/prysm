@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -12,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
@@ -62,12 +62,24 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	// [IGNORE] the SignedProposerPreferences where preferences.proposal_slot is equal to bid.slot has been seen.
-	proposerIdx, err := helpers.BeaconProposerIndexAtSlot(ctx, st, bid.Slot())
+	// [IGNORE] matching SignedProposerPreferences seen, where checkpoint_root =
+	// get_checkpoint_block(store, bid.parent_block_root, epoch(bid.slot)-1).
+	bidEpoch := slots.ToEpoch(bid.Slot())
+	checkpointEpoch := primitives.Epoch(0)
+	if bidEpoch > 0 {
+		checkpointEpoch = bidEpoch - 1
+	}
+	boundarySlot, err := slots.EpochStart(checkpointEpoch)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	pref, ok := s.proposerPreferencesCache.Get(bid.Slot(), proposerIdx)
+	parentBlockRoot := bid.ParentBlockRoot()
+	checkpointRootBytes, err := s.cfg.chain.Ancestor(ctx, parentBlockRoot[:], boundarySlot)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	checkpointRoot := bytesutil.ToBytes32(checkpointRootBytes)
+	pref, ok := s.proposerPreferencesCache.Get(checkpointRoot, bid.Slot())
 	if !ok {
 		return pubsub.ValidationIgnore, nil
 	}

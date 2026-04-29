@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -63,12 +64,12 @@ func (s *Service) runLatePayloadTasks() {
 	}
 }
 
-func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives.Slot) (cache.TrackedValidator, bool) {
+func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives.Slot, headRoot [32]byte) (cache.TrackedValidator, bool) {
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(st.Slot())
 	fuluAndNextEpoch := st.Version() >= version.Fulu && e == stateEpoch+1
 	if e == stateEpoch || fuluAndNextEpoch {
-		return s.trackedProposer(st, slot)
+		return s.trackedProposer(st, slot, headRoot)
 	}
 	return cache.TrackedValidator{}, false
 }
@@ -107,7 +108,7 @@ func (s *Service) computePayloadWithdrawals(ctx context.Context, st state.Beacon
 // It is guaranteed to be called for the current slot + 1 and the head state to have been advanced to at least the current epoch.
 func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot, headRoot []byte) payloadattribute.Attributer {
 	emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
-	val, proposing := s.checkIfProposing(st, slot)
+	val, proposing := s.checkIfProposing(st, slot, bytesutil.ToBytes32(headRoot))
 	if !proposing {
 		return emptyAttri
 	}
