@@ -144,7 +144,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 			continue
 		}
 
-		activeBal, err := helpers.TotalActiveBalance(st)
+		activeBal, err := helpers.TotalActiveBalance(ctx, st)
 		if err != nil {
 			return err
 		}
@@ -218,7 +218,7 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 			continue
 		}
 
-		exitEpoch, err := computeConsolidationEpochAndUpdateChurn(st, primitives.Gwei(srcV.EffectiveBalance))
+		exitEpoch, err := computeConsolidationEpochAndUpdateChurn(ctx, st, primitives.Gwei(srcV.EffectiveBalance))
 		if err != nil {
 			log.WithError(err).Error("Failed to compute consolidation epoch")
 			continue
@@ -320,14 +320,14 @@ func queueExcessActiveBalance(st state.BeaconState, idx primitives.ValidatorInde
 	return nil
 }
 
-func computeConsolidationEpochAndUpdateChurn(st state.BeaconState, consolidationBalance primitives.Gwei) (primitives.Epoch, error) {
+func computeConsolidationEpochAndUpdateChurn(ctx context.Context, st state.BeaconState, consolidationBalance primitives.Gwei) (primitives.Epoch, error) {
 	earliestEpoch, err := st.EarliestConsolidationEpoch()
 	if err != nil {
 		return 0, err
 	}
 	earliestConsolidationEpoch := max(earliestEpoch, helpers.ActivationExitEpoch(slots.ToEpoch(st.Slot())))
 
-	activeBal, err := helpers.TotalActiveBalance(st)
+	activeBal, err := helpers.TotalActiveBalance(ctx, st)
 	if err != nil {
 		return 0, err
 	}

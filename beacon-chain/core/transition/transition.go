@@ -399,7 +399,7 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 	}
 
 	if time.CanUpgradeToElectra(slot) {
-		state, err = electra.UpgradeToElectra(state)
+		state, err = electra.UpgradeToElectra(ctx, state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			return nil, err
@@ -433,7 +433,10 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 }
 
 // VerifyOperationLengths verifies that block operation lengths are valid.
-func VerifyOperationLengths(_ context.Context, state state.BeaconState, b interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+func VerifyOperationLengths(ctx context.Context, state state.BeaconState, b interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	_, span := prysmTrace.StartSpan(ctx, "core.state.VerifyOperationLengths")
+	defer span.End()
+
 	if b == nil || b.IsNil() {
 		return nil, blocks.ErrNilBeaconBlock
 	}
