@@ -52,11 +52,12 @@ func (s *Service) JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topi
 	s.joinedTopicsLock.Lock()
 	defer s.joinedTopicsLock.Unlock()
 
-	if strings.Contains(topic, DataColumnSubnetTopicFormat) && s.partialColumnBroadcaster != nil {
-		opts = append(opts, pubsub.RequestPartialMessages())
-	}
-
 	if _, ok := s.joinedTopics[topic]; !ok {
+		if strings.Contains(topic, GossipDataColumnSidecarMessage) && s.partialColumnBroadcaster != nil {
+			opts = append(opts, pubsub.RequestPartialMessages())
+			log.Info("Joining data column sidecar topic with partial messages", "topic", topic)
+		}
+
 		topicHandle, err := s.pubsub.Join(topic, opts...)
 		if err != nil {
 			return nil, err
