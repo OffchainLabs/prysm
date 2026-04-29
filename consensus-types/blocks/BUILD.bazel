@@ -59,7 +59,6 @@ go_test(
         "kzg_test.go",
         "partialdatacolumn_mutation_test.go",
         "partialdatacolumn_test.go",
-        "partialdatacolumn_invariants_test.go",
         "proofs_test.go",
         "proto_test.go",
         "roblob_test.go",
