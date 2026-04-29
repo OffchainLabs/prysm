@@ -332,9 +332,8 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(st.Slot())
 	fuluAndNextEpoch := st.Version() >= version.Fulu && e == stateEpoch+1
-	headRoot32 := bytesutil.ToBytes32(headRoot)
 	if e == stateEpoch || fuluAndNextEpoch {
-		val, ok = s.trackedProposer(st, slot, headRoot32)
+		val, ok = s.trackedProposer(st, slot)
 		if !ok {
 			return emptyAttri
 		}
@@ -352,7 +351,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	}
 	if e > stateEpoch && !fuluAndNextEpoch {
 		emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
-		val, ok = s.trackedProposer(st, slot, headRoot32)
+		val, ok = s.trackedProposer(st, slot)
 		if !ok {
 			return emptyAttri
 		}

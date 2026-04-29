@@ -1076,7 +1076,20 @@ func (v *validator) buildProposerPreferences(
 	var signedPrefs []*ethpb.SignedProposerPreferences
 	var sigFailCount int
 
+	// Per Gloas spec, dependent_root for a proposal in epoch E is the duty
+	// dependent root the beacon node uses to compute proposer duties for E:
+	//   - proposal in current epoch  → previous_duty_dependent_root
+	//   - proposal in next epoch     → current_duty_dependent_root
+	prevDepRoot, currDepRoot := v.duties.DependentRoots()
+
 	processDuties := func(duties map[pubkey]*ethpb.ValidatorDuty, isNextEpoch bool) {
+		dependentRoot := prevDepRoot
+		if isNextEpoch {
+			dependentRoot = currDepRoot
+		}
+		if len(dependentRoot) != fieldparams.RootLength {
+			return
+		}
 		for pk, duty := range duties {
 			if len(duty.ProposerSlots) == 0 {
 				continue
@@ -1118,6 +1131,7 @@ func (v *validator) buildProposerPreferences(
 				}
 
 				pref := &ethpb.ProposerPreferences{
+					DependentRoot:  dependentRoot,
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: duty.ValidatorIndex,
 					FeeRecipient:   feeRecipient[:],

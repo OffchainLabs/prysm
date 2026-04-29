@@ -44,8 +44,8 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	if signedPreferences.Message == nil {
 		return pubsub.ValidationReject, errNilMessage
 	}
-	if len(signedPreferences.Message.CheckpointRoot) != 32 {
-		return pubsub.ValidationReject, errors.New("checkpoint_root must be 32 bytes")
+	if len(signedPreferences.Message.DependentRoot) != 32 {
+		return pubsub.ValidationReject, errors.New("dependent_root must be 32 bytes")
 	}
 
 	v := s.newSignedProposerPreferencesVerifier(signedPreferences, verification.SignedProposerPreferencesGossipRequirements)
@@ -55,42 +55,42 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		return pubsub.ValidationIgnore, err
 	}
 
-	checkpointRoot := bytesutil.ToBytes32(signedPreferences.Message.CheckpointRoot)
-	// [IGNORE] block with root preferences.checkpoint_root has been seen.
-	if !s.cfg.chain.InForkchoice(checkpointRoot) && !s.cfg.beaconDB.HasBlock(ctx, checkpointRoot) {
-		return pubsub.ValidationIgnore, errors.New("checkpoint block not seen yet")
+	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
+	// [IGNORE] block with root preferences.dependent_root has been seen.
+	if !s.cfg.chain.InForkchoice(dependentRoot) && !s.cfg.beaconDB.HasBlock(ctx, dependentRoot) {
+		return pubsub.ValidationIgnore, errors.New("dependent_root block not seen yet")
 	}
 
-	// Checkpoint state at epoch(proposal_slot)-1 anchored to checkpoint_root.
-	st, err := s.cfg.stateGen.StateByRootNoCopy(ctx, checkpointRoot)
+	// Checkpoint state at epoch(proposal_slot)-1 anchored to dependent_root.
+	st, err := s.cfg.stateGen.StateByRootNoCopy(ctx, dependentRoot)
 	if err != nil {
 		return pubsub.ValidationIgnore, errors.Wrap(err, "load checkpoint state")
 	}
 	proposalEpoch := slots.ToEpoch(signedPreferences.Message.ProposalSlot)
-	checkpointEpoch := primitives.Epoch(0)
+	dependentEpoch := primitives.Epoch(0)
 	if proposalEpoch > 0 {
-		checkpointEpoch = proposalEpoch - 1
+		dependentEpoch = proposalEpoch - 1
 	}
-	boundarySlot, err := slots.EpochStart(checkpointEpoch)
+	boundarySlot, err := slots.EpochStart(dependentEpoch)
 	if err != nil {
 		return pubsub.ValidationIgnore, errors.Wrap(err, "compute checkpoint boundary slot")
 	}
-	st, err = transition.ProcessSlotsIfNeeded(ctx, st, checkpointRoot[:], boundarySlot)
+	st, err = transition.ProcessSlotsIfNeeded(ctx, st, dependentRoot[:], boundarySlot)
 	if err != nil {
 		return pubsub.ValidationIgnore, errors.Wrap(err, "advance checkpoint state to boundary")
 	}
 
 	// [REJECT] is_valid_proposal_slot(state, preferences) returns True, where state
 	// is the checkpoint state at the epoch compute_epoch_at_slot(proposal_slot) - 1
-	// and the root preferences.checkpoint_root.
+	// and the root preferences.dependent_root.
 	if err := v.VerifyValidProposalSlot(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
 	slot := signedPreferences.Message.ProposalSlot
 	valIdx := signedPreferences.Message.ValidatorIndex
-	// [IGNORE] dedup on (checkpoint_root, proposal_slot); validator_index is implied.
-	if s.proposerPreferencesCache.Has(checkpointRoot, slot) {
+	// [IGNORE] dedup on (dependent_root, proposal_slot); validator_index is implied.
+	if s.proposerPreferencesCache.Has(dependentRoot, slot) {
 		return pubsub.ValidationIgnore, nil
 	}
 	// [REJECT] signed_proposer_preferences.signature is valid with respect to the
@@ -99,7 +99,7 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		return pubsub.ValidationReject, err
 	}
 
-	s.proposerPreferencesCache.Add(checkpointRoot, slot, valIdx, signedPreferences.Message.FeeRecipient, signedPreferences.Message.GasLimit)
+	s.proposerPreferencesCache.Add(dependentRoot, slot, valIdx, signedPreferences.Message.FeeRecipient, signedPreferences.Message.GasLimit)
 	msg.ValidatorData = signedPreferences
 	return pubsub.ValidationAccept, nil
 }

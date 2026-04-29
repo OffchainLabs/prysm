@@ -7,16 +7,16 @@ import (
 )
 
 // ProposerPreference is a broadcast preference anchored to a specific branch
-// via CheckpointRoot (Gloas spec).
+// via DependentRoot (Gloas spec).
 type ProposerPreference struct {
-	CheckpointRoot [32]byte
+	DependentRoot [32]byte
 	ValidatorIndex primitives.ValidatorIndex
 	FeeRecipient   []byte
 	GasLimit       uint64
 }
 
 // ProposerPreferencesCache stores broadcast proposer preferences indexed by
-// proposal slot, looked up within a slot by checkpoint_root.
+// proposal slot, looked up within a slot by dependent_root.
 type ProposerPreferencesCache struct {
 	preferences map[primitives.Slot][]ProposerPreference
 	lock        sync.RWMutex
@@ -30,10 +30,10 @@ func NewProposerPreferencesCache() *ProposerPreferencesCache {
 }
 
 // Add stores a proposer preference. If an entry with the same
-// (slot, checkpointRoot) already exists, the existing value is kept and false
+// (slot, dependentRoot) already exists, the existing value is kept and false
 // is returned.
 func (c *ProposerPreferencesCache) Add(
-	checkpointRoot [32]byte,
+	dependentRoot [32]byte,
 	slot primitives.Slot,
 	validatorIndex primitives.ValidatorIndex,
 	feeRecipient []byte,
@@ -43,12 +43,12 @@ func (c *ProposerPreferencesCache) Add(
 	defer c.lock.Unlock()
 
 	for _, p := range c.preferences[slot] {
-		if p.CheckpointRoot == checkpointRoot {
+		if p.DependentRoot == dependentRoot {
 			return false
 		}
 	}
 	c.preferences[slot] = append(c.preferences[slot], ProposerPreference{
-		CheckpointRoot: checkpointRoot,
+		DependentRoot: dependentRoot,
 		ValidatorIndex: validatorIndex,
 		FeeRecipient:   feeRecipient,
 		GasLimit:       gasLimit,
@@ -56,26 +56,26 @@ func (c *ProposerPreferencesCache) Add(
 	return true
 }
 
-// Get returns the proposer preference stored for (slot, checkpointRoot).
-func (c *ProposerPreferencesCache) Get(checkpointRoot [32]byte, slot primitives.Slot) (ProposerPreference, bool) {
+// Get returns the proposer preference stored for (slot, dependentRoot).
+func (c *ProposerPreferencesCache) Get(dependentRoot [32]byte, slot primitives.Slot) (ProposerPreference, bool) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
 	for _, p := range c.preferences[slot] {
-		if p.CheckpointRoot == checkpointRoot {
+		if p.DependentRoot == dependentRoot {
 			return p, true
 		}
 	}
 	return ProposerPreference{}, false
 }
 
-// Has returns true if a proposer preference exists for (slot, checkpointRoot).
-func (c *ProposerPreferencesCache) Has(checkpointRoot [32]byte, slot primitives.Slot) bool {
+// Has returns true if a proposer preference exists for (slot, dependentRoot).
+func (c *ProposerPreferencesCache) Has(dependentRoot [32]byte, slot primitives.Slot) bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
 	for _, p := range c.preferences[slot] {
-		if p.CheckpointRoot == checkpointRoot {
+		if p.DependentRoot == dependentRoot {
 			return true
 		}
 	}

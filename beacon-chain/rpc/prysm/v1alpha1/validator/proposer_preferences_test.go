@@ -43,7 +43,7 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					CheckpointRoot: bytes32(0xcc),
+					DependentRoot: bytes32(0xcc),
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -85,7 +85,7 @@ func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					CheckpointRoot: bytes32(0xaa),
+					DependentRoot: bytes32(0xaa),
 					ProposalSlot:   currentSlot + 1,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -95,7 +95,7 @@ func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
 			},
 			{
 				Message: &ethpb.ProposerPreferences{
-					CheckpointRoot: bytes32(0xbb),
+					DependentRoot: bytes32(0xbb),
 					ProposalSlot:   currentSlot + 2,
 					ValidatorIndex: 5,
 					FeeRecipient:   make([]byte, 20),
@@ -140,7 +140,7 @@ func TestSubmitSignedProposerPreferences_DuplicateSlot(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					CheckpointRoot: bytes32(0xcc),
+					DependentRoot: bytes32(0xcc),
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -177,7 +177,7 @@ func TestSubmitSignedProposerPreferences_InvalidEpoch(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					CheckpointRoot: bytes32(0xcc),
+					DependentRoot: bytes32(0xcc),
 					ProposalSlot:   currentSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -218,7 +218,7 @@ func TestSubmitSignedProposerPreferences_CurrentEpochFutureSlot(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					CheckpointRoot: bytes32(0xcc),
+					DependentRoot: bytes32(0xcc),
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -254,7 +254,7 @@ func TestSubmitSignedProposerPreferences_Syncing(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					CheckpointRoot: bytes32(0xcc),
+					DependentRoot: bytes32(0xcc),
 					ProposalSlot:   currentSlot + 1,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -292,7 +292,7 @@ func TestSubmitSignedProposerPreferences_BroadcastsForProposalEpoch(t *testing.T
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					CheckpointRoot: bytes32(0xcc),
+					DependentRoot: bytes32(0xcc),
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),

@@ -2117,6 +2117,8 @@ func TestValidator_buildProposerSettingsRequests_WithDefaultConfig(t *testing.T)
 	assert.DeepEqual(t, expected, actual)
 }
 
+var testProposerPrefDependentRoot = bytes.Repeat([]byte{0x42}, 32)
+
 func TestValidator_buildProposerPreferences(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 
@@ -2202,6 +2204,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					Status:         ethpb.ValidatorStatus_ACTIVE,
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
@@ -2231,6 +2235,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		// DomainData is cached after the first call, so subsequent subtests
@@ -2272,6 +2278,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		// Slot 0 is start of epoch 0 (before mid-epoch), should not build yet.
@@ -2302,6 +2310,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		midSlot := params.BeaconConfig().SlotsPerEpoch / 2
@@ -2336,6 +2346,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{slot1, slot2},
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		// DomainData calls served from cache (populated in prior subtest).
@@ -2371,6 +2383,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
@@ -2424,6 +2438,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		// DomainData calls served from cache (populated in prior subtest).
@@ -2471,6 +2487,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					Status:         ethpb.ValidatorStatus_ACTIVE,
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		// Slot 1 (past epoch start) allows current-epoch preferences.
@@ -2507,6 +2525,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{nextEpochSlot},
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		// At mid-epoch, both current and next epoch preferences are eligible.
@@ -2542,6 +2562,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					Status:         ethpb.ValidatorStatus_ACTIVE,
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		// Slot 0 (epoch start) skips current-epoch preferences.
@@ -2572,6 +2594,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					Status:         ethpb.ValidatorStatus_ACTIVE,
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		prefs := v.buildProposerPreferences(t.Context(), km, 1, false)
@@ -2608,6 +2632,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					Status:         ethpb.ValidatorStatus_ACTIVE,
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		prefs := v.buildProposerPreferences(t.Context(), km, 1, false)
@@ -2636,6 +2662,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 				},
 			},
 			NextEpochDuties: []*ethpb.ValidatorDuty{},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		// Only the new validator's slot is submitted.
@@ -2670,6 +2698,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
 				},
 			},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		// Slot 1 is before mid-epoch, next-epoch prefs should not be sent.
@@ -2699,6 +2729,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 				},
 			},
 			NextEpochDuties: []*ethpb.ValidatorDuty{},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		// Normal submission at mid-epoch so the slot is in the future.
@@ -2737,6 +2769,8 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 				},
 			},
 			NextEpochDuties: []*ethpb.ValidatorDuty{},
+			PrevDependentRoot: testProposerPrefDependentRoot,
+			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
 
 		// slot == epochStart (0) with force=false — gate blocks current-epoch duties.

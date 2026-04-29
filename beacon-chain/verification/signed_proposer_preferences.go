@@ -57,7 +57,7 @@ func (v *ProposerPreferencesVerifier) VerifyCurrentOrNextEpoch(_ state.ReadOnlyB
 
 // VerifyValidProposalSlot checks the validator matches the proposer_lookahead
 // entry for proposal_slot. The caller must pass the checkpoint state at
-// epoch(proposal_slot)-1 anchored to preferences.checkpoint_root, with slots
+// epoch(proposal_slot)-1 anchored to preferences.dependent_root, with slots
 // advanced through that boundary.
 func (v *ProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireProposerPreferencesProposalSlotValid, &err)

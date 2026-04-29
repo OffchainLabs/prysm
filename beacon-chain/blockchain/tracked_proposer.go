@@ -11,16 +11,16 @@ import (
 )
 
 // proposerPreference looks up the cached preference for (slot, valIdx) anchored
-// to the checkpoint at epoch(slot)-1 reachable from headRoot.
-func (s *Service) proposerPreference(slot primitives.Slot, valIdx primitives.ValidatorIndex, headRoot [32]byte) (cache.TrackedValidator, bool) {
+// to the dependent_root derived from the given state.
+func (s *Service) proposerPreference(st state.ReadOnlyBeaconState, slot primitives.Slot, valIdx primitives.ValidatorIndex) (cache.TrackedValidator, bool) {
 	if s.cfg.ProposerPreferencesCache == nil {
 		return cache.TrackedValidator{}, false
 	}
-	checkpointRoot, ok := s.proposerCheckpointRoot(slot, headRoot)
+	dependentRoot, ok := s.proposerDependentRoot(st, slot)
 	if !ok {
 		return cache.TrackedValidator{}, false
 	}
-	pref, ok := s.cfg.ProposerPreferencesCache.Get(checkpointRoot, slot)
+	pref, ok := s.cfg.ProposerPreferencesCache.Get(dependentRoot, slot)
 	if !ok {
 		return cache.TrackedValidator{}, false
 	}
@@ -32,35 +32,37 @@ func (s *Service) proposerPreference(slot primitives.Slot, valIdx primitives.Val
 	return cache.TrackedValidator{Active: true, FeeRecipient: feeRecipient, GasLimit: pref.GasLimit}, true
 }
 
-// proposerCheckpointRoot is the spec's get_checkpoint_block(store, headRoot, epoch(slot)-1).
-func (s *Service) proposerCheckpointRoot(slot primitives.Slot, headRoot [32]byte) ([32]byte, bool) {
+// proposerDependentRoot is the spec's get_proposer_dependent_root(state, epoch(slot)).
+// Returns false on slot underflow (proposal epoch < 2) — the caller treats that
+// as a cache miss; the spec's "use genesis" fallback only matters for genesis-
+// adjacent slots which never carry Gloas preferences.
+func (s *Service) proposerDependentRoot(st state.ReadOnlyBeaconState, slot primitives.Slot) ([32]byte, bool) {
 	proposalEpoch := slots.ToEpoch(slot)
-	if proposalEpoch == 0 {
+	if proposalEpoch < 2 {
 		return [32]byte{}, false
 	}
-	boundarySlot, err := slots.EpochStart(proposalEpoch - 1)
+	boundary, err := slots.EpochStart(proposalEpoch - 1)
 	if err != nil {
 		return [32]byte{}, false
 	}
-	ar, err := s.Ancestor(s.ctx, headRoot[:], boundarySlot)
+	rootBytes, err := helpers.BlockRootAtSlot(st, boundary-1)
 	if err != nil {
 		return [32]byte{}, false
 	}
-	return bytesutil.ToBytes32(ar), true
+	return bytesutil.ToBytes32(rootBytes), true
 }
 
 // trackedProposer returns whether the beacon node was informed, via the
 // validators/prepare_proposer endpoint, of the proposer at the given slot.
-// Post-Gloas, a cached ProposerPreference (keyed by the checkpoint at
-// epoch(slot)-1 reached from headRoot) overrides the tracked validator when
-// present.
-func (s *Service) trackedProposer(st state.ReadOnlyBeaconState, slot primitives.Slot, headRoot [32]byte) (cache.TrackedValidator, bool) {
+// Post-Gloas, a cached ProposerPreference (keyed by the dependent_root derived
+// from `st`) overrides the tracked validator when present.
+func (s *Service) trackedProposer(st state.ReadOnlyBeaconState, slot primitives.Slot) (cache.TrackedValidator, bool) {
 	if features.Get().PrepareAllPayloads {
 		id, err := helpers.BeaconProposerIndexAtSlot(s.ctx, st, slot)
 		if err != nil {
 			return cache.TrackedValidator{Active: true}, true
 		}
-		if val, ok := s.proposerPreference(slot, id, headRoot); ok {
+		if val, ok := s.proposerPreference(st, slot, id); ok {
 			return val, true
 		}
 		return cache.TrackedValidator{Active: true}, true
@@ -73,7 +75,7 @@ func (s *Service) trackedProposer(st state.ReadOnlyBeaconState, slot primitives.
 	if !ok {
 		return cache.TrackedValidator{}, false
 	}
-	if pref, ok := s.proposerPreference(slot, id, headRoot); ok {
+	if pref, ok := s.proposerPreference(st, slot, id); ok {
 		return pref, true
 	}
 	return val, val.Active

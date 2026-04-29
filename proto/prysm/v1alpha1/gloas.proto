@@ -80,13 +80,13 @@ message SignedExecutionPayloadBid {
 //
 // Spec:
 // class ProposerPreferences(Container):
-//     checkpoint_root: Root
+//     dependent_root: Root
 //     proposal_slot: Slot
 //     validator_index: ValidatorIndex
 //     fee_recipient: ExecutionAddress
 //     gas_limit: uint64
 message ProposerPreferences {
-  bytes checkpoint_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes dependent_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 proposal_slot = 2 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"

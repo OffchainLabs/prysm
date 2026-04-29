@@ -400,12 +400,12 @@ func (p *ProposerPreferences) MarshalSSZ() ([]byte, error) {
 func (p *ProposerPreferences) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 
-	// Field (0) 'CheckpointRoot'
-	if size := len(p.CheckpointRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.CheckpointRoot", size, 32)
+	// Field (0) 'DependentRoot'
+	if size := len(p.DependentRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.DependentRoot", size, 32)
 		return
 	}
-	dst = append(dst, p.CheckpointRoot...)
+	dst = append(dst, p.DependentRoot...)
 
 	// Field (1) 'ProposalSlot'
 	dst = ssz.MarshalUint(dst, p.ProposalSlot)
@@ -434,11 +434,11 @@ func (p *ProposerPreferences) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrSize
 	}
 
-	// Field (0) 'CheckpointRoot'
-	if cap(p.CheckpointRoot) == 0 {
-		p.CheckpointRoot = make([]byte, 0, len(buf[0:32]))
+	// Field (0) 'DependentRoot'
+	if cap(p.DependentRoot) == 0 {
+		p.DependentRoot = make([]byte, 0, len(buf[0:32]))
 	}
-	p.CheckpointRoot = append(p.CheckpointRoot, buf[0:32]...)
+	p.DependentRoot = append(p.DependentRoot, buf[0:32]...)
 
 	// Field (1) 'ProposalSlot'
 	p.ProposalSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[32:40])
@@ -473,12 +473,12 @@ func (p *ProposerPreferences) HashTreeRoot() ([32]byte, error) {
 func (p *ProposerPreferences) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
-	// Field (0) 'CheckpointRoot'
-	if size := len(p.CheckpointRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.CheckpointRoot", size, 32)
+	// Field (0) 'DependentRoot'
+	if size := len(p.DependentRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.DependentRoot", size, 32)
 		return
 	}
-	hh.PutBytes(p.CheckpointRoot)
+	hh.PutBytes(p.DependentRoot)
 
 	// Field (1) 'ProposalSlot'
 	ssz.PutUint(hh, p.ProposalSlot)

@@ -57,9 +57,9 @@ func TestValidateSignedProposerPreferencesGossip_InitialSync(t *testing.T) {
 func TestValidateSignedProposerPreferencesGossip_CheckpointBlockNotSeen(t *testing.T) {
 	ctx := context.Background()
 	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
-	// Rewrite checkpoint_root to a value with no corresponding block.
+	// Rewrite dependent_root to a value with no corresponding block.
 	unknownRoot := [32]byte{0xde, 0xad, 0xbe, 0xef}
-	signedPreferences.Message.CheckpointRoot = unknownRoot[:]
+	signedPreferences.Message.DependentRoot = unknownRoot[:]
 	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
 	s.cfg.chain.(*mock.ChainService).ForkchoiceRoots = map[[32]byte]bool{}
 
@@ -115,8 +115,8 @@ func TestValidateSignedProposerPreferencesGossip_AlreadySeen(t *testing.T) {
 	s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
 	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
 
-	checkpointRoot := bytesutil.ToBytes32(signedPreferences.Message.CheckpointRoot)
-	require.Equal(t, true, s.proposerPreferencesCache.Add(checkpointRoot, signedPreferences.Message.ProposalSlot, signedPreferences.Message.ValidatorIndex, []byte{0x01}, 10))
+	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
+	require.Equal(t, true, s.proposerPreferencesCache.Add(dependentRoot, signedPreferences.Message.ProposalSlot, signedPreferences.Message.ValidatorIndex, []byte{0x01}, 10))
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
@@ -132,8 +132,8 @@ func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationAccept, result)
 
-	checkpointRoot := bytesutil.ToBytes32(signedPreferences.Message.CheckpointRoot)
-	got, ok := s.proposerPreferencesCache.Get(checkpointRoot, signedPreferences.Message.ProposalSlot)
+	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
+	got, ok := s.proposerPreferencesCache.Get(dependentRoot, signedPreferences.Message.ProposalSlot)
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, signedPreferences.Message.FeeRecipient, got.FeeRecipient)
 	require.Equal(t, signedPreferences.Message.GasLimit, got.GasLimit)
@@ -206,17 +206,17 @@ func setupSignedProposerPreferencesService(t *testing.T) (*Service, *pubsub.Mess
 	sb := util.NewBeaconBlockGloas()
 	signedBlock, err := blocks.NewSignedBeaconBlock(sb)
 	require.NoError(t, err)
-	checkpointRoot, err := signedBlock.Block().HashTreeRoot()
+	dependentRoot, err := signedBlock.Block().HashTreeRoot()
 	require.NoError(t, err)
 	require.NoError(t, db.SaveBlock(ctx, signedBlock))
-	require.NoError(t, db.SaveState(ctx, st, checkpointRoot))
+	require.NoError(t, db.SaveState(ctx, st, dependentRoot))
 
 	chainService := &mock.ChainService{
 		Genesis: time.Now(),
 		DB:      db,
 		State:   st,
 		ForkchoiceRoots: map[[32]byte]bool{
-			checkpointRoot: true,
+			dependentRoot: true,
 		},
 	}
 
@@ -240,7 +240,7 @@ func setupSignedProposerPreferencesService(t *testing.T) (*Service, *pubsub.Mess
 	// has not yet passed.
 	signedPreferences := &ethpb.SignedProposerPreferences{
 		Message: &ethpb.ProposerPreferences{
-			CheckpointRoot: checkpointRoot[:],
+			DependentRoot: dependentRoot[:],
 			ProposalSlot:   33,
 			ValidatorIndex: 0,
 			FeeRecipient:   bytes.Repeat([]byte{0x01}, 20),

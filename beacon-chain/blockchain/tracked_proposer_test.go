@@ -12,17 +12,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// trackedProposer now anchors preferences on a checkpoint root derived from the
-// caller's head via Ancestor(). minimalTestService doesn't wire a forkchoice
-// node graph here, so Ancestor returns an error and proposerPreference falls
-// back to the no-cache path. The empty-headRoot variant exercises the
-// non-cached paths; cached-preference behavior is exercised end-to-end by the
-// gossip and bid validation tests under beacon-chain/sync.
+// trackedProposer now anchors preferences on dependent_root derived from the
+// passed state (state.block_roots lookup). At slot 0 the lookup underflows so
+// proposerPreference falls back to the no-cache path; cached-preference
+// behavior is exercised end-to-end by the gossip and bid validation tests
+// under beacon-chain/sync.
 
 func TestTrackedProposer_NotTracked(t *testing.T) {
 	service, _ := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
-	_, ok := service.trackedProposer(st, 0, [32]byte{})
+	_, ok := service.trackedProposer(st, 0)
 	require.Equal(t, false, ok)
 }
 
@@ -31,7 +30,7 @@ func TestTrackedProposer_Tracked(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	addr := common.HexToAddress("0x1234")
 	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, FeeRecipient: primitives.ExecutionAddress(addr), Index: 0})
-	val, ok := service.trackedProposer(st, 0, [32]byte{})
+	val, ok := service.trackedProposer(st, 0)
 	require.Equal(t, true, ok)
 	require.Equal(t, primitives.ExecutionAddress(addr), val.FeeRecipient)
 }
@@ -42,7 +41,7 @@ func TestTrackedProposer_PrepareAllPayloads_Default(t *testing.T) {
 
 	service, _ := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
-	val, ok := service.trackedProposer(st, 0, [32]byte{})
+	val, ok := service.trackedProposer(st, 0)
 	require.Equal(t, true, ok)
 	require.Equal(t, true, val.Active)
 	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(val.FeeRecipient[:]).String())

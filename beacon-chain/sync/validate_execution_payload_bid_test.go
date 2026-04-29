@@ -9,6 +9,7 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -18,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -347,17 +347,25 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
+	ctx := context.Background()
+	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
+
+	// Save a genesis block so beaconDB.GenesisBlockRoot resolves; bids at slot 1
+	// (epoch 0) hit the underflow branch in proposerDependentRoot which falls
+	// back to the genesis block root.
+	gb := util.NewBeaconBlock()
+	signedGenesis, err := blocks.NewSignedBeaconBlock(gb)
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(ctx, signedGenesis))
+	genesisRoot, err := signedGenesis.Block().HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisRoot))
+
 	state, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
 	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
 	signedBid.Message.BuilderIndex = 1
-	// Bid validation derives checkpoint_root via Ancestor(parent_block_root,
-	// EpochStart(epoch(slot)-1)). At slot 1, epoch is 0 so we treat that as
-	// IGNORE in production code; for the test we override Gloas/Fulu fork
-	// epochs to 0 and stub the ancestor lookup.
-	parentBlockRoot := bytesutil.ToBytes32(signedBid.Message.ParentBlockRoot)
-	checkpointRoot := [32]byte{0xcc}
 	chainService := &mock.ChainService{
 		Genesis: time.Now(),
 		State:   state,
@@ -365,9 +373,6 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 			[32]byte{0x02}: true,
 		},
 		ForkchoiceBlockHashes: map[[32]byte][32]byte{[32]byte{0x02}: [32]byte{0x01}},
-		Ancestors: map[[32]byte][32]byte{
-			parentBlockRoot: checkpointRoot,
-		},
 	}
 	s := &Service{
 		seenExecutionPayloadBidCache:    newSlotAwareCache(10),
@@ -377,12 +382,13 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 			p2p:         p,
 			initialSync: &mockSync.Sync{},
 			chain:       chainService,
+			beaconDB:    db,
 			clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 		},
 	}
 	// The Gloas test state has a zero-filled proposer lookahead, so the
 	// proposer for any slot is validator index 0.
-	require.Equal(t, true, s.proposerPreferencesCache.Add(checkpointRoot, signedBid.Message.Slot, 0, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit))
+	require.Equal(t, true, s.proposerPreferencesCache.Add(genesisRoot, signedBid.Message.Slot, 0, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit))
 	msg := executionPayloadBidToPubsub(t, s, p, signedBid)
 	return s, msg, signedBid
 }
