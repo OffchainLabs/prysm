@@ -43,11 +43,7 @@ func (c *executionPayloadEnvelopeCache) Add(slot primitives.Slot, envelope *ethp
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for s := range c.entries {
-		if s < slot {
-			delete(c.entries, s)
-		}
-	}
+	c.evictOlderThan(slot)
 	c.entries[slot] = &envelopeContents{
 		envelope:  envelope,
 		blobs:     blobs,
@@ -64,6 +60,7 @@ func (c *executionPayloadEnvelopeCache) peek(slot primitives.Slot) (*ethpb.Execu
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.evictOlderThan(slot)
 	entry, ok := c.entries[slot]
 	if !ok {
 		return nil, nil, nil
@@ -80,10 +77,20 @@ func (c *executionPayloadEnvelopeCache) Take(slot primitives.Slot) (*ethpb.Execu
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.evictOlderThan(slot)
 	entry, ok := c.entries[slot]
 	if !ok {
 		return nil, nil, nil
 	}
 	delete(c.entries, slot)
 	return entry.envelope, entry.blobs, entry.kzgProofs
+}
+
+// evictOlderThan drops any entries strictly older than slot. Caller must hold c.mu.
+func (c *executionPayloadEnvelopeCache) evictOlderThan(slot primitives.Slot) {
+	for s := range c.entries {
+		if s < slot {
+			delete(c.entries, s)
+		}
+	}
 }

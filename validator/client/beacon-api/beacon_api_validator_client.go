@@ -40,6 +40,9 @@ type beaconApiValidatorClient struct {
 func WithStateless(enabled bool) ValidatorClientOpt {
 	return func(c *beaconApiValidatorClient) {
 		c.stateless = enabled
+		if enabled {
+			c.envelopeCache = newExecutionPayloadEnvelopeCache()
+		}
 	}
 }
 
@@ -59,7 +62,6 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...V
 			handler:    handler,
 		},
 		isEventStreamRunning: false,
-		envelopeCache:        newExecutionPayloadEnvelopeCache(),
 	}
 	for _, o := range opts {
 		o(c)
