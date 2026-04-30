@@ -1097,12 +1097,13 @@
 - name: ExecutionPayloadEnvelope#gloas
   sources: []
   spec: |
-    <spec ssz_object="ExecutionPayloadEnvelope" fork="gloas" hash="526d7f15">
+    <spec ssz_object="ExecutionPayloadEnvelope" fork="gloas" hash="3df22cd3">
     class ExecutionPayloadEnvelope(Container):
         payload: ExecutionPayload
         execution_requests: ExecutionRequests
         builder_index: BuilderIndex
         beacon_block_root: Root
+        parent_beacon_block_root: Root
     </spec>
 
 - name: ExecutionPayloadHeader#bellatrix
@@ -1377,6 +1378,20 @@
         execution_branch: ExecutionBranch
     </spec>
 
+- name: LightClientHeader#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="LightClientHeader" fork="gloas" hash="b0387ab2">
+    class LightClientHeader(Container):
+        beacon: BeaconBlockHeader
+        # [Modified in Gloas:EIP7732]
+        # Removed `execution`
+        # [New in Gloas:EIP7732]
+        execution_block_hash: Hash32
+        # [Modified in Gloas:EIP7732]
+        execution_branch: ExecutionBranch
+    </spec>
+
 - name: LightClientOptimisticUpdate#altair
   sources:
     - file: proto/prysm/v1alpha1/light_client.proto
@@ -1451,6 +1466,15 @@
         row_index: RowIndex
     </spec>
 
+- name: PartialDataColumnGroupID#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PartialDataColumnGroupID" fork="gloas" hash="9e8865b1">
+    class PartialDataColumnGroupID(Container):
+        slot: Slot
+        beacon_block_root: Root
+    </spec>
+
 - name: PartialDataColumnHeader#fulu
   sources: []
   spec: |
@@ -1464,17 +1488,11 @@
 - name: PartialDataColumnHeader#gloas
   sources: []
   spec: |
-    <spec ssz_object="PartialDataColumnHeader" fork="gloas" hash="09a13d5b">
+    <spec ssz_object="PartialDataColumnHeader" fork="gloas" hash="9a335538">
     class PartialDataColumnHeader(Container):
         kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
-        # [Modified in Gloas:EIP7732]
-        # Removed `signed_block_header`
-        # [Modified in Gloas:EIP7732]
-        # Removed `kzg_commitments_inclusion_proof`
-        # [New in Gloas:EIP7732]
-        slot: Slot
-        # [New in Gloas:EIP7732]
-        beacon_block_root: Root
+        signed_block_header: SignedBeaconBlockHeader
+        kzg_commitments_inclusion_proof: Vector[Bytes32, KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH]
     </spec>
 
 - name: PartialDataColumnPartsMetadata#fulu
@@ -1496,6 +1514,16 @@
         kzg_proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]
         # Optional header, only sent on eager pushes
         header: List[PartialDataColumnHeader, 1]
+    </spec>
+
+- name: PartialDataColumnSidecar#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PartialDataColumnSidecar" fork="gloas" hash="57b4ad2a">
+    class PartialDataColumnSidecar(Container):
+        cells_present_bitmap: Bitlist[MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        partial_column: List[Cell, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        kzg_proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]
     </spec>
 
 - name: PayloadAttestation#gloas
@@ -1594,8 +1622,9 @@
 - name: ProposerPreferences#gloas
   sources: []
   spec: |
-    <spec ssz_object="ProposerPreferences" fork="gloas" hash="2a38b149">
+    <spec ssz_object="ProposerPreferences" fork="gloas" hash="5ef93db5">
     class ProposerPreferences(Container):
+        dependent_root: Root
         proposal_slot: Slot
         validator_index: ValidatorIndex
         fee_recipient: ExecutionAddress

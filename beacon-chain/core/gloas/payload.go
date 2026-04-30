@@ -21,7 +21,7 @@ import (
 // Actual state mutations are deferred to process_parent_execution_payload in
 // the next block.
 //
-//	<spec fn="verify_execution_payload_envelope" fork="gloas" hash="0261931f">
+//	<spec fn="verify_execution_payload_envelope" fork="gloas" hash="450a2b1c">
 //	def verify_execution_payload_envelope(
 //	    state: BeaconState,
 //	    signed_envelope: SignedExecutionPayloadEnvelope,
