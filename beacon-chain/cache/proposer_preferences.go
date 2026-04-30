@@ -9,7 +9,7 @@ import (
 // ProposerPreference is a broadcast preference anchored to a specific branch
 // via DependentRoot (Gloas spec).
 type ProposerPreference struct {
-	DependentRoot [32]byte
+	DependentRoot  [32]byte
 	ValidatorIndex primitives.ValidatorIndex
 	FeeRecipient   []byte
 	GasLimit       uint64
@@ -48,7 +48,7 @@ func (c *ProposerPreferencesCache) Add(
 		}
 	}
 	c.preferences[slot] = append(c.preferences[slot], ProposerPreference{
-		DependentRoot: dependentRoot,
+		DependentRoot:  dependentRoot,
 		ValidatorIndex: validatorIndex,
 		FeeRecipient:   feeRecipient,
 		GasLimit:       gasLimit,
