@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -59,6 +60,7 @@ func (vs *Server) SubmitSignedProposerPreferences(
 			)
 		}
 
+		valIdx := msg.Message.ValidatorIndex
 		currentSlot := vs.TimeFetcher.CurrentSlot()
 		if proposalSlot <= currentSlot {
 			return nil, status.Errorf(
@@ -69,7 +71,16 @@ func (vs *Server) SubmitSignedProposerPreferences(
 			)
 		}
 
-		if vs.ProposerPreferencesCache.Has(proposalSlot) {
+		if len(msg.Message.DependentRoot) != fieldparams.RootLength {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"signed proposer preferences dependent_root must be %d bytes (got %d)",
+				fieldparams.RootLength, len(msg.Message.DependentRoot),
+			)
+		}
+		var dependentRoot [fieldparams.RootLength]byte
+		copy(dependentRoot[:], msg.Message.DependentRoot)
+
+		if vs.ProposerPreferencesCache.Has(dependentRoot, proposalSlot) {
 			duplicate++
 			continue
 		}
@@ -80,7 +91,7 @@ func (vs *Server) SubmitSignedProposerPreferences(
 				broadcast, len(req.SignedProposerPreferences), err)
 		}
 
-		vs.ProposerPreferencesCache.Add(proposalSlot, msg.Message.FeeRecipient, msg.Message.GasLimit)
+		vs.ProposerPreferencesCache.Add(dependentRoot, proposalSlot, valIdx, msg.Message.FeeRecipient, msg.Message.GasLimit)
 		broadcast++
 	}
 

@@ -6,64 +6,80 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
-// ProposerPreference stores the proposer fee recipient and gas limit for a slot.
+// ProposerPreference is a broadcast preference anchored to a specific branch
+// via DependentRoot (Gloas spec).
 type ProposerPreference struct {
-	FeeRecipient []byte
-	GasLimit     uint64
+	DependentRoot  [32]byte
+	ValidatorIndex primitives.ValidatorIndex
+	FeeRecipient   []byte
+	GasLimit       uint64
 }
 
-// ProposerPreferencesCache stores proposer preferences by slot.
+// ProposerPreferencesCache stores broadcast proposer preferences indexed by
+// proposal slot, looked up within a slot by dependent_root.
 type ProposerPreferencesCache struct {
-	slotToPreferences map[primitives.Slot]ProposerPreference
-	lock              sync.RWMutex
+	preferences map[primitives.Slot][]ProposerPreference
+	lock        sync.RWMutex
 }
 
 // NewProposerPreferencesCache initializes a proposer preferences cache.
 func NewProposerPreferencesCache() *ProposerPreferencesCache {
 	return &ProposerPreferencesCache{
-		slotToPreferences: make(map[primitives.Slot]ProposerPreference),
+		preferences: make(map[primitives.Slot][]ProposerPreference),
 	}
 }
 
-// Add stores proposer preferences for a slot. If the slot already exists, the
-// existing value is kept and false is returned.
-func (c *ProposerPreferencesCache) Add(slot primitives.Slot, feeRecipient []byte, gasLimit uint64) bool {
+// Add stores a proposer preference. If an entry with the same
+// (slot, dependentRoot) already exists, the existing value is kept and false
+// is returned.
+func (c *ProposerPreferencesCache) Add(
+	dependentRoot [32]byte,
+	slot primitives.Slot,
+	validatorIndex primitives.ValidatorIndex,
+	feeRecipient []byte,
+	gasLimit uint64,
+) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if _, ok := c.slotToPreferences[slot]; ok {
-		return false
+	for _, p := range c.preferences[slot] {
+		if p.DependentRoot == dependentRoot {
+			return false
+		}
 	}
-
-	// FeeRecipient comes from validated SSZ-decoded proposer preferences, so
-	// retaining the slice reference here is intentional.
-	c.slotToPreferences[slot] = ProposerPreference{
-		FeeRecipient: feeRecipient,
-		GasLimit:     gasLimit,
-	}
+	c.preferences[slot] = append(c.preferences[slot], ProposerPreference{
+		DependentRoot:  dependentRoot,
+		ValidatorIndex: validatorIndex,
+		FeeRecipient:   feeRecipient,
+		GasLimit:       gasLimit,
+	})
 	return true
 }
 
-// Get returns proposer preferences for a slot.
-func (c *ProposerPreferencesCache) Get(slot primitives.Slot) (ProposerPreference, bool) {
+// Get returns the proposer preference stored for (slot, dependentRoot).
+func (c *ProposerPreferencesCache) Get(dependentRoot [32]byte, slot primitives.Slot) (ProposerPreference, bool) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	pref, ok := c.slotToPreferences[slot]
-	if !ok {
-		return ProposerPreference{}, false
+	for _, p := range c.preferences[slot] {
+		if p.DependentRoot == dependentRoot {
+			return p, true
+		}
 	}
-
-	return pref, true
+	return ProposerPreference{}, false
 }
 
-// Has returns true if proposer preferences for the slot already exist.
-func (c *ProposerPreferencesCache) Has(slot primitives.Slot) bool {
+// Has returns true if a proposer preference exists for (slot, dependentRoot).
+func (c *ProposerPreferencesCache) Has(dependentRoot [32]byte, slot primitives.Slot) bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	_, ok := c.slotToPreferences[slot]
-	return ok
+	for _, p := range c.preferences[slot] {
+		if p.DependentRoot == dependentRoot {
+			return true
+		}
+	}
+	return false
 }
 
 // PruneBefore removes all proposer preferences for slots before the provided slot.
@@ -71,9 +87,9 @@ func (c *ProposerPreferencesCache) PruneBefore(slot primitives.Slot) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	for cachedSlot := range c.slotToPreferences {
+	for cachedSlot := range c.preferences {
 		if cachedSlot < slot {
-			delete(c.slotToPreferences, cachedSlot)
+			delete(c.preferences, cachedSlot)
 		}
 	}
 }
@@ -83,5 +99,5 @@ func (c *ProposerPreferencesCache) Clear() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.slotToPreferences = make(map[primitives.Slot]ProposerPreference)
+	c.preferences = make(map[primitives.Slot][]ProposerPreference)
 }

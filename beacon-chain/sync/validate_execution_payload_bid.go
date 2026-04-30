@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -11,8 +12,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -57,14 +60,22 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyCurrentOrNextSlot(); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	// [IGNORE] the SignedProposerPreferences where preferences.proposal_slot is equal to bid.slot has been seen.
-	pref, ok := s.proposerPreferencesCache.Get(bid.Slot())
-	if !ok {
-		return pubsub.ValidationIgnore, nil
-	}
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
+	}
+	// [IGNORE] matching SignedProposerPreferences seen, where dependent_root =
+	// get_proposer_dependent_root(parent_state, epoch(bid.slot)) =
+	// parent_state.block_roots[start_slot(epoch(bid.slot)-1) - 1]. Underflow
+	// (bid.slot in epoch 0 or 1) is treated as the genesis block root.
+	parentBlockRoot := bid.ParentBlockRoot()
+	dependentRoot, err := s.proposerDependentRoot(ctx, parentBlockRoot, bid.Slot())
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	pref, ok := s.proposerPreferencesCache.Get(dependentRoot, bid.Slot())
+	if !ok {
+		return pubsub.ValidationIgnore, nil
 	}
 	// [REJECT] bid.builder_index is a valid/active builder index.
 	if err := v.VerifyBuilderActive(st); err != nil {
@@ -140,6 +151,24 @@ func (s *Service) hasSeenExecutionPayloadBidBuilder(key string) bool {
 
 func (s *Service) setSeenExecutionPayloadBidBuilder(slot primitives.Slot, key string) {
 	s.seenExecutionPayloadBidCache.Add(slot, key, true)
+}
+
+// proposerDependentRoot wraps helpers.ProposerDependentRoot, loading the
+// parent state via stateGen and substituting the genesis block root on
+// pre-Gloas slot underflow.
+func (s *Service) proposerDependentRoot(ctx context.Context, parentBlockRoot [32]byte, slot primitives.Slot) ([32]byte, error) {
+	if slots.ToEpoch(slot) < 2 {
+		root, err := s.cfg.beaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			return [32]byte{}, errors.Wrap(err, "genesis block root")
+		}
+		return root, nil
+	}
+	parentState, err := s.cfg.stateGen.StateByRootNoCopy(ctx, parentBlockRoot)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "load parent state")
+	}
+	return helpers.ProposerDependentRoot(parentState, slot)
 }
 
 func (s *Service) isHighestExecutionPayloadBid(bid interfaces.ROExecutionPayloadBid) bool {
