@@ -153,13 +153,11 @@ func (s *Service) setSeenExecutionPayloadBidBuilder(slot primitives.Slot, key st
 	s.seenExecutionPayloadBidCache.Add(slot, key, true)
 }
 
-// proposerDependentRoot is the spec's
-// get_proposer_dependent_root(parent_state, epoch(slot)) =
-// parent_state.block_roots[start_slot(epoch(slot)-1) - 1], with the genesis
-// block root substituted on slot underflow.
+// proposerDependentRoot wraps helpers.ProposerDependentRoot, loading the
+// parent state via stateGen and substituting the genesis block root on
+// pre-Gloas slot underflow.
 func (s *Service) proposerDependentRoot(ctx context.Context, parentBlockRoot [32]byte, slot primitives.Slot) ([32]byte, error) {
-	bidEpoch := slots.ToEpoch(slot)
-	if bidEpoch < 2 {
+	if slots.ToEpoch(slot) < 2 {
 		root, err := s.cfg.beaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
 			return [32]byte{}, errors.Wrap(err, "genesis block root")
@@ -170,15 +168,7 @@ func (s *Service) proposerDependentRoot(ctx context.Context, parentBlockRoot [32
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "load parent state")
 	}
-	boundary, err := slots.EpochStart(bidEpoch - 1)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "epoch start")
-	}
-	rootBytes, err := helpers.BlockRootAtSlot(parentState, boundary-1)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "block root at slot")
-	}
-	return bytesutil.ToBytes32(rootBytes), nil
+	return helpers.ProposerDependentRoot(parentState, slot)
 }
 
 func (s *Service) isHighestExecutionPayloadBid(bid interfaces.ROExecutionPayloadBid) bool {
