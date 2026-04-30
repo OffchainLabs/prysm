@@ -400,10 +400,9 @@ var (
 	// EnableStatelessFlag enables the stateless block production path for Gloas: the validator requests the
 	// block and execution payload envelope in a single v4 call instead of fetching them in two separate calls.
 	EnableStatelessFlag = &cli.BoolFlag{
-		Name:    "enable-stateless",
-		Usage:   "Enables stateless block production for Gloas. The validator requests block and execution payload envelope in a single /eth/v4/validator/blocks call.",
-		Value:   false,
-		Aliases: []string{"stateless"},
+		Name:  "stateless",
+		Usage: "Enables stateless block production for Gloas. The validator requests block and execution payload envelope in a single /eth/v4/validator/blocks call.",
+		Value: false,
 	}
 	// DisableDutiesPolling disables the polling of duties on dependent root changes.
 	DisableDutiesPolling = &cli.BoolFlag{
