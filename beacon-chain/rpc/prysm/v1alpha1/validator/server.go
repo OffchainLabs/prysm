@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -95,6 +96,7 @@ type Server struct {
 	CoreService                      *core.Service
 	AttestationStateFetcher          blockchain.AttestationStateFetcher
 	GraffitiInfo                     *execution.GraffitiInfo
+	payloadAttestationData           atomic.Pointer[ethpb.PayloadAttestationData]
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.

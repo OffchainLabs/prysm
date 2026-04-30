@@ -43,6 +43,10 @@ func (vs *Server) PayloadAttestationData(
 			"payload attestation data is only available for current slot: requested %d, current %d", slot, currentSlot)
 	}
 
+	if cached := vs.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
+		return cached, nil
+	}
+
 	highestReceivedSlot := vs.ForkchoiceFetcher.HighestReceivedBlockSlot()
 	if highestReceivedSlot != slot {
 		return nil, status.Errorf(
@@ -67,12 +71,14 @@ func (vs *Server) PayloadAttestationData(
 		"payload":   payloadStr,
 	}).Info("PTC request")
 
-	return &ethpb.PayloadAttestationData{
+	resp := &ethpb.PayloadAttestationData{
 		BeaconBlockRoot:   root[:],
 		Slot:              slot,
 		PayloadPresent:    payloadPresent,
 		BlobDataAvailable: payloadPresent, // TODO: Replace with real DA availability once DA paths are wired.
-	}, nil
+	}
+	vs.payloadAttestationData.Store(resp)
+	return resp, nil
 }
 
 // SubmitPayloadAttestation submits a payload attestation message to the network

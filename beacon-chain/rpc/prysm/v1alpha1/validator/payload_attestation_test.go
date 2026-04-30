@@ -61,6 +61,61 @@ func TestPayloadAttestationData_OK(t *testing.T) {
 	assert.Equal(t, false, resp.BlobDataAvailable)
 }
 
+func TestPayloadAttestationData_CachedPerSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	slot := primitives.Slot(7)
+	root := bytesutil.PadTo([]byte{0xAA}, 32)
+	chain := &chainMock.ChainService{
+		Slot: &slot,
+		Root: root,
+		MockCanonicalRoots: map[primitives.Slot][32]byte{
+			slot: bytesutil.ToBytes32(root),
+		},
+		MockCanonicalFull: map[primitives.Slot]bool{slot: false},
+	}
+	vs := &Server{
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		TimeFetcher:       chain,
+		HeadFetcher:       chain,
+		ForkchoiceFetcher: chain,
+	}
+
+	first, err := vs.PayloadAttestationData(t.Context(), &ethpb.PayloadAttestationDataRequest{Slot: slot})
+	require.NoError(t, err)
+	require.DeepEqual(t, root, first.BeaconBlockRoot)
+
+	// Mutate the underlying mock; a second call at the same slot must hit the cache
+	// and return the original response, ignoring the mutation.
+	newRoot := bytesutil.PadTo([]byte{0xBB}, 32)
+	chain.Root = newRoot
+	chain.MockCanonicalRoots[slot] = bytesutil.ToBytes32(newRoot)
+	chain.MockCanonicalFull[slot] = true
+
+	second, err := vs.PayloadAttestationData(t.Context(), &ethpb.PayloadAttestationDataRequest{Slot: slot})
+	require.NoError(t, err)
+	assert.Equal(t, true, first == second) // same pointer = served from cache
+	require.DeepEqual(t, root, second.BeaconBlockRoot)
+	assert.Equal(t, false, second.PayloadPresent)
+
+	// Advance to a new slot; cache must be bypassed and the fresh values returned.
+	nextSlot := slot + 1
+	chain.Slot = &nextSlot
+	chain.BlockSlot = nextSlot
+	chain.MockCanonicalRoots[nextSlot] = bytesutil.ToBytes32(newRoot)
+	chain.MockCanonicalFull[nextSlot] = true
+
+	third, err := vs.PayloadAttestationData(t.Context(), &ethpb.PayloadAttestationDataRequest{Slot: nextSlot})
+	require.NoError(t, err)
+	assert.Equal(t, false, first == third)
+	require.DeepEqual(t, newRoot, third.BeaconBlockRoot)
+	assert.Equal(t, nextSlot, third.Slot)
+	assert.Equal(t, true, third.PayloadPresent)
+}
+
 func TestPayloadAttestationData_SlotMismatch(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
