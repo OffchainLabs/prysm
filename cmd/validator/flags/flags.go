@@ -401,7 +401,7 @@ var (
 	// block and execution payload envelope in a single v4 call instead of fetching them in two separate calls.
 	EnableStatelessFlag = &cli.BoolFlag{
 		Name:  "stateless",
-		Usage: "Enables stateless block production for Gloas. The validator requests block and execution payload envelope in a single /eth/v4/validator/blocks call.",
+		Usage: fmt.Sprintf("Enables stateless block production for Gloas. The validator requests block and execution payload envelope in a single /eth/v4/validator/blocks call. Only works with `--%s`", BeaconRESTApiProviderFlag.Name),
 		Value: false,
 	}
 	// DisableDutiesPolling disables the polling of duties on dependent root changes.
