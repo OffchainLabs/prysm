@@ -5,9 +5,9 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -52,7 +52,7 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	v := s.newSignedProposerPreferencesVerifier(signedPreferences, verification.SignedProposerPreferencesGossipRequirements)
 
 	// [IGNORE] proposal_slot is in current or next epoch and not already passed (wall-clock only).
-	if err := v.VerifyCurrentOrNextEpoch(nil); err != nil {
+	if err := v.VerifyCurrentOrNextEpoch(); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 
@@ -63,22 +63,28 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	}
 
 	// Checkpoint state at epoch(proposal_slot)-1 anchored to dependent_root.
-	st, err := s.cfg.stateGen.StateByRootNoCopy(ctx, dependentRoot)
-	if err != nil {
-		return pubsub.ValidationIgnore, errors.Wrap(err, "load checkpoint state")
-	}
 	proposalEpoch := slots.ToEpoch(signedPreferences.Message.ProposalSlot)
-	dependentEpoch := primitives.Epoch(0)
-	if proposalEpoch > 0 {
-		dependentEpoch = proposalEpoch - 1
-	}
+	// Underflow at epoch 0 collapses to epoch 0 — the spec's genesis-adjacent fallback.
+	dependentEpoch, _ := proposalEpoch.SafeSub(1)
 	boundarySlot, err := slots.EpochStart(dependentEpoch)
 	if err != nil {
 		return pubsub.ValidationIgnore, errors.Wrap(err, "compute checkpoint boundary slot")
 	}
-	st, err = transition.ProcessSlotsIfNeeded(ctx, st, dependentRoot[:], boundarySlot)
-	if err != nil {
-		return pubsub.ValidationIgnore, errors.Wrap(err, "advance checkpoint state to boundary")
+	var st state.ReadOnlyBeaconState
+	// NextSlotState may return a state at slot < boundarySlot when the
+	// dependent block was at an earlier slot (empty boundary slot); only use it
+	// if it lands exactly on the boundary, otherwise fall through to load+advance.
+	if cached := transition.NextSlotState(dependentRoot[:], boundarySlot); cached != nil && cached.Slot() == boundarySlot {
+		st = cached
+	} else {
+		loaded, err := s.cfg.stateGen.StateByRootNoCopy(ctx, dependentRoot)
+		if err != nil {
+			return pubsub.ValidationIgnore, errors.Wrap(err, "load checkpoint state")
+		}
+		st, err = transition.ProcessSlotsIfNeeded(ctx, loaded, dependentRoot[:], boundarySlot)
+		if err != nil {
+			return pubsub.ValidationIgnore, errors.Wrap(err, "advance checkpoint state to boundary")
+		}
 	}
 
 	// [REJECT] is_valid_proposal_slot(state, preferences) returns True, where state

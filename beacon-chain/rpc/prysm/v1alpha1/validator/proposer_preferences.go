@@ -73,8 +73,8 @@ func (vs *Server) SubmitSignedProposerPreferences(
 
 		if len(msg.Message.DependentRoot) != fieldparams.RootLength {
 			return nil, status.Errorf(codes.InvalidArgument,
-				"signed proposer preferences dependent_root must be 32 bytes (got %d)",
-				len(msg.Message.DependentRoot),
+				"signed proposer preferences dependent_root must be %d bytes (got %d)",
+				fieldparams.RootLength, len(msg.Message.DependentRoot),
 			)
 		}
 		var dependentRoot [fieldparams.RootLength]byte

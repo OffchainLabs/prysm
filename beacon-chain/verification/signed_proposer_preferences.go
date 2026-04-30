@@ -36,8 +36,8 @@ type ProposerPreferencesVerifier struct {
 }
 
 // VerifyCurrentOrNextEpoch checks proposal_slot is in current or next epoch
-// (wall-clock) and not already passed. The state argument is unused.
-func (v *ProposerPreferencesVerifier) VerifyCurrentOrNextEpoch(_ state.ReadOnlyBeaconState) (err error) {
+// (wall-clock) and not already passed.
+func (v *ProposerPreferencesVerifier) VerifyCurrentOrNextEpoch() (err error) {
 	defer v.record(RequireProposerPreferencesCurrentOrNextEpoch, &err)
 
 	msg := v.message()
