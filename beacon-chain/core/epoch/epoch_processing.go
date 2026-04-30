@@ -318,7 +318,10 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) (state.BeaconState, er
 
 	bals := st.Balances()
 
+	nextEpoch := time.NextEpoch(st)
+
 	// Update effective balances with hysteresis.
+	nextActiveBalance := uint64(0)
 	validatorFunc := func(idx int, val state.ReadOnlyValidator) (newVal *ethpb.Validator, err error) {
 		if val == nil {
 			return nil, fmt.Errorf("validator %d is nil in state", idx)
@@ -335,11 +338,27 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) (state.BeaconState, er
 				newVal.EffectiveBalance = effectiveBal
 			}
 		}
+
+		if !helpers.IsActiveValidatorUsingTrie(val, nextEpoch) {
+			return
+		}
+
+		if newVal == nil {
+			nextActiveBalance += val.EffectiveBalance()
+			return
+		}
+
+		nextActiveBalance += newVal.EffectiveBalance
 		return
 	}
 
 	if err := st.ApplyToEveryValidator(validatorFunc); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("apply to every validator: %w", err)
+	}
+
+	nextActiveBalance = max(effBalanceInc, nextActiveBalance)
+	if err := helpers.UpdateNextEpochTotalActiveBalanceCache(st, nextActiveBalance); err != nil {
+		return nil, fmt.Errorf("update next epoch total active balance cache: %w", err)
 	}
 
 	return st, nil
