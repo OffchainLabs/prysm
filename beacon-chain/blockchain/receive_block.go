@@ -508,8 +508,14 @@ func (s *Service) markIncludedBlockBLSToExecChanges(headBlock interfaces.ReadOnl
 
 // This checks whether it's time to start saving hot state to DB.
 // It's time when there's `epochsSinceFinalitySaveHotStateDB` epochs of non-finality.
+//
+//	If state-diff is enabled, we will not save hot states to DB regardless of finality status.
+//
 // Requires a read lock on forkchoice
 func (s *Service) checkSaveHotStateDB(ctx context.Context) error {
+	if features.Get().EnableStateDiff {
+		return s.cfg.StateGen.DisableSaveHotStateToDB(ctx)
+	}
 	currentEpoch := slots.ToEpoch(s.CurrentSlot())
 	// Prevent `sinceFinality` going underflow.
 	var sinceFinality primitives.Epoch
