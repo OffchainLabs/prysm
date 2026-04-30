@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -70,13 +71,13 @@ func (vs *Server) SubmitSignedProposerPreferences(
 			)
 		}
 
-		if len(msg.Message.DependentRoot) != 32 {
+		if len(msg.Message.DependentRoot) != fieldparams.RootLength {
 			return nil, status.Errorf(codes.InvalidArgument,
 				"signed proposer preferences dependent_root must be 32 bytes (got %d)",
 				len(msg.Message.DependentRoot),
 			)
 		}
-		var dependentRoot [32]byte
+		var dependentRoot [fieldparams.RootLength]byte
 		copy(dependentRoot[:], msg.Message.DependentRoot)
 
 		if vs.ProposerPreferencesCache.Has(dependentRoot, proposalSlot) {

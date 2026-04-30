@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -44,7 +45,7 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	if signedPreferences.Message == nil {
 		return pubsub.ValidationReject, errNilMessage
 	}
-	if len(signedPreferences.Message.DependentRoot) != 32 {
+	if len(signedPreferences.Message.DependentRoot) != fieldparams.RootLength {
 		return pubsub.ValidationReject, errors.New("dependent_root must be 32 bytes")
 	}
 
