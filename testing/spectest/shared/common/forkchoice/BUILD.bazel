@@ -50,6 +50,7 @@ go_library(
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_ethereum_go_ethereum//core/types:go_default_library",
         "@com_github_golang_snappy//:go_default_library",
+        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
     ],
 )
 

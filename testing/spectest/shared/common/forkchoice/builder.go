@@ -10,6 +10,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -24,6 +25,7 @@ import (
 
 type Builder struct {
 	service  *blockchain.Service
+	fc       forkchoice.ForkChoicer
 	lastTick int64
 	execMock *engineMock
 	vwait    *verification.InitializerWaiter
@@ -45,6 +47,7 @@ func NewBuilder(t testing.TB, initialState state.BeaconState, initialBlock inter
 	bvw := verification.NewInitializerWaiter(cw, fc, sg, service, verification.WithForkLookup(getFork))
 	return &Builder{
 		service:  service,
+		fc:       fc,
 		execMock: execMock,
 		vwait:    bvw,
 	}
@@ -131,6 +134,32 @@ func (bb *Builder) AttesterSlashing(s *ethpb.AttesterSlashing) {
 	bb.service.InsertSlashingsToForkChoiceStore(context.TODO(), slashings)
 }
 
+// ExecutionPayloadEnvelope feeds a signed execution payload envelope to the chain
+// service. When valid is false, an error is required from the receiver.
+func (bb *Builder) ExecutionPayloadEnvelope(t testing.TB, env interfaces.ROSignedExecutionPayloadEnvelope, valid bool) {
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	err := bb.service.ReceiveExecutionPayloadEnvelope(ctx, env)
+	if valid {
+		require.NoError(t, err)
+		return
+	}
+	require.Equal(t, true, err != nil)
+}
+
+// PayloadAttestation feeds a payload attestation message to the chain service.
+// When valid is false, an error is required from the receiver.
+func (bb *Builder) PayloadAttestation(t testing.TB, msg *ethpb.PayloadAttestationMessage, valid bool) {
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	err := bb.service.ReceivePayloadAttestationMessage(ctx, msg)
+	if valid {
+		require.NoError(t, err)
+		return
+	}
+	require.Equal(t, true, err != nil)
+}
+
 // Check evaluates the fork choice results and compares them to the expected values.
 func (bb *Builder) Check(t testing.TB, c *Check) {
 	if c == nil {
@@ -176,4 +205,52 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 		require.DeepEqual(t, c.ShouldOverrideFCU.Result, bb.service.ShouldOverrideFCU())
 	}
 	*/
+	if c.Time != nil {
+		// The compliance-runner emits `time` in every checks block, asserting the
+		// current fork-choice time in seconds since genesis. Our builder's lastTick
+		// is exactly that value — it's the argument passed to the most recent Tick.
+		require.Equal(t, int64(*c.Time), bb.lastTick)
+	}
+	if c.HeadPayloadStatus != nil {
+		headRoot, err := bb.service.HeadRoot(ctx)
+		require.NoError(t, err)
+		var status int
+		if bb.fc.HasFullNode(bytesutil.ToBytes32(headRoot)) {
+			status = 1
+		}
+		require.Equal(t, *c.HeadPayloadStatus, status)
+	}
+	if c.ViableForHeadRootsAndWeights != nil {
+		checkViableHeads(t, bb.fc, c.ViableForHeadRootsAndWeights)
+	}
+}
+
+// checkViableHeads compares the expected {root, weight} multiset against the
+// set reported by the forkchoicer's Tips + Weight accessors. Comparison is
+// order-insensitive: both sides are keyed by root into maps before comparing
+// key-by-key (require.DeepEqual routes through go-cmp which panics on maps).
+func checkViableHeads(t testing.TB, fc forkchoice.ForkChoicer, expected []RootWeight) {
+	tips, _ := fc.Tips()
+	got := make(map[[32]byte]uint64, len(tips))
+	for _, root := range tips {
+		w, err := fc.Weight(root)
+		require.NoError(t, err)
+		got[root] = w
+	}
+	want := make(map[[32]byte]uint64, len(expected))
+	for _, rw := range expected {
+		want[bytesutil.ToBytes32(common.FromHex(rw.Root))] = rw.Weight
+	}
+	if len(want) != len(got) {
+		t.Fatalf("viable_for_head count mismatch: want %d, got %d (want=%x got=%x)", len(want), len(got), want, got)
+	}
+	for root, w := range want {
+		gw, ok := got[root]
+		if !ok {
+			t.Fatalf("viable_for_head missing root %#x (weight %d)", root, w)
+		}
+		if gw != w {
+			t.Fatalf("viable_for_head weight mismatch at %#x: want %d, got %d", root, w, gw)
+		}
+	}
 }
