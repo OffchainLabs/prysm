@@ -488,6 +488,7 @@ message DataColumnSidecarGloas {
 //     execution_requests: ExecutionRequests
 //     builder_index: BuilderIndex
 //     beacon_block_root: Root
+//     parent_beacon_block_root: Root
 message ExecutionPayloadEnvelope {
   ethereum.engine.v1.ExecutionPayloadGloas payload = 1;
   ethereum.engine.v1.ExecutionRequests execution_requests = 2;
@@ -495,6 +496,7 @@ message ExecutionPayloadEnvelope {
                                  "github.com/OffchainLabs/prysm/v7/"
                                  "consensus-types/primitives.BuilderIndex" ];
   bytes beacon_block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes parent_beacon_block_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // SignedExecutionPayloadEnvelope wraps an execution payload envelope with a
@@ -526,6 +528,7 @@ message BlindedExecutionPayloadEnvelope {
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
   bytes parent_block_hash = 7 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes parent_beacon_block_root = 8 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // SignedBlindedExecutionPayloadEnvelope wraps a blinded execution payload

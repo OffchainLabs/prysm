@@ -594,10 +594,11 @@ type BlockContentsGloas struct {
 }
 
 type ExecutionPayloadEnvelope struct {
-	Payload           *ExecutionPayloadGloas `json:"payload"`
-	ExecutionRequests *ExecutionRequests     `json:"execution_requests"`
-	BuilderIndex      string                 `json:"builder_index"`
-	BeaconBlockRoot   string                 `json:"beacon_block_root"`
+	Payload               *ExecutionPayloadGloas `json:"payload"`
+	ExecutionRequests     *ExecutionRequests     `json:"execution_requests"`
+	BuilderIndex          string                 `json:"builder_index"`
+	BeaconBlockRoot       string                 `json:"beacon_block_root"`
+	ParentBeaconBlockRoot string                 `json:"parent_beacon_block_root"`
 }
 
 type SignedExecutionPayloadEnvelope struct {

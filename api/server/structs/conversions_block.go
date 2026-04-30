@@ -3331,10 +3331,11 @@ func ExecutionPayloadEnvelopeFromConsensus(e *eth.ExecutionPayloadEnvelope) (*Ex
 		requests = ExecutionRequestsFromConsensus(e.ExecutionRequests)
 	}
 	return &ExecutionPayloadEnvelope{
-		Payload:           payload,
-		ExecutionRequests: requests,
-		BuilderIndex:      fmt.Sprintf("%d", e.BuilderIndex),
-		BeaconBlockRoot:   hexutil.Encode(e.BeaconBlockRoot),
+		Payload:               payload,
+		ExecutionRequests:     requests,
+		BuilderIndex:          fmt.Sprintf("%d", e.BuilderIndex),
+		BeaconBlockRoot:       hexutil.Encode(e.BeaconBlockRoot),
+		ParentBeaconBlockRoot: hexutil.Encode(e.ParentBeaconBlockRoot),
 	}, nil
 }
 
@@ -3392,11 +3393,16 @@ func (e *ExecutionPayloadEnvelope) ToConsensus() (*eth.ExecutionPayloadEnvelope,
 	if err != nil {
 		return nil, server.NewDecodeError(err, "BeaconBlockRoot")
 	}
+	parentBeaconBlockRoot, err := bytesutil.DecodeHexWithLength(e.ParentBeaconBlockRoot, fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ParentBeaconBlockRoot")
+	}
 	return &eth.ExecutionPayloadEnvelope{
-		Payload:           payload,
-		ExecutionRequests: requests,
-		BuilderIndex:      primitives.BuilderIndex(builderIndex),
-		BeaconBlockRoot:   beaconBlockRoot,
+		Payload:               payload,
+		ExecutionRequests:     requests,
+		BuilderIndex:          primitives.BuilderIndex(builderIndex),
+		BeaconBlockRoot:       beaconBlockRoot,
+		ParentBeaconBlockRoot: parentBeaconBlockRoot,
 	}, nil
 }
 

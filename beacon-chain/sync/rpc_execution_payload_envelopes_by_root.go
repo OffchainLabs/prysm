@@ -153,10 +153,11 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 			}
 			envelope := &ethpb.SignedExecutionPayloadEnvelope{
 				Message: &ethpb.ExecutionPayloadEnvelope{
-					Payload:           payload,
-					ExecutionRequests: req.env.Message.ExecutionRequests,
-					BuilderIndex:      req.env.Message.BuilderIndex,
-					BeaconBlockRoot:   req.env.Message.BeaconBlockRoot,
+					Payload:               payload,
+					ExecutionRequests:     req.env.Message.ExecutionRequests,
+					BuilderIndex:          req.env.Message.BuilderIndex,
+					BeaconBlockRoot:       req.env.Message.BeaconBlockRoot,
+					ParentBeaconBlockRoot: req.env.Message.ParentBeaconBlockRoot,
 				},
 				Signature: req.env.Signature,
 			}
