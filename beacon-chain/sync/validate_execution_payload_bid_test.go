@@ -9,12 +9,14 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -339,9 +341,31 @@ func testNewExecutionPayloadBidVerifier(m mockExecutionPayloadBidVerifier) verif
 func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *ethpb.SignedExecutionPayloadBid) {
 	t.Helper()
 
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := context.Background()
+	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
+
+	// Save a genesis block so beaconDB.GenesisBlockRoot resolves; bids at slot 1
+	// (epoch 0) hit the underflow branch in proposerDependentRoot which falls
+	// back to the genesis block root.
+	gb := util.NewBeaconBlock()
+	signedGenesis, err := blocks.NewSignedBeaconBlock(gb)
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(ctx, signedGenesis))
+	genesisRoot, err := signedGenesis.Block().HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisRoot))
+
 	state, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
+	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
+	signedBid.Message.BuilderIndex = 1
 	chainService := &mock.ChainService{
 		Genesis: time.Now(),
 		State:   state,
@@ -358,12 +382,13 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 			p2p:         p,
 			initialSync: &mockSync.Sync{},
 			chain:       chainService,
+			beaconDB:    db,
 			clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 		},
 	}
-	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
-	signedBid.Message.BuilderIndex = 1
-	require.Equal(t, true, s.proposerPreferencesCache.Add(signedBid.Message.Slot, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit))
+	// The Gloas test state has a zero-filled proposer lookahead, so the
+	// proposer for any slot is validator index 0.
+	require.Equal(t, true, s.proposerPreferencesCache.Add(genesisRoot, signedBid.Message.Slot, 0, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit))
 	msg := executionPayloadBidToPubsub(t, s, p, signedBid)
 	return s, msg, signedBid
 }

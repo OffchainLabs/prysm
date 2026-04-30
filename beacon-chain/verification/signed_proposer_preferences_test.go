@@ -21,32 +21,32 @@ func TestProposerPreferencesVerifier_VerifyCurrentOrNextEpoch(t *testing.T) {
 	// Next epoch future slot is accepted.
 	st, _, signed := newSignedProposerPreferencesState(t, 31, 40, 0)
 	verifier := &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, st.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
-	require.NoError(t, verifier.VerifyCurrentOrNextEpoch(st))
+	require.NoError(t, verifier.VerifyCurrentOrNextEpoch())
 
 	// Current epoch future slot is accepted.
 	signed.Message.ProposalSlot = st.Slot() + 1
 	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, st.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
-	require.NoError(t, verifier.VerifyCurrentOrNextEpoch(st))
+	require.NoError(t, verifier.VerifyCurrentOrNextEpoch())
 
 	// Current slot (already passed) is rejected.
 	signed.Message.ProposalSlot = st.Slot()
 	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, st.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed}
-	require.ErrorIs(t, verifier.VerifyCurrentOrNextEpoch(st), ErrProposerPreferencesSlotAlreadyPassed)
+	require.ErrorIs(t, verifier.VerifyCurrentOrNextEpoch(), ErrProposerPreferencesSlotAlreadyPassed)
 
 	// Same-epoch future slot with more room.
 	st2, _, signed2 := newSignedProposerPreferencesState(t, 24, 28, 0)
 	verifier = &ProposerPreferencesVerifier{sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, st2.Slot())}, results: newResults(RequireProposerPreferencesCurrentOrNextEpoch), p: signed2}
-	require.NoError(t, verifier.VerifyCurrentOrNextEpoch(st2))
+	require.NoError(t, verifier.VerifyCurrentOrNextEpoch())
 }
 
 func TestProposerPreferencesVerifier_VerifyCurrentOrNextEpoch_UsesClockWhenStateLags(t *testing.T) {
-	st, _, signed := newSignedProposerPreferencesState(t, 31, 32, 0)
+	_, _, signed := newSignedProposerPreferencesState(t, 31, 32, 0)
 	verifier := &ProposerPreferencesVerifier{
 		sharedResources: &sharedResources{clock: testClockAtSlotForProposerPreferences(t, 32)},
 		results:         newResults(RequireProposerPreferencesCurrentOrNextEpoch),
 		p:               signed,
 	}
-	require.ErrorIs(t, verifier.VerifyCurrentOrNextEpoch(st), ErrProposerPreferencesSlotAlreadyPassed)
+	require.ErrorIs(t, verifier.VerifyCurrentOrNextEpoch(), ErrProposerPreferencesSlotAlreadyPassed)
 }
 
 func TestProposerPreferencesVerifier_VerifyValidProposalSlot(t *testing.T) {

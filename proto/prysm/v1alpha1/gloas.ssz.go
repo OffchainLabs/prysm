@@ -400,20 +400,27 @@ func (p *ProposerPreferences) MarshalSSZ() ([]byte, error) {
 func (p *ProposerPreferences) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 
-	// Field (0) 'ProposalSlot'
+	// Field (0) 'DependentRoot'
+	if size := len(p.DependentRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.DependentRoot", size, 32)
+		return
+	}
+	dst = append(dst, p.DependentRoot...)
+
+	// Field (1) 'ProposalSlot'
 	dst = ssz.MarshalUint(dst, p.ProposalSlot)
 
-	// Field (1) 'ValidatorIndex'
+	// Field (2) 'ValidatorIndex'
 	dst = ssz.MarshalUint(dst, p.ValidatorIndex)
 
-	// Field (2) 'FeeRecipient'
+	// Field (3) 'FeeRecipient'
 	if size := len(p.FeeRecipient); size != 20 {
 		err = ssz.ErrBytesLengthFn("--.FeeRecipient", size, 20)
 		return
 	}
 	dst = append(dst, p.FeeRecipient...)
 
-	// Field (3) 'GasLimit'
+	// Field (4) 'GasLimit'
 	dst = ssz.MarshalUint(dst, p.GasLimit)
 
 	return
@@ -423,31 +430,37 @@ func (p *ProposerPreferences) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (p *ProposerPreferences) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 44 {
+	if size != 76 {
 		return ssz.ErrSize
 	}
 
-	// Field (0) 'ProposalSlot'
-	p.ProposalSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[0:8])
-
-	// Field (1) 'ValidatorIndex'
-	p.ValidatorIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[8:16])
-
-	// Field (2) 'FeeRecipient'
-	if cap(p.FeeRecipient) == 0 {
-		p.FeeRecipient = make([]byte, 0, len(buf[16:36]))
+	// Field (0) 'DependentRoot'
+	if cap(p.DependentRoot) == 0 {
+		p.DependentRoot = make([]byte, 0, len(buf[0:32]))
 	}
-	p.FeeRecipient = append(p.FeeRecipient, buf[16:36]...)
+	p.DependentRoot = append(p.DependentRoot, buf[0:32]...)
 
-	// Field (3) 'GasLimit'
-	p.GasLimit = ssz.UnmarshallUint[uint64](buf[36:44])
+	// Field (1) 'ProposalSlot'
+	p.ProposalSlot = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot](buf[32:40])
+
+	// Field (2) 'ValidatorIndex'
+	p.ValidatorIndex = ssz.UnmarshallUint[github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex](buf[40:48])
+
+	// Field (3) 'FeeRecipient'
+	if cap(p.FeeRecipient) == 0 {
+		p.FeeRecipient = make([]byte, 0, len(buf[48:68]))
+	}
+	p.FeeRecipient = append(p.FeeRecipient, buf[48:68]...)
+
+	// Field (4) 'GasLimit'
+	p.GasLimit = ssz.UnmarshallUint[uint64](buf[68:76])
 
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the ProposerPreferences object
 func (p *ProposerPreferences) SizeSSZ() (size int) {
-	size = 44
+	size = 76
 	return
 }
 
@@ -460,20 +473,27 @@ func (p *ProposerPreferences) HashTreeRoot() ([32]byte, error) {
 func (p *ProposerPreferences) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
-	// Field (0) 'ProposalSlot'
+	// Field (0) 'DependentRoot'
+	if size := len(p.DependentRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.DependentRoot", size, 32)
+		return
+	}
+	hh.PutBytes(p.DependentRoot)
+
+	// Field (1) 'ProposalSlot'
 	ssz.PutUint(hh, p.ProposalSlot)
 
-	// Field (1) 'ValidatorIndex'
+	// Field (2) 'ValidatorIndex'
 	ssz.PutUint(hh, p.ValidatorIndex)
 
-	// Field (2) 'FeeRecipient'
+	// Field (3) 'FeeRecipient'
 	if size := len(p.FeeRecipient); size != 20 {
 		err = ssz.ErrBytesLengthFn("--.FeeRecipient", size, 20)
 		return
 	}
 	hh.PutBytes(p.FeeRecipient)
 
-	// Field (3) 'GasLimit'
+	// Field (4) 'GasLimit'
 	ssz.PutUint(hh, p.GasLimit)
 
 	hh.Merkleize(indx)
@@ -511,7 +531,7 @@ func (s *SignedProposerPreferences) MarshalSSZTo(buf []byte) (dst []byte, err er
 func (s *SignedProposerPreferences) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 140 {
+	if size != 172 {
 		return ssz.ErrSize
 	}
 
@@ -519,22 +539,22 @@ func (s *SignedProposerPreferences) UnmarshalSSZ(buf []byte) error {
 	if s.Message == nil {
 		s.Message = new(ProposerPreferences)
 	}
-	if err = s.Message.UnmarshalSSZ(buf[0:44]); err != nil {
+	if err = s.Message.UnmarshalSSZ(buf[0:76]); err != nil {
 		return err
 	}
 
 	// Field (1) 'Signature'
 	if cap(s.Signature) == 0 {
-		s.Signature = make([]byte, 0, len(buf[44:140]))
+		s.Signature = make([]byte, 0, len(buf[76:172]))
 	}
-	s.Signature = append(s.Signature, buf[44:140]...)
+	s.Signature = append(s.Signature, buf[76:172]...)
 
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the SignedProposerPreferences object
 func (s *SignedProposerPreferences) SizeSSZ() (size int) {
-	size = 140
+	size = 172
 	return
 }
 
