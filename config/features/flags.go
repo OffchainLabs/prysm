@@ -101,8 +101,8 @@ var (
 	}
 	enableDoppelGangerProtection = &cli.BoolFlag{
 		Name: "enable-doppelganger",
-		Usage: `Enables the validator to perform a doppelganger check. 
-		This is not a foolproof method to find duplicate instances in the network. 
+		Usage: `Enables the validator to perform a doppelganger check.
+		This is not a foolproof method to find duplicate instances in the network.
 		Your validator will still be vulnerable if it is being run in unsafe configurations.`,
 	}
 	disableStakinContractCheck = &cli.BoolFlag{
@@ -149,6 +149,10 @@ var (
 	prepareAllPayloads = &cli.BoolFlag{
 		Name:  "prepare-all-payloads",
 		Usage: "Informs the engine to prepare all local payloads. Useful for relayers and builders.",
+	}
+	emitGloasRollbackFCU = &cli.BoolFlag{
+		Name:  "emit-rollback-fcu",
+		Usage: "Send forkchoice updates to the EL when head rolls the canonical execution head back to a prior payload",
 	}
 	EnableLightClient = &cli.BoolFlag{
 		Name:  "enable-light-client",
@@ -270,6 +274,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	disableVerboseSigVerification,
 	enableProposerPreprocessing,
 	prepareAllPayloads,
+	emitGloasRollbackFCU,
 	aggregateFirstInterval,
 	aggregateSecondInterval,
 	aggregateThirdInterval,

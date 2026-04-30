@@ -133,7 +133,7 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 	processAttsElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 
 	start = time.Now()
-	newHeadRoot, _, full, err := s.cfg.ForkChoiceStore.FullHead(ctx)
+	newHeadRoot, headBlockHash, full, err := s.cfg.ForkChoiceStore.FullHead(ctx)
 	if err != nil {
 		log.WithError(err).Error("Could not compute head from new attestations")
 		return
@@ -155,17 +155,23 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		}
 		postGloas := slots.ToEpoch(proposingSlot) >= params.BeaconConfig().GloasForkEpoch
 		if postGloas {
-			blockHash, hashErr := s.cfg.ForkChoiceStore.BlockHash(newHeadRoot)
-			if hashErr != nil {
-				log.WithError(hashErr).Error("Could not get block hash from forkchoice for FCU")
-			} else {
+			elHash := headBlockHash
+			if !features.Get().EmitGloasRollbackFCU {
+				bidHash, hashErr := s.cfg.ForkChoiceStore.BlockHash(newHeadRoot)
+				if hashErr != nil {
+					log.WithError(hashErr).Error("Could not get block hash from forkchoice for FCU")
+					bidHash = [32]byte{}
+				}
+				elHash = bidHash
+			}
+			if elHash != ([32]byte{}) {
 				go func() {
-					pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
+					pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, elHash, attr)
 					if err != nil {
 						log.WithError(err).Error("Could not update forkchoice with engine")
 					}
 					if pid == nil {
-						if attr != nil {
+						if attr != nil && !attr.IsEmpty() {
 							log.Warn("Engine did not return a payload ID for the fork choice update with attributes")
 						}
 						return
