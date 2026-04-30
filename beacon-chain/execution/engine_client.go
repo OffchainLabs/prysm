@@ -712,10 +712,11 @@ func (s *Service) ReconstructExecutionPayloadEnvelope(
 	}
 	return &ethpb.SignedExecutionPayloadEnvelope{
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload:           payload,
-			ExecutionRequests: envelope.Message.ExecutionRequests,
-			BuilderIndex:      envelope.Message.BuilderIndex,
-			BeaconBlockRoot:   envelope.Message.BeaconBlockRoot,
+			Payload:               payload,
+			ExecutionRequests:     envelope.Message.ExecutionRequests,
+			BuilderIndex:          envelope.Message.BuilderIndex,
+			BeaconBlockRoot:       envelope.Message.BeaconBlockRoot,
+			ParentBeaconBlockRoot: envelope.Message.ParentBeaconBlockRoot,
 		},
 		Signature: envelope.Signature,
 	}, nil
