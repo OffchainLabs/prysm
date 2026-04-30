@@ -3881,7 +3881,7 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the ExecutionPayloadEnvelope object to a target array
 func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(48)
+	offset := int(80)
 
 	// Offset (0) 'Payload'
 	dst = ssz.WriteOffset(dst, offset)
@@ -3907,6 +3907,13 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err err
 	}
 	dst = append(dst, e.BeaconBlockRoot...)
 
+	// Field (4) 'ParentBeaconBlockRoot'
+	if size := len(e.ParentBeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentBeaconBlockRoot", size, 32)
+		return
+	}
+	dst = append(dst, e.ParentBeaconBlockRoot...)
+
 	// Field (0) 'Payload'
 	if dst, err = e.Payload.MarshalSSZTo(dst); err != nil {
 		return
@@ -3924,7 +3931,7 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err err
 func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 48 {
+	if size < 80 {
 		return ssz.ErrSize
 	}
 
@@ -3936,7 +3943,7 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o0 != 48 {
+	if o0 != 80 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -3953,6 +3960,12 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 		e.BeaconBlockRoot = make([]byte, 0, len(buf[16:48]))
 	}
 	e.BeaconBlockRoot = append(e.BeaconBlockRoot, buf[16:48]...)
+
+	// Field (4) 'ParentBeaconBlockRoot'
+	if cap(e.ParentBeaconBlockRoot) == 0 {
+		e.ParentBeaconBlockRoot = make([]byte, 0, len(buf[48:80]))
+	}
+	e.ParentBeaconBlockRoot = append(e.ParentBeaconBlockRoot, buf[48:80]...)
 
 	// Field (0) 'Payload'
 	{
@@ -3980,7 +3993,7 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayloadEnvelope object
 func (e *ExecutionPayloadEnvelope) SizeSSZ() (size int) {
-	size = 48
+	size = 80
 
 	// Field (0) 'Payload'
 	if e.Payload == nil {
@@ -4025,6 +4038,13 @@ func (e *ExecutionPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 		return
 	}
 	hh.PutBytes(e.BeaconBlockRoot)
+
+	// Field (4) 'ParentBeaconBlockRoot'
+	if size := len(e.ParentBeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentBeaconBlockRoot", size, 32)
+		return
+	}
+	hh.PutBytes(e.ParentBeaconBlockRoot)
 
 	hh.Merkleize(indx)
 	return
@@ -4147,7 +4167,7 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the BlindedExecutionPayloadEnvelope object to a target array
 func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(116)
+	offset := int(148)
 
 	// Field (0) 'BlockHash'
 	if size := len(b.BlockHash); size != 32 {
@@ -4183,6 +4203,13 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, 
 	}
 	dst = append(dst, b.ParentBlockHash...)
 
+	// Field (6) 'ParentBeaconBlockRoot'
+	if size := len(b.ParentBeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentBeaconBlockRoot", size, 32)
+		return
+	}
+	dst = append(dst, b.ParentBeaconBlockRoot...)
+
 	// Field (1) 'ExecutionRequests'
 	if dst, err = b.ExecutionRequests.MarshalSSZTo(dst); err != nil {
 		return
@@ -4195,7 +4222,7 @@ func (b *BlindedExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, 
 func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 116 {
+	if size < 148 {
 		return ssz.ErrSize
 	}
 
@@ -4213,7 +4240,7 @@ func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o1 != 116 {
+	if o1 != 148 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -4235,6 +4262,12 @@ func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	}
 	b.ParentBlockHash = append(b.ParentBlockHash, buf[84:116]...)
 
+	// Field (6) 'ParentBeaconBlockRoot'
+	if cap(b.ParentBeaconBlockRoot) == 0 {
+		b.ParentBeaconBlockRoot = make([]byte, 0, len(buf[116:148]))
+	}
+	b.ParentBeaconBlockRoot = append(b.ParentBeaconBlockRoot, buf[116:148]...)
+
 	// Field (1) 'ExecutionRequests'
 	{
 		buf = tail[o1:]
@@ -4250,7 +4283,7 @@ func (b *BlindedExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the BlindedExecutionPayloadEnvelope object
 func (b *BlindedExecutionPayloadEnvelope) SizeSSZ() (size int) {
-	size = 116
+	size = 148
 
 	// Field (1) 'ExecutionRequests'
 	if b.ExecutionRequests == nil {
@@ -4301,6 +4334,13 @@ func (b *BlindedExecutionPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err 
 		return
 	}
 	hh.PutBytes(b.ParentBlockHash)
+
+	// Field (6) 'ParentBeaconBlockRoot'
+	if size := len(b.ParentBeaconBlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentBeaconBlockRoot", size, 32)
+		return
+	}
+	hh.PutBytes(b.ParentBeaconBlockRoot)
 
 	hh.Merkleize(indx)
 	return
