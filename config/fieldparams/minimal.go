@@ -52,6 +52,6 @@ const (
 	CellsPerBlob    = 64  // CellsPerBlob refers to the number of cells in a (non-extended) blob.
 
 	// Introduced in Gloas network upgrade.
-	PTCSize                = 2 // PTCSize is the size of the payload timeliness committee.
+	PTCSize                = 16 // PTCSize is the size of the payload timeliness committee.
 	MaxPayloadAttestations = 4 // MaxPayloadAttestations is the maximum number of payload attestations in a block.
 )

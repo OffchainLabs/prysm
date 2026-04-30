@@ -295,3 +295,5 @@ require (
 replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.20190722034630-4f2e55fcf87b
 
 replace github.com/tyler-smith/go-bip39 => ./third_party/go-bip39
+
+replace github.com/OffchainLabs/go-bitfield => github.com/barnabasbusa/go-bitfield v0.0.0-20260430103126-49cf19afead9
