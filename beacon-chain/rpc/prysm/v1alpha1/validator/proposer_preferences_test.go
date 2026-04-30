@@ -9,17 +9,12 @@ import (
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
-
-func bytes32(b byte) []byte {
-	out := make([]byte, 32)
-	out[0] = b
-	return out
-}
 
 func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
@@ -43,7 +38,7 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytes32(0xcc),
+					DependentRoot: bytesutil.PadTo([]byte{0xcc}, 32),
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -85,7 +80,7 @@ func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytes32(0xaa),
+					DependentRoot: bytesutil.PadTo([]byte{0xaa}, 32),
 					ProposalSlot:   currentSlot + 1,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -95,7 +90,7 @@ func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
 			},
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytes32(0xbb),
+					DependentRoot: bytesutil.PadTo([]byte{0xbb}, 32),
 					ProposalSlot:   currentSlot + 2,
 					ValidatorIndex: 5,
 					FeeRecipient:   make([]byte, 20),
@@ -140,7 +135,7 @@ func TestSubmitSignedProposerPreferences_DuplicateSlot(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytes32(0xcc),
+					DependentRoot: bytesutil.PadTo([]byte{0xcc}, 32),
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -177,7 +172,7 @@ func TestSubmitSignedProposerPreferences_InvalidEpoch(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytes32(0xcc),
+					DependentRoot: bytesutil.PadTo([]byte{0xcc}, 32),
 					ProposalSlot:   currentSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -218,7 +213,7 @@ func TestSubmitSignedProposerPreferences_CurrentEpochFutureSlot(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytes32(0xcc),
+					DependentRoot: bytesutil.PadTo([]byte{0xcc}, 32),
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -254,7 +249,7 @@ func TestSubmitSignedProposerPreferences_Syncing(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytes32(0xcc),
+					DependentRoot: bytesutil.PadTo([]byte{0xcc}, 32),
 					ProposalSlot:   currentSlot + 1,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -292,7 +287,7 @@ func TestSubmitSignedProposerPreferences_BroadcastsForProposalEpoch(t *testing.T
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytes32(0xcc),
+					DependentRoot: bytesutil.PadTo([]byte{0xcc}, 32),
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
