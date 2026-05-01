@@ -248,9 +248,10 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 				ExtraData:     make([]byte, 0),
 				SlotNumber:    1,
 			},
-			ExecutionRequests: &enginev1.ExecutionRequests{},
-			BuilderIndex:      0,
-			BeaconBlockRoot:   make([]byte, 32),
+			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			BuilderIndex:          0,
+			BeaconBlockRoot:       make([]byte, 32),
+			ParentBeaconBlockRoot: make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	}

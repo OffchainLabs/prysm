@@ -174,7 +174,7 @@
 - name: CHURN_LIMIT_QUOTIENT#phase0
   sources:
     - file: config/params/config.go
-      search: ChurnLimitQuotient\s+uint64
+      search: \bChurnLimitQuotient\s+uint64
       regex: true
   spec: |
     <spec config_var="CHURN_LIMIT_QUOTIENT" fork="phase0" hash="a43a1d33">

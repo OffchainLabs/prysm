@@ -53,5 +53,5 @@ const (
 
 	// Introduced in Gloas network upgrade.
 	PTCSize                = 16 // PTCSize is the size of the payload timeliness committee.
-	MaxPayloadAttestations = 4 // MaxPayloadAttestations is the maximum number of payload attestations in a block.
+	MaxPayloadAttestations = 4  // MaxPayloadAttestations is the maximum number of payload attestations in a block.
 )
