@@ -34,6 +34,18 @@ func (b *BeaconState) LatestBlockHash() ([32]byte, error) {
 	return [32]byte(b.latestBlockHash), nil
 }
 
+// PTCWindow returns a copy of the cached PTC window.
+func (b *BeaconState) PTCWindow() ([]*ethpb.PTCs, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("PTCWindow", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.ptcWindowVal(), nil
+}
+
 // IsAttestationSameSlot checks if the attestation is for the same slot as the block root in the state.
 // Spec v1.7.0-alpha pseudocode:
 //
@@ -292,26 +304,27 @@ func withdrawalsEqual(a, b []*enginev1.Withdrawal) bool {
 	return true
 }
 
-// IsParentBlockFull returns true if the last committed payload bid was fulfilled with a payload,
+// LatestBlockHashMatchesBidBlockHash returns true if the last committed payload bid was fulfilled with a payload,
 // which can only happen when both beacon block and payload were present.
 //
 // WARNING: This must be called on a beacon state before processing the bid for the current block
 // (process_execution_payload_bid), otherwise it will compare against the in-flight bid and produce
 // incorrect results.
-//
-//	<spec fn="is_parent_block_full" fork="gloas" hash="b59640c9">
-//	def is_parent_block_full(state: BeaconState) -> bool:
-//	    return state.latest_execution_payload_bid.block_hash == state.latest_block_hash
-//	</spec>
-func (b *BeaconState) IsParentBlockFull() (bool, error) {
+func (b *BeaconState) LatestBlockHashMatchesBidBlockHash() (bool, error) {
 	if b.version < version.Gloas {
-		return false, errNotSupported("IsParentBlockFull", b.version)
+		return false, errNotSupported("LatestBlockHashMatchesBidBlockHash", b.version)
 	}
 
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
 	if b.latestExecutionPayloadBid == nil {
+		return false, nil
+	}
+
+	// gloas genesis case
+	zero := params.BeaconConfig().ZeroHash
+	if bytes.Equal(b.latestBlockHash, zero[:]) {
 		return false, nil
 	}
 
@@ -652,6 +665,32 @@ func (b *BeaconState) PayloadExpectedWithdrawals() ([]*enginev1.Withdrawal, erro
 	return b.payloadExpectedWithdrawalsVal(), nil
 }
 
+// WithdrawalsForPayload returns the withdrawals that should be included in the
+// execution payload for the current slot. If the parent block was full,
+// fresh withdrawals are computed via ExpectedWithdrawalsGloas; otherwise
+// the existing payload_expected_withdrawals from state are reused unchanged.
+// This method does not acquire a lock directly; it delegates to
+// LatestBlockHashMatchesBidBlockHash, ExpectedWithdrawalsGloas, and PayloadExpectedWithdrawals
+// which each acquire their own read lock.
+func (b *BeaconState) WithdrawalsForPayload() ([]*enginev1.Withdrawal, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("WithdrawalsForPayload", b.version)
+	}
+
+	full, err := b.LatestBlockHashMatchesBidBlockHash()
+	if err != nil {
+		return nil, err
+	}
+	if full {
+		result, err := b.ExpectedWithdrawalsGloas()
+		if err != nil {
+			return nil, err
+		}
+		return result.Withdrawals, nil
+	}
+	return b.PayloadExpectedWithdrawals()
+}
+
 // NextWithdrawalBuilderIndex returns the next withdrawal builder index.
 func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, error) {
 	if b.version < version.Gloas {
@@ -662,4 +701,65 @@ func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, err
 	defer b.lock.RUnlock()
 
 	return b.nextWithdrawalBuilderIndex, nil
+}
+
+// PayloadCommitteeReadOnly returns the payload timeliness committee for a given slot
+// by looking up the cached PTC window in state.
+//
+//	<spec fn="get_ptc" fork="gloas" hash="b55ba184">
+//	def get_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
+//	    """
+//	    Get the payload timeliness committee for the given ``slot``.
+//	    """
+//	    epoch = compute_epoch_at_slot(slot)
+//	    state_epoch = get_current_epoch(state)
+//	    if epoch < state_epoch:
+//	        assert epoch + 1 == state_epoch
+//	        return state.ptc_window[slot % SLOTS_PER_EPOCH]
+//	    assert epoch <= state_epoch + MIN_SEED_LOOKAHEAD
+//	    offset = (epoch - state_epoch + 1) * SLOTS_PER_EPOCH
+//	    return state.ptc_window[offset + slot % SLOTS_PER_EPOCH]
+//	</spec>
+func (b *BeaconState) PayloadCommitteeReadOnly(slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("PayloadCommitteeReadOnly", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	offset, err := ptcWindowOffset(b.slot, slot)
+	if err != nil {
+		return nil, err
+	}
+
+	if uint64(offset) >= uint64(len(b.ptcWindow)) {
+		return nil, fmt.Errorf("ptc window offset %d out of range for size %d", offset, len(b.ptcWindow))
+	}
+	ptcSlot := b.ptcWindow[offset]
+	if ptcSlot == nil {
+		return nil, fmt.Errorf("ptc window slot %d is nil", offset)
+	}
+
+	return ptcSlot.ValidatorIndices, nil
+}
+
+func ptcWindowOffset(stateSlot, slot primitives.Slot) (primitives.Slot, error) {
+	epoch := slots.ToEpoch(slot)
+	stateEpoch := slots.ToEpoch(stateSlot)
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+	if epoch < stateEpoch {
+		if epoch+1 != stateEpoch {
+			return 0, fmt.Errorf("ptc window only supports previous epoch lookups: state_epoch=%d slot_epoch=%d", stateEpoch, epoch)
+		}
+		return slot % slotsPerEpoch, nil
+	}
+
+	if epoch > stateEpoch+params.BeaconConfig().MinSeedLookahead {
+		return 0, fmt.Errorf("ptc window lookup out of range: state_epoch=%d slot_epoch=%d", stateEpoch, epoch)
+	}
+
+	offset := slotsPerEpoch.Mul(uint64(epoch-stateEpoch+1)) + (slot % slotsPerEpoch)
+	return offset, nil
 }

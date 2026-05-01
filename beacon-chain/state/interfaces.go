@@ -24,7 +24,6 @@ type BeaconState interface {
 	SpecParametersProvider
 	ReadOnlyBeaconState
 	WriteOnlyBeaconState
-	CopyAllTries()
 	Defragment()
 	HashTreeRoot(ctx context.Context) ([32]byte, error)
 	Prover
@@ -238,6 +237,7 @@ type ReadOnlyDeposits interface {
 	DepositBalanceToConsume() (primitives.Gwei, error)
 	DepositRequestsStartIndex() (uint64, error)
 	PendingDeposits() ([]*ethpb.PendingDeposit, error)
+	IsPendingValidator(pubkey []byte) (bool, error)
 }
 
 type ReadOnlyConsolidations interface {

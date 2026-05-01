@@ -165,6 +165,12 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationIgnore, err
 	}
 
+	if s.cfg.chain.ShouldIgnoreData(blk.Block().ParentRoot(), blk.Block().Slot()) {
+		log.WithFields(getBlockFields(blk)).Debug("Ignoring block with canonical parent before justified checkpoint")
+		ignoredPreJustifiedBlockCount.Inc()
+		return pubsub.ValidationIgnore, nil
+	}
+
 	// Process the block if the clock jitter is less than MAXIMUM_GOSSIP_CLOCK_DISPARITY.
 	// Otherwise queue it for processing in the right slot.
 	if isBlockQueueable(genesisTime, blk.Block().Slot(), receivedTime) {
@@ -364,7 +370,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 		if err != nil {
 			return nil, err
 		}
-		return transition.ProcessSlotsForBlock(ctx, headState, blk.Block())
+		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, parentRoot[:], blk.Block().Slot())
 	}
 	// If head and block are in the same epoch and head is compatible with the parent's dependent root, then use head
 	if blockEpoch == headEpoch {
@@ -393,7 +399,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 	if blockEpoch == parentEpoch {
 		return parentState, nil
 	}
-	return transition.ProcessSlotsForBlock(ctx, parentState, blk.Block())
+	return transition.ProcessSlotsUsingNextSlotCache(ctx, parentState, parentRoot[:], blk.Block().Slot())
 }
 
 func validateDenebBeaconBlock(blk interfaces.ReadOnlyBeaconBlock) error {

@@ -5,7 +5,6 @@ import (
 	"context"
 	"sort"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -139,24 +138,19 @@ func (s *Service) SyncCommitteeDuties(ctx context.Context, st state.BeaconState,
 	nextSyncCommitteeFirstEpoch := currentSyncCommitteeFirstEpoch + params.BeaconConfig().EpochsPerSyncCommitteePeriod
 	isCurrentCommittee := requestedEpoch < nextSyncCommitteeFirstEpoch
 
-	var committee [][]byte
+	syncCommitteeFunc := st.NextSyncCommittee
 	if isCurrentCommittee {
-		sc, err := st.CurrentSyncCommittee()
-		if err != nil {
-			return nil, &RpcError{Err: errors.Wrap(err, "could not get sync committee"), Reason: Internal}
-		}
-		committee = sc.Pubkeys
-	} else {
-		sc, err := st.NextSyncCommittee()
-		if err != nil {
-			return nil, &RpcError{Err: errors.Wrap(err, "could not get sync committee"), Reason: Internal}
-		}
-		committee = sc.Pubkeys
+		syncCommitteeFunc = st.CurrentSyncCommittee
+	}
+
+	sc, err := syncCommitteeFunc()
+	if err != nil {
+		return nil, &RpcError{Err: errors.Wrap(err, "could not get sync committee"), Reason: Internal}
 	}
 
 	// Build pubkey → positions map from committee pubkeys.
 	committeePubkeys := make(map[[fieldparams.BLSPubkeyLength]byte][]uint64)
-	for j, pk := range committee {
+	for j, pk := range sc.Pubkeys {
 		var pk48 [fieldparams.BLSPubkeyLength]byte
 		copy(pk48[:], pk)
 		committeePubkeys[pk48] = append(committeePubkeys[pk48], uint64(j))
@@ -200,7 +194,7 @@ func (s *Service) PTCDuties(ctx context.Context, st state.BeaconState, epoch pri
 	_, span := trace.StartSpan(ctx, "coreService.PTCDuties")
 	defer span.End()
 
-	if len(indices) == 0 || epoch < params.BeaconConfig().GloasForkEpoch {
+	if len(indices) == 0 || epoch < params.BeaconConfig().GloasForkEpoch || st.Version() < version.Gloas {
 		return []*PTCDutyResult{}, nil
 	}
 
@@ -221,7 +215,7 @@ func (s *Service) PTCDuties(ctx context.Context, st state.BeaconState, epoch pri
 			return nil, &RpcError{Err: ctx.Err(), Reason: Internal}
 		}
 
-		ptc, err := gloas.PayloadCommittee(ctx, st, slot)
+		ptc, err := st.PayloadCommitteeReadOnly(slot)
 		if err != nil {
 			return nil, &RpcError{Err: err, Reason: Internal}
 		}

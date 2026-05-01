@@ -62,18 +62,19 @@ import (
 var _ runtime.Service = (*Service)(nil)
 
 const (
-	rangeLimit               = 1024
-	seenBlockSize            = 1000
-	seenPayloadEnvelopeSize  = 1000
-	seenDataColumnSize       = seenBlockSize * 128 // Each block can have max 128 data columns.
-	seenUnaggregatedAttSize  = 20000
-	seenAggregatedAttSize    = 16384
-	seenSyncMsgSize          = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
-	seenSyncContributionSize = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
-	seenExitSize             = 100
-	seenProposerSlashingSize = 100
-	badBlockSize             = 1000
-	syncMetricsInterval      = 10 * time.Second
+	rangeLimit                  = 1024
+	seenBlockSize               = 1000
+	seenPayloadEnvelopeSize     = 1000
+	seenExecutionPayloadBidSize = 1000
+	seenDataColumnSize          = seenBlockSize * 128 // Each block can have max 128 data columns.
+	seenUnaggregatedAttSize     = 20000
+	seenAggregatedAttSize       = 16384
+	seenSyncMsgSize             = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
+	seenSyncContributionSize    = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
+	seenExitSize                = 100
+	seenProposerSlashingSize    = 100
+	badBlockSize                = 1000
+	syncMetricsInterval         = 10 * time.Second
 )
 
 var (
@@ -154,9 +155,13 @@ type Service struct {
 	seenBlockLock                        sync.RWMutex
 	seenBlockCache                       *lru.Cache
 	seenPayloadEnvelopeCache             *lru.Cache
+	seenExecutionPayloadBidCache         *slotAwareCache
+	highestExecutionPayloadBidCache      *cache.HighestExecutionPayloadBidCache
 	seenBlobLock                         sync.RWMutex
 	seenBlobCache                        *lru.Cache
 	seenDataColumnCache                  *slotAwareCache
+	pendingGloasColumnsLock              sync.RWMutex
+	pendingGloasColumns                  map[[32]byte]*pendingGloasEntry
 	seenAggregatedAttestationLock        sync.RWMutex
 	seenAggregatedAttestationCache       *lru.Cache
 	seenUnAggregatedAttestationLock      sync.RWMutex
@@ -185,6 +190,7 @@ type Service struct {
 	newColumnsVerifier                   verification.NewDataColumnsVerifier
 	newPayloadAttestationVerifier        verification.NewPayloadAttestationMsgVerifier
 	newSignedProposerPreferencesVerifier verification.NewSignedProposerPreferencesVerifier
+	newExecutionPayloadBidVerifier       verification.NewExecutionPayloadBidVerifier
 	columnSidecarsExecSingleFlight       singleflight.Group
 	reconstructionSingleFlight           singleflight.Group
 	availableBlocker                     coverage.AvailableBlocker
@@ -215,6 +221,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		slotToPendingBlocks:      gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:        make(map[[32]byte]bool),
 		blkRootToPendingAtts:     make(map[[32]byte][]any),
+		pendingGloasColumns:      make(map[[32]byte]*pendingGloasEntry),
 		dataColumnLogCh:          make(chan dataColumnLogEntry, 1000),
 		reconstructionRandGen:    rand.NewGenerator(),
 		payloadAttestationCache:  &cache.PayloadAttestationCache{},
@@ -283,6 +290,12 @@ func newSignedProposerPreferencesVerifierFromInitializer(ini *verification.Initi
 	}
 }
 
+func newExecutionPayloadBidVerifierFromInitializer(ini *verification.Initializer) verification.NewExecutionPayloadBidVerifier {
+	return func(b interfaces.ROSignedExecutionPayloadBid, reqs []verification.Requirement) verification.ExecutionPayloadBidVerifier {
+		return ini.NewExecutionPayloadBidVerifier(b, reqs)
+	}
+}
+
 // Start the regular sync service.
 func (s *Service) Start() {
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -294,6 +307,7 @@ func (s *Service) Start() {
 	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
 	s.newPayloadAttestationVerifier = newPayloadAttestationMessageFromInitializer(v)
 	s.newSignedProposerPreferencesVerifier = newSignedProposerPreferencesVerifierFromInitializer(v)
+	s.newExecutionPayloadBidVerifier = newExecutionPayloadBidVerifierFromInitializer(v)
 	s.newExecutionPayloadEnvelopeVerifier = newPayloadVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
@@ -317,6 +331,8 @@ func (s *Service) Start() {
 
 	// Prune data column cache periodically on finalization.
 	async.RunEvery(s.ctx, 30*time.Second, s.pruneDataColumnCache)
+
+	go s.prunePendingGloasColumns()
 
 	if !params.FuluEnabled() {
 		return
@@ -379,11 +395,19 @@ func (s *Service) Status() error {
 	return nil
 }
 
+// HighestExecutionPayloadBidCache exposes sync's cache to the proposer RPC.
+// Sync is the sole writer (gossip); the proposer is a reader.
+func (s *Service) HighestExecutionPayloadBidCache() *cache.HighestExecutionPayloadBidCache {
+	return s.highestExecutionPayloadBidCache
+}
+
 // This initializes the caches to update seen beacon objects coming in from the wire
 // and prevent DoS.
 func (s *Service) initCaches() {
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
 	s.seenPayloadEnvelopeCache = lruwrpr.New(seenPayloadEnvelopeSize)
+	s.seenExecutionPayloadBidCache = newSlotAwareCache(seenExecutionPayloadBidSize)
+	s.highestExecutionPayloadBidCache = cache.NewHighestExecutionPayloadBidCache()
 	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
 	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)

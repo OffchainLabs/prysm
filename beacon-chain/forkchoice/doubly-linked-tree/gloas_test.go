@@ -67,19 +67,20 @@ func prepareGloasForkchoiceState(
 		FinalizedCheckpoint:        finalizedCheckpoint,
 		LatestBlockHeader:          blockHeader,
 		LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
-			BlockHash:          blockHash[:],
-			ParentBlockHash:    parentBlockHash[:],
-			ParentBlockRoot:    make([]byte, 32),
-			PrevRandao:         make([]byte, 32),
-			FeeRecipient:       make([]byte, 20),
-			BlobKzgCommitments: [][]byte{make([]byte, 48)},
+			BlockHash:             blockHash[:],
+			ParentBlockHash:       parentBlockHash[:],
+			ParentBlockRoot:       make([]byte, 32),
+			PrevRandao:            make([]byte, 32),
+			FeeRecipient:          make([]byte, 20),
+			BlobKzgCommitments:    [][]byte{make([]byte, 48)},
+			ExecutionRequestsRoot: make([]byte, 32),
 		},
 		Builders:                     make([]*ethpb.Builder, 0),
 		BuilderPendingPayments:       builderPendingPayments,
 		ExecutionPayloadAvailability: make([]byte, 1024),
 		LatestBlockHash:              make([]byte, 32),
 		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
-		ProposerLookahead:            make([]uint64, 64),
+		ProposerLookahead:            make([]primitives.ValidatorIndex, 64),
 	}
 
 	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
@@ -117,7 +118,7 @@ func prepareGloasForkchoicePayload(
 ) (interfaces.ROExecutionPayloadEnvelope, error) {
 	env := &ethpb.ExecutionPayloadEnvelope{
 		BeaconBlockRoot: blockRoot[:],
-		Payload:         &enginev1.ExecutionPayloadDeneb{},
+		Payload:         &enginev1.ExecutionPayloadGloas{},
 	}
 	return blocks.WrappedROExecutionPayloadEnvelope(env)
 }
@@ -907,46 +908,6 @@ func TestChoosePayloadContent(t *testing.T) {
 	})
 }
 
-func TestPayloadContentLookup(t *testing.T) {
-	f := setupGloas(t, 0, 0)
-	ctx := t.Context()
-
-	rootA := indexToHash(1)
-	blockHashA := indexToHash(100)
-	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, roblock))
-
-	t.Run("unknown root returns zero and false", func(t *testing.T) {
-		v, isBlockHash := f.PayloadContentLookup(indexToHash(999))
-		assert.Equal(t, [32]byte{}, v)
-		assert.Equal(t, false, isBlockHash)
-	})
-
-	t.Run("empty wins returns root", func(t *testing.T) {
-		v, isBlockHash := f.PayloadContentLookup(rootA)
-		assert.Equal(t, rootA, v)
-		assert.Equal(t, false, isBlockHash)
-	})
-
-	pe, err := prepareGloasForkchoicePayload(rootA)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertPayload(pe))
-
-	t.Run("full wins returns block hash", func(t *testing.T) {
-		en := f.store.emptyNodeByRoot[rootA]
-		fn := f.store.fullNodeByRoot[rootA]
-		require.NotNil(t, en)
-		require.NotNil(t, fn)
-		en.weight = 1
-		fn.weight = 2
-
-		v, isBlockHash := f.PayloadContentLookup(rootA)
-		assert.Equal(t, blockHashA, v)
-		assert.Equal(t, true, isBlockHash)
-	})
-}
-
 func TestGloasForkedBranches(t *testing.T) {
 	f := setupGloas(t, 1, 1)
 	s := f.store
@@ -1502,7 +1463,7 @@ func TestFullHead_EmptyPayload(t *testing.T) {
 // fullNodeByRoot entry with full=true for them (for EL optimistic validation tracking).
 // Without the epoch guard in FullHead, isNewHead would spuriously fire every ticker
 // tick because FullHead returned full=true while saveHead stored head.full=false.
-func TestFullHead_PreGloasBlock_ReturnsFalse(t *testing.T) {
+func TestFullHead_PreGloasBlock_ReturnsTrue(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.GloasForkEpoch = 100 // Gloas activates far in the future; slot 1 is pre-Gloas
@@ -1524,7 +1485,7 @@ func TestFullHead_PreGloasBlock_ReturnsFalse(t *testing.T) {
 	hr, _, full, err := f.FullHead(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, rootA, hr)
-	assert.Equal(t, false, full, "pre-Gloas block must return full=false from FullHead")
+	assert.Equal(t, true, full, "pre-Gloas block must return full=true from FullHead")
 }
 
 func TestUpdateBalances_SlotChangeMovesBalance(t *testing.T) {
@@ -1595,4 +1556,79 @@ func TestUpdateBalances_SlotChangeMovesBalance(t *testing.T) {
 	require.NotNil(t, emptyC)
 	// slot 101 == C.node.slot(101) → pending=true → Node.balance
 	assert.Equal(t, validatorBalance, emptyC.node.balance, "C should have the validator's balance")
+}
+
+func TestLatestCanonicalHashForRoot_SameParentReorg(t *testing.T) {
+	f := setupGloas(t, 1, 1)
+	ctx := t.Context()
+	s := f.store
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	balances := make([]uint64, 64)
+	for i := range balances {
+		balances[i] = 10
+	}
+	f.justifiedBalances = balances
+	s.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+
+	// Slot A at epoch boundary (slot 32). Bid blockHashA, parentHash = genesis (zeroHash).
+	slotA := primitives.Slot(32)
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	driftGenesisTime(f, slotA, 0)
+	st, blk, err := prepareGloasForkchoiceState(ctx, slotA, rootA, zeroHash, blockHashA, zeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	// Insert payload for A.
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// Slot B at slot 33. Bid blockHashB, parentHash = zeroHash (same EL parent as A!).
+	// This means B builds on A's EMPTY node, not A's full node.
+	slotB := primitives.Slot(33)
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	driftGenesisTime(f, slotB, 0)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotB, rootB, rootA, blockHashB, zeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	// Insert payload for B.
+	pe, err = prepareGloasForkchoicePayload(rootB)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// Slot C at slot 34, building on B's full node.
+	slotC := primitives.Slot(34)
+	rootC := indexToHash(3)
+	blockHashC := indexToHash(300)
+	driftGenesisTime(f, slotC, 0)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotC, rootC, rootB, blockHashC, blockHashB, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	// Verify B builds on A's empty node.
+	nodeB := s.emptyNodeByRoot[rootB]
+	require.NotNil(t, nodeB)
+	emptyA := s.emptyNodeByRoot[rootA]
+	require.NotNil(t, emptyA)
+	require.Equal(t, emptyA, nodeB.node.parent, "B should build on A's empty node")
+
+	// Give the empty path weight so choosePayloadContent picks empty for A.
+	// B is a child of emptyA, so emptyA gets weight while fullA stays at 0.
+	emptyA.weight = 100
+	fullA := s.fullNodeByRoot[rootA]
+	require.NotNil(t, fullA)
+	fullA.weight = 0
+
+	// Verify choosePayloadContent picks empty for A.
+	pn := s.choosePayloadContent(emptyA.node)
+	require.Equal(t, false, pn.full, "canonical choice for A should be empty")
+
+	// latestCanonicalHashForRoot(rootA) should return the parent hash
+	// (genesis = zeroHash), NOT blockHashA.
+	f.store.unrealizedJustifiedCheckpoint.Root = rootA
+	got := f.UnrealizedJustifiedPayloadBlockHash()
+	require.NotEqual(t, blockHashA, got, "should NOT return A's reorged-out payload hash")
+	require.Equal(t, zeroHash, got, "should return the common EL ancestor hash (genesis)")
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
@@ -84,7 +85,7 @@ type NewPayloadAttestationMsgVerifier func(pa payloadattestation.ROMessage, reqs
 
 // SignedProposerPreferencesVerifier defines the methods implemented by the signed proposer preferences verifier.
 type SignedProposerPreferencesVerifier interface {
-	VerifyNextEpoch(state.ReadOnlyBeaconState) error
+	VerifyCurrentOrNextEpoch(state.ReadOnlyBeaconState) error
 	VerifyValidProposalSlot(state.ReadOnlyBeaconState) error
 	VerifySignature(state.ReadOnlyBeaconState) error
 	SatisfyRequirement(Requirement)
@@ -93,3 +94,21 @@ type SignedProposerPreferencesVerifier interface {
 // NewSignedProposerPreferencesVerifier is a function signature that can be used by code that needs to be
 // able to mock Initializer.NewSignedProposerPreferencesVerifier without complex setup.
 type NewSignedProposerPreferencesVerifier func(p *ethpb.SignedProposerPreferences, reqs []Requirement) SignedProposerPreferencesVerifier
+
+// ExecutionPayloadBidVerifier defines the methods implemented by the ROSignedExecutionPayloadBid verifier.
+type ExecutionPayloadBidVerifier interface {
+	VerifyCurrentOrNextSlot() error
+	VerifyBuilderActive(state.ReadOnlyBeaconState) error
+	VerifyExecutionPaymentZero() error
+	VerifyFeeRecipientMatches([]byte) error
+	VerifyGasLimitMatches(uint64) error
+	VerifyParentBlockRootSeen(func([32]byte) bool) error
+	VerifyParentBlockHash(func([32]byte) ([32]byte, error)) error
+	VerifyBuilderCanCoverBid(state.ReadOnlyBeaconState) error
+	VerifySignature(state.ReadOnlyBeaconState) error
+	SatisfyRequirement(Requirement)
+}
+
+// NewExecutionPayloadBidVerifier is a function signature that can be used by code that needs to be
+// able to mock Initializer.NewExecutionPayloadBidVerifier without complex setup.
+type NewExecutionPayloadBidVerifier func(b interfaces.ROSignedExecutionPayloadBid, reqs []Requirement) ExecutionPayloadBidVerifier

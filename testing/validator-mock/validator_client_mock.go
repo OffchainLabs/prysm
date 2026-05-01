@@ -387,6 +387,36 @@ func (mr *MockValidatorClientMockRecorder) PublishExecutionPayloadEnvelope(ctx, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).PublishExecutionPayloadEnvelope), ctx, in)
 }
 
+// SubmitSignedProposerPreferences mocks base method.
+func (m *MockValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, in *eth.SubmitSignedProposerPreferencesRequest) (*empty.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitSignedProposerPreferences", ctx, in)
+	ret0, _ := ret[0].(*empty.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitSignedProposerPreferences indicates an expected call of SubmitSignedProposerPreferences.
+func (mr *MockValidatorClientMockRecorder) SubmitSignedProposerPreferences(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedProposerPreferences", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedProposerPreferences), ctx, in)
+}
+
+// SubmitSignedExecutionPayloadBid mocks base method.
+func (m *MockValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Context, in *eth.SignedExecutionPayloadBid) (*empty.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitSignedExecutionPayloadBid", ctx, in)
+	ret0, _ := ret[0].(*empty.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitSignedExecutionPayloadBid indicates an expected call of SubmitSignedExecutionPayloadBid.
+func (mr *MockValidatorClientMockRecorder) SubmitSignedExecutionPayloadBid(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedExecutionPayloadBid", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedExecutionPayloadBid), ctx, in)
+}
+
 // StartEventStream mocks base method.
 func (m *MockValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *event.Event) {
 	m.ctrl.T.Helper()

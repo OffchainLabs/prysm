@@ -309,8 +309,7 @@ func (f *ForkChoice) updateBalances() error {
 			newBalance = newBalances[index]
 		}
 
-		// Update only if the validator's voting slot has changed.
-		if vote.currentSlot != vote.nextSlot {
+		if oldBalance != newBalance || vote.currentSlot != vote.nextSlot {
 			// Add new balance to the next vote target if the root is known.
 			pn, pending := f.store.resolveVoteNode(vote.nextRoot, vote.nextSlot, vote.nextPayloadStatus)
 			if pn != nil && vote.nextRoot != zHash {
@@ -326,15 +325,20 @@ func (f *ForkChoice) updateBalances() error {
 			if pn != nil && vote.currentRoot != zHash {
 				if pending {
 					if pn.node.balance < oldBalance {
-						log.WithFields(logrus.Fields{
-							"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
-							"oldBalance":                 oldBalance,
-							"nodeBalance":                pn.node.balance,
-							"nodeWeight":                 pn.node.weight,
-							"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
-							"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
-							"previousProposerBoostScore": f.store.previousProposerBoostScore,
-						}).Warning("node with invalid balance, setting it to zero")
+						if pn.node.slot == 0 {
+							log.WithField("nodeRoot", fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:]))).
+								Debug("Genesis node pending balance underflow, clamping to zero")
+						} else {
+							log.WithFields(logrus.Fields{
+								"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
+								"oldBalance":                 oldBalance,
+								"nodeBalance":                pn.node.balance,
+								"nodeWeight":                 pn.node.weight,
+								"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
+								"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
+								"previousProposerBoostScore": f.store.previousProposerBoostScore,
+							}).Warning("node with invalid balance, setting it to zero")
+						}
 						pn.node.balance = 0
 					} else {
 						pn.node.balance -= oldBalance
@@ -379,9 +383,12 @@ func (f *ForkChoice) ProposerBoost() [fieldparams.RootLength]byte {
 
 // SetOptimisticToValid sets the node with the given root as a fully validated node. The payload for this root MUST have been processed.
 func (f *ForkChoice) SetOptimisticToValid(ctx context.Context, root [fieldparams.RootLength]byte) error {
-	fn, ok := f.store.fullNodeByRoot[root]
-	if !ok || fn == nil {
-		return errors.Wrap(ErrNilNode, "could not set node to valid")
+	fn := f.store.fullNodeByRoot[root]
+	if fn == nil {
+		fn = f.store.emptyNodeByRoot[root]
+		if fn == nil {
+			return errors.Wrapf(ErrNilNode, "could not set node to valid, no node found for root: %#x", bytesutil.Trunc(root[:]))
+		}
 	}
 	return f.store.setNodeAndParentValidated(ctx, fn)
 }
@@ -535,6 +542,19 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 			bcp.JustifiedCheckpoint.Epoch, bcp.FinalizedCheckpoint.Epoch); err != nil {
 			return err
 		}
+		if bcp.HasPayload {
+			root := bcp.Block.Root()
+			en := f.store.emptyNodeByRoot[root]
+			if en != nil && f.store.fullNodeByRoot[root] == nil {
+				f.store.fullNodeByRoot[root] = &PayloadNode{
+					node:       en.node,
+					optimistic: true,
+					timestamp:  time.Now(),
+					full:       true,
+					children:   make([]*Node, 0),
+				}
+			}
+		}
 		if err := f.updateCheckpoints(ctx, bcp.JustifiedCheckpoint, bcp.FinalizedCheckpoint); err != nil {
 			return err
 		}
@@ -563,17 +583,17 @@ func (f *ForkChoice) CachedHeadRoot() [32]byte {
 
 // FinalizedPayloadBlockHash returns the hash of the payload at the finalized checkpoint
 func (f *ForkChoice) FinalizedPayloadBlockHash() [32]byte {
-	return f.store.latestHashForRoot(f.FinalizedCheckpoint().Root)
+	return f.store.checkpointPayloadHashForRoot(f.FinalizedCheckpoint().Root)
 }
 
 // JustifiedPayloadBlockHash returns the hash of the payload at the justified checkpoint
 func (f *ForkChoice) JustifiedPayloadBlockHash() [32]byte {
-	return f.store.latestHashForRoot(f.JustifiedCheckpoint().Root)
+	return f.store.checkpointPayloadHashForRoot(f.JustifiedCheckpoint().Root)
 }
 
 // UnrealizedJustifiedPayloadBlockHash returns the hash of the payload at the unrealized justified checkpoint
 func (f *ForkChoice) UnrealizedJustifiedPayloadBlockHash() [32]byte {
-	return f.store.latestHashForRoot(f.store.unrealizedJustifiedCheckpoint.Root)
+	return f.store.checkpointPayloadHashForRoot(f.store.unrealizedJustifiedCheckpoint.Root)
 }
 
 // ForkChoiceDump returns a full dump of forkchoice.

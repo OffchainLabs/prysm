@@ -14,33 +14,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
-
-// ProcessSlotsForBlock advances the given state to the slot of the given block.
-// This function assumes that the parent state is the latest state that has been processed before the given block.
-// In particular, all that it is needed to get the blocks's prestate is to advance slots and possible epoch transitions.
-func ProcessSlotsForBlock(
-	ctx context.Context,
-	st state.BeaconState,
-	b interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
-	accessRoot := b.ParentRoot()
-	if st.Version() < version.Gloas {
-		return ProcessSlotsUsingNextSlotCache(ctx, st, accessRoot[:], b.Slot())
-	}
-	full, err := st.IsParentBlockFull()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not determine if parent block is full")
-	}
-	if full {
-		accessRoot, err = st.LatestBlockHash()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get latest block hash")
-		}
-	}
-	return ProcessSlotsUsingNextSlotCache(ctx, st, accessRoot[:], b.Slot())
-}
 
 // ProcessOperations
 //
@@ -130,7 +105,7 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 //
 // Spec definition:
 //
-//	<spec fn="process_epoch" fork="gloas" hash="393b69ef">
+//	<spec fn="process_epoch" fork="gloas" hash="bf3575a9">
 //	def process_epoch(state: BeaconState) -> None:
 //	    process_justification_and_finalization(state)
 //	    process_inactivity_updates(state)
@@ -149,6 +124,8 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 //	    process_participation_flag_updates(state)
 //	    process_sync_committee_updates(state)
 //	    process_proposer_lookahead(state)
+//	    # [New in Gloas:EIP7732]
+//	    process_ptc_window(state)
 //	</spec>
 func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	_, span := trace.StartSpan(ctx, "gloas.ProcessEpoch")
@@ -222,5 +199,5 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err := fulu.ProcessProposerLookahead(ctx, state); err != nil {
 		return err
 	}
-	return nil
+	return gloas.ProcessPTCWindow(ctx, state)
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -152,8 +153,13 @@ func (s *State) StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) 
 	}
 
 	if s.beaconDB.HasState(ctx, blockRoot) {
-		s, err := s.beaconDB.State(ctx, blockRoot)
-		return s, errors.Wrap(err, "failed to retrieve init-sync state from db")
+		st, err := s.beaconDB.State(ctx, blockRoot)
+		if err == nil {
+			return st, nil
+		}
+		if !stderrors.Is(err, db.ErrNotFoundState) {
+			return nil, errors.Wrap(err, "failed to retrieve init-sync state from db")
+		}
 	}
 
 	startState, err := s.latestAncestor(ctx, blockRoot)
@@ -179,7 +185,6 @@ func (s *State) StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) 
 	if err != nil {
 		return nil, errors.Wrap(err, "could not replay blocks")
 	}
-
 	return startState, nil
 }
 
@@ -271,7 +276,13 @@ func (s *State) loadStateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (
 func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
 	// Short circuit if the state is already in the DB.
 	if s.beaconDB.HasState(ctx, blockRoot) {
-		return s.beaconDB.State(ctx, blockRoot)
+		st, err := s.beaconDB.State(ctx, blockRoot)
+		if err == nil {
+			return st, nil
+		}
+		if !stderrors.Is(err, db.ErrNotFoundState) {
+			return nil, err
+		}
 	}
 
 	summary, err := s.stateSummary(ctx, blockRoot)
@@ -294,13 +305,12 @@ func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32
 		return startState, nil
 	}
 
-	blks, err := s.loadBlocks(ctx, startState.Slot()+1, targetSlot, bytesutil.ToBytes32(summary.Root))
+	blks, err := s.loadBlocks(ctx, startState.Slot()+1, targetSlot, blockRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not load blocks for hot state using root")
 	}
 
 	replayBlockCount.Observe(float64(len(blks)))
-
 	return s.replayBlocks(ctx, startState, blks, targetSlot)
 }
 
@@ -369,8 +379,13 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 
 		// Does the state exists in DB.
 		if s.beaconDB.HasState(ctx, parentRoot) {
-			s, err := s.beaconDB.State(ctx, parentRoot)
-			return s, errors.Wrap(err, "failed to retrieve state from db")
+			st, err := s.beaconDB.State(ctx, parentRoot)
+			if err == nil {
+				return st, nil
+			}
+			if !stderrors.Is(err, db.ErrNotFoundState) {
+				return nil, errors.Wrap(err, "failed to retrieve state from db")
+			}
 		}
 
 		b, err = s.beaconDB.Block(ctx, parentRoot)

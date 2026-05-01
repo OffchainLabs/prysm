@@ -509,17 +509,18 @@ func (s *SignedBlindedBeaconBlockFulu) SigString() string {
 // ----------------------------------------------------------------------------
 
 type ExecutionPayloadBid struct {
-	ParentBlockHash    string   `json:"parent_block_hash"`
-	ParentBlockRoot    string   `json:"parent_block_root"`
-	BlockHash          string   `json:"block_hash"`
-	PrevRandao         string   `json:"prev_randao"`
-	FeeRecipient       string   `json:"fee_recipient"`
-	GasLimit           string   `json:"gas_limit"`
-	BuilderIndex       string   `json:"builder_index"`
-	Slot               string   `json:"slot"`
-	Value              string   `json:"value"`
-	ExecutionPayment   string   `json:"execution_payment"`
-	BlobKzgCommitments []string `json:"blob_kzg_commitments"`
+	ParentBlockHash       string   `json:"parent_block_hash"`
+	ParentBlockRoot       string   `json:"parent_block_root"`
+	BlockHash             string   `json:"block_hash"`
+	PrevRandao            string   `json:"prev_randao"`
+	FeeRecipient          string   `json:"fee_recipient"`
+	GasLimit              string   `json:"gas_limit"`
+	BuilderIndex          string   `json:"builder_index"`
+	Slot                  string   `json:"slot"`
+	Value                 string   `json:"value"`
+	ExecutionPayment      string   `json:"execution_payment"`
+	BlobKzgCommitments    []string `json:"blob_kzg_commitments"`
+	ExecutionRequestsRoot string   `json:"execution_requests_root"`
 }
 
 type SignedExecutionPayloadBid struct {
@@ -559,6 +560,7 @@ type BeaconBlockBodyGloas struct {
 	BLSToExecutionChanges     []*SignedBLSToExecutionChange `json:"bls_to_execution_changes"`
 	SignedExecutionPayloadBid *SignedExecutionPayloadBid    `json:"signed_execution_payload_bid"`
 	PayloadAttestations       []*PayloadAttestation         `json:"payload_attestations"`
+	ParentExecutionRequests   *ExecutionRequests            `json:"parent_execution_requests"`
 }
 
 type BeaconBlockGloas struct {
@@ -584,13 +586,18 @@ func (s *SignedBeaconBlockGloas) SigString() string {
 	return s.Signature
 }
 
+type BlockContentsGloas struct {
+	Block                    *BeaconBlockGloas         `json:"block"`
+	ExecutionPayloadEnvelope *ExecutionPayloadEnvelope `json:"execution_payload_envelope"`
+	KzgProofs                []string                  `json:"kzg_proofs"`
+	Blobs                    []string                  `json:"blobs"`
+}
+
 type ExecutionPayloadEnvelope struct {
-	Payload           *ExecutionPayloadDeneb `json:"payload"`
+	Payload           *ExecutionPayloadGloas `json:"payload"`
 	ExecutionRequests *ExecutionRequests     `json:"execution_requests"`
 	BuilderIndex      string                 `json:"builder_index"`
 	BeaconBlockRoot   string                 `json:"beacon_block_root"`
-	Slot              string                 `json:"slot"`
-	StateRoot         string                 `json:"state_root"`
 }
 
 type SignedExecutionPayloadEnvelope struct {

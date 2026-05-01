@@ -201,6 +201,7 @@ ssz_gloas_objs = [
     "BuilderPendingWithdrawal",
     "DataColumnSidecarGloas",
     "ExecutionPayloadEnvelope",
+    "PTCs",
     "ProposerPreferences",
     "SignedProposerPreferences",
     "PayloadAttestation",
@@ -211,6 +212,7 @@ ssz_gloas_objs = [
     "SignedBlindedExecutionPayloadEnvelope",
     "SignedExecutionPayloadEnvelope",
     "BeaconBlockGloas",
+    "BeaconBlockContentsGloas",
     "SignedBeaconBlockGloas",
     "BeaconStateGloas",
 ]

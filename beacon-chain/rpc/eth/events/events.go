@@ -674,7 +674,7 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 var errUnsupportedPayloadAttribute = errors.New("cannot compute payload attributes pre-Bellatrix")
 var errPayloadAttributeExpired = errors.New("skipping payload attribute event for past slot")
 
-func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnlyBeaconState, root [32]byte, proposer primitives.ValidatorIndex, timestamp uint64, randao []byte) (payloadattribute.Attributer, error) {
+func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnlyBeaconState, root [32]byte, proposer primitives.ValidatorIndex, timestamp uint64, randao []byte, slot primitives.Slot) (payloadattribute.Attributer, error) {
 	v := st.Version()
 	if v < version.Bellatrix {
 		return nil, errors.Wrapf(errUnsupportedPayloadAttribute, "%s is not supported", version.String(v))
@@ -694,7 +694,15 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		})
 	}
 
-	w, _, err := st.ExpectedWithdrawals()
+	var (
+		w   []*engine.Withdrawal
+		err error
+	)
+	if v >= version.Gloas {
+		w, err = st.WithdrawalsForPayload()
+	} else {
+		w, _, err = st.ExpectedWithdrawals()
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get withdrawals from head state")
 	}
@@ -707,12 +715,23 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		})
 	}
 
-	return payloadattribute.New(&engine.PayloadAttributesV3{
+	if v < version.Gloas {
+		return payloadattribute.New(&engine.PayloadAttributesV3{
+			Timestamp:             timestamp,
+			PrevRandao:            randao,
+			SuggestedFeeRecipient: feeRecpt,
+			Withdrawals:           w,
+			ParentBeaconBlockRoot: root[:],
+		})
+	}
+
+	return payloadattribute.New(&engine.PayloadAttributesV4{
 		Timestamp:             timestamp,
 		PrevRandao:            randao,
 		SuggestedFeeRecipient: feeRecpt,
 		Withdrawals:           w,
 		ParentBeaconBlockRoot: root[:],
+		SlotNumber:            uint64(slot),
 	})
 }
 
@@ -797,7 +816,7 @@ func (s *Server) fillEventData(ctx context.Context, ev payloadattribute.EventDat
 		return ev, errors.Wrap(err, "could not get head state slot time")
 	}
 
-	ev.Attributer, err = s.computePayloadAttributes(ctx, rost, ev.HeadRoot, ev.ProposerIndex, uint64(t.Unix()), randao)
+	ev.Attributer, err = s.computePayloadAttributes(ctx, rost, ev.HeadRoot, ev.ProposerIndex, uint64(t.Unix()), randao, ev.ProposalSlot)
 	return ev, err
 }
 

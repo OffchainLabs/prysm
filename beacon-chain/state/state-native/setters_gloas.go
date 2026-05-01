@@ -91,18 +91,20 @@ func (b *BeaconState) SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid)
 	randao := h.PrevRandao()
 	blobKzgCommitments := h.BlobKzgCommitments()
 	feeRecipient := h.FeeRecipient()
+	executionRequestsRoot := h.ExecutionRequestsRoot()
 	b.latestExecutionPayloadBid = &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:    parentBlockHash[:],
-		ParentBlockRoot:    parentBlockRoot[:],
-		BlockHash:          blockHash[:],
-		PrevRandao:         randao[:],
-		GasLimit:           h.GasLimit(),
-		BuilderIndex:       h.BuilderIndex(),
-		Slot:               h.Slot(),
-		Value:              h.Value(),
-		ExecutionPayment:   h.ExecutionPayment(),
-		BlobKzgCommitments: blobKzgCommitments,
-		FeeRecipient:       feeRecipient[:],
+		ParentBlockHash:       parentBlockHash[:],
+		ParentBlockRoot:       parentBlockRoot[:],
+		BlockHash:             blockHash[:],
+		PrevRandao:            randao[:],
+		GasLimit:              h.GasLimit(),
+		BuilderIndex:          h.BuilderIndex(),
+		Slot:                  h.Slot(),
+		Value:                 h.Value(),
+		ExecutionPayment:      h.ExecutionPayment(),
+		BlobKzgCommitments:    blobKzgCommitments,
+		FeeRecipient:          feeRecipient[:],
+		ExecutionRequestsRoot: executionRequestsRoot[:],
 	}
 	b.markFieldAsDirty(types.LatestExecutionPayloadBid)
 
@@ -128,26 +130,35 @@ func (b *BeaconState) ClearBuilderPendingPayment(index primitives.Slot) error {
 	return nil
 }
 
-// QueueBuilderPayment implements the builder payment queuing logic for Gloas.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// payment = state.builder_pending_payments[SLOTS_PER_EPOCH + state.slot % SLOTS_PER_EPOCH]
-// amount = payment.withdrawal.amount
-// if amount > 0:
-//
-//	state.builder_pending_withdrawals.append(payment.withdrawal)
-//
-// state.builder_pending_payments[SLOTS_PER_EPOCH + state.slot % SLOTS_PER_EPOCH] = BuilderPendingPayment()
-func (b *BeaconState) QueueBuilderPayment() error {
+func (b *BeaconState) QueueBuilderPaymentForSlot(parentSlot primitives.Slot) error {
 	if b.version < version.Gloas {
-		return errNotSupported("QueueBuilderPayment", b.version)
+		return errNotSupported("QueueBuilderPaymentForSlot", b.version)
 	}
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	currentEpoch := slots.ToEpoch(b.slot)
+	parentEpoch := slots.ToEpoch(parentSlot)
 
+	if parentEpoch == currentEpoch {
+		return b.queueBuilderPaymentAtIndex(slotsPerEpoch + (parentSlot % slotsPerEpoch))
+	}
+	if parentEpoch+1 == currentEpoch {
+		return b.queueBuilderPaymentAtIndex(parentSlot % slotsPerEpoch)
+	}
+	bid := b.latestExecutionPayloadBid
+	if bid == nil || bid.Value == 0 {
+		return nil
+	}
+	return b.AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal{{
+		FeeRecipient: bytesutil.SafeCopyBytes(bid.FeeRecipient),
+		Amount:       bid.Value,
+		BuilderIndex: bid.BuilderIndex,
+	}})
+}
+
+func (b *BeaconState) queueBuilderPaymentAtIndex(paymentIndex primitives.Slot) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	slot := b.slot
-	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-	paymentIndex := slotsPerEpoch + (slot % slotsPerEpoch)
 	if uint64(paymentIndex) >= uint64(len(b.builderPendingPayments)) {
 		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", paymentIndex, len(b.builderPendingPayments))
 	}
@@ -642,7 +653,7 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 // OnboardBuildersFromPendingDeposits applies any pending builder deposits at the fork.
 // It mutates the state and prunes pending deposits accordingly.
 //
-//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas">
+//	<spec fn="onboard_builders_from_pending_deposits" fork="gloas" hash="2bd662c7">
 //	def onboard_builders_from_pending_deposits(state: BeaconState) -> None:
 //	    """
 //	    Applies any pending deposit for builders, effectively
@@ -766,4 +777,67 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 	b.markFieldAsDirty(types.PendingDeposits)
 
 	return nil
+}
+
+// SetPTCWindow is a mutating call to the beacon state which sets the cached PTC window.
+func (b *BeaconState) SetPTCWindow(window []*ethpb.PTCs) error {
+	if b.version < version.Gloas {
+		return errNotSupported("SetPTCWindow", b.version)
+	}
+
+	expected := expectedPTCWindowSize()
+	if uint64(len(window)) != uint64(expected) {
+		return fmt.Errorf("invalid size for ptc window: got %d want %d", len(window), expected)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.sharedFieldReferences[types.PTCWindow].MinusRef()
+	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)
+	b.ptcWindow = ethpb.CopyPTCWindow(window)
+	b.markFieldAsDirty(types.PTCWindow)
+	return nil
+}
+
+// RotatePTCWindow shifts the PTC window left by one epoch and fills the last epoch
+// with the provided new slots. This performs the rotation in-place under lock.
+func (b *BeaconState) RotatePTCWindow(newEpochSlots []*ethpb.PTCs) error {
+	if b.version < version.Gloas {
+		return errNotSupported("RotatePTCWindow", b.version)
+	}
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	if uint64(len(newEpochSlots)) != uint64(slotsPerEpoch) {
+		return fmt.Errorf("invalid new epoch slots size: got %d want %d", len(newEpochSlots), slotsPerEpoch)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	expected := expectedPTCWindowSize()
+	if uint64(len(b.ptcWindow)) != uint64(expected) {
+		return fmt.Errorf("invalid ptc window size: got %d want %d", len(b.ptcWindow), expected)
+	}
+
+	b.sharedFieldReferences[types.PTCWindow].MinusRef()
+	b.sharedFieldReferences[types.PTCWindow] = stateutil.NewRef(1)
+
+	newWindow := make([]*ethpb.PTCs, expected)
+
+	// Shift left by one epoch.
+	lastEpochStart := expected - slotsPerEpoch
+	copy(newWindow[:lastEpochStart], b.ptcWindow[slotsPerEpoch:])
+
+	// Fill the last epoch with copied new slots.
+	copy(newWindow[lastEpochStart:], ethpb.CopyPTCWindow(newEpochSlots))
+
+	b.ptcWindow = newWindow
+
+	b.markFieldAsDirty(types.PTCWindow)
+	return nil
+}
+
+func expectedPTCWindowSize() primitives.Slot {
+	return params.BeaconConfig().SlotsPerEpoch.Mul(uint64(2 + params.BeaconConfig().MinSeedLookahead))
 }

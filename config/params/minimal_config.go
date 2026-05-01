@@ -80,6 +80,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.MaxWithdrawalsPerPayload = 4
 	minimalConfig.MaxBlsToExecutionChanges = 16
 	minimalConfig.MaxValidatorsPerWithdrawalsSweep = 16
+	minimalConfig.MaxBuildersPerWithdrawalsSweep = 16
 
 	// Signature domains
 	minimalConfig.DomainBeaconProposer = bytesutil.ToBytes4(bytesutil.Bytes4(0))

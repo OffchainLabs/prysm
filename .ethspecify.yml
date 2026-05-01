@@ -1,4 +1,4 @@
-version: v1.7.0-alpha.2
+version: v1.7.0-alpha.5
 style: full
 
 specrefs:
@@ -23,8 +23,11 @@ exceptions:
     - PTC_SIZE#gloas
 
   constants:
+    # heze
+    - DOMAIN_INCLUSION_LIST_COMMITTEE#heze
     # phase0
     - BASIS_POINTS#phase0
+    - COMMITTEE_WEIGHT_ESTIMATION_ADJUSTMENT_FACTOR#phase0
     - ENDIANNESS#phase0
     - MAX_CONCURRENT_REQUESTS#phase0
     - UINT64_MAX#phase0
@@ -61,11 +64,12 @@ exceptions:
     - ATTESTATION_TIMELINESS_INDEX#gloas
     - BUILDER_INDEX_FLAG#gloas
     - BUILDER_INDEX_SELF_BUILD#gloas
-    - DOMAIN_PROPOSER_PREFERENCES#gloas
     - NUM_BLOCK_TIMELINESS_DEADLINES#gloas
     - PTC_TIMELINESS_INDEX#gloas
 
   configs:
+    # phase0
+    - CONFIRMATION_BYZANTINE_THRESHOLD#phase0
     # gloas
     - AGGREGATE_DUE_BPS_GLOAS#gloas
     - ATTESTATION_DUE_BPS_GLOAS#gloas
@@ -73,10 +77,30 @@ exceptions:
     - GLOAS_FORK_EPOCH#gloas
     - GLOAS_FORK_VERSION#gloas
     - SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
+    # heze
+    - HEZE_FORK_EPOCH#heze
+    - HEZE_FORK_VERSION#heze
+    - INCLUSION_LIST_SUBMISSION_DUE_BPS#heze
+    - MAX_BYTES_PER_INCLUSION_LIST#heze
+    - MAX_REQUEST_INCLUSION_LIST#heze
+    - PROPOSER_INCLUSION_LIST_CUTOFF_BPS#heze
+    - VIEW_FREEZE_CUTOFF_BPS#heze
 
   ssz_objects:
     # phase0
     - Eth1Block#phase0
+    # fulu
+    - PartialDataColumnHeader#fulu
+    - PartialDataColumnPartsMetadata#fulu
+    - PartialDataColumnSidecar#fulu
+    # gloas
+    - PartialDataColumnHeader#gloas
+    # heze
+    - BeaconState#heze
+    - ExecutionPayloadBid#heze
+    - InclusionList#heze
+    - SignedExecutionPayloadBid#heze
+    - SignedInclusionList#heze
     # capella
     - LightClientBootstrap#capella
     - LightClientFinalityUpdate#capella
@@ -91,6 +115,7 @@ exceptions:
     - BuilderPendingPayment#gloas
     - BuilderPendingWithdrawal#gloas
     - DataColumnSidecar#gloas
+    - ExecutionPayload#gloas
     - ExecutionPayloadBid#gloas
     - ExecutionPayloadEnvelope#gloas
     - ForkChoiceNode#gloas
@@ -105,7 +130,9 @@ exceptions:
 
   dataclasses:
     # phase0
+    - FastConfirmationStore#phase0
     - LatestMessage#phase0
+    - Seen#phase0
     - Store#phase0
     # altair
     - LightClientStore#altair
@@ -121,7 +148,13 @@ exceptions:
     # gloas
     - ExpectedWithdrawals#gloas
     - LatestMessage#gloas
+    - PayloadAttributes#gloas
     - Store#gloas
+    # heze
+    - GetInclusionListResponse#heze
+    - InclusionListStore#heze
+    - PayloadAttributes#heze
+    - Store#heze
 
   functions:
     # Functions implemented by KZG library for EIP-4844
@@ -178,11 +211,56 @@ exceptions:
     - verify_cell_kzg_proof_batch_impl#fulu
 
     # phase0
+    - adjust_committee_weight_estimate_to_ensure_safety#phase0
+    - compute_adversarial_weight#phase0
+    - compute_empty_slot_support_discount#phase0
+    - compute_honest_ffg_support_for_current_target#phase0
+    - compute_safety_threshold#phase0
+    - compute_shuffled_permutation#phase0
+    - estimate_committee_weight_between_slots#phase0
+    - find_latest_confirmed_descendant#phase0
+    - get_adversarial_weight#phase0
+    - get_ancestor_roots#phase0
+    - get_block_epoch#phase0
+    - get_block_slot#phase0
+    - get_block_support_between_slots#phase0
+    - get_checkpoint_for_block#phase0
+    - get_current_balance_source#phase0
+    - get_current_target#phase0
+    - get_current_target_score#phase0
+    - get_equivocation_score#phase0
+    - get_fast_confirmation_store#phase0
+    - get_latest_confirmed#phase0
+    - get_latest_message_epoch#phase0
+    - get_previous_balance_source#phase0
+    - get_pulled_up_head_state#phase0
+    - get_slot_committee#phase0
+    - get_support_discount#phase0
+    - is_ancestor#phase0
+    - is_confirmed_chain_safe#phase0
+    - is_full_validator_set_covered#phase0
+    - is_one_confirmed#phase0
+    - is_start_slot_at_epoch#phase0
+    - on_fast_confirmation#phase0
+    - update_fast_confirmation_variables#phase0
+    - will_current_target_be_justified#phase0
+    - will_no_conflicting_checkpoint_be_justified#phase0
+    - compute_attestation_subnet_prefix_bits#phase0
+    - compute_min_epochs_for_block_requests#phase0
+    - compute_time_at_slot_ms#phase0
+    - is_not_from_future_slot#phase0
+    - is_within_slot_range#phase0
     - update_proposer_boost_root#phase0
     - is_proposer_equivocation#phase0
     - record_block_timeliness#phase0
     - compute_proposer_score#phase0
     - get_attestation_score#phase0
+    - validate_attester_slashing_gossip#phase0
+    - validate_beacon_aggregate_and_proof_gossip#phase0
+    - validate_beacon_attestation_gossip#phase0
+    - validate_beacon_block_gossip#phase0
+    - validate_proposer_slashing_gossip#phase0
+    - validate_voluntary_exit_gossip#phase0
     - calculate_committee_fraction#phase0
     - compute_fork_version#phase0
     - compute_pulled_up_tip#phase0
@@ -273,6 +351,7 @@ exceptions:
     - upgrade_lc_store_to_capella#capella
     - upgrade_lc_update_to_capella#capella
     # deneb
+    - compute_max_request_blob_sidecars#deneb
     - get_lc_execution_root#deneb
     - is_valid_light_client_header#deneb
     - prepare_execution_payload#deneb
@@ -283,6 +362,7 @@ exceptions:
     - upgrade_lc_store_to_deneb#deneb
     - upgrade_lc_update_to_deneb#deneb
     # electra
+    - compute_max_request_blob_sidecars#electra
     - compute_weak_subjectivity_period#electra
     - current_sync_committee_gindex_at_slot#electra
     - finalized_root_gindex_at_slot#electra
@@ -304,13 +384,24 @@ exceptions:
     - upgrade_lc_store_to_electra#electra
     - upgrade_lc_update_to_electra#electra
     # fulu
+    - compute_max_request_data_column_sidecars#fulu
     - compute_matrix#fulu
+    - verify_partial_data_column_header_inclusion_proof#fulu
+    - verify_partial_data_column_sidecar_kzg_proofs#fulu
     - get_blob_parameters#fulu
     - get_data_column_sidecars_from_block#fulu
     - get_data_column_sidecars_from_column_sidecar#fulu
     - recover_matrix#fulu
     # gloas
-    - compute_balance_weighted_acceptance#gloas
+    - get_latest_message_epoch#gloas
+    - is_payload_verified#gloas
+    - on_execution_payload_envelope#gloas
+    - settle_builder_payment#gloas
+    - compute_ptc#gloas
+    - initialize_ptc_window#gloas
+    - is_payload_data_available#gloas
+    - is_pending_validator#gloas
+    - process_ptc_window#gloas
     - compute_balance_weighted_selection#gloas
     - compute_fork_version#gloas
     - compute_proposer_indices#gloas
@@ -345,14 +436,12 @@ exceptions:
     - is_attestation_same_slot#gloas
     - is_builder_withdrawal_credential#gloas
     - is_merge_transition_complete#gloas
-    - is_parent_block_full#gloas
     - is_parent_node_full#gloas
     - is_payload_timely#gloas
     - is_supporting_vote#gloas
     - is_valid_indexed_payload_attestation#gloas
     - notify_ptc_messages#gloas
     - on_block#gloas
-    - on_execution_payload#gloas
     - on_payload_attestation_message#gloas
     - prepare_execution_payload#gloas
     - process_attestation#gloas
@@ -407,6 +496,28 @@ exceptions:
     - update_next_withdrawal_builder_index#gloas
     - update_payload_expected_withdrawals#gloas
     - update_proposer_boost_root#gloas
+    # heze
+    - on_execution_payload_envelope#heze
+    - compute_fork_version#heze
+    - get_forkchoice_store#heze
+    - get_inclusion_list_bits#heze
+    - get_inclusion_list_committee_assignment#heze
+    - get_inclusion_list_committee#heze
+    - get_inclusion_list_signature#heze
+    - get_inclusion_list_store#heze
+    - get_inclusion_list_submission_due_ms#heze
+    - get_inclusion_list_transactions#heze
+    - get_proposer_inclusion_list_cutoff_ms#heze
+    - get_view_freeze_cutoff_ms#heze
+    - is_inclusion_list_bits_inclusive#heze
+    - is_payload_inclusion_list_satisfied#heze
+    - is_valid_inclusion_list_signature#heze
+    - on_inclusion_list#heze
+    - prepare_execution_payload#heze
+    - process_inclusion_list#heze
+    - record_payload_inclusion_list_satisfaction#heze
+    - should_extend_payload#heze
+    - upgrade_to_heze#heze
 
   presets:
     # gloas
@@ -415,3 +526,5 @@ exceptions:
     - MAX_BUILDERS_PER_WITHDRAWALS_SWEEP#gloas
     - MAX_PAYLOAD_ATTESTATIONS#gloas
     - PTC_SIZE#gloas
+    # heze
+    - INCLUSION_LIST_COMMITTEE_SIZE#heze

@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
@@ -144,17 +145,18 @@ func copySignedExecutionPayloadBid(header *SignedExecutionPayloadBid) *SignedExe
 	}
 	if header.Message != nil {
 		copied.Message = &ExecutionPayloadBid{
-			ParentBlockHash:    bytesutil.SafeCopyBytes(header.Message.ParentBlockHash),
-			ParentBlockRoot:    bytesutil.SafeCopyBytes(header.Message.ParentBlockRoot),
-			BlockHash:          bytesutil.SafeCopyBytes(header.Message.BlockHash),
-			PrevRandao:         bytesutil.SafeCopyBytes(header.Message.PrevRandao),
-			FeeRecipient:       bytesutil.SafeCopyBytes(header.Message.FeeRecipient),
-			GasLimit:           header.Message.GasLimit,
-			BuilderIndex:       header.Message.BuilderIndex,
-			Slot:               header.Message.Slot,
-			Value:              header.Message.Value,
-			ExecutionPayment:   header.Message.ExecutionPayment,
-			BlobKzgCommitments: bytesutil.SafeCopy2dBytes(header.Message.BlobKzgCommitments),
+			ParentBlockHash:       bytesutil.SafeCopyBytes(header.Message.ParentBlockHash),
+			ParentBlockRoot:       bytesutil.SafeCopyBytes(header.Message.ParentBlockRoot),
+			BlockHash:             bytesutil.SafeCopyBytes(header.Message.BlockHash),
+			PrevRandao:            bytesutil.SafeCopyBytes(header.Message.PrevRandao),
+			FeeRecipient:          bytesutil.SafeCopyBytes(header.Message.FeeRecipient),
+			GasLimit:              header.Message.GasLimit,
+			BuilderIndex:          header.Message.BuilderIndex,
+			Slot:                  header.Message.Slot,
+			Value:                 header.Message.Value,
+			ExecutionPayment:      header.Message.ExecutionPayment,
+			BlobKzgCommitments:    bytesutil.SafeCopy2dBytes(header.Message.BlobKzgCommitments),
+			ExecutionRequestsRoot: bytesutil.SafeCopyBytes(header.Message.ExecutionRequestsRoot),
 		}
 	}
 	return copied
@@ -188,6 +190,7 @@ func copyBeaconBlockBodyGloas(body *BeaconBlockBodyGloas) *BeaconBlockBodyGloas 
 
 	copied.SignedExecutionPayloadBid = copySignedExecutionPayloadBid(body.SignedExecutionPayloadBid)
 	copied.PayloadAttestations = copyPayloadAttestations(body.PayloadAttestations)
+	copied.ParentExecutionRequests = CopyExecutionRequests(body.ParentExecutionRequests)
 
 	return copied
 }
@@ -213,8 +216,6 @@ func copyExecutionPayloadEnvelope(env *ExecutionPayloadEnvelope) *ExecutionPaylo
 		ExecutionRequests: env.ExecutionRequests,
 		BuilderIndex:      env.BuilderIndex,
 		BeaconBlockRoot:   bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
-		Slot:              env.Slot,
-		StateRoot:         bytesutil.SafeCopyBytes(env.StateRoot),
 	}
 }
 
@@ -240,8 +241,30 @@ func copyBlindedExecutionPayloadEnvelope(env *BlindedExecutionPayloadEnvelope) *
 		BuilderIndex:      env.BuilderIndex,
 		BeaconBlockRoot:   bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
 		Slot:              env.Slot,
-		StateRoot:         bytesutil.SafeCopyBytes(env.StateRoot),
+		ParentBlockHash:   bytesutil.SafeCopyBytes(env.ParentBlockHash),
 	}
+}
+
+// CopyPTCs creates a deep copy of a PTC slot.
+func CopyPTCs(slot *PTCs) *PTCs {
+	if slot == nil {
+		return nil
+	}
+	indices := make([]primitives.ValidatorIndex, len(slot.ValidatorIndices))
+	copy(indices, slot.ValidatorIndices)
+	return &PTCs{ValidatorIndices: indices}
+}
+
+// CopyPTCWindow creates a deep copy of a PTC window.
+func CopyPTCWindow(window []*PTCs) []*PTCs {
+	if window == nil {
+		return nil
+	}
+	copied := make([]*PTCs, len(window))
+	for i, slot := range window {
+		copied[i] = CopyPTCs(slot)
+	}
+	return copied
 }
 
 // CopyBuilderPendingPayment creates a deep copy of a builder pending payment.
