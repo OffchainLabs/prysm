@@ -130,6 +130,7 @@ type Config struct {
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	PayloadIDCache                   *cache.PayloadIDCache
+	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	LCStore                          *lightClient.Store
 	GraffitiInfo                     *execution.GraffitiInfo
 }
@@ -269,6 +270,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ProposerPreferencesCache:         s.cfg.ProposerPreferencesCache,
 		HighestBidCache:                  s.cfg.HighestBidCache,
 		PayloadIDCache:                   s.cfg.PayloadIDCache,
+		ExecutionPayloadEnvelopeCache:    s.cfg.ExecutionPayloadEnvelopeCache,
 		AttestationStateFetcher:          s.cfg.AttestationReceiver,
 		GraffitiInfo:                     s.cfg.GraffitiInfo,
 	}

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -48,14 +49,13 @@ func testGloasBlock(t *testing.T) (*consensusblocks.GetPayloadResponse, interfac
 func TestStoreExecutionPayloadEnvelope(t *testing.T) {
 	local, sBlk := testGloasBlock(t)
 
-	vs := &Server{}
+	vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
 	err := vs.storeExecutionPayloadEnvelope(sBlk, local)
 	require.NoError(t, err)
 
-	envelope, found := vs.getExecutionPayloadEnvelope(sBlk.Block().Slot())
-	require.Equal(t, true, found)
-	require.NotNil(t, envelope.Payload)
-	require.Equal(t, sBlk.Block().Slot(), envelope.Payload.SlotNumber)
+	contents, ok := vs.ExecutionPayloadEnvelopeCache.Contents()
+	require.Equal(t, true, ok)
+	require.Equal(t, sBlk.Block().Slot(), contents.Envelope.Payload.SlotNumber)
 }
 
 func TestExtractExecutionPayloadGloas(t *testing.T) {
@@ -86,63 +86,6 @@ func TestExtractExecutionPayloadGloas(t *testing.T) {
 func TestExtractExecutionPayloadGloas_Nil(t *testing.T) {
 	require.Equal(t, true, extractExecutionPayloadGloas(nil) == nil)
 	require.Equal(t, true, extractExecutionPayloadGloas(&consensusblocks.GetPayloadResponse{}) == nil)
-}
-
-func TestSetGetExecutionPayloadEnvelope(t *testing.T) {
-	slot := primitives.Slot(42)
-
-	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadGloas{
-			ParentHash:    make([]byte, 32),
-			FeeRecipient:  make([]byte, 20),
-			StateRoot:     make([]byte, 32),
-			ReceiptsRoot:  make([]byte, 32),
-			LogsBloom:     make([]byte, 256),
-			PrevRandao:    make([]byte, 32),
-			BaseFeePerGas: make([]byte, 32),
-			BlockHash:     make([]byte, 32),
-			SlotNumber:    slot,
-		},
-		BuilderIndex:    primitives.BuilderIndex(7),
-		BeaconBlockRoot: make([]byte, 32),
-	}
-
-	vs := &Server{}
-	vs.setExecutionPayloadEnvelope(envelope, nil)
-
-	got, found := vs.getExecutionPayloadEnvelope(slot)
-	require.Equal(t, true, found)
-	require.DeepEqual(t, envelope, got)
-}
-
-func TestGetExecutionPayloadEnvelope_SlotMismatch(t *testing.T) {
-	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadGloas{
-			ParentHash:    make([]byte, 32),
-			FeeRecipient:  make([]byte, 20),
-			StateRoot:     make([]byte, 32),
-			ReceiptsRoot:  make([]byte, 32),
-			LogsBloom:     make([]byte, 256),
-			PrevRandao:    make([]byte, 32),
-			BaseFeePerGas: make([]byte, 32),
-			BlockHash:     make([]byte, 32),
-			SlotNumber:    42,
-		},
-		BuilderIndex:    primitives.BuilderIndex(7),
-		BeaconBlockRoot: make([]byte, 32),
-	}
-
-	vs := &Server{}
-	vs.setExecutionPayloadEnvelope(envelope, nil)
-
-	_, found := vs.getExecutionPayloadEnvelope(999)
-	require.Equal(t, false, found)
-}
-
-func TestGetExecutionPayloadEnvelope_Nil(t *testing.T) {
-	vs := &Server{}
-	_, found := vs.getExecutionPayloadEnvelope(1)
-	require.Equal(t, false, found)
 }
 
 func TestGetExecutionPayloadEnvelopeRPC_NilRequest(t *testing.T) {
@@ -210,8 +153,8 @@ func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {
 		BeaconBlockRoot: make([]byte, 32),
 	}
 
-	vs := &Server{}
-	vs.setExecutionPayloadEnvelope(envelope, nil)
+	vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
+	vs.ExecutionPayloadEnvelopeCache.Set(&cache.ExecutionPayloadContents{Envelope: envelope})
 
 	resp, err := vs.GetExecutionPayloadEnvelope(t.Context(), &ethpb.ExecutionPayloadEnvelopeRequest{
 		Slot: 1,
