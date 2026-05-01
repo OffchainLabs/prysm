@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	blockchainmock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	prysmtime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
@@ -2690,8 +2689,8 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		slot := primitives.Slot(0)
-		st, _ := util.DeterministicGenesisState(t, 64)
-		ptc, err := gloas.PayloadCommittee(t.Context(), st, slot)
+		st, _ := util.DeterministicGenesisStateGloas(t, 64)
+		ptc, err := st.PayloadCommitteeReadOnly(slot)
 		require.NoError(t, err)
 		require.NotEqual(t, 0, len(ptc))
 
