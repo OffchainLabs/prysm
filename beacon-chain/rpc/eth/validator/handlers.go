@@ -1564,13 +1564,6 @@ func (s *Server) GetPayloadAttestationData(w http.ResponseWriter, r *http.Reques
 	ctx, span := trace.StartSpan(r.Context(), "validator.GetPayloadAttestationData")
 	defer span.End()
 
-	currentSlot := s.TimeFetcher.CurrentSlot()
-	currentEpoch := slots.ToEpoch(currentSlot)
-	if currentEpoch < params.BeaconConfig().GloasForkEpoch {
-		httputil.HandleError(w, fmt.Sprintf("payload attestation data requires the gloas fork, current epoch %d, gloas epoch %d", currentEpoch, params.BeaconConfig().GloasForkEpoch), http.StatusBadRequest)
-		return
-	}
-
 	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
 		return
 	}
@@ -1580,27 +1573,10 @@ func (s *Server) GetPayloadAttestationData(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if primitives.Slot(slot) != currentSlot {
-		httputil.HandleError(w, fmt.Sprintf("payload attestation data is only available for the current slot %d, requested slot %d", currentSlot, slot), http.StatusBadRequest)
+	data, rpcErr := s.CoreService.PayloadAttestationData(ctx, primitives.Slot(slot))
+	if rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
 		return
-	}
-
-	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
-	if err != nil {
-		httputil.HandleError(w, "Could not get head root: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// TODO: Determine payload_present and blob_data_available from the SignedExecutionPayloadEnvelope
-	// once that handling is implemented. For now, stub with false.
-	payloadPresent := false
-	blobDataAvailable := false
-
-	data := &ethpbalpha.PayloadAttestationData{
-		BeaconBlockRoot:   headRoot,
-		Slot:              primitives.Slot(slot),
-		PayloadPresent:    payloadPresent,
-		BlobDataAvailable: blobDataAvailable,
 	}
 
 	if httputil.RespondWithSsz(r) {

@@ -7,6 +7,7 @@ import (
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -51,6 +52,7 @@ func TestPayloadAttestationData_OK(t *testing.T) {
 		TimeFetcher:       chain,
 		HeadFetcher:       chain,
 		ForkchoiceFetcher: chain,
+		CoreService:       &core.Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain},
 	}
 
 	resp, err := vs.PayloadAttestationData(t.Context(), &ethpb.PayloadAttestationDataRequest{Slot: slot})
@@ -75,6 +77,7 @@ func TestPayloadAttestationData_SlotMismatch(t *testing.T) {
 		TimeFetcher:       chain,
 		HeadFetcher:       chain,
 		ForkchoiceFetcher: chain,
+		CoreService:       &core.Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain},
 	}
 
 	_, err := vs.PayloadAttestationData(t.Context(), &ethpb.PayloadAttestationDataRequest{Slot: requested})

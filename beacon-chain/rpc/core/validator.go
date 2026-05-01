@@ -928,3 +928,38 @@ func (s *Service) ValidatorActiveSetChanges(
 		EjectedIndices:      ejectedIndices,
 	}, nil
 }
+
+// PayloadAttestationData produces the PTC attestation data for the given slot.
+// It enforces the gloas-fork gate, slot-equality with the current slot, and
+// requires that a block for the requested slot has been received.
+func (s *Service) PayloadAttestationData(
+	ctx context.Context,
+	slot primitives.Slot,
+) (*ethpb.PayloadAttestationData, *RpcError) {
+	_, span := trace.StartSpan(ctx, "coreService.PayloadAttestationData")
+	defer span.End()
+
+	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+		return nil, &RpcError{Reason: BadRequest, Err: fmt.Errorf("payload attestation data is not supported before Gloas fork (slot %d)", slot)}
+	}
+	currentSlot := s.GenesisTimeFetcher.CurrentSlot()
+	if slot != currentSlot {
+		return nil, &RpcError{Reason: BadRequest, Err: fmt.Errorf("payload attestation data is only available for current slot: requested %d, current %d", slot, currentSlot)}
+	}
+	highestReceivedSlot := s.ForkchoiceFetcher.HighestReceivedBlockSlot()
+	if highestReceivedSlot != slot {
+		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("no valid block root for slot %d, highest received block slot is %d", slot, highestReceivedSlot)}
+	}
+	root := s.ForkchoiceFetcher.HighestReceivedBlockRoot()
+	if root == [32]byte{} {
+		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not retrieve highest received block root for slot %d", slot)}
+	}
+	payloadPresent := s.ForkchoiceFetcher.HasFullNode(root)
+	return &ethpb.PayloadAttestationData{
+		BeaconBlockRoot:   root[:],
+		Slot:              slot,
+		PayloadPresent:    payloadPresent,
+		// TODO: replace with real DA availability once DA paths are wired.
+		BlobDataAvailable: payloadPresent,
+	}, nil
+}

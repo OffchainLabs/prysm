@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -138,5 +139,111 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 		}
 		rpcError := s.SubmitSignedAggregateSelectionProof(t.Context(), agg)
 		assert.ErrorContains(t, "electra aggregate and proof not supported yet", rpcError.Err)
+	})
+}
+
+func TestPayloadAttestationData(t *testing.T) {
+	t.Run("pre-gloas → BadRequest", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(0)
+		chain := &mockChain.ChainService{Slot: &slot}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(BadRequest), rpcErr.Reason)
+		assert.ErrorContains(t, "Gloas fork", rpcErr.Err)
+	})
+	t.Run("slot mismatch → BadRequest", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		current := primitives.Slot(5)
+		chain := &mockChain.ChainService{Slot: &current}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		_, rpcErr := s.PayloadAttestationData(t.Context(), primitives.Slot(10))
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(BadRequest), rpcErr.Reason)
+		assert.ErrorContains(t, "current slot", rpcErr.Err)
+	})
+	t.Run("no block received for slot → Unavailable", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		timeChain := &mockChain.ChainService{Slot: &slot}
+		fcChain := &mockChain.ChainService{BlockSlot: primitives.Slot(4)}
+		s := &Service{GenesisTimeFetcher: timeChain, ForkchoiceFetcher: fcChain}
+
+		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(Unavailable), rpcErr.Reason)
+		assert.ErrorContains(t, "no valid block root for slot 5", rpcErr.Err)
+	})
+	t.Run("empty highest received root → Internal", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		timeChain := &mockChain.ChainService{Slot: &slot}
+		fcChain := &mockChain.ChainService{BlockSlot: slot}
+		s := &Service{GenesisTimeFetcher: timeChain, ForkchoiceFetcher: fcChain}
+
+		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(Internal), rpcErr.Reason)
+		assert.ErrorContains(t, "could not retrieve highest received block root", rpcErr.Err)
+	})
+	t.Run("ok with payload absent", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		root := bytesutil.PadTo([]byte("head-root"), 32)
+		chain := &mockChain.ChainService{Slot: &slot, Root: root}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr)
+		assert.DeepEqual(t, root, data.BeaconBlockRoot)
+		assert.Equal(t, slot, data.Slot)
+		assert.Equal(t, false, data.PayloadPresent)
+		assert.Equal(t, false, data.BlobDataAvailable)
+	})
+	t.Run("ok with payload present", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		root := bytesutil.PadTo([]byte("head-root"), 32)
+		chain := &mockChain.ChainService{
+			Slot:               &slot,
+			Root:               root,
+			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr)
+		assert.DeepEqual(t, root, data.BeaconBlockRoot)
+		assert.Equal(t, slot, data.Slot)
+		assert.Equal(t, true, data.PayloadPresent)
+		assert.Equal(t, true, data.BlobDataAvailable)
 	})
 }

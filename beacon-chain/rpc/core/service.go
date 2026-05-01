@@ -15,6 +15,7 @@ type Service struct {
 	BeaconDB              db.ReadOnlyDatabase
 	ChainInfoFetcher      blockchain.ChainInfoFetcher
 	HeadFetcher           blockchain.HeadFetcher
+	ForkchoiceFetcher     blockchain.ForkchoiceFetcher
 	FinalizedFetcher      blockchain.FinalizationFetcher
 	GenesisTimeFetcher    blockchain.TimeFetcher
 	SyncChecker           sync.Checker
