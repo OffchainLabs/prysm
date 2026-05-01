@@ -92,7 +92,6 @@ go_test(
         "//api/server/structs:go_default_library",
         "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/blockchain/testing:go_default_library",
-        "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/core/transition:go_default_library",

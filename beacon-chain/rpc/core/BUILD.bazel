@@ -68,6 +68,7 @@ go_test(
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//consensus-types/validator:go_default_library",
+        "//encoding/bytesutil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
