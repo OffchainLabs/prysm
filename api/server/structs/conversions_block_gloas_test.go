@@ -1,8 +1,10 @@
 package structs
 
 import (
+	"bytes"
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -53,13 +55,17 @@ func TestExecutionPayloadEnvelopeFromConsensus_NilRequests(t *testing.T) {
 func TestBlockContentsGloasFromConsensus(t *testing.T) {
 	block := util.NewBeaconBlockGloas().Block
 	env := testEnvelopeProto()
+	proofs := [][]byte{bytes.Repeat([]byte{0x11}, 48)}
+	blobs := [][]byte{bytes.Repeat([]byte{0x22}, fieldparams.BlobSize)}
 
-	result, err := BlockContentsGloasFromConsensus(block, env)
+	result, err := BlockContentsGloasFromConsensus(block, env, proofs, blobs)
 	require.NoError(t, err)
 	require.NotNil(t, result.Block)
 	require.NotNil(t, result.Block.Body)
 	require.NotNil(t, result.ExecutionPayloadEnvelope)
 	require.Equal(t, hexutil.Encode(env.BeaconBlockRoot), result.ExecutionPayloadEnvelope.BeaconBlockRoot)
-	require.Equal(t, 0, len(result.KzgProofs))
-	require.Equal(t, 0, len(result.Blobs))
+	require.Equal(t, 1, len(result.KzgProofs))
+	require.Equal(t, hexutil.Encode(proofs[0]), result.KzgProofs[0])
+	require.Equal(t, 1, len(result.Blobs))
+	require.Equal(t, hexutil.Encode(blobs[0]), result.Blobs[0])
 }
