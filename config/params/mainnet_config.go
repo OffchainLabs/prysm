@@ -293,7 +293,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BytesPerLogsBloom:                256,
 	MaxExtraDataBytes:                32,
 	EthBurnAddressHex:                "0x0000000000000000000000000000000000000000",
-	DefaultBuilderGasLimit:           uint64(15000000),
+	DefaultBuilderGasLimit:           uint64(150000000),
 
 	// Mevboost circuit breaker
 	MaxBuilderConsecutiveMissedSlots: 3,
