@@ -68,6 +68,7 @@ type ChainService struct {
 	Genesis                     time.Time
 	ForkChoiceStore             forkchoice.ForkChoicer
 	ReceiveBlockMockErr         error
+	ReceivePayloadEnvelopeErr   error
 	OptimisticCheckRootReceived [32]byte
 	FinalizedRoots              map[[32]byte]bool
 	OptimisticRoots             map[[32]byte]bool
@@ -853,7 +854,7 @@ func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *et
 
 // ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
 func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
-	return nil
+	return c.ReceivePayloadEnvelopeErr
 }
 
 // ParentPayloadReady mocks the same method in the chain service.
