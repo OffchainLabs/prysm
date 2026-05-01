@@ -7,6 +7,7 @@ import (
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -118,9 +119,13 @@ func (vs *Server) SubmitPayloadAttestation(
 }
 
 func (vs *Server) payloadAttestationCommitteeIndex(ctx context.Context, msg *ethpb.PayloadAttestationMessage) (uint64, error) {
-	st, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
+	root := bytesutil.ToBytes32(msg.Data.BeaconBlockRoot)
+	st, err := vs.PayloadAttestationReceiver.PtcLookupState(ctx, root, msg.Data.Slot)
 	if err != nil {
 		return 0, err
+	}
+	if st == nil {
+		return 0, status.Errorf(codes.Unavailable, "unable to find state for payload attestation")
 	}
 	return gloas.PayloadCommitteeIndex(ctx, st, msg.Data.Slot, msg.ValidatorIndex)
 }
