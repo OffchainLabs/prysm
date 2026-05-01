@@ -467,6 +467,8 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 // - blockRootValidatorHashesBucket
 // - blockSlotIndicesBucket
 // - stateSlotIndicesBucket
+// - executionPayloadEnvelopesBucket
+// - executionPayloadEnvelopeBlockHashBucket
 func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot, batchSize int) (int, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.DeleteHistoricalDataBeforeSlot")
 	defer span.End()
@@ -517,9 +519,11 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 				return errors.Wrap(err, "could not delete validators")
 			}
 
-			// TODO: execution payload envelopes (Gloas+) are keyed by execution payload
-			// block hash, not beacon block root, so they cannot be pruned in this loop.
-			// A separate pruning mechanism is needed (e.g. secondary index or cursor scan).
+			// Delete execution payload envelope (Gloas+) and its BlockHash secondary index entry.
+			// Pre-Gloas blocks have no envelope; the helper no-ops in that case.
+			if err = deleteExecutionPayloadEnvelopeTx(tx, sr.root); err != nil {
+				return errors.Wrap(err, "could not delete execution payload envelope")
+			}
 
 			numSlotsDeleted++
 		}
