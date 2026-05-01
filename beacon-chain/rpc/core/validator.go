@@ -956,9 +956,9 @@ func (s *Service) PayloadAttestationData(
 	}
 	payloadPresent := s.ForkchoiceFetcher.HasFullNode(root)
 	return &ethpb.PayloadAttestationData{
-		BeaconBlockRoot:   root[:],
-		Slot:              slot,
-		PayloadPresent:    payloadPresent,
+		BeaconBlockRoot: root[:],
+		Slot:            slot,
+		PayloadPresent:  payloadPresent,
 		// TODO: replace with real DA availability once DA paths are wired.
 		BlobDataAvailable: payloadPresent,
 	}, nil

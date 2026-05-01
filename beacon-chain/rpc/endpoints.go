@@ -430,9 +430,9 @@ func (s *Service) validatorEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetPayloadAttestationData,
-      methods: []string{http.MethodGet},
+			methods: []string{http.MethodGet},
 		},
-    {
+		{
 			template: "/eth/v1/validator/execution_payload_envelope/{slot}",
 			name:     namespace + ".ExecutionPayloadEnvelope",
 			middleware: []middleware.Middleware{
