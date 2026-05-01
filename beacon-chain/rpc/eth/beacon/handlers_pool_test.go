@@ -2813,7 +2813,7 @@ func TestListPayloadAttestations(t *testing.T) {
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
-		slot := primitives.Slot(0)
+		slot := primitives.Slot(1)
 		chainService := &blockchainmock.ChainService{Slot: &slot}
 		pool := &payloadattestationmock.PoolMock{
 			Attestations: []*ethpbv1alpha1.PayloadAttestation{
@@ -2860,7 +2860,7 @@ func TestListPayloadAttestations(t *testing.T) {
 		cfg.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(cfg)
 
-		slot := primitives.Slot(0)
+		slot := primitives.Slot(1)
 		chainService := &blockchainmock.ChainService{Slot: &slot}
 		pool := &payloadattestationmock.PoolMock{
 			Attestations: []*ethpbv1alpha1.PayloadAttestation{
@@ -2891,5 +2891,26 @@ func TestListPayloadAttestations(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.Equal(t, 1, len(resp.Data))
 		assert.Equal(t, "1", resp.Data[0].Data.Slot)
+	})
+	t.Run("future slot returns 400", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		chainService := &blockchainmock.ChainService{Slot: &slot}
+		s := &Server{
+			TimeFetcher:            chainService,
+			PayloadAttestationPool: &payloadattestationmock.PoolMock{},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com?slot=99", nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.ListPayloadAttestations(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, "in the future", writer.Body.String())
 	})
 }

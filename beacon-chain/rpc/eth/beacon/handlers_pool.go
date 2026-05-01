@@ -976,7 +976,7 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var failures []*server.IndexedError
+	failures := make([]*server.IndexedError, 0, len(msgs))
 	for i, msg := range msgs {
 		consensusMsg, err := msg.ToConsensus()
 		if err != nil {
@@ -1039,14 +1039,19 @@ func (s *Server) ListPayloadAttestations(w http.ResponseWriter, r *http.Request)
 	_, span := trace.StartSpan(r.Context(), "beacon.ListPayloadAttestations")
 	defer span.End()
 
-	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
-	if currentEpoch < params.BeaconConfig().GloasForkEpoch {
-		httputil.HandleError(w, fmt.Sprintf("payload attestations require the Gloas fork, current epoch %d, Gloas epoch %d", currentEpoch, params.BeaconConfig().GloasForkEpoch), http.StatusBadRequest)
+	currentSlot := s.TimeFetcher.CurrentSlot()
+	if slots.ToEpoch(currentSlot) < params.BeaconConfig().GloasForkEpoch {
+		httputil.HandleError(w, fmt.Sprintf("payload attestations require the Gloas fork, current epoch %d, Gloas epoch %d", slots.ToEpoch(currentSlot), params.BeaconConfig().GloasForkEpoch), http.StatusBadRequest)
 		return
 	}
 
 	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
 	if !ok {
+		return
+	}
+
+	if primitives.Slot(slot) > currentSlot {
+		httputil.HandleError(w, fmt.Sprintf("requested slot %d is in the future, current slot is %d", slot, currentSlot), http.StatusBadRequest)
 		return
 	}
 
