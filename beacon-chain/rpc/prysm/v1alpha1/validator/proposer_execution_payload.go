@@ -140,7 +140,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 	var attr payloadattribute.Attributer
 	switch {
 	case st.Version() >= version.Gloas:
-		withdrawals, err := vs.computePayloadWithdrawals(ctx, st, parentRoot, parentFull)
+		withdrawals, err := vs.computePayloadWithdrawals(st, parentFull)
 		if err != nil {
 			return nil, err
 		}
@@ -285,29 +285,34 @@ var (
 )
 
 // computePayloadWithdrawals returns the withdrawals for the next payload.
-func (vs *Server) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte, parentFull bool) ([]*enginev1.Withdrawal, error) {
+func (vs *Server) computePayloadWithdrawals(st state.BeaconState, parentFull bool) ([]*enginev1.Withdrawal, error) {
 	if !parentFull {
 		return st.PayloadExpectedWithdrawals()
-	}
-	parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get parent block slot")
-	}
-	if slots.ToEpoch(parentSlot) >= params.BeaconConfig().GloasForkEpoch {
-		// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).
-		envelope, err := vs.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get parent execution payload envelope")
-		}
-		if err := coregloas.ApplyParentExecutionPayload(ctx, st, envelope.Message.ExecutionRequests); err != nil {
-			return nil, errors.Wrap(err, "could not apply parent execution payload")
-		}
 	}
 	result, err := st.ExpectedWithdrawalsGloas()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute expected withdrawals")
 	}
 	return result.Withdrawals, nil
+}
+
+func (vs *Server) applyParentExecutionPayloadToHead(ctx context.Context, head state.BeaconState, parentRoot [32]byte) error {
+	parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(parentRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not get parent block slot")
+	}
+	if slots.ToEpoch(parentSlot) < params.BeaconConfig().GloasForkEpoch {
+		return nil
+	}
+	// TODO: replace DB lookup with a single-entry cache (blockroot → envelope).
+	envelope, err := vs.BeaconDB.ExecutionPayloadEnvelope(ctx, parentRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not get parent execution payload envelope")
+	}
+	if err := coregloas.ApplyParentExecutionPayload(ctx, head, envelope.Message.ExecutionRequests); err != nil {
+		return errors.Wrap(err, "could not apply parent execution payload")
+	}
+	return nil
 }
 
 // getParentBlockHash retrieves the parent block hash of the block at the given slot.
