@@ -192,58 +192,60 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 }
 
 func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull bool) (*ethpb.GenericBeaconBlock, error) {
-	// Build consensus fields in background
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		// Set eth1 data.
-		eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
-		if err != nil {
-			eth1Data = &ethpb.Eth1Data{DepositRoot: params.BeaconConfig().ZeroHash[:], BlockHash: params.BeaconConfig().ZeroHash[:]}
-			log.WithError(err).Error("Could not get eth1data")
+	if sBlk.Version() >= version.Gloas && parentFull {
+		if err := vs.applyParentExecutionPayloadToHead(ctx, head, sBlk.Block().ParentRoot()); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not apply parent execution payload: %v", err)
 		}
-		sBlk.SetEth1Data(eth1Data)
+	}
 
-		// Set deposit and attestation.
-		deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, sBlk.Block().Slot(), eth1Data) // TODO: split attestations and deposits
-		if err != nil {
-			sBlk.SetDeposits([]*ethpb.Deposit{})
-			if err := sBlk.SetAttestations([]ethpb.Att{}); err != nil {
-				log.WithError(err).Error("Could not set attestations on block")
-			}
-			log.WithError(err).Error("Could not pack deposits and attestations")
-		} else {
-			sBlk.SetDeposits(deposits)
-			if err := sBlk.SetAttestations(atts); err != nil {
-				log.WithError(err).Error("Could not set attestations on block")
-			}
+	// Set eth1 data.
+	eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
+	if err != nil {
+		eth1Data = &ethpb.Eth1Data{DepositRoot: params.BeaconConfig().ZeroHash[:], BlockHash: params.BeaconConfig().ZeroHash[:]}
+		log.WithError(err).Error("Could not get eth1data")
+	}
+	sBlk.SetEth1Data(eth1Data)
+
+	// Set deposit and attestation.
+	deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, sBlk.Block().Slot(), eth1Data) // TODO: split attestations and deposits
+	if err != nil {
+		sBlk.SetDeposits([]*ethpb.Deposit{})
+		if err := sBlk.SetAttestations([]ethpb.Att{}); err != nil {
+			log.WithError(err).Error("Could not set attestations on block")
 		}
-
-		// Set slashings.
-		validProposerSlashings, validAttSlashings := vs.getSlashings(ctx, head)
-		sBlk.SetProposerSlashings(validProposerSlashings)
-		if err := sBlk.SetAttesterSlashings(validAttSlashings); err != nil {
-			log.WithError(err).Error("Could not set attester slashings on block")
+		log.WithError(err).Error("Could not pack deposits and attestations")
+	} else {
+		sBlk.SetDeposits(deposits)
+		if err := sBlk.SetAttestations(atts); err != nil {
+			log.WithError(err).Error("Could not set attestations on block")
 		}
+	}
 
-		// Set exits.
-		sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
+	// Set slashings.
+	validProposerSlashings, validAttSlashings := vs.getSlashings(ctx, head)
+	sBlk.SetProposerSlashings(validProposerSlashings)
+	if err := sBlk.SetAttesterSlashings(validAttSlashings); err != nil {
+		log.WithError(err).Error("Could not set attester slashings on block")
+	}
 
-		// Set sync aggregate. New in Altair.
-		vs.setSyncAggregate(ctx, sBlk, head)
+	// Set exits.
+	sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
 
-		// Set bls to execution change. New in Capella.
-		vs.setBlsToExecData(sBlk, head)
+	// Set sync aggregate. New in Altair.
+	vs.setSyncAggregate(ctx, sBlk, head)
 
-		// Set payload attestations. New in Gloas.
-		if sBlk.Version() >= version.Gloas {
-			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head, sBlk.Block().ParentRoot())); err != nil {
-				log.WithError(err).Error("Could not set payload attestations")
-			}
-			if err := vs.setParentExecutionRequests(ctx, sBlk, head, parentFull); err != nil {
-				log.WithError(err).Error("Could not set parent execution requests")
-			}
+	// Set bls to execution change. New in Capella.
+	vs.setBlsToExecData(sBlk, head)
+
+	// Set payload attestations. New in Gloas.
+	if sBlk.Version() >= version.Gloas {
+		if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head, sBlk.Block().ParentRoot())); err != nil {
+			log.WithError(err).Error("Could not set payload attestations")
 		}
-	})
+		if err := vs.setParentExecutionRequests(ctx, sBlk, head, parentFull); err != nil {
+			log.WithError(err).Error("Could not set parent execution requests")
+		}
+	}
 
 	winningBid := primitives.ZeroWei()
 	selfBuildEnvelope := true
@@ -284,8 +286,6 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 			}
 		}
 	}
-
-	wg.Wait()
 
 	sr, _, err := vs.computePostBlockStateAndRoot(ctx, sBlk)
 	if err != nil {
