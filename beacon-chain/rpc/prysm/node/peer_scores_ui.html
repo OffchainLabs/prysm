@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Prysm peer scores</title>
+<style>
+  body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: 1rem; background: #0b0d10; color: #d4d4d4; margin: 0; }
+  header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .8rem; }
+  h2 { margin: 0; font-size: 1.1rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th { text-align: left; padding: 6px 12px; border-bottom: 1px solid #444; cursor: pointer; user-select: none; position: sticky; top: 0; background: #0b0d10; }
+  th:hover { background: #16191e; }
+  td { padding: 4px 12px; border-bottom: 1px solid #1f2329; white-space: nowrap; }
+  tr:hover td { background: #1a1d22; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .up { color: #6cc46c; }
+  .down { color: #e76f6f; }
+  .flat { color: #666; }
+  .agent-prysm { color: #5cb8e7; }
+  .agent-lighthouse { color: #c178e6; }
+  .agent-teku { color: #f0b962; }
+  .agent-lodestar { color: #6cc46c; }
+  .agent-nimbus { color: #e76f6f; }
+  .agent-grandine { color: #f0e368; }
+  .agent-unknown { color: #888; }
+  .muted { color: #777; }
+  .topic { color: #b0b0b0; }
+  input, select { background: #16191e; color: #d4d4d4; border: 1px solid #2a2f36; padding: 3px 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h2>peer scores <span class="muted" id="meta"></span></h2>
+  <div>
+    filter <input id="q" placeholder="agent or peer id" size="18">
+    <select id="agent"><option value="">all agents</option></select>
+    <label class="muted">refresh <select id="refresh"><option>2</option><option selected>5</option><option>10</option><option>30</option></select>s</label>
+  </div>
+</header>
+<table>
+  <thead><tr id="hdr">
+    <th data-k="implementation">impl</th>
+    <th data-k="peer_id_short">peer</th>
+    <th data-k="start_score" class="num">start</th>
+    <th data-k="current_score" class="num">current</th>
+    <th data-k="last_delta" class="num">Δ last</th>
+    <th data-k="rate_per_min" class="num">rate/min</th>
+    <th data-k="behaviour_penalty" class="num">behaviour</th>
+    <th>last downscore</th>
+  </tr></thead>
+  <tbody id="tb"></tbody>
+</table>
+<script>
+const SCORE_URL = location.pathname.replace(/\/ui\/?$/, '');
+let sortKey = 'current_score', sortAsc = true, timer = null, lastJson = null;
+
+function render(j) {
+  let rows = (j.peers || []).slice();
+  const q = document.getElementById('q').value.toLowerCase();
+  const agent = document.getElementById('agent').value;
+  if (q) rows = rows.filter(p => p.implementation.toLowerCase().includes(q) || p.peer_id.toLowerCase().includes(q));
+  if (agent) rows = rows.filter(p => p.implementation === agent);
+  rows.sort((a, b) => {
+    const x = a[sortKey], y = b[sortKey];
+    if (typeof x === 'number') return (x - y) * (sortAsc ? 1 : -1);
+    return ('' + x).localeCompare('' + y) * (sortAsc ? 1 : -1);
+  });
+
+  const tb = document.getElementById('tb');
+  tb.innerHTML = '';
+  for (const p of rows) {
+    const tr = document.createElement('tr');
+    const arrow = p.last_delta > 0.001 ? '▲' : p.last_delta < -0.001 ? '▼' : '·';
+    const arrowClass = p.last_delta > 0.001 ? 'up' : p.last_delta < -0.001 ? 'down' : 'flat';
+    const rateClass = p.rate_per_min > 0.001 ? 'up' : p.rate_per_min < -0.001 ? 'down' : 'flat';
+    tr.innerHTML = `
+      <td class="agent-${p.implementation}">${p.implementation}</td>
+      <td title="${p.peer_id}">${p.peer_id_short}</td>
+      <td class="num">${p.start_score.toFixed(2)}</td>
+      <td class="num">${p.current_score.toFixed(2)}</td>
+      <td class="num ${arrowClass}">${arrow} ${p.last_delta.toFixed(3)}</td>
+      <td class="num ${rateClass}">${p.rate_per_min.toFixed(3)}</td>
+      <td class="num">${p.behaviour_penalty.toFixed(2)}</td>
+      <td>${p.last_downscore_topic ? `<span class="topic">${p.last_downscore_topic}</span> · ${p.last_downscore_info}` : '<span class="flat">—</span>'}
+    `;
+    tb.appendChild(tr);
+  }
+
+  const agents = new Set((j.peers || []).map(p => p.implementation));
+  const sel = document.getElementById('agent');
+  if (sel.options.length - 1 !== agents.size) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">all agents</option>' + [...agents].sort().map(a => `<option>${a}</option>`).join('');
+    sel.value = cur;
+  }
+
+  document.getElementById('meta').textContent =
+    `· ${rows.length}/${(j.peers || []).length} peers · updated ${new Date(j.generated_at * 1000).toLocaleTimeString()}`;
+}
+
+async function fetchAndRender() {
+  try {
+    const r = await fetch(SCORE_URL, { cache: 'no-store' });
+    const j = await r.json();
+    lastJson = j;
+    render(j);
+  } catch (e) {
+    document.getElementById('meta').textContent = '· fetch failed: ' + e.message;
+  }
+}
+
+function scheduleRefresh() {
+  if (timer) clearInterval(timer);
+  timer = setInterval(fetchAndRender, parseInt(document.getElementById('refresh').value, 10) * 1000);
+}
+
+document.getElementById('hdr').addEventListener('click', e => {
+  const th = e.target.closest('th[data-k]');
+  if (!th) return;
+  const k = th.dataset.k;
+  if (sortKey === k) sortAsc = !sortAsc; else { sortKey = k; sortAsc = true; }
+  if (lastJson) render(lastJson);
+});
+document.getElementById('q').addEventListener('input', () => lastJson && render(lastJson));
+document.getElementById('agent').addEventListener('change', () => lastJson && render(lastJson));
+document.getElementById('refresh').addEventListener('change', scheduleRefresh);
+
+fetchAndRender();
+scheduleRefresh();
+</script>
+</body>
+</html>

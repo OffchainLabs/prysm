@@ -1314,6 +1314,22 @@ func (s *Service) prysmNodeEndpoints() []endpoint {
 			handler: server.RemoveTrustedPeer,
 			methods: []string{http.MethodDelete},
 		},
+		{
+			template: "/prysm/v1/node/peer_scores",
+			name:     namespace + ".ListPeerScores",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.ListPeerScores,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/prysm/v1/node/peer_scores/ui",
+			name:     namespace + ".PeerScoresUI",
+			handler:  server.PeerScoresUI,
+			methods:  []string{http.MethodGet},
+		},
 	}
 }
 

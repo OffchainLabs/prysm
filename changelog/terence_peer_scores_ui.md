@@ -1,0 +1,1 @@
+- Add `/prysm/v1/node/peer_scores` and `/prysm/v1/node/peer_scores/ui` for live peer score visibility.

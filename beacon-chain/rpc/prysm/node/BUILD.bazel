@@ -4,8 +4,10 @@ go_library(
     name = "go_default_library",
     srcs = [
         "handlers.go",
+        "peer_scores.go",
         "server.go",
     ],
+    embedsrcs = ["peer_scores_ui.html"],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/node",
     visibility = ["//beacon-chain:__subpackages__"],
     deps = [
@@ -22,6 +24,7 @@ go_library(
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_libp2p_go_libp2p//core/network:go_default_library",
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
+        "@com_github_libp2p_go_libp2p//core/peerstore:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
     ],
 )
