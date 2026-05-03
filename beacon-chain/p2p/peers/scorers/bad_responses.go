@@ -115,21 +115,22 @@ func (s *BadResponsesScorer) IncrementWithReason(pid peer.ID, reason string) int
 	s.store.Lock()
 	defer s.store.Unlock()
 
+	if reason == "" {
+		reason = "unspecified"
+	}
 	peerData, ok := s.store.PeerData(pid)
 	if ok {
 		peerData.BadResponses++
-		if reason != "" {
-			peerData.LastDownscoreReason = reason
-			peerData.LastDownscoreTime = time.Now()
-		}
+		peerData.LastDownscoreReason = reason
+		peerData.LastDownscoreTime = time.Now()
 		return peerData.BadResponses
 	}
 
 	const badResponses = 1
-	peerData = &peerdata.PeerData{BadResponses: badResponses}
-	if reason != "" {
-		peerData.LastDownscoreReason = reason
-		peerData.LastDownscoreTime = time.Now()
+	peerData = &peerdata.PeerData{
+		BadResponses:        badResponses,
+		LastDownscoreReason: reason,
+		LastDownscoreTime:   time.Now(),
 	}
 	s.store.SetPeerData(pid, peerData)
 	return badResponses

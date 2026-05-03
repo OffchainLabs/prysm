@@ -164,11 +164,13 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 			lastInfo = fmt.Sprintf("behaviour_penalty=%.2f", behaviour)
 		}
 
+		// rate/min: use the same 30s rolling window as delta so it reflects
+		// recent activity rather than long-window average since first observation.
 		var ratePerMin float64
-		if state.connectScoreSet {
-			minutes := now.Sub(state.connectTime).Minutes()
-			if minutes > 0 {
-				ratePerMin = (score - state.connectScore) / minutes
+		if len(state.history) > 1 {
+			windowMinutes := now.Sub(state.history[0].ts).Minutes()
+			if windowMinutes > 0 {
+				ratePerMin = (score - state.history[0].score) / windowMinutes
 			}
 		}
 
