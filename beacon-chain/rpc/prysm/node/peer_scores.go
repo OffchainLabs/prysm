@@ -26,9 +26,19 @@ type peerScoreSample struct {
 	connectScore     float64
 	connectTime      time.Time
 	connectScoreSet  bool // true once we've seen a non-zero score and locked in connectScore
-	lastScore        float64
+	history          []scoreAt
 	lastTopicInvalid map[string]float64
 }
+
+type scoreAt struct {
+	score float64
+	ts    time.Time
+}
+
+// deltaWindow is the rolling window for the "Δ last" column. Wider than the
+// poll interval so the column shows a meaningful number of recent activity
+// instead of always being 0.
+const deltaWindow = 30 * time.Second
 
 var (
 	peerScoreState   = map[peer.ID]*peerScoreSample{}
@@ -89,7 +99,6 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 		state, ok := peerScoreState[pid]
 		if !ok {
 			state = &peerScoreSample{
-				lastScore:        score,
 				lastTopicInvalid: map[string]float64{},
 			}
 			peerScoreState[pid] = state
@@ -101,6 +110,19 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 			state.connectScore = score
 			state.connectTime = now
 			state.connectScoreSet = true
+		}
+		// Append current sample, drop ones older than the delta window.
+		state.history = append(state.history, scoreAt{score: score, ts: now})
+		cutoff := now.Add(-deltaWindow - time.Second)
+		i := 0
+		for i < len(state.history) && state.history[i].ts.Before(cutoff) {
+			i++
+		}
+		state.history = state.history[i:]
+		// Δ over the rolling window: current minus the oldest sample still in window.
+		var lastDelta float64
+		if len(state.history) > 1 {
+			lastDelta = score - state.history[0].score
 		}
 
 		// Only report actual downscore events. Priority:
@@ -149,8 +171,6 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 				ratePerMin = (score - state.connectScore) / minutes
 			}
 		}
-		lastDelta := score - state.lastScore
-		state.lastScore = score
 
 		var secondsAgo int64 = -1
 		if !badTime.IsZero() {
