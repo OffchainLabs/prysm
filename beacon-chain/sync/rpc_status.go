@@ -201,7 +201,7 @@ func (s *Service) decodeStatus(stream network.Stream, epoch primitives.Epoch) (*
 	if epoch >= params.BeaconConfig().FuluForkEpoch {
 		msg := new(pb.StatusV2)
 		if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().IncrementWithReason(stream.Conn().RemotePeer(), "statusDecodeError")
 			return nil, errors.Wrap(err, "decode with max length")
 		}
 
@@ -210,7 +210,7 @@ func (s *Service) decodeStatus(stream network.Stream, epoch primitives.Epoch) (*
 
 	msg := new(pb.Status)
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().IncrementWithReason(stream.Conn().RemotePeer(), "statusDecodeError")
 		return nil, errors.Wrap(err, "decode with max length")
 	}
 

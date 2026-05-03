@@ -591,6 +591,6 @@ func (s *Service) isProcessedPayload(ctx context.Context, e interfaces.ROSignedE
 }
 
 func (s *Service) downscorePeer(peerID peer.ID, reason string) {
-	newScore := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	newScore := s.cfg.P2P.Peers().Scorers().BadResponsesScorer().IncrementWithReason(peerID, reason)
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

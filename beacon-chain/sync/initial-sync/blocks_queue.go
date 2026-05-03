@@ -463,7 +463,7 @@ func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn 
 }
 
 func (q *blocksQueue) downscorePeer(peerID peer.ID, reason string) {
-	newScore := q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	newScore := q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().IncrementWithReason(peerID, reason)
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
 

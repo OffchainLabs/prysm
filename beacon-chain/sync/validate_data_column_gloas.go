@@ -232,7 +232,7 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 	}
 
 	for pid := range badPeers {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(pid)
+		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().IncrementWithReason(pid, "invalidDataColumnGloas")
 	}
 
 	if len(verified) > 0 {

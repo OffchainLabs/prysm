@@ -822,7 +822,7 @@ func downscorePeer(p2p p2p.P2P, peerID peer.ID, reason string, fields ...logrus.
 		log = log.WithFields(field)
 	}
 
-	newScore := p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	newScore := p2p.Peers().Scorers().BadResponsesScorer().IncrementWithReason(peerID, reason)
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
 

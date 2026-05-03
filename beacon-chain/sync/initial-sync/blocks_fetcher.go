@@ -555,7 +555,11 @@ func dedupPeers(peers []peer.ID) []peer.ID {
 
 // downscorePeer increments the bad responses score for the peer and logs the event.
 func (f *blocksFetcher) downscorePeer(peerID peer.ID, reason error) {
-	newScore := f.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	r := ""
+	if reason != nil {
+		r = reason.Error()
+	}
+	newScore := f.p2p.Peers().Scorers().BadResponsesScorer().IncrementWithReason(peerID, r)
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
 

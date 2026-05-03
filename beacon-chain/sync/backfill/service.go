@@ -382,7 +382,7 @@ func (s *Service) WaitForCompletion() error {
 }
 
 func (s *Service) downscorePeer(peerID peer.ID, reason string, err error) {
-	newScore := s.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	newScore := s.p2p.Peers().Scorers().BadResponsesScorer().IncrementWithReason(peerID, reason)
 	logArgs := log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore})
 	if err != nil {
 		logArgs = logArgs.WithError(err)

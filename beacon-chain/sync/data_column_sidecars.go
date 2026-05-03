@@ -989,7 +989,7 @@ func verifyDataColumnSidecarsByPeer(
 		if err != nil {
 			// This peer has invalid sidecars.
 			log := log.WithError(err).WithField("peerID", peer)
-			newScore := p2p.Peers().Scorers().BadResponsesScorer().Increment(peer)
+			newScore := p2p.Peers().Scorers().BadResponsesScorer().IncrementWithReason(peer, "invalidDataColumnSidecars")
 			log.Warning("Peer returned invalid data column sidecars")
 			log.WithFields(logrus.Fields{"reason": "invalidDataColumnSidecars", "newScore": newScore}).Debug("Downscore peer")
 		}
