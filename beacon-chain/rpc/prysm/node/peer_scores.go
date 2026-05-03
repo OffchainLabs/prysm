@@ -79,10 +79,12 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 	for _, pid := range connected {
 		live[pid] = struct{}{}
 
-		score, behaviour, topicScores, err := gossip.GossipData(pid)
-		if err != nil {
-			score = scorers.Score(pid)
-		}
+		// scorers.Score sums every scorer (gossip + bad responses + block provider +
+		// peer status). This reflects bad-response increments immediately, even
+		// before libp2p's peerInspector has run. GossipData is read separately for
+		// the topic-level signals.
+		score := scorers.Score(pid)
+		_, behaviour, topicScores, _ := gossip.GossipData(pid)
 
 		state, ok := peerScoreState[pid]
 		if !ok {
