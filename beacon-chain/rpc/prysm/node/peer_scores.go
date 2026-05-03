@@ -57,6 +57,10 @@ type peerScoreRow struct {
 	LastDownscoreTopic      string  `json:"last_downscore_topic"`
 	LastDownscoreInfo       string  `json:"last_downscore_info"`
 	LastDownscoreSecondsAgo int64   `json:"last_downscore_seconds_ago"`
+	GossipScore             float64 `json:"gossip_score"`
+	PeerStatusScore         float64 `json:"peer_status_score"`
+	BadResponseScore        float64 `json:"bad_response_score"`
+	BadResponses            int     `json:"bad_responses"`
 }
 
 type peerScoresResponse struct {
@@ -73,6 +77,7 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 	scorers := peers.Scorers()
 	gossip := scorers.GossipScorer()
 	bad := scorers.BadResponsesScorer()
+	peerStatus := scorers.PeerStatusScorer()
 
 	var pStore peerstore.Peerstore
 	if s.PeerManager != nil && s.PeerManager.Host() != nil {
@@ -151,6 +156,9 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 		}
 		badCount, _ := bad.Count(pid)
 		badReason, badTime := bad.LastDownscore(pid)
+		gossipScoreVal := gossip.Score(pid)
+		peerStatusScoreVal := peerStatus.Score(pid)
+		badResponseScoreVal := bad.Score(pid)
 		switch {
 		case badReason != "":
 			lastInfo = fmt.Sprintf("%s (×%d, %s ago)", badReason, badCount, shortDuration(now.Sub(badTime)))
@@ -162,6 +170,10 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 			lastInfo = fmt.Sprintf("%.1f cumulative invalid msgs", maxInvalid)
 		case behaviour > 0:
 			lastInfo = fmt.Sprintf("behaviour_penalty=%.2f", behaviour)
+		case score < -0.05 && gossipScoreVal < -0.05:
+			lastInfo = fmt.Sprintf("libp2p gossip score=%.2f", gossipScoreVal)
+		case score <= 0.001 && peerStatusScoreVal <= 0.001:
+			lastInfo = "peer behind our head (peerStatus=0)"
 		}
 
 		// rate/min: use the same 30s rolling window as delta so it reflects
@@ -191,6 +203,10 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 			LastDownscoreTopic:      shortTopic(lastTopic),
 			LastDownscoreInfo:       lastInfo,
 			LastDownscoreSecondsAgo: secondsAgo,
+			GossipScore:             gossipScoreVal,
+			PeerStatusScore:         peerStatusScoreVal,
+			BadResponseScore:        badResponseScoreVal,
+			BadResponses:            badCount,
 		})
 	}
 
