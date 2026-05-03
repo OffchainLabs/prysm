@@ -36,16 +36,17 @@ var (
 )
 
 type peerScoreRow struct {
-	PeerID             string  `json:"peer_id"`
-	PeerIDShort        string  `json:"peer_id_short"`
-	Implementation     string  `json:"implementation"`
-	StartScore         float64 `json:"start_score"`
-	CurrentScore       float64 `json:"current_score"`
-	BehaviourPenalty   float64 `json:"behaviour_penalty"`
-	RatePerMin         float64 `json:"rate_per_min"`
-	LastDelta          float64 `json:"last_delta"`
-	LastDownscoreTopic string  `json:"last_downscore_topic"`
-	LastDownscoreInfo  string  `json:"last_downscore_info"`
+	PeerID                  string  `json:"peer_id"`
+	PeerIDShort             string  `json:"peer_id_short"`
+	Implementation          string  `json:"implementation"`
+	StartScore              float64 `json:"start_score"`
+	CurrentScore            float64 `json:"current_score"`
+	BehaviourPenalty        float64 `json:"behaviour_penalty"`
+	RatePerMin              float64 `json:"rate_per_min"`
+	LastDelta               float64 `json:"last_delta"`
+	LastDownscoreTopic      string  `json:"last_downscore_topic"`
+	LastDownscoreInfo       string  `json:"last_downscore_info"`
+	LastDownscoreSecondsAgo int64   `json:"last_downscore_seconds_ago"`
 }
 
 type peerScoresResponse struct {
@@ -149,18 +150,23 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 		lastDelta := score - state.lastScore
 		state.lastScore = score
 
+		var secondsAgo int64 = -1
+		if !badTime.IsZero() {
+			secondsAgo = int64(now.Sub(badTime).Seconds())
+		}
 		pidStr := pid.String()
 		rows = append(rows, peerScoreRow{
-			PeerID:             pidStr,
-			PeerIDShort:        shortPeerID(pidStr),
-			Implementation:     agentForPeer(pStore, pid),
-			StartScore:         state.connectScore,
-			CurrentScore:       score,
-			BehaviourPenalty:   behaviour,
-			RatePerMin:         ratePerMin,
-			LastDelta:          lastDelta,
-			LastDownscoreTopic: shortTopic(lastTopic),
-			LastDownscoreInfo:  lastInfo,
+			PeerID:                  pidStr,
+			PeerIDShort:             shortPeerID(pidStr),
+			Implementation:          agentForPeer(pStore, pid),
+			StartScore:              state.connectScore,
+			CurrentScore:            score,
+			BehaviourPenalty:        behaviour,
+			RatePerMin:              ratePerMin,
+			LastDelta:               lastDelta,
+			LastDownscoreTopic:      shortTopic(lastTopic),
+			LastDownscoreInfo:       lastInfo,
+			LastDownscoreSecondsAgo: secondsAgo,
 		})
 	}
 
