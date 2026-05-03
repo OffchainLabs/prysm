@@ -59,6 +59,8 @@ type PeerData struct {
 	ChainStateValidationError error
 	// Scorers internal data.
 	BadResponses         int
+	LastDownscoreReason  string
+	LastDownscoreTime    time.Time
 	ProcessedBlocks      uint64
 	BlockProviderUpdated time.Time
 	// Gossip Scoring data.

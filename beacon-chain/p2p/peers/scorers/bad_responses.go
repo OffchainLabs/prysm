@@ -102,6 +102,12 @@ func (s *BadResponsesScorer) countNoLock(pid peer.ID) (int, error) {
 // Increment increments the number of bad responses we have received from the given remote peer.
 // If peer doesn't exist this method is no-op.
 func (s *BadResponsesScorer) Increment(pid peer.ID) int {
+	return s.IncrementWithReason(pid, "")
+}
+
+// IncrementWithReason behaves like Increment but additionally records the reason for the
+// downscore so it can be surfaced in debug tooling.
+func (s *BadResponsesScorer) IncrementWithReason(pid peer.ID, reason string) int {
 	if pid == "" {
 		return 0
 	}
@@ -112,13 +118,34 @@ func (s *BadResponsesScorer) Increment(pid peer.ID) int {
 	peerData, ok := s.store.PeerData(pid)
 	if ok {
 		peerData.BadResponses++
+		if reason != "" {
+			peerData.LastDownscoreReason = reason
+			peerData.LastDownscoreTime = time.Now()
+		}
 		return peerData.BadResponses
 	}
 
 	const badResponses = 1
 	peerData = &peerdata.PeerData{BadResponses: badResponses}
+	if reason != "" {
+		peerData.LastDownscoreReason = reason
+		peerData.LastDownscoreTime = time.Now()
+	}
 	s.store.SetPeerData(pid, peerData)
 	return badResponses
+}
+
+// LastDownscore returns the most recent downscore reason and timestamp recorded for the
+// given peer. Returns ("", zero time) if none recorded.
+func (s *BadResponsesScorer) LastDownscore(pid peer.ID) (string, time.Time) {
+	s.store.RLock()
+	defer s.store.RUnlock()
+
+	peerData, ok := s.store.PeerData(pid)
+	if !ok {
+		return "", time.Time{}
+	}
+	return peerData.LastDownscoreReason, peerData.LastDownscoreTime
 }
 
 // IsBadPeer states if the peer is to be considered bad.

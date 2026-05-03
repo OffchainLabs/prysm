@@ -60,6 +60,7 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 	connected := peers.Connected()
 	scorers := peers.Scorers()
 	gossip := scorers.GossipScorer()
+	bad := scorers.BadResponsesScorer()
 
 	var pStore peerstore.Peerstore
 	if s.PeerManager != nil && s.PeerManager.Host() != nil {
@@ -93,10 +94,11 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Pick the strongest current "downscore" signal. Priority:
-		//   1. invalid_message_deliveries that grew since last poll (fresh badness)
-		//   2. any topic with cumulative invalid_message_deliveries > 0
-		//   3. behaviour_penalty > 0
-		//   4. a topic the peer is in but has zero mesh deliveries on (mesh deficit)
+		//   1. last bad-response reason (the explicit downscorePeer events from service.go)
+		//   2. invalid_message_deliveries that grew since last poll (fresh badness)
+		//   3. any topic with cumulative invalid_message_deliveries > 0
+		//   4. behaviour_penalty > 0
+		//   5. a topic the peer is in but has zero mesh deliveries on (mesh deficit)
 		var lastTopic, lastInfo string
 		var maxJump, maxInvalid float64
 		var jumpTopic, invalidTopic, deficitTopic string
@@ -121,7 +123,11 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 			}
 			state.lastTopicInvalid[topic] = cur
 		}
+		badCount, _ := bad.Count(pid)
+		badReason, badTime := bad.LastDownscore(pid)
 		switch {
+		case badReason != "":
+			lastInfo = fmt.Sprintf("%s (×%d, %s ago)", badReason, badCount, shortDuration(now.Sub(badTime)))
 		case maxJump > 0:
 			lastTopic = jumpTopic
 			lastInfo = fmt.Sprintf("+%.1f invalid msgs since last poll", maxJump)
@@ -222,4 +228,15 @@ func shortTopic(s string) string {
 		}
 	}
 	return s
+}
+
+func shortDuration(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
 }
