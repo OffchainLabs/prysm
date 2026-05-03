@@ -26,7 +26,9 @@
   .muted { color: #777; }
   .topic { color: #b0b0b0; }
   tr.fresh td { background: #3a1a1a !important; transition: background 1.5s; }
+  tr.disconnected td { color: #777; }
   .fresh-tag { color: #ff8888; font-weight: bold; margin-left: .4rem; }
+  .state-tag { font-size: 11px; color: #777; margin-right: .3rem; }
   input, select { background: #16191e; color: #d4d4d4; border: 1px solid #2a2f36; padding: 3px 6px; }
 </style>
 </head>
@@ -48,7 +50,7 @@
     <th data-k="last_delta" class="num" title="Score change in the last 30 seconds">Δ 30s</th>
     <th data-k="rate_per_min" class="num">rate/min</th>
     <th data-k="behaviour_penalty" class="num">behaviour</th>
-    <th>last downscore</th>
+    <th>last downscore / reason</th>
   </tr></thead>
   <tbody id="tb"></tbody>
 </table>
@@ -82,8 +84,10 @@ function render(j) {
     const rateClass = p.rate_per_min > 0.001 ? 'up' : p.rate_per_min < -0.001 ? 'down' : 'flat';
     const fresh = p.last_downscore_seconds_ago >= 0 && p.last_downscore_seconds_ago < 30;
     if (fresh) tr.classList.add('fresh');
+    if (p.connection_state === 'disconnected') tr.classList.add('disconnected');
+    const stateTag = p.connection_state === 'disconnected' ? '<span class="state-tag">[disc]</span>' : '';
     tr.innerHTML = `
-      <td class="agent-${p.implementation}">${p.implementation}</td>
+      <td class="agent-${p.implementation}">${stateTag}${p.implementation}</td>
       <td title="${p.peer_id}">${p.peer_id_short}</td>
       <td class="num">${p.start_score.toFixed(2)}</td>
       <td class="num">${p.current_score.toFixed(2)}</td>

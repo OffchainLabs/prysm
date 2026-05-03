@@ -560,6 +560,35 @@ func (p *Status) Disconnecting() []peer.ID {
 	return peers
 }
 
+// RecordDisconnect stores a human-readable reason for the peer's most recent
+// disconnect. Used by debug tooling that surfaces why peers leave.
+func (p *Status) RecordDisconnect(pid peer.ID, reason string) {
+	p.store.Lock()
+	defer p.store.Unlock()
+	peerData, ok := p.store.PeerData(pid)
+	if !ok {
+		peerData = &peerdata.PeerData{}
+		p.store.SetPeerData(pid, peerData)
+	}
+	if reason == "" {
+		reason = "unspecified"
+	}
+	peerData.LastDisconnectReason = reason
+	peerData.LastDisconnectTime = time.Now()
+}
+
+// LastDisconnect returns the most recent disconnect reason and timestamp for the
+// given peer, or ("", zero) if none recorded.
+func (p *Status) LastDisconnect(pid peer.ID) (string, time.Time) {
+	p.store.RLock()
+	defer p.store.RUnlock()
+	peerData, ok := p.store.PeerData(pid)
+	if !ok {
+		return "", time.Time{}
+	}
+	return peerData.LastDisconnectReason, peerData.LastDisconnectTime
+}
+
 // Disconnected returns the peers that are disconnected.
 func (p *Status) Disconnected() []peer.ID {
 	p.store.RLock()

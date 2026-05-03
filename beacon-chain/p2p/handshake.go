@@ -72,6 +72,11 @@ func (s *Service) disconnectFromPeerOnError(
 		}).
 		Debug("Initiate peer disconnection")
 
+	reason := ""
+	if badPeerErr != nil {
+		reason = badPeerErr.Error()
+	}
+	s.peers.RecordDisconnect(remotePeerID, reason)
 	s.peers.SetConnectionState(remotePeerID, peers.Disconnected)
 }
 

@@ -49,6 +49,7 @@ type peerScoreRow struct {
 	PeerID                  string  `json:"peer_id"`
 	PeerIDShort             string  `json:"peer_id_short"`
 	Implementation          string  `json:"implementation"`
+	ConnectionState         string  `json:"connection_state"`
 	StartScore              float64 `json:"start_score"`
 	CurrentScore            float64 `json:"current_score"`
 	BehaviourPenalty        float64 `json:"behaviour_penalty"`
@@ -63,6 +64,10 @@ type peerScoreRow struct {
 	BadResponses            int     `json:"bad_responses"`
 }
 
+// disconnectedRetention controls how long disconnected peers remain visible
+// in the peer scores response after disconnect.
+const disconnectedRetention = 5 * time.Minute
+
 type peerScoresResponse struct {
 	GeneratedAt int64          `json:"generated_at"`
 	Peers       []peerScoreRow `json:"peers"`
@@ -73,11 +78,28 @@ type peerScoresResponse struct {
 // process memory; values reset on node restart.
 func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 	peers := s.PeersFetcher.Peers()
-	connected := peers.Connected()
 	scorers := peers.Scorers()
 	gossip := scorers.GossipScorer()
 	bad := scorers.BadResponsesScorer()
 	peerStatus := scorers.PeerStatusScorer()
+
+	// Build the working set: connected peers + recently disconnected peers.
+	connected := peers.Connected()
+	visible := make([]peer.ID, 0, len(connected))
+	stateOf := make(map[peer.ID]string, len(connected))
+	for _, pid := range connected {
+		visible = append(visible, pid)
+		stateOf[pid] = "connected"
+	}
+	cutoff := time.Now().Add(-disconnectedRetention)
+	for _, pid := range peers.Disconnected() {
+		_, dt := peers.LastDisconnect(pid)
+		if dt.IsZero() || dt.Before(cutoff) {
+			continue
+		}
+		visible = append(visible, pid)
+		stateOf[pid] = "disconnected"
+	}
 
 	var pStore peerstore.Peerstore
 	if s.PeerManager != nil && s.PeerManager.Host() != nil {
@@ -90,8 +112,8 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 	peerScoreStateMu.Lock()
 	defer peerScoreStateMu.Unlock()
 
-	live := make(map[peer.ID]struct{}, len(connected))
-	for _, pid := range connected {
+	live := make(map[peer.ID]struct{}, len(visible))
+	for _, pid := range visible {
 		live[pid] = struct{}{}
 
 		// scorers.Score sums every scorer (gossip + bad responses + block provider +
@@ -159,7 +181,12 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 		gossipScoreVal := gossip.Score(pid)
 		peerStatusScoreVal := peerStatus.Score(pid)
 		badResponseScoreVal := bad.Score(pid)
+		discReason, discTime := peers.LastDisconnect(pid)
+		connState := stateOf[pid]
+		// Disconnect reason takes precedence when the peer is disconnected.
 		switch {
+		case connState == "disconnected" && discReason != "":
+			lastInfo = fmt.Sprintf("disconnected: %s (%s ago)", discReason, shortDuration(now.Sub(discTime)))
 		case badReason != "":
 			lastInfo = fmt.Sprintf("%s (×%d, %s ago)", badReason, badCount, shortDuration(now.Sub(badTime)))
 		case maxJump > 0:
@@ -195,6 +222,7 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 			PeerID:                  pidStr,
 			PeerIDShort:             shortPeerID(pidStr),
 			Implementation:          agentForPeer(pStore, pid),
+			ConnectionState:         connState,
 			StartScore:              state.connectScore,
 			CurrentScore:            score,
 			BehaviourPenalty:        behaviour,

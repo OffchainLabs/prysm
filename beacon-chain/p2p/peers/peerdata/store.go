@@ -61,6 +61,8 @@ type PeerData struct {
 	BadResponses         int
 	LastDownscoreReason  string
 	LastDownscoreTime    time.Time
+	LastDisconnectReason string
+	LastDisconnectTime   time.Time
 	ProcessedBlocks      uint64
 	BlockProviderUpdated time.Time
 	// Gossip Scoring data.
