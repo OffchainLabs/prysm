@@ -92,8 +92,15 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 			peerScoreState[pid] = state
 		}
 
+		// Pick the strongest current "downscore" signal. Priority:
+		//   1. invalid_message_deliveries that grew since last poll (fresh badness)
+		//   2. any topic with cumulative invalid_message_deliveries > 0
+		//   3. behaviour_penalty > 0
+		//   4. a topic the peer is in but has zero mesh deliveries on (mesh deficit)
 		var lastTopic, lastInfo string
-		var maxJump float64
+		var maxJump, maxInvalid float64
+		var jumpTopic, invalidTopic, deficitTopic string
+		var deficitMesh uint64
 		for topic, ts := range topicScores {
 			if ts == nil {
 				continue
@@ -102,14 +109,30 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 			delta := cur - state.lastTopicInvalid[topic]
 			if delta > maxJump {
 				maxJump = delta
-				lastTopic = topic
+				jumpTopic = topic
+			}
+			if cur > maxInvalid {
+				maxInvalid = cur
+				invalidTopic = topic
+			}
+			if ts.TimeInMesh > 30 && ts.MeshMessageDeliveries == 0 && ts.TimeInMesh > deficitMesh {
+				deficitMesh = ts.TimeInMesh
+				deficitTopic = topic
 			}
 			state.lastTopicInvalid[topic] = cur
 		}
-		if lastTopic != "" {
-			lastInfo = fmt.Sprintf("+%.1f invalid_message_deliveries since last poll", maxJump)
-		} else if behaviour > 0 {
+		switch {
+		case maxJump > 0:
+			lastTopic = jumpTopic
+			lastInfo = fmt.Sprintf("+%.1f invalid msgs since last poll", maxJump)
+		case maxInvalid > 0:
+			lastTopic = invalidTopic
+			lastInfo = fmt.Sprintf("%.1f cumulative invalid msgs", maxInvalid)
+		case behaviour > 0:
 			lastInfo = fmt.Sprintf("behaviour_penalty=%.2f", behaviour)
+		case deficitTopic != "":
+			lastTopic = deficitTopic
+			lastInfo = fmt.Sprintf("0 mesh deliveries in %ds", deficitMesh)
 		}
 
 		minutes := now.Sub(state.connectTime).Minutes()
