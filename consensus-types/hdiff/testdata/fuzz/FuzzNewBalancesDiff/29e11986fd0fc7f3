@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('¨')
+[]byte("\xe8\xc1E\x12\v\x19X7\xa1\xfdY\x84B\xd8c\x82s")
