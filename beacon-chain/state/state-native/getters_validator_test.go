@@ -72,7 +72,7 @@ func TestValidatorIndexes(t *testing.T) {
 
 func TestEffectiveBalanceAtIndex(t *testing.T) {
 	dState, _ := util.DeterministicGenesisState(t, 10)
-	for i := uint64(0); i < 10; i++ {
+	for i := range uint64(10) {
 		want, err := dState.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(i))
 		require.NoError(t, err)
 		got, err := dState.EffectiveBalanceAtIndex(primitives.ValidatorIndex(i))
