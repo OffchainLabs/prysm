@@ -25,6 +25,7 @@ var knownAgentVersions = []string{
 type peerScoreSample struct {
 	connectScore     float64
 	connectTime      time.Time
+	connectScoreSet  bool // true once we've seen a non-zero score and locked in connectScore
 	lastScore        float64
 	lastTopicInvalid map[string]float64
 }
@@ -85,12 +86,18 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 		state, ok := peerScoreState[pid]
 		if !ok {
 			state = &peerScoreSample{
-				connectScore:     score,
-				connectTime:      now,
 				lastScore:        score,
 				lastTopicInvalid: map[string]float64{},
 			}
 			peerScoreState[pid] = state
+		}
+		// Lock in the start score the first time we see a non-zero value, so
+		// the column doesn't perpetually report 0 just because libp2p hadn't
+		// scored the peer when we first observed it.
+		if !state.connectScoreSet && score != 0 {
+			state.connectScore = score
+			state.connectTime = now
+			state.connectScoreSet = true
 		}
 
 		// Only report actual downscore events. Priority:
@@ -132,10 +139,12 @@ func (s *Server) ListPeerScores(w http.ResponseWriter, r *http.Request) {
 			lastInfo = fmt.Sprintf("behaviour_penalty=%.2f", behaviour)
 		}
 
-		minutes := now.Sub(state.connectTime).Minutes()
 		var ratePerMin float64
-		if minutes > 0 {
-			ratePerMin = (score - state.connectScore) / minutes
+		if state.connectScoreSet {
+			minutes := now.Sub(state.connectTime).Minutes()
+			if minutes > 0 {
+				ratePerMin = (score - state.connectScore) / minutes
+			}
 		}
 		lastDelta := score - state.lastScore
 		state.lastScore = score
