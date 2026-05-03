@@ -90,7 +90,7 @@ function render(j) {
       <td class="num ${arrowClass}">${arrow} ${p.last_delta.toFixed(3)}</td>
       <td class="num ${rateClass}">${p.rate_per_min.toFixed(3)}</td>
       <td class="num">${p.behaviour_penalty.toFixed(2)}</td>
-      <td>${p.last_downscore_topic ? `<span class="topic">${p.last_downscore_topic}</span> · ${p.last_downscore_info}` : '<span class="flat">—</span>'}${fresh ? '<span class="fresh-tag">NEW</span>' : ''}</td>
+      <td>${p.last_downscore_info ? `${p.last_downscore_topic ? `<span class="topic">${p.last_downscore_topic}</span> · ` : ''}${p.last_downscore_info}` : '<span class="flat">—</span>'}${fresh ? '<span class="fresh-tag">NEW</span>' : ''}</td>
     `;
     tb.appendChild(tr);
   }
