@@ -40,5 +40,5 @@ type Server struct {
 	BlockRewardFetcher            rewards.BlockRewardsFetcher
 	TrackedValidatorsCache        *cache.TrackedValidatorsCache
 	PayloadIDCache                *cache.PayloadIDCache
-  PayloadAttestationPool        payloadattestation.PoolManager
+	PayloadAttestationPool        payloadattestation.PoolManager
 }
