@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	testtmpl "github.com/OffchainLabs/prysm/v7/beacon-chain/state/testing"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -67,6 +68,20 @@ func TestValidatorIndexes(t *testing.T) {
 		require.NotEmpty(t, readOnlyBytes)
 		require.Equal(t, hexutil.Encode(readOnlyBytes[:]), hexutil.Encode(byteValue[:]))
 	})
+}
+
+func TestEffectiveBalanceAtIndex(t *testing.T) {
+	dState, _ := util.DeterministicGenesisState(t, 10)
+	for i := uint64(0); i < 10; i++ {
+		want, err := dState.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(i))
+		require.NoError(t, err)
+		got, err := dState.EffectiveBalanceAtIndex(primitives.ValidatorIndex(i))
+		require.NoError(t, err)
+		require.Equal(t, want.EffectiveBalance(), got)
+	}
+
+	_, err := dState.EffectiveBalanceAtIndex(primitives.ValidatorIndex(10))
+	require.NotNil(t, err)
 }
 
 func TestPendingBalanceToWithdraw(t *testing.T) {
