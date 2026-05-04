@@ -57,6 +57,9 @@ import (
 //	    for_ops(body.payload_attestations, process_payload_attestation)
 //	</spec>
 func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "core.state.gloasOperations")
+	defer span.End()
+
 	var err error
 
 	bb := block.Body()

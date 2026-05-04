@@ -524,6 +524,9 @@ func ProcessBlockForStateRoot(
 
 // This calls altair block operations.
 func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "core.state.altairOperations")
+	defer span.End()
+
 	var err error
 
 	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
@@ -565,6 +568,9 @@ func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock int
 
 // This calls phase 0 block operations.
 func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "core.state.phase0Operations")
+	defer span.End()
+
 	var err error
 	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
 	hasExits := len(beaconBlock.Body().VoluntaryExits()) > 0
