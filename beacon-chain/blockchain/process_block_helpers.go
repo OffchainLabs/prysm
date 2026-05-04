@@ -42,6 +42,11 @@ func (s *Service) getFCUArgs(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) er
 	if err := s.getFCUArgsEarlyBlock(cfg, fcuArgs); err != nil {
 		return err
 	}
+
+	if !s.inRegularSync() {
+		return nil
+	}
+
 	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:])
 	return nil
 }
