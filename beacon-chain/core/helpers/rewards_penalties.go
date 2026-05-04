@@ -99,11 +99,6 @@ func UpdateTotalActiveBalanceCache(s state.BeaconState, total uint64) error {
 	return balanceCache.AddTotalEffectiveBalance(s, total)
 }
 
-// UpdateNextEpochTotalActiveBalanceCache updates the cache with the given total active balance for the next epoch.
-func UpdateNextEpochTotalActiveBalanceCache(s state.ReadOnlyBeaconState, total uint64) error {
-	return balanceCache.AddTotalEffectiveBalanceForNextEpoch(s, total)
-}
-
 // IncreaseBalance increases validator with the given 'index' balance by 'delta' in Gwei.
 //
 // Spec pseudocode definition:

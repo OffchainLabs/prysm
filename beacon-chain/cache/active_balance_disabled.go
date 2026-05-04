@@ -20,11 +20,6 @@ func (c *FakeBalanceCache) AddTotalEffectiveBalance(st state.ReadOnlyBeaconState
 	return nil
 }
 
-// AddTotalEffectiveBalanceForNextEpoch is a stub.
-func (c *FakeBalanceCache) AddTotalEffectiveBalanceForNextEpoch(st state.ReadOnlyBeaconState, balance uint64) error {
-	return nil
-}
-
 // Get returns the current epoch's effective balance for state `st` in cache.
 func (c *FakeBalanceCache) Get(st state.ReadOnlyBeaconState) (uint64, error) {
 	return 0, nil

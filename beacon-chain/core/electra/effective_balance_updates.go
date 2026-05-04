@@ -3,8 +3,6 @@ package electra
 import (
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -39,10 +37,7 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) error {
 
 	bals := st.Balances()
 
-	nextEpoch := time.NextEpoch(st)
-
 	// Update effective balances with hysteresis.
-	nextActiveBalance := uint64(0)
 	validatorFunc := func(idx int, val state.ReadOnlyValidator) (newVal *ethpb.Validator, err error) {
 		if idx >= len(bals) {
 			return nil, fmt.Errorf("validator index exceeds validator length in state %d >= %d", idx, len(st.Balances()))
@@ -61,28 +56,8 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) error {
 				newVal.EffectiveBalance = effectiveBal
 			}
 		}
-
-		if !helpers.IsActiveValidatorUsingTrie(val, nextEpoch) {
-			return
-		}
-
-		if newVal == nil {
-			nextActiveBalance += val.EffectiveBalance()
-			return
-		}
-
-		nextActiveBalance += newVal.EffectiveBalance
-		return
+		return newVal, nil
 	}
 
-	if err := st.ApplyToEveryValidator(validatorFunc); err != nil {
-		return fmt.Errorf("apply to every validator: %w", err)
-	}
-
-	nextActiveBalance = max(effBalanceInc, nextActiveBalance)
-	if err := helpers.UpdateNextEpochTotalActiveBalanceCache(st, nextActiveBalance); err != nil {
-		return fmt.Errorf("update next epoch total active balance cache: %w", err)
-	}
-
-	return nil
+	return st.ApplyToEveryValidator(validatorFunc)
 }
