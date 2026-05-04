@@ -6,7 +6,6 @@ package validator
 import (
 	"bytes"
 	"context"
-	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -31,7 +30,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	prysmSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/genesis"
@@ -52,9 +50,7 @@ type Server struct {
 	TrackedValidatorsCache           *cache.TrackedValidatorsCache
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
-	executionPayloadEnvelopeMu       sync.RWMutex
-	executionPayloadEnvelope         *ethpb.ExecutionPayloadEnvelope
-	executionPayloadDataColumns      []blocks.RODataColumn
+	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	HeadFetcher                      blockchain.HeadFetcher
 	ForkFetcher                      blockchain.ForkFetcher
 	ForkchoiceFetcher                blockchain.ForkchoiceFetcher

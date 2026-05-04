@@ -3350,8 +3350,9 @@ func SignedExecutionPayloadEnvelopeFromConsensus(e *eth.SignedExecutionPayloadEn
 	}, nil
 }
 
-// BlockContentsGloasFromConsensus converts a proto Gloas block and envelope to the API struct.
-func BlockContentsGloasFromConsensus(block *eth.BeaconBlockGloas, envelope *eth.ExecutionPayloadEnvelope) (*BlockContentsGloas, error) {
+// BlockContentsGloasFromConsensus converts a proto Gloas block, envelope, and
+// blob data to the API struct.
+func BlockContentsGloasFromConsensus(block *eth.BeaconBlockGloas, envelope *eth.ExecutionPayloadEnvelope, kzgProofs [][]byte, blobs [][]byte) (*BlockContentsGloas, error) {
 	b, err := BeaconBlockGloasFromConsensus(block)
 	if err != nil {
 		return nil, err
@@ -3360,11 +3361,19 @@ func BlockContentsGloasFromConsensus(block *eth.BeaconBlockGloas, envelope *eth.
 	if err != nil {
 		return nil, err
 	}
+	encodedProofs := make([]string, len(kzgProofs))
+	for i, p := range kzgProofs {
+		encodedProofs[i] = hexutil.Encode(p)
+	}
+	encodedBlobs := make([]string, len(blobs))
+	for i, b := range blobs {
+		encodedBlobs[i] = hexutil.Encode(b)
+	}
 	return &BlockContentsGloas{
 		Block:                    b,
 		ExecutionPayloadEnvelope: env,
-		KzgProofs:                []string{}, // TODO: populate from blobs bundle
-		Blobs:                    []string{}, // TODO: populate from blobs bundle
+		KzgProofs:                encodedProofs,
+		Blobs:                    encodedBlobs,
 	}, nil
 }
 
@@ -3417,4 +3426,55 @@ func (e *SignedExecutionPayloadEnvelope) ToConsensus() (*eth.SignedExecutionPayl
 		Message:   msg,
 		Signature: sig,
 	}, nil
+}
+
+// SignedExecutionPayloadEnvelopeContentsFromConsensus builds the API struct
+// used for stateless envelope publishing from native components.
+func SignedExecutionPayloadEnvelopeContentsFromConsensus(signed *eth.SignedExecutionPayloadEnvelope, kzgProofs [][]byte, blobs [][]byte) (*SignedExecutionPayloadEnvelopeContents, error) {
+	signedJSON, err := SignedExecutionPayloadEnvelopeFromConsensus(signed)
+	if err != nil {
+		return nil, err
+	}
+	encodedProofs := make([]string, len(kzgProofs))
+	for i, p := range kzgProofs {
+		encodedProofs[i] = hexutil.Encode(p)
+	}
+	encodedBlobs := make([]string, len(blobs))
+	for i, b := range blobs {
+		encodedBlobs[i] = hexutil.Encode(b)
+	}
+	return &SignedExecutionPayloadEnvelopeContents{
+		SignedExecutionPayloadEnvelope: signedJSON,
+		KzgProofs:                      encodedProofs,
+		Blobs:                          encodedBlobs,
+	}, nil
+}
+
+// ToConsensus decodes the API struct into the signed envelope plus raw blob and
+// KZG proof bytes used by the stateless publish path.
+func (c *SignedExecutionPayloadEnvelopeContents) ToConsensus() (*eth.SignedExecutionPayloadEnvelope, [][]byte, [][]byte, error) {
+	if c == nil {
+		return nil, nil, nil, server.NewDecodeError(errNilValue, "SignedExecutionPayloadEnvelopeContents")
+	}
+	signed, err := c.SignedExecutionPayloadEnvelope.ToConsensus()
+	if err != nil {
+		return nil, nil, nil, server.NewDecodeError(err, "SignedExecutionPayloadEnvelope")
+	}
+	proofs := make([][]byte, len(c.KzgProofs))
+	for i, p := range c.KzgProofs {
+		proof, err := bytesutil.DecodeHexWithLength(p, 48)
+		if err != nil {
+			return nil, nil, nil, server.NewDecodeError(err, fmt.Sprintf("KzgProofs[%d]", i))
+		}
+		proofs[i] = proof
+	}
+	blobs := make([][]byte, len(c.Blobs))
+	for i, b := range c.Blobs {
+		blob, err := bytesutil.DecodeHexWithLength(b, fieldparams.BlobSize)
+		if err != nil {
+			return nil, nil, nil, server.NewDecodeError(err, fmt.Sprintf("Blobs[%d]", i))
+		}
+		blobs[i] = blob
+	}
+	return signed, proofs, blobs, nil
 }
