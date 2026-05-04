@@ -3,7 +3,7 @@ module github.com/OffchainLabs/prysm/v7
 go 1.25.1
 
 require (
-	github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506
+	github.com/OffchainLabs/go-bitfield v0.0.0-20260504143531-5cbb6d0f5f2e
 	github.com/OffchainLabs/hashtree v0.2.3
 	github.com/aristanetworks/goarista v0.0.0-20200805130819-fd197cf57d96
 	github.com/bazelbuild/rules_go v0.23.2
@@ -295,5 +295,3 @@ require (
 replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.20190722034630-4f2e55fcf87b
 
 replace github.com/tyler-smith/go-bip39 => ./third_party/go-bip39
-
-replace github.com/OffchainLabs/go-bitfield => github.com/barnabasbusa/go-bitfield v0.0.0-20260430103126-49cf19afead9
