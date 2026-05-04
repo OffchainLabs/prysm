@@ -37,7 +37,7 @@ func ProcessAttestationsNoVerifySignature(
 	body := b.Body()
 	span.SetAttributes(trace.Int64Attribute("count", int64(len(body.Attestations()))))
 
-	totalBalance, err := helpers.TotalActiveBalance(beaconState)
+	totalBalance, err := helpers.TotalActiveBalance(ctx, beaconState)
 	if err != nil {
 		return nil, err
 	}

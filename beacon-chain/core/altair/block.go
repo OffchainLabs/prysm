@@ -91,7 +91,7 @@ func processSyncAggregate(ctx context.Context, s state.BeaconState, sync *ethpb.
 	}
 	votedKeys := make([]bls.PublicKey, 0, len(committeeKeys))
 
-	activeBalance, err := helpers.TotalActiveBalance(s)
+	activeBalance, err := helpers.TotalActiveBalance(ctx, s)
 	if err != nil {
 		return nil, nil, 0, err
 	}

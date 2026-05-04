@@ -160,7 +160,7 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err := electra.ProcessRegistryUpdates(ctx, state); err != nil {
 		return errors.Wrap(err, "could not process registry updates")
 	}
-	if err := electra.ProcessSlashings(state); err != nil {
+	if err := electra.ProcessSlashings(ctx, state); err != nil {
 		return err
 	}
 	state, err = electra.ProcessEth1DataReset(state)
@@ -173,7 +173,7 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err = electra.ProcessPendingConsolidations(ctx, state); err != nil {
 		return err
 	}
-	if err = gloas.ProcessBuilderPendingPayments(state); err != nil {
+	if err = gloas.ProcessBuilderPendingPayments(ctx, state); err != nil {
 		return err
 	}
 	if err = electra.ProcessEffectiveBalanceUpdates(state); err != nil {

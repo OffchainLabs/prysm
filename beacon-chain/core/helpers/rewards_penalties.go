@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	mathutil "github.com/OffchainLabs/prysm/v7/math"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
@@ -56,15 +58,21 @@ func TotalBalance(state state.ReadOnlyValidators, indices []primitives.Validator
 //	 Note: ``get_total_balance`` returns ``EFFECTIVE_BALANCE_INCREMENT`` Gwei minimum to avoid divisions by zero.
 //	 """
 //	 return get_total_balance(state, set(get_active_validator_indices(state, get_current_epoch(state))))
-func TotalActiveBalance(s state.ReadOnlyBeaconState) (uint64, error) {
+func TotalActiveBalance(ctx context.Context, s state.ReadOnlyBeaconState) (uint64, error) {
+	_, span := trace.StartSpan(ctx, "helpers.TotalActiveBalance")
+	defer span.End()
+
 	bal, err := balanceCache.Get(s)
 	if err == nil {
+		span.SetAttributes(trace.BoolAttribute("cacheHit", true))
 		return bal, nil
 	}
 
 	if !errors.Is(err, cache.ErrNotFound) {
 		return 0, fmt.Errorf("balance cache get: %w", err)
 	}
+
+	span.SetAttributes(trace.BoolAttribute("cacheHit", false))
 
 	total := uint64(0)
 	epoch := slots.ToEpoch(s.Slot())
