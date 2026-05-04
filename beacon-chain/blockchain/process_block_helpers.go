@@ -41,11 +41,15 @@ func (s *Service) CurrentSlot() primitives.Slot {
 
 // getFCUArgs returns the arguments to call forkchoice update
 func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) (*fcuConfig, error) {
-
 	fcuArgs, err := s.getFCUArgsEarlyBlock(cfg)
 	if err != nil {
 		return nil, err
 	}
+
+	if !s.inRegularSync() {
+		return fcuArgs, nil
+	}
+
 	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:], cfg.headRoot[:])
 	return fcuArgs, nil
 }
