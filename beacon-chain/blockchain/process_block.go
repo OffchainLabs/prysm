@@ -36,7 +36,7 @@ import (
 )
 
 // A custom slot deadline for processing state slots in our cache.
-const slotDeadline = 5 * time.Second
+const slotDeadline = 10 * time.Second
 
 // A custom deadline for deposit trie insertion.
 const depositDeadline = 20 * time.Second
@@ -479,16 +479,25 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	if err := helpers.UpdateProposerIndicesInCache(ctx, st, e); err != nil {
 		return errors.Wrap(err, "could not update proposer index cache")
 	}
+
 	go func(ep primitives.Epoch) {
 		// Use a custom deadline here, since this method runs asynchronously.
 		// We ignore the parent method's context and instead create a new one
 		// with a custom deadline, therefore using the background context instead.
 		slotCtx, cancel := context.WithTimeout(context.Background(), slotDeadline)
 		defer cancel()
+
 		if err := helpers.UpdateCommitteeCache(slotCtx, st, ep+1); err != nil {
 			log.WithError(err).Warn("Could not update committee cache")
 		}
+
+		// Prime the total active balance cache for the new epoch so the first
+		// block of the epoch hits the cache.
+		if _, err := helpers.TotalActiveBalance(slotCtx, st); err != nil {
+			log.WithError(err).Warn("Could not prime total active balance cache")
+		}
 	}(e)
+
 	// The latest block header is from the previous epoch
 	r, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
