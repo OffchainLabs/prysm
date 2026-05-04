@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -57,14 +58,12 @@ func TotalBalance(state state.ReadOnlyValidators, indices []primitives.Validator
 //	 return get_total_balance(state, set(get_active_validator_indices(state, get_current_epoch(state))))
 func TotalActiveBalance(s state.ReadOnlyBeaconState) (uint64, error) {
 	bal, err := balanceCache.Get(s)
-	switch {
-	case err == nil:
+	if err == nil {
 		return bal, nil
-	case errors.Is(err, cache.ErrNotFound):
-		// Do nothing if we receive a not found error.
-	default:
-		// In the event, we encounter another error we return it.
-		return 0, err
+	}
+
+	if !errors.Is(err, cache.ErrNotFound) {
+		return 0, fmt.Errorf("balance cache get: %w", err)
 	}
 
 	total := uint64(0)

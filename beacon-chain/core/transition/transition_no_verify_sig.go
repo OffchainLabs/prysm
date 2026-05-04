@@ -361,27 +361,37 @@ func ProcessOperationsNoVerifyAttsSigs(
 		return nil, errors.Wrap(err, "could not verify operation lengths")
 	}
 
-	var err error
-	if beaconBlock.Version() == version.Phase0 {
-		state, err = phase0Operations(ctx, state, beaconBlock)
+	blockVersion := beaconBlock.Version()
+	if blockVersion >= version.Gloas {
+		state, err := gloasOperations(ctx, state, beaconBlock)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("gloas operations: %w", err)
 		}
-	} else if beaconBlock.Version() < version.Electra {
-		state, err = altairOperations(ctx, state, beaconBlock)
+
+		return state, nil
+	}
+
+	if blockVersion >= version.Electra {
+		state, err := electraOperations(ctx, state, beaconBlock)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("electra operations: %w", err)
 		}
-	} else if beaconBlock.Version() < version.Gloas {
-		state, err = electraOperations(ctx, state, beaconBlock)
+
+		return state, nil
+	}
+
+	if blockVersion > version.Phase0 {
+		state, err := altairOperations(ctx, state, beaconBlock)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("altair operations: %w", err)
 		}
-	} else {
-		state, err = gloasOperations(ctx, state, beaconBlock)
-		if err != nil {
-			return nil, err
-		}
+
+		return state, nil
+	}
+
+	state, err := phase0Operations(ctx, state, beaconBlock)
+	if err != nil {
+		return nil, fmt.Errorf("phase0 operations: %w", err)
 	}
 
 	return state, nil
