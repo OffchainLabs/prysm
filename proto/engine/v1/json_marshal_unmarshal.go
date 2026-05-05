@@ -96,7 +96,7 @@ func (e *ExecutionBlock) MarshalJSON() ([]byte, error) {
 	if e.Version == version.Capella {
 		decoded["withdrawals"] = e.Withdrawals
 	}
-	if len(e.BlockAccessList) > 0 {
+	if e.Version >= version.Gloas {
 		decoded["blockAccessList"] = e.BlockAccessList
 	}
 
@@ -164,6 +164,9 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 		if has && dgu != nil {
 			e.Version = version.Deneb
 		}
+	}
+	if len(e.BlockAccessList) > 0 {
+		e.Version = version.Gloas
 	}
 
 	rawTxList, ok := decoded["transactions"]
