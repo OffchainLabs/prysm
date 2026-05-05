@@ -77,6 +77,10 @@ func TotalActiveBalance(ctx context.Context, s state.ReadOnlyBeaconState) (uint6
 	total := uint64(0)
 	epoch := slots.ToEpoch(s.Slot())
 	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		if IsActiveValidatorUsingTrie(val, epoch) {
 			total += val.EffectiveBalance()
 		}
