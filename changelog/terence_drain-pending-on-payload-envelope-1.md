@@ -1,0 +1,1 @@
+- sync: targeted wake-up of pending child blocks when their parent's payload envelope is applied.

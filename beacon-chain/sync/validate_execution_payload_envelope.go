@@ -237,17 +237,18 @@ func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg pr
 	if err != nil {
 		return errors.Wrap(err, "could not wrap signed execution payload envelope")
 	}
+	envelope, err := env.Envelope()
+	if err != nil {
+		return errors.Wrap(err, "could not unwrap execution payload envelope")
+	}
+	blkRoot := envelope.BeaconBlockRoot()
 	if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, env); err != nil {
 		if blockchain.IsInvalidBlock(err) {
-			envelope, envErr := env.Envelope()
-			if envErr == nil {
-				s.setBadPayload(ctx, envelope.BeaconBlockRoot())
-			} else {
-				log.WithError(envErr).Error("failed to get envelope from signed execution payload envelope")
-			}
+			s.setBadPayload(ctx, blkRoot)
 		}
 		return err
 	}
+	go s.processPendingBlocksWithParent(s.ctx, blkRoot)
 	return nil
 }
 

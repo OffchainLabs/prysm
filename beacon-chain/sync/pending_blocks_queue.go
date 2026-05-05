@@ -97,86 +97,22 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 		// Process each block in the queue.
 		for _, b := range blocksInCache {
 			start := time.Now()
-			totalDuration := time.Duration(0)
-
-			if err := blocks.BeaconBlockIsNil(b); err != nil {
-				continue
-			}
-			blkRoot, err := b.Block().HashTreeRoot()
+			out, err := s.processPendingBlock(ctx, span, slot, b)
 			if err != nil {
 				return err
 			}
-
-			// Skip blocks that are already being processed.
-			if s.cfg.chain.BlockBeingSynced(blkRoot) {
-				log.WithField("blockRoot", fmt.Sprintf("%#x", blkRoot)).Info("Skipping pending block already being processed")
-				continue
+			if out.parentToRequest != ([32]byte{}) {
+				parentRoots = append(parentRoots, out.parentToRequest)
 			}
-
-			// Remove and skip blocks already in the database.
-			if s.cfg.beaconDB.HasBlock(ctx, blkRoot) {
-				if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
-					return err
-				}
-				continue
+			if out.processed {
+				blkRoots = append(blkRoots, out.blkRoot)
+				log.WithFields(logrus.Fields{
+					"slotIndex": fmt.Sprintf("%d/%d", i+1, len(sortedSlots)),
+					"slot":      slot,
+					"root":      fmt.Sprintf("%#x", out.blkRoot),
+					"duration":  time.Since(start),
+				}).Debug("Processed pending block and cleared it in cache")
 			}
-
-			parentRoot := b.Block().ParentRoot()
-			inPendingQueue := s.isBlockInQueue(parentRoot)
-
-			// Check if block is bad.
-			keepProcessing, err := s.checkIfBlockIsBad(ctx, span, slot, b, blkRoot)
-			if err != nil {
-				return err
-			}
-			if !keepProcessing {
-				continue
-			}
-
-			// Request parent block if not in the pending queue and not in the database.
-			isParentBlockInDB := s.cfg.beaconDB.HasBlock(ctx, parentRoot)
-			if !inPendingQueue && !isParentBlockInDB && s.hasPeer() {
-				parentRoots = append(parentRoots, parentRoot)
-				continue
-			}
-			if !isParentBlockInDB {
-				continue
-			}
-			if !s.cfg.chain.ParentPayloadReady(b.Block()) {
-				continue
-			}
-
-			// Calculate the deadline time by adding three slots duration to the current time
-			secondsPerSlot := params.BeaconConfig().SecondsPerSlot
-			threeSlotDuration := 3 * time.Duration(secondsPerSlot) * time.Second
-			ctxWithTimeout, cancelFunction := context.WithTimeout(ctx, threeSlotDuration)
-			// Process and broadcast the block.
-			if err := s.processAndBroadcastBlock(ctxWithTimeout, b, blkRoot); err != nil {
-				s.handleBlockProcessingError(ctxWithTimeout, err, b, blkRoot)
-				cancelFunction()
-				continue
-			}
-			cancelFunction()
-
-			// Process synchronously because it's likely that the next pending block depends on it.
-			s.processPendingPayloadEnvelope(ctx, blkRoot)
-			s.processPendingGloasColumns(blkRoot, b)
-			blkRoots = append(blkRoots, blkRoot)
-
-			// Remove the processed block from the queue.
-			if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
-				return err
-			}
-
-			duration := time.Since(start)
-			totalDuration += duration
-			log.WithFields(logrus.Fields{
-				"slotIndex":     fmt.Sprintf("%d/%d", i+1, len(sortedSlots)),
-				"slot":          slot,
-				"root":          fmt.Sprintf("%#x", blkRoot),
-				"duration":      duration,
-				"totalDuration": totalDuration,
-			}).Debug("Processed pending block and cleared it in cache")
 		}
 
 		span.End()
@@ -190,6 +126,106 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	}
 
 	return s.sendBatchRootRequest(ctx, parentRoots, randGen)
+}
+
+type pendingBlockOutcome struct {
+	blkRoot         [32]byte
+	processed       bool
+	parentToRequest [32]byte
+}
+
+func (s *Service) processPendingBlock(ctx context.Context, span trace.Span, slot primitives.Slot, b interfaces.ReadOnlySignedBeaconBlock) (pendingBlockOutcome, error) {
+	var out pendingBlockOutcome
+	if err := blocks.BeaconBlockIsNil(b); err != nil {
+		return out, nil
+	}
+	blkRoot, err := b.Block().HashTreeRoot()
+	if err != nil {
+		return out, err
+	}
+	out.blkRoot = blkRoot
+
+	if s.cfg.chain.BlockBeingSynced(blkRoot) {
+		log.WithField("blockRoot", fmt.Sprintf("%#x", blkRoot)).Info("Skipping pending block already being processed")
+		return out, nil
+	}
+	if s.cfg.beaconDB.HasBlock(ctx, blkRoot) {
+		return out, s.removeBlockFromQueue(b, blkRoot)
+	}
+	parentRoot := b.Block().ParentRoot()
+	inPendingQueue := s.isBlockInQueue(parentRoot)
+
+	keepProcessing, err := s.checkIfBlockIsBad(ctx, span, slot, b, blkRoot)
+	if err != nil {
+		return out, err
+	}
+	if !keepProcessing {
+		return out, nil
+	}
+
+	isParentBlockInDB := s.cfg.beaconDB.HasBlock(ctx, parentRoot)
+	if !inPendingQueue && !isParentBlockInDB && s.hasPeer() {
+		out.parentToRequest = parentRoot
+		return out, nil
+	}
+	if !isParentBlockInDB {
+		return out, nil
+	}
+	if !s.cfg.chain.ParentPayloadReady(b.Block()) {
+		return out, nil
+	}
+
+	threeSlotDuration := 3 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
+	cctx, cancel := context.WithTimeout(ctx, threeSlotDuration)
+	defer cancel()
+	if err := s.processAndBroadcastBlock(cctx, b, blkRoot); err != nil {
+		s.handleBlockProcessingError(cctx, err, b, blkRoot)
+		return out, nil
+	}
+
+	s.processPendingPayloadEnvelope(ctx, blkRoot)
+	s.processPendingGloasColumns(blkRoot, b)
+	if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
+		return out, err
+	}
+	out.processed = true
+	return out, nil
+}
+
+// Wakes pending blocks gated on ParentPayloadReady once parent's envelope arrives.
+func (s *Service) processPendingBlocksWithParent(ctx context.Context, parentRoot [32]byte) {
+	ctx, span := prysmTrace.StartSpan(ctx, "processPendingBlocksWithParent")
+	defer span.End()
+
+	s.pendingQueueLock.RLock()
+	var matches []interfaces.ReadOnlySignedBeaconBlock
+	for k := range s.slotToPendingBlocks.Items() {
+		for _, b := range s.pendingBlocksInCache(cacheKeyToSlot(k)) {
+			if b.Block().ParentRoot() == parentRoot {
+				matches = append(matches, b)
+			}
+		}
+	}
+	s.pendingQueueLock.RUnlock()
+	if len(matches) == 0 {
+		return
+	}
+
+	for _, b := range matches {
+		innerCtx, innerSpan := startInnerSpan(ctx, b.Block().Slot())
+		out, err := s.processPendingBlock(innerCtx, innerSpan, b.Block().Slot(), b)
+		innerSpan.End()
+		if err != nil {
+			log.WithError(err).WithField("parentRoot", fmt.Sprintf("%#x", parentRoot)).
+				Debug("Could not process pending child after envelope")
+			continue
+		}
+		if out.processed {
+			if err := s.processPendingAttsForBlock(ctx, out.blkRoot); err != nil {
+				log.WithError(err).Debug("Failed to process pending attestations for block")
+			}
+		}
+	}
 }
 
 // startInnerSpan starts a new tracing span for an inner loop and returns the new context and span.
