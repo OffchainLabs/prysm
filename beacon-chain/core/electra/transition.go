@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	e "github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -94,9 +95,14 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	if err = ProcessPendingConsolidations(ctx, state); err != nil {
 		return err
 	}
-	if err = ProcessEffectiveBalanceUpdates(state); err != nil {
+	nextActiveBalance, err := ProcessEffectiveBalanceUpdates(state)
+	if err != nil {
 		return err
 	}
+	if err := helpers.UpdateNextEpochTotalActiveBalanceCache(state, nextActiveBalance); err != nil {
+		return fmt.Errorf("update next epoch total active balance cache: %w", err)
+	}
+
 	state, err = ProcessSlashingsReset(state)
 	if err != nil {
 		return err

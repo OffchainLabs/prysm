@@ -27,7 +27,7 @@ func TestProcessEffectiveBalanceUpdates_SafeCopy(t *testing.T) {
 	require.NoError(t, err)
 	copiedState := st.Copy()
 
-	err = electra.ProcessEffectiveBalanceUpdates(copiedState)
+	_, err = electra.ProcessEffectiveBalanceUpdates(copiedState)
 	require.NoError(t, err)
 
 	require.Equal(t, st.Validators()[0].EffectiveBalance, params.BeaconConfig().MinActivationBalance)
@@ -157,7 +157,7 @@ func TestProcessEffectiveBalnceUpdates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := electra.ProcessEffectiveBalanceUpdates(tt.state)
+			_, err := electra.ProcessEffectiveBalanceUpdates(tt.state)
 			require.Equal(t, tt.wantErr, err != nil, "unexpected error returned wanted error=nil (%s), got error=%s", tt.wantErr, err)
 			if tt.check != nil {
 				tt.check(t, tt.state)

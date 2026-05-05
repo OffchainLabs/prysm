@@ -309,7 +309,10 @@ func ProcessEth1DataReset(state state.BeaconState) (state.BeaconState, error) {
 //	          or validator.effective_balance + UPWARD_THRESHOLD < balance
 //	      ):
 //	          validator.effective_balance = min(balance - balance % EFFECTIVE_BALANCE_INCREMENT, MAX_EFFECTIVE_BALANCE)
-func ProcessEffectiveBalanceUpdates(st state.BeaconState) (state.BeaconState, error) {
+//
+// In addition to updating effective balances, it returns the total effective balance of validators
+// that will be active during the next epoch.
+func ProcessEffectiveBalanceUpdates(st state.BeaconState) (state.BeaconState, uint64, error) {
 	effBalanceInc := params.BeaconConfig().EffectiveBalanceIncrement
 	maxEffBalance := params.BeaconConfig().MaxEffectiveBalance
 	hysteresisInc := effBalanceInc / params.BeaconConfig().HysteresisQuotient
@@ -318,7 +321,10 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) (state.BeaconState, er
 
 	bals := st.Balances()
 
+	nextEpoch := time.NextEpoch(st)
+
 	// Update effective balances with hysteresis.
+	nextActiveBalance := uint64(0)
 	validatorFunc := func(idx int, val state.ReadOnlyValidator) (newVal *ethpb.Validator, err error) {
 		if val == nil {
 			return nil, fmt.Errorf("validator %d is nil in state", idx)
@@ -335,14 +341,25 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) (state.BeaconState, er
 				newVal.EffectiveBalance = effectiveBal
 			}
 		}
+
+		if !helpers.IsActiveValidatorUsingTrie(val, nextEpoch) {
+			return
+		}
+
+		if newVal == nil {
+			nextActiveBalance += val.EffectiveBalance()
+			return
+		}
+
+		nextActiveBalance += newVal.EffectiveBalance
 		return
 	}
 
 	if err := st.ApplyToEveryValidator(validatorFunc); err != nil {
-		return nil, err
+		return nil, 0, fmt.Errorf("apply to every validator: %w", err)
 	}
 
-	return st, nil
+	return st, max(effBalanceInc, nextActiveBalance), nil
 }
 
 // ProcessSlashingsReset processes the total slashing balances updates during epoch processing.
@@ -474,9 +491,13 @@ func ProcessFinalUpdates(state state.BeaconState) (state.BeaconState, error) {
 	}
 
 	// Update effective balances with hysteresis.
-	state, err = ProcessEffectiveBalanceUpdates(state)
+	state, nextActiveBalance, err := ProcessEffectiveBalanceUpdates(state)
 	if err != nil {
 		return nil, err
+	}
+
+	if err := helpers.UpdateNextEpochTotalActiveBalanceCache(state, nextActiveBalance); err != nil {
+		return nil, fmt.Errorf("could not update next epoch total active balance cache: %w", err)
 	}
 
 	// Set total slashed balances.

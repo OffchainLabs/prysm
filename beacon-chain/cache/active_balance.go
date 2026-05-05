@@ -64,6 +64,20 @@ func (c *BalanceCache) AddTotalEffectiveBalance(st state.ReadOnlyBeaconState, ba
 	return nil
 }
 
+// AddTotalEffectiveBalanceForNextEpoch adds a new total effective balance entry for state `st` into the cache, keyed for the next epoch.
+func (c *BalanceCache) AddTotalEffectiveBalanceForNextEpoch(st state.ReadOnlyBeaconState, balance uint64) error {
+	key, err := nextEpochBalanceCacheKey(st)
+	if err != nil {
+		return err
+	}
+
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	_ = c.cache.Add(key, balance)
+	return nil
+}
+
 // Get returns the current epoch's effective balance for state `st` in cache.
 func (c *BalanceCache) Get(st state.ReadOnlyBeaconState) (uint64, error) {
 	key, err := balanceCacheKey(st)
