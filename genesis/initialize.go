@@ -38,7 +38,7 @@ func initializeFromProviders(ctx context.Context, dir string, providers ...Provi
 	for _, get := range providers {
 		gs, err := get.Genesis(ctx)
 		if err != nil {
-			log.WithField("provider", fmt.Sprintf("%T", get)).Warn("genesis provider failed")
+			log.WithError(err).WithField("provider", fmt.Sprintf("%T", get)).Warn("genesis provider failed")
 			continue
 		}
 		gd, err := newGenesisData(gs, dir)
