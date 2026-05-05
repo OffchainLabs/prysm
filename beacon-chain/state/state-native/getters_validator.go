@@ -90,6 +90,21 @@ func (b *BeaconState) EffectiveBalanceSum(idxs []primitives.ValidatorIndex) (uin
 	return sum, nil
 }
 
+// EffectiveBalanceAtIndex returns the effective balance of the validator at the given index
+// without materializing a Validator struct.
+func (b *BeaconState) EffectiveBalanceAtIndex(idx primitives.ValidatorIndex) (uint64, error) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	if b.validatorsMultiValue == nil {
+		return 0, state.ErrNilValidatorsInState
+	}
+	v, err := b.validatorsMultiValue.At(b, uint64(idx))
+	if err != nil {
+		return 0, err
+	}
+	return v.EffectiveBalance, nil
+}
+
 func (b *BeaconState) validatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Validator, error) {
 	if b.validatorsMultiValue == nil {
 		return &ethpb.Validator{}, nil

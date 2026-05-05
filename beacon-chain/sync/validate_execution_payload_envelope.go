@@ -248,6 +248,13 @@ func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg pr
 		}
 		return err
 	}
+	if s.chainIsStarted() {
+		go func() {
+			if err := s.processPendingBlocks(s.ctx); err != nil {
+				log.WithError(err).Debug("Could not process pending blocks after envelope receipt")
+			}
+		}()
+	}
 	return nil
 }
 
