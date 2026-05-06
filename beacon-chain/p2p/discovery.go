@@ -1002,7 +1002,7 @@ func peerIdsFromMultiAddrs(addrs []ma.Multiaddr) []peer.ID {
 			continue
 		}
 		if len(info.Addrs) == 0 {
-			log.WithField("peerID", info.ID).Warn("Skipping trusted peer with no transport address")
+			log.WithField("peerID", info.ID).Warn("Skipping peer with no transport address")
 			continue
 		}
 		peers = append(peers, info.ID)
