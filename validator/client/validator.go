@@ -831,11 +831,16 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
 	}
 
-	// TODO(gloas): add gloas flag to stop needing prepare beacon proposer post gloas
-	if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
-		Recipients: proposerReqs,
-	}); err != nil {
-		return err
+	// Pre-Gloas: push fee recipients via prepare_beacon_proposer. Post-Gloas the
+	// proposer-preferences submission below carries this data on-chain and the
+	// beacon node sources fee recipient + gas limit from the proposer
+	// preferences cache instead of TrackedValidatorsCache.
+	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+		if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
+			Recipients: proposerReqs,
+		}); err != nil {
+			return err
+		}
 	}
 
 	prefs := v.buildProposerPreferences(ctx, km, slot)
@@ -852,7 +857,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}()
 	}
 
-	// TODO: figure out what to do post gloas for builder apis
+	// Builder API path (validator registrations, MEV-boost) is only used pre-Gloas.
 	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
 		return nil
 	}
@@ -1081,12 +1086,21 @@ func (v *validator) buildProposerPreferences(
 			}
 
 			feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
+			// Gas limit is a default-only setting in proposer preferences;
+			// per-validator gas limits are intentionally not honored to keep
+			// gas-limit signaling uniform across an operator's keys.
+			//
+			// Read order: v2 top-level Option.GasLimit (post-Gloas schema) →
+			// v1 BuilderConfig.GasLimit (legacy DB rows / pre-v2 files) →
+			// chain default.
 			gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
 			if ps != nil && ps.DefaultConfig != nil {
 				if ps.DefaultConfig.FeeRecipientConfig != nil {
 					feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
 				}
-				if ps.DefaultConfig.BuilderConfig != nil && ps.DefaultConfig.BuilderConfig.Enabled {
+				if ps.DefaultConfig.GasLimit != 0 {
+					gasLimit = uint64(ps.DefaultConfig.GasLimit)
+				} else if ps.DefaultConfig.BuilderConfig != nil {
 					gasLimit = uint64(ps.DefaultConfig.BuilderConfig.GasLimit)
 				}
 			}
@@ -1094,9 +1108,6 @@ func (v *validator) buildProposerPreferences(
 				if config, ok := ps.ProposeConfig[pk]; ok && config != nil {
 					if config.FeeRecipientConfig != nil {
 						feeRecipient = config.FeeRecipientConfig.FeeRecipient
-					}
-					if config.BuilderConfig != nil && config.BuilderConfig.Enabled {
-						gasLimit = uint64(config.BuilderConfig.GasLimit)
 					}
 				}
 			}

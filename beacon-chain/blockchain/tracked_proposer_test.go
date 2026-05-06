@@ -81,3 +81,33 @@ func TestTrackedProposer_TrackedWithProposerPreferenceOverride(t *testing.T) {
 	require.Equal(t, primitives.ExecutionAddress(prefAddr), val.FeeRecipient)
 	require.Equal(t, uint64(50_000_000), val.GasLimit)
 }
+
+// Post-Gloas, trackedProposer must bypass TrackedValidatorsCache and source
+// fee recipient + gas limit only from the proposer-preferences cache. On a
+// cache miss it returns Active=true so payload-attribute helpers fall back to
+// the burn address (overridden by --suggested-fee-recipient when set).
+func TestTrackedProposer_PostGloas_BypassesTrackedValidatorsCache(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	service, _ := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
+	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
+
+	// Pre-populate the (legacy pre-Gloas) cache. Post-Gloas this entry must be
+	// ignored.
+	stalePreGloasFeeRecipient := common.HexToAddress("0xdead000000000000000000000000000000000000")
+	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{
+		Active:       true,
+		Index:        0,
+		FeeRecipient: primitives.ExecutionAddress(stalePreGloasFeeRecipient),
+	})
+
+	val, ok := service.trackedProposer(st, 0)
+	require.Equal(t, true, ok)
+	require.Equal(t, true, val.Active)
+	// FeeRecipient must NOT be the cached pre-Gloas value; it must be the empty
+	// (burn) address since no proposer preference is set.
+	require.Equal(t, primitives.ExecutionAddress{}, val.FeeRecipient)
+}

@@ -752,10 +752,18 @@ func (s *Server) produceSyncCommitteeContribution(
 	}, true
 }
 
-// RegisterValidator requests that the beacon node stores valid validator registrations and calls the builder apis to update the custom builder
+// RegisterValidator requests that the beacon node stores valid validator registrations and calls the builder apis to update the custom builder.
+//
+// Post-Gloas this is a no-op: the builder/relay path is removed and the
+// validator client publishes proposer preferences instead. Older clients still
+// hitting the endpoint receive a successful response.
 func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.RegisterValidators")
 	defer span.End()
+
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		return
+	}
 
 	if s.BlockBuilder == nil || !s.BlockBuilder.Configured() {
 		httputil.HandleError(w, fmt.Sprintf("Could not register block builder: %v", builder.ErrNoBuilder), http.StatusBadRequest)
@@ -794,7 +802,14 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 }
 
 // PrepareBeaconProposer endpoint saves the fee recipient given a validator index, this is used when proposing a block.
+//
+// Post-Gloas this is a no-op: the validator client publishes signed proposer
+// preferences instead, which the beacon node reads from the proposer-preferences
+// cache when building payload attributes.
 func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		return
+	}
 	var jsonFeeRecipients []*structs.FeeRecipient
 	err := json.NewDecoder(r.Body).Decode(&jsonFeeRecipients)
 	switch {

@@ -1011,13 +1011,19 @@ func TestServer_SetGasLimit(t *testing.T) {
 		wantErr          string
 	}{
 		{
+			// Previously returned "No proposer settings were found to update".
+			// Post-migration the handler initializes empty settings and sets
+			// the gas limit on the per-validator entry (pre-Gloas semantics).
 			name:             "ProposerSettings is nil",
 			pubkey:           pubkey1,
 			newGasLimit:      9999,
 			proposerSettings: nil,
-			wantErr:          "No proposer settings were found to update",
+			w:                []*want{{pubkey1, 9999}},
 		},
 		{
+			// Previously gated on builder.enabled=true. Post-migration the
+			// handler creates a per-validator BuilderConfig (Enabled=false) and
+			// stores the gas limit (pre-Gloas semantics).
 			name:        "ProposerSettings.ProposeConfig is nil AND ProposerSettings.DefaultConfig is nil",
 			pubkey:      pubkey1,
 			newGasLimit: 9999,
@@ -1025,7 +1031,7 @@ func TestServer_SetGasLimit(t *testing.T) {
 				ProposeConfig: nil,
 				DefaultConfig: nil,
 			},
-			wantErr: "Gas limit changes only apply when builder is enabled",
+			w: []*want{{pubkey1, 9999}},
 		},
 		{
 			name:        "ProposerSettings.ProposeConfig is nil AND ProposerSettings.DefaultConfig.BuilderConfig is nil",
@@ -1037,7 +1043,7 @@ func TestServer_SetGasLimit(t *testing.T) {
 					BuilderConfig: nil,
 				},
 			},
-			wantErr: "Gas limit changes only apply when builder is enabled",
+			w: []*want{{pubkey1, 9999}},
 		},
 		{
 			name:        "ProposerSettings.ProposeConfig is defined for pubkey, BuilderConfig is nil AND ProposerSettings.DefaultConfig is nil",
@@ -1051,7 +1057,7 @@ func TestServer_SetGasLimit(t *testing.T) {
 				},
 				DefaultConfig: nil,
 			},
-			wantErr: "Gas limit changes only apply when builder is enabled",
+			w: []*want{{pubkey1, 9999}},
 		},
 		{
 			name:        "ProposerSettings.ProposeConfig is defined for pubkey, BuilderConfig is defined AND ProposerSettings.DefaultConfig is nil",
@@ -1065,7 +1071,7 @@ func TestServer_SetGasLimit(t *testing.T) {
 				},
 				DefaultConfig: nil,
 			},
-			wantErr: "Gas limit changes only apply when builder is enabled",
+			w: []*want{{pubkey1, 9999}},
 		},
 		{
 			name:        "ProposerSettings.ProposeConfig is NOT defined for pubkey, BuilderConfig is defined AND ProposerSettings.DefaultConfig is nil",
@@ -1339,6 +1345,111 @@ func TestServer_DeleteGasLimit(t *testing.T) {
 			})
 		}
 	}
+}
+
+// On Gloas-aware networks, Set/Get/DeleteGasLimit operate on
+// settings.DefaultConfig.BuilderConfig.GasLimit and ignore the pubkey routing
+// because per-validator gas limits in proposer preferences are unsafe.
+func TestServer_GasLimit_GloasAware(t *testing.T) {
+	ctx := t.Context()
+	pubkey1, err := hexutil.Decode("0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
+	require.NoError(t, err)
+
+	originBeaconChainGasLimit := params.BeaconConfig().DefaultBuilderGasLimit
+	t.Cleanup(func() {
+		params.BeaconConfig().DefaultBuilderGasLimit = originBeaconChainGasLimit
+	})
+
+	setupServer := func(t *testing.T, settings *proposer.Settings) *Server {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+
+		m := &testutil.FakeValidator{}
+		require.NoError(t, m.SetProposerSettings(ctx, settings))
+		validatorDB := dbtest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
+		vs, err := client.NewValidatorService(ctx, &client.Config{
+			Conn:      mocks.MockNodeConnection(),
+			Validator: m,
+			DB:        validatorDB,
+		})
+		require.NoError(t, err)
+		return &Server{
+			validatorService: vs,
+			db:               validatorDB,
+		}
+	}
+
+	t.Run("SetGasLimit on fresh settings initializes v2 schema and writes top-level GasLimit", func(t *testing.T) {
+		s := setupServer(t, nil)
+		body, err := json.Marshal(&SetGasLimitRequest{GasLimit: "12345678"})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/eth/v1/validator/{pubkey}/gas_limit", bytes.NewReader(body))
+		req.SetPathValue("pubkey", hexutil.Encode(pubkey1))
+		w := httptest.NewRecorder()
+		w.Body = &bytes.Buffer{}
+
+		s.SetGasLimit(w, req)
+		assert.Equal(t, http.StatusAccepted, w.Code)
+		settings := s.validatorService.ProposerSettings()
+		require.NotNil(t, settings.DefaultConfig)
+		assert.Equal(t, uint32(2), settings.Version)
+		assert.Equal(t, validator.Uint64(12345678), settings.DefaultConfig.GasLimit)
+		// v2 schema does not use BuilderConfig.
+		assert.Equal(t, true, settings.DefaultConfig.BuilderConfig == nil)
+		// Pubkey routing is ignored — no per-validator entry created.
+		_, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey1)]
+		assert.Equal(t, false, found)
+	})
+
+	t.Run("GetGasLimit returns top-level DefaultConfig.GasLimit on v2", func(t *testing.T) {
+		s := setupServer(t, &proposer.Settings{
+			Version: 2,
+			DefaultConfig: &proposer.Option{
+				GasLimit: validator.Uint64(42424242),
+			},
+		})
+		req := httptest.NewRequest(http.MethodGet, "/eth/v1/validator/{pubkey}/gas_limit", nil)
+		req.SetPathValue("pubkey", hexutil.Encode(pubkey1))
+		w := httptest.NewRecorder()
+		w.Body = &bytes.Buffer{}
+
+		s.GetGasLimit(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		resp := &GetGasLimitResponse{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
+		assert.Equal(t, "42424242", resp.Data.GasLimit)
+	})
+
+	t.Run("DeleteGasLimit resets top-level DefaultConfig.GasLimit on v2", func(t *testing.T) {
+		params.BeaconConfig().DefaultBuilderGasLimit = uint64(0xbbdd)
+		s := setupServer(t, &proposer.Settings{
+			Version: 2,
+			DefaultConfig: &proposer.Option{
+				GasLimit: validator.Uint64(99887766),
+			},
+		})
+		req := httptest.NewRequest(http.MethodDelete, "/eth/v1/validator/{pubkey}/gas_limit", nil)
+		req.SetPathValue("pubkey", hexutil.Encode(pubkey1))
+		w := httptest.NewRecorder()
+		w.Body = &bytes.Buffer{}
+
+		s.DeleteGasLimit(w, req)
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Equal(t, validator.Uint64(0xbbdd), s.validatorService.ProposerSettings().DefaultConfig.GasLimit)
+	})
+
+	t.Run("DeleteGasLimit returns 404 when no default exists", func(t *testing.T) {
+		s := setupServer(t, nil)
+		req := httptest.NewRequest(http.MethodDelete, "/eth/v1/validator/{pubkey}/gas_limit", nil)
+		req.SetPathValue("pubkey", hexutil.Encode(pubkey1))
+		w := httptest.NewRecorder()
+		w.Body = &bytes.Buffer{}
+
+		s.DeleteGasLimit(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
 }
 
 func TestServer_ListRemoteKeys(t *testing.T) {

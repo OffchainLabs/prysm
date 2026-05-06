@@ -3,6 +3,7 @@ package loader
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
@@ -13,6 +14,7 @@ import (
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
@@ -179,10 +181,95 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	if err != nil {
 		return nil, err
 	}
+	if err := validateSchemaVersion(ps); err != nil {
+		return nil, err
+	}
+	warnGloasDeprecations(ps)
 	if err := psl.db.SaveProposerSettings(cliCtx.Context, ps); err != nil {
 		return nil, err
 	}
 	return ps, nil
+}
+
+// validateSchemaVersion enforces version-specific rules. v2 (post-Gloas)
+// rejects any builder block (relays/enabled live there and are removed
+// post-Gloas) and any per-validator gas_limit (divergent gas-limit signaling
+// across an operator's keys is unsafe). v1 has no schema enforcement here;
+// behavior is preserved by warnGloasDeprecations.
+func validateSchemaVersion(ps *proposer.Settings) error {
+	if ps == nil || ps.Version != 2 {
+		return nil
+	}
+	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
+		return errors.New("v2 proposer settings: 'builder' block on default_config is not allowed (post-Gloas the relay path is removed). Move 'gas_limit' to default_config.gas_limit.")
+	}
+	for k, opt := range ps.ProposeConfig {
+		if opt == nil {
+			continue
+		}
+		label := fmt.Sprintf("proposer_config[%s]", hexutil.Encode(k[:]))
+		if opt.BuilderConfig != nil {
+			return errors.Errorf("v2 proposer settings: 'builder' block on %s is not allowed (post-Gloas the relay path is removed)", label)
+		}
+		if opt.GasLimit != 0 {
+			return errors.Errorf("v2 proposer settings: per-validator 'gas_limit' on %s is not allowed; only default_config.gas_limit is honored", label)
+		}
+	}
+	return nil
+}
+
+// warnGloasDeprecations emits one-time warnings for proposer-settings fields
+// that become obsolete post-Gloas. Networks that do not configure Gloas
+// (GloasForkEpoch == MaxUint64) stay silent. v2 settings already had the
+// dangerous fields rejected at load time, so this is a no-op for them.
+func warnGloasDeprecations(ps *proposer.Settings) {
+	if ps == nil || params.BeaconConfig().GloasForkEpoch == math.MaxUint64 || ps.Version == 2 {
+		return
+	}
+	var gasLimitInfoEmitted bool
+	emitGasLimitInfo := func() {
+		if gasLimitInfoEmitted {
+			return
+		}
+		log.Info("Post-Gloas: 'gas_limit' from proposer settings is used for proposer preferences regardless of 'enabled'. Migrate to v2 (set 'version: 2' and move gas_limit to default_config.gas_limit) for the post-Gloas schema.")
+		gasLimitInfoEmitted = true
+	}
+	checkDefault := func(b *proposer.BuilderConfig) {
+		if b == nil {
+			return
+		}
+		if b.Enabled {
+			log.Warnf("default_config: builder/MEV-boost is removed post-Gloas; the 'enabled' field will be ignored. Only 'gas_limit' is honored.")
+			emitGasLimitInfo()
+		}
+		if len(b.Relays) > 0 {
+			log.Warnf("default_config: relays are ignored post-Gloas (no MEV-boost). Remove 'relays' to silence this warning.")
+		}
+	}
+	checkPerValidator := func(label string, b *proposer.BuilderConfig) {
+		if b == nil {
+			return
+		}
+		if b.Enabled {
+			log.Warnf("%s: builder/MEV-boost is removed post-Gloas; the 'enabled' field will be ignored.", label)
+		}
+		if len(b.Relays) > 0 {
+			log.Warnf("%s: relays are ignored post-Gloas (no MEV-boost). Remove 'relays' to silence this warning.", label)
+		}
+		if b.GasLimit != 0 {
+			log.Warnf("%s: per-validator 'gas_limit' is not honored post-Gloas; only 'default_config.builder.gas_limit' is used.", label)
+			emitGasLimitInfo()
+		}
+	}
+	if ps.DefaultConfig != nil {
+		checkDefault(ps.DefaultConfig.BuilderConfig)
+	}
+	for k, opt := range ps.ProposeConfig {
+		if opt == nil {
+			continue
+		}
+		checkPerValidator(fmt.Sprintf("proposer_config[%s]", hexutil.Encode(k[:])), opt.BuilderConfig)
+	}
 }
 
 func (psl *SettingsLoader) applyOverrides() {
@@ -270,9 +357,11 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 	// Merge DefaultConfig
 	if db != nil && db.DefaultConfig != nil {
 		merged.DefaultConfig = db.DefaultConfig
-		// db always falls back to local building if no builder settings are provided
+		// db falls back to local building if --enable-builder is not set. When
+		// --suggested-gas-limit is set we preserve the gas limit (required by
+		// proposer preferences post-Gloas) and only disable the relay path.
 		if builderConfig == nil {
-			db.DefaultConfig.Builder = nil
+			db.DefaultConfig.Builder = downgradeBuilderForLocalBuilding(db.DefaultConfig.Builder, gasLimitOnly)
 		}
 	}
 	if loaded != nil && loaded.DefaultConfig != nil {
@@ -283,9 +372,8 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 	if db != nil && len(db.ProposerConfig) > 0 {
 		merged.ProposerConfig = db.ProposerConfig
 		for _, option := range db.ProposerConfig {
-			// db always falls back to local building if no builder settings are provided
 			if builderConfig == nil {
-				option.Builder = nil
+				option.Builder = downgradeBuilderForLocalBuilding(option.Builder, gasLimitOnly)
 			}
 		}
 	}
@@ -302,11 +390,37 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 		}
 	}
 
-	if merged.DefaultConfig == nil && builderConfig != nil {
-		merged.DefaultConfig = &validatorpb.ProposerOptionPayload{Builder: builderConfig}
+	if merged.DefaultConfig == nil {
+		switch {
+		case builderConfig != nil:
+			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{Builder: builderConfig}
+		case gasLimitOnly != nil:
+			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{
+				Builder: &validatorpb.BuilderConfig{
+					Enabled:  false,
+					GasLimit: *gasLimitOnly,
+				},
+			}
+		}
 	}
 
 	return merged
+}
+
+// downgradeBuilderForLocalBuilding disables the builder relay path while
+// preserving the gas limit when the user has explicitly set
+// --suggested-gas-limit. Without that flag, the existing behavior of dropping
+// the builder entirely is preserved.
+func downgradeBuilderForLocalBuilding(b *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.BuilderConfig {
+	if b == nil {
+		return nil
+	}
+	if gasLimitOnly == nil {
+		return nil
+	}
+	b.Enabled = false
+	b.Relays = nil
+	return b
 }
 
 func processBuilderConfig(current *validatorpb.BuilderConfig, override *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.BuilderConfig {
@@ -320,7 +434,20 @@ func processBuilderConfig(current *validatorpb.BuilderConfig, override *validato
 		}
 		return current
 	}
-	return override
+	if override != nil {
+		return override
+	}
+	if gasLimitOnly != nil {
+		// No existing builder config and no --enable-builder override, but the
+		// user explicitly set --suggested-gas-limit. Materialize a disabled
+		// builder so the gas limit flows through to proposer preferences
+		// post-Gloas.
+		return &validatorpb.BuilderConfig{
+			Enabled:  false,
+			GasLimit: *gasLimitOnly,
+		}
+	}
+	return nil
 }
 
 func reviewGasLimit(gasLimit validator.Uint64) validator.Uint64 {

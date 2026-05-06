@@ -15,7 +15,7 @@ import (
 
 // SettingFromConsensus converts struct to Settings while verifying the fields
 func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, error) {
-	settings := &Settings{}
+	settings := &Settings{Version: ps.Version}
 	if len(ps.ProposerConfig) != 0 {
 		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
 		for key, optionPayload := range ps.ProposerConfig {
@@ -39,6 +39,7 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 			if optionPayload.Builder != nil {
 				p.BuilderConfig = BuilderConfigFromConsensus(optionPayload.Builder)
 			}
+			p.GasLimit = optionPayload.GasLimit
 			settings.ProposeConfig[bytesutil.ToBytes48(decodedKey)] = p
 		}
 	}
@@ -58,6 +59,7 @@ func SettingFromConsensus(ps *validatorpb.ProposerSettingsPayload) (*Settings, e
 		if ps.DefaultConfig.Builder != nil {
 			d.BuilderConfig = BuilderConfigFromConsensus(ps.DefaultConfig.Builder)
 		}
+		d.GasLimit = ps.DefaultConfig.GasLimit
 		settings.DefaultConfig = d
 	}
 	return settings, nil
@@ -103,9 +105,14 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 
 // Settings is a Prysm internal representation of the fee recipient config on the validator client.
 // validatorpb.ProposerSettingsPayload maps to Settings on import through the CLI.
+//
+// Version selects the schema variant. 0/1 = v1 (legacy, with builder block).
+// 2 = post-Gloas schema (rejects builder block, top-level gas_limit on
+// default_config only). The loader enforces version-specific validation.
 type Settings struct {
 	ProposeConfig map[[fieldparams.BLSPubkeyLength]byte]*Option
 	DefaultConfig *Option
+	Version       uint32
 }
 
 // ShouldBeSaved goes through checks to see if the value should be saveable
@@ -122,7 +129,7 @@ func (ps *Settings) ToConsensus() *validatorpb.ProposerSettingsPayload {
 	if ps == nil {
 		return nil
 	}
-	payload := &validatorpb.ProposerSettingsPayload{}
+	payload := &validatorpb.ProposerSettingsPayload{Version: ps.Version}
 	if ps.ProposeConfig != nil {
 		payload.ProposerConfig = make(map[string]*validatorpb.ProposerOptionPayload)
 		for key, option := range ps.ProposeConfig {
@@ -146,10 +153,15 @@ type GraffitiConfig struct {
 }
 
 // Option is a Prysm internal representation of the ProposerOptionPayload on the validator client in bytes format instead of hex.
+//
+// GasLimit is the v2 (post-Gloas) home for the gas-limit signal. Only the
+// default_config's GasLimit is honored; per-validator GasLimit is rejected at
+// load time.
 type Option struct {
 	FeeRecipientConfig *FeeRecipientConfig
 	BuilderConfig      *BuilderConfig
 	GraffitiConfig     *GraffitiConfig
+	GasLimit           validator.Uint64
 }
 
 // Clone creates a deep copy of proposer option
@@ -157,7 +169,7 @@ func (po *Option) Clone() *Option {
 	if po == nil {
 		return nil
 	}
-	p := &Option{}
+	p := &Option{GasLimit: po.GasLimit}
 	if po.FeeRecipientConfig != nil {
 		p.FeeRecipientConfig = po.FeeRecipientConfig.Clone()
 	}
@@ -174,7 +186,7 @@ func (po *Option) ToConsensus() *validatorpb.ProposerOptionPayload {
 	if po == nil {
 		return nil
 	}
-	p := &validatorpb.ProposerOptionPayload{}
+	p := &validatorpb.ProposerOptionPayload{GasLimit: po.GasLimit}
 	if po.FeeRecipientConfig != nil {
 		p.FeeRecipient = po.FeeRecipientConfig.FeeRecipient.Hex()
 	}
@@ -192,7 +204,7 @@ func (ps *Settings) Clone() *Settings {
 	if ps == nil {
 		return nil
 	}
-	clone := &Settings{}
+	clone := &Settings{Version: ps.Version}
 	if ps.DefaultConfig != nil {
 		clone.DefaultConfig = ps.DefaultConfig.Clone()
 	}

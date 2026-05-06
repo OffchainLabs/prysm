@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 
@@ -712,7 +713,29 @@ func (s *Server) DeleteFeeRecipientByPubkey(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetGasLimit returns the gas limit measured in gwei defined for the custom mev builder by public key
+// isGloasAware reports whether the running network has a configured Gloas
+// fork epoch. On these networks gas_limit is a default-only setting (managed
+// via the v2 schema) because per-validator gas limits in proposer preferences
+// are unsafe.
+func isGloasAware() bool {
+	return params.BeaconConfig().GloasForkEpoch < math.MaxUint64
+}
+
+// useV2Schema reports whether the keymanager API should operate in v2 mode
+// (gas_limit at top-level Option.GasLimit, pubkey routing ignored). Existing
+// settings tagged Version=2, or fresh settings on Gloas-aware networks, both
+// trigger v2 semantics.
+func useV2Schema(settings *proposer.Settings) bool {
+	if settings != nil && settings.Version == 2 {
+		return true
+	}
+	return settings == nil && isGloasAware()
+}
+
+// GetGasLimit returns the gas limit measured in gwei.
+//
+// v1: returns the per-validator gas limit (or BuilderConfig default) for the pubkey.
+// v2 (post-Gloas schema): returns DefaultConfig.GasLimit and ignores the pubkey.
 func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.GetGasLimit")
 	defer span.End()
@@ -735,19 +758,32 @@ func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 	}
 	settings := s.validatorService.ProposerSettings()
 	if settings != nil {
-		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
-		if found {
-			if proposerOption.BuilderConfig != nil {
-				resp.Data.GasLimit = fmt.Sprintf("%d", proposerOption.BuilderConfig.GasLimit)
+		if useV2Schema(settings) {
+			if settings.DefaultConfig != nil && settings.DefaultConfig.GasLimit != 0 {
+				resp.Data.GasLimit = fmt.Sprintf("%d", settings.DefaultConfig.GasLimit)
 			}
-		} else if settings.DefaultConfig != nil && settings.DefaultConfig.BuilderConfig != nil {
-			resp.Data.GasLimit = fmt.Sprintf("%d", s.validatorService.ProposerSettings().DefaultConfig.BuilderConfig.GasLimit)
+		} else {
+			proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
+			if found {
+				if proposerOption.BuilderConfig != nil {
+					resp.Data.GasLimit = fmt.Sprintf("%d", proposerOption.BuilderConfig.GasLimit)
+				}
+			} else if settings.DefaultConfig != nil && settings.DefaultConfig.BuilderConfig != nil {
+				resp.Data.GasLimit = fmt.Sprintf("%d", settings.DefaultConfig.BuilderConfig.GasLimit)
+			}
 		}
 	}
 	httputil.WriteJson(w, resp)
 }
 
-// SetGasLimit updates the gas limit by public key
+// SetGasLimit updates the gas limit.
+//
+// v1: writes to the per-validator BuilderConfig.GasLimit. The legacy "Gas
+// limit changes only apply when builder is enabled" gate is dropped — gas
+// limit is meaningful in proposer settings even when the builder relay path
+// is disabled.
+// v2 (post-Gloas schema): writes to DefaultConfig.GasLimit and ignores the
+// pubkey. Fresh settings on Gloas-aware networks default to v2.
 func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.SetGasLimit")
 	defer span.End()
@@ -778,38 +814,39 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	settings := s.validatorService.ProposerSettings()
+	freshOnGloas := settings == nil && isGloasAware()
 	if settings == nil {
-		httputil.HandleError(w, "No proposer settings were found to update", http.StatusInternalServerError)
-		return
-	} else if settings.ProposeConfig == nil {
-		if settings.DefaultConfig == nil || settings.DefaultConfig.BuilderConfig == nil || !settings.DefaultConfig.BuilderConfig.Enabled {
-			httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
-			return
-		}
-		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
-		option := settings.DefaultConfig.Clone()
-		option.BuilderConfig.GasLimit = validator.Uint64(gasLimit)
-		settings.ProposeConfig[bytesutil.ToBytes48(pubkey)] = option
-	} else {
-		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
-		if found {
-			if proposerOption.BuilderConfig == nil || !proposerOption.BuilderConfig.Enabled {
-				httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
-				return
-			} else {
-				proposerOption.BuilderConfig.GasLimit = validator.Uint64(gasLimit)
-			}
-		} else {
-			if settings.DefaultConfig == nil {
-				httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
-				return
-			}
-			option := settings.DefaultConfig.Clone()
-			option.BuilderConfig.GasLimit = validator.Uint64(gasLimit)
-			settings.ProposeConfig[bytesutil.ToBytes48(pubkey)] = option
-		}
+		settings = &proposer.Settings{}
 	}
-	// save the settings
+	if freshOnGloas {
+		settings.Version = 2
+	}
+
+	if useV2Schema(settings) {
+		if settings.DefaultConfig == nil {
+			settings.DefaultConfig = &proposer.Option{}
+		}
+		settings.DefaultConfig.GasLimit = validator.Uint64(gasLimit)
+	} else {
+		key := bytesutil.ToBytes48(pubkey)
+		if settings.ProposeConfig == nil {
+			settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
+		}
+		proposerOption, found := settings.ProposeConfig[key]
+		if !found {
+			if settings.DefaultConfig != nil {
+				proposerOption = settings.DefaultConfig.Clone()
+			} else {
+				proposerOption = &proposer.Option{}
+			}
+			settings.ProposeConfig[key] = proposerOption
+		}
+		if proposerOption.BuilderConfig == nil {
+			proposerOption.BuilderConfig = &proposer.BuilderConfig{}
+		}
+		proposerOption.BuilderConfig.GasLimit = validator.Uint64(gasLimit)
+	}
+
 	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
 		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -817,7 +854,12 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// DeleteGasLimit deletes the gas limit by public key
+// DeleteGasLimit resets the gas limit to the chain default.
+//
+// v1: resets the per-validator gas limit to the proposer-config default (or
+// chain default). Returns 404 if no per-validator entry exists.
+// v2 (post-Gloas schema): resets DefaultConfig.GasLimit to the chain default
+// and ignores the pubkey.
 func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.DeleteGasLimit")
 	defer span.End()
@@ -832,6 +874,22 @@ func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	proposerSettings := s.validatorService.ProposerSettings()
+	if useV2Schema(proposerSettings) {
+		if proposerSettings == nil ||
+			proposerSettings.DefaultConfig == nil ||
+			proposerSettings.DefaultConfig.GasLimit == 0 {
+			httputil.HandleError(w, "No gas limit configured to reset", http.StatusNotFound)
+			return
+		}
+		proposerSettings.DefaultConfig.GasLimit = validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+		if err := s.validatorService.SetProposerSettings(ctx, proposerSettings); err != nil {
+			httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	if proposerSettings != nil && proposerSettings.ProposeConfig != nil {
 		proposerOption, found := proposerSettings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
 		if found && proposerOption.BuilderConfig != nil {

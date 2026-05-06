@@ -3,6 +3,7 @@ package loader
 import (
 	"flag"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1001,4 +1002,201 @@ func Test_ProposerSettingsLoaderWithOnlyBuilder_DoesNotSaveInDB(t *testing.T) {
 			require.DeepEqual(t, want, got)
 		})
 	}
+}
+
+// Post-Gloas the gas limit must flow into the proposer-preferences submission
+// regardless of whether the builder relay path is enabled. When the user passes
+// --suggested-gas-limit the loader must materialize a disabled BuilderConfig
+// so the gas limit survives in the merged settings.
+func Test_ProposerSettingsLoader_GasLimitWithoutBuilder(t *testing.T) {
+	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+		t.Run(fmt.Sprintf("minimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
+			app := cli.App{}
+			set := flag.NewFlagSet("test", 0)
+			set.String(flags.SuggestedFeeRecipientFlag.Name, "", "")
+			require.NoError(t, set.Set(flags.SuggestedFeeRecipientFlag.Name, "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"))
+			set.String(flags.BuilderGasLimitFlag.Name, "", "")
+			require.NoError(t, set.Set(flags.BuilderGasLimitFlag.Name, "12345678"))
+			cliCtx := cli.NewContext(&app, set, nil)
+			validatorDB := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, isSlashingProtectionMinimal)
+			loader, err := NewProposerSettingsLoader(
+				cliCtx,
+				validatorDB,
+				WithBuilderConfig(),
+				WithGasLimit(),
+			)
+			require.NoError(t, err)
+			got, err := loader.Load(cliCtx)
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			require.NotNil(t, got.DefaultConfig)
+			require.NotNil(t, got.DefaultConfig.BuilderConfig)
+			require.Equal(t, false, got.DefaultConfig.BuilderConfig.Enabled)
+			require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
+		})
+	}
+}
+
+// On a Gloas-aware network, loading proposer settings with a builder block
+// that has enabled=true or relays != nil must log a deprecation warning. On a
+// Gloas-unaware network (mainnet today, GloasForkEpoch=MaxUint64) the loader
+// must stay silent.
+func Test_warnGloasDeprecations(t *testing.T) {
+	t.Run("gloas-unaware network is silent", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = math.MaxUint64
+		params.OverrideBeaconConfig(cfg)
+		hook := logtest.NewGlobal()
+
+		warnGloasDeprecations(&proposer.Settings{
+			DefaultConfig: &proposer.Option{
+				BuilderConfig: &proposer.BuilderConfig{
+					Enabled: true,
+					Relays:  []string{"https://relay.example"},
+				},
+			},
+		})
+		assert.LogsDoNotContain(t, hook, "post-Gloas")
+	})
+	t.Run("gloas-aware network warns on enabled builder", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+		hook := logtest.NewGlobal()
+
+		warnGloasDeprecations(&proposer.Settings{
+			DefaultConfig: &proposer.Option{
+				BuilderConfig: &proposer.BuilderConfig{Enabled: true},
+			},
+		})
+		assert.LogsContain(t, hook, "the 'enabled' field will be ignored")
+	})
+	t.Run("gloas-aware network warns on relays", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+		hook := logtest.NewGlobal()
+
+		warnGloasDeprecations(&proposer.Settings{
+			DefaultConfig: &proposer.Option{
+				BuilderConfig: &proposer.BuilderConfig{Relays: []string{"https://relay.example"}},
+			},
+		})
+		assert.LogsContain(t, hook, "relays are ignored post-Gloas")
+	})
+	t.Run("gloas-aware network silent when builder is disabled and no relays", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+		hook := logtest.NewGlobal()
+
+		warnGloasDeprecations(&proposer.Settings{
+			DefaultConfig: &proposer.Option{
+				BuilderConfig: &proposer.BuilderConfig{Enabled: false, GasLimit: 30000000},
+			},
+		})
+		assert.LogsDoNotContain(t, hook, "post-Gloas")
+	})
+	t.Run("gloas-aware network warns on per-validator gas_limit", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+		hook := logtest.NewGlobal()
+
+		key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+		require.NoError(t, err)
+		warnGloasDeprecations(&proposer.Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				bytesutil.ToBytes48(key1): {
+					BuilderConfig: &proposer.BuilderConfig{Enabled: false, GasLimit: 30000000},
+				},
+			},
+		})
+		assert.LogsContain(t, hook, "per-validator 'gas_limit' is not honored post-Gloas")
+	})
+	t.Run("v2 settings stay silent (rejected at load instead)", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+		hook := logtest.NewGlobal()
+
+		warnGloasDeprecations(&proposer.Settings{
+			Version: 2,
+			DefaultConfig: &proposer.Option{
+				GasLimit: 30000000,
+			},
+		})
+		assert.LogsDoNotContain(t, hook, "post-Gloas")
+	})
+}
+
+// validateSchemaVersion enforces v2 schema rules at load time. v1 has no
+// schema enforcement here (existing behavior preserved by warnGloasDeprecations).
+func Test_validateSchemaVersion(t *testing.T) {
+	key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	require.NoError(t, err)
+
+	t.Run("v1 with builder accepted", func(t *testing.T) {
+		require.NoError(t, validateSchemaVersion(&proposer.Settings{
+			Version: 1,
+			DefaultConfig: &proposer.Option{
+				BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 30000000},
+			},
+		}))
+	})
+	t.Run("v0 (unset) treated as v1", func(t *testing.T) {
+		require.NoError(t, validateSchemaVersion(&proposer.Settings{
+			DefaultConfig: &proposer.Option{
+				BuilderConfig: &proposer.BuilderConfig{},
+			},
+		}))
+	})
+	t.Run("v2 with builder on default rejected", func(t *testing.T) {
+		err := validateSchemaVersion(&proposer.Settings{
+			Version: 2,
+			DefaultConfig: &proposer.Option{
+				BuilderConfig: &proposer.BuilderConfig{},
+			},
+		})
+		require.NotNil(t, err)
+		assert.StringContains(t, "'builder' block on default_config is not allowed", err.Error())
+	})
+	t.Run("v2 with builder on per-validator rejected", func(t *testing.T) {
+		err := validateSchemaVersion(&proposer.Settings{
+			Version: 2,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				bytesutil.ToBytes48(key1): {
+					BuilderConfig: &proposer.BuilderConfig{},
+				},
+			},
+		})
+		require.NotNil(t, err)
+		assert.StringContains(t, "'builder' block on proposer_config", err.Error())
+	})
+	t.Run("v2 with per-validator gas_limit rejected", func(t *testing.T) {
+		err := validateSchemaVersion(&proposer.Settings{
+			Version: 2,
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
+				bytesutil.ToBytes48(key1): {
+					GasLimit: 30000000,
+				},
+			},
+		})
+		require.NotNil(t, err)
+		assert.StringContains(t, "per-validator 'gas_limit'", err.Error())
+	})
+	t.Run("v2 with default-only gas_limit accepted", func(t *testing.T) {
+		require.NoError(t, validateSchemaVersion(&proposer.Settings{
+			Version: 2,
+			DefaultConfig: &proposer.Option{
+				GasLimit: 30000000,
+			},
+		}))
+	})
 }

@@ -3242,6 +3242,7 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 			proposerServer := &Server{
 				BeaconDB:               db,
 				TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+				TimeFetcher:            &mock.ChainService{},
 			}
 			require.Equal(t, false, proposerServer.TrackedValidatorsCache.Validating())
 			_, err := proposerServer.PrepareBeaconProposer(ctx, tt.args.request)
@@ -3260,6 +3261,36 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 	}
 }
 
+// Post-Gloas, PrepareBeaconProposer is a no-op. An older validator client
+// hitting this endpoint receives a successful response and TrackedValidatorsCache
+// is not updated (the BN sources fee recipient from the proposer-preferences
+// cache instead).
+func TestProposer_PrepareBeaconProposer_PostGloas_NoOp(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	db := dbutil.SetupDB(t)
+	ctx := t.Context()
+	proposerServer := &Server{
+		BeaconDB:               db,
+		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		TimeFetcher:            &mock.ChainService{},
+	}
+	req := &ethpb.PrepareBeaconProposerRequest{
+		Recipients: []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer{
+			{
+				FeeRecipient:   bytesutil.PadTo([]byte{0xFF, 0xFF}, fieldparams.FeeRecipientLength),
+				ValidatorIndex: 1,
+			},
+		},
+	}
+	_, err := proposerServer.PrepareBeaconProposer(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, false, proposerServer.TrackedValidatorsCache.Validating())
+}
+
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	hook := logTest.NewGlobal()
 	logrus.SetLevel(logrus.DebugLevel)
@@ -3269,6 +3300,7 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	proposerServer := &Server{
 		BeaconDB:               db,
 		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		TimeFetcher:            &mock.ChainService{},
 	}
 
 	// New validator
@@ -3326,6 +3358,7 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	proposerServer := &Server{
 		BeaconDB:               db,
 		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		TimeFetcher:            &mock.ChainService{},
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)
 	recipients := make([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, 0)
@@ -3347,19 +3380,34 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 
 func TestProposer_SubmitValidatorRegistrations(t *testing.T) {
 	ctx := t.Context()
-	proposerServer := &Server{}
+	proposerServer := &Server{TimeFetcher: &mock.ChainService{}}
 	reg := &ethpb.SignedValidatorRegistrationsV1{}
 	_, err := proposerServer.SubmitValidatorRegistrations(ctx, reg)
 	require.ErrorContains(t, builder.ErrNoBuilder.Error(), err)
-	proposerServer = &Server{BlockBuilder: &builderTest.MockBuilderService{}}
+	proposerServer = &Server{BlockBuilder: &builderTest.MockBuilderService{}, TimeFetcher: &mock.ChainService{}}
 	_, err = proposerServer.SubmitValidatorRegistrations(ctx, reg)
 	require.ErrorContains(t, builder.ErrNoBuilder.Error(), err)
-	proposerServer = &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}}
+	proposerServer = &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true}, TimeFetcher: &mock.ChainService{}}
 	_, err = proposerServer.SubmitValidatorRegistrations(ctx, reg)
 	require.NoError(t, err)
-	proposerServer = &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true, ErrRegisterValidator: errors.New("bad")}}
+	proposerServer = &Server{BlockBuilder: &builderTest.MockBuilderService{HasConfigured: true, ErrRegisterValidator: errors.New("bad")}, TimeFetcher: &mock.ChainService{}}
 	_, err = proposerServer.SubmitValidatorRegistrations(ctx, reg)
 	require.ErrorContains(t, "bad", err)
+}
+
+// Post-Gloas, SubmitValidatorRegistrations is a no-op so older validator
+// clients still hitting it succeed without invoking the builder service.
+func TestProposer_SubmitValidatorRegistrations_PostGloas_NoOp(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	// Intentionally leave BlockBuilder unset — post-Gloas the no-op path skips it.
+	proposerServer := &Server{TimeFetcher: &mock.ChainService{}}
+	_, err := proposerServer.SubmitValidatorRegistrations(ctx, &ethpb.SignedValidatorRegistrationsV1{})
+	require.NoError(t, err)
 }
 
 func majorityVoteBoundaryTime(slot primitives.Slot) (uint64, uint64) {

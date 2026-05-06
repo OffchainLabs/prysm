@@ -117,8 +117,17 @@ message SignResponse {
 // ProposerOptionPayload is a property of ProposerSettingsPayload
 message ProposerOptionPayload {
   string fee_recipient = 1;
+  // Deprecated post-Gloas: builder/MEV-boost is removed. v2 schema rejects this
+  // field at load time. Pre-Gloas (v1) it controls the relay registration path.
   BuilderConfig builder = 2;
   optional string graffiti = 3;
+  // Top-level gas limit signal. Honored on default_config in v2 schema (the
+  // post-Gloas format). Per-validator gas_limit is rejected at load time
+  // because divergent gas-limit signaling across an operator's keys is unsafe.
+  uint64 gas_limit = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"
+  ];
 }
 
 // BuilderConfig is a property of ProposerOptionPayload
@@ -132,8 +141,13 @@ message BuilderConfig {
 }
 
 // ProposerSettingsPayload is used to unmarshal files sent from the validator
-// flag as well as safe to bolt db bucket
+// flag as well as safe to bolt db bucket.
+//
+// `version` selects the schema variant. Absent/zero/1 = v1 (legacy, with
+// builder block). 2 = post-Gloas schema (rejects builder block, top-level
+// gas_limit on default_config only).
 message ProposerSettingsPayload {
   map<string, ProposerOptionPayload> proposer_config = 1;
   ProposerOptionPayload default_config = 2;
+  uint32 version = 3;
 }
