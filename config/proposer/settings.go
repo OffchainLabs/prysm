@@ -103,9 +103,17 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 	return c
 }
 
+// Schema versions for proposer settings. SchemaV1Unset is the proto3 zero
+// value — every existing v1 user has it, since the version field is new.
+// Both SchemaV1Unset and SchemaV1 are legacy v1 inputs to the migration.
+const (
+	SchemaV1Unset uint32 = 0
+	SchemaV1      uint32 = 1
+	SchemaV2      uint32 = 2
+)
+
 // Settings is a Prysm internal representation of the fee recipient config on the validator client.
 // validatorpb.ProposerSettingsPayload maps to Settings on import through the CLI.
-// Version: 0/1 = legacy schema, 2 = post-Gloas schema.
 type Settings struct {
 	ProposeConfig map[[fieldparams.BLSPubkeyLength]byte]*Option
 	DefaultConfig *Option
