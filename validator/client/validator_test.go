@@ -2144,10 +2144,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 				FeeRecipientConfig: &proposer.FeeRecipientConfig{
 					FeeRecipient: feeRecipient,
 				},
-				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  true,
-					GasLimit: 42000000,
-				},
+				GasLimit: 42000000,
 			},
 		},
 		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
@@ -2388,10 +2385,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 				FeeRecipientConfig: &proposer.FeeRecipientConfig{
 					FeeRecipient: feeRecipient,
 				},
-				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  true,
-					GasLimit: 42000000,
-				},
+				GasLimit: 42000000,
 			},
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
 				kp.pub: {
@@ -2399,10 +2393,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 						FeeRecipient: customFeeRecipient,
 					},
 					// Per-validator gas_limit is intentionally ignored; default-only.
-					BuilderConfig: &proposer.BuilderConfig{
-						Enabled:  true,
-						GasLimit: 99000000,
-					},
+					GasLimit: 99000000,
 				},
 			},
 		}
@@ -2677,69 +2668,6 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		prefs := v.buildProposerPreferences(t.Context(), km, 1)
 		require.Equal(t, 0, len(prefs))
 	})
-}
-
-func TestValidator_buildProposerPreferences_GasLimitWithoutBuilder(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
-	kp := randKeypair(t)
-	km := newMockKeymanager(t, kp)
-	feeRecipient := feeRecipientFromString(t, "0x1111111111111111111111111111111111111111")
-
-	ctrl := gomock.NewController(t)
-	client := validatormock.NewMockValidatorClient(ctrl)
-	domainCache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
-		NumCounters: 1920,
-		MaxCost:     192,
-		BufferItems: 64,
-	})
-	require.NoError(t, err)
-	client.EXPECT().
-		DomainData(gomock.Any(), gomock.Any()).
-		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
-		AnyTimes()
-
-	nextEpochProposerSlot := params.BeaconConfig().SlotsPerEpoch + 3
-	midEpochSlot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch / 2)
-
-	v := validator{
-		validatorClient: client,
-		domainDataCache: domainCache,
-		proposerSettings: &proposer.Settings{
-			DefaultConfig: &proposer.Option{
-				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
-				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  false,
-					GasLimit: 42000000,
-				},
-			},
-		},
-		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			kp.pub: {
-				publicKey: kp.pub[:],
-				status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE},
-				index:     1,
-			},
-		},
-		duties:             &dutyStore{},
-		submittedPrefSlots: make(map[primitives.Slot]bool),
-	}
-	v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
-			PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
-		}},
-		NextEpochDuties: []*ethpb.ValidatorDuty{{
-			PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
-			ProposerSlots: []primitives.Slot{nextEpochProposerSlot},
-		}},
-	})
-
-	prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
-	require.Equal(t, 1, len(prefs))
-	require.Equal(t, uint64(42000000), prefs[0].Message.GasLimit)
 }
 
 func TestValidator_buildProposerPreferences_V2TopLevelGasLimit(t *testing.T) {

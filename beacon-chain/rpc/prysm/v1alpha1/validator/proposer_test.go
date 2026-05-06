@@ -3242,7 +3242,6 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 			proposerServer := &Server{
 				BeaconDB:               db,
 				TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-				TimeFetcher:            &mock.ChainService{},
 			}
 			require.Equal(t, false, proposerServer.TrackedValidatorsCache.Validating())
 			_, err := proposerServer.PrepareBeaconProposer(ctx, tt.args.request)
@@ -3261,32 +3260,6 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 	}
 }
 
-func TestProposer_PrepareBeaconProposer_PostGloas_NoOp(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
-	db := dbutil.SetupDB(t)
-	ctx := t.Context()
-	proposerServer := &Server{
-		BeaconDB:               db,
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-		TimeFetcher:            &mock.ChainService{},
-	}
-	req := &ethpb.PrepareBeaconProposerRequest{
-		Recipients: []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer{
-			{
-				FeeRecipient:   bytesutil.PadTo([]byte{0xFF, 0xFF}, fieldparams.FeeRecipientLength),
-				ValidatorIndex: 1,
-			},
-		},
-	}
-	_, err := proposerServer.PrepareBeaconProposer(ctx, req)
-	require.NoError(t, err)
-	require.Equal(t, false, proposerServer.TrackedValidatorsCache.Validating())
-}
-
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	hook := logTest.NewGlobal()
 	logrus.SetLevel(logrus.DebugLevel)
@@ -3296,7 +3269,6 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	proposerServer := &Server{
 		BeaconDB:               db,
 		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-		TimeFetcher:            &mock.ChainService{},
 	}
 
 	// New validator
@@ -3354,7 +3326,6 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	proposerServer := &Server{
 		BeaconDB:               db,
 		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-		TimeFetcher:            &mock.ChainService{},
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)
 	recipients := make([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, 0)

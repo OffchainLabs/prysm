@@ -3696,7 +3696,6 @@ func TestPrepareBeaconProposer(t *testing.T) {
 				BeaconDB:               db,
 				TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 				PayloadIDCache:         cache.NewPayloadIDCache(),
-				TimeFetcher:            &mockChain.ChainService{},
 			}
 			server.PrepareBeaconProposer(writer, request)
 			require.Equal(t, tt.code, writer.Code)
@@ -3716,29 +3715,6 @@ func TestPrepareBeaconProposer(t *testing.T) {
 	}
 }
 
-// Post-Gloas the REST PrepareBeaconProposer endpoint is a no-op: an older
-// validator client hitting it receives a successful response and the
-// TrackedValidatorsCache is not updated.
-func TestPrepareBeaconProposer_PostGloas_NoOp(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
-	body := bytes.NewBufferString(`[{"validator_index":"1","fee_recipient":"0xb698D697092822185bF0311052215d5B5e1F3934"}]`)
-	request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/validator/prepare_beacon_proposer", body)
-	writer := httptest.NewRecorder()
-	server := &Server{
-		BeaconDB:               dbutil.SetupDB(t),
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-		PayloadIDCache:         cache.NewPayloadIDCache(),
-		TimeFetcher:            &mockChain.ChainService{},
-	}
-	server.PrepareBeaconProposer(writer, request)
-	require.Equal(t, http.StatusOK, writer.Code)
-	require.Equal(t, false, server.TrackedValidatorsCache.Validating())
-}
-
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	hook := logTest.NewGlobal()
 	logrus.SetLevel(logrus.DebugLevel)
@@ -3750,7 +3726,6 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 		BeaconDB:               db,
 		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 		PayloadIDCache:         cache.NewPayloadIDCache(),
-		TimeFetcher:            &mockChain.ChainService{},
 	}
 	req := []*structs.FeeRecipient{{
 		FeeRecipient:   hexutil.Encode(bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)),

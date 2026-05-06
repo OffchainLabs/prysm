@@ -794,11 +794,7 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 }
 
 // PrepareBeaconProposer endpoint saves the fee recipient given a validator index, this is used when proposing a block.
-// Post-Gloas this is a no-op; fee recipients come from the proposer-preferences cache.
 func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
-	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
-		return
-	}
 	var jsonFeeRecipients []*structs.FeeRecipient
 	err := json.NewDecoder(r.Body).Decode(&jsonFeeRecipients)
 	switch {

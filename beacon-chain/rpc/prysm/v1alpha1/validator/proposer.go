@@ -553,13 +553,9 @@ func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, roSidecars
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
 // PrepareBeaconProposer caches and updates the fee recipient for the given proposer.
-// Post-Gloas this is a no-op; fee recipients come from the proposer-preferences cache.
 func (vs *Server) PrepareBeaconProposer(
 	_ context.Context, request *ethpb.PrepareBeaconProposerRequest,
 ) (*emptypb.Empty, error) {
-	if slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
-		return &emptypb.Empty{}, nil
-	}
 	var validatorIndices []primitives.ValidatorIndex
 
 	for _, r := range request.Recipients {
