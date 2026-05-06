@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//config:go_default_library",
         "//config/fieldparams:go_default_library",
+        "//config/params:go_default_library",
         "//consensus-types/validator:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//proto/prysm/v1alpha1/validator-client:go_default_library",
