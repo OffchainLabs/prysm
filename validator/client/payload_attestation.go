@@ -15,7 +15,10 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // SubmitPayloadAttestation submits a payload attestation message for a PTC member.
@@ -32,6 +35,15 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 
 	data, err := v.validatorClient.PayloadAttestationData(ctx, slot)
 	if err != nil {
+		if status.Code(errors.Cause(err)) == codes.Unavailable {
+			validatorPayloadAttestationSubmissionTotal.WithLabelValues("skipped_no_block").Inc()
+			log.WithFields(logrus.Fields{
+				"slot":   slot,
+				"reason": status.Convert(errors.Cause(err)).Message(),
+			}).Info("Skipping payload attestation: beacon node has no head block for slot")
+			tracing.AnnotateError(span, err)
+			return
+		}
 		validatorPayloadAttestationSubmissionTotal.WithLabelValues("failed").Inc()
 		log.WithError(err).Error("Could not request payload attestation data")
 		tracing.AnnotateError(span, err)
