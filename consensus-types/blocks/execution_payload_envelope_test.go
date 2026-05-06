@@ -46,8 +46,9 @@ func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 				},
 			},
 		},
-		BuilderIndex:    10,
-		BeaconBlockRoot: bytes.Repeat([]byte{0xAA}, 32),
+		BuilderIndex:          10,
+		BeaconBlockRoot:       bytes.Repeat([]byte{0xAA}, 32),
+		ParentBeaconBlockRoot: bytes.Repeat([]byte{0xCC}, 32),
 	}
 }
 

@@ -37,11 +37,13 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 
 	payload := extractExecutionPayloadGloas(local)
 
+	parentRoot := sBlk.Block().ParentRoot()
 	envelope := &ethpb.ExecutionPayloadEnvelope{
-		Payload:           payload,
-		ExecutionRequests: local.ExecutionRequests,
-		BuilderIndex:      params.BeaconConfig().BuilderIndexSelfBuild,
-		BeaconBlockRoot:   blockRoot[:],
+		Payload:               payload,
+		ExecutionRequests:     local.ExecutionRequests,
+		BuilderIndex:          params.BeaconConfig().BuilderIndexSelfBuild,
+		BeaconBlockRoot:       blockRoot[:],
+		ParentBeaconBlockRoot: parentRoot[:],
 	}
 
 	// Precompute sidecars here (during ProposeBeaconBlock slack) so publish stays fast.

@@ -46,8 +46,9 @@ func testSignedEnvelope(slot primitives.Slot, beaconBlockRoot []byte) *pb.Signed
 				BlockHash:     root,
 				SlotNumber:    slot,
 			},
-			ExecutionRequests: &engpb.ExecutionRequests{},
-			BeaconBlockRoot:   root,
+			ExecutionRequests:     &engpb.ExecutionRequests{},
+			BeaconBlockRoot:       root,
+			ParentBeaconBlockRoot: make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	}
