@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -1526,6 +1527,82 @@ func initBlindedBlockBodyFromProtoFulu(pb *eth.BlindedBeaconBlockBodyElectra) (*
 // ----------------------------------------------------------------------------
 // Gloas
 // ----------------------------------------------------------------------------
+
+func SignedGossipBeaconBlockGloasFromBlock(blk interfaces.ReadOnlySignedBeaconBlock) (*eth.SignedGossipBeaconBlockGloas, error) {
+	if err := BeaconBlockIsNil(blk); err != nil {
+		return nil, err
+	}
+	if blk.Version() != version.Gloas {
+		return nil, ErrUnsupportedVersion
+	}
+	pb, err := blk.Proto()
+	if err != nil {
+		return nil, err
+	}
+	gloas, ok := pb.(*eth.SignedBeaconBlockGloas)
+	if !ok {
+		return nil, errIncorrectBlockVersion
+	}
+	return &eth.SignedGossipBeaconBlockGloas{
+		Block: &eth.GossipBeaconBlockGloas{
+			Slot:          gloas.Block.Slot,
+			ProposerIndex: gloas.Block.ProposerIndex,
+			ParentRoot:    gloas.Block.ParentRoot,
+			StateRoot:     gloas.Block.StateRoot,
+			Body: &eth.GossipBeaconBlockBodyGloas{
+				RandaoReveal:              gloas.Block.Body.RandaoReveal,
+				Eth1Data:                  gloas.Block.Body.Eth1Data,
+				Graffiti:                  gloas.Block.Body.Graffiti,
+				ProposerSlashings:         gloas.Block.Body.ProposerSlashings,
+				AttesterSlashings:         gloas.Block.Body.AttesterSlashings,
+				Attestations:              gloas.Block.Body.Attestations,
+				Deposits:                  gloas.Block.Body.Deposits,
+				VoluntaryExits:            gloas.Block.Body.VoluntaryExits,
+				SyncAggregate:             gloas.Block.Body.SyncAggregate,
+				BlsToExecutionChanges:     gloas.Block.Body.BlsToExecutionChanges,
+				SignedExecutionPayloadBid: gloas.Block.Body.SignedExecutionPayloadBid,
+				PayloadAttestations:       gloas.Block.Body.PayloadAttestations,
+			},
+		},
+		Signature: gloas.Signature,
+	}, nil
+}
+
+func SignedBeaconBlockGloasFromGossip(gossip *eth.SignedGossipBeaconBlockGloas, reqs *enginev1.ExecutionRequests) (interfaces.SignedBeaconBlock, error) {
+	if gossip == nil || gossip.Block == nil {
+		return nil, errNilBlock
+	}
+	if gossip.Block.Body == nil {
+		return nil, errNilBlockBody
+	}
+	if reqs == nil {
+		reqs = &enginev1.ExecutionRequests{}
+	}
+	return NewSignedBeaconBlock(&eth.SignedBeaconBlockGloas{
+		Block: &eth.BeaconBlockGloas{
+			Slot:          gossip.Block.Slot,
+			ProposerIndex: gossip.Block.ProposerIndex,
+			ParentRoot:    gossip.Block.ParentRoot,
+			StateRoot:     gossip.Block.StateRoot,
+			Body: &eth.BeaconBlockBodyGloas{
+				RandaoReveal:              gossip.Block.Body.RandaoReveal,
+				Eth1Data:                  gossip.Block.Body.Eth1Data,
+				Graffiti:                  gossip.Block.Body.Graffiti,
+				ProposerSlashings:         gossip.Block.Body.ProposerSlashings,
+				AttesterSlashings:         gossip.Block.Body.AttesterSlashings,
+				Attestations:              gossip.Block.Body.Attestations,
+				Deposits:                  gossip.Block.Body.Deposits,
+				VoluntaryExits:            gossip.Block.Body.VoluntaryExits,
+				SyncAggregate:             gossip.Block.Body.SyncAggregate,
+				BlsToExecutionChanges:     gossip.Block.Body.BlsToExecutionChanges,
+				SignedExecutionPayloadBid: gossip.Block.Body.SignedExecutionPayloadBid,
+				PayloadAttestations:       gossip.Block.Body.PayloadAttestations,
+				ParentExecutionRequests:   eth.CopyExecutionRequests(reqs),
+			},
+		},
+		Signature: gossip.Signature,
+	})
+}
 
 func initSignedBlockFromProtoGloas(pb *eth.SignedBeaconBlockGloas) (*SignedBeaconBlock, error) {
 	if pb == nil {

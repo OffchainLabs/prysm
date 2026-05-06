@@ -1847,6 +1847,41 @@ func TestInitSignedBlockFromProtoGloas(t *testing.T) {
 	require.DeepEqual(t, pb.Block.Body.SignedExecutionPayloadBid, gotBid)
 }
 
+func TestSignedGossipBeaconBlockGloasFromBlockOmitsParentExecutionRequests(t *testing.T) {
+	sb, err := NewSignedBeaconBlock(&eth.SignedBeaconBlockGloas{
+		Block: &eth.BeaconBlockGloas{
+			Body: &eth.BeaconBlockBodyGloas{
+				ParentExecutionRequests: &enginev1.ExecutionRequests{
+					Deposits: []*enginev1.DepositRequest{{Pubkey: []byte{0x01}}},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	gossip, err := SignedGossipBeaconBlockGloasFromBlock(sb)
+	require.NoError(t, err)
+
+	require.NotNil(t, gossip.Block.Body)
+}
+
+func TestSignedBeaconBlockGloasFromGossipAddsParentExecutionRequests(t *testing.T) {
+	reqs := &enginev1.ExecutionRequests{
+		Deposits: []*enginev1.DepositRequest{{Pubkey: []byte{0x01}}},
+	}
+
+	sb, err := SignedBeaconBlockGloasFromGossip(&eth.SignedGossipBeaconBlockGloas{
+		Block: &eth.GossipBeaconBlockGloas{Body: &eth.GossipBeaconBlockBodyGloas{}},
+	}, reqs)
+	require.NoError(t, err)
+
+	got, err := sb.Block().Body().ParentExecutionRequests()
+	require.NoError(t, err)
+	require.DeepEqual(t, reqs, got)
+	got.Deposits[0].Pubkey[0] = 0x02
+	require.Equal(t, byte(0x01), reqs.Deposits[0].Pubkey[0])
+}
+
 func getFields() fields {
 	b20 := make([]byte, 20)
 	b48 := make([]byte, 48)

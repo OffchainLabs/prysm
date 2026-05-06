@@ -66,9 +66,15 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	s.validateBlockLock.Lock()
 	defer s.validateBlockLock.Unlock()
 
-	blk, ok := m.(interfaces.ReadOnlySignedBeaconBlock)
-	if !ok {
-		return pubsub.ValidationReject, errors.New("msg is not ethpb.ReadOnlySignedBeaconBlock")
+	blk, ready, err := s.canonicalBlockFromPubsub(ctx, m)
+	if err != nil {
+		return pubsub.ValidationReject, err
+	}
+	if !ready {
+		if blk != nil && !blk.IsNil() && !blk.Block().IsNil() {
+			go s.requestPayloadEnvelope(blk.Block().ParentRoot())
+		}
+		return pubsub.ValidationIgnore, nil
 	}
 
 	if blk.IsNil() || blk.Block().IsNil() {

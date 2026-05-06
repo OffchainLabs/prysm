@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 	"math/big"
+	"sync"
 	"testing"
 	"time"
 
@@ -126,6 +127,22 @@ func TestServer_GetBeaconBlock_Phase0(t *testing.T) {
 	assert.DeepEqual(t, proposerSlashings, phase0Blk.Phase0.Body.ProposerSlashings)
 	assert.Equal(t, params.BeaconConfig().MaxAttesterSlashings, uint64(len(phase0Blk.Phase0.Body.AttesterSlashings)))
 	assert.DeepEqual(t, attSlashings, phase0Blk.Phase0.Body.AttesterSlashings)
+}
+
+func TestServer_BroadcastBlock_GloasUsesGossipBlock(t *testing.T) {
+	p2p := &mockp2p.MockBroadcaster{}
+	server := &Server{P2P: p2p}
+	block, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockGloas())
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	require.NoError(t, server.broadcastBlock(t.Context(), &wg, block, [fieldparams.RootLength]byte{}))
+	wg.Wait()
+
+	require.Equal(t, 1, len(p2p.BroadcastMessages))
+	_, ok := p2p.BroadcastMessages[0].(*ethpb.SignedGossipBeaconBlockGloas)
+	require.Equal(t, true, ok)
 }
 
 func TestServer_GetBeaconBlock_Altair(t *testing.T) {
