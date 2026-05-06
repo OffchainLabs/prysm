@@ -14,7 +14,6 @@ import (
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
@@ -181,9 +180,7 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateSchemaVersion(ps); err != nil {
-		return nil, err
-	}
+	warnUnusedSchemaFields(ps)
 	if err := psl.db.SaveProposerSettings(cliCtx.Context, ps); err != nil {
 		return nil, err
 	}
@@ -195,22 +192,19 @@ func isGloasAware() bool {
 	return params.BeaconConfig().GloasForkEpoch < math.MaxUint64
 }
 
-// validateSchemaVersion rejects per-validator gas_limit on v2 settings:
-// gas-limit signaling must be uniform across an operator's keys.
-func validateSchemaVersion(ps *proposer.Settings) error {
+// warnUnusedSchemaFields warns when v2 settings carry fields that won't be
+// honored — currently just per-validator gas_limit (signaling must be uniform
+// across an operator's keys; only default_config.gas_limit is read).
+func warnUnusedSchemaFields(ps *proposer.Settings) {
 	if ps == nil || ps.Version != proposer.SchemaV2 {
-		return nil
+		return
 	}
-	for k, opt := range ps.ProposeConfig {
-		if opt == nil {
-			continue
-		}
-		if opt.GasLimit != 0 {
-			label := fmt.Sprintf("proposer_config[%s]", hexutil.Encode(k[:]))
-			return errors.Errorf("v2 proposer settings: per-validator 'gas_limit' on %s is not allowed; only default_config.gas_limit is honored", label)
+	for _, opt := range ps.ProposeConfig {
+		if opt != nil && opt.GasLimit != 0 {
+			log.Warn("v2 proposer settings: per-validator 'gas_limit' is ignored; only default_config.gas_limit is honored.")
+			return
 		}
 	}
-	return nil
 }
 
 func (psl *SettingsLoader) applyOverrides() {

@@ -1274,65 +1274,40 @@ func Test_ProposerSettingsLoader_NormalizesGasLimitToV2(t *testing.T) {
 	})
 }
 
-func Test_validateSchemaVersion(t *testing.T) {
+func Test_warnUnusedSchemaFields(t *testing.T) {
 	key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
 	require.NoError(t, err)
 
-	t.Run("v1 with builder accepted", func(t *testing.T) {
-		require.NoError(t, validateSchemaVersion(&proposer.Settings{
-			Version: 1,
+	t.Run("v1 silent", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		warnUnusedSchemaFields(&proposer.Settings{
+			Version: proposer.SchemaV1,
 			DefaultConfig: &proposer.Option{
 				BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 30000000},
 			},
-		}))
+		})
+		assert.LogsDoNotContain(t, hook, "per-validator 'gas_limit'")
 	})
-	t.Run("v0 (unset) treated as v1", func(t *testing.T) {
-		require.NoError(t, validateSchemaVersion(&proposer.Settings{
-			DefaultConfig: &proposer.Option{
-				BuilderConfig: &proposer.BuilderConfig{},
-			},
-		}))
-	})
-	t.Run("v2 with builder on default accepted (pre-Gloas MEV-boost)", func(t *testing.T) {
-		require.NoError(t, validateSchemaVersion(&proposer.Settings{
-			Version: 2,
-			DefaultConfig: &proposer.Option{
-				GasLimit:      30000000,
-				BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 30000000},
-			},
-		}))
-	})
-	t.Run("v2 with builder on per-validator accepted", func(t *testing.T) {
-		require.NoError(t, validateSchemaVersion(&proposer.Settings{
-			Version: 2,
+	t.Run("v2 default-only gas_limit silent", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		warnUnusedSchemaFields(&proposer.Settings{
+			Version: proposer.SchemaV2,
 			DefaultConfig: &proposer.Option{
 				GasLimit: 30000000,
 			},
-			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
-				bytesutil.ToBytes48(key1): {
-					BuilderConfig: &proposer.BuilderConfig{Enabled: true},
-				},
-			},
-		}))
+		})
+		assert.LogsDoNotContain(t, hook, "per-validator 'gas_limit'")
 	})
-	t.Run("v2 with per-validator gas_limit rejected", func(t *testing.T) {
-		err := validateSchemaVersion(&proposer.Settings{
-			Version: 2,
+	t.Run("v2 per-validator gas_limit warns", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		warnUnusedSchemaFields(&proposer.Settings{
+			Version: proposer.SchemaV2,
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
 				bytesutil.ToBytes48(key1): {
 					GasLimit: 30000000,
 				},
 			},
 		})
-		require.NotNil(t, err)
-		assert.StringContains(t, "per-validator 'gas_limit'", err.Error())
-	})
-	t.Run("v2 with default-only gas_limit accepted", func(t *testing.T) {
-		require.NoError(t, validateSchemaVersion(&proposer.Settings{
-			Version: 2,
-			DefaultConfig: &proposer.Option{
-				GasLimit: 30000000,
-			},
-		}))
+		assert.LogsContain(t, hook, "per-validator 'gas_limit'")
 	})
 }
