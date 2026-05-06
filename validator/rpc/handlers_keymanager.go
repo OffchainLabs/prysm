@@ -713,17 +713,9 @@ func (s *Server) DeleteFeeRecipientByPubkey(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func isGloasAware() bool {
+// gloasAware reports whether the network has a configured Gloas fork epoch.
+func gloasAware() bool {
 	return params.BeaconConfig().GloasForkEpoch < math.MaxUint64
-}
-
-// useV2Schema reports whether the keymanager API operates in v2 mode
-// (gas_limit at top-level Option.GasLimit, pubkey routing ignored).
-func useV2Schema(settings *proposer.Settings) bool {
-	if settings != nil && settings.Version == 2 {
-		return true
-	}
-	return settings == nil && isGloasAware()
 }
 
 // GetGasLimit returns the gas limit measured in gwei. In v2 it returns
@@ -736,36 +728,18 @@ func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Validator service not ready", http.StatusServiceUnavailable)
 		return
 	}
-
 	rawPubkey, pubkey, ok := shared.HexFromRoute(w, r, "pubkey", fieldparams.BLSPubkeyLength)
 	if !ok {
 		return
 	}
 
-	resp := &GetGasLimitResponse{
+	settings := s.validatorService.ProposerSettings()
+	httputil.WriteJson(w, &GetGasLimitResponse{
 		Data: &GasLimitMetaData{
 			Pubkey:   rawPubkey,
-			GasLimit: fmt.Sprintf("%d", params.BeaconConfig().DefaultBuilderGasLimit),
+			GasLimit: fmt.Sprintf("%d", settings.GasLimit(bytesutil.ToBytes48(pubkey))),
 		},
-	}
-	settings := s.validatorService.ProposerSettings()
-	if settings != nil {
-		if useV2Schema(settings) {
-			if settings.DefaultConfig != nil && settings.DefaultConfig.GasLimit != 0 {
-				resp.Data.GasLimit = fmt.Sprintf("%d", settings.DefaultConfig.GasLimit)
-			}
-		} else {
-			proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
-			if found {
-				if proposerOption.BuilderConfig != nil {
-					resp.Data.GasLimit = fmt.Sprintf("%d", proposerOption.BuilderConfig.GasLimit)
-				}
-			} else if settings.DefaultConfig != nil && settings.DefaultConfig.BuilderConfig != nil {
-				resp.Data.GasLimit = fmt.Sprintf("%d", settings.DefaultConfig.BuilderConfig.GasLimit)
-			}
-		}
-	}
-	httputil.WriteJson(w, resp)
+	})
 }
 
 // SetGasLimit updates the gas limit. In v2 it writes to DefaultConfig.GasLimit
@@ -800,38 +774,13 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	settings := s.validatorService.ProposerSettings()
-	freshOnGloas := settings == nil && isGloasAware()
 	if settings == nil {
 		settings = &proposer.Settings{}
+		if gloasAware() {
+			settings.Version = proposer.SchemaV2
+		}
 	}
-	if freshOnGloas {
-		settings.Version = 2
-	}
-
-	if useV2Schema(settings) {
-		if settings.DefaultConfig == nil {
-			settings.DefaultConfig = &proposer.Option{}
-		}
-		settings.DefaultConfig.GasLimit = validator.Uint64(gasLimit)
-	} else {
-		key := bytesutil.ToBytes48(pubkey)
-		if settings.ProposeConfig == nil {
-			settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
-		}
-		proposerOption, found := settings.ProposeConfig[key]
-		if !found {
-			if settings.DefaultConfig != nil {
-				proposerOption = settings.DefaultConfig.Clone()
-			} else {
-				proposerOption = &proposer.Option{}
-			}
-			settings.ProposeConfig[key] = proposerOption
-		}
-		if proposerOption.BuilderConfig == nil {
-			proposerOption.BuilderConfig = &proposer.BuilderConfig{}
-		}
-		proposerOption.BuilderConfig.GasLimit = validator.Uint64(gasLimit)
-	}
+	settings.SetGasLimit(bytesutil.ToBytes48(pubkey), validator.Uint64(gasLimit))
 
 	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
 		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
@@ -855,47 +804,16 @@ func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proposerSettings := s.validatorService.ProposerSettings()
-	if useV2Schema(proposerSettings) {
-		if proposerSettings == nil ||
-			proposerSettings.DefaultConfig == nil ||
-			proposerSettings.DefaultConfig.GasLimit == 0 {
-			httputil.HandleError(w, "No gas limit configured to reset", http.StatusNotFound)
-			return
-		}
-		proposerSettings.DefaultConfig.GasLimit = validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
-		if err := s.validatorService.SetProposerSettings(ctx, proposerSettings); err != nil {
-			httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+	settings := s.validatorService.ProposerSettings()
+	if !settings.ResetGasLimit(bytesutil.ToBytes48(pubkey)) {
+		httputil.HandleError(w, fmt.Sprintf("No gas limit found for pubkey %q", rawPubkey), http.StatusNotFound)
 		return
 	}
-
-	if proposerSettings != nil && proposerSettings.ProposeConfig != nil {
-		proposerOption, found := proposerSettings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
-		if found && proposerOption.BuilderConfig != nil {
-			// If proposerSettings has default value, use it.
-			if proposerSettings.DefaultConfig != nil && proposerSettings.DefaultConfig.BuilderConfig != nil {
-				proposerOption.BuilderConfig.GasLimit = proposerSettings.DefaultConfig.BuilderConfig.GasLimit
-			} else {
-				// Fallback to using global default.
-				proposerOption.BuilderConfig.GasLimit = validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
-			}
-			// save the settings
-			if err := s.validatorService.SetProposerSettings(ctx, proposerSettings); err != nil {
-				httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusBadRequest)
-				return
-			}
-			// Successfully deleted gas limit (reset to proposer config default or global default).
-			// Return with success http code "204".
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
+	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusBadRequest)
+		return
 	}
-	// Otherwise, either no proposerOption is found for the pubkey or proposerOption.BuilderConfig is not enabled at all,
-	// we respond "not found".
-	httputil.HandleError(w, fmt.Sprintf("No gas limit found for pubkey %q", rawPubkey), http.StatusNotFound)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) GetGraffiti(w http.ResponseWriter, r *http.Request) {

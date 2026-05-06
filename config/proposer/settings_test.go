@@ -200,3 +200,134 @@ func TestProposerSettings_ShouldBeSaved(t *testing.T) {
 		})
 	}
 }
+
+func TestSettings_GasLimit(t *testing.T) {
+	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+	pubkey, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	require.NoError(t, err)
+	pk := bytesutil.ToBytes48(pubkey)
+
+	t.Run("nil settings returns chain default", func(t *testing.T) {
+		var ps *Settings
+		require.Equal(t, chainDefault, ps.GasLimit(pk))
+	})
+
+	t.Run("v2 returns DefaultConfig.GasLimit", func(t *testing.T) {
+		ps := &Settings{
+			Version:       SchemaV2,
+			DefaultConfig: &Option{GasLimit: validator.Uint64(42_000_000)},
+		}
+		require.Equal(t, validator.Uint64(42_000_000), ps.GasLimit(pk))
+	})
+
+	t.Run("v2 unset DefaultConfig.GasLimit returns chain default", func(t *testing.T) {
+		ps := &Settings{Version: SchemaV2}
+		require.Equal(t, chainDefault, ps.GasLimit(pk))
+	})
+
+	t.Run("v1 returns per-validator BuilderConfig.GasLimit", func(t *testing.T) {
+		ps := &Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				pk: {BuilderConfig: &BuilderConfig{GasLimit: validator.Uint64(50_000_000)}},
+			},
+		}
+		require.Equal(t, validator.Uint64(50_000_000), ps.GasLimit(pk))
+	})
+
+	t.Run("v1 falls back to default BuilderConfig.GasLimit", func(t *testing.T) {
+		ps := &Settings{
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{GasLimit: validator.Uint64(60_000_000)}},
+		}
+		require.Equal(t, validator.Uint64(60_000_000), ps.GasLimit(pk))
+	})
+}
+
+func TestSettings_SetGasLimit(t *testing.T) {
+	pubkey, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	require.NoError(t, err)
+	pk := bytesutil.ToBytes48(pubkey)
+
+	t.Run("v2 writes top-level DefaultConfig.GasLimit and ignores pubkey", func(t *testing.T) {
+		ps := &Settings{Version: SchemaV2}
+		ps.SetGasLimit(pk, validator.Uint64(70_000_000))
+		require.Equal(t, validator.Uint64(70_000_000), ps.DefaultConfig.GasLimit)
+		_, found := ps.ProposeConfig[pk]
+		require.Equal(t, false, found)
+	})
+
+	t.Run("v1 creates per-validator BuilderConfig", func(t *testing.T) {
+		ps := &Settings{}
+		ps.SetGasLimit(pk, validator.Uint64(80_000_000))
+		opt, found := ps.ProposeConfig[pk]
+		require.Equal(t, true, found)
+		require.Equal(t, validator.Uint64(80_000_000), opt.BuilderConfig.GasLimit)
+	})
+
+	t.Run("v1 clones default into new per-validator entry", func(t *testing.T) {
+		feeRecipient := common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3")
+		ps := &Settings{
+			DefaultConfig: &Option{
+				FeeRecipientConfig: &FeeRecipientConfig{FeeRecipient: feeRecipient},
+				BuilderConfig:      &BuilderConfig{Enabled: true, GasLimit: validator.Uint64(30_000_000)},
+			},
+		}
+		ps.SetGasLimit(pk, validator.Uint64(90_000_000))
+		opt := ps.ProposeConfig[pk]
+		require.Equal(t, feeRecipient, opt.FeeRecipientConfig.FeeRecipient)
+		require.Equal(t, validator.Uint64(90_000_000), opt.BuilderConfig.GasLimit)
+	})
+}
+
+func TestSettings_ResetGasLimit(t *testing.T) {
+	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+	pubkey, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
+	require.NoError(t, err)
+	pk := bytesutil.ToBytes48(pubkey)
+
+	t.Run("nil settings returns false", func(t *testing.T) {
+		var ps *Settings
+		require.Equal(t, false, ps.ResetGasLimit(pk))
+	})
+
+	t.Run("v2 with no default returns false", func(t *testing.T) {
+		ps := &Settings{Version: SchemaV2}
+		require.Equal(t, false, ps.ResetGasLimit(pk))
+	})
+
+	t.Run("v2 resets DefaultConfig.GasLimit to chain default", func(t *testing.T) {
+		ps := &Settings{
+			Version:       SchemaV2,
+			DefaultConfig: &Option{GasLimit: validator.Uint64(99_000_000)},
+		}
+		require.Equal(t, true, ps.ResetGasLimit(pk))
+		require.Equal(t, chainDefault, ps.DefaultConfig.GasLimit)
+	})
+
+	t.Run("v1 returns false for missing per-validator entry", func(t *testing.T) {
+		ps := &Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{},
+		}
+		require.Equal(t, false, ps.ResetGasLimit(pk))
+	})
+
+	t.Run("v1 resets per-validator to default's BuilderConfig.GasLimit", func(t *testing.T) {
+		ps := &Settings{
+			DefaultConfig: &Option{BuilderConfig: &BuilderConfig{GasLimit: validator.Uint64(40_000_000)}},
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				pk: {BuilderConfig: &BuilderConfig{GasLimit: validator.Uint64(99_000_000)}},
+			},
+		}
+		require.Equal(t, true, ps.ResetGasLimit(pk))
+		require.Equal(t, validator.Uint64(40_000_000), ps.ProposeConfig[pk].BuilderConfig.GasLimit)
+	})
+
+	t.Run("v1 resets per-validator to chain default when no proposer-config default", func(t *testing.T) {
+		ps := &Settings{
+			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*Option{
+				pk: {BuilderConfig: &BuilderConfig{GasLimit: validator.Uint64(99_000_000)}},
+			},
+		}
+		require.Equal(t, true, ps.ResetGasLimit(pk))
+		require.Equal(t, chainDefault, ps.ProposeConfig[pk].BuilderConfig.GasLimit)
+	})
+}

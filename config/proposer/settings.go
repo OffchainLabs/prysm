@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/config"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
@@ -270,4 +271,87 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 	}
 	c.GasLimit = bc.GasLimit
 	return c
+}
+
+// isV2 reports whether the settings use the post-Gloas schema (gas limit at
+// top-level Option.GasLimit, pubkey routing ignored on per-validator endpoints).
+func (ps *Settings) isV2() bool {
+	return ps != nil && ps.Version == SchemaV2
+}
+
+// GasLimit returns the configured gas limit (gwei) for pubkey, or the chain
+// default if no override is configured. In v2 the pubkey is ignored.
+func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
+	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+	if ps == nil {
+		return chainDefault
+	}
+	if ps.isV2() {
+		if ps.DefaultConfig != nil && ps.DefaultConfig.GasLimit != 0 {
+			return ps.DefaultConfig.GasLimit
+		}
+		return chainDefault
+	}
+	if opt, ok := ps.ProposeConfig[pubkey]; ok && opt.BuilderConfig != nil {
+		return opt.BuilderConfig.GasLimit
+	}
+	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
+		return ps.DefaultConfig.BuilderConfig.GasLimit
+	}
+	return chainDefault
+}
+
+// SetGasLimit writes the gas limit. In v2 it writes to DefaultConfig.GasLimit
+// and ignores the pubkey; in v1 it creates/updates the per-validator entry.
+func (ps *Settings) SetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, gasLimit validator.Uint64) {
+	if ps.isV2() {
+		if ps.DefaultConfig == nil {
+			ps.DefaultConfig = &Option{}
+		}
+		ps.DefaultConfig.GasLimit = gasLimit
+		return
+	}
+	if ps.ProposeConfig == nil {
+		ps.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
+	}
+	opt, found := ps.ProposeConfig[pubkey]
+	if !found {
+		if ps.DefaultConfig != nil {
+			opt = ps.DefaultConfig.Clone()
+		} else {
+			opt = &Option{}
+		}
+		ps.ProposeConfig[pubkey] = opt
+	}
+	if opt.BuilderConfig == nil {
+		opt.BuilderConfig = &BuilderConfig{}
+	}
+	opt.BuilderConfig.GasLimit = gasLimit
+}
+
+// ResetGasLimit resets the gas limit to the proposer-config default (or chain
+// default if none). Returns false when there's nothing to reset (404). In v2
+// it resets DefaultConfig.GasLimit and ignores the pubkey.
+func (ps *Settings) ResetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) bool {
+	if ps == nil {
+		return false
+	}
+	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+	if ps.isV2() {
+		if ps.DefaultConfig == nil || ps.DefaultConfig.GasLimit == 0 {
+			return false
+		}
+		ps.DefaultConfig.GasLimit = chainDefault
+		return true
+	}
+	opt, found := ps.ProposeConfig[pubkey]
+	if !found || opt.BuilderConfig == nil {
+		return false
+	}
+	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
+		opt.BuilderConfig.GasLimit = ps.DefaultConfig.BuilderConfig.GasLimit
+	} else {
+		opt.BuilderConfig.GasLimit = chainDefault
+	}
+	return true
 }
