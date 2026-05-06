@@ -48,20 +48,6 @@ func (vs *Server) PayloadAttestationData(
 	if cached := vs.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
 		return cached, nil
 	}
-	root := vs.ForkchoiceFetcher.HighestReceivedBlockRoot()
-	if root == [32]byte{} {
-		return nil, status.Errorf(codes.Internal, "could not retrieve highest received block root for slot %d", slot)
-	}
-	payloadPresent := vs.ForkchoiceFetcher.HasFullNode(root)
-	payloadStr := "empty"
-	if payloadPresent {
-		payloadStr = "full"
-	}
-	log.WithFields(logrus.Fields{
-		"slot":      slot,
-		"blockRoot": fmt.Sprintf("%#x", root),
-		"payload":   payloadStr,
-	}).Info("PTC request")
 
 	// dedupe concurrent callers at the PTC deadline.
 	v, err, _ := vs.payloadAttestationFlight.Do(strconv.FormatUint(uint64(slot), 10), func() (any, error) {
@@ -91,6 +77,17 @@ func (vs *Server) PayloadAttestationData(
 			BlobDataAvailable: payloadPresent, // TODO: Replace with real DA availability once DA paths are wired.
 		}
 		vs.payloadAttestationData.Store(resp)
+
+		payloadStr := "empty"
+		if payloadPresent {
+			payloadStr = "full"
+		}
+		log.WithFields(logrus.Fields{
+			"slot":      slot,
+			"blockRoot": fmt.Sprintf("%#x", root),
+			"payload":   payloadStr,
+		}).Info("PTC request")
+
 		return resp, nil
 	})
 	if err != nil {
@@ -148,7 +145,16 @@ func (vs *Server) SubmitPayloadAttestation(
 		},
 	})
 
-	log.WithField("slot", msg.Data.Slot).Debug("Submitted payload attestation message")
+	payloadStr := "empty"
+	if msg.Data.PayloadPresent {
+		payloadStr = "full"
+	}
+	log.WithFields(logrus.Fields{
+		"slot":           msg.Data.Slot,
+		"blockRoot":      fmt.Sprintf("%#x", msg.Data.BeaconBlockRoot),
+		"payload":        payloadStr,
+		"validatorIndex": msg.ValidatorIndex,
+	}).Debug("Submitted payload attestation message")
 	return &emptypb.Empty{}, nil
 }
 
