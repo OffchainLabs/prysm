@@ -1633,3 +1633,48 @@ func TestLatestCanonicalHashForRoot_SameParentReorg(t *testing.T) {
 	require.NotEqual(t, blockHashA, got, "should NOT return A's reorged-out payload hash")
 	require.Equal(t, zeroHash, got, "should return the common EL ancestor hash (genesis)")
 }
+
+// Regression test for the prune fix that removes children of the full
+// finalized node with slot <= checkpointMaxSlot. Without the fix, a child
+// built on the full payload of the finalized block survives in
+// fullNodeByRoot/emptyNodeByRoot and can later trigger a panic.
+func TestStore_Prune_IncompatibleFullFinalizedChildren(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	// Block A at slot 30 (epoch 0), child of genesis.
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 30, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	// Insert payload for A so fullNodeByRoot[A] exists.
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// Block C at slot 31 builds on full A.
+	rootC := indexToHash(2)
+	blockHashC := indexToHash(101)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 31, rootC, rootA, blockHashC, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	s := f.store
+	fullA := s.fullNodeByRoot[rootA]
+	require.NotNil(t, fullA)
+	require.Equal(t, 1, len(fullA.children))
+	require.Equal(t, rootC, fullA.children[0].root)
+	require.NotNil(t, s.emptyNodeByRoot[rootC])
+
+	// Finalize A in epoch 1: checkpointMaxSlot = 32, so C (slot 31) is incompatible.
+	s.finalizedCheckpoint.Root = rootA
+	s.finalizedCheckpoint.Epoch = 1
+	require.NoError(t, s.prune(ctx))
+
+	_, emptyOk := s.emptyNodeByRoot[rootC]
+	require.Equal(t, false, emptyOk)
+	_, fullOk := s.fullNodeByRoot[rootC]
+	require.Equal(t, false, fullOk)
+}

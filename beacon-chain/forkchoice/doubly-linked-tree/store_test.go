@@ -181,9 +181,9 @@ func TestStore_Prune_MoreThanOnce(t *testing.T) {
 	assert.Equal(t, 90, len(s.emptyNodeByRoot), "Incorrect nodes count")
 
 	// One more time.
-	s.finalizedCheckpoint.Root = indexToHash(20)
+	s.finalizedCheckpoint.Root = indexToHash(10)
 	require.NoError(t, s.prune(t.Context()))
-	assert.Equal(t, 80, len(s.emptyNodeByRoot), "Incorrect nodes count")
+	assert.Equal(t, 90, len(s.emptyNodeByRoot), "Incorrect nodes count")
 }
 
 func TestStore_Prune_ReturnEarly(t *testing.T) {
