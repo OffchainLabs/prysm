@@ -150,6 +150,10 @@ var (
 		Name:  "prepare-all-payloads",
 		Usage: "Informs the engine to prepare all local payloads. Useful for relayers and builders.",
 	}
+	EnableSSZRestEngineAPI = &cli.BoolFlag{
+		Name:  "enable-ssz-rest-engine-api",
+		Usage: "(Experimental): Enables EIP-8161 SSZ-REST routing to the execution engine.",
+	}
 	EnableLightClient = &cli.BoolFlag{
 		Name:  "enable-light-client",
 		Usage: "Enables the light client support in the beacon node",
@@ -270,6 +274,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	disableVerboseSigVerification,
 	enableProposerPreprocessing,
 	prepareAllPayloads,
+	EnableSSZRestEngineAPI,
 	aggregateFirstInterval,
 	aggregateSecondInterval,
 	aggregateThirdInterval,

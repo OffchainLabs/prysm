@@ -120,7 +120,6 @@ func (RPCClientEmpty) CallContext(context.Context, any, string, ...any) error {
 
 // config defines a config struct for dependencies into the service.
 type config struct {
-	disableSSZRouting       bool
 	depositContractAddr     common.Address
 	beaconDB                db.HeadAccessDatabase
 	depositCache            cache.DepositCache
@@ -163,7 +162,6 @@ type Service struct {
 	verifierWaiter          *verification.InitializerWaiter
 	blobVerifier            verification.NewBlobVerifier
 	capabilityCache         *capabilityCache
-	sszRestClientLock       sync.RWMutex
 	sszRestClient           *sszRestClient
 	graffitiInfo            *GraffitiInfo
 }

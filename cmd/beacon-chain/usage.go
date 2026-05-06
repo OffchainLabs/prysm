@@ -166,7 +166,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.EngineEndpointTimeoutSeconds,
 			flags.Eth1HeaderReqLimit,
 			flags.ExecutionEngineEndpoint,
-			flags.DisableSSZRouting,
 			flags.ExecutionEngineHeaders,
 			flags.ExecutionJWTSecretFlag,
 			flags.JwtId,

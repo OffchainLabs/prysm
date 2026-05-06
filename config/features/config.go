@@ -75,6 +75,8 @@ type Flags struct {
 	EnableProposerPreprocessing  bool // EnableProposerPreprocessing enables proposer pre-processing of blocks before proposing.
 
 	PrepareAllPayloads bool // PrepareAllPayloads informs the engine to prepare a block on every slot.
+	// EnableSSZRestEngineAPI enables EIP-8161 SSZ-REST routing to the execution engine.
+	EnableSSZRestEngineAPI bool
 	// BlobSaveFsync requires blob saving to block on fsync to ensure blobs are durably persisted before passing DA.
 	BlobSaveFsync bool
 
@@ -254,6 +256,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(prepareAllPayloads.Name) {
 		logEnabled(prepareAllPayloads)
 		cfg.PrepareAllPayloads = true
+	}
+	if ctx.IsSet(EnableSSZRestEngineAPI.Name) {
+		logEnabled(EnableSSZRestEngineAPI)
+		cfg.EnableSSZRestEngineAPI = true
 	}
 	if ctx.IsSet(disableResourceManager.Name) {
 		logEnabled(disableResourceManager)

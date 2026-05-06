@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/network"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -338,7 +339,7 @@ func TestDoRequest(t *testing.T) {
 
 		client := newSSZRestClient(srv.URL, srv.Client())
 		_, err := client.doRequest(context.Background(), "/test/path", nil)
-		require.ErrorContains(t, "returned status 500", err)
+		require.ErrorContains(t, "unsuccessful (500: internal error)", err)
 	})
 	t.Run("empty body request", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -373,7 +374,20 @@ func TestIsSSZRestAvailable(t *testing.T) {
 }
 
 func TestSetupSSZRestClientDisableFlag(t *testing.T) {
-	t.Run("enabled by default", func(t *testing.T) {
+	t.Run("disabled by default", func(t *testing.T) {
+		s := &Service{
+			cfg: &config{
+				currHttpEndpoint: network.HttpEndpoint("http://localhost:8551"),
+			},
+		}
+		s.setupSSZRestClient()
+		assert.Equal(t, false, s.isSSZRestAvailable())
+	})
+
+	t.Run("enabled by feature flag", func(t *testing.T) {
+		resetCfg := features.InitWithReset(&features.Flags{EnableSSZRestEngineAPI: true})
+		defer resetCfg()
+
 		s := &Service{
 			cfg: &config{
 				currHttpEndpoint: network.HttpEndpoint("http://localhost:8551"),
@@ -382,25 +396,13 @@ func TestSetupSSZRestClientDisableFlag(t *testing.T) {
 		s.setupSSZRestClient()
 		assert.Equal(t, true, s.isSSZRestAvailable())
 	})
-
-	t.Run("disabled clears client", func(t *testing.T) {
-		s := &Service{
-			cfg: &config{
-				currHttpEndpoint:  network.HttpEndpoint("http://localhost:8551"),
-				disableSSZRouting: true,
-			},
-			sszRestClient: &sszRestClient{},
-		}
-		s.setupSSZRestClient()
-		assert.Equal(t, false, s.isSSZRestAvailable())
-	})
 }
 
 func TestNewSSZRestClient(t *testing.T) {
 	httpClient := &http.Client{}
 	client := newSSZRestClient("http://localhost:6367", httpClient)
 	assert.Equal(t, "http://localhost:6367", client.baseURL)
-	assert.Equal(t, true, client.httpClient == httpClient)
+	assert.Equal(t, "http://localhost:6367", client.handler.Host())
 }
 
 func TestDoRequestURLConstruction(t *testing.T) {

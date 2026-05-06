@@ -55,6 +55,46 @@ ssz_gen_marshal(
     ],
 )
 
+ssz_gen_marshal(
+    name = "sszrest_getpayload_generated_files",
+    out = "sszrest_getpayload.ssz.go",
+    srcs = [
+        "electra.pb.go",
+        "execution_engine.pb.go",
+        "fulu.pb.go",
+        "sszrest_types.go",
+    ],
+    objs = [
+        "GetPayloadV2ResponseSSZ",
+        "GetPayloadV3ResponseSSZ",
+        "GetPayloadV4ResponseSSZ",
+        "GetPayloadV5ResponseSSZ",
+        "GetPayloadV6ResponseSSZ",
+    ],
+)
+
+ssz_gen_marshal(
+    name = "sszrest_types_generated_files",
+    out = "sszrest_types.ssz.go",
+    srcs = [
+        "electra.pb.go",
+        "execution_engine.pb.go",
+        "fulu.pb.go",
+        "sszrest_types.go",
+    ],
+    objs = [
+        "PayloadStatusV1SSZ",
+        "ForkchoiceUpdatedResponseSSZ",
+        "PayloadAttributesV3SSZ",
+        "WithdrawalSSZ",
+        "ForkchoiceUpdatedV3RequestSSZ",
+        "GetBlobsRequestSSZ",
+        "ExchangeCapabilitiesSSZ",
+        "ClientVersionV1SSZ",
+        "ClientVersionV1ListSSZ",
+    ],
+)
+
 go_proto_library(
     name = "go_proto",
     compilers = [
@@ -83,10 +123,10 @@ go_library(
         "fulu.go",
         "gloas.go",
         "json_marshal_unmarshal.go",
-        "sszrest_getpayload.ssz.go",
         "sszrest_types.go",
-        "sszrest_types.ssz.go",
         ":ssz_generated_files",  # keep
+        ":sszrest_getpayload_generated_files",
+        ":sszrest_types_generated_files",
     ],
     embed = [
         ":go_proto",

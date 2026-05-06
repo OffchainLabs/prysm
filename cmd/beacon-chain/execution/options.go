@@ -26,7 +26,6 @@ func FlagOptions(c *cli.Context) ([]execution.Option, error) {
 	opts := []execution.Option{
 		execution.WithEth1HeaderRequestLimit(c.Uint64(flags.Eth1HeaderReqLimit.Name)),
 		execution.WithHeaders(headers),
-		execution.WithSSZRoutingDisabled(c.Bool(flags.DisableSSZRouting.Name)),
 	}
 	if len(jwtSecret) > 0 {
 		opts = append(opts, execution.WithHttpEndpointAndJWTSecret(endpoint, jwtSecret))

@@ -46,14 +46,6 @@ func WithHeaders(headers []string) Option {
 	}
 }
 
-// WithSSZRoutingDisabled disables EIP-8161 SSZ REST routing to the execution engine.
-func WithSSZRoutingDisabled(disabled bool) Option {
-	return func(s *Service) error {
-		s.cfg.disableSSZRouting = disabled
-		return nil
-	}
-}
-
 // WithDepositContractAddress for the deposit contract.
 func WithDepositContractAddress(addr common.Address) Option {
 	return func(s *Service) error {

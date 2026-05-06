@@ -5,17 +5,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -26,22 +28,19 @@ import (
 const (
 	// sszContentType is the Content-Type header used for SSZ-REST requests/responses.
 	sszContentType = "application/octet-stream"
-
-	// maxResponseSize is the maximum allowed SSZ response body size (32 MB).
-	maxResponseSize = 32 * 1024 * 1024
 )
 
 // sszRestClient handles SSZ-REST communication with the execution layer per EIP-8161.
 type sszRestClient struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL string
+	handler rest.Handler
 }
 
 // newSSZRestClient creates a new SSZ-REST client with the given base URL and HTTP client.
 func newSSZRestClient(baseURL string, httpClient *http.Client) *sszRestClient {
 	return &sszRestClient{
-		baseURL:    baseURL,
-		httpClient: httpClient,
+		baseURL: baseURL,
+		handler: rest.NewHandler(*httpClient, baseURL),
 	}
 }
 
@@ -57,58 +56,28 @@ func (e *sszRestError) Error() string {
 
 // doRequest sends an SSZ-encoded POST request and returns the SSZ-encoded response body.
 func (c *sszRestClient) doRequest(ctx context.Context, path string, body []byte) ([]byte, error) {
-	return c.doHTTP(ctx, http.MethodPost, path, body)
+	resp, _, err := c.handler.PostSSZ(ctx, path, map[string]string{"Accept": sszContentType}, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, handleSSZRestHTTPError(err)
+	}
+	return resp, nil
 }
 
-// doGetRequest sends a GET request (no body) and returns the SSZ-encoded response body.
-func (c *sszRestClient) doGetRequest(ctx context.Context, path string) ([]byte, error) {
-	return c.doHTTP(ctx, http.MethodGet, path, nil)
-}
-
-func (c *sszRestClient) doHTTP(ctx context.Context, method, path string, body []byte) ([]byte, error) {
-	url := c.baseURL + path
-	var reqBody io.Reader
-	if len(body) > 0 {
-		reqBody = bytes.NewReader(body)
+func handleSSZRestHTTPError(err error) error {
+	var restErr *sszRestError
+	if errors.As(err, &restErr) {
+		return handleSSZRestError(restErr)
+	}
+	var defaultErr *httputil.DefaultJsonError
+	if errors.As(err, &defaultErr) {
+		return handleSSZRestError(&sszRestError{Code: defaultErr.Code, Message: defaultErr.Message})
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
-	if err != nil {
-		return nil, errors.Wrap(err, "create SSZ-REST request")
+	var rpcErr sszRestError
+	if jsonErr := json.Unmarshal([]byte(err.Error()), &rpcErr); jsonErr == nil && rpcErr.Code != 0 {
+		return handleSSZRestError(&rpcErr)
 	}
-	if len(body) > 0 {
-		req.Header.Set("Content-Type", sszContentType)
-	}
-	req.Header.Set("Accept", sszContentType)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, errors.Wrap(err, "SSZ-REST request failed")
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
-	if err != nil {
-		return nil, errors.Wrap(err, "read SSZ-REST response")
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var restErr sszRestError
-		if jsonErr := json.Unmarshal(respBody, &restErr); jsonErr == nil && restErr.Code != 0 {
-			return nil, handleSSZRestError(&restErr)
-		}
-
-		// Error responses use text/plain per execution-apis SSZ spec.
-		errMsg := string(respBody)
-		if errMsg == "" {
-			errMsg = resp.Status
-		}
-		return nil, fmt.Errorf("SSZ-REST %s %s returned status %d: %s", method, path, resp.StatusCode, errMsg)
-	}
-
-	return respBody, nil
+	return err
 }
 
 // handleSSZRestError maps SSZ-REST error codes to existing engine API errors.
@@ -153,18 +122,13 @@ func handleSSZRestError(e *sszRestError) error {
 // Engine API JSON-RPC endpoint. SSZ-REST routes are served on the same port
 // under /engine/* paths. Auto-probes availability on first use.
 func (s *Service) setupSSZRestClient() {
-	if s.cfg.disableSSZRouting {
-		s.sszRestClientLock.Lock()
-		defer s.sszRestClientLock.Unlock()
+	if !features.Get().EnableSSZRestEngineAPI {
 		s.sszRestClient = nil
-		log.Info("SSZ-REST Engine API transport disabled by flag")
 		return
 	}
 
 	engineURL := s.cfg.currHttpEndpoint.Url
 	if engineURL == "" {
-		s.sszRestClientLock.Lock()
-		defer s.sszRestClientLock.Unlock()
 		s.sszRestClient = nil
 		return
 	}
@@ -172,15 +136,11 @@ func (s *Service) setupSSZRestClient() {
 	// Derive SSZ-REST base URL from the execution endpoint (same host:port).
 	baseURL := strings.TrimRight(engineURL, "/")
 	httpClient := s.cfg.currHttpEndpoint.HttpClient()
-	s.sszRestClientLock.Lock()
-	defer s.sszRestClientLock.Unlock()
 	s.sszRestClient = newSSZRestClient(baseURL, httpClient)
 	log.WithField("url", baseURL).Info("SSZ-REST Engine API transport enabled (EIP-8161)")
 }
 
 func (s *Service) getSSZRestClient() *sszRestClient {
-	s.sszRestClientLock.RLock()
-	defer s.sszRestClientLock.RUnlock()
 	return s.sszRestClient
 }
 
