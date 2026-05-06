@@ -3,17 +3,12 @@ package electra
 import (
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // ProcessEffectiveBalanceUpdates processes effective balance updates during epoch processing.
-//
-// In addition to updating effective balances, it returns the total effective balance of validators
-// that will be active during the next epoch, so the caller can prime the balance cache for it.
 //
 // Spec pseudocode definition:
 //
@@ -34,7 +29,7 @@ import (
 //	            or validator.effective_balance + UPWARD_THRESHOLD < balance
 //	        ):
 //	            validator.effective_balance = min(balance - balance % EFFECTIVE_BALANCE_INCREMENT, EFFECTIVE_BALANCE_LIMIT)
-func ProcessEffectiveBalanceUpdates(st state.BeaconState) (uint64, error) {
+func ProcessEffectiveBalanceUpdates(st state.BeaconState) error {
 	effBalanceInc := params.BeaconConfig().EffectiveBalanceIncrement
 	hysteresisInc := effBalanceInc / params.BeaconConfig().HysteresisQuotient
 	downwardThreshold := hysteresisInc * params.BeaconConfig().HysteresisDownwardMultiplier
@@ -42,10 +37,7 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) (uint64, error) {
 
 	bals := st.Balances()
 
-	nextEpoch := time.NextEpoch(st)
-
 	// Update effective balances with hysteresis.
-	nextActiveBalance := uint64(0)
 	validatorFunc := func(idx int, val state.ReadOnlyValidator) (newVal *ethpb.Validator, err error) {
 		if idx >= len(bals) {
 			return nil, fmt.Errorf("validator index exceeds validator length in state %d >= %d", idx, len(st.Balances()))
@@ -64,23 +56,8 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) (uint64, error) {
 				newVal.EffectiveBalance = effectiveBal
 			}
 		}
-
-		if !helpers.IsActiveValidatorUsingTrie(val, nextEpoch) {
-			return
-		}
-
-		if newVal == nil {
-			nextActiveBalance += val.EffectiveBalance()
-			return
-		}
-
-		nextActiveBalance += newVal.EffectiveBalance
-		return
+		return newVal, nil
 	}
 
-	if err := st.ApplyToEveryValidator(validatorFunc); err != nil {
-		return 0, fmt.Errorf("apply to every validator: %w", err)
-	}
-
-	return max(effBalanceInc, nextActiveBalance), nil
+	return st.ApplyToEveryValidator(validatorFunc)
 }

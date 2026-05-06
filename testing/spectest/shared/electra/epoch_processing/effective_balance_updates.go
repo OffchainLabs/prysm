@@ -24,7 +24,7 @@ func RunEffectiveBalanceUpdatesTests(t *testing.T, config string) {
 }
 
 func processEffectiveBalanceUpdatesWrapper(t *testing.T, st state.BeaconState) (state.BeaconState, error) {
-	_, err := electra.ProcessEffectiveBalanceUpdates(st)
+	err := electra.ProcessEffectiveBalanceUpdates(st)
 	require.NoError(t, err, "Could not process final updates")
 	return st, nil
 }

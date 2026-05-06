@@ -176,12 +176,8 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err = gloas.ProcessBuilderPendingPayments(ctx, state); err != nil {
 		return err
 	}
-	nextActiveBalance, err := electra.ProcessEffectiveBalanceUpdates(state)
-	if err != nil {
+	if err = electra.ProcessEffectiveBalanceUpdates(state); err != nil {
 		return err
-	}
-	if err := helpers.UpdateNextEpochTotalActiveBalanceCache(state, nextActiveBalance); err != nil {
-		return errors.Wrap(err, "could not update next epoch total active balance cache")
 	}
 	state, err = electra.ProcessSlashingsReset(state)
 	if err != nil {

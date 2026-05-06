@@ -12,19 +12,8 @@ import (
 // Given input state `st`, balance key is constructed as:
 // (block_root in `st` at epoch_start_slot - 1) + current_epoch + validator_count
 func balanceCacheKey(st state.ReadOnlyBeaconState) (string, error) {
-	currentEpoch := primitives.Epoch(st.Slot().DivSlot(params.BeaconConfig().SlotsPerEpoch))
-	return computeBalanceCacheKey(st, currentEpoch)
-}
-
-// Given input state `st`, next epoch balance key is constructed as:
-// (block_root in `st` at epoch_start_slot - 1) + {current_epoch+1} + validator_count
-func nextEpochBalanceCacheKey(st state.ReadOnlyBeaconState) (string, error) {
-	currentEpoch := primitives.Epoch(st.Slot().DivSlot(params.BeaconConfig().SlotsPerEpoch))
-	return computeBalanceCacheKey(st, currentEpoch+1)
-}
-
-func computeBalanceCacheKey(st state.ReadOnlyBeaconState, currentEpoch primitives.Epoch) (string, error) {
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	currentEpoch := st.Slot().DivSlot(slotsPerEpoch)
 	epochStartSlot, err := slotsPerEpoch.SafeMul(uint64(currentEpoch))
 	if err != nil {
 		// impossible condition due to early division

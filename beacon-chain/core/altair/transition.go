@@ -2,11 +2,9 @@ package altair
 
 import (
 	"context"
-	"fmt"
 
 	e "github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/pkg/errors"
@@ -78,14 +76,10 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	if err != nil {
 		return err
 	}
-	state, nextActiveBalance, err := e.ProcessEffectiveBalanceUpdates(state)
+	state, err = e.ProcessEffectiveBalanceUpdates(state)
 	if err != nil {
 		return err
 	}
-	if err := helpers.UpdateNextEpochTotalActiveBalanceCache(state, nextActiveBalance); err != nil {
-		return fmt.Errorf("updating next epoch total active balance cache: %w", err)
-	}
-
 	state, err = e.ProcessSlashingsReset(state)
 	if err != nil {
 		return err
