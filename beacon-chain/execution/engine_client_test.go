@@ -2852,7 +2852,8 @@ func TestGloasPayloadFromExecutionBlock_PropagatesBlockAccessList(t *testing.T) 
 func TestExecutionBlock_MarshalUnmarshalJSON_BlockAccessList(t *testing.T) {
 	bal := hexutil.Bytes{0xde, 0xad, 0xbe, 0xef}
 	original := &pb.ExecutionBlock{
-		Hash: common.BytesToHash([]byte("block-hash")),
+		Version: version.Gloas,
+		Hash:    common.BytesToHash([]byte("block-hash")),
 		Header: gethtypes.Header{
 			ParentHash: common.BytesToHash([]byte("parent")),
 			Number:     big.NewInt(1),
