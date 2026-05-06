@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/features"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
@@ -20,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 )
@@ -272,26 +270,12 @@ func (s *Service) getPayloadSSZRest(ctx context.Context, payloadId [8]byte, slot
 		return nil, errors.New("SSZ-REST client unavailable")
 	}
 
-	// Determine version path based on slot/epoch.
-	epoch := slots.ToEpoch(slot)
-	cfg := params.BeaconConfig()
-	var version int
-	switch {
-	case epoch >= cfg.GloasForkEpoch:
-		version = 6
-	case epoch >= cfg.FuluForkEpoch:
-		version = 5
-	case epoch >= cfg.ElectraForkEpoch:
-		version = 4
-	case epoch >= cfg.DenebForkEpoch:
-		version = 3
-	case epoch >= cfg.CapellaForkEpoch:
-		version = 2
-	default:
-		version = 1
+	method, _ := getPayloadMethodAndMessage(slot)
+	version, err := getPayloadVersion(method)
+	if err != nil {
+		return nil, err
 	}
 
-	// POST /engine/v{N}/get_payload with 8-byte payload ID body
 	versionPath := fmt.Sprintf("/engine/v%d/get_payload", version)
 
 	respBody, err := client.doRequest(ctx, versionPath, payloadId[:])
@@ -304,6 +288,25 @@ func (s *Service) getPayloadSSZRest(ctx context.Context, payloadId [8]byte, slot
 		return nil, errors.Wrap(err, "unmarshal SSZ-REST get_payload response")
 	}
 	return resp, nil
+}
+
+func getPayloadVersion(method string) (int, error) {
+	switch method {
+	case GetPayloadMethod:
+		return 1, nil
+	case GetPayloadMethodV2:
+		return 2, nil
+	case GetPayloadMethodV3:
+		return 3, nil
+	case GetPayloadMethodV4:
+		return 4, nil
+	case GetPayloadMethodV5:
+		return 5, nil
+	case GetPayloadMethodV6:
+		return 6, nil
+	default:
+		return 0, fmt.Errorf("unsupported get_payload method: %s", method)
+	}
 }
 
 // getBlobsSSZRest sends a GetBlobs request via SSZ-REST.
