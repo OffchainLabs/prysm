@@ -177,7 +177,6 @@ type EngineCaller interface {
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 
 // NewPayload request calls the engine_newPayloadVX method.
-// Per EIP-8161, it uses SSZ-REST transport exclusively when available; no JSON-RPC fallback.
 func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
 	defer span.End()
@@ -189,7 +188,6 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 	ctx, cancel := context.WithDeadline(ctx, d)
 	defer cancel()
 
-	// EIP-8161: Use SSZ-REST exclusively when available; no JSON-RPC fallback.
 	if s.isSSZRestAvailable() {
 		return s.newPayloadSSZRest(ctx, payload, versionedHashes, parentBlockRoot, executionRequests)
 	}
@@ -256,7 +254,6 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 }
 
 // ForkchoiceUpdated calls the engine_forkchoiceUpdatedVX method.
-// Per EIP-8161, it uses SSZ-REST transport exclusively when available; no JSON-RPC fallback.
 func (s *Service) ForkchoiceUpdated(
 	ctx context.Context, state *pb.ForkchoiceState, attrs payloadattribute.Attributer,
 ) (*pb.PayloadIDBytes, []byte, error) {
@@ -275,7 +272,6 @@ func (s *Service) ForkchoiceUpdated(
 		return nil, nil, errors.New("nil payload attributer")
 	}
 
-	// EIP-8161: Use SSZ-REST exclusively when available; no JSON-RPC fallback.
 	if s.isSSZRestAvailable() {
 		return s.forkchoiceUpdatedSSZRest(ctx, state, attrs)
 	}
@@ -363,7 +359,6 @@ func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
 }
 
 // GetPayload calls the engine_getPayloadVX method.
-// Per EIP-8161, it uses SSZ-REST transport exclusively when available; no JSON-RPC fallback.
 func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primitives.Slot) (*blocks.GetPayloadResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetPayload")
 	defer span.End()
@@ -375,7 +370,6 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	ctx, cancel := context.WithDeadline(ctx, d)
 	defer cancel()
 
-	// EIP-8161: Use SSZ-REST exclusively when available; no JSON-RPC fallback.
 	if s.isSSZRestAvailable() {
 		return s.getPayloadSSZRest(ctx, payloadId, slot)
 	}
@@ -411,7 +405,6 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 		supportedEngineEndpoints = append(supportedEngineEndpoints, gloasEngineEndpoints...)
 	}
 
-	// EIP-8161: Use SSZ-REST exclusively when available; no JSON-RPC fallback.
 	// The first call happens before setupSSZRestClient runs, so it falls
 	// through to the JSON-RPC path below — that's bootstrap, not fallback.
 	var elSupportedEndpointsSlice []string
@@ -630,7 +623,6 @@ func (s *Service) HeaderByNumber(ctx context.Context, number *big.Int) (*types.H
 }
 
 // GetBlobs returns the blob and proof from the execution engine for the given versioned hashes.
-// Per EIP-8161, it uses SSZ-REST transport exclusively when available; no JSON-RPC fallback.
 func (s *Service) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobs")
 	defer span.End()
@@ -640,7 +632,6 @@ func (s *Service) GetBlobs(ctx context.Context, versionedHashes []common.Hash) (
 		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV1))
 	}
 
-	// EIP-8161: Use SSZ-REST exclusively when available; no JSON-RPC fallback.
 	if s.isSSZRestAvailable() {
 		return s.getBlobsSSZRest(ctx, versionedHashes)
 	}
@@ -675,12 +666,10 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 }
 
 // GetClientVersionV1 calls engine_getClientVersionV1.
-// Per EIP-8161, it uses SSZ-REST transport exclusively when available; no JSON-RPC fallback.
 func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVersionV1, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetClientVersionV1")
 	defer span.End()
 
-	// EIP-8161: Use SSZ-REST exclusively when available; no JSON-RPC fallback.
 	if s.isSSZRestAvailable() {
 		result, err := s.getClientVersionSSZRest(ctx)
 		if err != nil {

@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package ethereum.engine.v1;
+
+import "proto/eth/ext/options.proto";
+import "proto/engine/v1/electra.proto";
+import "proto/engine/v1/execution_engine.proto";
+
+option csharp_namespace = "Ethereum.Engine.V1";
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/engine/v1;enginev1";
+option java_multiple_files = true;
+option java_outer_classname = "SszRestProto";
+option java_package = "org.ethereum.engine.v1";
+option php_namespace = "Ethereum\\Engine\\v1";
+
+message PayloadStatusV1SSZ {
+  bytes status = 1 [ (ethereum.eth.ext.ssz_size) = "1" ];
+  repeated bytes latest_valid_hash = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "1"
+  ];
+  bytes validation_error = 3 [ (ethereum.eth.ext.ssz_max) = "1024" ];
+}
+
+message ForkchoiceUpdatedResponseSSZ {
+  PayloadStatusV1SSZ payload_status = 1;
+  repeated bytes payload_id = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,8",
+    (ethereum.eth.ext.ssz_max) = "1"
+  ];
+}
+
+message GetPayloadV2ResponseSSZ {
+  ExecutionPayloadCapella payload = 1;
+  bytes block_value = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+message GetPayloadV3ResponseSSZ {
+  ExecutionPayloadDeneb payload = 1;
+  bytes block_value = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  BlobsBundle blobs_bundle = 3;
+  bool should_override_builder = 4;
+}
+
+message GetPayloadV4ResponseSSZ {
+  ExecutionPayloadDeneb payload = 1;
+  bytes block_value = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  BlobsBundle blobs_bundle = 3;
+  bool should_override_builder = 4;
+  ExecutionRequests execution_requests = 5;
+}
+
+message GetPayloadV5ResponseSSZ {
+  ExecutionPayloadDeneb payload = 1;
+  bytes block_value = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  BlobsBundleV2 blobs_bundle = 3;
+  bool should_override_builder = 4;
+  ExecutionRequests execution_requests = 5;
+}
+
+message GetPayloadV6ResponseSSZ {
+  ExecutionPayloadGloas payload = 1;
+  bytes block_value = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  BlobsBundleV2 blobs_bundle = 3;
+  bool should_override_builder = 4;
+  ExecutionRequests execution_requests = 5;
+}
+
+message PayloadAttributesV3SSZ {
+  uint64 timestamp = 1;
+  bytes prev_randao = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes suggested_fee_recipient = 3 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  repeated WithdrawalSSZ withdrawals = 4
+      [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
+  bytes parent_beacon_block_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+message WithdrawalSSZ {
+  uint64 index = 1;
+  uint64 validator_index = 2;
+  bytes address = 3 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  uint64 amount = 4;
+}
+
+message ForkchoiceUpdatedV3RequestSSZ {
+  ForkchoiceState forkchoice_state = 1;
+  repeated PayloadAttributesV3SSZ payload_attributes = 2
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+}
+
+message GetBlobsRequestSSZ {
+  repeated bytes versioned_hashes = 1 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "4096"
+  ];
+}
+
+message ExchangeCapabilitiesSSZ {
+  repeated bytes capabilities = 1 [
+    (ethereum.eth.ext.ssz_size) = "?,?",
+    (ethereum.eth.ext.ssz_max) = "128,64"
+  ];
+}
+
+message ClientVersionV1SSZ {
+  bytes code = 1 [ (ethereum.eth.ext.ssz_max) = "8" ];
+  bytes name = 2 [ (ethereum.eth.ext.ssz_max) = "64" ];
+  bytes version = 3 [ (ethereum.eth.ext.ssz_max) = "64" ];
+  bytes commit = 4 [ (ethereum.eth.ext.ssz_size) = "4" ];
+}
+
+message ClientVersionResponseSSZ {
+  repeated ClientVersionV1SSZ versions = 1
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+}

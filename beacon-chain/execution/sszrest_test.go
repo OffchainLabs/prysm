@@ -514,7 +514,7 @@ func TestUnmarshalGetPayloadResponseSSZ(t *testing.T) {
 		blockValue[0] = 0x42
 		wire := &pb.GetPayloadV4ResponseSSZ{
 			Payload:               testExecutionPayloadDeneb(),
-			BlockValue:            blockValue,
+			BlockValue:            blockValue[:],
 			BlobsBundle:           &pb.BlobsBundle{},
 			ShouldOverrideBuilder: true,
 			ExecutionRequests:     &pb.ExecutionRequests{},
@@ -535,7 +535,7 @@ func TestUnmarshalGetPayloadResponseSSZ(t *testing.T) {
 		var blockValue [32]byte
 		wire := &pb.GetPayloadV3ResponseSSZ{
 			Payload:     testExecutionPayloadDeneb(),
-			BlockValue:  blockValue,
+			BlockValue:  blockValue[:],
 			BlobsBundle: &pb.BlobsBundle{},
 		}
 		data, err := wire.MarshalSSZ()

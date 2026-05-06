@@ -136,7 +136,10 @@ func unmarshalPayloadStatusSSZ(data []byte) (*pb.PayloadStatus, error) {
 
 func payloadStatusFromSSZ(wire *pb.PayloadStatusV1SSZ) (*pb.PayloadStatus, error) {
 	status := &pb.PayloadStatus{}
-	switch wire.Status {
+	if len(wire.Status) != 1 {
+		return nil, fmt.Errorf("invalid SSZ payload status length: %d", len(wire.Status))
+	}
+	switch wire.Status[0] {
 	case sszPayloadStatusValid:
 		status.Status = pb.PayloadStatus_VALID
 	case sszPayloadStatusInvalid:
@@ -148,7 +151,7 @@ func payloadStatusFromSSZ(wire *pb.PayloadStatusV1SSZ) (*pb.PayloadStatus, error
 	case sszPayloadStatusInvalidBlockHash:
 		status.Status = pb.PayloadStatus_INVALID_BLOCK_HASH
 	default:
-		return nil, fmt.Errorf("unknown SSZ payload status: %d", wire.Status)
+		return nil, fmt.Errorf("unknown SSZ payload status: %d", wire.Status[0])
 	}
 	if len(wire.LatestValidHash) == 1 {
 		status.LatestValidHash = make([]byte, 32)
@@ -194,16 +197,16 @@ func payloadAttributesToSSZ(attrs payloadattribute.Attributer) (*pb.PayloadAttri
 			return nil, err
 		}
 		wire.Timestamp = a.Timestamp
-		copy(wire.PrevRandao[:], a.PrevRandao)
-		copy(wire.SuggestedFeeRecipient[:], a.SuggestedFeeRecipient)
+		wire.PrevRandao = cloneBytes(a.PrevRandao)
+		wire.SuggestedFeeRecipient = cloneBytes(a.SuggestedFeeRecipient)
 	case 2:
 		a, err := attrs.PbV2()
 		if err != nil {
 			return nil, err
 		}
 		wire.Timestamp = a.Timestamp
-		copy(wire.PrevRandao[:], a.PrevRandao)
-		copy(wire.SuggestedFeeRecipient[:], a.SuggestedFeeRecipient)
+		wire.PrevRandao = cloneBytes(a.PrevRandao)
+		wire.SuggestedFeeRecipient = cloneBytes(a.SuggestedFeeRecipient)
 		wire.Withdrawals = withdrawalsToSSZ(a.Withdrawals)
 	default: // V3 (Deneb/Electra/Fulu)
 		a, err := attrs.PbV3()
@@ -211,10 +214,10 @@ func payloadAttributesToSSZ(attrs payloadattribute.Attributer) (*pb.PayloadAttri
 			return nil, err
 		}
 		wire.Timestamp = a.Timestamp
-		copy(wire.PrevRandao[:], a.PrevRandao)
-		copy(wire.SuggestedFeeRecipient[:], a.SuggestedFeeRecipient)
+		wire.PrevRandao = cloneBytes(a.PrevRandao)
+		wire.SuggestedFeeRecipient = cloneBytes(a.SuggestedFeeRecipient)
 		wire.Withdrawals = withdrawalsToSSZ(a.Withdrawals)
-		copy(wire.ParentBeaconBlockRoot[:], a.ParentBeaconBlockRoot)
+		wire.ParentBeaconBlockRoot = cloneBytes(a.ParentBeaconBlockRoot)
 	}
 	return wire, nil
 }
@@ -226,11 +229,15 @@ func withdrawalsToSSZ(ws []*pb.Withdrawal) []*pb.WithdrawalSSZ {
 			Index:          w.Index,
 			ValidatorIndex: uint64(w.ValidatorIndex),
 			Amount:         w.Amount,
+			Address:        cloneBytes(w.Address),
 		}
-		copy(r.Address[:], w.Address)
 		result[i] = r
 	}
 	return result
+}
+
+func cloneBytes(b []byte) []byte {
+	return append([]byte(nil), b...)
 }
 
 // --- ForkchoiceUpdated Response ---
@@ -306,7 +313,7 @@ func unmarshalGetPayloadV2ResponseSSZ(data []byte) (*blocks.GetPayloadResponse, 
 	}
 	return &blocks.GetPayloadResponse{
 		ExecutionData: ed,
-		Bid:           blockValueToWei(wire.BlockValue[:]),
+		Bid:           blockValueToWei(wire.BlockValue),
 	}, nil
 }
 
@@ -323,7 +330,7 @@ func unmarshalGetPayloadV3ResponseSSZ(data []byte) (*blocks.GetPayloadResponse, 
 		ExecutionData:   ed,
 		BlobsBundler:    wire.BlobsBundle,
 		OverrideBuilder: wire.ShouldOverrideBuilder,
-		Bid:             blockValueToWei(wire.BlockValue[:]),
+		Bid:             blockValueToWei(wire.BlockValue),
 	}, nil
 }
 
@@ -340,7 +347,7 @@ func unmarshalGetPayloadV4ResponseSSZ(data []byte) (*blocks.GetPayloadResponse, 
 		ExecutionData:     ed,
 		BlobsBundler:      wire.BlobsBundle,
 		OverrideBuilder:   wire.ShouldOverrideBuilder,
-		Bid:               blockValueToWei(wire.BlockValue[:]),
+		Bid:               blockValueToWei(wire.BlockValue),
 		ExecutionRequests: wire.ExecutionRequests,
 	}, nil
 }
@@ -358,7 +365,7 @@ func unmarshalGetPayloadV5ResponseSSZ(data []byte) (*blocks.GetPayloadResponse, 
 		ExecutionData:     ed,
 		BlobsBundler:      wire.BlobsBundle,
 		OverrideBuilder:   wire.ShouldOverrideBuilder,
-		Bid:               blockValueToWei(wire.BlockValue[:]),
+		Bid:               blockValueToWei(wire.BlockValue),
 		ExecutionRequests: wire.ExecutionRequests,
 	}, nil
 }
@@ -376,7 +383,7 @@ func unmarshalGetPayloadV6ResponseSSZ(data []byte) (*blocks.GetPayloadResponse, 
 		ExecutionData:     ed,
 		BlobsBundler:      wire.BlobsBundle,
 		OverrideBuilder:   wire.ShouldOverrideBuilder,
-		Bid:               blockValueToWei(wire.BlockValue[:]),
+		Bid:               blockValueToWei(wire.BlockValue),
 		ExecutionRequests: wire.ExecutionRequests,
 	}, nil
 }
@@ -476,21 +483,20 @@ func marshalClientVersionRequest(code, name, ver, commit string) []byte {
 		Name:    []byte(name),
 		Version: []byte(ver),
 	}
-	commitBytes := parseCommitToBytes4(commit)
-	req.Commit = commitBytes
+	req.Commit = parseCommitToBytes4(commit)
 
 	data, _ := req.MarshalSSZ()
 	return data
 }
 
-// parseCommitToBytes4 converts a hex commit string to a 4-byte array.
-func parseCommitToBytes4(commit string) [4]byte {
-	var result [4]byte
+// parseCommitToBytes4 converts a hex commit string to 4 bytes.
+func parseCommitToBytes4(commit string) []byte {
+	result := make([]byte, 4)
 	b := common.FromHex(commit)
 	if len(b) >= 4 {
-		copy(result[:], b[:4])
+		copy(result, b[:4])
 	} else {
-		copy(result[:], b)
+		copy(result, b)
 	}
 	return result
 }

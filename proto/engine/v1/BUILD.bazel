@@ -58,11 +58,29 @@ ssz_gen_marshal(
 ssz_gen_marshal(
     name = "sszrest_getpayload_generated_files",
     out = "sszrest_getpayload.ssz.go",
-    srcs = [
-        "electra.pb.go",
-        "execution_engine.pb.go",
-        "fulu.pb.go",
-        "sszrest_types.go",
+    go_proto = ":go_proto",
+    includes = [
+        "//consensus-types/primitives:go_default_library",
+    ],
+    exclude_objs = [
+        "ExecutionPayload",
+        "ExecutionPayloadCapella",
+        "ExecutionPayloadHeader",
+        "ExecutionPayloadHeaderCapella",
+        "ExecutionPayloadHeaderDeneb",
+        "ExecutionPayloadDeneb",
+        "ExecutionPayloadGloas",
+        "ExecutionPayloadDenebAndBlobsBundle",
+        "ExecutionPayloadDenebAndBlobsBundleV2",
+        "BlindedBlobsBundle",
+        "BlobsBundle",
+        "BlobsBundleV2",
+        "ForkchoiceState",
+        "Withdrawal",
+        "WithdrawalRequest",
+        "DepositRequest",
+        "ConsolidationRequest",
+        "ExecutionRequests",
     ],
     objs = [
         "GetPayloadV2ResponseSSZ",
@@ -76,11 +94,9 @@ ssz_gen_marshal(
 ssz_gen_marshal(
     name = "sszrest_types_generated_files",
     out = "sszrest_types.ssz.go",
-    srcs = [
-        "electra.pb.go",
-        "execution_engine.pb.go",
-        "fulu.pb.go",
-        "sszrest_types.go",
+    go_proto = ":go_proto",
+    includes = [
+        "//consensus-types/primitives:go_default_library",
     ],
     objs = [
         "PayloadStatusV1SSZ",
@@ -91,7 +107,7 @@ ssz_gen_marshal(
         "GetBlobsRequestSSZ",
         "ExchangeCapabilitiesSSZ",
         "ClientVersionV1SSZ",
-        "ClientVersionV1ListSSZ",
+        "ClientVersionResponseSSZ",
     ],
 )
 
@@ -123,7 +139,6 @@ go_library(
         "fulu.go",
         "gloas.go",
         "json_marshal_unmarshal.go",
-        "sszrest_types.go",
         ":ssz_generated_files",  # keep
         ":sszrest_getpayload_generated_files",
         ":sszrest_types_generated_files",
@@ -161,6 +176,7 @@ ssz_proto_files(
         "electra.proto",
         "execution_engine.proto",
         "fulu.proto",
+        "sszrest.proto",
     ],
     config = select({
         "//conditions:default": "mainnet",
