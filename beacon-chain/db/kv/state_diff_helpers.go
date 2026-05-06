@@ -261,6 +261,11 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 	if !features.Get().EnableStateDiff {
 		return nil
 	}
+
+	if slot%32 != 0 {
+		return errors.New("cannot initialize state diff with a non epoch boundary offset")
+	}
+
 	// Only reinitialize if the offset is different
 	if s.stateDiffCache != nil {
 		if s.stateDiffCache.getOffset() == uint64(slot) {
