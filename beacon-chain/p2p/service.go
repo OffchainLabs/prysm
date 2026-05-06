@@ -477,6 +477,10 @@ func (s *Service) connectWithAllTrustedPeers(multiAddrs []multiaddr.Multiaddr) {
 		return
 	}
 	for _, info := range addrInfos {
+		if len(info.Addrs) == 0 {
+			log.WithField("peerID", info.ID).Warn("Skipping trusted peer with no transport address")
+			continue
+		}
 		// add peer into peer status
 		s.peers.Add(nil, info.ID, info.Addrs[0], network.DirUnknown)
 		// make each dial non-blocking

@@ -1001,6 +1001,10 @@ func peerIdsFromMultiAddrs(addrs []ma.Multiaddr) []peer.ID {
 			log.WithError(err).Errorf("Could not derive peer info from multiaddress %s", a.String())
 			continue
 		}
+		if len(info.Addrs) == 0 {
+			log.WithField("peerID", info.ID).Warn("Skipping trusted peer with no transport address")
+			continue
+		}
 		peers = append(peers, info.ID)
 	}
 	return peers
