@@ -2398,8 +2398,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					FeeRecipientConfig: &proposer.FeeRecipientConfig{
 						FeeRecipient: customFeeRecipient,
 					},
-					// Per-validator gas_limit is intentionally not honored in
-					// proposer preferences; only the default is used.
+					// Per-validator gas_limit is intentionally ignored; default-only.
 					BuilderConfig: &proposer.BuilderConfig{
 						Enabled:  true,
 						GasLimit: 99000000,
@@ -2680,8 +2679,6 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 	})
 }
 
-// Post-Gloas the builder/relay path is removed, so gas limit must flow into
-// proposer preferences even when BuilderConfig.Enabled=false.
 func TestValidator_buildProposerPreferences_GasLimitWithoutBuilder(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -2745,9 +2742,6 @@ func TestValidator_buildProposerPreferences_GasLimitWithoutBuilder(t *testing.T)
 	require.Equal(t, uint64(42000000), prefs[0].Message.GasLimit)
 }
 
-// buildProposerPreferences must read the v2 top-level Option.GasLimit when
-// present, falling back to the legacy BuilderConfig.GasLimit only when the
-// top-level field is unset (e.g., old DB rows from before v2).
 func TestValidator_buildProposerPreferences_V2TopLevelGasLimit(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -2777,9 +2771,7 @@ func TestValidator_buildProposerPreferences_V2TopLevelGasLimit(t *testing.T) {
 	v := validator{
 		validatorClient: client,
 		domainDataCache: domainCache,
-		// v2 top-level GasLimit is preferred over (deliberately mismatched)
-		// legacy BuilderConfig.GasLimit. The test asserts the top-level value
-		// reaches the proposer preference.
+		// Top-level GasLimit must win over the legacy BuilderConfig.GasLimit.
 		proposerSettings: &proposer.Settings{
 			Version: 2,
 			DefaultConfig: &proposer.Option{

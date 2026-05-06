@@ -105,10 +105,7 @@ func BuilderConfigFromConsensus(from *validatorpb.BuilderConfig) *BuilderConfig 
 
 // Settings is a Prysm internal representation of the fee recipient config on the validator client.
 // validatorpb.ProposerSettingsPayload maps to Settings on import through the CLI.
-//
-// Version selects the schema variant. 0/1 = v1 (legacy, with builder block).
-// 2 = post-Gloas schema (rejects builder block, top-level gas_limit on
-// default_config only). The loader enforces version-specific validation.
+// Version: 0/1 = legacy schema, 2 = post-Gloas schema.
 type Settings struct {
 	ProposeConfig map[[fieldparams.BLSPubkeyLength]byte]*Option
 	DefaultConfig *Option
@@ -153,10 +150,7 @@ type GraffitiConfig struct {
 }
 
 // Option is a Prysm internal representation of the ProposerOptionPayload on the validator client in bytes format instead of hex.
-//
-// GasLimit is the v2 (post-Gloas) home for the gas-limit signal. Only the
-// default_config's GasLimit is honored; per-validator GasLimit is rejected at
-// load time.
+// GasLimit is the v2 home for the gas-limit signal (default_config only).
 type Option struct {
 	FeeRecipientConfig *FeeRecipientConfig
 	BuilderConfig      *BuilderConfig

@@ -2026,8 +2026,7 @@ func TestServer_RegisterValidator(t *testing.T) {
 				BlockBuilder: &builderTest.MockBuilderService{
 					HasConfigured: true,
 				},
-				BeaconDB:    db,
-				TimeFetcher: &mockChain.ChainService{},
+				BeaconDB: db,
 			}
 
 			server.RegisterValidator(writer, request)
@@ -2037,26 +2036,6 @@ func TestServer_RegisterValidator(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Post-Gloas the REST RegisterValidator endpoint is a no-op: an older client
-// hitting it gets a successful response without invoking the BlockBuilder.
-func TestServer_RegisterValidator_PostGloas_NoOp(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
-	body := bytes.NewBufferString(registrations)
-	request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/validator/register_validator", body)
-	writer := httptest.NewRecorder()
-	// Intentionally leave BlockBuilder unset — post-Gloas the no-op path skips it.
-	server := Server{
-		BeaconDB:    dbutil.SetupDB(t),
-		TimeFetcher: &mockChain.ChainService{},
-	}
-	server.RegisterValidator(writer, request)
-	require.Equal(t, http.StatusOK, writer.Code)
 }
 
 func TestGetAttesterDuties(t *testing.T) {

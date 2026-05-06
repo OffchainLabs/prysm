@@ -1011,9 +1011,6 @@ func TestServer_SetGasLimit(t *testing.T) {
 		wantErr          string
 	}{
 		{
-			// Previously returned "No proposer settings were found to update".
-			// Post-migration the handler initializes empty settings and sets
-			// the gas limit on the per-validator entry (pre-Gloas semantics).
 			name:             "ProposerSettings is nil",
 			pubkey:           pubkey1,
 			newGasLimit:      9999,
@@ -1021,9 +1018,6 @@ func TestServer_SetGasLimit(t *testing.T) {
 			w:                []*want{{pubkey1, 9999}},
 		},
 		{
-			// Previously gated on builder.enabled=true. Post-migration the
-			// handler creates a per-validator BuilderConfig (Enabled=false) and
-			// stores the gas limit (pre-Gloas semantics).
 			name:        "ProposerSettings.ProposeConfig is nil AND ProposerSettings.DefaultConfig is nil",
 			pubkey:      pubkey1,
 			newGasLimit: 9999,
@@ -1347,9 +1341,6 @@ func TestServer_DeleteGasLimit(t *testing.T) {
 	}
 }
 
-// On Gloas-aware networks, Set/Get/DeleteGasLimit operate on
-// settings.DefaultConfig.BuilderConfig.GasLimit and ignore the pubkey routing
-// because per-validator gas limits in proposer preferences are unsafe.
 func TestServer_GasLimit_GloasAware(t *testing.T) {
 	ctx := t.Context()
 	pubkey1, err := hexutil.Decode("0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
@@ -1396,9 +1387,7 @@ func TestServer_GasLimit_GloasAware(t *testing.T) {
 		require.NotNil(t, settings.DefaultConfig)
 		assert.Equal(t, uint32(2), settings.Version)
 		assert.Equal(t, validator.Uint64(12345678), settings.DefaultConfig.GasLimit)
-		// v2 schema does not use BuilderConfig.
 		assert.Equal(t, true, settings.DefaultConfig.BuilderConfig == nil)
-		// Pubkey routing is ignored — no per-validator entry created.
 		_, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey1)]
 		assert.Equal(t, false, found)
 	})

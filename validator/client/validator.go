@@ -831,10 +831,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
 	}
 
-	// Pre-Gloas: push fee recipients via prepare_beacon_proposer. Post-Gloas the
-	// proposer-preferences submission below carries this data on-chain and the
-	// beacon node sources fee recipient + gas limit from the proposer
-	// preferences cache instead of TrackedValidatorsCache.
+	// Post-Gloas the proposer-preferences submission below carries this data instead.
 	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
 		if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
 			Recipients: proposerReqs,
@@ -857,7 +854,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}()
 	}
 
-	// Builder API path (validator registrations, MEV-boost) is only used pre-Gloas.
+	// Builder API path is pre-Gloas only.
 	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
 		return nil
 	}
@@ -1086,13 +1083,7 @@ func (v *validator) buildProposerPreferences(
 			}
 
 			feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
-			// Gas limit is a default-only setting in proposer preferences;
-			// per-validator gas limits are intentionally not honored to keep
-			// gas-limit signaling uniform across an operator's keys.
-			//
-			// Read order: v2 top-level Option.GasLimit (post-Gloas schema) →
-			// v1 BuilderConfig.GasLimit (legacy DB rows / pre-v2 files) →
-			// chain default.
+			// Per-validator gas limits are intentionally not honored; gas limit is default-only.
 			gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
 			if ps != nil && ps.DefaultConfig != nil {
 				if ps.DefaultConfig.FeeRecipientConfig != nil {

@@ -713,18 +713,12 @@ func (s *Server) DeleteFeeRecipientByPubkey(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// isGloasAware reports whether the running network has a configured Gloas
-// fork epoch. On these networks gas_limit is a default-only setting (managed
-// via the v2 schema) because per-validator gas limits in proposer preferences
-// are unsafe.
 func isGloasAware() bool {
 	return params.BeaconConfig().GloasForkEpoch < math.MaxUint64
 }
 
-// useV2Schema reports whether the keymanager API should operate in v2 mode
-// (gas_limit at top-level Option.GasLimit, pubkey routing ignored). Existing
-// settings tagged Version=2, or fresh settings on Gloas-aware networks, both
-// trigger v2 semantics.
+// useV2Schema reports whether the keymanager API operates in v2 mode
+// (gas_limit at top-level Option.GasLimit, pubkey routing ignored).
 func useV2Schema(settings *proposer.Settings) bool {
 	if settings != nil && settings.Version == 2 {
 		return true
@@ -732,10 +726,8 @@ func useV2Schema(settings *proposer.Settings) bool {
 	return settings == nil && isGloasAware()
 }
 
-// GetGasLimit returns the gas limit measured in gwei.
-//
-// v1: returns the per-validator gas limit (or BuilderConfig default) for the pubkey.
-// v2 (post-Gloas schema): returns DefaultConfig.GasLimit and ignores the pubkey.
+// GetGasLimit returns the gas limit measured in gwei. In v2 it returns
+// DefaultConfig.GasLimit and ignores the pubkey.
 func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.GetGasLimit")
 	defer span.End()
@@ -776,14 +768,8 @@ func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, resp)
 }
 
-// SetGasLimit updates the gas limit.
-//
-// v1: writes to the per-validator BuilderConfig.GasLimit. The legacy "Gas
-// limit changes only apply when builder is enabled" gate is dropped — gas
-// limit is meaningful in proposer settings even when the builder relay path
-// is disabled.
-// v2 (post-Gloas schema): writes to DefaultConfig.GasLimit and ignores the
-// pubkey. Fresh settings on Gloas-aware networks default to v2.
+// SetGasLimit updates the gas limit. In v2 it writes to DefaultConfig.GasLimit
+// and ignores the pubkey.
 func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.SetGasLimit")
 	defer span.End()
@@ -854,12 +840,8 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// DeleteGasLimit resets the gas limit to the chain default.
-//
-// v1: resets the per-validator gas limit to the proposer-config default (or
-// chain default). Returns 404 if no per-validator entry exists.
-// v2 (post-Gloas schema): resets DefaultConfig.GasLimit to the chain default
-// and ignores the pubkey.
+// DeleteGasLimit resets the gas limit to the chain default. In v2 it resets
+// DefaultConfig.GasLimit and ignores the pubkey.
 func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.DeleteGasLimit")
 	defer span.End()

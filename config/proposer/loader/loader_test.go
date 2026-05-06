@@ -1004,10 +1004,6 @@ func Test_ProposerSettingsLoaderWithOnlyBuilder_DoesNotSaveInDB(t *testing.T) {
 	}
 }
 
-// Post-Gloas the gas limit must flow into the proposer-preferences submission
-// regardless of whether the builder relay path is enabled. When the user passes
-// --suggested-gas-limit the loader must materialize a disabled BuilderConfig
-// so the gas limit survives in the merged settings.
 func Test_ProposerSettingsLoader_GasLimitWithoutBuilder(t *testing.T) {
 	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
 		t.Run(fmt.Sprintf("minimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
@@ -1037,10 +1033,6 @@ func Test_ProposerSettingsLoader_GasLimitWithoutBuilder(t *testing.T) {
 	}
 }
 
-// On a Gloas-aware network, loading proposer settings with a builder block
-// that has enabled=true or relays != nil must log a deprecation warning. On a
-// Gloas-unaware network (mainnet today, GloasForkEpoch=MaxUint64) the loader
-// must stay silent.
 func Test_warnGloasDeprecations(t *testing.T) {
 	t.Run("gloas-unaware network is silent", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
@@ -1136,8 +1128,6 @@ func Test_warnGloasDeprecations(t *testing.T) {
 	})
 }
 
-// validateSchemaVersion enforces v2 schema rules at load time. v1 has no
-// schema enforcement here (existing behavior preserved by warnGloasDeprecations).
 func Test_validateSchemaVersion(t *testing.T) {
 	key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
 	require.NoError(t, err)
