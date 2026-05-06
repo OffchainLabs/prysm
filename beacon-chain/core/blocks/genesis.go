@@ -193,8 +193,9 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 			Signature: params.BeaconConfig().EmptySignature[:],
 		})
 	case *ethpb.BeaconStateGloas:
+		gloasState := ps.(*ethpb.BeaconStateGloas)
 		return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
-			Block:     gloasGenesisBlock(root),
+			Block:     gloasGenesisBlock(root, gloasState.LatestExecutionPayloadBid),
 			Signature: params.BeaconConfig().EmptySignature[:],
 		})
 	default:
@@ -202,7 +203,24 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 	}
 }
 
-func gloasGenesisBlock(root [fieldparams.RootLength]byte) *ethpb.BeaconBlockGloas {
+// gloasGenesisBlock builds the genesis beacon block for Gloas. Per the spec,
+// the block body's signed_execution_payload_bid.message must mirror the
+// genesis state's latest_execution_payload_bid so that the block's body root
+// matches the state's latest_block_header.body_root. See
+// https://github.com/ethpandaops/eth-beacon-genesis/issues/76.
+func gloasGenesisBlock(root [fieldparams.RootLength]byte, stateBid *ethpb.ExecutionPayloadBid) *ethpb.BeaconBlockGloas {
+	bid := stateBid.Copy()
+	if bid == nil {
+		bid = &ethpb.ExecutionPayloadBid{
+			ParentBlockHash:       make([]byte, 32),
+			ParentBlockRoot:       make([]byte, 32),
+			BlockHash:             make([]byte, 32),
+			PrevRandao:            make([]byte, 32),
+			FeeRecipient:          make([]byte, 20),
+			BlobKzgCommitments:    make([][]byte, 0),
+			ExecutionRequestsRoot: make([]byte, 32),
+		}
+	}
 	return &ethpb.BeaconBlockGloas{
 		ParentRoot: params.BeaconConfig().ZeroHash[:],
 		StateRoot:  root[:],
@@ -218,15 +236,7 @@ func gloasGenesisBlock(root [fieldparams.RootLength]byte) *ethpb.BeaconBlockGloa
 				SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
 			},
 			SignedExecutionPayloadBid: &ethpb.SignedExecutionPayloadBid{
-				Message: &ethpb.ExecutionPayloadBid{
-					ParentBlockHash:       make([]byte, 32),
-					ParentBlockRoot:       make([]byte, 32),
-					BlockHash:             make([]byte, 32),
-					PrevRandao:            make([]byte, 32),
-					FeeRecipient:          make([]byte, 20),
-					BlobKzgCommitments:    make([][]byte, 0),
-					ExecutionRequestsRoot: make([]byte, 32),
-				},
+				Message:   bid,
 				Signature: make([]byte, fieldparams.BLSSignatureLength),
 			},
 			PayloadAttestations: make([]*ethpb.PayloadAttestation, 0),

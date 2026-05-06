@@ -63,14 +63,23 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 			// If the pre-state is a genesis state, verify that the genesis block
 			// Prysm would construct for this state matches the state's
 			// latest_block_header (which per spec records the genesis block's body root).
+			// Some spec tests reuse a slot-0 pre-state but mutate latest_execution_payload_bid
+			// to simulate a post-payload scenario; skip those since their bid no longer
+			// matches the genesis block encoded in latest_block_header.body_root.
 			if beaconState.Slot() == params.BeaconConfig().GenesisSlot {
-				genesisBlock, err := coreblocks.NewGenesisBlockForState(context.Background(), beaconState)
+				bid, err := beaconState.LatestExecutionPayloadBid()
 				require.NoError(t, err)
-				genesisBodyRoot, err := genesisBlock.Block().Body().HashTreeRoot()
-				require.NoError(t, err)
-				expectedBodyRoot := bytesutil.ToBytes32(beaconState.LatestBlockHeader().BodyRoot)
-				if genesisBodyRoot != expectedBodyRoot {
-					t.Fatalf("genesis block body root does not match pre-state latest_block_header.body_root: got %#x, want %#x", genesisBodyRoot, expectedBodyRoot)
+				zeroHash := params.BeaconConfig().ZeroHash
+				isGenesisBid := bid == nil || bid.BlockHash() == zeroHash
+				if isGenesisBid {
+					genesisBlock, err := coreblocks.NewGenesisBlockForState(context.Background(), beaconState)
+					require.NoError(t, err)
+					genesisBodyRoot, err := genesisBlock.Block().Body().HashTreeRoot()
+					require.NoError(t, err)
+					expectedBodyRoot := bytesutil.ToBytes32(beaconState.LatestBlockHeader().BodyRoot)
+					if genesisBodyRoot != expectedBodyRoot {
+						t.Fatalf("genesis block body root does not match pre-state latest_block_header.body_root: got %#x, want %#x", genesisBodyRoot, expectedBodyRoot)
+					}
 				}
 			}
 
