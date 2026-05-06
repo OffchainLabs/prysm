@@ -219,16 +219,22 @@ func gloasGenesisBlock(root [fieldparams.RootLength]byte) *ethpb.BeaconBlockGloa
 			},
 			SignedExecutionPayloadBid: &ethpb.SignedExecutionPayloadBid{
 				Message: &ethpb.ExecutionPayloadBid{
-					ParentBlockHash:    make([]byte, 32),
-					ParentBlockRoot:    make([]byte, 32),
-					BlockHash:          make([]byte, 32),
-					PrevRandao:         make([]byte, 32),
-					FeeRecipient:       make([]byte, 20),
-					BlobKzgCommitments: make([][]byte, 0),
+					ParentBlockHash:       make([]byte, 32),
+					ParentBlockRoot:       make([]byte, 32),
+					BlockHash:             make([]byte, 32),
+					PrevRandao:            make([]byte, 32),
+					FeeRecipient:          make([]byte, 20),
+					BlobKzgCommitments:    make([][]byte, 0),
+					ExecutionRequestsRoot: make([]byte, 32),
 				},
 				Signature: make([]byte, fieldparams.BLSSignatureLength),
 			},
 			PayloadAttestations: make([]*ethpb.PayloadAttestation, 0),
+			ParentExecutionRequests: &enginev1.ExecutionRequests{
+				Withdrawals:    make([]*enginev1.WithdrawalRequest, 0),
+				Deposits:       make([]*enginev1.DepositRequest, 0),
+				Consolidations: make([]*enginev1.ConsolidationRequest, 0),
+			},
 		},
 	}
 }

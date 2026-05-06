@@ -8,12 +8,14 @@ import (
 	"strings"
 	"testing"
 
+	coreblocks "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
@@ -57,6 +59,20 @@ func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 			require.NoError(t, beaconStateBase.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
 			beaconState, err := state_native.InitializeFromProtoGloas(beaconStateBase)
 			require.NoError(t, err)
+
+			// If the pre-state is a genesis state, verify that the genesis block
+			// Prysm would construct for this state matches the state's
+			// latest_block_header (which per spec records the genesis block's body root).
+			if beaconState.Slot() == params.BeaconConfig().GenesisSlot {
+				genesisBlock, err := coreblocks.NewGenesisBlockForState(context.Background(), beaconState)
+				require.NoError(t, err)
+				genesisBodyRoot, err := genesisBlock.Block().Body().HashTreeRoot()
+				require.NoError(t, err)
+				expectedBodyRoot := bytesutil.ToBytes32(beaconState.LatestBlockHeader().BodyRoot)
+				if genesisBodyRoot != expectedBodyRoot {
+					t.Fatalf("genesis block body root does not match pre-state latest_block_header.body_root: got %#x, want %#x", genesisBodyRoot, expectedBodyRoot)
+				}
+			}
 
 			file, err := util.BazelFileBytes(testsFolderPath, folder.Name(), "meta.yaml")
 			require.NoError(t, err)
