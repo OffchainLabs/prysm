@@ -228,6 +228,20 @@ func TestServer_getParentBlockHash_Gloas_Empty(t *testing.T) {
 	require.DeepEqual(t, parentBlockHash[:], got)
 }
 
+func TestServer_applyParentExecutionPayloadToHead_PreGloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	st, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+
+	chain := &chainMock.ChainService{BlockSlot: 0}
+	vs := &Server{ForkchoiceFetcher: chain}
+	require.NoError(t, vs.applyParentExecutionPayloadToHead(context.Background(), st, [32]byte{}))
+}
+
 func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {
 	beaconDB := dbTest.SetupDB(t)
 	nonTransitionSt, _ := util.DeterministicGenesisStateBellatrix(t, 1)
