@@ -174,9 +174,10 @@ func (s *Service) proposerDependentRoot(ctx context.Context, parentBlockRoot [32
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "load parent state")
 	}
-	// Advance through any empty slots so BlockRootAtSlot's bounds check
-	// (state.Slot() > start_slot(epoch-1)-1) holds when the parent block
-	// itself sits at or before that boundary, e.g. an entirely empty epoch-1.
+	// No-op when parent state is already past start_slot(epoch-1) — the typical
+	// case. Only does work when the previous epoch had zero blocks (e.g.
+	// inactivity leak), which is the scenario BlockRootAtSlot's bounds check
+	// can't otherwise satisfy.
 	boundary, err := slots.EpochStart(slots.ToEpoch(slot) - 1)
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "epoch start")
