@@ -62,8 +62,15 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		return pubsub.ValidationIgnore, errors.New("dependent_root block not seen yet")
 	}
 
+	slot := signedPreferences.Message.ProposalSlot
+	// [IGNORE] dedup on (dependent_root, proposal_slot) before the checkpoint
+	// state load so byte-mutated duplicates can't amplify state work.
+	if s.proposerPreferencesCache.Has(dependentRoot, slot) {
+		return pubsub.ValidationIgnore, nil
+	}
+
 	// Checkpoint state at epoch(proposal_slot)-1 anchored to dependent_root.
-	proposalEpoch := slots.ToEpoch(signedPreferences.Message.ProposalSlot)
+	proposalEpoch := slots.ToEpoch(slot)
 	// Underflow at epoch 0 collapses to epoch 0 — the spec's genesis-adjacent fallback.
 	dependentEpoch, _ := proposalEpoch.SafeSub(1)
 	boundarySlot, err := slots.EpochStart(dependentEpoch)
@@ -94,19 +101,13 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		return pubsub.ValidationReject, err
 	}
 
-	slot := signedPreferences.Message.ProposalSlot
-	valIdx := signedPreferences.Message.ValidatorIndex
-	// [IGNORE] dedup on (dependent_root, proposal_slot); validator_index is implied.
-	if s.proposerPreferencesCache.Has(dependentRoot, slot) {
-		return pubsub.ValidationIgnore, nil
-	}
 	// [REJECT] signed_proposer_preferences.signature is valid with respect to the
 	// validator's public key.
 	if err := v.VerifySignature(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	s.proposerPreferencesCache.Add(dependentRoot, slot, valIdx, signedPreferences.Message.FeeRecipient, signedPreferences.Message.GasLimit)
+	s.proposerPreferencesCache.Add(dependentRoot, slot, signedPreferences.Message.ValidatorIndex, signedPreferences.Message.FeeRecipient, signedPreferences.Message.GasLimit)
 	msg.ValidatorData = signedPreferences
 	return pubsub.ValidationAccept, nil
 }
