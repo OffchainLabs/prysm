@@ -63,13 +63,10 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	// [IGNORE] matching SignedProposerPreferences seen, where dependent_root =
-	// get_proposer_dependent_root(parent_state, epoch(bid.slot)) =
-	// parent_state.block_roots[start_slot(epoch(bid.slot)-1) - 1]. Underflow
-	// (bid.slot in epoch 0 or 1) is treated as the genesis block root.
+	// [IGNORE] matching SignedProposerPreferences seen, keyed on the proposer
+	// dep root anchored to bid.parent_block_root.
 	parentBlockRoot := bid.ParentBlockRoot()
-	// Gate the parent state load on a cheap forkchoice/DB-index check so an
-	// attacker can't force checkpoint-state loads keyed on bogus parent roots.
+	// Cheap gate so attacker-chosen parent roots can't force forkchoice walks.
 	if !s.cfg.chain.InForkchoice(parentBlockRoot) && !s.cfg.beaconDB.HasBlock(ctx, parentBlockRoot) {
 		return pubsub.ValidationIgnore, errors.New("parent_block_root not seen yet")
 	}

@@ -8,10 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
-// proposerPreference looks up the cached preference for (slot, valIdx) anchored
-// to the dependent_root derived from the given state. Underflow at genesis-
-// adjacent slots is treated as a cache miss; those slots never carry Gloas
-// preferences anyway.
+// proposerPreference looks up the cached preference for (slot, valIdx).
 func (s *Service) proposerPreference(st state.ReadOnlyBeaconState, slot primitives.Slot, valIdx primitives.ValidatorIndex) (cache.TrackedValidator, bool) {
 	if s.cfg.ProposerPreferencesCache == nil {
 		return cache.TrackedValidator{}, false
