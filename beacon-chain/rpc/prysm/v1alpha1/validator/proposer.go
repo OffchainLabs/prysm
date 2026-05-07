@@ -192,6 +192,12 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 }
 
 func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull bool) (*ethpb.GenericBeaconBlock, error) {
+	if sBlk.Version() >= version.Gloas && parentFull {
+		if err := vs.applyParentExecutionPayloadToHead(ctx, head, sBlk.Block().ParentRoot()); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not apply parent execution payload: %v", err)
+		}
+	}
+
 	// Build consensus fields in background
 	var wg sync.WaitGroup
 	wg.Go(func() {
