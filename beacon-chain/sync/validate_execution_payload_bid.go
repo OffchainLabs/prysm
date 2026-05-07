@@ -3,8 +3,6 @@ package sync
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -159,34 +157,24 @@ func (s *Service) setSeenExecutionPayloadBidBuilder(slot primitives.Slot, key st
 	s.seenExecutionPayloadBidCache.Add(slot, key, true)
 }
 
-// proposerDependentRoot wraps helpers.ProposerDependentRoot, loading the
-// parent state via stateGen and substituting the genesis block root on
-// pre-Gloas slot underflow.
+// proposerDependentRoot returns the post-Fulu spec's proposer dep root for
+// epoch(slot), anchored to parentBlockRoot's chain:
+// state.block_roots[start_slot(epoch-1) - 1]. Pre-Gloas slot underflow falls
+// back to genesis.
 func (s *Service) proposerDependentRoot(ctx context.Context, parentBlockRoot [32]byte, slot primitives.Slot) ([32]byte, error) {
-	if slots.ToEpoch(slot) < 2 {
+	epoch := slots.ToEpoch(slot)
+	if epoch < 2 {
 		root, err := s.cfg.beaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
 			return [32]byte{}, errors.Wrap(err, "genesis block root")
 		}
 		return root, nil
 	}
-	parentState, err := s.cfg.stateGen.StateByRootNoCopy(ctx, parentBlockRoot)
+	depRoot, err := s.cfg.chain.DependentRootForEpoch(parentBlockRoot, epoch.Sub(1))
 	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "load parent state")
+		return [32]byte{}, errors.Wrap(err, "dependent root for epoch")
 	}
-	// No-op when parent state is already past start_slot(epoch-1) — the typical
-	// case. Only does work when the previous epoch had zero blocks (e.g.
-	// inactivity leak), which is the scenario BlockRootAtSlot's bounds check
-	// can't otherwise satisfy.
-	boundary, err := slots.EpochStart(slots.ToEpoch(slot) - 1)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "epoch start")
-	}
-	parentState, err = transition.ProcessSlotsIfNeeded(ctx, parentState, parentBlockRoot[:], boundary)
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "advance parent state to boundary")
-	}
-	return helpers.ProposerDependentRoot(parentState, slot)
+	return depRoot, nil
 }
 
 func (s *Service) isHighestExecutionPayloadBid(bid interfaces.ROExecutionPayloadBid) bool {

@@ -10,20 +10,20 @@ import (
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/pkg/errors"
@@ -290,44 +290,34 @@ func TestExecutionPayloadBidSubscriber_HappyPath(t *testing.T) {
 	require.DeepEqual(t, signedBid, got)
 }
 
-// TestProposerDependentRoot_AdvancesAcrossEmptyEpoch asserts that the helper
-// advances the loaded parent state to start_slot(epoch-1) before delegating to
-// helpers.ProposerDependentRoot. With a parent state at slot 0 and a bid slot
-// in epoch 2, BlockRootAtSlot's bounds check would fail without the advance.
-func TestProposerDependentRoot_AdvancesAcrossEmptyEpoch(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.FuluForkEpoch = 0
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
+// TestProposerDependentRoot_DelegatesToForkchoice asserts that the helper
+// queries the chain's DependentRootForEpoch at epoch-1 anchored to
+// parentBlockRoot, and returns whatever root forkchoice gives back.
+func TestProposerDependentRoot_DelegatesToForkchoice(t *testing.T) {
 	ctx := context.Background()
 	db := dbtest.SetupDB(t)
 
-	// Need active validators so the cross-epoch ProcessSlots advance can run
-	// process_epoch without erroring on an empty active validator set.
-	st, _ := util.DeterministicGenesisStateGloas(t, 64)
+	parentRoot := [32]byte{0xaa}
+	expectedDepRoot := [32]byte{0xbb}
+	bidSlot := 2*params.BeaconConfig().SlotsPerEpoch + 6
+	expectedEpoch := slots.ToEpoch(bidSlot).Sub(1)
 
-	sb := util.NewBeaconBlockGloas()
-	signedBlock, err := blocks.NewSignedBeaconBlock(sb)
-	require.NoError(t, err)
-	parentRoot, err := signedBlock.Block().HashTreeRoot()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveBlock(ctx, signedBlock))
-	require.NoError(t, db.SaveState(ctx, st, parentRoot))
-
-	s := &Service{
-		cfg: &config{
-			beaconDB: db,
-			stateGen: stategen.New(db, doublylinkedtree.New()),
+	var gotRoot [32]byte
+	var gotEpoch primitives.Epoch
+	chainService := &mock.ChainService{
+		DependentRootCB: func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+			gotRoot = root
+			gotEpoch = epoch
+			return expectedDepRoot, nil
 		},
 	}
+	s := &Service{cfg: &config{beaconDB: db, chain: chainService}}
 
-	// Bid slot in epoch 2: boundary = start_slot(1) = SlotsPerEpoch. Parent state
-	// at slot 0 must be advanced past slot 31 for BlockRootAtSlot(state, 31) to pass.
-	bidSlot := 2*params.BeaconConfig().SlotsPerEpoch + 6
-	_, err = s.proposerDependentRoot(ctx, parentRoot, bidSlot)
+	got, err := s.proposerDependentRoot(ctx, parentRoot, bidSlot)
 	require.NoError(t, err)
+	require.Equal(t, expectedDepRoot, got)
+	require.Equal(t, parentRoot, gotRoot)
+	require.Equal(t, expectedEpoch, gotEpoch)
 }
 
 func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {
