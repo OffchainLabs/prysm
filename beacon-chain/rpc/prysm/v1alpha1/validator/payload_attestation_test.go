@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
@@ -162,6 +163,30 @@ func TestPayloadAttestationData_ConcurrentSingleflight(t *testing.T) {
 	for i := 1; i < callers; i++ {
 		assert.Equal(t, true, results[0] == results[i])
 	}
+}
+
+func TestPayloadAttestationData_BeforeDeadline(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	slot := primitives.Slot(0)
+	chain := &chainMock.ChainService{
+		Slot:    &slot,
+		Genesis: time.Now(),
+		Root:    bytesutil.PadTo([]byte{0xAA}, 32),
+	}
+	vs := &Server{
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		TimeFetcher:       chain,
+		HeadFetcher:       chain,
+		ForkchoiceFetcher: chain,
+	}
+
+	_, err := vs.PayloadAttestationData(t.Context(), &ethpb.PayloadAttestationDataRequest{Slot: slot})
+	require.ErrorContains(t, "PTC deadline not yet reached", err)
+	assert.Equal(t, (*ethpb.PayloadAttestationData)(nil), vs.payloadAttestationData.Load())
 }
 
 func TestPayloadAttestationData_SlotMismatch(t *testing.T) {

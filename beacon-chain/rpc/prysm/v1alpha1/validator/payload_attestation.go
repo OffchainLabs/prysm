@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -42,6 +43,16 @@ func (vs *Server) PayloadAttestationData(
 	if slot != currentSlot {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"payload attestation data is only available for current slot: requested %d, current %d", slot, currentSlot)
+	}
+
+	slotStart, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), slot)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "could not compute slot start time: %v", err)
+	}
+	cfg := params.BeaconConfig()
+	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS))
+	if time.Now().Before(deadline) {
+		return nil, status.Errorf(codes.Unavailable, "PTC deadline not yet reached for slot %d", slot)
 	}
 
 	if cached := vs.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
