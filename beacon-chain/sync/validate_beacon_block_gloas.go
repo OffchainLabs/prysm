@@ -110,28 +110,19 @@ func (s *Service) fetchPayloadEnvelope(root [32]byte) {
 		if len(envelopes) == 0 {
 			continue
 		}
-		if len(envelopes) > 1 {
-			log.Warn("Multiple payload envelopes returned by peer, expected at most one")
+		wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(envelopes[0])
+		if err != nil {
+			log.WithError(err).Debug("Could not wrap requested payload envelope")
+			continue
 		}
-		processed := false
-		for _, env := range envelopes {
-			wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(env)
-			if err != nil {
-				log.WithError(err).Debug("Could not wrap requested payload envelope")
-				continue
+		if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
+			if blockchain.IsInvalidBlock(err) {
+				s.setBadPayload(s.ctx, root)
+				return
 			}
-			if err := s.cfg.chain.ReceiveExecutionPayloadEnvelope(s.ctx, wrapped); err != nil {
-				if blockchain.IsInvalidBlock(err) {
-					s.setBadPayload(s.ctx, root)
-					return
-				}
-				log.WithError(err).Debug("Could not process requested payload envelope")
-				continue
-			}
-			processed = true
+			log.WithError(err).Debug("Could not process requested payload envelope")
+			continue
 		}
-		if processed {
-			return
-		}
+		return
 	}
 }
