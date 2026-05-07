@@ -8,11 +8,15 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	executiontesting "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -21,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -137,6 +142,11 @@ func testSignedEnvelope() *ethpb.SignedExecutionPayloadEnvelope {
 }
 
 func TestPublishExecutionPayloadEnvelope_OK(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
 
@@ -169,7 +179,128 @@ func TestPublishExecutionPayloadEnvelope_InvalidBody(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+func TestPublishExecutionPayloadEnvelope_StatelessContents_NoBlobs(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctrl := gomock.NewController(t)
+	signed := testSignedEnvelope()
+	contents, err := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(signed, nil, nil)
+	require.NoError(t, err)
+	body, err := json.Marshal(contents)
+	require.NoError(t, err)
+
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+		gomock.Any(), gomock.Any(),
+	).Return(&emptypb.Empty{}, nil)
+
+	// With no blobs in the request, the sidecar broadcast/receive branch is
+	// skipped, so the handler does not need a Broadcaster or DataColumnReceiver.
+	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+// statelessContentsBody builds a SignedExecutionPayloadEnvelopeContents JSON
+// body with real blobs+proofs, returning the body bytes and the signed
+// envelope used to construct it. blobMutator runs against the flat proofs
+// after they're built so callers can inject corruption.
+func statelessContentsBody(t *testing.T, blobCount int, mutateProofs func([][]byte)) ([]byte, *ethpb.SignedExecutionPayloadEnvelope) {
+	t.Helper()
+	require.NoError(t, kzg.Start())
+
+	rawBlobs := make([]kzg.Blob, blobCount)
+	for i := range rawBlobs {
+		rawBlobs[i] = kzg.Blob{uint8(i + 1)}
+	}
+	_, proofsPerBlob := util.GenerateCellsAndProofs(t, rawBlobs)
+
+	flatBlobs := make([][]byte, blobCount)
+	for i, b := range rawBlobs {
+		flatBlobs[i] = b[:]
+	}
+	flatProofs := make([][]byte, 0, blobCount*fieldparams.NumberOfColumns)
+	for _, proofs := range proofsPerBlob {
+		for _, p := range proofs {
+			flatProofs = append(flatProofs, p[:])
+		}
+	}
+	if mutateProofs != nil {
+		mutateProofs(flatProofs)
+	}
+
+	signed := testSignedEnvelope()
+	contents, err := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(signed, flatProofs, flatBlobs)
+	require.NoError(t, err)
+	body, err := json.Marshal(contents)
+	require.NoError(t, err)
+	return body, signed
+}
+
+func TestPublishExecutionPayloadEnvelope_StatelessContents_WithBlobs(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	body, _ := statelessContentsBody(t, 2, nil)
+
+	ctrl := gomock.NewController(t)
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+		gomock.Any(), gomock.Any(),
+	).Return(&emptypb.Empty{}, nil)
+
+	s := &Server{
+		V1Alpha1ValidatorServer: v1alpha1Server,
+		Broadcaster:             &mockp2p.MockBroadcaster{},
+		DataColumnReceiver:      &chainMock.ChainService{},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	body, _ := statelessContentsBody(t, 2, func(flatProofs [][]byte) {
+		// Corrupt the first proof — verification must reject.
+		flatProofs[0] = bytes.Repeat([]byte{0xff}, 48)
+	})
+
+	s := &Server{
+		Broadcaster:        &mockp2p.MockBroadcaster{},
+		DataColumnReceiver: &chainMock.ChainService{},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte("kzg verification failed")))
+}
+
 func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
 	ctrl := gomock.NewController(t)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
