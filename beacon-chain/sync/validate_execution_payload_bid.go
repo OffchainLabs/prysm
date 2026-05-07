@@ -66,10 +66,6 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	// [IGNORE] matching SignedProposerPreferences seen, keyed on the proposer
 	// dep root anchored to bid.parent_block_root.
 	parentBlockRoot := bid.ParentBlockRoot()
-	// Cheap gate so attacker-chosen parent roots can't force forkchoice walks.
-	if !s.cfg.chain.InForkchoice(parentBlockRoot) && !s.cfg.beaconDB.HasBlock(ctx, parentBlockRoot) {
-		return pubsub.ValidationIgnore, errors.New("parent_block_root not seen yet")
-	}
 	dependentRoot, err := s.proposerDependentRoot(ctx, parentBlockRoot, bid.Slot())
 	if err != nil {
 		return pubsub.ValidationIgnore, err

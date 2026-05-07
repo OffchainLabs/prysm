@@ -63,23 +63,6 @@ func TestValidateExecutionPayloadBidGossip_ProposerPreferencesUnseen(t *testing.
 	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
-// TestValidateExecutionPayloadBidGossip_ParentBlockRootUnseen asserts the cheap
-// forkchoice/HasBlock gate that prevents attacker-controlled parent_block_root
-// values from forcing checkpoint-state loads.
-func TestValidateExecutionPayloadBidGossip_ParentBlockRootUnseen(t *testing.T) {
-	ctx := context.Background()
-	s, msg, _ := setupExecutionPayloadBidService(t)
-	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
-	// Clear the forkchoice entry for the bid's parent_block_root; the DB also
-	// has no block at that root, so the gate must trigger.
-	s.cfg.chain.(*mock.ChainService).ForkchoiceRoots = map[[32]byte]bool{}
-
-	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
-	require.NotNil(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
-	require.StringContains(t, "parent_block_root not seen yet", err.Error())
-}
-
 func TestValidateExecutionPayloadBidGossip_InitialSync(t *testing.T) {
 	ctx := context.Background()
 	p := p2ptest.NewTestP2P(t)
