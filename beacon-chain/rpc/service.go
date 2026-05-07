@@ -194,19 +194,20 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 	}
 	withCache := stategen.WithCache(stateCache)
 	ch := stategen.NewCanonicalHistory(s.cfg.BeaconDB, s.cfg.ChainInfoFetcher, s.cfg.ChainInfoFetcher, withCache)
-	stater := &lookup.BeaconDbStater{
-		BeaconDB:           s.cfg.BeaconDB,
-		ChainInfoFetcher:   s.cfg.ChainInfoFetcher,
-		GenesisTimeFetcher: s.cfg.GenesisTimeFetcher,
-		StateGenService:    s.cfg.StateGen,
-		ReplayerBuilder:    ch,
-	}
 	blocker := &lookup.BeaconDbBlocker{
 		BeaconDB:           s.cfg.BeaconDB,
 		ChainInfoFetcher:   s.cfg.ChainInfoFetcher,
 		GenesisTimeFetcher: s.cfg.GenesisTimeFetcher,
 		BlobStorage:        s.cfg.BlobStorage,
 		DataColumnStorage:  s.cfg.DataColumnStorage,
+	}
+	stater := &lookup.BeaconDbStater{
+		BeaconDB:           s.cfg.BeaconDB,
+		ChainInfoFetcher:   s.cfg.ChainInfoFetcher,
+		GenesisTimeFetcher: s.cfg.GenesisTimeFetcher,
+		StateGenService:    s.cfg.StateGen,
+		ReplayerBuilder:    ch,
+		Blocker:            blocker,
 	}
 	rewardFetcher := &rewards.BlockRewardService{Replayer: ch, DB: s.cfg.BeaconDB}
 	coreService := &core.Service{

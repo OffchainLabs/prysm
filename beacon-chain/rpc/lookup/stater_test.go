@@ -9,6 +9,7 @@ import (
 
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockstategen "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
@@ -417,6 +418,95 @@ func TestGetStateRoot(t *testing.T) {
 		p := BeaconDbStater{}
 		_, err := p.StateRoot(ctx, []byte("foo"))
 		require.ErrorContains(t, "could not parse state ID", err)
+	})
+}
+
+func TestBeaconDbStater_BlockRoot(t *testing.T) {
+	ctx := t.Context()
+
+	headSlot := primitives.Slot(123)
+	fillSlot := func(state *ethpb.BeaconState) error {
+		state.Slot = headSlot
+		return nil
+	}
+	newBeaconState, err := util.NewBeaconState(util.FillRootsNaturalOpt, fillSlot)
+	require.NoError(t, err)
+
+	// Cases that delegate to Blocker. Any non-hex/non-32-byte form (head/genesis/finalized/
+	// justified/<slot>) should return whatever the Blocker says — Stater does not look at the
+	// state for these.
+	delegationCases := []struct {
+		name string
+		id   string
+	}{
+		{"head", "head"},
+		{"genesis", "genesis"},
+		{"finalized", "finalized"},
+		{"justified", "justified"},
+		{"slot", "40"},
+	}
+	for _, tc := range delegationCases {
+		t.Run("delegates to Blocker for "+tc.name, func(t *testing.T) {
+			expected := bytesutil.ToBytes32(bytesutil.PadTo([]byte("expected-block-root"), 32))
+			p := BeaconDbStater{
+				Blocker: &testutil.MockBlocker{RootToReturn: expected},
+			}
+			got, err := p.BlockRoot(ctx, []byte(tc.id))
+			require.NoError(t, err)
+			assert.Equal(t, expected, got)
+		})
+	}
+
+	t.Run("propagates Blocker error", func(t *testing.T) {
+		p := BeaconDbStater{
+			Blocker: &testutil.MockBlocker{ErrorToReturn: errors.New("blocker boom")},
+		}
+		_, err := p.BlockRoot(ctx, []byte("head"))
+		require.ErrorContains(t, "blocker boom", err)
+	})
+
+	// Hex/raw cases — translate state-root → block-root via head state pairing.
+	// FillRootsNaturalOpt sets state.StateRoots[i] == state.BlockRoots[i] == bytesutil.ToBytes32(i),
+	// so a query for state-root 0x...01 should return block-root 0x...01.
+	t.Run("hex state root", func(t *testing.T) {
+		hex := "0x" + strings.Repeat("0", 63) + "1"
+		expected, err := hexutil.Decode(hex)
+		require.NoError(t, err)
+		p := BeaconDbStater{
+			ChainInfoFetcher: &chainMock.ChainService{State: newBeaconState},
+		}
+		got, err := p.BlockRoot(ctx, []byte(hex))
+		require.NoError(t, err)
+		assert.DeepEqual(t, expected, got[:])
+	})
+
+	t.Run("raw 32-byte state root", func(t *testing.T) {
+		expected, err := hexutil.Decode("0x" + strings.Repeat("0", 63) + "1")
+		require.NoError(t, err)
+		p := BeaconDbStater{
+			ChainInfoFetcher: &chainMock.ChainService{State: newBeaconState},
+		}
+		got, err := p.BlockRoot(ctx, expected)
+		require.NoError(t, err)
+		assert.DeepEqual(t, expected, got[:])
+	})
+
+	t.Run("hex state root not found", func(t *testing.T) {
+		hex := "0x" + strings.Repeat("f", 64)
+		p := BeaconDbStater{
+			ChainInfoFetcher: &chainMock.ChainService{State: newBeaconState},
+		}
+		_, err := p.BlockRoot(ctx, []byte(hex))
+		var notFound *StateNotFoundError
+		require.Equal(t, true, errors.As(err, &notFound))
+	})
+
+	t.Run("malformed hex", func(t *testing.T) {
+		p := BeaconDbStater{}
+		// Odd-length hex passes IsHex but fails hexutil.Decode (must be even length).
+		_, err := p.BlockRoot(ctx, []byte("0x123"))
+		var parseErr *StateIdParseError
+		require.Equal(t, true, errors.As(err, &parseErr))
 	})
 }
 

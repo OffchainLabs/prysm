@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -101,6 +102,7 @@ type Stater interface {
 	StateRoot(ctx context.Context, id []byte) ([]byte, error)
 	StateBySlot(ctx context.Context, slot primitives.Slot) (state.BeaconState, error)
 	StateByEpoch(ctx context.Context, epoch primitives.Epoch) (state.BeaconState, error)
+	BlockRoot(ctx context.Context, id []byte) ([32]byte, error)
 }
 
 // BeaconDbStater is an implementation of Stater. It retrieves states from the beacon chain database.
@@ -110,6 +112,7 @@ type BeaconDbStater struct {
 	GenesisTimeFetcher blockchain.TimeFetcher
 	StateGenService    stategen.StateManager
 	ReplayerBuilder    stategen.ReplayerBuilder
+	Blocker            Blocker
 }
 
 // State returns the BeaconState for a given identifier. The identifier can be one of:
@@ -231,6 +234,68 @@ func (p *BeaconDbStater) StateRoot(ctx context.Context, stateId []byte) (root []
 	}
 
 	return root, err
+}
+
+// BlockRoot returns the canonical block root associated with the state at the given id, without
+// loading a BeaconState. For named tags and slot numbers it delegates to a Blocker (head/genesis/
+// finalized/justified/<slot> share the same canonical block under either id space). For hex/raw
+// state-root inputs it walks the head state's state_roots/block_roots circular buffers, since a
+// state root and a block root are different hashes that must be paired explicitly.
+func (p *BeaconDbStater) BlockRoot(ctx context.Context, stateId []byte) ([32]byte, error) {
+	if bytesutil.IsHex(stateId) || len(stateId) == fieldparams.RootLength {
+		stateRoot := stateId
+		if bytesutil.IsHex(stateId) {
+			decoded, err := hexutil.Decode(string(stateId))
+			if err != nil {
+				e := NewStateIdParseError(err)
+				return [32]byte{}, &e
+			}
+			stateRoot = decoded
+		}
+		return p.blockRootByStateRoot(ctx, stateRoot)
+	}
+	return p.Blocker.BlockRoot(ctx, stateId)
+}
+
+// blockRootByStateRoot maps a state root to its canonical block root using the head state's
+// state_roots/block_roots circular buffers, without loading any historical state.
+func (p *BeaconDbStater) blockRootByStateRoot(ctx context.Context, stateRoot []byte) ([32]byte, error) {
+	headState, err := p.ChainInfoFetcher.HeadStateReadOnly(ctx)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not get head state")
+	}
+	stateRoots := headState.StateRoots()
+	blkRoots := headState.BlockRoots()
+	n := len(stateRoots)
+	s, err := math.Int(uint64(headState.Slot()))
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not convert slot to int")
+	}
+	startIdx := s % n
+	isPostGloas := slots.ToEpoch(p.ChainInfoFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch
+
+	for i := range n {
+		idx := (startIdx - i + n) % n
+		if bytes.Equal(stateRoots[idx], stateRoot) {
+			return bytesutil.ToBytes32(blkRoots[idx]), nil
+		}
+		if isPostGloas {
+			r := bytesutil.ToBytes32(blkRoots[idx])
+			if r == params.BeaconConfig().ZeroHash {
+				continue
+			}
+			b, err := p.BeaconDB.Block(ctx, r)
+			if err != nil || b == nil || b.IsNil() {
+				continue
+			}
+			if b.Block().StateRoot() == bytesutil.ToBytes32(stateRoot) {
+				return r, nil
+			}
+		}
+	}
+
+	notFound := NewStateNotFoundError(len(headState.StateRoots()), stateRoot)
+	return [32]byte{}, &notFound
 }
 
 func (p *BeaconDbStater) stateByRoot(ctx context.Context, stateRoot []byte) (state.BeaconState, error) {
