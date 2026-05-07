@@ -28,6 +28,7 @@ go_library(
         "//testing/spectest:__subpackages__",
     ],
     deps = [
+        "//api/rest:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/cache:go_default_library",
@@ -45,6 +46,7 @@ go_library(
         "//beacon-chain/state/stategen:go_default_library",
         "//beacon-chain/verification:go_default_library",
         "//cmd/beacon-chain/flags:go_default_library",
+        "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
@@ -61,6 +63,7 @@ go_library(
         "//monitoring/tracing/trace:go_default_library",
         "//network:go_default_library",
         "//network/authorization:go_default_library",
+        "//network/httputil:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",

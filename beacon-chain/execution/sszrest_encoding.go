@@ -2,6 +2,7 @@ package execution
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -237,7 +238,7 @@ func withdrawalsToSSZ(ws []*pb.Withdrawal) []*pb.WithdrawalSSZ {
 }
 
 func cloneBytes(b []byte) []byte {
-	return append([]byte(nil), b...)
+	return slices.Clone(b)
 }
 
 // --- ForkchoiceUpdated Response ---
