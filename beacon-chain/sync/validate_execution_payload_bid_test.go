@@ -10,10 +10,12 @@ import (
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -59,6 +61,23 @@ func TestValidateExecutionPayloadBidGossip_ProposerPreferencesUnseen(t *testing.
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
+// TestValidateExecutionPayloadBidGossip_ParentBlockRootUnseen asserts the cheap
+// forkchoice/HasBlock gate that prevents attacker-controlled parent_block_root
+// values from forcing checkpoint-state loads.
+func TestValidateExecutionPayloadBidGossip_ParentBlockRootUnseen(t *testing.T) {
+	ctx := context.Background()
+	s, msg, _ := setupExecutionPayloadBidService(t)
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+	// Clear the forkchoice entry for the bid's parent_block_root; the DB also
+	// has no block at that root, so the gate must trigger.
+	s.cfg.chain.(*mock.ChainService).ForkchoiceRoots = map[[32]byte]bool{}
+
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NotNil(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.StringContains(t, "parent_block_root not seen yet", err.Error())
 }
 
 func TestValidateExecutionPayloadBidGossip_InitialSync(t *testing.T) {
@@ -269,6 +288,46 @@ func TestExecutionPayloadBidSubscriber_HappyPath(t *testing.T) {
 	got, ok := s.highestExecutionPayloadBidCache.Get(bid.Slot(), bid.ParentBlockHash(), bid.ParentBlockRoot())
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, signedBid, got)
+}
+
+// TestProposerDependentRoot_AdvancesAcrossEmptyEpoch asserts that the helper
+// advances the loaded parent state to start_slot(epoch-1) before delegating to
+// helpers.ProposerDependentRoot. With a parent state at slot 0 and a bid slot
+// in epoch 2, BlockRootAtSlot's bounds check would fail without the advance.
+func TestProposerDependentRoot_AdvancesAcrossEmptyEpoch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := context.Background()
+	db := dbtest.SetupDB(t)
+
+	// Need active validators so the cross-epoch ProcessSlots advance can run
+	// process_epoch without erroring on an empty active validator set.
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
+
+	sb := util.NewBeaconBlockGloas()
+	signedBlock, err := blocks.NewSignedBeaconBlock(sb)
+	require.NoError(t, err)
+	parentRoot, err := signedBlock.Block().HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(ctx, signedBlock))
+	require.NoError(t, db.SaveState(ctx, st, parentRoot))
+
+	s := &Service{
+		cfg: &config{
+			beaconDB: db,
+			stateGen: stategen.New(db, doublylinkedtree.New()),
+		},
+	}
+
+	// Bid slot in epoch 2: boundary = start_slot(1) = SlotsPerEpoch. Parent state
+	// at slot 0 must be advanced past slot 31 for BlockRootAtSlot(state, 31) to pass.
+	bidSlot := 2*params.BeaconConfig().SlotsPerEpoch + 6
+	_, err = s.proposerDependentRoot(ctx, parentRoot, bidSlot)
+	require.NoError(t, err)
 }
 
 func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {

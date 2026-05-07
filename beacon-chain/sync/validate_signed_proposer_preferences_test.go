@@ -122,6 +122,24 @@ func TestValidateSignedProposerPreferencesGossip_AlreadySeen(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
+// TestValidateSignedProposerPreferencesGossip_CacheHitSkipsStateLoad asserts that
+// the dedup cache lookup short-circuits before the checkpoint state load. With
+// the saved state removed, a duplicate gossip message must still return
+// (ValidationIgnore, nil); reaching StateByRootNoCopy would surface an error.
+func TestValidateSignedProposerPreferencesGossip_CacheHitSkipsStateLoad(t *testing.T) {
+	ctx := context.Background()
+	s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
+	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+
+	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
+	require.Equal(t, true, s.proposerPreferencesCache.Add(dependentRoot, signedPreferences.Message.ProposalSlot, signedPreferences.Message.ValidatorIndex, []byte{0x01}, 10))
+	require.NoError(t, s.cfg.beaconDB.DeleteState(ctx, dependentRoot))
+
+	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
 func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 	ctx := context.Background()
 	s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
@@ -240,7 +258,7 @@ func setupSignedProposerPreferencesService(t *testing.T) (*Service, *pubsub.Mess
 	// has not yet passed.
 	signedPreferences := &ethpb.SignedProposerPreferences{
 		Message: &ethpb.ProposerPreferences{
-			DependentRoot: dependentRoot[:],
+			DependentRoot:  dependentRoot[:],
 			ProposalSlot:   33,
 			ValidatorIndex: 0,
 			FeeRecipient:   bytes.Repeat([]byte{0x01}, 20),

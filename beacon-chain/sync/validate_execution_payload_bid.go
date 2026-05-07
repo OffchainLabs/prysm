@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -172,6 +173,17 @@ func (s *Service) proposerDependentRoot(ctx context.Context, parentBlockRoot [32
 	parentState, err := s.cfg.stateGen.StateByRootNoCopy(ctx, parentBlockRoot)
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "load parent state")
+	}
+	// Advance through any empty slots so BlockRootAtSlot's bounds check
+	// (state.Slot() > start_slot(epoch-1)-1) holds when the parent block
+	// itself sits at or before that boundary, e.g. an entirely empty epoch-1.
+	boundary, err := slots.EpochStart(slots.ToEpoch(slot) - 1)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "epoch start")
+	}
+	parentState, err = transition.ProcessSlotsIfNeeded(ctx, parentState, parentBlockRoot[:], boundary)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "advance parent state to boundary")
 	}
 	return helpers.ProposerDependentRoot(parentState, slot)
 }
