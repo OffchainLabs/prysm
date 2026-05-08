@@ -51,8 +51,8 @@ func TestSendExecutionPayloadEnvelopesByRootRequest(t *testing.T) {
 					BlockHash:     make([]byte, fieldparams.RootLength),
 					SlotNumber:    slot,
 				},
-				BeaconBlockRoot: root[:],
-				StateRoot:       make([]byte, fieldparams.RootLength),
+				BeaconBlockRoot:       root[:],
+				ParentBeaconBlockRoot: make([]byte, fieldparams.RootLength),
 			},
 			Signature: make([]byte, fieldparams.BLSSignatureLength),
 		}

@@ -131,13 +131,13 @@ func (s *Store) DeleteExecutionPayloadEnvelope(ctx context.Context, blockRoot [3
 func blindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope) *ethpb.SignedBlindedExecutionPayloadEnvelope {
 	return &ethpb.SignedBlindedExecutionPayloadEnvelope{
 		Message: &ethpb.BlindedExecutionPayloadEnvelope{
-			BlockHash:         env.Message.Payload.BlockHash,
-			ExecutionRequests: env.Message.ExecutionRequests,
-			BuilderIndex:      env.Message.BuilderIndex,
-			BeaconBlockRoot:   env.Message.BeaconBlockRoot,
-			Slot:              primitives.Slot(env.Message.Payload.SlotNumber),
-			StateRoot:         env.Message.StateRoot,
-			ParentBlockHash:   env.Message.Payload.ParentHash,
+			BlockHash:             env.Message.Payload.BlockHash,
+			ExecutionRequests:     env.Message.ExecutionRequests,
+			BuilderIndex:          env.Message.BuilderIndex,
+			BeaconBlockRoot:       env.Message.BeaconBlockRoot,
+			Slot:                  primitives.Slot(env.Message.Payload.SlotNumber),
+			ParentBlockHash:       env.Message.Payload.ParentHash,
+			ParentBeaconBlockRoot: env.Message.ParentBeaconBlockRoot,
 		},
 		Signature: env.Signature,
 	}

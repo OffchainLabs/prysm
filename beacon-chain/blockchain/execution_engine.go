@@ -116,7 +116,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 				return nil, nil
 			}
 
-			r, err := s.cfg.ForkChoiceStore.Head(ctx)
+			r, _, full, err := s.cfg.ForkChoiceStore.FullHead(ctx)
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"slot":                 headBlk.Slot(),
@@ -145,7 +145,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 				return nil, err // Returning err because it's recursive here.
 			}
 
-			if err := s.saveHead(ctx, r, b, st); err != nil {
+			if err := s.saveHead(ctx, r, b, st, full); err != nil {
 				log.WithError(err).Error("Could not save head after pruning invalid blocks")
 			}
 
@@ -321,7 +321,7 @@ func (s *Service) pruneInvalidBlock(ctx context.Context, root, parentRoot, paren
 
 // getPayloadAttributes returns the payload attributes for the given state and slot.
 // The attribute is required to initiate a payload build process in the context of an `engine_forkchoiceUpdated` call.
-func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot, accessRoot []byte) payloadattribute.Attributer {
+func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot []byte, headFull bool) payloadattribute.Attributer {
 	emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
 
 	// If it is an epoch boundary then process slots to get the right
@@ -343,7 +343,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		// right proposer index pre-Fulu, either way we need to copy the state to process it.
 		st = st.Copy()
 		var err error
-		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, accessRoot, slot)
+		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, headRoot, slot)
 		if err != nil {
 			log.WithError(err).Error("Could not process slots to get payload attribute")
 			return emptyAttri
@@ -373,7 +373,12 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	v := st.Version()
 	switch {
 	case v >= version.Gloas:
-		return payloadAttributesGloas(st, uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot, slot)
+		withdrawals, err := s.computePayloadWithdrawals(ctx, st, bytesutil.ToBytes32(headRoot), headFull)
+		if err != nil {
+			log.WithError(err).Error("Could not get withdrawals for payload attribute")
+			return emptyAttri
+		}
+		return payloadAttributesGloas(uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot, withdrawals, slot)
 	case v >= version.Deneb:
 		return payloadAttributesDeneb(st, uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot)
 	case v >= version.Capella:
@@ -386,12 +391,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	}
 }
 
-func payloadAttributesGloas(st state.BeaconState, timestamp uint64, prevRandao, feeRecipient, parentBeaconBlockRoot []byte, slot primitives.Slot) payloadattribute.Attributer {
-	withdrawals, err := st.WithdrawalsForPayload()
-	if err != nil {
-		log.WithError(err).Error("Could not get payload withdrawals to get payload attribute")
-		return payloadattribute.EmptyWithVersion(st.Version())
-	}
+func payloadAttributesGloas(timestamp uint64, prevRandao, feeRecipient, parentBeaconBlockRoot []byte, withdrawals []*enginev1.Withdrawal, slot primitives.Slot) payloadattribute.Attributer {
 	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
 		Timestamp:             timestamp,
 		PrevRandao:            prevRandao,
@@ -402,7 +402,7 @@ func payloadAttributesGloas(st state.BeaconState, timestamp uint64, prevRandao, 
 	})
 	if err != nil {
 		log.WithError(err).Error("Could not get payload attribute")
-		return payloadattribute.EmptyWithVersion(st.Version())
+		return payloadattribute.EmptyWithVersion(version.Gloas)
 	}
 	return attr
 }

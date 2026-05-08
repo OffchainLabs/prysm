@@ -7,6 +7,5 @@ import (
 )
 
 func TestMainnet_Gloas_Sanity_Blocks(t *testing.T) {
-	t.Skip("gloas spec tests disabled until https://github.com/OffchainLabs/prysm/pull/16658")
 	sanity.RunBlockProcessingTest(t, "mainnet", "sanity/blocks/pyspec_tests")
 }

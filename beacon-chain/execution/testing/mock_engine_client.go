@@ -185,7 +185,6 @@ func (e *EngineClient) ReconstructExecutionPayloadEnvelope(
 			ExecutionRequests: envelope.Message.ExecutionRequests,
 			BuilderIndex:      envelope.Message.BuilderIndex,
 			BeaconBlockRoot:   envelope.Message.BeaconBlockRoot,
-			StateRoot:         envelope.Message.StateRoot,
 		},
 		Signature: envelope.Signature,
 	}, nil

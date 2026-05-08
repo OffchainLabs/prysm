@@ -264,7 +264,7 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 	// Only reinitialize if the offset is different
 	if s.stateDiffCache != nil {
 		if s.stateDiffCache.getOffset() == uint64(slot) {
-			log.WithField("offset", slot).Warning("Ignoring state diff cache reinitialization")
+			log.WithField("offset", slot).Debug("Ignoring state diff cache reinitialization")
 			return nil
 		}
 	}
@@ -303,7 +303,7 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 		return pkgerrors.Wrap(err, "failed to save initial snapshot")
 	}
 
-	log.WithField("offset", slot).Info("Initialized state-diff cache")
+	log.WithField("offset", slot).Debug("Initialized state-diff cache")
 	return nil
 }
 

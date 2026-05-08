@@ -57,10 +57,13 @@ func (s signedExecutionPayloadEnvelope) IsNil() bool {
 	if len(s.s.Signature) != field_params.BLSSignatureLength {
 		return true
 	}
+	if s.s.Message == nil {
+		return true
+	}
 	if len(s.s.Message.BeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
-	if len(s.s.Message.StateRoot) != field_params.RootLength {
+	if len(s.s.Message.ParentBeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
 	if s.s.Message.ExecutionRequests == nil {
@@ -94,6 +97,9 @@ func (p *executionPayloadEnvelope) IsNil() bool {
 	if len(p.p.BeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
+	if len(p.p.ParentBeaconBlockRoot) != field_params.RootLength {
+		return true
+	}
 	return false
 }
 
@@ -122,14 +128,14 @@ func (p *executionPayloadEnvelope) BeaconBlockRoot() [field_params.RootLength]by
 	return [field_params.RootLength]byte(p.p.BeaconBlockRoot)
 }
 
+// ParentBeaconBlockRoot returns the parent beacon block root referenced by the envelope.
+func (p *executionPayloadEnvelope) ParentBeaconBlockRoot() [field_params.RootLength]byte {
+	return [field_params.RootLength]byte(p.p.ParentBeaconBlockRoot)
+}
+
 // Slot returns the slot derived from the payload's slot_number field.
 func (p *executionPayloadEnvelope) Slot() primitives.Slot {
 	return primitives.Slot(p.p.Payload.SlotNumber)
-}
-
-// StateRoot returns the state root carried by the envelope.
-func (p *executionPayloadEnvelope) StateRoot() [field_params.RootLength]byte {
-	return [field_params.RootLength]byte(p.p.StateRoot)
 }
 
 // BlockHash returns the block hash from the execution payload.
@@ -157,6 +163,9 @@ func (p *blindedExecutionPayloadEnvelope) IsNil() bool {
 	if len(p.p.BeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
+	if len(p.p.ParentBeaconBlockRoot) != field_params.RootLength {
+		return true
+	}
 	if len(p.p.BlockHash) != field_params.RootLength {
 		return true
 	}
@@ -179,12 +188,12 @@ func (p *blindedExecutionPayloadEnvelope) BeaconBlockRoot() [field_params.RootLe
 	return [field_params.RootLength]byte(p.p.BeaconBlockRoot)
 }
 
-func (p *blindedExecutionPayloadEnvelope) Slot() primitives.Slot {
-	return p.p.Slot
+func (p *blindedExecutionPayloadEnvelope) ParentBeaconBlockRoot() [field_params.RootLength]byte {
+	return [field_params.RootLength]byte(p.p.ParentBeaconBlockRoot)
 }
 
-func (p *blindedExecutionPayloadEnvelope) StateRoot() [field_params.RootLength]byte {
-	return [field_params.RootLength]byte(p.p.StateRoot)
+func (p *blindedExecutionPayloadEnvelope) Slot() primitives.Slot {
+	return p.p.Slot
 }
 
 func (p *blindedExecutionPayloadEnvelope) BlockHash() [field_params.RootLength]byte {

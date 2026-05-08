@@ -46,9 +46,9 @@ func testSignedEnvelope(slot primitives.Slot, beaconBlockRoot []byte) *pb.Signed
 				BlockHash:     root,
 				SlotNumber:    slot,
 			},
-			ExecutionRequests: &engpb.ExecutionRequests{},
-			BeaconBlockRoot:   root,
-			StateRoot:         make([]byte, 32),
+			ExecutionRequests:     &engpb.ExecutionRequests{},
+			BeaconBlockRoot:       root,
+			ParentBeaconBlockRoot: make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	}
@@ -132,6 +132,28 @@ func TestValidateEnvelopesByRange(t *testing.T) {
 			assert.Equal(t, tc.expectedRP.size, rp.size)
 		})
 	}
+}
+
+func TestValidateExecutionPayloadEnvelopeByRangeResponseRejectsMalformedEnvelope(t *testing.T) {
+	req := &pb.ExecutionPayloadEnvelopesByRangeRequest{StartSlot: 5, Count: 1}
+
+	t.Run("nil message", func(t *testing.T) {
+		env := testSignedEnvelope(5, make([]byte, 32))
+		env.Message = nil
+
+		_, _, err := validateExecutionPayloadEnvelopeByRangeResponse(env, req, 0, nil, false)
+		require.NotNil(t, err)
+		assert.ErrorContains(t, "invalid execution payload envelope", err)
+	})
+
+	t.Run("nil payload", func(t *testing.T) {
+		env := testSignedEnvelope(5, make([]byte, 32))
+		env.Message.Payload = nil
+
+		_, _, err := validateExecutionPayloadEnvelopeByRangeResponse(env, req, 0, nil, false)
+		require.NotNil(t, err)
+		assert.ErrorContains(t, "invalid execution payload envelope", err)
+	})
 }
 
 // ---------------------------------------------------------------------------

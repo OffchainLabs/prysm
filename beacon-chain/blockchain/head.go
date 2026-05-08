@@ -41,7 +41,8 @@ func (s *Service) UpdateAndSaveHeadWithBalances(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "could not retrieve head state in DB")
 	}
-	return s.saveHead(ctx, headRoot, headBlock, headState)
+	full := s.cfg.ForkChoiceStore.FullBeatsEmpty(headRoot)
+	return s.saveHead(ctx, headRoot, headBlock, headState, full)
 }
 
 // This defines the current chain service's view of head.
@@ -50,34 +51,17 @@ type head struct {
 	block      interfaces.ReadOnlySignedBeaconBlock // current head block.
 	state      state.BeaconState                    // current head state.
 	slot       primitives.Slot                      // the head block slot number
-	full       bool                                 // whether the head is post-CL or post-EL after Gloas
+	full       bool                                 // whether the head's execution payload has been delivered (post-Gloas)
 	optimistic bool                                 // optimistic status when saved head
 }
 
 // This saves head info to the local service cache, it also saves the
 // new head root to the DB.
 // Caller of the method MUST acquire a lock on forkchoice.
-func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock interfaces.ReadOnlySignedBeaconBlock, headState state.BeaconState) error {
+func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock interfaces.ReadOnlySignedBeaconBlock, headState state.BeaconState, full bool) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.saveHead")
 	defer span.End()
 
-	// Pre-Gloas we use empty for head because we still key states by blockroot
-	var full bool
-	var err error
-	if headState.Version() >= version.Gloas {
-		gloasFirstSlot, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
-		if err != nil {
-			return errors.Wrap(err, "could not compute gloas first slot")
-		}
-		if headState.Slot() > gloasFirstSlot {
-			full, err = headState.IsParentBlockFull()
-			if err != nil {
-				return errors.Wrap(err, "could not determine if head is full or not")
-			}
-		}
-	}
-
-	// Do nothing if head hasn't changed.
 	if !s.isNewHead(newHeadRoot, full) {
 		return nil
 	}
@@ -235,9 +219,9 @@ func (s *Service) setHead(newHead *head) error {
 		root:       newHead.root,
 		block:      bCp,
 		state:      newHead.state.Copy(),
-		full:       newHead.full,
 		optimistic: newHead.optimistic,
 		slot:       newHead.slot,
+		full:       newHead.full,
 	}
 	return nil
 }

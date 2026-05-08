@@ -13,4 +13,3 @@ func TestMerkleizeTrieLeaves_BadHashLayer(t *testing.T) {
 	_, _, err := stateutil.MerkleizeTrieLeaves(layers, hashLayer)
 	assert.ErrorContains(t, "hash layer is a non power of 2", err)
 }
-

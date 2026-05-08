@@ -217,6 +217,7 @@ func setupSignedProposerPreferencesService(t *testing.T) (*Service, *pubsub.Mess
 	}
 	signedPreferences := &ethpb.SignedProposerPreferences{
 		Message: &ethpb.ProposerPreferences{
+			DependentRoot:  make([]byte, 32),
 			ProposalSlot:   primitives.Slot(1),
 			ValidatorIndex: 2,
 			FeeRecipient:   bytes.Repeat([]byte{0x01}, 20),

@@ -182,15 +182,8 @@ func (s *Service) updateCheckpoints(
 	preState, postState state.BeaconState,
 	blockRoot [32]byte,
 ) error {
-	if coreTime.CurrentEpoch(postState) > cp.c && s.cfg.ForkChoiceStore.IsCanonical(blockRoot) {
-		headSt, err := s.HeadState(ctx)
-		if err != nil {
-			return errors.Wrap(err, "could not get head state")
-		}
-		if err := reportEpochMetrics(ctx, postState, headSt); err != nil {
-			log.WithError(err).Error("Could not report epoch metrics")
-		}
-	}
+	s.reportEpochMetrics(postState, cp.c, blockRoot)
+
 	if err := s.updateJustificationOnBlock(ctx, preState, postState, cp.j); err != nil {
 		return errors.Wrap(err, "could not update justified checkpoint")
 	}
@@ -205,6 +198,24 @@ func (s *Service) updateCheckpoints(
 		s.executePostFinalizationTasks(ctx, postState)
 	}
 	return nil
+}
+
+func (s *Service) reportEpochMetrics(postState state.BeaconState, prevEpoch primitives.Epoch, blockRoot [32]byte) {
+	if coreTime.CurrentEpoch(postState) <= prevEpoch || !s.cfg.ForkChoiceStore.IsCanonical(blockRoot) {
+		return
+	}
+
+	go func() {
+		headSt, err := s.HeadState(s.ctx)
+		if err != nil {
+			log.WithError(err).Error("Could not get head state for epoch metrics")
+			return
+		}
+
+		if err := reportEpochMetrics(s.ctx, postState, headSt); err != nil {
+			log.WithError(err).Error("Could not report epoch metrics")
+		}
+	}()
 }
 
 func (s *Service) validateExecutionAndConsensus(
@@ -508,8 +519,14 @@ func (s *Service) markIncludedBlockBLSToExecChanges(headBlock interfaces.ReadOnl
 
 // This checks whether it's time to start saving hot state to DB.
 // It's time when there's `epochsSinceFinalitySaveHotStateDB` epochs of non-finality.
+//
+//	If state-diff is enabled, we will not save hot states to DB regardless of finality status.
+//
 // Requires a read lock on forkchoice
 func (s *Service) checkSaveHotStateDB(ctx context.Context) error {
+	if features.Get().EnableStateDiff {
+		return s.cfg.StateGen.DisableSaveHotStateToDB(ctx)
+	}
 	currentEpoch := slots.ToEpoch(s.CurrentSlot())
 	// Prevent `sinceFinality` going underflow.
 	var sinceFinality primitives.Epoch
