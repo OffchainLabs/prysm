@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -19,9 +20,96 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 		return nil
 	}
 
+	if beaconState.Version() < version.Gloas {
+		return processDepositRequestsPerRequest(beaconState, requests)
+	}
+
+	// dup pubkeys break batching: a later request's classification can depend on the earlier one succeeding
+	seen := make(map[[fieldparams.BLSPubkeyLength]byte]struct{}, len(requests))
+	for _, req := range requests {
+		if req == nil {
+			return errors.New("could not apply deposit request: nil deposit request")
+		}
+		pk := bytesutil.ToBytes48(req.Pubkey)
+		if _, dup := seen[pk]; dup {
+			return processDepositRequestsPerRequest(beaconState, requests)
+		}
+		seen[pk] = struct{}{}
+	}
+
+	slot := beaconState.Slot()
+	newBuilders := make([]*enginev1.DepositRequest, 0, len(requests))
+	for _, req := range requests {
+		pubkey := bytesutil.ToBytes48(req.Pubkey)
+
+		if idx, ok := beaconState.BuilderIndexByPubkey(pubkey); ok {
+			if err := beaconState.IncreaseBuilderBalance(idx, req.Amount); err != nil {
+				return errors.Wrap(err, "could not apply builder deposit")
+			}
+			builderDepositsProcessedTotal.Inc()
+			continue
+		}
+
+		if helpers.IsBuilderWithdrawalCredential(req.WithdrawalCredentials) {
+			if _, isValidator := beaconState.ValidatorIndexByPubkey(pubkey); !isValidator {
+				isPending, err := beaconState.IsPendingValidator(req.Pubkey)
+				if err != nil {
+					return errors.Wrap(err, "could not check pending validator")
+				}
+				if !isPending {
+					newBuilders = append(newBuilders, req)
+					continue
+				}
+			}
+		}
+
+		if err := beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
+			PublicKey:             req.Pubkey,
+			WithdrawalCredentials: req.WithdrawalCredentials,
+			Amount:                req.Amount,
+			Signature:             req.Signature,
+			Slot:                  slot,
+		}); err != nil {
+			return errors.Wrap(err, "could not append deposit request")
+		}
+	}
+
+	return registerNewBuilders(ctx, beaconState, newBuilders)
+}
+
+func processDepositRequestsPerRequest(beaconState state.BeaconState, requests []*enginev1.DepositRequest) error {
 	for _, receipt := range requests {
 		if err := processDepositRequest(beaconState, receipt); err != nil {
 			return errors.Wrap(err, "could not apply deposit request")
+		}
+	}
+	return nil
+}
+
+func registerNewBuilders(ctx context.Context, beaconState state.BeaconState, candidates []*enginev1.DepositRequest) error {
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	valid, err := helpers.BatchVerifyDepositRequestSignatures(ctx, candidates)
+	if err != nil {
+		return errors.Wrap(err, "could not verify builder deposits")
+	}
+
+	for i, c := range candidates {
+		builderDepositsProcessedTotal.Inc()
+		if !valid[i] {
+			log.WithFields(logrus.Fields{
+				"pubkey": fmt.Sprintf("%x", c.Pubkey),
+			}).Warn("ignoring builder deposit: invalid signature")
+			continue
+		}
+		if err := beaconState.AddBuilderFromDeposit(
+			bytesutil.ToBytes48(c.Pubkey),
+			bytesutil.ToBytes32(c.WithdrawalCredentials),
+			c.Amount,
+		); err != nil {
+			return errors.Wrap(err, "could not apply builder deposit")
 		}
 	}
 	return nil

@@ -53,6 +53,7 @@ go_test(
     srcs = [
         "attestation_test.go",
         "bid_test.go",
+        "deposit_request_bench_test.go",
         "deposit_request_test.go",
         "payload_attestation_test.go",
         "payload_test.go",

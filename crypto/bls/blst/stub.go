@@ -103,6 +103,11 @@ func PublicKeyFromBytes(_ []byte) (PublicKey, error) {
 	panic(err)
 }
 
+// MultiplePublicKeysFromBytes -- stub
+func MultiplePublicKeysFromBytes(_ [][]byte) ([]common.PublicKey, error) {
+	panic(err)
+}
+
 // SignatureFromBytes -- stub
 func SignatureFromBytes(_ []byte) (Signature, error) {
 	panic(err)

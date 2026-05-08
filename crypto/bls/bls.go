@@ -24,6 +24,11 @@ func PublicKeyFromBytes(pubKey []byte) (PublicKey, error) {
 	return blst.PublicKeyFromBytes(pubKey)
 }
 
+// MultiplePublicKeysFromBytes batch-deserializes a slice of compressed BLS public keys.
+func MultiplePublicKeysFromBytes(pubKeys [][]byte) ([]PublicKey, error) {
+	return blst.MultiplePublicKeysFromBytes(pubKeys)
+}
+
 // SignatureFromBytesNoValidation creates a BLS signature from a LittleEndian byte slice.
 // It does not check validity of the signature, use only when the byte slice has
 // already been verified
