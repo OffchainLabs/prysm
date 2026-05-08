@@ -180,10 +180,10 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 				return err
 			}
 		}
-		if s.beaconDB.HasState(ctx, aRoot) {
-			s.migrateHotToCold(aRoot)
-			continue
-		}
+		//if s.beaconDB.HasState(ctx, aRoot) {
+		//	s.migrateHotToCold(aRoot)
+		//	continue
+		//}
 		// advance slots to the target slot
 		if aState.Slot() < slot {
 			aState, err = transition.ProcessSlots(ctx, aState, slot)

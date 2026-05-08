@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -139,11 +140,17 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 		return nil, errors.New("could not compute anchor level")
 	}
 
+	stateDiffGetAnchorStateCalls.Inc()
+
 	// Check if we have the anchor in cache.
+	cacheReadStart := time.Now()
 	anchor = s.stateDiffCache.getAnchor(anchorLvl)
+	stateDiffGetAnchorStateCacheReadTime.Observe(float64(time.Since(cacheReadStart)) / float64(time.Millisecond))
 	if anchor != nil && anchor.Slot() == anchorSlot {
+		stateDiffGetAnchorStateCacheHit.Inc()
 		return anchor, nil
 	}
+	stateDiffGetAnchorStateCacheMiss.Inc()
 	if anchor != nil {
 		log.WithField("level", anchorLvl).
 			WithField("expectedSlot", anchorSlot).
@@ -152,7 +159,9 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 	}
 
 	// If not, load it from the database.
+	dbReadStart := time.Now()
 	anchor, err = s.stateByDiff(ctx, anchorSlot)
+	stateDiffGetAnchorStateDBReadTime.Observe(float64(time.Since(dbReadStart)) / float64(time.Millisecond))
 	if err != nil {
 		return nil, err
 	}
@@ -261,6 +270,11 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 	if !features.Get().EnableStateDiff {
 		return nil
 	}
+
+	if slot%32 != 0 {
+		return errors.New("state diff slot must be a multiple of 32")
+	}
+
 	// Only reinitialize if the offset is different
 	if s.stateDiffCache != nil {
 		if s.stateDiffCache.getOffset() == uint64(slot) {

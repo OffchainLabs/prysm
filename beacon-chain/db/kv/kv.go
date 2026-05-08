@@ -61,6 +61,30 @@ var (
 		Name: "validator_entry_cache_delete_total",
 		Help: "The total number of cache deletes on the validator entry cache.",
 	})
+	stateDiffGetAnchorStateCalls = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "state_diff_get_anchor_state_calls_total",
+		Help: "The total number of state diff getAnchorState calls.",
+	})
+	stateDiffGetAnchorStateCacheHit = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "state_diff_get_anchor_state_cache_hit_total",
+		Help: "The total number of state diff getAnchorState cache hits.",
+	})
+	stateDiffGetAnchorStateCacheMiss = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "state_diff_get_anchor_state_cache_miss_total",
+		Help: "The total number of state diff getAnchorState cache misses.",
+	})
+	stateDiffGetAnchorStateCacheReadTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "state_diff_get_anchor_state_cache_read_milliseconds",
+		Help: "Milliseconds it takes to read the anchor state from cache in getAnchorState.",
+	})
+	stateDiffGetAnchorStateDBReadTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "state_diff_get_anchor_state_db_read_milliseconds",
+		Help: "Milliseconds it takes to read the anchor state from the database in getAnchorState.",
+	})
+	stateDiffAnchorCacheBytes = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "state_diff_anchor_cache_bytes",
+		Help: "The size in bytes of each state diff anchor cache level.",
+	}, []string{"level"})
 	stateReadingTime = promauto.NewSummary(prometheus.SummaryOpts{
 		Name: "db_beacon_state_reading_milliseconds",
 		Help: "Milliseconds it takes to read a beacon state from the DB",

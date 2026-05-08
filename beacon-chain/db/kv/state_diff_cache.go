@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"strconv"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -26,6 +27,7 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 		levelsWithData: make([]bool, len(flags.Get().StateDiffExponents)),
 		offset:         offset,
 	}
+	resetAnchorCacheBytesMetrics(len(cache.anchors))
 
 	if err := s.db.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
@@ -74,7 +76,9 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 	// Only cache anchor if there are higher levels that need it.
 	// With a single exponent, len(anchors)==0 and no caching is needed.
 	if len(cache.anchors) > 0 {
-		cache.anchors[0] = anchor0
+		if err := cache.setAnchor(0, anchor0); err != nil {
+			return nil, err
+		}
 	}
 	cache.levelsWithData[0] = true
 
@@ -170,11 +174,13 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 		return nil, err
 	}
 
-	return &stateDiffCache{
+	cache := &stateDiffCache{
 		anchors:        make([]state.ReadOnlyBeaconState, len(flags.Get().StateDiffExponents)-1), // -1 because last level doesn't need to be cached
 		levelsWithData: make([]bool, len(flags.Get().StateDiffExponents)),
 		offset:         offset,
-	}, nil
+	}
+	resetAnchorCacheBytesMetrics(len(cache.anchors))
+	return cache, nil
 }
 
 func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
@@ -184,12 +190,15 @@ func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
 }
 
 func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) error {
+	sizeBytes := anchorStateCacheSizeBytes(anchor)
+
 	c.Lock()
 	defer c.Unlock()
 	if level >= len(c.anchors) || level < 0 {
 		return errors.New("state diff cache: anchor level out of range")
 	}
 	c.anchors[level] = anchor
+	stateDiffAnchorCacheBytes.WithLabelValues(strconv.Itoa(level)).Set(sizeBytes)
 	return nil
 }
 
@@ -228,4 +237,22 @@ func (c *stateDiffCache) clearAnchors() {
 	c.Lock()
 	defer c.Unlock()
 	c.anchors = make([]state.ReadOnlyBeaconState, len(flags.Get().StateDiffExponents)-1) // -1 because last level doesn't need to be cached
+	resetAnchorCacheBytesMetrics(len(c.anchors))
+}
+
+func anchorStateCacheSizeBytes(anchor state.ReadOnlyBeaconState) float64 {
+	if anchor == nil {
+		return 0
+	}
+	enc, err := anchor.MarshalSSZ()
+	if err != nil {
+		return 0
+	}
+	return float64(len(enc))
+}
+
+func resetAnchorCacheBytesMetrics(levelCount int) {
+	for level := range levelCount {
+		stateDiffAnchorCacheBytes.WithLabelValues(strconv.Itoa(level)).Set(0)
+	}
 }
