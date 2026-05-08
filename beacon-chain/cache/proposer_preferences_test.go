@@ -86,3 +86,72 @@ func TestProposerPreferencesCache_PruneBefore(t *testing.T) {
 	require.Equal(t, true, c.Has(rootA, 11))
 	require.Equal(t, true, c.Has(rootA, 12))
 }
+
+func TestProposerPreferencesCache_SetAndValidator(t *testing.T) {
+	c := NewProposerPreferencesCache()
+	pref := ProposerPreference{
+		DependentRoot:  rootA,
+		ValidatorIndex: 9,
+		FeeRecipient:   []byte{0xde, 0xad},
+		GasLimit:       30_000_000,
+	}
+
+	_, ok := c.Validator(9)
+	require.Equal(t, false, ok)
+
+	c.Set(pref)
+	got, ok := c.Validator(9)
+	require.Equal(t, true, ok)
+	require.Equal(t, pref.ValidatorIndex, got.ValidatorIndex)
+	require.Equal(t, pref.DependentRoot, got.DependentRoot)
+	require.Equal(t, pref.GasLimit, got.GasLimit)
+	require.DeepEqual(t, pref.FeeRecipient, got.FeeRecipient)
+}
+
+func TestProposerPreferencesCache_SetOverwrites(t *testing.T) {
+	c := NewProposerPreferencesCache()
+
+	c.Set(ProposerPreference{ValidatorIndex: 4, FeeRecipient: []byte{1}, GasLimit: 10})
+	c.Set(ProposerPreference{DependentRoot: rootB, ValidatorIndex: 4, FeeRecipient: []byte{2}, GasLimit: 20})
+
+	got, ok := c.Validator(4)
+	require.Equal(t, true, ok)
+	require.Equal(t, rootB, got.DependentRoot)
+	require.DeepEqual(t, []byte{2}, got.FeeRecipient)
+	require.Equal(t, uint64(20), got.GasLimit)
+}
+
+func TestProposerPreferencesCache_Validating(t *testing.T) {
+	c := NewProposerPreferencesCache()
+	require.Equal(t, false, c.Validating())
+
+	require.Equal(t, true, c.Add(rootA, 5, 1, []byte{1}, 10))
+	require.Equal(t, false, c.Validating())
+
+	c.Set(ProposerPreference{ValidatorIndex: 2, FeeRecipient: []byte{1}, GasLimit: 10})
+	require.Equal(t, true, c.Validating())
+}
+
+func TestProposerPreferencesCache_Indices(t *testing.T) {
+	c := NewProposerPreferencesCache()
+	require.Equal(t, 0, len(c.Indices()))
+
+	require.Equal(t, true, c.Add(rootA, 5, 99, []byte{1}, 10))
+	require.Equal(t, 0, len(c.Indices()))
+
+	c.Set(ProposerPreference{ValidatorIndex: 2})
+	c.Set(ProposerPreference{ValidatorIndex: 7})
+	indices := c.Indices()
+	require.Equal(t, 2, len(indices))
+	require.Equal(t, true, indices[primitives.ValidatorIndex(2)])
+	require.Equal(t, true, indices[primitives.ValidatorIndex(7)])
+	require.Equal(t, false, indices[primitives.ValidatorIndex(99)])
+}
+
+func TestProposerPreferencesCache_AddRejectsOwnedValidator(t *testing.T) {
+	c := NewProposerPreferencesCache()
+	c.Set(ProposerPreference{ValidatorIndex: 7, FeeRecipient: []byte{1}, GasLimit: 10})
+
+	require.Equal(t, false, c.Add(rootA, 5, 7, []byte{2}, 20))
+	require.Equal(t, false, c.Has(rootA, 5))
+}
