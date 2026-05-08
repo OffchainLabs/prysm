@@ -562,6 +562,10 @@ func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, roSidecars
 func (vs *Server) PrepareBeaconProposer(
 	_ context.Context, request *ethpb.PrepareBeaconProposerRequest,
 ) (*emptypb.Empty, error) {
+	if slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		log.Warn("PrepareBeaconProposer is deprecated post-Gloas; validator clients should use SignedProposerPreferences instead. Request accepted as a no-op.")
+		return &emptypb.Empty{}, nil
+	}
 	var validatorIndices []primitives.ValidatorIndex
 
 	for _, r := range request.Recipients {
@@ -570,19 +574,17 @@ func (vs *Server) PrepareBeaconProposer(
 			return nil, status.Errorf(codes.InvalidArgument, "Invalid fee recipient address: %v", recipient)
 		}
 		// Use default address if the burn address is return
-		feeRecipient := primitives.ExecutionAddress(r.FeeRecipient)
-		if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
-			feeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
-			if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
+		feeRecipient := r.FeeRecipient
+		if common.BytesToAddress(feeRecipient) == (common.Address{}) {
+			feeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
+			if common.BytesToAddress(feeRecipient) == (common.Address{}) {
 				log.WithField("validatorIndex", r.ValidatorIndex).Warn("Fee recipient is the burn address")
 			}
 		}
-		val := cache.TrackedValidator{
-			Active:       true, // TODO: either check or add the field in the request
-			Index:        r.ValidatorIndex,
-			FeeRecipient: feeRecipient,
-		}
-		vs.TrackedValidatorsCache.Set(val)
+		vs.ProposerPreferencesCache.Set(cache.ProposerPreference{
+			ValidatorIndex: r.ValidatorIndex,
+			FeeRecipient:   feeRecipient,
+		})
 		validatorIndices = append(validatorIndices, r.ValidatorIndex)
 	}
 

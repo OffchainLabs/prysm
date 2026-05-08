@@ -23,6 +23,7 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -42,9 +43,10 @@ var (
 	})
 )
 
-func setFeeRecipientIfBurnAddress(val *cache.TrackedValidator) {
-	if val.FeeRecipient == primitives.ExecutionAddress([20]byte{}) && val.Index == 0 {
-		val.FeeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
+func setFeeRecipientIfBurnAddress(val *cache.ProposerPreference, slot primitives.Slot) {
+	if common.BytesToAddress(val.FeeRecipient) == (common.Address{}) && val.ValidatorIndex == 0 {
+		val.FeeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
+		cache.WarnSuggestedFeeRecipientPostGloas(slot)
 	}
 }
 
@@ -81,11 +83,11 @@ func (vs *Server) getLocalPayloadFromEngine(
 	}
 	payloadId, ok := vs.PayloadIDCache.PayloadID(slot, parentRoot)
 
-	val, tracked := vs.TrackedValidatorsCache.Validator(proposerId)
+	val, tracked := vs.ProposerPreferencesCache.Validator(proposerId)
 	if !tracked {
 		logrus.WithFields(logFields).Warn("Could not find tracked proposer index")
 	}
-	setFeeRecipientIfBurnAddress(&val)
+	setFeeRecipientIfBurnAddress(&val, slot)
 
 	if ok && payloadId != [8]byte{} {
 		// Payload ID is cache hit. Return the cached payload ID.
@@ -94,7 +96,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		payloadIDCacheHit.Inc()
 		res, err := vs.ExecutionEngineCaller.GetPayload(ctx, pid, slot)
 		if err == nil {
-			warnIfFeeRecipientDiffers(val.FeeRecipient[:], res.ExecutionData.FeeRecipient())
+			warnIfFeeRecipientDiffers(val.FeeRecipient, res.ExecutionData.FeeRecipient())
 			return res, nil
 		}
 		// TODO: TestServer_getExecutionPayloadContextTimeout expects this behavior.
@@ -147,7 +149,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV4{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
-			SuggestedFeeRecipient: val.FeeRecipient[:],
+			SuggestedFeeRecipient: val.FeeRecipient,
 			Withdrawals:           withdrawals,
 			ParentBeaconBlockRoot: parentRoot[:],
 			SlotNumber:            uint64(slot),
@@ -163,7 +165,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV3{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
-			SuggestedFeeRecipient: val.FeeRecipient[:],
+			SuggestedFeeRecipient: val.FeeRecipient,
 			Withdrawals:           withdrawals,
 			ParentBeaconBlockRoot: parentRoot[:],
 		})
@@ -178,7 +180,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV2{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
-			SuggestedFeeRecipient: val.FeeRecipient[:],
+			SuggestedFeeRecipient: val.FeeRecipient,
 			Withdrawals:           withdrawals,
 		})
 		if err != nil {
@@ -188,7 +190,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributes{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
-			SuggestedFeeRecipient: val.FeeRecipient[:],
+			SuggestedFeeRecipient: val.FeeRecipient,
 		})
 		if err != nil {
 			return nil, err
@@ -208,7 +210,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		return nil, err
 	}
 
-	warnIfFeeRecipientDiffers(val.FeeRecipient[:], res.ExecutionData.FeeRecipient())
+	warnIfFeeRecipientDiffers(val.FeeRecipient, res.ExecutionData.FeeRecipient())
 	log.WithField("value", res.Bid).Debug("Received execution payload from local engine")
 	return res, nil
 }

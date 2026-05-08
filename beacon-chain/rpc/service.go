@@ -126,7 +126,6 @@ type Config struct {
 	ClockWaiter                      startup.ClockWaiter
 	BlobStorage                      *filesystem.BlobStorage
 	DataColumnStorage                *filesystem.DataColumnStorage
-	TrackedValidatorsCache           *cache.TrackedValidatorsCache
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	PayloadIDCache                   *cache.PayloadIDCache
@@ -265,7 +264,6 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		BLSChangesPool:                   s.cfg.BLSChangesPool,
 		ClockWaiter:                      s.cfg.ClockWaiter,
 		CoreService:                      coreService,
-		TrackedValidatorsCache:           s.cfg.TrackedValidatorsCache,
 		ProposerPreferencesCache:         s.cfg.ProposerPreferencesCache,
 		HighestBidCache:                  s.cfg.HighestBidCache,
 		PayloadIDCache:                   s.cfg.PayloadIDCache,

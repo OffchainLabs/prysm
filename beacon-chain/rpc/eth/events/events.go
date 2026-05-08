@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -681,9 +682,9 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 	}
 
 	feeRecpt := params.BeaconConfig().DefaultFeeRecipient.Bytes()
-	tValidator, exists := s.TrackedValidatorsCache.Validator(proposer)
+	tValidator, exists := s.ProposerPreferencesCache.Validator(proposer)
 	if exists {
-		feeRecpt = tValidator.FeeRecipient[:]
+		feeRecpt = tValidator.FeeRecipient
 	}
 
 	if v == version.Bellatrix {

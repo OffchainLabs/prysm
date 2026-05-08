@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -35,7 +36,7 @@ func (vs *Server) SubmitSignedProposerPreferences(
 
 	currentEpoch := slots.ToEpoch(vs.TimeFetcher.CurrentSlot())
 
-	var broadcast, duplicate int
+	var broadcast int
 	for _, msg := range req.SignedProposerPreferences {
 		if msg == nil || msg.Message == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "signed proposer preferences message is nil")
@@ -80,25 +81,27 @@ func (vs *Server) SubmitSignedProposerPreferences(
 		var dependentRoot [fieldparams.RootLength]byte
 		copy(dependentRoot[:], msg.Message.DependentRoot)
 
-		if vs.ProposerPreferencesCache.Has(dependentRoot, proposalSlot) {
-			duplicate++
-			continue
-		}
-
 		if err := vs.P2P.BroadcastForEpoch(ctx, msg, slots.ToEpoch(proposalSlot)); err != nil {
 			return nil, status.Errorf(codes.Internal,
 				"Could not broadcast signed proposer preferences (broadcast %d/%d): %v",
 				broadcast, len(req.SignedProposerPreferences), err)
 		}
 
-		vs.ProposerPreferencesCache.Add(dependentRoot, proposalSlot, valIdx, msg.Message.FeeRecipient, msg.Message.GasLimit)
+		// Mark this validator as owned with its branch-independent default.
+		// Our own preferences live in the owned store only; the broadcast
+		// goes out to peers and we do not validate our own bids locally.
+		vs.ProposerPreferencesCache.Set(cache.ProposerPreference{
+			DependentRoot:  dependentRoot,
+			ValidatorIndex: valIdx,
+			FeeRecipient:   msg.Message.FeeRecipient,
+			GasLimit:       msg.Message.GasLimit,
+		})
 		broadcast++
 	}
 
 	log.WithFields(logrus.Fields{
 		"total":     len(req.SignedProposerPreferences),
 		"broadcast": broadcast,
-		"duplicate": duplicate,
 	}).Debug("Processed signed proposer preferences")
 	return &emptypb.Empty{}, nil
 }

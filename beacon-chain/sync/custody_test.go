@@ -76,7 +76,7 @@ func setupCustodyTest(t *testing.T, withChain bool) *testSetup {
 	service := &Service{
 		ctx:                    ctx,
 		cfg:                    cfg,
-		trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 
 	return &testSetup{
@@ -198,7 +198,7 @@ func TestCustodyGroupCount(t *testing.T) {
 	t.Run("No tracked validators returns CustodyRequirement", func(t *testing.T) {
 		service := &Service{
 			ctx:                    context.Background(),
-			trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+			proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 		}
 
 		result, err := service.custodyGroupCount(ctx)
@@ -244,7 +244,7 @@ func TestCustodyGroupCount(t *testing.T) {
 		withSemiSupernode(t, func() {
 			service := &Service{
 				ctx:                    context.Background(),
-				trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+				proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 			}
 
 			result, err := service.custodyGroupCount(ctx)
@@ -274,7 +274,7 @@ func TestSemiSupernodeValidatorCustodyOverride(t *testing.T) {
 			// Setup with validators requiring only 32 groups (less than 64)
 			service := &Service{
 				ctx:                    context.Background(),
-				trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+				proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 			}
 
 			result, err := service.custodyGroupCount(ctx)
@@ -316,7 +316,7 @@ func TestSemiSupernodeValidatorCustodyOverride(t *testing.T) {
 		withSemiSupernode(t, func() {
 			service := &Service{
 				ctx:                    context.Background(),
-				trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+				proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 			}
 
 			result, err := service.custodyGroupCount(ctx)
@@ -340,7 +340,7 @@ func TestSemiSupernodeValidatorCustodyOverride(t *testing.T) {
 		withSemiSupernode(t, func() {
 			service := &Service{
 				ctx:                    context.Background(),
-				trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+				proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 			}
 
 			result, err := service.custodyGroupCount(ctx)

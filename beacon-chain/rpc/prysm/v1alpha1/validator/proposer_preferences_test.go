@@ -38,7 +38,7 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytesutil.PadTo([]byte{0xcc}, 32),
+					DependentRoot:  bytesutil.PadTo([]byte{0xcc}, 32),
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -53,10 +53,10 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepEqual(t, &emptypb.Empty{}, resp)
 	assert.Equal(t, true, p2p.BroadcastCalled.Load())
-	pref, ok := cache.Get([32]byte{0xcc}, proposalSlot)
+	val, ok := cache.Validator(2)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, req.SignedProposerPreferences[0].Message.FeeRecipient, pref.FeeRecipient)
-	require.Equal(t, req.SignedProposerPreferences[0].Message.GasLimit, pref.GasLimit)
+	require.DeepEqual(t, req.SignedProposerPreferences[0].Message.FeeRecipient, val.FeeRecipient)
+	require.Equal(t, req.SignedProposerPreferences[0].Message.GasLimit, val.GasLimit)
 }
 
 func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
@@ -80,7 +80,7 @@ func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytesutil.PadTo([]byte{0xaa}, 32),
+					DependentRoot:  bytesutil.PadTo([]byte{0xaa}, 32),
 					ProposalSlot:   currentSlot + 1,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -90,7 +90,7 @@ func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
 			},
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytesutil.PadTo([]byte{0xbb}, 32),
+					DependentRoot:  bytesutil.PadTo([]byte{0xbb}, 32),
 					ProposalSlot:   currentSlot + 2,
 					ValidatorIndex: 5,
 					FeeRecipient:   make([]byte, 20),
@@ -105,25 +105,28 @@ func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepEqual(t, &emptypb.Empty{}, resp)
 
-	_, ok := c.Get([32]byte{0xaa}, currentSlot+1)
+	_, ok := c.Validator(2)
 	require.Equal(t, true, ok)
-	pref2, ok := c.Get([32]byte{0xbb}, currentSlot+2)
+	val2, ok := c.Validator(5)
 	require.Equal(t, true, ok)
-	require.Equal(t, uint64(25_000_000), pref2.GasLimit)
+	require.Equal(t, uint64(25_000_000), val2.GasLimit)
 }
 
-func TestSubmitSignedProposerPreferences_DuplicateSlot(t *testing.T) {
+func TestSubmitSignedProposerPreferences_DuplicateBroadcasts(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.GloasForkEpoch = 1
 	params.OverrideBeaconConfig(cfg)
 
+	// SubmitSignedProposerPreferences no longer dedups against the local
+	// cache before broadcasting: gossipsub handles duplicate suppression
+	// on the network. Local Submits always broadcast and refresh the
+	// owned-validator entry.
 	currentSlot := primitives.Slot(31)
 	proposalSlot := currentSlot + 1
 	chain := &chainMock.ChainService{Slot: &currentSlot}
 	p2p := &p2pmock.MockBroadcaster{}
 	c := cache.NewProposerPreferencesCache()
-	c.Add([32]byte{0xcc}, proposalSlot, 2, make([]byte, 20), 30_000_000)
 	vs := &Server{
 		SyncChecker:              &mockSync.Sync{IsSyncing: false},
 		TimeFetcher:              chain,
@@ -135,7 +138,7 @@ func TestSubmitSignedProposerPreferences_DuplicateSlot(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytesutil.PadTo([]byte{0xcc}, 32),
+					DependentRoot:  bytesutil.PadTo([]byte{0xcc}, 32),
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -149,7 +152,10 @@ func TestSubmitSignedProposerPreferences_DuplicateSlot(t *testing.T) {
 	resp, err := vs.SubmitSignedProposerPreferences(t.Context(), req)
 	require.NoError(t, err)
 	require.DeepEqual(t, &emptypb.Empty{}, resp)
-	assert.Equal(t, false, p2p.BroadcastCalled.Load())
+	assert.Equal(t, true, p2p.BroadcastCalled.Load())
+	val, ok := c.Validator(2)
+	require.Equal(t, true, ok)
+	require.Equal(t, uint64(30_000_000), val.GasLimit)
 }
 
 func TestSubmitSignedProposerPreferences_InvalidEpoch(t *testing.T) {
@@ -172,7 +178,7 @@ func TestSubmitSignedProposerPreferences_InvalidEpoch(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytesutil.PadTo([]byte{0xcc}, 32),
+					DependentRoot:  bytesutil.PadTo([]byte{0xcc}, 32),
 					ProposalSlot:   currentSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -213,7 +219,7 @@ func TestSubmitSignedProposerPreferences_CurrentEpochFutureSlot(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytesutil.PadTo([]byte{0xcc}, 32),
+					DependentRoot:  bytesutil.PadTo([]byte{0xcc}, 32),
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -249,7 +255,7 @@ func TestSubmitSignedProposerPreferences_Syncing(t *testing.T) {
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytesutil.PadTo([]byte{0xcc}, 32),
+					DependentRoot:  bytesutil.PadTo([]byte{0xcc}, 32),
 					ProposalSlot:   currentSlot + 1,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),
@@ -287,7 +293,7 @@ func TestSubmitSignedProposerPreferences_BroadcastsForProposalEpoch(t *testing.T
 		SignedProposerPreferences: []*ethpb.SignedProposerPreferences{
 			{
 				Message: &ethpb.ProposerPreferences{
-					DependentRoot: bytesutil.PadTo([]byte{0xcc}, 32),
+					DependentRoot:  bytesutil.PadTo([]byte{0xcc}, 32),
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: 2,
 					FeeRecipient:   make([]byte, 20),

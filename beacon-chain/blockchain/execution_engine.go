@@ -327,7 +327,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	// If it is an epoch boundary then process slots to get the right
 	// shuffling before checking if the proposer is tracked. Otherwise
 	// perform this check before. This is cheap as the NSC has already been updated.
-	var val cache.TrackedValidator
+	var val cache.ProposerPreference
 	var ok bool
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(st.Slot())
@@ -378,13 +378,13 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			log.WithError(err).Error("Could not get withdrawals for payload attribute")
 			return emptyAttri
 		}
-		return payloadAttributesGloas(uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot, withdrawals, slot)
+		return payloadAttributesGloas(uint64(t.Unix()), prevRando, val.FeeRecipient, headRoot, withdrawals, slot)
 	case v >= version.Deneb:
-		return payloadAttributesDeneb(st, uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot)
+		return payloadAttributesDeneb(st, uint64(t.Unix()), prevRando, val.FeeRecipient, headRoot)
 	case v >= version.Capella:
-		return payloadAttributesCapella(st, uint64(t.Unix()), prevRando, val.FeeRecipient[:])
+		return payloadAttributesCapella(st, uint64(t.Unix()), prevRando, val.FeeRecipient)
 	case v >= version.Bellatrix:
-		return payloadAttributesBellatrix(uint64(t.Unix()), prevRando, val.FeeRecipient[:])
+		return payloadAttributesBellatrix(uint64(t.Unix()), prevRando, val.FeeRecipient)
 	default:
 		log.WithField("version", version.String(v)).Error("Could not get payload attribute due to unknown state version")
 		return payloadattribute.EmptyWithVersion(v)

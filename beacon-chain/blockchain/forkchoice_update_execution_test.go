@@ -68,7 +68,7 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
 	service.cfg.PayloadIDCache = cache.NewPayloadIDCache()
-	service.cfg.TrackedValidatorsCache = cache.NewTrackedValidatorsCache()
+	service.cfg.ProposerPreferencesCache = cache.NewProposerPreferencesCache()
 
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 2

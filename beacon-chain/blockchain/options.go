@@ -88,14 +88,6 @@ func WithPayloadIDCache(c *cache.PayloadIDCache) Option {
 	}
 }
 
-// WithTrackedValidatorsCache for tracked validators cache.
-func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
-	return func(s *Service) error {
-		s.cfg.TrackedValidatorsCache = c
-		return nil
-	}
-}
-
 // WithProposerPreferencesCache sets the proposer preferences cache used to
 // look up fee recipient and gas limit from Gloas gossip preferences.
 func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {

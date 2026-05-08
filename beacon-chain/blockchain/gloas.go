@@ -49,6 +49,7 @@ func (s *Service) runLatePayloadTasks() {
 	if err := s.waitUntilEpoch(cfg.GloasForkEpoch, cfg.SecondsPerSlot); err != nil {
 		return
 	}
+	cache.WarnSuggestedFeeRecipientPostGloas(s.CurrentSlot())
 	offset := cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS)
 	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SecondsPerSlot)
 	defer ticker.Done()
@@ -63,14 +64,14 @@ func (s *Service) runLatePayloadTasks() {
 	}
 }
 
-func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives.Slot) (cache.TrackedValidator, bool) {
+func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives.Slot) (cache.ProposerPreference, bool) {
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(st.Slot())
 	fuluAndNextEpoch := st.Version() >= version.Fulu && e == stateEpoch+1
 	if e == stateEpoch || fuluAndNextEpoch {
 		return s.trackedProposer(st, slot)
 	}
-	return cache.TrackedValidator{}, false
+	return cache.ProposerPreference{}, false
 }
 
 // computePayloadWithdrawals returns the withdrawals for the next payload.
@@ -147,7 +148,7 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
 		Timestamp:             uint64(t.Unix()),
 		PrevRandao:            prevRando,
-		SuggestedFeeRecipient: val.FeeRecipient[:],
+		SuggestedFeeRecipient: val.FeeRecipient,
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: headRoot,
 		SlotNumber:            uint64(slot),

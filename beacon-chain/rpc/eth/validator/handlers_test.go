@@ -2026,7 +2026,8 @@ func TestServer_RegisterValidator(t *testing.T) {
 				BlockBuilder: &builderTest.MockBuilderService{
 					HasConfigured: true,
 				},
-				BeaconDB: db,
+				BeaconDB:    db,
+				TimeFetcher: &mockChain.ChainService{},
 			}
 
 			server.RegisterValidator(writer, request)
@@ -2402,15 +2403,15 @@ func TestGetProposerDuties(t *testing.T) {
 			State: bs, Root: genesisRoot[:], Slot: &chainSlot,
 		}
 		s := &Server{
-			Stater:                 &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
-			HeadFetcher:            chain,
-			TimeFetcher:            chain,
-			OptimisticModeFetcher:  chain,
-			SyncChecker:            &mockSync.Sync{IsSyncing: false},
-			PayloadIDCache:         cache.NewPayloadIDCache(),
-			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-			BeaconDB:               db,
-			CoreService:            &core.Service{},
+			Stater:                   &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
+			HeadFetcher:              chain,
+			TimeFetcher:              chain,
+			OptimisticModeFetcher:    chain,
+			SyncChecker:              &mockSync.Sync{IsSyncing: false},
+			PayloadIDCache:           cache.NewPayloadIDCache(),
+			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			BeaconDB:                 db,
+			CoreService:              &core.Service{},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
@@ -2445,15 +2446,15 @@ func TestGetProposerDuties(t *testing.T) {
 			State: bs, Root: genesisRoot[:], Slot: &chainSlot,
 		}
 		s := &Server{
-			Stater:                 &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
-			HeadFetcher:            chain,
-			TimeFetcher:            chain,
-			OptimisticModeFetcher:  chain,
-			SyncChecker:            &mockSync.Sync{IsSyncing: false},
-			PayloadIDCache:         cache.NewPayloadIDCache(),
-			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-			BeaconDB:               db,
-			CoreService:            &core.Service{},
+			Stater:                   &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
+			HeadFetcher:              chain,
+			TimeFetcher:              chain,
+			OptimisticModeFetcher:    chain,
+			SyncChecker:              &mockSync.Sync{IsSyncing: false},
+			PayloadIDCache:           cache.NewPayloadIDCache(),
+			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			BeaconDB:                 db,
+			CoreService:              &core.Service{},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
@@ -2489,15 +2490,15 @@ func TestGetProposerDuties(t *testing.T) {
 			State: bs, Root: genesisRoot[:], Slot: &chainSlot,
 		}
 		s := &Server{
-			Stater:                 &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
-			HeadFetcher:            chain,
-			TimeFetcher:            chain,
-			OptimisticModeFetcher:  chain,
-			SyncChecker:            &mockSync.Sync{IsSyncing: false},
-			PayloadIDCache:         cache.NewPayloadIDCache(),
-			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-			BeaconDB:               db,
-			CoreService:            &core.Service{},
+			Stater:                   &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
+			HeadFetcher:              chain,
+			TimeFetcher:              chain,
+			OptimisticModeFetcher:    chain,
+			SyncChecker:              &mockSync.Sync{IsSyncing: false},
+			PayloadIDCache:           cache.NewPayloadIDCache(),
+			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			BeaconDB:                 db,
+			CoreService:              &core.Service{},
 		}
 
 		currentEpoch := slots.ToEpoch(bs.Slot())
@@ -2529,15 +2530,15 @@ func TestGetProposerDuties(t *testing.T) {
 			State: bs, Root: genesisRoot[:], Slot: &chainSlot, Optimistic: true,
 		}
 		s := &Server{
-			Stater:                 &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
-			HeadFetcher:            chain,
-			TimeFetcher:            chain,
-			OptimisticModeFetcher:  chain,
-			SyncChecker:            &mockSync.Sync{IsSyncing: false},
-			PayloadIDCache:         cache.NewPayloadIDCache(),
-			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-			BeaconDB:               db,
-			CoreService:            &core.Service{},
+			Stater:                   &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
+			HeadFetcher:              chain,
+			TimeFetcher:              chain,
+			OptimisticModeFetcher:    chain,
+			SyncChecker:              &mockSync.Sync{IsSyncing: false},
+			PayloadIDCache:           cache.NewPayloadIDCache(),
+			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			BeaconDB:                 db,
+			CoreService:              &core.Service{},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
@@ -2653,14 +2654,14 @@ func TestGetProposerDutiesV2(t *testing.T) {
 			State: bs, Root: genesisRoot[:], Slot: &chainSlot,
 		}
 		s := &Server{
-			Stater:                 &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
-			HeadFetcher:            chain,
-			TimeFetcher:            chain,
-			OptimisticModeFetcher:  chain,
-			SyncChecker:            &mockSync.Sync{IsSyncing: false},
-			PayloadIDCache:         cache.NewPayloadIDCache(),
-			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-			BeaconDB:               db,
+			Stater:                   &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
+			HeadFetcher:              chain,
+			TimeFetcher:              chain,
+			OptimisticModeFetcher:    chain,
+			SyncChecker:              &mockSync.Sync{IsSyncing: false},
+			PayloadIDCache:           cache.NewPayloadIDCache(),
+			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			BeaconDB:                 db,
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v2/validator/duties/proposer/{epoch}", nil)
@@ -2693,14 +2694,14 @@ func TestGetProposerDutiesV2(t *testing.T) {
 			State: bs, Root: genesisRoot[:], Slot: &chainSlot,
 		}
 		s := &Server{
-			Stater:                 &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
-			HeadFetcher:            chain,
-			TimeFetcher:            chain,
-			OptimisticModeFetcher:  chain,
-			SyncChecker:            &mockSync.Sync{IsSyncing: false},
-			PayloadIDCache:         cache.NewPayloadIDCache(),
-			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-			BeaconDB:               db,
+			Stater:                   &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
+			HeadFetcher:              chain,
+			TimeFetcher:              chain,
+			OptimisticModeFetcher:    chain,
+			SyncChecker:              &mockSync.Sync{IsSyncing: false},
+			PayloadIDCache:           cache.NewPayloadIDCache(),
+			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			BeaconDB:                 db,
 		}
 
 		// Request epoch 1 (pre-Fulu since FuluForkEpoch=100).
@@ -2730,14 +2731,14 @@ func TestGetProposerDutiesV2(t *testing.T) {
 			State: bs, Root: genesisRoot[:], Slot: &chainSlot,
 		}
 		s := &Server{
-			Stater:                 &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
-			HeadFetcher:            chain,
-			TimeFetcher:            chain,
-			OptimisticModeFetcher:  chain,
-			SyncChecker:            &mockSync.Sync{IsSyncing: false},
-			PayloadIDCache:         cache.NewPayloadIDCache(),
-			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-			BeaconDB:               db,
+			Stater:                   &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
+			HeadFetcher:              chain,
+			TimeFetcher:              chain,
+			OptimisticModeFetcher:    chain,
+			SyncChecker:              &mockSync.Sync{IsSyncing: false},
+			PayloadIDCache:           cache.NewPayloadIDCache(),
+			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			BeaconDB:                 db,
 		}
 
 		// Request epoch 1 (post-Fulu since FuluForkEpoch=0).
@@ -2767,14 +2768,14 @@ func TestGetProposerDutiesV2(t *testing.T) {
 			State: bs, Root: genesisRoot[:], Slot: &chainSlot,
 		}
 		s := &Server{
-			Stater:                 &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
-			HeadFetcher:            chain,
-			TimeFetcher:            chain,
-			OptimisticModeFetcher:  chain,
-			SyncChecker:            &mockSync.Sync{IsSyncing: false},
-			PayloadIDCache:         cache.NewPayloadIDCache(),
-			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-			BeaconDB:               db,
+			Stater:                   &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
+			HeadFetcher:              chain,
+			TimeFetcher:              chain,
+			OptimisticModeFetcher:    chain,
+			SyncChecker:              &mockSync.Sync{IsSyncing: false},
+			PayloadIDCache:           cache.NewPayloadIDCache(),
+			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			BeaconDB:                 db,
 		}
 
 		// Request epoch 1 when current epoch is 0, triggering next-epoch lookahead.
@@ -3693,9 +3694,10 @@ func TestPrepareBeaconProposer(t *testing.T) {
 			writer := httptest.NewRecorder()
 			db := dbutil.SetupDB(t)
 			server := &Server{
-				BeaconDB:               db,
-				TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-				PayloadIDCache:         cache.NewPayloadIDCache(),
+				BeaconDB:                 db,
+				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+				PayloadIDCache:           cache.NewPayloadIDCache(),
+				TimeFetcher:              &mockChain.ChainService{},
 			}
 			server.PrepareBeaconProposer(writer, request)
 			require.Equal(t, tt.code, writer.Code)
@@ -3707,9 +3709,9 @@ func TestPrepareBeaconProposer(t *testing.T) {
 				require.NoError(t, err)
 				index, err := strconv.ParseUint(tt.request[0].ValidatorIndex, 10, 64)
 				require.NoError(t, err)
-				val, tracked := server.TrackedValidatorsCache.Validator(primitives.ValidatorIndex(index))
+				val, tracked := server.ProposerPreferencesCache.Validator(primitives.ValidatorIndex(index))
 				require.Equal(t, true, tracked)
-				require.Equal(t, primitives.ExecutionAddress(feebytes), val.FeeRecipient)
+				require.DeepEqual(t, feebytes, val.FeeRecipient)
 			}
 		})
 	}
@@ -3723,9 +3725,10 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 
 	// New validator
 	proposerServer := &Server{
-		BeaconDB:               db,
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-		PayloadIDCache:         cache.NewPayloadIDCache(),
+		BeaconDB:                 db,
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		PayloadIDCache:           cache.NewPayloadIDCache(),
+		TimeFetcher:              &mockChain.ChainService{},
 	}
 	req := []*structs.FeeRecipient{{
 		FeeRecipient:   hexutil.Encode(bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)),
@@ -3808,9 +3811,10 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	db := dbutil.SetupDB(b)
 	proposerServer := &Server{
-		BeaconDB:               db,
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-		PayloadIDCache:         cache.NewPayloadIDCache(),
+		BeaconDB:                 db,
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		PayloadIDCache:           cache.NewPayloadIDCache(),
+		TimeFetcher:              &mockChain.ChainService{},
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)
 	recipients := make([]*structs.FeeRecipient, 0)

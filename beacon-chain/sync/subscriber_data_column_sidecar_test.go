@@ -19,7 +19,7 @@ func TestAllDataColumnSubnets(t *testing.T) {
 		// Service with no tracked validators
 		svc := &Service{
 			ctx:                    t.Context(),
-			trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+			proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 		}
 
 		result := svc.allDataColumnSubnets(primitives.Slot(0))
@@ -42,12 +42,12 @@ func TestAllDataColumnSubnets(t *testing.T) {
 		require.NoError(t, err)
 
 		// At least one tracked validator.
-		tvc := cache.NewTrackedValidatorsCache()
-		tvc.Set(cache.TrackedValidator{Active: true, Index: 1})
+		tvc := cache.NewProposerPreferencesCache()
+		tvc.Set(cache.ProposerPreference{ValidatorIndex: 1})
 
 		svc := &Service{
-			ctx:                    ctx,
-			trackedValidatorsCache: tvc,
+			ctx:                      ctx,
+			proposerPreferencesCache: tvc,
 			cfg: &config{
 				stateGen: stateGen,
 				beaconDB: db,

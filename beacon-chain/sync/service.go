@@ -195,7 +195,6 @@ type Service struct {
 	reconstructionSingleFlight           singleflight.Group
 	availableBlocker                     coverage.AvailableBlocker
 	reconstructionRandGen                *rand.Rand
-	trackedValidatorsCache               *cache.TrackedValidatorsCache
 	ctxMap                               ContextByteVersions
 	slasherEnabled                       bool
 	lcStore                              *lightClient.Store

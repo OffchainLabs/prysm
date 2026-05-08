@@ -199,7 +199,7 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 		WithAttestationService(req.attSrv),
 		WithBLSToExecPool(req.blsPool),
 		WithDepositCache(dc),
-		WithTrackedValidatorsCache(cache.NewTrackedValidatorsCache()),
+		WithProposerPreferencesCache(cache.NewProposerPreferencesCache()),
 		WithBlobStorage(filesystem.NewEphemeralBlobStorage(t)),
 		WithDataColumnStorage(filesystem.NewEphemeralDataColumnStorage(t)),
 		WithSyncChecker(mock.MockChecker{}),

@@ -148,14 +148,14 @@ func TestServer_getExecutionPayload(t *testing.T) {
 			ed, err := blocks.NewWrappedExecutionData(&pb.ExecutionPayload{})
 			require.NoError(t, err)
 			vs := &Server{
-				ExecutionEngineCaller:  &powtesting.EngineClient{PayloadIDBytes: tt.payloadID, ErrForkchoiceUpdated: tt.forkchoiceErr, GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed, OverrideBuilder: tt.override}},
-				HeadFetcher:            &chainMock.ChainService{State: tt.st},
-				FinalizationFetcher:    &chainMock.ChainService{},
-				BeaconDB:               beaconDB,
-				PayloadIDCache:         cache.NewPayloadIDCache(),
-				TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+				ExecutionEngineCaller:    &powtesting.EngineClient{PayloadIDBytes: tt.payloadID, ErrForkchoiceUpdated: tt.forkchoiceErr, GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed, OverrideBuilder: tt.override}},
+				HeadFetcher:              &chainMock.ChainService{State: tt.st},
+				FinalizationFetcher:      &chainMock.ChainService{},
+				BeaconDB:                 beaconDB,
+				PayloadIDCache:           cache.NewPayloadIDCache(),
+				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 			}
-			vs.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, Index: tt.validatorIndx})
+			vs.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: tt.validatorIndx})
 			if tt.payloadID != nil {
 				vs.PayloadIDCache.Set(tt.st.Slot(), [32]byte{'a'}, [8]byte(*tt.payloadID))
 			}
@@ -263,11 +263,11 @@ func TestServer_getExecutionPayloadContextTimeout(t *testing.T) {
 	ed, err := blocks.NewWrappedExecutionData(&pb.ExecutionPayload{})
 	require.NoError(t, err)
 	vs := &Server{
-		ExecutionEngineCaller:  &powtesting.EngineClient{PayloadIDBytes: &pb.PayloadIDBytes{}, ErrGetPayload: context.DeadlineExceeded, GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed}},
-		HeadFetcher:            &chainMock.ChainService{State: nonTransitionSt},
-		BeaconDB:               beaconDB,
-		PayloadIDCache:         cache.NewPayloadIDCache(),
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		ExecutionEngineCaller:    &powtesting.EngineClient{PayloadIDBytes: &pb.PayloadIDBytes{}, ErrGetPayload: context.DeadlineExceeded, GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed}},
+		HeadFetcher:              &chainMock.ChainService{State: nonTransitionSt},
+		BeaconDB:                 beaconDB,
+		PayloadIDCache:           cache.NewPayloadIDCache(),
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 	vs.PayloadIDCache.Set(nonTransitionSt.Slot(), [32]byte{'a'}, [8]byte{100})
 
@@ -316,18 +316,18 @@ func TestServer_getExecutionPayload_UnexpectedFeeRecipient(t *testing.T) {
 			PayloadIDBytes:     payloadID,
 			GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed},
 		},
-		HeadFetcher:            &chainMock.ChainService{State: transitionSt},
-		FinalizationFetcher:    &chainMock.ChainService{},
-		BeaconDB:               beaconDB,
-		PayloadIDCache:         cache.NewPayloadIDCache(),
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		HeadFetcher:              &chainMock.ChainService{State: transitionSt},
+		FinalizationFetcher:      &chainMock.ChainService{},
+		BeaconDB:                 beaconDB,
+		PayloadIDCache:           cache.NewPayloadIDCache(),
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
-	val := cache.TrackedValidator{
-		Active:       true,
-		FeeRecipient: primitives.ExecutionAddress(feeRecipient),
-		Index:        0,
+	val := cache.ProposerPreference{
+
+		FeeRecipient:   feeRecipient.Bytes(),
+		ValidatorIndex: 0,
 	}
-	vs.TrackedValidatorsCache.Set(val)
+	vs.ProposerPreferencesCache.Set(val)
 
 	blk := util.NewBeaconBlockBellatrix()
 	blk.Block.Slot = transitionSt.Slot()
@@ -455,14 +455,14 @@ func TestServer_getTerminalBlockHashIfExists(t *testing.T) {
 }
 
 func TestSetFeeRecipientIfBurnAddress(t *testing.T) {
-	val := &cache.TrackedValidator{Index: 1}
+	val := &cache.ProposerPreference{ValidatorIndex: 1}
 	cfg := params.BeaconConfig().Copy()
 	cfg.DefaultFeeRecipient = common.Address([20]byte{'a'})
 	params.OverrideBeaconConfig(cfg)
-	require.NotEqual(t, common.Address(val.FeeRecipient), params.BeaconConfig().DefaultFeeRecipient)
-	setFeeRecipientIfBurnAddress(val)
-	require.NotEqual(t, common.Address(val.FeeRecipient), params.BeaconConfig().DefaultFeeRecipient)
-	val.Index = 0
-	setFeeRecipientIfBurnAddress(val)
-	require.Equal(t, common.Address(val.FeeRecipient), params.BeaconConfig().DefaultFeeRecipient)
+	require.NotEqual(t, common.BytesToAddress(val.FeeRecipient), params.BeaconConfig().DefaultFeeRecipient)
+	setFeeRecipientIfBurnAddress(val, 0)
+	require.NotEqual(t, common.BytesToAddress(val.FeeRecipient), params.BeaconConfig().DefaultFeeRecipient)
+	val.ValidatorIndex = 0
+	setFeeRecipientIfBurnAddress(val, 0)
+	require.Equal(t, common.BytesToAddress(val.FeeRecipient), params.BeaconConfig().DefaultFeeRecipient)
 }

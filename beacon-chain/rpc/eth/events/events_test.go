@@ -195,7 +195,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 			Data: &operation.BLSToExecutionChangeReceivedData{
 				Change: &eth.SignedBLSToExecutionChange{
 					Message: &eth.BLSToExecutionChange{
-						ValidatorIndex:     0,
+						ValidatorIndex: 0,
 						FromBlsPubkey:      make([]byte, 48),
 						ToExecutionAddress: make([]byte, 20),
 					},
@@ -483,7 +483,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 			name                      string
 			getState                  func() state.BeaconState
 			getBlock                  func() interfaces.SignedBeaconBlock
-			SetTrackedValidatorsCache func(*cache.TrackedValidatorsCache)
+			SetProposerPreferencesCache func(*cache.ProposerPreferencesCache)
 		}
 		testCases := []testCase{
 			{
@@ -537,11 +537,11 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					require.NoError(t, err)
 					return b
 				},
-				SetTrackedValidatorsCache: func(c *cache.TrackedValidatorsCache) {
-					c.Set(cache.TrackedValidator{
-						Active:       true,
-						Index:        0,
-						FeeRecipient: primitives.ExecutionAddress(common.HexToAddress("0xd2DBd02e4efe087d7d195de828b9Dd25f19A89C9").Bytes()),
+				SetProposerPreferencesCache: func(c *cache.ProposerPreferencesCache) {
+					c.Set(cache.ProposerPreference{
+						
+						ValidatorIndex: 0,
+						FeeRecipient: common.HexToAddress("0xd2DBd02e4efe087d7d195de828b9Dd25f19A89C9").Bytes(),
 					})
 				},
 			},
@@ -580,12 +580,12 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					OperationNotifier:      &mockChain.SimpleNotifier{Feed: opn},
 					HeadFetcher:            mockChainService,
 					ChainInfoFetcher:       mockChainService,
-					TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+					ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 					EventWriteTimeout:      testEventWriteTimeout,
 					StateGen:               stategen,
 				}
-				if tc.SetTrackedValidatorsCache != nil {
-					tc.SetTrackedValidatorsCache(s.TrackedValidatorsCache)
+				if tc.SetProposerPreferencesCache != nil {
+					tc.SetProposerPreferencesCache(s.ProposerPreferencesCache)
 				}
 				topics, err := newTopicRequest([]string{PayloadAttributesTopic})
 				require.NoError(t, err)
@@ -595,7 +595,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					{
 						Type: statefeed.PayloadAttributes,
 						Data: payloadattribute.EventData{
-							ProposerIndex:     0,
+							ProposerIndex: 0,
 							ProposalSlot:      mockChainService.CurrentSlot() + 1,
 							ParentBlockNumber: 0,
 							ParentBlockHash:   make([]byte, 32),
@@ -679,7 +679,7 @@ func TestFillEventData(t *testing.T) {
 			OperationNotifier:      &mockChain.SimpleNotifier{Feed: opn},
 			HeadFetcher:            mockChainService,
 			ChainInfoFetcher:       mockChainService,
-			TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 			EventWriteTimeout:      testEventWriteTimeout,
 			StateGen:               stategen,
 		}

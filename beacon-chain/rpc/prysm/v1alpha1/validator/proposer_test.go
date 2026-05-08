@@ -906,7 +906,7 @@ func getProposerServer(ctx context.Context, db db.HeadAccessDatabase, headState 
 			Genesis: time.Now(),
 		},
 		PayloadIDCache:         cache.NewPayloadIDCache(),
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 		BeaconDB:               db,
 		BLSChangesPool:         blstoexec.NewPool(),
 		BlockBuilder:           &builderTest.MockBuilderService{HasConfigured: true},
@@ -3241,18 +3241,18 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 			ctx := t.Context()
 			proposerServer := &Server{
 				BeaconDB:               db,
-				TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 			}
-			require.Equal(t, false, proposerServer.TrackedValidatorsCache.Validating())
+			require.Equal(t, false, proposerServer.ProposerPreferencesCache.Validating())
 			_, err := proposerServer.PrepareBeaconProposer(ctx, tt.args.request)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, err)
 				return
 			} else {
-				require.Equal(t, true, proposerServer.TrackedValidatorsCache.Validating())
+				require.Equal(t, true, proposerServer.ProposerPreferencesCache.Validating())
 			}
 			require.NoError(t, err)
-			val, tracked := proposerServer.TrackedValidatorsCache.Validator(1)
+			val, tracked := proposerServer.ProposerPreferencesCache.Validator(1)
 			require.Equal(t, true, tracked)
 			require.Equal(t, primitives.ExecutionAddress(tt.args.request.Recipients[0].FeeRecipient), val.FeeRecipient)
 
@@ -3267,8 +3267,9 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	db := dbutil.SetupDB(t)
 	ctx := t.Context()
 	proposerServer := &Server{
-		BeaconDB:               db,
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		BeaconDB:                 db,
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		TimeFetcher:              &mock.ChainService{},
 	}
 
 	// New validator
@@ -3325,7 +3326,7 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	ctx := b.Context()
 	proposerServer := &Server{
 		BeaconDB:               db,
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)
 	recipients := make([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, 0)

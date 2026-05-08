@@ -597,7 +597,7 @@ func (s *Service) inRegularSync() bool {
 // validating returns true if the beacon is tracking some validators that have
 // registered for proposing.
 func (s *Service) validating() bool {
-	return s.cfg.TrackedValidatorsCache.Validating()
+	return s.cfg.ProposerPreferencesCache.Validating()
 }
 
 // ShouldIgnoreData returns true if the data for the given parent root and slot should be ignored.

@@ -34,6 +34,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation/attestations"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -752,10 +753,16 @@ func (s *Server) produceSyncCommitteeContribution(
 	}, true
 }
 
+
 // RegisterValidator requests that the beacon node stores valid validator registrations and calls the builder apis to update the custom builder
 func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.RegisterValidators")
 	defer span.End()
+
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		log.Warn("/eth/v1/validator/register_validator is deprecated post-Gloas; validator clients should use SignedProposerPreferences instead. Request accepted as a no-op.")
+		return
+	}
 
 	if s.BlockBuilder == nil || !s.BlockBuilder.Configured() {
 		httputil.HandleError(w, fmt.Sprintf("Could not register block builder: %v", builder.ErrNoBuilder), http.StatusBadRequest)
@@ -795,6 +802,10 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 
 // PrepareBeaconProposer endpoint saves the fee recipient given a validator index, this is used when proposing a block.
 func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		log.Warn("/eth/v1/validator/prepare_beacon_proposer is deprecated post-Gloas; validator clients should use SignedProposerPreferences instead. Request accepted as a no-op.")
+		return
+	}
 	var jsonFeeRecipients []*structs.FeeRecipient
 	err := json.NewDecoder(r.Body).Decode(&jsonFeeRecipients)
 	switch {
@@ -817,19 +828,17 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Use default address if the burn address is return
-		feeRecipient := primitives.ExecutionAddress(feeRecipientBytes)
-		if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
-			feeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
-			if feeRecipient == primitives.ExecutionAddress([20]byte{}) {
+		feeRecipient := feeRecipientBytes
+		if common.BytesToAddress(feeRecipient) == (common.Address{}) {
+			feeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
+			if common.BytesToAddress(feeRecipient) == (common.Address{}) {
 				log.WithField("validatorIndex", validatorIndex).Warn("Fee recipient is the burn address")
 			}
 		}
-		val := cache.TrackedValidator{
-			Active:       true, // TODO: either check or add the field in the request
-			Index:        primitives.ValidatorIndex(validatorIndex),
-			FeeRecipient: feeRecipient,
-		}
-		s.TrackedValidatorsCache.Set(val)
+		s.ProposerPreferencesCache.Set(cache.ProposerPreference{
+			ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
+			FeeRecipient:   feeRecipient,
+		})
 		validatorIndices = append(validatorIndices, primitives.ValidatorIndex(validatorIndex))
 	}
 

@@ -16,13 +16,13 @@ import (
 // Server defines a server implementation of the http events service,
 // providing RPC endpoints to subscribe to events from the beacon node.
 type Server struct {
-	StateNotifier          statefeed.Notifier
-	OperationNotifier      opfeed.Notifier
-	HeadFetcher            blockchain.HeadFetcher
-	ChainInfoFetcher       blockchain.ChainInfoFetcher
-	TrackedValidatorsCache *cache.TrackedValidatorsCache
-	KeepAliveInterval      time.Duration
-	EventFeedDepth         int
-	EventWriteTimeout      time.Duration
-	StateGen               stategen.StateManager
+	StateNotifier            statefeed.Notifier
+	OperationNotifier        opfeed.Notifier
+	HeadFetcher              blockchain.HeadFetcher
+	ChainInfoFetcher         blockchain.ChainInfoFetcher
+	ProposerPreferencesCache *cache.ProposerPreferencesCache
+	KeepAliveInterval        time.Duration
+	EventFeedDepth           int
+	EventWriteTimeout        time.Duration
+	StateGen                 stategen.StateManager
 }

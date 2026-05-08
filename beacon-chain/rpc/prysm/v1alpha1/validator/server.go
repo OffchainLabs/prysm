@@ -47,7 +47,6 @@ import (
 type Server struct {
 	Ctx                              context.Context
 	PayloadIDCache                   *cache.PayloadIDCache
-	TrackedValidatorsCache           *cache.TrackedValidatorsCache
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache

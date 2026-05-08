@@ -216,7 +216,7 @@ func (s *Service) validatorEndpoints(
 		BeaconDB:                      s.cfg.BeaconDB,
 		BlockBuilder:                  s.cfg.BlockBuilder,
 		OperationNotifier:             s.cfg.OperationNotifier,
-		TrackedValidatorsCache:        s.cfg.TrackedValidatorsCache,
+		ProposerPreferencesCache:      s.cfg.ProposerPreferencesCache,
 		PayloadIDCache:                s.cfg.PayloadIDCache,
 		CoreService:                   coreService,
 		BlockRewardFetcher:            rewardFetcher,
@@ -1102,12 +1102,12 @@ func (s *Service) debugEndpoints(stater lookup.Stater, blocker lookup.Blocker) [
 
 func (s *Service) eventsEndpoints() []endpoint {
 	server := &events.Server{
-		StateNotifier:          s.cfg.StateNotifier,
-		OperationNotifier:      s.cfg.OperationNotifier,
-		HeadFetcher:            s.cfg.HeadFetcher,
-		ChainInfoFetcher:       s.cfg.ChainInfoFetcher,
-		TrackedValidatorsCache: s.cfg.TrackedValidatorsCache,
-		StateGen:               s.cfg.StateGen,
+		StateNotifier:            s.cfg.StateNotifier,
+		OperationNotifier:        s.cfg.OperationNotifier,
+		HeadFetcher:              s.cfg.HeadFetcher,
+		ChainInfoFetcher:         s.cfg.ChainInfoFetcher,
+		ProposerPreferencesCache: s.cfg.ProposerPreferencesCache,
+		StateGen:                 s.cfg.StateGen,
 	}
 
 	const namespace = "events"
