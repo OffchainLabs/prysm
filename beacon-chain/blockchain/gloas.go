@@ -16,6 +16,7 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 )
 
@@ -49,7 +50,9 @@ func (s *Service) runLatePayloadTasks() {
 	if err := s.waitUntilEpoch(cfg.GloasForkEpoch, cfg.SecondsPerSlot); err != nil {
 		return
 	}
-	cache.WarnSuggestedFeeRecipientPostGloas(s.CurrentSlot())
+	if cfg.DefaultFeeRecipient != (common.Address{}) {
+		log.Warn("--suggested-fee-recipient is deprecated post-Gloas; validator clients should provide fee recipients via SignedProposerPreferences.")
+	}
 	offset := cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS)
 	ticker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, cfg.SecondsPerSlot)
 	defer ticker.Done()

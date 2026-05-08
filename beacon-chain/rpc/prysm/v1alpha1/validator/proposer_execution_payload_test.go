@@ -455,14 +455,18 @@ func TestServer_getTerminalBlockHashIfExists(t *testing.T) {
 }
 
 func TestSetFeeRecipientIfBurnAddress(t *testing.T) {
-	val := &cache.ProposerPreference{ValidatorIndex: 1}
 	cfg := params.BeaconConfig().Copy()
 	cfg.DefaultFeeRecipient = common.Address([20]byte{'a'})
 	params.OverrideBeaconConfig(cfg)
-	require.NotEqual(t, common.BytesToAddress(val.FeeRecipient), params.BeaconConfig().DefaultFeeRecipient)
-	setFeeRecipientIfBurnAddress(val, 0)
-	require.NotEqual(t, common.BytesToAddress(val.FeeRecipient), params.BeaconConfig().DefaultFeeRecipient)
-	val.ValidatorIndex = 0
-	setFeeRecipientIfBurnAddress(val, 0)
+
+	// Empty fee → default fee applied, regardless of validator index.
+	val := &cache.ProposerPreference{ValidatorIndex: 1}
+	setFeeRecipientIfBurnAddress(val)
 	require.Equal(t, common.BytesToAddress(val.FeeRecipient), params.BeaconConfig().DefaultFeeRecipient)
+
+	// Non-empty fee → left alone.
+	preset := common.Address([20]byte{'b'})
+	val = &cache.ProposerPreference{ValidatorIndex: 1, FeeRecipient: preset.Bytes()}
+	setFeeRecipientIfBurnAddress(val)
+	require.Equal(t, common.BytesToAddress(val.FeeRecipient), preset)
 }

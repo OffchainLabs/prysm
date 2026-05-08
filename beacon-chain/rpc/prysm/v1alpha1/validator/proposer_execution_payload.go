@@ -43,10 +43,9 @@ var (
 	})
 )
 
-func setFeeRecipientIfBurnAddress(val *cache.ProposerPreference, slot primitives.Slot) {
-	if common.BytesToAddress(val.FeeRecipient) == (common.Address{}) && val.ValidatorIndex == 0 {
+func setFeeRecipientIfBurnAddress(val *cache.ProposerPreference) {
+	if common.BytesToAddress(val.FeeRecipient) == (common.Address{}) {
 		val.FeeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
-		cache.WarnSuggestedFeeRecipientPostGloas(slot)
 	}
 }
 
@@ -87,7 +86,18 @@ func (vs *Server) getLocalPayloadFromEngine(
 	if !tracked {
 		logrus.WithFields(logFields).Warn("Could not find tracked proposer index")
 	}
-	setFeeRecipientIfBurnAddress(&val, slot)
+	// Prefer the spec-aligned (slot, dependent_root) entry if available.
+	dependentRoot, drErr := helpers.ProposerDependentRoot(st, slot)
+	if drErr == nil {
+		if pref, ok := vs.ProposerPreferencesCache.Get(dependentRoot, slot); ok && pref.ValidatorIndex == proposerId {
+			val = pref
+		} else if tracked && slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+			log.WithFields(logFields).WithField("dependentRoot", fmt.Sprintf("%#x", dependentRoot)).
+				Warn("No proposer preference for current branch (dependent_root drift); falling through to default fee recipient. Validator client should re-Submit.")
+			val = cache.ProposerPreference{ValidatorIndex: proposerId}
+		}
+	}
+	setFeeRecipientIfBurnAddress(&val)
 
 	if ok && payloadId != [8]byte{} {
 		// Payload ID is cache hit. Return the cached payload ID.

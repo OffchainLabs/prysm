@@ -13,7 +13,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -35,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/sirupsen/logrus"
 )
 
 const DefaultEventFeedDepth = 1000
@@ -682,9 +682,30 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 	}
 
 	feeRecpt := params.BeaconConfig().DefaultFeeRecipient.Bytes()
-	tValidator, exists := s.ProposerPreferencesCache.Validator(proposer)
-	if exists {
-		feeRecpt = tValidator.FeeRecipient
+	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
+		// Post-Gloas: preferences are signed for (slot, dependent_root).
+		// Both local Submits (via AddOwned) and foreign gossip land in
+		// external, so a single Get covers ours and theirs.
+		dependentRoot, drErr := helpers.ProposerDependentRoot(st, slot)
+		if drErr != nil {
+			return nil, errors.Wrap(drErr, "could not compute proposer dependent root")
+		}
+		if pref, ok := s.ProposerPreferencesCache.Get(dependentRoot, slot); ok && pref.ValidatorIndex == proposer {
+			feeRecpt = pref.FeeRecipient
+		} else if val, exists := s.ProposerPreferencesCache.Validator(proposer); exists {
+			// Drift fallback for our own validators.
+			feeRecpt = val.FeeRecipient
+		} else {
+			log.WithFields(logrus.Fields{
+				"slot":          slot,
+				"dependentRoot": fmt.Sprintf("%#x", dependentRoot),
+				"proposer":      proposer,
+			}).Debug("No proposer preference cached for SSE payload_attributes event; using default fee recipient")
+		}
+	} else if val, exists := s.ProposerPreferencesCache.Validator(proposer); exists {
+		// Pre-Gloas: only the vidx-keyed owned entry (populated by
+		// prepare_beacon_proposer) applies. external is empty for ours.
+		feeRecpt = val.FeeRecipient
 	}
 
 	if v == version.Bellatrix {

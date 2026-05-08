@@ -65,9 +65,8 @@ func NewProposerPreferencesCache() *ProposerPreferencesCache {
 // Add stores a foreign (gossip-ingested) proposer preference. If an entry
 // with the same (slot, dependentRoot) already exists, the existing value
 // is kept and false is returned. If the validator is locally owned, the
-// preference is rejected — our own vidxs must never appear in external.
-// Use Set for our own validators — SubmitSignedProposerPreferences
-// populates owned, not external.
+// preference is rejected — our own vidxs must never appear in external
+// from the gossip path. Use AddOwned for local writes.
 func (c *ProposerPreferencesCache) Add(
 	dependentRoot [32]byte,
 	slot primitives.Slot,
@@ -78,6 +77,42 @@ func (c *ProposerPreferencesCache) Add(
 	if _, owned := c.owned.Get(ownedKey(validatorIndex)); owned {
 		return false
 	}
+	return c.addExternal(dependentRoot, slot, validatorIndex, feeRecipient, gasLimit)
+}
+
+// AddOwned stores a local proposer preference in both stores: in external
+// (so FCU lookups by (slot, dependent_root) hit) and in owned (so
+// Validating()/Indices() reflect this validator). Bypasses the
+// ownership-skip in Add since this is our own write. The fee_recipient
+// and gas_limit are duplicated across both stores intentionally — owned
+// holds the branch-independent default for fallback, external holds the
+// branch-specific entry for spec-aligned lookup.
+func (c *ProposerPreferencesCache) AddOwned(
+	dependentRoot [32]byte,
+	slot primitives.Slot,
+	validatorIndex primitives.ValidatorIndex,
+	feeRecipient []byte,
+	gasLimit uint64,
+) bool {
+	added := c.addExternal(dependentRoot, slot, validatorIndex, feeRecipient, gasLimit)
+	c.owned.Set(ownedKey(validatorIndex), ProposerPreference{
+		DependentRoot:  dependentRoot,
+		ValidatorIndex: validatorIndex,
+		FeeRecipient:   feeRecipient,
+		GasLimit:       gasLimit,
+	}, gocache.DefaultExpiration)
+	return added
+}
+
+// addExternal appends to the external slot map, deduping on
+// (slot, dependentRoot). Caller is responsible for any ownership gating.
+func (c *ProposerPreferencesCache) addExternal(
+	dependentRoot [32]byte,
+	slot primitives.Slot,
+	validatorIndex primitives.ValidatorIndex,
+	feeRecipient []byte,
+	gasLimit uint64,
+) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
