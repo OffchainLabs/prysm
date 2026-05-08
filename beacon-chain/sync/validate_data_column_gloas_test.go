@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -87,11 +88,13 @@ func TestValidateDataColumnGloas(t *testing.T) {
 
 		clock := startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)
 		service := &Service{
-			cfg:                 &config{p2p: p, initialSync: &mockSync.Sync{}, clock: clock, chain: chainService, batchVerifierLimit: 10},
-			ctx:                 ctx,
-			newColumnsVerifier:  newDataColumnsVerifier,
-			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
-			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+			cfg:                          &config{p2p: p, initialSync: &mockSync.Sync{}, clock: clock, chain: chainService, batchVerifierLimit: 10},
+			ctx:                          ctx,
+			newColumnsVerifier:           newDataColumnsVerifier,
+			seenDataColumnCache:          newSlotAwareCache(seenDataColumnSize),
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
 		}
 
 		buf := new(bytes.Buffer)
@@ -186,7 +189,7 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		topic := service.addDigestAndIndexToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecarGloas]()], digest, peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index))
 		msg := &pubsub.Message{Message: &pb.Message{Topic: &topic}}
 
-		_, err = service.validateDataColumnGloas(ctx, msg, roDataColumn, "/data_column_sidecar_%d/")
+		_, err = service.validateDataColumnGloas(ctx, "aDummyPID", msg, roDataColumn, "/data_column_sidecar_%d/")
 		require.ErrorContains(t, "slot does not match block slot", err)
 	})
 }
@@ -196,8 +199,10 @@ func TestPendingGloasColumns(t *testing.T) {
 
 	t.Run("queue and retrieve", func(t *testing.T) {
 		s := &Service{
-			cfg:                 &config{clock: clock},
-			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+			cfg:                          &config{clock: clock},
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
 		}
 		root := [32]byte{0xaa}
 		dc := &ethpb.DataColumnSidecarGloas{
@@ -216,13 +221,16 @@ func TestPendingGloasColumns(t *testing.T) {
 		entry := s.pendingGloasColumns[root]
 		require.NotNil(t, entry)
 		require.NotNil(t, entry.columns[5])
-		require.Equal(t, peer.ID("peer1"), entry.columns[5].peer)
+		require.Equal(t, 1, len(entry.columns[5].sidecars))
+		require.NotNil(t, entry.columns[5].sidecars[peer.ID("peer1")])
 	})
 
-	t.Run("dedup by index", func(t *testing.T) {
+	t.Run("retains both peers for same root and index", func(t *testing.T) {
 		s := &Service{
-			cfg:                 &config{clock: clock},
-			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+			cfg:                          &config{clock: clock},
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
 		}
 		root := [32]byte{0xbb}
 		dc := &ethpb.DataColumnSidecarGloas{
@@ -237,13 +245,23 @@ func TestPendingGloasColumns(t *testing.T) {
 
 		s.queuePendingGloasColumn(roCol, "peer1")
 		s.queuePendingGloasColumn(roCol, "peer2")
-		require.Equal(t, peer.ID("peer1"), s.pendingGloasColumns[root].columns[10].peer)
+		entry := s.pendingGloasColumns[root].columns[10]
+		require.Equal(t, 2, len(entry.sidecars))
+		require.NotNil(t, entry.sidecars[peer.ID("peer1")])
+		require.NotNil(t, entry.sidecars[peer.ID("peer2")])
+
+		// A second submission from the same peer is a no-op.
+		s.queuePendingGloasColumn(roCol, "peer1")
+		require.Equal(t, 2, len(entry.sidecars))
+		require.Equal(t, 1, s.pendingGloasPeerColumnCounts[peer.ID("peer1")])
 	})
 
 	t.Run("nil block is no-op", func(t *testing.T) {
 		s := &Service{
-			cfg:                 &config{clock: clock},
-			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+			cfg:                          &config{clock: clock},
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
 		}
 		root := [32]byte{0xcc}
 		s.pendingGloasColumns[root] = &pendingGloasEntry{slot: clock.CurrentSlot()}
@@ -255,8 +273,10 @@ func TestPendingGloasColumns(t *testing.T) {
 
 	t.Run("index out of bounds rejected", func(t *testing.T) {
 		s := &Service{
-			cfg:                 &config{clock: clock},
-			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+			cfg:                          &config{clock: clock},
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
 		}
 		root := [32]byte{0xee}
 		dc := &ethpb.DataColumnSidecarGloas{
@@ -275,10 +295,14 @@ func TestPendingGloasColumns(t *testing.T) {
 
 	t.Run("map capped at maxPendingGloasRoots", func(t *testing.T) {
 		s := &Service{
-			cfg:                 &config{clock: clock},
-			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+			cfg:                          &config{clock: clock},
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
 		}
-		// Fill up to the cap.
+		// Fill up to the cap with one distinct peer per root, so the per-peer
+		// root cap doesn't trigger first and we actually exercise the global
+		// map cap.
 		for i := range maxPendingGloasRoots {
 			root := [32]byte{byte(i)}
 			dc := &ethpb.DataColumnSidecarGloas{
@@ -290,11 +314,12 @@ func TestPendingGloasColumns(t *testing.T) {
 			}
 			roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
 			require.NoError(t, err)
-			s.queuePendingGloasColumn(roCol, "peer1")
+			s.queuePendingGloasColumn(roCol, peer.ID(fmt.Sprintf("peer%d", i)))
 		}
 		require.Equal(t, maxPendingGloasRoots, len(s.pendingGloasColumns))
 
-		// One more should be dropped.
+		// One more from a fresh peer should be dropped because the global root
+		// map is full.
 		overflowRoot := [32]byte{0xff}
 		dc := &ethpb.DataColumnSidecarGloas{
 			Index:           0,
@@ -305,10 +330,11 @@ func TestPendingGloasColumns(t *testing.T) {
 		}
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, overflowRoot)
 		require.NoError(t, err)
-		s.queuePendingGloasColumn(roCol, "peer1")
+		s.queuePendingGloasColumn(roCol, "overflow")
 		require.Equal(t, false, s.hasPendingGloasColumns(overflowRoot))
 
-		// Adding to an existing root should still work.
+		// Adding to an existing root from the peer that already owns it should
+		// still work and must not consume an additional root slot.
 		existingRoot := [32]byte{0x00}
 		dc2 := &ethpb.DataColumnSidecarGloas{
 			Index:           1,
@@ -319,8 +345,142 @@ func TestPendingGloasColumns(t *testing.T) {
 		}
 		roCol2, err := blocks.NewRODataColumnGloasWithRoot(dc2, existingRoot)
 		require.NoError(t, err)
-		s.queuePendingGloasColumn(roCol2, "peer1")
+		s.queuePendingGloasColumn(roCol2, peer.ID("peer0"))
 		require.NotNil(t, s.pendingGloasColumns[existingRoot].columns[1])
+		require.Equal(t, 1, s.pendingGloasPeerRootCounts[peer.ID("peer0")])
+	})
+
+	t.Run("per-peer root cap rejects new roots beyond the limit", func(t *testing.T) {
+		s := &Service{
+			cfg:                          &config{clock: clock},
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
+		}
+		// "noisy" claims its full root quota with one column on each root.
+		for i := 0; i < maxPendingGloasRootsPerPeer; i++ {
+			root := [32]byte{byte(i)}
+			dc := &ethpb.DataColumnSidecarGloas{
+				Index:           0,
+				Slot:            clock.CurrentSlot(),
+				BeaconBlockRoot: root[:],
+				Column:          [][]byte{make([]byte, 2048)},
+				KzgProofs:       [][]byte{make([]byte, 48)},
+			}
+			roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
+			require.NoError(t, err)
+			s.queuePendingGloasColumn(roCol, "noisy")
+		}
+		require.Equal(t, maxPendingGloasRootsPerPeer, s.pendingGloasPeerRootCounts["noisy"])
+
+		// A further sidecar from "noisy" on a fresh root must be dropped.
+		extraRoot := [32]byte{0xaa}
+		dc := &ethpb.DataColumnSidecarGloas{
+			Index:           0,
+			Slot:            clock.CurrentSlot(),
+			BeaconBlockRoot: extraRoot[:],
+			Column:          [][]byte{make([]byte, 2048)},
+			KzgProofs:       [][]byte{make([]byte, 48)},
+		}
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, extraRoot)
+		require.NoError(t, err)
+		s.queuePendingGloasColumn(roCol, "noisy")
+		require.Equal(t, false, s.hasPendingGloasColumns(extraRoot))
+
+		// A different peer is unaffected and can still claim the fresh root.
+		s.queuePendingGloasColumn(roCol, "honest")
+		require.Equal(t, true, s.hasPendingGloasColumns(extraRoot))
+
+		// "noisy" can still add columns to roots it already owns without
+		// consuming a new root slot.
+		ownedRoot := [32]byte{byte(0)}
+		dc2 := &ethpb.DataColumnSidecarGloas{
+			Index:           1,
+			Slot:            clock.CurrentSlot(),
+			BeaconBlockRoot: ownedRoot[:],
+			Column:          [][]byte{make([]byte, 2048)},
+			KzgProofs:       [][]byte{make([]byte, 48)},
+		}
+		roCol2, err := blocks.NewRODataColumnGloasWithRoot(dc2, ownedRoot)
+		require.NoError(t, err)
+		s.queuePendingGloasColumn(roCol2, "noisy")
+		require.NotNil(t, s.pendingGloasColumns[ownedRoot].columns[1])
+		require.Equal(t, maxPendingGloasRootsPerPeer, s.pendingGloasPeerRootCounts["noisy"])
+	})
+
+	t.Run("per-peer column cap rejects further inserts", func(t *testing.T) {
+		s := &Service{
+			cfg:                          &config{clock: clock},
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
+		}
+		root := [32]byte{0xab}
+		// Fill the per-peer quota for "noisy" using distinct column indices on a single root.
+		for i := uint64(0); i < maxPendingGloasColumnsPerPeer; i++ {
+			dc := &ethpb.DataColumnSidecarGloas{
+				Index:           i,
+				Slot:            clock.CurrentSlot(),
+				BeaconBlockRoot: root[:],
+				Column:          [][]byte{make([]byte, 2048)},
+				KzgProofs:       [][]byte{make([]byte, 48)},
+			}
+			roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
+			require.NoError(t, err)
+			s.queuePendingGloasColumn(roCol, "noisy")
+		}
+		require.Equal(t, maxPendingGloasColumnsPerPeer, s.pendingGloasPeerColumnCounts["noisy"])
+
+		// A new column from "noisy" on a fresh root must be dropped.
+		overflowRoot := [32]byte{0xcd}
+		dc := &ethpb.DataColumnSidecarGloas{
+			Index:           0,
+			Slot:            clock.CurrentSlot(),
+			BeaconBlockRoot: overflowRoot[:],
+			Column:          [][]byte{make([]byte, 2048)},
+			KzgProofs:       [][]byte{make([]byte, 48)},
+		}
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, overflowRoot)
+		require.NoError(t, err)
+		s.queuePendingGloasColumn(roCol, "noisy")
+		require.Equal(t, false, s.hasPendingGloasColumns(overflowRoot))
+
+		// A different peer is unaffected.
+		s.queuePendingGloasColumn(roCol, "honest")
+		require.Equal(t, true, s.hasPendingGloasColumns(overflowRoot))
+		require.Equal(t, 1, s.pendingGloasPeerColumnCounts["honest"])
+	})
+
+	t.Run("flush releases per-peer count", func(t *testing.T) {
+		s := &Service{
+			cfg:                          &config{clock: clock},
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
+		}
+		root := [32]byte{0xef}
+		dc := &ethpb.DataColumnSidecarGloas{
+			Index:           0,
+			Slot:            clock.CurrentSlot(),
+			BeaconBlockRoot: root[:],
+			Column:          [][]byte{make([]byte, 2048)},
+			KzgProofs:       [][]byte{make([]byte, 48)},
+		}
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(dc, root)
+		require.NoError(t, err)
+		s.queuePendingGloasColumn(roCol, "peer1")
+		require.Equal(t, 1, s.pendingGloasPeerColumnCounts["peer1"])
+
+		// processPendingGloasColumns with a nil block bails out without flushing — exercise
+		// the queue-deletion path directly so we test count release independent of verification.
+		s.pendingGloasColumnsLock.Lock()
+		entry := s.pendingGloasColumns[root]
+		delete(s.pendingGloasColumns, root)
+		s.releasePendingGloasPeerCounts(entry)
+		s.pendingGloasColumnsLock.Unlock()
+
+		_, exists := s.pendingGloasPeerColumnCounts["peer1"]
+		require.Equal(t, false, exists)
 	})
 
 	t.Run("process verifies and saves valid columns", func(t *testing.T) {
@@ -346,8 +506,10 @@ func TestPendingGloasColumns(t *testing.T) {
 				clock:             clock,
 				dataColumnStorage: dcs,
 			},
-			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
-			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
+			seenDataColumnCache:          newSlotAwareCache(seenDataColumnSize),
 		}
 
 		// Queue the sidecar.
@@ -362,6 +524,45 @@ func TestPendingGloasColumns(t *testing.T) {
 
 		// Column should be marked as seen.
 		require.Equal(t, true, s.hasSeenDataColumnRootIndex(blockRoot, sidecar.Index))
+	})
+
+	t.Run("process skips already seen index without saving zero column", func(t *testing.T) {
+		err := kzg.Start()
+		require.NoError(t, err)
+
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		p := p2ptest.NewTestP2P(t)
+		dcs := filesystem.NewEphemeralDataColumnStorage(t)
+
+		sidecar, signedBlock := gloasFixture(t)
+		blockRoot, err := signedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		s := &Service{
+			cfg: &config{
+				p2p:               p,
+				clock:             clock,
+				dataColumnStorage: dcs,
+			},
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
+			seenDataColumnCache:          newSlotAwareCache(seenDataColumnSize),
+		}
+
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
+		require.NoError(t, err)
+		s.queuePendingGloasColumn(roCol, "peer1")
+		s.setSeenDataColumnRootIndex(blockRoot, sidecar.Index, sidecar.Slot)
+
+		s.processPendingGloasColumns(blockRoot, signedBlock)
+		require.Equal(t, false, s.hasPendingGloasColumns(blockRoot))
+		require.Equal(t, false, dcs.Summary(blockRoot).HasIndex(sidecar.Index))
 	})
 
 	t.Run("process downscores bad peer for slot mismatch", func(t *testing.T) {
@@ -390,8 +591,10 @@ func TestPendingGloasColumns(t *testing.T) {
 				clock:             clock,
 				dataColumnStorage: dcs,
 			},
-			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
-			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
+			seenDataColumnCache:          newSlotAwareCache(seenDataColumnSize),
 		}
 
 		roCol, err := blocks.NewRODataColumnGloasWithRoot(sidecar, blockRoot)
@@ -404,6 +607,73 @@ func TestPendingGloasColumns(t *testing.T) {
 		require.Equal(t, false, s.hasSeenDataColumnRootIndex(blockRoot, sidecar.Index))
 	})
 
+	t.Run("process retains both peers and downscores only the bad one", func(t *testing.T) {
+		err := kzg.Start()
+		require.NoError(t, err)
+
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		p := p2ptest.NewTestP2P(t)
+		dcs := filesystem.NewEphemeralDataColumnStorage(t)
+
+		sidecar, signedBlock := gloasFixture(t)
+		blockRoot, err := signedBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		good := &ethpb.DataColumnSidecarGloas{
+			Index:           sidecar.Index,
+			Slot:            sidecar.Slot,
+			BeaconBlockRoot: bytesutil.SafeCopyBytes(sidecar.BeaconBlockRoot),
+			Column:          bytesutil.SafeCopy2dBytes(sidecar.Column),
+			KzgProofs:       bytesutil.SafeCopy2dBytes(sidecar.KzgProofs),
+		}
+		bad := &ethpb.DataColumnSidecarGloas{
+			Index:           sidecar.Index,
+			Slot:            sidecar.Slot + 10, // wrong slot triggers verification failure
+			BeaconBlockRoot: bytesutil.SafeCopyBytes(sidecar.BeaconBlockRoot),
+			Column:          bytesutil.SafeCopy2dBytes(sidecar.Column),
+			KzgProofs:       bytesutil.SafeCopy2dBytes(sidecar.KzgProofs),
+		}
+
+		s := &Service{
+			cfg: &config{
+				p2p:               p,
+				clock:             clock,
+				dataColumnStorage: dcs,
+			},
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
+			seenDataColumnCache:          newSlotAwareCache(seenDataColumnSize),
+		}
+
+		goodCol, err := blocks.NewRODataColumnGloasWithRoot(good, blockRoot)
+		require.NoError(t, err)
+		badCol, err := blocks.NewRODataColumnGloasWithRoot(bad, blockRoot)
+		require.NoError(t, err)
+		s.queuePendingGloasColumn(goodCol, "goodpeer")
+		s.queuePendingGloasColumn(badCol, "badpeer")
+		// Both peers must be retained.
+		require.Equal(t, 2, len(s.pendingGloasColumns[blockRoot].columns[sidecar.Index].sidecars))
+
+		s.processPendingGloasColumns(blockRoot, signedBlock)
+		require.Equal(t, false, s.hasPendingGloasColumns(blockRoot))
+		// goodpeer's sidecar passes and is saved.
+		require.Equal(t, true, s.hasSeenDataColumnRootIndex(blockRoot, sidecar.Index))
+		// badpeer is downscored.
+		badCount, err := p.Peers().Scorers().BadResponsesScorer().Count(peer.ID("badpeer"))
+		require.NoError(t, err)
+		require.Equal(t, 1, badCount)
+		// goodpeer is not downscored; Count returns ErrPeerUnknown when the peer
+		// has never been recorded as bad.
+		_, err = p.Peers().Scorers().BadResponsesScorer().Count(peer.ID("goodpeer"))
+		require.ErrorContains(t, "peer unknown", err)
+	})
+
 	t.Run("no entry is no-op", func(t *testing.T) {
 		p := p2ptest.NewTestP2P(t)
 		s := &Service{
@@ -411,8 +681,10 @@ func TestPendingGloasColumns(t *testing.T) {
 				p2p:   p,
 				clock: clock,
 			},
-			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
-			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
+			seenDataColumnCache:          newSlotAwareCache(seenDataColumnSize),
 		}
 		root := [32]byte{0xdd}
 		pb := util.NewBeaconBlockGloas()
@@ -424,8 +696,10 @@ func TestPendingGloasColumns(t *testing.T) {
 
 	t.Run("prune keeps current and next slot", func(t *testing.T) {
 		s := &Service{
-			cfg:                 &config{clock: clock},
-			pendingGloasColumns: make(map[[32]byte]*pendingGloasEntry),
+			cfg:                          &config{clock: clock},
+			pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+			pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
 		}
 		currentSlot := clock.CurrentSlot()
 		if currentSlot < 3 {

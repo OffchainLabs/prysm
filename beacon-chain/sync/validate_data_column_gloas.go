@@ -25,9 +25,25 @@ import (
 // maxPendingGloasRoots caps the number of distinct block roots in the pending queue.
 const maxPendingGloasRoots = 8
 
+// maxPendingGloasColumnsPerPeer caps the number of queued columns attributable to a single
+// peer at any time, so a malicious peer cannot fill the queue and starve honest peers
+// (consensus-specs #5199).
+const maxPendingGloasColumnsPerPeer = fieldparams.NumberOfColumns
+
+// maxPendingGloasRootsPerPeer caps the number of distinct block roots a single peer can
+// introduce into the pending queue, so one peer cannot occupy every root slot and shut
+// other peers out. This is stricter than consensus-specs #5199's per-peer-per-subnet
+// recommendation, but preserves space for multiple peers under the global root cap.
+const maxPendingGloasRootsPerPeer = 2
+
+// pendingColumnEntry holds every (peer, sidecar) pair we've received for a given
+// (block_root, column_index) tuple. Retaining one slot per peer lets us:
+//   - downscore every forwarding peer whose offering fails verification once the
+//     block arrives, and
+//   - keep per-peer-per-subnet queue coverage, subject to the queue caps above,
+//     as recommended by consensus-specs #5199.
 type pendingColumnEntry struct {
-	sidecar *ethpb.DataColumnSidecarGloas
-	peer    peer.ID
+	sidecars map[peer.ID]*ethpb.DataColumnSidecarGloas
 }
 
 type pendingGloasEntry struct {
@@ -37,6 +53,7 @@ type pendingGloasEntry struct {
 
 func (s *Service) validateDataColumnGloas(
 	ctx context.Context,
+	pid peer.ID,
 	msg *pubsub.Message,
 	roDataColumn blocks.RODataColumn,
 	dataColumnSidecarSubTopic string,
@@ -45,15 +62,16 @@ func (s *Service) validateDataColumnGloas(
 	// [Modified in Gloas:EIP7732]
 	//
 	// [IGNORE] A valid block for the sidecar's slot has been seen (via gossip or non-gossip sources).
-	// If not yet seen, a client MUST queue the sidecar for deferred validation and possible processing once
-	// the block is received or retrieved.
+	// If not yet seen, a client SHOULD queue the sidecar for deferred validation and possible processing
+	// once the block is received or retrieved. Per consensus-specs #5199, queueing is per peer per
+	// subnet so a single peer cannot occupy all queue slots.
 	if s.cfg.chain == nil || !s.cfg.chain.HasBlock(ctx, roDataColumn.BlockRoot()) {
 		actualSubnet := peerdas.ComputeSubnetForDataColumnSidecar(roDataColumn.Index())
 		expectedSubTopic := fmt.Sprintf(dataColumnSidecarSubTopic, actualSubnet)
 		if msg.Topic == nil || !strings.Contains(*msg.Topic+"/", expectedSubTopic) {
 			return blocks.VerifiedRODataColumn{}, errors.New("gloas data column on wrong subnet")
 		}
-		s.queuePendingGloasColumn(roDataColumn, peer.ID(msg.GetFrom()))
+		s.queuePendingGloasColumn(roDataColumn, pid)
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("gloas data column block not yet seen"))
 	}
 
@@ -139,8 +157,32 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 	s.pendingGloasColumnsLock.Lock()
 	defer s.pendingGloasColumnsLock.Unlock()
 
-	entry := s.pendingGloasColumns[root]
-	if entry == nil {
+	if s.pendingGloasPeerColumnCounts[pid] >= maxPendingGloasColumnsPerPeer {
+		return
+	}
+
+	entry, exists := s.pendingGloasColumns[root]
+	// Determine whether accepting this column would make pid an owner of a new
+	// root. Owning a root means having any (index, peer) entry under it; this
+	// lets us cap how many root slots a single peer can claim.
+	newRootForPeer := !exists
+	if exists {
+		newRootForPeer = true
+		for _, pe := range entry.columns {
+			if pe == nil {
+				continue
+			}
+			if _, ok := pe.sidecars[pid]; ok {
+				newRootForPeer = false
+				break
+			}
+		}
+	}
+	if newRootForPeer && s.pendingGloasPeerRootCounts[pid] >= maxPendingGloasRootsPerPeer {
+		return
+	}
+
+	if !exists {
 		if len(s.pendingGloasColumns) >= maxPendingGloasRoots {
 			return
 		}
@@ -148,10 +190,19 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 		s.pendingGloasColumns[root] = entry
 	}
 
-	if entry.columns[idx] != nil {
+	pe := entry.columns[idx]
+	if pe == nil {
+		pe = &pendingColumnEntry{sidecars: make(map[peer.ID]*ethpb.DataColumnSidecarGloas)}
+		entry.columns[idx] = pe
+	}
+	if _, dup := pe.sidecars[pid]; dup {
 		return
 	}
-	entry.columns[idx] = &pendingColumnEntry{sidecar: dc, peer: pid}
+	pe.sidecars[pid] = dc
+	s.pendingGloasPeerColumnCounts[pid]++
+	if newRootForPeer {
+		s.pendingGloasPeerRootCounts[pid]++
+	}
 }
 
 func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {
@@ -162,6 +213,9 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 	s.pendingGloasColumnsLock.Lock()
 	entry := s.pendingGloasColumns[root]
 	delete(s.pendingGloasColumns, root)
+	if entry != nil {
+		s.releasePendingGloasPeerCounts(entry)
+	}
 	s.pendingGloasColumnsLock.Unlock()
 
 	if entry == nil {
@@ -174,7 +228,8 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 		return
 	}
 
-	// Count pending sidecars for pre-allocation.
+	// Pre-allocate based on number of populated indices; each contributes at
+	// most one verified sidecar to the saved set.
 	count := 0
 	for _, pe := range entry.columns {
 		if pe != nil {
@@ -189,46 +244,60 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 		if pe == nil {
 			continue
 		}
-		roCol, err := blocks.NewRODataColumnGloasWithRoot(pe.sidecar, root)
-		if err != nil {
-			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Failed to wrap pending Gloas column")
-			skipped++
-			continue
-		}
-		roCol.SetBidCommitments(commitments)
+		// Verify every peer's offering for this (root, index) so a bad peer
+		// hiding behind another peer's good sidecar still gets downscored.
+		// The first sidecar that passes verification is the one we save.
+		var winner blocks.VerifiedRODataColumn
+		haveWinner := false
+		alreadySeen := false
+		for pid, sidecar := range pe.sidecars {
+			roCol, err := blocks.NewRODataColumnGloasWithRoot(sidecar, root)
+			if err != nil {
+				log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Failed to wrap pending Gloas column")
+				skipped++
+				continue
+			}
+			roCol.SetBidCommitments(commitments)
 
-		if s.hasSeenDataColumnRootIndex(root, roCol.Index()) {
-			continue
-		}
+			verifier := verification.NewGloasDataColumnVerifier(roCol, blk.Block(), verification.PendingGloasColumnRequirements)
 
-		verifier := verification.NewGloasDataColumnVerifier(roCol, blk.Block(), verification.PendingGloasColumnRequirements)
+			if err := verifier.VerifyDataColumnSidecarSlotMatchesBlockGloas(); err != nil {
+				badPeers[pid] = true
+				continue
+			}
+			if err := verifier.VerifyDataColumnSidecarGloas(); err != nil {
+				badPeers[pid] = true
+				continue
+			}
+			if err := verifier.VerifyDataColumnSidecarKzgProofsGloas(); err != nil {
+				badPeers[pid] = true
+				continue
+			}
+			if haveWinner {
+				continue
+			}
+			if s.hasSeenDataColumnRootIndex(root, roCol.Index()) {
+				alreadySeen = true
+				continue
+			}
 
-		if err := verifier.VerifyDataColumnSidecarSlotMatchesBlockGloas(); err != nil {
-			skipped++
-			badPeers[pe.peer] = true
-			continue
+			v, err := verifier.VerifiedRODataColumn()
+			if err != nil {
+				log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Failed to get verified pending Gloas column")
+				skipped++
+				continue
+			}
+			v.SetBidCommitments(commitments)
+			s.setSeenDataColumnRootIndex(root, v.Index(), v.Slot())
+			winner = v
+			haveWinner = true
 		}
-		if err := verifier.VerifyDataColumnSidecarGloas(); err != nil {
+		if haveWinner {
+			verified = append(verified, winner)
+		} else if len(pe.sidecars) > 0 && !alreadySeen {
+			// Every peer's offering for this index was rejected.
 			skipped++
-			badPeers[pe.peer] = true
-			continue
 		}
-		if err := verifier.VerifyDataColumnSidecarKzgProofsGloas(); err != nil {
-			skipped++
-			badPeers[pe.peer] = true
-			continue
-		}
-
-		v, err := verifier.VerifiedRODataColumn()
-		if err != nil {
-			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Failed to get verified pending Gloas column")
-			skipped++
-			continue
-		}
-		v.SetBidCommitments(commitments)
-
-		s.setSeenDataColumnRootIndex(root, v.Index(), v.Slot())
-		verified = append(verified, v)
 	}
 
 	for pid := range badPeers {
@@ -267,12 +336,41 @@ func (s *Service) prunePendingGloasColumns() {
 			s.pendingGloasColumnsLock.Lock()
 			for r, e := range s.pendingGloasColumns {
 				if e.slot+1 < currentSlot {
+					s.releasePendingGloasPeerCounts(e)
 					delete(s.pendingGloasColumns, r)
 				}
 			}
 			s.pendingGloasColumnsLock.Unlock()
 		case <-s.ctx.Done():
 			return
+		}
+	}
+}
+
+// releasePendingGloasPeerCounts decrements per-peer column and root counters for every
+// (peer, sidecar) pair held by entry. Each unique peer in the entry releases one root slot.
+// Caller must hold pendingGloasColumnsLock for writing.
+func (s *Service) releasePendingGloasPeerCounts(entry *pendingGloasEntry) {
+	rootSeen := make(map[peer.ID]bool)
+	for _, pe := range entry.columns {
+		if pe == nil {
+			continue
+		}
+		for pid := range pe.sidecars {
+			if s.pendingGloasPeerColumnCounts[pid] <= 1 {
+				delete(s.pendingGloasPeerColumnCounts, pid)
+			} else {
+				s.pendingGloasPeerColumnCounts[pid]--
+			}
+			if rootSeen[pid] {
+				continue
+			}
+			rootSeen[pid] = true
+			if s.pendingGloasPeerRootCounts[pid] <= 1 {
+				delete(s.pendingGloasPeerRootCounts, pid)
+			} else {
+				s.pendingGloasPeerRootCounts[pid]--
+			}
 		}
 	}
 }
