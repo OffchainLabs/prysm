@@ -304,8 +304,30 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 		attributes = payloadattribute.EmptyWithVersion(version.Gloas)
 	}
 
+	// fireAttr fires the payload_attributes SSE event when a payload ID was returned.
+	fireAttr := func(pid *enginev1.PayloadIDBytes) {
+		if pid == nil || attributes.IsEmpty() {
+			return
+		}
+		v4, err := attributes.PbV4()
+		if err != nil || v4 == nil {
+			return
+		}
+		headRoot := [32]byte(v4.ParentBeaconBlockRoot)
+		proposalSlot := primitives.Slot(v4.SlotNumber)
+		go func() {
+			headBlock, err := s.getBlock(s.ctx, headRoot)
+			if err != nil {
+				log.WithError(err).Debug("Could not get head block for Gloas payload attributes event")
+				return
+			}
+			s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, proposalSlot)
+		}()
+	}
+
 	payloadID, lastValidHash, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, attributes)
 	if err == nil {
+		fireAttr(payloadID)
 		return payloadID, nil
 	}
 
@@ -315,6 +337,7 @@ func (s *Service) notifyForkchoiceUpdateGloas(ctx context.Context, blockHash [32
 			"headBlockHash":             fmt.Sprintf("%#x", bytesutil.Trunc(blockHash[:])),
 			"finalizedPayloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(finalizedHash[:])),
 		}).Info("Called forkchoice updated with optimistic block (Gloas)")
+		fireAttr(payloadID)
 		return payloadID, nil
 	case errors.Is(err, execution.ErrInvalidPayloadStatus):
 		if len(lastValidHash) == 0 {
