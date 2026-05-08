@@ -53,8 +53,8 @@ github.com/DataDog/zstd v1.5.7/go.mod h1:g4AWEaM3yOg3HYfnJ3YIawPnVdXJh9QME85blwS
 github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible/go.mod h1:r7JcOSlj0wfOMncg0iLm8Leh48TZaKVeNIfJntJ2wa0=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
-github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506 h1:d/SJkN8/9Ca+1YmuDiUJxAiV4w/a9S8NcsG7GMQSrVI=
-github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506/go.mod h1:6TZI4FU6zT8x6ZfWa1J8YQ2NgW0wLV/W3fHRca8ISBo=
+github.com/OffchainLabs/go-bitfield v0.0.0-20260504143531-5cbb6d0f5f2e h1:M9Ia6En5b8/imySo4xQeeoJPG2tOOJEKk/GnfBI86Hk=
+github.com/OffchainLabs/go-bitfield v0.0.0-20260504143531-5cbb6d0f5f2e/go.mod h1:6TZI4FU6zT8x6ZfWa1J8YQ2NgW0wLV/W3fHRca8ISBo=
 github.com/OffchainLabs/hashtree v0.2.3 h1:nM8dBAQZzHLzzM14FaAHXnHTAXZIst69v5xWuS48y/c=
 github.com/OffchainLabs/hashtree v0.2.3/go.mod h1:b07+cRZs+eAR8TR57CB9TQlt5Gnl/06Xs76xt/1wq0M=
 github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251001021608-1fe7b43fc4d6 h1:1zYrtlhrZ6/b6SAjLSfKzWtdgqK0U+HtH/VcBWh1BaU=

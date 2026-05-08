@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
@@ -140,7 +141,8 @@ func TestExecutionPayloadEnvelopeSubscriber_WrongMessage(t *testing.T) {
 
 func TestExecutionPayloadEnvelopeSubscriber_HappyPath(t *testing.T) {
 	s := &Service{
-		cfg: &config{chain: &mock.ChainService{}},
+		cfg:          &config{chain: &mock.ChainService{}},
+		chainStarted: abool.New(),
 	}
 	root := [32]byte{0x01}
 	blockHash := [32]byte{0x02}
@@ -361,8 +363,9 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 			ExecutionRequests: &enginev1.ExecutionRequests{
 				Deposits: []*enginev1.DepositRequest{},
 			},
-			BuilderIndex:    builderIdx,
-			BeaconBlockRoot: root[:],
+			BuilderIndex:          builderIdx,
+			BeaconBlockRoot:       root[:],
+			ParentBeaconBlockRoot: make([]byte, 32),
 		},
 		Signature: bytes.Repeat([]byte{0xAA}, 96),
 	}

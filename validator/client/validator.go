@@ -1068,10 +1068,21 @@ func (v *validator) buildProposerPreferences(
 	}
 
 	ps := v.ProposerSettings()
+	prevDependentRoot, currDependentRoot := v.duties.DependentRoots()
+	if len(prevDependentRoot) != fieldparams.RootLength {
+		prevDependentRoot = make([]byte, fieldparams.RootLength)
+	}
+	if len(currDependentRoot) != fieldparams.RootLength {
+		currDependentRoot = make([]byte, fieldparams.RootLength)
+	}
 	var signedPrefs []*ethpb.SignedProposerPreferences
 	var sigFailCount int
 
 	processDuties := func(duties map[pubkey]*ethpb.ValidatorDuty, isNextEpoch bool) {
+		dependentRoot := prevDependentRoot
+		if isNextEpoch {
+			dependentRoot = currDependentRoot
+		}
 		for pk, duty := range duties {
 			if len(duty.ProposerSlots) == 0 {
 				continue
@@ -1113,6 +1124,7 @@ func (v *validator) buildProposerPreferences(
 				}
 
 				pref := &ethpb.ProposerPreferences{
+					DependentRoot:  dependentRoot,
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: duty.ValidatorIndex,
 					FeeRecipient:   feeRecipient[:],

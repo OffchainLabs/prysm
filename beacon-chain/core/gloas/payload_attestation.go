@@ -256,11 +256,11 @@ func selectByBalanceFill(
 		offset := (i % 16) * 2
 		randomValue := uint64(binary.LittleEndian.Uint16(randomBytes[offset : offset+2]))
 
-		val, err := st.ValidatorAtIndexReadOnly(idx)
+		eb, err := st.EffectiveBalanceAtIndex(idx)
 		if err != nil {
 			return nil, i, errors.Wrapf(err, "validator %d", idx)
 		}
-		if val.EffectiveBalance()*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue {
+		if eb*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue {
 			selected = append(selected, idx)
 		}
 		if uint64(len(selected)) == fieldparams.PTCSize {

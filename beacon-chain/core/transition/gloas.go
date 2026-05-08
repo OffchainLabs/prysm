@@ -105,7 +105,7 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 //
 // Spec definition:
 //
-//	<spec fn="process_epoch" fork="gloas" hash="bf3575a9">
+//	<spec fn="process_epoch" fork="gloas" hash="24b959ba">
 //	def process_epoch(state: BeaconState) -> None:
 //	    process_justification_and_finalization(state)
 //	    process_inactivity_updates(state)
@@ -113,6 +113,7 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 //	    process_registry_updates(state)
 //	    process_slashings(state)
 //	    process_eth1_data_reset(state)
+//	    # [Modified in Gloas:EIP8061]
 //	    process_pending_deposits(state)
 //	    process_pending_consolidations(state)
 //	    # [New in Gloas:EIP7732]

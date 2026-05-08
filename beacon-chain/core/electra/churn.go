@@ -47,7 +47,7 @@ func ComputeConsolidationEpochAndUpdateChurn(ctx context.Context, s state.Beacon
 	if err != nil {
 		return 0, err
 	}
-	perEpochConsolidationChurn := helpers.ConsolidationChurnLimit(primitives.Gwei(activeBal))
+	perEpochConsolidationChurn := helpers.ConsolidationChurnLimitForVersion(s.Version(), primitives.Gwei(activeBal))
 
 	// New epoch for consolidations.
 	var consolidationBalanceToConsume primitives.Gwei

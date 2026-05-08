@@ -14,6 +14,8 @@ import (
 	"github.com/pkg/errors"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -37,6 +39,35 @@ func TestSubmitPayloadAttestation_PayloadAttestationDataFailure(t *testing.T) {
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
 			validator.SubmitPayloadAttestation(t.Context(), 1, pubKey)
 			require.LogsContain(t, hook, "Could not request payload attestation data")
+		})
+	}
+}
+
+func TestSubmitPayloadAttestation_NoHeadBlockForSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+		t.Run(fmt.Sprintf("SlashingProtectionMinimal:%v", isSlashingProtectionMinimal), func(t *testing.T) {
+			hook := logTest.NewGlobal()
+			validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
+			defer finish()
+
+			unavailable := errors.Wrap(
+				status.Error(codes.Unavailable, "no valid block root for slot 1, highest received block slot is 0"),
+				"PayloadAttestationData",
+			)
+			m.validatorClient.EXPECT().
+				PayloadAttestationData(gomock.Any(), gomock.Any()).
+				Return(nil, unavailable)
+
+			var pubKey [fieldparams.BLSPubkeyLength]byte
+			copy(pubKey[:], validatorKey.PublicKey().Marshal())
+			validator.SubmitPayloadAttestation(t.Context(), 1, pubKey)
+			require.LogsContain(t, hook, "Skipping payload attestation: beacon node has no head block for slot")
+			require.LogsDoNotContain(t, hook, "Could not request payload attestation data")
 		})
 	}
 }

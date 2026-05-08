@@ -99,6 +99,7 @@ func TestProposerPreferencesVerifier_VerifySignature_ForkBoundary(t *testing.T) 
 
 	signed := &ethpb.SignedProposerPreferences{
 		Message: &ethpb.ProposerPreferences{
+			DependentRoot:  make([]byte, 32),
 			ProposalSlot:   proposalSlot,
 			ValidatorIndex: validatorIndex,
 			FeeRecipient:   bytes.Repeat([]byte{0x01}, 20),
@@ -138,6 +139,7 @@ func newSignedProposerPreferencesState(t *testing.T, currentSlot, proposalSlot p
 
 	signed := &ethpb.SignedProposerPreferences{
 		Message: &ethpb.ProposerPreferences{
+			DependentRoot:  make([]byte, 32),
 			ProposalSlot:   proposalSlot,
 			ValidatorIndex: validatorIndex,
 			FeeRecipient:   bytes.Repeat([]byte{0x01}, 20),

@@ -282,3 +282,7 @@ type BuilderPendingWithdrawal struct {
 	Amount       string `json:"amount"`
 	BuilderIndex string `json:"builder_index"`
 }
+
+type PTCs struct {
+	ValidatorIndices []string `json:"validator_indices"`
+}

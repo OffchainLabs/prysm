@@ -89,3 +89,22 @@ func BuilderPendingWithdrawalFromConsensus(w *ethpb.BuilderPendingWithdrawal) *B
 		BuilderIndex: fmt.Sprintf("%d", w.BuilderIndex),
 	}
 }
+
+func PTCWindowFromConsensus(window []*ethpb.PTCs) []*PTCs {
+	out := make([]*PTCs, len(window))
+	for i, slot := range window {
+		out[i] = PTCsFromConsensus(slot)
+	}
+	return out
+}
+
+func PTCsFromConsensus(p *ethpb.PTCs) *PTCs {
+	if p == nil {
+		return &PTCs{}
+	}
+	indices := make([]string, len(p.ValidatorIndices))
+	for i, idx := range p.ValidatorIndices {
+		indices[i] = fmt.Sprintf("%d", idx)
+	}
+	return &PTCs{ValidatorIndices: indices}
+}
