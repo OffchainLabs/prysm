@@ -219,6 +219,7 @@ go_test(
         "gloas__finality__finality_test.go",
         "gloas__fork__upgrade_to_gloas_test.go",
         "gloas__fork_transition__transition_test.go",
+        "gloas__forkchoice__forkchoice_test.go",
         "gloas__operations__attestation_test.go",
         "gloas__operations__attester_slashing_test.go",
         "gloas__operations__block_header_test.go",
