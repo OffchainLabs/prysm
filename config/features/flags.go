@@ -220,12 +220,13 @@ var (
 		Name:  "ignore-unviable-attestations",
 		Usage: "Ignores attestations whose target state is not viable with respect to the current head (avoid expensive state replay from lagging attesters).",
 	}
-	// EnableZkvmFlag enables ZKVM execution proof mode.
-	EnableZkvmFlag = &cli.BoolFlag{
-		Name: "enable-zkvm",
-		Usage: "Enables ZKVM execution proof mode. The node subscribes to the " +
-			"execution_proof gossip topic, verifies proofs via the verifier endpoint, " +
-			"and advertises zkVM support in its ENR. Requires --verifier-rest-api-provider.",
+	// ZkvmModeFlag selects the ZKVM execution proof mode.
+	ZkvmModeFlag = &cli.StringFlag{
+		Name: "zkvm",
+		Usage: `Selects ZKVM execution proof mode. Accepted values:
+			execute-and-verify (run a local execution client and additionally
+			verify execution proofs received over gossip), or verify-only
+			(run with no execution client at all)`,
 	}
 )
 
@@ -291,7 +292,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,
-	EnableZkvmFlag,
+	ZkvmModeFlag,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

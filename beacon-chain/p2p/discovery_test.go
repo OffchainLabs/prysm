@@ -283,7 +283,7 @@ func TestCreateLocalNode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.zkvmEnabled {
 				resetCfg := features.InitWithReset(&features.Flags{
-					EnableZkvm: true,
+					ZkvmMode: features.ZkvmExecuteAndVerify,
 				})
 				t.Cleanup(func() {
 					resetCfg()
@@ -370,7 +370,7 @@ func TestCreateLocalNode(t *testing.T) {
 			if tt.zkvmEnabled {
 				zkvmEnabled := new(bool)
 				require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(params.BeaconNetworkConfig().ZkvmEnabledKey, zkvmEnabled)))
-				require.Equal(t, features.Get().EnableZkvm, *zkvmEnabled)
+				require.Equal(t, features.Get().IsZkvmEnabled(), *zkvmEnabled)
 			}
 
 		})

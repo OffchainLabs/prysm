@@ -24,6 +24,7 @@ import (
 	native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
@@ -220,6 +221,11 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 
 // Start the powchain service's main event loop.
 func (s *Service) Start() {
+	if features.Get().IsZkvmVerifyOnly() {
+		log.Info("zkVM verify-only mode: skipping execution client startup")
+		return
+	}
+
 	if err := s.setupExecutionClientConnections(s.ctx, s.cfg.currHttpEndpoint); err != nil {
 		log.WithError(err).Error("Could not connect to execution endpoint")
 	}

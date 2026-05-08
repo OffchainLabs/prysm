@@ -330,7 +330,7 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 			})
 		})
 
-		if features.Get().EnableZkvm {
+		if features.Get().IsZkvmEnabled() {
 			s.spawn(func() {
 				s.subscribe(
 					p2p.ExecutionProofSubnetTopicFormat,

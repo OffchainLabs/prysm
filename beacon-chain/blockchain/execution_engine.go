@@ -39,6 +39,10 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyForkchoiceUpdate")
 	defer span.End()
 
+	if features.Get().IsZkvmVerifyOnly() {
+		return nil, nil
+	}
+
 	if arg.headBlock == nil || arg.headBlock.IsNil() {
 		log.Error("Head block is nil")
 		return nil, nil
@@ -222,6 +226,10 @@ func (s *Service) getPayloadHash(ctx context.Context, root []byte) ([32]byte, er
 func (s *Service) notifyNewPayload(ctx context.Context, stVersion int, header interfaces.ExecutionData, blk blocktypes.ROBlock) (bool, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyNewPayload")
 	defer span.End()
+
+	if features.Get().IsZkvmVerifyOnly() {
+		return true, nil
+	}
 
 	// Execution payload is only supported in Bellatrix and beyond. Pre
 	// merge blocks are never optimistic

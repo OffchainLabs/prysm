@@ -386,6 +386,39 @@ func setBuilderExecution(blk interfaces.SignedBeaconBlock, execution interfaces.
 	return setExecution(blk, execution, true, builderKzgCommitments, requests)
 }
 
+func setBuilderOnlyExecution(blk interfaces.SignedBeaconBlock, bid builder.Bid) (primitives.Wei, error) {
+	header, err := bid.Header()
+	if err != nil {
+		return primitives.ZeroWei(), fmt.Errorf("failed to retrieve header from BuilderBid: %w", err)
+	}
+
+	builderKzgCommitments := [][]byte{}
+	if bid.Version() >= version.Deneb {
+		bidDeneb, ok := bid.(builder.BidDeneb)
+		if !ok {
+			return primitives.ZeroWei(), fmt.Errorf("bid type %T does not implement builder.BidDeneb", bid)
+		}
+
+		builderKzgCommitments = bidDeneb.BlobKzgCommitments()
+	}
+
+	executionRequests := new(enginev1.ExecutionRequests)
+	if bid.Version() >= version.Electra {
+		bidElectra, ok := bid.(builder.BidElectra)
+		if !ok {
+			return primitives.ZeroWei(), fmt.Errorf("bid type %T does not implement builder.BidElectra", bid)
+		}
+
+		executionRequests = bidElectra.ExecutionRequests()
+	}
+
+	if err := setBuilderExecution(blk, header, builderKzgCommitments, executionRequests); err != nil {
+		return primitives.ZeroWei(), fmt.Errorf("set builder execution: %w", err)
+	}
+
+	return bid.Value(), nil
+}
+
 // setExecution sets the execution context for a beacon block. It also sets KZG commitments based on the block version.
 // The function is designed to be flexible and handle both local and builder executions.
 func setExecution(blk interfaces.SignedBeaconBlock, execution interfaces.ExecutionData, isBlinded bool, kzgCommitments [][]byte, requests *enginev1.ExecutionRequests) error {

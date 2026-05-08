@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -89,6 +90,10 @@ func (s *Store) insert(ctx context.Context,
 	}
 
 	parent := s.nodeByRoot[parentRoot]
+
+	// If not using a execution client at all, then consider the node as always EL validated.
+	elValidated := features.Get().IsZkvmVerifyOnly()
+
 	n := &Node{
 		slot:                     slot,
 		root:                     root,
@@ -98,6 +103,7 @@ func (s *Store) insert(ctx context.Context,
 		finalizedEpoch:           finalizedEpoch,
 		unrealizedFinalizedEpoch: finalizedEpoch,
 		optimistic:               true,
+		elValidated:              elValidated,
 		payloadHash:              payloadHash,
 		timestamp:                time.Now(),
 	}

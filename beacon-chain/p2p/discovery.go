@@ -589,7 +589,7 @@ func (s *Service) createLocalNode(
 		localNode.Set(quicEntry)
 	}
 
-	if features.Get().EnableZkvm {
+	if features.Get().IsZkvmEnabled() {
 		zkvmKeyEntry := enr.WithEntry(zkvmEnabledKeyEnrKey, true)
 		localNode.Set(zkvmKeyEntry)
 	}

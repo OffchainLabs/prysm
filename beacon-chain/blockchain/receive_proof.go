@@ -17,7 +17,7 @@ func (s *Service) ReceiveProof(proof blocks.VerifiedROSignedExecutionProof) erro
 		return fmt.Errorf("save proof: %w", err)
 	}
 
-	if !features.Get().EnableZkvm {
+	if !features.Get().IsZkvmEnabled() {
 		return nil
 	}
 

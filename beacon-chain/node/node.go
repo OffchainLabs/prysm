@@ -141,10 +141,18 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		return nil, errors.Wrap(err, "could not set beacon configuration options")
 	}
 
-	// Validate zkVM flag and verifier endpoint consistency.
+	// Validate zkVM flag and dependent endpoints.
+	zkvmEnabled := features.Get().IsZkvmEnabled()
+	zkvmVerifyOnly := features.Get().IsZkvmVerifyOnly()
 	verifierEndpoint := cliCtx.String(flags.VerifierRESTApiProviderFlag.Name)
-	if features.Get().EnableZkvm && verifierEndpoint == "" {
-		return nil, fmt.Errorf("--%s requires --%s to be set", features.EnableZkvmFlag.Name, flags.VerifierRESTApiProviderFlag.Name)
+	mevRelayEndpoint := cliCtx.String(flags.MevRelayEndpoint.Name)
+
+	if zkvmEnabled && verifierEndpoint == "" {
+		return nil, fmt.Errorf("--%s requires --%s to be set", features.ZkvmModeFlag.Name, flags.VerifierRESTApiProviderFlag.Name)
+	}
+
+	if zkvmVerifyOnly && mevRelayEndpoint == "" {
+		log.Warningf("zkVM verify-only mode is active without --%s: this node will be unable to propose blocks", flags.MevRelayEndpoint.Name)
 	}
 
 	ctx := cliCtx.Context

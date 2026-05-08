@@ -34,22 +34,37 @@ import (
 const enabledFeatureFlag = "Enabled feature flag"
 const disabledFeatureFlag = "Disabled feature flag"
 
+// ZkvmMode is the runtime mode for ZKVM execution proof handling.
+type ZkvmMode string
+
+const (
+	ZkvmOff              ZkvmMode = ""
+	ZkvmExecuteAndVerify ZkvmMode = "execute-and-verify"
+	ZkvmVerifyOnly       ZkvmMode = "verify-only"
+)
+
+// validZkvmModes enumerates the accepted values for the --zkvm flag.
+var validZkvmModes = map[ZkvmMode]bool{
+	ZkvmOff:              true,
+	ZkvmExecuteAndVerify: true,
+	ZkvmVerifyOnly:       true,
+}
+
 // Flags is a struct to represent which features the client will perform on runtime.
 type Flags struct {
 	// Feature related flags.
-	WriteSSZStateTransitions            bool // WriteSSZStateTransitions to tmp directory.
-	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
-	EnableLightClient                   bool // EnableLightClient enables light client APIs.
-	EnableQUIC                          bool // EnableQUIC specifies whether to enable QUIC transport for libp2p.
-	WriteWalletPasswordOnWebOnboarding  bool // WriteWalletPasswordOnWebOnboarding writes the password to disk after Prysm web signup.
-	EnableDoppelGanger                  bool // EnableDoppelGanger enables doppelganger protection on startup for the validator.
-	EnableHistoricalSpaceRepresentation bool // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
-	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
-	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
-	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
-	EnableWeb                           bool // EnableWeb enables the webui on the validator client
+	WriteSSZStateTransitions            bool     // WriteSSZStateTransitions to tmp directory.
+	EnablePeerScorer                    bool     // EnablePeerScorer enables experimental peer scoring in p2p.
+	EnableLightClient                   bool     // EnableLightClient enables light client APIs.
+	EnableQUIC                          bool     // EnableQUIC specifies whether to enable QUIC transport for libp2p.
+	WriteWalletPasswordOnWebOnboarding  bool     // WriteWalletPasswordOnWebOnboarding writes the password to disk after Prysm web signup.
+	EnableDoppelGanger                  bool     // EnableDoppelGanger enables doppelganger protection on startup for the validator.
+	EnableHistoricalSpaceRepresentation bool     // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
+	EnableBeaconRESTApi                 bool     // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
+	EnableExperimentalAttestationPool   bool     // EnableExperimentalAttestationPool enables an experimental attestation pool design.
+	DisableDutiesV2                     bool     // DisableDutiesV2 sets validator client to use the get Duties endpoint
+	EnableWeb                           bool     // EnableWeb enables the webui on the validator client
 	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
-	EnableZkvm                          bool // EnableZkvm enables zkVM related features.
 
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
@@ -93,11 +108,23 @@ type Flags struct {
 
 	// Feature related flags (alignment forced in the end)
 	ForceHead        string                // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
+	ZkvmMode         ZkvmMode              // ZkvmMode selects the ZKVM execution proof mode (off / execute-and-verify / verify-only).
 	BlacklistedRoots map[[32]byte]struct{} // BlacklistedRoots is a list of roots that are blacklisted from processing.
 }
 
 var featureConfig *Flags
 var featureConfigLock sync.RWMutex
+
+// IsZkvmEnabled reports whether any ZKVM execution proof mode is active.
+func (f *Flags) IsZkvmEnabled() bool {
+	return f.ZkvmMode != ZkvmOff
+}
+
+// IsZkvmVerifyOnly reports whether the node is running in proof-only mode
+// (no execution client connected).
+func (f *Flags) IsZkvmVerifyOnly() bool {
+	return f.ZkvmMode == ZkvmVerifyOnly
+}
 
 // Get retrieves feature config.
 func Get() *Flags {
@@ -305,13 +332,37 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		}
 	}
 
-	if ctx.IsSet(EnableZkvmFlag.Name) {
-		logEnabled(EnableZkvmFlag)
-		cfg.EnableZkvm = true
+	if err := configureZkvmMode(ctx, cfg); err != nil {
+		return fmt.Errorf("configure zkVM mode: %w", err)
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
 	Init(cfg)
+	return nil
+}
+
+// configureZkvmMode reads the --zkvm flag, validates it, and stores the
+// resulting mode in cfg. Unset flag is a no-op (cfg.ZkvmMode stays ZkvmOff).
+func configureZkvmMode(ctx *cli.Context, cfg *Flags) error {
+	if !ctx.IsSet(ZkvmModeFlag.Name) {
+		return nil
+	}
+
+	mode := ZkvmMode(ctx.String(ZkvmModeFlag.Name))
+	if !validZkvmModes[mode] {
+		return fmt.Errorf(
+			"invalid value %q for --%s: must be one of %q, %q",
+			string(mode), ZkvmModeFlag.Name, ZkvmExecuteAndVerify, ZkvmVerifyOnly,
+		)
+	}
+
+	cfg.ZkvmMode = mode
+	if mode == ZkvmOff {
+		return nil
+	}
+
+	log.WithField(ZkvmModeFlag.Name, string(mode)).Warn(enabledFeatureFlag)
+
 	return nil
 }
 

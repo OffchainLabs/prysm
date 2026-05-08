@@ -120,7 +120,8 @@ func (n *Node) isNodeReady() (bool, error) {
 	if !n.elValidated {
 		return false, nil
 	}
-	if !features.Get().EnableZkvm {
+
+	if !features.Get().IsZkvmEnabled() {
 		return true, nil
 	}
 

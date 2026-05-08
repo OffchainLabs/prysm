@@ -303,7 +303,7 @@ func (s *Service) Start() {
 		log.WithError(err).Error("Failed to maintain custody info")
 	}
 
-	if !features.Get().EnableZkvm {
+	if !features.Get().IsZkvmEnabled() {
 		return
 	}
 
