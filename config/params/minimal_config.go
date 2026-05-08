@@ -127,6 +127,11 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.PendingDepositsLimit = 134217728
 	minimalConfig.MaxPendingDepositsPerEpoch = 16
 
+	// New Gloas params (EIP-8061)
+	minimalConfig.ChurnLimitQuotientGloas = 16
+	minimalConfig.ConsolidationChurnLimitQuotient = 32
+	minimalConfig.MaxPerEpochActivationChurnLimitGloas = 128000000000
+
 	// Ethereum PoW parameters.
 	minimalConfig.DepositChainID = 5   // Chain ID of eth1 goerli.
 	minimalConfig.DepositNetworkID = 5 // Network ID of eth1 goerli.

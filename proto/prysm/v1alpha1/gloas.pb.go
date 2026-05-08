@@ -1542,13 +1542,14 @@ func (x *DataColumnSidecarGloas) GetBeaconBlockRoot() []byte {
 }
 
 type ExecutionPayloadEnvelope struct {
-	state             protoimpl.MessageState                                                   `protogen:"open.v1"`
-	Payload           *v1.ExecutionPayloadGloas                                                `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
-	ExecutionRequests *v1.ExecutionRequests                                                    `protobuf:"bytes,2,opt,name=execution_requests,json=executionRequests,proto3" json:"execution_requests,omitempty"`
-	BuilderIndex      github_com_OffchainLabs_prysm_v7_consensus_types_primitives.BuilderIndex `protobuf:"varint,3,opt,name=builder_index,json=builderIndex,proto3" json:"builder_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.BuilderIndex"`
-	BeaconBlockRoot   []byte                                                                   `protobuf:"bytes,4,opt,name=beacon_block_root,json=beaconBlockRoot,proto3" json:"beacon_block_root,omitempty" ssz-size:"32"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                 protoimpl.MessageState                                                   `protogen:"open.v1"`
+	Payload               *v1.ExecutionPayloadGloas                                                `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
+	ExecutionRequests     *v1.ExecutionRequests                                                    `protobuf:"bytes,2,opt,name=execution_requests,json=executionRequests,proto3" json:"execution_requests,omitempty"`
+	BuilderIndex          github_com_OffchainLabs_prysm_v7_consensus_types_primitives.BuilderIndex `protobuf:"varint,3,opt,name=builder_index,json=builderIndex,proto3" json:"builder_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.BuilderIndex"`
+	BeaconBlockRoot       []byte                                                                   `protobuf:"bytes,4,opt,name=beacon_block_root,json=beaconBlockRoot,proto3" json:"beacon_block_root,omitempty" ssz-size:"32"`
+	ParentBeaconBlockRoot []byte                                                                   `protobuf:"bytes,5,opt,name=parent_beacon_block_root,json=parentBeaconBlockRoot,proto3" json:"parent_beacon_block_root,omitempty" ssz-size:"32"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ExecutionPayloadEnvelope) Reset() {
@@ -1609,6 +1610,13 @@ func (x *ExecutionPayloadEnvelope) GetBeaconBlockRoot() []byte {
 	return nil
 }
 
+func (x *ExecutionPayloadEnvelope) GetParentBeaconBlockRoot() []byte {
+	if x != nil {
+		return x.ParentBeaconBlockRoot
+	}
+	return nil
+}
+
 type SignedExecutionPayloadEnvelope struct {
 	state         protoimpl.MessageState    `protogen:"open.v1"`
 	Message       *ExecutionPayloadEnvelope `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
@@ -1662,15 +1670,16 @@ func (x *SignedExecutionPayloadEnvelope) GetSignature() []byte {
 }
 
 type BlindedExecutionPayloadEnvelope struct {
-	state             protoimpl.MessageState                                                   `protogen:"open.v1"`
-	BlockHash         []byte                                                                   `protobuf:"bytes,1,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty" ssz-size:"32"`
-	ExecutionRequests *v1.ExecutionRequests                                                    `protobuf:"bytes,2,opt,name=execution_requests,json=executionRequests,proto3" json:"execution_requests,omitempty"`
-	BuilderIndex      github_com_OffchainLabs_prysm_v7_consensus_types_primitives.BuilderIndex `protobuf:"varint,3,opt,name=builder_index,json=builderIndex,proto3" json:"builder_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.BuilderIndex"`
-	BeaconBlockRoot   []byte                                                                   `protobuf:"bytes,4,opt,name=beacon_block_root,json=beaconBlockRoot,proto3" json:"beacon_block_root,omitempty" ssz-size:"32"`
-	Slot              github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot         `protobuf:"varint,5,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
-	ParentBlockHash   []byte                                                                   `protobuf:"bytes,7,opt,name=parent_block_hash,json=parentBlockHash,proto3" json:"parent_block_hash,omitempty" ssz-size:"32"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                 protoimpl.MessageState                                                   `protogen:"open.v1"`
+	BlockHash             []byte                                                                   `protobuf:"bytes,1,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty" ssz-size:"32"`
+	ExecutionRequests     *v1.ExecutionRequests                                                    `protobuf:"bytes,2,opt,name=execution_requests,json=executionRequests,proto3" json:"execution_requests,omitempty"`
+	BuilderIndex          github_com_OffchainLabs_prysm_v7_consensus_types_primitives.BuilderIndex `protobuf:"varint,3,opt,name=builder_index,json=builderIndex,proto3" json:"builder_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.BuilderIndex"`
+	BeaconBlockRoot       []byte                                                                   `protobuf:"bytes,4,opt,name=beacon_block_root,json=beaconBlockRoot,proto3" json:"beacon_block_root,omitempty" ssz-size:"32"`
+	Slot                  github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot         `protobuf:"varint,5,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
+	ParentBlockHash       []byte                                                                   `protobuf:"bytes,7,opt,name=parent_block_hash,json=parentBlockHash,proto3" json:"parent_block_hash,omitempty" ssz-size:"32"`
+	ParentBeaconBlockRoot []byte                                                                   `protobuf:"bytes,8,opt,name=parent_beacon_block_root,json=parentBeaconBlockRoot,proto3" json:"parent_beacon_block_root,omitempty" ssz-size:"32"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *BlindedExecutionPayloadEnvelope) Reset() {
@@ -1741,6 +1750,13 @@ func (x *BlindedExecutionPayloadEnvelope) GetSlot() github_com_OffchainLabs_prys
 func (x *BlindedExecutionPayloadEnvelope) GetParentBlockHash() []byte {
 	if x != nil {
 		return x.ParentBlockHash
+	}
+	return nil
+}
+
+func (x *BlindedExecutionPayloadEnvelope) GetParentBeaconBlockRoot() []byte {
+	if x != nil {
+		return x.ParentBeaconBlockRoot
 	}
 	return nil
 }

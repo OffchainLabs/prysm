@@ -1073,6 +1073,13 @@ func (v *validator) buildProposerPreferences(
 	}
 
 	ps := v.ProposerSettings()
+	prevDependentRoot, currDependentRoot := v.duties.DependentRoots()
+	if len(prevDependentRoot) != fieldparams.RootLength {
+		prevDependentRoot = make([]byte, fieldparams.RootLength)
+	}
+	if len(currDependentRoot) != fieldparams.RootLength {
+		currDependentRoot = make([]byte, fieldparams.RootLength)
+	}
 	var signedPrefs []*ethpb.SignedProposerPreferences
 	var sigFailCount int
 

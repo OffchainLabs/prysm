@@ -64,7 +64,7 @@ func (b *BeaconState) exitEpochAndUpdateChurn(totalActiveBalance primitives.Gwei
 	defer b.lock.Unlock()
 
 	earliestExitEpoch := max(b.earliestExitEpoch, helpers.ActivationExitEpoch(slots.ToEpoch(b.slot)))
-	perEpochChurn := helpers.ActivationExitChurnLimit(totalActiveBalance) // Guaranteed to be non-zero.
+	perEpochChurn := helpers.ExitChurnLimitForVersion(b.version, totalActiveBalance) // Guaranteed to be non-zero.
 
 	// New epoch for exits
 	var exitBalanceToConsume primitives.Gwei
