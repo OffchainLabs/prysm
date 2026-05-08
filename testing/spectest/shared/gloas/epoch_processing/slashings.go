@@ -1,0 +1,31 @@
+package epoch_processing
+
+import (
+	"path"
+	"testing"
+
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
+)
+
+// RunSlashingsTests executes "epoch_processing/slashings" tests.
+func RunSlashingsTests(t *testing.T, config string) {
+	require.NoError(t, utils.SetConfig(t, config))
+
+	testFolders, testsFolderPath := utils.TestFolders(t, config, "gloas", "epoch_processing/slashings/pyspec_tests")
+	for _, folder := range testFolders {
+		t.Run(folder.Name(), func(t *testing.T) {
+			helpers.ClearCache()
+			folderPath := path.Join(testsFolderPath, folder.Name())
+			RunEpochOperationTest(t, folderPath, processSlashingsWrapper)
+		})
+	}
+}
+
+func processSlashingsWrapper(t *testing.T, st state.BeaconState) (state.BeaconState, error) {
+	require.NoError(t, electra.ProcessSlashings(st), "Could not process slashings")
+	return st, nil
+}
