@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	requests "github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -92,7 +93,15 @@ func ApplyParentExecutionPayload(
 }
 
 func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *enginev1.ExecutionRequests) error {
-	if err := processDepositRequests(ctx, st, rqs.Deposits); err != nil {
+	var prefetched []bool
+	if rqs != nil && len(rqs.Deposits) > 0 {
+		if root, err := rqs.HashTreeRoot(); err == nil {
+			if v, ok := cache.DepositSig.Get(root); ok && len(v) == len(rqs.Deposits) {
+				prefetched = v
+			}
+		}
+	}
+	if err := processDepositRequests(ctx, st, rqs.Deposits, prefetched); err != nil {
 		return errors.Wrap(err, "could not process deposit requests")
 	}
 	var err error

@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func processDepositRequests(ctx context.Context, beaconState state.BeaconState, requests []*enginev1.DepositRequest) error {
+func processDepositRequests(ctx context.Context, beaconState state.BeaconState, requests []*enginev1.DepositRequest, prefetched []bool) error {
 	if len(requests) == 0 {
 		return nil
 	}
@@ -39,7 +39,8 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 
 	slot := beaconState.Slot()
 	newBuilders := make([]*enginev1.DepositRequest, 0, len(requests))
-	for _, req := range requests {
+	newBuilderIndices := make([]int, 0, len(requests))
+	for i, req := range requests {
 		pubkey := bytesutil.ToBytes48(req.Pubkey)
 
 		if idx, ok := beaconState.BuilderIndexByPubkey(pubkey); ok {
@@ -58,6 +59,7 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 				}
 				if !isPending {
 					newBuilders = append(newBuilders, req)
+					newBuilderIndices = append(newBuilderIndices, i)
 					continue
 				}
 			}
@@ -74,7 +76,7 @@ func processDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 		}
 	}
 
-	return registerNewBuilders(ctx, beaconState, newBuilders)
+	return registerNewBuilders(ctx, beaconState, newBuilders, newBuilderIndices, prefetched)
 }
 
 func processDepositRequestsPerRequest(beaconState state.BeaconState, requests []*enginev1.DepositRequest) error {
@@ -86,14 +88,23 @@ func processDepositRequestsPerRequest(beaconState state.BeaconState, requests []
 	return nil
 }
 
-func registerNewBuilders(ctx context.Context, beaconState state.BeaconState, candidates []*enginev1.DepositRequest) error {
+func registerNewBuilders(ctx context.Context, beaconState state.BeaconState, candidates []*enginev1.DepositRequest, indices []int, prefetched []bool) error {
 	if len(candidates) == 0 {
 		return nil
 	}
 
-	valid, err := helpers.BatchVerifyDepositRequestSignatures(ctx, candidates)
-	if err != nil {
-		return errors.Wrap(err, "could not verify builder deposits")
+	var valid []bool
+	if prefetched != nil {
+		valid = make([]bool, len(indices))
+		for i, idx := range indices {
+			valid[i] = prefetched[idx]
+		}
+	} else {
+		var err error
+		valid, err = helpers.BatchVerifyDepositRequestSignatures(ctx, candidates)
+		if err != nil {
+			return errors.Wrap(err, "could not verify builder deposits")
+		}
 	}
 
 	for i, c := range candidates {

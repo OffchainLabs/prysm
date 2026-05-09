@@ -18,12 +18,12 @@ func TestProcessDepositRequests_EmptyAndNil(t *testing.T) {
 	st := newGloasState(t, nil, nil)
 
 	t.Run("empty requests continues", func(t *testing.T) {
-		err := processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{})
+		err := processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{}, nil)
 		require.NoError(t, err)
 	})
 
 	t.Run("nil request errors", func(t *testing.T) {
-		err := processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{nil})
+		err := processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{nil}, nil)
 		require.ErrorContains(t, "nil deposit request", err)
 	})
 }
@@ -145,7 +145,7 @@ func TestProcessDepositRequests_BatchVerifyMultipleNewBuilders(t *testing.T) {
 	}
 
 	st := newGloasState(t, nil, nil)
-	require.NoError(t, processDepositRequests(t.Context(), st, reqs))
+	require.NoError(t, processDepositRequests(t.Context(), st, reqs, nil))
 
 	for i := range n {
 		idx, ok := st.BuilderIndexByPubkey(toBytes48(keys[i].PublicKey().Marshal()))
@@ -177,7 +177,7 @@ func TestProcessDepositRequests_BatchFallback_OnlyInvalidDropped(t *testing.T) {
 	}
 
 	st := newGloasState(t, nil, nil)
-	require.NoError(t, processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{good, bad}))
+	require.NoError(t, processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{good, bad}, nil))
 
 	idx, ok := st.BuilderIndexByPubkey(toBytes48(good.Pubkey))
 	require.Equal(t, true, ok)
@@ -210,7 +210,7 @@ func TestProcessDepositRequests_BatchFallback_AllInvalidDropped(t *testing.T) {
 	reqs := []*enginev1.DepositRequest{mk(0), mk(1), mk(2)}
 
 	st := newGloasState(t, nil, nil)
-	require.NoError(t, processDepositRequests(t.Context(), st, reqs))
+	require.NoError(t, processDepositRequests(t.Context(), st, reqs, nil))
 
 	for _, r := range reqs {
 		_, ok := st.BuilderIndexByPubkey(toBytes48(r.Pubkey))
@@ -230,7 +230,7 @@ func TestProcessDepositRequests_DupPubkey_RegistrationThenTopUp(t *testing.T) {
 	topUp := depositRequestFromPending(stateTesting.GeneratePendingDeposit(t, sk, 250, topUpCred, 0), 1)
 
 	st := newGloasState(t, nil, nil)
-	require.NoError(t, processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{register, topUp}))
+	require.NoError(t, processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{register, topUp}, nil))
 
 	idx, ok := st.BuilderIndexByPubkey(toBytes48(sk.PublicKey().Marshal()))
 	require.Equal(t, true, ok)
@@ -254,7 +254,7 @@ func TestProcessDepositRequests_DupPubkey_FailedRegistrationThenTopUpRetries(t *
 	second := depositRequestFromPending(stateTesting.GeneratePendingDeposit(t, sk, 999, cred, 0), 1)
 
 	st := newGloasState(t, nil, nil)
-	require.NoError(t, processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{first, second}))
+	require.NoError(t, processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{first, second}, nil))
 
 	idx, ok := st.BuilderIndexByPubkey(toBytes48(sk.PublicKey().Marshal()))
 	require.Equal(t, true, ok)
@@ -272,7 +272,7 @@ func TestProcessDepositRequests_DupPubkey_ValidatorThenBuilderStaysPending(t *te
 	second := depositRequestFromPending(stateTesting.GeneratePendingDeposit(t, sk, 200, bldCred, 0), 1)
 
 	st := newGloasState(t, nil, nil)
-	require.NoError(t, processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{first, second}))
+	require.NoError(t, processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{first, second}, nil))
 
 	_, ok := st.BuilderIndexByPubkey(toBytes48(sk.PublicKey().Marshal()))
 	require.Equal(t, false, ok)
@@ -317,7 +317,7 @@ func TestProcessDepositRequests_MixedClassifications(t *testing.T) {
 	require.NoError(t, err)
 	newB := depositRequestFromPending(stateTesting.GeneratePendingDeposit(t, skNewB, 2222, bldCred, 0), 3)
 
-	require.NoError(t, processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{topUp, newA, valDep, newB}))
+	require.NoError(t, processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{topUp, newA, valDep, newB}, nil))
 
 	idx, ok := st.BuilderIndexByPubkey(toBytes48(existingPubkey))
 	require.Equal(t, true, ok)
@@ -371,7 +371,7 @@ func TestProcessDepositRequests_BatchEqualsPerRequest(t *testing.T) {
 	reqs := build()
 
 	stBatch := newGloasState(t, nil, nil)
-	require.NoError(t, processDepositRequests(t.Context(), stBatch, reqs))
+	require.NoError(t, processDepositRequests(t.Context(), stBatch, reqs, nil))
 
 	stLegacy := newGloasState(t, nil, nil)
 	require.NoError(t, processDepositRequestsPerRequest(stLegacy, reqs))

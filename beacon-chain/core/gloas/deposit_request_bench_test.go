@@ -126,7 +126,7 @@ func BenchmarkProcessDepositRequests_8192NewBuilders_OneBad_Batched(b *testing.B
 		b.StopTimer()
 		st := benchFreshGloasState(b)
 		b.StartTimer()
-		if err := processDepositRequests(ctx, st, reqs); err != nil {
+		if err := processDepositRequests(ctx, st, reqs, nil); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -145,7 +145,7 @@ func BenchmarkProcessDepositRequests_8192NewBuilders_EightBad_Batched(b *testing
 		b.StopTimer()
 		st := benchFreshGloasState(b)
 		b.StartTimer()
-		if err := processDepositRequests(ctx, st, reqs); err != nil {
+		if err := processDepositRequests(ctx, st, reqs, nil); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -200,7 +200,7 @@ func benchBatched(b *testing.B, n int) {
 		b.StopTimer()
 		st := benchFreshGloasState(b)
 		b.StartTimer()
-		if err := processDepositRequests(ctx, st, reqs); err != nil {
+		if err := processDepositRequests(ctx, st, reqs, nil); err != nil {
 			b.Fatal(err)
 		}
 	}

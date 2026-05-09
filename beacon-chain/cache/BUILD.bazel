@@ -13,6 +13,7 @@ go_library(
         "committee_disabled.go",  # keep
         "committees.go",
         "common.go",
+        "deposit_signature.go",
         "doc.go",
         "error.go",
         "execution_payload_envelope.go",
