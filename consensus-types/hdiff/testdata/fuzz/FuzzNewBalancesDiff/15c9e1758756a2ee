@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('Á')
+[]byte("\x18\xbf\xd8\xc2܆|\x16\x19\xefb}hG\x19r\xe6")
