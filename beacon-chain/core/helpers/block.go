@@ -56,4 +56,3 @@ func BlockRoot(state state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]byte,
 	}
 	return BlockRootAtSlot(state, s)
 }
-
