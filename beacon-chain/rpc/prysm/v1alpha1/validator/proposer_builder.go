@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -23,15 +22,15 @@ func (vs *Server) canUseBuilder(ctx context.Context, slot primitives.Slot, idx p
 	if !vs.BlockBuilder.Configured() {
 		return false, nil
 	}
-	activated, err := vs.circuitBreakBuilder(slot)
-	span.SetAttributes(trace.BoolAttribute("circuitBreakerActivated", activated))
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return false, err
-	}
-	if activated {
-		return false, nil
-	}
+	// activated, err := vs.circuitBreakBuilder(slot)
+	// span.SetAttributes(trace.BoolAttribute("circuitBreakerActivated", activated))
+	// if err != nil {
+	// 	tracing.AnnotateError(span, err)
+	// 	return false, err
+	// }
+	// if activated {
+	// 	return false, nil
+	// }
 	return vs.validatorRegistered(ctx, idx)
 }
 
