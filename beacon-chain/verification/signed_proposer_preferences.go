@@ -115,7 +115,7 @@ func (v *ProposerPreferencesVerifier) VerifySignature(st state.ReadOnlyBeaconSta
 
 	val, err := st.ValidatorAtIndexReadOnly(msg.ValidatorIndex)
 	if err != nil {
-		return fmt.Errorf("validator %d: %w", msg.ValidatorIndex, err)
+		return errors.Wrapf(err, "validator %d", msg.ValidatorIndex)
 	}
 	pubkey := val.PublicKey()
 	if err := signing.VerifySigningRoot(msg, pubkey[:], v.p.Signature, domain); err != nil {
