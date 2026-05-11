@@ -55,7 +55,7 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 	assert.Equal(t, true, p2p.BroadcastCalled.Load())
 	pref, ok := cache.Get([32]byte{0xcc}, proposalSlot)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, req.SignedProposerPreferences[0].Message.FeeRecipient, pref.FeeRecipient)
+	require.DeepEqual(t, req.SignedProposerPreferences[0].Message.FeeRecipient, pref.FeeRecipient[:])
 	require.Equal(t, req.SignedProposerPreferences[0].Message.GasLimit, pref.GasLimit)
 }
 
@@ -123,7 +123,12 @@ func TestSubmitSignedProposerPreferences_DuplicateSlot(t *testing.T) {
 	chain := &chainMock.ChainService{Slot: &currentSlot}
 	p2p := &p2pmock.MockBroadcaster{}
 	c := cache.NewProposerPreferencesCache()
-	c.Add([32]byte{0xcc}, proposalSlot, 2, make([]byte, 20), 30_000_000)
+	c.Add(cache.ProposerPreference{
+		DependentRoot:  [32]byte{0xcc},
+		ValidatorIndex: 2,
+		FeeRecipient:   primitives.ExecutionAddress{},
+		GasLimit:       30_000_000,
+	}, proposalSlot)
 	vs := &Server{
 		SyncChecker:              &mockSync.Sync{IsSyncing: false},
 		TimeFetcher:              chain,

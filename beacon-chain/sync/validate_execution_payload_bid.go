@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -66,7 +65,8 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	// [IGNORE] matching SignedProposerPreferences seen, keyed on the proposer
 	// dep root anchored to bid.parent_block_root.
 	parentBlockRoot := bid.ParentBlockRoot()
-	dependentRoot, err := s.proposerDependentRoot(ctx, parentBlockRoot, bid.Slot())
+	priorEpoch, _ := slots.ToEpoch(bid.Slot()).SafeSub(1)
+	dependentRoot, err := s.cfg.chain.DependentRootForEpoch(parentBlockRoot, priorEpoch)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
@@ -83,7 +83,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationReject, err
 	}
 	// [REJECT] bid.fee_recipient matches the fee_recipient from the proposer's SignedProposerPreferences associated with bid.slot.
-	if err := v.VerifyFeeRecipientMatches(pref.FeeRecipient); err != nil {
+	if err := v.VerifyFeeRecipientMatches(pref.FeeRecipient[:]); err != nil {
 		return pubsub.ValidationReject, err
 	}
 	// [REJECT] bid.gas_limit matches the gas_limit from the proposer's SignedProposerPreferences associated with bid.slot.
@@ -148,26 +148,6 @@ func (s *Service) hasSeenExecutionPayloadBidBuilder(key string) bool {
 
 func (s *Service) setSeenExecutionPayloadBidBuilder(slot primitives.Slot, key string) {
 	s.seenExecutionPayloadBidCache.Add(slot, key, true)
-}
-
-// proposerDependentRoot returns the post-Fulu spec's proposer dep root for
-// epoch(slot), anchored to parentBlockRoot's chain:
-// state.block_roots[start_slot(epoch-1) - 1]. Pre-Gloas slot underflow falls
-// back to genesis.
-func (s *Service) proposerDependentRoot(ctx context.Context, parentBlockRoot [32]byte, slot primitives.Slot) ([32]byte, error) {
-	epoch := slots.ToEpoch(slot)
-	if epoch < 2 {
-		root, err := s.cfg.beaconDB.GenesisBlockRoot(ctx)
-		if err != nil {
-			return [32]byte{}, errors.Wrap(err, "genesis block root")
-		}
-		return root, nil
-	}
-	depRoot, err := s.cfg.chain.DependentRootForEpoch(parentBlockRoot, epoch.Sub(1))
-	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "dependent root for epoch")
-	}
-	return depRoot, nil
 }
 
 func (s *Service) isHighestExecutionPayloadBid(bid interfaces.ROExecutionPayloadBid) bool {

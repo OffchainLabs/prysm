@@ -116,7 +116,12 @@ func TestValidateSignedProposerPreferencesGossip_AlreadySeen(t *testing.T) {
 	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
 
 	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
-	require.Equal(t, true, s.proposerPreferencesCache.Add(dependentRoot, signedPreferences.Message.ProposalSlot, signedPreferences.Message.ValidatorIndex, []byte{0x01}, 10))
+	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
+		DependentRoot:  dependentRoot,
+		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
+		FeeRecipient:   primitives.ExecutionAddress{0x01},
+		GasLimit:       10,
+	}, signedPreferences.Message.ProposalSlot))
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
@@ -132,7 +137,12 @@ func TestValidateSignedProposerPreferencesGossip_CacheHitSkipsStateLoad(t *testi
 	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
 
 	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
-	require.Equal(t, true, s.proposerPreferencesCache.Add(dependentRoot, signedPreferences.Message.ProposalSlot, signedPreferences.Message.ValidatorIndex, []byte{0x01}, 10))
+	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
+		DependentRoot:  dependentRoot,
+		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
+		FeeRecipient:   primitives.ExecutionAddress{0x01},
+		GasLimit:       10,
+	}, signedPreferences.Message.ProposalSlot))
 	require.NoError(t, s.cfg.beaconDB.DeleteState(ctx, dependentRoot))
 
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
@@ -153,7 +163,7 @@ func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
 	got, ok := s.proposerPreferencesCache.Get(dependentRoot, signedPreferences.Message.ProposalSlot)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, signedPreferences.Message.FeeRecipient, got.FeeRecipient)
+	require.DeepEqual(t, signedPreferences.Message.FeeRecipient, got.FeeRecipient[:])
 	require.Equal(t, signedPreferences.Message.GasLimit, got.GasLimit)
 	validatorData, ok := msg.ValidatorData.(*ethpb.SignedProposerPreferences)
 	require.Equal(t, true, ok)
@@ -173,16 +183,21 @@ func TestSignedProposerPreferencesSubscriber_HappyPath(t *testing.T) {
 }
 
 type mockSignedProposerPreferencesVerifier struct {
-	errCurrentOrNextEpoch error
-	errValidProposalSlot  error
-	errSignature          error
-	lastStateSlot         primitives.Slot
+	errCurrentOrNextEpoch  error
+	errDependentRootSeen   error
+	errValidProposalSlot   error
+	errSignature           error
+	lastStateSlot          primitives.Slot
 }
 
 var _ verification.SignedProposerPreferencesVerifier = &mockSignedProposerPreferencesVerifier{}
 
 func (m *mockSignedProposerPreferencesVerifier) VerifyCurrentOrNextEpoch() error {
 	return m.errCurrentOrNextEpoch
+}
+
+func (m *mockSignedProposerPreferencesVerifier) VerifyDependentRootSeen(func([32]byte) bool) error {
+	return m.errDependentRootSeen
 }
 
 func (m *mockSignedProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyBeaconState) error {

@@ -12,12 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// trackedProposer now anchors preferences on dependent_root derived from the
-// passed state (state.block_roots lookup). At slot 0 the lookup underflows so
-// proposerPreference falls back to the no-cache path; cached-preference
-// behavior is exercised end-to-end by the gossip and bid validation tests
-// under beacon-chain/sync.
-
 func TestTrackedProposer_NotTracked(t *testing.T) {
 	service, _ := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)

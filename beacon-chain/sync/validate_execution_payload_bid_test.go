@@ -19,11 +19,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/pkg/errors"
@@ -273,36 +272,6 @@ func TestExecutionPayloadBidSubscriber_HappyPath(t *testing.T) {
 	require.DeepEqual(t, signedBid, got)
 }
 
-// TestProposerDependentRoot_DelegatesToForkchoice asserts that the helper
-// queries the chain's DependentRootForEpoch at epoch-1 anchored to
-// parentBlockRoot, and returns whatever root forkchoice gives back.
-func TestProposerDependentRoot_DelegatesToForkchoice(t *testing.T) {
-	ctx := context.Background()
-	db := dbtest.SetupDB(t)
-
-	parentRoot := [32]byte{0xaa}
-	expectedDepRoot := [32]byte{0xbb}
-	bidSlot := 2*params.BeaconConfig().SlotsPerEpoch + 6
-	expectedEpoch := slots.ToEpoch(bidSlot).Sub(1)
-
-	var gotRoot [32]byte
-	var gotEpoch primitives.Epoch
-	chainService := &mock.ChainService{
-		DependentRootCB: func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
-			gotRoot = root
-			gotEpoch = epoch
-			return expectedDepRoot, nil
-		},
-	}
-	s := &Service{cfg: &config{beaconDB: db, chain: chainService}}
-
-	got, err := s.proposerDependentRoot(ctx, parentRoot, bidSlot)
-	require.NoError(t, err)
-	require.Equal(t, expectedDepRoot, got)
-	require.Equal(t, parentRoot, gotRoot)
-	require.Equal(t, expectedEpoch, gotEpoch)
-}
-
 func TestExecutionPayloadBidSubscriber_NilMessage(t *testing.T) {
 	s := &Service{
 		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
@@ -384,8 +353,8 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 	p := p2ptest.NewTestP2P(t)
 
 	// Save a genesis block so beaconDB.GenesisBlockRoot resolves; bids at slot 1
-	// (epoch 0) hit the underflow branch in proposerDependentRoot which falls
-	// back to the genesis block root.
+	// (epoch 0) hit the underflow branch in chain.DependentRootForEpoch which
+	// falls back to the genesis block root.
 	gb := util.NewBeaconBlock()
 	signedGenesis, err := blocks.NewSignedBeaconBlock(gb)
 	require.NoError(t, err)
@@ -399,8 +368,9 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
 	signedBid.Message.BuilderIndex = 1
 	chainService := &mock.ChainService{
-		Genesis: time.Now(),
-		State:   state,
+		Genesis:    time.Now(),
+		State:      state,
+		TargetRoot: genesisRoot,
 		ForkchoiceRoots: map[[32]byte]bool{
 			[32]byte{0x02}: true,
 		},
@@ -420,7 +390,12 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 	}
 	// The Gloas test state has a zero-filled proposer lookahead, so the
 	// proposer for any slot is validator index 0.
-	require.Equal(t, true, s.proposerPreferencesCache.Add(genesisRoot, signedBid.Message.Slot, 0, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit))
+	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
+		DependentRoot:  genesisRoot,
+		ValidatorIndex: 0,
+		FeeRecipient:   bytesutil.ToBytes20(signedBid.Message.FeeRecipient),
+		GasLimit:       signedBid.Message.GasLimit,
+	}, signedBid.Message.Slot))
 	msg := executionPayloadBidToPubsub(t, s, p, signedBid)
 	return s, msg, signedBid
 }

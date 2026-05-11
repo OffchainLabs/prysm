@@ -11,7 +11,7 @@ import (
 type ProposerPreference struct {
 	DependentRoot  [32]byte
 	ValidatorIndex primitives.ValidatorIndex
-	FeeRecipient   []byte
+	FeeRecipient   primitives.ExecutionAddress
 	GasLimit       uint64
 }
 
@@ -32,27 +32,16 @@ func NewProposerPreferencesCache() *ProposerPreferencesCache {
 // Add stores a proposer preference. If an entry with the same
 // (slot, dependentRoot) already exists, the existing value is kept and false
 // is returned.
-func (c *ProposerPreferencesCache) Add(
-	dependentRoot [32]byte,
-	slot primitives.Slot,
-	validatorIndex primitives.ValidatorIndex,
-	feeRecipient []byte,
-	gasLimit uint64,
-) bool {
+func (c *ProposerPreferencesCache) Add(p ProposerPreference, slot primitives.Slot) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	for _, p := range c.preferences[slot] {
-		if p.DependentRoot == dependentRoot {
+	for _, existing := range c.preferences[slot] {
+		if existing.DependentRoot == p.DependentRoot {
 			return false
 		}
 	}
-	c.preferences[slot] = append(c.preferences[slot], ProposerPreference{
-		DependentRoot:  dependentRoot,
-		ValidatorIndex: validatorIndex,
-		FeeRecipient:   feeRecipient,
-		GasLimit:       gasLimit,
-	})
+	c.preferences[slot] = append(c.preferences[slot], p)
 	return true
 }
 

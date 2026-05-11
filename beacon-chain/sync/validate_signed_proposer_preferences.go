@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -58,8 +59,11 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 
 	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
 	// [IGNORE] block with root preferences.dependent_root has been seen.
-	if !s.cfg.chain.InForkchoice(dependentRoot) && !s.cfg.beaconDB.HasBlock(ctx, dependentRoot) {
-		return pubsub.ValidationIgnore, errors.New("dependent_root block not seen yet")
+	seen := func(root [32]byte) bool {
+		return s.cfg.chain.InForkchoice(root) || s.cfg.beaconDB.HasBlock(ctx, root)
+	}
+	if err := v.VerifyDependentRootSeen(seen); err != nil {
+		return pubsub.ValidationIgnore, err
 	}
 
 	slot := signedPreferences.Message.ProposalSlot
@@ -78,12 +82,16 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		return pubsub.ValidationIgnore, errors.Wrap(err, "compute checkpoint boundary slot")
 	}
 	var st state.ReadOnlyBeaconState
-	// NextSlotState may return a state at slot < boundarySlot when the
-	// dependent block was at an earlier slot (empty boundary slot); only use it
-	// if it lands exactly on the boundary, otherwise fall through to load+advance.
-	if cached := transition.NextSlotState(dependentRoot[:], boundarySlot); cached != nil && cached.Slot() == boundarySlot {
-		st = cached
-	} else {
+	// NextSlotState is only worth probing for next-epoch preferences whose
+	// boundary lands on the current epoch start (head still in prev epoch);
+	// for current-epoch preferences the boundary is older and the 2-slot
+	// cache will miss.
+	if proposalEpoch > slots.ToEpoch(s.cfg.clock.CurrentSlot()) {
+		if cached := transition.NextSlotState(dependentRoot[:], boundarySlot); cached != nil && cached.Slot() == boundarySlot {
+			st = cached
+		}
+	}
+	if st == nil {
 		loaded, err := s.cfg.stateGen.StateByRootNoCopy(ctx, dependentRoot)
 		if err != nil {
 			return pubsub.ValidationIgnore, errors.Wrap(err, "load checkpoint state")
@@ -107,7 +115,12 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		return pubsub.ValidationReject, err
 	}
 
-	s.proposerPreferencesCache.Add(dependentRoot, slot, signedPreferences.Message.ValidatorIndex, signedPreferences.Message.FeeRecipient, signedPreferences.Message.GasLimit)
+	s.proposerPreferencesCache.Add(cache.ProposerPreference{
+		DependentRoot:  dependentRoot,
+		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
+		FeeRecipient:   bytesutil.ToBytes20(signedPreferences.Message.FeeRecipient),
+		GasLimit:       signedPreferences.Message.GasLimit,
+	}, slot)
 	msg.ValidatorData = signedPreferences
 	return pubsub.ValidationAccept, nil
 }

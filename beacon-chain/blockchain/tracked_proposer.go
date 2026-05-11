@@ -13,7 +13,7 @@ func (s *Service) proposerPreference(st state.ReadOnlyBeaconState, slot primitiv
 	if s.cfg.ProposerPreferencesCache == nil {
 		return cache.TrackedValidator{}, false
 	}
-	dependentRoot, err := helpers.ProposerDependentRoot(st, slot)
+	dependentRoot, err := st.ProposerDependentRoot(slot)
 	if err != nil {
 		return cache.TrackedValidator{}, false
 	}
@@ -24,9 +24,7 @@ func (s *Service) proposerPreference(st state.ReadOnlyBeaconState, slot primitiv
 	if pref.ValidatorIndex != valIdx {
 		return cache.TrackedValidator{}, false
 	}
-	var feeRecipient primitives.ExecutionAddress
-	copy(feeRecipient[:], pref.FeeRecipient)
-	return cache.TrackedValidator{Active: true, FeeRecipient: feeRecipient, GasLimit: pref.GasLimit}, true
+	return cache.TrackedValidator{Active: true, FeeRecipient: pref.FeeRecipient, GasLimit: pref.GasLimit}, true
 }
 
 // trackedProposer returns whether the beacon node was informed, via the
