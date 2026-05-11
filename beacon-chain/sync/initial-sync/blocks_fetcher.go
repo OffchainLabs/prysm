@@ -489,7 +489,7 @@ func (f *blocksFetcher) waitForBandwidth(pid peer.ID, count uint64) error {
 	if err != nil {
 		return err
 	}
-	toWait := timeToWait(int64(intCount), rem, f.rateLimiter.Capacity(), f.rateLimiter.TillEmpty(pid.String())) / 5
+	toWait := timeToWait(int64(intCount), rem, f.rateLimiter.Capacity(), f.rateLimiter.TillEmpty(pid.String())) / 2
 	timer := time.NewTimer(toWait)
 	defer timer.Stop()
 	select {
