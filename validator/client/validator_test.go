@@ -370,13 +370,13 @@ func TestRolesAt_OK(t *testing.T) {
 				PtcSlots:        []primitives.Slot{1},
 			})
 			nextPk := bytesutil.ToBytes48(validatorKey.PublicKey().Marshal())
-			v.duties.nextDuties[nextPk] = &ethpb.ValidatorDuty{
+			v.duties.data.nextDuties[nextPk] = &ethpb.ValidatorDuty{
 				CommitteeIndex:  1,
 				AttesterSlot:    1,
 				PublicKey:       validatorKey.PublicKey().Marshal(),
 				IsSyncCommittee: true,
 			}
-			v.duties.syncNextMap[v.duties.nextDuties[nextPk].ValidatorIndex] = true
+			v.duties.data.syncNextMap[v.duties.data.nextDuties[nextPk].ValidatorIndex] = true
 
 			m.validatorClient.EXPECT().DomainData(
 				gomock.Any(), // ctx
@@ -407,13 +407,13 @@ func TestRolesAt_OK(t *testing.T) {
 				PublicKey:       validatorKey.PublicKey().Marshal(),
 				IsSyncCommittee: false,
 			})
-			v.duties.nextDuties[nextPk] = &ethpb.ValidatorDuty{
+			v.duties.data.nextDuties[nextPk] = &ethpb.ValidatorDuty{
 				CommitteeIndex:  1,
 				AttesterSlot:    1,
 				PublicKey:       validatorKey.PublicKey().Marshal(),
 				IsSyncCommittee: true,
 			}
-			v.duties.syncNextMap[v.duties.nextDuties[nextPk].ValidatorIndex] = true
+			v.duties.data.syncNextMap[v.duties.data.nextDuties[nextPk].ValidatorIndex] = true
 
 			m.validatorClient.EXPECT().SyncSubcommitteeIndex(
 				gomock.Any(), // ctx
@@ -2187,22 +2187,26 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
 		require.Equal(t, 0, len(prefs))
@@ -2215,23 +2219,27 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		// DomainData is cached after the first call, so subsequent subtests
 		// using the same epoch will hit the cache. Use AnyTimes() here.
@@ -2256,23 +2264,27 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		// Slot 0 is start of epoch 0 (before mid-epoch), should not build yet.
 		prefs := v.buildProposerPreferences(t.Context(), km, 0)
@@ -2286,23 +2298,27 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		midSlot := params.BeaconConfig().SlotsPerEpoch / 2
 		prefs := v.buildProposerPreferences(t.Context(), km, midSlot)
@@ -2320,23 +2336,27 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{slot1, slot2},
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{slot1, slot2},
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		// DomainData calls served from cache (populated in prior subtest).
 		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
@@ -2355,23 +2375,27 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_EXITED,
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_EXITED,
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_EXITED,
-					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_EXITED,
+						ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
 		require.Equal(t, 0, len(prefs))
@@ -2408,23 +2432,27 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		// DomainData calls served from cache (populated in prior subtest).
 		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
@@ -2455,23 +2483,27 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{currentEpochSlot},
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{currentEpochSlot},
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		// Slot 1 (past epoch start) allows current-epoch preferences.
 		prefs := v.buildProposerPreferences(t.Context(), km, 1)
@@ -2490,24 +2522,28 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{currentEpochSlot},
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{currentEpochSlot},
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{nextEpochSlot},
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{nextEpochSlot},
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		// At mid-epoch, both current and next epoch preferences are eligible.
 		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
@@ -2526,23 +2562,27 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{3},
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{3},
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		// Slot 0 (epoch start) skips current-epoch preferences.
 		prefs := v.buildProposerPreferences(t.Context(), km, 0)
@@ -2556,23 +2596,27 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{5},
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{5},
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		prefs := v.buildProposerPreferences(t.Context(), km, 1)
 		require.Equal(t, 1, len(prefs))
@@ -2592,23 +2636,27 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{5},
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{5},
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		prefs := v.buildProposerPreferences(t.Context(), km, 1)
 		require.Equal(t, 1, len(prefs))
@@ -2620,23 +2668,27 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 			index:     2,
 		}
 		v.duties = &dutyStore{}
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{5},
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{5},
+					},
+					{
+						PublicKey:      kp2.pub[:],
+						ValidatorIndex: 2,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{7},
+					},
 				},
-				{
-					PublicKey:      kp2.pub[:],
-					ValidatorIndex: 2,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{7},
-				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{},
-		})
+				NextEpochDuties: []*ethpb.ValidatorDuty{},
+			})
+			v.duties.Write(data)
+		}
 
 		// Only the new validator's slot is submitted.
 		prefs = v.buildProposerPreferences(t.Context(), km, 2)
@@ -2654,23 +2706,27 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 
 		v.duties = &dutyStore{}
 		v.submittedPrefSlots = make(map[primitives.Slot]bool)
-		v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-			CurrentEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+					},
 				},
-			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{
-				{
-					PublicKey:      kp.pub[:],
-					ValidatorIndex: 1,
-					Status:         ethpb.ValidatorStatus_ACTIVE,
-					ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+				NextEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:      kp.pub[:],
+						ValidatorIndex: 1,
+						Status:         ethpb.ValidatorStatus_ACTIVE,
+						ProposerSlots:  []primitives.Slot{nextEpochProposerSlot},
+					},
 				},
-			},
-		})
+			})
+			v.duties.Write(data)
+		}
 
 		// Slot 1 is before mid-epoch, next-epoch prefs should not be sent.
 		prefs := v.buildProposerPreferences(t.Context(), km, 1)

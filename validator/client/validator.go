@@ -64,55 +64,55 @@ var (
 )
 
 type validator struct {
-	logValidatorPerformance      bool
 	distributed                  bool
 	enableAPI                    bool
 	disableDutiesPolling         bool
 	emitAccountMetrics           bool
+	logValidatorPerformance      bool
 	attLogsLock                  sync.Mutex
 	highestValidSlotLock         sync.Mutex
-	domainDataLock               sync.RWMutex
 	blacklistedPubkeysLock       sync.RWMutex
 	prevEpochBalancesLock        sync.RWMutex
 	cachedAttestationDataLock    sync.RWMutex
-	dutiesLock                   sync.RWMutex
-	aggSelector                  aggregatorSelector
+	submittedPrefSlotsLock       sync.RWMutex
+	domainDataLock               sync.RWMutex
 	cachedAttestationData        *ethpb.AttestationData
-	accountsChangedChannel       chan [][fieldparams.BLSPubkeyLength]byte
-	eventsChannel                chan *eventClient.Event
-	highestValidSlot             primitives.Slot
-	submittedAggregates          map[submittedAttKey]*submittedAtt
-	graffitiStruct               *graffiti.Graffiti
-	syncCommitteeStats           syncCommitteeStats
-	slotFeed                     *event.Feed
-	domainDataCache              *ristretto.Cache[string, proto.Message]
-	interopKeysConfig            *local.InteropKeymanagerConfig
-	duties                       *dutyStore
-	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
-	submittedPrefSlots           map[primitives.Slot]bool
-	proposerSettings             *proposer.Settings
-	web3SignerConfig             *remoteweb3signer.SetupConfig
-	startBalances                map[[fieldparams.BLSPubkeyLength]byte]uint64
-	prevEpochBalances            map[[fieldparams.BLSPubkeyLength]byte]uint64
-	blacklistedPubkeys           map[[fieldparams.BLSPubkeyLength]byte]bool
-	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
-	wallet                       *wallet.Wallet
-	walletInitializedChan        chan *wallet.Wallet
-	walletInitializedFeed        *event.Feed
 	graffitiOrderedIndex         uint64
-	conn                         validatorHelpers.NodeConnection
+	walletInitializedFeed        *event.Feed
+	walletInitializedChan        chan *wallet.Wallet
+	wallet                       *wallet.Wallet
+	accountsChangedChannel       chan [][fieldparams.BLSPubkeyLength]byte
+	blacklistedPubkeys           map[[fieldparams.BLSPubkeyLength]byte]bool
+	prevEpochBalances            map[[fieldparams.BLSPubkeyLength]byte]uint64
+	startBalances                map[[fieldparams.BLSPubkeyLength]byte]uint64
+	web3SignerConfig             *remoteweb3signer.SetupConfig
+	proposerSettings             *proposer.Settings
+	submittedPrefSlots           map[primitives.Slot]bool
 	submittedAtts                map[submittedAttKey]*submittedAtt
 	validatorsRegBatchSize       int
+	duties                       *dutyStore
+	interopKeysConfig            *local.InteropKeymanagerConfig
+	domainDataCache              *ristretto.Cache[string, proto.Message]
+	slotFeed                     *event.Feed
+	syncCommitteeStats           syncCommitteeStats
+	graffitiStruct               *graffiti.Graffiti
+	submittedAggregates          map[submittedAttKey]*submittedAtt
+	highestValidSlot             primitives.Slot
+	eventsChannel                chan *eventClient.Event
+	pubkeyToStatus               map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
+	signedValidatorRegistrations map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
+	aggSelector                  aggregatorSelector
 	validatorClient              iface.ValidatorClient
 	chainClient                  iface.ChainClient
 	nodeClient                   iface.NodeClient
 	prysmChainClient             iface.PrysmChainClient
 	db                           db.Database
-	km                           keymanager.IKeymanager
+	conn                         validatorHelpers.NodeConnection
 	accountChangedSub            event.Subscription
 	ticker                       slots.Ticker
-	genesisTime                  time.Time
+	km                           keymanager.IKeymanager
 	graffiti                     []byte
+	genesisTime                  time.Time
 	voteStats                    voteStats
 }
 
@@ -541,10 +541,8 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 	ctx, span := trace.StartSpan(ctx, "validator.RolesAt")
 	defer span.End()
 
-	v.dutiesLock.RLock()
-	defer v.dutiesLock.RUnlock()
-
-	if !v.duties.IsInitialized() {
+	snap := v.duties.Snapshot()
+	if !snap.initialized {
 		return nil, errors.New("validator duties are not initialized")
 	}
 
@@ -553,7 +551,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		syncCommitteePubkeys [][fieldparams.BLSPubkeyLength]byte
 	)
 
-	for pk, duty := range v.duties.CurrentEpochDuties() {
+	for pk, duty := range snap.currentDuties {
 		var roles []iface.ValidatorRole
 
 		if duty == nil {
@@ -586,7 +584,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		// the validator checks whether it's in the sync committee of following epoch.
 		inSyncCommittee := false
 		if slots.IsEpochEnd(slot) {
-			if v.duties.IsNextSyncCommittee(duty.ValidatorIndex) {
+			if snap.IsNextSyncCommittee(duty.ValidatorIndex) {
 				roles = append(roles, iface.RoleSyncCommittee)
 				inSyncCommittee = true
 			}
@@ -601,7 +599,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 			syncCommitteePubkeys = append(syncCommitteePubkeys, pk)
 		}
 
-		if slices.Contains(v.duties.PtcSlots(duty.ValidatorIndex), slot) {
+		if slices.Contains(snap.PtcSlots(duty.ValidatorIndex), slot) {
 			roles = append(roles, iface.RolePTCMember)
 		}
 
@@ -1054,16 +1052,16 @@ func (v *validator) buildProposerPreferences(
 	}
 	midEpoch := epochStart + params.BeaconConfig().SlotsPerEpoch/2
 
+	v.submittedPrefSlotsLock.Lock()
 	for s := range v.submittedPrefSlots {
 		if s < epochStart {
 			delete(v.submittedPrefSlots, s)
 		}
 	}
+	v.submittedPrefSlotsLock.Unlock()
 
-	v.dutiesLock.RLock()
-	defer v.dutiesLock.RUnlock()
-
-	if !v.duties.IsInitialized() {
+	snap := v.duties.Snapshot()
+	if !snap.initialized {
 		return nil
 	}
 
@@ -1102,7 +1100,10 @@ func (v *validator) buildProposerPreferences(
 			}
 
 			for _, proposalSlot := range duty.ProposerSlots {
-				if v.submittedPrefSlots[proposalSlot] {
+				v.submittedPrefSlotsLock.RLock()
+				already := v.submittedPrefSlots[proposalSlot]
+				v.submittedPrefSlotsLock.RUnlock()
+				if already {
 					continue
 				}
 				// Skip slots that have passed or are too close. Preferences are
@@ -1124,13 +1125,15 @@ func (v *validator) buildProposerPreferences(
 					continue
 				}
 				signedPrefs = append(signedPrefs, signedPref)
+				v.submittedPrefSlotsLock.Lock()
 				v.submittedPrefSlots[proposalSlot] = true
+				v.submittedPrefSlotsLock.Unlock()
 			}
 		}
 	}
 
-	currentDuties := v.duties.CurrentEpochDuties()
-	nextDuties := v.duties.NextEpochDuties()
+	currentDuties := snap.currentDuties
+	nextDuties := snap.nextDuties
 
 	var currentProposerCount, nextProposerCount int
 	for _, d := range currentDuties {
@@ -1162,9 +1165,15 @@ func (v *validator) buildProposerPreferences(
 		"currentProposerSlots": currentProposerCount,
 		"nextProposerSlots":    nextProposerCount,
 		"prefsBuilt":           len(signedPrefs),
-		"alreadySubmitted":     len(v.submittedPrefSlots),
+		"alreadySubmitted":     v.submittedPrefSlotsCount(),
 	}).Debug("Build proposer preferences result")
 	return signedPrefs
+}
+
+func (v *validator) submittedPrefSlotsCount() int {
+	v.submittedPrefSlotsLock.RLock()
+	defer v.submittedPrefSlotsLock.RUnlock()
+	return len(v.submittedPrefSlots)
 }
 
 func (v *validator) buildSignedRegReqs(

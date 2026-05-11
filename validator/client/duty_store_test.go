@@ -10,7 +10,8 @@ import (
 )
 
 func testDutyStore(current ...*ethpb.ValidatorDuty) *dutyStore {
-	ds := &dutyStore{
+	ds := &dutyStore{}
+	ds.data = dutyStoreData{
 		currentDuties:  make(map[pubkey]*ethpb.ValidatorDuty),
 		nextDuties:     make(map[pubkey]*ethpb.ValidatorDuty),
 		proposerSlots:  make(map[primitives.ValidatorIndex][]primitives.Slot),
@@ -20,15 +21,15 @@ func testDutyStore(current ...*ethpb.ValidatorDuty) *dutyStore {
 		initialized:    true,
 	}
 	for _, d := range current {
-		ds.currentDuties[bytesutil.ToBytes48(d.PublicKey)] = d
+		ds.data.currentDuties[bytesutil.ToBytes48(d.PublicKey)] = d
 		if len(d.ProposerSlots) > 0 {
-			ds.proposerSlots[d.ValidatorIndex] = d.ProposerSlots
+			ds.data.proposerSlots[d.ValidatorIndex] = d.ProposerSlots
 		}
 		if d.IsSyncCommittee {
-			ds.syncCurrentMap[d.ValidatorIndex] = true
+			ds.data.syncCurrentMap[d.ValidatorIndex] = true
 		}
 		if len(d.PtcSlots) > 0 {
-			ds.ptcSlots[d.ValidatorIndex] = d.PtcSlots
+			ds.data.ptcSlots[d.ValidatorIndex] = d.PtcSlots
 		}
 	}
 	return ds
@@ -40,9 +41,8 @@ func TestDutyStore_Uninitialized(t *testing.T) {
 	assert.Equal(t, true, ds.CurrentEpochDuties() == nil)
 	assert.Equal(t, true, ds.NextEpochDuties() == nil)
 
-	prev, curr := ds.DependentRoots()
-	assert.Equal(t, true, prev == nil)
-	assert.Equal(t, true, curr == nil)
+	assert.Equal(t, true, ds.PrevDependentRoot() == nil)
+	assert.Equal(t, true, ds.CurrDependentRoot() == nil)
 
 	d, ok := ds.CurrentDuty(pubkey{})
 	assert.Equal(t, false, ok)
@@ -59,7 +59,7 @@ func TestDutyStore_ZeroValueIsNotInitialized(t *testing.T) {
 	assert.Equal(t, false, ds.IsInitialized())
 }
 
-func TestDutyStore_SetFromCombinedDutiesResponse(t *testing.T) {
+func TestDutyStore_Write(t *testing.T) {
 	pk1 := bytesutil.ToBytes48([]byte{1})
 	pk2 := bytesutil.ToBytes48([]byte{2})
 
@@ -87,7 +87,11 @@ func TestDutyStore_SetFromCombinedDutiesResponse(t *testing.T) {
 	}
 
 	ds := &dutyStore{}
-	ds.SetFromCombinedDutiesResponse(container)
+	{
+		var data dutyStoreData
+		data.setFromContainer(container)
+		ds.Write(data)
+	}
 
 	assert.Equal(t, true, ds.IsInitialized())
 
@@ -105,9 +109,8 @@ func TestDutyStore_SetFromCombinedDutiesResponse(t *testing.T) {
 	assert.Equal(t, primitives.ValidatorIndex(20), next[pk2].ValidatorIndex)
 
 	// Dependent roots.
-	prev, curr := ds.DependentRoots()
-	assert.DeepEqual(t, []byte("prev"), prev)
-	assert.DeepEqual(t, []byte("curr"), curr)
+	assert.DeepEqual(t, []byte("prev"), ds.PrevDependentRoot())
+	assert.DeepEqual(t, []byte("curr"), ds.CurrDependentRoot())
 
 	// Proposer slots.
 	assert.DeepEqual(t, []primitives.Slot{3, 7}, ds.ProposerSlots(10))
@@ -126,8 +129,8 @@ func TestDutyStore_SetFromCombinedDutiesResponse(t *testing.T) {
 
 func TestDutyStore_Reset(t *testing.T) {
 	ds := testDutyStore(&ethpb.ValidatorDuty{PublicKey: make([]byte, 48)})
-	ds.prevDependentRoot = []byte("prev")
-	ds.currDependentRoot = []byte("curr")
+	ds.data.prevDependentRoot = []byte("prev")
+	ds.data.currDependentRoot = []byte("curr")
 	assert.Equal(t, true, ds.IsInitialized())
 
 	ds.Reset()
@@ -135,20 +138,28 @@ func TestDutyStore_Reset(t *testing.T) {
 	assert.Equal(t, true, ds.CurrentEpochDuties() == nil)
 }
 
-func TestDutyStore_SetFromCombinedDutiesResponseNilResets(t *testing.T) {
+func TestDutyStore_WriteNilResets(t *testing.T) {
 	ds := testDutyStore(&ethpb.ValidatorDuty{PublicKey: make([]byte, 48)})
 	assert.Equal(t, true, ds.IsInitialized())
 
-	ds.SetFromCombinedDutiesResponse(nil)
+	{
+		var data dutyStoreData
+		data.setFromContainer(nil)
+		ds.Write(data)
+	}
 	assert.Equal(t, false, ds.IsInitialized())
 }
 
-func TestDutyStore_SetFromCombinedDutiesResponseSkipsNilDuties(t *testing.T) {
+func TestDutyStore_WriteSkipsNilDuties(t *testing.T) {
 	ds := &dutyStore{}
-	ds.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{nil, {PublicKey: make([]byte, 48), ValidatorIndex: 1}},
-		NextEpochDuties:    []*ethpb.ValidatorDuty{nil},
-	})
+	{
+		var data dutyStoreData
+		data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{nil, {PublicKey: make([]byte, 48), ValidatorIndex: 1}},
+			NextEpochDuties:    []*ethpb.ValidatorDuty{nil},
+		})
+		ds.Write(data)
+	}
 	assert.Equal(t, 1, len(ds.CurrentEpochDuties()))
 	assert.Equal(t, 0, len(ds.NextEpochDuties()))
 }
