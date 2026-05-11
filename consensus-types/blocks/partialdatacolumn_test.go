@@ -182,27 +182,40 @@ func TestPartialDataColumn_newPartsMetadata(t *testing.T) {
 		n             int
 		includedBits  []uint64
 		expectedAvail []uint64
+		expectedReq   []uint64
 	}{
-		{name: "none included", n: 4, includedBits: nil, expectedAvail: nil},
-		{name: "sparse included", n: 5, includedBits: []uint64{1, 4}, expectedAvail: []uint64{1, 4}},
-		{name: "all included", n: 3, includedBits: []uint64{0, 1, 2}, expectedAvail: []uint64{0, 1, 2}},
+		{name: "none included", n: 4, includedBits: nil, expectedAvail: nil, expectedReq: []uint64{0, 1, 2, 3}},
+		{name: "sparse included", n: 5, includedBits: []uint64{1, 4}, expectedAvail: []uint64{1, 4}, expectedReq: []uint64{0, 2, 3}},
+		{name: "all included", n: 3, includedBits: []uint64{0, 1, 2}, expectedAvail: []uint64{0, 1, 2}, expectedReq: nil},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := mustNewPartialColumn(t, tt.n, tt.includedBits...)
-			meta := p.newPartsMetadata()
+			meta, err := p.newPartsMetadata()
+			require.NoError(t, err)
 			require.Equal(t, uint64(tt.n), bitfield.Bitlist(meta.Available).Len())
 			require.Equal(t, uint64(tt.n), bitfield.Bitlist(meta.Requests).Len())
 
 			expected := testBitlist(uint64(tt.n), tt.expectedAvail...)
 			require.DeepEqual(t, []byte(expected), []byte(meta.Available))
-
-			for i := uint64(0); i < uint64(tt.n); i++ {
-				require.Equal(t, true, bitfield.Bitlist(meta.Requests).BitAt(i))
-			}
+			expectedRequests := testBitlist(uint64(tt.n), tt.expectedReq...)
+			require.DeepEqual(t, []byte(expectedRequests), []byte(meta.Requests))
 		})
 	}
+}
+
+func TestPartialDataColumn_newPartsMetadata_WithPartsRequests(t *testing.T) {
+	requests := testBitlist(4, 1, 3)
+	p := mustNewPartialColumnWithOpts(t, 4, []uint64{1}, WithPartsRequests(requests))
+
+	meta, err := p.newPartsMetadata()
+	require.NoError(t, err)
+
+	require.Equal(t, true, bitfield.Bitlist(meta.Available).BitAt(1))
+	require.Equal(t, uint64(1), bitfield.Bitlist(meta.Requests).Count())
+	require.Equal(t, false, bitfield.Bitlist(meta.Requests).BitAt(1))
+	require.Equal(t, true, bitfield.Bitlist(meta.Requests).BitAt(3))
 }
 
 func TestNewPartsMetaWithNoAvailableAndNoRequests(t *testing.T) {
@@ -334,12 +347,14 @@ func TestPartialDataColumn_PartsMetadata(t *testing.T) {
 		expectedN  uint64
 		expectErr  string
 		availCount uint64
+		reqCount   uint64
 	}{
 		{
 			name:       "nominal",
 			p:          mustNewPartialColumn(t, 4, 1, 2),
 			expectedN:  4,
 			availCount: 2,
+			reqCount:   2,
 		},
 		{
 			name: "marshal error due max bitlist size",
@@ -364,7 +379,7 @@ func TestPartialDataColumn_PartsMetadata(t *testing.T) {
 			parsed, parseErr := decodePartsMetadata(meta, tt.expectedN)
 			require.NoError(t, parseErr)
 			require.Equal(t, tt.availCount, bitfield.Bitlist(parsed.Available).Count())
-			require.Equal(t, tt.expectedN, bitfield.Bitlist(parsed.Requests).Count())
+			require.Equal(t, tt.reqCount, bitfield.Bitlist(parsed.Requests).Count())
 		})
 	}
 }
@@ -645,11 +660,12 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				decoded := mustDecodeSidecar(t, action.EncodedPartialMessage)
 				require.Equal(t, 1, len(decoded.Header))
 				require.Equal(t, 0, len(decoded.PartialColumn))
-				// Sent should reflect our partsMetadata (available = our included, requests = all).
+				// Sent should reflect our partsMetadata (available = our included, requests = missing).
 				require.NotNil(t, nextState.Sent)
 				require.Equal(t, uint64(1), bitfield.Bitlist(nextState.Sent.Available).Count())
 				require.Equal(t, true, bitfield.Bitlist(nextState.Sent.Available).BitAt(0))
-				require.Equal(t, uint64(2), bitfield.Bitlist(nextState.Sent.Requests).Count())
+				require.Equal(t, uint64(1), bitfield.Bitlist(nextState.Sent.Requests).Count())
+				require.Equal(t, true, bitfield.Bitlist(nextState.Sent.Requests).BitAt(1))
 			},
 		},
 		{
@@ -713,7 +729,9 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				require.Equal(t, uint64(2), bitfield.Bitlist(sentMetaWire.Available).Count())
 				require.Equal(t, true, bitfield.Bitlist(sentMetaWire.Available).BitAt(0))
 				require.Equal(t, true, bitfield.Bitlist(sentMetaWire.Available).BitAt(2))
-				require.Equal(t, uint64(4), bitfield.Bitlist(sentMetaWire.Requests).Count())
+				require.Equal(t, uint64(2), bitfield.Bitlist(sentMetaWire.Requests).Count())
+				require.Equal(t, true, bitfield.Bitlist(sentMetaWire.Requests).BitAt(1))
+				require.Equal(t, true, bitfield.Bitlist(sentMetaWire.Requests).BitAt(3))
 
 				// Verify Sent stored as proto matches wire metadata
 				require.DeepEqual(t, sentMetaWire.Available, next.Sent.Available)
@@ -786,7 +804,8 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 			name: "does not resend unchanged metadata",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 1)
-				myMeta := p.newPartsMetadata()
+				myMeta, err := p.newPartsMetadata()
+				require.NoError(t, err)
 				next, action, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{
 					Sent: myMeta,
 				}, true)
@@ -805,7 +824,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0)
 				sentMeta := &ethpb.PartialDataColumnPartsMetadata{
 					Available: testBitlist(3, 0, 1),
-					Requests:  testBitlist(3, allSet(3)...), // all requested, same as newPartsMetadata
+					Requests:  testBitlist(3, 1, 2), // same as newPartsMetadata
 				}
 				next, action, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{
 					Sent: sentMeta,
@@ -825,7 +844,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0, 2)
 				sentMeta := &ethpb.PartialDataColumnPartsMetadata{
 					Available: testBitlist(3, 0),
-					Requests:  testBitlist(3, allSet(3)...),
+					Requests:  testBitlist(3, 1),
 				}
 				next, action, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{
 					Sent: sentMeta,
@@ -871,22 +890,22 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 		{
 			name: "sentMeta requests mismatch triggers resend then converges",
 			run: func(t *testing.T) {
-				// We have cell 0. Our newPartsMetadata requests all 3 cells.
-				// Sent has matching available {0} but requests only {0,1} (not all 3).
+				// We have cell 0. Our newPartsMetadata requests missing cells {1,2}.
+				// Sent has matching available {0} but requests only {0,1}.
 				p := mustNewPartialColumn(t, 3, 0)
 				sentMeta := &ethpb.PartialDataColumnPartsMetadata{
 					Available: testBitlist(3, 0),
-					Requests:  testBitlist(3, 0, 1), // mismatch: we request all 3
+					Requests:  testBitlist(3, 0, 1),
 				}
 				state1, action1, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{
 					Sent: sentMeta,
 				}, true)
 				require.NoError(t, action1.Err)
 				require.NotNil(t, action1.EncodedPartsMetadata) // resent because Requests differ
-				// Requests should now match our current requests (all 3).
-				for i := range uint64(3) {
-					require.Equal(t, true, bitfield.Bitlist(state1.Sent.Requests).BitAt(i))
-				}
+				// Requests should now match our current missing cells.
+				require.Equal(t, false, bitfield.Bitlist(state1.Sent.Requests).BitAt(0))
+				require.Equal(t, true, bitfield.Bitlist(state1.Sent.Requests).BitAt(1))
+				require.Equal(t, true, bitfield.Bitlist(state1.Sent.Requests).BitAt(2))
 				// Available should be merged: old {0} | new {0} = {0}
 				require.Equal(t, true, bitfield.Bitlist(state1.Sent.Available).BitAt(0))
 				require.Equal(t, false, bitfield.Bitlist(state1.Sent.Available).BitAt(1))
@@ -905,7 +924,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0)
 				sentMeta := &ethpb.PartialDataColumnPartsMetadata{
 					Available: testBitlist(2, 0),
-					Requests:  testBitlist(3, allSet(3)...), // Requests match length so we reach Contains check
+					Requests:  testBitlist(3, 1, 2), // Requests match so we reach Contains check
 				}
 				_, action, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{
 					Sent: sentMeta,
@@ -916,7 +935,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 		{
 			name: "requested true with existing sentMeta merges available on resend",
 			run: func(t *testing.T) {
-				// We have cells 0,1,2. Sent has available {0} and all requests.
+				// We have cells 0,1,2. Sent has available {0}.
 				// recvdMeta peer has nothing and requests everything.
 				// This tests that both cell sending and metadata resending work together,
 				// and that Sent merges correctly when cells are also being sent.
@@ -957,7 +976,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 					Sent: sentMeta,
 				}, true)
 				require.NoError(t, action.Err)
-				require.NotNil(t, action.EncodedPartsMetadata) // resent because Requests differ (we request all 4)
+				require.NotNil(t, action.EncodedPartsMetadata) // resent because Requests differ (we request missing cells)
 			},
 		},
 		{
@@ -1052,12 +1071,12 @@ func TestPartialDataColumn_ForPeer_ByBlockProposer(t *testing.T) {
 				require.Equal(t, true, bitfield.Bitlist(nextState.Recvd.Available).BitAt(0))
 				require.Equal(t, true, bitfield.Bitlist(nextState.Recvd.Available).BitAt(3))
 
-				// Sent should reflect our partsMetadata: available = all 4 cells, requests = all 4.
+				// Sent should reflect our partsMetadata: available = all 4 cells, requests = none.
 				require.NotNil(t, nextState.Sent)
 				require.Equal(t, uint64(4), bitfield.Bitlist(nextState.Sent.Available).Count())
 				require.Equal(t, true, bitfield.Bitlist(nextState.Sent.Available).BitAt(0))
 				require.Equal(t, true, bitfield.Bitlist(nextState.Sent.Available).BitAt(3))
-				require.Equal(t, uint64(4), bitfield.Bitlist(nextState.Sent.Requests).Count())
+				require.Equal(t, uint64(0), bitfield.Bitlist(nextState.Sent.Requests).Count())
 				// Verify Sent matches the wire-encoded partsMetadata.
 				sentMetaWire, err := decodePartsMetadata(action.EncodedPartsMetadata, 4)
 				require.NoError(t, err)

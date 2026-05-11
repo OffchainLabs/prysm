@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
@@ -60,6 +61,7 @@ var (
 		GetPayloadMethodV5,
 		GetBlobsV2,
 		GetBlobsV3,
+		HasBlobsV1,
 	}
 
 	gloasEngineEndpoints = []string{
@@ -131,6 +133,8 @@ const (
 	GetBlobsV2 = "engine_getBlobsV2"
 	// GetBlobsV3 request string for JSON-RPC.
 	GetBlobsV3 = "engine_getBlobsV3"
+	// HasBlobsV1 request string for JSON-RPC.
+	HasBlobsV1 = "engine_hasBlobs"
 	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
 	GetClientVersionV1 = "engine_getClientVersionV1"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
@@ -160,6 +164,7 @@ type Reconstructor interface {
 	) (map[[32]byte]*pb.ExecutionPayloadGloas, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
 	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error)
+	ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error)
 	ReconstructExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, error)
 }
 
@@ -685,6 +690,28 @@ func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash)
 	return result, handleRPCError(err)
 }
 
+// HasBlobs checks whether the given versioned hashes are available in the
+// execution client's blob pool without fetching the actual blob data.
+// It returns a boolean slice parallel to the input hashes.
+func (s *Service) HasBlobs(ctx context.Context, versionedHashes []common.Hash) ([]bool, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.HasBlobs")
+	defer span.End()
+	start := time.Now()
+
+	if !s.capabilityCache.has(HasBlobsV1) {
+		log.Debug("HasBlobs is not supported")
+		return nil, fmt.Errorf("%s is not supported", HasBlobsV1)
+	}
+
+	log.Debug("HasBlobs is supported")
+
+	hasBlobsRequestsTotal.Inc()
+	result := make([]bool, len(versionedHashes))
+	err := s.rpcClient.CallContext(ctx, &result, HasBlobsV1, versionedHashes)
+	hasBlobsLatency.Observe(time.Since(start).Seconds())
+	return result, handleRPCError(err)
+}
+
 // ReconstructFullBlock takes in a blinded beacon block and reconstructs
 // a beacon block with a full execution payload via the engine API.
 func (s *Service) ReconstructFullBlock(
@@ -991,14 +1018,56 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	return nil, partialColumns, nil
 }
 
+// ConstructPartialDataColumnSidecarsFromHasBlobs constructs header-only partial
+// columns whose parts metadata requests only the blobs missing from the EL.
+func (s *Service) ConstructPartialDataColumnSidecarsFromHasBlobs(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error) {
+	if !s.useHasBlobs() {
+		return nil, false, nil
+	}
+
+	root := populator.Root()
+	commitments, err := populator.Commitments()
+	if err != nil {
+		return nil, true, wrapWithBlockRoot(err, root, "commitments")
+	}
+	if len(commitments) == 0 {
+		return nil, true, nil
+	}
+
+	hasBlobs, err := s.HasBlobs(ctx, versionedHashesFromCommitments(commitments))
+	if err != nil {
+		return nil, true, wrapWithBlockRoot(err, root, "has blobs")
+	}
+	if len(hasBlobs) != len(commitments) {
+		return nil, true, wrapWithBlockRoot(
+			errors.Errorf("got %d results for %d commitments", len(hasBlobs), len(commitments)),
+			root,
+			"has blobs result length",
+		)
+	}
+
+	requests := bitfield.NewBitlist(uint64(len(commitments)))
+	for i, hasBlob := range hasBlobs {
+		if !hasBlob {
+			requests.SetBitAt(uint64(i), true)
+		}
+	}
+	if requests.Count() == 0 {
+		// EL has all blobs; GetBlobsV3 will succeed immediately, no need for an early publish.
+		return nil, true, nil
+	}
+
+	included := bitfield.NewBitlist(uint64(len(commitments)))
+	partialColumns, err := peerdas.PartialColumns(included, nil, nil, populator, blocks.WithPartsRequests(requests))
+	if err != nil {
+		return nil, true, wrapWithBlockRoot(err, root, "construct partial columns from has blobs")
+	}
+	return partialColumns, true, nil
+}
+
 // fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
 func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) (peerdas.StructuredCellsAndProofs, error) {
-	// Collect KZG hashes for all blobs.
-	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
-	for _, commitment := range kzgCommitments {
-		versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
-		versionedHashes = append(versionedHashes, versionedHash)
-	}
+	versionedHashes := versionedHashesFromCommitments(kzgCommitments)
 
 	var blobAndProofs []*pb.BlobAndProofV2
 
@@ -1034,6 +1103,18 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 
 func (s *Service) useV3() bool {
 	return s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported
+}
+
+func (s *Service) useHasBlobs() bool {
+	return s.useV3() && s.capabilityCache.has(HasBlobsV1)
+}
+
+func versionedHashesFromCommitments(kzgCommitments [][]byte) []common.Hash {
+	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
+	for _, commitment := range kzgCommitments {
+		versionedHashes = append(versionedHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
+	}
+	return versionedHashes
 }
 
 // upgradeSidecarsToVerifiedSidecars upgrades a list of data column sidecars into verified data column sidecars.

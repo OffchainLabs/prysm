@@ -852,6 +852,18 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 			}
 			topicStore[string(groupIDBytes)] = verifier
 		} else {
+			if requests, ok := partialCol.PartsRequests(); ok {
+				p.logger.WithFields(logrus.Fields{"topic": topic, "groupID": groupIDBytes}).Debug("Setting parts requests", "requests", requests)
+				if err := verifier.Column.SetPartsRequests(requests); err != nil {
+					aggErr = stderrors.Join(aggErr, err)
+					continue
+				}
+			} else {
+				// Phase 2 (GetBlobsV3): clear the HasBlobs-derived override so that
+				// newPartsMetadata computes requests from actual cell presence (!included).
+				p.logger.WithFields(logrus.Fields{"topic": topic, "groupID": groupIDBytes}).Debug("Clearing parts requests")
+				verifier.Column.ClearPartsRequests()
+			}
 			for i := range partialCol.Included.Len() {
 				if partialCol.Included.BitAt(i) {
 					verifier.ExtendFromVerifiedCell(uint64(i), partialCol.Column[i], partialCol.KzgProofs[i])

@@ -232,6 +232,26 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			"type":          source.Type(),
 		})
 
+		partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
+		isPartialEnabled := partialBroadcaster != nil
+		publishPartialColumns := func(partialColumns []blocks.PartialDataColumn) error {
+			if !isPartialEnabled || len(partialColumns) == 0 {
+				return nil
+			}
+			return partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+				for i := range uint64(len(partialColumns)) {
+					if !columnIndicesToSample[i] {
+						continue
+					}
+					subnet := peerdas.ComputeSubnetForDataColumnSidecar(i)
+					topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+					if !yield(topic, partialColumns[i]) {
+						return
+					}
+				}
+			})
+		}
+
 		var constructedSidecarCount uint64
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
 			log = log.WithField("iteration", iteration)
@@ -252,11 +272,23 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 
 			if iteration == 0 {
 				dataColumnsRecoveredFromELAttempts.Inc()
+				if isPartialEnabled {
+					partialColumns, supported, err := s.cfg.executionReconstructor.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+					if err != nil {
+						if ctx.Err() != nil {
+							return nil, ctx.Err()
+						}
+						log.WithError(err).Warn("Failed to construct partial columns from HasBlobs")
+					} else if supported && len(partialColumns) > 0 {
+						log.WithField("len(partialColumns)", len(partialColumns)).Debug("Publishing HasBlobs partial columns")
+						if err := publishPartialColumns(partialColumns); err != nil {
+							log.WithError(err).Warn("Failed to publish HasBlobs partial columns")
+						}
+					}
+				}
 			}
 
 			// Try to reconstruct data column constructedSidecars from the execution client.
-			partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
-			isPartialEnabled := partialBroadcaster != nil
 			constructedSidecars, partialColumns, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
 			if err != nil {
 				return nil, errors.Wrap(err, "reconstruct data column sidecars")
@@ -267,19 +299,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				// Publish the partial column. This is idempotent if we republish the same data twice.
 				// Note, the "partial column" may indeed be complete. We still
 				// should publish to help our peers.
-				err = partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
-					for i := range uint64(len(partialColumns)) {
-						if !columnIndicesToSample[i] {
-							continue
-						}
-						subnet := peerdas.ComputeSubnetForDataColumnSidecar(i)
-						topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
-						if !yield(topic, partialColumns[i]) {
-							return
-						}
-					}
-				})
-				if err != nil {
+				if err := publishPartialColumns(partialColumns); err != nil {
 					log.WithError(err).Warn("Failed to publish partial columns")
 				}
 			}

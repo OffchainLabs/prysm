@@ -41,12 +41,13 @@ type EngineClient struct {
 	OverrideValidHash           [32]byte
 	GetPayloadResponse          *blocks.GetPayloadResponse
 	ErrGetPayload               error
-	BlobSidecars                []blocks.VerifiedROBlob
-	ErrorBlobSidecars           error
-	DataColumnSidecars          []blocks.VerifiedRODataColumn
-	ErrorDataColumnSidecars     error
-	ClientVersion               []*structs.ClientVersionV1
-	ErrorClientVersion          error
+	BlobSidecars               []blocks.VerifiedROBlob
+	ErrorBlobSidecars          error
+	DataColumnSidecars         []blocks.VerifiedRODataColumn
+	ErrorDataColumnSidecars    error
+	HasBlobsPartialColumns     []blocks.PartialDataColumn
+	ClientVersion              []*structs.ClientVersionV1
+	ErrorClientVersion         error
 }
 
 // NewPayload --
@@ -164,6 +165,15 @@ func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadO
 // ConstructDataColumnSidecars is a mock implementation of the ConstructDataColumnSidecars method.
 func (e *EngineClient) ConstructDataColumnSidecars(context.Context, peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
 	return e.DataColumnSidecars, nil, e.ErrorDataColumnSidecars
+}
+
+// ConstructPartialDataColumnSidecarsFromHasBlobs is a mock implementation of the ConstructPartialDataColumnSidecarsFromHasBlobs method.
+// A nil HasBlobsPartialColumns field means "not supported" (returns false). A non-nil slice (even empty) means "supported".
+func (e *EngineClient) ConstructPartialDataColumnSidecarsFromHasBlobs(context.Context, peerdas.ConstructionPopulator) ([]blocks.PartialDataColumn, bool, error) {
+	if e.HasBlobsPartialColumns == nil {
+		return nil, false, nil
+	}
+	return e.HasBlobsPartialColumns, true, nil
 }
 
 // ReconstructExecutionPayloadEnvelope --

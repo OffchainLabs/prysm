@@ -2723,6 +2723,106 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 	// })
 }
 
+func TestConstructPartialDataColumnSidecarsFromHasBlobs(t *testing.T) {
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	const numBlobs = 3
+	b := util.NewBeaconBlockFulu()
+	b.Block.Body.BlobKzgCommitments = createRandomKzgCommitments(t, numBlobs)
+	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	roBlock, err := blocks.NewROBlockWithRoot(sb, r)
+	require.NoError(t, err)
+
+	source := peerdas.PopulateFromBlock(roBlock)
+	ctx := context.Background()
+
+	t.Run("HasBlobs capability absent returns (nil, false, nil)", func(t *testing.T) {
+		client := &Service{
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil}},
+			partialColumnsSupported: true,
+		}
+		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+		require.NoError(t, err)
+		require.Equal(t, false, supported)
+		require.Equal(t, 0, len(cols))
+	})
+
+	t.Run("EL has all blobs returns early with no partial columns", func(t *testing.T) {
+		cli, engine := newMockEngine(t)
+		defer cli.Close()
+		engine.register(HasBlobsV1, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, []bool{true, true, true})
+		})
+		client := &Service{
+			rpcClient:               cli,
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobsV1: nil}},
+			partialColumnsSupported: true,
+		}
+		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+		require.NoError(t, err)
+		require.Equal(t, true, supported)
+		require.Equal(t, 0, len(cols))
+	})
+
+	t.Run("EL missing first blob sets request bit 0 only", func(t *testing.T) {
+		cli, engine := newMockEngine(t)
+		defer cli.Close()
+		engine.register(HasBlobsV1, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, []bool{false, true, true}) // blob 0 missing
+		})
+		client := &Service{
+			rpcClient:               cli,
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobsV1: nil}},
+			partialColumnsSupported: true,
+		}
+		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+		require.NoError(t, err)
+		require.Equal(t, true, supported)
+		require.Equal(t, fieldparams.NumberOfColumns, len(cols))
+		for _, col := range cols {
+			requests, ok := col.PartsRequests()
+			require.Equal(t, true, ok)
+			require.Equal(t, uint64(numBlobs), requests.Len())
+			require.Equal(t, true, requests.BitAt(0))  // blob 0 missing: requested
+			require.Equal(t, false, requests.BitAt(1)) // blob 1 present: not requested
+			require.Equal(t, false, requests.BitAt(2)) // blob 2 present: not requested
+		}
+	})
+
+	t.Run("EL missing all blobs sets all request bits", func(t *testing.T) {
+		cli, engine := newMockEngine(t)
+		defer cli.Close()
+		engine.register(HasBlobsV1, func(msg *jsonrpcMessage, w http.ResponseWriter, _ *http.Request) {
+			mockWriteResult(t, w, msg, []bool{false, false, false})
+		})
+		client := &Service{
+			rpcClient:               cli,
+			capabilityCache:         &capabilityCache{capabilities: map[string]any{GetBlobsV3: nil, HasBlobsV1: nil}},
+			partialColumnsSupported: true,
+		}
+		cols, supported, err := client.ConstructPartialDataColumnSidecarsFromHasBlobs(ctx, source)
+		require.NoError(t, err)
+		require.Equal(t, true, supported)
+		require.Equal(t, fieldparams.NumberOfColumns, len(cols))
+		for _, col := range cols {
+			requests, ok := col.PartsRequests()
+			require.Equal(t, true, ok)
+			require.Equal(t, true, requests.BitAt(0))
+			require.Equal(t, true, requests.BitAt(1))
+			require.Equal(t, true, requests.BitAt(2))
+		}
+	})
+}
+
 func createRandomKzgCommitments(t *testing.T, num int) [][]byte {
 	kzgCommitments := make([][]byte, num)
 	for i := range kzgCommitments {
