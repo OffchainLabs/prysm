@@ -316,11 +316,11 @@ func (vs *Server) setBuilderOnlyBlockExecution(ctx context.Context, sBlk interfa
 	builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), latestHeader.GasLimit())
 	if err != nil {
 		builderGetPayloadMissCount.Inc()
-		return nil, status.Errorf(codes.Internal, "zkvm verify-only: builder failed to provide a payload: %v", err)
+		return nil, status.Errorf(codes.Internal, "zkvm verify-only: builder failed to provide a bid: %v", err)
 	}
 
 	if builderBid == nil {
-		return nil, status.Errorf(codes.Internal, "zkvm verify-only: builder did not return a payload")
+		return nil, status.Errorf(codes.Internal, "zkvm verify-only: builder did not return a bid")
 	}
 
 	winningBid, err := setBuilderOnlyExecution(sBlk, builderBid)
