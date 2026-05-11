@@ -274,15 +274,15 @@ func AttestationDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]by
 	if epoch <= 1 {
 		return nil, errors.New("epoch <= 1 requires genesis block root from DB")
 	}
-	epochStart, err := slots.EpochStart(epoch)
+	prevEpochStartSlot, err := slots.EpochStart(epoch.Sub(1))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not obtain epoch's start slot: %v", err)
 	}
-	root, err := s.ProposerDependentRoot(epochStart)
+	root, err := helpers.BlockRootAtSlot(s, prevEpochStartSlot.Sub(1))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get block root")
 	}
-	return root[:], nil
+	return root, nil
 }
 
 // ProposalDependentRoot returns the block root at (epoch start - 1),
