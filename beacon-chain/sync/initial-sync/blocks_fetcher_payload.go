@@ -46,6 +46,27 @@ func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
 	return nil
 }
 
+func batchExpectsEnvelopes(blks []blocks.BlockWithROSidecars) bool {
+	if len(blks) <= 1 {
+		return false
+	}
+	s, err := blks[0].Block.Block().Body().SignedExecutionPayloadBid()
+	if err != nil {
+		return true
+	}
+	first := s.Message.ParentBlockHash
+	for i := 1; i < len(blks); i++ {
+		ns, err := blks[i].Block.Block().Body().SignedExecutionPayloadBid()
+		if err != nil {
+			return true
+		}
+		if !bytes.Equal(ns.Message.ParentBlockHash, first) {
+			return true
+		}
+	}
+	return false
+}
+
 // validatePayloadBlockConsistency checks that the envelopes slice correponds to the blocks slice in
 // the peers responses. If they were given by the same peer then we also penalize the peer if they are
 // not consistent.
@@ -156,7 +177,8 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 	if start > 0 {
 		start--
 	}
-	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, r.count, r.blocksFrom, peers)
+	requireNonEmpty := batchExpectsEnvelopes(r.bwb)
+	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, r.count, r.blocksFrom, peers, requireNonEmpty)
 	if err != nil {
 		r.err = errors.Wrap(err, "fetch payload envelopes from peer")
 		r.payloadsFrom = ""
@@ -175,6 +197,7 @@ func (f *blocksFetcher) fetchPayloadEnvelopesFromPeer(
 	count uint64,
 	pid peer.ID,
 	peers []peer.ID,
+	requireNonEmpty bool,
 ) ([]interfaces.ROSignedExecutionPayloadEnvelope, peer.ID, error) {
 	ctx, span := trace.StartSpan(ctx, "initialsync.fetchPayloadEnvelopesFromPeer")
 	defer span.End()
@@ -200,6 +223,14 @@ func (f *blocksFetcher) fetchPayloadEnvelopesFromPeer(
 			if errors.Is(err, prysmsync.ErrInvalidFetchedData) {
 				f.downscorePeer(p, err)
 			}
+			continue
+		}
+		if requireNonEmpty && len(envelopes) == 0 {
+			log.WithFields(logrus.Fields{
+				"peer":      p,
+				"startSlot": req.StartSlot,
+				"count":     req.Count,
+			}).Debug("Peer returned empty payload envelopes when required; trying next peer")
 			continue
 		}
 		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
