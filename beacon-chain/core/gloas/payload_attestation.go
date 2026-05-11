@@ -45,10 +45,16 @@ var ErrValidatorNotInPTC = stderrors.New("validator not in PTC")
 //	    assert is_valid_indexed_payload_attestation(state, indexed_payload_attestation)
 //	</spec>
 func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body interfaces.ReadOnlyBeaconBlockBody) error {
+	_, span := trace.StartSpan(ctx, "gloas.ProcessPayloadAttestations")
+	defer span.End()
+
 	atts, err := body.PayloadAttestations()
 	if err != nil {
 		return errors.Wrap(err, "failed to get payload attestations from block body")
 	}
+
+	span.SetAttributes(trace.Int64Attribute("count", int64(len(atts))))
+
 	if len(atts) == 0 {
 		return nil
 	}

@@ -277,7 +277,7 @@ func TestProcessAttesterSlashings_AppliesCorrectStatus(t *testing.T) {
 
 func TestProcessAttesterSlashing_ExitEpochGetsUpdated(t *testing.T) {
 	st, keys := util.DeterministicGenesisStateElectra(t, 8)
-	bal, err := helpers.TotalActiveBalance(st)
+	bal, err := helpers.TotalActiveBalance(t.Context(), st)
 	require.NoError(t, err)
 	perEpochChurn := helpers.ActivationExitChurnLimit(primitives.Gwei(bal))
 	vals := st.Validators()

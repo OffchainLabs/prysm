@@ -109,7 +109,7 @@ func InitiateValidatorExit(
 		// [Modified in Electra:EIP7251]
 		// exit_queue_epoch = compute_exit_epoch_and_update_churn(state, validator.effective_balance)
 		var err error
-		exitInfo.HighestExitEpoch, err = s.ExitEpochAndUpdateChurn(primitives.Gwei(validator.EffectiveBalance))
+		exitInfo.HighestExitEpoch, err = s.ExitEpochAndUpdateChurn(ctx, primitives.Gwei(validator.EffectiveBalance))
 		if err != nil {
 			return nil, err
 		}
