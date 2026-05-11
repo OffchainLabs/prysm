@@ -8,8 +8,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
-	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	coreRequests "github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -285,6 +285,10 @@ var (
 )
 
 // computePayloadWithdrawals returns the withdrawals for the next payload.
+// Skips deposit-request processing: deposits go to pending_deposits or
+// state.builders and don't affect the immediately-computed withdrawals,
+// while applying them would force a BLS batch verify on the proposer
+// critical path.
 func (vs *Server) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte, parentFull bool) ([]*enginev1.Withdrawal, error) {
 	if !parentFull {
 		return st.PayloadExpectedWithdrawals()
@@ -299,8 +303,22 @@ func (vs *Server) computePayloadWithdrawals(ctx context.Context, st state.Beacon
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get parent execution payload envelope")
 		}
-		if err := coregloas.ApplyParentExecutionPayload(ctx, st, envelope.Message.ExecutionRequests); err != nil {
-			return nil, errors.Wrap(err, "could not apply parent execution payload")
+		parentBid, err := st.LatestExecutionPayloadBid()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get latest execution payload bid")
+		}
+		reqs := envelope.Message.ExecutionRequests
+		if reqs != nil {
+			st, err = coreRequests.ProcessWithdrawalRequests(ctx, st, reqs.Withdrawals)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not process withdrawal requests")
+			}
+			if err := coreRequests.ProcessConsolidationRequests(ctx, st, reqs.Consolidations); err != nil {
+				return nil, errors.Wrap(err, "could not process consolidation requests")
+			}
+		}
+		if err := st.QueueBuilderPaymentForSlot(parentBid.Slot()); err != nil {
+			return nil, errors.Wrap(err, "could not queue builder payment")
 		}
 	}
 	result, err := st.ExpectedWithdrawalsGloas()
