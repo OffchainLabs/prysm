@@ -121,6 +121,14 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		result, err := service.validateDataColumn(ctx, "aDummyPID", message)
 		require.ErrorContains(t, "gloas data column block not yet seen", err)
 		require.Equal(t, pubsub.ValidationIgnore, result)
+
+		// The queued entry must record the forwarding peer (`pid`), not msg.From which
+		// is empty under StrictNoSign/WithNoAuthor and would no-op the bad-response scorer.
+		blockRoot := bytesutil.ToBytes32(sidecar.BeaconBlockRoot)
+		entry := service.pendingGloasColumns[blockRoot]
+		require.NotNil(t, entry)
+		require.NotNil(t, entry.columns[sidecar.Index])
+		require.Equal(t, peer.ID("aDummyPID"), entry.columns[sidecar.Index].peer)
 	})
 
 	t.Run("validates against bid commitments", func(t *testing.T) {
@@ -186,7 +194,7 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		topic := service.addDigestAndIndexToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecarGloas]()], digest, peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index))
 		msg := &pubsub.Message{Message: &pb.Message{Topic: &topic}}
 
-		_, err = service.validateDataColumnGloas(ctx, msg, roDataColumn, "/data_column_sidecar_%d/")
+		_, err = service.validateDataColumnGloas(ctx, "aDummyPID", msg, roDataColumn, "/data_column_sidecar_%d/")
 		require.ErrorContains(t, "slot does not match block slot", err)
 	})
 }

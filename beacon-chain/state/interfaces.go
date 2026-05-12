@@ -270,7 +270,7 @@ type WriteOnlyEth1Data interface {
 	SetEth1DataVotes(val []*ethpb.Eth1Data) error
 	AppendEth1DataVotes(val *ethpb.Eth1Data) error
 	SetEth1DepositIndex(val uint64) error
-	ExitEpochAndUpdateChurn(exitBalance primitives.Gwei) (primitives.Epoch, error)
+	ExitEpochAndUpdateChurn(ctx context.Context, exitBalance primitives.Gwei) (primitives.Epoch, error)
 	ExitEpochAndUpdateChurnForTotalBal(totalActiveBalance primitives.Gwei, exitBalance primitives.Gwei) (primitives.Epoch, error)
 	SetExitBalanceToConsume(val primitives.Gwei) error
 	SetEarliestExitEpoch(val primitives.Epoch) error

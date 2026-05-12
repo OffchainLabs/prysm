@@ -2,6 +2,9 @@ package validator
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -11,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -42,27 +46,54 @@ func (vs *Server) PayloadAttestationData(
 			"payload attestation data is only available for current slot: requested %d, current %d", slot, currentSlot)
 	}
 
-	highestReceivedSlot := vs.ForkchoiceFetcher.HighestReceivedBlockSlot()
-	if highestReceivedSlot != slot {
-		return nil, status.Errorf(
-			codes.Unavailable,
-			"no valid block root for slot %d, highest received block slot is %d",
-			slot,
-			highestReceivedSlot,
-		)
+	slotStart, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), slot)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "could not compute slot start time: %v", err)
 	}
-	root := vs.ForkchoiceFetcher.HighestReceivedBlockRoot()
-	if root == [32]byte{} {
-		return nil, status.Errorf(codes.Internal, "could not retrieve highest received block root for slot %d", slot)
+	cfg := params.BeaconConfig()
+	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS))
+	if time.Now().Before(deadline) {
+		return nil, status.Errorf(codes.Unavailable, "PTC deadline not yet reached for slot %d", slot)
 	}
-	payloadPresent := vs.ForkchoiceFetcher.HasFullNode(root)
 
-	return &ethpb.PayloadAttestationData{
-		BeaconBlockRoot:   root[:],
-		Slot:              slot,
-		PayloadPresent:    payloadPresent,
-		BlobDataAvailable: payloadPresent, // TODO: Replace with real DA availability once DA paths are wired.
-	}, nil
+	if cached := vs.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
+		return cached, nil
+	}
+
+	// dedupe concurrent callers at the PTC deadline.
+	v, err, _ := vs.payloadAttestationFlight.Do(strconv.FormatUint(uint64(slot), 10), func() (any, error) {
+		if cached := vs.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
+			return cached, nil
+		}
+
+		highestReceivedSlot := vs.ForkchoiceFetcher.HighestReceivedBlockSlot()
+		if highestReceivedSlot != slot {
+			return nil, status.Errorf(
+				codes.Unavailable,
+				"no valid block root for slot %d, highest received block slot is %d",
+				slot,
+				highestReceivedSlot,
+			)
+		}
+		root := vs.ForkchoiceFetcher.HighestReceivedBlockRoot()
+		if root == [32]byte{} {
+			return nil, status.Errorf(codes.Internal, "could not retrieve highest received block root for slot %d", slot)
+		}
+		payloadPresent := vs.ForkchoiceFetcher.HasFullNode(root)
+
+		resp := &ethpb.PayloadAttestationData{
+			BeaconBlockRoot:   root[:],
+			Slot:              slot,
+			PayloadPresent:    payloadPresent,
+			BlobDataAvailable: payloadPresent, // TODO: Replace with real DA availability once DA paths are wired.
+		}
+		vs.payloadAttestationData.Store(resp)
+		return resp, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.(*ethpb.PayloadAttestationData), nil
 }
 
 // SubmitPayloadAttestation submits a payload attestation message to the network
@@ -114,7 +145,11 @@ func (vs *Server) SubmitPayloadAttestation(
 		},
 	})
 
-	log.WithField("slot", msg.Data.Slot).Debug("Submitted payload attestation message")
+	log.WithFields(logrus.Fields{
+		"slot":           msg.Data.Slot,
+		"blockRoot":      fmt.Sprintf("%#x", msg.Data.BeaconBlockRoot),
+		"validatorIndex": msg.ValidatorIndex,
+	}).Debug("Submitted payload attestation message")
 	return &emptypb.Empty{}, nil
 }
 
