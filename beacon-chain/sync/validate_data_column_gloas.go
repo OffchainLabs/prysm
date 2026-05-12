@@ -37,6 +37,7 @@ type pendingGloasEntry struct {
 
 func (s *Service) validateDataColumnGloas(
 	ctx context.Context,
+	pid peer.ID,
 	msg *pubsub.Message,
 	roDataColumn blocks.RODataColumn,
 	dataColumnSidecarSubTopic string,
@@ -53,7 +54,7 @@ func (s *Service) validateDataColumnGloas(
 		if msg.Topic == nil || !strings.Contains(*msg.Topic+"/", expectedSubTopic) {
 			return blocks.VerifiedRODataColumn{}, errors.New("gloas data column on wrong subnet")
 		}
-		s.queuePendingGloasColumn(roDataColumn, peer.ID(msg.GetFrom()))
+		s.queuePendingGloasColumn(roDataColumn, pid)
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("gloas data column block not yet seen"))
 	}
 
