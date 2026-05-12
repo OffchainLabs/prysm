@@ -471,10 +471,9 @@ func (s *Service) submitSignedProofToBeaconNode(signedProof *ethpb.SignedExecuti
 }
 
 // connectToProverSSE creates and executes an SSE request to the prover endpoint,
-// retrying up to 5 times with a 1 second interval.
+// retrying indefinitely with a 10 second interval until the connection succeeds
+// or the service context is cancelled.
 func (s *Service) connectToProverSSE() (*http.Response, error) {
-	const attempts = 10
-
 	url := s.cfg.ProverApiEndpoint + "/v1/execution_proof_requests"
 	log.WithField("url", url).Info("Subscribing to prover events")
 
@@ -488,26 +487,22 @@ func (s *Service) connectToProverSSE() (*http.Response, error) {
 
 	log := log.WithField("url", url)
 
-	for attempt := range attempts {
+	for {
 		resp, err := (&http.Client{}).Do(req)
 		if err == nil {
 			log.Info("Connected to prover SSE endpoint")
 			return resp, nil
 		}
 
-		log.WithError(err).
-			WithField("attempt", fmt.Sprintf("%d/%d", attempt+1, attempts)).
-			Warning("Failed to connect to prover SSE endpoint, retrying")
+		log.WithError(err).Warning("Failed to connect to prover SSE endpoint, retrying")
 
 		select {
 		case <-s.ctx.Done():
 			return nil, s.ctx.Err()
 
-		case <-time.After(1 * time.Second):
+		case <-time.After(10 * time.Second):
 		}
 	}
-
-	return nil, fmt.Errorf("failed to connect to prover SSE endpoint after %d attempts", attempts)
 }
 
 // listenToProverEvents subscribes to the prover's SSE endpoint to receive
