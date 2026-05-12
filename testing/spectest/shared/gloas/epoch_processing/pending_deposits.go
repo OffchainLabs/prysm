@@ -34,7 +34,7 @@ func runPendingDepositsTestsAt(t *testing.T, config, testPath string) {
 }
 
 func processPendingDeposits(t *testing.T, st state.BeaconState) (state.BeaconState, error) {
-	tab, err := helpers.TotalActiveBalance(st)
+	tab, err := helpers.TotalActiveBalance(context.TODO(), st)
 	require.NoError(t, err)
 	return st, electra.ProcessPendingDeposits(context.TODO(), st, primitives.Gwei(tab))
 }
