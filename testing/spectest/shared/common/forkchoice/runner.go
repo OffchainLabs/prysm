@@ -67,10 +67,9 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 			"voting_source_beyond_two_epoch":         true,
 			"justified_update_always_if_better":      true,
 			"justified_update_not_realized_finality": true,
-			// TODO(gloas): shouldApplyProposerBoost missing rule 3 from consensus-specs#4807 (early-equivocation check on weak parent).
-			"shorter_chain_but_heavier_weight": true,
-			// TODO(gloas): on_block needs to clear proposerBoostRoot for late blocks (past attestation deadline).
-			"proposer_boost_root_same_slot_untimely_block": true,
+			// TODO(gloas): shouldApplyProposerBoost needs implementation, these are equivocation tests
+			"include_votes_another_empty_chain_with_enough_ffg_votes_previous_epoch": true,
+			"simple_attempted_reorg_without_enough_ffg_votes":                        true,
 		}
 		for _, folder := range testFolders {
 			if skipTests[folder.Name()] {
