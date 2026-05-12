@@ -3,6 +3,8 @@ package sync
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -112,9 +114,15 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 }
 
 func (s *Service) signedProposerPreferencesSubscriber(_ context.Context, msg proto.Message) error {
-	_, ok := msg.(*ethpb.SignedProposerPreferences)
+	signedPreferences, ok := msg.(*ethpb.SignedProposerPreferences)
 	if !ok {
 		return errWrongMessage
 	}
+	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+		Type: opfeed.ProposerPreferencesReceived,
+		Data: &opfeed.ProposerPreferencesReceivedData{
+			SignedPreferences: signedPreferences,
+		},
+	})
 	return nil
 }

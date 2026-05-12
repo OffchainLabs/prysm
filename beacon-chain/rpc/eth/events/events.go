@@ -81,6 +81,8 @@ const (
 	ExecutionPayloadBidTopic = "execution_payload_bid"
 	// PayloadAttestationMessageTopic represents a new payload attestation message event topic.
 	PayloadAttestationMessageTopic = "payload_attestation_message"
+	// ProposerPreferencesTopic represents a new signed proposer preferences event topic.
+	ProposerPreferencesTopic = "proposer_preferences"
 )
 
 var (
@@ -116,6 +118,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.BlockGossipReceived:               BlockGossipTopic,
 	operation.DataColumnReceived:                DataColumnTopic,
 	operation.PayloadAttestationMessageReceived: PayloadAttestationMessageTopic,
+	operation.ProposerPreferencesReceived:        ProposerPreferencesTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -483,6 +486,8 @@ func topicForEvent(event *feed.Event) string {
 		return PayloadAttestationMessageTopic
 	case *statefeed.PayloadProcessedData:
 		return ExecutionPayloadTopic
+	case *operation.ProposerPreferencesReceivedData:
+		return ProposerPreferencesTopic
 	default:
 		return InvalidTopic
 	}
@@ -665,6 +670,10 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				Slot:      fmt.Sprintf("%d", v.Slot),
 				BlockRoot: hexutil.Encode(v.BlockRoot[:]),
 			})
+		}, nil
+	case *operation.ProposerPreferencesReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.SignedProposerPreferencesFromConsensus(v.SignedPreferences))
 		}, nil
 	default:
 		return nil, errors.Wrapf(errUnhandledEventData, "event data type %T unsupported", v)
