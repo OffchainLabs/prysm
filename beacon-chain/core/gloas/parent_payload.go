@@ -7,6 +7,7 @@ import (
 	requests "github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/pkg/errors"
 )
@@ -16,6 +17,9 @@ import (
 //
 //	<spec fn="process_parent_execution_payload" fork="gloas" hash="defer_payload">
 func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, blk interfaces.ReadOnlyBeaconBlock) error {
+	_, span := trace.StartSpan(ctx, "gloas.ProcessParentExecutionPayload")
+	defer span.End()
+
 	body := blk.Body()
 	signedBid, err := body.SignedExecutionPayloadBid()
 	if err != nil {
@@ -92,7 +96,7 @@ func ApplyParentExecutionPayload(
 }
 
 func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *enginev1.ExecutionRequests) error {
-	if err := processDepositRequests(ctx, st, rqs.Deposits); err != nil {
+	if err := ProcessDepositRequests(ctx, st, rqs.Deposits); err != nil {
 		return errors.Wrap(err, "could not process deposit requests")
 	}
 	var err error
