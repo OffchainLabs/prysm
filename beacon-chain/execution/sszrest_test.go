@@ -797,7 +797,7 @@ func TestGetBlobsSSZRestEndpoint(t *testing.T) {
 	responseSSZ := buildGetBlobsResponseSSZ(blobsData)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/engine/v1/get_blobs", r.URL.Path)
+		assert.Equal(t, "/engine/v1/blobs", r.URL.Path)
 		assert.Equal(t, sszContentType, r.Header.Get("Content-Type"))
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write(responseSSZ)
@@ -819,7 +819,7 @@ func TestExchangeCapabilitiesSSZRestEndpoint(t *testing.T) {
 	responseSSZ := marshalExchangeCapabilitiesRequest(caps)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/engine/v1/exchange_capabilities", r.URL.Path)
+		assert.Equal(t, "/engine/v1/capabilities", r.URL.Path)
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write(responseSSZ)
 		require.NoError(t, err)
@@ -841,7 +841,7 @@ func TestGetClientVersionSSZRestEndpoint(t *testing.T) {
 	responseSSZ := buildClientVersionResponseSSZ(versions)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/engine/v1/get_client_version", r.URL.Path)
+		assert.Equal(t, "/engine/v1/client/version", r.URL.Path)
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write(responseSSZ)
 		require.NoError(t, err)
