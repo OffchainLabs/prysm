@@ -508,7 +508,19 @@ func (s *Store) shouldApplyProposerBoost() bool {
 	if p.node.slot+1 != n.slot {
 		return true
 	}
-	return p.weight*100 >= s.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold
+	if p.node.weight*100 >= s.committeeWeight*params.BeaconConfig().ReorgHeadWeightThreshold {
+		return true
+	}
+	// Parent is weak by attestation weight. Allow the boost anyway unless we have
+	// evidence (a second observed block root for the parent's (slot, proposer))
+	// that the parent's proposer equivocated.
+	roots := s.blockRootsBySlotProposer[proposerSlotKey{slot: p.node.slot, proposer: p.node.proposerIndex}]
+	for _, r := range roots {
+		if r != p.node.root {
+			return false
+		}
+	}
+	return true
 }
 
 // removeProposerBoostFromParent removes the proposer boost that must have been applied to the parent of the current proposer boost node

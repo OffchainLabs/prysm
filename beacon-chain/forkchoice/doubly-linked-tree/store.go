@@ -109,6 +109,7 @@ func (s *Store) insert(ctx context.Context,
 
 	n := &Node{
 		slot:                        slot,
+		proposerIndex:               block.ProposerIndex(),
 		root:                        root,
 		parent:                      parent,
 		justifiedEpoch:              justifiedEpoch,

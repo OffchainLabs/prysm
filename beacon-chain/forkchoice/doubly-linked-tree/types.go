@@ -53,6 +53,7 @@ type Store struct {
 // This is used as an array based stateful DAG for efficient fork choice look up.
 type Node struct {
 	slot                        primitives.Slot              // slot of the block converted to the node.
+	proposerIndex               primitives.ValidatorIndex    // proposer index of the block that produced this node.
 	root                        [fieldparams.RootLength]byte // root of the block converted to the node.
 	blockHash                   [fieldparams.RootLength]byte // payloadHash of the block converted to the node.
 	parent                      *PayloadNode                 // parent index of this node.
