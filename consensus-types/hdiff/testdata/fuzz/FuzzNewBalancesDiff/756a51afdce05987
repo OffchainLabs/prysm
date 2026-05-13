@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('\t')
+[]byte("\xe7t\x89\x90\x00\x9c\f\x1fw<\xa5\xaan\xba#\x80j")
