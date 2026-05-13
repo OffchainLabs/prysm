@@ -51,6 +51,7 @@ const (
 
 	// Signed proposer preferences specific.
 	RequireProposerPreferencesCurrentOrNextEpoch
+	RequireProposerPreferencesDependentRootSeen
 	RequireProposerPreferencesProposalSlotValid
 	RequireProposerPreferencesSignatureValid
 )

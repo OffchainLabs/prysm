@@ -1,5 +1,4 @@
 diff --git a/BUILD.bazel b/BUILD.bazel
-index 9be80a1..0e78457 100755
 --- a/BUILD.bazel
 +++ b/BUILD.bazel
 @@ -8,58 +8,7 @@ go_library(
@@ -58,20 +57,19 @@ index 9be80a1..0e78457 100755
 -        ],
 -        "//conditions:default": [],
 -    }),
-     importpath = "github.com/karalabe/hid",
+     importpath = "github.com/ethereum/hid",
      visibility = ["//visibility:public"],
  )
 diff --git a/hid_disabled.go b/hid_disabled.go
-index fa2c504..0091853 100644
 --- a/hid_disabled.go
 +++ b/hid_disabled.go
 @@ -4,9 +4,6 @@
  // This file is released under the 3-clause BSD license. Note however that Linux
  // support depends on libusb, released under GNU LGPL 2.1 or later.
- 
+
 -//go:build (!freebsd && !linux && !darwin && !windows) || ios || !cgo
 -// +build !freebsd,!linux,!darwin,!windows ios !cgo
 -
  package hid
- 
+
  // Supported returns whether this platform is supported by the HID library or not.

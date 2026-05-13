@@ -1,6 +1,8 @@
 package state_native
 
 import (
+	"context"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -33,13 +35,13 @@ import (
 //	    state.earliest_exit_epoch = earliest_exit_epoch
 //
 //	    return state.earliest_exit_epoch
-func (b *BeaconState) ExitEpochAndUpdateChurn(exitBalance primitives.Gwei) (primitives.Epoch, error) {
+func (b *BeaconState) ExitEpochAndUpdateChurn(ctx context.Context, exitBalance primitives.Gwei) (primitives.Epoch, error) {
 	if b.version < version.Electra {
 		return 0, errNotSupported("ExitEpochAndUpdateChurn", b.version)
 	}
 
 	// This helper requires access to the RLock and cannot be called from within the write Lock.
-	activeBal, err := helpers.TotalActiveBalance(b)
+	activeBal, err := helpers.TotalActiveBalance(ctx, b)
 	if err != nil {
 		return 0, err
 	}
