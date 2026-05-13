@@ -51,11 +51,9 @@ func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
 // not consistent.
 func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse) {
 	if len(r.envelopes) == 0 {
-		if err := checkAllBlocksBuildOnEmpty(r.bwb); err != nil {
-			r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
-			if r.blocksFrom == r.payloadsFrom {
-				f.downscorePeer(r.blocksFrom, r.err)
-			}
+		// Only downscore with bad payload if the same peer provided available blocks
+		if err := checkAllBlocksBuildOnEmpty(r.bwb); err != nil && r.blocksFrom == r.payloadsFrom {
+			f.downscorePeer(r.blocksFrom, errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error()))
 		}
 		return
 	}
