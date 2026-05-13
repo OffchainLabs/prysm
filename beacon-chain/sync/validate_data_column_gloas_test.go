@@ -358,7 +358,7 @@ func TestPendingGloasColumns(t *testing.T) {
 			pendingGloasPeerRootCounts:   make(map[peer.ID]int),
 		}
 		// "noisy" claims its full root quota with one column on each root.
-		for i := 0; i < maxPendingGloasRootsPerPeer; i++ {
+		for i := range maxPendingGloasRootsPerPeer {
 			root := [32]byte{byte(i)}
 			dc := &ethpb.DataColumnSidecarGloas{
 				Index:           0,
@@ -417,7 +417,7 @@ func TestPendingGloasColumns(t *testing.T) {
 		}
 		root := [32]byte{0xab}
 		// Fill the per-peer quota for "noisy" using distinct column indices on a single root.
-		for i := uint64(0); i < maxPendingGloasColumnsPerPeer; i++ {
+		for i := range uint64(maxPendingGloasColumnsPerPeer) {
 			dc := &ethpb.DataColumnSidecarGloas{
 				Index:           i,
 				Slot:            clock.CurrentSlot(),
