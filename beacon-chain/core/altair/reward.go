@@ -1,6 +1,8 @@
 package altair
 
 import (
+	"context"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -24,8 +26,8 @@ import (
 //	  """
 //	  increments = state.validators[index].effective_balance // EFFECTIVE_BALANCE_INCREMENT
 //	  return Gwei(increments * get_base_reward_per_increment(state))
-func BaseReward(s state.ReadOnlyBeaconState, index primitives.ValidatorIndex) (uint64, error) {
-	totalBalance, err := helpers.TotalActiveBalance(s)
+func BaseReward(ctx context.Context, s state.ReadOnlyBeaconState, index primitives.ValidatorIndex) (uint64, error) {
+	totalBalance, err := helpers.TotalActiveBalance(ctx, s)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not calculate active balance")
 	}
