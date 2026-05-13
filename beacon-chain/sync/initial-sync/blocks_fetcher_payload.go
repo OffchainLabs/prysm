@@ -100,9 +100,11 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 		env := r.envelopes[pidx]
 		full, err := blocks.BlockBuiltOnEnvelope(env, b.Block)
 		if err != nil || !full {
-			r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, "envelope does not match block")
 			if r.blocksFrom == r.payloadsFrom {
+				r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, "envelope does not match block")
 				f.downscorePeer(r.blocksFrom, r.err)
+			} else {
+				r.err = errors.New("envelope does not match block")
 			}
 			return
 		}
