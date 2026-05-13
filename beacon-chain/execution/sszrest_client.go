@@ -359,6 +359,29 @@ func (s *Service) getBlobsSSZRest(ctx context.Context, versionedHashes []common.
 	return unmarshalGetBlobsResponseSSZ(respBody)
 }
 
+// getBlobsV2SSZRest sends a GetBlobsV2 request via SSZ-REST.
+// It posts to /engine/v2/blobs and returns []*pb.BlobAndProofV2, where each
+// entry carries the full blob and all 128 cell KZG proofs.
+func (s *Service) getBlobsV2SSZRest(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV2SSZRest")
+	defer span.End()
+
+	client := s.getSSZRestClient()
+	if client == nil {
+		return nil, errors.New("SSZ-REST client unavailable")
+	}
+
+	reqBody := marshalGetBlobsV2Request(versionedHashes)
+
+	// POST /engine/v2/blobs per EIP-8161 spec.
+	respBody, err := client.doRequest(ctx, "/engine/v2/blobs", reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	return unmarshalGetBlobsV2ResponseSSZ(respBody)
+}
+
 // exchangeCapabilitiesSSZRest sends an ExchangeCapabilities request via SSZ-REST.
 func (s *Service) exchangeCapabilitiesSSZRest(ctx context.Context, capabilities []string) ([]string, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilitiesSSZRest")

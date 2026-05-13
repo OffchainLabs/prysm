@@ -488,6 +488,65 @@ func unmarshalGetBlobsResponseSSZ(data []byte) ([]*pb.BlobAndProof, error) {
 	return result, nil
 }
 
+// --- GetBlobsV2 ---
+
+// blobAndProofV2Size is the fixed SSZ size of a BlobAndProofV2.
+// Each entry is: blob (BlobLength bytes) + 128 cell KZG proofs (128 * 48 bytes).
+const blobAndProofV2Size = fieldparams.BlobLength + fieldparams.NumberOfColumns*48
+
+// marshalGetBlobsV2Request creates the SSZ-encoded body for a get_blobs_v2 request.
+// The request format is identical to V1 (a list of 32-byte versioned hashes), so
+// we reuse marshalGetBlobsRequest directly.
+func marshalGetBlobsV2Request(versionedHashes []common.Hash) []byte {
+	return marshalGetBlobsRequest(versionedHashes)
+}
+
+// unmarshalGetBlobsV2ResponseSSZ decodes an SSZ-encoded GetBlobsV2Response.
+// BlobAndProofV2 is fixed-size: blob (131072 bytes) + 128 cell proofs (128*48 = 6144 bytes)
+// = 137216 bytes per entry.
+func unmarshalGetBlobsV2ResponseSSZ(data []byte) ([]*pb.BlobAndProofV2, error) {
+	if len(data) < 4 {
+		return nil, fmt.Errorf("SSZ get_blobs_v2 response too short: %d bytes", len(data))
+	}
+
+	listOffset := ssz.ReadOffset(data[0:4])
+	if listOffset > uint64(len(data)) {
+		return nil, fmt.Errorf("SSZ get_blobs_v2 response truncated")
+	}
+
+	listData := data[listOffset:]
+	if len(listData) == 0 {
+		return []*pb.BlobAndProofV2{}, nil
+	}
+	if len(listData)%blobAndProofV2Size != 0 {
+		return nil, fmt.Errorf("SSZ get_blobs_v2 data size %d not divisible by BlobAndProofV2 size %d", len(listData), blobAndProofV2Size)
+	}
+
+	const proofSize = 48
+	count := len(listData) / blobAndProofV2Size
+	result := make([]*pb.BlobAndProofV2, count)
+	for i := range count {
+		base := i * blobAndProofV2Size
+
+		blob := make([]byte, fieldparams.BlobLength)
+		copy(blob, listData[base:base+fieldparams.BlobLength])
+
+		proofBase := base + fieldparams.BlobLength
+		kzgProofs := make([][]byte, fieldparams.NumberOfColumns)
+		for j := range fieldparams.NumberOfColumns {
+			proof := make([]byte, proofSize)
+			copy(proof, listData[proofBase+j*proofSize:proofBase+(j+1)*proofSize])
+			kzgProofs[j] = proof
+		}
+
+		result[i] = &pb.BlobAndProofV2{
+			Blob:      blob,
+			KzgProofs: kzgProofs,
+		}
+	}
+	return result, nil
+}
+
 // --- ExchangeCapabilities ---
 
 // marshalExchangeCapabilitiesRequest creates the SSZ-encoded body for an
