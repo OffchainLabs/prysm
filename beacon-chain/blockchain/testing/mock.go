@@ -85,9 +85,21 @@ type ChainService struct {
 	ParentPayloadReadyVal *bool
 	ForkchoiceRoots       map[[32]byte]bool
 	ForkchoiceBlockHashes map[[32]byte][32]byte
+	// Ancestors lets a test stub the result of Ancestor(root, slot) without
+	// wiring a full forkchoice store. Keyed by the input root.
+	Ancestors map[[32]byte][32]byte
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
+	if s.Ancestors != nil {
+		r := bytesutil.ToBytes32(root)
+		if a, ok := s.Ancestors[r]; ok {
+			return a[:], nil
+		}
+	}
+	if s.ForkChoiceStore == nil {
+		return nil, errors.New("mock ChainService: no Ancestors map or ForkChoiceStore configured")
+	}
 	r, err := s.ForkChoiceStore.AncestorRoot(ctx, bytesutil.ToBytes32(root), slot)
 	return r[:], err
 }

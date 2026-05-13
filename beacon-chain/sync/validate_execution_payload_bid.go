@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
@@ -57,14 +58,21 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyCurrentOrNextSlot(); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	// [IGNORE] the SignedProposerPreferences where preferences.proposal_slot is equal to bid.slot has been seen.
-	pref, ok := s.proposerPreferencesCache.Get(bid.Slot())
-	if !ok {
-		return pubsub.ValidationIgnore, nil
-	}
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
+	}
+	// [IGNORE] matching SignedProposerPreferences seen, keyed on the proposer
+	// dep root anchored to bid.parent_block_root.
+	parentBlockRoot := bid.ParentBlockRoot()
+	priorEpoch, _ := slots.ToEpoch(bid.Slot()).SafeSub(1)
+	dependentRoot, err := s.cfg.chain.DependentRootForEpoch(parentBlockRoot, priorEpoch)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	pref, ok := s.proposerPreferencesCache.Get(dependentRoot, bid.Slot())
+	if !ok {
+		return pubsub.ValidationIgnore, nil
 	}
 	// [REJECT] bid.builder_index is a valid/active builder index.
 	if err := v.VerifyBuilderActive(st); err != nil {
@@ -75,7 +83,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationReject, err
 	}
 	// [REJECT] bid.fee_recipient matches the fee_recipient from the proposer's SignedProposerPreferences associated with bid.slot.
-	if err := v.VerifyFeeRecipientMatches(pref.FeeRecipient); err != nil {
+	if err := v.VerifyFeeRecipientMatches(pref.FeeRecipient[:]); err != nil {
 		return pubsub.ValidationReject, err
 	}
 	// [REJECT] bid.gas_limit matches the gas_limit from the proposer's SignedProposerPreferences associated with bid.slot.
