@@ -100,7 +100,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	// Verify the block is the first block received for the proposer for the slot.
 	if s.hasSeenBlockIndexSlot(blk.Block().Slot(), blk.Block().ProposerIndex()) {
 		// Attempt to detect and broadcast equivocation before ignoring
-		err = s.detectAndBroadcastEquivocation(ctx, blk)
+		err = s.detectAndBroadcastEquivocation(ctx, blk, receivedTime)
 		if err != nil {
 			// If signature verification fails, reject the block
 			if errors.Is(err, ErrSlashingSignatureFailure) {
@@ -597,10 +597,17 @@ func getBlockFields(b interfaces.ReadOnlySignedBeaconBlock) logrus.Fields {
 
 // detectAndBroadcastEquivocation checks if the given block is an equivocating block by comparing it with
 // the head block. If the blocks are from the same slot and proposer but have different signatures,
-// it creates and broadcasts a proposer slashing object after verification.
-func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) error {
+// it creates and broadcasts a proposer slashing object after verification. When --track-equivocations
+// is set and the duplicate was received before the configured early deadline, the duplicate's block
+// root is recorded in forkchoice via RecordBlockForEquivocation.
+func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock, receivedTime time.Time) error {
 	slot := blk.Block().Slot()
 	proposerIndex := blk.Block().ProposerIndex()
+
+	duplicateRoot, err := blk.Block().HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not compute duplicate block root")
+	}
 
 	// Get head block for comparison
 	headBlock, err := s.cfg.chain.HeadBlock(ctx)
@@ -643,12 +650,18 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 		return errors.Wrap(err, "could not get head state")
 	}
 
-	// Verify the slashing against current state
+	// Verify the slashing against current state. This BLS-verifies both block headers,
+	// so we reuse the result below to record an early equivocation in forkchoice.
 	if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {
 		if errors.Is(err, blocks.ErrCouldNotVerifyBlockHeader) {
 			return errors.Wrap(ErrSlashingSignatureFailure, err.Error())
 		}
 		return errors.Wrap(err, "could not verify proposer slashing")
+	}
+
+	// Record the equivocation in forkchoice if it was observed before the early deadline.
+	if features.Get().TrackEquivocations {
+		s.recordEarlyEquivocation(slot, proposerIndex, duplicateRoot, receivedTime)
 	}
 
 	// Broadcast if verification passes
@@ -664,4 +677,19 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 	}
 
 	return nil
+}
+
+// recordEarlyEquivocation records the duplicate block's root in forkchoice if the equivocation was
+// observed before slot_start + SlotComponentDuration(EquivocationEarlyDueBPS).
+func (s *Service) recordEarlyEquivocation(slot primitives.Slot, proposer primitives.ValidatorIndex, root [32]byte, receivedTime time.Time) {
+	slotStart, err := slots.StartTime(s.cfg.clock.GenesisTime(), slot)
+	if err != nil {
+		return
+	}
+	cfg := params.BeaconConfig()
+	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.EquivocationEarlyDueBPS))
+	if receivedTime.After(deadline) {
+		return
+	}
+	s.cfg.chain.RecordBlockForEquivocation(slot, proposer, root)
 }

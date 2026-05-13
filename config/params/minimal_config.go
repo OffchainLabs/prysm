@@ -41,6 +41,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.SyncMessageDueBPSGloas = 2500
 	minimalConfig.ContributionDueBPSGloas = 5000
 	minimalConfig.PayloadAttestationDueBPS = 7500
+	minimalConfig.EquivocationEarlyDueBPS = 7500
 	minimalConfig.MinAttestationInclusionDelay = 1
 	minimalConfig.SlotsPerEpoch = 8
 	minimalConfig.SqrRootSlotsPerEpoch = 2

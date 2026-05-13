@@ -60,6 +60,7 @@ type ForkchoiceFetcher interface {
 	DependentRoot(primitives.Epoch) ([32]byte, error)
 	CanonicalNodeAtSlot(primitives.Slot) ([32]byte, bool)
 	ShouldIgnoreData(parentRoot [32]byte, dataSlot primitives.Slot) bool
+	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
 }
 
 // TimeFetcher retrieves the Ethereum consensus data that's related to time.

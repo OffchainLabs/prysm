@@ -27,6 +27,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -36,6 +37,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	gcache "github.com/patrickmn/go-cache"
@@ -1921,7 +1923,7 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 		signedBlock, err := blocks.NewSignedBeaconBlock(block)
 		require.NoError(t, err)
 
-		err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
+		err = r.detectAndBroadcastEquivocation(ctx, signedBlock, time.Now())
 		require.NoError(t, err)
 		assert.Equal(t, 0, len(slashingPool.PendingPropSlashings), "Expected no slashings")
 	})
@@ -1967,7 +1969,7 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
 		require.NoError(t, err)
 
-		err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock)
+		err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock, time.Now())
 		require.NoError(t, err)
 
 		// Verify slashing was inserted
@@ -2005,7 +2007,7 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 			seenBlockCache: lruwrpr.New(10),
 		}
 
-		err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
+		err = r.detectAndBroadcastEquivocation(ctx, signedBlock, time.Now())
 		require.NoError(t, err)
 		assert.Equal(t, 0, len(slashingPool.PendingPropSlashings), "Expected no slashings for same signature")
 	})
@@ -2048,7 +2050,7 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 			seenBlockCache: lruwrpr.New(10),
 		}
 
-		err = r.detectAndBroadcastEquivocation(ctx, signedBlock)
+		err = r.detectAndBroadcastEquivocation(ctx, signedBlock, time.Now())
 		require.ErrorContains(t, "could not get head state", err)
 	})
 	t.Run("signature verification failure", func(t *testing.T) {
@@ -2091,8 +2093,113 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 			seenBlockCache: lruwrpr.New(10),
 		}
 
-		err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock)
+		err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock, time.Now())
 		require.ErrorIs(t, err, ErrSlashingSignatureFailure)
+	})
+
+	t.Run("early equivocation recorded in forkchoice when flag on", func(t *testing.T) {
+		resetFn := features.InitWithReset(&features.Flags{TrackEquivocations: true})
+		defer resetFn()
+
+		headBlock := util.NewBeaconBlock()
+		headBlock.Block.Slot = 1
+		headBlock.Block.ProposerIndex = 0
+		headBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent1"), 32)
+		sig1, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		headBlock.Signature = sig1
+
+		newBlock := util.NewBeaconBlock()
+		newBlock.Block.Slot = 1
+		newBlock.Block.ProposerIndex = 0
+		newBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent2"), 32)
+		sig2, err := signing.ComputeDomainAndSign(beaconState, 0, newBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		newBlock.Signature = sig2
+
+		signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+		require.NoError(t, err)
+		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+		require.NoError(t, err)
+
+		genesis := time.Now()
+		chainService := &mock.ChainService{
+			State:   beaconState,
+			Genesis: genesis,
+			Block:   signedHeadBlock,
+		}
+
+		r := &Service{
+			cfg: &config{
+				p2p:          p,
+				chain:        chainService,
+				slashingPool: &slashingsmock.PoolMock{},
+				clock:        startup.NewClock(genesis, chainService.ValidatorsRoot),
+			},
+			seenBlockCache: lruwrpr.New(10),
+		}
+
+		slotStart, err := slots.StartTime(genesis, 1)
+		require.NoError(t, err)
+		require.NoError(t, r.detectAndBroadcastEquivocation(ctx, signedNewBlock, slotStart))
+
+		expectedRoot, err := signedNewBlock.Block().HashTreeRoot()
+		require.NoError(t, err)
+		key := mock.EquivocationKey{Slot: 1, Proposer: 0}
+		recorded := chainService.RecordedEquivocations[key]
+		require.Equal(t, 1, len(recorded))
+		require.Equal(t, expectedRoot, recorded[0])
+	})
+
+	t.Run("late equivocation not recorded when flag on", func(t *testing.T) {
+		resetFn := features.InitWithReset(&features.Flags{TrackEquivocations: true})
+		defer resetFn()
+
+		headBlock := util.NewBeaconBlock()
+		headBlock.Block.Slot = 1
+		headBlock.Block.ProposerIndex = 0
+		headBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent1"), 32)
+		sig1, err := signing.ComputeDomainAndSign(beaconState, 0, headBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		headBlock.Signature = sig1
+
+		newBlock := util.NewBeaconBlock()
+		newBlock.Block.Slot = 1
+		newBlock.Block.ProposerIndex = 0
+		newBlock.Block.ParentRoot = bytesutil.PadTo([]byte("parent2"), 32)
+		sig2, err := signing.ComputeDomainAndSign(beaconState, 0, newBlock.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[0])
+		require.NoError(t, err)
+		newBlock.Signature = sig2
+
+		signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+		require.NoError(t, err)
+		signedNewBlock, err := blocks.NewSignedBeaconBlock(newBlock)
+		require.NoError(t, err)
+
+		genesis := time.Now()
+		chainService := &mock.ChainService{
+			State:   beaconState,
+			Genesis: genesis,
+			Block:   signedHeadBlock,
+		}
+
+		r := &Service{
+			cfg: &config{
+				p2p:          p,
+				chain:        chainService,
+				slashingPool: &slashingsmock.PoolMock{},
+				clock:        startup.NewClock(genesis, chainService.ValidatorsRoot),
+			},
+			seenBlockCache: lruwrpr.New(10),
+		}
+
+		slotStart, err := slots.StartTime(genesis, 1)
+		require.NoError(t, err)
+		// Past the early deadline (75% of slot at default mainnet config).
+		lateReceived := slotStart.Add(time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+		require.NoError(t, r.detectAndBroadcastEquivocation(ctx, signedNewBlock, lateReceived))
+
+		require.Equal(t, 0, len(chainService.RecordedEquivocations))
 	})
 }
 

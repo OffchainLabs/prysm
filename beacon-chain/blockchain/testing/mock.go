@@ -5,6 +5,7 @@ package testing
 import (
 	"bytes"
 	"context"
+	"slices"
 	"sync"
 	"time"
 
@@ -88,6 +89,14 @@ type ChainService struct {
 	// Ancestors lets a test stub the result of Ancestor(root, slot) without
 	// wiring a full forkchoice store. Keyed by the input root.
 	Ancestors map[[32]byte][32]byte
+
+	RecordedEquivocations map[EquivocationKey][][32]byte
+}
+
+// EquivocationKey identifies a (slot, proposer) pair for the equivocation tracking mock.
+type EquivocationKey struct {
+	Slot     primitives.Slot
+	Proposer primitives.ValidatorIndex
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -784,6 +793,25 @@ func (s *ChainService) FullBeatsEmpty(root [32]byte) bool {
 // ShouldIgnoreData returns true if the data for the given parent root and slot should be ignored.
 func (s *ChainService) ShouldIgnoreData(_ [32]byte, _ primitives.Slot) bool {
 	return false
+}
+
+// RecordBlockForEquivocation mocks the same method in the chain service.
+func (s *ChainService) RecordBlockForEquivocation(slot primitives.Slot, proposer primitives.ValidatorIndex, root [32]byte) {
+	if s.ForkChoiceStore != nil {
+		s.ForkChoiceStore.RecordBlockForEquivocation(slot, proposer, root)
+	}
+	if s.RecordedEquivocations == nil {
+		s.RecordedEquivocations = make(map[EquivocationKey][][32]byte)
+	}
+	key := EquivocationKey{Slot: slot, Proposer: proposer}
+	roots := s.RecordedEquivocations[key]
+	if len(roots) >= 2 {
+		return
+	}
+	if slices.Contains(roots, root) {
+		return
+	}
+	s.RecordedEquivocations[key] = append(roots, root)
 }
 
 // InsertNode mocks the same method in the chain service

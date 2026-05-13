@@ -41,6 +41,7 @@ type Store struct {
 	emptyNodeByRoot               map[[fieldparams.RootLength]byte]*PayloadNode // nodes indexed by roots.
 	fullNodeByRoot                map[[fieldparams.RootLength]byte]*PayloadNode // full nodes (the payload was present) indexed by beacon block root.
 	slashedIndices                map[primitives.ValidatorIndex]bool            // the list of equivocating validator indices
+	blockRootsBySlotProposer      map[proposerSlotKey][][32]byte                // up to two block roots observed for a (slot, proposer); pruned at finalization.
 	originRoot                    [fieldparams.RootLength]byte                  // The genesis block root
 	genesisTime                   time.Time
 	highestReceivedNode           *Node                                      // The highest slot node.
@@ -77,6 +78,12 @@ type PayloadNode struct {
 	node           *Node     // the consensus part of this full forkchoice node
 	timestamp      time.Time // The timestamp when the node was inserted.
 	children       []*Node   // the list of direct children of this Node
+}
+
+// proposerSlotKey identifies a (slot, proposer) pair for the equivocation tracking map.
+type proposerSlotKey struct {
+	slot     primitives.Slot
+	proposer primitives.ValidatorIndex
 }
 
 // Vote defines an individual validator's vote.
