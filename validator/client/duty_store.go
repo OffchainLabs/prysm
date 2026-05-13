@@ -28,6 +28,9 @@ type dutyStoreData struct {
 	epoch             primitives.Epoch
 	currDependentRoot []byte
 	prevDependentRoot []byte
+	// indices is the sorted set of validator indices the last fetch was built
+	// from. canPromote requires this to match the current request's indices.
+	indices []primitives.ValidatorIndex
 }
 
 func (d *dutyStoreData) IsInitialized() bool { return d.initialized }
@@ -96,8 +99,22 @@ func (d *dutyStoreData) IsNextSyncCommittee(idx primitives.ValidatorIndex) bool 
 	return d.syncNextMap[idx]
 }
 
-func (d *dutyStoreData) canPromote(nextEpoch primitives.Epoch) bool {
-	return d.initialized && d.epoch+1 == nextEpoch && d.missingNext == 0
+func (d *dutyStoreData) canPromote(nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex) bool {
+	if !d.initialized || d.epoch+1 != nextEpoch || d.missingNext != 0 {
+		return false
+	}
+	// Both slices are kept sorted; differing length or any element mismatch
+	// signals a validator-set drift (activation, exit, keymanager change) and
+	// invalidates the cached duties for promotion.
+	if len(d.indices) != len(indices) {
+		return false
+	}
+	for i, idx := range d.indices {
+		if idx != indices[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (d *dutyStoreData) ToContainer() *ethpb.ValidatorDutiesContainer {
@@ -201,13 +218,13 @@ func (ds *dutyStore) IsInitialized() bool {
 	return ds.data.IsInitialized()
 }
 
-func (ds *dutyStore) canPromote(nextEpoch primitives.Epoch) bool {
+func (ds *dutyStore) canPromote(nextEpoch primitives.Epoch, indices []primitives.ValidatorIndex) bool {
 	if ds == nil {
 		return false
 	}
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
-	return ds.data.canPromote(nextEpoch)
+	return ds.data.canPromote(nextEpoch, indices)
 }
 
 func (ds *dutyStore) PrevDependentRoot() []byte {

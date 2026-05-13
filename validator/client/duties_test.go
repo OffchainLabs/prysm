@@ -546,7 +546,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 			Duties: []*ethpb.PTCDuty{{Pubkey: keys.pub[:], ValidatorIndex: 42, Slot: primitives.Slot(epoch+1)*spe + 2}},
 		}, nil)
 
-		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub}))
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42}))
 
 		// Current epoch: attester + proposer + sync + PTC.
 		current := v.duties.CurrentEpochDuties()
@@ -598,7 +598,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).AnyTimes()
 		client.EXPECT().PTCDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil).AnyTimes()
 
-		err := v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub})
+		err := v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42})
 		require.ErrorContains(t, "attester fail", err)
 		assert.Equal(t, true, v.duties.IsInitialized())
 		assert.Equal(t, 1, len(v.duties.CurrentEpochDuties()))
@@ -625,7 +625,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).AnyTimes()
 		client.EXPECT().PTCDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil).AnyTimes()
 
-		err := v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub})
+		err := v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42})
 		require.ErrorContains(t, "proposer fail", err)
 		assert.Equal(t, true, v.duties.IsInitialized())
 		assert.Equal(t, 1, len(v.duties.CurrentEpochDuties()))
@@ -649,16 +649,16 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		client.EXPECT().PTCDuties(gomock.Any(), epoch, gomock.Any()).Return(nil, errors.New("ptc fail"))
 		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil)
 
-		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub}))
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42}))
 		assert.Equal(t, true, v.duties.IsInitialized())
 		assert.Equal(t, 0, len(v.duties.PtcSlots(42)))
 	})
 
 	t.Run("no known indices clears duties", func(t *testing.T) {
-		v, _, keys := setup(t)
+		v, _, _ := setup(t)
 		v.pubkeyToStatus = map[pubkey]*validatorStatus{}
 
-		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub}))
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, nil))
 		assert.Equal(t, false, v.duties.IsInitialized())
 	})
 
@@ -682,6 +682,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		}
 		v.duties.data.epoch = epoch - 1
 		v.duties.data.currDependentRoot = bytesutil.PadTo([]byte{0xaa}, 32)
+		v.duties.data.indices = []primitives.ValidatorIndex{42}
 
 		rootA := bytesutil.PadTo([]byte{0x01}, 32)
 		rootB := bytesutil.PadTo([]byte{0x02}, 32)
@@ -721,7 +722,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		client.EXPECT().PTCDuties(gomock.Any(), epoch, gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil)
 		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil)
 
-		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub}))
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42}))
 		assert.LogsContain(t, hook, "diverged on promotion")
 
 		// Refetch's currDepRoot is the next-epoch attester root.
@@ -753,7 +754,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).Times(2)
 		client.EXPECT().PTCDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil).Times(2)
 
-		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub}))
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42}))
 		require.Equal(t, missingNextProposer, v.duties.data.missingNext&missingNextProposer)
 
 		// Second iteration at epoch+1. v.duties.epoch+1 == epoch+1 would normally trigger
@@ -778,7 +779,140 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).Times(2)
 		client.EXPECT().PTCDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil).Times(2)
 
-		require.NoError(t, v.updateDutiesSplit(t.Context(), nextEpoch, [][fieldparams.BLSPubkeyLength]byte{keys.pub}))
+		require.NoError(t, v.updateDutiesSplit(t.Context(), nextEpoch, []primitives.ValidatorIndex{42}))
 		require.Equal(t, missingNextDuties(0), v.duties.data.missingNext)
 	})
+
+	t.Run("validator set drift forces full refetch instead of promote", func(t *testing.T) {
+		v, client, keys := setup(t)
+		spe := params.BeaconConfig().SlotsPerEpoch
+
+		// Seed the store with indices=[42] and a complete next-epoch cache so
+		// that, ignoring drift, canPromote would otherwise return true.
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				NextEpochDuties: []*ethpb.ValidatorDuty{{
+					PublicKey: keys.pub[:], ValidatorIndex: 42,
+					Status: ethpb.ValidatorStatus_ACTIVE,
+				}},
+			})
+			data.epoch = epoch - 1
+			data.indices = []primitives.ValidatorIndex{42}
+			v.duties.Write(data)
+		}
+
+		// Caller now presents a different (larger) index set; canPromote must
+		// reject promotion and fall through to fetchAllDuties.
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch, gomock.Any()).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: make([]byte, 32),
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: keys.pub[:], ValidatorIndex: 42,
+				Slot: primitives.Slot(epoch) * spe, CommitteeIndex: 1, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.AttesterDutiesResponse{}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(&ethpb.ProposerDutiesResponse{}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(&ethpb.ProposerDutiesResponse{}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).Times(2)
+		client.EXPECT().PTCDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil).Times(2)
+
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42, 99}))
+		require.DeepEqual(t, []primitives.ValidatorIndex{42, 99}, v.duties.data.indices)
+	})
+
+	t.Run("combined-endpoint cache cannot promote into split", func(t *testing.T) {
+		v, client, keys := setup(t)
+		spe := params.BeaconConfig().SlotsPerEpoch
+
+		// Simulate what updateDutiesCombined leaves behind: a populated next-
+		// epoch cache, missingNext=missingNextPtc, and indices empty (combined
+		// path doesn't track them). The first split call must refetch.
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				NextEpochDuties: []*ethpb.ValidatorDuty{{
+					PublicKey: keys.pub[:], ValidatorIndex: 42,
+					Status: ethpb.ValidatorStatus_ACTIVE,
+				}},
+			})
+			data.missingNext = missingNextPtc
+			v.duties.Write(data)
+		}
+
+		// Expect full-fetch RPC pattern (8 endpoints), not promote (4).
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch, gomock.Any()).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: make([]byte, 32),
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: keys.pub[:], ValidatorIndex: 42,
+				Slot: primitives.Slot(epoch) * spe, CommitteeIndex: 1, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.AttesterDutiesResponse{}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch).Return(&ethpb.ProposerDutiesResponse{}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(&ethpb.ProposerDutiesResponse{}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil).Times(2)
+		client.EXPECT().PTCDuties(gomock.Any(), gomock.Any(), gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil).Times(2)
+
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42}))
+		// After a full fetch, missingNext is reset.
+		require.Equal(t, missingNextDuties(0), v.duties.data.missingNext)
+	})
+}
+
+func TestIsActiveForDuties(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   *ethpb.ValidatorStatusResponse
+		epoch    primitives.Epoch
+		expected bool
+	}{
+		{"nil", nil, 5, false},
+		{"unknown", &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_UNKNOWN_STATUS}, 5, false},
+		{"deposited", &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_DEPOSITED}, 5, false},
+		{"pending before activation", &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_PENDING, ActivationEpoch: 10}, 5, false},
+		{"pending at activation", &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_PENDING, ActivationEpoch: 5}, 5, true},
+		{"pending after activation", &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_PENDING, ActivationEpoch: 3}, 5, true},
+		{"active", &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, 5, true},
+		{"exiting", &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_EXITING}, 5, true},
+		{"slashing", &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_SLASHING}, 5, false},
+		{"exited", &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_EXITED}, 5, false},
+		{"invalid", &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_INVALID}, 5, false},
+		{"partially deposited", &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_PARTIALLY_DEPOSITED}, 5, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, isActiveForDuties(tt.status, tt.epoch))
+		})
+	}
+}
+
+func TestFilteredKeysAndIndices(t *testing.T) {
+	pkActive := bytesutil.ToBytes48([]byte{1})
+	pkPending := bytesutil.ToBytes48([]byte{2})
+	pkExited := bytesutil.ToBytes48([]byte{3})
+	pkUnknown := bytesutil.ToBytes48([]byte{4}) // not in pubkeyToStatus
+	pkActive2 := bytesutil.ToBytes48([]byte{5})
+
+	v := &validator{
+		pubkeyToStatus: map[pubkey]*validatorStatus{
+			pkActive:  {status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, index: 99},
+			pkPending: {status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_PENDING, ActivationEpoch: 10}, index: 50},
+			pkExited:  {status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_EXITED}, index: 7},
+			// pkActive2 has a smaller index than pkActive to verify sorting.
+			pkActive2: {status: &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE}, index: 3},
+		},
+	}
+
+	// At epoch 5, pkPending's activation epoch (10) hasn't been reached.
+	keys, idx := v.filteredKeysAndIndices([][fieldparams.BLSPubkeyLength]byte{pkActive, pkPending, pkExited, pkUnknown, pkActive2}, 5)
+
+	// Indices are sorted; pkActive2 (3) precedes pkActive (99).
+	require.DeepEqual(t, []primitives.ValidatorIndex{3, 99}, idx)
+	require.Equal(t, 2, len(keys))
+
+	// At epoch 10, pkPending qualifies (activation epoch reached).
+	keys, idx = v.filteredKeysAndIndices([][fieldparams.BLSPubkeyLength]byte{pkActive, pkPending, pkExited, pkUnknown, pkActive2}, 10)
+	require.DeepEqual(t, []primitives.ValidatorIndex{3, 50, 99}, idx)
+	require.Equal(t, 3, len(keys))
 }

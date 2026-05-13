@@ -935,14 +935,9 @@ func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fie
 			return nil, errors.Wrap(err, "failed to update validator status cache")
 		}
 	}
+	currEpoch := slots.ToEpoch(slot)
 	for k, s := range v.pubkeyToStatus {
-		currEpoch := primitives.Epoch(slot / params.BeaconConfig().SlotsPerEpoch)
-		currActivating := s.status.Status == ethpb.ValidatorStatus_PENDING && currEpoch >= s.status.ActivationEpoch
-
-		active := s.status.Status == ethpb.ValidatorStatus_ACTIVE
-		exiting := s.status.Status == ethpb.ValidatorStatus_EXITING
-
-		if currActivating || active || exiting {
+		if isActiveForDuties(s.status, currEpoch) {
 			filteredKeys = append(filteredKeys, k)
 		} else {
 			log.WithFields(logrus.Fields{

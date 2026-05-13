@@ -163,3 +163,61 @@ func TestDutyStore_WriteSkipsNilDuties(t *testing.T) {
 	assert.Equal(t, 1, len(ds.CurrentEpochDuties()))
 	assert.Equal(t, 0, len(ds.NextEpochDuties()))
 }
+
+func TestDutyStoreData_CanPromote(t *testing.T) {
+	base := func() dutyStoreData {
+		return dutyStoreData{
+			initialized: true,
+			epoch:       9,
+			indices:     []primitives.ValidatorIndex{1, 5, 7},
+		}
+	}
+
+	t.Run("happy path: matching epoch + indices + zero missing", func(t *testing.T) {
+		d := base()
+		assert.Equal(t, true, d.canPromote(10, []primitives.ValidatorIndex{1, 5, 7}))
+	})
+
+	t.Run("uninitialized cannot promote", func(t *testing.T) {
+		d := base()
+		d.initialized = false
+		assert.Equal(t, false, d.canPromote(10, []primitives.ValidatorIndex{1, 5, 7}))
+	})
+
+	t.Run("non-adjacent epoch cannot promote", func(t *testing.T) {
+		d := base()
+		assert.Equal(t, false, d.canPromote(11, []primitives.ValidatorIndex{1, 5, 7}))
+		assert.Equal(t, false, d.canPromote(9, []primitives.ValidatorIndex{1, 5, 7}))
+	})
+
+	t.Run("non-zero missingNext blocks promote", func(t *testing.T) {
+		d := base()
+		d.missingNext = missingNextPtc
+		assert.Equal(t, false, d.canPromote(10, []primitives.ValidatorIndex{1, 5, 7}))
+	})
+
+	t.Run("drift: added index blocks promote", func(t *testing.T) {
+		d := base()
+		assert.Equal(t, false, d.canPromote(10, []primitives.ValidatorIndex{1, 5, 7, 9}))
+	})
+
+	t.Run("drift: removed index blocks promote", func(t *testing.T) {
+		d := base()
+		assert.Equal(t, false, d.canPromote(10, []primitives.ValidatorIndex{1, 7}))
+	})
+
+	t.Run("drift: substituted index blocks promote", func(t *testing.T) {
+		d := base()
+		assert.Equal(t, false, d.canPromote(10, []primitives.ValidatorIndex{1, 5, 8}))
+	})
+
+	t.Run("nil current indices treated as empty: blocks promote when stored is non-empty", func(t *testing.T) {
+		d := base()
+		assert.Equal(t, false, d.canPromote(10, nil))
+	})
+
+	t.Run("both empty index sets is a no-op promote", func(t *testing.T) {
+		d := dutyStoreData{initialized: true, epoch: 9}
+		assert.Equal(t, true, d.canPromote(10, nil))
+	})
+}

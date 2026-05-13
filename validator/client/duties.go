@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -20,8 +21,9 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// filterBlacklistedKeys returns validating keys with slashable keys removed.
-func (v *validator) filterBlacklistedKeys(ctx context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
+// nonBlacklistedKeys returns the keymanager's validating keys with
+// slashing-protection-blacklisted keys removed.
+func (v *validator) nonBlacklistedKeys(ctx context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
 	validatingKeys, err := v.km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
 		return nil, err
@@ -42,6 +44,44 @@ func (v *validator) filterBlacklistedKeys(ctx context.Context) ([][fieldparams.B
 	return filtered, nil
 }
 
+// isActiveForDuties reports whether a validator status entry indicates the
+// validator currently has duties to perform — i.e. it is in (or about to be
+// in) the beacon-state active set. Shared by filteredKeysAndIndices and
+// filterAndCacheActiveKeys so both call sites agree on the same predicate.
+func isActiveForDuties(s *ethpb.ValidatorStatusResponse, currEpoch primitives.Epoch) bool {
+	if s == nil {
+		return false
+	}
+	switch s.Status {
+	case ethpb.ValidatorStatus_ACTIVE, ethpb.ValidatorStatus_EXITING:
+		return true
+	case ethpb.ValidatorStatus_PENDING:
+		// Cache may be stale: include validators whose activation epoch has
+		// already arrived but whose status hasn't been refreshed yet.
+		return currEpoch >= s.ActivationEpoch
+	}
+	return false
+}
+
+// filteredKeysAndIndices returns the subset of keys with duties to fetch for
+// the given epoch (see isActiveForDuties), and the corresponding sorted
+// validator indices. Sorted indices let callers compare against a previously
+// stored set to detect drift.
+func (v *validator) filteredKeysAndIndices(keys [][fieldparams.BLSPubkeyLength]byte, epoch primitives.Epoch) ([][fieldparams.BLSPubkeyLength]byte, []primitives.ValidatorIndex) {
+	outKeys := make([][fieldparams.BLSPubkeyLength]byte, 0, len(keys))
+	indices := make([]primitives.ValidatorIndex, 0, len(keys))
+	for _, pk := range keys {
+		st, ok := v.pubkeyToStatus[pk]
+		if !ok || !isActiveForDuties(st.status, epoch) {
+			continue
+		}
+		outKeys = append(outKeys, pk)
+		indices = append(indices, st.index)
+	}
+	slices.Sort(indices)
+	return outKeys, indices
+}
+
 // UpdateDuties checks the slot number to determine if the validator's
 // list of upcoming assignments needs to be updated. For example, at the
 // beginning of a new epoch.
@@ -49,15 +89,16 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "validator.UpdateDuties")
 	defer span.End()
 
-	filteredKeys, err := v.filterBlacklistedKeys(ctx)
+	keys, err := v.nonBlacklistedKeys(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not filter blacklisted keys")
 	}
 
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
 
+	filteredKeys, filteredIndices := v.filteredKeysAndIndices(keys, epoch)
 	if epoch >= params.BeaconConfig().GloasForkEpoch {
-		err = v.updateDutiesSplit(ctx, epoch, filteredKeys)
+		err = v.updateDutiesSplit(ctx, epoch, filteredIndices)
 	} else {
 		err = v.updateDutiesCombined(ctx, epoch, filteredKeys)
 	}
@@ -107,7 +148,6 @@ func (v *validator) updateDutiesCombined(ctx context.Context, epoch primitives.E
 // depRootsDiverged reports whether the freshly fetched next-epoch attester and
 // proposer dependent roots disagree.
 func depRootsDiverged(epoch primitives.Epoch, res dutiesFetchResult) bool {
-
 	if epoch < params.BeaconConfig().FuluForkEpoch {
 		// Pre-fulu, attester dep root for epoch+1 is get_block_root_at_slot(
 		// compute_start_slot_at_epoch(epoch) - 1)
@@ -161,19 +201,14 @@ const (
 // updateDutiesSplit fetches duties from the split V3 endpoints and
 // populates the duty store. When the epoch has advanced by exactly one
 // and duties are already initialized, it promotes the cached next-epoch
-// duties to current and only fetches the new next-epoch.
-func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoch, filteredKeys [][fieldparams.BLSPubkeyLength]byte) error {
-	indices := make([]primitives.ValidatorIndex, 0, len(filteredKeys))
-	for _, pk := range filteredKeys {
-		if st, ok := v.pubkeyToStatus[pk]; ok && st.status != nil && st.status.Status != ethpb.ValidatorStatus_UNKNOWN_STATUS {
-			indices = append(indices, st.index)
-		}
-	}
+// duties to current and only fetches the new next-epoch. indices must be
+// sorted (see filteredKeysAndIndices).
+func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex) error {
 	if len(indices) == 0 {
 		return nil
 	}
 
-	canPromote := v.duties.canPromote(epoch)
+	canPromote := v.duties.canPromote(epoch, indices)
 
 	var (
 		res dutiesFetchResult
@@ -217,6 +252,7 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 	})
 	data.epoch = epoch
 	data.missingNext = res.missingNext
+	data.indices = indices
 	v.duties.Write(data)
 
 	if allCurrentDutiesExited(res.currentDuties) {
