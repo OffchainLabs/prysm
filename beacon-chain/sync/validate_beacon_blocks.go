@@ -602,11 +602,6 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 	slot := blk.Block().Slot()
 	proposerIndex := blk.Block().ProposerIndex()
 
-	duplicateRoot, err := blk.Block().HashTreeRoot()
-	if err != nil {
-		return errors.Wrap(err, "could not compute duplicate block root")
-	}
-
 	// Get head block for comparison
 	headBlock, err := s.cfg.chain.HeadBlock(ctx)
 	if err != nil {
@@ -657,7 +652,11 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 	}
 
 	if features.Get().TrackEquivocations {
-		s.recordEarlyEquivocation(slot, proposerIndex, duplicateRoot, receivedTime)
+		root, err := blk.Block().HashTreeRoot()
+		if err != nil {
+			return errors.Wrap(err, "could not compute block root")
+		}
+		s.recordEarlyEquivocation(slot, proposerIndex, root, receivedTime)
 	}
 
 	// Broadcast if verification passes
