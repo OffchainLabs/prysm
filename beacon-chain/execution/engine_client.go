@@ -655,6 +655,14 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 		return []*pb.BlobAndProofV2{}, nil
 	}
 
+	if s.isSSZRestAvailable() {
+		result, err := s.getBlobsV2SSZRest(ctx, versionedHashes)
+		if len(result) != 0 {
+			getBlobsV2Latency.Observe(float64(time.Since(start).Milliseconds()))
+		}
+		return result, err
+	}
+
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
 	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV2, versionedHashes)
 
