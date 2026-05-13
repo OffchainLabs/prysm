@@ -205,6 +205,9 @@ const (
 // sorted (see filteredKeysAndIndices).
 func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex) error {
 	if len(indices) == 0 {
+		// No active keys for this client; drop any previously cached duties so
+		// stale entries don't keep appearing in RolesAt etc.
+		v.duties.Reset()
 		return nil
 	}
 
@@ -395,82 +398,62 @@ func (v *validator) fetchAllDuties(ctx context.Context, epoch primitives.Epoch, 
 	if res.attNext != nil {
 		res.currDepRoot = res.attNext.DependentRoot
 	}
-	proposerSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
-	if propCurr != nil {
-		for _, d := range propCurr.Duties {
-			proposerSlots[d.ValidatorIndex] = append(proposerSlots[d.ValidatorIndex], d.Slot)
-		}
-	}
-	ptcSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
-	if ptcCurr != nil {
-		for _, d := range ptcCurr.Duties {
-			ptcSlots[d.ValidatorIndex] = append(ptcSlots[d.ValidatorIndex], d.Slot)
-		}
-	}
-	syncSet := make(map[primitives.ValidatorIndex]bool)
-	if syncCurr != nil {
-		for _, d := range syncCurr.Duties {
-			syncSet[d.ValidatorIndex] = true
-		}
-	}
-	if attCurr != nil {
-		for _, d := range attCurr.Duties {
-			res.currentDuties = append(res.currentDuties, &ethpb.ValidatorDuty{
-				PublicKey:               d.Pubkey,
-				ValidatorIndex:          d.ValidatorIndex,
-				CommitteeIndex:          d.CommitteeIndex,
-				CommitteeLength:         d.CommitteeLength,
-				CommitteesAtSlot:        d.CommitteesAtSlot,
-				ValidatorCommitteeIndex: d.ValidatorCommitteeIndex,
-				AttesterSlot:            d.Slot,
-				ProposerSlots:           proposerSlots[d.ValidatorIndex],
-				IsSyncCommittee:         syncSet[d.ValidatorIndex],
-				PtcSlots:                ptcSlots[d.ValidatorIndex],
-				Status:                  v.statusForPubkey(d.Pubkey),
-			})
-		}
-	}
+	res.currentDuties = v.assembleDuties(attCurr, propCurr, syncCurr, ptcCurr)
 	return res, nil
 }
 
 // buildNextDuties constructs next-epoch ValidatorDuty entries from
 // the raw API responses in the fetch result.
 func (v *validator) buildNextDuties(res dutiesFetchResult) []*ethpb.ValidatorDuty {
+	return v.assembleDuties(res.attNext, res.propNext, res.syncNext, res.ptcNext)
+}
+
+// assembleDuties stitches together the four per-duty-type API responses for
+// a single epoch into a slice of ValidatorDuty entries, one per attester
+// assignment. Used by fetchAllDuties (current epoch) and buildNextDuties
+// (next epoch).
+func (v *validator) assembleDuties(
+	att *ethpb.AttesterDutiesResponse,
+	prop *ethpb.ProposerDutiesResponse,
+	sync *ethpb.SyncCommitteeDutiesResponse,
+	ptc *ethpb.PTCDutiesResponse,
+) []*ethpb.ValidatorDuty {
 	proposerSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
-	if res.propNext != nil {
-		for _, d := range res.propNext.Duties {
+	if prop != nil {
+		for _, d := range prop.Duties {
 			proposerSlots[d.ValidatorIndex] = append(proposerSlots[d.ValidatorIndex], d.Slot)
 		}
 	}
-	syncSet := make(map[primitives.ValidatorIndex]bool)
-	if res.syncNext != nil {
-		for _, d := range res.syncNext.Duties {
-			syncSet[d.ValidatorIndex] = true
-		}
-	}
 	ptcSlots := make(map[primitives.ValidatorIndex][]primitives.Slot)
-	if res.ptcNext != nil {
-		for _, d := range res.ptcNext.Duties {
+	if ptc != nil {
+		for _, d := range ptc.Duties {
 			ptcSlots[d.ValidatorIndex] = append(ptcSlots[d.ValidatorIndex], d.Slot)
 		}
 	}
-	var duties []*ethpb.ValidatorDuty
-	if res.attNext != nil {
-		for _, d := range res.attNext.Duties {
-			duties = append(duties, &ethpb.ValidatorDuty{
-				PublicKey:               d.Pubkey,
-				ValidatorIndex:          d.ValidatorIndex,
-				CommitteeIndex:          d.CommitteeIndex,
-				CommitteeLength:         d.CommitteeLength,
-				CommitteesAtSlot:        d.CommitteesAtSlot,
-				ValidatorCommitteeIndex: d.ValidatorCommitteeIndex,
-				AttesterSlot:            d.Slot,
-				ProposerSlots:           proposerSlots[d.ValidatorIndex],
-				IsSyncCommittee:         syncSet[d.ValidatorIndex],
-				PtcSlots:                ptcSlots[d.ValidatorIndex],
-				Status:                  v.statusForPubkey(d.Pubkey),
-			})
+	syncSet := make(map[primitives.ValidatorIndex]bool)
+	if sync != nil {
+		for _, d := range sync.Duties {
+			syncSet[d.ValidatorIndex] = true
 		}
+	}
+	if att == nil {
+		return nil
+	}
+	duties := make([]*ethpb.ValidatorDuty, 0, len(att.Duties))
+	for _, d := range att.Duties {
+		duties = append(duties, &ethpb.ValidatorDuty{
+			PublicKey:               d.Pubkey,
+			ValidatorIndex:          d.ValidatorIndex,
+			CommitteeIndex:          d.CommitteeIndex,
+			CommitteeLength:         d.CommitteeLength,
+			CommitteesAtSlot:        d.CommitteesAtSlot,
+			ValidatorCommitteeIndex: d.ValidatorCommitteeIndex,
+			AttesterSlot:            d.Slot,
+			ProposerSlots:           proposerSlots[d.ValidatorIndex],
+			IsSyncCommittee:         syncSet[d.ValidatorIndex],
+			PtcSlots:                ptcSlots[d.ValidatorIndex],
+			Status:                  v.statusForPubkey(d.Pubkey),
+		})
 	}
 	return duties
 }

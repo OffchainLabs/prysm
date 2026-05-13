@@ -654,9 +654,23 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		assert.Equal(t, 0, len(v.duties.PtcSlots(42)))
 	})
 
-	t.Run("no known indices clears duties", func(t *testing.T) {
-		v, _, _ := setup(t)
+	t.Run("no known indices clears existing duties", func(t *testing.T) {
+		v, _, keys := setup(t)
 		v.pubkeyToStatus = map[pubkey]*validatorStatus{}
+
+		// Seed the store with prior duties so the test verifies they're cleared
+		// (rather than passing tautologically against an empty store).
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+					PublicKey: keys.pub[:], ValidatorIndex: 42,
+					Status: ethpb.ValidatorStatus_ACTIVE,
+				}},
+			})
+			v.duties.Write(data)
+			require.Equal(t, true, v.duties.IsInitialized())
+		}
 
 		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, nil))
 		assert.Equal(t, false, v.duties.IsInitialized())
