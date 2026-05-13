@@ -38,7 +38,7 @@ func RunUpgradeToElectra(t *testing.T, config string) {
 			}
 			preState, err := state_native.InitializeFromProtoUnsafeDeneb(preStateBase)
 			require.NoError(t, err)
-			postState, err := electra.UpgradeToElectra(preState)
+			postState, err := electra.UpgradeToElectra(t.Context(), preState)
 			require.NoError(t, err)
 			postStateFromFunction, err := state_native.ProtobufBeaconStateElectra(postState.ToProtoUnsafe())
 			require.NoError(t, err)

@@ -186,7 +186,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 
 			// note: you can safely subtract these values because haxExcessBalance is checked
 			toWithdraw := min(vBal-params.BeaconConfig().MinActivationBalance-pendingBalanceToWithdraw, amount)
-			exitQueueEpoch, err := st.ExitEpochAndUpdateChurn(primitives.Gwei(toWithdraw))
+			exitQueueEpoch, err := st.ExitEpochAndUpdateChurn(ctx, primitives.Gwei(toWithdraw))
 			if err != nil {
 				return nil, err
 			}

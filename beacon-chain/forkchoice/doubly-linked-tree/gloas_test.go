@@ -117,8 +117,9 @@ func prepareGloasForkchoicePayload(
 	blockRoot [32]byte,
 ) (interfaces.ROExecutionPayloadEnvelope, error) {
 	env := &ethpb.ExecutionPayloadEnvelope{
-		BeaconBlockRoot: blockRoot[:],
-		Payload:         &enginev1.ExecutionPayloadGloas{},
+		BeaconBlockRoot:       blockRoot[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{},
 	}
 	return blocks.WrappedROExecutionPayloadEnvelope(env)
 }

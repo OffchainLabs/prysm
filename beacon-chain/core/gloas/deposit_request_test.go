@@ -18,12 +18,12 @@ func TestProcessDepositRequests_EmptyAndNil(t *testing.T) {
 	st := newGloasState(t, nil, nil)
 
 	t.Run("empty requests continues", func(t *testing.T) {
-		err := processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{})
+		err := ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{})
 		require.NoError(t, err)
 	})
 
 	t.Run("nil request errors", func(t *testing.T) {
-		err := processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{nil})
+		err := ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{nil})
 		require.ErrorContains(t, "nil deposit request", err)
 	})
 }
