@@ -124,6 +124,12 @@ func (s *Store) SaveState(ctx context.Context, st state.ReadOnlyBeaconState, blo
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveState")
 	defer span.End()
 
+	startTime := time.Now()
+
+	defer func() {
+		stateSavingTime.Observe(float64(time.Since(startTime).Milliseconds()))
+	}()
+
 	if features.Get().EnableStateDiff && s.stateDiffCache != nil {
 		return s.saveStateByDiff(ctx, st)
 	}
@@ -145,7 +151,6 @@ func (s *Store) SaveStates(ctx context.Context, states []state.ReadOnlyBeaconSta
 	if states == nil {
 		return errors.New("nil state")
 	}
-	startTime := time.Now()
 	multipleEncs := make([][]byte, len(states))
 	for i, st := range states {
 		stateBytes, err := marshalState(ctx, st)
@@ -170,7 +175,6 @@ func (s *Store) SaveStates(ctx context.Context, states []state.ReadOnlyBeaconSta
 	}); err != nil {
 		return err
 	}
-	stateSavingTime.Observe(float64(time.Since(startTime).Milliseconds()))
 	return nil
 }
 
