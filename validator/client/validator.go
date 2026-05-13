@@ -1072,6 +1072,8 @@ func (v *validator) buildProposerPreferences(
 	var sigFailCount int
 
 	processDuties := func(duties map[pubkey]*ethpb.ValidatorDuty, isNextEpoch bool) {
+		v.submittedPrefSlotsLock.Lock()
+		defer v.submittedPrefSlotsLock.Unlock()
 		dependentRoot := prevDependentRoot
 		if isNextEpoch {
 			dependentRoot = currDependentRoot
@@ -1106,16 +1108,13 @@ func (v *validator) buildProposerPreferences(
 			}
 
 			for _, proposalSlot := range duty.ProposerSlots {
-				v.submittedPrefSlotsLock.RLock()
-				already := v.submittedPrefSlots[proposalSlot]
-				v.submittedPrefSlotsLock.RUnlock()
-				if already {
-					continue
-				}
 				// Skip slots that have passed or are too close. Preferences are
 				// submitted at mid-slot, so the proposer needs to be at least 1
 				// full slot away for the beacon node to receive them in time.
 				if !isNextEpoch && proposalSlot <= slot+1 {
+					continue
+				}
+				if v.submittedPrefSlots[proposalSlot] {
 					continue
 				}
 
@@ -1132,9 +1131,7 @@ func (v *validator) buildProposerPreferences(
 					continue
 				}
 				signedPrefs = append(signedPrefs, signedPref)
-				v.submittedPrefSlotsLock.Lock()
 				v.submittedPrefSlots[proposalSlot] = true
-				v.submittedPrefSlotsLock.Unlock()
 			}
 		}
 	}
