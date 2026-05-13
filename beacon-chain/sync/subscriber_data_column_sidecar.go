@@ -54,7 +54,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		})
 
 		wg.Go(func() error {
-			if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
+			if err := s.processDataColumnSidecarsFromExecution(s.ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
 				if errors.Is(err, context.Canceled) {
 					return nil
 				}

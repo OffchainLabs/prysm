@@ -54,32 +54,75 @@ func marshalNewPayloadRequest(
 
 	switch payloadProto.(type) {
 	case *pb.ExecutionPayload:
+		// V1: body is just the SSZ-encoded ExecutionPayloadV1.
 		return payloadSSZ, nil
+
 	case *pb.ExecutionPayloadCapella:
+		// V2: body is just the SSZ-encoded ExecutionPayloadV2.
 		return payloadSSZ, nil
+
 	case *pb.ExecutionPayloadDeneb:
 		if executionRequests == nil {
-			// V3: {payload (var), versioned_hashes (var), parent_beacon_block_root (fixed 32)}
+			// Pre-Electra Deneb (Cancun): V3 container.
+			// { execution_payload (var), expected_blob_versioned_hashes (var),
+			//   parent_beacon_block_root (fixed 32) }
 			return marshalNewPayloadV3Container(payloadSSZ, versionedHashes, parentBlockRoot), nil
 		}
-		// V4: {payload (var), versioned_hashes (var), parent_beacon_block_root (fixed 32), execution_requests (var)}
-		requestsSSZ, err := executionRequests.MarshalSSZ()
+		// Post-Electra (Prague/Electra/Fulu): V4 container.
+		requestsSSZ, err := encodeExecutionRequestsForSSZRest(executionRequests)
 		if err != nil {
-			return nil, errors.Wrap(err, "marshal execution requests SSZ")
+			return nil, errors.Wrap(err, "encode execution requests for SSZ-REST")
 		}
 		return marshalNewPayloadV4Container(payloadSSZ, versionedHashes, parentBlockRoot, requestsSSZ), nil
+
 	case *pb.ExecutionPayloadGloas:
+		// V5: same container shape as V4 but with ExecutionPayloadV4 inside.
+		// execution_requests is always required.
 		if executionRequests == nil {
 			executionRequests = &pb.ExecutionRequests{}
 		}
-		requestsSSZ, err := executionRequests.MarshalSSZ()
+		requestsSSZ, err := encodeExecutionRequestsForSSZRest(executionRequests)
 		if err != nil {
-			return nil, errors.Wrap(err, "marshal execution requests SSZ")
+			return nil, errors.Wrap(err, "encode execution requests for SSZ-REST")
 		}
 		return marshalNewPayloadV4Container(payloadSSZ, versionedHashes, parentBlockRoot, requestsSSZ), nil
+
 	default:
 		return nil, errors.New("unsupported execution payload type for SSZ-REST")
 	}
+}
+
+func encodeExecutionRequestsForSSZRest(requests *pb.ExecutionRequests) ([]byte, error) {
+	encoded, err := pb.EncodeExecutionRequests(requests)
+	if err != nil {
+		return nil, errors.Wrap(err, "EIP-7685 encode execution requests")
+	}
+
+	n := len(encoded)
+	if n == 0 {
+		return []byte{}, nil
+	}
+
+	fixedSize := n * 4
+	varSize := 0
+	for _, entry := range encoded {
+		varSize += len(entry)
+	}
+
+	buf := make([]byte, 0, fixedSize+varSize)
+
+	offset := fixedSize
+	for _, entry := range encoded {
+		buf = ssz.WriteOffset(buf, offset)
+		offset += len(entry)
+	}
+
+	// Write the actual byte list data.
+	for _, entry := range encoded {
+		buf = append(buf, entry...)
+	}
+
+	return buf, nil
 }
 
 func marshalNewPayloadV3Container(payloadSSZ []byte, versionedHashes []common.Hash, parentBlockRoot *common.Hash) []byte {

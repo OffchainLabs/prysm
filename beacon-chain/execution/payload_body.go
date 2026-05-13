@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -86,7 +87,13 @@ func (r *blindedBlockReconstructor) addToBatch(b interfaces.ReadOnlySignedBeacon
 	return nil
 }
 
-func payloadBodyMethodForBlock(_ interface{ Version() int }) string {
+// payloadBodyMethodForBlock returns the correct engine_getPayloadBodiesByHash method
+// for the given block's fork version. Amsterdam (Gloas) and later forks require V2,
+// which uses a different response schema; earlier forks use V1.
+func payloadBodyMethodForBlock(b interface{ Version() int }) string {
+	if b.Version() >= version.Gloas {
+		return GetPayloadBodiesByHashV2
+	}
 	return GetPayloadBodiesByHashV1
 }
 
@@ -239,6 +246,11 @@ func (r *blindedBlockReconstructor) unblinded() ([]interfaces.SignedBeaconBlock,
 	return unblinded, nil
 }
 
-func rangeMethodForHashMethod(_ string) string {
+// rangeMethodForHashMethod returns the corresponding engine_getPayloadBodiesByRange method
+// that pairs with the given hash method. V2 hash method maps to V2 range method.
+func rangeMethodForHashMethod(hashMethod string) string {
+	if hashMethod == GetPayloadBodiesByHashV2 {
+		return GetPayloadBodiesByRangeV2
+	}
 	return GetPayloadBodiesByRangeV1
 }
