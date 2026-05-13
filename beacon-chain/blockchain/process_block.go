@@ -656,8 +656,7 @@ func (s *Service) InsertSlashingsToForkChoiceStore(ctx context.Context, slashing
 	}
 }
 
-// RecordBlockForEquivocation records a block root observed for the given (slot, proposer) in the
-// fork choice store's equivocation tracking map. It takes the forkchoice write lock before forwarding.
+// RecordBlockForEquivocation forwards to the forkchoice store under the write lock.
 func (s *Service) RecordBlockForEquivocation(slot primitives.Slot, proposer primitives.ValidatorIndex, root [32]byte) {
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()

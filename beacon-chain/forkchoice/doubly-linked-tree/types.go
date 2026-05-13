@@ -53,7 +53,7 @@ type Store struct {
 // This is used as an array based stateful DAG for efficient fork choice look up.
 type Node struct {
 	slot                        primitives.Slot              // slot of the block converted to the node.
-	proposerIndex               primitives.ValidatorIndex    // proposer index of the block that produced this node.
+	proposerIndex               primitives.ValidatorIndex    // proposer index of the block.
 	root                        [fieldparams.RootLength]byte // root of the block converted to the node.
 	blockHash                   [fieldparams.RootLength]byte // payloadHash of the block converted to the node.
 	parent                      *PayloadNode                 // parent index of this node.
@@ -81,7 +81,6 @@ type PayloadNode struct {
 	children       []*Node   // the list of direct children of this Node
 }
 
-// proposerSlotKey identifies a (slot, proposer) pair for the equivocation tracking map.
 type proposerSlotKey struct {
 	slot     primitives.Slot
 	proposer primitives.ValidatorIndex

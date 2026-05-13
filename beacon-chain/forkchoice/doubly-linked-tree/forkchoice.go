@@ -490,8 +490,7 @@ func (f *ForkChoice) UpdateFinalizedCheckpoint(fc *forkchoicetypes.Checkpoint) e
 	return nil
 }
 
-// RecordBlockForEquivocation appends root to the per-(slot, proposer) list of observed block roots,
-// capped at two entries. Duplicate roots are ignored.
+// RecordBlockForEquivocation appends root to the (slot, proposer) list, capped at two entries.
 func (f *ForkChoice) RecordBlockForEquivocation(slot primitives.Slot, proposer primitives.ValidatorIndex, root [32]byte) {
 	key := proposerSlotKey{slot: slot, proposer: proposer}
 	roots := f.store.blockRootsBySlotProposer[key]

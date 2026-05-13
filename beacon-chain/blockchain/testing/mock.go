@@ -93,7 +93,6 @@ type ChainService struct {
 	RecordedEquivocations map[EquivocationKey][][32]byte
 }
 
-// EquivocationKey identifies a (slot, proposer) pair for the equivocation tracking mock.
 type EquivocationKey struct {
 	Slot     primitives.Slot
 	Proposer primitives.ValidatorIndex

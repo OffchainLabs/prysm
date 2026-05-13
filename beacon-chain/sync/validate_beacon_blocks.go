@@ -597,9 +597,7 @@ func getBlockFields(b interfaces.ReadOnlySignedBeaconBlock) logrus.Fields {
 
 // detectAndBroadcastEquivocation checks if the given block is an equivocating block by comparing it with
 // the head block. If the blocks are from the same slot and proposer but have different signatures,
-// it creates and broadcasts a proposer slashing object after verification. When --track-equivocations
-// is set and the duplicate was received before the configured early deadline, the duplicate's block
-// root is recorded in forkchoice via RecordBlockForEquivocation.
+// it creates and broadcasts a proposer slashing object after verification.
 func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock, receivedTime time.Time) error {
 	slot := blk.Block().Slot()
 	proposerIndex := blk.Block().ProposerIndex()
@@ -650,8 +648,7 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 		return errors.Wrap(err, "could not get head state")
 	}
 
-	// Verify the slashing against current state. This BLS-verifies both block headers,
-	// so we reuse the result below to record an early equivocation in forkchoice.
+	// Verify the slashing against current state
 	if err := blocks.VerifyProposerSlashing(headState, slashing); err != nil {
 		if errors.Is(err, blocks.ErrCouldNotVerifyBlockHeader) {
 			return errors.Wrap(ErrSlashingSignatureFailure, err.Error())
@@ -659,7 +656,6 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 		return errors.Wrap(err, "could not verify proposer slashing")
 	}
 
-	// Record the equivocation in forkchoice if it was observed before the early deadline.
 	if features.Get().TrackEquivocations {
 		s.recordEarlyEquivocation(slot, proposerIndex, duplicateRoot, receivedTime)
 	}
@@ -679,8 +675,6 @@ func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interf
 	return nil
 }
 
-// recordEarlyEquivocation records the duplicate block's root in forkchoice if the equivocation was
-// observed before slot_start + SlotComponentDuration(EquivocationEarlyDueBPS).
 func (s *Service) recordEarlyEquivocation(slot primitives.Slot, proposer primitives.ValidatorIndex, root [32]byte, receivedTime time.Time) {
 	slotStart, err := slots.StartTime(s.cfg.clock.GenesisTime(), slot)
 	if err != nil {

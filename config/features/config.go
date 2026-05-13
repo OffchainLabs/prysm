@@ -69,7 +69,7 @@ type Flags struct {
 	DisableResourceManager     bool // Disables running the node with libp2p's resource manager.
 	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
 	IgnoreUnviableAttestations bool // Ignore attestations whose target state is not viable (avoids lagging-node DoS).
-	TrackEquivocations         bool // TrackEquivocations records proposer equivocations observed on gossip into forkchoice.
+	TrackEquivocations         bool // Record proposer equivocations seen on gossip into forkchoice.
 
 	EnableHashtree               bool // Enables usage of the hashtree library for hashing
 	EnableVerboseSigVerification bool // EnableVerboseSigVerification specifies whether to verify individual signature if batch verification fails

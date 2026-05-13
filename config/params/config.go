@@ -98,8 +98,8 @@ type BeaconChainConfig struct {
 	ContributionDueBPSGloas         primitives.BP    `yaml:"CONTRIBUTION_DUE_BPS_GLOAS" spec:"true"`          // ContributionDueBPSGloas defines the contribution due time in basis points of the slot (Gloas).
 	PayloadAttestationDueBPS        primitives.BP    `yaml:"PAYLOAD_ATTESTATION_DUE_BPS" spec:"true"`         // PayloadAttestationDueBPS defines the payload attestation due time in basis points of the slot.
 
-	// Prysm-internal time-based parameters (not part of the consensus spec).
-	EquivocationEarlyDueBPS primitives.BP `yaml:"-"` // EquivocationEarlyDueBPS defines the cutoff for an "early" proposer equivocation in basis points of the slot.
+	// Prysm-internal (non-spec) parameters.
+	EquivocationEarlyDueBPS primitives.BP `yaml:"-"` // Cutoff for an "early" proposer equivocation, in basis points of the slot.
 
 	// Ethereum PoW parameters.
 	DepositChainID         uint64 `yaml:"DEPOSIT_CHAIN_ID" spec:"true"`         // DepositChainID of the eth1 network. This used for replay protection.
