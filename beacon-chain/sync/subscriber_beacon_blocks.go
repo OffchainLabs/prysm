@@ -49,7 +49,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 	}
 
 	go func() {
-		if err := s.processSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+		if err := s.processSidecarsFromExecutionFromBlock(s.ctx, roBlock); err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"root": fmt.Sprintf("%#x", root),
 				"slot": block.Slot(),
