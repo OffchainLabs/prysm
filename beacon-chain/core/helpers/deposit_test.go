@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -177,4 +178,57 @@ func TestBatchVerifyPendingDepositsSignatures_InvalidSignature(t *testing.T) {
 	verified, err := helpers.BatchVerifyPendingDepositsSignatures(t.Context(), []*ethpb.PendingDeposit{pendingDeposit})
 	require.NoError(t, err)
 	require.Equal(t, false, verified)
+}
+
+func TestBatchVerifyDepositRequestSignatures(t *testing.T) {
+	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
+	require.NoError(t, err)
+
+	makeReq := func(valid bool) *enginev1.DepositRequest {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		req := &enginev1.DepositRequest{
+			Pubkey:                sk.PublicKey().Marshal(),
+			WithdrawalCredentials: make([]byte, 32),
+			Amount:                32_000_000_000,
+		}
+		if valid {
+			sr, err := signing.ComputeSigningRoot(&ethpb.DepositMessage{
+				PublicKey:             req.Pubkey,
+				WithdrawalCredentials: req.WithdrawalCredentials,
+				Amount:                req.Amount,
+			}, domain)
+			require.NoError(t, err)
+			req.Signature = sk.Sign(sr[:]).Marshal()
+		} else {
+			req.Signature = make([]byte, 96)
+		}
+		return req
+	}
+
+	t.Run("empty returns nil", func(t *testing.T) {
+		valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), nil)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(valid))
+	})
+
+	t.Run("all valid", func(t *testing.T) {
+		reqs := []*enginev1.DepositRequest{makeReq(true), makeReq(true), makeReq(true)}
+		valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+		require.NoError(t, err)
+		require.DeepEqual(t, []bool{true, true, true}, valid)
+	})
+
+	t.Run("divide-and-conquer isolates the bad signature", func(t *testing.T) {
+		reqs := []*enginev1.DepositRequest{
+			makeReq(true),
+			makeReq(true),
+			makeReq(false),
+			makeReq(true),
+			makeReq(true),
+		}
+		valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+		require.NoError(t, err)
+		require.DeepEqual(t, []bool{true, true, false, true, true}, valid)
+	})
 }

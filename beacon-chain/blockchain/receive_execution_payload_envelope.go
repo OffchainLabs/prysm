@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -28,6 +30,22 @@ import (
 // ExecutionPayloadEnvelopeReceiver defines the methods for receiving execution payload envelopes.
 type ExecutionPayloadEnvelopeReceiver interface {
 	ReceiveExecutionPayloadEnvelope(context.Context, interfaces.ROSignedExecutionPayloadEnvelope) error
+}
+
+// prefetchDepositSignatures warms the deposit sig cache so next slot's block
+// import can skip the inline BLS verify.
+func (s *Service) prefetchDepositSignatures(requests *enginev1.ExecutionRequests) {
+	root, err := requests.HashTreeRoot()
+	if err != nil {
+		log.WithError(err).Debug("Could not hash execution requests for deposit sig prefetch")
+		return
+	}
+	valid, err := helpers.BatchVerifyDepositRequestSignatures(s.ctx, requests.Deposits)
+	if err != nil {
+		log.WithError(err).Debug("Could not batch verify deposit signatures for prefetch")
+		return
+	}
+	cache.DepositSig.Put(root, valid)
 }
 
 // ReceiveExecutionPayloadEnvelope processes a signed execution payload envelope for the Gloas fork.
@@ -163,6 +181,9 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 				var pId [8]byte
 				copy(pId[:], pid[:])
 				s.cfg.PayloadIDCache.Set(envelope.Slot()+1, root, pId)
+			}
+			if requests := envelope.ExecutionRequests(); requests != nil && len(requests.Deposits) > 0 {
+				s.prefetchDepositSignatures(requests)
 			}
 		}()
 	}

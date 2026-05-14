@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -14,13 +15,39 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ProcessDepositRequests(ctx context.Context, beaconState state.BeaconState, requests []*enginev1.DepositRequest) error {
+// prefetchedDepositSigs returns the cached per-deposit BLS verdicts produced by
+// the envelope-time prefetcher, or nil if absent.
+func prefetchedDepositSigs(rqs *enginev1.ExecutionRequests) []bool {
+	if rqs == nil || len(rqs.Deposits) == 0 {
+		return nil
+	}
+	root, err := rqs.HashTreeRoot()
+	if err != nil {
+		return nil
+	}
+	v, ok := cache.DepositSig.Get(root)
+	if !ok || len(v) != len(rqs.Deposits) {
+		return nil
+	}
+	return v
+}
+
+// ProcessDepositRequests applies each request to state. prefetched, if non-nil,
+// must align 1:1 with requests and short-circuits the inline BLS verify.
+func ProcessDepositRequests(ctx context.Context, beaconState state.BeaconState, requests []*enginev1.DepositRequest, prefetched []bool) error {
 	if len(requests) == 0 {
 		return nil
 	}
+	if prefetched != nil && len(prefetched) != len(requests) {
+		return errors.Errorf("prefetched length %d does not match requests length %d", len(prefetched), len(requests))
+	}
 
-	for _, receipt := range requests {
-		if err := processDepositRequest(beaconState, receipt); err != nil {
+	for i, receipt := range requests {
+		var sigValid *bool
+		if prefetched != nil {
+			sigValid = &prefetched[i]
+		}
+		if err := processDepositRequest(beaconState, receipt, sigValid); err != nil {
 			return errors.Wrap(err, "could not apply deposit request")
 		}
 	}
@@ -67,12 +94,12 @@ func ProcessDepositRequests(ctx context.Context, beaconState state.BeaconState, 
 //	        )
 //	    )
 //	</spec>
-func processDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest) error {
+func processDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest, prefetchedValid *bool) error {
 	if request == nil {
 		return errors.New("nil deposit request")
 	}
 
-	applied, err := applyBuilderDepositRequest(beaconState, request)
+	applied, err := applyBuilderDepositRequest(beaconState, request, prefetchedValid)
 	if err != nil {
 		return errors.Wrap(err, "could not apply builder deposit")
 	}
@@ -116,7 +143,7 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 //	    state.builders[builder_index].balance += amount
 //
 // </spec>
-func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest) (bool, error) {
+func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest, prefetchedValid *bool) (bool, error) {
 	if beaconState.Version() < version.Gloas {
 		return false, nil
 	}
@@ -150,6 +177,7 @@ func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1
 		request.WithdrawalCredentials,
 		request.Amount,
 		request.Signature,
+		prefetchedValid,
 	); err != nil {
 		return false, err
 	}
@@ -162,16 +190,23 @@ func applyDepositForNewBuilder(
 	withdrawalCredentials []byte,
 	amount uint64,
 	signature []byte,
+	prefetchedValid *bool,
 ) error {
 	pubkeyBytes := bytesutil.ToBytes48(pubkey)
-	valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
-		PublicKey:             pubkey,
-		WithdrawalCredentials: withdrawalCredentials,
-		Amount:                amount,
-		Signature:             signature,
-	})
-	if err != nil {
-		return errors.Wrap(err, "could not verify deposit signature")
+	var valid bool
+	if prefetchedValid != nil {
+		valid = *prefetchedValid
+	} else {
+		var err error
+		valid, err = helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
+			PublicKey:             pubkey,
+			WithdrawalCredentials: withdrawalCredentials,
+			Amount:                amount,
+			Signature:             signature,
+		})
+		if err != nil {
+			return errors.Wrap(err, "could not verify deposit signature")
+		}
 	}
 	if !valid {
 		log.WithFields(logrus.Fields{
