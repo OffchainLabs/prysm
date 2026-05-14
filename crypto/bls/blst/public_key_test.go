@@ -162,3 +162,61 @@ func TestPublicKeysEmpty(t *testing.T) {
 	_, err := blst.AggregatePublicKeys(pubs)
 	require.ErrorContains(t, "nil or empty public keys", err)
 }
+
+func TestMultiplePublicKeysFromBytes(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		out, err := blst.MultiplePublicKeysFromBytes(nil)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(out))
+	})
+
+	t.Run("wrong length", func(t *testing.T) {
+		_, err := blst.MultiplePublicKeysFromBytes([][]byte{{0x00}})
+		require.ErrorContains(t, "public key must be 48 bytes", err)
+	})
+
+	t.Run("round trip", func(t *testing.T) {
+		raw := make([][]byte, 32)
+		for i := range raw {
+			priv, err := blst.RandKey()
+			require.NoError(t, err)
+			raw[i] = priv.PublicKey().Marshal()
+		}
+		got, err := blst.MultiplePublicKeysFromBytes(raw)
+		require.NoError(t, err)
+		require.Equal(t, len(raw), len(got))
+		for i, pk := range got {
+			require.DeepEqual(t, raw[i], pk.Marshal())
+		}
+	})
+
+	t.Run("cache warm then cold mix", func(t *testing.T) {
+		raw := make([][]byte, 16)
+		for i := range raw {
+			priv, err := blst.RandKey()
+			require.NoError(t, err)
+			raw[i] = priv.PublicKey().Marshal()
+		}
+		// Warm cache for the first 8 via the single-key path.
+		for i := range 8 {
+			_, err := blst.PublicKeyFromBytes(raw[i])
+			require.NoError(t, err)
+		}
+		got, err := blst.MultiplePublicKeysFromBytes(raw)
+		require.NoError(t, err)
+		require.Equal(t, len(raw), len(got))
+		for i, pk := range got {
+			require.DeepEqual(t, raw[i], pk.Marshal())
+		}
+	})
+
+	t.Run("invalid uncompress fails", func(t *testing.T) {
+		raw := make([][]byte, 2)
+		priv, err := blst.RandKey()
+		require.NoError(t, err)
+		raw[0] = priv.PublicKey().Marshal()
+		raw[1] = bytes.Repeat([]byte{0xff}, 48)
+		_, err = blst.MultiplePublicKeysFromBytes(raw)
+		require.NotEqual(t, nil, err)
+	})
+}

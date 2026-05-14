@@ -3,6 +3,7 @@
 package blst_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/blst"
@@ -58,4 +59,46 @@ func BenchmarkSecretKey_Marshal(b *testing.B) {
 		_, err := blst.SecretKeyFromBytes(d)
 		_ = err
 	}
+}
+
+// Each iteration consumes fresh pubkey bytes so neither path hits the
+// pubkey cache. Compares batch decompression against a serial loop.
+func BenchmarkMultiplePublicKeysFromBytes(b *testing.B) {
+	for _, n := range []int{16, 64, 256, 1024} {
+		b.Run(fmt.Sprintf("batch=%d", n), func(b *testing.B) {
+			pool := freshPubkeyBytes(b, b.N*n)
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				batch := pool[i*n : (i+1)*n]
+				if _, err := blst.MultiplePublicKeysFromBytes(batch); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+		b.Run(fmt.Sprintf("loop=%d", n), func(b *testing.B) {
+			pool := freshPubkeyBytes(b, b.N*n)
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				batch := pool[i*n : (i+1)*n]
+				for _, pk := range batch {
+					if _, err := blst.PublicKeyFromBytes(pk); err != nil {
+						b.Fatal(err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func freshPubkeyBytes(b *testing.B, n int) [][]byte {
+	b.Helper()
+	out := make([][]byte, n)
+	for i := range out {
+		priv, err := blst.RandKey()
+		require.NoError(b, err)
+		out[i] = priv.PublicKey().Marshal()
+	}
+	return out
 }
