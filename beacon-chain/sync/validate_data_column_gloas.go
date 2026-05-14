@@ -36,19 +36,14 @@ const maxPendingGloasColumnsPerPeer = fieldparams.NumberOfColumns
 // recommendation, but preserves space for multiple peers under the global root cap.
 const maxPendingGloasRootsPerPeer = 2
 
-// pendingColumnEntry holds every (peer, sidecar) pair we've received for a given
-// (block_root, column_index) tuple. Retaining one slot per peer lets us:
-//   - downscore every forwarding peer whose offering fails verification once the
-//     block arrives, and
-//   - keep per-peer-per-subnet queue coverage, subject to the queue caps above,
-//     as recommended by consensus-specs #5199.
-type pendingColumnEntry struct {
-	sidecars map[peer.ID]*ethpb.DataColumnSidecarGloas
-}
-
+// pendingGloasEntry holds every queued (peer, sidecar) for one block root: each
+// column index maps peer.ID -> sidecar. Keeping a separate sidecar per peer per cell
+// lets us downscore every forwarding peer whose offering fails verification once the
+// block arrives, and keep per-peer-per-subnet queue coverage as recommended by
+// consensus-specs #5199.
 type pendingGloasEntry struct {
 	slot    primitives.Slot
-	columns [fieldparams.NumberOfColumns]*pendingColumnEntry
+	columns [fieldparams.NumberOfColumns]map[peer.ID]*ethpb.DataColumnSidecarGloas
 }
 
 // validateDataColumnGloas validates a Gloas data column sidecar from gossip.
@@ -155,12 +150,12 @@ func (s *Service) setSeenDataColumnRootIndex(root [fieldparams.RootLength]byte, 
 //
 // Example (empty queue):
 //
-//	H1 -> (R1, 0)  accepted. H1: cols=1, roots=1.
-//	H1 -> (R1, 5)  accepted (same root). H1: cols=2, roots=1.
-//	H1 -> (R2, 0)  accepted. H1: cols=3, roots=2.
-//	H1 -> (R3, 0)  DROP — H1 root cap.
-//	H2 -> (R1, 0)  accepted alongside H1. H2: cols=1, roots=1.
-//	H2 -> (R1, 0)  DROP — same-peer cell dedup.
+//	peer1 -> (root1, 0)  accepted. peer1: cols=1, roots=1.
+//	peer1 -> (root1, 5)  accepted (same root). peer1: cols=2, roots=1.
+//	peer1 -> (root2, 0)  accepted. peer1: cols=3, roots=2.
+//	peer1 -> (root3, 0)  DROP — peer1 root cap.
+//	peer2 -> (root1, 0)  accepted alongside peer1. peer2: cols=1, roots=1.
+//	peer2 -> (root1, 0)  DROP — same-peer cell dedup.
 func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID) {
 	dc := roCol.DataColumnSidecarGloas()
 	if dc == nil {
@@ -183,23 +178,21 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 	}
 
 	entry, exists := s.pendingGloasColumns[root]
+
 	// newRootForPeer asks: would inserting this column cause pid to claim this
 	// root for the first time? If yes, it consumes one of pid's 2 root slots;
 	// if no, it just adds a column under a root pid already owns.
 	//
-	// Example. Existing entry for R1:
-	//   columns[0].sidecars = {H1, H2}
-	//   columns[5].sidecars = {H1}
+	// Example. Existing entry for root1:
+	//   columns[0] = {peer1, peer2}
+	//   columns[5] = {peer1}
 	// Then:
-	//   H1 -> (R1, 9) inserts -> newRootForPeer = false (H1 already at col 0 and 5).
-	//   H3 -> (R1, 9) inserts -> newRootForPeer = true  (H3 nowhere under R1).
+	//   peer1 -> (root1, 9) inserts -> newRootForPeer = false (peer1 already at col 0 and 5).
+	//   peer3 -> (root1, 9) inserts -> newRootForPeer = true  (peer3 nowhere under root1).
 	newRootForPeer := true
 	if exists {
-		for _, pe := range entry.columns {
-			if pe == nil {
-				continue
-			}
-			if _, ok := pe.sidecars[pid]; ok {
+		for _, cell := range entry.columns {
+			if _, ok := cell[pid]; ok {
 				newRootForPeer = false
 				break
 			}
@@ -219,16 +212,16 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 		s.pendingGloasColumns[root] = entry
 	}
 
-	pe := entry.columns[idx]
-	if pe == nil {
-		pe = &pendingColumnEntry{sidecars: make(map[peer.ID]*ethpb.DataColumnSidecarGloas)}
-		entry.columns[idx] = pe
+	cell := entry.columns[idx]
+	if cell == nil {
+		cell = make(map[peer.ID]*ethpb.DataColumnSidecarGloas)
+		entry.columns[idx] = cell
 	}
 	// Same-peer dedup: must not double-charge quotas.
-	if _, dup := pe.sidecars[pid]; dup {
+	if _, dup := cell[pid]; dup {
 		return
 	}
-	pe.sidecars[pid] = dc
+	cell[pid] = dc
 	s.pendingGloasPeerColumnCounts[pid]++
 	if newRootForPeer {
 		s.pendingGloasPeerRootCounts[pid]++
@@ -239,12 +232,12 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 // arrives. For each (root, index), KZG-verify every peer's offering; first pass wins
 // and is saved; failing peers are downscored.
 //
-// Example for one cell (R1, 0) with offerings {H1: good, M: bad, H2: good}:
+// Example for one cell (root1, 0) with offerings {goodpeer1: good, attacker: bad, goodpeer2: good}:
 //
-//	H1 verify pass -> winner = H1
-//	M  verify fail -> badPeers[M] = true
-//	H2 verify pass -> discarded (already have winner)
-//	-> save H1, Increment(M).
+//	goodpeer1 verify pass -> winner = goodpeer1
+//	attacker  verify fail -> badPeers[attacker] = true
+//	goodpeer2 verify pass -> discarded (already have winner)
+//	-> save goodpeer1's sidecar, Increment(attacker).
 //
 // alreadySeen avoids logging "skipped" when the column was saved via another path.
 func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {
@@ -270,27 +263,18 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 		return
 	}
 
-	// Pre-allocate based on number of populated indices; each contributes at
-	// most one verified sidecar to the saved set.
-	count := 0
-	for _, pe := range entry.columns {
-		if pe != nil {
-			count++
-		}
-	}
-
-	verified := make([]blocks.VerifiedRODataColumn, 0, count)
+	verified := make([]blocks.VerifiedRODataColumn, 0, fieldparams.NumberOfColumns)
 	var skipped int
 	badPeers := make(map[peer.ID]bool)
 	// Outer: each column index. Inner: each peer's offering for that cell.
-	for _, pe := range entry.columns {
-		if pe == nil {
+	for _, cell := range entry.columns {
+		if cell == nil {
 			continue
 		}
 		var winner blocks.VerifiedRODataColumn
 		haveWinner := false
 		alreadySeen := false
-		for pid, sidecar := range pe.sidecars {
+		for pid, sidecar := range cell {
 			roCol, err := blocks.NewRODataColumnGloasWithRoot(sidecar, root)
 			if err != nil {
 				log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Error("Failed to wrap pending Gloas column")
@@ -334,7 +318,7 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 		}
 		if haveWinner {
 			verified = append(verified, winner)
-		} else if len(pe.sidecars) > 0 && !alreadySeen {
+		} else if len(cell) > 0 && !alreadySeen {
 			// Every peer's offering for this index was rejected.
 			skipped++
 		}
@@ -387,23 +371,32 @@ func (s *Service) prunePendingGloasColumns() {
 	}
 }
 
-// releasePendingGloasPeerCounts undoes per-peer bookkeeping for a removed entry.
-// Column count: -1 per cell the peer was in. Root count: -1 per peer (once per entry).
+// releasePendingGloasPeerCounts undoes per-peer bookkeeping for ONE removed entry.
+// It does NOT reset s.pendingGloasPeerColumnCounts / s.pendingGloasPeerRootCounts
+// wholesale — those maps span every entry, and other entries' contributions stay live.
 //
-// Example. Entry holds:
+// Per peer in this entry:
+//   - ColumnCounts[pid]: -1 per cell the peer appears in.
+//   - RootCounts[pid]:   -1 once (rootSeen guards against double-decrement).
 //
-//	col[0] = {H1, H2}, col[5] = {H1}, col[9] = {H2, M}
-//	Before: cols{H1:2, H2:2, M:1}, roots{H1:1, H2:1, M:1}
-//	After:  cols{}, roots{}
+// Example. s.pendingGloasColumns holds:
+//
+//	s.pendingGloasColumns[root1].columns[0] = {peer1, peer2}
+//	s.pendingGloasColumns[root1].columns[5] = {peer1}
+//	s.pendingGloasColumns[root2].columns[3] = {peer1, peer3}
+//
+//	                          s.pendingGloasPeerColumnCounts             s.pendingGloasPeerRootCounts
+//	before release of root1:  {peer1:3, peer2:1, peer3:1}                {peer1:2, peer2:1, peer3:1}
+//	after  release of root1:  {peer1:1, peer3:1}                         {peer1:1, peer3:1}
+//
+// peer1's ColumnCounts drops 3 -> 1 (two cells in root1) but RootCounts only -1 (still
+// owns root2). peer2 hits zero and is deleted. peer3 untouched (only in root2).
 //
 // Caller must hold pendingGloasColumnsLock for writing.
 func (s *Service) releasePendingGloasPeerCounts(entry *pendingGloasEntry) {
 	rootSeen := make(map[peer.ID]bool)
-	for _, pe := range entry.columns {
-		if pe == nil {
-			continue
-		}
-		for pid := range pe.sidecars {
+	for _, cell := range entry.columns {
+		for pid := range cell {
 			if s.pendingGloasPeerColumnCounts[pid] <= 1 {
 				delete(s.pendingGloasPeerColumnCounts, pid)
 			} else {
