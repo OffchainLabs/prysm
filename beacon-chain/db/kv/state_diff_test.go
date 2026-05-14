@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -730,7 +731,7 @@ func TestStateDiff_SaveAndReadDiffForkTransitionGloas(t *testing.T) {
 
 	db := setupDB(t)
 
-	st, _ := createState(t, 0, version.Fulu)
+	st, _ := util.DeterministicGenesisStateFulu(t, 64)
 
 	err := setOffsetInDB(db, 0)
 	require.NoError(t, err)
@@ -739,16 +740,18 @@ func TestStateDiff_SaveAndReadDiffForkTransitionGloas(t *testing.T) {
 	require.NoError(t, err)
 
 	slot := primitives.Slot(math.PowerOf2(5))
-	st, _ = createState(t, slot, version.Gloas)
+	gloasSt, err := gloas.UpgradeToGloas(st.Copy())
+	require.NoError(t, err)
+	require.NoError(t, gloasSt.SetSlot(slot))
 
-	err = db.saveStateByDiff(context.Background(), st)
+	err = db.saveStateByDiff(context.Background(), gloasSt)
 	require.NoError(t, err)
 
 	readSt, err := db.stateByDiff(context.Background(), slot)
 	require.NoError(t, err)
 	require.NotNil(t, readSt)
 
-	stSSZ, err := st.MarshalSSZ()
+	stSSZ, err := gloasSt.MarshalSSZ()
 	require.NoError(t, err)
 	readStSSZ, err := readSt.MarshalSSZ()
 	require.NoError(t, err)
