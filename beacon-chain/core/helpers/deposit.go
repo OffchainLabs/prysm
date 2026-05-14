@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/contracts/deposit"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
@@ -122,6 +123,22 @@ func IsPendingValidator(pendingDeposits []*ethpb.PendingDeposit, pubkey []byte) 
 	return false, nil
 }
 
+// BatchVerifyDepositRequestSignatures returns a per-request validity slice.
+func BatchVerifyDepositRequestSignatures(ctx context.Context, requests []*enginev1.DepositRequest) ([]bool, error) {
+	if len(requests) == 0 {
+		return nil, nil
+	}
+	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	valid := make([]bool, len(requests))
+	if err := verifyDepositRequestsDC(ctx, requests, domain, valid); err != nil {
+		return nil, err
+	}
+	return valid, nil
+}
+
 // IsValidDepositSignature returns whether deposit_data is valid
 // def is_valid_deposit_signature(pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: uint64, signature: BLSSignature) -> bool:
 //
@@ -217,6 +234,70 @@ func verifyDepositDataWithDomain(ctx context.Context, deps []*ethpb.Deposit, dom
 		return errors.New("one or more deposit signatures did not verify")
 	}
 	return nil
+}
+
+func verifyDepositRequestDataWithDomain(ctx context.Context, reqs []*enginev1.DepositRequest, domain []byte) error {
+	if len(reqs) == 0 {
+		return nil
+	}
+	pks := make([]bls.PublicKey, len(reqs))
+	sigs := make([][]byte, len(reqs))
+	msgs := make([][32]byte, len(reqs))
+	for i, req := range reqs {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if req == nil {
+			return errors.New("nil deposit request")
+		}
+		pk, err := bls.PublicKeyFromBytes(req.Pubkey)
+		if err != nil {
+			return err
+		}
+		pks[i] = pk
+		sigs[i] = req.Signature
+		sr, err := signing.ComputeSigningRoot(&ethpb.DepositMessage{
+			PublicKey:             req.Pubkey,
+			WithdrawalCredentials: req.WithdrawalCredentials,
+			Amount:                req.Amount,
+		}, domain)
+		if err != nil {
+			return err
+		}
+		msgs[i] = sr
+	}
+	verify, err := bls.VerifyMultipleSignatures(sigs, msgs, pks)
+	if err != nil {
+		return errors.Errorf("could not verify multiple signatures: %v", err)
+	}
+	if !verify {
+		return errors.New("one or more deposit signatures did not verify")
+	}
+	return nil
+}
+
+func verifyDepositRequestsDC(ctx context.Context, reqs []*enginev1.DepositRequest, domain []byte, out []bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len(reqs) == 0 {
+		return nil
+	}
+	if err := verifyDepositRequestDataWithDomain(ctx, reqs, domain); err == nil {
+		for i := range out {
+			out[i] = true
+		}
+		return nil
+	}
+	if len(reqs) == 1 {
+		out[0] = false
+		return nil
+	}
+	mid := len(reqs) / 2
+	if err := verifyDepositRequestsDC(ctx, reqs[:mid], domain, out[:mid]); err != nil {
+		return err
+	}
+	return verifyDepositRequestsDC(ctx, reqs[mid:], domain, out[mid:])
 }
 
 func verifyPendingDepositDataWithDomain(ctx context.Context, deps []*ethpb.PendingDeposit, domain []byte) error {

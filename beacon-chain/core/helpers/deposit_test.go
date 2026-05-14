@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -177,4 +178,130 @@ func TestBatchVerifyPendingDepositsSignatures_InvalidSignature(t *testing.T) {
 	verified, err := helpers.BatchVerifyPendingDepositsSignatures(t.Context(), []*ethpb.PendingDeposit{pendingDeposit})
 	require.NoError(t, err)
 	require.Equal(t, false, verified)
+}
+
+func makeValidDepositRequest(t *testing.T, amount uint64) *enginev1.DepositRequest {
+	t.Helper()
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
+	require.NoError(t, err)
+	wc := make([]byte, 32)
+	sr, err := signing.ComputeSigningRoot(&ethpb.DepositMessage{
+		PublicKey:             sk.PublicKey().Marshal(),
+		WithdrawalCredentials: wc,
+		Amount:                amount,
+	}, domain)
+	require.NoError(t, err)
+	return &enginev1.DepositRequest{
+		Pubkey:                sk.PublicKey().Marshal(),
+		WithdrawalCredentials: wc,
+		Amount:                amount,
+		Signature:             sk.Sign(sr[:]).Marshal(),
+	}
+}
+
+func makeInvalidDepositRequest(t *testing.T, amount uint64) *enginev1.DepositRequest {
+	t.Helper()
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	return &enginev1.DepositRequest{
+		Pubkey:                sk.PublicKey().Marshal(),
+		WithdrawalCredentials: make([]byte, 32),
+		Amount:                amount,
+		Signature:             make([]byte, 96),
+	}
+}
+
+func TestBatchVerifyDepositRequestSignatures_Empty(t *testing.T) {
+	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), nil)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(valid))
+}
+
+func TestBatchVerifyDepositRequestSignatures_AllValid(t *testing.T) {
+	reqs := []*enginev1.DepositRequest{
+		makeValidDepositRequest(t, 100),
+		makeValidDepositRequest(t, 200),
+		makeValidDepositRequest(t, 300),
+		makeValidDepositRequest(t, 400),
+	}
+	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	require.NoError(t, err)
+	require.DeepEqual(t, []bool{true, true, true, true}, valid)
+}
+
+func TestBatchVerifyDepositRequestSignatures_AllInvalid(t *testing.T) {
+	reqs := []*enginev1.DepositRequest{
+		makeInvalidDepositRequest(t, 100),
+		makeInvalidDepositRequest(t, 200),
+		makeInvalidDepositRequest(t, 300),
+	}
+	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	require.NoError(t, err)
+	require.DeepEqual(t, []bool{false, false, false}, valid)
+}
+
+func TestBatchVerifyDepositRequestSignatures_SingleValid(t *testing.T) {
+	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), []*enginev1.DepositRequest{makeValidDepositRequest(t, 1)})
+	require.NoError(t, err)
+	require.DeepEqual(t, []bool{true}, valid)
+}
+
+func TestBatchVerifyDepositRequestSignatures_SingleInvalid(t *testing.T) {
+	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), []*enginev1.DepositRequest{makeInvalidDepositRequest(t, 1)})
+	require.NoError(t, err)
+	require.DeepEqual(t, []bool{false}, valid)
+}
+
+func TestBatchVerifyDepositRequestSignatures_MixedDC(t *testing.T) {
+	reqs := []*enginev1.DepositRequest{
+		makeInvalidDepositRequest(t, 1),
+		makeValidDepositRequest(t, 2),
+		makeValidDepositRequest(t, 3),
+		makeInvalidDepositRequest(t, 4),
+		makeValidDepositRequest(t, 5),
+		makeValidDepositRequest(t, 6),
+		makeInvalidDepositRequest(t, 7),
+		makeValidDepositRequest(t, 8),
+	}
+	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	require.NoError(t, err)
+	require.DeepEqual(t, []bool{false, true, true, false, true, true, false, true}, valid)
+}
+
+func TestBatchVerifyDepositRequestSignatures_OneBadInLargeBatch(t *testing.T) {
+	const n = 128
+	reqs := make([]*enginev1.DepositRequest, n)
+	for i := range n {
+		reqs[i] = makeValidDepositRequest(t, uint64(i+1))
+	}
+	const badIdx = 11
+	reqs[badIdx] = makeInvalidDepositRequest(t, badIdx+1)
+	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	require.NoError(t, err)
+	for i, v := range valid {
+		require.Equal(t, i != badIdx, v)
+	}
+}
+
+func TestBatchVerifyDepositRequestSignatures_MultipleBadAcrossSubtrees(t *testing.T) {
+	const n = 128
+	reqs := make([]*enginev1.DepositRequest, n)
+	for i := range n {
+		reqs[i] = makeValidDepositRequest(t, uint64(i+1))
+	}
+	badIdxs := []int{5, 47, 99, 120}
+	for _, idx := range badIdxs {
+		reqs[idx] = makeInvalidDepositRequest(t, uint64(idx+1))
+	}
+	bad := map[int]bool{}
+	for _, idx := range badIdxs {
+		bad[idx] = true
+	}
+	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	require.NoError(t, err)
+	for i, v := range valid {
+		require.Equal(t, !bad[i], v)
+	}
 }
