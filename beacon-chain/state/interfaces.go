@@ -238,6 +238,7 @@ type ReadOnlyDeposits interface {
 	DepositBalanceToConsume() (primitives.Gwei, error)
 	DepositRequestsStartIndex() (uint64, error)
 	PendingDeposits() ([]*ethpb.PendingDeposit, error)
+	PendingDepositsAtSlotTail(slot primitives.Slot) []*ethpb.PendingDeposit
 	IsPendingValidator(pubkey []byte) (bool, error)
 }
 

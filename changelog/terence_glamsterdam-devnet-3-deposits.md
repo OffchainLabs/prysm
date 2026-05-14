@@ -1,0 +1,1 @@
+- Cache pending-deposit signature verdicts and amortize the Gloas builder-onboarding BLS verify across pre-fork slots.

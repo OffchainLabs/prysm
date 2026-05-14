@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	gotime "time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
@@ -361,6 +362,7 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 
 	slot := state.Slot()
 	upgraded := false
+	start := gotime.Now()
 
 	if time.CanUpgradeToAltair(slot) {
 		state, err = altair.UpgradeToAltair(ctx, state)
@@ -417,7 +419,7 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 	}
 
 	if time.CanUpgradeToGloas(slot) {
-		state, err = gloas.UpgradeToGloas(state)
+		state, err = gloas.UpgradeToGloas(ctx, state)
 		if err != nil {
 			tracing.AnnotateError(span, err)
 			return nil, err
@@ -426,7 +428,10 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 	}
 
 	if upgraded {
-		log.WithField("version", version.String(state.Version())).Info("Upgraded state to")
+		log.WithFields(logrus.Fields{
+			"version":  version.String(state.Version()),
+			"duration": gotime.Since(start),
+		}).Info("Upgraded state to")
 	}
 
 	return state, nil

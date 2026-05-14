@@ -871,6 +871,8 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 		stateFieldLeaves:              make(map[types.FieldIndex]*fieldtrie.FieldTrie, len(fieldMap)),
 		rebuildTrie:                   make(map[types.FieldIndex]bool, fieldCount),
 		valMapHandler:                 stateutil.NewValMapHandler(st.Validators),
+		builderMapHandler:             stateutil.NewBuilderMapHandler(st.Builders),
+		hasExitedBuilders:             anyBuilderExited(st.Builders),
 	}
 
 	b.blockRootsMultiValue = NewMultiValueBlockRoots(st.BlockRoots)
@@ -1013,7 +1015,9 @@ func (b *BeaconState) Copy() state.BeaconState {
 		stateFieldLeaves: make(map[types.FieldIndex]*fieldtrie.FieldTrie, len(fieldMap)),
 
 		// Share the reference to validator index map.
-		valMapHandler: b.valMapHandler,
+		valMapHandler:     b.valMapHandler,
+		builderMapHandler: b.builderMapHandler,
+		hasExitedBuilders: b.hasExitedBuilders,
 	}
 
 	b.blockRootsMultiValue.Copy(b, dst)
@@ -1051,6 +1055,11 @@ func (b *BeaconState) Copy() state.BeaconState {
 
 	// Increment ref for validator map
 	b.valMapHandler.AddRef()
+
+	// Increment ref for builder index map (Gloas+).
+	if b.builderMapHandler != nil {
+		b.builderMapHandler.AddRef()
+	}
 
 	for i := range b.dirtyFields {
 		dst.dirtyFields[i] = true

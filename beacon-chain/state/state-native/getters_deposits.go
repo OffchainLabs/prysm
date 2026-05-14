@@ -94,3 +94,24 @@ func (b *BeaconState) pendingDepositsVal() []*ethpb.PendingDeposit {
 
 	return ethpb.CopySlice(b.pendingDeposits)
 }
+
+func (b *BeaconState) PendingDepositsAtSlotTail(slot primitives.Slot) []*ethpb.PendingDeposit {
+	if b.version < version.Electra {
+		return nil
+	}
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	n := len(b.pendingDeposits)
+	var i int
+	for i = n - 1; i >= 0; i-- {
+		if b.pendingDeposits[i].Slot != slot {
+			break
+		}
+	}
+	if i+1 >= n {
+		return nil
+	}
+	out := make([]*ethpb.PendingDeposit, n-i-1)
+	copy(out, b.pendingDeposits[i+1:])
+	return out
+}

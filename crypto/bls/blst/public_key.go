@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/pkg/errors"
+	blst "github.com/supranational/blst/bindings/go"
 )
 
 var pubkeyCache = &pubkeyCacheMap{
@@ -71,6 +72,54 @@ func publicKeyFromBytes(pubKey []byte, cacheCopy bool) (common.PublicKey, error)
 	copiedKey := pubKeyObj.Copy()
 	pubkeyCache.setPubkey(*newKey, copiedKey)
 	return pubKeyObj, nil
+}
+
+// MultiplePublicKeysFromBytes batch-deserializes and validates compressed BLS public keys.
+// BLST parallelizes the decompression and subgroup checks across CPU cores, so it is
+// faster than calling PublicKeyFromBytes in a loop.
+func MultiplePublicKeysFromBytes(multiPubs [][]byte) ([]common.PublicKey, error) {
+	if len(multiPubs) == 0 {
+		return nil, nil
+	}
+	for _, pk := range multiPubs {
+		if len(pk) != params.BeaconConfig().BLSPubkeyLength {
+			return nil, fmt.Errorf("public key must be %d bytes", params.BeaconConfig().BLSPubkeyLength)
+		}
+	}
+
+	out := make([]common.PublicKey, len(multiPubs))
+	var missIdx []int
+	var missBytes [][]byte
+	for i, pk := range multiPubs {
+		var key [fieldparams.BLSPubkeyLength]byte
+		copy(key[:], pk)
+		if cv, ok := pubkeyCache.pubkey(key); ok {
+			out[i] = cv.Copy()
+			continue
+		}
+		missIdx = append(missIdx, i)
+		missBytes = append(missBytes, pk)
+	}
+	if len(missBytes) == 0 {
+		return out, nil
+	}
+
+	raw := new(blstPublicKey).BatchUncompress(missBytes)
+	if raw == nil || len(raw) != len(missBytes) {
+		return nil, errors.New("could not unmarshal one or more bytes into public key")
+	}
+	if !blst.P1AffinesValidate(raw) {
+		return nil, common.ErrInfinitePubKey
+	}
+
+	for i, idx := range missIdx {
+		pkObj := &PublicKey{p: raw[i]}
+		out[idx] = pkObj
+		var key [fieldparams.BLSPubkeyLength]byte
+		copy(key[:], missBytes[i])
+		pubkeyCache.setPubkey(key, pkObj.Copy())
+	}
+	return out, nil
 }
 
 // AggregatePublicKeys aggregates the provided raw public keys into a single key.

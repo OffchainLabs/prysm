@@ -1,6 +1,8 @@
 package state
 
 import (
+	"context"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -31,6 +33,7 @@ type writeOnlyGloasFields interface {
 	// Builders.
 	IncreaseBuilderBalance(index primitives.BuilderIndex, amount uint64) error
 	AddBuilderFromDeposit(pubkey [fieldparams.BLSPubkeyLength]byte, withdrawalCredentials [fieldparams.RootLength]byte, amount uint64) error
+	AddBuildersFromDeposits(deposits []BuilderDeposit) error
 	UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64, participatedFlags map[uint8]bool) error
 	UpdateBuilderAtIndex(index primitives.BuilderIndex, builder *ethpb.Builder) error
 
@@ -39,7 +42,7 @@ type writeOnlyGloasFields interface {
 	DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdrawal) error
 	DequeueBuilderPendingWithdrawals(num uint64) error
 	SetNextWithdrawalBuilderIndex(idx primitives.BuilderIndex) error
-	OnboardBuildersFromPendingDeposits() error
+	OnboardBuildersFromPendingDeposits(ctx context.Context) error
 }
 
 type readOnlyGloasFields interface {
@@ -75,6 +78,15 @@ type readOnlyGloasFields interface {
 	ExpectedWithdrawalsGloas() (ExpectedWithdrawalsGloasResult, error)
 	PayloadExpectedWithdrawals() ([]*enginev1.Withdrawal, error)
 	WithdrawalsForPayload() ([]*enginev1.Withdrawal, error)
+}
+
+// BuilderDeposit carries the data needed to register a new builder from a
+// deposit. Used by AddBuildersFromDeposits to batch-register many builders
+// under a single state-lock cycle.
+type BuilderDeposit struct {
+	Pubkey                [fieldparams.BLSPubkeyLength]byte
+	WithdrawalCredentials [fieldparams.RootLength]byte
+	Amount                uint64
 }
 
 // ExpectedWithdrawalsGloasResult bundles the expected withdrawals and related counters

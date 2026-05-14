@@ -129,7 +129,11 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 	e.Hash = common.BytesToHash(decodedHash)
 	e.TotalDifficulty, _ = decoded["totalDifficulty"].(string)
 
-	if balStr, ok := decoded["blockAccessList"].(string); ok {
+	if raw, exists := decoded["blockAccessList"]; exists && raw != nil {
+		balStr, ok := raw.(string)
+		if !ok {
+			return errors.New("expected `blockAccessList` field to be a string")
+		}
 		balBytes, err := hexutil.Decode(balStr)
 		if err != nil {
 			return errors.Wrap(err, "could not decode blockAccessList hex")

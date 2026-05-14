@@ -1,10 +1,14 @@
 package state_native
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	gotime "time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -294,6 +298,21 @@ func (b *BeaconState) UpdateBuilderAtIndex(index primitives.BuilderIndex, builde
 		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
 	}
 
+	// Keep the pubkey -> index map in sync if the pubkey is changing.
+	b.ensureBuilderMapWritable()
+	if prev := builders[idx]; prev != nil && len(prev.Pubkey) == fieldparams.BLSPubkeyLength {
+		if len(builder.Pubkey) != fieldparams.BLSPubkeyLength || !bytes.Equal(prev.Pubkey, builder.Pubkey) {
+			b.builderMapHandler.Remove(bytesutil.ToBytes48(prev.Pubkey))
+		}
+	}
+	if len(builder.Pubkey) == fieldparams.BLSPubkeyLength {
+		b.builderMapHandler.Set(bytesutil.ToBytes48(builder.Pubkey), uint64(idx))
+	}
+	// Once any builder has been marked as exiting, builderInsertionIndex
+	// must scan for reusable slots. The flag is monotonic.
+	if !b.hasExitedBuilders && builder.WithdrawableEpoch != params.BeaconConfig().FarFutureEpoch {
+		b.hasExitedBuilders = true
+	}
 	builders[idx] = ethpb.CopyBuilder(builder)
 	b.builders = builders
 
@@ -375,21 +394,134 @@ func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkey
 		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
 	}
 
+	// If we're overwriting an existing slot (e.g., an exited builder),
+	// evict its pubkey from the lookup map before installing the new one.
+	b.ensureBuilderMapWritable()
 	if index < primitives.BuilderIndex(len(builders)) {
+		if prev := builders[index]; prev != nil && len(prev.Pubkey) == fieldparams.BLSPubkeyLength {
+			b.builderMapHandler.Remove(bytesutil.ToBytes48(prev.Pubkey))
+		}
 		builders[index] = builder
 	} else {
 		gap := index - primitives.BuilderIndex(len(builders)) + 1
 		builders = append(builders, make([]*ethpb.Builder, gap)...)
 		builders[index] = builder
 	}
+	b.builderMapHandler.Set(pubkey, uint64(index))
 	b.builders = builders
 
 	b.markFieldAsDirty(types.Builders)
 	return nil
 }
 
+// AddBuildersFromDeposits creates new builder entries in a single locked
+// section. It assigns each deposit to either a reusable exited-builder slot
+// (if any) or the tail of state.builders, and updates the pubkey -> index
+// map for all entries with one COW.
+func (b *BeaconState) AddBuildersFromDeposits(deposits []state.BuilderDeposit) error {
+	if b.version < version.Gloas {
+		return errNotSupported("AddBuildersFromDeposits", b.version)
+	}
+	if len(deposits) == 0 {
+		return nil
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	currentEpoch := slots.ToEpoch(b.slot)
+	farFuture := params.BeaconConfig().FarFutureEpoch
+
+	builders := b.builders
+	if b.sharedFieldReferences[types.Builders].Refs() > 1 {
+		builders = make([]*ethpb.Builder, len(b.builders), len(b.builders)+len(deposits))
+		copy(builders, b.builders)
+		b.sharedFieldReferences[types.Builders].MinusRef()
+		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
+	}
+	b.ensureBuilderMapWritable()
+
+	var reusable []int
+	if b.hasExitedBuilders {
+		reusable = make([]int, 0)
+		for i, builder := range builders {
+			if builder == nil {
+				continue
+			}
+			if builder.WithdrawableEpoch <= currentEpoch && builder.Balance == 0 {
+				reusable = append(reusable, i)
+			}
+		}
+	}
+
+	for _, d := range deposits {
+		entry := &ethpb.Builder{
+			Pubkey:            bytesutil.SafeCopyBytes(d.Pubkey[:]),
+			Version:           []byte{d.WithdrawalCredentials[0]},
+			ExecutionAddress:  bytesutil.SafeCopyBytes(d.WithdrawalCredentials[12:]),
+			Balance:           primitives.Gwei(d.Amount),
+			DepositEpoch:      currentEpoch,
+			WithdrawableEpoch: farFuture,
+		}
+		if len(reusable) > 0 {
+			idx := reusable[0]
+			reusable = reusable[1:]
+			if prev := builders[idx]; prev != nil && len(prev.Pubkey) == fieldparams.BLSPubkeyLength {
+				b.builderMapHandler.Remove(bytesutil.ToBytes48(prev.Pubkey))
+			}
+			builders[idx] = entry
+			b.builderMapHandler.Set(d.Pubkey, uint64(idx))
+			continue
+		}
+		builders = append(builders, entry)
+		b.builderMapHandler.Set(d.Pubkey, uint64(len(builders)-1))
+	}
+
+	b.builders = builders
+	b.markFieldAsDirty(types.Builders)
+	return nil
+}
+
+// ensureBuilderMapWritable clones the builder pubkey -> index map when it is
+// shared across state copies. Callers must hold b.lock for writing.
+func (b *BeaconState) ensureBuilderMapWritable() {
+	if b.builderMapHandler == nil {
+		b.builderMapHandler = stateutil.NewBuilderMapHandler(b.builders)
+		return
+	}
+	if b.builderMapHandler.Refs() > 1 {
+		copied := b.builderMapHandler.Copy()
+		b.builderMapHandler.MinusRef()
+		b.builderMapHandler = copied
+	}
+}
+
+// anyBuilderExited reports whether any builder in the slice has had its exit
+// initiated (WithdrawableEpoch != FarFutureEpoch). Used to gate the
+// builderInsertionIndex reusable-slot scan.
+func anyBuilderExited(builders []*ethpb.Builder) bool {
+	farFuture := params.BeaconConfig().FarFutureEpoch
+	for _, builder := range builders {
+		if builder == nil {
+			continue
+		}
+		if builder.WithdrawableEpoch != farFuture {
+			return true
+		}
+	}
+	return false
+}
+
 func (b *BeaconState) builderInsertionIndex(currentEpoch primitives.Epoch) primitives.BuilderIndex {
+	// Fast path: if no builder has ever initiated exit, no slot can be reused.
+	// Skip the full scan and append to the tail.
+	if !b.hasExitedBuilders {
+		return primitives.BuilderIndex(len(b.builders))
+	}
 	for i, builder := range b.builders {
+		if builder == nil {
+			continue
+		}
 		if builder.WithdrawableEpoch <= currentEpoch && builder.Balance == 0 {
 			return primitives.BuilderIndex(i)
 		}
@@ -701,7 +833,7 @@ func decreaseBalanceWithVal(currBalance, delta primitives.Gwei) primitives.Gwei 
 //
 //	    state.pending_deposits = pending_deposits
 //	</spec>
-func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
+func (b *BeaconState) OnboardBuildersFromPendingDeposits(ctx context.Context) error {
 	if b.version < version.Gloas {
 		return errNotSupported("OnboardBuildersFromPendingDeposits", b.version)
 	}
@@ -709,11 +841,31 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
+	tLock := gotime.Now()
 	pendingDeposits := b.pendingDeposits
+	validSig, err := helpers.BatchVerifyPendingDepositSignatures(ctx, pendingDeposits)
+	if err != nil {
+		return pkgerrors.Wrap(err, "could not batch verify pending deposit signatures")
+	}
+	tVerify := gotime.Since(tLock)
+
+	tLoop := gotime.Now()
 	newPendingDeposits := make([]*ethpb.PendingDeposit, 0, len(pendingDeposits))
 	newValidatorPubkeys := make(map[[fieldparams.BLSPubkeyLength]byte]bool)
 
-	for _, deposit := range pendingDeposits {
+	// At fork time b.builders starts empty and only grows by append, so we
+	// append directly and lean on the pubkey -> index map for O(1) lookups.
+	builders := b.builders
+	if b.sharedFieldReferences[types.Builders].Refs() > 1 {
+		builders = make([]*ethpb.Builder, len(b.builders))
+		copy(builders, b.builders)
+		b.sharedFieldReferences[types.Builders].MinusRef()
+		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
+	}
+	b.ensureBuilderMapWritable()
+	buildersDirty := false
+
+	for i, deposit := range pendingDeposits {
 		pubkey := bytesutil.ToBytes48(deposit.PublicKey)
 		if _, ok := newValidatorPubkeys[pubkey]; ok {
 			newPendingDeposits = append(newPendingDeposits, deposit)
@@ -724,46 +876,34 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 			continue
 		}
 
-		if idx, ok := b.builderIndexByPubkey(pubkey); ok {
-			if err := b.increaseBuilderBalance(idx, deposit.Amount); err != nil {
-				return err
-			}
+		if idx, ok := b.builderMapHandler.Get(pubkey); ok && idx < uint64(len(builders)) && builders[idx] != nil {
+			builder := ethpb.CopyBuilder(builders[idx])
+			builder.Balance += primitives.Gwei(deposit.Amount)
+			builders[idx] = builder
+			buildersDirty = true
 			continue
 		}
 
 		if helpers.IsBuilderWithdrawalCredential(deposit.WithdrawalCredentials) {
-			valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
-				PublicKey:             deposit.PublicKey,
-				WithdrawalCredentials: deposit.WithdrawalCredentials,
-				Amount:                deposit.Amount,
-				Signature:             deposit.Signature,
-			})
-			if err != nil {
-				log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Could not verify builder deposit signature")
+			if !validSig[i] {
+				log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Debug("Invalid signature for builder deposit")
 				continue
 			}
-			if valid {
-				depositEpoch := slots.ToEpoch(deposit.Slot)
-				if err := b.addBuilderFromDepositAtEpoch(pubkey, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch); err != nil {
-					log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Failed to apply builder deposit")
-					continue
-				}
-			} else {
-				log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Debug("Invalid signature for builder deposit")
-			}
+			creds := bytesutil.ToBytes32(deposit.WithdrawalCredentials)
+			builders = append(builders, &ethpb.Builder{
+				Pubkey:            bytesutil.SafeCopyBytes(pubkey[:]),
+				Version:           []byte{creds[0]},
+				ExecutionAddress:  bytesutil.SafeCopyBytes(creds[12:]),
+				Balance:           primitives.Gwei(deposit.Amount),
+				DepositEpoch:      slots.ToEpoch(deposit.Slot),
+				WithdrawableEpoch: params.BeaconConfig().FarFutureEpoch,
+			})
+			b.builderMapHandler.Set(pubkey, uint64(len(builders)-1))
+			buildersDirty = true
 			continue
 		}
 
-		valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
-			PublicKey:             deposit.PublicKey,
-			WithdrawalCredentials: deposit.WithdrawalCredentials,
-			Amount:                deposit.Amount,
-			Signature:             deposit.Signature,
-		})
-		if err != nil {
-			log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Could not verify validator deposit signature")
-		}
-		if valid {
+		if validSig[i] {
 			newValidatorPubkeys[pubkey] = true
 			newPendingDeposits = append(newPendingDeposits, deposit)
 		} else {
@@ -771,10 +911,21 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 		}
 	}
 
+	if buildersDirty {
+		b.builders = builders
+		b.markFieldAsDirty(types.Builders)
+	}
+
 	b.sharedFieldReferences[types.PendingDeposits].MinusRef()
 	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)
 	b.pendingDeposits = newPendingDeposits
 	b.markFieldAsDirty(types.PendingDeposits)
+
+	log.WithFields(map[string]any{
+		"deposits":    len(pendingDeposits),
+		"batchVerify": tVerify,
+		"loop":        gotime.Since(tLoop),
+	}).Info("OnboardBuildersFromPendingDeposits timings")
 
 	return nil
 }

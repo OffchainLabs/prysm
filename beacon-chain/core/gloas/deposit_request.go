@@ -3,9 +3,11 @@ package gloas
 import (
 	"context"
 	"fmt"
+	gotime "time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -14,15 +16,147 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func processDepositRequests(ctx context.Context, beaconState state.BeaconState, requests []*enginev1.DepositRequest) error {
+func processDepositRequests(ctx context.Context, beaconState state.BeaconState, requests []*enginev1.DepositRequest, prefetched []bool) error {
 	if len(requests) == 0 {
 		return nil
 	}
 
+	if beaconState.Version() < version.Gloas {
+		return processDepositRequestsPerRequest(beaconState, requests)
+	}
+
+	// dup pubkeys break batching: a later request's classification can depend on the earlier one succeeding
+	seen := make(map[[fieldparams.BLSPubkeyLength]byte]struct{}, len(requests))
+	for _, req := range requests {
+		if req == nil {
+			return errors.New("could not apply deposit request: nil deposit request")
+		}
+		pk := bytesutil.ToBytes48(req.Pubkey)
+		if _, dup := seen[pk]; dup {
+			return processDepositRequestsPerRequest(beaconState, requests)
+		}
+		seen[pk] = struct{}{}
+	}
+
+	slot := beaconState.Slot()
+	newBuilders := make([]*enginev1.DepositRequest, 0, len(requests))
+	newBuilderIndices := make([]int, 0, len(requests))
+	var (
+		tBuilderLookup, tValLookup, tPendingCheck, tAppend gotime.Duration
+		nAppends, nBuilderBumps                            int
+	)
+	for i, req := range requests {
+		pubkey := bytesutil.ToBytes48(req.Pubkey)
+
+		t1 := gotime.Now()
+		idx, isExistingBuilder := beaconState.BuilderIndexByPubkey(pubkey)
+		tBuilderLookup += gotime.Since(t1)
+		if isExistingBuilder {
+			if err := beaconState.IncreaseBuilderBalance(idx, req.Amount); err != nil {
+				return errors.Wrap(err, "could not apply builder deposit")
+			}
+			builderDepositsProcessedTotal.Inc()
+			nBuilderBumps++
+			continue
+		}
+
+		if helpers.IsBuilderWithdrawalCredential(req.WithdrawalCredentials) {
+			t2 := gotime.Now()
+			_, isValidator := beaconState.ValidatorIndexByPubkey(pubkey)
+			tValLookup += gotime.Since(t2)
+			if !isValidator {
+				t3 := gotime.Now()
+				isPending, err := beaconState.IsPendingValidator(req.Pubkey)
+				tPendingCheck += gotime.Since(t3)
+				if err != nil {
+					return errors.Wrap(err, "could not check pending validator")
+				}
+				if !isPending {
+					newBuilders = append(newBuilders, req)
+					newBuilderIndices = append(newBuilderIndices, i)
+					continue
+				}
+			}
+		}
+
+		t4 := gotime.Now()
+		if err := beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
+			PublicKey:             req.Pubkey,
+			WithdrawalCredentials: req.WithdrawalCredentials,
+			Amount:                req.Amount,
+			Signature:             req.Signature,
+			Slot:                  slot,
+		}); err != nil {
+			return errors.Wrap(err, "could not append deposit request")
+		}
+		tAppend += gotime.Since(t4)
+		nAppends++
+	}
+
+	tReg := gotime.Now()
+	err := registerNewBuilders(ctx, beaconState, newBuilders, newBuilderIndices, prefetched)
+	tRegDur := gotime.Since(tReg)
+
+	log.WithFields(logrus.Fields{
+		"numRequests":      len(requests),
+		"nBuilderBumps":    nBuilderBumps,
+		"nAppends":         nAppends,
+		"nNewBuilders":     len(newBuilders),
+		"builderLookup":    tBuilderLookup,
+		"validatorLookup":  tValLookup,
+		"pendingCheck":     tPendingCheck,
+		"appendTotal":      tAppend,
+		"registerBuilders": tRegDur,
+	}).Info("ProcessDepositRequests timings")
+
+	return err
+}
+
+func processDepositRequestsPerRequest(beaconState state.BeaconState, requests []*enginev1.DepositRequest) error {
 	for _, receipt := range requests {
 		if err := processDepositRequest(beaconState, receipt); err != nil {
 			return errors.Wrap(err, "could not apply deposit request")
 		}
+	}
+	return nil
+}
+
+func registerNewBuilders(ctx context.Context, beaconState state.BeaconState, candidates []*enginev1.DepositRequest, indices []int, prefetched []bool) error {
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	var valid []bool
+	if prefetched != nil {
+		valid = make([]bool, len(indices))
+		for i, idx := range indices {
+			valid[i] = prefetched[idx]
+		}
+	} else {
+		var err error
+		valid, err = helpers.BatchVerifyDepositRequestSignatures(ctx, candidates)
+		if err != nil {
+			return errors.Wrap(err, "could not verify builder deposits")
+		}
+	}
+
+	deposits := make([]state.BuilderDeposit, 0, len(candidates))
+	for i, c := range candidates {
+		builderDepositsProcessedTotal.Inc()
+		if !valid[i] {
+			log.WithFields(logrus.Fields{
+				"pubkey": fmt.Sprintf("%x", c.Pubkey),
+			}).Warn("ignoring builder deposit: invalid signature")
+			continue
+		}
+		deposits = append(deposits, state.BuilderDeposit{
+			Pubkey:                bytesutil.ToBytes48(c.Pubkey),
+			WithdrawalCredentials: bytesutil.ToBytes32(c.WithdrawalCredentials),
+			Amount:                c.Amount,
+		})
+	}
+	if err := beaconState.AddBuildersFromDeposits(deposits); err != nil {
+		return errors.Wrap(err, "could not apply builder deposits")
 	}
 	return nil
 }

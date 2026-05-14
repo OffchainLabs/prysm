@@ -41,7 +41,7 @@ func TestUpgradeToGloas_Basic(t *testing.T) {
 	require.NoError(t, st.SetLatestExecutionPayloadHeader(wrappedHeader))
 
 	preForkState := st.Copy()
-	mSt, err := gloas.UpgradeToGloas(st)
+	mSt, err := gloas.UpgradeToGloas(t.Context(), st)
 	require.NoError(t, err)
 
 	require.Equal(t, preForkState.GenesisTime(), mSt.GenesisTime())
@@ -114,7 +114,7 @@ func TestUpgradeToGloas_OnboardsBuilderDeposit(t *testing.T) {
 
 	require.NoError(t, st.SetPendingDeposits([]*ethpb.PendingDeposit{deposit}))
 
-	mSt, err := gloas.UpgradeToGloas(st)
+	mSt, err := gloas.UpgradeToGloas(t.Context(), st)
 	require.NoError(t, err)
 
 	pbState, ok := mSt.ToProtoUnsafe().(*ethpb.BeaconStateGloas)

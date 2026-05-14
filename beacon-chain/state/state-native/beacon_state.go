@@ -81,13 +81,18 @@ type BeaconState struct {
 	payloadExpectedWithdrawals   []*enginev1.Withdrawal
 	ptcWindow                    []*ethpb.PTCs
 
-	id                    uint64
-	lock                  sync.RWMutex
-	dirtyFields           map[types.FieldIndex]bool
-	dirtyIndices          map[types.FieldIndex][]uint64
-	stateFieldLeaves      map[types.FieldIndex]*fieldtrie.FieldTrie
-	rebuildTrie           map[types.FieldIndex]bool
-	valMapHandler         *stateutil.ValidatorMapHandler
+	id                uint64
+	lock              sync.RWMutex
+	dirtyFields       map[types.FieldIndex]bool
+	dirtyIndices      map[types.FieldIndex][]uint64
+	stateFieldLeaves  map[types.FieldIndex]*fieldtrie.FieldTrie
+	rebuildTrie       map[types.FieldIndex]bool
+	valMapHandler     *stateutil.ValidatorMapHandler
+	builderMapHandler *stateutil.BuilderMapHandler
+	// hasExitedBuilders is true once any builder's WithdrawableEpoch has been
+	// set to a finite value. Monotonic: once set, never cleared. Used as a
+	// fast-path gate for builderInsertionIndex's reusable-slot scan.
+	hasExitedBuilders     bool
 	merkleLayers          [][][]byte
 	sharedFieldReferences map[types.FieldIndex]*stateutil.Reference
 }

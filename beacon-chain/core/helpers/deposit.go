@@ -3,7 +3,9 @@ package helpers
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -11,8 +13,10 @@ import (
 	"github.com/OffchainLabs/prysm/v7/contracts/deposit"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // ActivateValidatorWithEffectiveBalance updates validator's effective balance, and if it's above MaxEffectiveBalance, validator becomes active in genesis.
@@ -76,6 +80,142 @@ func BatchVerifyPendingDepositsSignatures(ctx context.Context, deposits []*ethpb
 	return true, nil
 }
 
+// BatchVerifyPendingDepositSignatures returns a per-deposit validity slice; falls back to divide-and-conquer on batch failure.
+// Hits the BuilderOnboardingSig cache first so deposits verified pre-fork don't redo BLS work at the Gloas upgrade.
+func BatchVerifyPendingDepositSignatures(ctx context.Context, deposits []*ethpb.PendingDeposit) ([]bool, error) {
+	if len(deposits) == 0 {
+		return nil, nil
+	}
+	lookupStart := time.Now()
+	valid := make([]bool, len(deposits))
+	keys := make([][32]byte, len(deposits))
+	var missIdx []int
+	var missDeposits []*ethpb.PendingDeposit
+	for i, d := range deposits {
+		keys[i] = cache.PendingDepositKey(d)
+		if v, ok := cache.BuilderOnboardingSig.Get(keys[i]); ok {
+			valid[i] = v
+			continue
+		}
+		missIdx = append(missIdx, i)
+		missDeposits = append(missDeposits, d)
+	}
+	lookupDur := time.Since(lookupStart)
+	if len(missDeposits) == 0 {
+		log.WithFields(logrus.Fields{
+			"deposits": len(deposits),
+			"hits":     len(deposits),
+			"misses":   0,
+			"lookup":   lookupDur,
+		}).Info("Pending deposit batch verify: all cache hits")
+		return valid, nil
+	}
+	verifyStart := time.Now()
+	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	missValid := make([]bool, len(missDeposits))
+	if err := verifyPendingDepositsDC(ctx, missDeposits, domain, missValid); err != nil {
+		return nil, err
+	}
+	validCount := 0
+	for k, i := range missIdx {
+		valid[i] = missValid[k]
+		cache.BuilderOnboardingSig.Put(keys[i], missValid[k])
+		if missValid[k] {
+			validCount++
+		}
+	}
+	log.WithFields(logrus.Fields{
+		"deposits":  len(deposits),
+		"hits":      len(deposits) - len(missDeposits),
+		"misses":    len(missDeposits),
+		"missValid": validCount,
+		"lookup":    lookupDur,
+		"verifyBls": time.Since(verifyStart),
+	}).Info("Pending deposit batch verify")
+	return valid, nil
+}
+
+func verifyPendingDepositsDC(ctx context.Context, deps []*ethpb.PendingDeposit, domain []byte, out []bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len(deps) == 0 {
+		return nil
+	}
+	if err := verifyPendingDepositDataWithDomain(ctx, deps, domain); err == nil {
+		for i := range out {
+			out[i] = true
+		}
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len(deps) == 1 {
+		out[0] = false
+		return nil
+	}
+	const fanout = 8
+	chunk := (len(deps) + fanout - 1) / fanout
+	for i := 0; i < len(deps); i += chunk {
+		end := min(i+chunk, len(deps))
+		if err := verifyPendingDepositsDC(ctx, deps[i:end], domain, out[i:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// BatchVerifyDepositRequestSignatures returns a per-request validity slice; falls back to divide-and-conquer on batch failure.
+func BatchVerifyDepositRequestSignatures(ctx context.Context, requests []*enginev1.DepositRequest) ([]bool, error) {
+	if len(requests) == 0 {
+		return nil, nil
+	}
+	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	valid := make([]bool, len(requests))
+	if err := verifyDepositRequestsDC(ctx, requests, domain, valid); err != nil {
+		return nil, err
+	}
+	return valid, nil
+}
+
+func verifyDepositRequestsDC(ctx context.Context, reqs []*enginev1.DepositRequest, domain []byte, out []bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len(reqs) == 0 {
+		return nil
+	}
+	if err := verifyDepositRequestDataWithDomain(ctx, reqs, domain); err == nil {
+		for i := range out {
+			out[i] = true
+		}
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len(reqs) == 1 {
+		out[0] = false
+		return nil
+	}
+	const fanout = 8
+	chunk := (len(reqs) + fanout - 1) / fanout
+	for i := 0; i < len(reqs); i += chunk {
+		end := min(i+chunk, len(reqs))
+		if err := verifyDepositRequestsDC(ctx, reqs[i:end], domain, out[i:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // IsValidDepositSignature returns whether deposit_data is valid
 // def is_valid_deposit_signature(pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: uint64, signature: BLSSignature) -> bool:
 //
@@ -136,28 +276,71 @@ func verifyDepositDataWithDomain(ctx context.Context, deps []*ethpb.Deposit, dom
 	if len(deps) == 0 {
 		return nil
 	}
-	pks := make([]bls.PublicKey, len(deps))
+	pubkeyBytes := make([][]byte, len(deps))
+	for i, dep := range deps {
+		if dep == nil || dep.Data == nil {
+			return errors.New("nil deposit")
+		}
+		pubkeyBytes[i] = dep.Data.PublicKey
+	}
+	pks, err := bls.MultiplePublicKeysFromBytes(pubkeyBytes)
+	if err != nil {
+		return err
+	}
 	sigs := make([][]byte, len(deps))
 	msgs := make([][32]byte, len(deps))
 	for i, dep := range deps {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if dep == nil || dep.Data == nil {
-			return errors.New("nil deposit")
-		}
-		dpk, err := bls.PublicKeyFromBytes(dep.Data.PublicKey)
-		if err != nil {
-			return err
-		}
-		pks[i] = dpk
 		sigs[i] = dep.Data.Signature
-		depositMessage := &ethpb.DepositMessage{
+		sr, err := signing.ComputeSigningRoot(&ethpb.DepositMessage{
 			PublicKey:             dep.Data.PublicKey,
 			WithdrawalCredentials: dep.Data.WithdrawalCredentials,
 			Amount:                dep.Data.Amount,
+		}, domain)
+		if err != nil {
+			return err
 		}
-		sr, err := signing.ComputeSigningRoot(depositMessage, domain)
+		msgs[i] = sr
+	}
+	verify, err := bls.VerifyMultipleSignatures(sigs, msgs, pks)
+	if err != nil {
+		return errors.Errorf("could not verify multiple signatures: %v", err)
+	}
+	if !verify {
+		return errors.New("one or more deposit signatures did not verify")
+	}
+	return nil
+}
+
+func verifyDepositRequestDataWithDomain(ctx context.Context, reqs []*enginev1.DepositRequest, domain []byte) error {
+	if len(reqs) == 0 {
+		return nil
+	}
+	pubkeyBytes := make([][]byte, len(reqs))
+	for i, req := range reqs {
+		if req == nil {
+			return errors.New("nil deposit request")
+		}
+		pubkeyBytes[i] = req.Pubkey
+	}
+	pks, err := bls.MultiplePublicKeysFromBytes(pubkeyBytes)
+	if err != nil {
+		return err
+	}
+	sigs := make([][]byte, len(reqs))
+	msgs := make([][32]byte, len(reqs))
+	for i, req := range reqs {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		sigs[i] = req.Signature
+		sr, err := signing.ComputeSigningRoot(&ethpb.DepositMessage{
+			PublicKey:             req.Pubkey,
+			WithdrawalCredentials: req.WithdrawalCredentials,
+			Amount:                req.Amount,
+		}, domain)
 		if err != nil {
 			return err
 		}
@@ -177,28 +360,29 @@ func verifyPendingDepositDataWithDomain(ctx context.Context, deps []*ethpb.Pendi
 	if len(deps) == 0 {
 		return nil
 	}
-	pks := make([]bls.PublicKey, len(deps))
+	pubkeyBytes := make([][]byte, len(deps))
+	for i, dep := range deps {
+		if dep == nil {
+			return errors.New("nil deposit")
+		}
+		pubkeyBytes[i] = dep.PublicKey
+	}
+	pks, err := bls.MultiplePublicKeysFromBytes(pubkeyBytes)
+	if err != nil {
+		return err
+	}
 	sigs := make([][]byte, len(deps))
 	msgs := make([][32]byte, len(deps))
 	for i, dep := range deps {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if dep == nil {
-			return errors.New("nil deposit")
-		}
-		dpk, err := bls.PublicKeyFromBytes(dep.PublicKey)
-		if err != nil {
-			return err
-		}
-		pks[i] = dpk
 		sigs[i] = dep.Signature
-		depositMessage := &ethpb.DepositMessage{
+		sr, err := signing.ComputeSigningRoot(&ethpb.DepositMessage{
 			PublicKey:             dep.PublicKey,
 			WithdrawalCredentials: dep.WithdrawalCredentials,
 			Amount:                dep.Amount,
-		}
-		sr, err := signing.ComputeSigningRoot(depositMessage, domain)
+		}, domain)
 		if err != nil {
 			return err
 		}

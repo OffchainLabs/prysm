@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	gotime "time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	b "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
@@ -13,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
@@ -146,17 +148,22 @@ func CalculatePostState(
 	}
 
 	// Copy state to avoid mutating the state reference.
+	tCopyStart := gotime.Now()
 	state := rollback.Copy()
+	tCopy := gotime.Since(tCopyStart)
 
 	// Execute per slots transition.
 	var err error
 	parentRoot := signed.Block().ParentRoot()
+	tSlotsStart := gotime.Now()
 	state, err = ProcessSlotsUsingNextSlotCache(ctx, state, parentRoot[:], signed.Block().Slot())
+	tSlots := gotime.Since(tSlotsStart)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process slots")
 	}
 
 	// Execute per block transition.
+	tBlockStart := gotime.Now()
 	if features.Get().EnableProposerPreprocessing {
 		state, err = processBlockForProposing(ctx, state, signed)
 		if err != nil {
@@ -168,6 +175,13 @@ func CalculatePostState(
 			return nil, errors.Wrap(err, "could not process block")
 		}
 	}
+	tBlock := gotime.Since(tBlockStart)
+	log.WithFields(map[string]any{
+		"slot":  signed.Block().Slot(),
+		"copy":  tCopy,
+		"slots": tSlots,
+		"block": tBlock,
+	}).Info("CalculatePostState phase timings")
 	return state, nil
 }
 
@@ -496,6 +510,8 @@ func ProcessBlockForStateRoot(
 		return nil, errors.Wrap(err, "could not process block operation")
 	}
 
+	warmBuilderOnboardingSigCache(state)
+
 	if signed.Block().Version() == version.Phase0 {
 		return state, nil
 	}
@@ -510,6 +526,49 @@ func ProcessBlockForStateRoot(
 	}
 
 	return state, nil
+}
+
+// warmBuilderOnboardingSigCache batch-verifies pending deposits appended at the
+// current slot in the background, so Gloas's OnboardBuildersFromPendingDeposits
+// hits a warm cache instead of doing tens of thousands of BLS pairings at the
+// fork upgrade. No-op outside the Electra/Fulu window where pending_deposits
+// exists and Gloas is the next upgrade.
+func warmBuilderOnboardingSigCache(st state.BeaconState) {
+	if st.Version() < version.Electra || st.Version() >= version.Gloas {
+		return
+	}
+	if params.BeaconConfig().GloasForkEpoch == params.BeaconConfig().FarFutureEpoch {
+		return
+	}
+	newDeposits := st.PendingDepositsAtSlotTail(st.Slot())
+	if len(newDeposits) == 0 {
+		return
+	}
+	slot := st.Slot()
+	go func() {
+		start := gotime.Now()
+		valid, err := helpers.BatchVerifyPendingDepositSignatures(context.Background(), newDeposits)
+		if err != nil {
+			log.WithError(err).Warn("Failed to warm builder onboarding sig cache")
+			return
+		}
+		log.WithFields(map[string]any{
+			"slot":     slot,
+			"deposits": len(newDeposits),
+			"valid":    countTrue(valid),
+			"duration": gotime.Since(start),
+		}).Info("Warmed builder onboarding sig cache")
+	}()
+}
+
+func countTrue(b []bool) int {
+	n := 0
+	for _, v := range b {
+		if v {
+			n++
+		}
+	}
+	return n
 }
 
 // This calls altair block operations.

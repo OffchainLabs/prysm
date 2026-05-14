@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -897,6 +898,10 @@ func TestAddBuilderFromDeposit(t *testing.T) {
 					Balance:           0,
 				},
 			},
+			// Production state goes through InitializeFromProtoUnsafeGloas
+			// which seeds this from the builders slice; manual construction
+			// has to do it itself for the reuse fast-path to be skipped.
+			hasExitedBuilders: true,
 		}
 
 		require.NoError(t, st.AddBuilderFromDeposit(pubkey, wc, 123))
@@ -940,6 +945,122 @@ func TestAddBuilderFromDeposit(t *testing.T) {
 	})
 }
 
+func TestAddBuildersFromDeposits(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.AddBuildersFromDeposits([]state.BuilderDeposit{{}})
+		require.ErrorContains(t, "AddBuildersFromDeposits", err)
+	})
+
+	t.Run("no-op on empty input", func(t *testing.T) {
+		st := &BeaconState{
+			version:     version.Gloas,
+			dirtyFields: make(map[types.FieldIndex]bool),
+			sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+				types.Builders: stateutil.NewRef(1),
+			},
+		}
+		require.NoError(t, st.AddBuildersFromDeposits(nil))
+		require.Equal(t, false, st.dirtyFields[types.Builders])
+	})
+
+	t.Run("appends and updates map when no exits", func(t *testing.T) {
+		var pk0, pk1 [48]byte
+		copy(pk0[:], bytes.Repeat([]byte{0xAA}, 48))
+		copy(pk1[:], bytes.Repeat([]byte{0xBB}, 48))
+		var wc [32]byte
+		copy(wc[:], bytes.Repeat([]byte{0xCC}, 32))
+		wc[0] = 0x42
+
+		statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{})
+		require.NoError(t, err)
+		st := statePb.(*BeaconState)
+
+		require.NoError(t, st.AddBuildersFromDeposits([]state.BuilderDeposit{
+			{Pubkey: pk0, WithdrawalCredentials: wc, Amount: 7},
+			{Pubkey: pk1, WithdrawalCredentials: wc, Amount: 11},
+		}))
+
+		require.Equal(t, 2, len(st.builders))
+		require.DeepEqual(t, pk0[:], st.builders[0].Pubkey)
+		require.DeepEqual(t, pk1[:], st.builders[1].Pubkey)
+		require.Equal(t, primitives.Gwei(7), st.builders[0].Balance)
+		require.Equal(t, primitives.Gwei(11), st.builders[1].Balance)
+		require.Equal(t, true, st.dirtyFields[types.Builders])
+
+		idx0, ok := st.builderMapHandler.Get(pk0)
+		require.Equal(t, true, ok)
+		require.Equal(t, uint64(0), idx0)
+		idx1, ok := st.builderMapHandler.Get(pk1)
+		require.Equal(t, true, ok)
+		require.Equal(t, uint64(1), idx1)
+	})
+
+	t.Run("reuses exited slots then appends overflow", func(t *testing.T) {
+		var pkOld, pkNew0, pkNew1 [48]byte
+		copy(pkOld[:], bytes.Repeat([]byte{0x11}, 48))
+		copy(pkNew0[:], bytes.Repeat([]byte{0x22}, 48))
+		copy(pkNew1[:], bytes.Repeat([]byte{0x33}, 48))
+		var wc [32]byte
+		copy(wc[:], bytes.Repeat([]byte{0xCC}, 32))
+		wc[0] = 0x42
+
+		statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+			Slot: params.BeaconConfig().SlotsPerEpoch * 4,
+			Builders: []*ethpb.Builder{
+				{
+					Pubkey:            pkOld[:],
+					WithdrawableEpoch: 0,
+					Balance:           0,
+				},
+			},
+		})
+		require.NoError(t, err)
+		st := statePb.(*BeaconState)
+		st.hasExitedBuilders = true // exited slot is reusable
+
+		require.NoError(t, st.AddBuildersFromDeposits([]state.BuilderDeposit{
+			{Pubkey: pkNew0, WithdrawalCredentials: wc, Amount: 8},
+			{Pubkey: pkNew1, WithdrawalCredentials: wc, Amount: 9},
+		}))
+
+		require.Equal(t, 2, len(st.builders))
+		require.DeepEqual(t, pkNew0[:], st.builders[0].Pubkey)
+		require.DeepEqual(t, pkNew1[:], st.builders[1].Pubkey)
+
+		_, ok := st.builderMapHandler.Get(pkOld)
+		require.Equal(t, false, ok)
+		idx0, ok := st.builderMapHandler.Get(pkNew0)
+		require.Equal(t, true, ok)
+		require.Equal(t, uint64(0), idx0)
+		idx1, ok := st.builderMapHandler.Get(pkNew1)
+		require.Equal(t, true, ok)
+		require.Equal(t, uint64(1), idx1)
+	})
+}
+
+func TestAddBuildersFromDeposits_CopyOnWrite(t *testing.T) {
+	var pk [48]byte
+	copy(pk[:], bytes.Repeat([]byte{0xAA}, 48))
+	var wc [32]byte
+	copy(wc[:], bytes.Repeat([]byte{0xBB}, 32))
+
+	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{})
+	require.NoError(t, err)
+	st := statePb.(*BeaconState)
+
+	copied := st.Copy().(*BeaconState)
+	require.Equal(t, uint(2), st.sharedFieldReferences[types.Builders].Refs())
+
+	require.NoError(t, copied.AddBuildersFromDeposits([]state.BuilderDeposit{
+		{Pubkey: pk, WithdrawalCredentials: wc, Amount: 5},
+	}))
+	require.Equal(t, 0, len(st.builders))
+	require.Equal(t, 1, len(copied.builders))
+	require.Equal(t, uint(1), st.sharedFieldReferences[types.Builders].Refs())
+	require.Equal(t, uint(1), copied.sharedFieldReferences[types.Builders].Refs())
+}
+
 func TestAddBuilderFromDeposit_CopyOnWrite(t *testing.T) {
 	var pubkey [48]byte
 	copy(pubkey[:], bytes.Repeat([]byte{0xAA}, 48))
@@ -974,7 +1095,7 @@ func TestAddBuilderFromDeposit_CopyOnWrite(t *testing.T) {
 func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
 		st := &BeaconState{version: version.Fulu}
-		err := st.OnboardBuildersFromPendingDeposits()
+		err := st.OnboardBuildersFromPendingDeposits(t.Context())
 		require.ErrorContains(t, "OnboardBuildersFromPendingDeposits", err)
 	})
 
@@ -993,7 +1114,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		}
 
 		st := newGloasState(t, []*ethpb.Validator{validator}, nil, []*ethpb.PendingDeposit{deposit}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 1, len(st.pendingDeposits))
 		require.Equal(t, 0, len(st.builders))
 	})
@@ -1007,7 +1128,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		deposit := newPendingDeposit(t, sk, builderCreds, amount, depSlot, true)
 
 		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{deposit}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 0, len(st.pendingDeposits))
 		require.Equal(t, 1, len(st.builders))
 
@@ -1031,7 +1152,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		deposit := newPendingDeposit(t, sk, nonBuilderCreds, 5, 0, false)
 
 		st := newGloasState(t, nil, []*ethpb.Builder{builder}, []*ethpb.PendingDeposit{deposit}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 0, len(st.pendingDeposits))
 		require.Equal(t, 1, len(st.builders))
 		require.Equal(t, primitives.Gwei(15), st.builders[0].Balance)
@@ -1044,7 +1165,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		deposit := newPendingDeposit(t, sk, builderCreds, 10, 0, false)
 
 		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{deposit}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 0, len(st.pendingDeposits))
 		require.Equal(t, 0, len(st.builders))
 	})
@@ -1059,7 +1180,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		depositBuilder := newPendingDeposit(t, sk, builderCreds, 7, 0, true)
 
 		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{depositValidator, depositBuilder}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 2, len(st.pendingDeposits))
 		require.Equal(t, 0, len(st.builders))
 	})
@@ -1071,7 +1192,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		deposit := newPendingDeposit(t, sk, validatorCreds, 5, 0, false)
 
 		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{deposit}, 0)
-		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits(t.Context()))
 		require.Equal(t, 0, len(st.pendingDeposits))
 		require.Equal(t, 0, len(st.builders))
 	})

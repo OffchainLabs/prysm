@@ -367,15 +367,17 @@ func (b *BeaconState) BuilderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]b
 }
 
 func (b *BeaconState) builderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]byte) (primitives.BuilderIndex, bool) {
-	for i, builder := range b.builders {
-		if builder == nil {
-			continue
-		}
-		if bytes.Equal(builder.Pubkey, pubkey[:]) {
-			return primitives.BuilderIndex(i), true
-		}
+	if b.builderMapHandler == nil {
+		return 0, false
 	}
-	return 0, false
+	idx, ok := b.builderMapHandler.Get(pubkey)
+	if !ok {
+		return 0, false
+	}
+	if idx >= uint64(len(b.builders)) || b.builders[idx] == nil {
+		return 0, false
+	}
+	return primitives.BuilderIndex(idx), true
 }
 
 // ExpectedWithdrawalsGloas returns the withdrawals that a proposer will need to pack in the next block

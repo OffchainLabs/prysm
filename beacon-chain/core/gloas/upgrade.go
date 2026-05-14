@@ -2,6 +2,7 @@ package gloas
 
 import (
 	"context"
+	gotime "time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -144,21 +145,45 @@ import (
 //	    # Cache the signed execution payload bid
 //	    state.latest_execution_payload_bid = bid
 //	</spec>
-func UpgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
+func UpgradeToGloas(ctx context.Context, beaconState state.BeaconState) (state.BeaconState, error) {
+	t0 := gotime.Now()
 	s, err := upgradeToGloas(beaconState)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert to gloas")
 	}
-	ptcWindow, err := initializePTCWindow(context.Background(), s)
+	tUpgrade := gotime.Since(t0)
+
+	t1 := gotime.Now()
+	ptcWindow, err := initializePTCWindow(ctx, s)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize ptc window")
 	}
+	tPTC := gotime.Since(t1)
+
+	t2 := gotime.Now()
 	if err := s.SetPTCWindow(ptcWindow); err != nil {
 		return nil, errors.Wrap(err, "failed to set ptc window")
 	}
-	if err := s.OnboardBuildersFromPendingDeposits(); err != nil {
+	tSetPTC := gotime.Since(t2)
+
+	t3 := gotime.Now()
+	pendingDeposits, err := s.PendingDeposits()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read pending deposits")
+	}
+	if err := s.OnboardBuildersFromPendingDeposits(ctx); err != nil {
 		return nil, errors.Wrap(err, "failed to onboard builders from pending deposits")
 	}
+	tOnboard := gotime.Since(t3)
+
+	log.WithFields(map[string]any{
+		"buildState":      tUpgrade,
+		"initPTCWindow":   tPTC,
+		"setPTCWindow":    tSetPTC,
+		"onboardBuilders": tOnboard,
+		"pendingDeposits": len(pendingDeposits),
+	}).Info("UpgradeToGloas phase timings")
+
 	return s, nil
 }
 
@@ -308,7 +333,7 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		}
 	}
 
-	emptyExecutionRequestsRoot, err := (&enginev1.ExecutionRequests{}).HashTreeRoot()
+	emptyExecutionRequestsRoot, err := enginev1.EmptyExecutionRequestsHashTreeRoot()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute empty execution requests root")
 	}

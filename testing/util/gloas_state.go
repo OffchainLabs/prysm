@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
@@ -15,7 +16,7 @@ func DeterministicGenesisStateGloas(t testing.TB, numValidators uint64) (state.B
 	t.Helper()
 
 	fuluState, privKeys := DeterministicGenesisStateFulu(t, numValidators)
-	beaconState, err := gloas.UpgradeToGloas(fuluState)
+	beaconState, err := gloas.UpgradeToGloas(context.Background(), fuluState)
 	if err != nil {
 		t.Fatal(errors.Wrapf(err, "failed to upgrade genesis beacon state of %d validators to gloas", numValidators))
 	}

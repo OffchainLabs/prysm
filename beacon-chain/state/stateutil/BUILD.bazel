@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "block_header_root.go",
+        "builder_map_handler.go",
         "builder_pending_payments_root.go",
         "builder_pending_withdrawals_root.go",
         "builders_root.go",
