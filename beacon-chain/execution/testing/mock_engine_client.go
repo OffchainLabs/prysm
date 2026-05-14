@@ -41,13 +41,13 @@ type EngineClient struct {
 	OverrideValidHash           [32]byte
 	GetPayloadResponse          *blocks.GetPayloadResponse
 	ErrGetPayload               error
-	BlobSidecars               []blocks.VerifiedROBlob
-	ErrorBlobSidecars          error
-	DataColumnSidecars         []blocks.VerifiedRODataColumn
-	ErrorDataColumnSidecars    error
-	HasBlobsPartialColumns     []blocks.PartialDataColumn
-	ClientVersion              []*structs.ClientVersionV1
-	ErrorClientVersion         error
+	BlobSidecars                []blocks.VerifiedROBlob
+	ErrorBlobSidecars           error
+	DataColumnSidecars          []blocks.VerifiedRODataColumn
+	ErrorDataColumnSidecars     error
+	HasBlobsPartialColumns      []blocks.PartialDataColumn
+	ClientVersion               []*structs.ClientVersionV1
+	ErrorClientVersion          error
 }
 
 // NewPayload --
