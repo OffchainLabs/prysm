@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -53,6 +54,11 @@ func ProcessProposerSlashings(
 	slashings []*ethpb.ProposerSlashing,
 	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "blocks.ProcessProposerSlashings")
+	defer span.End()
+
+	span.SetAttributes(trace.Int64Attribute("count", int64(len(slashings))))
+
 	if exitInfo == nil && len(slashings) > 0 {
 		return nil, errors.New("exit info required to process proposer slashings")
 	}
