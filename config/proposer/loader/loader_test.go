@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
@@ -1032,7 +1033,7 @@ func Test_ProposerSettingsLoader_GasLimitWithoutBuilder(t *testing.T) {
 	}
 }
 
-func Test_ProposerSettingsLoader_NormalizesGasLimitToV2(t *testing.T) {
+func Test_ProposerSettingsLoader_DoesNotMigrateAtLoad(t *testing.T) {
 	makeCliCtx := func(t *testing.T) *cli.Context {
 		app := cli.App{}
 		set := flag.NewFlagSet("test", 0)
@@ -1043,7 +1044,7 @@ func Test_ProposerSettingsLoader_NormalizesGasLimitToV2(t *testing.T) {
 		return cli.NewContext(&app, set, nil)
 	}
 
-	t.Run("gloas-aware + --suggested-gas-limit lifts to top-level Option.GasLimit and bumps Version=2", func(t *testing.T) {
+	t.Run("gloas-configured + --suggested-gas-limit stays v1 (no load-time migration)", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig().Copy()
 		cfg.GloasForkEpoch = 100
@@ -1061,9 +1062,9 @@ func Test_ProposerSettingsLoader_NormalizesGasLimitToV2(t *testing.T) {
 		got, err := loader.Load(cliCtx)
 		require.NoError(t, err)
 		require.NotNil(t, got)
-		require.Equal(t, proposer.SchemaV2, got.Version)
-		require.NotNil(t, got.DefaultConfig)
-		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.GasLimit)
+		// Migration is deferred; settings stay in v1 form at load time.
+		require.Equal(t, uint32(0), got.Version)
+		require.Equal(t, validator.Uint64(0), got.DefaultConfig.GasLimit)
 		require.NotNil(t, got.DefaultConfig.BuilderConfig)
 		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
 	})
@@ -1087,7 +1088,7 @@ func Test_ProposerSettingsLoader_NormalizesGasLimitToV2(t *testing.T) {
 		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
 	})
 
-	t.Run("gloas-aware + explicit version: 1 in DB also migrates to v2", func(t *testing.T) {
+	t.Run("gloas-configured + explicit version: 1 in DB stays v1 at load time", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig().Copy()
 		cfg.GloasForkEpoch = 100
@@ -1119,131 +1120,11 @@ func Test_ProposerSettingsLoader_NormalizesGasLimitToV2(t *testing.T) {
 		got, err := loader.Load(cliCtx)
 		require.NoError(t, err)
 		require.NotNil(t, got)
-		require.Equal(t, proposer.SchemaV2, got.Version)
-		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.GasLimit)
-	})
-
-	t.Run("gloas-aware network: DB-only restart auto-upgrades v1 BuilderConfig.GasLimit to v2", func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig().Copy()
-		cfg.GloasForkEpoch = 100
-		params.OverrideBeaconConfig(cfg)
-
-		app := cli.App{}
-		set := flag.NewFlagSet("test", 0)
-		cliCtx := cli.NewContext(&app, set, nil)
-		validatorDB := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
-		// Pre-seed the DB with a v1-shaped settings (no top-level GasLimit,
-		// only BuilderConfig.GasLimit). Simulates a prior pre-Gloas run.
-		seed := &proposer.Settings{
-			DefaultConfig: &proposer.Option{
-				FeeRecipientConfig: &proposer.FeeRecipientConfig{
-					FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
-				},
-				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  true,
-					GasLimit: validator.Uint64(42000000),
-				},
-			},
-		}
-		require.NoError(t, validatorDB.SaveProposerSettings(cliCtx.Context, seed))
-
-		loader, err := NewProposerSettingsLoader(
-			cliCtx,
-			validatorDB,
-			WithBuilderConfig(),
-			WithGasLimit(),
-		)
-		require.NoError(t, err)
-		got, err := loader.Load(cliCtx)
-		require.NoError(t, err)
-		require.NotNil(t, got)
-		require.Equal(t, uint32(2), got.Version)
-		require.Equal(t, validator.Uint64(42000000), got.DefaultConfig.GasLimit)
-		// BuilderConfig is downgraded (no --enable-builder this run): gas limit
-		// preserved for proposer preferences, relay disabled.
+		require.Equal(t, proposer.SchemaV1, got.Version)
+		require.Equal(t, validator.Uint64(0), got.DefaultConfig.GasLimit)
 		require.NotNil(t, got.DefaultConfig.BuilderConfig)
-		require.Equal(t, false, got.DefaultConfig.BuilderConfig.Enabled)
-		require.Equal(t, validator.Uint64(42000000), got.DefaultConfig.BuilderConfig.GasLimit)
-	})
-
-	t.Run("migration warns on per-validator builder.enabled", func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig().Copy()
-		cfg.GloasForkEpoch = 100
-		params.OverrideBeaconConfig(cfg)
-		hook := logtest.NewGlobal()
-
-		app := cli.App{}
-		set := flag.NewFlagSet("test", 0)
-		cliCtx := cli.NewContext(&app, set, nil)
-		validatorDB := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
-		key1, err := hexutil.Decode("0xa057816155ad77931185101128655c0191bd0214c201ca48ed887f6c4c6adf334070efcd75140eada5ac83a92506dd7a")
-		require.NoError(t, err)
-		seed := &proposer.Settings{
-			DefaultConfig: &proposer.Option{
-				FeeRecipientConfig: &proposer.FeeRecipientConfig{
-					FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
-				},
-				BuilderConfig: &proposer.BuilderConfig{GasLimit: validator.Uint64(30000000)},
-			},
-			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option{
-				bytesutil.ToBytes48(key1): {
-					FeeRecipientConfig: &proposer.FeeRecipientConfig{
-						FeeRecipient: common.HexToAddress("0x50155530FCE8a85ec7055A5F8b2bE214B3DaeFd3"),
-					},
-					BuilderConfig: &proposer.BuilderConfig{
-						Enabled:  true,
-						GasLimit: validator.Uint64(35000000),
-					},
-				},
-			},
-		}
-		require.NoError(t, validatorDB.SaveProposerSettings(cliCtx.Context, seed))
-
-		loader, err := NewProposerSettingsLoader(
-			cliCtx,
-			validatorDB,
-			WithBuilderConfig(),
-			WithGasLimit(),
-		)
-		require.NoError(t, err)
-		_, err = loader.Load(cliCtx)
-		require.NoError(t, err)
-		assert.LogsContain(t, hook, "builder/MEV-boost settings will not be honored")
-	})
-
-	t.Run("migration is silent when no builder relay fields are set", func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig().Copy()
-		cfg.GloasForkEpoch = 100
-		params.OverrideBeaconConfig(cfg)
-		hook := logtest.NewGlobal()
-
-		app := cli.App{}
-		set := flag.NewFlagSet("test", 0)
-		cliCtx := cli.NewContext(&app, set, nil)
-		validatorDB := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
-		seed := &proposer.Settings{
-			DefaultConfig: &proposer.Option{
-				FeeRecipientConfig: &proposer.FeeRecipientConfig{
-					FeeRecipient: common.HexToAddress("0x6e35733c5af9B61374A128e6F85f553aF09ff89A"),
-				},
-				BuilderConfig: &proposer.BuilderConfig{GasLimit: validator.Uint64(30000000)},
-			},
-		}
-		require.NoError(t, validatorDB.SaveProposerSettings(cliCtx.Context, seed))
-
-		loader, err := NewProposerSettingsLoader(
-			cliCtx,
-			validatorDB,
-			WithBuilderConfig(),
-			WithGasLimit(),
-		)
-		require.NoError(t, err)
-		_, err = loader.Load(cliCtx)
-		require.NoError(t, err)
-		assert.LogsDoNotContain(t, hook, "builder/MEV-boost settings will not be honored")
+		// CLI --suggested-gas-limit applied to BuilderConfig.GasLimit in v1.
+		require.Equal(t, validator.Uint64(12345678), got.DefaultConfig.BuilderConfig.GasLimit)
 	})
 
 	t.Run("gloas-aware network: no gas signal anywhere stays v1 (runtime uses chain default)", func(t *testing.T) {
@@ -1310,4 +1191,44 @@ func Test_warnUnusedSchemaFields(t *testing.T) {
 		})
 		assert.LogsContain(t, hook, "per-validator 'gas_limit'")
 	})
+}
+
+func Test_mergeProposerSettings_VersionPrecedence(t *testing.T) {
+	t.Run("loaded.Version wins when non-zero", func(t *testing.T) {
+		merged := mergeProposerSettings(
+			&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2},
+			&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV1},
+			&flagOptions{},
+		)
+		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
+	})
+	t.Run("db.Version used when loaded.Version is 0", func(t *testing.T) {
+		merged := mergeProposerSettings(
+			&validatorpb.ProposerSettingsPayload{},
+			&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV1},
+			&flagOptions{},
+		)
+		require.Equal(t, uint32(proposer.SchemaV1), merged.Version)
+	})
+	t.Run("loaded.Version used when db is nil", func(t *testing.T) {
+		merged := mergeProposerSettings(
+			&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2},
+			nil,
+			&flagOptions{},
+		)
+		require.Equal(t, uint32(proposer.SchemaV2), merged.Version)
+	})
+}
+
+func Test_mergeProposerSettings_CreatesDefaultFromGasLimitFlag(t *testing.T) {
+	gl := validator.Uint64(12345678)
+	merged := mergeProposerSettings(
+		&validatorpb.ProposerSettingsPayload{},
+		nil,
+		&flagOptions{gasLimit: &gl},
+	)
+	require.NotNil(t, merged.DefaultConfig)
+	require.NotNil(t, merged.DefaultConfig.Builder)
+	require.Equal(t, false, merged.DefaultConfig.Builder.Enabled)
+	require.Equal(t, gl, merged.DefaultConfig.Builder.GasLimit)
 }

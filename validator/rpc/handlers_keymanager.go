@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"strings"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
@@ -713,13 +711,7 @@ func (s *Server) DeleteFeeRecipientByPubkey(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// gloasAware reports whether the network has a configured Gloas fork epoch.
-func gloasAware() bool {
-	return params.BeaconConfig().GloasForkEpoch < math.MaxUint64
-}
-
-// GetGasLimit returns the gas limit measured in gwei. In v2 it returns
-// DefaultConfig.GasLimit and ignores the pubkey.
+// GetGasLimit returns the gas limit in gwei.
 func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.GetGasLimit")
 	defer span.End()
@@ -742,8 +734,7 @@ func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// SetGasLimit updates the gas limit. In v2 it writes to DefaultConfig.GasLimit
-// and ignores the pubkey.
+// SetGasLimit updates the gas limit.
 func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.SetGasLimit")
 	defer span.End()
@@ -774,13 +765,10 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	settings := s.validatorService.ProposerSettings()
-	if settings == nil {
-		settings = &proposer.Settings{}
-		if gloasAware() {
-			settings.Version = proposer.SchemaV2
-		}
+	if err := settings.SetGasLimit(bytesutil.ToBytes48(pubkey), validator.Uint64(gasLimit)); err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	settings.SetGasLimit(bytesutil.ToBytes48(pubkey), validator.Uint64(gasLimit))
 
 	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
 		httputil.HandleError(w, "Could not set proposer settings: "+err.Error(), http.StatusInternalServerError)
@@ -789,8 +777,7 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// DeleteGasLimit resets the gas limit to the chain default. In v2 it resets
-// DefaultConfig.GasLimit and ignores the pubkey.
+// DeleteGasLimit resets the gas limit to the chain default.
 func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.keymanagerAPI.DeleteGasLimit")
 	defer span.End()

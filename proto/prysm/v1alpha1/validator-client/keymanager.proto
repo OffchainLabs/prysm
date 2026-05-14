@@ -117,10 +117,10 @@ message SignResponse {
 // ProposerOptionPayload is a property of ProposerSettingsPayload
 message ProposerOptionPayload {
   string fee_recipient = 1;
-  // Deprecated post-Gloas; rejected by v2 schema.
+  // Not honored at schema version 2.
   BuilderConfig builder = 2;
   optional string graffiti = 3;
-  // v2 (post-Gloas) gas limit signal. Honored on default_config only.
+  // v2 gas limit. Honored on default_config only.
   uint64 gas_limit = 4 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/validator.Uint64"

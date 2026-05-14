@@ -273,14 +273,40 @@ func (bc *BuilderConfig) ToConsensus() *validatorpb.BuilderConfig {
 	return c
 }
 
-// isV2 reports whether the settings use the post-Gloas schema (gas limit at
-// top-level Option.GasLimit, pubkey routing ignored on per-validator endpoints).
 func (ps *Settings) isV2() bool {
 	return ps != nil && ps.Version == SchemaV2
 }
 
+// UpgradeToV2 migrates v1 settings to v2 in place. Returns true if changed.
+func (ps *Settings) UpgradeToV2() bool {
+	if ps == nil || ps.isV2() {
+		return false
+	}
+	if ps.DefaultConfig != nil && ps.DefaultConfig.BuilderConfig != nil {
+		if ps.DefaultConfig.GasLimit == 0 {
+			ps.DefaultConfig.GasLimit = ps.DefaultConfig.BuilderConfig.GasLimit
+		}
+		ps.DefaultConfig.BuilderConfig = nil
+	}
+	dropped := 0
+	for _, opt := range ps.ProposeConfig {
+		if opt == nil || opt.BuilderConfig == nil {
+			continue
+		}
+		if opt.BuilderConfig.GasLimit != 0 {
+			dropped++
+		}
+		opt.BuilderConfig = nil
+	}
+	if dropped > 0 {
+		log.Warnf("Dropped per-validator builder.gas_limit on %d key(s) during v1->v2 upgrade; only default_config.gas_limit is honored.", dropped)
+	}
+	ps.Version = SchemaV2
+	return true
+}
+
 // GasLimit returns the configured gas limit (gwei) for pubkey, or the chain
-// default if no override is configured. In v2 the pubkey is ignored.
+// default if no override is configured. v2 ignores the pubkey.
 func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator.Uint64 {
 	chainDefault := validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
 	if ps == nil {
@@ -301,37 +327,51 @@ func (ps *Settings) GasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) validator
 	return chainDefault
 }
 
-// SetGasLimit writes the gas limit. In v2 it writes to DefaultConfig.GasLimit
-// and ignores the pubkey; in v1 it creates/updates the per-validator entry.
-func (ps *Settings) SetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, gasLimit validator.Uint64) {
+// SetGasLimit writes the gas limit. v2 writes DefaultConfig.GasLimit and
+// ignores the pubkey; v1 requires existing settings with builder enabled.
+func (ps *Settings) SetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte, gasLimit validator.Uint64) error {
+	if ps == nil {
+		return errors.New("No proposer settings were found to update")
+	}
 	if ps.isV2() {
 		if ps.DefaultConfig == nil {
 			ps.DefaultConfig = &Option{}
 		}
 		ps.DefaultConfig.GasLimit = gasLimit
-		return
+		return nil
+	}
+	builderEnabled := func(o *Option) bool {
+		return o != nil && o.BuilderConfig != nil && o.BuilderConfig.Enabled
 	}
 	if ps.ProposeConfig == nil {
-		ps.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
-	}
-	opt, found := ps.ProposeConfig[pubkey]
-	if !found {
-		if ps.DefaultConfig != nil {
-			opt = ps.DefaultConfig.Clone()
-		} else {
-			opt = &Option{}
+		if !builderEnabled(ps.DefaultConfig) {
+			return errors.New("Gas limit changes only apply when builder is enabled")
 		}
+		ps.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
+		opt := ps.DefaultConfig.Clone()
+		opt.BuilderConfig.GasLimit = gasLimit
 		ps.ProposeConfig[pubkey] = opt
+		return nil
 	}
-	if opt.BuilderConfig == nil {
-		opt.BuilderConfig = &BuilderConfig{}
+	if opt, found := ps.ProposeConfig[pubkey]; found {
+		if !builderEnabled(opt) {
+			return errors.New("Gas limit changes only apply when builder is enabled")
+		}
+		opt.BuilderConfig.GasLimit = gasLimit
+		return nil
 	}
+	if !builderEnabled(ps.DefaultConfig) {
+		return errors.New("Gas limit changes only apply when builder is enabled")
+	}
+	opt := ps.DefaultConfig.Clone()
 	opt.BuilderConfig.GasLimit = gasLimit
+	ps.ProposeConfig[pubkey] = opt
+	return nil
 }
 
-// ResetGasLimit resets the gas limit to the proposer-config default (or chain
-// default if none). Returns false when there's nothing to reset (404). In v2
-// it resets DefaultConfig.GasLimit and ignores the pubkey.
+// ResetGasLimit resets the gas limit to the chain default. v2 resets
+// DefaultConfig.GasLimit; v1 resets the per-validator BuilderConfig.GasLimit.
+// Returns false when there's nothing to reset.
 func (ps *Settings) ResetGasLimit(pubkey [fieldparams.BLSPubkeyLength]byte) bool {
 	if ps == nil {
 		return false

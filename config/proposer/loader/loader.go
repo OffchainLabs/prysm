@@ -3,7 +3,6 @@ package loader
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
@@ -187,14 +186,6 @@ func (psl *SettingsLoader) Load(cliCtx *cli.Context) (*proposer.Settings, error)
 	return ps, nil
 }
 
-// isGloasAware reports whether the running network has a configured Gloas fork epoch.
-func isGloasAware() bool {
-	return params.BeaconConfig().GloasForkEpoch < math.MaxUint64
-}
-
-// warnUnusedSchemaFields warns when v2 settings carry fields that won't be
-// honored — currently just per-validator gas_limit (signaling must be uniform
-// across an operator's keys; only default_config.gas_limit is read).
 func warnUnusedSchemaFields(ps *proposer.Settings) {
 	if ps == nil || ps.Version != proposer.SchemaV2 {
 		return
@@ -296,12 +287,6 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 		}
 	}
 
-	// Capture deprecation warning intent before strip mutates the inputs.
-	if isGloasAware() && merged.Version < proposerSchemaLatest &&
-		(payloadHasBuilderRelay(loaded) || payloadHasBuilderRelay(db)) {
-		defer log.Warn("Post-Gloas: builder/MEV-boost settings will not be honored. Remove 'builder.enabled' and 'builder.relays' from your proposer settings.")
-	}
-
 	// Merge DefaultConfig
 	if db != nil && db.DefaultConfig != nil {
 		merged.DefaultConfig = db.DefaultConfig
@@ -349,84 +334,11 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 		}
 	}
 
-	applyProposerSchemaMigrations(merged, gasLimitOnly)
 	return merged
 }
 
-// payloadHasBuilderRelay reports whether p has any BuilderConfig with
-// MEV-boost relay fields set (Enabled or Relays) on default or per-validator.
-func payloadHasBuilderRelay(p *validatorpb.ProposerSettingsPayload) bool {
-	if p == nil {
-		return false
-	}
-	hasRelay := func(b *validatorpb.BuilderConfig) bool {
-		return b != nil && (b.Enabled || len(b.Relays) > 0)
-	}
-	if p.DefaultConfig != nil && hasRelay(p.DefaultConfig.Builder) {
-		return true
-	}
-	for _, opt := range p.ProposerConfig {
-		if opt != nil && hasRelay(opt.Builder) {
-			return true
-		}
-	}
-	return false
-}
-
-// proposerSchemaMigration upgrades a settings payload from one schema version
-// to the next. Each migration is responsible for its own trigger logic.
-type proposerSchemaMigration struct {
-	from  uint32
-	apply func(p *validatorpb.ProposerSettingsPayload, gasLimitOnly *validator.Uint64)
-}
-
-// proposerSchemaMigrations runs in order; add a new step here for each
-// future schema bump. The dispatcher walks the chain on each load but each
-// step's body fires at most once per validator lifetime — once a migration
-// bumps p.Version, the early-return guard short-circuits subsequent loads.
-var proposerSchemaMigrations = []proposerSchemaMigration{
-	// Pre-versioned settings (proto3 zero value) and explicit v1 are the
-	// same thing: legacy schema with gas limit on BuilderConfig.GasLimit.
-	{from: proposer.SchemaV1Unset, apply: migrateV1ToV2},
-	{from: proposer.SchemaV1, apply: migrateV1ToV2},
-}
-
-const proposerSchemaLatest = proposer.SchemaV2
-
-func applyProposerSchemaMigrations(p *validatorpb.ProposerSettingsPayload, gasLimitOnly *validator.Uint64) {
-	if p == nil || p.Version >= proposerSchemaLatest {
-		return
-	}
-	for _, m := range proposerSchemaMigrations {
-		if p.Version == m.from {
-			m.apply(p, gasLimitOnly)
-		}
-	}
-}
-
-// migrateV1ToV2 lifts Builder.GasLimit to top-level Option.GasLimit on
-// Gloas-aware networks. Builder fields are left intact for pre-Gloas MEV-boost.
-func migrateV1ToV2(p *validatorpb.ProposerSettingsPayload, _ *validator.Uint64) {
-	if p.DefaultConfig == nil || !isGloasAware() {
-		return
-	}
-	if p.DefaultConfig.GasLimit == 0 && p.DefaultConfig.Builder != nil {
-		p.DefaultConfig.GasLimit = p.DefaultConfig.Builder.GasLimit
-	}
-	if p.DefaultConfig.GasLimit != 0 {
-		p.Version = proposer.SchemaV2
-	}
-}
-
-// stripMEVBoostRelay clears the legacy relay fields, keeping gas_limit when
-// it's still useful: --suggested-gas-limit was passed, or the network is
-// Gloas-aware and the stored BuilderConfig has one. Otherwise drops the builder.
 func stripMEVBoostRelay(b *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.BuilderConfig {
-	if b == nil {
-		return nil
-	}
-	keepGasLimit := gasLimitOnly != nil || (isGloasAware() && b.GasLimit != 0)
-	if !keepGasLimit {
+	if b == nil || gasLimitOnly == nil {
 		return nil
 	}
 	b.Enabled = false

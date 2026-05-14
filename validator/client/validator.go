@@ -852,7 +852,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}()
 	}
 
-	// Builder API path is pre-Gloas only.
+	// TODO: figure out what to do post gloas for builder apis
 	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
 		return nil
 	}
@@ -1073,6 +1073,11 @@ func (v *validator) buildProposerPreferences(
 	}
 
 	ps := v.ProposerSettings()
+	if ps.UpgradeToV2() {
+		if err := v.SetProposerSettings(ctx, ps); err != nil {
+			log.WithError(err).Warn("Failed to persist v1->v2 proposer settings upgrade")
+		}
+	}
 	var signedPrefs []*ethpb.SignedProposerPreferences
 	var sigFailCount int
 

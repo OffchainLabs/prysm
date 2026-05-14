@@ -2653,7 +2653,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{7},
 				},
 			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{},
+			NextEpochDuties:   []*ethpb.ValidatorDuty{},
 			PrevDependentRoot: testProposerPrefDependentRoot,
 			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
@@ -2720,7 +2720,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{midEpochSlot + 2},
 				},
 			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{},
+			NextEpochDuties:   []*ethpb.ValidatorDuty{},
 			PrevDependentRoot: testProposerPrefDependentRoot,
 			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
@@ -2760,7 +2760,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{5},
 				},
 			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{},
+			NextEpochDuties:   []*ethpb.ValidatorDuty{},
 			PrevDependentRoot: testProposerPrefDependentRoot,
 			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
@@ -2826,7 +2826,11 @@ func TestValidator_buildProposerPreferences_V2TopLevelGasLimit(t *testing.T) {
 		duties:             &dutyStore{},
 		submittedPrefSlots: make(map[primitives.Slot]bool),
 	}
+	root := make([]byte, fieldparams.RootLength)
+	root[0] = 1
 	v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot: root,
+		CurrDependentRoot: root,
 		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
 			PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
 		}},
@@ -2836,9 +2840,156 @@ func TestValidator_buildProposerPreferences_V2TopLevelGasLimit(t *testing.T) {
 		}},
 	})
 
-	prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot)
+	prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 	require.Equal(t, 1, len(prefs))
 	require.Equal(t, uint64(55555555), prefs[0].Message.GasLimit)
+}
+
+func TestValidator_buildProposerPreferences_UpgradesV1Settings(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	kp := randKeypair(t)
+	km := newMockKeymanager(t, kp)
+	feeRecipient := feeRecipientFromString(t, "0x1111111111111111111111111111111111111111")
+
+	ctrl := gomock.NewController(t)
+	client := validatormock.NewMockValidatorClient(ctrl)
+	domainCache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
+		NumCounters: 1920,
+		MaxCost:     192,
+		BufferItems: 64,
+	})
+	require.NoError(t, err)
+	client.EXPECT().
+		DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
+		AnyTimes()
+
+	nextEpochProposerSlot := params.BeaconConfig().SlotsPerEpoch + 3
+	midEpochSlot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch / 2)
+
+	v := validator{
+		validatorClient: client,
+		domainDataCache: domainCache,
+		// v1-shaped settings: gas limit lives on BuilderConfig only.
+		proposerSettings: &proposer.Settings{
+			DefaultConfig: &proposer.Option{
+				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
+				BuilderConfig: &proposer.BuilderConfig{
+					Enabled:  true,
+					GasLimit: 42000000,
+				},
+			},
+		},
+		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+			kp.pub: {
+				publicKey: kp.pub[:],
+				status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE},
+				index:     1,
+			},
+		},
+		duties:             &dutyStore{},
+		submittedPrefSlots: make(map[primitives.Slot]bool),
+		db:                 dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false),
+	}
+	root := make([]byte, fieldparams.RootLength)
+	root[0] = 1
+	v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+		PrevDependentRoot: root,
+		CurrDependentRoot: root,
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+			PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
+		}},
+		NextEpochDuties: []*ethpb.ValidatorDuty{{
+			PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
+			ProposerSlots: []primitives.Slot{nextEpochProposerSlot},
+		}},
+	})
+
+	prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
+	require.Equal(t, 1, len(prefs))
+	// Lifted from BuilderConfig.GasLimit -> Option.GasLimit, then read by runtime.
+	require.Equal(t, uint64(42000000), prefs[0].Message.GasLimit)
+
+	// In-memory settings upgraded to v2.
+	ps := v.ProposerSettings()
+	require.Equal(t, proposer.SchemaV2, ps.Version)
+	require.Equal(t, validatorType.Uint64(42000000), ps.DefaultConfig.GasLimit)
+	require.Equal(t, true, ps.DefaultConfig.BuilderConfig == nil)
+
+	// Persisted to the DB.
+	dbps, err := v.db.ProposerSettings(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, proposer.SchemaV2, dbps.Version)
+	require.Equal(t, validatorType.Uint64(42000000), dbps.DefaultConfig.GasLimit)
+}
+
+// Post-fork, PushProposerSettings must not call SubmitValidatorRegistrations
+// (builder API path is pre-Gloas only).
+func TestValidator_PushProposerSettings_SkipsBuilderRegistrationsPostGloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctrl := gomock.NewController(t)
+	ctx := t.Context()
+	db := dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
+	client := validatormock.NewMockValidatorClient(ctrl)
+	nodeClient := validatormock.NewMockNodeClient(ctrl)
+
+	// Pre-fork code path calls SubmitValidatorRegistrations; post-fork must not.
+	client.EXPECT().SubmitValidatorRegistrations(gomock.Any(), gomock.Any()).Times(0)
+	// Everything else is allowed any number of times — we're not asserting on those.
+	client.EXPECT().SubmitSignedProposerPreferences(gomock.Any(), gomock.Any()).Return(&empty.Empty{}, nil).AnyTimes()
+	client.EXPECT().DomainData(gomock.Any(), gomock.Any()).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).AnyTimes()
+	client.EXPECT().PrepareBeaconProposer(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+	v := validator{
+		validatorClient:              client,
+		nodeClient:                   nodeClient,
+		db:                           db,
+		pubkeyToStatus:               make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
+		signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),
+		interopKeysConfig: &local.InteropKeymanagerConfig{
+			NumValidatorKeys: 1,
+			Offset:           1,
+		},
+		duties:             &dutyStore{},
+		submittedPrefSlots: make(map[primitives.Slot]bool),
+	}
+	require.NoError(t, v.WaitForKeymanagerInitialization(ctx))
+	km, err := v.Keymanager()
+	require.NoError(t, err)
+	keys, err := km.FetchValidatingPublicKeys(ctx)
+	require.NoError(t, err)
+	v.pubkeyToStatus[keys[0]] = &validatorStatus{
+		publicKey: keys[0][:],
+		status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE},
+		index:     primitives.ValidatorIndex(1),
+	}
+	client.EXPECT().MultipleValidatorStatus(gomock.Any(), gomock.Any()).Return(
+		&ethpb.MultipleValidatorStatusResponse{
+			Statuses:   []*ethpb.ValidatorStatusResponse{{Status: ethpb.ValidatorStatus_ACTIVE}},
+			PublicKeys: [][]byte{keys[0][:]},
+			Indices:    []primitives.ValidatorIndex{1},
+		}, nil).AnyTimes()
+
+	// Builder enabled — would normally trigger registrations pre-fork.
+	require.NoError(t, v.SetProposerSettings(ctx, &proposer.Settings{
+		DefaultConfig: &proposer.Option{
+			FeeRecipientConfig: &proposer.FeeRecipientConfig{
+				FeeRecipient: common.HexToAddress("0x046Fb65722E7b2455043BFEBf6177F1D2e9738D9"),
+			},
+			BuilderConfig: &proposer.BuilderConfig{Enabled: true, GasLimit: 40000000},
+		},
+	}))
+
+	// slot 1 is post-Gloas (GloasForkEpoch == 0).
+	require.NoError(t, v.PushProposerSettings(ctx, 1, false))
 }
 
 func TestValidator_buildSignedRegReqs_DefaultConfigDisabled(t *testing.T) {
