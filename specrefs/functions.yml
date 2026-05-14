@@ -13066,7 +13066,7 @@
 - name: verify_data_column_sidecar_kzg_proofs#fulu
   sources:
     - file: beacon-chain/core/peerdas/p2p_interface.go
-      search: func VerifyDataColumnsSidecarKZGProofs(
+      search: func BatchVerifyDataColumnsCellsKZGProofs(
   spec: |
     <spec fn="verify_data_column_sidecar_kzg_proofs" fork="fulu" hash="1cd21395">
     def verify_data_column_sidecar_kzg_proofs(sidecar: DataColumnSidecar) -> bool:
