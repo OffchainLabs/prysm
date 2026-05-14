@@ -192,24 +192,36 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 }
 
 func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull bool) (*ethpb.GenericBeaconBlock, error) {
+	buildLog := log.WithField("slot", sBlk.Block().Slot())
+	t0 := time.Now()
+
 	if sBlk.Version() >= version.Gloas && parentFull {
 		if err := vs.applyParentExecutionPayloadToHead(ctx, head, sBlk.Block().ParentRoot()); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not apply parent execution payload: %v", err)
 		}
 	}
+	tApplyParent := time.Since(t0)
 
 	// Build consensus fields in background
+	consensusStart := time.Now()
+	var (
+		tEth1, tDepositsAtts, tSlashings, tExits, tSync, tBLSChanges, tPayloadAtts, tParentReqs time.Duration
+		numDeposits, numAtts                                                                    int
+	)
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		// Set eth1 data.
+		tStart := time.Now()
 		eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
 		if err != nil {
 			eth1Data = &ethpb.Eth1Data{DepositRoot: params.BeaconConfig().ZeroHash[:], BlockHash: params.BeaconConfig().ZeroHash[:]}
 			log.WithError(err).Error("Could not get eth1data")
 		}
 		sBlk.SetEth1Data(eth1Data)
+		tEth1 = time.Since(tStart)
 
 		// Set deposit and attestation.
+		tStart = time.Now()
 		deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, sBlk.Block().Slot(), eth1Data) // TODO: split attestations and deposits
 		if err != nil {
 			sBlk.SetDeposits([]*ethpb.Deposit{})
@@ -222,42 +234,63 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 			if err := sBlk.SetAttestations(atts); err != nil {
 				log.WithError(err).Error("Could not set attestations on block")
 			}
+			numDeposits = len(deposits)
+			numAtts = len(atts)
 		}
+		tDepositsAtts = time.Since(tStart)
 
 		// Set slashings.
+		tStart = time.Now()
 		validProposerSlashings, validAttSlashings := vs.getSlashings(ctx, head)
 		sBlk.SetProposerSlashings(validProposerSlashings)
 		if err := sBlk.SetAttesterSlashings(validAttSlashings); err != nil {
 			log.WithError(err).Error("Could not set attester slashings on block")
 		}
+		tSlashings = time.Since(tStart)
 
 		// Set exits.
+		tStart = time.Now()
 		sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
+		tExits = time.Since(tStart)
 
 		// Set sync aggregate. New in Altair.
+		tStart = time.Now()
 		vs.setSyncAggregate(ctx, sBlk, head)
+		tSync = time.Since(tStart)
 
 		// Set bls to execution change. New in Capella.
+		tStart = time.Now()
 		vs.setBlsToExecData(sBlk, head)
+		tBLSChanges = time.Since(tStart)
 
 		// Set payload attestations. New in Gloas.
 		if sBlk.Version() >= version.Gloas {
+			tStart = time.Now()
 			if err := sBlk.SetPayloadAttestations(vs.getPayloadAttestations(ctx, head, sBlk.Block().ParentRoot())); err != nil {
 				log.WithError(err).Error("Could not set payload attestations")
 			}
+			tPayloadAtts = time.Since(tStart)
+			tStart = time.Now()
 			if err := vs.setParentExecutionRequests(ctx, sBlk, head, parentFull); err != nil {
 				log.WithError(err).Error("Could not set parent execution requests")
 			}
+			tParentReqs = time.Since(tStart)
 		}
 	})
 
+	execStart := time.Now()
+	var (
+		tLocalPayload, tBuilderBid, tSetExec time.Duration
+	)
 	winningBid := primitives.ZeroWei()
 	selfBuildEnvelope := true
 	var bundle enginev1.BlobsBundler
 	var local *blocks.GetPayloadResponse
 	if sBlk.Version() >= version.Bellatrix {
 		var err error
+		tStart := time.Now()
 		local, err = vs.getLocalPayload(ctx, sBlk.Block(), head, parentFull)
+		tLocalPayload = time.Since(tStart)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
 		}
@@ -271,40 +304,78 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 					return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
 				}
 				parentGasLimit := latestHeader.GasLimit()
+				tStart := time.Now()
 				builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
+				tBuilderBid = time.Since(tStart)
 				if err != nil {
 					builderGetPayloadMissCount.Inc()
 					log.WithError(err).Error("Could not get builder payload")
 				}
 			}
 
+			tStart = time.Now()
 			winningBid, bundle, err = setExecutionData(ctx, sBlk, local, builderBid, builderBoostFactor)
+			tSetExec = time.Since(tStart)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
 			}
 		} else {
 			selfBuildOnly := local.OverrideBuilder || skipMevBoost
+			tStart = time.Now()
 			selfBuildEnvelope, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
+			tSetExec = time.Since(tStart)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
 			}
 		}
 	}
+	tExec := time.Since(execStart)
 
+	waitStart := time.Now()
 	wg.Wait()
+	tWait := time.Since(waitStart)
+	tConsensus := time.Since(consensusStart)
 
+	stateRootStart := time.Now()
 	sr, _, err := vs.computePostBlockStateAndRoot(ctx, sBlk)
+	tStateRoot := time.Since(stateRootStart)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not compute state root: %v", err)
 	}
 	sBlk.SetStateRoot(sr)
 
+	var tEnvelope time.Duration
 	// For Gloas self-build, cache the execution payload envelope now that the block is fully built.
 	if sBlk.Version() >= version.Gloas && selfBuildEnvelope {
+		tStart := time.Now()
 		if err := vs.storeExecutionPayloadEnvelope(sBlk, local); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not build execution payload envelope: %v", err)
 		}
+		tEnvelope = time.Since(tStart)
 	}
+
+	buildLog.WithFields(logrus.Fields{
+		"total":        time.Since(t0),
+		"applyParent":  tApplyParent,
+		"exec":         tExec,
+		"localPayload": tLocalPayload,
+		"builderBid":   tBuilderBid,
+		"setExec":      tSetExec,
+		"consensusBg":  tConsensus,
+		"wgWait":       tWait,
+		"stateRoot":    tStateRoot,
+		"envelope":     tEnvelope,
+		"eth1":         tEth1,
+		"depositsAtts": tDepositsAtts,
+		"slashings":    tSlashings,
+		"exits":        tExits,
+		"syncAgg":      tSync,
+		"blsChanges":   tBLSChanges,
+		"payloadAtts":  tPayloadAtts,
+		"parentReqs":   tParentReqs,
+		"numDeposits":  numDeposits,
+		"numAtts":      numAtts,
+	}).Info("Block build phase timings")
 
 	return vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
 }
