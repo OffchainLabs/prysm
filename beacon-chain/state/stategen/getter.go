@@ -185,7 +185,6 @@ func (s *State) StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) 
 	if err != nil {
 		return nil, errors.Wrap(err, "could not replay blocks")
 	}
-
 	return startState, nil
 }
 
@@ -306,13 +305,12 @@ func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32
 		return startState, nil
 	}
 
-	blks, err := s.loadBlocks(ctx, startState.Slot()+1, targetSlot, bytesutil.ToBytes32(summary.Root))
+	blks, err := s.loadBlocks(ctx, startState.Slot()+1, targetSlot, blockRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not load blocks for hot state using root")
 	}
 
 	replayBlockCount.Observe(float64(len(blks)))
-
 	return s.replayBlocks(ctx, startState, blks, targetSlot)
 }
 

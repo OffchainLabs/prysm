@@ -2,6 +2,7 @@ package enginev1
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -15,6 +16,16 @@ var (
 	crExample = &ConsolidationRequest{}
 	crSize    = crExample.SizeSSZ()
 )
+
+// emptyRequestsRootOnce merkleizes a zero-value ExecutionRequests.
+var emptyRequestsRootOnce = sync.OnceValues(func() ([32]byte, error) {
+	return (&ExecutionRequests{}).HashTreeRoot()
+})
+
+// EmptyExecutionRequestsHashTreeRoot returns the merkle root of an empty ExecutionRequests.
+func EmptyExecutionRequestsHashTreeRoot() ([32]byte, error) {
+	return emptyRequestsRootOnce()
+}
 
 const (
 	DepositRequestType = iota
@@ -30,10 +41,14 @@ type ExecutionRequestLimits struct {
 }
 
 func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests(limits ExecutionRequestLimits) (*ExecutionRequests, error) {
+	return decodeExecutionRequestList(ebe.ExecutionRequests, limits)
+}
+
+func decodeExecutionRequestList(raw [][]byte, limits ExecutionRequestLimits) (*ExecutionRequests, error) {
 	requests := &ExecutionRequests{}
 	var prevTypeNum *uint8
-	for i := range ebe.ExecutionRequests {
-		requestType, requestListInSSZBytes, err := decodeExecutionRequest(ebe.ExecutionRequests[i])
+	for i := range raw {
+		requestType, requestListInSSZBytes, err := decodeExecutionRequest(raw[i])
 		if err != nil {
 			return nil, err
 		}

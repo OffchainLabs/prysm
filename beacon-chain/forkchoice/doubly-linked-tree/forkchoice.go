@@ -325,15 +325,20 @@ func (f *ForkChoice) updateBalances() error {
 			if pn != nil && vote.currentRoot != zHash {
 				if pending {
 					if pn.node.balance < oldBalance {
-						log.WithFields(logrus.Fields{
-							"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
-							"oldBalance":                 oldBalance,
-							"nodeBalance":                pn.node.balance,
-							"nodeWeight":                 pn.node.weight,
-							"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
-							"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
-							"previousProposerBoostScore": f.store.previousProposerBoostScore,
-						}).Warning("node with invalid balance, setting it to zero")
+						if pn.node.slot == 0 {
+							log.WithField("nodeRoot", fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:]))).
+								Debug("Genesis node pending balance underflow, clamping to zero")
+						} else {
+							log.WithFields(logrus.Fields{
+								"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
+								"oldBalance":                 oldBalance,
+								"nodeBalance":                pn.node.balance,
+								"nodeWeight":                 pn.node.weight,
+								"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
+								"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
+								"previousProposerBoostScore": f.store.previousProposerBoostScore,
+							}).Warning("node with invalid balance, setting it to zero")
+						}
 						pn.node.balance = 0
 					} else {
 						pn.node.balance -= oldBalance
@@ -378,9 +383,12 @@ func (f *ForkChoice) ProposerBoost() [fieldparams.RootLength]byte {
 
 // SetOptimisticToValid sets the node with the given root as a fully validated node. The payload for this root MUST have been processed.
 func (f *ForkChoice) SetOptimisticToValid(ctx context.Context, root [fieldparams.RootLength]byte) error {
-	fn, ok := f.store.fullNodeByRoot[root]
-	if !ok || fn == nil {
-		return errors.Wrap(ErrNilNode, "could not set node to valid")
+	fn := f.store.fullNodeByRoot[root]
+	if fn == nil {
+		fn = f.store.emptyNodeByRoot[root]
+		if fn == nil {
+			return errors.Wrapf(ErrNilNode, "could not set node to valid, no node found for root: %#x", bytesutil.Trunc(root[:]))
+		}
 	}
 	return f.store.setNodeAndParentValidated(ctx, fn)
 }
@@ -533,6 +541,19 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 			bcp.Block,
 			bcp.JustifiedCheckpoint.Epoch, bcp.FinalizedCheckpoint.Epoch); err != nil {
 			return err
+		}
+		if bcp.HasPayload {
+			root := bcp.Block.Root()
+			en := f.store.emptyNodeByRoot[root]
+			if en != nil && f.store.fullNodeByRoot[root] == nil {
+				f.store.fullNodeByRoot[root] = &PayloadNode{
+					node:       en.node,
+					optimistic: true,
+					timestamp:  time.Now(),
+					full:       true,
+					children:   make([]*Node, 0),
+				}
+			}
 		}
 		if err := f.updateCheckpoints(ctx, bcp.JustifiedCheckpoint, bcp.FinalizedCheckpoint); err != nil {
 			return err

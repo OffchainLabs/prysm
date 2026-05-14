@@ -6,7 +6,6 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -33,8 +32,8 @@ func TestPayloadAttestationSubscriber_NilData(t *testing.T) {
 }
 
 func TestPayloadAttestationSubscriber_NoPool(t *testing.T) {
-	st, _ := util.DeterministicGenesisState(t, 64)
-	ptc, err := gloas.PayloadCommittee(t.Context(), st, 0)
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
+	ptc, err := st.PayloadCommitteeReadOnly(0)
 	require.NoError(t, err)
 	require.NotEmpty(t, ptc)
 
@@ -81,8 +80,8 @@ func TestPayloadAttestationSubscriber_HeadStateError(t *testing.T) {
 }
 
 func TestPayloadAttestationSubscriber_ValidatorInPTC(t *testing.T) {
-	st, _ := util.DeterministicGenesisState(t, 64)
-	ptc, err := gloas.PayloadCommittee(t.Context(), st, 0)
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
+	ptc, err := st.PayloadCommitteeReadOnly(0)
 	require.NoError(t, err)
 	require.NotEmpty(t, ptc)
 
@@ -108,8 +107,8 @@ func TestPayloadAttestationSubscriber_ValidatorInPTC(t *testing.T) {
 }
 
 func TestPayloadAttestationSubscriber_ValidatorNotInPTC(t *testing.T) {
-	st, _ := util.DeterministicGenesisState(t, 64)
-	ptc, err := gloas.PayloadCommittee(t.Context(), st, 0)
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
+	ptc, err := st.PayloadCommitteeReadOnly(0)
 	require.NoError(t, err)
 
 	ptcSet := make(map[primitives.ValidatorIndex]bool, len(ptc))

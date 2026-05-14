@@ -2,8 +2,18 @@ package state_native
 
 import (
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/pkg/errors"
 )
+
+// ErrProposerDependentRootUnderflow is returned by ProposerDependentRoot when
+// the proposal epoch is less than 2, in which case the spec falls back to the
+// genesis block root — callers must supply that themselves.
+var ErrProposerDependentRootUnderflow = errors.New("proposer dependent root: epoch < 2")
 
 // LatestBlockHeader stored within the beacon state.
 func (b *BeaconState) LatestBlockHeader() *ethpb.BeaconBlockHeader {
@@ -75,4 +85,31 @@ func (b *BeaconState) BlockRootAtIndex(idx uint64) ([]byte, error) {
 		return nil, err
 	}
 	return r[:], nil
+}
+
+// ProposerDependentRoot is the spec's get_proposer_dependent_root(state, epoch(slot)) =
+// state.block_roots[start_slot(epoch(slot)-1) - 1]. Returns
+// ErrProposerDependentRootUnderflow when the proposal epoch is < 2; the spec's
+// fallback to the genesis block root is the caller's responsibility.
+func (b *BeaconState) ProposerDependentRoot(slot primitives.Slot) ([32]byte, error) {
+	epoch := slots.ToEpoch(slot)
+	if epoch < 2 {
+		return [32]byte{}, ErrProposerDependentRootUnderflow
+	}
+	boundary, err := slots.EpochStart(epoch - 1)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "epoch start")
+	}
+	target := boundary - 1
+	b.lock.RLock()
+	stateSlot := b.slot
+	b.lock.RUnlock()
+	if target >= stateSlot || stateSlot > target+params.BeaconConfig().SlotsPerHistoricalRoot {
+		return [32]byte{}, errors.Errorf("slot %d out of bounds", target)
+	}
+	rootBytes, err := b.BlockRootAtIndex(uint64(target % params.BeaconConfig().SlotsPerHistoricalRoot))
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "block root at slot")
+	}
+	return bytesutil.ToBytes32(rootBytes), nil
 }

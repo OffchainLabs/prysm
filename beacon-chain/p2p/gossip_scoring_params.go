@@ -52,7 +52,9 @@ const (
 	// lightClientFinalityUpdateWeight specifies the scoring weight that we apply to
 	// our light client finality update topic.
 	lightClientFinalityUpdateWeight = 0.05
-
+	// signedProposerPreferencesWeight specifies the scoring weight that we apply to
+	// our signed proposer preferences topic.
+	signedProposerPreferencesWeight = 0.05
 	// maxInMeshScore describes the max score a peer can attain from being in the mesh.
 	maxInMeshScore = 10
 	// maxFirstDeliveryScore describes the max score a peer can obtain from first deliveries.
@@ -150,6 +152,9 @@ func (s *Service) topicScoreParams(topic string) (*pubsub.TopicScoreParams, erro
 		return defaultBlockTopicParams(), nil
 	case strings.Contains(topic, GossipExecutionPayloadEnvelopeMessage):
 		// TODO: Revisit scoring params for execution payload envelope gossip.
+		return defaultBlockTopicParams(), nil
+	case strings.Contains(topic, GossipSignedProposerPreferencesMessage):
+		// TODO: Revisit scoring params for signed proposer preferences gossip.
 		return defaultBlockTopicParams(), nil
 	default:
 		return nil, errors.Errorf("unrecognized topic provided for parameter registration: %s", topic)

@@ -32,6 +32,7 @@ type Server struct {
 	BlockNotifier           blockfeed.Notifier
 	OperationNotifier       operation.Notifier
 	Broadcaster             p2p.Broadcaster
+	DataColumnReceiver      blockchain.DataColumnReceiver
 	AttestationCache        *cache.AttestationCache
 	AttestationsPool        attestations.Pool
 	SlashingsPool           slashings.PoolManager

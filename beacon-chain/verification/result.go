@@ -59,6 +59,8 @@ func (r Requirement) String() string {
 		return "RequireBuilderValid"
 	case RequirePayloadHashValid:
 		return "RequirePayloadHashValid"
+	case RequireExecutionRequestsRootValid:
+		return "RequireExecutionRequestsRootValid"
 	case RequireEnvelopeSlotAboveFinalized:
 		return "RequireEnvelopeSlotAboveFinalized"
 	case RequireEnvelopeSlotMatchesBlock:
@@ -83,8 +85,8 @@ func (r Requirement) String() string {
 		return "RequireBidBuilderCanCover"
 	case RequireBidSignatureValid:
 		return "RequireBidSignatureValid"
-	case RequireProposerPreferencesNextEpoch:
-		return "RequireProposerPreferencesNextEpoch"
+	case RequireProposerPreferencesCurrentOrNextEpoch:
+		return "RequireProposerPreferencesCurrentOrNextEpoch"
 	case RequireProposerPreferencesProposalSlotValid:
 		return "RequireProposerPreferencesProposalSlotValid"
 	case RequireProposerPreferencesSignatureValid:

@@ -220,7 +220,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BeaconStateDenebFieldCount:     28,
 	BeaconStateElectraFieldCount:   37,
 	BeaconStateFuluFieldCount:      38,
-	BeaconStateGloasFieldCount:     45,
+	BeaconStateGloasFieldCount:     46,
 
 	// Slasher related values.
 	WeakSubjectivityPeriod:          54000,
@@ -346,9 +346,12 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BalancePerAdditionalCustodyGroup:      32_000_000_000,
 
 	// Values related to gloas
-	BuilderPaymentThresholdNumerator:   6,
-	BuilderPaymentThresholdDenominator: 10,
-	MaxRequestPayloads:                 128,
+	BuilderPaymentThresholdNumerator:     6,
+	BuilderPaymentThresholdDenominator:   10,
+	MaxRequestPayloads:                   128,
+	ChurnLimitQuotientGloas:              32_768,
+	ConsolidationChurnLimitQuotient:      65_536,
+	MaxPerEpochActivationChurnLimitGloas: 256_000_000_000,
 
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB

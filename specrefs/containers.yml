@@ -242,7 +242,7 @@
 - name: BeaconBlockBody#gloas
   sources: []
   spec: |
-    <spec ssz_object="BeaconBlockBody" fork="gloas" hash="7e472a77">
+    <spec ssz_object="BeaconBlockBody" fork="gloas" hash="7a5140aa">
     class BeaconBlockBody(Container):
         randao_reveal: BLSSignature
         eth1_data: Eth1Data
@@ -264,6 +264,8 @@
         signed_execution_payload_bid: SignedExecutionPayloadBid
         # [New in Gloas:EIP7732]
         payload_attestations: List[PayloadAttestation, MAX_PAYLOAD_ATTESTATIONS]
+        # [New in Gloas:EIP7732]
+        parent_execution_requests: ExecutionRequests
     </spec>
 
 - name: BeaconBlockHeader#phase0
@@ -568,7 +570,7 @@
 - name: BeaconState#gloas
   sources: []
   spec: |
-    <spec ssz_object="BeaconState" fork="gloas" hash="c33b0db2">
+    <spec ssz_object="BeaconState" fork="gloas" hash="2c32353c">
     class BeaconState(Container):
         genesis_time: uint64
         genesis_validators_root: Root
@@ -597,7 +599,7 @@
         # [Modified in Gloas:EIP7732]
         # Removed `latest_execution_payload_header`
         # [New in Gloas:EIP7732]
-        latest_execution_payload_bid: ExecutionPayloadBid
+        latest_block_hash: Hash32
         next_withdrawal_index: WithdrawalIndex
         next_withdrawal_validator_index: ValidatorIndex
         historical_summaries: List[HistoricalSummary, HISTORICAL_ROOTS_LIMIT]
@@ -622,9 +624,119 @@
         # [New in Gloas:EIP7732]
         builder_pending_withdrawals: List[BuilderPendingWithdrawal, BUILDER_PENDING_WITHDRAWALS_LIMIT]
         # [New in Gloas:EIP7732]
-        latest_block_hash: Hash32
+        latest_execution_payload_bid: ExecutionPayloadBid
         # [New in Gloas:EIP7732]
         payload_expected_withdrawals: List[Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD]
+        # [New in Gloas:EIP7732]
+        ptc_window: Vector[Vector[ValidatorIndex, PTC_SIZE], (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH]
+    </spec>
+
+- name: BeaconState#heze
+  sources: []
+  spec: |
+    <spec ssz_object="BeaconState" fork="heze" hash="8a0dfed9">
+    class BeaconState(Container):
+        genesis_time: uint64
+        genesis_validators_root: Root
+        slot: Slot
+        fork: Fork
+        latest_block_header: BeaconBlockHeader
+        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
+        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
+        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        eth1_data: Eth1Data
+        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
+        eth1_deposit_index: uint64
+        validators: List[Validator, VALIDATOR_REGISTRY_LIMIT]
+        balances: List[Gwei, VALIDATOR_REGISTRY_LIMIT]
+        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
+        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
+        previous_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
+        current_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
+        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        previous_justified_checkpoint: Checkpoint
+        current_justified_checkpoint: Checkpoint
+        finalized_checkpoint: Checkpoint
+        inactivity_scores: List[uint64, VALIDATOR_REGISTRY_LIMIT]
+        current_sync_committee: SyncCommittee
+        next_sync_committee: SyncCommittee
+        latest_block_hash: Hash32
+        next_withdrawal_index: WithdrawalIndex
+        next_withdrawal_validator_index: ValidatorIndex
+        historical_summaries: List[HistoricalSummary, HISTORICAL_ROOTS_LIMIT]
+        deposit_requests_start_index: uint64
+        deposit_balance_to_consume: Gwei
+        exit_balance_to_consume: Gwei
+        earliest_exit_epoch: Epoch
+        consolidation_balance_to_consume: Gwei
+        earliest_consolidation_epoch: Epoch
+        pending_deposits: List[PendingDeposit, PENDING_DEPOSITS_LIMIT]
+        pending_partial_withdrawals: List[PendingPartialWithdrawal, PENDING_PARTIAL_WITHDRAWALS_LIMIT]
+        pending_consolidations: List[PendingConsolidation, PENDING_CONSOLIDATIONS_LIMIT]
+        proposer_lookahead: Vector[ValidatorIndex, (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH]
+        builders: List[Builder, BUILDER_REGISTRY_LIMIT]
+        next_withdrawal_builder_index: BuilderIndex
+        execution_payload_availability: Bitvector[SLOTS_PER_HISTORICAL_ROOT]
+        builder_pending_payments: Vector[BuilderPendingPayment, 2 * SLOTS_PER_EPOCH]
+        builder_pending_withdrawals: List[BuilderPendingWithdrawal, BUILDER_PENDING_WITHDRAWALS_LIMIT]
+        # [Modified in Heze:EIP7805]
+        latest_execution_payload_bid: ExecutionPayloadBid
+        payload_expected_withdrawals: List[Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD]
+        ptc_window: Vector[Vector[ValidatorIndex, PTC_SIZE], (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH]
+    </spec>
+
+- name: BeaconState#heze
+  sources: []
+  spec: |
+    <spec ssz_object="BeaconState" fork="heze" hash="8a0dfed9">
+    class BeaconState(Container):
+        genesis_time: uint64
+        genesis_validators_root: Root
+        slot: Slot
+        fork: Fork
+        latest_block_header: BeaconBlockHeader
+        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
+        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
+        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        eth1_data: Eth1Data
+        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
+        eth1_deposit_index: uint64
+        validators: List[Validator, VALIDATOR_REGISTRY_LIMIT]
+        balances: List[Gwei, VALIDATOR_REGISTRY_LIMIT]
+        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
+        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
+        previous_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
+        current_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
+        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        previous_justified_checkpoint: Checkpoint
+        current_justified_checkpoint: Checkpoint
+        finalized_checkpoint: Checkpoint
+        inactivity_scores: List[uint64, VALIDATOR_REGISTRY_LIMIT]
+        current_sync_committee: SyncCommittee
+        next_sync_committee: SyncCommittee
+        latest_block_hash: Hash32
+        next_withdrawal_index: WithdrawalIndex
+        next_withdrawal_validator_index: ValidatorIndex
+        historical_summaries: List[HistoricalSummary, HISTORICAL_ROOTS_LIMIT]
+        deposit_requests_start_index: uint64
+        deposit_balance_to_consume: Gwei
+        exit_balance_to_consume: Gwei
+        earliest_exit_epoch: Epoch
+        consolidation_balance_to_consume: Gwei
+        earliest_consolidation_epoch: Epoch
+        pending_deposits: List[PendingDeposit, PENDING_DEPOSITS_LIMIT]
+        pending_partial_withdrawals: List[PendingPartialWithdrawal, PENDING_PARTIAL_WITHDRAWALS_LIMIT]
+        pending_consolidations: List[PendingConsolidation, PENDING_CONSOLIDATIONS_LIMIT]
+        proposer_lookahead: Vector[ValidatorIndex, (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH]
+        builders: List[Builder, BUILDER_REGISTRY_LIMIT]
+        next_withdrawal_builder_index: BuilderIndex
+        execution_payload_availability: Bitvector[SLOTS_PER_HISTORICAL_ROOT]
+        builder_pending_payments: Vector[BuilderPendingPayment, 2 * SLOTS_PER_EPOCH]
+        builder_pending_withdrawals: List[BuilderPendingWithdrawal, BUILDER_PENDING_WITHDRAWALS_LIMIT]
+        # [Modified in Heze:EIP7805]
+        latest_execution_payload_bid: ExecutionPayloadBid
+        payload_expected_withdrawals: List[Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD]
+        ptc_window: Vector[Vector[ValidatorIndex, PTC_SIZE], (2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH]
     </spec>
 
 - name: BlobIdentifier#deneb
@@ -914,10 +1026,38 @@
         excess_blob_gas: uint64
     </spec>
 
+- name: ExecutionPayload#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="ExecutionPayload" fork="gloas" hash="d399d858">
+    class ExecutionPayload(Container):
+        parent_hash: Hash32
+        fee_recipient: ExecutionAddress
+        state_root: Bytes32
+        receipts_root: Bytes32
+        logs_bloom: ByteVector[BYTES_PER_LOGS_BLOOM]
+        prev_randao: Bytes32
+        block_number: uint64
+        gas_limit: uint64
+        gas_used: uint64
+        timestamp: uint64
+        extra_data: ByteList[MAX_EXTRA_DATA_BYTES]
+        base_fee_per_gas: uint256
+        block_hash: Hash32
+        transactions: List[Transaction, MAX_TRANSACTIONS_PER_PAYLOAD]
+        withdrawals: List[Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD]
+        blob_gas_used: uint64
+        excess_blob_gas: uint64
+        # [New in Gloas:EIP7928]
+        block_access_list: BlockAccessList
+        # [New in Gloas:EIP7843]
+        slot_number: uint64
+    </spec>
+
 - name: ExecutionPayloadBid#gloas
   sources: []
   spec: |
-    <spec ssz_object="ExecutionPayloadBid" fork="gloas" hash="1a7b9dea">
+    <spec ssz_object="ExecutionPayloadBid" fork="gloas" hash="0c77d857">
     class ExecutionPayloadBid(Container):
         parent_block_hash: Hash32
         parent_block_root: Root
@@ -930,19 +1070,40 @@
         value: Gwei
         execution_payment: Gwei
         blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        execution_requests_root: Root
+    </spec>
+
+- name: ExecutionPayloadBid#heze
+  sources: []
+  spec: |
+    <spec ssz_object="ExecutionPayloadBid" fork="heze" hash="1a81a347">
+    class ExecutionPayloadBid(Container):
+        parent_block_hash: Hash32
+        parent_block_root: Root
+        block_hash: Hash32
+        prev_randao: Bytes32
+        fee_recipient: ExecutionAddress
+        gas_limit: uint64
+        builder_index: BuilderIndex
+        slot: Slot
+        value: Gwei
+        execution_payment: Gwei
+        blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        execution_requests_root: Root
+        # [New in Heze:EIP7805]
+        inclusion_list_bits: Bitvector[INCLUSION_LIST_COMMITTEE_SIZE]
     </spec>
 
 - name: ExecutionPayloadEnvelope#gloas
   sources: []
   spec: |
-    <spec ssz_object="ExecutionPayloadEnvelope" fork="gloas" hash="ec5c0233">
+    <spec ssz_object="ExecutionPayloadEnvelope" fork="gloas" hash="3df22cd3">
     class ExecutionPayloadEnvelope(Container):
         payload: ExecutionPayload
         execution_requests: ExecutionRequests
         builder_index: BuilderIndex
         beacon_block_root: Root
-        slot: Slot
-        state_root: Root
+        parent_beacon_block_root: Root
     </spec>
 
 - name: ExecutionPayloadHeader#bellatrix
@@ -1090,6 +1251,17 @@
         state_summary_root: Root
     </spec>
 
+- name: InclusionList#heze
+  sources: []
+  spec: |
+    <spec ssz_object="InclusionList" fork="heze" hash="7c3fadd5">
+    class InclusionList(Container):
+        slot: Slot
+        validator_index: ValidatorIndex
+        inclusion_list_committee_root: Root
+        transactions: List[Transaction, MAX_TRANSACTIONS_PER_PAYLOAD]
+    </spec>
+
 - name: IndexedAttestation#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_block.proto
@@ -1206,6 +1378,20 @@
         execution_branch: ExecutionBranch
     </spec>
 
+- name: LightClientHeader#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="LightClientHeader" fork="gloas" hash="b0387ab2">
+    class LightClientHeader(Container):
+        beacon: BeaconBlockHeader
+        # [Modified in Gloas:EIP7732]
+        # Removed `execution`
+        # [New in Gloas:EIP7732]
+        execution_block_hash: Hash32
+        # [Modified in Gloas:EIP7732]
+        execution_branch: ExecutionBranch
+    </spec>
+
 - name: LightClientOptimisticUpdate#altair
   sources:
     - file: proto/prysm/v1alpha1/light_client.proto
@@ -1278,6 +1464,66 @@
         kzg_proof: KZGProof
         column_index: ColumnIndex
         row_index: RowIndex
+    </spec>
+
+- name: PartialDataColumnGroupID#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PartialDataColumnGroupID" fork="gloas" hash="9e8865b1">
+    class PartialDataColumnGroupID(Container):
+        slot: Slot
+        beacon_block_root: Root
+    </spec>
+
+- name: PartialDataColumnHeader#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="PartialDataColumnHeader" fork="fulu" hash="9a335538">
+    class PartialDataColumnHeader(Container):
+        kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        signed_block_header: SignedBeaconBlockHeader
+        kzg_commitments_inclusion_proof: Vector[Bytes32, KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH]
+    </spec>
+
+- name: PartialDataColumnHeader#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PartialDataColumnHeader" fork="gloas" hash="9a335538">
+    class PartialDataColumnHeader(Container):
+        kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        signed_block_header: SignedBeaconBlockHeader
+        kzg_commitments_inclusion_proof: Vector[Bytes32, KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH]
+    </spec>
+
+- name: PartialDataColumnPartsMetadata#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="PartialDataColumnPartsMetadata" fork="fulu" hash="de766326">
+    class PartialDataColumnPartsMetadata(Container):
+        available: Bitlist[MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        requests: Bitlist[MAX_BLOB_COMMITMENTS_PER_BLOCK]
+    </spec>
+
+- name: PartialDataColumnSidecar#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="PartialDataColumnSidecar" fork="fulu" hash="91f75478">
+    class PartialDataColumnSidecar(Container):
+        cells_present_bitmap: Bitlist[MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        partial_column: List[Cell, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        kzg_proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        # Optional header, only sent on eager pushes
+        header: List[PartialDataColumnHeader, 1]
+    </spec>
+
+- name: PartialDataColumnSidecar#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PartialDataColumnSidecar" fork="gloas" hash="57b4ad2a">
+    class PartialDataColumnSidecar(Container):
+        cells_present_bitmap: Bitlist[MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        partial_column: List[Cell, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        kzg_proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]
     </spec>
 
 - name: PayloadAttestation#gloas
@@ -1376,8 +1622,9 @@
 - name: ProposerPreferences#gloas
   sources: []
   spec: |
-    <spec ssz_object="ProposerPreferences" fork="gloas" hash="2a38b149">
+    <spec ssz_object="ProposerPreferences" fork="gloas" hash="5ef93db5">
     class ProposerPreferences(Container):
+        dependent_root: Root
         proposal_slot: Slot
         validator_index: ValidatorIndex
         fee_recipient: ExecutionAddress
@@ -1471,12 +1718,31 @@
         signature: BLSSignature
     </spec>
 
+- name: SignedExecutionPayloadBid#heze
+  sources: []
+  spec: |
+    <spec ssz_object="SignedExecutionPayloadBid" fork="heze" hash="ce64ecf2">
+    class SignedExecutionPayloadBid(Container):
+        # [Modified in Heze:EIP7805]
+        message: ExecutionPayloadBid
+        signature: BLSSignature
+    </spec>
+
 - name: SignedExecutionPayloadEnvelope#gloas
   sources: []
   spec: |
     <spec ssz_object="SignedExecutionPayloadEnvelope" fork="gloas" hash="ab8f3404">
     class SignedExecutionPayloadEnvelope(Container):
         message: ExecutionPayloadEnvelope
+        signature: BLSSignature
+    </spec>
+
+- name: SignedInclusionList#heze
+  sources: []
+  spec: |
+    <spec ssz_object="SignedInclusionList" fork="heze" hash="d1f6abde">
+    class SignedInclusionList(Container):
+        message: InclusionList
         signature: BLSSignature
     </spec>
 

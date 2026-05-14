@@ -1,21 +1,17 @@
 package stategen
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -39,42 +35,23 @@ func (s *State) replayBlocks(
 		"diff":      targetSlot - state.Slot(),
 	})
 	rLog.Debug("Replaying state")
-	// The input block list is sorted in decreasing slots order.
+
 	for _, blk := range signed {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		if state.Slot() >= targetSlot {
+		stateSlot := state.Slot()
+		if stateSlot >= targetSlot {
 			break
 		}
-		// A node shouldn't process the block if the block slot is lower than the state slot.
-		if state.Slot() >= blk.Block().Slot() {
+		slot := blk.Block().Slot()
+		if stateSlot >= slot {
 			continue
 		}
 
-		var envelope *ethpb.SignedBlindedExecutionPayloadEnvelope
-		if blk.Version() >= version.Gloas {
-			root, err := blk.Block().HashTreeRoot()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not compute block root for execution payload envelope lookup")
-			}
-			envelope, err = s.beaconDB.ExecutionPayloadEnvelope(ctx, root)
-			if err != nil && !errors.Is(err, db.ErrNotFound) {
-				return nil, errors.Wrap(err, "could not retrieve execution payload envelope")
-			}
-		}
-
-		state, err = executeStateTransitionStateGen(ctx, state, blk, envelope)
+		state, err = executeStateTransitionStateGen(ctx, state, blk)
 		if err != nil {
-			return nil, err
-		}
-	}
-
-	// If there are skip slots at the end.
-	if targetSlot > state.Slot() {
-		state, err = ReplayProcessSlots(ctx, state, targetSlot)
-		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "could not execute state transition for block at slot %d", slot)
 		}
 	}
 
@@ -111,9 +88,8 @@ func (s *State) loadBlocks(ctx context.Context, startSlot, endSlot primitives.Sl
 // WARNING: This method should not be used on an unverified new block.
 func executeStateTransitionStateGen(
 	ctx context.Context,
-	state state.BeaconState,
+	st state.BeaconState,
 	signed interfaces.ReadOnlySignedBeaconBlock,
-	blindedEnvelope *ethpb.SignedBlindedExecutionPayloadEnvelope,
 ) (state.BeaconState, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -127,7 +103,7 @@ func executeStateTransitionStateGen(
 
 	// Execute per slots transition.
 	// Given this is for state gen, a node uses the version of process slots without skip slots cache.
-	state, err = ReplayProcessSlots(ctx, state, signed.Block().Slot())
+	st, err = ReplayProcessSlots(ctx, st, signed.Block().Slot())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process slot")
 	}
@@ -135,34 +111,32 @@ func executeStateTransitionStateGen(
 	// Execute per block transition.
 	// Given this is for state gen, a node only cares about the post state without proposer
 	// and randao signature verifications.
-	state, err = transition.ProcessBlockForStateRoot(ctx, state, signed)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not process block")
+	st, err = transition.ProcessBlockForStateRoot(ctx, st, signed)
+	if err == nil {
+		return st, nil
 	}
-
-	if state.Version() >= version.Gloas && blindedEnvelope != nil && blindedEnvelope.Message != nil {
-		latestHeader := state.LatestBlockHeader()
-		if len(latestHeader.StateRoot) == 0 || bytes.Equal(latestHeader.StateRoot, make([]byte, 32)) {
-			previousStateRoot, err := state.HashTreeRoot(ctx)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not compute state root")
-			}
-			latestHeader.StateRoot = previousStateRoot[:]
-			if err := state.SetLatestBlockHeader(latestHeader); err != nil {
-				return nil, errors.Wrap(err, "could not set latest block header")
+	fields := logrus.Fields{
+		"blockSlot":    signed.Block().Slot(),
+		"parentRoot":   fmt.Sprintf("%#x", signed.Block().ParentRoot()),
+		"blockVersion": signed.Block().Version(),
+	}
+	if st != nil && !st.IsNil() {
+		fields["stateSlot"] = st.Slot()
+		if st.Version() >= version.Gloas {
+			latestHash, hashErr := st.LatestBlockHash()
+			if hashErr == nil {
+				fields["stateLatestBlockHash"] = fmt.Sprintf("%#x", latestHash)
 			}
 		}
-
-		if err := gloas.ApplyExecutionPayloadStateMutations(
-			ctx,
-			state,
-			blindedEnvelope.Message.ExecutionRequests,
-			[32]byte(blindedEnvelope.Message.BlockHash),
-		); err != nil {
-			return nil, errors.Wrap(err, "could not apply execution payload state mutations")
+	}
+	if signed.Block().Version() >= version.Gloas {
+		signedBid, bidErr := signed.Block().Body().SignedExecutionPayloadBid()
+		if bidErr == nil && signedBid != nil && signedBid.Message != nil && len(signedBid.Message.ParentBlockHash) == 32 {
+			fields["bidParentBlockHash"] = fmt.Sprintf("%#x", [32]byte(signedBid.Message.ParentBlockHash))
 		}
 	}
-	return state, nil
+	log.WithError(err).WithFields(fields).Debug("Failed to process block during stategen replay")
+	return nil, errors.Wrap(err, "could not process block")
 }
 
 // ReplayProcessSlots to process old slots for state gen usages.

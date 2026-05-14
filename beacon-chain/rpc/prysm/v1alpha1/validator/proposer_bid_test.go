@@ -48,7 +48,7 @@ func TestSetSelfBuildExecutionPayloadBid(t *testing.T) {
 	local := &consensusblocks.GetPayloadResponse{
 		ExecutionData:     ed,
 		Bid:               bidValue,
-		BlobsBundler:      nil,
+		BlobsBundler:      &enginev1.BlobsBundle{},
 		ExecutionRequests: &enginev1.ExecutionRequests{},
 	}
 
@@ -75,6 +75,64 @@ func TestSetSelfBuildExecutionPayloadBid(t *testing.T) {
 	require.DeepEqual(t, parentRoot[:], bid.ParentBlockRoot)
 	require.Equal(t, primitives.Gwei(0), bid.Value)
 	require.Equal(t, primitives.Gwei(0), bid.ExecutionPayment)
+}
+
+func TestSetSelfBuildExecutionPayloadBid_BlobCommitments(t *testing.T) {
+	parentRoot := [32]byte{1, 2, 3}
+	slot := primitives.Slot(100)
+
+	sBlk, err := consensusblocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
+		Block: &ethpb.BeaconBlockGloas{
+			Slot:       slot,
+			ParentRoot: parentRoot[:],
+			Body:       &ethpb.BeaconBlockBodyGloas{},
+		},
+	})
+	require.NoError(t, err)
+
+	payload := &enginev1.ExecutionPayloadDeneb{
+		ParentHash:    make([]byte, 32),
+		FeeRecipient:  make([]byte, 20),
+		StateRoot:     make([]byte, 32),
+		ReceiptsRoot:  make([]byte, 32),
+		LogsBloom:     make([]byte, 256),
+		PrevRandao:    make([]byte, 32),
+		BaseFeePerGas: make([]byte, 32),
+		BlockHash:     make([]byte, 32),
+		ExtraData:     make([]byte, 0),
+	}
+	ed, err := consensusblocks.WrappedExecutionPayloadDeneb(payload)
+	require.NoError(t, err)
+
+	// Create blob commitments matching what the EL would return.
+	commitments := [][]byte{
+		make([]byte, 48),
+		make([]byte, 48),
+		make([]byte, 48),
+	}
+	for i := range commitments {
+		commitments[i][0] = byte(i + 1)
+	}
+
+	local := &consensusblocks.GetPayloadResponse{
+		ExecutionData: ed,
+		BlobsBundler: &enginev1.BlobsBundle{
+			KzgCommitments: commitments,
+		},
+		ExecutionRequests: &enginev1.ExecutionRequests{},
+	}
+
+	vs := &Server{}
+	_, err = vs.setExecutionPayloadBid(t.Context(), sBlk, local, true)
+	require.NoError(t, err)
+
+	signedBid, err := sBlk.Block().Body().SignedExecutionPayloadBid()
+	require.NoError(t, err)
+	require.NotNil(t, signedBid.Message)
+
+	// Verify blob KZG commitments are set on the bid (not empty).
+	require.Equal(t, 3, len(signedBid.Message.BlobKzgCommitments))
+	require.DeepEqual(t, commitments, signedBid.Message.BlobKzgCommitments)
 }
 
 func TestSetSelfBuildExecutionPayloadBid_NilPayload(t *testing.T) {
@@ -127,23 +185,25 @@ func TestSetExecutionPayloadBid_PrefersP2PBid(t *testing.T) {
 	local := &consensusblocks.GetPayloadResponse{
 		ExecutionData:     ed,
 		Bid:               big.NewInt(0),
+		BlobsBundler:      &enginev1.BlobsBundle{},
 		ExecutionRequests: &enginev1.ExecutionRequests{},
 	}
 
 	// Populate the highest bid cache with a P2P bid.
 	p2pBid := &ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
-			Slot:               slot,
-			ParentBlockHash:    parentHash[:],
-			ParentBlockRoot:    parentRoot[:],
-			BlockHash:          make([]byte, 32),
-			BuilderIndex:       5,
-			Value:              1000,
-			ExecutionPayment:   500,
-			FeeRecipient:       make([]byte, 20),
-			GasLimit:           30_000_000,
-			PrevRandao:         make([]byte, 32),
-			BlobKzgCommitments: [][]byte{},
+			Slot:                  slot,
+			ParentBlockHash:       parentHash[:],
+			ParentBlockRoot:       parentRoot[:],
+			BlockHash:             make([]byte, 32),
+			BuilderIndex:          5,
+			Value:                 1000,
+			ExecutionPayment:      500,
+			FeeRecipient:          make([]byte, 20),
+			GasLimit:              30_000_000,
+			PrevRandao:            make([]byte, 32),
+			BlobKzgCommitments:    [][]byte{},
+			ExecutionRequestsRoot: make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	}
@@ -199,23 +259,25 @@ func TestSetExecutionPayloadBid_PrefersLocalWhenHigherValue(t *testing.T) {
 	local := &consensusblocks.GetPayloadResponse{
 		ExecutionData:     ed,
 		Bid:               big.NewInt(2000_000_000_000),
+		BlobsBundler:      &enginev1.BlobsBundle{},
 		ExecutionRequests: &enginev1.ExecutionRequests{},
 	}
 
 	// P2P bid is only 1000 Gwei — local should win.
 	p2pBid := &ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
-			Slot:               slot,
-			ParentBlockHash:    parentHash[:],
-			ParentBlockRoot:    parentRoot[:],
-			BlockHash:          make([]byte, 32),
-			BuilderIndex:       5,
-			Value:              1000,
-			ExecutionPayment:   500,
-			FeeRecipient:       make([]byte, 20),
-			GasLimit:           30_000_000,
-			PrevRandao:         make([]byte, 32),
-			BlobKzgCommitments: [][]byte{},
+			Slot:                  slot,
+			ParentBlockHash:       parentHash[:],
+			ParentBlockRoot:       parentRoot[:],
+			BlockHash:             make([]byte, 32),
+			BuilderIndex:          5,
+			Value:                 1000,
+			ExecutionPayment:      500,
+			FeeRecipient:          make([]byte, 20),
+			GasLimit:              30_000_000,
+			PrevRandao:            make([]byte, 32),
+			BlobKzgCommitments:    [][]byte{},
+			ExecutionRequestsRoot: make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	}
@@ -270,23 +332,25 @@ func TestSetExecutionPayloadBid_SelfBuildOnlyIgnoresCache(t *testing.T) {
 	local := &consensusblocks.GetPayloadResponse{
 		ExecutionData:     ed,
 		Bid:               big.NewInt(0),
+		BlobsBundler:      &enginev1.BlobsBundle{},
 		ExecutionRequests: &enginev1.ExecutionRequests{},
 	}
 
 	// P2P bid has higher value, but selfBuildOnly=true should force self-build.
 	p2pBid := &ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
-			Slot:               slot,
-			ParentBlockHash:    parentHash[:],
-			ParentBlockRoot:    parentRoot[:],
-			BlockHash:          make([]byte, 32),
-			BuilderIndex:       5,
-			Value:              1000,
-			ExecutionPayment:   500,
-			FeeRecipient:       make([]byte, 20),
-			GasLimit:           30_000_000,
-			PrevRandao:         make([]byte, 32),
-			BlobKzgCommitments: [][]byte{},
+			Slot:                  slot,
+			ParentBlockHash:       parentHash[:],
+			ParentBlockRoot:       parentRoot[:],
+			BlockHash:             make([]byte, 32),
+			BuilderIndex:          5,
+			Value:                 1000,
+			ExecutionPayment:      500,
+			FeeRecipient:          make([]byte, 20),
+			GasLimit:              30_000_000,
+			PrevRandao:            make([]byte, 32),
+			BlobKzgCommitments:    [][]byte{},
+			ExecutionRequestsRoot: make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	}
@@ -340,6 +404,7 @@ func TestSetExecutionPayloadBid_FallsBackToSelfBuildWhenNoCachedBid(t *testing.T
 	local := &consensusblocks.GetPayloadResponse{
 		ExecutionData:     ed,
 		Bid:               big.NewInt(0),
+		BlobsBundler:      &enginev1.BlobsBundle{},
 		ExecutionRequests: &enginev1.ExecutionRequests{},
 	}
 

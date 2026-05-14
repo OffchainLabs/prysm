@@ -67,19 +67,20 @@ func prepareGloasForkchoiceState(
 		FinalizedCheckpoint:        finalizedCheckpoint,
 		LatestBlockHeader:          blockHeader,
 		LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
-			BlockHash:          blockHash[:],
-			ParentBlockHash:    parentBlockHash[:],
-			ParentBlockRoot:    make([]byte, 32),
-			PrevRandao:         make([]byte, 32),
-			FeeRecipient:       make([]byte, 20),
-			BlobKzgCommitments: [][]byte{make([]byte, 48)},
+			BlockHash:             blockHash[:],
+			ParentBlockHash:       parentBlockHash[:],
+			ParentBlockRoot:       make([]byte, 32),
+			PrevRandao:            make([]byte, 32),
+			FeeRecipient:          make([]byte, 20),
+			BlobKzgCommitments:    [][]byte{make([]byte, 48)},
+			ExecutionRequestsRoot: make([]byte, 32),
 		},
 		Builders:                     make([]*ethpb.Builder, 0),
 		BuilderPendingPayments:       builderPendingPayments,
 		ExecutionPayloadAvailability: make([]byte, 1024),
 		LatestBlockHash:              make([]byte, 32),
 		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
-		ProposerLookahead:            make([]uint64, 64),
+		ProposerLookahead:            make([]primitives.ValidatorIndex, 64),
 	}
 
 	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
@@ -116,8 +117,9 @@ func prepareGloasForkchoicePayload(
 	blockRoot [32]byte,
 ) (interfaces.ROExecutionPayloadEnvelope, error) {
 	env := &ethpb.ExecutionPayloadEnvelope{
-		BeaconBlockRoot: blockRoot[:],
-		Payload:         &enginev1.ExecutionPayloadDeneb{},
+		BeaconBlockRoot:       blockRoot[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{},
 	}
 	return blocks.WrappedROExecutionPayloadEnvelope(env)
 }
@@ -440,8 +442,8 @@ func TestGloasHeadComputation(t *testing.T) {
 	emptyB := s.choosePayloadContent(s.headNode)
 	require.NotNil(t, emptyB)
 	require.Equal(t, false, emptyB.full)
-	assert.Equal(t, uint64(0), s.headNode.weight) // no proposer boost: parent weight too low
-	assert.Equal(t, uint64(0), s.headNode.balance)
+	assert.Equal(t, uint64(8), s.headNode.weight)
+	assert.Equal(t, uint64(8), s.headNode.balance)
 	assert.Equal(t, uint64(0), emptyB.balance)
 	assert.Equal(t, uint64(0), emptyB.weight)
 	assert.Equal(t, s.headNode.parent, fullA) // parent of head is full A
@@ -449,7 +451,7 @@ func TestGloasHeadComputation(t *testing.T) {
 	assert.Equal(t, uint64(0), fullA.balance)
 	assert.Equal(t, uint64(0), fullA.node.balance)
 	assert.Equal(t, uint64(0), emptyA.weight)     // neither does the empty block of A
-	assert.Equal(t, uint64(0), fullA.node.weight) // no proposer boost propagated
+	assert.Equal(t, uint64(8), fullA.node.weight)
 
 	// Process an attestation for rootA at slotB, voting empty (payloadStatus=false).
 	attesters := []uint64{0}
@@ -464,7 +466,7 @@ func TestGloasHeadComputation(t *testing.T) {
 	assert.Equal(t, uint64(10), emptyA.weight)
 	assert.Equal(t, uint64(0), fullA.balance)
 	assert.Equal(t, uint64(0), fullA.weight)
-	assert.Equal(t, uint64(10), emptyA.node.weight) // Pending node of A has 1 vote supporting it, no proposer boost.
+	assert.Equal(t, uint64(18), emptyA.node.weight)
 	assert.Equal(t, uint64(0), emptyA.node.balance)
 	assert.Equal(t, uint64(0), fullA.weight)  // Full node of A has no proposer boost and no votes.
 	assert.Equal(t, uint64(0), fullA.balance) // Full node of A has no proposer boost and no votes.
@@ -482,9 +484,9 @@ func TestGloasHeadComputation(t *testing.T) {
 	assert.Equal(t, uint64(10), emptyA.weight)
 	assert.Equal(t, uint64(10), fullA.balance)
 	assert.Equal(t, uint64(10), fullA.weight)
-	assert.Equal(t, uint64(20), emptyA.node.weight)
+	assert.Equal(t, uint64(28), emptyA.node.weight)
 	assert.Equal(t, uint64(0), emptyA.node.balance)
-	assert.Equal(t, uint64(0), emptyB.node.weight) // empty B has no proposer boost and no votes
+	assert.Equal(t, uint64(8), emptyB.node.weight)
 
 	// Move to next slot, head should still be B but without proposer boost.
 	slotC := slotB + 1
@@ -533,14 +535,14 @@ func TestGloasHeadComputation(t *testing.T) {
 	emptyC := s.choosePayloadContent(s.headNode)
 	require.NotNil(t, emptyC)
 	require.Equal(t, false, emptyC.full)
-	assert.Equal(t, uint64(0), s.headNode.weight) // no proposer boost: parent weight too low
+	assert.Equal(t, uint64(8), s.headNode.weight)
 
 	assert.Equal(t, uint64(0), emptyB.weight)
-	assert.Equal(t, uint64(0), emptyB.node.weight)
+	assert.Equal(t, uint64(8), emptyB.node.weight)
 
 	assert.Equal(t, uint64(10), emptyA.weight)
-	assert.Equal(t, uint64(10), fullA.weight)
-	assert.Equal(t, uint64(20), emptyA.node.weight)
+	assert.Equal(t, uint64(18), fullA.weight)
+	assert.Equal(t, uint64(28), emptyA.node.weight)
 
 	// Insert payload for C, head should be C full.
 	pe, err = prepareGloasForkchoicePayload(rootC)
@@ -576,11 +578,11 @@ func TestGloasHeadComputation(t *testing.T) {
 	assert.Equal(t, emptyD, hn)
 
 	assert.Equal(t, uint64(0), emptyD.weight)
-	assert.Equal(t, uint64(0), emptyD.node.weight) // no proposer boost: parent weight too low
+	assert.Equal(t, uint64(8), emptyD.node.weight)
 
 	assert.Equal(t, uint64(0), emptyC.weight)
 	assert.Equal(t, uint64(0), fullC.weight)
-	assert.Equal(t, uint64(0), emptyC.node.weight) // no proposer boost: parent weight too low
+	assert.Equal(t, uint64(8), emptyC.node.weight)
 
 	// Set full PTC votes for C's payload. Head is still D
 	for i := range uint64(fieldparams.PTCSize) {
@@ -613,13 +615,13 @@ func TestGloasHeadComputation(t *testing.T) {
 	require.Equal(t, fullC, hn)
 
 	assert.Equal(t, uint64(0), emptyD.weight)
-	assert.Equal(t, uint64(30), emptyD.node.weight)
+	assert.Equal(t, uint64(38), emptyD.node.weight)
 
 	assert.Equal(t, uint64(30), emptyC.weight) // No PB to the empty and full nodes, just the pending one
 	assert.Equal(t, uint64(40), fullC.weight)
-	assert.Equal(t, uint64(70), emptyC.node.weight)
+	assert.Equal(t, uint64(78), emptyC.node.weight)
 
-	assert.Equal(t, uint64(70), emptyB.weight)
+	assert.Equal(t, uint64(78), emptyB.weight)
 }
 
 // TestGloasProposerBoostWithParentWeight is similar to TestGloasHeadComputation
@@ -741,8 +743,8 @@ func TestGloasProposerBoostWithParentWeight(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, rootC, headRoot)
 
-	assert.Equal(t, uint64(0), s.headNode.weight) // C has no boost (parent weight 0)
-	assert.Equal(t, uint64(0), s.headNode.balance)
+	assert.Equal(t, uint64(8), s.headNode.weight)
+	assert.Equal(t, uint64(8), s.headNode.balance)
 }
 
 func TestShouldExtendPayload(t *testing.T) {
@@ -907,46 +909,6 @@ func TestChoosePayloadContent(t *testing.T) {
 	})
 }
 
-func TestPayloadContentLookup(t *testing.T) {
-	f := setupGloas(t, 0, 0)
-	ctx := t.Context()
-
-	rootA := indexToHash(1)
-	blockHashA := indexToHash(100)
-	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, roblock))
-
-	t.Run("unknown root returns zero and false", func(t *testing.T) {
-		v, isBlockHash := f.PayloadContentLookup(indexToHash(999))
-		assert.Equal(t, [32]byte{}, v)
-		assert.Equal(t, false, isBlockHash)
-	})
-
-	t.Run("empty wins returns root", func(t *testing.T) {
-		v, isBlockHash := f.PayloadContentLookup(rootA)
-		assert.Equal(t, rootA, v)
-		assert.Equal(t, false, isBlockHash)
-	})
-
-	pe, err := prepareGloasForkchoicePayload(rootA)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertPayload(pe))
-
-	t.Run("full wins returns block hash", func(t *testing.T) {
-		en := f.store.emptyNodeByRoot[rootA]
-		fn := f.store.fullNodeByRoot[rootA]
-		require.NotNil(t, en)
-		require.NotNil(t, fn)
-		en.weight = 1
-		fn.weight = 2
-
-		v, isBlockHash := f.PayloadContentLookup(rootA)
-		assert.Equal(t, blockHashA, v)
-		assert.Equal(t, true, isBlockHash)
-	})
-}
-
 func TestGloasForkedBranches(t *testing.T) {
 	f := setupGloas(t, 1, 1)
 	s := f.store
@@ -1017,13 +979,13 @@ func TestGloasForkedBranches(t *testing.T) {
 	require.Equal(t, rootB, headRoot)
 
 	assert.Equal(t, uint64(0), emptyB.weight)
-	assert.Equal(t, uint64(0), emptyB.node.weight) // no proposer boost: parent weight too low
+	assert.Equal(t, uint64(8), emptyB.node.weight)
 	assert.Equal(t, uint64(0), emptyC.weight)
 	assert.Equal(t, uint64(0), fullC.weight)
 	assert.Equal(t, uint64(0), emptyC.node.weight)
 	assert.Equal(t, uint64(0), emptyA.weight)
 	assert.Equal(t, uint64(0), fullA.weight)
-	assert.Equal(t, uint64(0), emptyA.node.weight) // no proposer boost: parent weight too low
+	assert.Equal(t, uint64(8), emptyA.node.weight)
 
 	// Attestations shift head to C.
 	// Validators 0,1 vote for B (payloadStatus=false → pending B).
@@ -1036,7 +998,7 @@ func TestGloasForkedBranches(t *testing.T) {
 	require.Equal(t, rootC, headRoot)
 
 	assert.Equal(t, uint64(0), emptyB.weight)
-	assert.Equal(t, uint64(20), emptyB.node.weight) // no boost: parent weight was 0 from prev Head
+	assert.Equal(t, uint64(28), emptyB.node.weight)
 	assert.Equal(t, uint64(0), fullC.weight)
 	assert.Equal(t, uint64(0), emptyC.weight)
 	assert.Equal(t, uint64(30), emptyC.node.weight)
@@ -1129,7 +1091,7 @@ func TestGloasPTCOverridesProposerBoost(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, rootC, headRoot)
 
-	assert.Equal(t, uint64(0), emptyB.node.weight) // no proposer boost: parent weight too low
+	assert.Equal(t, uint64(8), emptyB.node.weight)
 	assert.Equal(t, uint64(0), emptyC.node.weight)
 	assert.Equal(t, uint64(0), emptyA.weight)
 	assert.Equal(t, uint64(0), fullA.weight)
@@ -1143,7 +1105,7 @@ func TestGloasPTCOverridesProposerBoost(t *testing.T) {
 	require.Equal(t, rootC, headRoot)
 
 	// emptyA.weight = 20 (B votes), fullA.weight = 20 (C votes) → tied, PTC wins.
-	assert.Equal(t, uint64(20), emptyB.node.weight) // no boost: parent weight was 0 from prev Head
+	assert.Equal(t, uint64(28), emptyB.node.weight)
 	assert.Equal(t, uint64(20), emptyC.node.weight)
 	assert.Equal(t, uint64(20), emptyA.weight)
 	assert.Equal(t, uint64(20), fullA.weight)
@@ -1295,11 +1257,11 @@ func TestGloasDeepForkWeightPropagation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, rootC, headRoot)
 
-	assert.Equal(t, uint64(0), emptyC.node.weight) // no proposer boost: parent weight too low
+	assert.Equal(t, uint64(8), emptyC.node.weight)
 	assert.Equal(t, uint64(0), emptyD.node.weight)
 	assert.Equal(t, uint64(0), emptyB.weight)
 	assert.Equal(t, uint64(0), fullB.weight)
-	assert.Equal(t, uint64(0), emptyB.node.weight) // no proposer boost: parent weight too low
+	assert.Equal(t, uint64(8), emptyB.node.weight)
 
 	// Attestations at different levels.
 	// Validators 0,1 vote for C (payloadStatus=false → pending C).
@@ -1313,12 +1275,12 @@ func TestGloasDeepForkWeightPropagation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, rootD, headRoot)
 
-	assert.Equal(t, uint64(20), emptyC.node.weight) // no boost: parent weight was 0 from prev Head
+	assert.Equal(t, uint64(28), emptyC.node.weight)
 	assert.Equal(t, uint64(30), fullD.weight)
 	assert.Equal(t, uint64(30), emptyD.node.weight)
 	assert.Equal(t, uint64(20), emptyB.weight)
 	assert.Equal(t, uint64(50), fullB.weight)
-	assert.Equal(t, uint64(70), emptyB.node.weight) // no boost propagated from C
+	assert.Equal(t, uint64(78), emptyB.node.weight)
 
 	// Heavy votes for C branch flip the head back.
 	f.ProcessAttestation(ctx, []uint64{7, 8, 9, 10, 11}, rootC, slotC, false)
@@ -1502,7 +1464,7 @@ func TestFullHead_EmptyPayload(t *testing.T) {
 // fullNodeByRoot entry with full=true for them (for EL optimistic validation tracking).
 // Without the epoch guard in FullHead, isNewHead would spuriously fire every ticker
 // tick because FullHead returned full=true while saveHead stored head.full=false.
-func TestFullHead_PreGloasBlock_ReturnsFalse(t *testing.T) {
+func TestFullHead_PreGloasBlock_ReturnsTrue(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.GloasForkEpoch = 100 // Gloas activates far in the future; slot 1 is pre-Gloas
@@ -1524,7 +1486,7 @@ func TestFullHead_PreGloasBlock_ReturnsFalse(t *testing.T) {
 	hr, _, full, err := f.FullHead(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, rootA, hr)
-	assert.Equal(t, false, full, "pre-Gloas block must return full=false from FullHead")
+	assert.Equal(t, true, full, "pre-Gloas block must return full=true from FullHead")
 }
 
 func TestUpdateBalances_SlotChangeMovesBalance(t *testing.T) {

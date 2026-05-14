@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -1345,4 +1346,182 @@ func TestGetBeaconBlock_BlindedElectraValid(t *testing.T) {
 	}
 
 	assert.DeepEqual(t, expectedBeaconBlock, beaconBlock)
+}
+
+func setupGloasConfig(t *testing.T) {
+	t.Helper()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+}
+
+func TestGetBeaconBlock_GloasValid_SSZ_WithPayload(t *testing.T) {
+	setupGloasConfig(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proto := testhelpers.GenerateProtoGloasBeaconBlock()
+	contents := &ethpb.BeaconBlockContentsGloas{
+		Block:                    proto,
+		ExecutionPayloadEnvelope: testhelpers.GenerateProtoExecutionPayloadEnvelope(),
+	}
+	sszBytes, err := contents.MarshalSSZ()
+	require.NoError(t, err)
+
+	const slot = primitives.Slot(1)
+	randaoReveal := []byte{2}
+	graffiti := []byte{3}
+
+	ctx := t.Context()
+
+	handler := mock.NewMockHandler(ctrl)
+	handler.EXPECT().GetSSZ(
+		gomock.Any(),
+		fmt.Sprintf("/eth/v4/validator/blocks/%d?graffiti=%s&include_payload=true&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
+	).Return(
+		sszBytes,
+		http.Header{
+			"Content-Type":                     []string{api.OctetStreamMediaType},
+			api.VersionHeader:                  []string{"gloas"},
+			api.ExecutionPayloadIncludedHeader: []string{"true"},
+		},
+		nil,
+	).Times(1)
+
+	validatorClient := &beaconApiValidatorClient{
+		handler:       handler,
+		stateless:     true,
+		envelopeCache: newExecutionPayloadEnvelopeCache(),
+	}
+	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
+	require.NoError(t, err)
+
+	expectedBeaconBlock := &ethpb.GenericBeaconBlock{
+		Block: &ethpb.GenericBeaconBlock_Gloas{
+			Gloas: proto,
+		},
+	}
+
+	assert.DeepEqual(t, expectedBeaconBlock, beaconBlock)
+	cached, _, _ := validatorClient.envelopeCache.Take(slot)
+	require.NotNil(t, cached)
+	assert.DeepEqual(t, contents.ExecutionPayloadEnvelope.BeaconBlockRoot, cached.BeaconBlockRoot)
+}
+
+func TestGetBeaconBlock_GloasValid_SSZ_WithoutPayload(t *testing.T) {
+	setupGloasConfig(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proto := testhelpers.GenerateProtoGloasBeaconBlock()
+	sszBytes, err := proto.MarshalSSZ()
+	require.NoError(t, err)
+
+	const slot = primitives.Slot(1)
+	randaoReveal := []byte{2}
+	graffiti := []byte{3}
+
+	ctx := t.Context()
+
+	handler := mock.NewMockHandler(ctrl)
+	handler.EXPECT().GetSSZ(
+		gomock.Any(),
+		fmt.Sprintf("/eth/v4/validator/blocks/%d?graffiti=%s&include_payload=false&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
+	).Return(
+		sszBytes,
+		http.Header{
+			"Content-Type":                     []string{api.OctetStreamMediaType},
+			api.VersionHeader:                  []string{"gloas"},
+			api.ExecutionPayloadIncludedHeader: []string{"false"},
+		},
+		nil,
+	).Times(1)
+
+	validatorClient := &beaconApiValidatorClient{
+		handler:       handler,
+		envelopeCache: newExecutionPayloadEnvelopeCache(),
+	}
+	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
+	require.NoError(t, err)
+
+	expectedBeaconBlock := &ethpb.GenericBeaconBlock{
+		Block: &ethpb.GenericBeaconBlock_Gloas{
+			Gloas: proto,
+		},
+	}
+
+	assert.DeepEqual(t, expectedBeaconBlock, beaconBlock)
+}
+
+func TestGetBeaconBlock_GloasValid_JSON_WithoutPayload(t *testing.T) {
+	setupGloasConfig(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proto := testhelpers.GenerateProtoGloasBeaconBlock()
+	block := testhelpers.GenerateJsonGloasBeaconBlock()
+	dataBytes, err := json.Marshal(block)
+	require.NoError(t, err)
+
+	const slot = primitives.Slot(1)
+	randaoReveal := []byte{2}
+	graffiti := []byte{3}
+
+	b, err := json.Marshal(structs.ProduceBlockV4Response{
+		Version:                  "gloas",
+		ConsensusBlockValue:      "0",
+		ExecutionPayloadIncluded: false,
+		Data:                     dataBytes,
+	})
+	require.NoError(t, err)
+	handler := mock.NewMockHandler(ctrl)
+	handler.EXPECT().GetSSZ(
+		gomock.Any(),
+		fmt.Sprintf("/eth/v4/validator/blocks/%d?graffiti=%s&include_payload=false&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
+	).Return(
+		b,
+		http.Header{"Content-Type": []string{"application/json"}},
+		nil,
+	).Times(1)
+
+	validatorClient := &beaconApiValidatorClient{
+		handler:       handler,
+		envelopeCache: newExecutionPayloadEnvelopeCache(),
+	}
+	beaconBlock, err := validatorClient.beaconBlock(t.Context(), slot, randaoReveal, graffiti)
+	require.NoError(t, err)
+
+	assert.DeepEqual(t, &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: proto}}, beaconBlock)
+}
+
+func TestGetBeaconBlock_GloasRejectsJSONWithPayload(t *testing.T) {
+	setupGloasConfig(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const slot = primitives.Slot(1)
+	randaoReveal := []byte{2}
+	graffiti := []byte{3}
+
+	handler := mock.NewMockHandler(ctrl)
+	handler.EXPECT().GetSSZ(
+		gomock.Any(),
+		fmt.Sprintf("/eth/v4/validator/blocks/%d?graffiti=%s&include_payload=true&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
+	).Return(
+		[]byte("{}"),
+		http.Header{
+			"Content-Type":                       []string{"application/json"},
+			api.ExecutionPayloadIncludedHeader: []string{"true"},
+		},
+		nil,
+	).Times(1)
+
+	validatorClient := &beaconApiValidatorClient{
+		handler:       handler,
+		stateless:     true,
+		envelopeCache: newExecutionPayloadEnvelopeCache(),
+	}
+	_, err := validatorClient.beaconBlock(t.Context(), slot, randaoReveal, graffiti)
+	assert.ErrorContains(t, "must be SSZ", err)
 }

@@ -109,17 +109,22 @@ func (vs *Server) createSelfBuildExecutionPayloadBid(
 	}
 
 	parentBlockRoot := block.ParentRoot()
+	executionRequestsRoot, err := local.ExecutionRequests.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compute execution requests root")
+	}
 	return &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:    ed.ParentHash(),
-		ParentBlockRoot:    bytesutil.SafeCopyBytes(parentBlockRoot[:]),
-		BlockHash:          ed.BlockHash(),
-		PrevRandao:         ed.PrevRandao(),
-		FeeRecipient:       ed.FeeRecipient(),
-		GasLimit:           ed.GasLimit(),
-		BuilderIndex:       params.BeaconConfig().BuilderIndexSelfBuild,
-		Slot:               block.Slot(),
-		Value:              0,
-		ExecutionPayment:   0,
-		BlobKzgCommitments: [][]byte{}, // TODO: handle DA in gloas
+		ParentBlockHash:       ed.ParentHash(),
+		ParentBlockRoot:       bytesutil.SafeCopyBytes(parentBlockRoot[:]),
+		BlockHash:             ed.BlockHash(),
+		PrevRandao:            ed.PrevRandao(),
+		FeeRecipient:          ed.FeeRecipient(),
+		GasLimit:              ed.GasLimit(),
+		BuilderIndex:          params.BeaconConfig().BuilderIndexSelfBuild,
+		Slot:                  block.Slot(),
+		Value:                 0,
+		ExecutionPayment:      0,
+		BlobKzgCommitments:    local.BlobsBundler.GetKzgCommitments(),
+		ExecutionRequestsRoot: executionRequestsRoot[:],
 	}, nil
 }

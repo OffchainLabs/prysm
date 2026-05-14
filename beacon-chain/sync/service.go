@@ -160,6 +160,8 @@ type Service struct {
 	seenBlobLock                         sync.RWMutex
 	seenBlobCache                        *lru.Cache
 	seenDataColumnCache                  *slotAwareCache
+	pendingGloasColumnsLock              sync.RWMutex
+	pendingGloasColumns                  map[[32]byte]*pendingGloasEntry
 	seenAggregatedAttestationLock        sync.RWMutex
 	seenAggregatedAttestationCache       *lru.Cache
 	seenUnAggregatedAttestationLock      sync.RWMutex
@@ -219,6 +221,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		slotToPendingBlocks:      gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
 		seenPendingBlocks:        make(map[[32]byte]bool),
 		blkRootToPendingAtts:     make(map[[32]byte][]any),
+		pendingGloasColumns:      make(map[[32]byte]*pendingGloasEntry),
 		dataColumnLogCh:          make(chan dataColumnLogEntry, 1000),
 		reconstructionRandGen:    rand.NewGenerator(),
 		payloadAttestationCache:  &cache.PayloadAttestationCache{},
@@ -329,6 +332,8 @@ func (s *Service) Start() {
 	// Prune data column cache periodically on finalization.
 	async.RunEvery(s.ctx, 30*time.Second, s.pruneDataColumnCache)
 
+	go s.prunePendingGloasColumns()
+
 	if !params.FuluEnabled() {
 		return
 	}
@@ -388,6 +393,12 @@ func (s *Service) Status() error {
 		return errors.New("out of sync")
 	}
 	return nil
+}
+
+// HighestExecutionPayloadBidCache exposes sync's cache to the proposer RPC.
+// Sync is the sole writer (gossip); the proposer is a reader.
+func (s *Service) HighestExecutionPayloadBidCache() *cache.HighestExecutionPayloadBidCache {
+	return s.highestExecutionPayloadBidCache
 }
 
 // This initializes the caches to update seen beacon objects coming in from the wire

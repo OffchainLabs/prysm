@@ -68,6 +68,7 @@ type ChainService struct {
 	Genesis                     time.Time
 	ForkChoiceStore             forkchoice.ForkChoicer
 	ReceiveBlockMockErr         error
+	ReceivePayloadEnvelopeErr   error
 	OptimisticCheckRootReceived [32]byte
 	FinalizedRoots              map[[32]byte]bool
 	OptimisticRoots             map[[32]byte]bool
@@ -77,16 +78,28 @@ type ChainService struct {
 	DataColumns                 []blocks.VerifiedRODataColumn
 	TargetRoot                  [32]byte
 	MockHeadSlot                *primitives.Slot
+	DependentRootCB             func([32]byte, primitives.Epoch) ([32]byte, error)
 	MockCanonicalRoots          map[primitives.Slot][32]byte
 	MockCanonicalFull           map[primitives.Slot]bool
-	MockPayloadContentLookup    map[[32]byte][32]byte
-	MockPayloadContentIsFull    map[[32]byte]bool
-	ParentPayloadReadyVal       *bool
-	ForkchoiceRoots             map[[32]byte]bool
-	ForkchoiceBlockHashes       map[[32]byte][32]byte
+
+	ParentPayloadReadyVal *bool
+	ForkchoiceRoots       map[[32]byte]bool
+	ForkchoiceBlockHashes map[[32]byte][32]byte
+	// Ancestors lets a test stub the result of Ancestor(root, slot) without
+	// wiring a full forkchoice store. Keyed by the input root.
+	Ancestors map[[32]byte][32]byte
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
+	if s.Ancestors != nil {
+		r := bytesutil.ToBytes32(root)
+		if a, ok := s.Ancestors[r]; ok {
+			return a[:], nil
+		}
+	}
+	if s.ForkChoiceStore == nil {
+		return nil, errors.New("mock ChainService: no Ancestors map or ForkChoiceStore configured")
+	}
 	r, err := s.ForkChoiceStore.AncestorRoot(ctx, bytesutil.ToBytes32(root), slot)
 	return r[:], err
 }
@@ -281,7 +294,7 @@ func (s *ChainService) ReceiveBlockInitialSync(ctx context.Context, block interf
 }
 
 // ReceiveBlockBatch processes blocks in batches from initial-sync.
-func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, _ das.AvailabilityChecker) error {
+func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, _ []interfaces.ROSignedExecutionPayloadEnvelope, _ das.AvailabilityChecker) error {
 	if s.State == nil {
 		return ErrNilState
 	}
@@ -757,17 +770,20 @@ func (s *ChainService) HasFullNode(root [32]byte) bool {
 	return false
 }
 
-// PayloadContentLookup mocks the same method in the chain service.
-func (s *ChainService) PayloadContentLookup(root [32]byte) ([32]byte, bool) {
+// FullBeatsEmpty mocks the same method in the chain service.
+func (s *ChainService) FullBeatsEmpty(root [32]byte) bool {
 	if s.ForkChoiceStore != nil {
-		return s.ForkChoiceStore.PayloadContentLookup(root)
+		return s.ForkChoiceStore.FullBeatsEmpty(root)
 	}
-	if s.MockPayloadContentLookup != nil {
-		if value, ok := s.MockPayloadContentLookup[root]; ok {
-			return value, s.MockPayloadContentIsFull[root]
-		}
+	if s.ForkchoiceRoots != nil {
+		return s.ForkchoiceRoots[root]
 	}
-	return root, false
+	return false
+}
+
+// ShouldIgnoreData returns true if the data for the given parent root and slot should be ignored.
+func (s *ChainService) ShouldIgnoreData(_ [32]byte, _ primitives.Slot) bool {
+	return false
 }
 
 // InsertNode mocks the same method in the chain service
@@ -848,9 +864,17 @@ func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *et
 	return nil
 }
 
+// PtcLookupState implements the same method in the chain service.
+func (c *ChainService) PtcLookupState(_ context.Context, _ [32]byte, _ primitives.Slot) (state.ReadOnlyBeaconState, error) {
+	if c.State == nil {
+		return nil, nil
+	}
+	return c.State, nil
+}
+
 // ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
 func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
-	return nil
+	return c.ReceivePayloadEnvelopeErr
 }
 
 // ParentPayloadReady mocks the same method in the chain service.
@@ -862,7 +886,10 @@ func (s *ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool
 }
 
 // DependentRootForEpoch mocks the same method in the chain service
-func (c *ChainService) DependentRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
+func (c *ChainService) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	if c.DependentRootCB != nil {
+		return c.DependentRootCB(root, epoch)
+	}
 	return c.TargetRoot, nil
 }
 

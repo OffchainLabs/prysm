@@ -42,6 +42,7 @@ var _ runtime.Service = (*Service)(nil)
 // blockchainService defines the interface for interaction with block chain service.
 type blockchainService interface {
 	blockchain.BlockReceiver
+	blockchain.ExecutionPayloadEnvelopeReceiver
 	blockchain.ChainInfoFetcher
 }
 
@@ -318,10 +319,11 @@ func (s *Service) Resync() error {
 	if err != nil {
 		return err
 	}
+	l := log
 	if err = s.roundRobinSync(); err != nil {
-		log = log.WithError(err)
+		l = log.WithError(err)
 	}
-	log.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Resync attempt complete")
+	l.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Resync attempt complete")
 	return nil
 }
 

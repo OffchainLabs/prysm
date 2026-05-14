@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -183,6 +185,9 @@ func TestGetSpec(t *testing.T) {
 	config.BuilderPaymentThresholdNumerator = 104
 	config.BuilderPaymentThresholdDenominator = 105
 	config.MaxRequestPayloads = 106
+	config.ChurnLimitQuotientGloas = 107
+	config.ConsolidationChurnLimitQuotient = 108
+	config.MaxPerEpochActivationChurnLimitGloas = 109
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -229,7 +234,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 198, len(data))
+	assert.Equal(t, 205, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -635,6 +640,12 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "104", v)
 			case "BUILDER_PAYMENT_THRESHOLD_DENOMINATOR":
 				assert.Equal(t, "105", v)
+			case "CHURN_LIMIT_QUOTIENT_GLOAS":
+				assert.Equal(t, "107", v)
+			case "CONSOLIDATION_CHURN_LIMIT_QUOTIENT":
+				assert.Equal(t, "108", v)
+			case "MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS":
+				assert.Equal(t, "109", v)
 			case "BLOB_SCHEDULE":
 				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)
@@ -651,6 +662,14 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "128", v) // From fieldparams.NumberOfColumns
 			case "UPDATE_TIMEOUT":
 				assert.Equal(t, "1782", v) // SlotsPerEpoch (27) * EpochsPerSyncCommitteePeriod (66)
+			case "PTC_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.PTCSize), 10), v)
+			case "MAX_PAYLOAD_ATTESTATIONS":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxPayloadAttestations), 10), v)
+			case "BUILDER_REGISTRY_LIMIT":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.BuilderRegistryLimit), 10), v)
+			case "BUILDER_PENDING_WITHDRAWALS_LIMIT":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.BuilderPendingWithdrawalsLimit), 10), v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

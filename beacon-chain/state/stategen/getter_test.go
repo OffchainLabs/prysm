@@ -226,7 +226,7 @@ func TestStateByRoot_FallsBackToReplayOnNotFoundStateFromDirectRead(t *testing.T
 	ib10, err := blt.NewSignedBeaconBlock(blk10)
 	require.NoError(t, err)
 
-	st10, err = executeStateTransitionStateGen(ctx, st10, ib10, nil)
+	st10, err = executeStateTransitionStateGen(ctx, st10, ib10)
 	require.NoError(t, err)
 	st10Root, err := st10.HashTreeRoot(ctx)
 	require.NoError(t, err)
@@ -466,7 +466,7 @@ func TestLoadStateByRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	// make state at slot 10 by transitioning a copy of st9 with ib10 (aka blk10)
-	st10, err = executeStateTransitionStateGen(t.Context(), st10, ib10, nil)
+	st10, err = executeStateTransitionStateGen(t.Context(), st10, ib10)
 	require.NoError(t, err)
 	st10Root, err := st10.HashTreeRoot(t.Context())
 	require.NoError(t, err)
@@ -489,7 +489,7 @@ func TestLoadStateByRoot(t *testing.T) {
 
 	// same steps as 9->10; stf 10->11, then block update
 	st11 := st10.Copy()
-	st11, err = executeStateTransitionStateGen(t.Context(), st11, ib11, nil)
+	st11, err = executeStateTransitionStateGen(t.Context(), st11, ib11)
 	require.NoError(t, err)
 	st11Root, err := st11.HashTreeRoot(t.Context())
 	require.NoError(t, err)

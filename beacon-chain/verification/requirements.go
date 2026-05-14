@@ -33,6 +33,7 @@ const (
 	// Execution payload envelope specific.
 	RequireBuilderValid
 	RequirePayloadHashValid
+	RequireExecutionRequestsRootValid
 	RequireEnvelopeSlotAboveFinalized
 	RequireEnvelopeSlotMatchesBlock
 	RequireBuilderSignatureValid
@@ -49,7 +50,8 @@ const (
 	RequireBidSignatureValid
 
 	// Signed proposer preferences specific.
-	RequireProposerPreferencesNextEpoch
+	RequireProposerPreferencesCurrentOrNextEpoch
+	RequireProposerPreferencesDependentRootSeen
 	RequireProposerPreferencesProposalSlotValid
 	RequireProposerPreferencesSignatureValid
 )

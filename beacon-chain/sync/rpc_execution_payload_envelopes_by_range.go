@@ -187,7 +187,7 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 		batchHashes = append(batchHashes, c.blockHash)
 	}
 
-	payloadByHash, err := s.cfg.executionReconstructor.ReconstructFullExecutionPayloadsByHash(ctx, batchHashes)
+	payloadByHash, err := s.cfg.executionReconstructor.ReconstructFullGloasExecutionPayloadsByHash(ctx, batchHashes)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 		return errors.Wrap(err, "could not batch reconstruct full execution payload envelopes")
@@ -201,12 +201,11 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 		}
 		fullEnv := &pb.SignedExecutionPayloadEnvelope{
 			Message: &pb.ExecutionPayloadEnvelope{
-				Payload:           payload,
-				ExecutionRequests: c.env.Message.ExecutionRequests,
-				BuilderIndex:      c.env.Message.BuilderIndex,
-				BeaconBlockRoot:   c.env.Message.BeaconBlockRoot,
-				Slot:              c.env.Message.Slot,
-				StateRoot:         c.env.Message.StateRoot,
+				Payload:               payload,
+				ExecutionRequests:     c.env.Message.ExecutionRequests,
+				BuilderIndex:          c.env.Message.BuilderIndex,
+				BeaconBlockRoot:       c.env.Message.BeaconBlockRoot,
+				ParentBeaconBlockRoot: c.env.Message.ParentBeaconBlockRoot,
 			},
 			Signature: c.env.Signature,
 		}

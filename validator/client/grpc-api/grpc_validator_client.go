@@ -18,6 +18,7 @@ import (
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
+	grpcretry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -284,6 +285,10 @@ func (c *grpcValidatorClient) SubmitSignedProposerPreferences(ctx context.Contex
 	return c.getClient().SubmitSignedProposerPreferences(ctx, in)
 }
 
+func (c *grpcValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Context, in *ethpb.SignedExecutionPayloadBid) (*empty.Empty, error) {
+	return c.getClient().SubmitSignedExecutionPayloadBid(ctx, in)
+}
+
 func (c *grpcValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *ethpb.CommitteeSubnetsSubscribeRequest, _ []*ethpb.ValidatorDuty) (*empty.Empty, error) {
 	return c.getClient().SubscribeCommitteeSubnets(ctx, in)
 }
@@ -463,12 +468,9 @@ func (c *grpcValidatorClient) PayloadAttestationData(ctx context.Context, slot p
 	req := &ethpb.PayloadAttestationDataRequest{
 		Slot: slot,
 	}
-	resp, err := c.getClient().PayloadAttestationData(ctx, req)
+	resp, err := c.getClient().PayloadAttestationData(ctx, req, grpcretry.WithMax(0))
 	if err != nil {
-		return nil, errors.Wrap(
-			client.ErrConnectionIssue,
-			errors.Wrap(err, "PayloadAttestationData").Error(),
-		)
+		return nil, errors.Wrap(err, "PayloadAttestationData")
 	}
 	return resp, nil
 }
