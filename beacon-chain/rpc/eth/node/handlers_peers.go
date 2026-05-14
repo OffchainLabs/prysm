@@ -13,8 +13,21 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/proto/migration"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+)
+
+// libp2pAgentVersionKey is the peerstore key used by libp2p to store a peer's
+// agent version (advertised via the libp2p identify protocol).
+const libp2pAgentVersionKey = "AgentVersion"
+
+// Mapping from Prysm's scorer error categories to the beacon-API spec's
+// controlled vocabulary for downscore reasons.
+const (
+	downscoreReasonBadResponses = "rpc_invalid_response"
+	downscoreReasonPeerStatus   = "status_unviable_fork"
+	downscoreReasonGossip       = "behaviour_penalty"
 )
 
 // GetPeer retrieves data about the given peer.
@@ -75,15 +88,16 @@ func (s *Server) GetPeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := &structs.GetPeerResponse{
-		Data: &structs.Peer{
-			PeerId:             rawId,
-			Enr:                "enr:" + serializedEnr,
-			LastSeenP2PAddress: p2pAddress.String(),
-			State:              strings.ToLower(v1ConnState.String()),
-			Direction:          strings.ToLower(v1PeerDirection.String()),
-		},
+	data := &structs.Peer{
+		PeerId:             rawId,
+		Enr:                "enr:" + serializedEnr,
+		LastSeenP2PAddress: p2pAddress.String(),
+		State:              strings.ToLower(v1ConnState.String()),
+		Direction:          strings.ToLower(v1PeerDirection.String()),
 	}
+	populatePeerScoreFields(data, peerStatus, s.peerHost(), id)
+
+	resp := &structs.GetPeerResponse{Data: data}
 	httputil.WriteJson(w, resp)
 }
 
@@ -102,7 +116,7 @@ func (s *Server) GetPeers(w http.ResponseWriter, r *http.Request) {
 		allIds := peerStatus.All()
 		allPeers := make([]*structs.Peer, 0, len(allIds))
 		for _, id := range allIds {
-			p, err := peerInfo(peerStatus, id)
+			p, err := peerInfo(peerStatus, s.peerHost(), id)
 			if err != nil {
 				httputil.HandleError(w, "Could not get peer info: "+err.Error(), http.StatusInternalServerError)
 				return
@@ -171,7 +185,7 @@ func (s *Server) GetPeers(w http.ResponseWriter, r *http.Request) {
 	}
 	filteredPeers := make([]*structs.Peer, 0, len(filteredIds))
 	for _, id := range filteredIds {
-		p, err := peerInfo(peerStatus, id)
+		p, err := peerInfo(peerStatus, s.peerHost(), id)
 		if err != nil {
 			httputil.HandleError(w, "Could not get peer info: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -234,7 +248,7 @@ func handleEmptyFilters(states []string, directions []string) (emptyState, empty
 	return emptyState, emptyDirection
 }
 
-func peerInfo(peerStatus *peers.Status, id peer.ID) (*structs.Peer, error) {
+func peerInfo(peerStatus *peers.Status, hst host.Host, id peer.ID) (*structs.Peer, error) {
 	enr, err := peerStatus.ENR(id)
 	if err != nil {
 		if errors.Is(err, peerdata.ErrPeerUnknown) {
@@ -284,6 +298,79 @@ func peerInfo(peerStatus *peers.Status, id peer.ID) (*structs.Peer, error) {
 	if serializedEnr != "" {
 		p.Enr = "enr:" + serializedEnr
 	}
+	populatePeerScoreFields(p, peerStatus, hst, id)
 
 	return p, nil
+}
+
+// peerHost returns the libp2p host if the server has a PeerManager configured.
+// In unit tests the PeerManager is often nil; callers must tolerate a nil host.
+func (s *Server) peerHost() host.Host {
+	if s.PeerManager == nil {
+		return nil
+	}
+	return s.PeerManager.Host()
+}
+
+// populatePeerScoreFields fills in the optional score-related fields on the
+// peer struct. All lookups are best-effort: missing data leaves the
+// corresponding field empty so it is omitted from the JSON response.
+func populatePeerScoreFields(p *structs.Peer, peerStatus *peers.Status, hst host.Host, id peer.ID) {
+	if p == nil {
+		return
+	}
+	if hst != nil {
+		if agent := agentVersion(hst, id); agent != "" {
+			p.AgentVersion = agent
+		}
+	}
+	if peerStatus != nil {
+		score := peerStatus.Scorers().Score(id)
+		p.Score = &score
+		if reasons := downscoreReasons(peerStatus, id); len(reasons) > 0 {
+			p.DownscoreReasons = reasons
+		}
+	}
+}
+
+// agentVersion looks up the peer's advertised libp2p agent string from the
+// host's peerstore. Returns an empty string when the value is unavailable.
+func agentVersion(hst host.Host, id peer.ID) string {
+	if hst == nil {
+		return ""
+	}
+	raw, err := hst.Peerstore().Get(id, libp2pAgentVersionKey)
+	if err != nil {
+		return ""
+	}
+	agent, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return agent
+}
+
+// downscoreReasons inspects each Prysm scorer to determine why a peer is
+// currently considered bad. The Prysm scorers do not retain a per-event
+// history, so this reflects the live state at the time of the request and
+// maps it to the spec's controlled vocabulary.
+func downscoreReasons(peerStatus *peers.Status, id peer.ID) []string {
+	if peerStatus == nil {
+		return nil
+	}
+	scorerSvc := peerStatus.Scorers()
+	if scorerSvc == nil {
+		return nil
+	}
+	reasons := make([]string, 0, 3)
+	if err := scorerSvc.BadResponsesScorer().IsBadPeer(id); err != nil {
+		reasons = append(reasons, downscoreReasonBadResponses)
+	}
+	if err := scorerSvc.PeerStatusScorer().IsBadPeer(id); err != nil {
+		reasons = append(reasons, downscoreReasonPeerStatus)
+	}
+	if err := scorerSvc.GossipScorer().IsBadPeer(id); err != nil {
+		reasons = append(reasons, downscoreReasonGossip)
+	}
+	return reasons
 }
