@@ -38,5 +38,6 @@ type Server struct {
 	CoreService                   *core.Service
 	BlockRewardFetcher            rewards.BlockRewardsFetcher
 	ProposerPreferencesCache      *cache.ProposerPreferencesCache
+	SubscribedValidatorsCache     *cache.SubscribedValidatorsCache
 	PayloadIDCache                *cache.PayloadIDCache
 }

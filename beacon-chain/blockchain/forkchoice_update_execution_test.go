@@ -69,6 +69,7 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 	require.NoError(t, err)
 	service.cfg.PayloadIDCache = cache.NewPayloadIDCache()
 	service.cfg.ProposerPreferencesCache = cache.NewProposerPreferencesCache()
+	service.cfg.SubscribedValidatorsCache = cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute)
 
 	b := util.NewBeaconBlock()
 	b.Block.Slot = 2

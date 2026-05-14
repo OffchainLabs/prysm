@@ -575,6 +575,9 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 			return
 		}
 		validators[i] = val
+		if s.SubscribedValidatorsCache != nil {
+			s.SubscribedValidatorsCache.Add(consensusItem.ValidatorIndex)
+		}
 	}
 
 	fetchValsLen := func(slot primitives.Slot) (uint64, error) {
@@ -752,7 +755,6 @@ func (s *Server) produceSyncCommitteeContribution(
 		Signature:         hexutil.Encode(sig),
 	}, true
 }
-
 
 // RegisterValidator requests that the beacon node stores valid validator registrations and calls the builder apis to update the custom builder
 func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {

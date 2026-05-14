@@ -158,6 +158,7 @@ func TestService_ReceiveBlock(t *testing.T) {
 				WithExitPool(voluntaryexits.NewPool()),
 				WithStateNotifier(&blockchainTesting.MockStateNotifier{RecordEvents: true}),
 				WithProposerPreferencesCache(cache.NewProposerPreferencesCache()),
+				WithSubscribedValidatorsCache(cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute)),
 			)
 
 			beaconDB := tr.db

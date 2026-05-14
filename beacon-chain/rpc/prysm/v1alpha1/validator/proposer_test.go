@@ -905,11 +905,11 @@ func getProposerServer(ctx context.Context, db db.HeadAccessDatabase, headState 
 		TimeFetcher: &testutil.MockGenesisTimeFetcher{
 			Genesis: time.Now(),
 		},
-		PayloadIDCache:         cache.NewPayloadIDCache(),
+		PayloadIDCache:           cache.NewPayloadIDCache(),
 		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
-		BeaconDB:               db,
-		BLSChangesPool:         blstoexec.NewPool(),
-		BlockBuilder:           &builderTest.MockBuilderService{HasConfigured: true},
+		BeaconDB:                 db,
+		BLSChangesPool:           blstoexec.NewPool(),
+		BlockBuilder:             &builderTest.MockBuilderService{HasConfigured: true},
 	}
 }
 
@@ -3240,16 +3240,15 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 			db := dbutil.SetupDB(t)
 			ctx := t.Context()
 			proposerServer := &Server{
-				BeaconDB:               db,
+				BeaconDB:                 db,
 				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 			}
-			require.Equal(t, false, proposerServer.ProposerPreferencesCache.Validating())
+			_, preExisting := proposerServer.ProposerPreferencesCache.Validator(1)
+			require.Equal(t, false, preExisting)
 			_, err := proposerServer.PrepareBeaconProposer(ctx, tt.args.request)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, err)
 				return
-			} else {
-				require.Equal(t, true, proposerServer.ProposerPreferencesCache.Validating())
 			}
 			require.NoError(t, err)
 			val, tracked := proposerServer.ProposerPreferencesCache.Validator(1)
@@ -3325,7 +3324,7 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	db := dbutil.SetupDB(b)
 	ctx := b.Context()
 	proposerServer := &Server{
-		BeaconDB:               db,
+		BeaconDB:                 db,
 		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)

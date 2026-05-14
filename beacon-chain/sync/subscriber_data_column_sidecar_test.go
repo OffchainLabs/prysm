@@ -2,6 +2,7 @@ package sync
 
 import (
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -18,8 +19,8 @@ func TestAllDataColumnSubnets(t *testing.T) {
 	t.Run("returns nil when no validators tracked", func(t *testing.T) {
 		// Service with no tracked validators
 		svc := &Service{
-			ctx:                    t.Context(),
-			proposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			ctx:                       t.Context(),
+			subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
 		}
 
 		result := svc.allDataColumnSubnets(primitives.Slot(0))
@@ -41,13 +42,13 @@ func TestAllDataColumnSubnets(t *testing.T) {
 		_, err := stateGen.Resume(ctx, genesisState)
 		require.NoError(t, err)
 
-		// At least one tracked validator.
-		tvc := cache.NewProposerPreferencesCache()
-		tvc.Set(cache.ProposerPreference{ValidatorIndex: 1})
+		// At least one attached validator.
+		svc := cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute)
+		svc.Add(1)
 
-		svc := &Service{
-			ctx:                      ctx,
-			proposerPreferencesCache: tvc,
+		s := &Service{
+			ctx:                       ctx,
+			subscribedValidatorsCache: svc,
 			cfg: &config{
 				stateGen: stateGen,
 				beaconDB: db,
@@ -55,7 +56,7 @@ func TestAllDataColumnSubnets(t *testing.T) {
 		}
 
 		dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
-		result := svc.allDataColumnSubnets(0)
+		result := s.allDataColumnSubnets(0)
 		assert.Equal(t, dataColumnSidecarSubnetCount, uint64(len(result)))
 
 		for i := range dataColumnSidecarSubnetCount {

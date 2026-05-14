@@ -121,33 +121,6 @@ func TestProposerPreferencesCache_SetOverwrites(t *testing.T) {
 	require.Equal(t, uint64(20), got.GasLimit)
 }
 
-func TestProposerPreferencesCache_Validating(t *testing.T) {
-	c := NewProposerPreferencesCache()
-	require.Equal(t, false, c.Validating())
-
-	require.Equal(t, true, c.Add(rootA, 5, 1, []byte{1}, 10))
-	require.Equal(t, false, c.Validating())
-
-	c.Set(ProposerPreference{ValidatorIndex: 2, FeeRecipient: []byte{1}, GasLimit: 10})
-	require.Equal(t, true, c.Validating())
-}
-
-func TestProposerPreferencesCache_Indices(t *testing.T) {
-	c := NewProposerPreferencesCache()
-	require.Equal(t, 0, len(c.Indices()))
-
-	require.Equal(t, true, c.Add(rootA, 5, 99, []byte{1}, 10))
-	require.Equal(t, 0, len(c.Indices()))
-
-	c.Set(ProposerPreference{ValidatorIndex: 2})
-	c.Set(ProposerPreference{ValidatorIndex: 7})
-	indices := c.Indices()
-	require.Equal(t, 2, len(indices))
-	require.Equal(t, true, indices[primitives.ValidatorIndex(2)])
-	require.Equal(t, true, indices[primitives.ValidatorIndex(7)])
-	require.Equal(t, false, indices[primitives.ValidatorIndex(99)])
-}
-
 func TestProposerPreferencesCache_AddRejectsOwnedValidator(t *testing.T) {
 	c := NewProposerPreferencesCache()
 	c.Set(ProposerPreference{ValidatorIndex: 7, FeeRecipient: []byte{1}, GasLimit: 10})

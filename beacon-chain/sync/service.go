@@ -201,6 +201,7 @@ type Service struct {
 	dataColumnLogCh                      chan dataColumnLogEntry
 	payloadAttestationCache              *cache.PayloadAttestationCache
 	proposerPreferencesCache             *cache.ProposerPreferencesCache
+	subscribedValidatorsCache            *cache.SubscribedValidatorsCache
 	digestActions                        perDigestSet
 	subscriptionSpawner                  func(func()) // see Service.spawn for details
 	newExecutionPayloadEnvelopeVerifier  verification.NewExecutionPayloadEnvelopeVerifier

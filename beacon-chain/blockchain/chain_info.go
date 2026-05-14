@@ -606,10 +606,10 @@ func (s *Service) inRegularSync() bool {
 	return s.cfg.SyncChecker.Synced()
 }
 
-// validating returns true if the beacon is tracking some validators that have
-// registered for proposing.
+// validating returns true if at least one validator is attached to this BN
+// via beacon_committee_subscriptions.
 func (s *Service) validating() bool {
-	return s.cfg.ProposerPreferencesCache.Validating()
+	return s.cfg.SubscribedValidatorsCache.Validating()
 }
 
 // ShouldIgnoreData returns true if the data for the given parent root and slot should be ignored.

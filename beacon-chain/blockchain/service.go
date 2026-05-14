@@ -73,29 +73,30 @@ type Service struct {
 
 // config options for the service.
 type config struct {
-	BeaconBlockBuf           int
-	ChainStartFetcher        execution.ChainStartFetcher
-	BeaconDB                 db.HeadAccessDatabase
-	DepositCache             cache.DepositCache
-	PayloadIDCache           *cache.PayloadIDCache
-	ProposerPreferencesCache *cache.ProposerPreferencesCache
-	AttestationCache         *cache.AttestationCache
-	AttPool                  attestations.Pool
-	ExitPool                 voluntaryexits.PoolManager
-	SlashingPool             slashings.PoolManager
-	BLSToExecPool            blstoexec.PoolManager
-	P2P                      p2p.Accessor
-	MaxRoutines              int
-	StateNotifier            statefeed.Notifier
-	ForkChoiceStore          f.ForkChoicer
-	AttService               *attestations.Service
-	StateGen                 *stategen.State
-	SlasherAttestationsFeed  *event.Feed
-	WeakSubjectivityCheckpt  *ethpb.Checkpoint
-	BlockFetcher             execution.POWBlockFetcher
-	FinalizedStateAtStartUp  state.BeaconState
-	ExecutionEngineCaller    execution.EngineCaller
-	SyncChecker              Checker
+	BeaconBlockBuf            int
+	ChainStartFetcher         execution.ChainStartFetcher
+	BeaconDB                  db.HeadAccessDatabase
+	DepositCache              cache.DepositCache
+	PayloadIDCache            *cache.PayloadIDCache
+	ProposerPreferencesCache  *cache.ProposerPreferencesCache
+	SubscribedValidatorsCache *cache.SubscribedValidatorsCache
+	AttestationCache          *cache.AttestationCache
+	AttPool                   attestations.Pool
+	ExitPool                  voluntaryexits.PoolManager
+	SlashingPool              slashings.PoolManager
+	BLSToExecPool             blstoexec.PoolManager
+	P2P                       p2p.Accessor
+	MaxRoutines               int
+	StateNotifier             statefeed.Notifier
+	ForkChoiceStore           f.ForkChoicer
+	AttService                *attestations.Service
+	StateGen                  *stategen.State
+	SlasherAttestationsFeed   *event.Feed
+	WeakSubjectivityCheckpt   *ethpb.Checkpoint
+	BlockFetcher              execution.POWBlockFetcher
+	FinalizedStateAtStartUp   state.BeaconState
+	ExecutionEngineCaller     execution.EngineCaller
+	SyncChecker               Checker
 }
 
 // Checker is an interface used to determine if a node is in initial sync

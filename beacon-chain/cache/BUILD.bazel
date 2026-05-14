@@ -28,6 +28,7 @@ go_library(
         "registration.go",
         "skip_slot_cache.go",
         "subnet_ids.go",
+        "subscribed_validators.go",
         "sync_committee.go",
         "sync_committee_disabled.go",  # keep
         "sync_committee_head_state.go",
@@ -90,6 +91,7 @@ go_test(
         "registration_test.go",
         "skip_slot_cache_test.go",
         "subnet_ids_test.go",
+        "subscribed_validators_test.go",
         "sync_committee_head_state_test.go",
         "sync_committee_test.go",
         "sync_subnet_ids_test.go",

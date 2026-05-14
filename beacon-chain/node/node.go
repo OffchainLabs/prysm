@@ -75,6 +75,13 @@ import (
 
 const testSkipPowFlag = "test-skip-pow"
 
+// SubscribedValidatorsCache TTL. The VC re-posts beacon_committee_subscriptions
+// every epoch (~6.4 min on mainnet); 1 hour rides out several missed epochs.
+const (
+	subscribedValidatorsTTL             = time.Hour
+	subscribedValidatorsCleanupInterval = 15 * time.Minute
+)
+
 // Used as a struct to keep cli flag options for configuring services
 // for the beacon node. We keep this as a separate struct to not pollute the actual BeaconNode
 // struct, as it is merely used to pass down configuration options into the appropriate services.
@@ -88,51 +95,52 @@ type serviceFlagOpts struct {
 // full PoS node. It handles the lifecycle of the entire system and registers
 // services to a service registry.
 type BeaconNode struct {
-	cliCtx                   *cli.Context
-	ctx                      context.Context
-	cancel                   context.CancelFunc
-	services                 *runtime.ServiceRegistry
-	lock                     sync.RWMutex
-	stop                     chan struct{} // Channel to wait for termination notifications.
-	db                       db.Database
-	slasherDB                db.SlasherDatabase
-	attestationCache         *cache.AttestationCache
-	attestationPool          attestations.Pool
-	payloadAttestationPool   payloadattestation.PoolManager
-	exitPool                 voluntaryexits.PoolManager
-	slashingsPool            slashings.PoolManager
-	syncCommitteePool        synccommittee.Pool
-	blsToExecPool            blstoexec.PoolManager
-	depositCache             cache.DepositCache
-	proposerPreferencesCache *cache.ProposerPreferencesCache
-	payloadIDCache           *cache.PayloadIDCache
-	executionPayloadCache    *cache.ExecutionPayloadEnvelopeCache
-	stateFeed                *event.Feed
-	blockFeed                *event.Feed
-	opFeed                   *event.Feed
-	stateGen                 *stategen.State
-	collector                *bcnodeCollector
-	slasherBlockHeadersFeed  *event.Feed
-	slasherAttestationsFeed  *event.Feed
-	finalizedStateAtStartUp  state.BeaconState
-	serviceFlagOpts          *serviceFlagOpts
-	GenesisProviders         []genesis.Provider
-	CheckpointInitializer    checkpoint.Initializer
-	forkChoicer              forkchoice.ForkChoicer
-	ClockWaiter              startup.ClockWaiter
-	BackfillOpts             []backfill.ServiceOption
-	initialSyncComplete      chan struct{}
-	BlobStorage              *filesystem.BlobStorage
-	BlobStorageOptions       []filesystem.BlobStorageOption
-	DataColumnStorage        *filesystem.DataColumnStorage
-	DataColumnStorageOptions []filesystem.DataColumnStorageOption
-	verifyInitWaiter         *verification.InitializerWaiter
-	lhsp                     *verification.LazyHeadStateProvider
-	syncChecker              *initialsync.SyncChecker
-	slasherEnabled           bool
-	lcStore                  *lightclient.Store
-	ConfigOptions            []params.Option
-	SyncNeedsWaiter          func() (das.SyncNeeds, error)
+	cliCtx                    *cli.Context
+	ctx                       context.Context
+	cancel                    context.CancelFunc
+	services                  *runtime.ServiceRegistry
+	lock                      sync.RWMutex
+	stop                      chan struct{} // Channel to wait for termination notifications.
+	db                        db.Database
+	slasherDB                 db.SlasherDatabase
+	attestationCache          *cache.AttestationCache
+	attestationPool           attestations.Pool
+	payloadAttestationPool    payloadattestation.PoolManager
+	exitPool                  voluntaryexits.PoolManager
+	slashingsPool             slashings.PoolManager
+	syncCommitteePool         synccommittee.Pool
+	blsToExecPool             blstoexec.PoolManager
+	depositCache              cache.DepositCache
+	proposerPreferencesCache  *cache.ProposerPreferencesCache
+	subscribedValidatorsCache *cache.SubscribedValidatorsCache
+	payloadIDCache            *cache.PayloadIDCache
+	executionPayloadCache     *cache.ExecutionPayloadEnvelopeCache
+	stateFeed                 *event.Feed
+	blockFeed                 *event.Feed
+	opFeed                    *event.Feed
+	stateGen                  *stategen.State
+	collector                 *bcnodeCollector
+	slasherBlockHeadersFeed   *event.Feed
+	slasherAttestationsFeed   *event.Feed
+	finalizedStateAtStartUp   state.BeaconState
+	serviceFlagOpts           *serviceFlagOpts
+	GenesisProviders          []genesis.Provider
+	CheckpointInitializer     checkpoint.Initializer
+	forkChoicer               forkchoice.ForkChoicer
+	ClockWaiter               startup.ClockWaiter
+	BackfillOpts              []backfill.ServiceOption
+	initialSyncComplete       chan struct{}
+	BlobStorage               *filesystem.BlobStorage
+	BlobStorageOptions        []filesystem.BlobStorageOption
+	DataColumnStorage         *filesystem.DataColumnStorage
+	DataColumnStorageOptions  []filesystem.DataColumnStorageOption
+	verifyInitWaiter          *verification.InitializerWaiter
+	lhsp                      *verification.LazyHeadStateProvider
+	syncChecker               *initialsync.SyncChecker
+	slasherEnabled            bool
+	lcStore                   *lightclient.Store
+	ConfigOptions             []params.Option
+	SyncNeedsWaiter           func() (das.SyncNeeds, error)
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -154,30 +162,31 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 	ctx := cliCtx.Context
 
 	beacon := &BeaconNode{
-		cliCtx:                   cliCtx,
-		ctx:                      ctx,
-		cancel:                   cancel,
-		services:                 runtime.NewServiceRegistry(),
-		stop:                     make(chan struct{}),
-		stateFeed:                new(event.Feed),
-		blockFeed:                new(event.Feed),
-		opFeed:                   new(event.Feed),
-		attestationCache:         cache.NewAttestationCache(),
-		attestationPool:          attestations.NewPool(),
-		payloadAttestationPool:   payloadattestation.NewPool(),
-		exitPool:                 voluntaryexits.NewPool(),
-		slashingsPool:            slashings.NewPool(),
-		syncCommitteePool:        synccommittee.NewPool(),
-		blsToExecPool:            blstoexec.NewPool(),
-		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
-		payloadIDCache:           cache.NewPayloadIDCache(),
-		executionPayloadCache:    cache.NewExecutionPayloadEnvelopeCache(),
-		slasherBlockHeadersFeed:  new(event.Feed),
-		slasherAttestationsFeed:  new(event.Feed),
-		serviceFlagOpts:          &serviceFlagOpts{},
-		initialSyncComplete:      make(chan struct{}),
-		syncChecker:              &initialsync.SyncChecker{},
-		slasherEnabled:           cliCtx.Bool(flags.SlasherFlag.Name),
+		cliCtx:                    cliCtx,
+		ctx:                       ctx,
+		cancel:                    cancel,
+		services:                  runtime.NewServiceRegistry(),
+		stop:                      make(chan struct{}),
+		stateFeed:                 new(event.Feed),
+		blockFeed:                 new(event.Feed),
+		opFeed:                    new(event.Feed),
+		attestationCache:          cache.NewAttestationCache(),
+		attestationPool:           attestations.NewPool(),
+		payloadAttestationPool:    payloadattestation.NewPool(),
+		exitPool:                  voluntaryexits.NewPool(),
+		slashingsPool:             slashings.NewPool(),
+		syncCommitteePool:         synccommittee.NewPool(),
+		blsToExecPool:             blstoexec.NewPool(),
+		proposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(subscribedValidatorsTTL, subscribedValidatorsCleanupInterval),
+		payloadIDCache:            cache.NewPayloadIDCache(),
+		executionPayloadCache:     cache.NewExecutionPayloadEnvelopeCache(),
+		slasherBlockHeadersFeed:   new(event.Feed),
+		slasherAttestationsFeed:   new(event.Feed),
+		serviceFlagOpts:           &serviceFlagOpts{},
+		initialSyncComplete:       make(chan struct{}),
+		syncChecker:               &initialsync.SyncChecker{},
+		slasherEnabled:            cliCtx.Bool(flags.SlasherFlag.Name),
 	}
 
 	for _, opt := range opts {
@@ -769,6 +778,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithBlobStorage(b.BlobStorage),
 		blockchain.WithDataColumnStorage(b.DataColumnStorage),
 		blockchain.WithProposerPreferencesCache(b.proposerPreferencesCache),
+		blockchain.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
@@ -864,6 +874,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithProposerPreferencesCache(b.proposerPreferencesCache),
+		regularsync.WithSubscribedValidatorsCache(b.subscribedValidatorsCache),
 		regularsync.WithSlasherEnabled(b.slasherEnabled),
 		regularsync.WithLightClientStore(b.lcStore),
 		regularsync.WithBatchVerifierLimit(b.cliCtx.Int(flags.BatchVerifierLimit.Name)),
@@ -1025,6 +1036,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		BlobStorage:                      b.BlobStorage,
 		DataColumnStorage:                b.DataColumnStorage,
 		ProposerPreferencesCache:         b.proposerPreferencesCache,
+		SubscribedValidatorsCache:        b.subscribedValidatorsCache,
 		HighestBidCache:                  regularSyncService.HighestExecutionPayloadBidCache(),
 		PayloadIDCache:                   b.payloadIDCache,
 		ExecutionPayloadEnvelopeCache:    b.executionPayloadCache,

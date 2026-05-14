@@ -831,11 +831,15 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
 	}
 
-	// TODO(gloas): add gloas flag to stop needing prepare beacon proposer post gloas
-	if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
-		Recipients: proposerReqs,
-	}); err != nil {
-		return err
+	// Post-Gloas, fee recipients flow via SignedProposerPreferences gossip and
+	// the attached-set flows via beacon_committee_subscriptions, so the BN
+	// no-ops PrepareBeaconProposer. Skip the call to avoid the warn log.
+	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+		if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
+			Recipients: proposerReqs,
+		}); err != nil {
+			return err
+		}
 	}
 
 	prefs := v.buildProposerPreferences(ctx, km, slot, false)

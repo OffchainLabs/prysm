@@ -217,6 +217,7 @@ func (s *Service) validatorEndpoints(
 		BlockBuilder:                  s.cfg.BlockBuilder,
 		OperationNotifier:             s.cfg.OperationNotifier,
 		ProposerPreferencesCache:      s.cfg.ProposerPreferencesCache,
+		SubscribedValidatorsCache:     s.cfg.SubscribedValidatorsCache,
 		PayloadIDCache:                s.cfg.PayloadIDCache,
 		CoreService:                   coreService,
 		BlockRewardFetcher:            rewardFetcher,

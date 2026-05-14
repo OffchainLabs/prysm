@@ -46,8 +46,9 @@ type ProposerPreference struct {
 //     of branch. Populated by prepare_beacon_proposer (pre-Gloas) and
 //     SubmitSignedProposerPreferences (post-Gloas). Entries TTL out.
 //
-// Validating()/Indices()/the trackedProposer ownership check read from
-// owned; bid validation reads from external.
+// trackedProposer reads from owned for fee-recipient lookups; bid validation
+// reads from external. "Which validators does this BN serve" lives in
+// SubscribedValidatorsCache, not here.
 type ProposerPreferencesCache struct {
 	external map[primitives.Slot][]ProposerPreference
 	owned    *gocache.Cache
@@ -200,28 +201,6 @@ func (c *ProposerPreferencesCache) Validator(index primitives.ValidatorIndex) (P
 		return ProposerPreference{}, false
 	}
 	return pref, true
-}
-
-// Validating returns true if this BN's VC owns at least one validator.
-// Foreign gossiped preferences do not count.
-func (c *ProposerPreferencesCache) Validating() bool {
-	return c.owned.ItemCount() > 0
-}
-
-// Indices returns the set of validator indices owned by this BN's VC.
-// Foreign gossiped preferences are excluded.
-func (c *ProposerPreferencesCache) Indices() map[primitives.ValidatorIndex]bool {
-	items := c.owned.Items()
-	indices := make(map[primitives.ValidatorIndex]bool, len(items))
-	for key := range items {
-		idx, err := strconv.ParseUint(key, 10, 64)
-		if err != nil {
-			log.WithError(err).Errorf("Failed to parse owned validator key: %s", key)
-			continue
-		}
-		indices[primitives.ValidatorIndex(idx)] = true
-	}
-	return indices
 }
 
 func ownedKey(index primitives.ValidatorIndex) string {
