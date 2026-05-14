@@ -398,6 +398,37 @@ func (p *Status) SetNextValidTime(pid peer.ID, nextTime time.Time) {
 	peerData.NextValidTime = nextTime
 }
 
+// SetLastGoodbye records the most recent goodbye code exchanged with a peer.
+// sentByUs is true when the local node initiated the goodbye and false when
+// the code was received from the remote peer. The observation time is set
+// to time.Now() so callers do not need to thread a clock through.
+func (p *Status) SetLastGoodbye(pid peer.ID, code uint64, sentByUs bool) {
+	p.store.Lock()
+	defer p.store.Unlock()
+
+	peerData := p.store.PeerDataGetOrCreate(pid)
+	peerData.LastGoodbyeCode = code
+	peerData.LastGoodbyeSentByUs = sentByUs
+	peerData.LastGoodbyeObserved = time.Now()
+}
+
+// LastGoodbye returns the most recent goodbye code observed for a peer along
+// with the direction (sentByUs) and the observation timestamp. The returned
+// ok value is false when no goodbye has been recorded for the peer.
+func (p *Status) LastGoodbye(pid peer.ID) (code uint64, sentByUs bool, at time.Time, ok bool) {
+	p.store.RLock()
+	defer p.store.RUnlock()
+
+	peerData, exists := p.store.PeerData(pid)
+	if !exists {
+		return 0, false, time.Time{}, false
+	}
+	if peerData.LastGoodbyeObserved.IsZero() {
+		return 0, false, time.Time{}, false
+	}
+	return peerData.LastGoodbyeCode, peerData.LastGoodbyeSentByUs, peerData.LastGoodbyeObserved, true
+}
+
 // RandomizeBackOff adds extra backoff period during which peer won't be dialed.
 func (p *Status) RandomizeBackOff(pid peer.ID) {
 	p.store.Lock()

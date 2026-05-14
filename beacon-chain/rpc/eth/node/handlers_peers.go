@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/OffchainLabs/prysm/v7/proto/migration"
@@ -28,6 +29,19 @@ const (
 	downscoreReasonBadResponses = "rpc_invalid_response"
 	downscoreReasonPeerStatus   = "status_unviable_fork"
 	downscoreReasonGossip       = "behaviour_penalty"
+)
+
+// Mapping from Prysm's goodbye codes to the beacon-API spec's controlled
+// vocabulary for disconnect reasons. See beacon-chain/p2p/types/rpc_goodbye_codes.go
+// for the source-of-truth code values.
+const (
+	disconnectReasonClientShutdown = "client_shutdown"
+	disconnectReasonIrrelevantNet  = "irrelevant_network"
+	disconnectReasonIOError        = "io_error"
+	disconnectReasonUnviableFork   = "unviable_fork"
+	disconnectReasonTooManyPeers   = "too_many_peers"
+	disconnectReasonBadScore       = "bad_score"
+	disconnectReasonUnknown        = "unknown"
 )
 
 // GetPeer retrieves data about the given peer.
@@ -330,6 +344,32 @@ func populatePeerScoreFields(p *structs.Peer, peerStatus *peers.Status, hst host
 		if reasons := downscoreReasons(peerStatus, id); len(reasons) > 0 {
 			p.DownscoreReasons = reasons
 		}
+		if code, _, _, ok := peerStatus.LastGoodbye(id); ok {
+			p.DisconnectReason = mapGoodbyeCode(code)
+		}
+	}
+}
+
+// mapGoodbyeCode translates a Prysm goodbye code into the beacon-API spec's
+// controlled disconnect_reason vocabulary. Unrecognized codes fall back to
+// "unknown" so callers can still distinguish "we observed a goodbye" from
+// "no goodbye seen" (which omits the field entirely).
+func mapGoodbyeCode(code uint64) string {
+	switch p2ptypes.RPCGoodbyeCode(code) {
+	case p2ptypes.GoodbyeCodeClientShutdown:
+		return disconnectReasonClientShutdown
+	case p2ptypes.GoodbyeCodeWrongNetwork:
+		return disconnectReasonIrrelevantNet
+	case p2ptypes.GoodbyeCodeGenericError:
+		return disconnectReasonIOError
+	case p2ptypes.GoodbyeCodeUnableToVerifyNetwork:
+		return disconnectReasonUnviableFork
+	case p2ptypes.GoodbyeCodeTooManyPeers:
+		return disconnectReasonTooManyPeers
+	case p2ptypes.GoodbyeCodeBadScore, p2ptypes.GoodbyeCodeBanned:
+		return disconnectReasonBadScore
+	default:
+		return disconnectReasonUnknown
 	}
 }
 
