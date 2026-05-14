@@ -17,6 +17,9 @@ func SetGenesisFork(t *testing.T, cfg *BeaconChainConfig, fork int) {
 
 func setGenesisUpdateEpochs(b *BeaconChainConfig, fork int) {
 	switch fork {
+	case version.Gloas:
+		b.GloasForkEpoch = 0
+		setGenesisUpdateEpochs(b, version.Fulu)
 	case version.Fulu:
 		b.FuluForkEpoch = 0
 		setGenesisUpdateEpochs(b, version.Electra)

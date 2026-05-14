@@ -120,9 +120,17 @@ func (s *Store) LegacyGenesisState(ctx context.Context) (state.BeaconState, erro
 }
 
 // SaveState stores a state to the db using block's signing root which was used to generate the state.
-func (s *Store) SaveState(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) error {
+func (s *Store) SaveState(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) (err error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveState")
 	defer span.End()
+
+	startTime := time.Now()
+
+	defer func() {
+		if err == nil {
+			stateSavingTime.Observe(float64(time.Since(startTime).Milliseconds()))
+		}
+	}()
 
 	if features.Get().EnableStateDiff && s.stateDiffCache != nil {
 		return s.saveStateByDiff(ctx, st)
@@ -145,7 +153,6 @@ func (s *Store) SaveStates(ctx context.Context, states []state.ReadOnlyBeaconSta
 	if states == nil {
 		return errors.New("nil state")
 	}
-	startTime := time.Now()
 	multipleEncs := make([][]byte, len(states))
 	for i, st := range states {
 		stateBytes, err := marshalState(ctx, st)
@@ -170,7 +177,6 @@ func (s *Store) SaveStates(ctx context.Context, states []state.ReadOnlyBeaconSta
 	}); err != nil {
 		return err
 	}
-	stateSavingTime.Observe(float64(time.Since(startTime).Milliseconds()))
 	return nil
 }
 

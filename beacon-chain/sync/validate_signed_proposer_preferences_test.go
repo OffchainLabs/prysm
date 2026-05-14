@@ -153,7 +153,7 @@ func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
 	got, ok := s.proposerPreferencesCache.Get(dependentRoot, signedPreferences.Message.ProposalSlot)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, signedPreferences.Message.FeeRecipient, got.FeeRecipient)
+	require.DeepEqual(t, signedPreferences.Message.FeeRecipient, got.FeeRecipient[:])
 	require.Equal(t, signedPreferences.Message.GasLimit, got.GasLimit)
 	validatorData, ok := msg.ValidatorData.(*ethpb.SignedProposerPreferences)
 	require.Equal(t, true, ok)
@@ -174,6 +174,7 @@ func TestSignedProposerPreferencesSubscriber_HappyPath(t *testing.T) {
 
 type mockSignedProposerPreferencesVerifier struct {
 	errCurrentOrNextEpoch error
+	errDependentRootSeen  error
 	errValidProposalSlot  error
 	errSignature          error
 	lastStateSlot         primitives.Slot
@@ -183,6 +184,10 @@ var _ verification.SignedProposerPreferencesVerifier = &mockSignedProposerPrefer
 
 func (m *mockSignedProposerPreferencesVerifier) VerifyCurrentOrNextEpoch() error {
 	return m.errCurrentOrNextEpoch
+}
+
+func (m *mockSignedProposerPreferencesVerifier) VerifyDependentRootSeen(func([32]byte) bool) error {
+	return m.errDependentRootSeen
 }
 
 func (m *mockSignedProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyBeaconState) error {

@@ -16,6 +16,7 @@ import (
 // signed proposer preferences.
 var SignedProposerPreferencesGossipRequirements = requirementList([]Requirement{
 	RequireProposerPreferencesCurrentOrNextEpoch,
+	RequireProposerPreferencesDependentRootSeen,
 	RequireProposerPreferencesProposalSlotValid,
 	RequireProposerPreferencesSignatureValid,
 })
@@ -24,6 +25,7 @@ var (
 	ErrProposerPreferencesNotCurrentOrNextEpoch = errors.New("proposer preferences proposal slot is not in the current or next epoch")
 	ErrProposerPreferencesSlotAlreadyPassed     = errors.New("proposer preferences proposal slot has already passed")
 	ErrProposerPreferencesInvalidProposalSlot   = errors.New("proposer preferences validator is not assigned to the proposal slot")
+	ErrProposerPreferencesDependentRootNotSeen  = errors.New("proposer preferences dependent_root block not seen")
 )
 
 var _ SignedProposerPreferencesVerifier = &ProposerPreferencesVerifier{}
@@ -33,6 +35,18 @@ type ProposerPreferencesVerifier struct {
 	*sharedResources
 	results *results
 	p       *ethpb.SignedProposerPreferences
+}
+
+// VerifyDependentRootSeen checks that the block referenced by
+// preferences.dependent_root is known to the node, via the supplied predicate.
+func (v *ProposerPreferencesVerifier) VerifyDependentRootSeen(seen func([32]byte) bool) (err error) {
+	defer v.record(RequireProposerPreferencesDependentRootSeen, &err)
+
+	root := [32]byte(v.message().DependentRoot)
+	if seen != nil && seen(root) {
+		return nil
+	}
+	return fmt.Errorf("%w: root=%#x", ErrProposerPreferencesDependentRootNotSeen, root)
 }
 
 // VerifyCurrentOrNextEpoch checks proposal_slot is in current or next epoch
@@ -101,7 +115,7 @@ func (v *ProposerPreferencesVerifier) VerifySignature(st state.ReadOnlyBeaconSta
 
 	val, err := st.ValidatorAtIndexReadOnly(msg.ValidatorIndex)
 	if err != nil {
-		return fmt.Errorf("validator %d: %w", msg.ValidatorIndex, err)
+		return errors.Wrapf(err, "validator %d", msg.ValidatorIndex)
 	}
 	pubkey := val.PublicKey()
 	if err := signing.VerifySigningRoot(msg, pubkey[:], v.p.Signature, domain); err != nil {

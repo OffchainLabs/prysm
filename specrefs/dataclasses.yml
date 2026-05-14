@@ -165,11 +165,12 @@
 - name: InclusionListStore#heze
   sources: []
   spec: |
-    <spec dataclass="InclusionListStore" fork="heze" hash="a822ee5d">
+    <spec dataclass="InclusionListStore" fork="heze" hash="786c17aa">
     class InclusionListStore(object):
-        inclusion_lists: DefaultDict[Tuple[Slot, Root], Set[InclusionList]] = field(
-            default_factory=lambda: defaultdict(set)
+        inclusion_lists: DefaultDict[Tuple[Slot, Root], Dict[Root, InclusionList]] = field(
+            default_factory=lambda: defaultdict(dict)
         )
+        inclusion_list_timeliness: Dict[Root, boolean] = field(default_factory=dict)
         equivocators: DefaultDict[Tuple[Slot, Root], Set[ValidatorIndex]] = field(
             default_factory=lambda: defaultdict(set)
         )
@@ -366,6 +367,45 @@
         attestation_validator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
     </spec>
 
+- name: Seen#altair
+  sources: []
+  spec: |
+    <spec dataclass="Seen" fork="altair" hash="aba9af1a">
+    class Seen(object):
+        proposer_slots: Set[Tuple[ValidatorIndex, Slot]]
+        aggregator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        aggregate_data_roots: Dict[Root, Set[Tuple[boolean, ...]]]
+        voluntary_exit_indices: Set[ValidatorIndex]
+        proposer_slashing_indices: Set[ValidatorIndex]
+        attester_slashing_indices: Set[ValidatorIndex]
+        attestation_validator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        # [New in Altair]
+        sync_contribution_aggregator_slots: Set[Tuple[ValidatorIndex, Slot, uint64]]
+        # [New in Altair]
+        sync_contribution_data: Dict[Tuple[Slot, Root, uint64], Set[Tuple[boolean, ...]]]
+        # [New in Altair]
+        sync_message_validator_slots: Set[Tuple[Slot, ValidatorIndex, uint64]]
+    </spec>
+
+- name: Seen#capella
+  sources: []
+  spec: |
+    <spec dataclass="Seen" fork="capella" hash="a2b00f90">
+    class Seen(object):
+        proposer_slots: Set[Tuple[ValidatorIndex, Slot]]
+        aggregator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        aggregate_data_roots: Dict[Root, Set[Tuple[boolean, ...]]]
+        voluntary_exit_indices: Set[ValidatorIndex]
+        proposer_slashing_indices: Set[ValidatorIndex]
+        attester_slashing_indices: Set[ValidatorIndex]
+        attestation_validator_epochs: Set[Tuple[ValidatorIndex, Epoch]]
+        sync_contribution_aggregator_slots: Set[Tuple[ValidatorIndex, Slot, uint64]]
+        sync_contribution_data: Dict[Tuple[Slot, Root, uint64], Set[Tuple[boolean, ...]]]
+        sync_message_validator_slots: Set[Tuple[Slot, ValidatorIndex, uint64]]
+        # [New in Capella]
+        bls_to_execution_change_indices: Set[ValidatorIndex]
+    </spec>
+
 - name: Store#phase0
   sources: []
   spec: |
@@ -390,7 +430,7 @@
 - name: Store#gloas
   sources: []
   spec: |
-    <spec dataclass="Store" fork="gloas" hash="5ece7e6f">
+    <spec dataclass="Store" fork="gloas" hash="e7c1cf9d">
     class Store(object):
         time: uint64
         genesis_time: uint64
@@ -411,9 +451,11 @@
         # [New in Gloas:EIP7732]
         payloads: Dict[Root, ExecutionPayloadEnvelope] = field(default_factory=dict)
         # [New in Gloas:EIP7732]
-        payload_timeliness_vote: Dict[Root, Vector[boolean, PTC_SIZE]] = field(default_factory=dict)
+        payload_timeliness_vote: Dict[Root, Vector[Optional[boolean], PTC_SIZE]] = field(
+            default_factory=dict
+        )
         # [New in Gloas:EIP7732]
-        payload_data_availability_vote: Dict[Root, Vector[boolean, PTC_SIZE]] = field(
+        payload_data_availability_vote: Dict[Root, Vector[Optional[boolean], PTC_SIZE]] = field(
             default_factory=dict
         )
     </spec>

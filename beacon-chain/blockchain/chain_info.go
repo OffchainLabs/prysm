@@ -506,11 +506,23 @@ func (s *Service) IsOptimisticForRoot(ctx context.Context, root [32]byte) (bool,
 	return !isCanonical, nil
 }
 
-// DependentRootForEpoch wraps the corresponding method in forkchoice
+// DependentRootForEpoch wraps the corresponding method in forkchoice. The
+// genesis-era underflow (slot < 2 epochs) is handled by falling back to the
+// origin block root so callers don't have to special-case it.
 func (s *Service) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	if epoch == 0 {
+		return s.originBlockRoot, nil
+	}
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
-	return s.cfg.ForkChoiceStore.DependentRootForEpoch(root, epoch)
+	depRoot, err := s.cfg.ForkChoiceStore.DependentRootForEpoch(root, epoch)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if depRoot == [32]byte{} {
+		return s.originBlockRoot, nil
+	}
+	return depRoot, nil
 }
 
 // TargetRootForEpoch wraps the corresponding method in forkchoice

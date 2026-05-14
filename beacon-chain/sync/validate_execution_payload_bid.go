@@ -83,7 +83,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationReject, err
 	}
 	// [REJECT] bid.fee_recipient matches the fee_recipient from the proposer's SignedProposerPreferences associated with bid.slot.
-	if err := v.VerifyFeeRecipientMatches(pref.FeeRecipient); err != nil {
+	if err := v.VerifyFeeRecipientMatches(pref.FeeRecipient[:]); err != nil {
 		return pubsub.ValidationReject, err
 	}
 	// [REJECT] bid.gas_limit matches the gas_limit from the proposer's SignedProposerPreferences associated with bid.slot.

@@ -399,8 +399,9 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
 	signedBid.Message.BuilderIndex = 1
 	chainService := &mock.ChainService{
-		Genesis: time.Now(),
-		State:   state,
+		Genesis:    time.Now(),
+		State:      state,
+		TargetRoot: genesisRoot,
 		ForkchoiceRoots: map[[32]byte]bool{
 			[32]byte{0x02}: true,
 		},

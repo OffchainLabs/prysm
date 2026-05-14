@@ -1,4 +1,4 @@
-version: v1.7.0-alpha.5
+version: v1.7.0-alpha.7
 style: full
 
 specrefs:
@@ -35,6 +35,9 @@ exceptions:
     # altair
     - PARTICIPATION_FLAG_WEIGHTS#altair
     # bellatrix
+    - PAYLOAD_STATUS_INVALIDATED#bellatrix
+    - PAYLOAD_STATUS_NOT_VALIDATED#bellatrix
+    - PAYLOAD_STATUS_VALID#bellatrix
     - SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY#bellatrix
     # deneb
     - BLS_MODULUS#deneb
@@ -73,18 +76,19 @@ exceptions:
     # gloas
     - AGGREGATE_DUE_BPS_GLOAS#gloas
     - ATTESTATION_DUE_BPS_GLOAS#gloas
+    - CHURN_LIMIT_QUOTIENT_GLOAS#gloas
+    - CONSOLIDATION_CHURN_LIMIT_QUOTIENT#gloas
     - CONTRIBUTION_DUE_BPS_GLOAS#gloas
     - GLOAS_FORK_EPOCH#gloas
     - GLOAS_FORK_VERSION#gloas
+    - MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS#gloas
     - SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
     # heze
     - HEZE_FORK_EPOCH#heze
     - HEZE_FORK_VERSION#heze
-    - INCLUSION_LIST_SUBMISSION_DUE_BPS#heze
+    - INCLUSION_LIST_DUE_BPS#heze
     - MAX_BYTES_PER_INCLUSION_LIST#heze
     - MAX_REQUEST_INCLUSION_LIST#heze
-    - PROPOSER_INCLUSION_LIST_CUTOFF_BPS#heze
-    - VIEW_FREEZE_CUTOFF_BPS#heze
 
   ssz_objects:
     # phase0
@@ -120,6 +124,9 @@ exceptions:
     - ExecutionPayloadEnvelope#gloas
     - ForkChoiceNode#gloas
     - IndexedPayloadAttestation#gloas
+    - LightClientHeader#gloas
+    - PartialDataColumnGroupID#gloas
+    - PartialDataColumnSidecar#gloas
     - PayloadAttestation#gloas
     - PayloadAttestationData#gloas
     - PayloadAttestationMessage#gloas
@@ -136,11 +143,13 @@ exceptions:
     - Store#phase0
     # altair
     - LightClientStore#altair
+    - Seen#altair
     # bellatrix
     - OptimisticStore#bellatrix
     # capella
     - ExpectedWithdrawals#capella
     - LightClientStore#capella
+    - Seen#capella
     # electra
     - ExpectedWithdrawals#electra
     # fulu
@@ -306,6 +315,8 @@ exceptions:
     - validate_on_attestation#phase0
     - validate_target_epoch_against_current_time#phase0
     - xor#phase0
+    - compute_merkle_branch_root#phase0
+    - is_non_strict_superset#phase0
     # altair
     - compute_merkle_proof#altair
     - compute_sync_committee_period_at_slot#altair
@@ -328,12 +339,16 @@ exceptions:
     - process_sync_committee_contributions#altair
     - set_or_append_list#altair
     - validate_light_client_update#altair
+    - is_current_slot#altair
+    - validate_sync_committee_contribution_and_proof_gossip#altair
+    - validate_sync_committee_message_gossip#altair
     # bellatrix
     - get_execution_payload#bellatrix
     - is_merge_transition_block#bellatrix
     - is_optimistic_candidate_block#bellatrix
     - latest_verified_ancestor#bellatrix
     - prepare_execution_payload#bellatrix
+    - validate_beacon_block_gossip#bellatrix
     # capella
     - apply_withdrawals#capella
     - get_balance_after_withdrawals#capella
@@ -350,6 +365,8 @@ exceptions:
     - upgrade_lc_optimistic_update_to_capella#capella
     - upgrade_lc_store_to_capella#capella
     - upgrade_lc_update_to_capella#capella
+    - validate_beacon_block_gossip#capella
+    - validate_bls_to_execution_change_gossip#capella
     # deneb
     - compute_max_request_blob_sidecars#deneb
     - get_lc_execution_root#deneb
@@ -496,6 +513,22 @@ exceptions:
     - update_next_withdrawal_builder_index#gloas
     - update_payload_expected_withdrawals#gloas
     - update_proposer_boost_root#gloas
+    - block_to_light_client_header#gloas
+    - compute_exit_epoch_and_update_churn#gloas
+    - compute_weak_subjectivity_period#gloas
+    - get_activation_churn_limit#gloas
+    - get_consolidation_churn_limit#gloas
+    - get_exit_churn_limit#gloas
+    - get_lc_execution_root#gloas
+    - get_proposer_dependent_root#gloas
+    - is_valid_light_client_header#gloas
+    - process_pending_deposits#gloas
+    - upgrade_lc_bootstrap_to_gloas#gloas
+    - upgrade_lc_finality_update_to_gloas#gloas
+    - upgrade_lc_header_to_gloas#gloas
+    - upgrade_lc_optimistic_update_to_gloas#gloas
+    - upgrade_lc_store_to_gloas#gloas
+    - upgrade_lc_update_to_gloas#gloas
     # heze
     - on_execution_payload_envelope#heze
     - compute_fork_version#heze
@@ -505,10 +538,7 @@ exceptions:
     - get_inclusion_list_committee#heze
     - get_inclusion_list_signature#heze
     - get_inclusion_list_store#heze
-    - get_inclusion_list_submission_due_ms#heze
     - get_inclusion_list_transactions#heze
-    - get_proposer_inclusion_list_cutoff_ms#heze
-    - get_view_freeze_cutoff_ms#heze
     - is_inclusion_list_bits_inclusive#heze
     - is_payload_inclusion_list_satisfied#heze
     - is_valid_inclusion_list_signature#heze
@@ -518,6 +548,7 @@ exceptions:
     - record_payload_inclusion_list_satisfaction#heze
     - should_extend_payload#heze
     - upgrade_to_heze#heze
+    - get_inclusion_list_due_ms#heze
 
   presets:
     # gloas
