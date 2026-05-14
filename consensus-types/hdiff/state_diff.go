@@ -128,6 +128,7 @@ type stateDiff struct {
 	builderPendingWithdrawalsDiff  []*ethpb.BuilderPendingWithdrawal // prefix-drop + append.
 	latestBlockHash                [fieldparams.RootLength]byte      // override.
 	payloadExpectedWithdrawals     []*enginev1.Withdrawal            // override.
+	ptcWindow                      []*ethpb.PTCs                     // override.
 }
 
 type hdiff struct {

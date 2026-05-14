@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -305,4 +306,82 @@ func TestGloasNilBidErrors(t *testing.T) {
 	bid, err := target.LatestExecutionPayloadBid()
 	require.NoError(t, err)
 	require.NotNil(t, bid)
+}
+
+func TestGloasPTCWindow(t *testing.T) {
+	source, err := gloasState(t, 64)
+	require.NoError(t, err)
+
+	target := source.Copy()
+	require.NoError(t, target.SetSlot(source.Slot()+1))
+
+	// Mutate the PTC window: bump validator indices in the last slot.
+	window, err := target.PTCWindow()
+	require.NoError(t, err)
+	require.NotEmpty(t, window)
+	last := window[len(window)-1]
+	for i := range last.ValidatorIndices {
+		last.ValidatorIndices[i] = primitives.ValidatorIndex(i + 7)
+	}
+	require.NoError(t, target.SetPTCWindow(window))
+
+	ctx := t.Context()
+	hdiffBytes, err := Diff(source, target)
+	require.NoError(t, err)
+
+	result, err := ApplyDiff(ctx, source, hdiffBytes)
+	require.NoError(t, err)
+	requireEqualState(t, target, result)
+}
+
+func TestGloasExecutionRequestsRoot(t *testing.T) {
+	source, err := gloasState(t, 64)
+	require.NoError(t, err)
+
+	target := source.Copy()
+	require.NoError(t, target.SetSlot(source.Slot()+1))
+
+	// Mutate ExecutionRequestsRoot on the bid.
+	srcBid, err := target.LatestExecutionPayloadBid()
+	require.NoError(t, err)
+	parentBlockHash := srcBid.ParentBlockHash()
+	parentBlockRoot := srcBid.ParentBlockRoot()
+	blockHash := srcBid.BlockHash()
+	prevRandao := srcBid.PrevRandao()
+	feeRecipient := srcBid.FeeRecipient()
+	var newRequestsRoot [32]byte
+	for i := range newRequestsRoot {
+		newRequestsRoot[i] = byte(i + 99)
+	}
+	newBidProto := &ethpb.ExecutionPayloadBid{
+		ParentBlockHash:       parentBlockHash[:],
+		ParentBlockRoot:       parentBlockRoot[:],
+		BlockHash:             blockHash[:],
+		PrevRandao:            prevRandao[:],
+		GasLimit:              srcBid.GasLimit(),
+		BuilderIndex:          srcBid.BuilderIndex(),
+		Slot:                  srcBid.Slot(),
+		Value:                 srcBid.Value(),
+		ExecutionPayment:      srcBid.ExecutionPayment(),
+		BlobKzgCommitments:    srcBid.BlobKzgCommitments(),
+		FeeRecipient:          feeRecipient[:],
+		ExecutionRequestsRoot: newRequestsRoot[:],
+	}
+	wrapped, err := blocks.WrappedROExecutionPayloadBid(newBidProto)
+	require.NoError(t, err)
+	require.NoError(t, target.SetExecutionPayloadBid(wrapped))
+
+	ctx := t.Context()
+	hdiffBytes, err := Diff(source, target)
+	require.NoError(t, err)
+
+	result, err := ApplyDiff(ctx, source, hdiffBytes)
+	require.NoError(t, err)
+	requireEqualState(t, target, result)
+
+	// Sanity: the restored bid carries the mutated requests root.
+	gotBid, err := result.LatestExecutionPayloadBid()
+	require.NoError(t, err)
+	gotRoot := gotBid.ExecutionRequestsRoot()
+	require.Equal(t, newRequestsRoot, gotRoot)
 }

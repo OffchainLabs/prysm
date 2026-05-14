@@ -221,6 +221,7 @@ type stateDiff struct {
 	builderPendingWithdrawalsDiff  []*ethpb.BuilderPendingWithdrawal
 	latestBlockHash                [fieldparams.RootLength]byte
 	payloadExpectedWithdrawals     []*enginev1.Withdrawal
+	ptcWindow                      []*ethpb.PTCs
 }
 ```
 
@@ -392,9 +393,9 @@ The proposer lookahead is stored as the SSZ serialized version of the field. It 
 
 #### Gloas fields
 
-Gloas replaces `executionPayloadHeader` with `latestExecutionPayloadBid` and introduces several new state fields related to the builder registry and execution payload availability. The Gloas-specific diff logic lives in `state_diff_gloas.go`. When `targetVersion >= version.Gloas`, the `executionPayloadHeader` path is skipped entirely and the following fields are serialized/deserialized instead:
+Gloas replaces `executionPayloadHeader` with two state fields — `latestBlockHash` (at proto position 10001) and `latestExecutionPayloadBid` (at proto position 14006) — and introduces several new state fields related to the builder registry, execution payload availability, and the cached PTC window. The Gloas-specific diff logic lives in `state_diff_gloas.go`. When `targetVersion >= version.Gloas`, the `executionPayloadHeader` path is skipped entirely and the following fields are serialized/deserialized instead:
 
-**Latest Execution Payload Bid.** Always non-nil for valid Gloas states. Serialized as 8 bytes for the SSZ size followed by the SSZ bytes (variable size due to `BlobKzgCommitments`). Always overrides. The diff computation errors if the target bid is nil.
+**Latest Execution Payload Bid.** Always non-nil for valid Gloas states. Serialized as 8 bytes for the SSZ size followed by the SSZ bytes (variable size due to `BlobKzgCommitments`). The bid carries 12 sub-fields including `ExecutionRequestsRoot`. Always overrides. The diff computation errors if the target bid is nil.
 
 **Builder Diffs.** The builder registry is diffed sparsely. Only builders whose fields changed between source and target are stored. The first 8 bytes encode the count of changed builders. Each entry is a `uint32` index followed by the fixed-size (93 bytes) SSZ-encoded `Builder`. When applying, the current builder slice is read from the source, changed indices are patched, and the result is written back with `SetBuilders`. This handles both mutations (balance changes, exits) and replacements (exited builder slot reused by a new deposit) since the full builder struct is stored for each changed index.
 
@@ -409,6 +410,8 @@ Gloas replaces `executionPayloadHeader` with `latestExecutionPayloadBid` and int
 **Latest Block Hash.** Stored as 32 raw bytes, always overrides.
 
 **Payload Expected Withdrawals.** The first 8 bytes store the length. The remaining bytes contain SSZ-encoded `Withdrawal` entries (44 bytes each). Always overrides.
+
+**PTC Window.** The cached payload-timeliness-committee window, a vector of `(2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH` `PTCs` slots (each a fixed-size SSZ vector of `PTC_SIZE` validator indices). The first 8 bytes store the slot count; the remaining bytes contain the SSZ-encoded `PTCs` entries back-to-back. Always overrides. The window rotates once per epoch (`RotatePTCWindow`), so on most slot transitions the source and target windows match and the encoded bytes compress well under snappy.
 
 ##### Cross-fork diffs involving Gloas
 

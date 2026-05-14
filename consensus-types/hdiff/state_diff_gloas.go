@@ -47,18 +47,20 @@ func diffGloasFields(diff *stateDiff, source, target state.ReadOnlyBeaconState) 
 	blockHash := bid.BlockHash()
 	prevRandao := bid.PrevRandao()
 	feeRecipient := bid.FeeRecipient()
+	executionRequestsRoot := bid.ExecutionRequestsRoot()
 	diff.latestExecutionPayloadBid = &ethpb.ExecutionPayloadBid{
-		ParentBlockHash:    parentBlockHash[:],
-		ParentBlockRoot:    parentBlockRoot[:],
-		BlockHash:          blockHash[:],
-		PrevRandao:         prevRandao[:],
-		GasLimit:           bid.GasLimit(),
-		BuilderIndex:       bid.BuilderIndex(),
-		Slot:               bid.Slot(),
-		Value:              bid.Value(),
-		ExecutionPayment:   bid.ExecutionPayment(),
-		BlobKzgCommitments: bid.BlobKzgCommitments(),
-		FeeRecipient:       feeRecipient[:],
+		ParentBlockHash:       parentBlockHash[:],
+		ParentBlockRoot:       parentBlockRoot[:],
+		BlockHash:             blockHash[:],
+		PrevRandao:            prevRandao[:],
+		GasLimit:              bid.GasLimit(),
+		BuilderIndex:          bid.BuilderIndex(),
+		Slot:                  bid.Slot(),
+		Value:                 bid.Value(),
+		ExecutionPayment:      bid.ExecutionPayment(),
+		BlobKzgCommitments:    bid.BlobKzgCommitments(),
+		FeeRecipient:          feeRecipient[:],
+		ExecutionRequestsRoot: executionRequestsRoot[:],
 	}
 
 	// builders (sparse diff: only changed entries).
@@ -100,6 +102,12 @@ func diffGloasFields(diff *stateDiff, source, target state.ReadOnlyBeaconState) 
 	diff.payloadExpectedWithdrawals, err = target.PayloadExpectedWithdrawals()
 	if err != nil {
 		return errors.Wrap(err, "failed to get payload expected withdrawals")
+	}
+
+	// ptcWindow (override).
+	diff.ptcWindow, err = target.PTCWindow()
+	if err != nil {
+		return errors.Wrap(err, "failed to get ptc window")
 	}
 
 	return nil
@@ -221,6 +229,16 @@ func serializeGloasFields(ret []byte, s *stateDiff) []byte {
 		sszBytes, err := w.MarshalSSZ()
 		if err != nil {
 			logrus.WithError(err).Error("Failed to marshal payload expected withdrawal")
+			return nil
+		}
+		ret = append(ret, sszBytes...)
+	}
+
+	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.ptcWindow)))
+	for _, p := range s.ptcWindow {
+		sszBytes, err := p.MarshalSSZ()
+		if err != nil {
+			logrus.WithError(err).Error("Failed to marshal ptc window slot")
 			return nil
 		}
 		ret = append(ret, sszBytes...)
@@ -351,6 +369,28 @@ func (ret *stateDiff) readGloasFields(data *[]byte) error {
 		*data = (*data)[withdrawalLength:]
 	}
 
+	// ptcWindow (length-prefixed, each entry fixed SSZ).
+	if len(*data) < 8 {
+		return errors.Wrap(errDataSmall, "ptcWindow length")
+	}
+	ptcCount := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
+	if ptcCount < 0 {
+		return errors.Wrap(errDataSmall, "ptcWindow: negative count")
+	}
+	*data = (*data)[8:]
+	ret.ptcWindow = make([]*ethpb.PTCs, ptcCount)
+	for i := range ptcCount {
+		ret.ptcWindow[i] = &ethpb.PTCs{}
+		ptcSize := ret.ptcWindow[i].SizeSSZ()
+		if len(*data) < ptcSize {
+			return errors.Wrap(errDataSmall, "ptcWindow data")
+		}
+		if err := ret.ptcWindow[i].UnmarshalSSZ((*data)[:ptcSize]); err != nil {
+			return errors.Wrap(err, "failed to unmarshal ptc window slot")
+		}
+		*data = (*data)[ptcSize:]
+	}
+
 	return nil
 }
 
@@ -411,6 +451,11 @@ func applyGloasFields(source state.BeaconState, diff *stateDiff) error {
 	// payloadExpectedWithdrawals.
 	if err := source.SetPayloadExpectedWithdrawals(diff.payloadExpectedWithdrawals); err != nil {
 		return errors.Wrap(err, "failed to set payload expected withdrawals")
+	}
+
+	// ptcWindow.
+	if err := source.SetPTCWindow(diff.ptcWindow); err != nil {
+		return errors.Wrap(err, "failed to set ptc window")
 	}
 
 	return nil
