@@ -839,7 +839,11 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 			localCache[0] = st
 
 			// level 0 should be the same
-			require.DeepEqual(t, localCache[0], db.stateDiffCache.getAnchor(0))
+			localSSZ, err := localCache[0].MarshalSSZ()
+			require.NoError(t, err)
+			cachedSSZ, err := db.stateDiffCache.getAnchor(0).MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, localSSZ, cachedSSZ)
 
 			// rest of the cache should be nil
 			for i := 1; i < len(exponents)-1; i++ {
@@ -878,7 +882,11 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 			localCache[0] = st
 
 			// level 0 should be the same
-			require.DeepEqual(t, localCache[0], db.stateDiffCache.getAnchor(0))
+			localSSZ, err = localCache[0].MarshalSSZ()
+			require.NoError(t, err)
+			cachedSSZ, err = db.stateDiffCache.getAnchor(0).MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, localSSZ, cachedSSZ)
 
 			// rest of the cache should be nil
 			for i := 1; i < len(exponents)-1; i++ {

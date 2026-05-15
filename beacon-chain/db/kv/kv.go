@@ -69,6 +69,10 @@ var (
 		Name: "db_beacon_state_saving_milliseconds",
 		Help: "Milliseconds it takes to save a beacon state to the DB",
 	})
+	stateDiffAnchorCacheBytes = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "state_diff_anchor_cache_bytes",
+		Help: "The size in bytes of each state diff anchor cache level.",
+	}, []string{"level"})
 )
 
 // BlockCacheSize specifies 1000 slots worth of blocks cached, which
