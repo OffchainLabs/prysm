@@ -569,7 +569,6 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				stategen := mock.NewService()
 				stategen.AddStateForRoot(st, headRoot)
 				beaconDB := dbtest.SetupDB(t)
-				require.NoError(t, beaconDB.SaveGenesisBlockRoot(t.Context(), [32]byte{}))
 				s := &Server{
 					StateNotifier:            &mockChain.SimpleNotifier{Feed: stn},
 					OperationNotifier:        &mockChain.SimpleNotifier{Feed: opn},

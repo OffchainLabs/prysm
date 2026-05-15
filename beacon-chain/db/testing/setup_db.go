@@ -23,6 +23,9 @@ func SetupDB(t testing.TB) db.Database {
 			t.Fatalf("failed to close database: %v", err)
 		}
 	})
+	if err := s.SaveGenesisBlockRoot(context.Background(), [32]byte{}); err != nil {
+		t.Fatalf("failed to save default genesis block root: %v", err)
+	}
 	return s
 }
 

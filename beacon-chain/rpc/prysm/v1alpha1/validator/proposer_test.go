@@ -3263,9 +3263,10 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	db := dbutil.SetupDB(t)
 	ctx := t.Context()
 	proposerServer := &Server{
-		BeaconDB:                 db,
-		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
-		TimeFetcher:              &mock.ChainService{},
+		BeaconDB:                  db,
+		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+		TimeFetcher:               &mock.ChainService{},
 	}
 
 	// New validator

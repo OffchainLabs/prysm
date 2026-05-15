@@ -166,7 +166,6 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 	ctx := t.Context()
 	genesis := time.Now().Add(-1 * 4 * time.Duration(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().SecondsPerSlot)) * time.Second) // Genesis was 4 epochs ago.
 	beaconDB := testDB.SetupDB(t)
-	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, [32]byte{}))
 	fcs := doublylinkedtree.New()
 	fcs.SetGenesisTime(genesis)
 	sg := stategen.New(beaconDB, fcs)

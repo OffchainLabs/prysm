@@ -585,6 +585,7 @@ func (vs *Server) PrepareBeaconProposer(
 		})
 		vs.SubscribedValidatorsCache.Add(r.ValidatorIndex)
 	}
+	log.WithField("validatorCount", len(request.Recipients)).Debug("Updated fee recipient addresses")
 	return &emptypb.Empty{}, nil
 }
 
