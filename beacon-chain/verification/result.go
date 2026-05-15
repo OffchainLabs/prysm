@@ -75,8 +75,8 @@ func (r Requirement) String() string {
 		return "RequireBidExecutionPaymentZero"
 	case RequireBidFeeRecipientMatches:
 		return "RequireBidFeeRecipientMatches"
-	case RequireBidGasLimitMatches:
-		return "RequireBidGasLimitMatches"
+	case RequireBidGasLimitCompatible:
+		return "RequireBidGasLimitCompatible"
 	case RequireBidParentBlockRootSeen:
 		return "RequireBidParentBlockRootSeen"
 	case RequireBidParentBlockHashValid:
