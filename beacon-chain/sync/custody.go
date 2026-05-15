@@ -174,7 +174,9 @@ func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 // finalized state and the validators attached to this beacon node (per
 // beacon_committee_subscriptions).
 func (s *Service) validatorsCustodyRequirement() (uint64, error) {
-	// Get the indices of the attached validators.
+	if s.subscribedValidatorsCache == nil {
+		return 0, nil
+	}
 	indices := s.subscribedValidatorsCache.Indices()
 
 	// Return early if no validators are tracked.

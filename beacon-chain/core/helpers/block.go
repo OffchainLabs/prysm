@@ -22,6 +22,9 @@ type GenesisBlockRootReader interface {
 // is the genesis block root.
 func ProposerDependentRootOrGenesis(ctx context.Context, db GenesisBlockRootReader, st state.ReadOnlyBeaconState, slot primitives.Slot) ([32]byte, error) {
 	if slots.ToEpoch(slot) < 2 {
+		if db == nil {
+			return [32]byte{}, errors.New("genesis fallback required at epoch < 2 but db is nil")
+		}
 		root, err := db.GenesisBlockRoot(ctx)
 		if err != nil {
 			return [32]byte{}, errors.Wrap(err, "genesis block root")

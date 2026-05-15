@@ -675,6 +675,7 @@ func TestFillEventData(t *testing.T) {
 			HeadFetcher:              mockChainService,
 			ChainInfoFetcher:         mockChainService,
 			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+			BeaconDB:                 dbtest.SetupDB(t),
 			EventWriteTimeout:        testEventWriteTimeout,
 			StateGen:                 stategen,
 		}
