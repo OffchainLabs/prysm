@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -74,6 +75,51 @@ func BatchVerifyPendingDepositsSignatures(ctx context.Context, deposits []*ethpb
 		return false, nil
 	}
 	return true, nil
+}
+
+// IsPendingValidator checks whether a pending deposit with a valid signature exists in the
+// given queue for the given pubkey.
+//
+//	<spec fn="is_pending_validator" fork="gloas">
+//	def is_pending_validator(pending_deposits: Sequence[PendingDeposit], pubkey: BLSPubkey) -> bool:
+//	    """
+//	    Check if a pending deposit with a valid signature is in the queue for the given pubkey.
+//	    """
+//	    for pending_deposit in pending_deposits:
+//	        if pending_deposit.pubkey != pubkey:
+//	            continue
+//	        if is_valid_deposit_signature(
+//	            pending_deposit.pubkey,
+//	            pending_deposit.withdrawal_credentials,
+//	            pending_deposit.amount,
+//	            pending_deposit.signature,
+//	        ):
+//	            return True
+//	    return False
+//	</spec>
+func IsPendingValidator(pendingDeposits []*ethpb.PendingDeposit, pubkey []byte) (bool, error) {
+	for _, deposit := range pendingDeposits {
+		if deposit == nil {
+			continue
+		}
+		if !bytes.Equal(deposit.PublicKey, pubkey) {
+			continue
+		}
+		valid, err := IsValidDepositSignature(&ethpb.Deposit_Data{
+			PublicKey:             deposit.PublicKey,
+			WithdrawalCredentials: deposit.WithdrawalCredentials,
+			Amount:                deposit.Amount,
+			Signature:             deposit.Signature,
+		})
+		if err != nil {
+			log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Warn("Could not verify pending deposit signature")
+			continue
+		}
+		if valid {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // IsValidDepositSignature returns whether deposit_data is valid

@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	stateTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/state/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
@@ -177,4 +178,46 @@ func TestBatchVerifyPendingDepositsSignatures_InvalidSignature(t *testing.T) {
 	verified, err := helpers.BatchVerifyPendingDepositsSignatures(t.Context(), []*ethpb.PendingDeposit{pendingDeposit})
 	require.NoError(t, err)
 	require.Equal(t, false, verified)
+}
+
+func TestIsPendingValidator(t *testing.T) {
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	validDeposit := stateTesting.GeneratePendingDeposit(t, sk, 1000, [32]byte{0x01}, 0)
+
+	t.Run("valid signature returns true", func(t *testing.T) {
+		ok, err := helpers.IsPendingValidator([]*ethpb.PendingDeposit{validDeposit}, validDeposit.PublicKey)
+		require.NoError(t, err)
+		require.Equal(t, true, ok)
+	})
+
+	t.Run("invalid signature returns false", func(t *testing.T) {
+		invalid := &ethpb.PendingDeposit{
+			PublicKey:             validDeposit.PublicKey,
+			WithdrawalCredentials: validDeposit.WithdrawalCredentials,
+			Amount:                validDeposit.Amount,
+			Signature:             make([]byte, fieldparams.BLSSignatureLength),
+		}
+		ok, err := helpers.IsPendingValidator([]*ethpb.PendingDeposit{invalid}, validDeposit.PublicKey)
+		require.NoError(t, err)
+		require.Equal(t, false, ok)
+	})
+
+	t.Run("unknown pubkey returns false", func(t *testing.T) {
+		ok, err := helpers.IsPendingValidator([]*ethpb.PendingDeposit{validDeposit}, []byte{9, 9, 9})
+		require.NoError(t, err)
+		require.Equal(t, false, ok)
+	})
+
+	t.Run("nil entry skipped", func(t *testing.T) {
+		ok, err := helpers.IsPendingValidator([]*ethpb.PendingDeposit{nil, validDeposit}, validDeposit.PublicKey)
+		require.NoError(t, err)
+		require.Equal(t, true, ok)
+	})
+
+	t.Run("empty slice returns false", func(t *testing.T) {
+		ok, err := helpers.IsPendingValidator(nil, validDeposit.PublicKey)
+		require.NoError(t, err)
+		require.Equal(t, false, ok)
+	})
 }
