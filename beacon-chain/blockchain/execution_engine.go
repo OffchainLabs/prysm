@@ -370,6 +370,14 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		return emptyAttri
 	}
 
+	// Empty FeeRecipient means no SignedProposerPreferences cached; fall through
+	// to --suggested-fee-recipient (DefaultFeeRecipient) so the engine never
+	// receives the burn address unless that's explicitly configured.
+	feeRecipient := val.FeeRecipient
+	if common.BytesToAddress(feeRecipient) == (common.Address{}) {
+		feeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
+	}
+
 	v := st.Version()
 	switch {
 	case v >= version.Gloas:
@@ -378,13 +386,13 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			log.WithError(err).Error("Could not get withdrawals for payload attribute")
 			return emptyAttri
 		}
-		return payloadAttributesGloas(uint64(t.Unix()), prevRando, val.FeeRecipient, headRoot, withdrawals, slot)
+		return payloadAttributesGloas(uint64(t.Unix()), prevRando, feeRecipient, headRoot, withdrawals, slot)
 	case v >= version.Deneb:
-		return payloadAttributesDeneb(st, uint64(t.Unix()), prevRando, val.FeeRecipient, headRoot)
+		return payloadAttributesDeneb(st, uint64(t.Unix()), prevRando, feeRecipient, headRoot)
 	case v >= version.Capella:
-		return payloadAttributesCapella(st, uint64(t.Unix()), prevRando, val.FeeRecipient)
+		return payloadAttributesCapella(st, uint64(t.Unix()), prevRando, feeRecipient)
 	case v >= version.Bellatrix:
-		return payloadAttributesBellatrix(uint64(t.Unix()), prevRando, val.FeeRecipient)
+		return payloadAttributesBellatrix(uint64(t.Unix()), prevRando, feeRecipient)
 	default:
 		log.WithField("version", version.String(v)).Error("Could not get payload attribute due to unknown state version")
 		return payloadattribute.EmptyWithVersion(v)

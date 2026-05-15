@@ -221,7 +221,7 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	cleanupStart := time.Now()
 	es.waitForExit()
-	log.WithField("cleanup_wait", time.Since(cleanupStart)).Debug("streamEvents shutdown complete")
+	log.WithField("cleanup_wait", time.Since(cleanupStart)).Debug("StreamEvents shutdown complete")
 }
 
 func newEventStreamer(buffSize int, ka time.Duration) *eventStreamer {
@@ -683,18 +683,17 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 
 	feeRecpt := params.BeaconConfig().DefaultFeeRecipient.Bytes()
 	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
-		// Post-Gloas: preferences are signed for (slot, dependent_root).
-		// Both local Submits (via AddOwned) and foreign gossip land in
-		// external, so a single Get covers ours and theirs.
+		// Post-Gloas: first try the signed (slot, dep_root) preference, then
+		// fall back to the per-validator default (PrepareBeaconProposer),
+		// then to --suggested-fee-recipient.
 		dependentRoot, drErr := helpers.ProposerDependentRoot(st, slot)
 		if drErr != nil {
 			return nil, errors.Wrap(drErr, "could not compute proposer dependent root")
 		}
 		if pref, ok := s.ProposerPreferencesCache.Get(dependentRoot, slot); ok && pref.ValidatorIndex == proposer {
 			feeRecpt = pref.FeeRecipient
-		} else if val, exists := s.ProposerPreferencesCache.Validator(proposer); exists {
-			// Drift fallback for our own validators.
-			feeRecpt = val.FeeRecipient
+		} else if def, ok := s.ProposerPreferencesCache.Default(proposer); ok {
+			feeRecpt = def.FeeRecipient
 		} else {
 			log.WithFields(logrus.Fields{
 				"slot":          slot,
@@ -702,10 +701,9 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 				"proposer":      proposer,
 			}).Debug("No proposer preference cached for SSE payload_attributes event; using default fee recipient")
 		}
-	} else if val, exists := s.ProposerPreferencesCache.Validator(proposer); exists {
-		// Pre-Gloas: only the vidx-keyed owned entry (populated by
-		// prepare_beacon_proposer) applies. external is empty for ours.
-		feeRecpt = val.FeeRecipient
+	} else if def, ok := s.ProposerPreferencesCache.Default(proposer); ok {
+		// Pre-Gloas: only the per-validator default (from PrepareBeaconProposer) applies.
+		feeRecpt = def.FeeRecipient
 	}
 
 	if v == version.Bellatrix {

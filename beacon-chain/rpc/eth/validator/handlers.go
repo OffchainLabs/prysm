@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // GetAggregateAttestationV2 aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
@@ -802,10 +801,13 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PrepareBeaconProposer endpoint saves the fee recipient given a validator index, this is used when proposing a block.
+// PrepareBeaconProposer saves the per-validator fee recipient default. The VC
+// switches to SignedProposerPreferences one epoch before Gloas; from that
+// point this endpoint is deprecated and accepts requests as a no-op.
 func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
-	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
-		log.Warn("/eth/v1/validator/prepare_beacon_proposer is deprecated post-Gloas; validator clients should use SignedProposerPreferences instead. Request accepted as a no-op.")
+	if deprecateGate, err := params.BeaconConfig().GloasForkEpoch.SafeSub(1); err == nil &&
+		slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= deprecateGate {
+		log.Warn("/eth/v1/validator/prepare_beacon_proposer is deprecated; use SignedProposerPreferences. Request accepted as a no-op.")
 		return
 	}
 	var jsonFeeRecipients []*structs.FeeRecipient
@@ -818,8 +820,6 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	var validatorIndices []primitives.ValidatorIndex
-	// filter for found fee recipients
 	for _, r := range jsonFeeRecipients {
 		validatorIndex, valid := shared.ValidateUint(w, "validator_index", r.ValidatorIndex)
 		if !valid {
@@ -829,31 +829,15 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		if !valid {
 			return
 		}
-		// Use default address if the burn address is return
 		feeRecipient := feeRecipientBytes
 		if common.BytesToAddress(feeRecipient) == (common.Address{}) {
 			feeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
-			if common.BytesToAddress(feeRecipient) == (common.Address{}) {
-				log.WithField("validatorIndex", validatorIndex).Warn("Fee recipient is the burn address")
-			}
 		}
 		s.ProposerPreferencesCache.Set(cache.ProposerPreference{
 			ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
 			FeeRecipient:   feeRecipient,
 		})
-		validatorIndices = append(validatorIndices, primitives.ValidatorIndex(validatorIndex))
 	}
-
-	if len(validatorIndices) == 0 {
-		return
-	}
-
-	log := log.WithField("validatorCount", len(validatorIndices))
-	if logrus.GetLevel() >= logrus.TraceLevel {
-		log = log.WithField("validatorIndices", validatorIndices)
-	}
-
-	log.Debug("Updated fee recipient addresses")
 }
 
 // GetAttesterDuties requests the beacon node to provide a set of attestation duties,

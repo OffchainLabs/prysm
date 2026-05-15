@@ -155,7 +155,6 @@ func TestServer_getExecutionPayload(t *testing.T) {
 				PayloadIDCache:           cache.NewPayloadIDCache(),
 				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 			}
-			vs.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: tt.validatorIndx})
 			if tt.payloadID != nil {
 				vs.PayloadIDCache.Set(tt.st.Slot(), [32]byte{'a'}, [8]byte(*tt.payloadID))
 			}
@@ -305,7 +304,9 @@ func TestServer_getExecutionPayload_UnexpectedFeeRecipient(t *testing.T) {
 		Root: b2r[:],
 	}))
 
-	feeRecipient := common.BytesToAddress([]byte("a"))
+	// With proposer-preferences cache empty (no SignedProposerPreferences),
+	// the BN expects DefaultFeeRecipient. Engine returns matching → no warning.
+	feeRecipient := common.BytesToAddress(params.BeaconConfig().DefaultFeeRecipient.Bytes())
 	payloadID := &pb.PayloadIDBytes{0x1}
 	payload := emptyPayload()
 	payload.FeeRecipient = feeRecipient[:]
@@ -322,12 +323,6 @@ func TestServer_getExecutionPayload_UnexpectedFeeRecipient(t *testing.T) {
 		PayloadIDCache:           cache.NewPayloadIDCache(),
 		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 	}
-	val := cache.ProposerPreference{
-
-		FeeRecipient:   feeRecipient.Bytes(),
-		ValidatorIndex: 0,
-	}
-	vs.ProposerPreferencesCache.Set(val)
 
 	blk := util.NewBeaconBlockBellatrix()
 	blk.Block.Slot = transitionSt.Slot()

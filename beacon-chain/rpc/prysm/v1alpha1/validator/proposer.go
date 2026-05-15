@@ -558,47 +558,31 @@ func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, roSidecars
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
-// PrepareBeaconProposer caches and updates the fee recipient for the given proposer.
+// PrepareBeaconProposer caches a per-validator fee-recipient default. The VC
+// switches to SignedProposerPreferences one epoch before Gloas; from that
+// point this endpoint is deprecated and accepts requests as a no-op.
 func (vs *Server) PrepareBeaconProposer(
 	_ context.Context, request *ethpb.PrepareBeaconProposerRequest,
 ) (*emptypb.Empty, error) {
-	if slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
-		log.Warn("PrepareBeaconProposer is deprecated post-Gloas; validator clients should use SignedProposerPreferences instead. Request accepted as a no-op.")
+	if deprecateGate, err := params.BeaconConfig().GloasForkEpoch.SafeSub(1); err == nil &&
+		slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) >= deprecateGate {
+		log.Warn("PrepareBeaconProposer is deprecated; use SignedProposerPreferences. Request accepted as a no-op.")
 		return &emptypb.Empty{}, nil
 	}
-	var validatorIndices []primitives.ValidatorIndex
-
 	for _, r := range request.Recipients {
 		recipient := hexutil.Encode(r.FeeRecipient)
 		if !common.IsHexAddress(recipient) {
 			return nil, status.Errorf(codes.InvalidArgument, "Invalid fee recipient address: %v", recipient)
 		}
-		// Use default address if the burn address is return
 		feeRecipient := r.FeeRecipient
 		if common.BytesToAddress(feeRecipient) == (common.Address{}) {
 			feeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
-			if common.BytesToAddress(feeRecipient) == (common.Address{}) {
-				log.WithField("validatorIndex", r.ValidatorIndex).Warn("Fee recipient is the burn address")
-			}
 		}
 		vs.ProposerPreferencesCache.Set(cache.ProposerPreference{
 			ValidatorIndex: r.ValidatorIndex,
 			FeeRecipient:   feeRecipient,
 		})
-		validatorIndices = append(validatorIndices, r.ValidatorIndex)
 	}
-
-	if len(validatorIndices) == 0 {
-		return &emptypb.Empty{}, nil
-	}
-
-	log := log.WithField("validatorCount", len(validatorIndices))
-	if logrus.GetLevel() >= logrus.TraceLevel {
-		log = log.WithField("validatorIndices", validatorIndices)
-	}
-
-	log.Debug("Updated fee recipient addresses")
-
 	return &emptypb.Empty{}, nil
 }
 

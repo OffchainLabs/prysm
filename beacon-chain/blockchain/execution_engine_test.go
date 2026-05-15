@@ -720,21 +720,14 @@ func Test_GetPayloadAttribute(t *testing.T) {
 	attr := service.getPayloadAttribute(ctx, st, 0, []byte{}, true)
 	require.Equal(t, true, attr.IsEmpty())
 
-	service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: 0})
-	// Cache hit, advance state, no fee recipient
+	// Subscribe the proposer; with no SignedProposerPreferences cached,
+	// fee recipient falls back to --suggested-fee-recipient (burn by default).
+	service.cfg.SubscribedValidatorsCache.Add(0)
 	slot := primitives.Slot(1)
 	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(attr.SuggestedFeeRecipient()).String())
-
-	// Cache hit, advance state, has fee recipient
-	suggestedAddr := common.HexToAddress("123")
-	service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{FeeRecipient: suggestedAddr.Bytes(), ValidatorIndex: 0})
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
-	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
-	require.Equal(t, false, attr.IsEmpty())
-	require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
 }
 
 func Test_GetPayloadAttribute_PrepareAllPayloads(t *testing.T) {
@@ -760,25 +753,15 @@ func Test_GetPayloadAttributeV2(t *testing.T) {
 	attr := service.getPayloadAttribute(ctx, st, 0, []byte{}, true)
 	require.Equal(t, true, attr.IsEmpty())
 
-	// Cache hit, advance state, no fee recipient
-	service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: 0})
+	// Subscribe the proposer; with no SignedProposerPreferences cached,
+	// fee recipient falls back to --suggested-fee-recipient (burn by default).
+	service.cfg.SubscribedValidatorsCache.Add(0)
 	slot := primitives.Slot(1)
 	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
 	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
 	require.Equal(t, false, attr.IsEmpty())
 	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(attr.SuggestedFeeRecipient()).String())
 	a, err := attr.Withdrawals()
-	require.NoError(t, err)
-	require.Equal(t, 0, len(a))
-
-	// Cache hit, advance state, has fee recipient
-	suggestedAddr := common.HexToAddress("123")
-	service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{FeeRecipient: suggestedAddr.Bytes(), ValidatorIndex: 0})
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
-	attr = service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], true)
-	require.Equal(t, false, attr.IsEmpty())
-	require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
-	a, err = attr.Withdrawals()
 	require.NoError(t, err)
 	require.Equal(t, 0, len(a))
 }
@@ -812,25 +795,15 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 			attr := service.getPayloadAttribute(ctx, test.st, 0, []byte{}, true)
 			require.Equal(t, true, attr.IsEmpty())
 
-			// Cache hit, advance state, no fee recipient
+			// Subscribe the proposer; with no SignedProposerPreferences cached,
+			// fee recipient falls back to --suggested-fee-recipient (burn by default).
+			service.cfg.SubscribedValidatorsCache.Add(0)
 			slot := primitives.Slot(1)
-			service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{ValidatorIndex: 0})
 			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
 			attr = service.getPayloadAttribute(ctx, test.st, slot, params.BeaconConfig().ZeroHash[:], true)
 			require.Equal(t, false, attr.IsEmpty())
 			require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(attr.SuggestedFeeRecipient()).String())
 			a, err := attr.Withdrawals()
-			require.NoError(t, err)
-			require.Equal(t, 0, len(a))
-
-			// Cache hit, advance state, has fee recipient
-			suggestedAddr := common.HexToAddress("123")
-			service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{FeeRecipient: suggestedAddr.Bytes(), ValidatorIndex: 0})
-			service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
-			attr = service.getPayloadAttribute(ctx, test.st, slot, params.BeaconConfig().ZeroHash[:], true)
-			require.Equal(t, false, attr.IsEmpty())
-			require.Equal(t, suggestedAddr, common.BytesToAddress(attr.SuggestedFeeRecipient()))
-			a, err = attr.Withdrawals()
 			require.NoError(t, err)
 			require.Equal(t, 0, len(a))
 

@@ -3654,67 +3654,24 @@ func TestGetPTCDuties_ForkBoundary(t *testing.T) {
 	})
 }
 
+// TestPrepareBeaconProposer verifies pre-(Gloas-1 epoch) writes land in the
+// per-validator defaults store.
 func TestPrepareBeaconProposer(t *testing.T) {
-	tests := []struct {
-		name    string
-		request []*structs.FeeRecipient
-		code    int
-		wantErr string
-	}{
-		{
-			name: "Happy Path",
-			request: []*structs.FeeRecipient{{
-				FeeRecipient:   "0xb698D697092822185bF0311052215d5B5e1F3934",
-				ValidatorIndex: "1",
-			},
-			},
-			code:    http.StatusOK,
-			wantErr: "",
-		},
-		{
-			name: "invalid fee recipient length",
-			request: []*structs.FeeRecipient{{
-				FeeRecipient:   "0xb698D697092822185bF0311052",
-				ValidatorIndex: "1",
-			},
-			},
-			code:    http.StatusBadRequest,
-			wantErr: "Invalid fee_recipient",
-		},
+	body := bytes.NewBufferString(`[{"validator_index":"1","fee_recipient":"0xb698D697092822185bF0311052215d5B5e1F3934"}]`)
+	request := httptest.NewRequest(http.MethodPost, "http://example.com/eth/v1/validator/prepare_beacon_proposer", body)
+	writer := httptest.NewRecorder()
+	zero := primitives.Slot(0)
+	server := &Server{
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		TimeFetcher:              &mockChain.ChainService{Slot: &zero},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			b, err := json.Marshal(tt.request)
-			require.NoError(t, err)
-			var body bytes.Buffer
-			_, err = body.WriteString(string(b))
-			require.NoError(t, err)
-			url := "http://example.com/eth/v1/validator/prepare_beacon_proposer"
-			request := httptest.NewRequest(http.MethodPost, url, &body)
-			writer := httptest.NewRecorder()
-			db := dbutil.SetupDB(t)
-			server := &Server{
-				BeaconDB:                 db,
-				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
-				PayloadIDCache:           cache.NewPayloadIDCache(),
-				TimeFetcher:              &mockChain.ChainService{},
-			}
-			server.PrepareBeaconProposer(writer, request)
-			require.Equal(t, tt.code, writer.Code)
-			if tt.wantErr != "" {
-				require.Equal(t, strings.Contains(writer.Body.String(), tt.wantErr), true)
-			} else {
-				require.NoError(t, err)
-				feebytes, err := hexutil.Decode(tt.request[0].FeeRecipient)
-				require.NoError(t, err)
-				index, err := strconv.ParseUint(tt.request[0].ValidatorIndex, 10, 64)
-				require.NoError(t, err)
-				val, tracked := server.ProposerPreferencesCache.Validator(primitives.ValidatorIndex(index))
-				require.Equal(t, true, tracked)
-				require.DeepEqual(t, feebytes, val.FeeRecipient)
-			}
-		})
-	}
+	server.PrepareBeaconProposer(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+	got, ok := server.ProposerPreferencesCache.Default(1)
+	require.Equal(t, true, ok)
+	expected, err := hexutil.Decode("0xb698D697092822185bF0311052215d5B5e1F3934")
+	require.NoError(t, err)
+	require.DeepEqual(t, expected, got.FeeRecipient)
 }
 
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {

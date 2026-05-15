@@ -148,10 +148,15 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 		return emptyAttri
 	}
 
+	feeRecipient := val.FeeRecipient
+	if common.BytesToAddress(feeRecipient) == (common.Address{}) {
+		feeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
+	}
+
 	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
 		Timestamp:             uint64(t.Unix()),
 		PrevRandao:            prevRando,
-		SuggestedFeeRecipient: val.FeeRecipient,
+		SuggestedFeeRecipient: feeRecipient,
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: headRoot,
 		SlotNumber:            uint64(slot),

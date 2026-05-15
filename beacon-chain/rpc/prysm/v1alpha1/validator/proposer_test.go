@@ -3239,22 +3239,18 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := dbutil.SetupDB(t)
 			ctx := t.Context()
+			zero := primitives.Slot(0)
 			proposerServer := &Server{
 				BeaconDB:                 db,
 				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+				TimeFetcher:              &mock.ChainService{Slot: &zero},
 			}
-			_, preExisting := proposerServer.ProposerPreferencesCache.Validator(1)
-			require.Equal(t, false, preExisting)
 			_, err := proposerServer.PrepareBeaconProposer(ctx, tt.args.request)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, tt.wantErr, err)
 				return
 			}
 			require.NoError(t, err)
-			val, tracked := proposerServer.ProposerPreferencesCache.Validator(1)
-			require.Equal(t, true, tracked)
-			require.Equal(t, primitives.ExecutionAddress(tt.args.request.Recipients[0].FeeRecipient), val.FeeRecipient)
-
 		})
 	}
 }

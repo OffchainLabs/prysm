@@ -30,7 +30,6 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )
@@ -195,7 +194,7 @@ func operationEventsFixtures(t *testing.T) (*topicRequest, []*feed.Event) {
 			Data: &operation.BLSToExecutionChangeReceivedData{
 				Change: &eth.SignedBLSToExecutionChange{
 					Message: &eth.BLSToExecutionChange{
-						ValidatorIndex: 0,
+						ValidatorIndex:     0,
 						FromBlsPubkey:      make([]byte, 48),
 						ToExecutionAddress: make([]byte, 20),
 					},
@@ -480,9 +479,9 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 	})
 	t.Run("payload attributes", func(t *testing.T) {
 		type testCase struct {
-			name                      string
-			getState                  func() state.BeaconState
-			getBlock                  func() interfaces.SignedBeaconBlock
+			name                        string
+			getState                    func() state.BeaconState
+			getBlock                    func() interfaces.SignedBeaconBlock
 			SetProposerPreferencesCache func(*cache.ProposerPreferencesCache)
 		}
 		testCases := []testCase{
@@ -537,13 +536,6 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					require.NoError(t, err)
 					return b
 				},
-				SetProposerPreferencesCache: func(c *cache.ProposerPreferencesCache) {
-					c.Set(cache.ProposerPreference{
-						
-						ValidatorIndex: 0,
-						FeeRecipient: common.HexToAddress("0xd2DBd02e4efe087d7d195de828b9Dd25f19A89C9").Bytes(),
-					})
-				},
 			},
 		}
 		for _, tc := range testCases {
@@ -576,13 +568,13 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				stategen := mock.NewService()
 				stategen.AddStateForRoot(st, headRoot)
 				s := &Server{
-					StateNotifier:          &mockChain.SimpleNotifier{Feed: stn},
-					OperationNotifier:      &mockChain.SimpleNotifier{Feed: opn},
-					HeadFetcher:            mockChainService,
-					ChainInfoFetcher:       mockChainService,
+					StateNotifier:            &mockChain.SimpleNotifier{Feed: stn},
+					OperationNotifier:        &mockChain.SimpleNotifier{Feed: opn},
+					HeadFetcher:              mockChainService,
+					ChainInfoFetcher:         mockChainService,
 					ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
-					EventWriteTimeout:      testEventWriteTimeout,
-					StateGen:               stategen,
+					EventWriteTimeout:        testEventWriteTimeout,
+					StateGen:                 stategen,
 				}
 				if tc.SetProposerPreferencesCache != nil {
 					tc.SetProposerPreferencesCache(s.ProposerPreferencesCache)
@@ -595,7 +587,7 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 					{
 						Type: statefeed.PayloadAttributes,
 						Data: payloadattribute.EventData{
-							ProposerIndex: 0,
+							ProposerIndex:     0,
 							ProposalSlot:      mockChainService.CurrentSlot() + 1,
 							ParentBlockNumber: 0,
 							ParentBlockHash:   make([]byte, 32),
@@ -675,13 +667,13 @@ func TestFillEventData(t *testing.T) {
 		stn := mockChain.NewEventFeedWrapper()
 		opn := mockChain.NewEventFeedWrapper()
 		srv := &Server{
-			StateNotifier:          &mockChain.SimpleNotifier{Feed: stn},
-			OperationNotifier:      &mockChain.SimpleNotifier{Feed: opn},
-			HeadFetcher:            mockChainService,
-			ChainInfoFetcher:       mockChainService,
+			StateNotifier:            &mockChain.SimpleNotifier{Feed: stn},
+			OperationNotifier:        &mockChain.SimpleNotifier{Feed: opn},
+			HeadFetcher:              mockChainService,
+			ChainInfoFetcher:         mockChainService,
 			ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
-			EventWriteTimeout:      testEventWriteTimeout,
-			StateGen:               stategen,
+			EventWriteTimeout:        testEventWriteTimeout,
+			StateGen:                 stategen,
 		}
 
 		filled, err := srv.fillEventData(ctx, partial)

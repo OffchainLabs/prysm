@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -86,11 +87,12 @@ func (vs *Server) SubmitSignedProposerPreferences(
 				broadcast, len(req.SignedProposerPreferences), err)
 		}
 
-		// Write to both stores: external (so FCU lookups by
-		// (slot, dependent_root) honor the spec-aligned preference) and
-		// owned (so Validating()/Indices() reflect this validator). The
-		// fee/gas data is duplicated intentionally — see AddOwned.
-		vs.ProposerPreferencesCache.AddOwned(dependentRoot, proposalSlot, valIdx, msg.Message.FeeRecipient, msg.Message.GasLimit)
+		vs.ProposerPreferencesCache.Add(cache.ProposerPreference{
+			DependentRoot:  dependentRoot,
+			ValidatorIndex: valIdx,
+			FeeRecipient:   msg.Message.FeeRecipient,
+			GasLimit:       msg.Message.GasLimit,
+		}, proposalSlot)
 		broadcast++
 	}
 

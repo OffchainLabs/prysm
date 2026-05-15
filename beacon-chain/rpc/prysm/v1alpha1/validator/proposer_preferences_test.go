@@ -53,10 +53,10 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepEqual(t, &emptypb.Empty{}, resp)
 	assert.Equal(t, true, p2p.BroadcastCalled.Load())
-	val, ok := cache.Validator(2)
+	pref, ok := cache.Get([32]byte{0xcc}, proposalSlot)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, req.SignedProposerPreferences[0].Message.FeeRecipient, val.FeeRecipient)
-	require.Equal(t, req.SignedProposerPreferences[0].Message.GasLimit, val.GasLimit)
+	require.DeepEqual(t, req.SignedProposerPreferences[0].Message.FeeRecipient, pref.FeeRecipient)
+	require.Equal(t, req.SignedProposerPreferences[0].Message.GasLimit, pref.GasLimit)
 }
 
 func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
@@ -105,11 +105,11 @@ func TestSubmitSignedProposerPreferences_Multiple(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepEqual(t, &emptypb.Empty{}, resp)
 
-	_, ok := c.Validator(2)
+	_, ok := c.Get([32]byte{0xaa}, currentSlot+1)
 	require.Equal(t, true, ok)
-	val2, ok := c.Validator(5)
+	pref2, ok := c.Get([32]byte{0xbb}, currentSlot+2)
 	require.Equal(t, true, ok)
-	require.Equal(t, uint64(25_000_000), val2.GasLimit)
+	require.Equal(t, uint64(25_000_000), pref2.GasLimit)
 }
 
 func TestSubmitSignedProposerPreferences_DuplicateBroadcasts(t *testing.T) {
@@ -153,9 +153,9 @@ func TestSubmitSignedProposerPreferences_DuplicateBroadcasts(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepEqual(t, &emptypb.Empty{}, resp)
 	assert.Equal(t, true, p2p.BroadcastCalled.Load())
-	val, ok := c.Validator(2)
+	pref, ok := c.Get([32]byte{0xcc}, proposalSlot)
 	require.Equal(t, true, ok)
-	require.Equal(t, uint64(30_000_000), val.GasLimit)
+	require.Equal(t, uint64(30_000_000), pref.GasLimit)
 }
 
 func TestSubmitSignedProposerPreferences_InvalidEpoch(t *testing.T) {

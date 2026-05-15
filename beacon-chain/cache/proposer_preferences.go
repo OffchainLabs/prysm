@@ -14,13 +14,11 @@ const (
 	cleanupInterval   = 15 * time.Minute
 )
 
-// ProposerPreference is the unified preference shape stored in both stores
-// of ProposerPreferencesCache. For foreign entries it carries the gossiped
-// branch anchor (DependentRoot). For owned entries written via
-// SubmitSignedProposerPreferences, DependentRoot reflects the latest
-// local Submit; for entries written via the pre-Gloas
-// prepare_beacon_proposer endpoint, DependentRoot is zero (the concept
-// does not apply pre-Gloas).
+// ProposerPreference is a proposer fee-recipient / gas-limit preference. When
+// stored in the (slot, dep_root) preferences map it represents a signed
+// SignedProposerPreferences; when stored in the per-validator defaults map it
+// represents a pre-Gloas PrepareBeaconProposer write (no signature, no
+// dependent_root).
 type ProposerPreference struct {
 	DependentRoot  [32]byte
 	ValidatorIndex primitives.ValidatorIndex
@@ -28,115 +26,56 @@ type ProposerPreference struct {
 	GasLimit       uint64
 }
 
-// ProposerPreferencesCache holds two semantically distinct stores with no
-// data overlap:
+// ProposerPreferencesCache holds two stores with different lookup keys:
 //
-//  1. external: foreign proposer preferences received via gossip, keyed by
-//     (slot, dependent_root). Branch-specific per spec. Used by bid
-//     validation to verify that a foreign builder bid matches what the
-//     foreign proposer announced. The gossip validator filters
-//     self-broadcasts, so our own preferences never land here.
+//  1. preferences: signed proposer preferences from gossip / our local
+//     SubmitSignedProposerPreferences, keyed by (slot, dependent_root).
+//     Spec-aligned lookup for bid validation and post-Gloas proposing.
 //
-//  2. owned: validators this BN's VC manages, keyed by validator_index.
-//     Branch-independent — fee recipient / gas limit are properties of the
-//     validator, not of any specific (slot, dependent_root). The reason
-//     external is keyed by branch is that on different branches the
-//     proposing validator may differ; for our own validators that question
-//     does not apply because we propose with our own preferences regardless
-//     of branch. Populated by prepare_beacon_proposer (pre-Gloas) and
-//     SubmitSignedProposerPreferences (post-Gloas). Entries TTL out.
+//  2. defaults: per-validator fee-recipient defaults written via the
+//     pre-Gloas PrepareBeaconProposer endpoint, keyed by validator_index.
+//     Branch-independent fallback for proposing when no (slot, dep_root)
+//     entry exists.
 //
-// trackedProposer reads from owned for fee-recipient lookups; bid validation
-// reads from external. "Which validators does this BN serve" lives in
-// SubscribedValidatorsCache, not here.
+// Lookup order at proposal time: preferences → defaults → DefaultFeeRecipient
+// (the --suggested-fee-recipient flag). "Which validators are attached to this
+// BN" lives in SubscribedValidatorsCache, not here.
 type ProposerPreferencesCache struct {
-	external map[primitives.Slot][]ProposerPreference
-	owned    *gocache.Cache
-	lock     sync.RWMutex
+	preferences map[primitives.Slot][]ProposerPreference
+	defaults    *gocache.Cache
+	lock        sync.RWMutex
 }
 
 // NewProposerPreferencesCache initializes a proposer preferences cache.
 func NewProposerPreferencesCache() *ProposerPreferencesCache {
 	return &ProposerPreferencesCache{
-		external: make(map[primitives.Slot][]ProposerPreference),
-		owned:    gocache.New(defaultExpiration, cleanupInterval),
+		preferences: make(map[primitives.Slot][]ProposerPreference),
+		defaults:    gocache.New(defaultExpiration, cleanupInterval),
 	}
 }
 
-// Add stores a foreign (gossip-ingested) proposer preference. If an entry
-// with the same (slot, dependentRoot) already exists, the existing value
-// is kept and false is returned. If the validator is locally owned, the
-// preference is rejected — our own vidxs must never appear in external
-// from the gossip path. Use AddOwned for local writes.
-func (c *ProposerPreferencesCache) Add(
-	dependentRoot [32]byte,
-	slot primitives.Slot,
-	validatorIndex primitives.ValidatorIndex,
-	feeRecipient []byte,
-	gasLimit uint64,
-) bool {
-	if _, owned := c.owned.Get(ownedKey(validatorIndex)); owned {
-		return false
-	}
-	return c.addExternal(dependentRoot, slot, validatorIndex, feeRecipient, gasLimit)
-}
-
-// AddOwned stores a local proposer preference in both stores: in external
-// (so FCU lookups by (slot, dependent_root) hit) and in owned (so
-// Validating()/Indices() reflect this validator). Bypasses the
-// ownership-skip in Add since this is our own write. The fee_recipient
-// and gas_limit are duplicated across both stores intentionally — owned
-// holds the branch-independent default for fallback, external holds the
-// branch-specific entry for spec-aligned lookup.
-func (c *ProposerPreferencesCache) AddOwned(
-	dependentRoot [32]byte,
-	slot primitives.Slot,
-	validatorIndex primitives.ValidatorIndex,
-	feeRecipient []byte,
-	gasLimit uint64,
-) bool {
-	added := c.addExternal(dependentRoot, slot, validatorIndex, feeRecipient, gasLimit)
-	c.owned.Set(ownedKey(validatorIndex), ProposerPreference{
-		DependentRoot:  dependentRoot,
-		ValidatorIndex: validatorIndex,
-		FeeRecipient:   feeRecipient,
-		GasLimit:       gasLimit,
-	}, gocache.DefaultExpiration)
-	return added
-}
-
-// addExternal appends to the external slot map, deduping on
-// (slot, dependentRoot). Caller is responsible for any ownership gating.
-func (c *ProposerPreferencesCache) addExternal(
-	dependentRoot [32]byte,
-	slot primitives.Slot,
-	validatorIndex primitives.ValidatorIndex,
-	feeRecipient []byte,
-	gasLimit uint64,
-) bool {
+// Add stores a signed proposer preference at the given slot. If an entry
+// with the same (slot, pref.DependentRoot) already exists, the existing value
+// is kept and false is returned.
+func (c *ProposerPreferencesCache) Add(pref ProposerPreference, slot primitives.Slot) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	for _, p := range c.external[slot] {
-		if p.DependentRoot == dependentRoot {
+	for _, p := range c.preferences[slot] {
+		if p.DependentRoot == pref.DependentRoot {
 			return false
 		}
 	}
-	c.external[slot] = append(c.external[slot], ProposerPreference{
-		DependentRoot:  dependentRoot,
-		ValidatorIndex: validatorIndex,
-		FeeRecipient:   feeRecipient,
-		GasLimit:       gasLimit,
-	})
+	c.preferences[slot] = append(c.preferences[slot], pref)
 	return true
 }
 
-// Get returns the foreign proposer preference stored for (slot, dependentRoot).
+// Get returns the signed proposer preference stored for (slot, dependentRoot).
 func (c *ProposerPreferencesCache) Get(dependentRoot [32]byte, slot primitives.Slot) (ProposerPreference, bool) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	for _, p := range c.external[slot] {
+	for _, p := range c.preferences[slot] {
 		if p.DependentRoot == dependentRoot {
 			return p, true
 		}
@@ -144,12 +83,12 @@ func (c *ProposerPreferencesCache) Get(dependentRoot [32]byte, slot primitives.S
 	return ProposerPreference{}, false
 }
 
-// Has returns true if a foreign proposer preference exists for (slot, dependentRoot).
+// Has returns true if a signed preference exists for (slot, dependentRoot).
 func (c *ProposerPreferencesCache) Has(dependentRoot [32]byte, slot primitives.Slot) bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	for _, p := range c.external[slot] {
+	for _, p := range c.preferences[slot] {
 		if p.DependentRoot == dependentRoot {
 			return true
 		}
@@ -157,52 +96,48 @@ func (c *ProposerPreferencesCache) Has(dependentRoot [32]byte, slot primitives.S
 	return false
 }
 
-// PruneBefore removes all foreign preferences for slots before the provided slot.
+// PruneBefore removes all signed preferences for slots before the provided slot.
 func (c *ProposerPreferencesCache) PruneBefore(slot primitives.Slot) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	for cachedSlot := range c.external {
+	for cachedSlot := range c.preferences {
 		if cachedSlot < slot {
-			delete(c.external, cachedSlot)
+			delete(c.preferences, cachedSlot)
 		}
 	}
 }
 
-// Clear removes all cached foreign preferences.
+// Clear removes all cached signed preferences. Does not touch defaults.
 func (c *ProposerPreferencesCache) Clear() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.external = make(map[primitives.Slot][]ProposerPreference)
+	c.preferences = make(map[primitives.Slot][]ProposerPreference)
 }
 
-// Set records a validator that this BN's VC owns, keyed by ValidatorIndex.
-// Pre-Gloas callers (prepare_beacon_proposer) leave DependentRoot zero;
-// post-Gloas callers (SubmitSignedProposerPreferences) populate it from
-// the local Submit. The fee recipient / gas limit are treated as
-// branch-independent for our own validators. Foreign gossip ingestion
-// must not call this.
+// Set records a per-validator fee-recipient default, keyed by ValidatorIndex.
+// Populated by the pre-Gloas PrepareBeaconProposer endpoint. DependentRoot on
+// the supplied preference is ignored.
 func (c *ProposerPreferencesCache) Set(pref ProposerPreference) {
-	c.owned.Set(ownedKey(pref.ValidatorIndex), pref, gocache.DefaultExpiration)
+	c.defaults.Set(defaultKey(pref.ValidatorIndex), pref, gocache.DefaultExpiration)
 }
 
-// Validator retrieves an owned validator entry by index, if present. A hit
-// indicates the BN's VC owns the validator and carries the branch-independent
-// fee recipient / gas limit.
-func (c *ProposerPreferencesCache) Validator(index primitives.ValidatorIndex) (ProposerPreference, bool) {
-	item, ok := c.owned.Get(ownedKey(index))
+// Default returns the per-validator fee-recipient default for the given
+// validator index, if one was set via PrepareBeaconProposer.
+func (c *ProposerPreferencesCache) Default(index primitives.ValidatorIndex) (ProposerPreference, bool) {
+	item, ok := c.defaults.Get(defaultKey(index))
 	if !ok {
 		return ProposerPreference{}, false
 	}
 	pref, ok := item.(ProposerPreference)
 	if !ok {
-		log.Errorf("Failed to cast owned validator from cache, got unexpected item type %T", item)
+		log.Errorf("Failed to cast default fee recipient from cache, got unexpected item type %T", item)
 		return ProposerPreference{}, false
 	}
 	return pref, true
 }
 
-func ownedKey(index primitives.ValidatorIndex) string {
+func defaultKey(index primitives.ValidatorIndex) string {
 	return strconv.FormatUint(uint64(index), 10)
 }

@@ -17,21 +17,21 @@ import (
 // behavior is exercised end-to-end by the gossip and bid validation tests
 // under beacon-chain/sync.
 
-func TestTrackedProposer_NotTracked(t *testing.T) {
+func TestTrackedProposer_NotSubscribed(t *testing.T) {
 	service, _ := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	_, ok := service.trackedProposer(st, 0)
 	require.Equal(t, false, ok)
 }
 
-func TestTrackedProposer_Tracked(t *testing.T) {
+func TestTrackedProposer_Subscribed(t *testing.T) {
 	service, _ := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
-	addr := common.HexToAddress("0x1234")
-	service.cfg.ProposerPreferencesCache.Set(cache.ProposerPreference{FeeRecipient: addr.Bytes(), ValidatorIndex: 0})
+	service.cfg.SubscribedValidatorsCache.Add(0)
 	val, ok := service.trackedProposer(st, 0)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, addr.Bytes(), val.FeeRecipient)
+	// No SignedProposerPreferences cached → empty FeeRecipient (caller falls back to default).
+	require.DeepEqual(t, []byte(nil), val.FeeRecipient)
 }
 
 func TestTrackedProposer_PrepareAllPayloads_Default(t *testing.T) {
