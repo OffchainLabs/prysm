@@ -420,8 +420,8 @@ func (p *ProposerPreferences) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 	dst = append(dst, p.FeeRecipient...)
 
-	// Field (4) 'GasLimit'
-	dst = ssz.MarshalUint(dst, p.GasLimit)
+	// Field (4) 'TargetGasLimit'
+	dst = ssz.MarshalUint(dst, p.TargetGasLimit)
 
 	return
 }
@@ -452,8 +452,8 @@ func (p *ProposerPreferences) UnmarshalSSZ(buf []byte) error {
 	}
 	p.FeeRecipient = append(p.FeeRecipient, buf[48:68]...)
 
-	// Field (4) 'GasLimit'
-	p.GasLimit = ssz.UnmarshallUint[uint64](buf[68:76])
+	// Field (4) 'TargetGasLimit'
+	p.TargetGasLimit = ssz.UnmarshallUint[uint64](buf[68:76])
 
 	return err
 }
@@ -493,8 +493,8 @@ func (p *ProposerPreferences) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	}
 	hh.PutBytes(p.FeeRecipient)
 
-	// Field (4) 'GasLimit'
-	ssz.PutUint(hh, p.GasLimit)
+	// Field (4) 'TargetGasLimit'
+	ssz.PutUint(hh, p.TargetGasLimit)
 
 	hh.Merkleize(indx)
 	return

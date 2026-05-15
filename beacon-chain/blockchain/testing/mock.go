@@ -82,9 +82,11 @@ type ChainService struct {
 	MockCanonicalRoots          map[primitives.Slot][32]byte
 	MockCanonicalFull           map[primitives.Slot]bool
 
-	ParentPayloadReadyVal *bool
-	ForkchoiceRoots       map[[32]byte]bool
-	ForkchoiceBlockHashes map[[32]byte][32]byte
+	ParentPayloadReadyVal    *bool
+	ForkchoiceRoots          map[[32]byte]bool
+	ForkchoiceBlockHashes    map[[32]byte][32]byte
+	ParentPayloadGasLimits   map[[32]byte]uint64
+	ParentPayloadGasLimitErr error
 	// Ancestors lets a test stub the result of Ancestor(root, slot) without
 	// wiring a full forkchoice store. Keyed by the input root.
 	Ancestors map[[32]byte][32]byte
@@ -883,6 +885,14 @@ func (s *ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool
 		return *s.ParentPayloadReadyVal
 	}
 	return true
+}
+
+// ParentPayloadGasLimit mocks the same method in the chain service.
+func (s *ChainService) ParentPayloadGasLimit(_ context.Context, parentBlockRoot [32]byte) (uint64, error) {
+	if s.ParentPayloadGasLimitErr != nil {
+		return 0, s.ParentPayloadGasLimitErr
+	}
+	return s.ParentPayloadGasLimits[parentBlockRoot], nil
 }
 
 // DependentRootForEpoch mocks the same method in the chain service

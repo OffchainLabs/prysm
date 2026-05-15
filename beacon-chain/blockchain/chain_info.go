@@ -122,6 +122,7 @@ type FinalizationFetcher interface {
 	InForkchoice([32]byte) bool
 	IsFinalized(ctx context.Context, blockRoot [32]byte) bool
 	ParentPayloadReady(interfaces.ReadOnlyBeaconBlock) bool
+	ParentPayloadGasLimit(ctx context.Context, parentBlockRoot [32]byte) (uint64, error)
 }
 
 // OptimisticModeFetcher retrieves information about optimistic status of the node.
@@ -409,6 +410,47 @@ func (s *Service) InForkchoice(root [32]byte) bool {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.HasNode(root)
+}
+
+// ParentPayloadGasLimit returns the gas limit committed by the block at
+// parentBlockRoot: bid.gas_limit for Gloas, payload header for pre-Gloas (the
+// Fulu→Gloas boundary case).
+func (s *Service) ParentPayloadGasLimit(ctx context.Context, parentBlockRoot [32]byte) (uint64, error) {
+	s.headLock.RLock()
+	if s.hasHeadState() && s.head.root == parentBlockRoot {
+		gasLimit, err := payloadGasLimit(s.head.block)
+		s.headLock.RUnlock()
+		return gasLimit, err
+	}
+	s.headLock.RUnlock()
+
+	blk, err := s.cfg.BeaconDB.Block(ctx, parentBlockRoot)
+	if err != nil {
+		return 0, errors.Wrap(err, "could not get parent block")
+	}
+	if blk == nil || blk.IsNil() {
+		return 0, errors.New("parent block not found")
+	}
+	return payloadGasLimit(blk)
+}
+
+func payloadGasLimit(blk interfaces.ReadOnlySignedBeaconBlock) (uint64, error) {
+	body := blk.Block().Body()
+	if blk.Version() >= version.Gloas {
+		signedBid, err := body.SignedExecutionPayloadBid()
+		if err != nil {
+			return 0, errors.Wrap(err, "could not get signed execution payload bid")
+		}
+		if signedBid == nil || signedBid.Message == nil {
+			return 0, errors.New("parent block missing execution payload bid")
+		}
+		return signedBid.Message.GasLimit, nil
+	}
+	payload, err := body.Execution()
+	if err != nil {
+		return 0, errors.Wrap(err, "could not get execution payload")
+	}
+	return payload.GasLimit(), nil
 }
 
 // ParentPayloadReady returns true if the block's parent payload is available

@@ -16,9 +16,9 @@ var ExecutionPayloadBidGossipRequirements = []Requirement{
 	RequireBidBuilderActive,
 	RequireBidExecutionPaymentZero,
 	RequireBidFeeRecipientMatches,
-	RequireBidGasLimitMatches,
 	RequireBidParentBlockRootSeen,
 	RequireBidParentBlockHashValid,
+	RequireBidGasLimitCompatible,
 	RequireBidBuilderCanCover,
 	RequireBidSignatureValid,
 }
@@ -31,7 +31,7 @@ var (
 	ErrBidBuilderNotActive        = errors.New("builder is not active")
 	ErrBidExecutionPaymentNonZero = errors.New("execution payment is non-zero")
 	ErrBidFeeRecipientMismatch    = errors.New("fee recipient does not match proposer preferences")
-	ErrBidGasLimitMismatch        = errors.New("gas limit does not match proposer preferences")
+	ErrBidGasLimitIncompatible    = errors.New("bid gas limit is incompatible with parent and target")
 	ErrBidParentBlockRootNotSeen  = errors.New("parent block root not seen")
 	ErrBidParentBlockHashMismatch = errors.New("parent block hash does not match forkchoice")
 	ErrBidBuilderCannotCover      = errors.New("builder cannot cover bid")
@@ -110,18 +110,56 @@ func (v *BidVerifier) VerifyFeeRecipientMatches(expected []byte) (err error) {
 	return nil
 }
 
-// VerifyGasLimitMatches verifies the bid gas limit matches the expected proposer preferences value.
-func (v *BidVerifier) VerifyGasLimitMatches(expected uint64) (err error) {
-	defer v.record(RequireBidGasLimitMatches, &err)
+// VerifyGasLimitTargetCompatible verifies the bid gas limit is compatible with
+// the parent payload's gas limit and the proposer's target via the EIP-1559
+// elasticity rule.
+func (v *BidVerifier) VerifyGasLimitTargetCompatible(parentGasLimit, targetGasLimit uint64) (err error) {
+	defer v.record(RequireBidGasLimitCompatible, &err)
 
 	bid, err := v.b.Bid()
 	if err != nil {
 		return errors.Wrap(err, "failed to get bid")
 	}
-	if bid.GasLimit() != expected {
-		return fmt.Errorf("%w: bid=%d expected=%d", ErrBidGasLimitMismatch, bid.GasLimit(), expected)
+	if !isGasLimitTargetCompatible(parentGasLimit, bid.GasLimit(), targetGasLimit) {
+		return fmt.Errorf("%w: bid=%d parent=%d target=%d", ErrBidGasLimitIncompatible, bid.GasLimit(), parentGasLimit, targetGasLimit)
 	}
 	return nil
+}
+
+// isGasLimitTargetCompatible reports whether gasLimit is compatible with
+// targetGasLimit under the EIP-1559 transition rule from parentGasLimit.
+//
+//	<spec fn="is_gas_limit_target_compatible" fork="gloas">
+//	def is_gas_limit_target_compatible(
+//	    parent_gas_limit: uint64, gas_limit: uint64, target_gas_limit: uint64
+//	) -> bool:
+//	    max_gas_limit_difference = max(parent_gas_limit // 1024, 1) - 1
+//	    min_gas_limit = parent_gas_limit - max_gas_limit_difference
+//	    max_gas_limit = parent_gas_limit + max_gas_limit_difference
+//
+//	    if target_gas_limit >= min_gas_limit and target_gas_limit <= max_gas_limit:
+//	        return gas_limit == target_gas_limit
+//	    if target_gas_limit > max_gas_limit:
+//	        return gas_limit == max_gas_limit
+//	    return gas_limit == min_gas_limit
+//	</spec>
+func isGasLimitTargetCompatible(parentGasLimit, gasLimit, targetGasLimit uint64) bool {
+	maxDiff := parentGasLimit / 1024
+	if maxDiff == 0 {
+		maxDiff = 1
+	}
+	maxDiff--
+
+	minLimit := parentGasLimit - maxDiff
+	maxLimit := parentGasLimit + maxDiff
+
+	if targetGasLimit >= minLimit && targetGasLimit <= maxLimit {
+		return gasLimit == targetGasLimit
+	}
+	if targetGasLimit > maxLimit {
+		return gasLimit == maxLimit
+	}
+	return gasLimit == minLimit
 }
 
 // VerifyParentBlockRootSeen verifies the parent beacon block root is known.

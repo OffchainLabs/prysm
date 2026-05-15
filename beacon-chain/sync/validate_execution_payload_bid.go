@@ -86,10 +86,6 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyFeeRecipientMatches(pref.FeeRecipient[:]); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	// [REJECT] bid.gas_limit matches the gas_limit from the proposer's SignedProposerPreferences associated with bid.slot.
-	if err := v.VerifyGasLimitMatches(pref.GasLimit); err != nil {
-		return pubsub.ValidationReject, err
-	}
 	// The spec lists signature validation later, but the "first signed bid seen
 	// with a valid signature" gate below depends on knowing validity first.
 	if err := v.VerifySignature(st); err != nil {
@@ -110,8 +106,16 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyBuilderCanCoverBid(st); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	// [IGNORE] bid.parent_block_hash is the block hash of a known execution payload in fork choice.
+	// [IGNORE] bid.parent_block_hash is the block hash of a known execution payload in fork choice
+	// and bid.gas_limit is compatible with parent_gas_limit and the proposer's target.
 	if err := v.VerifyParentBlockHash(s.cfg.chain.BlockHash); err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	parentGasLimit, err := s.cfg.chain.ParentPayloadGasLimit(ctx, parentBlockRoot)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	if err := v.VerifyGasLimitTargetCompatible(parentGasLimit, pref.TargetGasLimit); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 	// [IGNORE] bid.parent_block_root is the hash tree root of a known beacon block in fork choice.
