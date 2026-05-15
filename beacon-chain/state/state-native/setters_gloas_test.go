@@ -1064,7 +1064,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		require.Equal(t, 0, len(st.builders))
 	})
 
-	t.Run("drops invalid non-builder deposit", func(t *testing.T) {
+	t.Run("keeps invalid non-builder deposit in pending queue", func(t *testing.T) {
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
 		validatorCreds := nonBuilderWithdrawalCredentials()
@@ -1072,8 +1072,40 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 
 		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{deposit}, 0)
 		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
-		require.Equal(t, 0, len(st.pendingDeposits))
+		require.Equal(t, 1, len(st.pendingDeposits))
 		require.Equal(t, 0, len(st.builders))
+	})
+
+	t.Run("creates builder then increases balance for same pubkey", func(t *testing.T) {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		builderCreds := builderWithdrawalCredentials(0x11)
+		depSlot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch * 2)
+		depositCreate := newPendingDeposit(t, sk, builderCreds, 10, depSlot, true)
+		depositTopUp := newPendingDeposit(t, sk, builderCreds, 5, depSlot, true)
+
+		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{depositCreate, depositTopUp}, 0)
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.Equal(t, 0, len(st.pendingDeposits))
+		require.Equal(t, 1, len(st.builders))
+		require.Equal(t, primitives.Gwei(15), st.builders[0].Balance)
+	})
+
+	t.Run("invalid validator deposit followed by valid builder deposit same pubkey", func(t *testing.T) {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		validatorCreds := nonBuilderWithdrawalCredentials()
+		builderCreds := builderWithdrawalCredentials(0xFF)
+
+		depositInvalidValidator := newPendingDeposit(t, sk, validatorCreds, 5, 0, false)
+		depositBuilder := newPendingDeposit(t, sk, builderCreds, 7, 0, true)
+
+		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{depositInvalidValidator, depositBuilder}, 0)
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.Equal(t, 1, len(st.pendingDeposits))
+		require.DeepEqual(t, depositInvalidValidator, st.pendingDeposits[0])
+		require.Equal(t, 1, len(st.builders))
+		require.Equal(t, primitives.Gwei(7), st.builders[0].Balance)
 	})
 }
 

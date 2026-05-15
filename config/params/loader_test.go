@@ -50,6 +50,7 @@ var placeholderFields = []string{
 	"MAX_BYTES_PER_INCLUSION_LIST",
 	"MAX_REQUEST_INCLUSION_LIST",
 	"NUMBER_OF_COLUMNS", // Configured as a constant in config/fieldparams/mainnet.go
+	"PAYLOAD_DUE_BPS",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",
