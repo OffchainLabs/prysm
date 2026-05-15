@@ -151,6 +151,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 			Withdrawals:           withdrawals,
 			ParentBeaconBlockRoot: parentRoot[:],
 			SlotNumber:            uint64(slot),
+			TargetGasLimit:        val.GasLimit,
 		})
 		if err != nil {
 			return nil, err

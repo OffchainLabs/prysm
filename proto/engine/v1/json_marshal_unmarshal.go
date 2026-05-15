@@ -828,6 +828,7 @@ type payloadAttributesV4JSON struct {
 	Withdrawals           []*Withdrawal  `json:"withdrawals"`
 	ParentBeaconBlockRoot hexutil.Bytes  `json:"parentBeaconBlockRoot"`
 	SlotNumber            hexutil.Uint64 `json:"slotNumber"`
+	TargetGasLimit        hexutil.Uint64 `json:"targetGasLimit"`
 }
 
 func (p *PayloadAttributesV4) MarshalJSON() ([]byte, error) {
@@ -843,6 +844,7 @@ func (p *PayloadAttributesV4) MarshalJSON() ([]byte, error) {
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: p.ParentBeaconBlockRoot,
 		SlotNumber:            hexutil.Uint64(p.SlotNumber),
+		TargetGasLimit:        hexutil.Uint64(p.TargetGasLimit),
 	})
 }
 
@@ -862,6 +864,7 @@ func (p *PayloadAttributesV4) UnmarshalJSON(enc []byte) error {
 	p.Withdrawals = withdrawals
 	p.ParentBeaconBlockRoot = dec.ParentBeaconBlockRoot
 	p.SlotNumber = uint64(dec.SlotNumber)
+	p.TargetGasLimit = uint64(dec.TargetGasLimit)
 	return nil
 }
 
