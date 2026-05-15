@@ -334,21 +334,24 @@ func (s *Service) updateMetrics() {
 		}
 	}
 
+	blobTopic := p2p.BlobSubnetTopicFormat + s.cfg.p2p.Encoding().ProtocolSuffix()
 	for i := 0; i < params.BeaconConfig().MaxBlobsPerBlock(s.cfg.clock.CurrentSlot()); i++ {
-		s.collectMetricForSubnet(p2p.BlobSubnetTopicFormat, digest, uint64(i))
+		s.collectMetricForSubnet(blobTopic, digest, uint64(i))
 	}
 
+	dataColumnTopic := p2p.DataColumnSubnetTopicFormat + s.cfg.p2p.Encoding().ProtocolSuffix()
 	for i := uint64(0); i < params.BeaconConfig().DataColumnSidecarSubnetCount; i++ {
-		s.collectMetricForSubnet(p2p.DataColumnSubnetTopicFormat, digest, i)
+		s.collectMetricForSubnet(dataColumnTopic, digest, i)
 	}
 
 	// We update all other gossip topics.
 	for _, topic := range p2p.AllTopics() {
 		// We already updated attestation subnet topics.
-		if strings.Contains(topic, p2p.GossipAttestationMessage) ||
-			strings.Contains(topic, p2p.GossipSyncCommitteeMessage) ||
-			strings.Contains(topic, p2p.GossipBlobSidecarMessage) ||
-			strings.Contains(topic, p2p.GossipDataColumnSidecarMessage) {
+		switch topic {
+		case p2p.AttestationSubnetTopicFormat,
+			p2p.SyncCommitteeSubnetTopicFormat,
+			p2p.BlobSubnetTopicFormat,
+			p2p.DataColumnSubnetTopicFormat:
 			continue
 		}
 		topic += s.cfg.p2p.Encoding().ProtocolSuffix()

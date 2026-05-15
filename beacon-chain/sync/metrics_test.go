@@ -17,7 +17,7 @@ import (
 )
 
 // TestUpdateMetrics_DataColumnTopicLabelFormatted verifies that updateMetrics
-// emits properly formatted topic labels for the data column sidecar subnets.
+// emits properly formatted, protocol-suffixed topic labels for the data column sidecar subnets.
 // Prior to the fix, the generic topic loop fed DataColumnSubnetTopicFormat
 // (which has both %x and %d verbs) into fmt.Sprintf with only the digest
 // argument, producing the literal "%!d(MISSING)" placeholder in the
@@ -57,7 +57,8 @@ func TestUpdateMetrics_DataColumnTopicLabelFormatted(t *testing.T) {
 	topicPeerCount.Collect(ch)
 	close(ch)
 
-	var sawDataColumn bool
+	var dataColumnLabels uint64
+	protocolSuffix := p2p.Encoding().ProtocolSuffix()
 	for m := range ch {
 		var pm dto.Metric
 		require.NoError(t, m.Write(&pm))
@@ -71,10 +72,12 @@ func TestUpdateMetrics_DataColumnTopicLabelFormatted(t *testing.T) {
 			require.Equal(t, false, strings.Contains(v, "%!"),
 				"topic label contains Sprintf error placeholder: %s", v)
 			if strings.Contains(v, "data_column_sidecar_") {
-				sawDataColumn = true
+				dataColumnLabels++
+				require.Equal(t, true, strings.HasSuffix(v, protocolSuffix),
+					"data column topic label missing encoding suffix: %s", v)
 			}
 		}
 	}
-	require.Equal(t, true, sawDataColumn,
-		"expected updateMetrics to emit at least one data_column_sidecar topic label")
+	require.Equal(t, params.BeaconConfig().DataColumnSidecarSubnetCount, dataColumnLabels,
+		"expected updateMetrics to emit one data_column_sidecar topic label per subnet")
 }
