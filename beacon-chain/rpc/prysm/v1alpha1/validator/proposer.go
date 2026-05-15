@@ -583,6 +583,7 @@ func (vs *Server) PrepareBeaconProposer(
 			ValidatorIndex: r.ValidatorIndex,
 			FeeRecipient:   bytesutil.ToBytes20(feeRecipient),
 		})
+		vs.SubscribedValidatorsCache.Add(r.ValidatorIndex)
 	}
 	return &emptypb.Empty{}, nil
 }

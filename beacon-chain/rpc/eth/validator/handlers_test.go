@@ -969,8 +969,9 @@ func TestSubmitBeaconCommitteeSubscription(t *testing.T) {
 		State: bs, Root: genesisRoot[:], Slot: &chainSlot,
 	}
 	s := &Server{
-		HeadFetcher: chain,
-		SyncChecker: &mockSync.Sync{IsSyncing: false},
+		HeadFetcher:               chain,
+		SyncChecker:               &mockSync.Sync{IsSyncing: false},
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
 	}
 
 	t.Run("single", func(t *testing.T) {
@@ -3662,8 +3663,9 @@ func TestPrepareBeaconProposer(t *testing.T) {
 	writer := httptest.NewRecorder()
 	zero := primitives.Slot(0)
 	server := &Server{
-		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
-		TimeFetcher:              &mockChain.ChainService{Slot: &zero},
+		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+		TimeFetcher:               &mockChain.ChainService{Slot: &zero},
 	}
 	server.PrepareBeaconProposer(writer, request)
 	require.Equal(t, http.StatusOK, writer.Code)

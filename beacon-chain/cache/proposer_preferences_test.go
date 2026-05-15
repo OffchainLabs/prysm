@@ -119,3 +119,49 @@ func TestProposerPreferencesCache_SetOverwrites(t *testing.T) {
 	require.DeepEqual(t, primitives.ExecutionAddress{2}, got.FeeRecipient)
 	require.Equal(t, uint64(20), got.GasLimit)
 }
+
+func TestProposerPreferencesCache_BestFor(t *testing.T) {
+	slot := primitives.Slot(123)
+	idx := primitives.ValidatorIndex(7)
+
+	t.Run("total miss returns false", func(t *testing.T) {
+		c := NewProposerPreferencesCache()
+		_, ok := c.BestFor(rootA, slot, idx)
+		require.Equal(t, false, ok)
+	})
+
+	t.Run("default-only fallback hits", func(t *testing.T) {
+		c := NewProposerPreferencesCache()
+		c.Set(ProposerPreference{ValidatorIndex: idx, FeeRecipient: primitives.ExecutionAddress{0x01}})
+		got, ok := c.BestFor(rootA, slot, idx)
+		require.Equal(t, true, ok)
+		require.Equal(t, primitives.ExecutionAddress{0x01}, got.FeeRecipient)
+	})
+
+	t.Run("branch-specific entry wins over default", func(t *testing.T) {
+		c := NewProposerPreferencesCache()
+		c.Set(ProposerPreference{ValidatorIndex: idx, FeeRecipient: primitives.ExecutionAddress{0x01}})
+		c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: idx, FeeRecipient: primitives.ExecutionAddress{0x02}}, slot)
+		got, ok := c.BestFor(rootA, slot, idx)
+		require.Equal(t, true, ok)
+		require.Equal(t, primitives.ExecutionAddress{0x02}, got.FeeRecipient)
+	})
+
+	t.Run("branch-specific entry for wrong validator falls through to default", func(t *testing.T) {
+		c := NewProposerPreferencesCache()
+		c.Set(ProposerPreference{ValidatorIndex: idx, FeeRecipient: primitives.ExecutionAddress{0x01}})
+		c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: idx + 1, FeeRecipient: primitives.ExecutionAddress{0x99}}, slot)
+		got, ok := c.BestFor(rootA, slot, idx)
+		require.Equal(t, true, ok)
+		require.Equal(t, primitives.ExecutionAddress{0x01}, got.FeeRecipient)
+	})
+
+	t.Run("different branch falls through to default", func(t *testing.T) {
+		c := NewProposerPreferencesCache()
+		c.Set(ProposerPreference{ValidatorIndex: idx, FeeRecipient: primitives.ExecutionAddress{0x01}})
+		c.Add(ProposerPreference{DependentRoot: rootB, ValidatorIndex: idx, FeeRecipient: primitives.ExecutionAddress{0x02}}, slot)
+		got, ok := c.BestFor(rootA, slot, idx)
+		require.Equal(t, true, ok)
+		require.Equal(t, primitives.ExecutionAddress{0x01}, got.FeeRecipient)
+	})
+}

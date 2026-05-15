@@ -21,7 +21,8 @@ import (
 func TestTrackedProposer_NotSubscribed(t *testing.T) {
 	service, _ := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
-	_, ok := service.trackedProposer(st, 0)
+	_, ok, err := service.trackedProposer(st, 0)
+	require.NoError(t, err)
 	require.Equal(t, false, ok)
 }
 
@@ -29,7 +30,8 @@ func TestTrackedProposer_Subscribed(t *testing.T) {
 	service, _ := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	service.cfg.SubscribedValidatorsCache.Add(0)
-	val, ok := service.trackedProposer(st, 0)
+	val, ok, err := service.trackedProposer(st, 0)
+	require.NoError(t, err)
 	require.Equal(t, true, ok)
 	// No SignedProposerPreferences cached → zero FeeRecipient (caller falls back to default).
 	require.Equal(t, primitives.ExecutionAddress{}, val.FeeRecipient)
@@ -41,7 +43,8 @@ func TestTrackedProposer_PrepareAllPayloads_Default(t *testing.T) {
 
 	service, _ := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
-	val, ok := service.trackedProposer(st, 0)
+	val, ok, err := service.trackedProposer(st, 0)
+	require.NoError(t, err)
 	require.Equal(t, true, ok)
 	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(val.FeeRecipient[:]).String())
 }

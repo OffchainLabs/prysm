@@ -575,9 +575,7 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 			return
 		}
 		validators[i] = val
-		if s.SubscribedValidatorsCache != nil {
-			s.SubscribedValidatorsCache.Add(consensusItem.ValidatorIndex)
-		}
+		s.SubscribedValidatorsCache.Add(consensusItem.ValidatorIndex)
 	}
 
 	fetchValsLen := func(slot primitives.Slot) (uint64, error) {
@@ -838,6 +836,7 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 			ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
 			FeeRecipient:   bytesutil.ToBytes20(feeRecipient),
 		})
+		s.SubscribedValidatorsCache.Add(primitives.ValidatorIndex(validatorIndex))
 	}
 }
 

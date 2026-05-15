@@ -70,6 +70,19 @@ func (c *ProposerPreferencesCache) Add(pref ProposerPreference, slot primitives.
 	return true
 }
 
+// BestFor returns the best-available preference for proposer `idx` at
+// (slot, dependentRoot): the signed branch-specific entry if present, else
+// the per-validator default, else (zero, false).
+func (c *ProposerPreferencesCache) BestFor(dependentRoot [32]byte, slot primitives.Slot, idx primitives.ValidatorIndex) (ProposerPreference, bool) {
+	if pref, ok := c.Get(dependentRoot, slot); ok && pref.ValidatorIndex == idx {
+		return pref, true
+	}
+	if def, ok := c.Default(idx); ok {
+		return def, true
+	}
+	return ProposerPreference{}, false
+}
+
 // Get returns the signed proposer preference stored for (slot, dependentRoot).
 func (c *ProposerPreferencesCache) Get(dependentRoot [32]byte, slot primitives.Slot) (ProposerPreference, bool) {
 	c.lock.RLock()

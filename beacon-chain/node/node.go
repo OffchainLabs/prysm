@@ -75,8 +75,6 @@ import (
 
 const testSkipPowFlag = "test-skip-pow"
 
-// SubscribedValidatorsCache TTL. The VC re-posts beacon_committee_subscriptions
-// every epoch (~6.4 min on mainnet); 1 hour rides out several missed epochs.
 const (
 	subscribedValidatorsTTL             = time.Hour
 	subscribedValidatorsCleanupInterval = 15 * time.Minute

@@ -3241,9 +3241,10 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 			ctx := t.Context()
 			zero := primitives.Slot(0)
 			proposerServer := &Server{
-				BeaconDB:                 db,
-				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
-				TimeFetcher:              &mock.ChainService{Slot: &zero},
+				BeaconDB:                  db,
+				ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+				SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+				TimeFetcher:               &mock.ChainService{Slot: &zero},
 			}
 			_, err := proposerServer.PrepareBeaconProposer(ctx, tt.args.request)
 			if tt.wantErr != "" {

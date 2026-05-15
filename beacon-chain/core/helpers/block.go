@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"context"
 	"math"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -9,6 +10,26 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
+
+// GenesisBlockRootReader is the minimal beacon DB surface needed to fetch the
+// genesis block root for the spec's epoch < 2 fallback.
+type GenesisBlockRootReader interface {
+	GenesisBlockRoot(ctx context.Context) ([32]byte, error)
+}
+
+// ProposerDependentRootOrGenesis wraps state.ProposerDependentRoot with the
+// spec-mandated genesis fallback: when proposal epoch < 2 the dependent root
+// is the genesis block root.
+func ProposerDependentRootOrGenesis(ctx context.Context, db GenesisBlockRootReader, st state.ReadOnlyBeaconState, slot primitives.Slot) ([32]byte, error) {
+	if slots.ToEpoch(slot) < 2 {
+		root, err := db.GenesisBlockRoot(ctx)
+		if err != nil {
+			return [32]byte{}, errors.Wrap(err, "genesis block root")
+		}
+		return root, nil
+	}
+	return st.ProposerDependentRoot(slot)
+}
 
 // BlockRootAtSlot returns the block root stored in the BeaconState for a recent slot.
 // It returns an error if the requested block root is not within the slot range.

@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -567,12 +568,15 @@ func TestStreamEvents_OperationsEvents(t *testing.T) {
 				opn := mockChain.NewEventFeedWrapper()
 				stategen := mock.NewService()
 				stategen.AddStateForRoot(st, headRoot)
+				beaconDB := dbtest.SetupDB(t)
+				require.NoError(t, beaconDB.SaveGenesisBlockRoot(t.Context(), [32]byte{}))
 				s := &Server{
 					StateNotifier:            &mockChain.SimpleNotifier{Feed: stn},
 					OperationNotifier:        &mockChain.SimpleNotifier{Feed: opn},
 					HeadFetcher:              mockChainService,
 					ChainInfoFetcher:         mockChainService,
 					ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+					BeaconDB:                 beaconDB,
 					EventWriteTimeout:        testEventWriteTimeout,
 					StateGen:                 stategen,
 				}

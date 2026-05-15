@@ -9,17 +9,8 @@ import (
 	gocache "github.com/patrickmn/go-cache"
 )
 
-// SubscribedValidatorsCache tracks the set of validator indices attached to
-// this beacon node, derived from /eth/v1/validator/beacon_committee_subscriptions
-// posts by the validator client. It is the source of truth for "what validators
-// is this BN serving" — used by CGC custody-requirement calculation and by the
-// chain service's validating() gate.
-//
-// This is intentionally separate from ProposerPreferencesCache, which holds
-// fee-recipient / builder config scoped to the proposing window. Attached-set
-// semantics (every active/exiting validator, every epoch) and proposer-preference
-// semantics (fee/gas, only around proposal slots) don't share a key shape or a
-// TTL, so they don't share a store.
+// SubscribedValidatorsCache tracks validator indices the validator client has
+// posted committee subscriptions for.
 type SubscribedValidatorsCache struct {
 	mu      sync.RWMutex
 	entries *gocache.Cache

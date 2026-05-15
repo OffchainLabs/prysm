@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 )
 
@@ -21,6 +22,7 @@ type Server struct {
 	HeadFetcher              blockchain.HeadFetcher
 	ChainInfoFetcher         blockchain.ChainInfoFetcher
 	ProposerPreferencesCache *cache.ProposerPreferencesCache
+	BeaconDB                 db.HeadAccessDatabase
 	KeepAliveInterval        time.Duration
 	EventFeedDepth           int
 	EventWriteTimeout        time.Duration

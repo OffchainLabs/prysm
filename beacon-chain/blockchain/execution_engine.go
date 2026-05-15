@@ -333,7 +333,12 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	stateEpoch := slots.ToEpoch(st.Slot())
 	fuluAndNextEpoch := st.Version() >= version.Fulu && e == stateEpoch+1
 	if e == stateEpoch || fuluAndNextEpoch {
-		val, ok = s.trackedProposer(st, slot)
+		var err error
+		val, ok, err = s.trackedProposer(st, slot)
+		if err != nil {
+			log.WithError(err).Error("Could not resolve tracked proposer")
+			return emptyAttri
+		}
 		if !ok {
 			return emptyAttri
 		}
@@ -351,7 +356,12 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	}
 	if e > stateEpoch && !fuluAndNextEpoch {
 		emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
-		val, ok = s.trackedProposer(st, slot)
+		var err error
+		val, ok, err = s.trackedProposer(st, slot)
+		if err != nil {
+			log.WithError(err).Error("Could not resolve tracked proposer")
+			return emptyAttri
+		}
 		if !ok {
 			return emptyAttri
 		}

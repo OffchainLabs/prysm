@@ -1108,6 +1108,7 @@ func (s *Service) eventsEndpoints() []endpoint {
 		HeadFetcher:              s.cfg.HeadFetcher,
 		ChainInfoFetcher:         s.cfg.ChainInfoFetcher,
 		ProposerPreferencesCache: s.cfg.ProposerPreferencesCache,
+		BeaconDB:                 s.cfg.BeaconDB,
 		StateGen:                 s.cfg.StateGen,
 	}
 

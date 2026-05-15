@@ -266,6 +266,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ClockWaiter:                      s.cfg.ClockWaiter,
 		CoreService:                      coreService,
 		ProposerPreferencesCache:         s.cfg.ProposerPreferencesCache,
+		SubscribedValidatorsCache:        s.cfg.SubscribedValidatorsCache,
 		HighestBidCache:                  s.cfg.HighestBidCache,
 		PayloadIDCache:                   s.cfg.PayloadIDCache,
 		ExecutionPayloadEnvelopeCache:    s.cfg.ExecutionPayloadEnvelopeCache,

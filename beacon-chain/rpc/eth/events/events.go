@@ -682,28 +682,18 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 	}
 
 	feeRecpt := params.BeaconConfig().DefaultFeeRecipient.Bytes()
-	if slots.ToEpoch(slot) >= params.BeaconConfig().GloasForkEpoch {
-		// Post-Gloas: first try the signed (slot, dep_root) preference, then
-		// fall back to the per-validator default (PrepareBeaconProposer),
-		// then to --suggested-fee-recipient.
-		dependentRoot, drErr := st.ProposerDependentRoot(slot)
-		if drErr != nil {
-			return nil, errors.Wrap(drErr, "could not compute proposer dependent root")
-		}
-		if pref, ok := s.ProposerPreferencesCache.Get(dependentRoot, slot); ok && pref.ValidatorIndex == proposer {
-			feeRecpt = pref.FeeRecipient[:]
-		} else if def, ok := s.ProposerPreferencesCache.Default(proposer); ok {
-			feeRecpt = def.FeeRecipient[:]
-		} else {
-			log.WithFields(logrus.Fields{
-				"slot":          slot,
-				"dependentRoot": fmt.Sprintf("%#x", dependentRoot),
-				"proposer":      proposer,
-			}).Debug("No proposer preference cached for SSE payload_attributes event; using default fee recipient")
-		}
-	} else if def, ok := s.ProposerPreferencesCache.Default(proposer); ok {
-		// Pre-Gloas: only the per-validator default (from PrepareBeaconProposer) applies.
-		feeRecpt = def.FeeRecipient[:]
+	dependentRoot, drErr := helpers.ProposerDependentRootOrGenesis(ctx, s.BeaconDB, st, slot)
+	if drErr != nil {
+		return nil, errors.Wrap(drErr, "could not compute proposer dependent root")
+	}
+	if pref, ok := s.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposer); ok {
+		feeRecpt = pref.FeeRecipient[:]
+	} else {
+		log.WithFields(logrus.Fields{
+			"slot":          slot,
+			"dependentRoot": fmt.Sprintf("%#x", dependentRoot),
+			"proposer":      proposer,
+		}).Debug("No proposer preference cached for SSE payload_attributes event; using default fee recipient")
 	}
 
 	if v == version.Bellatrix {

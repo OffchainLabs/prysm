@@ -1084,6 +1084,15 @@ message CommitteeSubnetsSubscribeRequest {
   // Subscribe as an attester means finding persistent peers on the subnet to be
   // able to publish attestations.
   repeated bool is_aggregator = 3;
+  // Validator index of the attester at (slots[i], committee_ids[i]). Optional;
+  // when populated the beacon node records the validator as attached for
+  // custody-group-count and validating() purposes. Older clients omit this; the
+  // beacon node treats an empty list as "no attached-set update."
+  repeated uint64 validator_indices = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/"
+        "primitives.ValidatorIndex"
+  ];
 }
 
 // ValidatorParticipation stores participation metrics during a given epoch.

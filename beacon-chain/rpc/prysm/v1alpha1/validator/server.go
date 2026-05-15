@@ -50,6 +50,7 @@ type Server struct {
 	Ctx                              context.Context
 	PayloadIDCache                   *cache.PayloadIDCache
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
+	SubscribedValidatorsCache        *cache.SubscribedValidatorsCache
 	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	HeadFetcher                      blockchain.HeadFetcher
