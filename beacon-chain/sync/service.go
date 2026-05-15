@@ -193,6 +193,7 @@ type Service struct {
 	newExecutionPayloadBidVerifier       verification.NewExecutionPayloadBidVerifier
 	columnSidecarsExecSingleFlight       singleflight.Group
 	reconstructionSingleFlight           singleflight.Group
+	payloadEnvelopeRequestSingleFlight   singleflight.Group
 	availableBlocker                     coverage.AvailableBlocker
 	reconstructionRandGen                *rand.Rand
 	ctxMap                               ContextByteVersions
