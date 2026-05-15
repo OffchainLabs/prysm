@@ -344,8 +344,14 @@ func populatePeerScoreFields(p *structs.Peer, peerStatus *peers.Status, hst host
 		if reasons := downscoreReasons(peerStatus, id); len(reasons) > 0 {
 			p.DownscoreReasons = reasons
 		}
-		if code, _, _, ok := peerStatus.LastGoodbye(id); ok {
-			p.DisconnectReason = mapGoodbyeCode(code)
+		// Per beacon-API spec, `disconnect_reason` MUST only be populated when
+		// `state` is `disconnected` or `disconnecting`. `p.State` is the
+		// lowercased connection state set by the caller.
+		if p.State == strings.ToLower(stateDisconnected) ||
+			p.State == strings.ToLower(stateDisconnecting) {
+			if code, _, _, ok := peerStatus.LastGoodbye(id); ok {
+				p.DisconnectReason = mapGoodbyeCode(code)
+			}
 		}
 	}
 }
