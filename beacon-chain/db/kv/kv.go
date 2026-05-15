@@ -77,9 +77,13 @@ var (
 		Name: "state_diff_get_anchor_state_cache_miss_total",
 		Help: "The total number of state diff getAnchorState cache misses.",
 	})
-	stateDiffGetAnchorStateCacheReadTime = promauto.NewHistogram(prometheus.HistogramOpts{
-		Name: "state_diff_get_anchor_state_cache_read_milliseconds",
-		Help: "Milliseconds it takes to read the anchor state from cache in getAnchorState.",
+	stateDiffGetAnchorStateCacheHitReadTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "state_diff_get_anchor_state_cache_hit_read_milliseconds",
+		Help: "Milliseconds it takes to read the anchor state from cache in getAnchorState in case of cache hit.",
+	})
+	stateDiffGetAnchorStateCacheMissTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "state_diff_get_anchor_state_cache_miss_milliseconds",
+		Help: "Milliseconds it takes for state diff anchor's cache to return in case of cache miss.",
 	})
 	stateDiffGetAnchorStateDBReadTime = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name: "state_diff_get_anchor_state_db_read_milliseconds",

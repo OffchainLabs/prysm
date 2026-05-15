@@ -144,10 +144,11 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 	startTime := time.Now()
 	anchor = s.stateDiffCache.getAnchor(anchorLvl)
 	if anchor != nil && anchor.Slot() == anchorSlot {
-		stateDiffGetAnchorStateCacheReadTime.Observe(float64(time.Since(startTime)) / float64(time.Millisecond))
+		stateDiffGetAnchorStateCacheHitReadTime.Observe(float64(time.Since(startTime)) / float64(time.Millisecond))
 		stateDiffGetAnchorStateCacheHit.Inc()
 		return anchor, nil
 	}
+	stateDiffGetAnchorStateCacheMissTime.Observe(float64(time.Since(startTime)) / float64(time.Millisecond))
 	stateDiffGetAnchorStateCacheMiss.Inc()
 	if anchor != nil {
 		log.WithField("level", anchorLvl).
