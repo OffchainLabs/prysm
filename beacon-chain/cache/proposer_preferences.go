@@ -22,7 +22,7 @@ const (
 type ProposerPreference struct {
 	DependentRoot  [32]byte
 	ValidatorIndex primitives.ValidatorIndex
-	FeeRecipient   []byte
+	FeeRecipient   primitives.ExecutionAddress
 	GasLimit       uint64
 }
 

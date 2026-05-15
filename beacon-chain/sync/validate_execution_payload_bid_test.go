@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -424,7 +425,7 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
 		DependentRoot:  genesisRoot,
 		ValidatorIndex: 0,
-		FeeRecipient:   signedBid.Message.FeeRecipient,
+		FeeRecipient:   bytesutil.ToBytes20(signedBid.Message.FeeRecipient),
 		GasLimit:       signedBid.Message.GasLimit,
 	}, signedBid.Message.Slot))
 	msg := executionPayloadBidToPubsub(t, s, p, signedBid)

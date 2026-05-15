@@ -119,7 +119,7 @@ func TestValidateSignedProposerPreferencesGossip_AlreadySeen(t *testing.T) {
 	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
 		DependentRoot:  dependentRoot,
 		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
-		FeeRecipient:   []byte{0x01},
+		FeeRecipient:   primitives.ExecutionAddress{0x01},
 		GasLimit:       10,
 	}, signedPreferences.Message.ProposalSlot))
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
@@ -140,7 +140,7 @@ func TestValidateSignedProposerPreferencesGossip_CacheHitSkipsStateLoad(t *testi
 	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
 		DependentRoot:  dependentRoot,
 		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
-		FeeRecipient:   []byte{0x01},
+		FeeRecipient:   primitives.ExecutionAddress{0x01},
 		GasLimit:       10,
 	}, signedPreferences.Message.ProposalSlot))
 	require.NoError(t, s.cfg.beaconDB.DeleteState(ctx, dependentRoot))
@@ -163,7 +163,7 @@ func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
 	got, ok := s.proposerPreferencesCache.Get(dependentRoot, signedPreferences.Message.ProposalSlot)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, signedPreferences.Message.FeeRecipient, got.FeeRecipient)
+	require.DeepEqual(t, signedPreferences.Message.FeeRecipient, got.FeeRecipient[:])
 	require.Equal(t, signedPreferences.Message.GasLimit, got.GasLimit)
 	validatorData, ok := msg.ValidatorData.(*ethpb.SignedProposerPreferences)
 	require.Equal(t, true, ok)

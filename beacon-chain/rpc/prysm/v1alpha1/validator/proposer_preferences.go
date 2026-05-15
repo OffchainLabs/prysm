@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -90,7 +91,7 @@ func (vs *Server) SubmitSignedProposerPreferences(
 		vs.ProposerPreferencesCache.Add(cache.ProposerPreference{
 			DependentRoot:  dependentRoot,
 			ValidatorIndex: valIdx,
-			FeeRecipient:   msg.Message.FeeRecipient,
+			FeeRecipient:   bytesutil.ToBytes20(msg.Message.FeeRecipient),
 			GasLimit:       msg.Message.GasLimit,
 		}, proposalSlot)
 		broadcast++

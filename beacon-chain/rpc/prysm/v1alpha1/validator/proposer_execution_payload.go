@@ -23,7 +23,6 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -44,8 +43,8 @@ var (
 )
 
 func setFeeRecipientIfBurnAddress(val *cache.ProposerPreference) {
-	if common.BytesToAddress(val.FeeRecipient) == (common.Address{}) {
-		val.FeeRecipient = params.BeaconConfig().DefaultFeeRecipient.Bytes()
+	if val.FeeRecipient == (primitives.ExecutionAddress{}) {
+		val.FeeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
 	}
 }
 
@@ -105,7 +104,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		payloadIDCacheHit.Inc()
 		res, err := vs.ExecutionEngineCaller.GetPayload(ctx, pid, slot)
 		if err == nil {
-			warnIfFeeRecipientDiffers(val.FeeRecipient, res.ExecutionData.FeeRecipient())
+			warnIfFeeRecipientDiffers(val.FeeRecipient[:], res.ExecutionData.FeeRecipient())
 			return res, nil
 		}
 		// TODO: TestServer_getExecutionPayloadContextTimeout expects this behavior.
@@ -158,7 +157,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV4{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
-			SuggestedFeeRecipient: val.FeeRecipient,
+			SuggestedFeeRecipient: val.FeeRecipient[:],
 			Withdrawals:           withdrawals,
 			ParentBeaconBlockRoot: parentRoot[:],
 			SlotNumber:            uint64(slot),
@@ -174,7 +173,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV3{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
-			SuggestedFeeRecipient: val.FeeRecipient,
+			SuggestedFeeRecipient: val.FeeRecipient[:],
 			Withdrawals:           withdrawals,
 			ParentBeaconBlockRoot: parentRoot[:],
 		})
@@ -189,7 +188,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV2{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
-			SuggestedFeeRecipient: val.FeeRecipient,
+			SuggestedFeeRecipient: val.FeeRecipient[:],
 			Withdrawals:           withdrawals,
 		})
 		if err != nil {
@@ -199,7 +198,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributes{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
-			SuggestedFeeRecipient: val.FeeRecipient,
+			SuggestedFeeRecipient: val.FeeRecipient[:],
 		})
 		if err != nil {
 			return nil, err
@@ -219,7 +218,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		return nil, err
 	}
 
-	warnIfFeeRecipientDiffers(val.FeeRecipient, res.ExecutionData.FeeRecipient())
+	warnIfFeeRecipientDiffers(val.FeeRecipient[:], res.ExecutionData.FeeRecipient())
 	log.WithField("value", res.Bid).Debug("Received execution payload from local engine")
 	return res, nil
 }

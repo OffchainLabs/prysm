@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -580,7 +581,7 @@ func (vs *Server) PrepareBeaconProposer(
 		}
 		vs.ProposerPreferencesCache.Set(cache.ProposerPreference{
 			ValidatorIndex: r.ValidatorIndex,
-			FeeRecipient:   feeRecipient,
+			FeeRecipient:   bytesutil.ToBytes20(feeRecipient),
 		})
 	}
 	return &emptypb.Empty{}, nil

@@ -691,9 +691,9 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 			return nil, errors.Wrap(drErr, "could not compute proposer dependent root")
 		}
 		if pref, ok := s.ProposerPreferencesCache.Get(dependentRoot, slot); ok && pref.ValidatorIndex == proposer {
-			feeRecpt = pref.FeeRecipient
+			feeRecpt = pref.FeeRecipient[:]
 		} else if def, ok := s.ProposerPreferencesCache.Default(proposer); ok {
-			feeRecpt = def.FeeRecipient
+			feeRecpt = def.FeeRecipient[:]
 		} else {
 			log.WithFields(logrus.Fields{
 				"slot":          slot,
@@ -703,7 +703,7 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		}
 	} else if def, ok := s.ProposerPreferencesCache.Default(proposer); ok {
 		// Pre-Gloas: only the per-validator default (from PrepareBeaconProposer) applies.
-		feeRecpt = def.FeeRecipient
+		feeRecpt = def.FeeRecipient[:]
 	}
 
 	if v == version.Bellatrix {

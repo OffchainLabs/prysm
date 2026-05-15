@@ -55,7 +55,7 @@ func TestSubmitSignedProposerPreferences_OK(t *testing.T) {
 	assert.Equal(t, true, p2p.BroadcastCalled.Load())
 	pref, ok := cache.Get([32]byte{0xcc}, proposalSlot)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, req.SignedProposerPreferences[0].Message.FeeRecipient, pref.FeeRecipient)
+	require.DeepEqual(t, req.SignedProposerPreferences[0].Message.FeeRecipient, pref.FeeRecipient[:])
 	require.Equal(t, req.SignedProposerPreferences[0].Message.GasLimit, pref.GasLimit)
 }
 

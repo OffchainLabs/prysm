@@ -3671,7 +3671,7 @@ func TestPrepareBeaconProposer(t *testing.T) {
 	require.Equal(t, true, ok)
 	expected, err := hexutil.Decode("0xb698D697092822185bF0311052215d5B5e1F3934")
 	require.NoError(t, err)
-	require.DeepEqual(t, expected, got.FeeRecipient)
+	require.DeepEqual(t, expected, got.FeeRecipient[:])
 }
 
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {

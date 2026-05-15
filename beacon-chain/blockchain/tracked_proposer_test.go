@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common"
@@ -30,8 +31,8 @@ func TestTrackedProposer_Subscribed(t *testing.T) {
 	service.cfg.SubscribedValidatorsCache.Add(0)
 	val, ok := service.trackedProposer(st, 0)
 	require.Equal(t, true, ok)
-	// No SignedProposerPreferences cached → empty FeeRecipient (caller falls back to default).
-	require.DeepEqual(t, []byte(nil), val.FeeRecipient)
+	// No SignedProposerPreferences cached → zero FeeRecipient (caller falls back to default).
+	require.Equal(t, primitives.ExecutionAddress{}, val.FeeRecipient)
 }
 
 func TestTrackedProposer_PrepareAllPayloads_Default(t *testing.T) {
@@ -42,5 +43,5 @@ func TestTrackedProposer_PrepareAllPayloads_Default(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
 	val, ok := service.trackedProposer(st, 0)
 	require.Equal(t, true, ok)
-	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(val.FeeRecipient).String())
+	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(val.FeeRecipient[:]).String())
 }

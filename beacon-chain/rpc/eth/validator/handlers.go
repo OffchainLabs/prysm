@@ -28,6 +28,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	validator2 "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -835,7 +836,7 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		}
 		s.ProposerPreferencesCache.Set(cache.ProposerPreference{
 			ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
-			FeeRecipient:   feeRecipient,
+			FeeRecipient:   bytesutil.ToBytes20(feeRecipient),
 		})
 	}
 }

@@ -457,11 +457,11 @@ func TestSetFeeRecipientIfBurnAddress(t *testing.T) {
 	// Empty fee → default fee applied, regardless of validator index.
 	val := &cache.ProposerPreference{ValidatorIndex: 1}
 	setFeeRecipientIfBurnAddress(val)
-	require.Equal(t, common.BytesToAddress(val.FeeRecipient), params.BeaconConfig().DefaultFeeRecipient)
+	require.Equal(t, common.BytesToAddress(val.FeeRecipient[:]), params.BeaconConfig().DefaultFeeRecipient)
 
 	// Non-empty fee → left alone.
 	preset := common.Address([20]byte{'b'})
-	val = &cache.ProposerPreference{ValidatorIndex: 1, FeeRecipient: preset.Bytes()}
+	val = &cache.ProposerPreference{ValidatorIndex: 1, FeeRecipient: primitives.ExecutionAddress(preset)}
 	setFeeRecipientIfBurnAddress(val)
-	require.Equal(t, common.BytesToAddress(val.FeeRecipient), preset)
+	require.Equal(t, common.BytesToAddress(val.FeeRecipient[:]), preset)
 }
