@@ -89,6 +89,10 @@ var (
 		Name: "state_diff_get_anchor_state_db_read_milliseconds",
 		Help: "Milliseconds it takes to read the anchor state from the database in getAnchorState.",
 	})
+	stateDiffAnchorCacheBytes = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "state_diff_anchor_cache_bytes",
+		Help: "The size in bytes of each state diff anchor cache level.",
+	}, []string{"level"})
 )
 
 // BlockCacheSize specifies 1000 slots worth of blocks cached, which
