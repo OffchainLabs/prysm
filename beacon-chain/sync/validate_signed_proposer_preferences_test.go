@@ -116,7 +116,12 @@ func TestValidateSignedProposerPreferencesGossip_AlreadySeen(t *testing.T) {
 	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
 
 	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
-	require.Equal(t, true, s.proposerPreferencesCache.Add(dependentRoot, signedPreferences.Message.ProposalSlot, signedPreferences.Message.ValidatorIndex, []byte{0x01}, 10))
+	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
+		DependentRoot:  dependentRoot,
+		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
+		FeeRecipient:   []byte{0x01},
+		GasLimit:       10,
+	}, signedPreferences.Message.ProposalSlot))
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
@@ -132,7 +137,12 @@ func TestValidateSignedProposerPreferencesGossip_CacheHitSkipsStateLoad(t *testi
 	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
 
 	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
-	require.Equal(t, true, s.proposerPreferencesCache.Add(dependentRoot, signedPreferences.Message.ProposalSlot, signedPreferences.Message.ValidatorIndex, []byte{0x01}, 10))
+	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
+		DependentRoot:  dependentRoot,
+		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
+		FeeRecipient:   []byte{0x01},
+		GasLimit:       10,
+	}, signedPreferences.Message.ProposalSlot))
 	require.NoError(t, s.cfg.beaconDB.DeleteState(ctx, dependentRoot))
 
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)

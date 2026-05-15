@@ -421,7 +421,12 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 	}
 	// The Gloas test state has a zero-filled proposer lookahead, so the
 	// proposer for any slot is validator index 0.
-	require.Equal(t, true, s.proposerPreferencesCache.Add(genesisRoot, signedBid.Message.Slot, 0, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit))
+	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
+		DependentRoot:  genesisRoot,
+		ValidatorIndex: 0,
+		FeeRecipient:   signedBid.Message.FeeRecipient,
+		GasLimit:       signedBid.Message.GasLimit,
+	}, signedBid.Message.Slot))
 	msg := executionPayloadBidToPubsub(t, s, p, signedBid)
 	return s, msg, signedBid
 }
