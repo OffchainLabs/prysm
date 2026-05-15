@@ -82,7 +82,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 	payloadId, ok := vs.PayloadIDCache.PayloadID(slot, parentRoot)
 
 	val := cache.ProposerPreference{ValidatorIndex: proposerId}
-	dependentRoot, drErr := helpers.ProposerDependentRoot(st, slot)
+	dependentRoot, drErr := st.ProposerDependentRoot(slot)
 	if drErr == nil {
 		if pref, ok := vs.ProposerPreferencesCache.Get(dependentRoot, slot); ok && pref.ValidatorIndex == proposerId {
 			val = pref

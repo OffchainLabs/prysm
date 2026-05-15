@@ -38,7 +38,7 @@ func (s *Service) trackedProposer(st state.ReadOnlyBeaconState, slot primitives.
 // PrepareBeaconProposer (pre-Gloas), then to an empty preference (caller
 // resolves to --suggested-fee-recipient).
 func (s *Service) preferenceForProposer(st state.ReadOnlyBeaconState, slot primitives.Slot, id primitives.ValidatorIndex) cache.ProposerPreference {
-	dependentRoot, err := helpers.ProposerDependentRoot(st, slot)
+	dependentRoot, err := st.ProposerDependentRoot(slot)
 	if err == nil {
 		if pref, ok := s.cfg.ProposerPreferencesCache.Get(dependentRoot, slot); ok && pref.ValidatorIndex == id {
 			return pref

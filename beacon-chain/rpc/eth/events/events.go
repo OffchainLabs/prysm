@@ -686,7 +686,7 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		// Post-Gloas: first try the signed (slot, dep_root) preference, then
 		// fall back to the per-validator default (PrepareBeaconProposer),
 		// then to --suggested-fee-recipient.
-		dependentRoot, drErr := helpers.ProposerDependentRoot(st, slot)
+		dependentRoot, drErr := st.ProposerDependentRoot(slot)
 		if drErr != nil {
 			return nil, errors.Wrap(drErr, "could not compute proposer dependent root")
 		}
