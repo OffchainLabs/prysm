@@ -714,22 +714,27 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 		}
 
 		builderIdx, isExistingBuilder := b.builderIndexByPubkey(pubkey)
-		if !isExistingBuilder {
-			if !helpers.IsBuilderWithdrawalCredential(deposit.WithdrawalCredentials) {
-				newPendingDeposits = append(newPendingDeposits, deposit)
-				continue
-			}
-			isPending, err := helpers.IsPendingValidator(newPendingDeposits, deposit.PublicKey)
-			if err != nil {
+		if isExistingBuilder {
+			if err := b.increaseBuilderBalance(builderIdx, deposit.Amount); err != nil {
 				return err
 			}
-			if isPending {
-				newPendingDeposits = append(newPendingDeposits, deposit)
-				continue
-			}
+			continue
 		}
 
-		if err := b.applyDepositForBuilder(deposit, builderIdx, isExistingBuilder); err != nil {
+		if !helpers.IsBuilderWithdrawalCredential(deposit.WithdrawalCredentials) {
+			newPendingDeposits = append(newPendingDeposits, deposit)
+			continue
+		}
+		isPending, err := helpers.IsPendingValidator(newPendingDeposits, deposit.PublicKey)
+		if err != nil {
+			return err
+		}
+		if isPending {
+			newPendingDeposits = append(newPendingDeposits, deposit)
+			continue
+		}
+
+		if err := b.applyDepositForNewBuilder(deposit); err != nil {
 			return err
 		}
 	}
@@ -765,10 +770,7 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 //	    state.builders[builder_index].balance += amount
 //
 // </spec>
-func (b *BeaconState) applyDepositForBuilder(deposit *ethpb.PendingDeposit, builderIdx primitives.BuilderIndex, isExistingBuilder bool) error {
-	if isExistingBuilder {
-		return b.increaseBuilderBalance(builderIdx, deposit.Amount)
-	}
+func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit) error {
 	valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
 		PublicKey:             deposit.PublicKey,
 		WithdrawalCredentials: deposit.WithdrawalCredentials,
