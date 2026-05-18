@@ -19,16 +19,26 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// filterBlacklistedKeys returns validating keys with slashable keys removed.
-func (v *validator) filterBlacklistedKeys(ctx context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
-	validatingKeys, err := v.km.FetchValidatingPublicKeys(ctx)
-	if err != nil {
-		return nil, err
+// filterBlacklistedKeys returns keys with slashable keys removed. If keys
+// are provided, those are filtered. Otherwise all keys are fetched from the
+// keymanager first.
+func (v *validator) filterBlacklistedKeys(ctx context.Context, keys ...[][fieldparams.BLSPubkeyLength]byte) ([][fieldparams.BLSPubkeyLength]byte, error) {
+	var toFilter [][fieldparams.BLSPubkeyLength]byte
+	if len(keys) > 0 {
+		for _, k := range keys {
+			toFilter = append(toFilter, k...)
+		}
+	} else {
+		var err error
+		toFilter, err = v.km.FetchValidatingPublicKeys(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
-	filtered := make([][fieldparams.BLSPubkeyLength]byte, 0, len(validatingKeys))
+	filtered := make([][fieldparams.BLSPubkeyLength]byte, 0, len(toFilter))
 	v.blacklistedPubkeysLock.RLock()
 	defer v.blacklistedPubkeysLock.RUnlock()
-	for _, pubKey := range validatingKeys {
+	for _, pubKey := range toFilter {
 		if v.blacklistedPubkeys[pubKey] {
 			log.WithField(
 				"pubkey", fmt.Sprintf("%#x", bytesutil.Trunc(pubKey[:])),
@@ -43,12 +53,15 @@ func (v *validator) filterBlacklistedKeys(ctx context.Context) ([][fieldparams.B
 
 // UpdateDuties checks the slot number to determine if the validator's
 // list of upcoming assignments needs to be updated. For example, at the
-// beginning of a new epoch.
-func (v *validator) UpdateDuties(ctx context.Context) error {
+// beginning of a new epoch. If newKeys is provided, only those keys are
+// fetched and merged into the existing duty store (used for mid-epoch
+// key imports). Otherwise all keys from the keymanager are fetched.
+func (v *validator) UpdateDuties(ctx context.Context, newKeys ...[][fieldparams.BLSPubkeyLength]byte) error {
 	ctx, span := trace.StartSpan(ctx, "validator.UpdateDuties")
 	defer span.End()
 
-	filteredKeys, err := v.filterBlacklistedKeys(ctx)
+	partial := len(newKeys) > 0
+	keys, err := v.filterBlacklistedKeys(ctx, newKeys...)
 	if err != nil {
 		return err
 	}
@@ -56,35 +69,51 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	epoch := slots.ToEpoch(slots.CurrentSlot(v.genesisTime) + 1)
 	req := &ethpb.DutiesRequest{
 		Epoch:      epoch,
-		PublicKeys: bytesutil.FromBytes48Array(filteredKeys),
+		PublicKeys: bytesutil.FromBytes48Array(keys),
 	}
 
 	resp, err := v.validatorClient.Duties(ctx, req)
 	if err != nil || resp == nil {
-		v.dutiesLock.Lock()
-		v.duties.Reset()
-		v.dutiesLock.Unlock()
+		if !partial {
+			v.dutiesLock.Lock()
+			v.duties.Reset()
+			v.dutiesLock.Unlock()
+		}
 		log.WithError(err).Error("Error getting validator duties")
 		return err
 	}
 
-	ss, err := slots.EpochStart(epoch)
-	if err != nil {
-		return err
-	}
 	v.dutiesLock.Lock()
-	v.duties.SetFromCombinedDutiesResponse(resp)
-	v.logDuties(ss)
+	if partial {
+		v.duties.MergeDutiesResponse(resp)
+		for _, pk := range keys {
+			v.lastDutiesPubkeys[pk] = true
+		}
+	} else {
+		ss, err := slots.EpochStart(epoch)
+		if err != nil {
+			v.dutiesLock.Unlock()
+			return err
+		}
+		v.duties.SetFromCombinedDutiesResponse(resp)
+		v.lastDutiesPubkeys = make(map[[fieldparams.BLSPubkeyLength]byte]bool, len(keys))
+		for _, pk := range keys {
+			v.lastDutiesPubkeys[pk] = true
+		}
+		v.logDuties(ss)
+	}
 	v.dutiesLock.Unlock()
 
-	allExitedCounter := 0
-	for _, d := range resp.CurrentEpochDuties {
-		if d.Status == ethpb.ValidatorStatus_EXITED {
-			allExitedCounter++
+	if !partial {
+		allExitedCounter := 0
+		for _, d := range resp.CurrentEpochDuties {
+			if d.Status == ethpb.ValidatorStatus_EXITED {
+				allExitedCounter++
+			}
 		}
-	}
-	if allExitedCounter != 0 && allExitedCounter == len(resp.CurrentEpochDuties) {
-		return ErrValidatorsAllExited
+		if allExitedCounter != 0 && allExitedCounter == len(resp.CurrentEpochDuties) {
+			return ErrValidatorsAllExited
+		}
 	}
 
 	// Non-blocking call for beacon node to start subscriptions for aggregators.

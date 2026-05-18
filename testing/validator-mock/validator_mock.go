@@ -489,17 +489,22 @@ func (mr *MockValidatorMockRecorder) UpdateDomainDataCaches(arg0, arg1 any) *gom
 }
 
 // UpdateDuties mocks base method.
-func (m *MockValidator) UpdateDuties(arg0 context.Context) error {
+func (m *MockValidator) UpdateDuties(arg0 context.Context, arg1 ...[][48]byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateDuties", arg0)
+	varargs := []any{arg0}
+	for _, a := range arg1 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "UpdateDuties", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateDuties indicates an expected call of UpdateDuties.
-func (mr *MockValidatorMockRecorder) UpdateDuties(arg0 any) *gomock.Call {
+func (mr *MockValidatorMockRecorder) UpdateDuties(arg0 any, arg1 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDuties", reflect.TypeOf((*MockValidator)(nil).UpdateDuties), arg0)
+	varargs := append([]any{arg0}, arg1...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDuties", reflect.TypeOf((*MockValidator)(nil).UpdateDuties), varargs...)
 }
 
 // WaitForActivation mocks base method.

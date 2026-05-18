@@ -114,6 +114,7 @@ type validator struct {
 	genesisTime                  time.Time
 	graffiti                     []byte
 	voteStats                    voteStats
+	lastDutiesPubkeys            map[[fieldparams.BLSPubkeyLength]byte]bool
 }
 
 type validatorStatus struct {
@@ -814,6 +815,12 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		log.Info("No imported public keys. Skipping prepare proposer routine")
 		return nil
 	}
+	if newKeys := v.newValidatorKeys(pubkeys); len(newKeys) > 0 {
+		log.WithField("count", len(newKeys)).Info("New validator keys detected, fetching duties")
+		if err := v.UpdateDuties(ctx, newKeys); err != nil {
+			log.WithError(err).Warn("Failed to fetch duties for new keys")
+		}
+	}
 	filteredKeys, err := v.filterAndCacheActiveKeys(ctx, pubkeys, slot)
 	if err != nil {
 		return err
@@ -867,6 +874,23 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 	}
 
 	return nil
+}
+
+// newValidatorKeys returns public keys from the keymanager that were not
+// included in the last UpdateDuties call.
+func (v *validator) newValidatorKeys(pubkeys [][fieldparams.BLSPubkeyLength]byte) [][fieldparams.BLSPubkeyLength]byte {
+	v.dutiesLock.RLock()
+	defer v.dutiesLock.RUnlock()
+	if v.lastDutiesPubkeys == nil {
+		return nil
+	}
+	var newKeys [][fieldparams.BLSPubkeyLength]byte
+	for _, pk := range pubkeys {
+		if !v.lastDutiesPubkeys[pk] {
+			newKeys = append(newKeys, pk)
+		}
+	}
+	return newKeys
 }
 
 func (v *validator) StartEventStream(ctx context.Context, topics []string) {

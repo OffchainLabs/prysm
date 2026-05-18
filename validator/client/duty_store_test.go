@@ -152,3 +152,84 @@ func TestDutyStore_SetFromCombinedDutiesResponseSkipsNilDuties(t *testing.T) {
 	assert.Equal(t, 1, len(ds.CurrentEpochDuties()))
 	assert.Equal(t, 0, len(ds.NextEpochDuties()))
 }
+
+func TestDutyStore_MergeDutiesResponse(t *testing.T) {
+	pk1 := bytesutil.ToBytes48([]byte{1})
+	pk2 := bytesutil.ToBytes48([]byte{2})
+	pk3 := bytesutil.ToBytes48([]byte{3})
+
+	// Start with an initialized store containing pk1.
+	ds := testDutyStore(&ethpb.ValidatorDuty{
+		PublicKey:      pk1[:],
+		ValidatorIndex: 10,
+		AttesterSlot:   5,
+		ProposerSlots:  []primitives.Slot{3},
+	})
+	ds.nextDuties[pk1] = &ethpb.ValidatorDuty{
+		PublicKey:      pk1[:],
+		ValidatorIndex: 10,
+		AttesterSlot:   40,
+	}
+
+	// Merge pk2 (current) and pk3 (next).
+	ds.MergeDutiesResponse(&ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{
+				PublicKey:       pk2[:],
+				ValidatorIndex:  20,
+				AttesterSlot:    6,
+				ProposerSlots:   []primitives.Slot{7},
+				IsSyncCommittee: true,
+				PtcSlots:        []primitives.Slot{8},
+			},
+		},
+		NextEpochDuties: []*ethpb.ValidatorDuty{
+			{
+				PublicKey:       pk3[:],
+				ValidatorIndex:  30,
+				AttesterSlot:    50,
+				IsSyncCommittee: true,
+			},
+		},
+	})
+
+	// pk1 should be unchanged.
+	d, ok := ds.CurrentDuty(pk1)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, primitives.ValidatorIndex(10), d.ValidatorIndex)
+	assert.DeepEqual(t, []primitives.Slot{3}, ds.ProposerSlots(10))
+	next := ds.NextEpochDuties()
+	assert.Equal(t, primitives.ValidatorIndex(10), next[pk1].ValidatorIndex)
+
+	// pk2 should be merged into current.
+	d, ok = ds.CurrentDuty(pk2)
+	assert.Equal(t, true, ok)
+	assert.Equal(t, primitives.ValidatorIndex(20), d.ValidatorIndex)
+	assert.DeepEqual(t, []primitives.Slot{7}, ds.ProposerSlots(20))
+	assert.Equal(t, true, ds.IsSyncCommittee(20))
+	assert.DeepEqual(t, []primitives.Slot{8}, ds.PtcSlots(20))
+
+	// pk3 should be merged into next.
+	assert.Equal(t, primitives.ValidatorIndex(30), next[pk3].ValidatorIndex)
+	assert.Equal(t, true, ds.IsNextSyncCommittee(30))
+}
+
+func TestDutyStore_MergeDutiesResponseNoopWhenUninitialized(t *testing.T) {
+	ds := &dutyStore{}
+	ds.MergeDutiesResponse(&ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{
+			{PublicKey: make([]byte, 48), ValidatorIndex: 1},
+		},
+	})
+	assert.Equal(t, false, ds.IsInitialized())
+}
+
+func TestDutyStore_MergeDutiesResponseSkipsNil(t *testing.T) {
+	ds := testDutyStore()
+	ds.MergeDutiesResponse(&ethpb.ValidatorDutiesContainer{
+		CurrentEpochDuties: []*ethpb.ValidatorDuty{nil},
+		NextEpochDuties:    []*ethpb.ValidatorDuty{nil},
+	})
+	assert.Equal(t, 0, len(ds.CurrentEpochDuties()))
+	assert.Equal(t, 0, len(ds.NextEpochDuties()))
+}
