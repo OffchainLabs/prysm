@@ -52,7 +52,7 @@ var emptyBuilderPendingPayment = &ethpb.BuilderPendingPayment{
 func newBuilderIdxMap(builders []*ethpb.Builder) map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex {
 	m := make(map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex, len(builders))
 	for i, builder := range builders {
-		if builder == nil || len(builder.Pubkey) == 0 {
+		if builder == nil {
 			continue
 		}
 		m[bytesutil.ToBytes48(builder.Pubkey)] = primitives.BuilderIndex(i)
@@ -305,16 +305,11 @@ func (b *BeaconState) UpdateBuilderAtIndex(index primitives.BuilderIndex, builde
 		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
 	}
 
-	if old := builders[idx]; old != nil && len(old.Pubkey) > 0 {
+	if old := builders[idx]; old != nil {
 		delete(b.builderIdxMap, bytesutil.ToBytes48(old.Pubkey))
 	}
 	builders[idx] = ethpb.CopyBuilder(builder)
-	if len(builder.Pubkey) > 0 {
-		if b.builderIdxMap == nil {
-			b.builderIdxMap = make(map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex)
-		}
-		b.builderIdxMap[bytesutil.ToBytes48(builder.Pubkey)] = index
-	}
+	b.builderIdxMap[bytesutil.ToBytes48(builder.Pubkey)] = index
 	b.builders = builders
 
 	b.markFieldAsDirty(types.Builders)
@@ -396,7 +391,7 @@ func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkey
 	}
 
 	if index < primitives.BuilderIndex(len(builders)) {
-		if old := builders[index]; old != nil && len(old.Pubkey) > 0 {
+		if old := builders[index]; old != nil {
 			delete(b.builderIdxMap, bytesutil.ToBytes48(old.Pubkey))
 		}
 		builders[index] = builder
@@ -404,9 +399,6 @@ func (b *BeaconState) addBuilderFromDepositAtEpoch(pubkey [fieldparams.BLSPubkey
 		gap := index - primitives.BuilderIndex(len(builders)) + 1
 		builders = append(builders, make([]*ethpb.Builder, gap)...)
 		builders[index] = builder
-	}
-	if b.builderIdxMap == nil {
-		b.builderIdxMap = make(map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex)
 	}
 	b.builderIdxMap[pubkey] = index
 	b.builders = builders
