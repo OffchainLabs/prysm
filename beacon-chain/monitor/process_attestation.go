@@ -244,7 +244,7 @@ func (s *Service) processAggregatedAttestation(ctx context.Context, att ethpb.Ag
 	for _, idx := range attestingIndices {
 		if s.canUpdateAttestedValidator(primitives.ValidatorIndex(idx), att.AggregateVal().GetData().Slot) {
 			logFields := logMessageTimelyFlagsForIndex(primitives.ValidatorIndex(idx), att.AggregateVal().GetData())
-			log.WithFields(logFields).Info("Processed aggregated attestation")
+			log.WithFields(logFields).Debug("Processed aggregated attestation")
 		}
 	}
 }
