@@ -19,6 +19,19 @@ import (
 
 // QueryBeaconState handles SSZ Query request for BeaconState.
 // Returns as bytes serialized SSZQueryResponse.
+//
+// @Summary Query beacon state with SSZ path
+// @Description Executes an SSZ query on a beacon state and returns the result as SSZ-encoded bytes. Allows efficient extraction of specific fields from large state objects.
+// @Tags Prysm Beacon
+// @Accept json
+// @Produce application/octet-stream
+// @Param state_id path string true "State identifier (head, genesis, finalized, justified, slot number, or hex root)"
+// @Param request body structs.SSZQueryRequest true "SSZ query path (e.g., 'validators[0].pubkey')"
+// @Success 200 {string} binary "SSZ-encoded SSZQueryResponse containing root and result"
+// @Failure 400 {object} httputil.DefaultJsonError
+// @Failure 404 {object} httputil.DefaultJsonError
+// @Failure 500 {object} httputil.DefaultJsonError
+// @Router /prysm/v1/beacon/states/{state_id}/query [post]
 func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.QueryBeaconState")
 	defer span.End()
@@ -110,8 +123,21 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteSsz(w, responseSsz)
 }
 
-// QueryBeaconState handles SSZ Query request for BeaconState.
+// QueryBeaconBlock handles SSZ Query request for BeaconBlock.
 // Returns as bytes serialized SSZQueryResponse.
+//
+// @Summary Query beacon block with SSZ path
+// @Description Executes an SSZ query on a beacon block and returns the result as SSZ-encoded bytes. Allows efficient extraction of specific fields from block objects.
+// @Tags Prysm Beacon
+// @Accept json
+// @Produce application/octet-stream
+// @Param block_id path string true "Block identifier (head, genesis, finalized, slot number, or hex root)"
+// @Param request body structs.SSZQueryRequest true "SSZ query path (e.g., 'body.attestations[0]')"
+// @Success 200 {string} binary "SSZ-encoded SSZQueryResponse containing root and result"
+// @Failure 400 {object} httputil.DefaultJsonError
+// @Failure 404 {object} httputil.DefaultJsonError
+// @Failure 500 {object} httputil.DefaultJsonError
+// @Router /prysm/v1/beacon/blocks/{block_id}/query [post]
 func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.QueryBeaconBlock")
 	defer span.End()

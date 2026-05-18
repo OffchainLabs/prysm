@@ -1,0 +1,795 @@
+basePath: /
+definitions:
+  httputil.DefaultJsonError:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+    type: object
+  structs.ActiveSetChanges:
+    properties:
+      activated_indices:
+        items:
+          type: string
+        type: array
+      activated_public_keys:
+        items:
+          type: string
+        type: array
+      ejected_indices:
+        items:
+          type: string
+        type: array
+      ejected_public_keys:
+        items:
+          type: string
+        type: array
+      epoch:
+        type: string
+      exited_indices:
+        items:
+          type: string
+        type: array
+      exited_public_keys:
+        items:
+          type: string
+        type: array
+      slashed_indices:
+        items:
+          type: string
+        type: array
+      slashed_public_keys:
+        items:
+          type: string
+        type: array
+    type: object
+  structs.AddrRequest:
+    properties:
+      addr:
+        type: string
+    type: object
+  structs.BeaconBlockHeader:
+    properties:
+      body_root:
+        type: string
+      parent_root:
+        type: string
+      proposer_index:
+        type: string
+      slot:
+        type: string
+      state_root:
+        type: string
+    type: object
+  structs.BlobSidecars:
+    properties:
+      sidecars:
+        items:
+          $ref: '#/definitions/structs.Sidecar'
+        type: array
+    type: object
+  structs.ChainHead:
+    properties:
+      finalized_block_root:
+        type: string
+      finalized_epoch:
+        type: string
+      finalized_slot:
+        type: string
+      head_block_root:
+        type: string
+      head_epoch:
+        type: string
+      head_slot:
+        type: string
+      justified_block_root:
+        type: string
+      justified_epoch:
+        type: string
+      justified_slot:
+        type: string
+      optimistic_status:
+        type: boolean
+      previous_justified_block_root:
+        type: string
+      previous_justified_epoch:
+        type: string
+      previous_justified_slot:
+        type: string
+    type: object
+  structs.Checkpoint:
+    properties:
+      epoch:
+        type: string
+      root:
+        type: string
+    type: object
+  structs.GetIndividualVotesRequest:
+    properties:
+      epoch:
+        type: string
+      indices:
+        items:
+          type: string
+        type: array
+      public_keys:
+        items:
+          type: string
+        type: array
+    type: object
+  structs.GetIndividualVotesResponse:
+    properties:
+      individual_votes:
+        items:
+          $ref: '#/definitions/structs.IndividualVote'
+        type: array
+    type: object
+  structs.GetValidatorCountResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/structs.ValidatorCount'
+        type: array
+      execution_optimistic:
+        type: string
+      finalized:
+        type: string
+    type: object
+  structs.GetValidatorParticipationResponse:
+    properties:
+      epoch:
+        type: string
+      finalized:
+        type: boolean
+      participation:
+        $ref: '#/definitions/structs.ValidatorParticipation'
+    type: object
+  structs.GetValidatorPerformanceRequest:
+    properties:
+      indices:
+        items:
+          type: integer
+        type: array
+      public_keys:
+        items:
+          items:
+            format: int32
+            type: integer
+          type: array
+        type: array
+    type: object
+  structs.GetValidatorPerformanceResponse:
+    properties:
+      balances_after_epoch_transition:
+        items:
+          type: integer
+        type: array
+      balances_before_epoch_transition:
+        items:
+          type: integer
+        type: array
+      correctly_voted_head:
+        items:
+          type: boolean
+        type: array
+      correctly_voted_source:
+        items:
+          type: boolean
+        type: array
+      correctly_voted_target:
+        items:
+          type: boolean
+        type: array
+      current_effective_balances:
+        items:
+          type: integer
+        type: array
+      inactivity_scores:
+        items:
+          type: integer
+        type: array
+      missing_validators:
+        items:
+          items:
+            format: int32
+            type: integer
+          type: array
+        type: array
+      public_keys:
+        items:
+          items:
+            format: int32
+            type: integer
+          type: array
+        type: array
+    type: object
+  structs.GetWeakSubjectivityResponse:
+    properties:
+      data:
+        $ref: '#/definitions/structs.WeakSubjectivityData'
+    type: object
+  structs.IndividualVote:
+    properties:
+      current_epoch_effective_balance_gwei:
+        type: string
+      epoch:
+        type: string
+      inactivity_score:
+        type: string
+      inclusion_distance:
+        type: string
+      inclusion_slot:
+        type: string
+      is_active_in_current_epoch:
+        type: boolean
+      is_active_in_previous_epoch:
+        type: boolean
+      is_current_epoch_attester:
+        type: boolean
+      is_current_epoch_target_attester:
+        type: boolean
+      is_previous_epoch_attester:
+        type: boolean
+      is_previous_epoch_head_attester:
+        type: boolean
+      is_previous_epoch_target_attester:
+        type: boolean
+      is_slashed:
+        type: boolean
+      is_withdrawable_in_current_epoch:
+        type: boolean
+      public_keys:
+        type: string
+      validator_index:
+        type: string
+    type: object
+  structs.Peer:
+    properties:
+      direction:
+        type: string
+      enr:
+        type: string
+      last_seen_p2p_address:
+        type: string
+      peer_id:
+        type: string
+      state:
+        type: string
+    type: object
+  structs.PeersResponse:
+    properties:
+      peers:
+        items:
+          $ref: '#/definitions/structs.Peer'
+        type: array
+    type: object
+  structs.PublishBlobsRequest:
+    properties:
+      blob_sidecars:
+        $ref: '#/definitions/structs.BlobSidecars'
+      block_root:
+        type: string
+    type: object
+  structs.SSZQueryRequest:
+    properties:
+      include_proof:
+        type: boolean
+      query:
+        type: string
+    type: object
+  structs.Sidecar:
+    properties:
+      blob:
+        type: string
+      index:
+        type: string
+      kzg_commitment:
+        type: string
+      kzg_commitment_inclusion_proof:
+        items:
+          type: string
+        type: array
+      kzg_proof:
+        type: string
+      signed_block_header:
+        $ref: '#/definitions/structs.SignedBeaconBlockHeader'
+    type: object
+  structs.SignedBeaconBlockHeader:
+    properties:
+      message:
+        $ref: '#/definitions/structs.BeaconBlockHeader'
+      signature:
+        type: string
+    type: object
+  structs.ValidatorCount:
+    properties:
+      count:
+        type: string
+      status:
+        type: string
+    type: object
+  structs.ValidatorParticipation:
+    properties:
+      current_epoch_active_gwei:
+        type: string
+      current_epoch_attesting_gwei:
+        type: string
+      current_epoch_target_attesting_gwei:
+        type: string
+      eligible_ether:
+        type: string
+      global_participation_rate:
+        type: string
+      previous_epoch_active_gwei:
+        type: string
+      previous_epoch_attesting_gwei:
+        type: string
+      previous_epoch_head_attesting_gwei:
+        type: string
+      previous_epoch_target_attesting_gwei:
+        type: string
+      voted_ether:
+        type: string
+    type: object
+  structs.WeakSubjectivityData:
+    properties:
+      state_root:
+        type: string
+      ws_checkpoint:
+        $ref: '#/definitions/structs.Checkpoint'
+    type: object
+host: localhost:3500
+info:
+  contact:
+    name: Prysm Team
+    url: https://github.com/OffchainLabs/prysm
+  description: |-
+    Custom Prysm endpoints for beacon node operations, validator metrics, and extended functionality.
+    These endpoints extend the standard Ethereum Beacon Node API with Prysm-specific features.
+  license:
+    name: GPL-3.0
+    url: https://github.com/OffchainLabs/prysm/blob/develop/LICENSE.md
+  title: Prysm Beacon Node Custom API
+  version: "1.0"
+paths:
+  /eth/v1/beacon/states/{state_id}/validator_count:
+    get:
+      description: Returns the total number of validators grouped by their status
+        (active, pending, exited, withdrawal, etc.) for a given state
+      parameters:
+      - description: State identifier (head, genesis, finalized, justified, slot number,
+          or hex root)
+        in: path
+        name: state_id
+        required: true
+        type: string
+      - collectionFormat: csv
+        description: 'Validator status filter (can be repeated). If omitted, returns
+          counts for all statuses. Valid values: pending_initialized, pending_queued,
+          active_ongoing, active_exiting, active_slashed, exited_unslashed, exited_slashed,
+          withdrawal_possible, withdrawal_done, active, pending, exited, withdrawal'
+        in: query
+        items:
+          type: string
+        name: status
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structs.GetValidatorCountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Get validator count by status
+      tags:
+      - Prysm Beacon
+  /prysm/node/trusted_peers:
+    get:
+      description: Returns a list of all trusted peers configured on this beacon node,
+        including their connection state, direction, ENR, and last seen address
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structs.PeersResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: List trusted peers
+      tags:
+      - Prysm Node
+    post:
+      consumes:
+      - application/json
+      description: Adds a peer to the beacon node's trusted peer set using its multiaddress.
+        Trusted peers are given priority in peer connections.
+      parameters:
+      - description: Peer multiaddress (e.g., /ip4/127.0.0.1/tcp/13000/p2p/16Uiu2...)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/structs.AddrRequest'
+      responses:
+        "200":
+          description: Peer successfully added to trusted set
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Add a trusted peer
+      tags:
+      - Prysm Node
+  /prysm/node/trusted_peers/{peer_id}:
+    delete:
+      description: Removes a peer from the beacon node's trusted peer set by peer
+        ID. Does not disconnect the peer if already connected.
+      parameters:
+      - description: Peer ID to remove from trusted set
+        in: path
+        name: peer_id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: Peer successfully removed from trusted set
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Remove a trusted peer
+      tags:
+      - Prysm Node
+  /prysm/v1/beacon/blobs:
+    post:
+      consumes:
+      - application/json
+      deprecated: true
+      description: Publishes blob sidecars to the beacon network. Only supported for
+        Deneb through Fulu epochs.
+      parameters:
+      - description: Blob sidecars to publish
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/structs.PublishBlobsRequest'
+      responses:
+        "200":
+          description: Blobs successfully published
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "503":
+          description: Beacon node is currently syncing
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Publish blob sidecars (DEPRECATED post-Fulu)
+      tags:
+      - Prysm Beacon
+  /prysm/v1/beacon/blocks/{block_id}/query:
+    post:
+      consumes:
+      - application/json
+      description: Executes an SSZ query on a beacon block and returns the result
+        as SSZ-encoded bytes. Allows efficient extraction of specific fields from
+        block objects.
+      parameters:
+      - description: Block identifier (head, genesis, finalized, slot number, or hex
+          root)
+        in: path
+        name: block_id
+        required: true
+        type: string
+      - description: SSZ query path (e.g., 'body.attestations[0]')
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/structs.SSZQueryRequest'
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: SSZ-encoded SSZQueryResponse containing root and result
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Query beacon block with SSZ path
+      tags:
+      - Prysm Beacon
+  /prysm/v1/beacon/chain_head:
+    get:
+      description: Returns detailed information about the current head, finalized,
+        and justified checkpoints of the beacon chain
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structs.ChainHead'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Get chain head information
+      tags:
+      - Prysm Beacon
+  /prysm/v1/beacon/individual_votes:
+    post:
+      consumes:
+      - application/json
+      description: Returns detailed voting information for specified validators in
+        a given epoch
+      parameters:
+      - description: Validator indices/public keys and epoch
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/structs.GetIndividualVotesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structs.GetIndividualVotesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Get individual validator votes
+      tags:
+      - Prysm Beacon
+  /prysm/v1/beacon/states/{state_id}/query:
+    post:
+      consumes:
+      - application/json
+      description: Executes an SSZ query on a beacon state and returns the result
+        as SSZ-encoded bytes. Allows efficient extraction of specific fields from
+        large state objects.
+      parameters:
+      - description: State identifier (head, genesis, finalized, justified, slot number,
+          or hex root)
+        in: path
+        name: state_id
+        required: true
+        type: string
+      - description: SSZ query path (e.g., 'validators[0].pubkey')
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/structs.SSZQueryRequest'
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: SSZ-encoded SSZQueryResponse containing root and result
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Query beacon state with SSZ path
+      tags:
+      - Prysm Beacon
+  /prysm/v1/beacon/states/{state_id}/validator_count:
+    get:
+      description: Returns the total number of validators grouped by their status
+        (active, pending, exited, withdrawal, etc.) for a given state
+      parameters:
+      - description: State identifier (head, genesis, finalized, justified, slot number,
+          or hex root)
+        in: path
+        name: state_id
+        required: true
+        type: string
+      - collectionFormat: csv
+        description: 'Validator status filter (can be repeated). If omitted, returns
+          counts for all statuses. Valid values: pending_initialized, pending_queued,
+          active_ongoing, active_exiting, active_slashed, exited_unslashed, exited_slashed,
+          withdrawal_possible, withdrawal_done, active, pending, exited, withdrawal'
+        in: query
+        items:
+          type: string
+        name: status
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structs.GetValidatorCountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Get validator count by status
+      tags:
+      - Prysm Beacon
+  /prysm/v1/beacon/weak_subjectivity:
+    get:
+      description: Computes the weak subjectivity checkpoint for safe checkpoint sync
+        initialization
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structs.GetWeakSubjectivityResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "503":
+          description: Beacon node is currently syncing
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Get weak subjectivity checkpoint
+      tags:
+      - Prysm Beacon
+  /prysm/v1/validators/{state_id}/active_set_changes:
+    get:
+      description: Returns validator set changes for a given epoch including activations,
+        voluntary exits, slashings, and ejections with both public keys and indices
+      parameters:
+      - description: State identifier (head, genesis, finalized, justified, slot number,
+          or hex root)
+        in: path
+        name: state_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structs.ActiveSetChanges'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Get active validator set changes
+      tags:
+      - Prysm Validator
+  /prysm/v1/validators/{state_id}/participation:
+    get:
+      description: Returns participation rate information for validators at a given
+        state, including voting statistics and balance information for current and
+        previous epochs
+      parameters:
+      - description: State identifier (head, genesis, finalized, justified, slot number,
+          or hex root)
+        in: path
+        name: state_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structs.GetValidatorParticipationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Get validator participation for an epoch
+      tags:
+      - Prysm Validator
+  /prysm/validators/performance:
+    post:
+      consumes:
+      - application/json
+      description: Returns detailed performance metrics for specified validators including
+        voting accuracy, balances before and after epoch transitions, and inactivity
+        scores
+      parameters:
+      - description: Validator public keys and/or indices to query
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/structs.GetValidatorPerformanceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/structs.GetValidatorPerformanceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.DefaultJsonError'
+      summary: Get validator performance metrics
+      tags:
+      - Prysm Validator
+schemes:
+- http
+- https
+swagger: "2.0"

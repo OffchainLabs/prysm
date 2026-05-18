@@ -48,6 +48,19 @@ import (
 //			}
 //		]
 //	}
+//
+// @Summary Get validator count by status
+// @Description Returns the total number of validators grouped by their status (active, pending, exited, withdrawal, etc.) for a given state
+// @Tags Prysm Beacon
+// @Produce json
+// @Param state_id path string true "State identifier (head, genesis, finalized, justified, slot number, or hex root)"
+// @Param status query []string false "Validator status filter. Repeat the parameter to pass multiple values (for example: ?status=active&status=pending). If omitted, returns counts for all statuses. Valid values: pending_initialized, pending_queued, active_ongoing, active_exiting, active_slashed, exited_unslashed, exited_slashed, withdrawal_possible, withdrawal_done, active, pending, exited, withdrawal" collectionFormat(multi)
+// @Success 200 {object} structs.GetValidatorCountResponse
+// @Failure 400 {object} httputil.DefaultJsonError
+// @Failure 404 {object} httputil.DefaultJsonError
+// @Failure 500 {object} httputil.DefaultJsonError
+// @Router /prysm/v1/beacon/states/{state_id}/validator_count [get]
+// @Router /eth/v1/beacon/states/{state_id}/validator_count [get]
 func (s *Server) GetValidatorCount(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetValidatorCount")
 	defer span.End()

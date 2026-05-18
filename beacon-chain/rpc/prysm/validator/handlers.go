@@ -17,6 +17,17 @@ import (
 // GetParticipation retrieves the validator participation information for a given epoch,
 // it returns the information about validator's participation rate in voting on the proof of stake
 // rules based on their balance compared to the total active validator balance.
+//
+// @Summary Get validator participation for an epoch
+// @Description Returns participation rate information for validators at a given state, including voting statistics and balance information for current and previous epochs
+// @Tags Prysm Validator
+// @Produce json
+// @Param state_id path string true "State identifier (head, genesis, finalized, justified, slot number, or hex root)"
+// @Success 200 {object} structs.GetValidatorParticipationResponse
+// @Failure 400 {object} httputil.DefaultJsonError
+// @Failure 404 {object} httputil.DefaultJsonError
+// @Failure 500 {object} httputil.DefaultJsonError
+// @Router /prysm/v1/validators/{state_id}/participation [get]
 func (s *Server) GetParticipation(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.GetParticipation")
 	defer span.End()
@@ -62,6 +73,17 @@ func (s *Server) GetParticipation(w http.ResponseWriter, r *http.Request) {
 //
 // This data includes any activations, voluntary exits, and involuntary
 // ejections.
+//
+// @Summary Get active validator set changes
+// @Description Returns validator set changes for a given epoch including activations, voluntary exits, slashings, and ejections with both public keys and indices
+// @Tags Prysm Validator
+// @Produce json
+// @Param state_id path string true "State identifier (head, genesis, finalized, justified, slot number, or hex root)"
+// @Success 200 {object} structs.ActiveSetChanges
+// @Failure 400 {object} httputil.DefaultJsonError
+// @Failure 404 {object} httputil.DefaultJsonError
+// @Failure 500 {object} httputil.DefaultJsonError
+// @Router /prysm/v1/validators/{state_id}/active_set_changes [get]
 func (s *Server) GetActiveSetChanges(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.GetActiveSetChanges")
 	defer span.End()
