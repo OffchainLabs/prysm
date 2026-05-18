@@ -26,18 +26,22 @@ func Scatter(inputLen int, sFunc func(int, int, *sync.RWMutex) (any, error)) ([]
 	if inputLen%chunkSize != 0 {
 		workers++
 	}
-	resultCh := make(chan *WorkerResults, workers)
-	defer close(resultCh)
-	errorCh := make(chan error, workers)
-	defer close(errorCh)
-	mutex := new(sync.RWMutex)
+
+	var (
+		resultCh = make(chan *WorkerResults, workers)
+		errorCh  = make(chan error, workers)
+		mutex    = new(sync.RWMutex)
+		wg       sync.WaitGroup
+	)
 	for worker := 0; worker < workers; worker++ {
 		offset := worker * chunkSize
 		entries := chunkSize
 		if offset+entries > inputLen {
 			entries = inputLen - offset
 		}
+		wg.Add(1)
 		go func(offset int, entries int) {
+			defer wg.Done()
 			extent, err := sFunc(offset, entries, mutex)
 			if err != nil {
 				errorCh <- err
@@ -50,13 +54,30 @@ func Scatter(inputLen int, sFunc func(int, int, *sync.RWMutex) (any, error)) ([]
 		}(offset, entries)
 	}
 
+	// Wait for all goroutines to finish
+	go func() {
+		wg.Wait()
+		close(resultCh)
+		close(errorCh)
+	}()
+
 	// Collect results from workers
 	results := make([]*WorkerResults, workers)
-	for i := 0; i < workers; i++ {
+	i := 0
+	for resultCh != nil || errorCh != nil {
 		select {
-		case result := <-resultCh:
+		case result, ok := <-resultCh:
+			if !ok {
+				resultCh = nil
+				continue
+			}
 			results[i] = result
-		case err := <-errorCh:
+			i++
+		case err, ok := <-errorCh:
+			if !ok {
+				errorCh = nil
+				continue
+			}
 			return nil, err
 		}
 	}

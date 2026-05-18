@@ -42,6 +42,12 @@ func TestUnique(t *testing.T) {
 	a.Equal([]string{"a", "b", "c", "d"}, unique(arr))
 }
 
+func getLockList() int {
+	locks.lock <- 1
+	defer func() { <-locks.lock }()
+	return len(locks.list)
+}
+
 func TestGetChan(t *testing.T) {
 	ch1 := getChan("a")
 	ch2 := getChan("aa")
@@ -110,14 +116,14 @@ func TestLockUnlock_CleansUnused(t *testing.T) {
 	wg.Go(func() {
 		lock := NewMultilock("dog", "cat", "owl")
 		lock.Lock()
-		assert.Equal(t, 3, len(locks.list))
+		assert.Equal(t, 3, getLockList())
 		lock.Unlock()
 
 	})
 	wg.Wait()
 	// We expect that unlocking completely cleared the locks list
 	// given all 3 lock keys were unused at time of unlock.
-	assert.Equal(t, 0, len(locks.list))
+	assert.Equal(t, 0, getLockList())
 }
 
 func TestLockUnlock_DoesNotCleanIfHeldElsewhere(t *testing.T) {
@@ -130,7 +136,7 @@ func TestLockUnlock_DoesNotCleanIfHeldElsewhere(t *testing.T) {
 		<-time.After(200 * time.Millisecond)
 		lock.Unlock()
 		// Assert that at the end of this goroutine, all locks are cleared.
-		assert.Equal(t, 0, len(locks.list))
+		assert.Equal(t, 0, getLockList())
 		wg.Done()
 	}()
 	go func() {
@@ -140,14 +146,16 @@ func TestLockUnlock_DoesNotCleanIfHeldElsewhere(t *testing.T) {
 		// cleared as a lock for it is still held by the previous goroutine.
 		<-time.After(100 * time.Millisecond)
 		lock.Unlock()
-		assert.Equal(t, 1, len(locks.list))
+		assert.Equal(t, 1, getLockList())
+		locks.lock <- 1
 		_, ok := locks.list["cat"]
+		<-locks.lock
 		assert.Equal(t, true, ok)
 		wg.Done()
 	}()
 	wg.Wait()
 	// We expect that at the end of this test, all locks are cleared.
-	assert.Equal(t, 0, len(locks.list))
+	assert.Equal(t, 0, getLockList())
 }
 
 func TestYield(t *testing.T) {
