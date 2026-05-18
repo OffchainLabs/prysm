@@ -681,15 +681,16 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		return nil, errors.Wrapf(errUnsupportedPayloadAttribute, "%s is not supported", version.String(v))
 	}
 
-	// On cache miss we emit the burn address: the SSE event reports the
-	// proposer's fee recipient, and our BN's --suggested-fee-recipient is
-	// not authoritative for proposers we don't own.
+	// Try signed pref first (post-Gloas, keyed by slot+dep_root). Fall back to
+	// the per-validator default if dep root is unavailable or the signed pref
+	// isn't cached. On total miss emit the burn address — our BN's
+	// --suggested-fee-recipient isn't authoritative for proposers we don't own.
 	feeRecpt := make([]byte, fieldparams.FeeRecipientLength)
-	dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, s.BeaconDB, st, slot)
-	if err != nil {
-		return nil, errors.Wrap(err, "proposer dependent root")
-	}
-	if pref, ok := s.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposer); ok {
+	if dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, s.BeaconDB, st, slot); err == nil {
+		if pref, ok := s.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposer); ok {
+			feeRecpt = pref.FeeRecipient[:]
+		}
+	} else if pref, ok := s.ProposerPreferencesCache.Default(proposer); ok {
 		feeRecpt = pref.FeeRecipient[:]
 	}
 
@@ -701,7 +702,10 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		})
 	}
 
-	var w []*engine.Withdrawal
+	var (
+		w   []*engine.Withdrawal
+		err error
+	)
 	if v >= version.Gloas {
 		w, err = st.WithdrawalsForPayload()
 	} else {
