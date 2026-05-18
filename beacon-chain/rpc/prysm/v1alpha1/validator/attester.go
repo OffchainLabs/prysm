@@ -140,10 +140,8 @@ func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.Comm
 	if len(req.ValidatorIndices) > 0 && len(req.ValidatorIndices) != len(req.Slots) {
 		return nil, status.Error(codes.InvalidArgument, "validator_indices length must match slots length when provided")
 	}
-	if vs.SubscribedValidatorsCache != nil {
-		for _, idx := range req.ValidatorIndices {
-			vs.SubscribedValidatorsCache.Add(idx)
-		}
+	for _, idx := range req.ValidatorIndices {
+		vs.SubscribedValidatorsCache.Add(idx)
 	}
 
 	fetchValsLen := func(slot primitives.Slot) (uint64, error) {

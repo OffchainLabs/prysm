@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -43,9 +44,10 @@ func testForkWatcherService(t *testing.T, current primitives.Epoch) *Service {
 			clock:       defaultClockWithTimeAtEpoch(current),
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
-		chainStarted:        abool.New(),
-		subHandler:          newSubTopicHandler(),
-		initialSyncComplete: closedChan,
+		chainStarted:             abool.New(),
+		subHandler:               newSubTopicHandler(),
+		initialSyncComplete:      closedChan,
+		subscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
 	}
 	return r
 }

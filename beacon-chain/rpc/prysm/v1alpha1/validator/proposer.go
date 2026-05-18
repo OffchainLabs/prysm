@@ -584,9 +584,7 @@ func (vs *Server) PrepareBeaconProposer(
 		// Backward-compat: track the validator here too so old VCs that don't
 		// populate validator_indices in SubscribeCommitteeSubnets still keep
 		// the BN's attached-set up to date for CGC and validating().
-		if vs.SubscribedValidatorsCache != nil {
-			vs.SubscribedValidatorsCache.Add(r.ValidatorIndex)
-		}
+		vs.SubscribedValidatorsCache.Add(r.ValidatorIndex)
 	}
 	log.WithField("validatorCount", len(request.Recipients)).Debug("Updated fee recipient addresses")
 	return &emptypb.Empty{}, nil

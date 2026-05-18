@@ -609,9 +609,6 @@ func (s *Service) inRegularSync() bool {
 // validating returns true if at least one validator is attached to this BN
 // via beacon_committee_subscriptions.
 func (s *Service) validating() bool {
-	if s.cfg.SubscribedValidatorsCache == nil {
-		return false
-	}
 	return s.cfg.SubscribedValidatorsCache.Validating()
 }
 
