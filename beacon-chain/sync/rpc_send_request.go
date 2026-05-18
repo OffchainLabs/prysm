@@ -50,10 +50,12 @@ var (
 	errMaxResponseDataColumnSidecarsExceeded = errors.New("peer returned more data column sidecars than requested")
 
 	errSidecarRPCValidation     = errors.Wrap(ErrInvalidFetchedData, "DataColumnSidecar")
-	errSidecarSlotsUnordered    = errors.Wrap(errSidecarRPCValidation, "slots not in ascending order")
-	errSidecarIndicesUnordered  = errors.Wrap(errSidecarRPCValidation, "sidecar indices not in ascending order")
-	errSidecarSlotNotRequested  = errors.Wrap(errSidecarRPCValidation, "sidecar slot not in range")
-	errSidecarIndexNotRequested = errors.Wrap(errSidecarRPCValidation, "sidecar index not requested")
+	errSidecarSlotsUnordered     = errors.Wrap(errSidecarRPCValidation, "slots not in ascending order")
+	errSidecarIndicesUnordered   = errors.Wrap(errSidecarRPCValidation, "sidecar indices not in ascending order")
+	errSidecarSlotNotRequested   = errors.Wrap(errSidecarRPCValidation, "sidecar slot not in range")
+	errSidecarIndexNotRequested  = errors.Wrap(errSidecarRPCValidation, "sidecar index not requested")
+	errSidecarDuplicate          = errors.Wrap(errSidecarRPCValidation, "duplicate sidecar received")
+	errBlobDuplicateOrUnexpected = errors.Wrap(verification.ErrBlobInvalid, "received duplicate or unexpected BlobSidecar")
 )
 
 // ------
@@ -363,23 +365,24 @@ func newSequentialBlobValidator() BlobResponseValidation {
 }
 
 func blobValidatorFromRootReq(req *p2ptypes.BlobSidecarsByRootReq) BlobResponseValidation {
-	blobIds := make(map[[32]byte]map[uint64]bool)
+	pendingBlobs := make(map[[32]byte]map[uint64]int)
 	for _, sc := range *req {
 		blockRoot := bytesutil.ToBytes32(sc.BlockRoot)
-		if blobIds[blockRoot] == nil {
-			blobIds[blockRoot] = make(map[uint64]bool)
+		if pendingBlobs[blockRoot] == nil {
+			pendingBlobs[blockRoot] = make(map[uint64]int)
 		}
-		blobIds[blockRoot][sc.Index] = true
+		pendingBlobs[blockRoot][sc.Index]++
 	}
 	return func(sc blocks.ROBlob) error {
-		blobIndices := blobIds[sc.BlockRoot()]
+		blobIndices := pendingBlobs[sc.BlockRoot()]
 		if blobIndices == nil {
 			return errors.Wrapf(errUnrequested, "root=%#x", sc.BlockRoot())
 		}
-		requested := blobIndices[sc.Index]
-		if !requested {
-			return errors.Wrapf(errUnrequested, "root=%#x index=%d", sc.BlockRoot(), sc.Index)
+		remaining := blobIndices[sc.Index]
+		if remaining <= 0 {
+			return errors.Wrapf(errBlobDuplicateOrUnexpected, "root=%#x index=%d", sc.BlockRoot(), sc.Index)
 		}
+		blobIndices[sc.Index] = remaining - 1
 		return nil
 	}
 }
@@ -621,12 +624,19 @@ func areSidecarsOrdered() DataColumnResponseValidation {
 	}
 }
 
-// isSidecarIndexRequested verifies that the index of the data column sidecar is found in the requested indices.
+type slotColumnKey struct {
+	slot  primitives.Slot
+	index uint64
+}
+
+// isSidecarIndexRequested verifies that the index of the data column sidecar is found in the requested indices
+// and has not already been received for the same slot.
 func isSidecarIndexRequested(request *ethpb.DataColumnSidecarsByRangeRequest) DataColumnResponseValidation {
 	requestedIndices := make(map[uint64]bool)
 	for _, col := range request.Columns {
 		requestedIndices[col] = true
 	}
+	receivedPairs := make(map[slotColumnKey]bool)
 
 	return func(sidecar blocks.RODataColumn) error {
 		columnIndex := sidecar.Index()
@@ -634,6 +644,12 @@ func isSidecarIndexRequested(request *ethpb.DataColumnSidecarsByRangeRequest) Da
 			requested := helpers.SortedPrettySliceFromMap(requestedIndices)
 			return errors.Wrapf(errSidecarIndexNotRequested, "%d not in %v", columnIndex, requested)
 		}
+
+		key := slotColumnKey{slot: sidecar.Slot(), index: columnIndex}
+		if receivedPairs[key] {
+			return errors.Wrapf(errSidecarDuplicate, "slot=%d index=%d", sidecar.Slot(), columnIndex)
+		}
+		receivedPairs[key] = true
 
 		return nil
 	}
@@ -719,30 +735,32 @@ func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer
 }
 
 func isSidecarIndexRootRequested(request p2ptypes.DataColumnsByRootIdentifiers) DataColumnResponseValidation {
-	columnsIndexFromRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
+	pendingColumns := make(map[[fieldparams.RootLength]byte]map[uint64]int)
 
 	for _, sidecar := range request {
 		blockRoot := bytesutil.ToBytes32(sidecar.BlockRoot)
-		if columnsIndexFromRoot[blockRoot] == nil {
-			columnsIndexFromRoot[blockRoot] = make(map[uint64]bool)
+		if pendingColumns[blockRoot] == nil {
+			pendingColumns[blockRoot] = make(map[uint64]int)
 		}
 
 		for _, column := range sidecar.Columns {
-			columnsIndexFromRoot[blockRoot][column] = true
+			pendingColumns[blockRoot][column]++
 		}
 	}
 
 	return func(sidecar blocks.RODataColumn) error {
 		root, index := sidecar.BlockRoot(), sidecar.Index()
-		indices, ok := columnsIndexFromRoot[root]
+		indices, ok := pendingColumns[root]
 
 		if !ok {
 			return errors.Errorf("root %#x returned by peer but not requested", root)
 		}
 
-		if !indices[index] {
-			return errors.Errorf("index %d for root %#x returned by peer but not requested", index, root)
+		remaining := indices[index]
+		if remaining <= 0 {
+			return errors.Wrapf(errSidecarDuplicate, "root=%#x index=%d", root, index)
 		}
+		indices[index] = remaining - 1
 
 		return nil
 	}
