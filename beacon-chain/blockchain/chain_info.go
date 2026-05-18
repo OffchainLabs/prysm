@@ -49,6 +49,7 @@ type ForkchoiceFetcher interface {
 	HighestReceivedBlockSlot() primitives.Slot
 	HighestReceivedBlockRoot() [32]byte
 	HasFullNode([32]byte) bool
+	PayloadEarly([32]byte) (bool, bool)
 	FullBeatsEmpty([32]byte) bool
 	ReceivedBlocksLastEpoch() (uint64, error)
 	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error

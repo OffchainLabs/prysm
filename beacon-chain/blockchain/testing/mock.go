@@ -82,6 +82,7 @@ type ChainService struct {
 	DependentRootCB             func([32]byte, primitives.Epoch) ([32]byte, error)
 	MockCanonicalRoots          map[primitives.Slot][32]byte
 	MockCanonicalFull           map[primitives.Slot]bool
+	MockPayloadEarly            map[[32]byte]bool
 
 	ParentPayloadReadyVal *bool
 	ForkchoiceRoots       map[[32]byte]bool
@@ -777,6 +778,15 @@ func (s *ChainService) HasFullNode(root [32]byte) bool {
 		return s.ForkchoiceRoots[root]
 	}
 	return false
+}
+
+// PayloadEarly mocks the same method in the chain service.
+func (s *ChainService) PayloadEarly(root [32]byte) (bool, bool) {
+	if s.MockPayloadEarly == nil {
+		return false, false
+	}
+	early, ok := s.MockPayloadEarly[root]
+	return early, ok
 }
 
 // FullBeatsEmpty mocks the same method in the chain service.
