@@ -263,6 +263,7 @@ func (s *Store) prune(ctx context.Context) error {
 	if fn.parent == nil {
 		return nil
 	}
+	s.finalizedPayloadBlockHash = s.checkpointPayloadHashForRoot(finalizedRoot)
 
 	// Save the new finalized dependent root because it will be pruned
 	s.finalizedDependentRoot = fn.parent.node.root
