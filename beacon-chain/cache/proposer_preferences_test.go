@@ -3,8 +3,10 @@ package cache
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
@@ -163,5 +165,25 @@ func TestProposerPreferencesCache_BestFor(t *testing.T) {
 		got, ok := c.BestFor(rootA, slot, idx)
 		require.Equal(t, true, ok)
 		require.Equal(t, primitives.ExecutionAddress{0x01}, got.FeeRecipient)
+	})
+}
+
+func TestProposerPreference_FeeRecipientOrDefault(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DefaultFeeRecipient = common.Address([20]byte{'a'})
+	params.OverrideBeaconConfig(cfg)
+
+	t.Run("empty fee recipient returns configured default", func(t *testing.T) {
+		val := &ProposerPreference{ValidatorIndex: 1}
+		got := val.FeeRecipientOrDefault()
+		require.Equal(t, params.BeaconConfig().DefaultFeeRecipient, common.BytesToAddress(got[:]))
+	})
+
+	t.Run("non-empty fee recipient returned as-is", func(t *testing.T) {
+		preset := common.Address([20]byte{'b'})
+		val := &ProposerPreference{ValidatorIndex: 1, FeeRecipient: primitives.ExecutionAddress(preset)}
+		got := val.FeeRecipientOrDefault()
+		require.Equal(t, preset, common.BytesToAddress(got[:]))
 	})
 }

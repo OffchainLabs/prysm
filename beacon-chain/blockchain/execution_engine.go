@@ -379,13 +379,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		return emptyAttri
 	}
 
-	// Empty FeeRecipient means no SignedProposerPreferences cached; fall through
-	// to --suggested-fee-recipient (DefaultFeeRecipient) so the engine never
-	// receives the burn address unless that's explicitly configured.
-	feeRecipient := val.FeeRecipient
-	if feeRecipient == (primitives.ExecutionAddress{}) {
-		feeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
-	}
+	feeRecipient := val.FeeRecipientOrDefault()
 
 	v := st.Version()
 	switch {

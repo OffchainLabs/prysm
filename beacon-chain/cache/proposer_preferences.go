@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	gocache "github.com/patrickmn/go-cache"
 )
@@ -24,6 +25,16 @@ type ProposerPreference struct {
 	ValidatorIndex primitives.ValidatorIndex
 	FeeRecipient   primitives.ExecutionAddress
 	GasLimit       uint64
+}
+
+// FeeRecipientOrDefault returns the preference's FeeRecipient, substituting
+// --suggested-fee-recipient when empty so the EL never sees the burn address
+// unless that's explicitly configured.
+func (p *ProposerPreference) FeeRecipientOrDefault() primitives.ExecutionAddress {
+	if p.FeeRecipient == (primitives.ExecutionAddress{}) {
+		return primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
+	}
+	return p.FeeRecipient
 }
 
 // ProposerPreferencesCache holds two stores with different lookup keys:

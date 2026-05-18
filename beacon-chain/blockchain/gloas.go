@@ -151,10 +151,7 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 		return emptyAttri
 	}
 
-	feeRecipient := val.FeeRecipient
-	if feeRecipient == (primitives.ExecutionAddress{}) {
-		feeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
-	}
+	feeRecipient := val.FeeRecipientOrDefault()
 
 	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
 		Timestamp:             uint64(t.Unix()),

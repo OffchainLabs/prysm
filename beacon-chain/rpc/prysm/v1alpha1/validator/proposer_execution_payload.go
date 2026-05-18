@@ -42,12 +42,6 @@ var (
 	})
 )
 
-func setFeeRecipientIfBurnAddress(val *cache.ProposerPreference) {
-	if val.FeeRecipient == (primitives.ExecutionAddress{}) {
-		val.FeeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
-	}
-}
-
 // This returns the local execution payload of a given slot. The function has full awareness of pre and post merge.
 func (vs *Server) getLocalPayload(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, st state.BeaconState, parentFull bool) (*consensusblocks.GetPayloadResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.getLocalPayload")
@@ -89,7 +83,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 	if pref, ok := vs.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposerId); ok {
 		val = pref
 	}
-	setFeeRecipientIfBurnAddress(&val)
+	val.FeeRecipient = val.FeeRecipientOrDefault()
 
 	if ok && payloadId != [8]byte{} {
 		// Payload ID is cache hit. Return the cached payload ID.
