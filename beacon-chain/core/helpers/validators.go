@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -19,18 +19,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-var (
-	CommitteeCacheInProgressHit = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "committee_cache_in_progress_hit",
-		Help: "The number of committee requests that are present in the cache.",
-	})
-
-	errProposerIndexMiss = errors.New("propoposer index not found in cache")
-)
+var errProposerIndexMiss = errors.New("propoposer index not found in cache")
 
 // IsActiveValidator returns the boolean value on whether the validator
 // is active or not.
@@ -101,7 +92,7 @@ func checkValidatorSlashable(activationEpoch, withdrawableEpoch primitives.Epoch
 //	  """
 //	  return [ValidatorIndex(i) for i, v in enumerate(state.validators) if is_active_validator(v, epoch)]
 func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]primitives.ValidatorIndex, error) {
-	ctx, span := trace.StartSpan(ctx, "helpers.ActiveValidatorIndices")
+	_, span := trace.StartSpan(ctx, "helpers.ActiveValidatorIndices")
 	defer span.End()
 
 	seed, err := Seed(s, epoch, params.BeaconConfig().DomainBeaconAttester)
@@ -116,44 +107,13 @@ func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, ep
 		return activeIndices, nil
 	}
 
-	if err := committeeCache.MarkInProgress(seed); err != nil {
-		if errors.Is(err, cache.ErrAlreadyInProgress) {
-			activeIndices, err := committeeCache.ActiveIndices(ctx, seed)
-			if err != nil {
-				return nil, err
-			}
-			if activeIndices == nil {
-				return nil, errors.New("nil active indices")
-			}
-			CommitteeCacheInProgressHit.Inc()
-			return activeIndices, nil
-		}
-		return nil, errors.Wrap(err, "could not mark committee cache as in progress")
-	}
-	defer func() {
-		if err := committeeCache.MarkNotInProgress(seed); err != nil {
-			log.WithError(err).Error("Could not mark cache not in progress")
-		}
-	}()
-
-	var indices []primitives.ValidatorIndex
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
-		if IsActiveValidatorUsingTrie(val, epoch) {
-			indices = append(indices, primitives.ValidatorIndex(idx))
-		}
-		return nil
-	}); err != nil {
+	indices, err := scanActiveValidatorIndices(s, epoch, seed)
+	if err != nil {
 		return nil, err
 	}
-
 	if len(indices) == 0 {
 		return nil, errors.New("no active validator indices")
 	}
-
-	if err := UpdateCommitteeCache(ctx, s, epoch); err != nil {
-		log.WithError(err).Debug("Could not update committee cache")
-	}
-
 	return indices, nil
 }
 
@@ -164,7 +124,7 @@ func ActiveValidatorCount(ctx context.Context, s state.ReadOnlyBeaconState, epoc
 	if err != nil {
 		return 0, errors.Wrap(err, "could not get seed")
 	}
-	activeCount, err := committeeCache.ActiveIndicesCount(ctx, seed)
+	activeCount, err := committeeCache.ActiveIndicesCount(seed)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not interface with committee cache")
 	}
@@ -172,35 +132,24 @@ func ActiveValidatorCount(ctx context.Context, s state.ReadOnlyBeaconState, epoc
 		return uint64(activeCount), nil
 	}
 
-	if err := committeeCache.MarkInProgress(seed); err != nil {
-		if errors.Is(err, cache.ErrAlreadyInProgress) {
-			activeCount, err := committeeCache.ActiveIndicesCount(ctx, seed)
-			if err != nil {
-				return 0, err
-			}
-			CommitteeCacheInProgressHit.Inc()
-			return uint64(activeCount), nil
+	if !committeeCache.HasEntry(string(seed[:])) {
+		indices, err := scanActiveValidatorIndices(s, epoch, seed)
+		if err != nil {
+			return 0, fmt.Errorf("scan active validator indices: %w", err)
 		}
-		return 0, errors.Wrap(err, "could not mark committee cache as in progress")
+
+		return uint64(len(indices)), nil
 	}
-	defer func() {
-		if err := committeeCache.MarkNotInProgress(seed); err != nil {
-			log.WithError(err).Error("Could not mark cache not in progress")
-		}
-	}()
 
 	count := uint64(0)
 	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
 		if IsActiveValidatorUsingTrie(val, epoch) {
 			count++
 		}
+
 		return nil
 	}); err != nil {
-		return 0, err
-	}
-
-	if err := UpdateCommitteeCache(ctx, s, epoch); err != nil {
-		return 0, errors.Wrap(err, "could not update committee cache")
+		return 0, fmt.Errorf("read from every validator: %w", err)
 	}
 
 	return count, nil
