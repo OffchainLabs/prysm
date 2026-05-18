@@ -111,6 +111,7 @@ go_test(
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
+        "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_google_gofuzz//:go_default_library",
         "@com_github_hashicorp_golang_lru//:go_default_library",
