@@ -1,4 +1,4 @@
-version: v1.7.0-alpha.7
+version: v1.7.0-alpha.8
 style: full
 
 specrefs:
@@ -82,6 +82,7 @@ exceptions:
     - GLOAS_FORK_EPOCH#gloas
     - GLOAS_FORK_VERSION#gloas
     - MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS#gloas
+    - PAYLOAD_DUE_BPS#gloas
     - SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
     # heze
     - HEZE_FORK_EPOCH#heze
@@ -150,8 +151,11 @@ exceptions:
     - ExpectedWithdrawals#capella
     - LightClientStore#capella
     - Seen#capella
+    # deneb
+    - Seen#deneb
     # electra
     - ExpectedWithdrawals#electra
+    - Seen#electra
     # fulu
     - BlobParameters#fulu
     # gloas
@@ -378,6 +382,11 @@ exceptions:
     - upgrade_lc_optimistic_update_to_deneb#deneb
     - upgrade_lc_store_to_deneb#deneb
     - upgrade_lc_update_to_deneb#deneb
+    - validate_beacon_aggregate_and_proof_gossip#deneb
+    - validate_beacon_attestation_gossip#deneb
+    - validate_beacon_block_gossip#deneb
+    - validate_blob_sidecar_gossip#deneb
+    - validate_voluntary_exit_gossip#deneb
     # electra
     - compute_max_request_blob_sidecars#electra
     - compute_weak_subjectivity_period#electra
@@ -400,6 +409,10 @@ exceptions:
     - upgrade_lc_optimistic_update_to_electra#electra
     - upgrade_lc_store_to_electra#electra
     - upgrade_lc_update_to_electra#electra
+    - validate_beacon_aggregate_and_proof_gossip#electra
+    - validate_beacon_attestation_gossip#electra
+    - validate_beacon_block_gossip#electra
+    - validate_blob_sidecar_gossip#electra
     # fulu
     - compute_max_request_data_column_sidecars#fulu
     - compute_matrix#fulu
@@ -411,12 +424,16 @@ exceptions:
     - recover_matrix#fulu
     # gloas
     - get_latest_message_epoch#gloas
+    - get_payload_due_ms#gloas
+    - is_gas_limit_target_compatible#gloas
     - is_payload_verified#gloas
     - on_execution_payload_envelope#gloas
+    - payload_data_availability#gloas
+    - payload_timeliness#gloas
     - settle_builder_payment#gloas
+    - should_build_on_full#gloas
     - compute_ptc#gloas
     - initialize_ptc_window#gloas
-    - is_payload_data_available#gloas
     - is_pending_validator#gloas
     - process_ptc_window#gloas
     - compute_balance_weighted_selection#gloas
@@ -454,7 +471,6 @@ exceptions:
     - is_builder_withdrawal_credential#gloas
     - is_merge_transition_complete#gloas
     - is_parent_node_full#gloas
-    - is_payload_timely#gloas
     - is_supporting_vote#gloas
     - is_valid_indexed_payload_attestation#gloas
     - notify_ptc_messages#gloas
