@@ -99,7 +99,7 @@ func (s *Service) processIncludedAttestation(ctx context.Context, state state.Re
 			inclusionSlotGauge.WithLabelValues(fmt.Sprintf("%d", idx)).Set(float64(latestPerf.inclusionSlot))
 			aggregatedPerf.totalDistance += uint64(latestPerf.inclusionSlot - latestPerf.attestedSlot)
 
-			if state.Version() == version.Altair {
+			if state.Version() >= version.Altair {
 				targetIdx := params.BeaconConfig().TimelyTargetFlagIndex
 				sourceIdx := params.BeaconConfig().TimelySourceFlagIndex
 				headIdx := params.BeaconConfig().TimelyHeadFlagIndex
@@ -244,7 +244,7 @@ func (s *Service) processAggregatedAttestation(ctx context.Context, att ethpb.Ag
 	for _, idx := range attestingIndices {
 		if s.canUpdateAttestedValidator(primitives.ValidatorIndex(idx), att.AggregateVal().GetData().Slot) {
 			logFields := logMessageTimelyFlagsForIndex(primitives.ValidatorIndex(idx), att.AggregateVal().GetData())
-			log.WithFields(logFields).Info("Processed aggregated attestation")
+			log.WithFields(logFields).Debug("Processed aggregated attestation")
 		}
 	}
 }

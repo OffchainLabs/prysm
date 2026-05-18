@@ -162,7 +162,9 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 			aRoot = cached.root
 			aState = cached.state
 		} else {
-			_, roots, err := s.beaconDB.HighestRootsBelowSlot(ctx, slot)
+			// we check for slot+1 because we don't want to treat this slot as a missed block when it's not in cache.
+			// this specifically happens when the state is evicted from the caches in long non finalization.
+			_, roots, err := s.beaconDB.HighestRootsBelowSlot(ctx, slot+1)
 			if err != nil {
 				return err
 			}
@@ -180,10 +182,7 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 				return err
 			}
 		}
-		if s.beaconDB.HasState(ctx, aRoot) {
-			s.migrateHotToCold(aRoot)
-			continue
-		}
+
 		// advance slots to the target slot
 		if aState.Slot() < slot {
 			aState, err = transition.ProcessSlots(ctx, aState, slot)

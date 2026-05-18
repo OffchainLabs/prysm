@@ -540,8 +540,8 @@
     - file: config/params/mainnet_config.go
       search: MinBuilderWithdrawabilityDelay
   spec: |
-    <spec config_var="MIN_BUILDER_WITHDRAWABILITY_DELAY" fork="gloas" hash="be7f8473">
-    MIN_BUILDER_WITHDRAWABILITY_DELAY: uint64 = 64
+    <spec config_var="MIN_BUILDER_WITHDRAWABILITY_DELAY" fork="gloas" hash="e1cd053c">
+    MIN_BUILDER_WITHDRAWABILITY_DELAY: uint64 = 8192
     </spec>
 
 - name: MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS#deneb
@@ -632,6 +632,13 @@
   spec: |
     <spec config_var="PAYLOAD_ATTESTATION_DUE_BPS" fork="gloas" hash="17307d0e">
     PAYLOAD_ATTESTATION_DUE_BPS: uint64 = 7500
+    </spec>
+
+- name: PAYLOAD_DUE_BPS#gloas
+  sources: []
+  spec: |
+    <spec config_var="PAYLOAD_DUE_BPS" fork="gloas" hash="ee4d44de">
+    PAYLOAD_DUE_BPS: uint64 = 7500
     </spec>
 
 - name: PROPOSER_REORG_CUTOFF_BPS#phase0
