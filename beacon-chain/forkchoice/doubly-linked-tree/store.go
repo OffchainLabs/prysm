@@ -86,6 +86,7 @@ func (s *Store) insert(ctx context.Context,
 	slot := block.Slot()
 	var parent *PayloadNode
 	blockHash := &[32]byte{}
+	var gasLimit uint64
 	if block.Version() >= version.Gloas {
 		if err := s.resolveParentPayloadStatus(block, &parent, blockHash); err != nil {
 			return nil, err
@@ -97,6 +98,7 @@ func (s *Store) insert(ctx context.Context,
 				return nil, err
 			}
 			copy(blockHash[:], execution.BlockHash())
+			gasLimit = execution.GasLimit()
 		}
 		parentRoot := block.ParentRoot()
 		en := s.emptyNodeByRoot[parentRoot]
@@ -116,6 +118,7 @@ func (s *Store) insert(ctx context.Context,
 		finalizedEpoch:              finalizedEpoch,
 		unrealizedFinalizedEpoch:    finalizedEpoch,
 		blockHash:                   *blockHash,
+		gasLimit:                    gasLimit,
 		payloadAvailabilityVote:     bitfield.NewBitvector512(),
 		payloadDataAvailabilityVote: bitfield.NewBitvector512(),
 	}

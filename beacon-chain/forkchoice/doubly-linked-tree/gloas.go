@@ -391,6 +391,11 @@ func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) err
 		// We don't import two payloads for the same root
 		return nil
 	}
+	exec, err := pe.Execution()
+	if err != nil {
+		return err
+	}
+	en.node.gasLimit = exec.GasLimit()
 	fn := &PayloadNode{
 		node:       en.node,
 		optimistic: true,
@@ -486,6 +491,23 @@ func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 		return [32]byte{}, errors.Wrap(ErrNilNode, "could not get block hash for root")
 	}
 	return en.node.blockHash, nil
+}
+
+// GasLimit returns the gas limit of the latest full payload at or before root.
+func (f *ForkChoice) GasLimit(root [32]byte) (uint64, error) {
+	s := f.store
+	if fn, ok := s.fullNodeByRoot[root]; ok {
+		return fn.node.gasLimit, nil
+	}
+	en, ok := s.emptyNodeByRoot[root]
+	if !ok || en == nil {
+		return 0, errors.Wrap(ErrNilNode, "could not get gas limit for root")
+	}
+	fp := s.fullParent(en)
+	if fp == nil {
+		return 0, errors.New("no full ancestor with gas limit")
+	}
+	return fp.node.gasLimit, nil
 }
 
 func (s *Store) shouldApplyProposerBoost() bool {

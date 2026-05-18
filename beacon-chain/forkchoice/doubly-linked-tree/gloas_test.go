@@ -450,7 +450,7 @@ func TestGloasHeadComputation(t *testing.T) {
 	assert.Equal(t, uint64(0), fullA.weight)  // the parent does not inherit proposer boost
 	assert.Equal(t, uint64(0), fullA.balance)
 	assert.Equal(t, uint64(0), fullA.node.balance)
-	assert.Equal(t, uint64(0), emptyA.weight)     // neither does the empty block of A
+	assert.Equal(t, uint64(0), emptyA.weight) // neither does the empty block of A
 	assert.Equal(t, uint64(8), fullA.node.weight)
 
 	// Process an attestation for rootA at slotB, voting empty (payloadStatus=false).
@@ -1677,4 +1677,104 @@ func TestStore_Prune_IncompatibleFullFinalizedChildren(t *testing.T) {
 	require.Equal(t, false, emptyOk)
 	_, fullOk := s.fullNodeByRoot[rootC]
 	require.Equal(t, false, fullOk)
+}
+
+func prepareBellatrixForkchoiceStateWithGasLimit(
+	slot primitives.Slot,
+	blockRoot [32]byte,
+	parentRoot [32]byte,
+	payloadHash [32]byte,
+	gasLimit uint64,
+) (state.BeaconState, blocks.ROBlock, error) {
+	blockHeader := &ethpb.BeaconBlockHeader{ParentRoot: parentRoot[:]}
+	executionHeader := &enginev1.ExecutionPayloadHeader{BlockHash: payloadHash[:], GasLimit: gasLimit}
+	base := &ethpb.BeaconStateBellatrix{
+		Slot:                         slot,
+		RandaoMixes:                  make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
+		CurrentJustifiedCheckpoint:   &ethpb.Checkpoint{},
+		FinalizedCheckpoint:          &ethpb.Checkpoint{},
+		LatestExecutionPayloadHeader: executionHeader,
+		LatestBlockHeader:            blockHeader,
+	}
+	st, err := state_native.InitializeFromProtoBellatrix(base)
+	if err != nil {
+		return nil, blocks.ROBlock{}, err
+	}
+	blk := &ethpb.SignedBeaconBlockBellatrix{
+		Block: &ethpb.BeaconBlockBellatrix{
+			Slot:       slot,
+			ParentRoot: parentRoot[:],
+			Body: &ethpb.BeaconBlockBodyBellatrix{
+				ExecutionPayload: &enginev1.ExecutionPayload{BlockHash: payloadHash[:], GasLimit: gasLimit},
+			},
+		},
+	}
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	if err != nil {
+		return nil, blocks.ROBlock{}, err
+	}
+	roblock, err := blocks.NewROBlockWithRoot(signed, blockRoot)
+	return st, roblock, err
+}
+
+func TestGasLimit_BellatrixInsertStoresGasLimit(t *testing.T) {
+	f := setup(0, 0)
+	ctx := t.Context()
+
+	root := indexToHash(1)
+	const gl = uint64(30_000_000)
+	st, roblock, err := prepareBellatrixForkchoiceStateWithGasLimit(1, root, params.BeaconConfig().ZeroHash, indexToHash(100), gl)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	got, err := f.GasLimit(root)
+	require.NoError(t, err)
+	assert.Equal(t, gl, got)
+}
+
+func TestGasLimit_UnknownRootErrors(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	_, err := f.GasLimit(indexToHash(999))
+	require.ErrorContains(t, ErrNilNode.Error(), err)
+}
+
+func TestGasLimit_GloasEmptyNodeWalksToFullAncestor(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	const gl = uint64(42_000_000)
+	env := &ethpb.ExecutionPayloadEnvelope{
+		BeaconBlockRoot:       rootA[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{GasLimit: gl},
+	}
+	pe, err := blocks.WrappedROExecutionPayloadEnvelope(env)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// Child B builds on full A (matching parent hash) — gas limit lookup walks to full ancestor A.
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	// B has no full node — GasLimit should walk to A's full ancestor.
+	_, hasFullB := f.store.fullNodeByRoot[rootB]
+	require.Equal(t, false, hasFullB)
+
+	got, err := f.GasLimit(rootB)
+	require.NoError(t, err)
+	assert.Equal(t, gl, got)
+
+	// Direct full lookup on A also returns gl.
+	got, err = f.GasLimit(rootA)
+	require.NoError(t, err)
+	assert.Equal(t, gl, got)
 }
