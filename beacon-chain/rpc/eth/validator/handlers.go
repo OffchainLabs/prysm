@@ -802,13 +802,11 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PrepareBeaconProposer saves the per-validator fee recipient default. The VC
-// switches to SignedProposerPreferences one epoch before Gloas; from that
-// point this endpoint is deprecated and accepts requests as a no-op.
+// PrepareBeaconProposer saves the per-validator fee recipient default. Post-Gloas
+// SignedProposerPreferences replaces this endpoint; requests are accepted as a no-op.
 func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
-	if deprecateGate, err := params.BeaconConfig().GloasForkEpoch.SafeSub(1); err == nil &&
-		slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= deprecateGate {
-		log.Warn("/eth/v1/validator/prepare_beacon_proposer is deprecated; use SignedProposerPreferences. Request accepted as a no-op.")
+	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		log.Warn("/eth/v1/validator/prepare_beacon_proposer is deprecated post-Gloas; use SignedProposerPreferences. Request accepted as a no-op.")
 		return
 	}
 	var jsonFeeRecipients []*structs.FeeRecipient

@@ -831,7 +831,9 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 		}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
 	}
 
-	if deprecateGate, err := params.BeaconConfig().GloasForkEpoch.SafeSub(1); err != nil || slots.ToEpoch(slot) < deprecateGate {
+	// Pre-Gloas, PrepareBeaconProposer carries the per-validator fee recipient.
+	// Post-Gloas, SignedProposerPreferences (submitted below) is canonical.
+	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
 		if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
 			Recipients: proposerReqs,
 		}); err != nil {

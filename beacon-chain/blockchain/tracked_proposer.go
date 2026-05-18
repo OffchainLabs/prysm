@@ -1,15 +1,12 @@
 package blockchain
 
 import (
-	"fmt"
-
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // trackedProposer returns the preference for the slot's proposer if the BN's
@@ -44,10 +41,5 @@ func (s *Service) preferenceForProposer(st state.ReadOnlyBeaconState, slot primi
 	if pref, ok := s.cfg.ProposerPreferencesCache.BestFor(dependentRoot, slot, id); ok {
 		return pref, nil
 	}
-	log.WithFields(logrus.Fields{
-		"slot":           slot,
-		"dependentRoot":  fmt.Sprintf("%#x", dependentRoot),
-		"validatorIndex": id,
-	}).Debug("No proposer preference cached; falling through to default fee recipient.")
 	return cache.ProposerPreference{ValidatorIndex: id}, nil
 }

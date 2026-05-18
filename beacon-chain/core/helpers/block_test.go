@@ -1,6 +1,7 @@
 package helpers_test
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"testing"
@@ -13,6 +14,15 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
+
+type fakeGenesisRootReader struct {
+	root [32]byte
+	err  error
+}
+
+func (f *fakeGenesisRootReader) GenesisBlockRoot(_ context.Context) ([32]byte, error) {
+	return f.root, f.err
+}
 
 func TestBlockRootAtSlot_CorrectBlockRoot(t *testing.T) {
 	var blockRoots [][]byte
@@ -120,4 +130,59 @@ func TestBlockRootAtSlot_OutOfBounds(t *testing.T) {
 		_, err = helpers.BlockRootAtSlot(s, tt.slot)
 		assert.ErrorContains(t, tt.expectedErr, err)
 	}
+}
+
+func TestProposerDependentRootOrGenesis(t *testing.T) {
+	ctx := context.Background()
+	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+	genesisRoot := [32]byte{0xab, 0xcd}
+
+	t.Run("epoch < 2 returns genesis block root from db", func(t *testing.T) {
+		db := &fakeGenesisRootReader{root: genesisRoot}
+		s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 1})
+		require.NoError(t, err)
+
+		got, err := helpers.ProposerDependentRootOrGenesis(ctx, db, s, primitives.Slot(slotsPerEpoch-1))
+		require.NoError(t, err)
+		assert.DeepEqual(t, genesisRoot, got)
+	})
+
+	t.Run("epoch < 2 with nil db errors", func(t *testing.T) {
+		s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 1})
+		require.NoError(t, err)
+
+		_, err = helpers.ProposerDependentRootOrGenesis(ctx, nil, s, primitives.Slot(slotsPerEpoch-1))
+		assert.ErrorContains(t, "genesis fallback required at epoch < 2 but db is nil", err)
+	})
+
+	t.Run("epoch < 2 propagates db error", func(t *testing.T) {
+		dbErr := fmt.Errorf("bolt closed")
+		db := &fakeGenesisRootReader{err: dbErr}
+		s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 1})
+		require.NoError(t, err)
+
+		_, err = helpers.ProposerDependentRootOrGenesis(ctx, db, s, primitives.Slot(slotsPerEpoch-1))
+		assert.ErrorContains(t, "genesis block root", err)
+		assert.ErrorContains(t, "bolt closed", err)
+	})
+
+	t.Run("epoch >= 2 returns state's proposer dependent root", func(t *testing.T) {
+		var blockRoots [][]byte
+		for i := uint64(0); i < uint64(params.BeaconConfig().SlotsPerHistoricalRoot); i++ {
+			blockRoots = append(blockRoots, []byte{byte(i)})
+		}
+		s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{
+			BlockRoots: blockRoots,
+			Slot:       primitives.Slot(3 * slotsPerEpoch),
+		})
+		require.NoError(t, err)
+		proposalSlot := primitives.Slot(2 * slotsPerEpoch)
+
+		// db is unused at epoch >= 2 so it can be nil — guards the spec-correct branch.
+		got, err := helpers.ProposerDependentRootOrGenesis(ctx, nil, s, proposalSlot)
+		require.NoError(t, err)
+		var expected [32]byte
+		expected[0] = byte(slotsPerEpoch - 1)
+		assert.DeepEqual(t, expected, got)
+	})
 }

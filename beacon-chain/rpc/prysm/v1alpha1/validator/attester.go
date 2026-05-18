@@ -135,8 +135,8 @@ func (vs *Server) SubscribeCommitteeSubnets(ctx context.Context, req *ethpb.Comm
 	if len(req.Slots) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "no attester slots provided")
 	}
-	// validator_indices is optional for backwards compatibility with old VCs.
-	// When non-empty it must be 1-to-1 with slots.
+	// validator_indices is 1-to-1 with slots when provided; older VCs may omit
+	// it and the BN treats an empty list as "no attached-set update".
 	if len(req.ValidatorIndices) > 0 && len(req.ValidatorIndices) != len(req.Slots) {
 		return nil, status.Error(codes.InvalidArgument, "validator_indices length must match slots length when provided")
 	}

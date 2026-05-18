@@ -16,61 +16,31 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 	ctx, span := trace.StartSpan(ctx, "validator.subscribeToSubnets")
 	defer span.End()
 
-	subscribeSlots := make([]primitives.Slot, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	subscribeCommitteeIndices := make([]primitives.CommitteeIndex, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	subscribeIsAggregator := make([]bool, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	activeDuties := make([]*ethpb.ValidatorDuty, 0, len(duties.CurrentEpochDuties)+len(duties.NextEpochDuties))
-	alreadySubscribed := make(map[[64]byte]bool)
+	total := len(duties.CurrentEpochDuties) + len(duties.NextEpochDuties)
+	subscribeSlots := make([]primitives.Slot, 0, total)
+	subscribeCommitteeIndices := make([]primitives.CommitteeIndex, 0, total)
+	subscribeIsAggregator := make([]bool, 0, total)
+	activeDuties := make([]*ethpb.ValidatorDuty, 0, total)
+	// Cache the isAggregator BLS result per (slot, committee) so we sign at most
+	// once per tuple even when multiple validators share the same attestation.
+	aggCache := make(map[[64]byte]bool, total)
 
 	if err := v.aggSelector.RefreshSelectionProofs(ctx); err != nil {
 		return errors.Wrap(err, "could not prepare aggregated selection proofs")
 	}
 
-	for _, duty := range duties.CurrentEpochDuties {
-		pk := bytesutil.ToBytes48(duty.PublicKey)
-		if duty.Status == ethpb.ValidatorStatus_ACTIVE || duty.Status == ethpb.ValidatorStatus_EXITING {
-			attesterSlot := duty.AttesterSlot
-			committeeIndex := duty.CommitteeIndex
-			alreadySubscribedKey := validatorSubnetSubscriptionKey(attesterSlot, committeeIndex)
-			if _, ok := alreadySubscribed[alreadySubscribedKey]; ok {
+	for _, set := range [][]*ethpb.ValidatorDuty{duties.CurrentEpochDuties, duties.NextEpochDuties} {
+		for _, duty := range set {
+			if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 				continue
 			}
-
-			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, attesterSlot, pk)
+			isAgg, err := v.cachedIsAggregator(ctx, duty, aggCache)
 			if err != nil {
-				return errors.Wrap(err, "could not check if a validator is an aggregator")
+				return err
 			}
-			if aggregator {
-				alreadySubscribed[alreadySubscribedKey] = true
-			}
-
-			subscribeSlots = append(subscribeSlots, attesterSlot)
-			subscribeCommitteeIndices = append(subscribeCommitteeIndices, committeeIndex)
-			subscribeIsAggregator = append(subscribeIsAggregator, aggregator)
-			activeDuties = append(activeDuties, duty)
-		}
-	}
-
-	for _, duty := range duties.NextEpochDuties {
-		if duty.Status == ethpb.ValidatorStatus_ACTIVE || duty.Status == ethpb.ValidatorStatus_EXITING {
-			attesterSlot := duty.AttesterSlot
-			committeeIndex := duty.CommitteeIndex
-			alreadySubscribedKey := validatorSubnetSubscriptionKey(attesterSlot, committeeIndex)
-			if _, ok := alreadySubscribed[alreadySubscribedKey]; ok {
-				continue
-			}
-
-			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, attesterSlot, bytesutil.ToBytes48(duty.PublicKey))
-			if err != nil {
-				return errors.Wrap(err, "could not check if a validator is an aggregator")
-			}
-			if aggregator {
-				alreadySubscribed[alreadySubscribedKey] = true
-			}
-
-			subscribeSlots = append(subscribeSlots, attesterSlot)
-			subscribeCommitteeIndices = append(subscribeCommitteeIndices, committeeIndex)
-			subscribeIsAggregator = append(subscribeIsAggregator, aggregator)
+			subscribeSlots = append(subscribeSlots, duty.AttesterSlot)
+			subscribeCommitteeIndices = append(subscribeCommitteeIndices, duty.CommitteeIndex)
+			subscribeIsAggregator = append(subscribeIsAggregator, isAgg)
 			activeDuties = append(activeDuties, duty)
 		}
 	}
@@ -85,6 +55,21 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 	)
 
 	return err
+}
+
+// cachedIsAggregator returns isAggregator for duty, signing the selection
+// proof at most once per (slot, committee) by reusing the cache.
+func (v *validator) cachedIsAggregator(ctx context.Context, duty *ethpb.ValidatorDuty, cache map[[64]byte]bool) (bool, error) {
+	key := validatorSubnetSubscriptionKey(duty.AttesterSlot, duty.CommitteeIndex)
+	if cached, ok := cache[key]; ok {
+		return cached, nil
+	}
+	isAgg, err := v.isAggregator(ctx, duty.CommitteeLength, duty.AttesterSlot, bytesutil.ToBytes48(duty.PublicKey))
+	if err != nil {
+		return false, errors.Wrap(err, "could not check if a validator is an aggregator")
+	}
+	cache[key] = isAgg
+	return isAgg, nil
 }
 
 func validatorSubnetSubscriptionKey(slot primitives.Slot, committeeIndex primitives.CommitteeIndex) [64]byte {

@@ -37,7 +37,7 @@ func (vs *Server) SubmitSignedProposerPreferences(
 
 	currentEpoch := slots.ToEpoch(vs.TimeFetcher.CurrentSlot())
 
-	var broadcast int
+	var broadcast, duplicate int
 	for _, msg := range req.SignedProposerPreferences {
 		if msg == nil || msg.Message == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "signed proposer preferences message is nil")
@@ -82,24 +82,31 @@ func (vs *Server) SubmitSignedProposerPreferences(
 		var dependentRoot [fieldparams.RootLength]byte
 		copy(dependentRoot[:], msg.Message.DependentRoot)
 
-		if err := vs.P2P.BroadcastForEpoch(ctx, msg, slots.ToEpoch(proposalSlot)); err != nil {
-			return nil, status.Errorf(codes.Internal,
-				"Could not broadcast signed proposer preferences (broadcast %d/%d): %v",
-				broadcast, len(req.SignedProposerPreferences), err)
-		}
-
-		vs.ProposerPreferencesCache.Add(cache.ProposerPreference{
+		// Add first; if it's a duplicate, skip gossip so we don't re-broadcast
+		// the same signed pref every slot.
+		added := vs.ProposerPreferencesCache.Add(cache.ProposerPreference{
 			DependentRoot:  dependentRoot,
 			ValidatorIndex: valIdx,
 			FeeRecipient:   bytesutil.ToBytes20(msg.Message.FeeRecipient),
 			GasLimit:       msg.Message.GasLimit,
 		}, proposalSlot)
+		if !added {
+			duplicate++
+			continue
+		}
+
+		if err := vs.P2P.BroadcastForEpoch(ctx, msg, slots.ToEpoch(proposalSlot)); err != nil {
+			return nil, status.Errorf(codes.Internal,
+				"Could not broadcast signed proposer preferences (broadcast %d/%d): %v",
+				broadcast, len(req.SignedProposerPreferences), err)
+		}
 		broadcast++
 	}
 
 	log.WithFields(logrus.Fields{
 		"total":     len(req.SignedProposerPreferences),
 		"broadcast": broadcast,
+		"duplicate": duplicate,
 	}).Debug("Processed signed proposer preferences")
 	return &emptypb.Empty{}, nil
 }

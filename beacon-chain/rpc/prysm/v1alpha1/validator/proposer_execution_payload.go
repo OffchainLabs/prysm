@@ -82,15 +82,12 @@ func (vs *Server) getLocalPayloadFromEngine(
 	payloadId, ok := vs.PayloadIDCache.PayloadID(slot, parentRoot)
 
 	val := cache.ProposerPreference{ValidatorIndex: proposerId}
-	dependentRoot, drErr := helpers.ProposerDependentRootOrGenesis(ctx, vs.BeaconDB, st, slot)
-	if drErr != nil {
-		return nil, errors.Wrap(drErr, "could not compute proposer dependent root")
+	dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, vs.BeaconDB, st, slot)
+	if err != nil {
+		return nil, errors.Wrap(err, "proposer dependent root")
 	}
 	if pref, ok := vs.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposerId); ok {
 		val = pref
-	} else {
-		log.WithFields(logFields).WithField("dependentRoot", fmt.Sprintf("%#x", dependentRoot)).
-			Debug("No proposer preference cached; falling through to default fee recipient.")
 	}
 	setFeeRecipientIfBurnAddress(&val)
 

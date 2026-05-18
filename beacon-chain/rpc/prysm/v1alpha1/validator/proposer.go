@@ -559,15 +559,13 @@ func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, roSidecars
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
 //
-// PrepareBeaconProposer caches a per-validator fee-recipient default. The VC
-// switches to SignedProposerPreferences one epoch before Gloas; from that
-// point this endpoint is deprecated and accepts requests as a no-op.
+// PrepareBeaconProposer caches a per-validator fee-recipient default. Post-Gloas
+// SignedProposerPreferences replaces this endpoint; requests are accepted as a no-op.
 func (vs *Server) PrepareBeaconProposer(
 	_ context.Context, request *ethpb.PrepareBeaconProposerRequest,
 ) (*emptypb.Empty, error) {
-	if deprecateGate, err := params.BeaconConfig().GloasForkEpoch.SafeSub(1); err == nil &&
-		slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) >= deprecateGate {
-		log.Warn("PrepareBeaconProposer is deprecated; use SignedProposerPreferences. Request accepted as a no-op.")
+	if slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		log.Warn("PrepareBeaconProposer is deprecated post-Gloas; use SignedProposerPreferences. Request accepted as a no-op.")
 		return &emptypb.Empty{}, nil
 	}
 	for _, r := range request.Recipients {
@@ -583,6 +581,9 @@ func (vs *Server) PrepareBeaconProposer(
 			ValidatorIndex: r.ValidatorIndex,
 			FeeRecipient:   bytesutil.ToBytes20(feeRecipient),
 		})
+		// Backward-compat: track the validator here too so old VCs that don't
+		// populate validator_indices in SubscribeCommitteeSubnets still keep
+		// the BN's attached-set up to date for CGC and validating().
 		if vs.SubscribedValidatorsCache != nil {
 			vs.SubscribedValidatorsCache.Add(r.ValidatorIndex)
 		}
