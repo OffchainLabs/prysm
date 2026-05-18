@@ -48,6 +48,60 @@ func TestEpoch_Mul(t *testing.T) {
 				t.Errorf("Epoch.Mul() = %v, want %v", res, tt.res)
 			}
 		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeMul(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeMul(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeMul() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).MulEpoch(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			var res primitives.Epoch
+			if tt.panicMsg != "" {
+				assertPanic(t, tt.panicMsg, func() {
+					res = primitives.Epoch(tt.a).MulEpoch(primitives.Epoch(tt.b))
+				})
+			} else {
+				res = primitives.Epoch(tt.a).MulEpoch(primitives.Epoch(tt.b))
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.MulEpoch() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeMulEpoch(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeMulEpoch(primitives.Epoch(tt.b))
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeMulEpoch() = %v, want %v", res, tt.res)
+			}
+		})
+		// CappedMul: on overflow, returns MaxUint64 instead of panicking
+		t.Run(fmt.Sprintf("Epoch(%v).CappedMul(%v)", tt.a, tt.b), func(t *testing.T) {
+			expectedRes := tt.res
+			if tt.panicMsg != "" {
+				expectedRes = math.MaxUint64 // CappedMul caps at MaxUint64 on overflow
+			}
+			res := primitives.Epoch(tt.a).CappedMul(tt.b)
+			if res != expectedRes {
+				t.Errorf("Epoch.CappedMul() = %v, want %v", res, expectedRes)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).CappedMulEpoch(%v)", tt.a, tt.b), func(t *testing.T) {
+			expectedRes := tt.res
+			if tt.panicMsg != "" {
+				expectedRes = math.MaxUint64 // CappedMulEpoch caps at MaxUint64 on overflow
+			}
+			res := primitives.Epoch(tt.a).CappedMulEpoch(primitives.Epoch(tt.b))
+			if res != expectedRes {
+				t.Errorf("Epoch.CappedMulEpoch() = %v, want %v", res, expectedRes)
+			}
+		})
 	}
 }
 
@@ -79,6 +133,39 @@ func TestEpoch_Div(t *testing.T) {
 			}
 			if tt.res != res {
 				t.Errorf("Epoch.Div() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeDiv(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeDiv(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeDiv() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).DivEpoch(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			var res primitives.Epoch
+			if tt.panicMsg != "" {
+				assertPanic(t, tt.panicMsg, func() {
+					res = primitives.Epoch(tt.a).DivEpoch(primitives.Epoch(tt.b))
+				})
+			} else {
+				res = primitives.Epoch(tt.a).DivEpoch(primitives.Epoch(tt.b))
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.DivEpoch() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeDivEpoch(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeDivEpoch(primitives.Epoch(tt.b))
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeDivEpoch() = %v, want %v", res, tt.res)
 			}
 		})
 	}
@@ -115,6 +202,16 @@ func TestEpoch_Add(t *testing.T) {
 				t.Errorf("Epoch.Add() = %v, want %v", res, tt.res)
 			}
 		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeAdd(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeAdd(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeAdd() = %v, want %v", res, tt.res)
+			}
+		})
 		t.Run(fmt.Sprintf("Epoch(%v).AddEpoch(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
 			var res primitives.Epoch
 			if tt.panicMsg != "" {
@@ -126,6 +223,37 @@ func TestEpoch_Add(t *testing.T) {
 			}
 			if tt.res != res {
 				t.Errorf("Epoch.AddEpoch() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeAddEpoch(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeAddEpoch(primitives.Epoch(tt.b))
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeAddEpoch() = %v, want %v", res, tt.res)
+			}
+		})
+		// CappedAdd: on overflow, returns MaxUint64 instead of panicking
+		t.Run(fmt.Sprintf("Epoch(%v).CappedAdd(%v)", tt.a, tt.b), func(t *testing.T) {
+			expectedRes := tt.res
+			if tt.panicMsg != "" {
+				expectedRes = math.MaxUint64 // CappedAdd caps at MaxUint64 on overflow
+			}
+			res := primitives.Epoch(tt.a).CappedAdd(tt.b)
+			if res != expectedRes {
+				t.Errorf("Epoch.CappedAdd() = %v, want %v", res, expectedRes)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).CappedAddEpoch(%v)", tt.a, tt.b), func(t *testing.T) {
+			expectedRes := tt.res
+			if tt.panicMsg != "" {
+				expectedRes = math.MaxUint64 // CappedAddEpoch caps at MaxUint64 on overflow
+			}
+			res := primitives.Epoch(tt.a).CappedAddEpoch(primitives.Epoch(tt.b))
+			if res != expectedRes {
+				t.Errorf("Epoch.CappedAddEpoch() = %v, want %v", res, expectedRes)
 			}
 		})
 	}
@@ -162,6 +290,60 @@ func TestEpoch_Sub(t *testing.T) {
 			}
 			if tt.res != res {
 				t.Errorf("Epoch.Sub() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeSub(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeSub(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeSub() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).SubEpoch(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			var res primitives.Epoch
+			if tt.panicMsg != "" {
+				assertPanic(t, tt.panicMsg, func() {
+					res = primitives.Epoch(tt.a).SubEpoch(primitives.Epoch(tt.b))
+				})
+			} else {
+				res = primitives.Epoch(tt.a).SubEpoch(primitives.Epoch(tt.b))
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SubEpoch() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeSubEpoch(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeSubEpoch(primitives.Epoch(tt.b))
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeSubEpoch() = %v, want %v", res, tt.res)
+			}
+		})
+		// FlooredSub: on underflow, returns 0 instead of panicking
+		t.Run(fmt.Sprintf("Epoch(%v).FlooredSub(%v)", tt.a, tt.b), func(t *testing.T) {
+			expectedRes := tt.res
+			if tt.panicMsg != "" {
+				expectedRes = 0 // FlooredSub floors to 0 on underflow
+			}
+			res := primitives.Epoch(tt.a).FlooredSub(tt.b)
+			if res != expectedRes {
+				t.Errorf("Epoch.FlooredSub() = %v, want %v", res, expectedRes)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).FlooredSubEpoch(%v)", tt.a, tt.b), func(t *testing.T) {
+			expectedRes := tt.res
+			if tt.panicMsg != "" {
+				expectedRes = 0 // FlooredSubEpoch floors to 0 on underflow
+			}
+			res := primitives.Epoch(tt.a).FlooredSubEpoch(primitives.Epoch(tt.b))
+			if res != expectedRes {
+				t.Errorf("Epoch.FlooredSubEpoch() = %v, want %v", res, expectedRes)
 			}
 		})
 	}
@@ -202,15 +384,57 @@ func TestEpoch_Mod(t *testing.T) {
 				t.Errorf("Epoch.Mod() = %v, want %v", res, tt.res)
 			}
 		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeMod(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeMod(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeMod() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).ModEpoch(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			var res primitives.Epoch
+			if tt.panicMsg != "" {
+				assertPanic(t, tt.panicMsg, func() {
+					res = primitives.Epoch(tt.a).ModEpoch(primitives.Epoch(tt.b))
+				})
+			} else {
+				res = primitives.Epoch(tt.a).ModEpoch(primitives.Epoch(tt.b))
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.ModEpoch() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeModEpoch(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeModEpoch(primitives.Epoch(tt.b))
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeModEpoch() = %v, want %v", res, tt.res)
+			}
+		})
 	}
 }
 
 func assertPanic(t *testing.T, panicMessage string, f func()) {
+	t.Helper()
 	defer func() {
-		if r := recover(); r == nil {
+		r := recover()
+		if r == nil {
 			t.Errorf("Expected panic not thrown")
-		} else if r != panicMessage {
-			t.Errorf("Unexpected panic thrown, want: %#v, got: %#v", panicMessage, r)
+			return
+		}
+		err, ok := r.(error)
+		if !ok {
+			t.Errorf("Expected panic with error, got: %T", r)
+			return
+		}
+		if err.Error() != panicMessage {
+			t.Errorf("Unexpected panic message, want: %q, got: %q", panicMessage, err.Error())
 		}
 	}()
 	f()
