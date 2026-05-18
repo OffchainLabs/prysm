@@ -17,6 +17,7 @@ var (
 	feeRecipientBucket                      = []byte("fee-recipient")
 	registrationBucket                      = []byte("registration")
 	stateDiffBucket                         = []byte("state-diff")
+	hotStateSnapshotsBucket                 = []byte("hot-state-snapshots")
 	executionPayloadEnvelopesBucket         = []byte("execution-payload-envelopes")
 	executionPayloadEnvelopeBlockHashBucket = []byte("execution-payload-envelope-block-hash-index")
 
