@@ -67,14 +67,14 @@ func (s *Service) runLatePayloadTasks() {
 	}
 }
 
-func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives.Slot) (cache.ProposerPreference, bool, error) {
+func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives.Slot) (*cache.ProposerPreference, error) {
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(st.Slot())
 	fuluAndNextEpoch := st.Version() >= version.Fulu && e == stateEpoch+1
 	if e == stateEpoch || fuluAndNextEpoch {
 		return s.trackedProposer(st, slot)
 	}
-	return cache.ProposerPreference{}, false, nil
+	return nil, nil
 }
 
 // computePayloadWithdrawals returns the withdrawals for the next payload.
@@ -111,12 +111,12 @@ func (s *Service) computePayloadWithdrawals(ctx context.Context, st state.Beacon
 // It is guaranteed to be called for the current slot + 1 and the head state to have been advanced to at least the current epoch.
 func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot, headRoot []byte) payloadattribute.Attributer {
 	emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
-	val, proposing, err := s.checkIfProposing(st, slot)
+	val, err := s.checkIfProposing(st, slot)
 	if err != nil {
 		log.WithError(err).Error("Could not resolve tracked proposer")
 		return emptyAttri
 	}
-	if !proposing {
+	if val == nil {
 		return emptyAttri
 	}
 

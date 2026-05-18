@@ -10,27 +10,33 @@ import (
 )
 
 // trackedProposer returns the preference for the slot's proposer if the BN's
-// VC is attached to that validator (per beacon_committee_subscriptions). On
-// preference-cache miss, the returned ProposerPreference has an empty
-// FeeRecipient; callers fall back to DefaultFeeRecipient via
-// setFeeRecipientIfBurnAddress.
-func (s *Service) trackedProposer(st state.ReadOnlyBeaconState, slot primitives.Slot) (cache.ProposerPreference, bool, error) {
+// VC is attached to that validator (per beacon_committee_subscriptions). A nil
+// return with no error means the slot's proposer is not ours (caller should
+// skip the payload build). On preference-cache miss the returned pref has an
+// empty FeeRecipient and callers fall back to DefaultFeeRecipient.
+func (s *Service) trackedProposer(st state.ReadOnlyBeaconState, slot primitives.Slot) (*cache.ProposerPreference, error) {
 	id, err := helpers.BeaconProposerIndexAtSlot(s.ctx, st, slot)
 	if features.Get().PrepareAllPayloads {
 		if err != nil {
-			return cache.ProposerPreference{}, true, nil
+			return &cache.ProposerPreference{}, nil
 		}
 		pref, err := s.preferenceForProposer(st, slot, id)
-		return pref, true, err
+		if err != nil {
+			return nil, err
+		}
+		return &pref, nil
 	}
 	if err != nil {
-		return cache.ProposerPreference{}, false, nil
+		return nil, errors.Wrap(err, "beacon proposer index")
 	}
 	if !s.cfg.SubscribedValidatorsCache.Has(id) {
-		return cache.ProposerPreference{}, false, nil
+		return nil, nil
 	}
 	pref, err := s.preferenceForProposer(st, slot, id)
-	return pref, true, err
+	if err != nil {
+		return nil, err
+	}
+	return &pref, nil
 }
 
 func (s *Service) preferenceForProposer(st state.ReadOnlyBeaconState, slot primitives.Slot, id primitives.ValidatorIndex) (cache.ProposerPreference, error) {
