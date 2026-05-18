@@ -263,10 +263,11 @@ func (psl *SettingsLoader) processProposerSettings(loadedSettings, dbSettings *v
 	return newSettings
 }
 
-// mergeProposerSettings merges database settings with loaded settings, giving precedence to loadedSettings
+// mergeProposerSettings merges database settings with loaded settings, giving
+// precedence to loadedSettings. Dispatches by schema version: v1 still flows
+// through Builder; v2 lives on Option directly.
 func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, options *flagOptions) *validatorpb.ProposerSettingsPayload {
 	merged := &validatorpb.ProposerSettingsPayload{}
-
 	if db != nil {
 		merged.Version = db.Version
 	}
@@ -274,36 +275,39 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 		merged.Version = loaded.Version
 	}
 
-	// Apply builder config overrides
 	var builderConfig *validatorpb.BuilderConfig
 	var gasLimitOnly *validator.Uint64
-
 	if options != nil {
 		if options.builderConfig != nil {
 			builderConfig = options.builderConfig.ToConsensus()
 		}
-		if options.gasLimit != nil {
-			gasLimitOnly = options.gasLimit
-		}
+		gasLimitOnly = options.gasLimit
 	}
 
-	// Merge DefaultConfig
+	if merged.Version == proposer.SchemaV2 {
+		return mergeProposerSettingsV2(merged, loaded, db, gasLimitOnly)
+	}
+	return mergeProposerSettingsV1(merged, loaded, db, builderConfig, gasLimitOnly)
+}
+
+func mergeProposerSettingsV1(merged, loaded, db *validatorpb.ProposerSettingsPayload, builderConfig *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
+	stripDBBuilder := builderConfig == nil
+
 	if db != nil && db.DefaultConfig != nil {
 		merged.DefaultConfig = db.DefaultConfig
-		if builderConfig == nil {
-			db.DefaultConfig.Builder = stripMEVBoostRelay(db.DefaultConfig.Builder, gasLimitOnly)
+		if stripDBBuilder {
+			db.DefaultConfig.Builder = nil
 		}
 	}
 	if loaded != nil && loaded.DefaultConfig != nil {
 		merged.DefaultConfig = loaded.DefaultConfig
 	}
 
-	// Merge ProposerConfig
 	if db != nil && len(db.ProposerConfig) > 0 {
 		merged.ProposerConfig = db.ProposerConfig
-		for _, option := range db.ProposerConfig {
-			if builderConfig == nil {
-				option.Builder = stripMEVBoostRelay(option.Builder, gasLimitOnly)
+		if stripDBBuilder {
+			for _, option := range db.ProposerConfig {
+				option.Builder = nil
 			}
 		}
 	}
@@ -326,24 +330,36 @@ func mergeProposerSettings(loaded, db *validatorpb.ProposerSettingsPayload, opti
 			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{Builder: builderConfig}
 		case gasLimitOnly != nil:
 			merged.DefaultConfig = &validatorpb.ProposerOptionPayload{
-				Builder: &validatorpb.BuilderConfig{
-					Enabled:  false,
-					GasLimit: *gasLimitOnly,
-				},
+				Builder: &validatorpb.BuilderConfig{Enabled: false, GasLimit: *gasLimitOnly},
 			}
 		}
 	}
-
 	return merged
 }
 
-func stripMEVBoostRelay(b *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.BuilderConfig {
-	if b == nil || gasLimitOnly == nil {
-		return nil
+func mergeProposerSettingsV2(merged, loaded, db *validatorpb.ProposerSettingsPayload, gasLimitOnly *validator.Uint64) *validatorpb.ProposerSettingsPayload {
+	if db != nil && db.DefaultConfig != nil {
+		merged.DefaultConfig = db.DefaultConfig
 	}
-	b.Enabled = false
-	b.Relays = nil
-	return b
+	if loaded != nil && loaded.DefaultConfig != nil {
+		merged.DefaultConfig = loaded.DefaultConfig
+	}
+	if db != nil && len(db.ProposerConfig) > 0 {
+		merged.ProposerConfig = db.ProposerConfig
+	}
+	if loaded != nil && len(loaded.ProposerConfig) > 0 {
+		merged.ProposerConfig = loaded.ProposerConfig
+	}
+
+	if gasLimitOnly == nil {
+		return merged
+	}
+	if merged.DefaultConfig == nil {
+		merged.DefaultConfig = &validatorpb.ProposerOptionPayload{GasLimit: *gasLimitOnly}
+	} else {
+		merged.DefaultConfig.GasLimit = *gasLimitOnly
+	}
+	return merged
 }
 
 func processBuilderConfig(current *validatorpb.BuilderConfig, override *validatorpb.BuilderConfig, gasLimitOnly *validator.Uint64) *validatorpb.BuilderConfig {

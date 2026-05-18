@@ -1232,3 +1232,38 @@ func Test_mergeProposerSettings_CreatesDefaultFromGasLimitFlag(t *testing.T) {
 	require.Equal(t, false, merged.DefaultConfig.Builder.Enabled)
 	require.Equal(t, gl, merged.DefaultConfig.Builder.GasLimit)
 }
+
+func Test_mergeProposerSettings_V2GasLimitOnlyGoesToOption(t *testing.T) {
+	gl := validator.Uint64(12345678)
+	merged := mergeProposerSettings(
+		nil,
+		&validatorpb.ProposerSettingsPayload{Version: proposer.SchemaV2},
+		&flagOptions{gasLimit: &gl},
+	)
+	require.NotNil(t, merged.DefaultConfig)
+	require.IsNil(t, merged.DefaultConfig.Builder)
+	require.Equal(t, gl, merged.DefaultConfig.GasLimit)
+}
+
+func Test_mergeProposerSettings_VersionGatesBuilderReset(t *testing.T) {
+	v1Builder := func() *validatorpb.BuilderConfig {
+		return &validatorpb.BuilderConfig{Enabled: true, GasLimit: 40000000, Relays: []string{"r"}}
+	}
+	t.Run("v1 db without enable-builder drops DB builder", func(t *testing.T) {
+		db := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV1,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x", Builder: v1Builder()},
+		}
+		merged := mergeProposerSettings(nil, db, &flagOptions{})
+		require.IsNil(t, merged.DefaultConfig.Builder)
+	})
+	t.Run("v2 db without enable-builder preserves DB builder", func(t *testing.T) {
+		db := &validatorpb.ProposerSettingsPayload{
+			Version:       proposer.SchemaV2,
+			DefaultConfig: &validatorpb.ProposerOptionPayload{FeeRecipient: "0x", Builder: v1Builder()},
+		}
+		merged := mergeProposerSettings(nil, db, &flagOptions{})
+		require.NotNil(t, merged.DefaultConfig.Builder)
+		require.Equal(t, validator.Uint64(40000000), merged.DefaultConfig.Builder.GasLimit)
+	})
+}
