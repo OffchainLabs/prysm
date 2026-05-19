@@ -1369,7 +1369,7 @@ func TestServer_DeleteGasLimit(t *testing.T) {
 	}
 }
 
-func TestServer_GasLimit_GloasAware(t *testing.T) {
+func TestServer_GasLimit_V2Schema(t *testing.T) {
 	ctx := t.Context()
 	pubkey1, err := hexutil.Decode("0xaf2e7ba294e03438ea819bd4033c6c1bf6b04320ee2075b77273c08d02f8a61bcc303c2c06bd3713cb442072ae591493")
 	require.NoError(t, err)

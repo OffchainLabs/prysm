@@ -1105,14 +1105,9 @@ func (v *validator) buildProposerPreferences(
 
 			feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
 			// Per-validator gas limits are intentionally not honored; gas limit is default-only.
-			gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
-			if ps != nil && ps.DefaultConfig != nil {
-				if ps.DefaultConfig.FeeRecipientConfig != nil {
-					feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
-				}
-				if ps.DefaultConfig.GasLimit != 0 {
-					gasLimit = uint64(ps.DefaultConfig.GasLimit)
-				}
+			gasLimit := uint64(ps.GasLimit(pk))
+			if ps != nil && ps.DefaultConfig != nil && ps.DefaultConfig.FeeRecipientConfig != nil {
+				feeRecipient = ps.DefaultConfig.FeeRecipientConfig.FeeRecipient
 			}
 			if ps != nil && ps.ProposeConfig != nil {
 				if config, ok := ps.ProposeConfig[pk]; ok && config != nil {

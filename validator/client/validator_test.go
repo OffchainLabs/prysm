@@ -2776,155 +2776,117 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 	})
 }
 
-func TestValidator_buildProposerPreferences_V2TopLevelGasLimit(t *testing.T) {
+func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
-	kp := randKeypair(t)
-	km := newMockKeymanager(t, kp)
 	feeRecipient := feeRecipientFromString(t, "0x1111111111111111111111111111111111111111")
 
-	ctrl := gomock.NewController(t)
-	client := validatormock.NewMockValidatorClient(ctrl)
-	domainCache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
-		NumCounters: 1920,
-		MaxCost:     192,
-		BufferItems: 64,
-	})
-	require.NoError(t, err)
-	client.EXPECT().
-		DomainData(gomock.Any(), gomock.Any()).
-		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
-		AnyTimes()
-
-	nextEpochProposerSlot := params.BeaconConfig().SlotsPerEpoch + 3
-	midEpochSlot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch / 2)
-
-	v := validator{
-		validatorClient: client,
-		domainDataCache: domainCache,
-		// Top-level GasLimit must win over the legacy BuilderConfig.GasLimit.
-		proposerSettings: &proposer.Settings{
-			Version: 2,
-			DefaultConfig: &proposer.Option{
-				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
-				GasLimit:           55555555,
-				BuilderConfig: &proposer.BuilderConfig{
-					GasLimit: 12345678,
+	tests := []struct {
+		name         string
+		settings     *proposer.Settings
+		needsDB      bool
+		wantGasLimit uint64
+		// upgradedGasLimit > 0 also asserts ps was upgraded to v2 and persisted.
+		upgradedGasLimit validatorType.Uint64
+	}{
+		{
+			name: "v2 top-level GasLimit wins over legacy BuilderConfig.GasLimit",
+			settings: &proposer.Settings{
+				Version: 2,
+				DefaultConfig: &proposer.Option{
+					FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
+					GasLimit:           55555555,
+					BuilderConfig:      &proposer.BuilderConfig{GasLimit: 12345678},
 				},
 			},
+			wantGasLimit: 55555555,
 		},
-		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			kp.pub: {
-				publicKey: kp.pub[:],
-				status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE},
-				index:     1,
-			},
-		},
-		duties:             &dutyStore{},
-		submittedPrefSlots: make(map[primitives.Slot]bool),
-	}
-	root := make([]byte, fieldparams.RootLength)
-	root[0] = 1
-	v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-		PrevDependentRoot: root,
-		CurrDependentRoot: root,
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
-			PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
-		}},
-		NextEpochDuties: []*ethpb.ValidatorDuty{{
-			PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
-			ProposerSlots: []primitives.Slot{nextEpochProposerSlot},
-		}},
-	})
-
-	prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
-	require.Equal(t, 1, len(prefs))
-	require.Equal(t, uint64(55555555), prefs[0].Message.GasLimit)
-}
-
-func TestValidator_buildProposerPreferences_UpgradesV1Settings(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
-	kp := randKeypair(t)
-	km := newMockKeymanager(t, kp)
-	feeRecipient := feeRecipientFromString(t, "0x1111111111111111111111111111111111111111")
-
-	ctrl := gomock.NewController(t)
-	client := validatormock.NewMockValidatorClient(ctrl)
-	domainCache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
-		NumCounters: 1920,
-		MaxCost:     192,
-		BufferItems: 64,
-	})
-	require.NoError(t, err)
-	client.EXPECT().
-		DomainData(gomock.Any(), gomock.Any()).
-		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
-		AnyTimes()
-
-	nextEpochProposerSlot := params.BeaconConfig().SlotsPerEpoch + 3
-	midEpochSlot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch / 2)
-
-	v := validator{
-		validatorClient: client,
-		domainDataCache: domainCache,
-		// v1-shaped settings: gas limit lives on BuilderConfig only.
-		proposerSettings: &proposer.Settings{
-			DefaultConfig: &proposer.Option{
-				FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
-				BuilderConfig: &proposer.BuilderConfig{
-					Enabled:  true,
-					GasLimit: 42000000,
+		{
+			name: "v1 settings upgraded; BuilderConfig.GasLimit promoted to Option.GasLimit",
+			settings: &proposer.Settings{
+				DefaultConfig: &proposer.Option{
+					FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
+					BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: 42000000},
 				},
 			},
+			needsDB:          true,
+			wantGasLimit:     42000000,
+			upgradedGasLimit: validatorType.Uint64(42000000),
 		},
-		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			kp.pub: {
-				publicKey: kp.pub[:],
-				status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE},
-				index:     1,
-			},
-		},
-		duties:             &dutyStore{},
-		submittedPrefSlots: make(map[primitives.Slot]bool),
-		db:                 dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false),
 	}
-	root := make([]byte, fieldparams.RootLength)
-	root[0] = 1
-	v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
-		PrevDependentRoot: root,
-		CurrDependentRoot: root,
-		CurrentEpochDuties: []*ethpb.ValidatorDuty{{
-			PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
-		}},
-		NextEpochDuties: []*ethpb.ValidatorDuty{{
-			PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
-			ProposerSlots: []primitives.Slot{nextEpochProposerSlot},
-		}},
-	})
 
-	prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
-	require.Equal(t, 1, len(prefs))
-	// Lifted from BuilderConfig.GasLimit -> Option.GasLimit, then read by runtime.
-	require.Equal(t, uint64(42000000), prefs[0].Message.GasLimit)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			kp := randKeypair(t)
+			km := newMockKeymanager(t, kp)
+			ctrl := gomock.NewController(t)
+			client := validatormock.NewMockValidatorClient(ctrl)
+			domainCache, err := ristretto.NewCache(&ristretto.Config[string, proto.Message]{
+				NumCounters: 1920,
+				MaxCost:     192,
+				BufferItems: 64,
+			})
+			require.NoError(t, err)
+			client.EXPECT().
+				DomainData(gomock.Any(), gomock.Any()).
+				Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil).
+				AnyTimes()
 
-	// In-memory settings upgraded to v2.
-	ps := v.ProposerSettings()
-	require.Equal(t, proposer.SchemaV2, ps.Version)
-	require.Equal(t, validatorType.Uint64(42000000), ps.DefaultConfig.GasLimit)
-	require.Equal(t, true, ps.DefaultConfig.BuilderConfig == nil)
+			nextEpochProposerSlot := params.BeaconConfig().SlotsPerEpoch + 3
+			midEpochSlot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch / 2)
 
-	// Persisted to the DB.
-	dbps, err := v.db.ProposerSettings(t.Context())
-	require.NoError(t, err)
-	require.Equal(t, proposer.SchemaV2, dbps.Version)
-	require.Equal(t, validatorType.Uint64(42000000), dbps.DefaultConfig.GasLimit)
+			v := validator{
+				validatorClient:  client,
+				domainDataCache:  domainCache,
+				proposerSettings: tt.settings,
+				pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
+					kp.pub: {
+						publicKey: kp.pub[:],
+						status:    &ethpb.ValidatorStatusResponse{Status: ethpb.ValidatorStatus_ACTIVE},
+						index:     1,
+					},
+				},
+				duties:             &dutyStore{},
+				submittedPrefSlots: make(map[primitives.Slot]bool),
+			}
+			if tt.needsDB {
+				v.db = dbTest.SetupDB(t, t.TempDir(), [][fieldparams.BLSPubkeyLength]byte{}, false)
+			}
+			root := make([]byte, fieldparams.RootLength)
+			root[0] = 1
+			v.duties.SetFromCombinedDutiesResponse(&ethpb.ValidatorDutiesContainer{
+				PrevDependentRoot: root,
+				CurrDependentRoot: root,
+				CurrentEpochDuties: []*ethpb.ValidatorDuty{{
+					PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
+				}},
+				NextEpochDuties: []*ethpb.ValidatorDuty{{
+					PublicKey: kp.pub[:], ValidatorIndex: 1, Status: ethpb.ValidatorStatus_ACTIVE,
+					ProposerSlots: []primitives.Slot{nextEpochProposerSlot},
+				}},
+			})
+
+			prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
+			require.Equal(t, 1, len(prefs))
+			require.Equal(t, tt.wantGasLimit, prefs[0].Message.GasLimit)
+
+			if tt.upgradedGasLimit == 0 {
+				return
+			}
+			ps := v.ProposerSettings()
+			require.Equal(t, proposer.SchemaV2, ps.Version)
+			require.Equal(t, tt.upgradedGasLimit, ps.DefaultConfig.GasLimit)
+			require.Equal(t, true, ps.DefaultConfig.BuilderConfig == nil)
+
+			dbps, err := v.db.ProposerSettings(t.Context())
+			require.NoError(t, err)
+			require.Equal(t, proposer.SchemaV2, dbps.Version)
+			require.Equal(t, tt.upgradedGasLimit, dbps.DefaultConfig.GasLimit)
+		})
+	}
 }
 
 // Post-fork, PushProposerSettings must not call SubmitValidatorRegistrations
