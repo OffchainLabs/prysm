@@ -389,9 +389,9 @@ func enableDevModeFlags(ctx *cli.Context) {
 }
 
 func complainOnDeprecatedFlags(ctx *cli.Context) {
-	for _, f := range deprecatedFlags {
+	for _, f := range DeprecatedFlags {
 		if ctx.IsSet(f.Names()[0]) {
-			log.Errorf("%s is deprecated and has no effect. Do not use this flag, it will be deleted soon.", f.Names()[0])
+			log.Warningf("--%s is deprecated and has no effect. Do not use this flag, it will be deleted soon.", f.Names()[0])
 		}
 	}
 }

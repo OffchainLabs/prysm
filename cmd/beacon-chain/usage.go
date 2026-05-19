@@ -220,12 +220,11 @@ var appHelpFlagGroups = []flagGroup{
 	{ // The deprecated section represents beacon flags that still have use, but should not be used
 		// as they are expected to be deleted in a feature release.
 		Name:  "deprecated",
-		Flags: []cli.Flag{},
+		Flags: features.DeprecatedFlags,
 	},
 	{ // Flags used in debugging Prysm. These are flags not usually run by end users.
 		Name: "debug",
 		Flags: []cli.Flag{
-			cmd.MaxGoroutines,
 			debug.BlockProfileRateFlag,
 			debug.MemProfileRateFlag,
 			debug.MutexProfileFractionFlag,

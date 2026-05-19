@@ -232,7 +232,7 @@ var devModeFlags = []cli.Flag{
 }
 
 // ValidatorFlags contains a list of all the feature flags that apply to the validator client.
-var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
+var ValidatorFlags = append(DeprecatedFlags, []cli.Flag{
 	writeWalletPasswordOnWebOnboarding,
 	HoleskyTestnet,
 	SepoliaTestnet,
@@ -289,7 +289,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,
-}, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
+}, deprecatedBeaconFlags, DeprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {
 	if len(flags) == 0 {

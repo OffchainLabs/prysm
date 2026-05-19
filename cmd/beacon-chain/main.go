@@ -126,7 +126,6 @@ var appFlags = []cli.Flag{
 	cmd.ForceClearDB,
 	cmd.LogFormat,
 	cmd.DisableLogColor,
-	cmd.MaxGoroutines,
 	debug.PProfFlag,
 	debug.PProfAddrFlag,
 	debug.PProfPortFlag,

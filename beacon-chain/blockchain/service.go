@@ -5,7 +5,6 @@ package blockchain
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sync"
 	"time"
 
@@ -87,7 +86,6 @@ type config struct {
 	SlashingPool             slashings.PoolManager
 	BLSToExecPool            blstoexec.PoolManager
 	P2P                      p2p.Accessor
-	MaxRoutines              int
 	StateNotifier            statefeed.Notifier
 	ForkChoiceStore          f.ForkChoicer
 	AttService               *attestations.Service
@@ -253,9 +251,6 @@ func (s *Service) Status() error {
 
 	if s.originBlockRoot == params.BeaconConfig().ZeroHash {
 		return errors.New("genesis state has not been created")
-	}
-	if runtime.NumGoroutine() > s.cfg.MaxRoutines {
-		return fmt.Errorf("too many goroutines (%d)", runtime.NumGoroutine())
 	}
 	return nil
 }

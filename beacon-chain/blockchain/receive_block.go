@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
@@ -29,8 +30,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
+
+const goroutineWarnThreshold = 5_000
 
 // This defines how many epochs since finality the run time will begin to save hot state on to the DB.
 var epochsSinceFinalitySaveHotStateDB = primitives.Epoch(100)
@@ -316,6 +320,10 @@ func (s *Service) reportPostBlockProcessing(
 	// Log state transition data.
 	if err := logStateTransitionData(block); err != nil {
 		log.WithError(err).Error("Unable to log state transition data")
+	}
+
+	if n := runtime.NumGoroutine(); n > goroutineWarnThreshold {
+		log.WithFields(logrus.Fields{"count": n, "threshold": goroutineWarnThreshold}).Debug("Goroutine count exceeded")
 	}
 
 	timeWithoutDaWait := time.Since(receivedTime) - daWaitedTime

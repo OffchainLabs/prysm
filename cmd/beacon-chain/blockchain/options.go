@@ -3,7 +3,6 @@ package blockchaincmd
 import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/urfave/cli/v2"
 )
@@ -15,9 +14,7 @@ func FlagOptions(c *cli.Context) ([]blockchain.Option, error) {
 	if err != nil {
 		return nil, err
 	}
-	maxRoutines := c.Int(cmd.MaxGoroutines.Name)
 	opts := []blockchain.Option{
-		blockchain.WithMaxGoroutines(maxRoutines),
 		blockchain.WithWeakSubjectivityCheckpoint(wsCheckpt),
 	}
 	return opts, nil
