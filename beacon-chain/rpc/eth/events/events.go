@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
@@ -683,25 +682,25 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 
 	// Try signed pref first (post-Gloas, keyed by slot+dep_root). Fall back to
 	// the per-validator default if dep root is unavailable or the signed pref
-	// isn't cached. On total miss emit the burn address — our BN's
-	// --suggested-fee-recipient isn't authoritative for proposers we don't own.
-	feeRecpt := make([]byte, fieldparams.FeeRecipientLength)
-	var gasLimit uint64
+	// isn't cached. On total miss emit the BN's configured defaults so SSE
+	// matches what FCU will actually send to the EL.
+	feeRecpt := primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
+	gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
 	if dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, s.BeaconDB, st, slot); err == nil {
 		if pref, ok := s.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposer); ok {
-			feeRecpt = pref.FeeRecipient[:]
-			gasLimit = pref.GasLimit
+			feeRecpt = pref.FeeRecipientOrDefault()
+			gasLimit = pref.GasLimitOrDefault()
 		}
 	} else if pref, ok := s.ProposerPreferencesCache.Default(proposer); ok {
-		feeRecpt = pref.FeeRecipient[:]
-		gasLimit = pref.GasLimit
+		feeRecpt = pref.FeeRecipientOrDefault()
+		gasLimit = pref.GasLimitOrDefault()
 	}
 
 	if v == version.Bellatrix {
 		return payloadattribute.New(&engine.PayloadAttributes{
 			Timestamp:             timestamp,
 			PrevRandao:            randao,
-			SuggestedFeeRecipient: feeRecpt,
+			SuggestedFeeRecipient: feeRecpt[:],
 		})
 	}
 
@@ -721,7 +720,7 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		return payloadattribute.New(&engine.PayloadAttributesV2{
 			Timestamp:             timestamp,
 			PrevRandao:            randao,
-			SuggestedFeeRecipient: feeRecpt,
+			SuggestedFeeRecipient: feeRecpt[:],
 			Withdrawals:           w,
 		})
 	}
@@ -730,7 +729,7 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		return payloadattribute.New(&engine.PayloadAttributesV3{
 			Timestamp:             timestamp,
 			PrevRandao:            randao,
-			SuggestedFeeRecipient: feeRecpt,
+			SuggestedFeeRecipient: feeRecpt[:],
 			Withdrawals:           w,
 			ParentBeaconBlockRoot: root[:],
 		})
@@ -739,7 +738,7 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 	return payloadattribute.New(&engine.PayloadAttributesV4{
 		Timestamp:             timestamp,
 		PrevRandao:            randao,
-		SuggestedFeeRecipient: feeRecpt,
+		SuggestedFeeRecipient: feeRecpt[:],
 		Withdrawals:           w,
 		ParentBeaconBlockRoot: root[:],
 		SlotNumber:            uint64(slot),
@@ -904,7 +903,7 @@ func marshalAttributes(attr payloadattribute.Attributer) ([]byte, error) {
 		return json.Marshal(&structs.PayloadAttributesV1{
 			Timestamp:             timestamp,
 			PrevRandao:            prevRandao,
-			SuggestedFeeRecipient: feeRecpt,
+			SuggestedFeeRecipient: feeRecpt[:],
 		})
 	}
 	w, err := attr.Withdrawals()
@@ -916,7 +915,7 @@ func marshalAttributes(attr payloadattribute.Attributer) ([]byte, error) {
 		return json.Marshal(&structs.PayloadAttributesV2{
 			Timestamp:             timestamp,
 			PrevRandao:            prevRandao,
-			SuggestedFeeRecipient: feeRecpt,
+			SuggestedFeeRecipient: feeRecpt[:],
 			Withdrawals:           withdrawals,
 		})
 	}
@@ -927,7 +926,7 @@ func marshalAttributes(attr payloadattribute.Attributer) ([]byte, error) {
 	return json.Marshal(&structs.PayloadAttributesV3{
 		Timestamp:             timestamp,
 		PrevRandao:            prevRandao,
-		SuggestedFeeRecipient: feeRecpt,
+		SuggestedFeeRecipient: feeRecpt[:],
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: hexutil.Encode(parentRoot),
 	})

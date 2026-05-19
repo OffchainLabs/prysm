@@ -32,6 +32,7 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )
@@ -696,9 +697,14 @@ func TestFillEventData(t *testing.T) {
 	})
 }
 
-func TestComputePayloadAttributes_CacheMissEmitsZeros(t *testing.T) {
-	ctx := t.Context()
+func TestComputePayloadAttributes_CacheMissEmitsDefaults(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DefaultFeeRecipient = common.Address([20]byte{'a'})
+	cfg.DefaultBuilderGasLimit = 36_000_000
+	params.OverrideBeaconConfig(cfg)
 
+	ctx := t.Context()
 	st, err := util.NewBeaconStateGloas(func(s *eth.BeaconStateGloas) error {
 		s.LatestExecutionPayloadBid.BlockHash = bytesutil.PadTo([]byte{0x01}, 32)
 		return nil
@@ -714,11 +720,11 @@ func TestComputePayloadAttributes_CacheMissEmitsZeros(t *testing.T) {
 	attr, err := srv.computePayloadAttributes(ctx, st, [32]byte{}, 0, uint64(time.Now().Unix()), make([]byte, 32), 1)
 	require.NoError(t, err)
 
-	require.DeepEqual(t, make([]byte, fieldparams.FeeRecipientLength), attr.SuggestedFeeRecipient())
+	require.DeepEqual(t, cfg.DefaultFeeRecipient.Bytes(), attr.SuggestedFeeRecipient())
 
 	v4, err := attr.PbV4()
 	require.NoError(t, err)
-	require.Equal(t, uint64(0), v4.TargetGasLimit)
+	require.Equal(t, cfg.DefaultBuilderGasLimit, v4.TargetGasLimit)
 }
 
 func setActiveValidators(t *testing.T, st state.BeaconState, count int) {
