@@ -2777,23 +2777,20 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 }
 
 func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
 	feeRecipient := feeRecipientFromString(t, "0x1111111111111111111111111111111111111111")
 
 	tests := []struct {
-		name         string
-		settings     *proposer.Settings
-		needsDB      bool
-		wantGasLimit uint64
-		// upgradedGasLimit > 0 also asserts ps was upgraded to v2 and persisted.
+		name           string
+		gloasForkEpoch primitives.Epoch
+		settings       *proposer.Settings
+		needsDB        bool
+		wantGasLimit   uint64
+		// >0 asserts migration ran and persisted; 0 asserts shape preserved.
 		upgradedGasLimit validatorType.Uint64
 	}{
 		{
-			name: "v2 top-level GasLimit wins over legacy BuilderConfig.GasLimit",
+			name:           "v2 top-level GasLimit wins over legacy BuilderConfig.GasLimit",
+			gloasForkEpoch: 0,
 			settings: &proposer.Settings{
 				Version: 2,
 				DefaultConfig: &proposer.Option{
@@ -2805,7 +2802,8 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			wantGasLimit: 55555555,
 		},
 		{
-			name: "v1 settings upgraded; BuilderConfig.GasLimit promoted to Option.GasLimit",
+			name:           "gloas active: v1 settings upgraded; BuilderConfig.GasLimit promoted to Option.GasLimit",
+			gloasForkEpoch: 0,
 			settings: &proposer.Settings{
 				DefaultConfig: &proposer.Option{
 					FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
@@ -2816,10 +2814,28 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			wantGasLimit:     42000000,
 			upgradedGasLimit: validatorType.Uint64(42000000),
 		},
+		{
+			// Migration must not fire while pre-gloas registration path still reads BuilderConfig.
+			name:           "gloasEpoch-1: preferences submitted, v1 shape preserved (no migration)",
+			gloasForkEpoch: 1,
+			settings: &proposer.Settings{
+				DefaultConfig: &proposer.Option{
+					FeeRecipientConfig: &proposer.FeeRecipientConfig{FeeRecipient: feeRecipient},
+					BuilderConfig:      &proposer.BuilderConfig{Enabled: true, GasLimit: 42000000},
+				},
+			},
+			needsDB:      true,
+			wantGasLimit: 42000000,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig().Copy()
+			cfg.GloasForkEpoch = tt.gloasForkEpoch
+			params.OverrideBeaconConfig(cfg)
+
 			kp := randKeypair(t)
 			km := newMockKeymanager(t, kp)
 			ctrl := gomock.NewController(t)
@@ -2873,10 +2889,14 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 			require.Equal(t, 1, len(prefs))
 			require.Equal(t, tt.wantGasLimit, prefs[0].Message.GasLimit)
 
+			ps := v.ProposerSettings()
 			if tt.upgradedGasLimit == 0 {
+				require.Equal(t, tt.settings.Version, ps.Version)
+				if tt.settings.DefaultConfig != nil && tt.settings.DefaultConfig.BuilderConfig != nil {
+					require.NotNil(t, ps.DefaultConfig.BuilderConfig)
+				}
 				return
 			}
-			ps := v.ProposerSettings()
 			require.Equal(t, proposer.SchemaV2, ps.Version)
 			require.Equal(t, tt.upgradedGasLimit, ps.DefaultConfig.GasLimit)
 			require.Equal(t, true, ps.DefaultConfig.BuilderConfig == nil)
