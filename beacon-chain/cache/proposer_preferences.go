@@ -37,6 +37,16 @@ func (p *ProposerPreference) FeeRecipientOrDefault() primitives.ExecutionAddress
 	return p.FeeRecipient
 }
 
+// GasLimitOrDefault returns the preference's GasLimit, substituting
+// DefaultBuilderGasLimit when zero so payload attributes never advertise a
+// zero target to the EL.
+func (p *ProposerPreference) GasLimitOrDefault() uint64 {
+	if p.GasLimit == 0 {
+		return params.BeaconConfig().DefaultBuilderGasLimit
+	}
+	return p.GasLimit
+}
+
 // ProposerPreferencesCache holds two stores with different lookup keys:
 //
 //  1. preferences: signed proposer preferences from gossip / our local

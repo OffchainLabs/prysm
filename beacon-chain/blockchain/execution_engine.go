@@ -389,11 +389,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			log.WithError(err).Error("Could not get withdrawals for payload attribute")
 			return emptyAttri
 		}
-		targetGasLimit := val.GasLimit
-		if targetGasLimit == 0 {
-			targetGasLimit = params.BeaconConfig().DefaultBuilderGasLimit
-		}
-		return payloadAttributesGloas(uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot, withdrawals, slot, targetGasLimit)
+		return payloadAttributesGloas(uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot, withdrawals, slot, val.GasLimitOrDefault())
 	case v >= version.Deneb:
 		return payloadAttributesDeneb(st, uint64(t.Unix()), prevRando, feeRecipient[:], headRoot)
 	case v >= version.Capella:

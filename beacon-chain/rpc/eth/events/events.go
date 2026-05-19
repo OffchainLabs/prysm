@@ -686,14 +686,15 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 	// isn't cached. On total miss emit the burn address — our BN's
 	// --suggested-fee-recipient isn't authoritative for proposers we don't own.
 	feeRecpt := make([]byte, fieldparams.FeeRecipientLength)
+	var gasLimit uint64
 	if dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, s.BeaconDB, st, slot); err == nil {
 		if pref, ok := s.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposer); ok {
 			feeRecpt = pref.FeeRecipient[:]
-      gasLimit = pref.GasLimit
+			gasLimit = pref.GasLimit
 		}
 	} else if pref, ok := s.ProposerPreferencesCache.Default(proposer); ok {
 		feeRecpt = pref.FeeRecipient[:]
-    gasLimit = pref.GasLimit
+		gasLimit = pref.GasLimit
 	}
 
 	if v == version.Bellatrix {

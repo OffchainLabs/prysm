@@ -26,6 +26,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -693,6 +694,31 @@ func TestFillEventData(t *testing.T) {
 		require.NotNil(t, filled.Attributer, "Should have a valid payload attributes object")
 		require.Equal(t, false, filled.Attributer.IsEmpty(), "Attributer should not be empty after fill")
 	})
+}
+
+func TestComputePayloadAttributes_CacheMissEmitsZeros(t *testing.T) {
+	ctx := t.Context()
+
+	st, err := util.NewBeaconStateGloas(func(s *eth.BeaconStateGloas) error {
+		s.LatestExecutionPayloadBid.BlockHash = bytesutil.PadTo([]byte{0x01}, 32)
+		return nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, st.SetSlot(1))
+
+	srv := &Server{
+		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		BeaconDB:                 dbtest.SetupDB(t),
+	}
+
+	attr, err := srv.computePayloadAttributes(ctx, st, [32]byte{}, 0, uint64(time.Now().Unix()), make([]byte, 32), 1)
+	require.NoError(t, err)
+
+	require.DeepEqual(t, make([]byte, fieldparams.FeeRecipientLength), attr.SuggestedFeeRecipient())
+
+	v4, err := attr.PbV4()
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), v4.TargetGasLimit)
 }
 
 func setActiveValidators(t *testing.T, st state.BeaconState, count int) {

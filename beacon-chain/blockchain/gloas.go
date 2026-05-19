@@ -160,7 +160,7 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: headRoot,
 		SlotNumber:            uint64(slot),
-		TargetGasLimit:        val.GasLimit,
+		TargetGasLimit:        val.GasLimitOrDefault(),
 	})
 	if err != nil {
 		log.WithError(err).Error("Could not get payload attribute")

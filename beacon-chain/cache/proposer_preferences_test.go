@@ -187,3 +187,20 @@ func TestProposerPreference_FeeRecipientOrDefault(t *testing.T) {
 		require.Equal(t, preset, common.BytesToAddress(got[:]))
 	})
 }
+
+func TestProposerPreference_GasLimitOrDefault(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DefaultBuilderGasLimit = 36_000_000
+	params.OverrideBeaconConfig(cfg)
+
+	t.Run("zero gas limit returns configured default", func(t *testing.T) {
+		val := &ProposerPreference{ValidatorIndex: 1}
+		require.Equal(t, params.BeaconConfig().DefaultBuilderGasLimit, val.GasLimitOrDefault())
+	})
+
+	t.Run("non-zero gas limit returned as-is", func(t *testing.T) {
+		val := &ProposerPreference{ValidatorIndex: 1, GasLimit: 42}
+		require.Equal(t, uint64(42), val.GasLimitOrDefault())
+	})
+}
