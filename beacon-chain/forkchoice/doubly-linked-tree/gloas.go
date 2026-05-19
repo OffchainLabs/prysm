@@ -393,7 +393,7 @@ func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) err
 	}
 	exec, err := pe.Execution()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not get execution from payload envelope")
 	}
 	en.node.gasLimit = exec.GasLimit()
 	fn := &PayloadNode{

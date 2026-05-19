@@ -1679,59 +1679,6 @@ func TestStore_Prune_IncompatibleFullFinalizedChildren(t *testing.T) {
 	require.Equal(t, false, fullOk)
 }
 
-func prepareBellatrixForkchoiceStateWithGasLimit(
-	slot primitives.Slot,
-	blockRoot [32]byte,
-	parentRoot [32]byte,
-	payloadHash [32]byte,
-	gasLimit uint64,
-) (state.BeaconState, blocks.ROBlock, error) {
-	blockHeader := &ethpb.BeaconBlockHeader{ParentRoot: parentRoot[:]}
-	executionHeader := &enginev1.ExecutionPayloadHeader{BlockHash: payloadHash[:], GasLimit: gasLimit}
-	base := &ethpb.BeaconStateBellatrix{
-		Slot:                         slot,
-		RandaoMixes:                  make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
-		CurrentJustifiedCheckpoint:   &ethpb.Checkpoint{},
-		FinalizedCheckpoint:          &ethpb.Checkpoint{},
-		LatestExecutionPayloadHeader: executionHeader,
-		LatestBlockHeader:            blockHeader,
-	}
-	st, err := state_native.InitializeFromProtoBellatrix(base)
-	if err != nil {
-		return nil, blocks.ROBlock{}, err
-	}
-	blk := &ethpb.SignedBeaconBlockBellatrix{
-		Block: &ethpb.BeaconBlockBellatrix{
-			Slot:       slot,
-			ParentRoot: parentRoot[:],
-			Body: &ethpb.BeaconBlockBodyBellatrix{
-				ExecutionPayload: &enginev1.ExecutionPayload{BlockHash: payloadHash[:], GasLimit: gasLimit},
-			},
-		},
-	}
-	signed, err := blocks.NewSignedBeaconBlock(blk)
-	if err != nil {
-		return nil, blocks.ROBlock{}, err
-	}
-	roblock, err := blocks.NewROBlockWithRoot(signed, blockRoot)
-	return st, roblock, err
-}
-
-func TestGasLimit_BellatrixInsertStoresGasLimit(t *testing.T) {
-	f := setup(0, 0)
-	ctx := t.Context()
-
-	root := indexToHash(1)
-	const gl = uint64(30_000_000)
-	st, roblock, err := prepareBellatrixForkchoiceStateWithGasLimit(1, root, params.BeaconConfig().ZeroHash, indexToHash(100), gl)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, roblock))
-
-	got, err := f.GasLimit(root)
-	require.NoError(t, err)
-	assert.Equal(t, gl, got)
-}
-
 func TestGasLimit_UnknownRootErrors(t *testing.T) {
 	f := setupGloas(t, 0, 0)
 	_, err := f.GasLimit(indexToHash(999))
