@@ -784,7 +784,7 @@ func TestForkChoice_FinalizedAndJustifiedPayloadBlockHash_PreGloas(t *testing.T)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
-	f.store.finalizedCheckpoint.Root = [32]byte{'a'}
+	require.NoError(t, f.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Root: [32]byte{'a'}}))
 	f.store.justifiedCheckpoint.Root = [32]byte{'a'}
 
 	require.Equal(t, [32]byte{'A'}, f.FinalizedPayloadBlockHash())
