@@ -681,9 +681,11 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 	}
 
 	feeRecpt := params.BeaconConfig().DefaultFeeRecipient.Bytes()
+	gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
 	tValidator, exists := s.TrackedValidatorsCache.Validator(proposer)
 	if exists {
 		feeRecpt = tValidator.FeeRecipient[:]
+		gasLimit = tValidator.GasLimit
 	}
 
 	if v == version.Bellatrix {
@@ -732,6 +734,7 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		Withdrawals:           w,
 		ParentBeaconBlockRoot: root[:],
 		SlotNumber:            uint64(slot),
+		TargetGasLimit:        gasLimit,
 	})
 }
 
