@@ -109,10 +109,10 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 
 // computePTC computes the payload timeliness committee for a given slot.
 //
-//	<spec fn="compute_ptc" fork="gloas" hash="0f323552">
+//	<spec fn="compute_ptc" fork="gloas" hash="1dcaa117">
 //	def compute_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
 //	    """
-//	    Get the payload timeliness committee for the given ``slot``.
+//	    Get the payload timeliness committee, with possible duplicates, for the given ``slot``.
 //	    """
 //	    epoch = compute_epoch_at_slot(slot)
 //	    seed = hash(get_seed(state, epoch, DOMAIN_PTC_ATTESTER) + uint_to_bytes(slot))
@@ -196,7 +196,7 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 
 // selectByBalance selects a balance-weighted subset of input candidates.
 //
-//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="f99b3e37">
+//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="e5dff16e">
 //	def compute_balance_weighted_selection(
 //	    state: BeaconState,
 //	    indices: Sequence[ValidatorIndex],
@@ -208,7 +208,7 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 //	    Return ``size`` indices sampled by effective balance, using ``indices``
 //	    as candidates. If ``shuffle_indices`` is ``True``, candidate indices
 //	    are themselves sampled from ``indices`` by shuffling it, otherwise
-//	    ``indices`` is traversed in order.
+//	    ``indices`` is traversed in order. The returned list can contain duplicates.
 //	    """
 //	    MAX_RANDOM_VALUE = 2**16 - 1
 //	    total = uint64(len(indices))
