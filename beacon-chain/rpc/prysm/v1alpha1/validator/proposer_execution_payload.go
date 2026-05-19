@@ -142,6 +142,10 @@ func (vs *Server) getLocalPayloadFromEngine(
 		if err != nil {
 			return nil, err
 		}
+		targetGasLimit := val.GasLimit
+		if targetGasLimit == 0 {
+			targetGasLimit = params.BeaconConfig().DefaultBuilderGasLimit
+		}
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV4{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
@@ -149,6 +153,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 			Withdrawals:           withdrawals,
 			ParentBeaconBlockRoot: parentRoot[:],
 			SlotNumber:            uint64(slot),
+			TargetGasLimit:        targetGasLimit,
 		})
 		if err != nil {
 			return nil, err

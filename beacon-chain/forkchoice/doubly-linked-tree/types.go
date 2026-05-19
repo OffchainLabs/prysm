@@ -34,6 +34,7 @@ type Store struct {
 	previousProposerBoostRoot     [fieldparams.RootLength]byte                  // previous block root that was boosted after being received in a timely manner.
 	previousProposerBoostScore    uint64                                        // previous proposer boosted root score.
 	finalizedDependentRoot        [fieldparams.RootLength]byte                  // dependent root at finalized checkpoint.
+	finalizedPayloadBlockHash     [fieldparams.RootLength]byte                  // cached payload hash at the finalized checkpoint. Refreshed before pruning at finalization since the node it resolves from is removed by prune.
 	committeeWeight               uint64                                        // tracks the total active validator balance divided by the number of slots per Epoch.
 	treeRootNode                  *Node                                         // the root node of the store tree.
 	headNode                      *Node                                         // last head Node

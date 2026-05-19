@@ -689,9 +689,11 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 	if dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, s.BeaconDB, st, slot); err == nil {
 		if pref, ok := s.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposer); ok {
 			feeRecpt = pref.FeeRecipient[:]
+      gasLimit = pref.GasLimit
 		}
 	} else if pref, ok := s.ProposerPreferencesCache.Default(proposer); ok {
 		feeRecpt = pref.FeeRecipient[:]
+    gasLimit = pref.GasLimit
 	}
 
 	if v == version.Bellatrix {
@@ -740,6 +742,7 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		Withdrawals:           w,
 		ParentBeaconBlockRoot: root[:],
 		SlotNumber:            uint64(slot),
+		TargetGasLimit:        gasLimit,
 	})
 }
 

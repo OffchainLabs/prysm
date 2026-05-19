@@ -263,6 +263,7 @@ func (s *Store) prune(ctx context.Context) error {
 	if fn.parent == nil {
 		return nil
 	}
+	s.finalizedPayloadBlockHash = s.checkpointPayloadHashForRoot(finalizedRoot)
 
 	// Save the new finalized dependent root because it will be pruned
 	s.finalizedDependentRoot = fn.parent.node.root
@@ -285,13 +286,32 @@ func (s *Store) prune(ctx context.Context) error {
 		return nil
 	}
 
+	remaining := fen.children[:0]
 	for _, child := range fen.children {
 		if child != nil && child.slot <= checkpointMaxSlot {
 			if err := s.pruneFinalizedNodeByRootMap(ctx, child, fn); err != nil {
 				return errors.Wrap(err, "could not prune incompatible finalized child")
 			}
+			continue
 		}
+		remaining = append(remaining, child)
 	}
+	fen.children = remaining
+	ffn := s.fullNodeByRoot[finalizedRoot]
+	if ffn == nil {
+		return nil
+	}
+	remaining = ffn.children[:0]
+	for _, child := range ffn.children {
+		if child != nil && child.slot <= checkpointMaxSlot {
+			if err := s.pruneFinalizedNodeByRootMap(ctx, child, fn); err != nil {
+				return errors.Wrap(err, "could not prune incompatible finalized child")
+			}
+			continue
+		}
+		remaining = append(remaining, child)
+	}
+	ffn.children = remaining
 	return nil
 }
 
