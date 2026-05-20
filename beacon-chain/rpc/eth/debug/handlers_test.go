@@ -812,6 +812,132 @@ func TestDataColumnSidecars(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		require.Equal(t, 0, len(resp.Data))
 	})
+
+	t.Run("Gloas block - returns Gloas-shaped sidecars", func(t *testing.T) {
+		originalConfig := params.BeaconConfig()
+		defer func() { params.OverrideBeaconConfig(originalConfig) }()
+
+		config := params.BeaconConfig().Copy()
+		config.FuluForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		signedGloasBlock := util.NewBeaconBlockGloas()
+		roBlock, err := blocks.NewSignedBeaconBlock(signedGloasBlock)
+		require.NoError(t, err)
+		require.Equal(t, version.Gloas, roBlock.Version())
+
+		blockRoot := bytesutil.ToBytes32([]byte{0xAB})
+		gloasDC := &ethpb.DataColumnSidecarGloas{
+			Index:           7,
+			Column:          [][]byte{{0x10}, {0x11}},
+			KzgProofs:       [][]byte{bytesutil.PadTo([]byte{0xAA}, 48), bytesutil.PadTo([]byte{0xBB}, 48)},
+			Slot:            123,
+			BeaconBlockRoot: blockRoot[:],
+		}
+		roCol, err := blocks.NewRODataColumnGloasWithRoot(gloasDC, blockRoot)
+		require.NoError(t, err)
+		verified := blocks.NewVerifiedRODataColumn(roCol)
+
+		chainService := &blockchainmock.ChainService{}
+		currentSlot := primitives.Slot(0)
+		chainService.Slot = &currentSlot
+		chainService.OptimisticRoots = make(map[[32]byte]bool)
+		chainService.FinalizedRoots = make(map[[32]byte]bool)
+
+		mockBlocker := &testutil.MockBlocker{
+			DataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+				return []blocks.VerifiedRODataColumn{verified}, nil
+			},
+			BlockToReturn: roBlock,
+		}
+
+		s := &Server{
+			GenesisTimeFetcher:    chainService,
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+			Blocker:               mockBlocker,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.DataColumnSidecars(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		require.Equal(t, version.String(version.Gloas), writer.Header().Get(api.VersionHeader))
+
+		resp := &structs.GetDebugDataColumnSidecarsResponseGloas{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, version.String(version.Gloas), resp.Version)
+		require.Equal(t, 1, len(resp.Data))
+		require.Equal(t, "7", resp.Data[0].Index)
+		require.Equal(t, "123", resp.Data[0].Slot)
+		require.Equal(t, hexutil.Encode(blockRoot[:]), resp.Data[0].BeaconBlockRoot)
+		require.Equal(t, 2, len(resp.Data[0].Column))
+		require.Equal(t, 2, len(resp.Data[0].KzgProofs))
+
+		// Fulu-only fields must not appear on the wire.
+		body := writer.Body.String()
+		assert.StringNotContains(t, "kzg_commitments", body)
+		assert.StringNotContains(t, "signed_block_header", body)
+		assert.StringNotContains(t, "kzg_commitments_inclusion_proof", body)
+	})
+}
+
+// TestBuildDataColumnSidecarsJsonResponse_GloasFails pins the broken-before behavior:
+// the original (Fulu) JSON builder cannot serialize a Gloas-backed RODataColumn because
+// it reads KzgCommitments/SignedBlockHeader/KzgCommitmentsInclusionProof — all Fulu-only.
+func TestBuildDataColumnSidecarsJsonResponse_GloasFails(t *testing.T) {
+	blockRoot := bytesutil.ToBytes32([]byte{0xAA})
+	gloasDC := &ethpb.DataColumnSidecarGloas{
+		Index:           3,
+		Column:          [][]byte{{0x01}},
+		KzgProofs:       [][]byte{bytesutil.PadTo([]byte{0x02}, 48)},
+		Slot:            42,
+		BeaconBlockRoot: blockRoot[:],
+	}
+	roCol, err := blocks.NewRODataColumnGloasWithRoot(gloasDC, blockRoot)
+	require.NoError(t, err)
+	verified := blocks.NewVerifiedRODataColumn(roCol)
+
+	_, err = buildDataColumnSidecarsJsonResponse([]blocks.VerifiedRODataColumn{verified})
+	require.NotNil(t, err)
+	assert.StringContains(t, "fulu", err.Error())
+}
+
+func TestBuildDataColumnSidecarsJsonResponseGloas(t *testing.T) {
+	blockRoot := bytesutil.ToBytes32([]byte{0xCD})
+	gloasDC := &ethpb.DataColumnSidecarGloas{
+		Index:           11,
+		Column:          [][]byte{{0xDE, 0xAD}, {0xBE, 0xEF}},
+		KzgProofs:       [][]byte{bytesutil.PadTo([]byte{0x55}, 48), bytesutil.PadTo([]byte{0x66}, 48)},
+		Slot:            777,
+		BeaconBlockRoot: blockRoot[:],
+	}
+	roCol, err := blocks.NewRODataColumnGloasWithRoot(gloasDC, blockRoot)
+	require.NoError(t, err)
+	verified := blocks.NewVerifiedRODataColumn(roCol)
+
+	sidecars, err := buildDataColumnSidecarsJsonResponseGloas([]blocks.VerifiedRODataColumn{verified})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(sidecars))
+	require.Equal(t, "11", sidecars[0].Index)
+	require.Equal(t, "777", sidecars[0].Slot)
+	require.Equal(t, hexutil.Encode(blockRoot[:]), sidecars[0].BeaconBlockRoot)
+	require.Equal(t, hexutil.Encode([]byte{0xDE, 0xAD}), sidecars[0].Column[0])
+	require.Equal(t, hexutil.Encode([]byte{0xBE, 0xEF}), sidecars[0].Column[1])
+	require.Equal(t, hexutil.Encode(bytesutil.PadTo([]byte{0x55}, 48)), sidecars[0].KzgProofs[0])
+	require.Equal(t, hexutil.Encode(bytesutil.PadTo([]byte{0x66}, 48)), sidecars[0].KzgProofs[1])
+
+	bz, err := json.Marshal(sidecars[0])
+	require.NoError(t, err)
+	body := string(bz)
+	assert.StringContains(t, `"index":"11"`, body)
+	assert.StringContains(t, `"slot":"777"`, body)
+	assert.StringContains(t, `"beacon_block_root":`, body)
+	assert.StringNotContains(t, "kzg_commitments", body)
+	assert.StringNotContains(t, "signed_block_header", body)
 }
 
 func TestParseDataColumnIndices(t *testing.T) {
