@@ -499,7 +499,8 @@ func (f *ForkChoice) GasLimit(root [32]byte) (uint64, error) {
 	if fn := s.fullNodeByRoot[root]; fn != nil {
 		return fn.gasLimit, nil
 	}
-	if en := s.emptyNodeByRoot[root]; en == nil {
+	en := s.emptyNodeByRoot[root]
+	if en == nil {
 		return 0, errors.Wrap(ErrNilNode, "could not get gas limit for root")
 	}
 	fp := s.fullParent(en)
