@@ -31,6 +31,7 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 			if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 				continue
 			}
+			// TODO: parallelize — serial sign here is O(N) signer round-trips at scale.
 			isAgg, err := v.isAggregator(ctx, duty.CommitteeLength, duty.AttesterSlot, bytesutil.ToBytes48(duty.PublicKey))
 			if err != nil {
 				return errors.Wrap(err, "could not check if a validator is an aggregator")
