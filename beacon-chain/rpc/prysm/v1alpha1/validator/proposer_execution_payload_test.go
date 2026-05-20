@@ -82,6 +82,7 @@ func TestServer_getExecutionPayload(t *testing.T) {
 		validatorIndx     primitives.ValidatorIndex
 		override          bool
 		wantedOverride    bool
+		nilDB             bool
 	}{
 		{
 			name:          "transition completed, nil payload id",
@@ -137,6 +138,15 @@ func TestServer_getExecutionPayload(t *testing.T) {
 			payloadID:      &pb.PayloadIDBytes{0x1},
 			wantedOverride: true,
 		},
+		{
+			// Regression: ProposerDependentRootOrGenesis failing must not abort
+			// payload preparation — we fall back to default preferences.
+			name:          "dependent root unavailable, falls back to default",
+			st:            transitionSt,
+			payloadID:     &pb.PayloadIDBytes{0x1},
+			validatorIndx: 1,
+			nilDB:         true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -147,11 +157,15 @@ func TestServer_getExecutionPayload(t *testing.T) {
 
 			ed, err := blocks.NewWrappedExecutionData(&pb.ExecutionPayload{})
 			require.NoError(t, err)
+			db := beaconDB
+			if tt.nilDB {
+				db = nil
+			}
 			vs := &Server{
 				ExecutionEngineCaller:    &powtesting.EngineClient{PayloadIDBytes: tt.payloadID, ErrForkchoiceUpdated: tt.forkchoiceErr, GetPayloadResponse: &blocks.GetPayloadResponse{ExecutionData: ed, OverrideBuilder: tt.override}},
 				HeadFetcher:              &chainMock.ChainService{State: tt.st},
 				FinalizationFetcher:      &chainMock.ChainService{},
-				BeaconDB:                 beaconDB,
+				BeaconDB:                 db,
 				PayloadIDCache:           cache.NewPayloadIDCache(),
 				ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
 			}
@@ -448,4 +462,3 @@ func TestServer_getTerminalBlockHashIfExists(t *testing.T) {
 		})
 	}
 }
-

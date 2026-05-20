@@ -3771,10 +3771,11 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	db := dbutil.SetupDB(b)
 	proposerServer := &Server{
-		BeaconDB:                 db,
-		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
-		PayloadIDCache:           cache.NewPayloadIDCache(),
-		TimeFetcher:              &mockChain.ChainService{},
+		BeaconDB:                  db,
+		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		PayloadIDCache:            cache.NewPayloadIDCache(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+		TimeFetcher:               &mockChain.ChainService{},
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)
 	recipients := make([]*structs.FeeRecipient, 0)

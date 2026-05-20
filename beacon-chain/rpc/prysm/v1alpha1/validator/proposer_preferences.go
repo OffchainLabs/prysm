@@ -79,13 +79,10 @@ func (vs *Server) SubmitSignedProposerPreferences(
 				fieldparams.RootLength, len(msg.Message.DependentRoot),
 			)
 		}
-		var dependentRoot [fieldparams.RootLength]byte
-		copy(dependentRoot[:], msg.Message.DependentRoot)
-
 		// Add first; if it's a duplicate, skip gossip so we don't re-broadcast
 		// the same signed pref every slot.
 		added := vs.ProposerPreferencesCache.Add(cache.ProposerPreference{
-			DependentRoot:  dependentRoot,
+			DependentRoot:  bytesutil.ToBytes32(msg.Message.DependentRoot),
 			ValidatorIndex: valIdx,
 			FeeRecipient:   bytesutil.ToBytes20(msg.Message.FeeRecipient),
 			GasLimit:       msg.Message.GasLimit,

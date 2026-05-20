@@ -3322,8 +3322,10 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	db := dbutil.SetupDB(b)
 	ctx := b.Context()
 	proposerServer := &Server{
-		BeaconDB:                 db,
-		ProposerPreferencesCache: cache.NewProposerPreferencesCache(),
+		BeaconDB:                  db,
+		ProposerPreferencesCache:  cache.NewProposerPreferencesCache(),
+		SubscribedValidatorsCache: cache.NewSubscribedValidatorsCache(time.Hour, 15*time.Minute),
+		TimeFetcher:               &mock.ChainService{},
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)
 	recipients := make([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, 0)
