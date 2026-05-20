@@ -2438,7 +2438,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 		require.Equal(t, 1, len(prefs))
 		require.DeepEqual(t, customFeeRecipient[:], prefs[0].Message.FeeRecipient)
-		require.Equal(t, uint64(99000000), prefs[0].Message.TargetGasLimit)
+		require.Equal(t, uint64(42000000), prefs[0].Message.TargetGasLimit)
 
 		// Restore default settings for other subtests.
 		v.proposerSettings = &proposer.Settings{
@@ -2887,7 +2887,7 @@ func TestValidator_buildProposerPreferences_GasLimitSources(t *testing.T) {
 
 			prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 			require.Equal(t, 1, len(prefs))
-			require.Equal(t, tt.wantGasLimit, prefs[0].Message.GasLimit)
+			require.Equal(t, tt.wantGasLimit, prefs[0].Message.TargetGasLimit)
 
 			ps := v.ProposerSettings()
 			if tt.upgradedGasLimit == 0 {
