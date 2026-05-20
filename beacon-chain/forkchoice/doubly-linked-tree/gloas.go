@@ -496,7 +496,7 @@ func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 // GasLimit returns the gas limit of the latest full payload at or before root.
 func (f *ForkChoice) GasLimit(root [32]byte) (uint64, error) {
 	s := f.store
-	if fn, ok := s.fullNodeByRoot[root]; ok {
+	if fn := s.fullNodeByRoot[root]; fn != nil {
 		return fn.gasLimit, nil
 	}
 	en, ok := s.emptyNodeByRoot[root]
