@@ -104,9 +104,9 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name:      "gas limit mismatch",
-			verifier:  mockExecutionPayloadBidVerifier{errGasLimitMismatch: errors.New("wrong gas limit")},
-			result:    pubsub.ValidationReject,
+			name:      "gas limit incompatible",
+			verifier:  mockExecutionPayloadBidVerifier{errGasLimitIncompatible: errors.New("incompatible gas limit")},
+			result:    pubsub.ValidationIgnore,
 			wantError: true,
 		},
 		{
@@ -240,17 +240,17 @@ func TestValidateExecutionPayloadBidGossip_FeeRecipientMismatch(t *testing.T) {
 	require.ErrorIs(t, err, verification.ErrBidFeeRecipientMismatch)
 }
 
-func TestValidateExecutionPayloadBidGossip_GasLimitMismatch(t *testing.T) {
+func TestValidateExecutionPayloadBidGossip_GasLimitIncompatible(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _ := setupExecutionPayloadBidService(t)
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(
-		mockExecutionPayloadBidVerifier{errGasLimitMismatch: verification.ErrBidGasLimitMismatch},
+		mockExecutionPayloadBidVerifier{errGasLimitIncompatible: verification.ErrBidGasLimitIncompatible},
 	)
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NotNil(t, err)
-	require.Equal(t, pubsub.ValidationReject, result)
-	require.ErrorIs(t, err, verification.ErrBidGasLimitMismatch)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.ErrorIs(t, err, verification.ErrBidGasLimitIncompatible)
 }
 
 func TestExecutionPayloadBidSubscriber_WrongMessage(t *testing.T) {
@@ -285,7 +285,7 @@ type mockExecutionPayloadBidVerifier struct {
 	errBuilderActive        error
 	errExecutionPayment     error
 	errFeeRecipientMismatch error
-	errGasLimitMismatch     error
+	errGasLimitIncompatible error
 	errParentBlockRootSeen  error
 	errParentBlockHash      error
 	errBuilderCanCoverBid   error
@@ -310,8 +310,8 @@ func (m *mockExecutionPayloadBidVerifier) VerifyFeeRecipientMatches([]byte) erro
 	return m.errFeeRecipientMismatch
 }
 
-func (m *mockExecutionPayloadBidVerifier) VerifyGasLimitMatches(uint64) error {
-	return m.errGasLimitMismatch
+func (m *mockExecutionPayloadBidVerifier) VerifyGasLimitTargetCompatible(uint64, uint64) error {
+	return m.errGasLimitIncompatible
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockRootSeen(func([32]byte) bool) error {
@@ -375,6 +375,7 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 			[32]byte{0x02}: true,
 		},
 		ForkchoiceBlockHashes: map[[32]byte][32]byte{[32]byte{0x02}: [32]byte{0x01}},
+		ForkchoiceGasLimits:   map[[32]byte]uint64{[32]byte{0x02}: 1},
 	}
 	s := &Service{
 		seenExecutionPayloadBidCache:    newSlotAwareCache(10),
@@ -394,7 +395,7 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 		DependentRoot:  genesisRoot,
 		ValidatorIndex: 0,
 		FeeRecipient:   bytesutil.ToBytes20(signedBid.Message.FeeRecipient),
-		GasLimit:       signedBid.Message.GasLimit,
+		TargetGasLimit: signedBid.Message.GasLimit,
 	}, signedBid.Message.Slot))
 	msg := executionPayloadBidToPubsub(t, s, p, signedBid)
 	return s, msg, signedBid

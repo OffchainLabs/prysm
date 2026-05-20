@@ -97,6 +97,7 @@ type FastGetter interface {
 	PayloadWeights(root [32]byte) (emptyWeight, fullWeight uint64, err error)
 	ParentRoot(root [32]byte) ([32]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
+	GasLimit(root [32]byte) (uint64, error)
 	CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool)
 }
 

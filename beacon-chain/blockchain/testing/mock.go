@@ -86,6 +86,7 @@ type ChainService struct {
 	ParentPayloadReadyVal *bool
 	ForkchoiceRoots       map[[32]byte]bool
 	ForkchoiceBlockHashes map[[32]byte][32]byte
+	ForkchoiceGasLimits   map[[32]byte]uint64
 	// Ancestors lets a test stub the result of Ancestor(root, slot) without
 	// wiring a full forkchoice store. Keyed by the input root.
 	Ancestors map[[32]byte][32]byte
@@ -910,6 +911,16 @@ func (s *ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool
 		return *s.ParentPayloadReadyVal
 	}
 	return true
+}
+
+// GasLimit mocks the execution payload gas limit lookup for a beacon block root.
+func (s *ChainService) GasLimit(root [32]byte) (uint64, error) {
+	if s.ForkchoiceGasLimits != nil {
+		if gasLimit, ok := s.ForkchoiceGasLimits[root]; ok {
+			return gasLimit, nil
+		}
+	}
+	return 0, errors.New("gas limit not found")
 }
 
 // DependentRootForEpoch mocks the same method in the chain service

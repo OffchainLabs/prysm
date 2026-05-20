@@ -75,6 +75,7 @@ type PayloadNode struct {
 	full           bool      // whether this node represents a payload present or not
 	weight         uint64    // weight of this node: the total balance including children
 	balance        uint64    // the balance that voted for this node directly
+	gasLimit       uint64    // execution payload gas limit (only set on full nodes).
 	bestDescendant *Node     // bestDescendant node of this payload node.
 	node           *Node     // the consensus part of this full forkchoice node
 	timestamp      time.Time // The timestamp when the node was inserted.

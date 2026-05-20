@@ -69,6 +69,7 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
 		chainStarted:                    abool.New(),
+		subHandler:                      newSubTopicHandler(),
 		clockWaiter:                     gs,
 		proposerPreferencesCache:        cache.NewProposerPreferencesCache(),
 		highestExecutionPayloadBidCache: cache.NewHighestExecutionPayloadBidCache(),
