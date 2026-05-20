@@ -699,7 +699,7 @@ func PrecomputeProposerIndices(state state.ReadOnlyBeaconState, activeIndices []
 }
 
 func scanActiveValidatorIndices(s state.ReadOnlyBeaconState, epoch primitives.Epoch, seed [32]byte) ([]primitives.ValidatorIndex, error) {
-	v, err, _ := committeeCache.Sf.Do(string(seed[:]), func() (any, error) {
+	v, err, shared := committeeCache.Sf.Do(string(seed[:]), func() (any, error) {
 		var indices []primitives.ValidatorIndex
 
 		if err := s.ReadFromEveryValidator(func(i int, val state.ReadOnlyValidator) error {
@@ -717,6 +717,9 @@ func scanActiveValidatorIndices(s state.ReadOnlyBeaconState, epoch primitives.Ep
 	})
 	if err != nil {
 		return nil, err
+	}
+	if shared {
+		CommitteeCacheInProgressHit.Inc()
 	}
 
 	return v.([]primitives.ValidatorIndex), nil

@@ -19,9 +19,18 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-var errProposerIndexMiss = errors.New("propoposer index not found in cache")
+var (
+	CommitteeCacheInProgressHit = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "committee_cache_in_progress_hit",
+		Help: "The number of committee requests that are present in the cache.",
+	})
+
+	errProposerIndexMiss = errors.New("propoposer index not found in cache")
+)
 
 // IsActiveValidator returns the boolean value on whether the validator
 // is active or not.
