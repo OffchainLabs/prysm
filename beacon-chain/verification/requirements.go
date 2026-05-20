@@ -43,7 +43,7 @@ const (
 	RequireBidBuilderActive
 	RequireBidExecutionPaymentZero
 	RequireBidFeeRecipientMatches
-	RequireBidGasLimitMatches
+	RequireBidGasLimitCompatible
 	RequireBidParentBlockRootSeen
 	RequireBidParentBlockHashValid
 	RequireBidBuilderCanCover
