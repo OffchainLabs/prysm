@@ -64,6 +64,13 @@ type GetDebugDataColumnSidecarsResponse struct {
 	Data                []*DataColumnSidecar `json:"data"`
 }
 
+type GetDebugDataColumnSidecarsResponseGloas struct {
+	Version             string                    `json:"version"`
+	ExecutionOptimistic bool                      `json:"execution_optimistic"`
+	Finalized           bool                      `json:"finalized"`
+	Data                []*DataColumnSidecarGloas `json:"data"`
+}
+
 type DataColumnSidecar struct {
 	Index                        string                   `json:"index"`
 	Column                       []string                 `json:"column"`
@@ -71,4 +78,12 @@ type DataColumnSidecar struct {
 	KzgProofs                    []string                 `json:"kzg_proofs"`
 	SignedBeaconBlockHeader      *SignedBeaconBlockHeader `json:"signed_block_header"`
 	KzgCommitmentsInclusionProof []string                 `json:"kzg_commitments_inclusion_proof"`
+}
+
+type DataColumnSidecarGloas struct {
+	Index           string   `json:"index"`
+	Column          []string `json:"column"`
+	KzgProofs       []string `json:"kzg_proofs"`
+	Slot            string   `json:"slot"`
+	BeaconBlockRoot string   `json:"beacon_block_root"`
 }

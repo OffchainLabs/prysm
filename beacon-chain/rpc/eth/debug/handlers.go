@@ -306,19 +306,32 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := buildDataColumnSidecarsJsonResponse(verifiedDataColumns)
+	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
+	if blk.Version() >= version.Gloas {
+		sidecars, err := buildDataColumnSidecarsJsonResponseGloas(verifiedDataColumns)
+		if err != nil {
+			httputil.HandleError(w, "Could not build data column sidecars response: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteJson(w, &structs.GetDebugDataColumnSidecarsResponseGloas{
+			Version:             version.String(blk.Version()),
+			Data:                sidecars,
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
+		})
+		return
+	}
+	sidecars, err := buildDataColumnSidecarsJsonResponse(verifiedDataColumns)
 	if err != nil {
 		httputil.HandleError(w, "Could not build data column sidecars response: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	resp := &structs.GetDebugDataColumnSidecarsResponse{
+	httputil.WriteJson(w, &structs.GetDebugDataColumnSidecarsResponse{
 		Version:             version.String(blk.Version()),
-		Data:                data,
+		Data:                sidecars,
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
-	}
-	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
-	httputil.WriteJson(w, resp)
+	})
 }
 
 // parseDataColumnIndices filters out invalid and duplicate data column indices
@@ -350,6 +363,32 @@ loop:
 		return nil, fmt.Errorf("requested data column indices %v are invalid", invalidIndices)
 	}
 	return indices, nil
+}
+
+func buildDataColumnSidecarsJsonResponseGloas(verifiedDataColumns []blocks.VerifiedRODataColumn) ([]*structs.DataColumnSidecarGloas, error) {
+	sidecars := make([]*structs.DataColumnSidecarGloas, len(verifiedDataColumns))
+	for i, dc := range verifiedDataColumns {
+		cells := dc.Column()
+		column := make([]string, len(cells))
+		for j, cell := range cells {
+			column[j] = hexutil.Encode(cell)
+		}
+
+		kzgProofs := make([]string, len(dc.KzgProofs()))
+		for j, proof := range dc.KzgProofs() {
+			kzgProofs[j] = hexutil.Encode(proof)
+		}
+
+		blockRoot := dc.BlockRoot()
+		sidecars[i] = &structs.DataColumnSidecarGloas{
+			Index:           strconv.FormatUint(dc.Index(), 10),
+			Column:          column,
+			KzgProofs:       kzgProofs,
+			Slot:            strconv.FormatUint(uint64(dc.Slot()), 10),
+			BeaconBlockRoot: hexutil.Encode(blockRoot[:]),
+		}
+	}
+	return sidecars, nil
 }
 
 func buildDataColumnSidecarsJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) ([]*structs.DataColumnSidecar, error) {
