@@ -166,6 +166,9 @@ func (s *Service) queuePendingPayloadEnvelope(
 	builderIdx := uint64(env.BuilderIndex())
 	isSelfBuild := builderIdx == uint64(params.BeaconConfig().BuilderIndexSelfBuild)
 	root := env.BeaconBlockRoot()
+	if signedEnvelope == nil || signedEnvelope.Message == nil || signedEnvelope.Message.Payload == nil {
+		return pubsub.ValidationIgnore, errNilMessage
+	}
 	s.pendingEnvelopeLock.Lock()
 	defer s.pendingEnvelopeLock.Unlock()
 	inner, rootExists := s.pendingPayloadEnvelopes[root]
@@ -201,7 +204,12 @@ func (s *Service) queuePendingPayloadEnvelope(
 		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
 		s.pendingPayloadEnvelopes[root] = inner
 	} else {
-		for _, existing := range inner {
+		for existingBuilderIdx, existing := range inner {
+			if existing == nil || existing.Message == nil || existing.Message.Payload == nil {
+				delete(inner, existingBuilderIdx)
+				log.Debug("Removed malformed pending payload envelope")
+				continue
+			}
 			if existing.Message.Payload.SlotNumber != signedEnvelope.Message.Payload.SlotNumber {
 				log.Debug("Ignoring payload envelope with mismatched slot")
 				return pubsub.ValidationIgnore, nil

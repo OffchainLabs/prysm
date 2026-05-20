@@ -93,6 +93,10 @@ func (s *Store) applyWeightChangesConsensusNode(ctx context.Context, n *Node) er
 // applyWeightChangesPayloadNode recomputes the weight of the node passed as an argument and all of its descendants,
 // using the current balance stored in each node.
 func (s *Store) applyWeightChangesPayloadNode(ctx context.Context, n *PayloadNode) error {
+	if n == nil {
+		log.Error("tried to apply weight changes to a nil payload node")
+		return nil
+	}
 	// Recursively calling the children to sum their weights.
 	childrenWeight := uint64(0)
 	for _, child := range n.children {

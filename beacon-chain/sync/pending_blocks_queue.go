@@ -143,6 +143,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 				continue
 			}
 			if !s.cfg.chain.ParentPayloadReady(b.Block()) {
+				go s.requestPayloadEnvelope(parentRoot)
 				continue
 			}
 

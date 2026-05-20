@@ -183,9 +183,10 @@ func testSignedEnvelope(t *testing.T, blockRoot [32]byte, slot primitives.Slot, 
 				Transactions:  [][]byte{},
 				Withdrawals:   []*enginev1.Withdrawal{},
 			},
-			ExecutionRequests: &enginev1.ExecutionRequests{},
-			BuilderIndex:      0,
-			BeaconBlockRoot:   blockRoot[:],
+			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			BuilderIndex:          0,
+			BeaconBlockRoot:       blockRoot[:],
+			ParentBeaconBlockRoot: make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
 	}
@@ -219,8 +220,9 @@ func TestGetPayloadEnvelopePrestate_UnknownRoot(t *testing.T) {
 	ctx := t.Context()
 	unknownRoot := bytesutil.ToBytes32([]byte("unknown"))
 	env := &ethpb.ExecutionPayloadEnvelope{
-		BeaconBlockRoot: unknownRoot[:],
-		Payload:         &enginev1.ExecutionPayloadGloas{},
+		BeaconBlockRoot:       unknownRoot[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -240,8 +242,9 @@ func TestGetPayloadEnvelopePrestate_OK(t *testing.T) {
 	insertGloasBlock(t, s, base, blk, blockRoot)
 
 	env := &ethpb.ExecutionPayloadEnvelope{
-		BeaconBlockRoot: blockRoot[:],
-		Payload:         &enginev1.ExecutionPayloadGloas{},
+		BeaconBlockRoot:       blockRoot[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -263,9 +266,10 @@ func TestNotifyNewEnvelope_Valid(t *testing.T) {
 	require.NoError(t, err)
 
 	env := &ethpb.ExecutionPayloadEnvelope{
-		BeaconBlockRoot:   blockRoot[:],
-		Payload:           &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		BeaconBlockRoot:       blockRoot[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
+		ExecutionRequests:     &enginev1.ExecutionRequests{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -290,9 +294,10 @@ func TestNotifyNewEnvelope_Syncing(t *testing.T) {
 	require.NoError(t, err)
 
 	env := &ethpb.ExecutionPayloadEnvelope{
-		BeaconBlockRoot:   blockRoot[:],
-		Payload:           &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		BeaconBlockRoot:       blockRoot[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
+		ExecutionRequests:     &enginev1.ExecutionRequests{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -317,9 +322,10 @@ func TestNotifyNewEnvelope_Invalid(t *testing.T) {
 	require.NoError(t, err)
 
 	env := &ethpb.ExecutionPayloadEnvelope{
-		BeaconBlockRoot:   blockRoot[:],
-		Payload:           &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		BeaconBlockRoot:       blockRoot[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
+		ExecutionRequests:     &enginev1.ExecutionRequests{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -402,9 +408,10 @@ func TestValidateExecutionOnEnvelope_Valid(t *testing.T) {
 	require.NoError(t, err)
 
 	env := &ethpb.ExecutionPayloadEnvelope{
-		BeaconBlockRoot:   blockRoot[:],
-		Payload:           &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:], ParentHash: make([]byte, 32)},
-		ExecutionRequests: &enginev1.ExecutionRequests{},
+		BeaconBlockRoot:       blockRoot[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:], ParentHash: make([]byte, 32)},
+		ExecutionRequests:     &enginev1.ExecutionRequests{},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -427,8 +434,9 @@ func TestPostPayloadTasks_NotHead(t *testing.T) {
 	require.NoError(t, err)
 
 	env := &ethpb.ExecutionPayloadEnvelope{
-		BeaconBlockRoot: root[:],
-		Payload:         &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
+		BeaconBlockRoot:       root[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:]},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)
@@ -456,8 +464,9 @@ func TestPostPayloadTasks_DoesNotMutateHead(t *testing.T) {
 	s.head.state = oldSt
 
 	env := &ethpb.ExecutionPayloadEnvelope{
-		BeaconBlockRoot: root[:],
-		Payload:         &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:], ParentHash: make([]byte, 32)},
+		BeaconBlockRoot:       root[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{BlockHash: blockHash[:], ParentHash: make([]byte, 32)},
 	}
 	envelope, err := blocks.WrappedROExecutionPayloadEnvelope(env)
 	require.NoError(t, err)

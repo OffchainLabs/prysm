@@ -69,6 +69,30 @@ var (
 		Name: "db_beacon_state_saving_milliseconds",
 		Help: "Milliseconds it takes to save a beacon state to the DB",
 	})
+	stateDiffGetAnchorStateCacheHit = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "state_diff_get_anchor_state_cache_hit_total",
+		Help: "The total number of state diff getAnchorState cache hits.",
+	})
+	stateDiffGetAnchorStateCacheMiss = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "state_diff_get_anchor_state_cache_miss_total",
+		Help: "The total number of state diff getAnchorState cache misses.",
+	})
+	stateDiffGetAnchorStateCacheHitReadTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "state_diff_get_anchor_state_cache_hit_read_milliseconds",
+		Help: "Milliseconds it takes to read the anchor state from cache in getAnchorState in case of cache hit.",
+	})
+	stateDiffGetAnchorStateCacheMissTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "state_diff_get_anchor_state_cache_miss_milliseconds",
+		Help: "Milliseconds it takes for state diff anchor's cache to return in case of cache miss.",
+	})
+	stateDiffGetAnchorStateDBReadTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "state_diff_get_anchor_state_db_read_milliseconds",
+		Help: "Milliseconds it takes to read the anchor state from the database in getAnchorState.",
+	})
+	stateDiffAnchorCacheBytes = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "state_diff_anchor_cache_bytes",
+		Help: "The size in bytes of each state diff anchor cache level.",
+	}, []string{"level"})
 )
 
 // BlockCacheSize specifies 1000 slots worth of blocks cached, which

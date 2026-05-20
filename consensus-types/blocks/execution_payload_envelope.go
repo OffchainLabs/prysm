@@ -57,7 +57,13 @@ func (s signedExecutionPayloadEnvelope) IsNil() bool {
 	if len(s.s.Signature) != field_params.BLSSignatureLength {
 		return true
 	}
+	if s.s.Message == nil {
+		return true
+	}
 	if len(s.s.Message.BeaconBlockRoot) != field_params.RootLength {
+		return true
+	}
+	if len(s.s.Message.ParentBeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
 	if s.s.Message.ExecutionRequests == nil {
@@ -91,6 +97,9 @@ func (p *executionPayloadEnvelope) IsNil() bool {
 	if len(p.p.BeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
+	if len(p.p.ParentBeaconBlockRoot) != field_params.RootLength {
+		return true
+	}
 	return false
 }
 
@@ -117,6 +126,11 @@ func (p *executionPayloadEnvelope) BuilderIndex() primitives.BuilderIndex {
 // BeaconBlockRoot returns the beacon block root referenced by the envelope.
 func (p *executionPayloadEnvelope) BeaconBlockRoot() [field_params.RootLength]byte {
 	return [field_params.RootLength]byte(p.p.BeaconBlockRoot)
+}
+
+// ParentBeaconBlockRoot returns the parent beacon block root referenced by the envelope.
+func (p *executionPayloadEnvelope) ParentBeaconBlockRoot() [field_params.RootLength]byte {
+	return [field_params.RootLength]byte(p.p.ParentBeaconBlockRoot)
 }
 
 // Slot returns the slot derived from the payload's slot_number field.
@@ -149,6 +163,9 @@ func (p *blindedExecutionPayloadEnvelope) IsNil() bool {
 	if len(p.p.BeaconBlockRoot) != field_params.RootLength {
 		return true
 	}
+	if len(p.p.ParentBeaconBlockRoot) != field_params.RootLength {
+		return true
+	}
 	if len(p.p.BlockHash) != field_params.RootLength {
 		return true
 	}
@@ -169,6 +186,10 @@ func (p *blindedExecutionPayloadEnvelope) BuilderIndex() primitives.BuilderIndex
 
 func (p *blindedExecutionPayloadEnvelope) BeaconBlockRoot() [field_params.RootLength]byte {
 	return [field_params.RootLength]byte(p.p.BeaconBlockRoot)
+}
+
+func (p *blindedExecutionPayloadEnvelope) ParentBeaconBlockRoot() [field_params.RootLength]byte {
+	return [field_params.RootLength]byte(p.p.ParentBeaconBlockRoot)
 }
 
 func (p *blindedExecutionPayloadEnvelope) Slot() primitives.Slot {
