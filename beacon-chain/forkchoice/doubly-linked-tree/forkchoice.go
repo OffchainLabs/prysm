@@ -472,6 +472,7 @@ func (f *ForkChoice) UpdateFinalizedCheckpoint(fc *forkchoicetypes.Checkpoint) e
 		return errInvalidNilCheckpoint
 	}
 	f.store.finalizedCheckpoint = fc
+	f.store.finalizedPayloadBlockHash = f.store.checkpointPayloadHashForRoot(fc.Root)
 	return nil
 }
 
@@ -581,9 +582,10 @@ func (f *ForkChoice) CachedHeadRoot() [32]byte {
 	return f.store.headNode.root
 }
 
-// FinalizedPayloadBlockHash returns the hash of the payload at the finalized checkpoint
+// FinalizedPayloadBlockHash returns the hash of the payload at the finalized checkpoint.
+// The value is cached by the store because the node that resolves it is pruned at finalization.
 func (f *ForkChoice) FinalizedPayloadBlockHash() [32]byte {
-	return f.store.checkpointPayloadHashForRoot(f.FinalizedCheckpoint().Root)
+	return f.store.finalizedPayloadBlockHash
 }
 
 // JustifiedPayloadBlockHash returns the hash of the payload at the justified checkpoint

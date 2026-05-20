@@ -93,6 +93,10 @@ func (s *Store) applyWeightChangesConsensusNode(ctx context.Context, n *Node) er
 // applyWeightChangesPayloadNode recomputes the weight of the node passed as an argument and all of its descendants,
 // using the current balance stored in each node.
 func (s *Store) applyWeightChangesPayloadNode(ctx context.Context, n *PayloadNode) error {
+	if n == nil {
+		log.Error("tried to apply weight changes to a nil payload node")
+		return nil
+	}
 	// Recursively calling the children to sum their weights.
 	childrenWeight := uint64(0)
 	for _, child := range n.children {
@@ -387,11 +391,16 @@ func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) err
 		// We don't import two payloads for the same root
 		return nil
 	}
+	exec, err := pe.Execution()
+	if err != nil {
+		return errors.Wrap(err, "could not get execution from payload envelope")
+	}
 	fn := &PayloadNode{
 		node:       en.node,
 		optimistic: true,
 		timestamp:  time.Now(),
 		full:       true,
+		gasLimit:   exec.GasLimit(),
 		children:   make([]*Node, 0),
 	}
 	s.fullNodeByRoot[root] = fn
@@ -482,6 +491,23 @@ func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 		return [32]byte{}, errors.Wrap(ErrNilNode, "could not get block hash for root")
 	}
 	return en.node.blockHash, nil
+}
+
+// GasLimit returns the gas limit of the latest full payload at or before root.
+func (f *ForkChoice) GasLimit(root [32]byte) (uint64, error) {
+	s := f.store
+	if fn := s.fullNodeByRoot[root]; fn != nil {
+		return fn.gasLimit, nil
+	}
+	en := s.emptyNodeByRoot[root]
+	if en == nil {
+		return 0, errors.Wrap(ErrNilNode, "could not get gas limit for root")
+	}
+	fp := s.fullParent(en)
+	if fp == nil {
+		return 0, errors.New("no full ancestor with gas limit")
+	}
+	return fp.gasLimit, nil
 }
 
 func (s *Store) shouldApplyProposerBoost() bool {

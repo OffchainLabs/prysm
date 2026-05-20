@@ -102,9 +102,9 @@ type ExecutionPayloadBidVerifier interface {
 	VerifyBuilderActive(state.ReadOnlyBeaconState) error
 	VerifyExecutionPaymentZero() error
 	VerifyFeeRecipientMatches([]byte) error
-	VerifyGasLimitMatches(uint64) error
 	VerifyParentBlockRootSeen(func([32]byte) bool) error
 	VerifyParentBlockHash(func([32]byte) ([32]byte, error)) error
+	VerifyGasLimitTargetCompatible(parentGasLimit, targetGasLimit uint64) error
 	VerifyBuilderCanCoverBid(state.ReadOnlyBeaconState) error
 	VerifySignature(state.ReadOnlyBeaconState) error
 	SatisfyRequirement(Requirement)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -140,10 +141,15 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 	}
 
 	// Check if we have the anchor in cache.
+	startTime := time.Now()
 	anchor = s.stateDiffCache.getAnchor(anchorLvl)
 	if anchor != nil && anchor.Slot() == anchorSlot {
+		stateDiffGetAnchorStateCacheHitReadTime.Observe(float64(time.Since(startTime)) / float64(time.Millisecond))
+		stateDiffGetAnchorStateCacheHit.Inc()
 		return anchor, nil
 	}
+	stateDiffGetAnchorStateCacheMissTime.Observe(float64(time.Since(startTime)) / float64(time.Millisecond))
+	stateDiffGetAnchorStateCacheMiss.Inc()
 	if anchor != nil {
 		log.WithField("level", anchorLvl).
 			WithField("expectedSlot", anchorSlot).
@@ -152,10 +158,12 @@ func (s *Store) getAnchorState(ctx context.Context, offset uint64, lvl int, slot
 	}
 
 	// If not, load it from the database.
+	startTime = time.Now()
 	anchor, err = s.stateByDiff(ctx, anchorSlot)
 	if err != nil {
 		return nil, err
 	}
+	stateDiffGetAnchorStateDBReadTime.Observe(float64(time.Since(startTime)) / float64(time.Millisecond))
 
 	// Save it in the cache.
 	err = s.stateDiffCache.setAnchor(anchorLvl, anchor)

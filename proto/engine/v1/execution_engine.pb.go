@@ -1657,6 +1657,7 @@ type PayloadAttributesV4 struct {
 	Withdrawals           []*Withdrawal          `protobuf:"bytes,4,rep,name=withdrawals,proto3" json:"withdrawals,omitempty" ssz-max:"16"`
 	ParentBeaconBlockRoot []byte                 `protobuf:"bytes,5,opt,name=parent_beacon_block_root,json=parentBeaconBlockRoot,proto3" json:"parent_beacon_block_root,omitempty" ssz-size:"32"`
 	SlotNumber            uint64                 `protobuf:"varint,6,opt,name=slot_number,json=slotNumber,proto3" json:"slot_number,omitempty"`
+	TargetGasLimit        uint64                 `protobuf:"varint,7,opt,name=target_gas_limit,json=targetGasLimit,proto3" json:"target_gas_limit,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -1729,6 +1730,13 @@ func (x *PayloadAttributesV4) GetParentBeaconBlockRoot() []byte {
 func (x *PayloadAttributesV4) GetSlotNumber() uint64 {
 	if x != nil {
 		return x.SlotNumber
+	}
+	return 0
+}
+
+func (x *PayloadAttributesV4) GetTargetGasLimit() uint64 {
+	if x != nil {
+		return x.TargetGasLimit
 	}
 	return 0
 }

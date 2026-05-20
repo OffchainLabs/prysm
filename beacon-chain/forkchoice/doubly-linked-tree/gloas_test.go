@@ -450,7 +450,7 @@ func TestGloasHeadComputation(t *testing.T) {
 	assert.Equal(t, uint64(0), fullA.weight)  // the parent does not inherit proposer boost
 	assert.Equal(t, uint64(0), fullA.balance)
 	assert.Equal(t, uint64(0), fullA.node.balance)
-	assert.Equal(t, uint64(0), emptyA.weight)     // neither does the empty block of A
+	assert.Equal(t, uint64(0), emptyA.weight) // neither does the empty block of A
 	assert.Equal(t, uint64(8), fullA.node.weight)
 
 	// Process an attestation for rootA at slotB, voting empty (payloadStatus=false).
@@ -1632,4 +1632,96 @@ func TestLatestCanonicalHashForRoot_SameParentReorg(t *testing.T) {
 	got := f.UnrealizedJustifiedPayloadBlockHash()
 	require.NotEqual(t, blockHashA, got, "should NOT return A's reorged-out payload hash")
 	require.Equal(t, zeroHash, got, "should return the common EL ancestor hash (genesis)")
+}
+
+// Regression test for the prune fix that removes children of the full
+// finalized node with slot <= checkpointMaxSlot. Without the fix, a child
+// built on the full payload of the finalized block survives in
+// fullNodeByRoot/emptyNodeByRoot and can later trigger a panic.
+func TestStore_Prune_IncompatibleFullFinalizedChildren(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	// Block A at slot 30 (epoch 0), child of genesis.
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 30, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	// Insert payload for A so fullNodeByRoot[A] exists.
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// Block C at slot 31 builds on full A.
+	rootC := indexToHash(2)
+	blockHashC := indexToHash(101)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 31, rootC, rootA, blockHashC, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	s := f.store
+	fullA := s.fullNodeByRoot[rootA]
+	require.NotNil(t, fullA)
+	require.Equal(t, 1, len(fullA.children))
+	require.Equal(t, rootC, fullA.children[0].root)
+	require.NotNil(t, s.emptyNodeByRoot[rootC])
+
+	// Finalize A in epoch 1: checkpointMaxSlot = 32, so C (slot 31) is incompatible.
+	s.finalizedCheckpoint.Root = rootA
+	s.finalizedCheckpoint.Epoch = 1
+	require.NoError(t, s.prune(ctx))
+
+	_, emptyOk := s.emptyNodeByRoot[rootC]
+	require.Equal(t, false, emptyOk)
+	_, fullOk := s.fullNodeByRoot[rootC]
+	require.Equal(t, false, fullOk)
+}
+
+func TestGasLimit_UnknownRootErrors(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	_, err := f.GasLimit(indexToHash(999))
+	require.ErrorContains(t, ErrNilNode.Error(), err)
+}
+
+func TestGasLimit_GloasEmptyNodeWalksToFullAncestor(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	const gl = uint64(42_000_000)
+	env := &ethpb.ExecutionPayloadEnvelope{
+		BeaconBlockRoot:       rootA[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{GasLimit: gl},
+	}
+	pe, err := blocks.WrappedROExecutionPayloadEnvelope(env)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// Child B builds on full A (matching parent hash) — gas limit lookup walks to full ancestor A.
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	// B has no full node — GasLimit should walk to A's full ancestor.
+	_, hasFullB := f.store.fullNodeByRoot[rootB]
+	require.Equal(t, false, hasFullB)
+
+	got, err := f.GasLimit(rootB)
+	require.NoError(t, err)
+	assert.Equal(t, gl, got)
+
+	// Direct full lookup on A also returns gl.
+	got, err = f.GasLimit(rootA)
+	require.NoError(t, err)
+	assert.Equal(t, gl, got)
 }

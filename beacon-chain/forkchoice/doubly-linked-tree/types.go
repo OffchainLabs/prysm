@@ -34,6 +34,7 @@ type Store struct {
 	previousProposerBoostRoot     [fieldparams.RootLength]byte                  // previous block root that was boosted after being received in a timely manner.
 	previousProposerBoostScore    uint64                                        // previous proposer boosted root score.
 	finalizedDependentRoot        [fieldparams.RootLength]byte                  // dependent root at finalized checkpoint.
+	finalizedPayloadBlockHash     [fieldparams.RootLength]byte                  // cached payload hash at the finalized checkpoint. Refreshed before pruning at finalization since the node it resolves from is removed by prune.
 	committeeWeight               uint64                                        // tracks the total active validator balance divided by the number of slots per Epoch.
 	treeRootNode                  *Node                                         // the root node of the store tree.
 	headNode                      *Node                                         // last head Node
@@ -72,6 +73,7 @@ type PayloadNode struct {
 	full           bool      // whether this node represents a payload present or not
 	weight         uint64    // weight of this node: the total balance including children
 	balance        uint64    // the balance that voted for this node directly
+	gasLimit       uint64    // execution payload gas limit (only set on full nodes).
 	bestDescendant *Node     // bestDescendant node of this payload node.
 	node           *Node     // the consensus part of this full forkchoice node
 	timestamp      time.Time // The timestamp when the node was inserted.
