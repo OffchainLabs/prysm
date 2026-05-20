@@ -162,6 +162,8 @@ type Service struct {
 	seenDataColumnCache                  *slotAwareCache
 	pendingGloasColumnsLock              sync.RWMutex
 	pendingGloasColumns                  map[[32]byte]*pendingGloasEntry
+	pendingGloasPeerColumnCounts         map[peer.ID]int
+	pendingGloasPeerRootCounts           map[peer.ID]int
 	seenAggregatedAttestationLock        sync.RWMutex
 	seenAggregatedAttestationCache       *lru.Cache
 	seenUnAggregatedAttestationLock      sync.RWMutex
@@ -215,19 +217,21 @@ type Service struct {
 func NewService(ctx context.Context, opts ...Option) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
-		ctx:                      ctx,
-		cancel:                   cancel,
-		chainStarted:             abool.New(),
-		cfg:                      &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
-		slotToPendingBlocks:      gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
-		seenPendingBlocks:        make(map[[32]byte]bool),
-		blkRootToPendingAtts:     make(map[[32]byte][]any),
-		pendingGloasColumns:      make(map[[32]byte]*pendingGloasEntry),
-		dataColumnLogCh:          make(chan dataColumnLogEntry, 1000),
-		reconstructionRandGen:    rand.NewGenerator(),
-		payloadAttestationCache:  &cache.PayloadAttestationCache{},
-		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
-		pendingPayloadEnvelopes:  make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		ctx:                          ctx,
+		cancel:                       cancel,
+		chainStarted:                 abool.New(),
+		cfg:                          &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
+		slotToPendingBlocks:          gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
+		seenPendingBlocks:            make(map[[32]byte]bool),
+		blkRootToPendingAtts:         make(map[[32]byte][]any),
+		pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+		pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+		pendingGloasPeerRootCounts:   make(map[peer.ID]int),
+		dataColumnLogCh:              make(chan dataColumnLogEntry, 1000),
+		reconstructionRandGen:        rand.NewGenerator(),
+		payloadAttestationCache:      &cache.PayloadAttestationCache{},
+		proposerPreferencesCache:     cache.NewProposerPreferencesCache(),
+		pendingPayloadEnvelopes:      make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
 	}
 
 	for _, opt := range opts {

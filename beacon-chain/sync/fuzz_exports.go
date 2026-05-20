@@ -16,13 +16,15 @@ import (
 func NewRegularSyncFuzz(opts ...Option) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Service{
-		cfg:                  &config{},
-		ctx:                  ctx,
-		cancel:               cancel,
-		slotToPendingBlocks:  gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:    make(map[[32]byte]bool),
-		blkRootToPendingAtts: make(map[[32]byte][]any),
-		pendingGloasColumns:  make(map[[32]byte]*pendingGloasEntry),
+		cfg:                          &config{},
+		ctx:                          ctx,
+		cancel:                       cancel,
+		slotToPendingBlocks:          gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:            make(map[[32]byte]bool),
+		blkRootToPendingAtts:         make(map[[32]byte][]any),
+		pendingGloasColumns:          make(map[[32]byte]*pendingGloasEntry),
+		pendingGloasPeerColumnCounts: make(map[peer.ID]int),
+		pendingGloasPeerRootCounts:   make(map[peer.ID]int),
 	}
 	r.rateLimiter = newRateLimiter(r.cfg.p2p)
 
