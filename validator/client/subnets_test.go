@@ -115,7 +115,7 @@ func TestSubscribeToSubnets_AggregatorEvaluatedPerValidator(t *testing.T) {
 // pickDistinguishingProofs returns two stub selection proofs that map to opposite isAggregator outcomes.
 func pickDistinguishingProofs(t *testing.T, modulo uint64) (agg, notAgg []byte) {
 	t.Helper()
-	for i := 0; i < 256; i++ {
+	for i := range 256 {
 		sig := []byte{byte(i)}
 		h := hash.Hash(sig)
 		isAgg := binary.LittleEndian.Uint64(h[:8])%modulo == 0
