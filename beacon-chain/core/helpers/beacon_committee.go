@@ -744,18 +744,14 @@ func fillCommitteeCacheAsync(seed [32]byte, indices []primitives.ValidatorIndex)
 		}
 
 		// UnshuffleList sorts in place.
-		// Copy so we never touch the caller's slice.
-		working := make([]primitives.ValidatorIndex, len(indices))
-		copy(working, indices)
-
-		shuffled, err := UnshuffleList(working, seed)
+		// Clone so we never touch the caller's slice.
+		shuffled, err := UnshuffleList(slices.Clone(indices), seed)
 		if err != nil {
 			log.WithError(err).Error("Could not shuffle indices for committee cache update")
 			return
 		}
 
-		sorted := make([]primitives.ValidatorIndex, len(shuffled))
-		copy(sorted, shuffled)
+		sorted := slices.Clone(shuffled)
 		slices.Sort(sorted)
 
 		ctx, cancel := context.WithTimeout(context.Background(), committeeCacheWriteTimeout)
