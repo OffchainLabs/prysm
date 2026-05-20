@@ -819,6 +819,7 @@ func TestDataColumnSidecars(t *testing.T) {
 
 		config := params.BeaconConfig().Copy()
 		config.FuluForkEpoch = 0
+		config.GloasForkEpoch = 0
 		params.OverrideBeaconConfig(config)
 
 		signedGloasBlock := util.NewBeaconBlockGloas()
