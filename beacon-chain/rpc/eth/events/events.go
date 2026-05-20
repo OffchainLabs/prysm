@@ -903,7 +903,7 @@ func marshalAttributes(attr payloadattribute.Attributer) ([]byte, error) {
 		return json.Marshal(&structs.PayloadAttributesV1{
 			Timestamp:             timestamp,
 			PrevRandao:            prevRandao,
-			SuggestedFeeRecipient: feeRecpt[:],
+			SuggestedFeeRecipient: feeRecpt,
 		})
 	}
 	w, err := attr.Withdrawals()
@@ -915,7 +915,7 @@ func marshalAttributes(attr payloadattribute.Attributer) ([]byte, error) {
 		return json.Marshal(&structs.PayloadAttributesV2{
 			Timestamp:             timestamp,
 			PrevRandao:            prevRandao,
-			SuggestedFeeRecipient: feeRecpt[:],
+			SuggestedFeeRecipient: feeRecpt,
 			Withdrawals:           withdrawals,
 		})
 	}
@@ -926,7 +926,7 @@ func marshalAttributes(attr payloadattribute.Attributer) ([]byte, error) {
 	return json.Marshal(&structs.PayloadAttributesV3{
 		Timestamp:             timestamp,
 		PrevRandao:            prevRandao,
-		SuggestedFeeRecipient: feeRecpt[:],
+		SuggestedFeeRecipient: feeRecpt,
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: hexutil.Encode(parentRoot),
 	})
