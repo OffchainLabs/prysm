@@ -118,7 +118,6 @@ func (s *Store) insert(ctx context.Context,
 		finalizedEpoch:              finalizedEpoch,
 		unrealizedFinalizedEpoch:    finalizedEpoch,
 		blockHash:                   *blockHash,
-		gasLimit:                    gasLimit,
 		payloadAvailabilityVote:     bitfield.NewBitvector512(),
 		payloadDataAvailabilityVote: bitfield.NewBitvector512(),
 	}
@@ -153,6 +152,7 @@ func (s *Store) insert(ctx context.Context,
 			optimistic: true,
 			timestamp:  time.Now(),
 			full:       true,
+			gasLimit:   gasLimit,
 		}
 		ret = fn
 		s.fullNodeByRoot[root] = fn

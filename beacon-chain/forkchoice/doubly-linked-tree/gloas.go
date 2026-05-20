@@ -395,12 +395,12 @@ func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) err
 	if err != nil {
 		return errors.Wrap(err, "could not get execution from payload envelope")
 	}
-	en.node.gasLimit = exec.GasLimit()
 	fn := &PayloadNode{
 		node:       en.node,
 		optimistic: true,
 		timestamp:  time.Now(),
 		full:       true,
+		gasLimit:   exec.GasLimit(),
 		children:   make([]*Node, 0),
 	}
 	s.fullNodeByRoot[root] = fn
@@ -497,7 +497,7 @@ func (f *ForkChoice) BlockHash(root [32]byte) ([32]byte, error) {
 func (f *ForkChoice) GasLimit(root [32]byte) (uint64, error) {
 	s := f.store
 	if fn, ok := s.fullNodeByRoot[root]; ok {
-		return fn.node.gasLimit, nil
+		return fn.gasLimit, nil
 	}
 	en, ok := s.emptyNodeByRoot[root]
 	if !ok || en == nil {
@@ -507,7 +507,7 @@ func (f *ForkChoice) GasLimit(root [32]byte) (uint64, error) {
 	if fp == nil {
 		return 0, errors.New("no full ancestor with gas limit")
 	}
-	return fp.node.gasLimit, nil
+	return fp.gasLimit, nil
 }
 
 func (s *Store) shouldApplyProposerBoost() bool {
