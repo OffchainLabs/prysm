@@ -15,6 +15,7 @@ import (
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
+	mockstategen "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -323,4 +324,108 @@ func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
 
 	s.PublishExecutionPayloadEnvelope(w, req)
 	require.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	signed := testSignedEnvelope()
+	envRoot := bytesutil.ToBytes32(signed.Message.BeaconBlockRoot)
+	envSlot := primitives.Slot(signed.Message.Payload.SlotNumber)
+	jsonEnvelope, err := structs.SignedExecutionPayloadEnvelopeFromConsensus(signed)
+	require.NoError(t, err)
+	body, err := json.Marshal(jsonEnvelope)
+	require.NoError(t, err)
+
+	// State that fails gloas.VerifyExecutionPayloadEnvelope (slot mismatch is
+	// enough). Lets us exercise the consensus path and assert it actually runs.
+	failingState, err := util.NewBeaconStateGloas()
+	require.NoError(t, err)
+
+	cases := []struct {
+		name           string
+		query          string
+		highestRoot    [32]byte
+		highestSlot    primitives.Slot
+		addState       bool
+		expectPublish  bool
+		expectedStatus int
+		expectedBody   string
+	}{
+		{name: "default (gossip)", query: "", expectPublish: true, expectedStatus: http.StatusOK},
+		{name: "explicit gossip", query: "?broadcast_validation=gossip", expectPublish: true, expectedStatus: http.StatusOK},
+		{
+			name:           "consensus state missing",
+			query:          "?broadcast_validation=consensus",
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   "could not get state for envelope beacon block root",
+		},
+		{
+			name:           "consensus verification fails",
+			query:          "?broadcast_validation=consensus",
+			addState:       true,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   "consensus validation failed",
+		},
+		{
+			name:           "consensus_and_equivocation equivocation detected",
+			query:          "?broadcast_validation=consensus_and_equivocation",
+			highestRoot:    bytesutil.ToBytes32(bytesutil.PadTo([]byte("other-root"), 32)),
+			highestSlot:    envSlot,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   "block is equivocated",
+		},
+		{
+			name:           "consensus_and_equivocation no equivocation runs consensus check",
+			query:          "?broadcast_validation=consensus_and_equivocation",
+			highestRoot:    envRoot,
+			highestSlot:    envSlot,
+			addState:       true,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   "consensus validation failed",
+		},
+		{
+			name:           "invalid value",
+			query:          "?broadcast_validation=bogus",
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   "invalid broadcast_validation value",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+			if tc.expectPublish {
+				v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+					gomock.Any(), gomock.Any(),
+				).Return(&emptypb.Empty{}, nil)
+			}
+
+			stateGen := mockstategen.NewService()
+			if tc.addState {
+				stateGen.AddStateForRoot(failingState, envRoot)
+			}
+			s := &Server{
+				V1Alpha1ValidatorServer: v1alpha1Server,
+				ForkchoiceFetcher: &chainMock.ChainService{
+					BlockSlot: tc.highestSlot,
+					Root:      tc.highestRoot[:],
+				},
+				StateGenService: stateGen,
+			}
+			req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope"+tc.query, bytes.NewReader(body))
+			w := httptest.NewRecorder()
+			w.Body = &bytes.Buffer{}
+
+			s.PublishExecutionPayloadEnvelope(w, req)
+			require.Equal(t, tc.expectedStatus, w.Code)
+			if tc.expectedBody != "" {
+				assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte(tc.expectedBody)))
+			}
+		})
+	}
 }

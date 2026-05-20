@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
@@ -112,7 +113,7 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 		return
 	}
 	if _, isContents := probe["signed_execution_payload_envelope"]; isContents {
-		s.publishExecutionPayloadEnvelopeContents(ctx, w, body)
+		s.publishExecutionPayloadEnvelopeContents(ctx, w, r, body)
 		return
 	}
 
@@ -125,6 +126,11 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 	consensus, err := jsonEnvelope.ToConsensus()
 	if err != nil {
 		httputil.HandleError(w, "invalid signed execution payload envelope: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := s.validateEnvelopeBroadcast(ctx, r, consensus); err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -148,7 +154,7 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 // publishExecutionPayloadEnvelopeContents handles the stateless variant:
 // verifies caller-supplied blobs/proofs, broadcasts derived sidecars, then
 // delegates the envelope to the bare publish path.
-func (s *Server) publishExecutionPayloadEnvelopeContents(ctx context.Context, w http.ResponseWriter, body []byte) {
+func (s *Server) publishExecutionPayloadEnvelopeContents(ctx context.Context, w http.ResponseWriter, r *http.Request, body []byte) {
 	var contents structs.SignedExecutionPayloadEnvelopeContents
 	if err := json.Unmarshal(body, &contents); err != nil {
 		httputil.HandleError(w, "could not decode envelope contents: "+err.Error(), http.StatusBadRequest)
@@ -157,6 +163,11 @@ func (s *Server) publishExecutionPayloadEnvelopeContents(ctx context.Context, w 
 	signed, kzgProofs, blobs, err := contents.ToConsensus()
 	if err != nil {
 		httputil.HandleError(w, "invalid signed execution payload envelope contents: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := s.validateEnvelopeBroadcast(ctx, r, signed); err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -205,6 +216,50 @@ func (s *Server) publishExecutionPayloadEnvelopeContents(ctx context.Context, w 
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+// validateEnvelopeBroadcast applies broadcast_validation semantics to an
+// envelope publish before it is broadcast to gossip. Spec: beacon-APIs #580.
+//   - gossip (default): no extra checks.
+//   - consensus: run full envelope consensus checks (signature + payload
+//     consistency against the pre-state at envelope.beacon_block_root).
+//   - consensus_and_equivocation: consensus + reject if a different beacon
+//     block at the envelope's slot has already been received.
+func (s *Server) validateEnvelopeBroadcast(ctx context.Context, r *http.Request, signed *eth.SignedExecutionPayloadEnvelope) error {
+	level := r.URL.Query().Get(broadcastValidationQueryParam)
+	switch level {
+	case "", broadcastValidationGossip:
+		return nil
+	case broadcastValidationConsensus, broadcastValidationConsensusAndEquivocation:
+	default:
+		return errors.Errorf("invalid %s value: %q", broadcastValidationQueryParam, level)
+	}
+
+	envSlot := primitives.Slot(signed.Message.Payload.SlotNumber)
+	envRoot := bytesutil.ToBytes32(signed.Message.BeaconBlockRoot)
+
+	if level == broadcastValidationConsensusAndEquivocation {
+		if s.ForkchoiceFetcher.HighestReceivedBlockSlot() == envSlot &&
+			s.ForkchoiceFetcher.HighestReceivedBlockRoot() != envRoot {
+			return errors.Wrapf(errEquivocatedBlock, "another block for slot %d already exists in fork choice", envSlot)
+		}
+	}
+
+	st, err := s.StateGenService.StateByRoot(ctx, envRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not get state for envelope beacon block root")
+	}
+	if st == nil || st.IsNil() {
+		return errors.Errorf("could not get state for envelope beacon block root %#x", envRoot)
+	}
+	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(signed)
+	if err != nil {
+		return errors.Wrap(err, "could not wrap signed envelope")
+	}
+	if err := gloas.VerifyExecutionPayloadEnvelope(ctx, st, roSigned); err != nil {
+		return errors.Wrap(err, "consensus validation failed")
+	}
+	return nil
 }
 
 // verifyCellProofs batch-verifies cell proofs against commitments derived
