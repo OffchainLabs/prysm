@@ -12,6 +12,8 @@ import (
 var (
 	rootA = [32]byte{0xaa}
 	rootB = [32]byte{0xbb}
+	feeA  = primitives.ExecutionAddress{1}
+	feeB  = primitives.ExecutionAddress{2}
 )
 
 func TestProposerPreferencesCache_AddGetHas(t *testing.T) {
@@ -97,7 +99,7 @@ func TestProposerPreferencesCache_SetAndDefault(t *testing.T) {
 	pref := ProposerPreference{
 		ValidatorIndex: 9,
 		FeeRecipient:   primitives.ExecutionAddress{0xde, 0xad},
-		GasLimit:       30_000_000,
+		TargetGasLimit: 30_000_000,
 	}
 
 	_, ok := c.Default(9)
@@ -107,19 +109,19 @@ func TestProposerPreferencesCache_SetAndDefault(t *testing.T) {
 	got, ok := c.Default(9)
 	require.Equal(t, true, ok)
 	require.Equal(t, pref.ValidatorIndex, got.ValidatorIndex)
-	require.Equal(t, pref.GasLimit, got.GasLimit)
+	require.Equal(t, pref.TargetGasLimit, got.TargetGasLimit)
 	require.DeepEqual(t, pref.FeeRecipient, got.FeeRecipient)
 }
 
 func TestProposerPreferencesCache_SetOverwrites(t *testing.T) {
 	c := NewProposerPreferencesCache()
-	c.Set(ProposerPreference{ValidatorIndex: 4, FeeRecipient: primitives.ExecutionAddress{1}, GasLimit: 10})
-	c.Set(ProposerPreference{ValidatorIndex: 4, FeeRecipient: primitives.ExecutionAddress{2}, GasLimit: 20})
+	c.Set(ProposerPreference{ValidatorIndex: 4, FeeRecipient: primitives.ExecutionAddress{1}, TargetGasLimit: 10})
+	c.Set(ProposerPreference{ValidatorIndex: 4, FeeRecipient: primitives.ExecutionAddress{2}, TargetGasLimit: 20})
 
 	got, ok := c.Default(4)
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, primitives.ExecutionAddress{2}, got.FeeRecipient)
-	require.Equal(t, uint64(20), got.GasLimit)
+	require.Equal(t, uint64(20), got.TargetGasLimit)
 }
 
 func TestProposerPreferencesCache_BestFor(t *testing.T) {
@@ -200,7 +202,7 @@ func TestProposerPreference_GasLimitOrDefault(t *testing.T) {
 	})
 
 	t.Run("non-zero gas limit returned as-is", func(t *testing.T) {
-		val := &ProposerPreference{ValidatorIndex: 1, GasLimit: 42}
+		val := &ProposerPreference{ValidatorIndex: 1, TargetGasLimit: 42}
 		require.Equal(t, uint64(42), val.GasLimitOrDefault())
 	})
 }

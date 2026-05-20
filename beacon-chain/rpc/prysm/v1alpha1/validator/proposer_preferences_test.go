@@ -155,7 +155,7 @@ func TestSubmitSignedProposerPreferences_DuplicateBroadcasts(t *testing.T) {
 	assert.Equal(t, true, p2p.BroadcastCalled.Load())
 	pref, ok := c.Get([32]byte{0xcc}, proposalSlot)
 	require.Equal(t, true, ok)
-	require.Equal(t, uint64(30_000_000), pref.GasLimit)
+	require.Equal(t, uint64(30_000_000), pref.TargetGasLimit)
 }
 
 func TestSubmitSignedProposerPreferences_InvalidEpoch(t *testing.T) {

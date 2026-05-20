@@ -37,14 +37,14 @@ func (p *ProposerPreference) FeeRecipientOrDefault() primitives.ExecutionAddress
 	return p.FeeRecipient
 }
 
-// GasLimitOrDefault returns the preference's GasLimit, substituting
+// GasLimitOrDefault returns the preference's TargetGasLimit, substituting
 // DefaultBuilderGasLimit when zero so payload attributes never advertise a
 // zero target to the EL.
 func (p *ProposerPreference) GasLimitOrDefault() uint64 {
-	if p.GasLimit == 0 {
+	if p.TargetGasLimit == 0 {
 		return params.BeaconConfig().DefaultBuilderGasLimit
 	}
-	return p.GasLimit
+	return p.TargetGasLimit
 }
 
 // ProposerPreferencesCache holds two stores with different lookup keys:
