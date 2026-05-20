@@ -27,10 +27,16 @@ func ProcessAttestationsNoVerifySignature(
 	beaconState state.BeaconState,
 	b interfaces.ReadOnlyBeaconBlock,
 ) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "blocks.ProcessAttestationsNoVerifySignature")
+	defer span.End()
+
 	if b == nil || b.IsNil() {
 		return nil, blocks.ErrNilBeaconBlock
 	}
+
 	body := b.Body()
+	span.SetAttributes(trace.Int64Attribute("count", int64(len(body.Attestations()))))
+
 	var err error
 	for idx, att := range body.Attestations() {
 		beaconState, err = ProcessAttestationNoVerifySignature(ctx, beaconState, att)

@@ -68,7 +68,7 @@ func genesisBeaconStateFulu(ctx context.Context, deposits []*ethpb.Deposit, gene
 		return nil, errors.Wrap(err, "could not process validator deposits")
 	}
 
-	return buildGenesisBeaconStateFulu(genesisTime, st, st.Eth1Data())
+	return buildGenesisBeaconStateFulu(ctx, genesisTime, st, st.Eth1Data())
 }
 
 // emptyGenesisStateFulu returns an empty genesis state in Fulu format.
@@ -109,7 +109,7 @@ func emptyGenesisStateFulu() (state.BeaconState, error) {
 	return state_native.InitializeFromProtoUnsafeFulu(st)
 }
 
-func buildGenesisBeaconStateFulu(genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data) (state.BeaconState, error) {
+func buildGenesisBeaconStateFulu(ctx context.Context, genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data) (state.BeaconState, error) {
 	if eth1Data == nil {
 		return nil, errors.New("no eth1data provided for genesis state")
 	}
@@ -158,7 +158,7 @@ func buildGenesisBeaconStateFulu(genesisTime uint64, preState state.BeaconState,
 	if err != nil {
 		return nil, err
 	}
-	tab, err := helpers.TotalActiveBalance(preState)
+	tab, err := helpers.TotalActiveBalance(ctx, preState)
 	if err != nil {
 		return nil, err
 	}

@@ -206,13 +206,13 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 //	            penalty_numerator = validator.effective_balance // increment * adjusted_total_slashing_balance
 //	            penalty = penalty_numerator // total_balance * increment
 //	            decrease_balance(state, ValidatorIndex(index), penalty)
-func ProcessSlashings(st state.BeaconState) error {
+func ProcessSlashings(ctx context.Context, st state.BeaconState) error {
 	slashingMultiplier, err := st.ProportionalSlashingMultiplier()
 	if err != nil {
 		return errors.Wrap(err, "could not get proportional slashing multiplier")
 	}
 	currentEpoch := time.CurrentEpoch(st)
-	totalBalance, err := helpers.TotalActiveBalance(st)
+	totalBalance, err := helpers.TotalActiveBalance(ctx, st)
 	if err != nil {
 		return errors.Wrap(err, "could not get total active balance")
 	}

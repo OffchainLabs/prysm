@@ -3,6 +3,7 @@ package kv
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/genesis"
@@ -47,4 +48,38 @@ func TestSaveOrigin(t *testing.T) {
 	broot, err := scb.Block().HashTreeRoot()
 	require.NoError(t, err)
 	require.Equal(t, true, db.IsFinalizedBlock(ctx, broot))
+}
+
+func TestSaveOrigin_StateDiffNonEpochBoundarySlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.OverrideBeaconConfig(params.MainnetConfig())
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+	defer resetCfg()
+	setDefaultStateDiffExponents()
+
+	ctx := t.Context()
+	db := setupDB(t)
+
+	require.NoError(t, genesis.Initialize(ctx, t.TempDir()))
+
+	st, err := genesis.State()
+	require.NoError(t, err)
+
+	sb, err := st.MarshalSSZ()
+	require.NoError(t, err)
+	require.NoError(t, db.LoadGenesis(ctx, sb))
+	require.NoError(t, db.EnsureEmbeddedGenesis(ctx))
+
+	cst, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, cst.SetSlot(31))
+	csb, err := cst.MarshalSSZ()
+	require.NoError(t, err)
+	cb := util.NewBeaconBlock()
+	cb.Block.Slot = 31
+	scb, err := blocks.NewSignedBeaconBlock(cb)
+	require.NoError(t, err)
+	cbb, err := scb.MarshalSSZ()
+	require.NoError(t, err)
+	require.ErrorContains(t, "non epoch boundary offset", db.SaveOrigin(ctx, csb, cbb))
 }
