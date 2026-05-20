@@ -326,6 +326,90 @@ func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
+func TestPublishExecutionPayloadEnvelope_SSZ(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctrl := gomock.NewController(t)
+	signed := testSignedEnvelope()
+
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+		gomock.Any(), gomock.Any(),
+	).Return(&emptypb.Empty{}, nil)
+
+	sszBody, err := signed.MarshalSSZ()
+	require.NoError(t, err)
+
+	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(sszBody))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestPublishExecutionPayloadEnvelope_SSZ_InvalidBody(t *testing.T) {
+	cases := []struct {
+		name     string
+		body     []byte
+		contains string // expected substring identifies which decoder fired
+	}{
+		// No Contents prefix → falls through to envelope decoder.
+		{name: "too short", body: []byte{0x00, 0x01, 0x02}, contains: "could not decode SSZ envelope:"},
+		{name: "no prefix match", body: []byte{0x05, 0x00, 0x00, 0x00, 0x00, 0x00}, contains: "could not decode SSZ envelope:"},
+		{name: "envelope lead offset but truncated", body: []byte{0x64, 0x00, 0x00, 0x00}, contains: "could not decode SSZ envelope:"},
+		// Contents prefix matches → contents decoder fires and reports specifically.
+		{name: "contents lead offset but truncated", body: []byte{0x0c, 0x00, 0x00, 0x00}, contains: "could not decode SSZ envelope contents:"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &Server{}
+			req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/octet-stream")
+			w := httptest.NewRecorder()
+			w.Body = &bytes.Buffer{}
+
+			s.PublishExecutionPayloadEnvelope(w, req)
+			require.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte(tc.contains)))
+		})
+	}
+}
+
+func TestPublishExecutionPayloadEnvelope_SSZ_Contents(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctrl := gomock.NewController(t)
+	signed := testSignedEnvelope()
+	contents := &ethpb.SignedExecutionPayloadEnvelopeContents{
+		SignedExecutionPayloadEnvelope: signed,
+	}
+	sszBody, err := contents.MarshalSSZ()
+	require.NoError(t, err)
+
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+		gomock.Any(), gomock.Any(),
+	).Return(&emptypb.Empty{}, nil)
+
+	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(sszBody))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()

@@ -3533,6 +3533,215 @@ func (b *BeaconBlockContentsGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 	return
 }
 
+// MarshalSSZ ssz marshals the SignedExecutionPayloadEnvelopeContents object
+func (s *SignedExecutionPayloadEnvelopeContents) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedExecutionPayloadEnvelopeContents object to a target array
+func (s *SignedExecutionPayloadEnvelopeContents) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(12)
+
+	// Offset (0) 'SignedExecutionPayloadEnvelope'
+	dst = ssz.WriteOffset(dst, offset)
+	if s.SignedExecutionPayloadEnvelope == nil {
+		s.SignedExecutionPayloadEnvelope = new(SignedExecutionPayloadEnvelope)
+	}
+	offset += s.SignedExecutionPayloadEnvelope.SizeSSZ()
+
+	// Offset (1) 'KzgProofs'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(s.KzgProofs) * 48
+
+	// Offset (2) 'Blobs'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(s.Blobs) * 131072
+
+	// Field (0) 'SignedExecutionPayloadEnvelope'
+	if dst, err = s.SignedExecutionPayloadEnvelope.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'KzgProofs'
+	if size := len(s.KzgProofs); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(s.KzgProofs); ii++ {
+		if size := len(s.KzgProofs[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.KzgProofs[ii]", size, 48)
+			return
+		}
+		dst = append(dst, s.KzgProofs[ii]...)
+	}
+
+	// Field (2) 'Blobs'
+	if size := len(s.Blobs); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.Blobs", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(s.Blobs); ii++ {
+		if size := len(s.Blobs[ii]); size != 131072 {
+			err = ssz.ErrBytesLengthFn("--.Blobs[ii]", size, 131072)
+			return
+		}
+		dst = append(dst, s.Blobs[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SignedExecutionPayloadEnvelopeContents object
+func (s *SignedExecutionPayloadEnvelopeContents) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 12 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1, o2 uint64
+
+	// Offset (0) 'SignedExecutionPayloadEnvelope'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 12 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'KzgProofs'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (2) 'Blobs'
+	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'SignedExecutionPayloadEnvelope'
+	{
+		buf = tail[o0:o1]
+		if s.SignedExecutionPayloadEnvelope == nil {
+			s.SignedExecutionPayloadEnvelope = new(SignedExecutionPayloadEnvelope)
+		}
+		if err = s.SignedExecutionPayloadEnvelope.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (1) 'KzgProofs'
+	{
+		buf = tail[o1:o2]
+		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		if err != nil {
+			return err
+		}
+		s.KzgProofs = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(s.KzgProofs[ii]) == 0 {
+				s.KzgProofs[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			}
+			s.KzgProofs[ii] = append(s.KzgProofs[ii], buf[ii*48:(ii+1)*48]...)
+		}
+	}
+
+	// Field (2) 'Blobs'
+	{
+		buf = tail[o2:]
+		num, err := ssz.DivideInt2(len(buf), 131072, 4096)
+		if err != nil {
+			return err
+		}
+		s.Blobs = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(s.Blobs[ii]) == 0 {
+				s.Blobs[ii] = make([]byte, 0, len(buf[ii*131072:(ii+1)*131072]))
+			}
+			s.Blobs[ii] = append(s.Blobs[ii], buf[ii*131072:(ii+1)*131072]...)
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedExecutionPayloadEnvelopeContents object
+func (s *SignedExecutionPayloadEnvelopeContents) SizeSSZ() (size int) {
+	size = 12
+
+	// Field (0) 'SignedExecutionPayloadEnvelope'
+	if s.SignedExecutionPayloadEnvelope == nil {
+		s.SignedExecutionPayloadEnvelope = new(SignedExecutionPayloadEnvelope)
+	}
+	size += s.SignedExecutionPayloadEnvelope.SizeSSZ()
+
+	// Field (1) 'KzgProofs'
+	size += len(s.KzgProofs) * 48
+
+	// Field (2) 'Blobs'
+	size += len(s.Blobs) * 131072
+
+	return
+}
+
+// HashTreeRoot ssz hashes the SignedExecutionPayloadEnvelopeContents object
+func (s *SignedExecutionPayloadEnvelopeContents) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedExecutionPayloadEnvelopeContents object with a hasher
+func (s *SignedExecutionPayloadEnvelopeContents) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'SignedExecutionPayloadEnvelope'
+	if err = s.SignedExecutionPayloadEnvelope.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'KzgProofs'
+	{
+		if size := len(s.KzgProofs); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range s.KzgProofs {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(s.KzgProofs))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (2) 'Blobs'
+	{
+		if size := len(s.Blobs); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.Blobs", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range s.Blobs {
+			if len(i) != 131072 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(s.Blobs))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the BuilderPendingPayment object
 func (b *BuilderPendingPayment) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)

@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -271,6 +272,34 @@ func TestProduceBlockV4_SSZ_IncludePayloadTrue(t *testing.T) {
 	assert.Equal(t, http.StatusOK, writer.Code)
 	assert.Equal(t, "application/octet-stream", writer.Header().Get("Content-Type"))
 	assert.Equal(t, true, writer.Body.Len() > 0)
+}
+
+func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctrl := gomock.NewController(t)
+	envelope := testEnvelope()
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
+		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
+	)
+
+	server := &Server{V1Alpha1Server: v1alpha1Server}
+	request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/validator/execution_payload_envelope/1", nil)
+	request.SetPathValue("slot", "1")
+	request.Header.Set("Accept", "application/octet-stream")
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.ExecutionPayloadEnvelope(writer, request)
+	assert.Equal(t, http.StatusOK, writer.Code)
+	assert.Equal(t, "application/octet-stream", writer.Header().Get("Content-Type"))
+	assert.Equal(t, version.String(version.Gloas), writer.Header().Get("Eth-Consensus-Version"))
+	expected, err := envelope.MarshalSSZ()
+	require.NoError(t, err)
+	assert.DeepEqual(t, expected, writer.Body.Bytes())
 }
 
 func TestProduceBlockV4_SSZ_IncludePayloadFalse(t *testing.T) {

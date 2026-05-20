@@ -238,12 +238,23 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+
+	if httputil.RespondWithSsz(r) {
+		sszBytes, err := resp.Envelope.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "could not marshal envelope to SSZ: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, sszBytes)
+		return
+	}
+
 	jsonEnvelope, err := structs.ExecutionPayloadEnvelopeFromConsensus(resp.Envelope)
 	if err != nil {
 		httputil.HandleError(w, "could not convert envelope to JSON: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
 	httputil.WriteJson(w, &structs.GetValidatorExecutionPayloadEnvelopeResponse{
 		Version: version.String(version.Gloas),
 		Data:    jsonEnvelope,

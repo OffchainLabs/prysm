@@ -211,6 +211,7 @@ ssz_gloas_objs = [
     "SignedExecutionPayloadBid",
     "SignedBlindedExecutionPayloadEnvelope",
     "SignedExecutionPayloadEnvelope",
+    "SignedExecutionPayloadEnvelopeContents",
     "BeaconBlockGloas",
     "BeaconBlockContentsGloas",
     "SignedBeaconBlockGloas",

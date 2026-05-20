@@ -419,6 +419,22 @@ message BeaconBlockContentsGloas {
   ];
 }
 
+// SignedExecutionPayloadEnvelopeContents bundles a signed execution payload
+// envelope with the raw blobs and KZG proofs needed by a beacon node that has
+// not cached them locally. Used by the stateless publish path of
+// POST /eth/v1/beacon/execution_payload_envelope.
+message SignedExecutionPayloadEnvelopeContents {
+  SignedExecutionPayloadEnvelope signed_execution_payload_envelope = 1;
+  repeated bytes kzg_proofs = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+  repeated bytes blobs = 3 [
+    (ethereum.eth.ext.ssz_size) = "?,blob.size",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+}
+
 // BuilderPendingPayment represents a pending payment to a builder.
 //
 // Spec:

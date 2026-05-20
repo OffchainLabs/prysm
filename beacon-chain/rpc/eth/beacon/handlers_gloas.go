@@ -1,6 +1,7 @@
 package beacon
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -105,28 +106,47 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Contents wraps the signed envelope alongside blobs/kzg_proofs; the
-	// wrapper key distinguishes it from a bare envelope body.
-	var probe map[string]json.RawMessage
-	if err := json.Unmarshal(body, &probe); err != nil {
-		httputil.HandleError(w, "could not decode request body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if _, isContents := probe["signed_execution_payload_envelope"]; isContents {
-		s.publishExecutionPayloadEnvelopeContents(ctx, w, r, body)
-		return
-	}
+	var consensus *eth.SignedExecutionPayloadEnvelope
+	if httputil.IsRequestSsz(r) {
+		// Dispatch by SSZ lead offset: 12 = Contents, 100 = bare envelope.
+		contentsLeadOffset := []byte{12, 0, 0, 0}
+		if bytes.HasPrefix(body, contentsLeadOffset) {
+			contents := &eth.SignedExecutionPayloadEnvelopeContents{}
+			if err := contents.UnmarshalSSZ(body); err != nil {
+				httputil.HandleError(w, "could not decode SSZ envelope contents: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			s.publishExecutionPayloadEnvelopeContentsSSZ(ctx, w, r, contents)
+			return
+		}
+		consensus = &eth.SignedExecutionPayloadEnvelope{}
+		if err := consensus.UnmarshalSSZ(body); err != nil {
+			httputil.HandleError(w, "could not decode SSZ envelope: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else {
+		// Contents wraps the signed envelope alongside blobs/kzg_proofs; the
+		// wrapper key distinguishes it from a bare envelope body.
+		var probe map[string]json.RawMessage
+		if err := json.Unmarshal(body, &probe); err != nil {
+			httputil.HandleError(w, "could not decode request body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if _, isContents := probe["signed_execution_payload_envelope"]; isContents {
+			s.publishExecutionPayloadEnvelopeContents(ctx, w, r, body)
+			return
+		}
 
-	var jsonEnvelope structs.SignedExecutionPayloadEnvelope
-	if err := json.Unmarshal(body, &jsonEnvelope); err != nil {
-		httputil.HandleError(w, "could not decode request body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	consensus, err := jsonEnvelope.ToConsensus()
-	if err != nil {
-		httputil.HandleError(w, "invalid signed execution payload envelope: "+err.Error(), http.StatusBadRequest)
-		return
+		var jsonEnvelope structs.SignedExecutionPayloadEnvelope
+		if err := json.Unmarshal(body, &jsonEnvelope); err != nil {
+			httputil.HandleError(w, "could not decode request body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		consensus, err = jsonEnvelope.ToConsensus()
+		if err != nil {
+			httputil.HandleError(w, "invalid signed execution payload envelope: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	if err := s.validateEnvelopeBroadcast(ctx, r, consensus); err != nil {
@@ -151,9 +171,7 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 	w.WriteHeader(http.StatusOK)
 }
 
-// publishExecutionPayloadEnvelopeContents handles the stateless variant:
-// verifies caller-supplied blobs/proofs, broadcasts derived sidecars, then
-// delegates the envelope to the bare publish path.
+// publishExecutionPayloadEnvelopeContents handles the JSON stateless variant.
 func (s *Server) publishExecutionPayloadEnvelopeContents(ctx context.Context, w http.ResponseWriter, r *http.Request, body []byte) {
 	var contents structs.SignedExecutionPayloadEnvelopeContents
 	if err := json.Unmarshal(body, &contents); err != nil {
@@ -165,7 +183,21 @@ func (s *Server) publishExecutionPayloadEnvelopeContents(ctx context.Context, w 
 		httputil.HandleError(w, "invalid signed execution payload envelope contents: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	s.processEnvelopeContents(ctx, w, r, signed, kzgProofs, blobs)
+}
 
+// publishExecutionPayloadEnvelopeContentsSSZ handles the SSZ stateless variant.
+func (s *Server) publishExecutionPayloadEnvelopeContentsSSZ(ctx context.Context, w http.ResponseWriter, r *http.Request, contents *eth.SignedExecutionPayloadEnvelopeContents) {
+	if contents == nil || contents.SignedExecutionPayloadEnvelope == nil {
+		httputil.HandleError(w, "nil signed execution payload envelope contents", http.StatusBadRequest)
+		return
+	}
+	s.processEnvelopeContents(ctx, w, r, contents.SignedExecutionPayloadEnvelope, contents.KzgProofs, contents.Blobs)
+}
+
+// processEnvelopeContents verifies caller-supplied blobs/proofs, broadcasts
+// derived sidecars, then delegates the envelope to the bare publish path.
+func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWriter, r *http.Request, signed *eth.SignedExecutionPayloadEnvelope, kzgProofs, blobs [][]byte) {
 	if err := s.validateEnvelopeBroadcast(ctx, r, signed); err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
