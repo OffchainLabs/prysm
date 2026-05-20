@@ -123,8 +123,8 @@ func IsPendingValidator(pendingDeposits []*ethpb.PendingDeposit, pubkey []byte) 
 	return false, nil
 }
 
-// BatchVerifyDepositRequestSignatures returns a per-request validity slice.
-func BatchVerifyDepositRequestSignatures(ctx context.Context, requests []*enginev1.DepositRequest) ([]bool, error) {
+// BatchVerifyDepositRequestSignatures returns the indices of requests with invalid signatures.
+func BatchVerifyDepositRequestSignatures(ctx context.Context, requests []*enginev1.DepositRequest) ([]int, error) {
 	if len(requests) == 0 {
 		return nil, nil
 	}
@@ -132,11 +132,7 @@ func BatchVerifyDepositRequestSignatures(ctx context.Context, requests []*engine
 	if err != nil {
 		return nil, err
 	}
-	valid := make([]bool, len(requests))
-	if err := verifyDepositRequestsDC(ctx, requests, domain, valid); err != nil {
-		return nil, err
-	}
-	return valid, nil
+	return verifyDepositRequestsDC(ctx, requests, domain)
 }
 
 // IsValidDepositSignature returns whether deposit_data is valid
@@ -276,28 +272,32 @@ func verifyDepositRequestDataWithDomain(ctx context.Context, reqs []*enginev1.De
 	return nil
 }
 
-func verifyDepositRequestsDC(ctx context.Context, reqs []*enginev1.DepositRequest, domain []byte, out []bool) error {
+func verifyDepositRequestsDC(ctx context.Context, reqs []*enginev1.DepositRequest, domain []byte) ([]int, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return nil, err
 	}
 	if len(reqs) == 0 {
-		return nil
+		return nil, nil
 	}
 	if err := verifyDepositRequestDataWithDomain(ctx, reqs, domain); err == nil {
-		for i := range out {
-			out[i] = true
-		}
-		return nil
+		return nil, nil
 	}
 	if len(reqs) == 1 {
-		out[0] = false
-		return nil
+		return []int{0}, nil
 	}
 	mid := len(reqs) / 2
-	if err := verifyDepositRequestsDC(ctx, reqs[:mid], domain, out[:mid]); err != nil {
-		return err
+	left, err := verifyDepositRequestsDC(ctx, reqs[:mid], domain)
+	if err != nil {
+		return nil, err
 	}
-	return verifyDepositRequestsDC(ctx, reqs[mid:], domain, out[mid:])
+	right, err := verifyDepositRequestsDC(ctx, reqs[mid:], domain)
+	if err != nil {
+		return nil, err
+	}
+	for i := range right {
+		right[i] += mid
+	}
+	return append(left, right...), nil
 }
 
 func verifyPendingDepositDataWithDomain(ctx context.Context, deps []*ethpb.PendingDeposit, domain []byte) error {

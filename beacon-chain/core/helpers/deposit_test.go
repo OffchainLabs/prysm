@@ -214,9 +214,9 @@ func makeInvalidDepositRequest(t *testing.T, amount uint64) *enginev1.DepositReq
 }
 
 func TestBatchVerifyDepositRequestSignatures_Empty(t *testing.T) {
-	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), nil)
+	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), nil)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(valid))
+	require.Equal(t, 0, len(invalid))
 }
 
 func TestBatchVerifyDepositRequestSignatures_AllValid(t *testing.T) {
@@ -226,9 +226,9 @@ func TestBatchVerifyDepositRequestSignatures_AllValid(t *testing.T) {
 		makeValidDepositRequest(t, 300),
 		makeValidDepositRequest(t, 400),
 	}
-	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
 	require.NoError(t, err)
-	require.DeepEqual(t, []bool{true, true, true, true}, valid)
+	require.Equal(t, 0, len(invalid))
 }
 
 func TestBatchVerifyDepositRequestSignatures_AllInvalid(t *testing.T) {
@@ -237,21 +237,21 @@ func TestBatchVerifyDepositRequestSignatures_AllInvalid(t *testing.T) {
 		makeInvalidDepositRequest(t, 200),
 		makeInvalidDepositRequest(t, 300),
 	}
-	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
 	require.NoError(t, err)
-	require.DeepEqual(t, []bool{false, false, false}, valid)
+	require.DeepEqual(t, []int{0, 1, 2}, invalid)
 }
 
 func TestBatchVerifyDepositRequestSignatures_SingleValid(t *testing.T) {
-	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), []*enginev1.DepositRequest{makeValidDepositRequest(t, 1)})
+	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), []*enginev1.DepositRequest{makeValidDepositRequest(t, 1)})
 	require.NoError(t, err)
-	require.DeepEqual(t, []bool{true}, valid)
+	require.Equal(t, 0, len(invalid))
 }
 
 func TestBatchVerifyDepositRequestSignatures_SingleInvalid(t *testing.T) {
-	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), []*enginev1.DepositRequest{makeInvalidDepositRequest(t, 1)})
+	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), []*enginev1.DepositRequest{makeInvalidDepositRequest(t, 1)})
 	require.NoError(t, err)
-	require.DeepEqual(t, []bool{false}, valid)
+	require.DeepEqual(t, []int{0}, invalid)
 }
 
 func TestBatchVerifyDepositRequestSignatures_MixedDC(t *testing.T) {
@@ -265,9 +265,9 @@ func TestBatchVerifyDepositRequestSignatures_MixedDC(t *testing.T) {
 		makeInvalidDepositRequest(t, 7),
 		makeValidDepositRequest(t, 8),
 	}
-	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
 	require.NoError(t, err)
-	require.DeepEqual(t, []bool{false, true, true, false, true, true, false, true}, valid)
+	require.DeepEqual(t, []int{0, 3, 6}, invalid)
 }
 
 func TestBatchVerifyDepositRequestSignatures_OneBadInLargeBatch(t *testing.T) {
@@ -278,11 +278,9 @@ func TestBatchVerifyDepositRequestSignatures_OneBadInLargeBatch(t *testing.T) {
 	}
 	const badIdx = 11
 	reqs[badIdx] = makeInvalidDepositRequest(t, badIdx+1)
-	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
 	require.NoError(t, err)
-	for i, v := range valid {
-		require.Equal(t, i != badIdx, v)
-	}
+	require.DeepEqual(t, []int{badIdx}, invalid)
 }
 
 func TestBatchVerifyDepositRequestSignatures_MultipleBadAcrossSubtrees(t *testing.T) {
@@ -295,13 +293,7 @@ func TestBatchVerifyDepositRequestSignatures_MultipleBadAcrossSubtrees(t *testin
 	for _, idx := range badIdxs {
 		reqs[idx] = makeInvalidDepositRequest(t, uint64(idx+1))
 	}
-	bad := map[int]bool{}
-	for _, idx := range badIdxs {
-		bad[idx] = true
-	}
-	valid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
+	invalid, err := helpers.BatchVerifyDepositRequestSignatures(t.Context(), reqs)
 	require.NoError(t, err)
-	for i, v := range valid {
-		require.Equal(t, !bad[i], v)
-	}
+	require.DeepEqual(t, badIdxs, invalid)
 }
