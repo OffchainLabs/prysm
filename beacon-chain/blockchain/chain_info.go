@@ -41,6 +41,7 @@ type ChainInfoFetcher interface {
 type ForkchoiceFetcher interface {
 	Ancestor(context.Context, []byte, primitives.Slot) ([]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
+	GasLimit(root [32]byte) (uint64, error)
 	CachedHeadRoot() [32]byte
 	GetProposerHead() [32]byte
 	SetForkChoiceGenesisTime(time.Time)

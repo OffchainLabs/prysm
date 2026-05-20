@@ -1138,7 +1138,7 @@ func (v *validator) buildProposerPreferences(
 					ProposalSlot:   proposalSlot,
 					ValidatorIndex: duty.ValidatorIndex,
 					FeeRecipient:   feeRecipient[:],
-					GasLimit:       gasLimit,
+					TargetGasLimit: gasLimit,
 				}
 				signedPref, err := v.signProposerPreferences(ctx, km, pk, pref)
 				if err != nil {

@@ -85,7 +85,7 @@ func (vs *Server) SubmitSignedProposerPreferences(
 			DependentRoot:  bytesutil.ToBytes32(msg.Message.DependentRoot),
 			ValidatorIndex: valIdx,
 			FeeRecipient:   bytesutil.ToBytes20(msg.Message.FeeRecipient),
-			GasLimit:       msg.Message.GasLimit,
+			TargetGasLimit:       msg.Message.TargetGasLimit,
 		}, proposalSlot)
 		if !added {
 			duplicate++

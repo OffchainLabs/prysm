@@ -159,7 +159,7 @@ func Test_signProposerPreferences(t *testing.T) {
 		ProposalSlot:   123,
 		ValidatorIndex: 456,
 		FeeRecipient:   bytesutil.PadTo([]byte("fee"), 20),
-		GasLimit:       789,
+		TargetGasLimit: 789,
 	}
 
 	domain, err := signing.ComputeDomain(

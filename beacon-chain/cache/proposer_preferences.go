@@ -24,7 +24,7 @@ type ProposerPreference struct {
 	DependentRoot  [32]byte
 	ValidatorIndex primitives.ValidatorIndex
 	FeeRecipient   primitives.ExecutionAddress
-	GasLimit       uint64
+	TargetGasLimit uint64
 }
 
 // FeeRecipientOrDefault returns the preference's FeeRecipient, substituting
