@@ -306,6 +306,9 @@ func OpenWallet(_ context.Context, cfg *Config) (*Wallet, error) {
 
 // SaveWallet persists the wallet's directories to disk.
 func (w *Wallet) SaveWallet() error {
+	if w == nil {
+		return errors.New("nil wallet")
+	}
 	if err := file.MkdirAll(w.accountsPath); err != nil {
 		return errors.Wrap(err, "could not create wallet directory")
 	}
@@ -314,27 +317,42 @@ func (w *Wallet) SaveWallet() error {
 
 // KeymanagerKind used by the wallet.
 func (w *Wallet) KeymanagerKind() keymanager.Kind {
+	if w == nil {
+		return 0
+	}
 	return w.keymanagerKind
 }
 
 // AccountsDir for the wallet.
 func (w *Wallet) AccountsDir() string {
+	if w == nil {
+		return ""
+	}
 	return w.accountsPath
 }
 
 // Dir for the wallet.
 func (w *Wallet) Dir() string {
+	if w == nil {
+		return ""
+	}
 	return w.walletDir
 }
 
 // Password for the wallet.
 func (w *Wallet) Password() string {
+	if w == nil {
+		return ""
+	}
 	return w.walletPassword
 }
 
 // InitializeKeymanager reads a keymanager config from disk at the wallet path,
 // unmarshals it based on the wallet's keymanager kind, and returns its value.
 func (w *Wallet) InitializeKeymanager(ctx context.Context, cfg iface.InitKeymanagerConfig) (keymanager.IKeymanager, error) {
+	if w == nil {
+		return nil, errors.New("nil wallet")
+	}
 	var km keymanager.IKeymanager
 	var err error
 	switch w.KeymanagerKind() {
@@ -376,6 +394,9 @@ func (w *Wallet) InitializeKeymanager(ctx context.Context, cfg iface.InitKeymana
 
 // WriteFileAtPath within the wallet directory given the desired path, filename, and raw data.
 func (w *Wallet) WriteFileAtPath(_ context.Context, filePath, fileName string, data []byte) (bool /* exited previously */, error) {
+	if w == nil {
+		return false, errors.New("nil wallet")
+	}
 	accountPath := filepath.Join(w.accountsPath, filePath)
 	hasDir, err := file.HasDir(accountPath)
 	if err != nil {
@@ -403,6 +424,9 @@ func (w *Wallet) WriteFileAtPath(_ context.Context, filePath, fileName string, d
 
 // ReadFileAtPath within the wallet directory given the desired path and filename.
 func (w *Wallet) ReadFileAtPath(_ context.Context, filePath, fileName string) ([]byte, error) {
+	if w == nil {
+		return nil, errors.New("nil wallet")
+	}
 	accountPath := filepath.Join(w.accountsPath, filePath)
 	hasDir, err := file.HasDir(accountPath)
 	if err != nil {
@@ -431,6 +455,9 @@ func (w *Wallet) ReadFileAtPath(_ context.Context, filePath, fileName string) ([
 // FileNameAtPath return the full file name for the requested file. It allows for finding the file
 // with a regex pattern.
 func (w *Wallet) FileNameAtPath(_ context.Context, filePath, fileName string) (string, error) {
+	if w == nil {
+		return "", errors.New("nil wallet")
+	}
 	accountPath := filepath.Join(w.accountsPath, filePath)
 	if err := file.MkdirAll(accountPath); err != nil {
 		return "", errors.Wrapf(err, "could not create path: %s", accountPath)
@@ -450,6 +477,9 @@ func (w *Wallet) FileNameAtPath(_ context.Context, filePath, fileName string) (s
 // ReadKeymanagerConfigFromDisk opens a keymanager config file
 // for reading if it exists at the wallet path.
 func (w *Wallet) ReadKeymanagerConfigFromDisk(_ context.Context) (io.ReadCloser, error) {
+	if w == nil {
+		return nil, errors.New("nil wallet")
+	}
 	configFilePath := filepath.Join(w.accountsPath, KeymanagerConfigFileName)
 	exists, err := file.Exists(configFilePath, file.Regular)
 	if err != nil {
@@ -466,6 +496,9 @@ func (w *Wallet) ReadKeymanagerConfigFromDisk(_ context.Context) (io.ReadCloser,
 // WriteKeymanagerConfigToDisk takes an encoded keymanager config file
 // and writes it to the wallet path.
 func (w *Wallet) WriteKeymanagerConfigToDisk(_ context.Context, encoded []byte) error {
+	if w == nil {
+		return errors.New("nil wallet")
+	}
 	configFilePath := filepath.Join(w.accountsPath, KeymanagerConfigFileName)
 	// Write the config file to disk.
 	if err := file.WriteFile(configFilePath, encoded); err != nil {
