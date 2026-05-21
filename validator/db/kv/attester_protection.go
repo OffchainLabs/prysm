@@ -93,6 +93,17 @@ var (
 	failedAttLocalProtectionErr = "attempted to make slashable attestation, rejected by local slashing protection"
 )
 
+func indexedAttestationData(att ethpb.IndexedAtt) (*ethpb.AttestationData, error) {
+	if att == nil || att.IsNil() {
+		return nil, errors.New("invalid nil attestation data")
+	}
+	data := att.GetData()
+	if data == nil || data.Source == nil || data.Target == nil {
+		return nil, errors.New("invalid nil attestation data")
+	}
+	return data, nil
+}
+
 // AttestationHistoryForPubKey retrieves a list of attestation records for data
 // we have stored in the database for the given validator public key.
 func (s *Store) AttestationHistoryForPubKey(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]*common.AttestationRecord, error) {
@@ -149,6 +160,10 @@ func (s *Store) SlashableAttestationCheck(
 	defer span.End()
 
 	signingRoot := signingRoot32[:]
+	data, err := indexedAttestationData(indexedAtt)
+	if err != nil {
+		return err
+	}
 
 	// Based on EIP-3076, validator should refuse to sign any attestation with source epoch less
 	// than the minimum source epoch present in that signer’s attestations.
@@ -156,14 +171,14 @@ func (s *Store) SlashableAttestationCheck(
 	if err != nil {
 		return err
 	}
-	if exists && indexedAtt.GetData().Source.Epoch < lowestSourceEpoch {
+	if exists && data.Source.Epoch < lowestSourceEpoch {
 		return fmt.Errorf(
 			"could not sign attestation lower than lowest source epoch in db, %d < %d",
-			indexedAtt.GetData().Source.Epoch,
+			data.Source.Epoch,
 			lowestSourceEpoch,
 		)
 	}
-	existingSigningRoot, err := s.SigningRootAtTargetEpoch(ctx, pubKey, indexedAtt.GetData().Target.Epoch)
+	existingSigningRoot, err := s.SigningRootAtTargetEpoch(ctx, pubKey, data.Target.Epoch)
 	if err != nil {
 		return err
 	}
@@ -176,10 +191,10 @@ func (s *Store) SlashableAttestationCheck(
 	if err != nil {
 		return err
 	}
-	if signingRootsDiffer && exists && indexedAtt.GetData().Target.Epoch <= lowestTargetEpoch {
+	if signingRootsDiffer && exists && data.Target.Epoch <= lowestTargetEpoch {
 		return fmt.Errorf(
 			"could not sign attestation lower than or equal to lowest target epoch in db if signing roots differ, %d <= %d",
-			indexedAtt.GetData().Target.Epoch,
+			data.Target.Epoch,
 			lowestTargetEpoch,
 		)
 	}
@@ -215,7 +230,11 @@ func (s *Store) CheckSlashableAttestation(
 	ctx, span := trace.StartSpan(ctx, "Validator.CheckSlashableAttestation")
 	defer span.End()
 	var slashKind SlashingKind
-	err := s.view(func(tx *bolt.Tx) error {
+	data, err := indexedAttestationData(att)
+	if err != nil {
+		return NotSlashable, err
+	}
+	err = s.view(func(tx *bolt.Tx) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -228,14 +247,14 @@ func (s *Store) CheckSlashableAttestation(
 		// First we check for double votes.
 		signingRootsBucket := pkBucket.Bucket(attestationSigningRootsBucket)
 		if signingRootsBucket != nil {
-			targetEpochBytes := bytesutil.EpochToBytesBigEndian(att.GetData().Target.Epoch)
+			targetEpochBytes := bytesutil.EpochToBytesBigEndian(data.Target.Epoch)
 			existingSigningRoot := signingRootsBucket.Get(targetEpochBytes)
 
 			// If a signing root exists in the database, and if this database signing root is empty => We consider the new attestation as a double vote.
 			// If a signing root exists in the database, and if this database signing differs from the signing root of the new attestation => We consider the new attestation as a double vote.
 			if existingSigningRoot != nil && (len(existingSigningRoot) == 0 || slashings.SigningRootsDiffer(existingSigningRoot, signingRoot)) {
 				slashKind = DoubleVote
-				return fmt.Errorf(doubleVoteMessage, att.GetData().Target.Epoch, existingSigningRoot)
+				return fmt.Errorf(doubleVoteMessage, data.Target.Epoch, existingSigningRoot)
 			}
 		}
 
@@ -271,10 +290,14 @@ func (s *Store) CheckSlashableAttestation(
 func (*Store) checkSurroundedVote(
 	targetEpochsBucket *bolt.Bucket, att ethpb.IndexedAtt,
 ) (SlashingKind, error) {
+	data, err := indexedAttestationData(att)
+	if err != nil {
+		return NotSlashable, err
+	}
 	c := targetEpochsBucket.Cursor()
 	for k, v := c.Last(); k != nil; k, v = c.Prev() {
 		existingTargetEpoch := bytesutil.BytesToEpochBigEndian(k)
-		if existingTargetEpoch <= att.GetData().Target.Epoch {
+		if existingTargetEpoch <= data.Target.Epoch {
 			break
 		}
 
@@ -296,8 +319,8 @@ func (*Store) checkSurroundedVote(
 			if surrounded {
 				return SurroundedVote, fmt.Errorf(
 					surroundedVoteMessage,
-					att.GetData().Source.Epoch,
-					att.GetData().Target.Epoch,
+					data.Source.Epoch,
+					data.Target.Epoch,
 					existingSourceEpoch,
 					existingTargetEpoch,
 				)
@@ -311,10 +334,14 @@ func (*Store) checkSurroundedVote(
 func (*Store) checkSurroundingVote(
 	sourceEpochsBucket *bolt.Bucket, att ethpb.IndexedAtt,
 ) (SlashingKind, error) {
+	data, err := indexedAttestationData(att)
+	if err != nil {
+		return NotSlashable, err
+	}
 	c := sourceEpochsBucket.Cursor()
 	for k, v := c.Last(); k != nil; k, v = c.Prev() {
 		existingSourceEpoch := bytesutil.BytesToEpochBigEndian(k)
-		if existingSourceEpoch <= att.GetData().Source.Epoch {
+		if existingSourceEpoch <= data.Source.Epoch {
 			break
 		}
 
@@ -336,8 +363,8 @@ func (*Store) checkSurroundingVote(
 			if surrounding {
 				return SurroundingVote, fmt.Errorf(
 					surroundingVoteMessage,
-					att.GetData().Source.Epoch,
-					att.GetData().Target.Epoch,
+					data.Source.Epoch,
+					data.Target.Epoch,
 					existingSourceEpoch,
 					existingTargetEpoch,
 				)
@@ -379,12 +406,16 @@ func (s *Store) SaveAttestationForPubKey(
 ) error {
 	ctx, span := trace.StartSpan(ctx, "Validator.SaveAttestationForPubKey")
 	defer span.End()
+	data, err := indexedAttestationData(att)
+	if err != nil {
+		return err
+	}
 	s.batchedAttestationsChan <- &AttestationRecordSaveRequest{
 		ctx: ctx,
 		record: &common.AttestationRecord{
 			PubKey:      pubKey,
-			Source:      att.GetData().Source.Epoch,
-			Target:      att.GetData().Target.Epoch,
+			Source:      data.Source.Epoch,
+			Target:      data.Target.Epoch,
 			SigningRoot: signingRoot[:],
 		},
 	}
