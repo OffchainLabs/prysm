@@ -109,6 +109,7 @@ func TestPayloadAttestationData_CachedPerSlot(t *testing.T) {
 	chain.BlockSlot = nextSlot
 	chain.MockCanonicalRoots[nextSlot] = bytesutil.ToBytes32(newRoot)
 	chain.MockCanonicalFull[nextSlot] = true
+	chain.MockPayloadEarly = map[[32]byte]bool{bytesutil.ToBytes32(newRoot): true}
 
 	third, err := vs.PayloadAttestationData(t.Context(), &ethpb.PayloadAttestationDataRequest{Slot: nextSlot})
 	require.NoError(t, err)

@@ -635,7 +635,10 @@
     </spec>
 
 - name: PAYLOAD_DUE_BPS#gloas
-  sources: []
+  sources:
+    - file: config/params/config.go
+      search: PayloadDueBPS\s+primitives.BP
+      regex: true
   spec: |
     <spec config_var="PAYLOAD_DUE_BPS" fork="gloas" hash="ee4d44de">
     PAYLOAD_DUE_BPS: uint64 = 7500

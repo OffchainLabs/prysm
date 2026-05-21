@@ -67,9 +67,6 @@ func runTest(t *testing.T, config string, fork int, basePath string) { // nolint
 			"voting_source_beyond_two_epoch":         true,
 			"justified_update_always_if_better":      true,
 			"justified_update_not_realized_finality": true,
-			// TODO(gloas): shouldApplyProposerBoost needs implementation, these are equivocation tests
-			"include_votes_another_empty_chain_with_enough_ffg_votes_previous_epoch": true,
-			"simple_attempted_reorg_without_enough_ffg_votes":                        true,
 		}
 		for _, folder := range testFolders {
 			if skipTests[folder.Name()] {

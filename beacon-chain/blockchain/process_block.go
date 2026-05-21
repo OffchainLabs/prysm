@@ -656,6 +656,13 @@ func (s *Service) InsertSlashingsToForkChoiceStore(ctx context.Context, slashing
 	}
 }
 
+// RecordBlockForEquivocation forwards to the forkchoice store under the write lock.
+func (s *Service) RecordBlockForEquivocation(slot primitives.Slot, proposer primitives.ValidatorIndex, root [32]byte) {
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
+	s.cfg.ForkChoiceStore.RecordBlockForEquivocation(slot, proposer, root)
+}
+
 // This saves post state info to DB or cache. This also saves post state info to fork choice store.
 // Post state info consists of processed block and state. Do not call this method unless the block and state are verified.
 func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interfaces.ReadOnlySignedBeaconBlock, st state.BeaconState) error {

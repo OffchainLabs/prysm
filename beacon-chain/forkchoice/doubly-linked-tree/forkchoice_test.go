@@ -398,6 +398,72 @@ func indexToHash(i uint64) [32]byte {
 	return hash.Hash(b[:])
 }
 
+func TestForkChoice_RecordBlockForEquivocation_AppendAndCap(t *testing.T) {
+	f := setup(0, 0)
+	slot := primitives.Slot(5)
+	proposer := primitives.ValidatorIndex(7)
+	rootA := [32]byte{'a'}
+	rootB := [32]byte{'b'}
+	rootC := [32]byte{'c'}
+
+	f.RecordBlockForEquivocation(slot, proposer, rootA)
+	f.RecordBlockForEquivocation(slot, proposer, rootB)
+	f.RecordBlockForEquivocation(slot, proposer, rootC)
+
+	key := proposerSlotKey{slot: slot, proposer: proposer}
+	require.Equal(t, 2, len(f.store.blockRootsBySlotProposer[key]))
+	require.Equal(t, rootA, f.store.blockRootsBySlotProposer[key][0])
+	require.Equal(t, rootB, f.store.blockRootsBySlotProposer[key][1])
+}
+
+func TestForkChoice_RecordBlockForEquivocation_DedupesRoot(t *testing.T) {
+	f := setup(0, 0)
+	slot := primitives.Slot(5)
+	proposer := primitives.ValidatorIndex(7)
+	root := [32]byte{'a'}
+
+	f.RecordBlockForEquivocation(slot, proposer, root)
+	f.RecordBlockForEquivocation(slot, proposer, root)
+
+	key := proposerSlotKey{slot: slot, proposer: proposer}
+	require.Equal(t, 1, len(f.store.blockRootsBySlotProposer[key]))
+}
+
+func TestForkChoice_InsertNode_RecordsFirstSeen(t *testing.T) {
+	f := setup(0, 0)
+	blockRoot := indexToHash(1)
+	st, roblock, err := prepareForkchoiceState(t.Context(), 1, blockRoot, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(t.Context(), st, roblock))
+
+	key := proposerSlotKey{slot: 1, proposer: roblock.Block().ProposerIndex()}
+	roots := f.store.blockRootsBySlotProposer[key]
+	require.Equal(t, 1, len(roots))
+	require.Equal(t, blockRoot, roots[0])
+}
+
+func TestForkChoice_RecordBlockForEquivocation_PrunedOnFinalization(t *testing.T) {
+	f := setup(0, 0)
+	slotsPerEpoch := primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+	earlySlot := primitives.Slot(2)
+	lateSlot := slotsPerEpoch*3 + 1
+	proposer := primitives.ValidatorIndex(7)
+	earlyRoot := [32]byte{'e'}
+	lateRoot := [32]byte{'l'}
+
+	f.RecordBlockForEquivocation(earlySlot, proposer, earlyRoot)
+	f.RecordBlockForEquivocation(lateSlot, proposer, lateRoot)
+
+	fc := &forkchoicetypes.Checkpoint{Root: [32]byte{'f'}, Epoch: 2}
+	require.NoError(t, f.UpdateFinalizedCheckpoint(fc))
+
+	_, earlyPresent := f.store.blockRootsBySlotProposer[proposerSlotKey{slot: earlySlot, proposer: proposer}]
+	require.Equal(t, false, earlyPresent)
+	_, latePresent := f.store.blockRootsBySlotProposer[proposerSlotKey{slot: lateSlot, proposer: proposer}]
+	require.Equal(t, true, latePresent)
+}
+
 func TestForkChoice_UpdateJustifiedAndFinalizedCheckpoints(t *testing.T) {
 	f := setup(1, 1)
 	ctx := t.Context()
