@@ -56,12 +56,10 @@ func TestValidateSignedProposerPreferencesGossip_InitialSync(t *testing.T) {
 
 func TestValidateSignedProposerPreferencesGossip_CheckpointBlockNotSeen(t *testing.T) {
 	ctx := context.Background()
-	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
-	// Rewrite dependent_root to a value with no corresponding block.
-	unknownRoot := [32]byte{0xde, 0xad, 0xbe, 0xef}
-	signedPreferences.Message.DependentRoot = unknownRoot[:]
-	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
-	s.cfg.chain.(*mock.ChainService).ForkchoiceRoots = map[[32]byte]bool{}
+	s, msg, _ := setupSignedProposerPreferencesService(t)
+	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(
+		mockSignedProposerPreferencesVerifier{errDependentRootSeen: errors.New("dependent_root block not seen")},
+	)
 
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
 	require.NotNil(t, err)
