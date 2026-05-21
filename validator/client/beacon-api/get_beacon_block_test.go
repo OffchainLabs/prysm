@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -215,8 +216,8 @@ func TestSSZCodecs_OrderAndCoverage(t *testing.T) {
 	require.NotEmpty(t, versions)
 
 	expected := make([]int, 0, len(versions))
-	for i := len(versions) - 1; i >= 0; i-- {
-		expected = append(expected, versions[i])
+	for _, version := range slices.Backward(versions) {
+		expected = append(expected, version)
 	}
 
 	require.Equal(t, len(expected), len(sszCodecs))
@@ -1511,7 +1512,7 @@ func TestGetBeaconBlock_GloasRejectsJSONWithPayload(t *testing.T) {
 	).Return(
 		[]byte("{}"),
 		http.Header{
-			"Content-Type":                       []string{"application/json"},
+			"Content-Type":                     []string{"application/json"},
 			api.ExecutionPayloadIncludedHeader: []string{"true"},
 		},
 		nil,

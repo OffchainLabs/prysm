@@ -563,8 +563,8 @@ func (s *Service) filterOutPendingAndSynced(roots [][fieldparams.RootLength]byte
 	s.pendingQueueLock.RLock()
 	defer s.pendingQueueLock.RUnlock()
 
-	for i := len(roots) - 1; i >= 0; i-- {
-		r := roots[i]
+	for i, r := range slices.Backward(roots) {
+
 		if s.seenPendingBlocks[r] || s.cfg.chain.BlockBeingSynced(r) {
 			roots = append(roots[:i], roots[i+1:]...)
 			continue

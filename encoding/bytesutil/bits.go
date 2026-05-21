@@ -2,6 +2,7 @@ package bytesutil
 
 import (
 	"math/bits"
+	"slices"
 
 	"github.com/pkg/errors"
 )
@@ -46,11 +47,11 @@ func HighestBitIndex(b []byte) (int, error) {
 		return 0, errors.New("input list can't be empty or nil")
 	}
 
-	for i := len(b) - 1; i >= 0; i-- {
-		if b[i] == 0 {
+	for i, v := range slices.Backward(b) {
+		if v == 0 {
 			continue
 		}
-		return bits.Len8(b[i]) + (i * 8), nil
+		return bits.Len8(v) + (i * 8), nil
 	}
 
 	return 0, nil

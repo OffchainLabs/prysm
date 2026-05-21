@@ -3,6 +3,7 @@ package ineffassign
 import (
 	"go/ast"
 	"go/token"
+	"slices"
 )
 
 type builder struct {
@@ -445,7 +446,7 @@ func (s *branchStack) push(lbl *ast.Object) *branch {
 }
 
 func (s *branchStack) get(lbl *ast.Ident) *branch {
-	for i := len(*s) - 1; i >= 0; i-- {
+	for i := range slices.Backward(*s) {
 		if br := (*s)[i]; lbl == nil || br.label == lbl.Obj {
 			return br
 		}

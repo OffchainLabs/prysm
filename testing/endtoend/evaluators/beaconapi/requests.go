@@ -2,6 +2,7 @@ package beaconapi
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -159,13 +160,13 @@ var getRequests = map[string]endpoint{
 				return fmt.Errorf(msgWrongJSON, &structs.GetForkScheduleResponse{}, lh)
 			}
 			// remove all forks with far-future epoch
-			for i := len(pResp.Data) - 1; i >= 0; i-- {
-				if pResp.Data[i].Epoch == fmt.Sprintf("%d", params.BeaconConfig().FarFutureEpoch) {
+			for i, v := range slices.Backward(pResp.Data) {
+				if v.Epoch == fmt.Sprintf("%d", params.BeaconConfig().FarFutureEpoch) {
 					pResp.Data = append(pResp.Data[:i], pResp.Data[i+1:]...)
 				}
 			}
-			for i := len(lhResp.Data) - 1; i >= 0; i-- {
-				if lhResp.Data[i].Epoch == fmt.Sprintf("%d", params.BeaconConfig().FarFutureEpoch) {
+			for i, v := range slices.Backward(lhResp.Data) {
+				if v.Epoch == fmt.Sprintf("%d", params.BeaconConfig().FarFutureEpoch) {
 					lhResp.Data = append(lhResp.Data[:i], lhResp.Data[i+1:]...)
 				}
 			}

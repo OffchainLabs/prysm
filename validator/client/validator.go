@@ -518,17 +518,17 @@ func retrieveLatestRecord(recs []*dbCommon.AttestationRecord) *dbCommon.Attestat
 	}
 	lastSource := recs[len(recs)-1].Source
 	chosenRec := recs[len(recs)-1]
-	for i := len(recs) - 1; i >= 0; i-- {
+	for _, rec := range slices.Backward(recs) {
 		// Exit if we are now on a different source
 		// as it is assumed that all source records are
 		// byte sorted.
-		if recs[i].Source != lastSource {
+		if rec.Source != lastSource {
 			break
 		}
 		// If we have a smaller target, we do
 		// change our chosen record.
-		if chosenRec.Target < recs[i].Target {
-			chosenRec = recs[i]
+		if chosenRec.Target < rec.Target {
+			chosenRec = rec
 		}
 	}
 	return chosenRec

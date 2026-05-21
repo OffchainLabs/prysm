@@ -5,6 +5,7 @@ package runtime
 import (
 	"fmt"
 	"reflect"
+	"slices"
 )
 
 // Service is a struct that can be registered into a ServiceRegistry for
@@ -45,8 +46,8 @@ func (s *ServiceRegistry) StartAll() {
 // StopAll ends every service in reverse order of registration, logging a
 // panic if any of them fail to stop.
 func (s *ServiceRegistry) StopAll() {
-	for i := len(s.serviceTypes) - 1; i >= 0; i-- {
-		kind := s.serviceTypes[i]
+	for _, kind := range slices.Backward(s.serviceTypes) {
+
 		service := s.services[kind]
 		if err := service.Stop(); err != nil {
 			log.WithError(err).Errorf("Could not stop the following service: %v", kind)

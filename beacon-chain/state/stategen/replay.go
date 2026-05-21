@@ -3,6 +3,7 @@ package stategen
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
@@ -173,9 +174,9 @@ func (s *State) loadFinalizedBlocks(ctx context.Context, startSlot, endSlot prim
 		return nil, errors.New("length of blocks and roots don't match")
 	}
 	fbs := make([]interfaces.ReadOnlySignedBeaconBlock, 0, len(bs))
-	for i := len(bs) - 1; i >= 0; i-- {
+	for i, b := range slices.Backward(bs) {
 		if s.beaconDB.IsFinalizedBlock(ctx, bRoots[i]) {
-			fbs = append(fbs, bs[i])
+			fbs = append(fbs, b)
 		}
 	}
 	return fbs, nil

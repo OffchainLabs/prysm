@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api"
@@ -142,8 +143,8 @@ func MiddlewareChain(h http.Handler, mw []Middleware) http.Handler {
 	}
 
 	wrapped := h
-	for i := len(mw) - 1; i >= 0; i-- {
-		wrapped = mw[i](wrapped)
+	for _, m := range slices.Backward(mw) {
+		wrapped = m(wrapped)
 	}
 	return wrapped
 }

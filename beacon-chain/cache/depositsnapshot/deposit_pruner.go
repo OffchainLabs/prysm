@@ -2,6 +2,7 @@ package depositsnapshot
 
 import (
 	"context"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -40,11 +41,11 @@ func (c *Cache) PruneAllProofs(ctx context.Context) {
 	c.depositsLock.Lock()
 	defer c.depositsLock.Unlock()
 
-	for i := len(c.deposits) - 1; i >= 0; i-- {
-		if c.deposits[i].Deposit.Proof == nil {
+	for _, v := range slices.Backward(c.deposits) {
+		if v.Deposit.Proof == nil {
 			break
 		}
-		c.deposits[i].Deposit.Proof = nil
+		v.Deposit.Proof = nil
 	}
 }
 
