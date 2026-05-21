@@ -126,7 +126,20 @@ func (ps *Settings) ToConsensus() *validatorpb.ProposerSettingsPayload {
 	if ps.ProposeConfig != nil {
 		payload.ProposerConfig = make(map[string]*validatorpb.ProposerOptionPayload)
 		for key, option := range ps.ProposeConfig {
-			payload.ProposerConfig[hexutil.Encode(key[:])] = option.ToConsensus()
+			if option == nil {
+				continue
+			}
+			optionPayload := &validatorpb.ProposerOptionPayload{}
+			if option.FeeRecipientConfig != nil {
+				optionPayload.FeeRecipient = option.FeeRecipientConfig.FeeRecipient.Hex()
+			}
+			if option.BuilderConfig != nil {
+				optionPayload.Builder = option.BuilderConfig.ToConsensus()
+			}
+			if option.GraffitiConfig != nil {
+				optionPayload.Graffiti = &option.GraffitiConfig.Graffiti
+			}
+			payload.ProposerConfig[hexutil.Encode(key[:])] = optionPayload
 		}
 	}
 	if ps.DefaultConfig != nil {
