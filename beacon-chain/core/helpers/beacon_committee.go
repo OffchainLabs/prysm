@@ -96,19 +96,24 @@ func attestationCommittees(
 	att ethpb.Att,
 	committeeFunc beaconCommitteeFunc,
 ) ([][]primitives.ValidatorIndex, error) {
+	data := att.GetData()
+	if data == nil {
+		return nil, errors.New("attestation data is nil")
+	}
+
 	var committees [][]primitives.ValidatorIndex
 	if att.Version() >= version.Electra {
 		committeeIndices := att.CommitteeBitsVal().BitIndices()
 		committees = make([][]primitives.ValidatorIndex, len(committeeIndices))
 		for i, ci := range committeeIndices {
-			committee, err := committeeFunc(ctx, st, att.GetData().Slot, primitives.CommitteeIndex(ci))
+			committee, err := committeeFunc(ctx, st, data.Slot, primitives.CommitteeIndex(ci))
 			if err != nil {
 				return nil, err
 			}
 			committees[i] = committee
 		}
 	} else {
-		committee, err := committeeFunc(ctx, st, att.GetData().Slot, att.GetData().CommitteeIndex)
+		committee, err := committeeFunc(ctx, st, data.Slot, data.CommitteeIndex)
 		if err != nil {
 			return nil, err
 		}
