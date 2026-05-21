@@ -131,6 +131,10 @@ func GenerateTestDenebBlockWithSidecar(t *testing.T, parent [32]byte, slot primi
 
 	body, err := blocks.NewBeaconBlockBody(block.Block.Body)
 	require.NoError(t, err)
+	if body == nil || body.IsNil() {
+		t.Fatal("beacon block body is nil")
+		return blocks.ROBlock{}, nil
+	}
 	inclusion := make([][][]byte, len(commitments))
 	for i := range commitments {
 		proof, err := blocks.MerkleProofKZGCommitment(body, i)
@@ -152,9 +156,17 @@ func GenerateTestDenebBlockWithSidecar(t *testing.T, parent [32]byte, slot primi
 	sidecars := make([]blocks.ROBlob, len(commitments))
 	sbb, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
+	if sbb == nil || sbb.IsNil() {
+		t.Fatal("signed beacon block is nil")
+		return blocks.ROBlock{}, nil
+	}
 
 	sh, err := sbb.Header()
 	require.NoError(t, err)
+	if sh == nil {
+		t.Fatal("signed beacon block header is nil")
+		return blocks.ROBlock{}, nil
+	}
 	for i, c := range block.Block.Body.BlobKzgCommitments {
 		sidecars[i] = GenerateTestDenebBlobSidecar(t, root, sh, i, c, inclusion[i])
 	}

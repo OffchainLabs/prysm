@@ -73,6 +73,12 @@ func DeterministicDepositsAndKeys(numDeposits uint64) ([]*ethpb.Deposit, []bls.S
 			}
 		}
 	}
+	if cachedDeposits == nil {
+		return nil, nil, errors.New("cached deposits are nil")
+	}
+	if privKeys == nil {
+		return nil, nil, errors.New("private keys are nil")
+	}
 
 	depositTrie, _, err := DeterministicDepositTrie(int(numDeposits)) // lint:ignore uintcast
 	if err != nil {
@@ -101,6 +107,12 @@ func DepositsWithBalance(balances []uint64) ([]*ethpb.Deposit, *trie.SparseMerkl
 	}
 
 	numDeposits := uint64(len(balances))
+	if cachedDeposits == nil {
+		return nil, nil, errors.New("cached deposits are nil")
+	}
+	if privKeys == nil {
+		return nil, nil, errors.New("private keys are nil")
+	}
 	numExisting := uint64(len(cachedDeposits))
 	numRequired := numDeposits - uint64(len(cachedDeposits))
 
@@ -379,6 +391,12 @@ func DeterministicDepositsAndKeysSameValidator(numDeposits uint64) ([]*ethpb.Dep
 	depositTrie, _, err := DeterministicDepositTrie(int(numDeposits))
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to create deposit trie")
+	}
+	if cachedDeposits == nil {
+		return nil, nil, errors.New("cached deposits are nil")
+	}
+	if privKeys == nil {
+		return nil, nil, errors.New("private keys are nil")
 	}
 	requestedDeposits := cachedDeposits[:numDeposits]
 	for i := range requestedDeposits {

@@ -262,6 +262,10 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			if len(sigs) == 0 {
 				continue
 			}
+			aggregatedSig := bls.AggregateSignatures(sigs)
+			if aggregatedSig == nil {
+				return nil, fmt.Errorf("aggregate signature is nil")
+			}
 
 			var att ethpb.Att
 			if bState.Version() >= version.Electra {
@@ -271,13 +275,13 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 					Data:            attData,
 					CommitteeBits:   cb,
 					AggregationBits: aggregationBits,
-					Signature:       bls.AggregateSignatures(sigs).Marshal(),
+					Signature:       aggregatedSig.Marshal(),
 				}
 			} else {
 				att = &ethpb.Attestation{
 					Data:            attData,
 					AggregationBits: aggregationBits,
-					Signature:       bls.AggregateSignatures(sigs).Marshal(),
+					Signature:       aggregatedSig.Marshal(),
 				}
 			}
 			attestations = append(attestations, att)
