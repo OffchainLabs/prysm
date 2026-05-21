@@ -1,0 +1,3 @@
+### Fixed
+
+- Reconstruct the Gloas genesis block's `signed_execution_payload_bid.message` from `state.latest_execution_payload_bid` instead of zero defaults. This makes Prysm's genesis `block_root` match the value committed to in `state.latest_block_header.body_root` (i.e. the value other clients return), fixing a divergence where Prysm produced an orphaned genesis block (`0xfef8248511…`) on glamsterdam-devnet-4 while every other client returned the canonical `0x2ed167c7…`. Without this, the validator client failed to propose at slot 1 with "parent root … does not match the latest block header signing root in state".
