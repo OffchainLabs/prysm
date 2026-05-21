@@ -120,6 +120,9 @@ func validatorsLoseBalance(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientC
 }
 
 func insertDoubleAttestationIntoPool(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientConn) error {
+	if len(conns) < 2 {
+		return errors.New("expected at least two beacon node connections")
+	}
 	conn := firstConn(conns)
 	valClient := eth.NewBeaconNodeValidatorClient(conn)
 	beaconClient := eth.NewBeaconChainClient(conn)
@@ -170,6 +173,9 @@ func insertDoubleAttestationIntoPool(_ *e2eTypes.EvaluationContext, conns ...*gr
 }
 
 func proposeDoubleBlock(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientConn) error {
+	if len(conns) < 2 {
+		return errors.New("expected at least two beacon node connections")
+	}
 	conn := firstConn(conns)
 	valClient := eth.NewBeaconNodeValidatorClient(conn)
 	beaconClient := eth.NewBeaconChainClient(conn)
