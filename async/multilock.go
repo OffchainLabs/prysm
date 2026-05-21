@@ -35,6 +35,9 @@ type Lock struct {
 }
 
 func (lk *Lock) Lock() {
+	if lk == nil {
+		return
+	}
 	lk.lock <- 1
 
 	// get the channels and attempt to acquire them
@@ -54,6 +57,9 @@ func (lk *Lock) Lock() {
 // Unlock unlocks this lock. Must be called after Lock.
 // Can only be invoked if there is a previous call to Lock.
 func (lk *Lock) Unlock() {
+	if lk == nil {
+		return
+	}
 	<-lk.unlock
 
 	if lk.chans != nil {
@@ -69,6 +75,9 @@ func (lk *Lock) Unlock() {
 
 // Yield temporarily unlocks, gives up the cpu time to other goroutine, and attempts to lock again.
 func (lk *Lock) Yield() {
+	if lk == nil {
+		return
+	}
 	lk.Unlock()
 	runtime.Gosched()
 	lk.Lock()
