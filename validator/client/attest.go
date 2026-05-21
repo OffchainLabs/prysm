@@ -200,6 +200,9 @@ func (v *validator) duty(pubKey [fieldparams.BLSPubkeyLength]byte) (*ethpb.Valid
 	if !ok {
 		return nil, fmt.Errorf("pubkey %#x not in duties", bytesutil.Trunc(pubKey[:]))
 	}
+	if d == nil {
+		return nil, fmt.Errorf("pubkey %#x has nil duty", bytesutil.Trunc(pubKey[:]))
+	}
 	return d, nil
 }
 
