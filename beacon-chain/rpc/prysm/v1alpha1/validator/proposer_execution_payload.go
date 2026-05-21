@@ -43,6 +43,9 @@ var (
 )
 
 func setFeeRecipientIfBurnAddress(val *cache.TrackedValidator) {
+	if val == nil {
+		return
+	}
 	if val.FeeRecipient == primitives.ExecutionAddress([20]byte{}) && val.Index == 0 {
 		val.FeeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
 	}

@@ -33,6 +33,9 @@ func BuildBlobSidecars(blk interfaces.ReadOnlySignedBeaconBlock, blobs [][]byte,
 	if err != nil {
 		return nil, err
 	}
+	if proofComponents == nil {
+		return nil, errors.New("nil blob proof components")
+	}
 
 	for i := range blobSidecars {
 		proof, err := blocks.MerkleProofKZGCommitmentFromComponents(proofComponents, i)

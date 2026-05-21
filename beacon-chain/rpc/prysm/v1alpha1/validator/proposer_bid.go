@@ -75,6 +75,9 @@ func (vs *Server) winningP2PBid(
 	if !ok {
 		return nil
 	}
+	if cached == nil || cached.Message == nil {
+		return nil
+	}
 
 	builderValueGwei := cached.Message.Value
 	localValueGwei := primitives.WeiToGwei(local.Bid)
