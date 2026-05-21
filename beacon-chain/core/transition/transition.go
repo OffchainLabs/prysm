@@ -352,6 +352,9 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) (state.BeaconSta
 			if err != nil {
 				return nil, errors.Wrap(err, "could not process epoch with optimizations")
 			}
+			if state == nil || state.IsNil() {
+				return nil, errors.New("state is nil after epoch precompute")
+			}
 		}
 	}
 	return state, err
