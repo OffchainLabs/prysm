@@ -22,7 +22,7 @@ func (b *BeaconState) executionPayloadAvailabilityVal() []byte {
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) builderPendingPaymentsVal() []*ethpb.BuilderPendingPayment {
 	if b.builderPendingPayments == nil {
-		return nil
+		return []*ethpb.BuilderPendingPayment{}
 	}
 
 	payments := make([]*ethpb.BuilderPendingPayment, len(b.builderPendingPayments))
