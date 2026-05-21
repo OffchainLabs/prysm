@@ -91,7 +91,7 @@ func (e *blobCacheEntry) stash(sc *blocks.ROBlob) error {
 func (e *blobCacheEntry) filter(root [32]byte, kc [][]byte) ([]blocks.ROBlob, error) {
 	count := len(kc)
 	if e.diskSummary.AllAvailable(count) {
-		return nil, nil
+		return []blocks.ROBlob{}, nil
 	}
 	scs := make([]blocks.ROBlob, 0, count)
 	for i := uint64(0); i < uint64(count); i++ {

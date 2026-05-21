@@ -121,10 +121,16 @@ func (s *LazilyPersistentStoreBlob) checkOne(ctx context.Context, current primit
 			fails := me.Failures()
 			lf := make(logrus.Fields, len(fails))
 			for i := range fails {
+				if fails[i] == nil {
+					continue
+				}
 				lf[fmt.Sprintf("fail_%d", i)] = fails[i].Error()
 			}
-			log.WithFields(lf).WithFields(logging.BlockFieldsFromBlob(sidecars[0])).
-				Debug("Invalid BlobSidecars received")
+			logEntry := log.WithFields(lf)
+			if len(sidecars) > 0 {
+				logEntry = logEntry.WithFields(logging.BlockFieldsFromBlob(sidecars[0]))
+			}
+			logEntry.Debug("Invalid BlobSidecars received")
 		}
 		return errors.Wrapf(err, "invalid BlobSidecars received for block %#x", root)
 	}
