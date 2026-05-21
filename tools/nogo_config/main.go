@@ -67,6 +67,9 @@ func main() {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
+	if c == nil {
+		c = make(Configs)
+	}
 
 	for check := range strings.SplitSeq(*checks, ",") {
 		c.AddExclusion(strings.TrimSpace(check), e)
