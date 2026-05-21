@@ -72,6 +72,9 @@ func AggregateDisjointOneBitAtts(atts []ethpb.Att) (ethpb.Att, error) {
 
 // AggregatePair aggregates pair of attestations a1 and a2 together.
 func AggregatePair(a1, a2 *ethpb.Attestation) (*ethpb.Attestation, error) {
+	if a1 == nil || a2 == nil {
+		return nil, errors.New("cannot aggregate nil attestations")
+	}
 	o, err := a1.AggregationBits.Overlaps(a2.AggregationBits)
 	if err != nil {
 		return nil, err
@@ -82,6 +85,9 @@ func AggregatePair(a1, a2 *ethpb.Attestation) (*ethpb.Attestation, error) {
 
 	baseAtt := a1.Copy()
 	newAtt := a2.Copy()
+	if baseAtt == nil || newAtt == nil {
+		return nil, errors.New("cannot aggregate nil attestations")
+	}
 	if newAtt.AggregationBits.Count() > baseAtt.AggregationBits.Count() {
 		baseAtt, newAtt = newAtt, baseAtt
 	}
@@ -108,6 +114,9 @@ func AggregatePair(a1, a2 *ethpb.Attestation) (*ethpb.Attestation, error) {
 	}
 
 	aggregatedSig := aggregateSignatures([]bls.Signature{baseSig, newSig})
+	if aggregatedSig == nil {
+		return nil, errors.New("could not aggregate signatures")
+	}
 	baseAtt.Signature = aggregatedSig.Marshal()
 	baseAtt.AggregationBits = newBits
 
