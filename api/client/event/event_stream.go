@@ -62,6 +62,9 @@ func NewEventStream(ctx context.Context, httpClient *http.Client, host string, t
 }
 
 func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
+	if h == nil {
+		return
+	}
 	allTopics := strings.Join(h.topics, ",")
 	log.WithField("topics", allTopics).Info("Listening to Beacon API events")
 	fullUrl := h.host + "/eth/v1/events?topics=" + allTopics
