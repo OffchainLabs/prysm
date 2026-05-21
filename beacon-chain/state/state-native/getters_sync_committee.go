@@ -16,7 +16,7 @@ func (b *BeaconState) CurrentSyncCommittee() (*ethpb.SyncCommittee, error) {
 	}
 
 	if b.currentSyncCommittee == nil {
-		return nil, nil
+		return &ethpb.SyncCommittee{}, nil
 	}
 
 	return b.currentSyncCommitteeVal(), nil
@@ -38,7 +38,7 @@ func (b *BeaconState) NextSyncCommittee() (*ethpb.SyncCommittee, error) {
 	}
 
 	if b.nextSyncCommittee == nil {
-		return nil, nil
+		return &ethpb.SyncCommittee{}, nil
 	}
 
 	return b.nextSyncCommitteeVal(), nil
@@ -53,7 +53,7 @@ func (b *BeaconState) nextSyncCommitteeVal() *ethpb.SyncCommittee {
 // copySyncCommittee copies the provided sync committee object.
 func copySyncCommittee(data *ethpb.SyncCommittee) *ethpb.SyncCommittee {
 	if data == nil {
-		return nil
+		return &ethpb.SyncCommittee{}
 	}
 	return &ethpb.SyncCommittee{
 		Pubkeys:         bytesutil.SafeCopy2dBytes(data.Pubkeys),
