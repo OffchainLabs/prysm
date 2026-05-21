@@ -563,51 +563,99 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 		var vote []byte
 		switch blk.Block.(type) {
 		case *ethpb.BeaconBlockContainer_Phase0Block:
-			b := blk.GetPhase0Block().Block
+			phase0 := blk.GetPhase0Block()
+			if phase0 == nil {
+				return errors.New("phase0 block is nil")
+			}
+			b := phase0.Block
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
 		case *ethpb.BeaconBlockContainer_AltairBlock:
-			b := blk.GetAltairBlock().Block
+			altair := blk.GetAltairBlock()
+			if altair == nil {
+				return errors.New("altair block is nil")
+			}
+			b := altair.Block
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
 		case *ethpb.BeaconBlockContainer_BellatrixBlock:
-			b := blk.GetBellatrixBlock().Block
+			bellatrix := blk.GetBellatrixBlock()
+			if bellatrix == nil {
+				return errors.New("bellatrix block is nil")
+			}
+			b := bellatrix.Block
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
 		case *ethpb.BeaconBlockContainer_BlindedBellatrixBlock:
-			b := blk.GetBlindedBellatrixBlock().Block
+			blindedBellatrix := blk.GetBlindedBellatrixBlock()
+			if blindedBellatrix == nil {
+				return errors.New("blinded bellatrix block is nil")
+			}
+			b := blindedBellatrix.Block
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
 		case *ethpb.BeaconBlockContainer_CapellaBlock:
-			b := blk.GetCapellaBlock().Block
+			capella := blk.GetCapellaBlock()
+			if capella == nil {
+				return errors.New("capella block is nil")
+			}
+			b := capella.Block
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
 		case *ethpb.BeaconBlockContainer_BlindedCapellaBlock:
-			b := blk.GetBlindedCapellaBlock().Block
+			blindedCapella := blk.GetBlindedCapellaBlock()
+			if blindedCapella == nil {
+				return errors.New("blinded capella block is nil")
+			}
+			b := blindedCapella.Block
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
 		case *ethpb.BeaconBlockContainer_DenebBlock:
-			b := blk.GetDenebBlock().Block
+			deneb := blk.GetDenebBlock()
+			if deneb == nil {
+				return errors.New("deneb block is nil")
+			}
+			b := deneb.Block
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
 		case *ethpb.BeaconBlockContainer_BlindedDenebBlock:
-			b := blk.GetBlindedDenebBlock().Message
+			blindedDeneb := blk.GetBlindedDenebBlock()
+			if blindedDeneb == nil {
+				return errors.New("blinded deneb block is nil")
+			}
+			b := blindedDeneb.Message
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
 		case *ethpb.BeaconBlockContainer_ElectraBlock:
-			b := blk.GetElectraBlock().Block
+			electra := blk.GetElectraBlock()
+			if electra == nil {
+				return errors.New("electra block is nil")
+			}
+			b := electra.Block
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
 		case *ethpb.BeaconBlockContainer_BlindedElectraBlock:
-			b := blk.GetBlindedElectraBlock().Message
+			blindedElectra := blk.GetBlindedElectraBlock()
+			if blindedElectra == nil {
+				return errors.New("blinded electra block is nil")
+			}
+			b := blindedElectra.Message
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
 		case *ethpb.BeaconBlockContainer_FuluBlock:
-			b := blk.GetFuluBlock().Block
+			fulu := blk.GetFuluBlock()
+			if fulu == nil {
+				return errors.New("fulu block is nil")
+			}
+			b := fulu.Block
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
 		case *ethpb.BeaconBlockContainer_BlindedFuluBlock:
-			b := blk.GetBlindedFuluBlock().Message
+			blindedFulu := blk.GetBlindedFuluBlock()
+			if blindedFulu == nil {
+				return errors.New("blinded fulu block is nil")
+			}
+			b := blindedFulu.Message
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
 		default:
