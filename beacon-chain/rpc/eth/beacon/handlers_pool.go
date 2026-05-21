@@ -1005,6 +1005,11 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 		}
 		if err := s.Broadcaster.Broadcast(ctx, consensusMsg); err != nil {
 			log.WithError(err).Error("Could not broadcast payload attestation message")
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: server.NewBroadcastFailedError("PayloadAttestation", err).Error(),
+			})
+			continue
 		}
 
 		if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg, idx); err != nil {
