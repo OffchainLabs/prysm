@@ -5,110 +5,71 @@ import (
 	"context"
 	"fmt"
 
-	requests "github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
-	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
-// ProcessExecutionPayload processes the signed execution payload envelope for the Gloas fork.
+// VerifyExecutionPayloadEnvelope is a verification function called by fork-choice when
+// importing a signed execution payload. It verifies the payload against the
+// execution engine without processing execution requests or updating state.
+// Actual state mutations are deferred to process_parent_execution_payload in
+// the next block.
 //
-//	<spec fn="process_execution_payload" fork="gloas" hash="36bd3af3">
-//	def process_execution_payload(
+//	<spec fn="verify_execution_payload_envelope" fork="gloas" hash="450a2b1c">
+//	def verify_execution_payload_envelope(
 //	    state: BeaconState,
-//	    # [Modified in Gloas:EIP7732]
-//	    # Removed `body`
-//	    # [New in Gloas:EIP7732]
 //	    signed_envelope: SignedExecutionPayloadEnvelope,
 //	    execution_engine: ExecutionEngine,
-//	    # [New in Gloas:EIP7732]
-//	    verify: bool = True,
 //	) -> None:
 //	    envelope = signed_envelope.message
 //	    payload = envelope.payload
 //
 //	    # Verify signature
-//	    if verify:
-//	        assert verify_execution_payload_envelope_signature(state, signed_envelope)
-//
-//	    # Cache latest block header state root
-//	    previous_state_root = hash_tree_root(state)
-//	    if state.latest_block_header.state_root == Root():
-//	        state.latest_block_header.state_root = previous_state_root
+//	    assert verify_execution_payload_envelope_signature(state, signed_envelope)
 //
 //	    # Verify consistency with the beacon block
-//	    assert envelope.beacon_block_root == hash_tree_root(state.latest_block_header)
-//	    assert envelope.slot == state.slot
+//	    header = copy(state.latest_block_header)
+//	    header.state_root = hash_tree_root(state)
+//	    assert envelope.beacon_block_root == hash_tree_root(header)
+//	    assert envelope.parent_beacon_block_root == state.latest_block_header.parent_root
 //
 //	    # Verify consistency with the committed bid
-//	    committed_bid = state.latest_execution_payload_bid
-//	    assert envelope.builder_index == committed_bid.builder_index
-//	    assert committed_bid.prev_randao == payload.prev_randao
+//	    bid = state.latest_execution_payload_bid
+//	    assert envelope.builder_index == bid.builder_index
+//	    assert payload.prev_randao == bid.prev_randao
+//	    assert payload.gas_limit == bid.gas_limit
+//	    assert payload.block_hash == bid.block_hash
+//	    assert hash_tree_root(envelope.execution_requests) == bid.execution_requests_root
 //
-//	    # Verify consistency with expected withdrawals
-//	    assert hash_tree_root(payload.withdrawals) == hash_tree_root(state.payload_expected_withdrawals)
-//
-//	    # Verify the gas_limit
-//	    assert committed_bid.gas_limit == payload.gas_limit
-//	    # Verify the block hash
-//	    assert committed_bid.block_hash == payload.block_hash
-//	    # Verify consistency of the parent hash with respect to the previous execution payload
-//	    assert payload.parent_hash == state.latest_block_hash
-//	    # Verify timestamp
-//	    assert payload.timestamp == compute_time_at_slot(state, state.slot)
 //	    # Verify the execution payload is valid
-//	    versioned_hashes = [
-//	        kzg_commitment_to_versioned_hash(commitment)
-//	        # [Modified in Gloas:EIP7732]
-//	        for commitment in committed_bid.blob_kzg_commitments
-//	    ]
-//	    requests = envelope.execution_requests
+//	    assert payload.slot_number == state.slot
+//	    assert payload.parent_hash == state.latest_block_hash
+//	    assert payload.timestamp == compute_time_at_slot(state, state.slot)
+//	    assert hash_tree_root(payload.withdrawals) == hash_tree_root(state.payload_expected_withdrawals)
 //	    assert execution_engine.verify_and_notify_new_payload(
 //	        NewPayloadRequest(
 //	            execution_payload=payload,
-//	            versioned_hashes=versioned_hashes,
-//	            parent_beacon_block_root=state.latest_block_header.parent_root,
-//	            execution_requests=requests,
+//	            versioned_hashes=[
+//	                kzg_commitment_to_versioned_hash(commitment)
+//	                for commitment in bid.blob_kzg_commitments
+//	            ],
+//	            parent_beacon_block_root=envelope.parent_beacon_block_root,
+//	            execution_requests=envelope.execution_requests,
 //	        )
 //	    )
-//
-//	    def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
-//	        for operation in operations:
-//	            fn(state, operation)
-//
-//	    for_ops(requests.deposits, process_deposit_request)
-//	    for_ops(requests.withdrawals, process_withdrawal_request)
-//	    for_ops(requests.consolidations, process_consolidation_request)
-//
-//	    # Queue the builder payment
-//	    payment = state.builder_pending_payments[SLOTS_PER_EPOCH + state.slot % SLOTS_PER_EPOCH]
-//	    amount = payment.withdrawal.amount
-//	    if amount > 0:
-//	        state.builder_pending_withdrawals.append(payment.withdrawal)
-//	    state.builder_pending_payments[SLOTS_PER_EPOCH + state.slot % SLOTS_PER_EPOCH] = (
-//	        BuilderPendingPayment()
-//	    )
-//
-//	    # Cache the execution payload hash
-//	    state.execution_payload_availability[state.slot % SLOTS_PER_HISTORICAL_ROOT] = 0b1
-//	    state.latest_block_hash = payload.block_hash
-//
-//	    # Verify the state root
-//	    if verify:
-//	        assert envelope.state_root == hash_tree_root(state)
 //	</spec>
-func ProcessExecutionPayload(
+func VerifyExecutionPayloadEnvelope(
 	ctx context.Context,
 	st state.BeaconState,
 	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
 ) error {
-	if err := VerifyExecutionPayloadEnvelopeSignature(st, signedEnvelope); err != nil {
+	if err := verifyExecutionPayloadEnvelopeSignature(st, signedEnvelope); err != nil {
 		return errors.Wrap(err, "signature verification failed")
 	}
 
@@ -117,53 +78,47 @@ func ProcessExecutionPayload(
 		return errors.Wrap(err, "could not get envelope from signed envelope")
 	}
 
-	if err := ApplyExecutionPayload(ctx, st, envelope); err != nil {
-		return err
-	}
-
-	r, err := st.HashTreeRoot(ctx)
-	if err != nil {
-		return errors.Wrap(err, "could not get hash tree root")
-	}
-	if r != envelope.StateRoot() {
-		return fmt.Errorf("state root mismatch: expected %#x, got %#x", envelope.StateRoot(), r)
-	}
-
-	return nil
+	return validatePayloadConsistency(ctx, st, envelope)
 }
 
-// ApplyExecutionPayload applies the execution payload envelope to the state and performs the same
-// consistency checks as the full processing path. This keeps the post-payload state root computation
-// on a shared code path, even though some bid/payload checks are not strictly required for the root itself.
-func ApplyExecutionPayload(
+// VerifyExecutionPayloadEnvelopeWithDeferredSig is the init-sync entry point: extract
+// the signature for deferred batch verification and validate consistency.
+// No state mutations are performed.
+func VerifyExecutionPayloadEnvelopeWithDeferredSig(
 	ctx context.Context,
 	st state.BeaconState,
-	envelope interfaces.ROExecutionPayloadEnvelope,
-) error {
-	latestHeader := st.LatestBlockHeader()
-	if len(latestHeader.StateRoot) == 0 || bytes.Equal(latestHeader.StateRoot, make([]byte, 32)) {
-		previousStateRoot, err := st.HashTreeRoot(ctx)
-		if err != nil {
-			return errors.Wrap(err, "could not compute state root")
-		}
-		latestHeader.StateRoot = previousStateRoot[:]
-		if err := st.SetLatestBlockHeader(latestHeader); err != nil {
-			return errors.Wrap(err, "could not set latest block header")
-		}
-	}
-
-	blockHeaderRoot, err := latestHeader.HashTreeRoot()
+	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
+) (*bls.SignatureBatch, error) {
+	sigBatch, err := ExecutionPayloadEnvelopeSignatureBatch(st, signedEnvelope)
 	if err != nil {
-		return errors.Wrap(err, "could not compute block header root")
+		return nil, errors.Wrap(err, "could not extract envelope signature batch")
 	}
 
-	beaconBlockRoot := envelope.BeaconBlockRoot()
-	if !bytes.Equal(beaconBlockRoot[:], blockHeaderRoot[:]) {
-		return errors.Errorf("envelope beacon block root does not match state latest block header root: envelope=%#x, header=%#x", beaconBlockRoot, blockHeaderRoot)
+	envelope, err := signedEnvelope.Envelope()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get envelope from signed envelope")
 	}
 
+	if err := validatePayloadConsistency(ctx, st, envelope); err != nil {
+		return nil, err
+	}
+	return sigBatch, nil
+}
+
+// validatePayloadConsistency checks that the envelope and payload are consistent
+// with the beacon block header, the committed bid, and the current state.
+func validatePayloadConsistency(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) error {
 	if envelope.Slot() != st.Slot() {
 		return errors.Errorf("envelope slot does not match state slot: envelope=%d, state=%d", envelope.Slot(), st.Slot())
+	}
+
+	header := st.LatestBlockHeader()
+	if header == nil {
+		return errors.New("latest block header is nil")
+	}
+	envelopeParent := envelope.ParentBeaconBlockRoot()
+	if !bytes.Equal(envelopeParent[:], header.ParentRoot) {
+		return errors.Errorf("envelope parent beacon block root does not match state latest block header parent root: envelope=%#x, state=%#x", envelopeParent, header.ParentRoot)
 	}
 
 	latestBid, err := st.LatestExecutionPayloadBid()
@@ -175,6 +130,16 @@ func ApplyExecutionPayload(
 	}
 	if envelope.BuilderIndex() != latestBid.BuilderIndex() {
 		return errors.Errorf("envelope builder index does not match committed bid builder index: envelope=%d, bid=%d", envelope.BuilderIndex(), latestBid.BuilderIndex())
+	}
+
+	// Verify execution_requests_root matches the bid commitment.
+	executionRequestsRoot, err := envelope.ExecutionRequests().HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not compute execution requests root")
+	}
+	bidExecutionRequestsRoot := latestBid.ExecutionRequestsRoot()
+	if executionRequestsRoot != bidExecutionRequestsRoot {
+		return errors.Errorf("execution requests root mismatch: envelope=%#x, bid=%#x", executionRequestsRoot, bidExecutionRequestsRoot)
 	}
 
 	payload, err := envelope.Execution()
@@ -190,7 +155,6 @@ func ApplyExecutionPayload(
 	if err != nil {
 		return errors.Wrap(err, "could not get withdrawals from payload")
 	}
-
 	ok, err := st.WithdrawalsMatchPayloadExpected(withdrawals)
 	if err != nil {
 		return errors.Wrap(err, "could not validate payload withdrawals")
@@ -225,117 +189,70 @@ func ApplyExecutionPayload(
 		return errors.Errorf("payload timestamp does not match expected timestamp: payload=%d, expected=%d", payload.Timestamp(), uint64(t.Unix()))
 	}
 
-	if err := ApplyExecutionPayloadStateMutations(ctx, st, envelope.ExecutionRequests(), [32]byte(payload.BlockHash())); err != nil {
-		return err
-	}
-
 	return nil
 }
 
-func ApplyExecutionPayloadStateMutations(
-	ctx context.Context,
+// ExecutionPayloadEnvelopeSignatureBatch extracts the BLS signature from a signed execution payload
+// envelope as a SignatureBatch for deferred batch verification.
+func ExecutionPayloadEnvelopeSignatureBatch(
 	st state.BeaconState,
-	executionRequests *enginev1.ExecutionRequests,
-	blockHash [32]byte,
-) error {
-	if err := processExecutionRequests(ctx, st, executionRequests); err != nil {
-		return errors.Wrap(err, "could not process execution requests")
+	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
+) (*bls.SignatureBatch, error) {
+	envelope, err := signedEnvelope.Envelope()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get envelope: %w", err)
 	}
 
-	if err := st.QueueBuilderPayment(); err != nil {
-		return errors.Wrap(err, "could not queue builder payment")
+	builderIdx := envelope.BuilderIndex()
+	publicKey, err := envelopePublicKey(st, builderIdx)
+	if err != nil {
+		return nil, err
 	}
 
-	if err := st.SetExecutionPayloadAvailability(st.Slot(), true); err != nil {
-		return errors.Wrap(err, "could not set execution payload availability")
+	currentEpoch := slots.ToEpoch(envelope.Slot())
+	domain, err := signing.Domain(
+		st.Fork(),
+		currentEpoch,
+		params.BeaconConfig().DomainBeaconBuilder,
+		st.GenesisValidatorsRoot(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute signing domain: %w", err)
 	}
 
-	if err := st.SetLatestBlockHash(blockHash); err != nil {
-		return errors.Wrap(err, "could not set latest block hash")
+	signingRoot, err := signedEnvelope.SigningRoot(domain)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute signing root: %w", err)
 	}
 
-	return nil
+	signatureBytes := signedEnvelope.Signature()
+	return &bls.SignatureBatch{
+		Signatures:   [][]byte{signatureBytes[:]},
+		PublicKeys:   []bls.PublicKey{publicKey},
+		Messages:     [][32]byte{signingRoot},
+		Descriptions: []string{"execution payload envelope signature"},
+	}, nil
 }
 
-func envelopePublicKey(st state.BeaconState, builderIdx primitives.BuilderIndex) (bls.PublicKey, error) {
-	if builderIdx == params.BeaconConfig().BuilderIndexSelfBuild {
-		return proposerPublicKey(st)
-	}
-	return builderPublicKey(st, builderIdx)
-}
-
-func proposerPublicKey(st state.BeaconState) (bls.PublicKey, error) {
-	header := st.LatestBlockHeader()
-	if header == nil {
-		return nil, fmt.Errorf("latest block header is nil")
-	}
-	proposerPubkey := st.PubkeyAtIndex(header.ProposerIndex)
-	publicKey, err := bls.PublicKeyFromBytes(proposerPubkey[:])
-	if err != nil {
-		return nil, fmt.Errorf("invalid proposer public key: %w", err)
-	}
-	return publicKey, nil
-}
-
-func builderPublicKey(st state.BeaconState, builderIdx primitives.BuilderIndex) (bls.PublicKey, error) {
-	builder, err := st.Builder(builderIdx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get builder: %w", err)
-	}
-	if builder == nil {
-		return nil, fmt.Errorf("builder at index %d not found", builderIdx)
-	}
-	publicKey, err := bls.PublicKeyFromBytes(builder.Pubkey)
-	if err != nil {
-		return nil, fmt.Errorf("invalid builder public key: %w", err)
-	}
-	return publicKey, nil
-}
-
-// processExecutionRequests processes deposits, withdrawals, and consolidations from execution requests.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// for op in requests.deposits: process_deposit_request(state, op)
-// for op in requests.withdrawals: process_withdrawal_request(state, op)
-// for op in requests.consolidations: process_consolidation_request(state, op)
-func processExecutionRequests(ctx context.Context, st state.BeaconState, rqs *enginev1.ExecutionRequests) error {
-	if err := processDepositRequests(ctx, st, rqs.Deposits); err != nil {
-		return errors.Wrap(err, "could not process deposit requests")
-	}
-
-	var err error
-	st, err = requests.ProcessWithdrawalRequests(ctx, st, rqs.Withdrawals)
-	if err != nil {
-		return errors.Wrap(err, "could not process withdrawal requests")
-	}
-	err = requests.ProcessConsolidationRequests(ctx, st, rqs.Consolidations)
-	if err != nil {
-		return errors.Wrap(err, "could not process consolidation requests")
-	}
-	return nil
-}
-
-// VerifyExecutionPayloadEnvelopeSignature verifies the BLS signature on a signed execution payload envelope.
-// <spec fn="verify_execution_payload_envelope_signature" fork="gloas" style="full" hash="49483ae2">
-// def verify_execution_payload_envelope_signature(
+// verifyExecutionPayloadEnvelopeSignature verifies the BLS signature on a signed execution payload envelope.
 //
-//	state: BeaconState, signed_envelope: SignedExecutionPayloadEnvelope
+//	<spec fn="verify_execution_payload_envelope_signature" fork="gloas" style="full" hash="49483ae2">
+//	def verify_execution_payload_envelope_signature(
+//	    state: BeaconState, signed_envelope: SignedExecutionPayloadEnvelope
+//	) -> bool:
+//	    builder_index = signed_envelope.message.builder_index
+//	    if builder_index == BUILDER_INDEX_SELF_BUILD:
+//	        validator_index = state.latest_block_header.proposer_index
+//	        pubkey = state.validators[validator_index].pubkey
+//	    else:
+//	        pubkey = state.builders[builder_index].pubkey
 //
-// ) -> bool:
-//
-//	builder_index = signed_envelope.message.builder_index
-//	if builder_index == BUILDER_INDEX_SELF_BUILD:
-//	    validator_index = state.latest_block_header.proposer_index
-//	    pubkey = state.validators[validator_index].pubkey
-//	else:
-//	    pubkey = state.builders[builder_index].pubkey
-//
-//	signing_root = compute_signing_root(
-//	    signed_envelope.message, get_domain(state, DOMAIN_BEACON_BUILDER)
-//	)
-//	return bls.Verify(pubkey, signing_root, signed_envelope.signature)
-//
-// </spec>
-func VerifyExecutionPayloadEnvelopeSignature(st state.BeaconState, signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope) error {
+//	    signing_root = compute_signing_root(
+//	        signed_envelope.message, get_domain(state, DOMAIN_BEACON_BUILDER)
+//	    )
+//	    return bls.Verify(pubkey, signing_root, signed_envelope.signature)
+//	</spec>
+func verifyExecutionPayloadEnvelopeSignature(st state.BeaconState, signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope) error {
 	envelope, err := signedEnvelope.Envelope()
 	if err != nil {
 		return fmt.Errorf("failed to get envelope: %w", err)
@@ -374,4 +291,39 @@ func VerifyExecutionPayloadEnvelopeSignature(st state.BeaconState, signedEnvelop
 	}
 
 	return nil
+}
+
+func envelopePublicKey(st state.BeaconState, builderIdx primitives.BuilderIndex) (bls.PublicKey, error) {
+	if builderIdx == params.BeaconConfig().BuilderIndexSelfBuild {
+		return proposerPublicKey(st)
+	}
+	return builderPublicKey(st, builderIdx)
+}
+
+func proposerPublicKey(st state.BeaconState) (bls.PublicKey, error) {
+	header := st.LatestBlockHeader()
+	if header == nil {
+		return nil, fmt.Errorf("latest block header is nil")
+	}
+	proposerPubkey := st.PubkeyAtIndex(header.ProposerIndex)
+	publicKey, err := bls.PublicKeyFromBytes(proposerPubkey[:])
+	if err != nil {
+		return nil, fmt.Errorf("invalid proposer public key: %w", err)
+	}
+	return publicKey, nil
+}
+
+func builderPublicKey(st state.BeaconState, builderIdx primitives.BuilderIndex) (bls.PublicKey, error) {
+	builder, err := st.Builder(builderIdx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get builder: %w", err)
+	}
+	if builder == nil {
+		return nil, fmt.Errorf("builder at index %d not found", builderIdx)
+	}
+	publicKey, err := bls.PublicKeyFromBytes(builder.Pubkey)
+	if err != nil {
+		return nil, fmt.Errorf("invalid builder public key: %w", err)
+	}
+	return publicKey, nil
 }

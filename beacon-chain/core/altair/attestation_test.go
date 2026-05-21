@@ -313,7 +313,7 @@ func TestProcessAttestationNoVerify_SourceTargetHead(t *testing.T) {
 	copy(ckp.Root, make([]byte, fieldparams.RootLength))
 	require.NoError(t, beaconState.SetCurrentJustifiedCheckpoint(ckp))
 
-	b, err := helpers.TotalActiveBalance(beaconState)
+	b, err := helpers.TotalActiveBalance(t.Context(), beaconState)
 	require.NoError(t, err)
 	beaconState, err = altair.ProcessAttestationNoVerifySignature(t.Context(), beaconState, att, b)
 	require.NoError(t, err)
@@ -556,7 +556,7 @@ func TestSetParticipationAndRewardProposer(t *testing.T) {
 				require.NoError(t, beaconState.SetPreviousParticipationBits(test.epochParticipation))
 			}
 
-			b, err := helpers.TotalActiveBalance(beaconState)
+			b, err := helpers.TotalActiveBalance(t.Context(), beaconState)
 			require.NoError(t, err)
 			st, err := altair.SetParticipationAndRewardProposer(t.Context(), beaconState, test.epoch, test.indices, test.participatedFlags, b, &ethpb.Attestation{})
 			require.NoError(t, err)
@@ -641,7 +641,7 @@ func TestEpochParticipation(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		b, err := helpers.TotalActiveBalance(beaconState)
+		b, err := helpers.TotalActiveBalance(t.Context(), beaconState)
 		require.NoError(t, err)
 		n, p, err := altair.EpochParticipation(beaconState, test.indices, test.epochParticipation, test.participatedFlags, b)
 		require.NoError(t, err)

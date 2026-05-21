@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	stderrors "errors"
 	"fmt"
+	"math"
 	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -19,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -43,10 +45,16 @@ var ErrValidatorNotInPTC = stderrors.New("validator not in PTC")
 //	    assert is_valid_indexed_payload_attestation(state, indexed_payload_attestation)
 //	</spec>
 func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body interfaces.ReadOnlyBeaconBlockBody) error {
+	_, span := trace.StartSpan(ctx, "gloas.ProcessPayloadAttestations")
+	defer span.End()
+
 	atts, err := body.PayloadAttestations()
 	if err != nil {
 		return errors.Wrap(err, "failed to get payload attestations from block body")
 	}
+
+	span.SetAttributes(trace.Int64Attribute("count", int64(len(atts))))
+
 	if len(atts) == 0 {
 		return nil
 	}
@@ -80,7 +88,7 @@ func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body 
 
 // indexedPayloadAttestation converts a payload attestation into its indexed form.
 func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState, att *eth.PayloadAttestation) (*consensus_types.IndexedPayloadAttestation, error) {
-	committee, err := PayloadCommittee(ctx, st, att.Data.Slot)
+	committee, err := st.PayloadCommitteeReadOnly(att.Data.Slot)
 	if err != nil {
 		return nil, err
 	}
@@ -99,12 +107,12 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 	}, nil
 }
 
-// PayloadCommittee returns the payload timeliness committee for a given slot for the state.
+// computePTC computes the payload timeliness committee for a given slot.
 //
-//	<spec fn="get_ptc" fork="gloas" hash="ae15f761">
-//	def get_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
+//	<spec fn="compute_ptc" fork="gloas" hash="1dcaa117">
+//	def compute_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
 //	    """
-//	    Get the payload timeliness committee for the given ``slot``.
+//	    Get the payload timeliness committee, with possible duplicates, for the given ``slot``.
 //	    """
 //	    epoch = compute_epoch_at_slot(slot)
 //	    seed = hash(get_seed(state, epoch, DOMAIN_PTC_ATTESTER) + uint_to_bytes(slot))
@@ -118,7 +126,7 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 //	        state, indices, seed, size=PTC_SIZE, shuffle_indices=False
 //	    )
 //	</spec>
-func PayloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
+func computePTC(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
 	epoch := slots.ToEpoch(slot)
 	seed, err := ptcSeed(st, epoch, slot)
 	if err != nil {
@@ -166,7 +174,7 @@ func PayloadCommitteeIndex(
 	slot primitives.Slot,
 	validatorIndex primitives.ValidatorIndex,
 ) (uint64, error) {
-	ptc, err := PayloadCommittee(ctx, st, slot)
+	ptc, err := st.PayloadCommitteeReadOnly(slot)
 	if err != nil {
 		return 0, err
 	}
@@ -188,7 +196,7 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 
 // selectByBalance selects a balance-weighted subset of input candidates.
 //
-//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="2c9f1c23">
+//	<spec fn="compute_balance_weighted_selection" fork="gloas" hash="e5dff16e">
 //	def compute_balance_weighted_selection(
 //	    state: BeaconState,
 //	    indices: Sequence[ValidatorIndex],
@@ -200,19 +208,26 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 //	    Return ``size`` indices sampled by effective balance, using ``indices``
 //	    as candidates. If ``shuffle_indices`` is ``True``, candidate indices
 //	    are themselves sampled from ``indices`` by shuffling it, otherwise
-//	    ``indices`` is traversed in order.
+//	    ``indices`` is traversed in order. The returned list can contain duplicates.
 //	    """
+//	    MAX_RANDOM_VALUE = 2**16 - 1
 //	    total = uint64(len(indices))
 //	    assert total > 0
+//	    effective_balances = [state.validators[index].effective_balance for index in indices]
 //	    selected: List[ValidatorIndex] = []
 //	    i = uint64(0)
 //	    while len(selected) < size:
+//	        offset = i % 16 * 2
+//	        if offset == 0:
+//	            random_bytes = hash(seed + uint_to_bytes(i // 16))
 //	        next_index = i % total
 //	        if shuffle_indices:
 //	            next_index = compute_shuffled_index(next_index, total, seed)
-//	        candidate_index = indices[next_index]
-//	        if compute_balance_weighted_acceptance(state, candidate_index, seed, i):
-//	            selected.append(candidate_index)
+//	        weight = effective_balances[next_index] * MAX_RANDOM_VALUE
+//	        random_value = bytes_to_uint64(random_bytes[offset : offset + 2])
+//	        threshold = MAX_EFFECTIVE_BALANCE_ELECTRA * random_value
+//	        if weight >= threshold:
+//	            selected.append(indices[next_index])
 //	        i += 1
 //	    return selected
 //	</spec>
@@ -230,16 +245,28 @@ func selectByBalanceFill(
 	copy(buf[:], seed[:])
 	maxBalance := params.BeaconConfig().MaxEffectiveBalanceElectra
 
+	var randomBytes [32]byte
+	cachedBlock := uint64(math.MaxUint64)
+
 	for _, idx := range candidates {
 		if ctx.Err() != nil {
 			return nil, i, ctx.Err()
 		}
 
-		ok, err := acceptByBalance(st, idx, buf[:], hashFunc, maxBalance, i)
-		if err != nil {
-			return nil, i, err
+		if block := i / 16; block != cachedBlock {
+			binary.LittleEndian.PutUint64(buf[len(buf)-8:], block)
+			randomBytes = hashFunc(buf[:])
+			cachedBlock = block
 		}
-		if ok {
+
+		offset := (i % 16) * 2
+		randomValue := uint64(binary.LittleEndian.Uint16(randomBytes[offset : offset+2]))
+
+		eb, err := st.EffectiveBalanceAtIndex(idx)
+		if err != nil {
+			return nil, i, errors.Wrapf(err, "validator %d", idx)
+		}
+		if eb*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue {
 			selected = append(selected, idx)
 		}
 		if uint64(len(selected)) == fieldparams.PTCSize {
@@ -249,38 +276,6 @@ func selectByBalanceFill(
 	}
 
 	return selected, i, nil
-}
-
-// acceptByBalance determines if a validator is accepted based on its effective balance.
-//
-//	<spec fn="compute_balance_weighted_acceptance" fork="gloas" hash="9954dcd0">
-//	def compute_balance_weighted_acceptance(
-//	    state: BeaconState, index: ValidatorIndex, seed: Bytes32, i: uint64
-//	) -> bool:
-//	    """
-//	    Return whether to accept the selection of the validator ``index``, with probability
-//	    proportional to its ``effective_balance``, and randomness given by ``seed`` and ``i``.
-//	    """
-//	    MAX_RANDOM_VALUE = 2**16 - 1
-//	    random_bytes = hash(seed + uint_to_bytes(i // 16))
-//	    offset = i % 16 * 2
-//	    random_value = bytes_to_uint64(random_bytes[offset : offset + 2])
-//	    effective_balance = state.validators[index].effective_balance
-//	    return effective_balance * MAX_RANDOM_VALUE >= MAX_EFFECTIVE_BALANCE_ELECTRA * random_value
-//	</spec>
-func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex, seedBuf []byte, hashFunc func([]byte) [32]byte, maxBalance uint64, round uint64) (bool, error) {
-	// Reuse the seed buffer by overwriting the last 8 bytes with the round counter.
-	binary.LittleEndian.PutUint64(seedBuf[len(seedBuf)-8:], round/16)
-	random := hashFunc(seedBuf)
-	offset := (round % 16) * 2
-	randomValue := uint64(binary.LittleEndian.Uint16(random[offset : offset+2])) // 16-bit draw per spec
-
-	val, err := st.ValidatorAtIndex(idx)
-	if err != nil {
-		return false, errors.Wrapf(err, "validator %d", idx)
-	}
-
-	return val.EffectiveBalance*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue, nil
 }
 
 // validIndexedPayloadAttestation verifies the signature of an indexed payload attestation.
@@ -341,4 +336,44 @@ func validIndexedPayloadAttestation(st state.ReadOnlyBeaconState, att *consensus
 		return errors.New("invalid signature")
 	}
 	return nil
+}
+
+// ProcessPTCWindow rotates the cached PTC window at epoch boundaries by computing
+// PTC assignments for the new lookahead epoch and shifting the window.
+//
+//	<spec fn="process_ptc_window" fork="gloas" hash="7be3d509">
+//	def process_ptc_window(state: BeaconState) -> None:
+//	    """
+//	    Update the cached PTC window.
+//	    """
+//	    # Shift all epochs forward by one
+//	    state.ptc_window[: len(state.ptc_window) - SLOTS_PER_EPOCH] = state.ptc_window[SLOTS_PER_EPOCH:]
+//	    # Fill in the last epoch
+//	    next_epoch = Epoch(get_current_epoch(state) + MIN_SEED_LOOKAHEAD + 1)
+//	    start_slot = compute_start_slot_at_epoch(next_epoch)
+//	    state.ptc_window[len(state.ptc_window) - SLOTS_PER_EPOCH :] = [
+//	        compute_ptc(state, Slot(slot)) for slot in range(start_slot, start_slot + SLOTS_PER_EPOCH)
+//	    ]
+//	</spec>
+func ProcessPTCWindow(ctx context.Context, st state.BeaconState) error {
+	_, span := trace.StartSpan(ctx, "gloas.ProcessPTCWindow")
+	defer span.End()
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	lastEpoch := slots.ToEpoch(st.Slot()) + params.BeaconConfig().MinSeedLookahead + 1
+	startSlot, err := slots.EpochStart(lastEpoch)
+	if err != nil {
+		return err
+	}
+
+	newSlots := make([]*eth.PTCs, slotsPerEpoch)
+	for i := range slotsPerEpoch {
+		ptc, err := computePTC(ctx, st, startSlot+primitives.Slot(i))
+		if err != nil {
+			return err
+		}
+		newSlots[i] = &eth.PTCs{ValidatorIndices: ptc}
+	}
+
+	return st.RotatePTCWindow(newSlots)
 }

@@ -49,8 +49,9 @@ func (t testExecutionPayloadBid) BlobKzgCommitments() [][]byte { return t.blobKz
 func (t testExecutionPayloadBid) BlobKzgCommitmentCount() uint64 {
 	return uint64(len(t.blobKzgCommitments))
 }
-func (t testExecutionPayloadBid) FeeRecipient() [20]byte { return t.feeRecipient }
-func (t testExecutionPayloadBid) IsNil() bool            { return false }
+func (t testExecutionPayloadBid) FeeRecipient() [20]byte          { return t.feeRecipient }
+func (t testExecutionPayloadBid) ExecutionRequestsRoot() [32]byte { return [32]byte{} }
+func (t testExecutionPayloadBid) IsNil() bool                     { return false }
 
 func TestSetExecutionPayloadBid(t *testing.T) {
 	t.Run("previous fork returns expected error", func(t *testing.T) {
@@ -186,80 +187,6 @@ func TestClearBuilderPendingPayment(t *testing.T) {
 
 		require.ErrorContains(t, "out of range", err)
 		require.Equal(t, false, st.dirtyFields[types.BuilderPendingPayments])
-	})
-}
-
-func TestQueueBuilderPayment(t *testing.T) {
-	t.Run("previous fork returns expected error", func(t *testing.T) {
-		st := &BeaconState{version: version.Fulu}
-		err := st.QueueBuilderPayment()
-		require.ErrorContains(t, "is not supported", err)
-	})
-
-	t.Run("appends withdrawal, clears payment, and marks dirty", func(t *testing.T) {
-		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-		slot := primitives.Slot(3)
-		paymentIndex := slotsPerEpoch + (slot % slotsPerEpoch)
-
-		st := &BeaconState{
-			version:                   version.Gloas,
-			slot:                      slot,
-			dirtyFields:               make(map[types.FieldIndex]bool),
-			rebuildTrie:               make(map[types.FieldIndex]bool),
-			sharedFieldReferences:     make(map[types.FieldIndex]*stateutil.Reference),
-			builderPendingPayments:    make([]*ethpb.BuilderPendingPayment, slotsPerEpoch*2),
-			builderPendingWithdrawals: []*ethpb.BuilderPendingWithdrawal{},
-		}
-		st.builderPendingPayments[paymentIndex] = &ethpb.BuilderPendingPayment{
-			Weight: 1,
-			Withdrawal: &ethpb.BuilderPendingWithdrawal{
-				FeeRecipient: bytes.Repeat([]byte{0xAB}, 20),
-				Amount:       99,
-				BuilderIndex: 1,
-			},
-		}
-
-		require.NoError(t, st.QueueBuilderPayment())
-		require.DeepEqual(t, emptyBuilderPendingPayment, st.builderPendingPayments[paymentIndex])
-		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
-		require.Equal(t, true, st.dirtyFields[types.BuilderPendingWithdrawals])
-		require.Equal(t, 1, len(st.builderPendingWithdrawals))
-		require.DeepEqual(t, bytes.Repeat([]byte{0xAB}, 20), st.builderPendingWithdrawals[0].FeeRecipient)
-		require.Equal(t, primitives.Gwei(99), st.builderPendingWithdrawals[0].Amount)
-
-		// Ensure copied withdrawal is not aliased.
-		st.builderPendingPayments[paymentIndex].Withdrawal.FeeRecipient[0] = 0x01
-		require.Equal(t, byte(0xAB), st.builderPendingWithdrawals[0].FeeRecipient[0])
-	})
-
-	t.Run("zero amount does not append withdrawal", func(t *testing.T) {
-		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-		slot := primitives.Slot(3)
-		paymentIndex := slotsPerEpoch + (slot % slotsPerEpoch)
-
-		st := &BeaconState{
-			version:                   version.Gloas,
-			slot:                      slot,
-			dirtyFields:               make(map[types.FieldIndex]bool),
-			rebuildTrie:               make(map[types.FieldIndex]bool),
-			sharedFieldReferences:     make(map[types.FieldIndex]*stateutil.Reference),
-			builderPendingPayments:    make([]*ethpb.BuilderPendingPayment, slotsPerEpoch*2),
-			builderPendingWithdrawals: []*ethpb.BuilderPendingWithdrawal{},
-		}
-		st.builderPendingPayments[paymentIndex] = &ethpb.BuilderPendingPayment{
-			Weight: 1,
-			Withdrawal: &ethpb.BuilderPendingWithdrawal{
-				FeeRecipient: bytes.Repeat([]byte{0xAB}, 20),
-				Amount:       0,
-				BuilderIndex: 1,
-			},
-		}
-
-		require.NoError(t, st.QueueBuilderPayment())
-		require.DeepEqual(t, emptyBuilderPendingPayment, st.builderPendingPayments[paymentIndex])
-		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
-		require.Equal(t, false, st.dirtyFields[types.BuilderPendingWithdrawals])
-		require.Equal(t, 0, len(st.builderPendingWithdrawals))
 	})
 }
 
@@ -1137,7 +1064,7 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 		require.Equal(t, 0, len(st.builders))
 	})
 
-	t.Run("drops invalid non-builder deposit", func(t *testing.T) {
+	t.Run("keeps invalid non-builder deposit in pending queue", func(t *testing.T) {
 		sk, err := bls.RandKey()
 		require.NoError(t, err)
 		validatorCreds := nonBuilderWithdrawalCredentials()
@@ -1145,8 +1072,40 @@ func TestOnboardBuildersFromPendingDeposits(t *testing.T) {
 
 		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{deposit}, 0)
 		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
-		require.Equal(t, 0, len(st.pendingDeposits))
+		require.Equal(t, 1, len(st.pendingDeposits))
 		require.Equal(t, 0, len(st.builders))
+	})
+
+	t.Run("creates builder then increases balance for same pubkey", func(t *testing.T) {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		builderCreds := builderWithdrawalCredentials(0x11)
+		depSlot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch * 2)
+		depositCreate := newPendingDeposit(t, sk, builderCreds, 10, depSlot, true)
+		depositTopUp := newPendingDeposit(t, sk, builderCreds, 5, depSlot, true)
+
+		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{depositCreate, depositTopUp}, 0)
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.Equal(t, 0, len(st.pendingDeposits))
+		require.Equal(t, 1, len(st.builders))
+		require.Equal(t, primitives.Gwei(15), st.builders[0].Balance)
+	})
+
+	t.Run("invalid validator deposit followed by valid builder deposit same pubkey", func(t *testing.T) {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		validatorCreds := nonBuilderWithdrawalCredentials()
+		builderCreds := builderWithdrawalCredentials(0xFF)
+
+		depositInvalidValidator := newPendingDeposit(t, sk, validatorCreds, 5, 0, false)
+		depositBuilder := newPendingDeposit(t, sk, builderCreds, 7, 0, true)
+
+		st := newGloasState(t, nil, nil, []*ethpb.PendingDeposit{depositInvalidValidator, depositBuilder}, 0)
+		require.NoError(t, st.OnboardBuildersFromPendingDeposits())
+		require.Equal(t, 1, len(st.pendingDeposits))
+		require.DeepEqual(t, depositInvalidValidator, st.pendingDeposits[0])
+		require.Equal(t, 1, len(st.builders))
+		require.Equal(t, primitives.Gwei(7), st.builders[0].Balance)
 	})
 }
 

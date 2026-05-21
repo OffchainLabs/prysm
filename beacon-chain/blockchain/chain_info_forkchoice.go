@@ -49,11 +49,32 @@ func (s *Service) HighestReceivedBlockRoot() [32]byte {
 	return s.cfg.ForkChoiceStore.HighestReceivedBlockRoot()
 }
 
+// BlockHash returns the execution payload block hash for the given beacon block root from forkchoice.
+func (s *Service) BlockHash(root [32]byte) ([32]byte, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.BlockHash(root)
+}
+
+// GasLimit returns the gas limit of the latest full payload at or before the given beacon block root from forkchoice.
+func (s *Service) GasLimit(root [32]byte) (uint64, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.GasLimit(root)
+}
+
 // HasFullNode returns the corresponding value from forkchoice
 func (s *Service) HasFullNode(root [32]byte) bool {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.HasFullNode(root)
+}
+
+// FullBeatsEmpty returns whether forkchoice would select the full payload variant for the given root.
+func (s *Service) FullBeatsEmpty(root [32]byte) bool {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.FullBeatsEmpty(root)
 }
 
 // ReceivedBlocksLastEpoch returns the corresponding value from forkchoice
@@ -142,6 +163,13 @@ func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byt
 	}
 	if st.Version() < version.Bellatrix {
 		return nil, nil
+	}
+	if st.Version() >= version.Gloas {
+		h, err := st.LatestBlockHash()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get latest block hash")
+		}
+		return bytesutil.SafeCopyBytes(h[:]), nil
 	}
 	header, err := st.LatestExecutionPayloadHeader()
 	if err != nil {

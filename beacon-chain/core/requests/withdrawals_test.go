@@ -89,7 +89,7 @@ func TestProcessWithdrawRequests(t *testing.T) {
 					Amount:            params.BeaconConfig().FullExitRequestAmount,
 					WithdrawableEpoch: 0,
 				}))
-				_, err = wantPostSt.ExitEpochAndUpdateChurn(primitives.Gwei(v.EffectiveBalance))
+				_, err = wantPostSt.ExitEpochAndUpdateChurn(t.Context(), primitives.Gwei(v.EffectiveBalance))
 				require.NoError(t, err)
 				webc, err := wantPostSt.ExitBalanceToConsume()
 				require.NoError(t, err)
@@ -172,7 +172,7 @@ func TestProcessWithdrawRequests(t *testing.T) {
 				gece, err := got.EarliestConsolidationEpoch()
 				require.NoError(t, err)
 				require.Equal(t, wece, gece)
-				_, err = wantPostSt.ExitEpochAndUpdateChurn(primitives.Gwei(100))
+				_, err = wantPostSt.ExitEpochAndUpdateChurn(t.Context(), primitives.Gwei(100))
 				require.NoError(t, err)
 				webc, err := wantPostSt.ExitBalanceToConsume()
 				require.NoError(t, err)

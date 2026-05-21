@@ -1,6 +1,7 @@
 package state_native
 
 import (
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -28,6 +29,17 @@ func (b *BeaconState) PendingDeposits() ([]*ethpb.PendingDeposit, error) {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 	return b.pendingDepositsVal(), nil
+}
+
+// IsPendingValidator checks the state's pending_deposits queue under RLock; the underlying
+// slice is not copied.
+func (b *BeaconState) IsPendingValidator(pubkey []byte) (bool, error) {
+	if b.version < version.Electra {
+		return false, errNotSupported("IsPendingValidator", b.version)
+	}
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	return helpers.IsPendingValidator(b.pendingDeposits, pubkey)
 }
 
 func (b *BeaconState) pendingDepositsVal() []*ethpb.PendingDeposit {

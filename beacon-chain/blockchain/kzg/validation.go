@@ -77,10 +77,10 @@ func VerifyBlobKZGProofBatch(blobs [][]byte, commitments [][]byte, proofs [][]by
 			return fmt.Errorf("blobs len (%d) differs from expected (%d)", len(blobs[i]), len(ckzg4844.Blob{}))
 		}
 		if len(commitments[i]) != len(ckzg4844.Bytes48{}) {
-			return fmt.Errorf("commitments len (%d) differs from expected (%d)", len(commitments[i]), len(ckzg4844.Blob{}))
+			return fmt.Errorf("commitments len (%d) differs from expected (%d)", len(commitments[i]), len(ckzg4844.Bytes48{}))
 		}
 		if len(proofs[i]) != len(ckzg4844.Bytes48{}) {
-			return fmt.Errorf("proofs len (%d) differs from expected (%d)", len(proofs[i]), len(ckzg4844.Blob{}))
+			return fmt.Errorf("proofs len (%d) differs from expected (%d)", len(proofs[i]), len(ckzg4844.Bytes48{}))
 		}
 		ckzgBlobs[i] = ckzg4844.Blob(blobs[i])
 		ckzgCommitments[i] = ckzg4844.Bytes48(commitments[i])

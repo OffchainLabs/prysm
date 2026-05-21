@@ -680,12 +680,12 @@ func (s *Store) SaveHeadBlockRoot(ctx context.Context, blockRoot [32]byte) error
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveHeadBlockRoot")
 	defer span.End()
 	hasStateSummary := s.HasStateSummary(ctx, blockRoot)
-	return s.db.Update(func(tx *bolt.Tx) error {
-		hasStateInDB := tx.Bucket(stateBucket).Get(blockRoot[:]) != nil
-		if !(hasStateInDB || hasStateSummary) {
-			return errors.New("no state or state summary found with head block root")
-		}
+	hasStateInDB := s.HasState(ctx, blockRoot)
+	if !(hasStateInDB || hasStateSummary) {
+		return errors.New("no state or state summary found with head block root")
+	}
 
+	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(blocksBucket)
 		return bucket.Put(headBlockRootKey, blockRoot[:])
 	})
@@ -806,6 +806,44 @@ func (s *Store) HighestRootsBelowSlot(ctx context.Context, slot primitives.Slot)
 	}
 
 	return fs, roots, nil
+}
+
+// LowestRootsAtOrAboveSlot returns roots from the database slot index at or above the input slot.
+// The returned slot is the slot where the roots were found. This is the mirror of HighestRootsBelowSlot.
+// If no block exists at or above the given slot, an empty root slice is returned.
+func (s *Store) LowestRootsAtOrAboveSlot(ctx context.Context, slot primitives.Slot) (fs primitives.Slot, roots [][32]byte, err error) {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.LowestRootsAtOrAboveSlot")
+	defer span.End()
+
+	sk := bytesutil.Uint64ToBytesBigEndian(uint64(slot))
+	err = s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(blockSlotIndicesBucket)
+		c := bkt.Cursor()
+		// Seek positions the cursor at the smallest key >= sk.
+		// If no key >= sk exists, sl is nil and we return empty.
+		for sl, r := c.Seek(sk); sl != nil; sl, r = c.Next() {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if r == nil {
+				continue
+			}
+			fs = bytesutil.BytesToSlotBigEndian(sl)
+			roots, err = splitRoots(r)
+			if err != nil {
+				return errors.Wrapf(err, "error parsing packed roots %#x", r)
+			}
+			return nil
+		}
+		// No block found at or above slot — fall back to the head block root.
+		headRoot := tx.Bucket(blocksBucket).Get(headBlockRootKey)
+		if headRoot == nil {
+			return nil
+		}
+		roots = [][32]byte{bytesutil.ToBytes32(headRoot)}
+		return nil
+	})
+	return fs, roots, err
 }
 
 // FeeRecipientByValidatorID returns the fee recipient for a validator id.

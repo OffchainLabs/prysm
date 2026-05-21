@@ -27,11 +27,17 @@ func ProcessAttestationsNoVerifySignature(
 	beaconState state.BeaconState,
 	b interfaces.ReadOnlyBeaconBlock,
 ) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "altair.ProcessAttestationsNoVerifySignature")
+	defer span.End()
+
 	if b == nil || b.IsNil() {
 		return nil, consensusblocks.ErrNilBeaconBlock
 	}
+
 	body := b.Body()
-	totalBalance, err := helpers.TotalActiveBalance(beaconState)
+	span.SetAttributes(trace.Int64Attribute("count", int64(len(body.Attestations()))))
+
+	totalBalance, err := helpers.TotalActiveBalance(ctx, beaconState)
 	if err != nil {
 		return nil, err
 	}

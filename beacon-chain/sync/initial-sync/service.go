@@ -42,6 +42,7 @@ var _ runtime.Service = (*Service)(nil)
 // blockchainService defines the interface for interaction with block chain service.
 type blockchainService interface {
 	blockchain.BlockReceiver
+	blockchain.ExecutionPayloadEnvelopeReceiver
 	blockchain.ChainInfoFetcher
 }
 
@@ -197,8 +198,9 @@ func (s *Service) Start() {
 	s.chainStarted.Set()
 	log.Info("Starting initial chain sync...")
 
-	// Are we already in sync, or close to it?
-	if slots.ToEpoch(s.cfg.Chain.HeadSlot()) == slots.ToEpoch(currentSlot) {
+	// Initial sync completion must be slot-precise. Being in the same epoch can still
+	// leave the node several slots behind the current head.
+	if s.cfg.Chain.HeadSlot() >= currentSlot {
 		log.Info("Already synced to the current chain head")
 		s.markSynced()
 		return
@@ -318,10 +320,11 @@ func (s *Service) Resync() error {
 	if err != nil {
 		return err
 	}
+	l := log
 	if err = s.roundRobinSync(); err != nil {
-		log = log.WithError(err)
+		l = log.WithError(err)
 	}
-	log.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Resync attempt complete")
+	l.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Resync attempt complete")
 	return nil
 }
 

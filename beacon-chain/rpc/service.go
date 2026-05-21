@@ -127,7 +127,10 @@ type Config struct {
 	BlobStorage                      *filesystem.BlobStorage
 	DataColumnStorage                *filesystem.DataColumnStorage
 	TrackedValidatorsCache           *cache.TrackedValidatorsCache
+	ProposerPreferencesCache         *cache.ProposerPreferencesCache
+	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
 	PayloadIDCache                   *cache.PayloadIDCache
+	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	LCStore                          *lightClient.Store
 	GraffitiInfo                     *execution.GraffitiInfo
 }
@@ -263,7 +266,10 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ClockWaiter:                      s.cfg.ClockWaiter,
 		CoreService:                      coreService,
 		TrackedValidatorsCache:           s.cfg.TrackedValidatorsCache,
+		ProposerPreferencesCache:         s.cfg.ProposerPreferencesCache,
+		HighestBidCache:                  s.cfg.HighestBidCache,
 		PayloadIDCache:                   s.cfg.PayloadIDCache,
+		ExecutionPayloadEnvelopeCache:    s.cfg.ExecutionPayloadEnvelopeCache,
 		AttestationStateFetcher:          s.cfg.AttestationReceiver,
 		GraffitiInfo:                     s.cfg.GraffitiInfo,
 	}

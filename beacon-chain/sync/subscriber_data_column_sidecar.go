@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
@@ -19,36 +20,51 @@ import (
 func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) error {
 	var wg errgroup.Group
 
-	sidecar, ok := msg.(blocks.VerifiedRODataColumn)
-	if !ok {
-		return fmt.Errorf("message was not type blocks.VerifiedRODataColumn, type=%T", msg)
+	var sidecar blocks.VerifiedRODataColumn
+	switch dc := msg.(type) {
+	case *ethpb.DataColumnSidecar:
+		ro, err := blocks.NewRODataColumn(dc)
+		if err != nil {
+			return err
+		}
+		sidecar = blocks.NewVerifiedRODataColumn(ro)
+	case *ethpb.DataColumnSidecarGloas:
+		ro, err := blocks.NewRODataColumnGloas(dc)
+		if err != nil {
+			return err
+		}
+		sidecar = blocks.NewVerifiedRODataColumn(ro)
+	default:
+		return fmt.Errorf("unexpected data column type: %T", msg)
 	}
 
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
 		return wrapDataColumnError(sidecar, "receive data column sidecar", err)
 	}
 
-	wg.Go(func() error {
-		if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
-			return wrapDataColumnError(sidecar, "process data column sidecars from reconstruction", err)
-		}
-
-		return nil
-	})
-
-	wg.Go(func() error {
-		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
-			if errors.Is(err, context.Canceled) {
-				// Do not log if the context was cancelled on purpose.
-				// (Still log other context errors such as deadlines exceeded).
-				return nil
+	// Reconstruction and execution processing require Fulu-specific fields
+	// (SignedBlockHeader, KzgCommitments) that Gloas sidecars don't carry.
+	if !sidecar.IsGloas() {
+		wg.Go(func() error {
+			if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
+				return wrapDataColumnError(sidecar, "process data column sidecars from reconstruction", err)
 			}
 
-			return wrapDataColumnError(sidecar, "process data column sidecars from execution", err)
-		}
+			return nil
+		})
 
-		return nil
-	})
+		wg.Go(func() error {
+			if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
+				if errors.Is(err, context.Canceled) {
+					return nil
+				}
+
+				return wrapDataColumnError(sidecar, "process data column sidecars from execution", err)
+			}
+
+			return nil
+		})
+	}
 
 	if err := wg.Wait(); err != nil {
 		return err
@@ -66,11 +82,15 @@ func (s *Service) receiveDataColumnSidecar(ctx context.Context, sidecar blocks.V
 // receiveDataColumnSidecars receives multiple data column sidecars: marks them as seen and saves them to the chain.
 func (s *Service) receiveDataColumnSidecars(ctx context.Context, sidecars []blocks.VerifiedRODataColumn) error {
 	for _, sidecar := range sidecars {
-		slot := sidecar.SignedBlockHeader.Header.Slot
-		proposerIndex := sidecar.SignedBlockHeader.Header.ProposerIndex
-		columnIndex := sidecar.Index
-
-		s.setSeenDataColumnIndex(slot, proposerIndex, columnIndex)
+		if sidecar.IsGloas() {
+			s.setSeenDataColumnRootIndex(sidecar.BlockRoot(), sidecar.Index(), sidecar.Slot())
+		} else {
+			proposerIndex, err := sidecar.ProposerIndex()
+			if err != nil {
+				return err
+			}
+			s.setSeenDataColumnIndex(sidecar.Slot(), proposerIndex, sidecar.Index())
+		}
 	}
 
 	if err := s.cfg.chain.ReceiveDataColumns(sidecars); err != nil {
@@ -118,5 +138,5 @@ func (s *Service) allDataColumnSubnets(_ primitives.Slot) map[uint64]bool {
 }
 
 func wrapDataColumnError(sidecar blocks.VerifiedRODataColumn, message string, err error) error {
-	return fmt.Errorf("%s - slot %d, root %s: %w", message, sidecar.SignedBlockHeader.Header.Slot, fmt.Sprintf("%#x", sidecar.BlockRoot()), err)
+	return fmt.Errorf("%s - slot %d, root %s: %w", message, sidecar.Slot(), fmt.Sprintf("%#x", sidecar.BlockRoot()), err)
 }

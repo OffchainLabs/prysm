@@ -41,6 +41,8 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.SyncMessageDueBPSGloas = 2500
 	minimalConfig.ContributionDueBPSGloas = 5000
 	minimalConfig.PayloadAttestationDueBPS = 7500
+	minimalConfig.PayloadDueBPS = 7500
+	minimalConfig.EquivocationEarlyDueBPS = 7500
 	minimalConfig.MinAttestationInclusionDelay = 1
 	minimalConfig.SlotsPerEpoch = 8
 	minimalConfig.SqrRootSlotsPerEpoch = 2
@@ -49,6 +51,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.EpochsPerEth1VotingPeriod = 4
 	minimalConfig.SlotsPerHistoricalRoot = 64
 	minimalConfig.MinValidatorWithdrawabilityDelay = 256
+	minimalConfig.MinBuilderWithdrawabilityDelay = 2
 	minimalConfig.ShardCommitteePeriod = 64
 	minimalConfig.MinEpochsToInactivityPenalty = 4
 	minimalConfig.Eth1FollowDistance = 16
@@ -79,6 +82,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.MaxWithdrawalsPerPayload = 4
 	minimalConfig.MaxBlsToExecutionChanges = 16
 	minimalConfig.MaxValidatorsPerWithdrawalsSweep = 16
+	minimalConfig.MaxBuildersPerWithdrawalsSweep = 16
 
 	// Signature domains
 	minimalConfig.DomainBeaconProposer = bytesutil.ToBytes4(bytesutil.Bytes4(0))
@@ -124,6 +128,11 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.MaxPendingPartialsPerWithdrawalsSweep = 2
 	minimalConfig.PendingDepositsLimit = 134217728
 	minimalConfig.MaxPendingDepositsPerEpoch = 16
+
+	// New Gloas params (EIP-8061)
+	minimalConfig.ChurnLimitQuotientGloas = 16
+	minimalConfig.ConsolidationChurnLimitQuotient = 32
+	minimalConfig.MaxPerEpochActivationChurnLimitGloas = 128000000000
 
 	// Ethereum PoW parameters.
 	minimalConfig.DepositChainID = 5   // Chain ID of eth1 goerli.

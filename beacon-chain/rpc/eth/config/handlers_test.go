@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -85,6 +87,7 @@ func TestGetSpec(t *testing.T) {
 	config.FuluForkEpoch = 109
 	config.GloasForkVersion = []byte("GloasForkVersion")
 	config.GloasForkEpoch = 110
+	config.MinBuilderWithdrawabilityDelay = 111
 	config.MaxBuildersPerWithdrawalsSweep = 112
 	config.BLSWithdrawalPrefixByte = byte('b')
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
@@ -143,6 +146,7 @@ func TestGetSpec(t *testing.T) {
 	config.SyncMessageDueBPSGloas = primitives.BP(128)
 	config.ContributionDueBPSGloas = primitives.BP(129)
 	config.PayloadAttestationDueBPS = primitives.BP(130)
+	config.PayloadDueBPS = primitives.BP(131)
 	config.TerminalBlockHash = common.HexToHash("TerminalBlockHash")
 	config.TerminalBlockHashActivationEpoch = 72
 	config.TerminalTotalDifficulty = "73"
@@ -182,6 +186,9 @@ func TestGetSpec(t *testing.T) {
 	config.BuilderPaymentThresholdNumerator = 104
 	config.BuilderPaymentThresholdDenominator = 105
 	config.MaxRequestPayloads = 106
+	config.ChurnLimitQuotientGloas = 107
+	config.ConsolidationChurnLimitQuotient = 108
+	config.MaxPerEpochActivationChurnLimitGloas = 109
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -210,6 +217,9 @@ func TestGetSpec(t *testing.T) {
 	var dptc [4]byte
 	copy(dptc[:], []byte{'0', '0', '0', '8'})
 	config.DomainPTCAttester = dptc
+	var dpp [4]byte
+	copy(dpp[:], []byte{'0', '0', '0', '9'})
+	config.DomainProposerPreferences = dpp
 	var dam [4]byte
 	copy(dam[:], []byte{'1', '0', '0', '0'})
 	config.DomainApplicationMask = dam
@@ -225,7 +235,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 196, len(data))
+	assert.Equal(t, 206, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -309,6 +319,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x"+hex.EncodeToString([]byte("GloasForkVersion")), v)
 			case "GLOAS_FORK_EPOCH":
 				assert.Equal(t, "110", v)
+			case "MIN_BUILDER_WITHDRAWABILITY_DELAY":
+				assert.Equal(t, "111", v)
 			case "MAX_BUILDERS_PER_WITHDRAWALS_SWEEP":
 				assert.Equal(t, "112", v)
 			case "MIN_ANCHOR_POW_BLOCK_DIFFICULTY":
@@ -435,6 +447,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x30303037", v)
 			case "DOMAIN_PTC_ATTESTER":
 				assert.Equal(t, "0x30303038", v)
+			case "DOMAIN_PROPOSER_PREFERENCES":
+				assert.Equal(t, "0x30303039", v)
 			case "DOMAIN_APPLICATION_MASK":
 				assert.Equal(t, "0x31303030", v)
 			case "DOMAIN_SYNC_COMMITTEE":
@@ -505,6 +519,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "129", v)
 			case "PAYLOAD_ATTESTATION_DUE_BPS":
 				assert.Equal(t, "130", v)
+			case "PAYLOAD_DUE_BPS":
+				assert.Equal(t, "131", v)
 			case "MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT":
 				assert.Equal(t, "8", v)
 			case "MAX_REQUEST_LIGHT_CLIENT_UPDATES":
@@ -627,6 +643,12 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "104", v)
 			case "BUILDER_PAYMENT_THRESHOLD_DENOMINATOR":
 				assert.Equal(t, "105", v)
+			case "CHURN_LIMIT_QUOTIENT_GLOAS":
+				assert.Equal(t, "107", v)
+			case "CONSOLIDATION_CHURN_LIMIT_QUOTIENT":
+				assert.Equal(t, "108", v)
+			case "MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS":
+				assert.Equal(t, "109", v)
 			case "BLOB_SCHEDULE":
 				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)
@@ -643,6 +665,14 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "128", v) // From fieldparams.NumberOfColumns
 			case "UPDATE_TIMEOUT":
 				assert.Equal(t, "1782", v) // SlotsPerEpoch (27) * EpochsPerSyncCommitteePeriod (66)
+			case "PTC_SIZE":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.PTCSize), 10), v)
+			case "MAX_PAYLOAD_ATTESTATIONS":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.MaxPayloadAttestations), 10), v)
+			case "BUILDER_REGISTRY_LIMIT":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.BuilderRegistryLimit), 10), v)
+			case "BUILDER_PENDING_WITHDRAWALS_LIMIT":
+				assert.Equal(t, strconv.FormatUint(uint64(fieldparams.BuilderPendingWithdrawalsLimit), 10), v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

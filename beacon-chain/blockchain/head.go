@@ -41,7 +41,8 @@ func (s *Service) UpdateAndSaveHeadWithBalances(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "could not retrieve head state in DB")
 	}
-	return s.saveHead(ctx, headRoot, headBlock, headState)
+	full := s.cfg.ForkChoiceStore.FullBeatsEmpty(headRoot)
+	return s.saveHead(ctx, headRoot, headBlock, headState, full)
 }
 
 // This defines the current chain service's view of head.
@@ -50,18 +51,18 @@ type head struct {
 	block      interfaces.ReadOnlySignedBeaconBlock // current head block.
 	state      state.BeaconState                    // current head state.
 	slot       primitives.Slot                      // the head block slot number
+	full       bool                                 // whether the head's execution payload has been delivered (post-Gloas)
 	optimistic bool                                 // optimistic status when saved head
 }
 
 // This saves head info to the local service cache, it also saves the
 // new head root to the DB.
 // Caller of the method MUST acquire a lock on forkchoice.
-func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock interfaces.ReadOnlySignedBeaconBlock, headState state.BeaconState) error {
+func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock interfaces.ReadOnlySignedBeaconBlock, headState state.BeaconState, full bool) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.saveHead")
 	defer span.End()
 
-	// Do nothing if head hasn't changed.
-	if !s.isNewHead(newHeadRoot) {
+	if !s.isNewHead(newHeadRoot, full) {
 		return nil
 	}
 
@@ -157,6 +158,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 		state:      headState,
 		optimistic: isOptimistic,
 		slot:       headBlock.Block().Slot(),
+		full:       full,
 	}
 	if err := s.setHead(newHead); err != nil {
 		return errors.Wrap(err, "could not set head")
@@ -219,6 +221,7 @@ func (s *Service) setHead(newHead *head) error {
 		state:      newHead.state.Copy(),
 		optimistic: newHead.optimistic,
 		slot:       newHead.slot,
+		full:       newHead.full,
 	}
 	return nil
 }
@@ -333,12 +336,15 @@ func (s *Service) notifyNewHeadEvent(
 	if currentDutyDependentRoot == [32]byte{} {
 		currentDutyDependentRoot = s.originBlockRoot
 	}
-	previousDutyDependentRoot := currentDutyDependentRoot
+	var previousDutyDependentRoot [32]byte
 	if currEpoch > 0 {
 		previousDutyDependentRoot, err = s.DependentRoot(currEpoch.Sub(1))
 		if err != nil {
 			return errors.Wrap(err, "could not get duty dependent root")
 		}
+	}
+	if previousDutyDependentRoot == [32]byte{} {
+		previousDutyDependentRoot = s.originBlockRoot
 	}
 
 	isOptimistic, err := s.IsOptimistic(ctx)

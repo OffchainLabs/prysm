@@ -69,33 +69,35 @@ type Service struct {
 	lcStore                        *lightClient.Store
 	startWaitingDataColumnSidecars chan bool // for testing purposes only
 	syncCommitteeHeadState         *cache.SyncCommitteeHeadStateCache
+	payloadArrivals                *payloadArrivals
 }
 
 // config options for the service.
 type config struct {
-	BeaconBlockBuf          int
-	ChainStartFetcher       execution.ChainStartFetcher
-	BeaconDB                db.HeadAccessDatabase
-	DepositCache            cache.DepositCache
-	PayloadIDCache          *cache.PayloadIDCache
-	TrackedValidatorsCache  *cache.TrackedValidatorsCache
-	AttestationCache        *cache.AttestationCache
-	AttPool                 attestations.Pool
-	ExitPool                voluntaryexits.PoolManager
-	SlashingPool            slashings.PoolManager
-	BLSToExecPool           blstoexec.PoolManager
-	P2P                     p2p.Accessor
-	MaxRoutines             int
-	StateNotifier           statefeed.Notifier
-	ForkChoiceStore         f.ForkChoicer
-	AttService              *attestations.Service
-	StateGen                *stategen.State
-	SlasherAttestationsFeed *event.Feed
-	WeakSubjectivityCheckpt *ethpb.Checkpoint
-	BlockFetcher            execution.POWBlockFetcher
-	FinalizedStateAtStartUp state.BeaconState
-	ExecutionEngineCaller   execution.EngineCaller
-	SyncChecker             Checker
+	BeaconBlockBuf           int
+	ChainStartFetcher        execution.ChainStartFetcher
+	BeaconDB                 db.HeadAccessDatabase
+	DepositCache             cache.DepositCache
+	PayloadIDCache           *cache.PayloadIDCache
+	TrackedValidatorsCache   *cache.TrackedValidatorsCache
+	ProposerPreferencesCache *cache.ProposerPreferencesCache
+	AttestationCache         *cache.AttestationCache
+	AttPool                  attestations.Pool
+	ExitPool                 voluntaryexits.PoolManager
+	SlashingPool             slashings.PoolManager
+	BLSToExecPool            blstoexec.PoolManager
+	P2P                      p2p.Accessor
+	MaxRoutines              int
+	StateNotifier            statefeed.Notifier
+	ForkChoiceStore          f.ForkChoicer
+	AttService               *attestations.Service
+	StateGen                 *stategen.State
+	SlasherAttestationsFeed  *event.Feed
+	WeakSubjectivityCheckpt  *ethpb.Checkpoint
+	BlockFetcher             execution.POWBlockFetcher
+	FinalizedStateAtStartUp  state.BeaconState
+	ExecutionEngineCaller    execution.EngineCaller
+	SyncChecker              Checker
 }
 
 // Checker is an interface used to determine if a node is in initial sync
@@ -189,6 +191,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		blockBeingSynced:       &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
 		payloadBeingSynced:     &currentlySyncingBlock{roots: make(map[[32]byte]struct{})},
 		syncCommitteeHeadState: cache.NewSyncCommitteeHeadState(),
+		payloadArrivals:        newPayloadArrivals(),
 	}
 	for _, opt := range opts {
 		if err := opt(srv); err != nil {
@@ -344,7 +347,7 @@ func (s *Service) initializeHead(ctx context.Context, st state.BeaconState) erro
 			return errors.Wrap(err, "could not get head state")
 		}
 	}
-	if err := s.setHead(&head{root, blk, st, blk.Block().Slot(), false}); err != nil {
+	if err := s.setHead(&head{root: root, block: blk, state: st, slot: blk.Block().Slot(), optimistic: false}); err != nil {
 		return errors.Wrap(err, "could not set head")
 	}
 	log.WithFields(logrus.Fields{
@@ -428,11 +431,11 @@ func (s *Service) saveGenesisData(ctx context.Context, genesisState state.Beacon
 	s.cfg.ForkChoiceStore.SetGenesisTime(s.genesisTime)
 
 	if err := s.setHead(&head{
-		genesisBlkRoot,
-		genesisBlk,
-		genesisState,
-		genesisBlk.Block().Slot(),
-		false,
+		root:       genesisBlkRoot,
+		block:      genesisBlk,
+		state:      genesisState,
+		slot:       genesisBlk.Block().Slot(),
+		optimistic: false,
 	}); err != nil {
 		log.WithError(err).Fatal("Could not set head")
 	}

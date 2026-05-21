@@ -18,12 +18,12 @@ func TestProcessDepositRequests_EmptyAndNil(t *testing.T) {
 	st := newGloasState(t, nil, nil)
 
 	t.Run("empty requests continues", func(t *testing.T) {
-		err := processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{})
+		err := ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{})
 		require.NoError(t, err)
 	})
 
 	t.Run("nil request errors", func(t *testing.T) {
-		err := processDepositRequests(t.Context(), st, []*enginev1.DepositRequest{nil})
+		err := ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{nil})
 		require.ErrorContains(t, "nil deposit request", err)
 	})
 }
@@ -89,6 +89,33 @@ func TestProcessDepositRequest_ExistingBuilderIncreasesBalance(t *testing.T) {
 	pending, err := st.PendingDeposits()
 	require.NoError(t, err)
 	require.Equal(t, 0, len(pending))
+}
+
+func TestProcessDepositRequest_BuilderDepositWithExistingPendingDepositStaysPending(t *testing.T) {
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+
+	validatorCred := validatorWithdrawalCredentials()
+	builderCred := builderWithdrawalCredentials()
+	existingPending := stateTesting.GeneratePendingDeposit(t, sk, 1234, validatorCred, 0)
+	req := depositRequestFromPending(stateTesting.GeneratePendingDeposit(t, sk, 200, builderCred, 1), 9)
+
+	st := newGloasState(t, nil, nil)
+	require.NoError(t, st.SetPendingDeposits([]*ethpb.PendingDeposit{existingPending}))
+
+	err = processDepositRequest(st, req)
+	require.NoError(t, err)
+
+	_, ok := st.BuilderIndexByPubkey(toBytes48(req.Pubkey))
+	require.Equal(t, false, ok)
+
+	pending, err := st.PendingDeposits()
+	require.NoError(t, err)
+	require.Equal(t, 2, len(pending))
+	require.DeepEqual(t, existingPending.PublicKey, pending[0].PublicKey)
+	require.DeepEqual(t, req.Pubkey, pending[1].PublicKey)
+	require.DeepEqual(t, req.WithdrawalCredentials, pending[1].WithdrawalCredentials)
+	require.Equal(t, req.Amount, pending[1].Amount)
 }
 
 func TestApplyDepositForBuilder_InvalidSignatureIgnoresDeposit(t *testing.T) {
