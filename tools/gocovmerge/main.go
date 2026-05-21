@@ -17,6 +17,9 @@ import (
 )
 
 func mergeProfiles(p, merge *cover.Profile) {
+	if p == nil || merge == nil {
+		return
+	}
 	if p.Mode != merge.Mode {
 		log.Fatalf("Cannot merge profiles with different modes")
 	}
@@ -72,11 +75,14 @@ func mergeProfileBlock(p *cover.Profile, pb cover.ProfileBlock, startIndex int) 
 }
 
 func addProfile(profiles []*cover.Profile, p *cover.Profile) []*cover.Profile {
+	if p == nil {
+		return profiles
+	}
 	i := sort.Search(len(profiles), func(i int) bool { return profiles[i].FileName >= p.FileName })
 	if i < len(profiles) && profiles[i].FileName == p.FileName {
 		mergeProfiles(profiles[i], p)
 	} else {
-		profiles = append(profiles, nil)
+		profiles = append(profiles, p)
 		copy(profiles[i+1:], profiles[i:])
 		profiles[i] = p
 	}
@@ -84,13 +90,23 @@ func addProfile(profiles []*cover.Profile, p *cover.Profile) []*cover.Profile {
 }
 
 func dumpProfiles(profiles []*cover.Profile, out io.Writer) {
-	if len(profiles) == 0 {
+	var mode string
+	for _, p := range profiles {
+		if p != nil {
+			mode = p.Mode
+			break
+		}
+	}
+	if mode == "" {
 		return
 	}
-	if _, err := fmt.Fprintf(out, "mode: %s\n", profiles[0].Mode); err != nil {
+	if _, err := fmt.Fprintf(out, "mode: %s\n", mode); err != nil {
 		panic(err)
 	}
 	for _, p := range profiles {
+		if p == nil {
+			continue
+		}
 		for _, b := range p.Blocks {
 			if _, err := fmt.Fprintf(out, "%s:%d.%d,%d.%d %d %d\n", p.FileName, b.StartLine, b.StartCol, b.EndLine, b.EndCol, b.NumStmt, b.Count); err != nil {
 				panic(err)
