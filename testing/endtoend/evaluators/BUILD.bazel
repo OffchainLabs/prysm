@@ -6,6 +6,7 @@ go_library(
     srcs = [
         "blob_limits.go",
         "builder.go",
+        "conns.go",
         "data.go",
         "execution_engine.go",
         "fee_recipient.go",
