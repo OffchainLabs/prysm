@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var configs *configset
+var configs = newConfigset()
 
 // All returns a slice of every BeaconChainConfig contained in the configset.
 func All() []*BeaconChainConfig {
