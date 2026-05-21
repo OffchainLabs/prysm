@@ -62,6 +62,9 @@ func ProcessJustificationAndFinalizationPreCompute(state state.BeaconState, pBal
 	if state.Slot() <= canProcessSlot {
 		return state, nil
 	}
+	if pBal == nil {
+		return nil, errors.New("precomputed balances are nil")
+	}
 
 	newBits := processJustificationBits(state, pBal.ActiveCurrentEpoch, pBal.PrevEpochTargetAttested, pBal.CurrentEpochTargetAttested)
 

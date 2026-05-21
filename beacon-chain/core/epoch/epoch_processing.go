@@ -103,6 +103,9 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 			if err != nil && !errors.Is(err, validators.ErrValidatorAlreadyExited) {
 				return nil, errors.Wrapf(err, "could not initiate exit for validator %d", idx)
 			}
+			if st == nil || st.IsNil() {
+				return nil, errors.New("state is nil after initiating validator exit")
+			}
 		}
 	}
 

@@ -41,6 +41,9 @@ func ProcessRewardsAndPenaltiesPrecompute(
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get proposer attestation delta")
 	}
+	if len(attsRewards) != numOfVals || len(attsPenalties) != numOfVals || len(proposerRewards) != numOfVals {
+		return nil, errors.New("reward and penalty lengths do not match validator count")
+	}
 	validatorBals := state.Balances()
 	for i := range numOfVals {
 		vp[i].BeforeEpochTransitionBalance = validatorBals[i]
