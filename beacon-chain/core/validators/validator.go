@@ -86,6 +86,9 @@ func InitiateValidatorExit(
 	idx primitives.ValidatorIndex,
 	exitInfo *ExitInfo,
 ) (state.BeaconState, error) {
+	if s == nil || s.IsNil() {
+		return nil, errors.New("nil state")
+	}
 	validator, err := s.ValidatorAtIndex(idx)
 	if err != nil {
 		return nil, err
@@ -132,6 +135,9 @@ func InitiateValidatorExitForTotalBal(
 	exitInfo *ExitInfo,
 	totalActiveBalance primitives.Gwei,
 ) (state.BeaconState, error) {
+	if s == nil || s.IsNil() {
+		return nil, errors.New("nil state")
+	}
 	validator, err := s.ValidatorAtIndex(idx)
 	if err != nil {
 		return nil, err
@@ -166,6 +172,9 @@ func InitiateValidatorExitForTotalBal(
 }
 
 func initiateValidatorExitPreElectra(ctx context.Context, s state.BeaconState, exitInfo *ExitInfo) error {
+	if s == nil || s.IsNil() {
+		return errors.New("nil state")
+	}
 	// Relevant spec code from phase0:
 	//
 	//	exit_epochs = [v.exit_epoch for v in state.validators if v.exit_epoch != FAR_FUTURE_EPOCH]
@@ -235,12 +244,18 @@ func SlashValidator(
 	exitInfo *ExitInfo,
 ) (state.BeaconState, error) {
 	var err error
+	if s == nil || s.IsNil() {
+		return nil, errors.New("nil state")
+	}
 	if exitInfo == nil {
 		return nil, errors.New("exit info is required to slash validator")
 	}
 	s, err = InitiateValidatorExitForTotalBal(ctx, s, slashedIdx, exitInfo, primitives.Gwei(exitInfo.TotalActiveBalance))
 	if err != nil && !errors.Is(err, ErrValidatorAlreadyExited) {
 		return nil, errors.Wrapf(err, "could not initiate validator %d exit", slashedIdx)
+	}
+	if s == nil || s.IsNil() {
+		return nil, errors.New("nil state after initiating validator exit")
 	}
 	currentEpoch := slots.ToEpoch(s.Slot())
 	validator, err := s.ValidatorAtIndex(slashedIdx)
