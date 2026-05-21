@@ -144,7 +144,7 @@ func processDirectory(ctx context.Context, dir string, depth int) ([]*keymanager
 	maxdepth := 2
 	if depth > maxdepth {
 		log.Infof("stopped checking folders for keystores after max depth of %d was reached", maxdepth)
-		return nil, nil // Stop recursion after two levels.
+		return []*keymanager.Keystore{}, nil // Stop recursion after two levels.
 	}
 	log.Infof("checking directory for keystores: %s", dir)
 	isDir, err := file.HasDir(dir)
