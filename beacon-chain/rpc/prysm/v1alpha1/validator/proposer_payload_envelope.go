@@ -30,6 +30,10 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 	sBlk interfaces.SignedBeaconBlock,
 	local *consensusblocks.GetPayloadResponse,
 ) error {
+	if local == nil {
+		return errors.New("nil local payload")
+	}
+
 	blockRoot, err := sBlk.Block().HashTreeRoot()
 	if err != nil {
 		return errors.Wrap(err, "could not compute block hash tree root")

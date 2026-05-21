@@ -261,6 +261,9 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
 		}
+		if local == nil {
+			return nil, status.Error(codes.Internal, "Could not get local payload")
+		}
 
 		if sBlk.Version() < version.Gloas {
 			// There's no reason to try to get a builder bid if local override is true.
@@ -356,6 +359,9 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
 	}
+	if block == nil || block.IsNil() {
+		return nil, status.Error(codes.Internal, "nil beacon block")
+	}
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
@@ -419,6 +425,9 @@ func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.Signe
 	copiedBlock, err := block.Copy()
 	if err != nil {
 		return nil, nil, err
+	}
+	if copiedBlock == nil || copiedBlock.IsNil() {
+		return nil, nil, errors.New("nil copied block")
 	}
 
 	payload, bundle, err := vs.BlockBuilder.SubmitBlindedBlock(ctx, block)
@@ -681,6 +690,9 @@ const (
 
 // handlePostBlockStateError retries block construction in some error cases.
 func (vs *Server) handlePostBlockStateError(ctx context.Context, block interfaces.SignedBeaconBlock, err error) (state.BeaconState, error) {
+	if block == nil || block.IsNil() {
+		return nil, status.Error(codes.Internal, "nil beacon block")
+	}
 	if ctx.Err() != nil {
 		return nil, status.Errorf(codes.Canceled, "context error: %v", ctx.Err())
 	}
