@@ -38,7 +38,11 @@ func NewServiceRegistry() *ServiceRegistry {
 func (s *ServiceRegistry) StartAll() {
 	for _, kind := range s.serviceTypes {
 		log.Debugf("Starting service type %v", kind)
-		go s.services[kind].Start()
+		service, ok := s.services[kind]
+		if !ok || service == nil {
+			continue
+		}
+		go service.Start()
 	}
 }
 
@@ -47,7 +51,10 @@ func (s *ServiceRegistry) StartAll() {
 func (s *ServiceRegistry) StopAll() {
 	for i := len(s.serviceTypes) - 1; i >= 0; i-- {
 		kind := s.serviceTypes[i]
-		service := s.services[kind]
+		service, ok := s.services[kind]
+		if !ok || service == nil {
+			continue
+		}
 		if err := service.Stop(); err != nil {
 			log.WithError(err).Errorf("Could not stop the following service: %v", kind)
 		}
@@ -59,7 +66,11 @@ func (s *ServiceRegistry) StopAll() {
 func (s *ServiceRegistry) Statuses() map[reflect.Type]error {
 	m := make(map[reflect.Type]error, len(s.serviceTypes))
 	for _, kind := range s.serviceTypes {
-		m[kind] = s.services[kind].Status()
+		service, ok := s.services[kind]
+		if !ok || service == nil {
+			continue
+		}
+		m[kind] = service.Status()
 	}
 	return m
 }
@@ -84,7 +95,7 @@ func (s *ServiceRegistry) FetchService(service any) error {
 		return fmt.Errorf("input must be of pointer type, received value type instead: %T", service)
 	}
 	element := reflect.ValueOf(service).Elem()
-	if running, ok := s.services[element.Type()]; ok {
+	if running, ok := s.services[element.Type()]; ok && running != nil {
 		element.Set(reflect.ValueOf(running))
 		return nil
 	}
