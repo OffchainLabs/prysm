@@ -194,7 +194,11 @@ func createAttestationSignatureBatch(
 		}
 		pks[i] = aggP
 
-		root, err := signing.ComputeSigningRoot(ia.GetData(), domain)
+		data := ia.GetData()
+		if data == nil {
+			return nil, errors.New("indexed attestation data is nil")
+		}
+		root, err := signing.ComputeSigningRoot(data, domain)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get signing root of object")
 		}
@@ -225,7 +229,14 @@ func AttestationSignatureBatch(ctx context.Context, beaconState state.ReadOnlyBe
 	var preForkAtts []ethpb.Att
 	var postForkAtts []ethpb.Att
 	for _, a := range atts {
-		if slots.ToEpoch(a.GetData().Slot) < fork.Epoch {
+		if err := helpers.ValidateNilAttestation(a); err != nil {
+			return nil, err
+		}
+		data := a.GetData()
+		if data == nil {
+			return nil, errors.New("attestation data is nil")
+		}
+		if slots.ToEpoch(data.Slot) < fork.Epoch {
 			preForkAtts = append(preForkAtts, a)
 		} else {
 			postForkAtts = append(postForkAtts, a)

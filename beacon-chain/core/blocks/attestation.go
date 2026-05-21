@@ -60,9 +60,12 @@ func VerifyAttestationNoVerifySignature(
 	if err := helpers.ValidateNilAttestation(att); err != nil {
 		return err
 	}
+	data := att.GetData()
+	if data == nil {
+		return errors.New("attestation data is nil")
+	}
 	currEpoch := time.CurrentEpoch(beaconState)
 	prevEpoch := time.PrevEpoch(beaconState)
-	data := att.GetData()
 	if data.Target.Epoch != prevEpoch && data.Target.Epoch != currEpoch {
 		return fmt.Errorf(
 			"expected target epoch (%d) to be the previous epoch (%d) or the current epoch (%d)",
@@ -82,11 +85,11 @@ func VerifyAttestationNoVerifySignature(
 		}
 	}
 
-	if err := helpers.ValidateSlotTargetEpoch(att.GetData()); err != nil {
+	if err := helpers.ValidateSlotTargetEpoch(data); err != nil {
 		return err
 	}
 
-	s := att.GetData().Slot
+	s := data.Slot
 	minInclusionCheck := s+params.BeaconConfig().MinAttestationInclusionDelay <= beaconState.Slot()
 	if !minInclusionCheck {
 		return fmt.Errorf(
@@ -108,7 +111,7 @@ func VerifyAttestationNoVerifySignature(
 			)
 		}
 	}
-	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, beaconState, att.GetData().Target.Epoch)
+	activeValidatorCount, err := helpers.ActiveValidatorCount(ctx, beaconState, data.Target.Epoch)
 	if err != nil {
 		return err
 	}
@@ -117,7 +120,7 @@ func VerifyAttestationNoVerifySignature(
 	var indexedAtt ethpb.IndexedAtt
 
 	if att.Version() >= version.Electra {
-		ci := att.GetData().CommitteeIndex
+		ci := data.CommitteeIndex
 		// Spec v1.7.0-alpha pseudocode:
 		//
 		//	# [Modified in Gloas:EIP7732]
@@ -141,7 +144,7 @@ func VerifyAttestationNoVerifySignature(
 			if uint64(ci) >= committeeCount {
 				return fmt.Errorf("committee index %d >= committee count %d", ci, committeeCount)
 			}
-			committees[i], err = helpers.BeaconCommitteeFromState(ctx, beaconState, att.GetData().Slot, primitives.CommitteeIndex(ci))
+			committees[i], err = helpers.BeaconCommitteeFromState(ctx, beaconState, data.Slot, primitives.CommitteeIndex(ci))
 			if err != nil {
 				return err
 			}
@@ -171,12 +174,12 @@ func VerifyAttestationNoVerifySignature(
 			return err
 		}
 	} else {
-		if uint64(att.GetData().CommitteeIndex) >= committeeCount {
-			return fmt.Errorf("committee index %d >= committee count %d", att.GetData().CommitteeIndex, committeeCount)
+		if uint64(data.CommitteeIndex) >= committeeCount {
+			return fmt.Errorf("committee index %d >= committee count %d", data.CommitteeIndex, committeeCount)
 		}
 
 		// Verify attesting indices are correct.
-		committee, err := helpers.BeaconCommitteeFromState(ctx, beaconState, att.GetData().Slot, att.GetData().CommitteeIndex)
+		committee, err := helpers.BeaconCommitteeFromState(ctx, beaconState, data.Slot, data.CommitteeIndex)
 		if err != nil {
 			return err
 		}
@@ -214,7 +217,10 @@ func ProcessAttestationNoVerifySignature(
 
 	currEpoch := time.CurrentEpoch(beaconState)
 	data := att.GetData()
-	s := att.GetData().Slot
+	if data == nil {
+		return nil, errors.New("attestation data is nil")
+	}
+	s := data.Slot
 	proposerIndex, err := helpers.BeaconProposerIndex(ctx, beaconState)
 	if err != nil {
 		return nil, err
@@ -263,9 +269,13 @@ func VerifyIndexedAttestation(ctx context.Context, beaconState state.ReadOnlyBea
 	if err := attestation.IsValidAttestationIndices(ctx, indexedAtt, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot); err != nil {
 		return err
 	}
+	data := indexedAtt.GetData()
+	if data == nil {
+		return errors.New("indexed attestation data is nil")
+	}
 	domain, err := signing.Domain(
 		beaconState.Fork(),
-		indexedAtt.GetData().Target.Epoch,
+		data.Target.Epoch,
 		params.BeaconConfig().DomainBeaconAttester,
 		beaconState.GenesisValidatorsRoot(),
 	)
