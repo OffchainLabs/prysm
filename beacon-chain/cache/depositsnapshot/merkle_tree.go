@@ -101,12 +101,20 @@ func generateProof(tree MerkleTreeNode, index uint64, depth uint64) ([32]byte, [
 	node := tree
 	for depth > 0 {
 		ithBit := (index >> (depth - 1)) & 0x1
+		left := node.Left()
+		right := node.Right()
+		if left == nil {
+			left = &ZeroNode{depth: depth - 1}
+		}
+		if right == nil {
+			right = &ZeroNode{depth: depth - 1}
+		}
 		if ithBit == 1 {
-			proof = append(proof, node.Left().GetRoot())
-			node = node.Right()
+			proof = append(proof, left.GetRoot())
+			node = right
 		} else {
-			proof = append(proof, node.Right().GetRoot())
-			node = node.Left()
+			proof = append(proof, right.GetRoot())
+			node = left
 		}
 		depth--
 	}

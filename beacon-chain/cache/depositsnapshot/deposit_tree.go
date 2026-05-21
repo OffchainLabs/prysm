@@ -39,7 +39,7 @@ type executionBlock struct {
 
 // NewDepositTree creates an empty deposit tree.
 func NewDepositTree() *DepositTree {
-	var leaves [][32]byte
+	leaves := make([][32]byte, 0)
 	merkle := create(leaves, DepositContractDepth)
 	return &DepositTree{
 		tree:                    merkle,
