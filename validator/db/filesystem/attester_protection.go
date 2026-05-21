@@ -302,16 +302,22 @@ func maxSourceTargetEpoch(atts []*ethpb.IndexedAttestation) (primitives.Epoch, p
 	maxTargetEpoch := primitives.Epoch(0)
 
 	for _, att := range atts {
-		if att == nil || att.Data == nil || att.Data.Source == nil || att.Data.Target == nil {
+		if att == nil {
 			return 0, 0, errors.New("incoming attestation does not contain source and/or target epoch")
 		}
+		data := att.Data
+		if data == nil || data.Source == nil || data.Target == nil {
+			return 0, 0, errors.New("incoming attestation does not contain source and/or target epoch")
+		}
+		source := data.Source
+		target := data.Target
 
-		if att.Data.Source.Epoch > maxSourceEpoch {
-			maxSourceEpoch = att.Data.Source.Epoch
+		if source.Epoch > maxSourceEpoch {
+			maxSourceEpoch = source.Epoch
 		}
 
-		if att.Data.Target.Epoch > maxTargetEpoch {
-			maxTargetEpoch = att.Data.Target.Epoch
+		if target.Epoch > maxTargetEpoch {
+			maxTargetEpoch = target.Epoch
 		}
 	}
 	return maxSourceEpoch, maxTargetEpoch, nil
