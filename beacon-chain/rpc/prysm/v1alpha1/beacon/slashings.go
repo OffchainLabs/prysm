@@ -20,6 +20,10 @@ func (bs *Server) SubmitProposerSlashing(
 	ctx context.Context,
 	req *ethpb.ProposerSlashing,
 ) (*ethpb.SubmitSlashingResponse, error) {
+	if req == nil || req.Header_1 == nil || req.Header_1.Header == nil {
+		return nil, status.Error(codes.InvalidArgument, "nil proposer slashing header")
+	}
+
 	beaconState, err := bs.HeadFetcher.HeadStateReadOnly(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not retrieve head state: %v", err)

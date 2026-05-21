@@ -123,6 +123,9 @@ func (bs *Server) ListValidatorAssignments(
 				index, requestedState.NumValidators())
 		}
 		a := assignments[index]
+		if a == nil {
+			return nil, status.Errorf(codes.Internal, "Could not retrieve committee assignment for validator index %d", index)
+		}
 		pubkey := requestedState.PubkeyAtIndex(index)
 		assign := &ethpb.ValidatorAssignments_CommitteeAssignment{
 			BeaconCommittees: a.Committee,

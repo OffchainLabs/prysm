@@ -71,6 +71,9 @@ func (bs *Server) ListValidatorBalances(
 	}
 
 	vals := requestedState.Validators()
+	if vals == nil {
+		return nil, status.Error(codes.Internal, "Could not retrieve validators")
+	}
 	balances := requestedState.Balances()
 	balancesCount := len(balances)
 	for _, pubKey := range req.PublicKeys {
@@ -94,6 +97,10 @@ func (bs *Server) ListValidatorBalances(
 			return nil, status.Errorf(codes.OutOfRange, "Validator index %d >= balance list %d",
 				index, len(balances))
 		}
+		if uint64(index) >= uint64(len(vals)) {
+			return nil, status.Errorf(codes.OutOfRange, "Validator index %d >= validator list %d",
+				index, len(vals))
+		}
 
 		val := vals[index]
 		st := validatorStatus(val, requestedEpoch)
@@ -110,6 +117,10 @@ func (bs *Server) ListValidatorBalances(
 		if uint64(index) >= uint64(len(balances)) {
 			return nil, status.Errorf(codes.OutOfRange, "Validator index %d >= balance list %d",
 				index, len(balances))
+		}
+		if uint64(index) >= uint64(len(vals)) {
+			return nil, status.Errorf(codes.OutOfRange, "Validator index %d >= validator list %d",
+				index, len(vals))
 		}
 
 		if !filtered[index] {
@@ -152,6 +163,9 @@ func (bs *Server) ListValidatorBalances(
 	if len(req.Indices) == 0 && len(req.PublicKeys) == 0 {
 		// Return everything.
 		for i := start; i < end; i++ {
+			if i >= len(vals) {
+				return nil, status.Errorf(codes.OutOfRange, "Validator index %d >= validator list %d", i, len(vals))
+			}
 			pubkey := requestedState.PubkeyAtIndex(primitives.ValidatorIndex(i))
 			val := vals[i]
 			st := validatorStatus(val, requestedEpoch)
