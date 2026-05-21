@@ -21,6 +21,9 @@ func NewRef(refs uint) *Reference {
 
 // Refs returns the reference number.
 func (r *Reference) Refs() uint {
+	if r == nil {
+		return 0
+	}
 	r.lock.RLock()
 	defer r.lock.RUnlock()
 	return r.refs
@@ -28,6 +31,9 @@ func (r *Reference) Refs() uint {
 
 // AddRef adds 1 to the reference number.
 func (r *Reference) AddRef() {
+	if r == nil {
+		return
+	}
 	r.lock.Lock()
 	r.refs++
 	r.lock.Unlock()
@@ -35,6 +41,9 @@ func (r *Reference) AddRef() {
 
 // MinusRef subtracts 1 to the reference number.
 func (r *Reference) MinusRef() {
+	if r == nil {
+		return
+	}
 	r.lock.Lock()
 	// Do not reduce further if object
 	// already has 0 reference to prevent underflow.
