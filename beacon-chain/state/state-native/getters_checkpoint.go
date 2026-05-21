@@ -35,7 +35,7 @@ func (b *BeaconState) justificationBitsVal() bitfield.Bitvector4 {
 // PreviousJustifiedCheckpoint denoting an epoch and block root.
 func (b *BeaconState) PreviousJustifiedCheckpoint() *ethpb.Checkpoint {
 	if b.previousJustifiedCheckpoint == nil {
-		return nil
+		return &ethpb.Checkpoint{}
 	}
 
 	b.lock.RLock()
@@ -47,13 +47,19 @@ func (b *BeaconState) PreviousJustifiedCheckpoint() *ethpb.Checkpoint {
 // previousJustifiedCheckpointVal denoting an epoch and block root.
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) previousJustifiedCheckpointVal() *ethpb.Checkpoint {
-	return b.previousJustifiedCheckpoint.Copy()
+	if b.previousJustifiedCheckpoint == nil {
+		return &ethpb.Checkpoint{}
+	}
+	return &ethpb.Checkpoint{
+		Epoch: b.previousJustifiedCheckpoint.Epoch,
+		Root:  bytes.Clone(b.previousJustifiedCheckpoint.Root),
+	}
 }
 
 // CurrentJustifiedCheckpoint denoting an epoch and block root.
 func (b *BeaconState) CurrentJustifiedCheckpoint() *ethpb.Checkpoint {
 	if b.currentJustifiedCheckpoint == nil {
-		return nil
+		return &ethpb.Checkpoint{}
 	}
 
 	b.lock.RLock()
@@ -65,7 +71,13 @@ func (b *BeaconState) CurrentJustifiedCheckpoint() *ethpb.Checkpoint {
 // currentJustifiedCheckpointVal denoting an epoch and block root.
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) currentJustifiedCheckpointVal() *ethpb.Checkpoint {
-	return b.currentJustifiedCheckpoint.Copy()
+	if b.currentJustifiedCheckpoint == nil {
+		return &ethpb.Checkpoint{}
+	}
+	return &ethpb.Checkpoint{
+		Epoch: b.currentJustifiedCheckpoint.Epoch,
+		Root:  bytes.Clone(b.currentJustifiedCheckpoint.Root),
+	}
 }
 
 // MatchCurrentJustifiedCheckpoint returns true if input justified checkpoint matches
@@ -97,7 +109,7 @@ func (b *BeaconState) MatchPreviousJustifiedCheckpoint(c *ethpb.Checkpoint) bool
 // FinalizedCheckpoint denoting an epoch and block root.
 func (b *BeaconState) FinalizedCheckpoint() *ethpb.Checkpoint {
 	if b.finalizedCheckpoint == nil {
-		return nil
+		return &ethpb.Checkpoint{}
 	}
 
 	b.lock.RLock()
@@ -109,7 +121,13 @@ func (b *BeaconState) FinalizedCheckpoint() *ethpb.Checkpoint {
 // finalizedCheckpointVal denoting an epoch and block root.
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) finalizedCheckpointVal() *ethpb.Checkpoint {
-	return b.finalizedCheckpoint.Copy()
+	if b.finalizedCheckpoint == nil {
+		return &ethpb.Checkpoint{}
+	}
+	return &ethpb.Checkpoint{
+		Epoch: b.finalizedCheckpoint.Epoch,
+		Root:  bytes.Clone(b.finalizedCheckpoint.Root),
+	}
 }
 
 // FinalizedCheckpointEpoch returns the epoch value of the finalized checkpoint.
