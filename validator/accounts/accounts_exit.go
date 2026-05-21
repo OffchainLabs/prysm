@@ -83,7 +83,10 @@ func PerformVoluntaryExit(
 	var rawNotExitedKeys [][]byte
 	genesisResponse, err := cfg.NodeClient.Genesis(ctx, &emptypb.Empty{})
 	if err != nil {
-		log.WithError(err).Errorf("voluntary exit failed: %v", err)
+		return nil, nil, errors.Wrap(err, "could not get genesis")
+	}
+	if genesisResponse == nil {
+		return nil, nil, errors.New("could not get genesis")
 	}
 	for i, key := range cfg.RawPubKeys {
 		// When output directory is present, only create the signed exit, but do not propose it.
