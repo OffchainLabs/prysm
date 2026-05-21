@@ -128,6 +128,9 @@ func DataColumnSidecars(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, 
 	if err != nil {
 		return nil, errors.Wrap(err, "rotate cells and proofs")
 	}
+	if cells == nil || proofs == nil {
+		return nil, errors.New("rotated cells or proofs are nil")
+	}
 
 	isGloas := slots.ToEpoch(src.Slot()) >= params.BeaconConfig().GloasForkEpoch
 	root := src.Root()
@@ -196,6 +199,9 @@ func DataColumnSidecarsGloas(
 	cells, proofs, err := rotateRowsToCols(cellsPerBlob, proofsPerBlob, numberOfColumns)
 	if err != nil {
 		return nil, errors.Wrap(err, "rotate cells and proofs")
+	}
+	if cells == nil || proofs == nil {
+		return nil, errors.New("rotated cells or proofs are nil")
 	}
 	roSidecars := make([]blocks.RODataColumn, 0, numberOfColumns)
 	for idx := range numberOfColumns {
