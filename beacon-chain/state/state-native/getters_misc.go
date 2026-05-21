@@ -60,7 +60,7 @@ func (b *BeaconState) Fork() *ethpb.Fork {
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) forkVal() *ethpb.Fork {
 	if b.fork == nil {
-		return nil
+		return &ethpb.Fork{}
 	}
 
 	prevVersion := make([]byte, len(b.fork.PreviousVersion))
