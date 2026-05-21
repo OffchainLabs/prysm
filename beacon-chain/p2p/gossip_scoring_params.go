@@ -222,13 +222,13 @@ func defaultAggregateTopicParams(activeValidators uint64) *pubsub.TopicScorePara
 	aggPerSlot := aggregatorsPerSlot(activeValidators)
 	firstMessageCap, err := decayLimit(scoreDecay(1*oneEpochDuration()), float64(aggPerSlot*2/gossipSubD))
 	if err != nil {
-		log.WithError(err).Warn("Skipping initializing topic scoring")
+		log.WithError(err).Trace("Skipping initializing topic scoring")
 		return nil
 	}
 	firstMessageWeight := maxFirstDeliveryScore / firstMessageCap
 	meshThreshold, err := decayThreshold(scoreDecay(1*oneEpochDuration()), float64(aggPerSlot)/dampeningFactor)
 	if err != nil {
-		log.WithError(err).Warn("Skipping initializing topic scoring")
+		log.WithError(err).Trace("Skipping initializing topic scoring")
 		return nil
 	}
 	meshWeight := -scoreByWeight(aggregateWeight, meshThreshold)
@@ -264,13 +264,13 @@ func defaultSyncContributionTopicParams() *pubsub.TopicScoreParams {
 	aggPerSlot := params.BeaconConfig().SyncCommitteeSubnetCount * params.BeaconConfig().TargetAggregatorsPerSyncSubcommittee
 	firstMessageCap, err := decayLimit(scoreDecay(1*oneEpochDuration()), float64(aggPerSlot*2/gossipSubD))
 	if err != nil {
-		log.WithError(err).Warn("Skipping initializing topic scoring")
+		log.WithError(err).Trace("Skipping initializing topic scoring")
 		return nil
 	}
 	firstMessageWeight := maxFirstDeliveryScore / firstMessageCap
 	meshThreshold, err := decayThreshold(scoreDecay(1*oneEpochDuration()), float64(aggPerSlot)/dampeningFactor)
 	if err != nil {
-		log.WithError(err).Warn("Skipping initializing topic scoring")
+		log.WithError(err).Trace("Skipping initializing topic scoring")
 		return nil
 	}
 	meshWeight := -scoreByWeight(syncContributionWeight, meshThreshold)
@@ -326,20 +326,20 @@ func defaultAggregateSubnetTopicParams(activeValidators uint64) *pubsub.TopicSco
 	}
 	rate := numPerSlot * 2 / gossipSubD
 	if rate == 0 {
-		log.Warn("Skipping initializing topic scoring because rate is 0")
+		log.Trace("Skipping initializing topic scoring because rate is 0")
 		return nil
 	}
 	// Determine expected first deliveries based on the message rate.
 	firstMessageCap, err := decayLimit(scoreDecay(firstDecay*oneEpochDuration()), float64(rate))
 	if err != nil {
-		log.WithError(err).Warn("Skipping initializing topic scoring")
+		log.WithError(err).Trace("Skipping initializing topic scoring")
 		return nil
 	}
 	firstMessageWeight := maxFirstDeliveryScore / firstMessageCap
 	// Determine expected mesh deliveries based on message rate applied with a dampening factor.
 	meshThreshold, err := decayThreshold(scoreDecay(meshDecay*oneEpochDuration()), float64(numPerSlot)/dampeningFactor)
 	if err != nil {
-		log.WithError(err).Warn("Skipping initializing topic scoring")
+		log.WithError(err).Trace("Skipping initializing topic scoring")
 		return nil
 	}
 	meshWeight := -scoreByWeight(topicWeight, meshThreshold)
@@ -389,20 +389,20 @@ func defaultSyncSubnetTopicParams(activeValidators uint64) *pubsub.TopicScorePar
 
 	rate := subnetWeight * 2 / gossipSubD
 	if rate == 0 {
-		log.Warn("Skipping initializing topic scoring because rate is 0")
+		log.Trace("Skipping initializing topic scoring because rate is 0")
 		return nil
 	}
 	// Determine expected first deliveries based on the message rate.
 	firstMessageCap, err := decayLimit(scoreDecay(firstDecay*oneEpochDuration()), float64(rate))
 	if err != nil {
-		log.WithError(err).Warn("Skipping initializing topic scoring")
+		log.WithError(err).Trace("Skipping initializing topic scoring")
 		return nil
 	}
 	firstMessageWeight := maxFirstDeliveryScore / firstMessageCap
 	// Determine expected mesh deliveries based on message rate applied with a dampening factor.
 	meshThreshold, err := decayThreshold(scoreDecay(meshDecay*oneEpochDuration()), float64(subnetWeight)/dampeningFactor)
 	if err != nil {
-		log.WithError(err).Warn("Skipping initializing topic scoring")
+		log.WithError(err).Trace("Skipping initializing topic scoring")
 		return nil
 	}
 	meshWeight := -scoreByWeight(topicWeight, meshThreshold)
@@ -649,5 +649,5 @@ func logGossipParameters(topic string, params *pubsub.TopicScoreParams) {
 	for i := range numOfFields {
 		fields[reflect.TypeFor[pubsub.TopicScoreParams]().Field(i).Name] = rawParams.Field(i).Interface()
 	}
-	log.WithFields(fields).Debugf("Topic Parameters for %s", topic)
+	log.WithFields(fields).Tracef("Topic Parameters for %s", topic)
 }

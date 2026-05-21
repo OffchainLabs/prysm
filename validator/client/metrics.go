@@ -355,7 +355,7 @@ func (v *validator) logForEachValidator(index int, pubKey []byte, resp *ethpb.Va
 			}
 		}
 
-		log.WithFields(previousEpochSummaryFields).Info("Previous epoch voting summary")
+		log.WithFields(previousEpochSummaryFields).Trace("Previous epoch voting summary")
 		if v.emitAccountMetrics {
 			ValidatorBalancesGaugeVec.WithLabelValues(fmtKey).Set(newBalance)
 			if correctlyVotedSource {

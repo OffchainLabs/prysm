@@ -90,7 +90,7 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 		"timeSinceSlotStart": time.Since(slotTime),
 		"blockRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(msg.BlockRoot)),
 		"validatorIndex":     msg.ValidatorIndex,
-	}).Info("Submitted new sync message")
+	}).Trace("Submitted new sync message")
 	v.syncCommitteeStats.totalMessagesSubmitted.Add(1)
 }
 
@@ -200,7 +200,7 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 			"subcommitteeIndex":  contributionAndProof.Contribution.SubcommitteeIndex,
 			"aggregatorIndex":    contributionAndProof.AggregatorIndex,
 			"bitsCount":          contributionAndProof.Contribution.AggregationBits.Count(),
-		}).Info("Submitted new sync contribution and proof")
+		}).Trace("Submitted new sync contribution and proof")
 	}
 }
 

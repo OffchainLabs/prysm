@@ -396,7 +396,7 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 		return &RpcError{Err: server.NewBroadcastFailedError("SignedAggregateAttAndProof", err), Reason: Internal}
 	}
 
-	if logrus.GetLevel() >= logrus.DebugLevel {
+	if logrus.GetLevel() >= logrus.TraceLevel {
 		var fields logrus.Fields
 		if agg.Version() >= version.Electra {
 			fields = logrus.Fields{
@@ -414,7 +414,7 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 				"aggregatedCount": att.GetAggregationBits().Count(),
 			}
 		}
-		log.WithFields(fields).Debug("Broadcasting aggregated attestation and proof")
+		log.WithFields(fields).Trace("Broadcasting aggregated attestation and proof")
 	}
 
 	return nil

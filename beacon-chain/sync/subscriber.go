@@ -529,7 +529,7 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			// digest, allowing them to arrive before a fork activates.
 			if !strings.Contains(topic, p2p.GossipSignedProposerPreferencesMessage) ||
 				params.ForkDigest(s.cfg.clock.CurrentEpoch()+1) != retDigest {
-				log.WithField("topic", topic).Debugf("Received message from outdated fork digest %#x", retDigest)
+				log.WithField("topic", topic).Tracef("Received message from outdated fork digest %#x", retDigest)
 				return pubsub.ValidationIgnore
 			}
 		}
