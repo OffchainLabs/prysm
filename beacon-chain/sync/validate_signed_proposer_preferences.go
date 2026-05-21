@@ -80,7 +80,7 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	stateEpoch := slots.ToEpoch(st.Slot())
 	// Sole permitted slot advance: next-epoch preference at the boundary before
 	// the head processes a block in the new epoch (proposalEpoch == stateEpoch+2).
-	if proposalEpoch == stateEpoch+2 {
+	if proposalEpoch == stateEpoch.AddEpoch(2) {
 		boundarySlot, err := slots.EpochStart(proposalEpoch.Sub(1))
 		if err != nil {
 			return pubsub.ValidationIgnore, errors.Wrap(err, "compute boundary slot")
@@ -93,7 +93,7 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		if err != nil {
 			return pubsub.ValidationIgnore, errors.Wrap(err, "advance head state to boundary")
 		}
-	} else if proposalEpoch > stateEpoch+1 {
+	} else if proposalEpoch > stateEpoch.AddEpoch(1) {
 		return pubsub.ValidationIgnore, errors.Errorf("head epoch %d cannot verify proposal epoch %d", stateEpoch, proposalEpoch)
 	}
 

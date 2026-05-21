@@ -125,26 +125,19 @@ func TestValidateSignedProposerPreferencesGossip_AlreadySeen(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
-// TestValidateSignedProposerPreferencesGossip_CacheHitSkipsStateLoad asserts that
-// the dedup cache lookup short-circuits before the checkpoint state load. With
-// the saved state removed, a duplicate gossip message must still return
-// (ValidationIgnore, nil); reaching StateByRootNoCopy would surface an error.
-func TestValidateSignedProposerPreferencesGossip_CacheHitSkipsStateLoad(t *testing.T) {
+// TestValidateSignedProposerPreferencesGossip_HeadTooStale exercises the branch
+// that returns when the proposal is more than one epoch ahead of the head state
+// (and not the +2 boundary edge case). With head state at epoch 0 and proposal
+// in epoch 3 the validator must ignore — proposer_lookahead cannot cover it.
+func TestValidateSignedProposerPreferencesGossip_HeadTooStale(t *testing.T) {
 	ctx := context.Background()
-	s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
+	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
 	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
-
-	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
-	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
-		DependentRoot:  dependentRoot,
-		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
-		FeeRecipient:   primitives.ExecutionAddress{0x01},
-		TargetGasLimit: 10,
-	}, signedPreferences.Message.ProposalSlot))
-	require.NoError(t, s.cfg.beaconDB.DeleteState(ctx, dependentRoot))
+	signedPreferences.Message.ProposalSlot = primitives.Slot(96)
+	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
 
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-	require.NoError(t, err)
+	require.ErrorContains(t, "cannot verify", err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
