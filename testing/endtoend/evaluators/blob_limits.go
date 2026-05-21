@@ -47,7 +47,7 @@ var BlobLimitsRespected = e2etypes.Evaluator{
 }
 
 func blobsIncludedInBlocks(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	client := ethpb.NewBeaconChainClient(conn)
 
 	chainHead, err := client.GetChainHead(context.Background(), &emptypb.Empty{})
@@ -107,7 +107,7 @@ func blobsIncludedInBlocks(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 }
 
 func blobLimitsRespected(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	nodeClient := ethpb.NewNodeClient(conn)
 	beaconClient := ethpb.NewBeaconChainClient(conn)
 

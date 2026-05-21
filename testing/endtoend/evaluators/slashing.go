@@ -61,7 +61,7 @@ var SlashedValidatorsLoseBalanceAfterEpoch = func(n primitives.Epoch) e2eTypes.E
 var slashedIndices []uint64
 
 func validatorsSlashed(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	ctx := context.Background()
 	client := eth.NewBeaconChainClient(conn)
 
@@ -90,7 +90,7 @@ func validatorsSlashed(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientConn)
 }
 
 func validatorsLoseBalance(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	ctx := context.Background()
 	client := eth.NewBeaconChainClient(conn)
 
@@ -120,7 +120,7 @@ func validatorsLoseBalance(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientC
 }
 
 func insertDoubleAttestationIntoPool(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	valClient := eth.NewBeaconNodeValidatorClient(conn)
 	beaconClient := eth.NewBeaconChainClient(conn)
 
@@ -146,7 +146,7 @@ func insertDoubleAttestationIntoPool(_ *e2eTypes.EvaluationContext, conns ...*gr
 
 		// Need to send proposal to both beacon nodes to avoid flakiness.
 		// See: https://github.com/prysmaticlabs/prysm/issues/12415#issuecomment-1874643269
-		c := eth.NewBeaconNodeValidatorClient(conns[0])
+		c := eth.NewBeaconNodeValidatorClient(firstConn(conns))
 		att, err := h.getSlashableAttestation(i)
 		if err != nil {
 			return err
@@ -170,7 +170,7 @@ func insertDoubleAttestationIntoPool(_ *e2eTypes.EvaluationContext, conns ...*gr
 }
 
 func proposeDoubleBlock(_ *e2eTypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	valClient := eth.NewBeaconNodeValidatorClient(conn)
 	beaconClient := eth.NewBeaconChainClient(conn)
 

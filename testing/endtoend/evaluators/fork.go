@@ -104,7 +104,7 @@ var FuluForkTransition = e2etypes.Evaluator{
 
 func altairForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 
-	conn := conns[0]
+	conn := firstConn(conns)
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
@@ -151,7 +151,7 @@ func altairForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) 
 }
 
 func bellatrixForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
@@ -200,7 +200,7 @@ func bellatrixForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCon
 }
 
 func capellaForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
 	defer cancel()
@@ -245,7 +245,7 @@ func capellaForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 }
 
 func denebForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
 	defer cancel()
@@ -290,7 +290,7 @@ func denebForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) e
 }
 
 func electraForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
 	defer cancel()
@@ -335,7 +335,7 @@ func electraForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 }
 
 func fuluForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)

@@ -24,7 +24,7 @@ var ColdStateCheckpoint = e2etypes.Evaluator{
 // Checks the first node for an old checkpoint using cold state storage.
 func checkColdStateCheckpoint(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	ctx := context.Background()
-	client := eth.NewBeaconChainClient(conns[0])
+	client := eth.NewBeaconChainClient(firstConn(conns))
 
 	for i := range primitives.Epoch(epochToCheck) {
 		res, err := client.ListValidatorAssignments(ctx, &eth.ListValidatorAssignmentsRequest{
