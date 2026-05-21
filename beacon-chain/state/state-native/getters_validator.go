@@ -286,7 +286,7 @@ func (b *BeaconState) BalancesLength() int {
 // Slashings of validators on the beacon chain.
 func (b *BeaconState) Slashings() []uint64 {
 	if b.slashings == nil {
-		return nil
+		return []uint64{}
 	}
 
 	b.lock.RLock()
@@ -299,7 +299,7 @@ func (b *BeaconState) Slashings() []uint64 {
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) slashingsVal() []uint64 {
 	if b.slashings == nil {
-		return nil
+		return []uint64{}
 	}
 
 	res := make([]uint64, len(b.slashings))
