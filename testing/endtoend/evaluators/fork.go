@@ -135,7 +135,11 @@ func altairForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) 
 	if res.GetPhase0Block() != nil {
 		return errors.New("phase 0 block returned after altair fork has occurred")
 	}
-	blk, err := blocks.NewSignedBeaconBlock(res.GetAltairBlock())
+	altairBlock := res.GetAltairBlock()
+	if altairBlock == nil {
+		return errors.New("nil altair block returned by beacon node")
+	}
+	blk, err := blocks.NewSignedBeaconBlock(altairBlock)
 	if err != nil {
 		return err
 	}
@@ -185,7 +189,11 @@ func bellatrixForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCon
 	if res.GetAltairBlock() != nil {
 		return errors.New("altair block returned after bellatrix fork has occurred")
 	}
-	blk, err := blocks.NewSignedBeaconBlock(res.GetBellatrixBlock())
+	bellatrixBlock := res.GetBellatrixBlock()
+	if bellatrixBlock == nil {
+		return errors.New("nil bellatrix block returned by beacon node")
+	}
+	blk, err := blocks.NewSignedBeaconBlock(bellatrixBlock)
 	if err != nil {
 		return err
 	}
@@ -227,10 +235,11 @@ func capellaForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 	if res.GetBlock() == nil {
 		return errors.New("nil block returned by beacon node")
 	}
-	if res.GetCapellaBlock() == nil {
+	capellaBlock := res.GetCapellaBlock()
+	if capellaBlock == nil {
 		return errors.Errorf("non-capella block returned after the fork with type %T", res.Block)
 	}
-	blk, err := blocks.NewSignedBeaconBlock(res.GetCapellaBlock())
+	blk, err := blocks.NewSignedBeaconBlock(capellaBlock)
 	if err != nil {
 		return err
 	}
@@ -272,10 +281,11 @@ func denebForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) e
 	if res.GetBlock() == nil {
 		return errors.New("nil block returned by beacon node")
 	}
-	if res.GetDenebBlock() == nil {
+	denebBlock := res.GetDenebBlock()
+	if denebBlock == nil {
 		return errors.Errorf("non-deneb block returned after the fork with type %T", res.Block)
 	}
-	blk, err := blocks.NewSignedBeaconBlock(res.GetDenebBlock())
+	blk, err := blocks.NewSignedBeaconBlock(denebBlock)
 	if err != nil {
 		return err
 	}
@@ -317,10 +327,11 @@ func electraForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 	if res.GetBlock() == nil {
 		return errors.New("nil block returned by beacon node")
 	}
-	if res.GetElectraBlock() == nil {
+	electraBlock := res.GetElectraBlock()
+	if electraBlock == nil {
 		return errors.Errorf("non-electra block returned after the fork with type %T", res.Block)
 	}
-	blk, err := blocks.NewSignedBeaconBlock(res.GetElectraBlock())
+	blk, err := blocks.NewSignedBeaconBlock(electraBlock)
 	if err != nil {
 		return err
 	}
@@ -368,11 +379,12 @@ func fuluForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) er
 		return errors.New("nil block returned by beacon node")
 	}
 
-	if res.GetFuluBlock() == nil {
+	fuluBlock := res.GetFuluBlock()
+	if fuluBlock == nil {
 		return errors.Errorf("non-fulu block returned after the fork with type %T", res.Block)
 	}
 
-	blk, err := blocks.NewSignedBeaconBlock(res.GetFuluBlock())
+	blk, err := blocks.NewSignedBeaconBlock(fuluBlock)
 	if err != nil {
 		return err
 	}
