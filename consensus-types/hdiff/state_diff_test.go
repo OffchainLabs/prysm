@@ -87,11 +87,19 @@ func TestApplyDiff(t *testing.T) {
 	source, keys := util.DeterministicGenesisStateElectra(t, 256)
 	blk, err := util.GenerateFullBlockElectra(source, keys, util.DefaultBlockGenConfig(), 1)
 	require.NoError(t, err)
+	if blk == nil {
+		t.Fatal("nil block")
+		return
+	}
 	wsb, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
 	ctx := t.Context()
 	target, err := transition.ExecuteStateTransition(ctx, source, wsb)
 	require.NoError(t, err)
+	if target == nil {
+		t.Fatal("nil target state")
+		return
+	}
 
 	// Add non-trivial eth1Data, regression check
 	depositRoot := make([]byte, fieldparams.RootLength)
@@ -132,6 +140,9 @@ func getMainnetStates() (state.BeaconState, state.BeaconState, error) {
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to initialize source state")
 	}
+	if source == nil {
+		return nil, nil, errors.New("nil source state")
+	}
 	targetProto := &ethpb.BeaconStateElectra{}
 	if err := targetProto.UnmarshalSSZ(targetBytes); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal target proto")
@@ -139,6 +150,9 @@ func getMainnetStates() (state.BeaconState, state.BeaconState, error) {
 	target, err := state_native.InitializeFromProtoElectra(targetProto)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to initialize target state")
+	}
+	if target == nil {
+		return nil, nil, errors.New("nil target state")
 	}
 	return source, target, nil
 }
@@ -149,10 +163,18 @@ func TestApplyDiffMainnet(t *testing.T) {
 	}
 	source, target, err := getMainnetStates()
 	require.NoError(t, err)
+	if source == nil || target == nil {
+		t.Fatal("nil mainnet state")
+		return
+	}
 	hdiff, err := Diff(source, target)
 	require.NoError(t, err)
 	source, err = ApplyDiff(t.Context(), source, hdiff)
 	require.NoError(t, err)
+	if source == nil {
+		t.Fatal("nil source state")
+		return
+	}
 	sourceSSZ, err := source.MarshalSSZ()
 	require.NoError(t, err)
 	targetSSZ, err := target.MarshalSSZ()
@@ -186,7 +208,10 @@ func Test_newHdiff(t *testing.T) {
 	// Test successful deserialization
 	hdiff, err := newHdiff(diffBytes)
 	require.NoError(t, err)
-	require.NotNil(t, hdiff)
+	if hdiff == nil {
+		t.Fatal("nil hdiff")
+		return
+	}
 	require.NotNil(t, hdiff.stateDiff)
 	require.NotNil(t, hdiff.validatorDiffs)
 	require.NotNil(t, hdiff.balancesDiff)
@@ -228,7 +253,10 @@ func Test_diffInternal(t *testing.T) {
 	t.Run("same state", func(t *testing.T) {
 		hdiff, err := diffInternal(source, source)
 		require.NoError(t, err)
-		require.NotNil(t, hdiff)
+		if hdiff == nil {
+			t.Fatal("nil hdiff")
+			return
+		}
 		require.Equal(t, 0, len(hdiff.validatorDiffs))
 		// Balance diff should have same length as validators but all zeros
 		require.Equal(t, len(source.Balances()), len(hdiff.balancesDiff))
@@ -241,7 +269,10 @@ func Test_diffInternal(t *testing.T) {
 		require.NoError(t, target.SetSlot(source.Slot()+5))
 		hdiff, err := diffInternal(source, target)
 		require.NoError(t, err)
-		require.NotNil(t, hdiff)
+		if hdiff == nil {
+			t.Fatal("nil hdiff")
+			return
+		}
 		require.Equal(t, target.Slot(), hdiff.stateDiff.slot)
 		require.Equal(t, target.Version(), hdiff.stateDiff.targetVersion)
 	})
@@ -253,7 +284,10 @@ func Test_diffInternal(t *testing.T) {
 		require.NoError(t, target.SetProposerLookahead(proposerLookahead))
 		hdiff, err := diffInternal(source, target)
 		require.NoError(t, err)
-		require.NotNil(t, hdiff)
+		if hdiff == nil {
+			t.Fatal("nil hdiff")
+			return
+		}
 		require.Equal(t, len(proposerLookahead), len(hdiff.stateDiff.proposerLookahead))
 		for i, v := range proposerLookahead {
 			require.Equal(t, uint64(v), hdiff.stateDiff.proposerLookahead[i])
@@ -261,17 +295,28 @@ func Test_diffInternal(t *testing.T) {
 	})
 
 	t.Run("with block transition", func(t *testing.T) {
-		blk, err := util.GenerateFullBlockFulu(source, keys, util.DefaultBlockGenConfig(), 1)
-		require.NoError(t, err)
-		wsb, err := blocks.NewSignedBeaconBlock(blk)
-		require.NoError(t, err)
-		ctx := t.Context()
-		target, err := transition.ExecuteStateTransition(ctx, source, wsb)
-		require.NoError(t, err)
+	blk, err := util.GenerateFullBlockFulu(source, keys, util.DefaultBlockGenConfig(), 1)
+	require.NoError(t, err)
+	if blk == nil {
+		t.Fatal("nil block")
+		return
+	}
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	ctx := t.Context()
+	target, err := transition.ExecuteStateTransition(ctx, source, wsb)
+	require.NoError(t, err)
+	if target == nil {
+		t.Fatal("nil target state")
+		return
+	}
 
 		hdiff, err := diffInternal(source, target)
 		require.NoError(t, err)
-		require.NotNil(t, hdiff)
+		if hdiff == nil {
+			t.Fatal("nil hdiff")
+			return
+		}
 		require.Equal(t, target.Slot(), hdiff.stateDiff.slot)
 		require.Equal(t, target.Version(), hdiff.stateDiff.targetVersion)
 	})
@@ -341,10 +386,18 @@ func TestApplyDiffMainnetComplete(t *testing.T) {
 	}
 	source, target, err := getMainnetStates()
 	require.NoError(t, err)
+	if source == nil || target == nil {
+		t.Fatal("nil mainnet state")
+		return
+	}
 	hdiff, err := Diff(source, target)
 	require.NoError(t, err)
 	source, err = ApplyDiff(t.Context(), source, hdiff)
 	require.NoError(t, err)
+	if source == nil {
+		t.Fatal("nil source state")
+		return
+	}
 
 	sBals := source.Balances()
 	tBals := target.Balances()
@@ -693,7 +746,10 @@ func Test_newStateDiff(t *testing.T) {
 	// Test successful deserialization
 	stateDiff, err := newStateDiff(hdiffBytes.StateDiff)
 	require.NoError(t, err)
-	require.NotNil(t, stateDiff)
+	if stateDiff == nil {
+		t.Fatal("nil state diff")
+		return
+	}
 	require.Equal(t, target.Slot(), stateDiff.slot)
 	require.Equal(t, target.Version(), stateDiff.targetVersion)
 
@@ -720,10 +776,18 @@ func Test_applyStateDiff(t *testing.T) {
 	// Create state diff
 	stateDiff, err := diffToState(source, target)
 	require.NoError(t, err)
+	if stateDiff == nil {
+		t.Fatal("nil state diff")
+		return
+	}
 
 	// Apply diff to source
 	result, err := applyStateDiff(ctx, source, stateDiff)
 	require.NoError(t, err)
+	if result == nil {
+		t.Fatal("nil result state")
+		return
+	}
 
 	// Verify result matches target
 	require.Equal(t, target.Slot(), result.Slot())
@@ -866,6 +930,10 @@ func Test_stateDiff_serialize(t *testing.T) {
 	// Create state diff
 	stateDiff, err := diffToState(source, target)
 	require.NoError(t, err)
+	if stateDiff == nil {
+		t.Fatal("nil state diff")
+		return
+	}
 
 	// Serialize
 	serialized := stateDiff.serialize()
@@ -887,6 +955,10 @@ func Test_hdiff_serialize(t *testing.T) {
 	// Create hdiff
 	hdiff, err := diffInternal(source, target)
 	require.NoError(t, err)
+	if hdiff == nil {
+		t.Fatal("nil hdiff")
+		return
+	}
 
 	// Serialize
 	serialized := hdiff.serialize()
@@ -1022,6 +1094,10 @@ func BenchmarkGetDiff(b *testing.B) {
 	}
 	source, target, err := getMainnetStates()
 	require.NoError(b, err)
+	if source == nil || target == nil {
+		b.Fatal("nil mainnet state")
+		return
+	}
 
 	for b.Loop() {
 		hdiff, err := Diff(source, target)
@@ -1036,12 +1112,20 @@ func BenchmarkApplyDiff(b *testing.B) {
 	}
 	source, target, err := getMainnetStates()
 	require.NoError(b, err)
+	if source == nil || target == nil {
+		b.Fatal("nil mainnet state")
+		return
+	}
 	hdiff, err := Diff(source, target)
 	require.NoError(b, err)
 
 	for b.Loop() {
 		source, err = ApplyDiff(b.Context(), source, hdiff)
 		require.NoError(b, err)
+		if source == nil {
+			b.Fatal("nil source state")
+			return
+		}
 	}
 }
 
@@ -1114,6 +1198,10 @@ func BenchmarkSerialization(b *testing.B) {
 	hdiff, err := diffInternal(source, target)
 	if err != nil {
 		b.Fatal(err)
+	}
+	if hdiff == nil {
+		b.Fatal("nil hdiff")
+		return
 	}
 
 	for b.Loop() {

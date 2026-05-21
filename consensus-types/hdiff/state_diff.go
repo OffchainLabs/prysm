@@ -39,18 +39,30 @@ type HdiffBytes struct {
 
 // Diff computes the difference between two beacon states and returns it as a serialized HdiffBytes object.
 func Diff(source, target state.ReadOnlyBeaconState) (HdiffBytes, error) {
+	if source == nil || target == nil {
+		return HdiffBytes{}, errors.New("nil beacon state")
+	}
 	h, err := diffInternal(source, target)
 	if err != nil {
 		return HdiffBytes{}, err
+	}
+	if h == nil {
+		return HdiffBytes{}, errors.New("nil hdiff")
 	}
 	return h.serialize(), nil
 }
 
 // ApplyDiff appplies the given serialized diff to the source beacon state and returns the resulting state.
 func ApplyDiff(ctx context.Context, source state.BeaconState, diff HdiffBytes) (state.BeaconState, error) {
+	if source == nil {
+		return nil, errors.New("nil beacon state")
+	}
 	hdiff, err := newHdiff(diff)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create Hdiff")
+	}
+	if hdiff == nil || hdiff.stateDiff == nil {
+		return nil, errors.New("nil Hdiff")
 	}
 	if source, err = applyStateDiff(ctx, source, hdiff.stateDiff); err != nil {
 		return nil, errors.Wrap(err, "failed to apply state diff")
@@ -413,12 +425,15 @@ func (ret *stateDiff) readPreviousEpochAttestations(data *[]byte) error {
 	}
 	ret.previousEpochAttestations = make([]*ethpb.PendingAttestation, previousEpochAttestationsLength)
 	(*data) = (*data)[8:]
-	var err error
 	for i := range previousEpochAttestationsLength {
-		ret.previousEpochAttestations[i], err = readPendingAttestation(data)
+		att, err := readPendingAttestation(data)
 		if err != nil {
 			return errors.Wrap(err, "failed to read previousEpochAttestation")
 		}
+		if att == nil {
+			return errors.New("nil previousEpochAttestation")
+		}
+		ret.previousEpochAttestations[i] = att
 	}
 	return nil
 }
@@ -433,12 +448,15 @@ func (ret *stateDiff) readCurrentEpochAttestations(data *[]byte) error {
 	}
 	ret.currentEpochAttestations = make([]*ethpb.PendingAttestation, currentEpochAttestationsLength)
 	(*data) = (*data)[8:]
-	var err error
 	for i := range currentEpochAttestationsLength {
-		ret.currentEpochAttestations[i], err = readPendingAttestation(data)
+		att, err := readPendingAttestation(data)
 		if err != nil {
 			return errors.Wrap(err, "failed to read currentEpochAttestation")
 		}
+		if att == nil {
+			return errors.New("nil currentEpochAttestation")
+		}
+		ret.currentEpochAttestations[i] = att
 	}
 	return nil
 }
@@ -992,6 +1010,9 @@ func newBalancesDiff(input []byte) ([]int64, error) {
 }
 
 func (s *stateDiff) serialize() []byte {
+	if s == nil {
+		return nil
+	}
 	ret := make([]byte, 0)
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(s.targetVersion))
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(s.slot))
@@ -1194,6 +1215,9 @@ func (s *stateDiff) serialize() []byte {
 }
 
 func (h *hdiff) serialize() HdiffBytes {
+	if h == nil || h.stateDiff == nil {
+		return HdiffBytes{}
+	}
 	vals := make([]byte, 0)
 	vals = binary.LittleEndian.AppendUint64(vals, uint64(len(h.validatorDiffs)))
 	for _, v := range h.validatorDiffs {
@@ -1519,6 +1543,12 @@ func diffStateRoots(diff *stateDiff, source, target state.ReadOnlyBeaconState) {
 func diffHistoricalRoots(source, target state.ReadOnlyBeaconState) ([][fieldparams.RootLength]byte, error) {
 	sRoots := source.HistoricalRoots()
 	tRoots := target.HistoricalRoots()
+	if sRoots == nil {
+		sRoots = make([][]byte, 0)
+	}
+	if tRoots == nil {
+		tRoots = make([][]byte, 0)
+	}
 	if len(tRoots) < len(sRoots) {
 		return nil, errors.New("target historical roots length is less than source")
 	}
@@ -1690,13 +1720,19 @@ func diffPendingDeposits(diff *stateDiff, source, target state.ReadOnlyBeaconSta
 	if err != nil {
 		return err
 	}
+	if tPendingDeposits == nil {
+		tPendingDeposits = make([]*ethpb.PendingDeposit, 0)
+	}
 	tlen := len(tPendingDeposits)
 	tPendingDeposits = append(tPendingDeposits, nil)
-	var sPendingDeposits []*ethpb.PendingDeposit
+	sPendingDeposits := make([]*ethpb.PendingDeposit, 0)
 	if source.Version() >= version.Electra {
 		sPendingDeposits, err = source.PendingDeposits()
 		if err != nil {
 			return err
+		}
+		if sPendingDeposits == nil {
+			sPendingDeposits = make([]*ethpb.PendingDeposit, 0)
 		}
 	}
 	tPendingDeposits = append(tPendingDeposits, sPendingDeposits...)
@@ -1705,6 +1741,9 @@ func diffPendingDeposits(diff *stateDiff, source, target state.ReadOnlyBeaconSta
 	diff.pendingDepositIndex = uint64(index)
 	diff.pendingDepositDiff = make([]*ethpb.PendingDeposit, tlen+index-len(sPendingDeposits))
 	for i, d := range tPendingDeposits[len(sPendingDeposits)-index : tlen] {
+		if d == nil {
+			return errors.New("nil pending deposit")
+		}
 		diff.pendingDepositDiff[i] = &ethpb.PendingDeposit{
 			PublicKey:             slices.Clone(d.PublicKey),
 			WithdrawalCredentials: slices.Clone(d.WithdrawalCredentials),
@@ -1721,13 +1760,19 @@ func diffPendingPartialWithdrawals(diff *stateDiff, source, target state.ReadOnl
 	if err != nil {
 		return err
 	}
+	if tPendingPartialWithdrawals == nil {
+		tPendingPartialWithdrawals = make([]*ethpb.PendingPartialWithdrawal, 0)
+	}
 	tlen := len(tPendingPartialWithdrawals)
 	tPendingPartialWithdrawals = append(tPendingPartialWithdrawals, nil)
-	var sPendingPartialWithdrawals []*ethpb.PendingPartialWithdrawal
+	sPendingPartialWithdrawals := make([]*ethpb.PendingPartialWithdrawal, 0)
 	if source.Version() >= version.Electra {
 		sPendingPartialWithdrawals, err = source.PendingPartialWithdrawals()
 		if err != nil {
 			return err
+		}
+		if sPendingPartialWithdrawals == nil {
+			sPendingPartialWithdrawals = make([]*ethpb.PendingPartialWithdrawal, 0)
 		}
 	}
 	tPendingPartialWithdrawals = append(tPendingPartialWithdrawals, sPendingPartialWithdrawals...)
@@ -1735,6 +1780,9 @@ func diffPendingPartialWithdrawals(diff *stateDiff, source, target state.ReadOnl
 	diff.pendingPartialWithdrawalsIndex = uint64(index)
 	diff.pendingPartialWithdrawalsDiff = make([]*ethpb.PendingPartialWithdrawal, tlen+index-len(sPendingPartialWithdrawals))
 	for i, d := range tPendingPartialWithdrawals[len(sPendingPartialWithdrawals)-index : tlen] {
+		if d == nil {
+			return errors.New("nil pending partial withdrawal")
+		}
 		diff.pendingPartialWithdrawalsDiff[i] = &ethpb.PendingPartialWithdrawal{
 			Index:             d.Index,
 			Amount:            d.Amount,
@@ -1749,13 +1797,19 @@ func diffPendingConsolidations(diff *stateDiff, source, target state.ReadOnlyBea
 	if err != nil {
 		return err
 	}
+	if tPendingConsolidations == nil {
+		tPendingConsolidations = make([]*ethpb.PendingConsolidation, 0)
+	}
 	tlen := len(tPendingConsolidations)
 	tPendingConsolidations = append(tPendingConsolidations, nil)
-	var sPendingConsolidations []*ethpb.PendingConsolidation
+	sPendingConsolidations := make([]*ethpb.PendingConsolidation, 0)
 	if source.Version() >= version.Electra {
 		sPendingConsolidations, err = source.PendingConsolidations()
 		if err != nil {
 			return err
+		}
+		if sPendingConsolidations == nil {
+			sPendingConsolidations = make([]*ethpb.PendingConsolidation, 0)
 		}
 	}
 	tPendingConsolidations = append(tPendingConsolidations, sPendingConsolidations...)
@@ -1763,6 +1817,9 @@ func diffPendingConsolidations(diff *stateDiff, source, target state.ReadOnlyBea
 	diff.pendingConsolidationsIndex = uint64(index)
 	diff.pendingConsolidationsDiffs = make([]*ethpb.PendingConsolidation, tlen+index-len(sPendingConsolidations))
 	for i, d := range tPendingConsolidations[len(sPendingConsolidations)-index : tlen] {
+		if d == nil {
+			return errors.New("nil pending consolidation")
+		}
 		diff.pendingConsolidationsDiffs[i] = &ethpb.PendingConsolidation{
 			SourceIndex: d.SourceIndex,
 			TargetIndex: d.TargetIndex,
@@ -1773,6 +1830,9 @@ func diffPendingConsolidations(diff *stateDiff, source, target state.ReadOnlyBea
 
 // applyValidatorDiff applies the validator diff to the source state in place.
 func applyValidatorDiff(source state.BeaconState, diff []validatorDiff) (state.BeaconState, error) {
+	if source == nil {
+		return nil, errors.New("nil beacon state")
+	}
 	sVals := source.Validators()
 	for _, d := range diff {
 		if d.index > uint32(len(sVals)) {
@@ -1803,6 +1863,9 @@ func applyValidatorDiff(source state.BeaconState, diff []validatorDiff) (state.B
 
 // applyBalancesDiff applies the balances diff to the source state in place.
 func applyBalancesDiff(source state.BeaconState, diff []int64) (state.BeaconState, error) {
+	if source == nil {
+		return nil, errors.New("nil beacon state")
+	}
 	sBalances := source.Balances()
 	if len(diff) < len(sBalances) {
 		return nil, errors.Errorf("target balances length %d is less than source %d", len(diff), len(sBalances))
@@ -1823,6 +1886,9 @@ func applyBalancesDiff(source state.BeaconState, diff []int64) (state.BeaconStat
 
 // applyStateDiff applies the given diff to the source state in place.
 func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDiff) (state.BeaconState, error) {
+	if source == nil || diff == nil {
+		return nil, errors.New("nil state diff input")
+	}
 	var err error
 	if source, err = updateToVersion(ctx, source, diff.targetVersion); err != nil {
 		return nil, errors.Wrap(err, "failed to update state to target version")
@@ -1986,8 +2052,14 @@ func applyPendingDepositsDiff(source state.BeaconState, diff *stateDiff) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to get pending deposits")
 	}
+	if sPendingDeposits == nil {
+		sPendingDeposits = make([]*ethpb.PendingDeposit, 0)
+	}
 	sPendingDeposits = sPendingDeposits[int(diff.pendingDepositIndex):]
 	for _, t := range diff.pendingDepositDiff {
+		if t == nil {
+			return errors.New("nil pending deposit diff")
+		}
 		sPendingDeposits = append(sPendingDeposits, &ethpb.PendingDeposit{
 			PublicKey:             slices.Clone(t.PublicKey),
 			WithdrawalCredentials: slices.Clone(t.WithdrawalCredentials),
@@ -2005,8 +2077,14 @@ func applyPendingPartialWithdrawalsDiff(source state.BeaconState, diff *stateDif
 	if err != nil {
 		return errors.Wrap(err, "failed to get pending partial withdrawals")
 	}
+	if sPendingPartialWithdrawals == nil {
+		sPendingPartialWithdrawals = make([]*ethpb.PendingPartialWithdrawal, 0)
+	}
 	sPendingPartialWithdrawals = sPendingPartialWithdrawals[int(diff.pendingPartialWithdrawalsIndex):]
 	for _, t := range diff.pendingPartialWithdrawalsDiff {
+		if t == nil {
+			return errors.New("nil pending partial withdrawal diff")
+		}
 		sPendingPartialWithdrawals = append(sPendingPartialWithdrawals, &ethpb.PendingPartialWithdrawal{
 			Index:             t.Index,
 			Amount:            t.Amount,
@@ -2022,8 +2100,14 @@ func applyPendingConsolidationsDiff(source state.BeaconState, diff *stateDiff) e
 	if err != nil {
 		return errors.Wrap(err, "failed to get pending consolidations")
 	}
+	if sPendingConsolidations == nil {
+		sPendingConsolidations = make([]*ethpb.PendingConsolidation, 0)
+	}
 	sPendingConsolidations = sPendingConsolidations[int(diff.pendingConsolidationsIndex):]
 	for _, t := range diff.pendingConsolidationsDiffs {
+		if t == nil {
+			return errors.New("nil pending consolidation diff")
+		}
 		sPendingConsolidations = append(sPendingConsolidations, &ethpb.PendingConsolidation{
 			SourceIndex: t.SourceIndex,
 			TargetIndex: t.TargetIndex,
