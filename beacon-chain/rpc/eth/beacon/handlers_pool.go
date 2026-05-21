@@ -116,13 +116,22 @@ func shouldIncludeAttestation(
 	rawCommitteeIndex string,
 	committeeIndex uint64,
 ) bool {
+	if att == nil {
+		return false
+	}
 	committeeIndexMatch := true
 	slotMatch := true
 	if rawCommitteeIndex != "" && att.GetCommitteeIndex() != primitives.CommitteeIndex(committeeIndex) {
 		committeeIndexMatch = false
 	}
-	if rawSlot != "" && att.GetData().Slot != primitives.Slot(slot) {
-		slotMatch = false
+	data := att.GetData()
+	if rawSlot != "" {
+		if data == nil {
+			return false
+		}
+		if data.Slot != primitives.Slot(slot) {
+			slotMatch = false
+		}
 	}
 	return committeeIndexMatch && slotMatch
 }
@@ -835,7 +844,17 @@ func (s *Server) submitAttesterSlashing(
 		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	headState, err = transition.ProcessSlotsIfPossible(ctx, headState, slashing.FirstAttestation().GetData().Slot)
+	firstAtt := slashing.FirstAttestation()
+	if firstAtt == nil {
+		httputil.HandleError(w, "Invalid attester slashing: nil attestation", http.StatusBadRequest)
+		return
+	}
+	data := firstAtt.GetData()
+	if data == nil {
+		httputil.HandleError(w, "Invalid attester slashing: nil attestation data", http.StatusBadRequest)
+		return
+	}
+	headState, err = transition.ProcessSlotsIfPossible(ctx, headState, data.Slot)
 	if err != nil {
 		httputil.HandleError(w, "Could not process slots: "+err.Error(), http.StatusInternalServerError)
 		return
