@@ -19,6 +19,28 @@ import (
 	"github.com/pkg/errors"
 )
 
+func attestationData(att ethpb.Att) (*ethpb.AttestationData, error) {
+	if att == nil || att.IsNil() {
+		return nil, errors.New("nil or missing attestation data")
+	}
+	data := att.GetData()
+	if data == nil {
+		return nil, errors.New("nil or missing attestation data")
+	}
+	return data, nil
+}
+
+func indexedAttestationData(indexedAtt ethpb.IndexedAtt) (*ethpb.AttestationData, error) {
+	if indexedAtt == nil || indexedAtt.IsNil() {
+		return nil, errors.New("nil or missing indexed attestation data")
+	}
+	data := indexedAtt.GetData()
+	if data == nil {
+		return nil, errors.New("nil or missing indexed attestation data")
+	}
+	return data, nil
+}
+
 // ConvertToIndexed converts attestation to (almost) indexed-verifiable form.
 //
 // Note about spec pseudocode definition. The state was used by get_attesting_indices to determine
@@ -39,6 +61,10 @@ import (
 //	     signature=attestation.signature,
 //	 )
 func ConvertToIndexed(_ context.Context, attestation ethpb.Att, committees ...[]primitives.ValidatorIndex) (ethpb.IndexedAtt, error) {
+	data, err := attestationData(attestation)
+	if err != nil {
+		return nil, err
+	}
 	attIndices, err := AttestingIndices(attestation, committees...)
 	if err != nil {
 		return nil, err
@@ -48,13 +74,13 @@ func ConvertToIndexed(_ context.Context, attestation ethpb.Att, committees ...[]
 
 	if attestation.Version() >= version.Electra {
 		return &ethpb.IndexedAttestationElectra{
-			Data:             attestation.GetData(),
+			Data:             data,
 			Signature:        attestation.GetSignature(),
 			AttestingIndices: attIndices,
 		}, nil
 	}
 	return &ethpb.IndexedAttestation{
-		Data:             attestation.GetData(),
+		Data:             data,
 		Signature:        attestation.GetSignature(),
 		AttestingIndices: attIndices,
 	}, nil
@@ -98,7 +124,11 @@ func AttestingIndices(att ethpb.Att, committees ...[]primitives.ValidatorIndex) 
 		committeesLen += len(c)
 	}
 	if aggBits.Len() == 0 {
-		fmt.Printf("committee_bits: %v, aggregation_bits: %v, slot: %d", att.CommitteeBitsVal(), att.GetAggregationBits(), att.GetData().Slot)
+		data, err := attestationData(att)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Printf("committee_bits: %v, aggregation_bits: %v, slot: %d", att.CommitteeBitsVal(), att.GetAggregationBits(), data.Slot)
 		debug.PrintStack()
 	}
 	if aggBits.Len() != uint64(committeesLen) {
@@ -147,9 +177,13 @@ func AttestingIndices(att ethpb.Att, committees ...[]primitives.ValidatorIndex) 
 func VerifyIndexedAttestationSig(ctx context.Context, indexedAtt ethpb.IndexedAtt, pubKeys []bls.PublicKey, domain []byte) error {
 	_, span := trace.StartSpan(ctx, "attestationutil.VerifyIndexedAttestationSig")
 	defer span.End()
+	data, err := indexedAttestationData(indexedAtt)
+	if err != nil {
+		return err
+	}
 	indices := indexedAtt.GetAttestingIndices()
 
-	messageHash, err := signing.ComputeSigningRoot(indexedAtt.GetData(), domain)
+	messageHash, err := signing.ComputeSigningRoot(data, domain)
 	if err != nil {
 		return errors.Wrap(err, "could not get signing root of object")
 	}
@@ -193,7 +227,8 @@ func IsValidAttestationIndices(ctx context.Context, indexedAttestation ethpb.Ind
 	_, span := trace.StartSpan(ctx, "attestationutil.IsValidAttestationIndices")
 	defer span.End()
 
-	if indexedAttestation == nil || indexedAttestation.IsNil() || indexedAttestation.GetData().Target == nil || indexedAttestation.GetData().Source == nil {
+	data, err := indexedAttestationData(indexedAttestation)
+	if err != nil || data.Target == nil || data.Source == nil {
 		return errors.New("nil or missing indexed attestation data")
 	}
 
