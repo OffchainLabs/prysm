@@ -149,6 +149,10 @@ func (l *TestLightClient) setupTestAltair() *TestLightClient {
 	// Attested State
 	attestedState, err := NewBeaconStateAltair()
 	require.NoError(l.T, err)
+	if attestedState == nil || attestedState.IsNil() {
+		l.T.Fatal("beacon state is nil")
+		return nil
+	}
 	require.NoError(l.T, attestedState.SetSlot(attestedSlot))
 
 	var signedFinalizedBlock interfaces.SignedBeaconBlock
@@ -162,20 +166,36 @@ func (l *TestLightClient) setupTestAltair() *TestLightClient {
 		// Finalized State & Block
 		finalizedState, err = NewBeaconStateAltair()
 		require.NoError(l.T, err)
+		if finalizedState == nil || finalizedState.IsNil() {
+			l.T.Fatal("beacon state is nil")
+			return nil
+		}
 		require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 		finalizedBlock := NewBeaconBlockAltair()
 		require.NoError(l.T, err)
 		finalizedBlock.Block.Slot = finalizedSlot
 		signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+		if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 		finalizedHeader, err := signedFinalizedBlock.Header()
 		require.NoError(l.T, err)
+		if finalizedHeader == nil {
+			l.T.Fatal("beacon block header is nil")
+			return nil
+		}
 		require.NoError(l.T, finalizedState.SetLatestBlockHeader(finalizedHeader.Header))
 		finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
 		require.NoError(l.T, err)
 		finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
 		signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+		if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 
 		// Set the finalized checkpoint
@@ -194,19 +214,35 @@ func (l *TestLightClient) setupTestAltair() *TestLightClient {
 	attestedBlock.Block.Slot = attestedSlot
 	attestedBlock.Block.ParentRoot = l.attestedParentRoot[:]
 	signedAttestedBlock, err := blocks.NewSignedBeaconBlock(attestedBlock)
+	if signedAttestedBlock == nil || signedAttestedBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 	attestedBlockHeader, err := signedAttestedBlock.Header()
 	require.NoError(l.T, err)
+	if attestedBlockHeader == nil {
+		l.T.Fatal("beacon block header is nil")
+		return nil
+	}
 	require.NoError(l.T, attestedState.SetLatestBlockHeader(attestedBlockHeader.Header))
 	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
 	require.NoError(l.T, err)
 	attestedBlock.Block.StateRoot = attestedStateRoot[:]
 	signedAttestedBlock, err = blocks.NewSignedBeaconBlock(attestedBlock)
+	if signedAttestedBlock == nil || signedAttestedBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 
 	// Signature State & Block
 	signatureState, err := NewBeaconStateAltair()
 	require.NoError(l.T, err)
+	if signatureState == nil || signatureState.IsNil() {
+		l.T.Fatal("beacon state is nil")
+		return nil
+	}
 	require.NoError(l.T, signatureState.SetSlot(signatureSlot))
 
 	signatureBlock := NewBeaconBlockAltair()
@@ -226,15 +262,27 @@ func (l *TestLightClient) setupTestAltair() *TestLightClient {
 	}
 
 	signedSignatureBlock, err := blocks.NewSignedBeaconBlock(signatureBlock)
+	if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 	signatureBlockHeader, err := signedSignatureBlock.Header()
 	require.NoError(l.T, err)
+	if signatureBlockHeader == nil {
+		l.T.Fatal("beacon block header is nil")
+		return nil
+	}
 	err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
 	require.NoError(l.T, err)
 	signatureStateRoot, err := signatureState.HashTreeRoot(ctx)
 	require.NoError(l.T, err)
 	signatureBlock.Block.StateRoot = signatureStateRoot[:]
 	signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+	if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 
 	l.State = signatureState
@@ -264,6 +312,10 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 	// Attested State & Block
 	attestedState, err := NewBeaconStateBellatrix()
 	require.NoError(l.T, err)
+	if attestedState == nil || attestedState.IsNil() {
+		l.T.Fatal("beacon state is nil")
+		return nil
+	}
 	require.NoError(l.T, attestedState.SetSlot(attestedSlot))
 
 	var signedFinalizedBlock interfaces.SignedBeaconBlock
@@ -279,20 +331,36 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 
 			finalizedState, err = NewBeaconStateAltair()
 			require.NoError(l.T, err)
+			if finalizedState == nil || finalizedState.IsNil() {
+				l.T.Fatal("beacon state is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 			finalizedBlock := NewBeaconBlockAltair()
 			require.NoError(l.T, err)
 			finalizedBlock.Block.Slot = finalizedSlot
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 			finalizedHeader, err := signedFinalizedBlock.Header()
 			require.NoError(l.T, err)
+			if finalizedHeader == nil {
+				l.T.Fatal("beacon block header is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetLatestBlockHeader(finalizedHeader.Header))
 			finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
 			require.NoError(l.T, err)
 			finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 		} else {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().BellatrixForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
@@ -302,20 +370,36 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 
 			finalizedState, err = NewBeaconStateBellatrix()
 			require.NoError(l.T, err)
+			if finalizedState == nil || finalizedState.IsNil() {
+				l.T.Fatal("beacon state is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 			finalizedBlock := NewBeaconBlockBellatrix()
 			require.NoError(l.T, err)
 			finalizedBlock.Block.Slot = finalizedSlot
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 			finalizedHeader, err := signedFinalizedBlock.Header()
 			require.NoError(l.T, err)
+			if finalizedHeader == nil {
+				l.T.Fatal("beacon block header is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetLatestBlockHeader(finalizedHeader.Header))
 			finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
 			require.NoError(l.T, err)
 			finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 		}
 
@@ -333,19 +417,35 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 	attestedBlock.Block.Slot = attestedSlot
 	attestedBlock.Block.ParentRoot = l.attestedParentRoot[:]
 	signedAttestedBlock, err := blocks.NewSignedBeaconBlock(attestedBlock)
+	if signedAttestedBlock == nil || signedAttestedBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 	attestedBlockHeader, err := signedAttestedBlock.Header()
 	require.NoError(l.T, err)
+	if attestedBlockHeader == nil {
+		l.T.Fatal("beacon block header is nil")
+		return nil
+	}
 	require.NoError(l.T, attestedState.SetLatestBlockHeader(attestedBlockHeader.Header))
 	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
 	require.NoError(l.T, err)
 	attestedBlock.Block.StateRoot = attestedStateRoot[:]
 	signedAttestedBlock, err = blocks.NewSignedBeaconBlock(attestedBlock)
+	if signedAttestedBlock == nil || signedAttestedBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 
 	// Signature State & Block
 	signatureState, err := NewBeaconStateBellatrix()
 	require.NoError(l.T, err)
+	if signatureState == nil || signatureState.IsNil() {
+		l.T.Fatal("beacon state is nil")
+		return nil
+	}
 	require.NoError(l.T, signatureState.SetSlot(signatureSlot))
 
 	var signedSignatureBlock interfaces.SignedBeaconBlock
@@ -367,11 +467,19 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 		}
 
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 
 		signatureBlockHeader, err := signedSignatureBlock.Header()
 		require.NoError(l.T, err)
 
+		if signatureBlockHeader == nil {
+			l.T.Fatal("beacon block header is nil")
+			return nil
+		}
 		err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
 		require.NoError(l.T, err)
 		stateRoot, err := signatureState.HashTreeRoot(ctx)
@@ -379,6 +487,10 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 
 		signatureBlock.Block.StateRoot = stateRoot[:]
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 	} else {
 		signatureBlock := NewBeaconBlockBellatrix()
@@ -398,11 +510,19 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 		}
 
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 
 		signatureBlockHeader, err := signedSignatureBlock.Header()
 		require.NoError(l.T, err)
 
+		if signatureBlockHeader == nil {
+			l.T.Fatal("beacon block header is nil")
+			return nil
+		}
 		err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
 		require.NoError(l.T, err)
 		signatureStateRoot, err := signatureState.HashTreeRoot(ctx)
@@ -410,6 +530,10 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 
 		signatureBlock.Block.StateRoot = signatureStateRoot[:]
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 	}
 
@@ -440,6 +564,10 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 	// Attested State
 	attestedState, err := NewBeaconStateCapella()
 	require.NoError(l.T, err)
+	if attestedState == nil || attestedState.IsNil() {
+		l.T.Fatal("beacon state is nil")
+		return nil
+	}
 	require.NoError(l.T, attestedState.SetSlot(attestedSlot))
 
 	var signedFinalizedBlock interfaces.SignedBeaconBlock
@@ -455,20 +583,36 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 
 			finalizedState, err = NewBeaconStateBellatrix()
 			require.NoError(l.T, err)
+			if finalizedState == nil || finalizedState.IsNil() {
+				l.T.Fatal("beacon state is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 			finalizedBlock := NewBeaconBlockBellatrix()
 			require.NoError(l.T, err)
 			finalizedBlock.Block.Slot = finalizedSlot
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 			finalizedHeader, err := signedFinalizedBlock.Header()
 			require.NoError(l.T, err)
+			if finalizedHeader == nil {
+				l.T.Fatal("beacon block header is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetLatestBlockHeader(finalizedHeader.Header))
 			finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
 			require.NoError(l.T, err)
 			finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 		} else {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().CapellaForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
@@ -478,20 +622,36 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 
 			finalizedState, err = NewBeaconStateCapella()
 			require.NoError(l.T, err)
+			if finalizedState == nil || finalizedState.IsNil() {
+				l.T.Fatal("beacon state is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 			finalizedBlock := NewBeaconBlockCapella()
 			require.NoError(l.T, err)
 			finalizedBlock.Block.Slot = finalizedSlot
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 			finalizedHeader, err := signedFinalizedBlock.Header()
 			require.NoError(l.T, err)
+			if finalizedHeader == nil {
+				l.T.Fatal("beacon block header is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetLatestBlockHeader(finalizedHeader.Header))
 			finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
 			require.NoError(l.T, err)
 			finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 		}
 
@@ -510,19 +670,35 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 	attestedBlock.Block.Slot = attestedSlot
 	attestedBlock.Block.ParentRoot = l.attestedParentRoot[:]
 	signedAttestedBlock, err := blocks.NewSignedBeaconBlock(attestedBlock)
+	if signedAttestedBlock == nil || signedAttestedBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 	attestedBlockHeader, err := signedAttestedBlock.Header()
 	require.NoError(l.T, err)
+	if attestedBlockHeader == nil {
+		l.T.Fatal("beacon block header is nil")
+		return nil
+	}
 	require.NoError(l.T, attestedState.SetLatestBlockHeader(attestedBlockHeader.Header))
 	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
 	require.NoError(l.T, err)
 	attestedBlock.Block.StateRoot = attestedStateRoot[:]
 	signedAttestedBlock, err = blocks.NewSignedBeaconBlock(attestedBlock)
+	if signedAttestedBlock == nil || signedAttestedBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 
 	// Signature State & Block
 	signatureState, err := NewBeaconStateCapella()
 	require.NoError(l.T, err)
+	if signatureState == nil || signatureState.IsNil() {
+		l.T.Fatal("beacon state is nil")
+		return nil
+	}
 	require.NoError(l.T, signatureState.SetSlot(signatureSlot))
 
 	var signedSignatureBlock interfaces.SignedBeaconBlock
@@ -544,11 +720,19 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 		}
 
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 
 		signatureBlockHeader, err := signedSignatureBlock.Header()
 		require.NoError(l.T, err)
 
+		if signatureBlockHeader == nil {
+			l.T.Fatal("beacon block header is nil")
+			return nil
+		}
 		err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
 		require.NoError(l.T, err)
 		stateRoot, err := signatureState.HashTreeRoot(ctx)
@@ -556,6 +740,10 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 
 		signatureBlock.Block.StateRoot = stateRoot[:]
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 	} else {
 		signatureBlock := NewBeaconBlockCapella()
@@ -575,11 +763,19 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 		}
 
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 
 		signatureBlockHeader, err := signedSignatureBlock.Header()
 		require.NoError(l.T, err)
 
+		if signatureBlockHeader == nil {
+			l.T.Fatal("beacon block header is nil")
+			return nil
+		}
 		err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
 		require.NoError(l.T, err)
 		signatureStateRoot, err := signatureState.HashTreeRoot(ctx)
@@ -587,6 +783,10 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 
 		signatureBlock.Block.StateRoot = signatureStateRoot[:]
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 	}
 
@@ -617,6 +817,10 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 	// Attested State
 	attestedState, err := NewBeaconStateDeneb()
 	require.NoError(l.T, err)
+	if attestedState == nil || attestedState.IsNil() {
+		l.T.Fatal("beacon state is nil")
+		return nil
+	}
 	require.NoError(l.T, attestedState.SetSlot(attestedSlot))
 
 	var signedFinalizedBlock interfaces.SignedBeaconBlock
@@ -633,20 +837,36 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 
 			finalizedState, err = NewBeaconStateCapella()
 			require.NoError(l.T, err)
+			if finalizedState == nil || finalizedState.IsNil() {
+				l.T.Fatal("beacon state is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 			finalizedBlock := NewBeaconBlockCapella()
 			require.NoError(l.T, err)
 			finalizedBlock.Block.Slot = finalizedSlot
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 			finalizedHeader, err := signedFinalizedBlock.Header()
 			require.NoError(l.T, err)
+			if finalizedHeader == nil {
+				l.T.Fatal("beacon block header is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetLatestBlockHeader(finalizedHeader.Header))
 			finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
 			require.NoError(l.T, err)
 			finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 		} else {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().DenebForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
@@ -656,20 +876,36 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 
 			finalizedState, err = NewBeaconStateDeneb()
 			require.NoError(l.T, err)
+			if finalizedState == nil || finalizedState.IsNil() {
+				l.T.Fatal("beacon state is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 			finalizedBlock := NewBeaconBlockDeneb()
 			require.NoError(l.T, err)
 			finalizedBlock.Block.Slot = finalizedSlot
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 			finalizedHeader, err := signedFinalizedBlock.Header()
 			require.NoError(l.T, err)
+			if finalizedHeader == nil {
+				l.T.Fatal("beacon block header is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetLatestBlockHeader(finalizedHeader.Header))
 			finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
 			require.NoError(l.T, err)
 			finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 		}
 
@@ -688,19 +924,35 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 	attestedBlock.Block.Slot = attestedSlot
 	attestedBlock.Block.ParentRoot = l.attestedParentRoot[:]
 	signedAttestedBlock, err := blocks.NewSignedBeaconBlock(attestedBlock)
+	if signedAttestedBlock == nil || signedAttestedBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 	attestedBlockHeader, err := signedAttestedBlock.Header()
 	require.NoError(l.T, err)
+	if attestedBlockHeader == nil {
+		l.T.Fatal("beacon block header is nil")
+		return nil
+	}
 	require.NoError(l.T, attestedState.SetLatestBlockHeader(attestedBlockHeader.Header))
 	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
 	require.NoError(l.T, err)
 	attestedBlock.Block.StateRoot = attestedStateRoot[:]
 	signedAttestedBlock, err = blocks.NewSignedBeaconBlock(attestedBlock)
+	if signedAttestedBlock == nil || signedAttestedBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 
 	// Signature State & Block
 	signatureState, err := NewBeaconStateDeneb()
 	require.NoError(l.T, err)
+	if signatureState == nil || signatureState.IsNil() {
+		l.T.Fatal("beacon state is nil")
+		return nil
+	}
 	require.NoError(l.T, signatureState.SetSlot(signatureSlot))
 
 	var signedSignatureBlock interfaces.SignedBeaconBlock
@@ -722,11 +974,19 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 		}
 
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 
 		signatureBlockHeader, err := signedSignatureBlock.Header()
 		require.NoError(l.T, err)
 
+		if signatureBlockHeader == nil {
+			l.T.Fatal("beacon block header is nil")
+			return nil
+		}
 		err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
 		require.NoError(l.T, err)
 		stateRoot, err := signatureState.HashTreeRoot(ctx)
@@ -734,6 +994,10 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 
 		signatureBlock.Message.StateRoot = stateRoot[:]
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 	} else {
 		signatureBlock := NewBeaconBlockDeneb()
@@ -753,11 +1017,19 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 		}
 
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 
 		signatureBlockHeader, err := signedSignatureBlock.Header()
 		require.NoError(l.T, err)
 
+		if signatureBlockHeader == nil {
+			l.T.Fatal("beacon block header is nil")
+			return nil
+		}
 		err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
 		require.NoError(l.T, err)
 		signatureStateRoot, err := signatureState.HashTreeRoot(ctx)
@@ -765,6 +1037,10 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 
 		signatureBlock.Block.StateRoot = signatureStateRoot[:]
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 	}
 
@@ -795,6 +1071,10 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 	// Attested State & Block
 	attestedState, err := NewBeaconStateElectra()
 	require.NoError(l.T, err)
+	if attestedState == nil || attestedState.IsNil() {
+		l.T.Fatal("beacon state is nil")
+		return nil
+	}
 	require.NoError(l.T, attestedState.SetSlot(attestedSlot))
 
 	var signedFinalizedBlock interfaces.SignedBeaconBlock
@@ -811,20 +1091,36 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 
 			finalizedState, err = NewBeaconStateDeneb()
 			require.NoError(l.T, err)
+			if finalizedState == nil || finalizedState.IsNil() {
+				l.T.Fatal("beacon state is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 			finalizedBlock := NewBeaconBlockDeneb()
 			require.NoError(l.T, err)
 			finalizedBlock.Block.Slot = finalizedSlot
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 			finalizedHeader, err := signedFinalizedBlock.Header()
 			require.NoError(l.T, err)
+			if finalizedHeader == nil {
+				l.T.Fatal("beacon block header is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetLatestBlockHeader(finalizedHeader.Header))
 			finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
 			require.NoError(l.T, err)
 			finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 		} else {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().ElectraForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
@@ -834,20 +1130,36 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 
 			finalizedState, err = NewBeaconStateElectra()
 			require.NoError(l.T, err)
+			if finalizedState == nil || finalizedState.IsNil() {
+				l.T.Fatal("beacon state is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 			finalizedBlock := NewBeaconBlockElectra()
 			require.NoError(l.T, err)
 			finalizedBlock.Block.Slot = finalizedSlot
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 			finalizedHeader, err := signedFinalizedBlock.Header()
 			require.NoError(l.T, err)
+			if finalizedHeader == nil {
+				l.T.Fatal("beacon block header is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetLatestBlockHeader(finalizedHeader.Header))
 			finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
 			require.NoError(l.T, err)
 			finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 		}
 
@@ -866,19 +1178,35 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 	attestedBlock.Block.Slot = attestedSlot
 	attestedBlock.Block.ParentRoot = l.attestedParentRoot[:]
 	signedAttestedBlock, err := blocks.NewSignedBeaconBlock(attestedBlock)
+	if signedAttestedBlock == nil || signedAttestedBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 	attestedBlockHeader, err := signedAttestedBlock.Header()
 	require.NoError(l.T, err)
+	if attestedBlockHeader == nil {
+		l.T.Fatal("beacon block header is nil")
+		return nil
+	}
 	require.NoError(l.T, attestedState.SetLatestBlockHeader(attestedBlockHeader.Header))
 	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
 	require.NoError(l.T, err)
 	attestedBlock.Block.StateRoot = attestedStateRoot[:]
 	signedAttestedBlock, err = blocks.NewSignedBeaconBlock(attestedBlock)
+	if signedAttestedBlock == nil || signedAttestedBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 
 	// Signature State & Block
 	signatureState, err := NewBeaconStateElectra()
 	require.NoError(l.T, err)
+	if signatureState == nil || signatureState.IsNil() {
+		l.T.Fatal("beacon state is nil")
+		return nil
+	}
 	require.NoError(l.T, signatureState.SetSlot(signatureSlot))
 
 	var signedSignatureBlock interfaces.SignedBeaconBlock
@@ -900,11 +1228,19 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 		}
 
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 
 		signatureBlockHeader, err := signedSignatureBlock.Header()
 		require.NoError(l.T, err)
 
+		if signatureBlockHeader == nil {
+			l.T.Fatal("beacon block header is nil")
+			return nil
+		}
 		err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
 		require.NoError(l.T, err)
 		stateRoot, err := signatureState.HashTreeRoot(ctx)
@@ -912,6 +1248,10 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 
 		signatureBlock.Message.StateRoot = stateRoot[:]
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 	} else {
 		signatureBlock := NewBeaconBlockElectra()
@@ -931,11 +1271,19 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 		}
 
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 
 		signatureBlockHeader, err := signedSignatureBlock.Header()
 		require.NoError(l.T, err)
 
+		if signatureBlockHeader == nil {
+			l.T.Fatal("beacon block header is nil")
+			return nil
+		}
 		err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
 		require.NoError(l.T, err)
 		signatureStateRoot, err := signatureState.HashTreeRoot(ctx)
@@ -943,6 +1291,10 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 
 		signatureBlock.Block.StateRoot = signatureStateRoot[:]
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 	}
 
@@ -973,6 +1325,10 @@ func (l *TestLightClient) setupTestFulu() *TestLightClient {
 	// Attested State & Block
 	attestedState, err := NewBeaconStateFulu()
 	require.NoError(l.T, err)
+	if attestedState == nil || attestedState.IsNil() {
+		l.T.Fatal("beacon state is nil")
+		return nil
+	}
 	require.NoError(l.T, attestedState.SetSlot(attestedSlot))
 
 	var signedFinalizedBlock interfaces.SignedBeaconBlock
@@ -989,20 +1345,36 @@ func (l *TestLightClient) setupTestFulu() *TestLightClient {
 
 			finalizedState, err = NewBeaconStateElectra()
 			require.NoError(l.T, err)
+			if finalizedState == nil || finalizedState.IsNil() {
+				l.T.Fatal("beacon state is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 			finalizedBlock := NewBeaconBlockElectra()
 			require.NoError(l.T, err)
 			finalizedBlock.Block.Slot = finalizedSlot
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 			finalizedHeader, err := signedFinalizedBlock.Header()
 			require.NoError(l.T, err)
+			if finalizedHeader == nil {
+				l.T.Fatal("beacon block header is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetLatestBlockHeader(finalizedHeader.Header))
 			finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
 			require.NoError(l.T, err)
 			finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 		} else {
 			finalizedSlot = primitives.Slot(uint64(params.BeaconConfig().FuluForkEpoch) * uint64(params.BeaconConfig().SlotsPerEpoch))
@@ -1012,20 +1384,36 @@ func (l *TestLightClient) setupTestFulu() *TestLightClient {
 
 			finalizedState, err = NewBeaconStateFulu()
 			require.NoError(l.T, err)
+			if finalizedState == nil || finalizedState.IsNil() {
+				l.T.Fatal("beacon state is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetSlot(finalizedSlot))
 
 			finalizedBlock := NewBeaconBlockFulu()
 			require.NoError(l.T, err)
 			finalizedBlock.Block.Slot = finalizedSlot
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 			finalizedHeader, err := signedFinalizedBlock.Header()
 			require.NoError(l.T, err)
+			if finalizedHeader == nil {
+				l.T.Fatal("beacon block header is nil")
+				return nil
+			}
 			require.NoError(l.T, finalizedState.SetLatestBlockHeader(finalizedHeader.Header))
 			finalizedStateRoot, err := finalizedState.HashTreeRoot(ctx)
 			require.NoError(l.T, err)
 			finalizedBlock.Block.StateRoot = finalizedStateRoot[:]
 			signedFinalizedBlock, err = blocks.NewSignedBeaconBlock(finalizedBlock)
+			if signedFinalizedBlock == nil || signedFinalizedBlock.IsNil() {
+				l.T.Fatal("beacon block is nil")
+				return nil
+			}
 			require.NoError(l.T, err)
 		}
 
@@ -1044,19 +1432,35 @@ func (l *TestLightClient) setupTestFulu() *TestLightClient {
 	attestedBlock.Block.Slot = attestedSlot
 	attestedBlock.Block.ParentRoot = l.attestedParentRoot[:]
 	signedAttestedBlock, err := blocks.NewSignedBeaconBlock(attestedBlock)
+	if signedAttestedBlock == nil || signedAttestedBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 	attestedBlockHeader, err := signedAttestedBlock.Header()
 	require.NoError(l.T, err)
+	if attestedBlockHeader == nil {
+		l.T.Fatal("beacon block header is nil")
+		return nil
+	}
 	require.NoError(l.T, attestedState.SetLatestBlockHeader(attestedBlockHeader.Header))
 	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
 	require.NoError(l.T, err)
 	attestedBlock.Block.StateRoot = attestedStateRoot[:]
 	signedAttestedBlock, err = blocks.NewSignedBeaconBlock(attestedBlock)
+	if signedAttestedBlock == nil || signedAttestedBlock.IsNil() {
+		l.T.Fatal("beacon block is nil")
+		return nil
+	}
 	require.NoError(l.T, err)
 
 	// Signature State & Block
 	signatureState, err := NewBeaconStateFulu()
 	require.NoError(l.T, err)
+	if signatureState == nil || signatureState.IsNil() {
+		l.T.Fatal("beacon state is nil")
+		return nil
+	}
 	require.NoError(l.T, signatureState.SetSlot(signatureSlot))
 
 	var signedSignatureBlock interfaces.SignedBeaconBlock
@@ -1078,11 +1482,19 @@ func (l *TestLightClient) setupTestFulu() *TestLightClient {
 		}
 
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 
 		signatureBlockHeader, err := signedSignatureBlock.Header()
 		require.NoError(l.T, err)
 
+		if signatureBlockHeader == nil {
+			l.T.Fatal("beacon block header is nil")
+			return nil
+		}
 		err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
 		require.NoError(l.T, err)
 		stateRoot, err := signatureState.HashTreeRoot(ctx)
@@ -1090,6 +1502,10 @@ func (l *TestLightClient) setupTestFulu() *TestLightClient {
 
 		signatureBlock.Message.StateRoot = stateRoot[:]
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 	} else {
 		signatureBlock := NewBeaconBlockFulu()
@@ -1109,11 +1525,19 @@ func (l *TestLightClient) setupTestFulu() *TestLightClient {
 		}
 
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 
 		signatureBlockHeader, err := signedSignatureBlock.Header()
 		require.NoError(l.T, err)
 
+		if signatureBlockHeader == nil {
+			l.T.Fatal("beacon block header is nil")
+			return nil
+		}
 		err = signatureState.SetLatestBlockHeader(signatureBlockHeader.Header)
 		require.NoError(l.T, err)
 		signatureStateRoot, err := signatureState.HashTreeRoot(ctx)
@@ -1121,6 +1545,10 @@ func (l *TestLightClient) setupTestFulu() *TestLightClient {
 
 		signatureBlock.Block.StateRoot = signatureStateRoot[:]
 		signedSignatureBlock, err = blocks.NewSignedBeaconBlock(signatureBlock)
+		if signedSignatureBlock == nil || signedSignatureBlock.IsNil() {
+			l.T.Fatal("beacon block is nil")
+			return nil
+		}
 		require.NoError(l.T, err)
 	}
 
@@ -1137,9 +1565,18 @@ func (l *TestLightClient) setupTestFulu() *TestLightClient {
 
 func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeader) {
 	updateAttestedHeaderBeacon := header.Beacon()
-	testAttestedHeader, err := l.AttestedBlock.Header()
+	attestedBlock := l.AttestedBlock
+	if attestedBlock == nil || attestedBlock.IsNil() {
+		l.T.Fatal("attested block is nil")
+		return
+	}
+	testAttestedHeader, err := attestedBlock.Header()
 	require.NoError(l.T, err)
-	require.Equal(l.T, l.AttestedBlock.Block().Slot(), updateAttestedHeaderBeacon.Slot, "Attested block slot is not equal")
+	if testAttestedHeader == nil {
+		l.T.Fatal("attested block header is nil")
+		return
+	}
+	require.Equal(l.T, attestedBlock.Block().Slot(), updateAttestedHeaderBeacon.Slot, "Attested block slot is not equal")
 	require.Equal(l.T, testAttestedHeader.Header.ProposerIndex, updateAttestedHeaderBeacon.ProposerIndex, "Attested block proposer index is not equal")
 	require.DeepSSZEqual(l.T, testAttestedHeader.Header.ParentRoot, updateAttestedHeaderBeacon.ParentRoot, "Attested block parent root is not equal")
 	require.DeepSSZEqual(l.T, testAttestedHeader.Header.BodyRoot, updateAttestedHeaderBeacon.BodyRoot, "Attested block body root is not equal")
@@ -1148,8 +1585,12 @@ func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeade
 	require.NoError(l.T, err)
 	require.DeepSSZEqual(l.T, attestedStateRoot[:], updateAttestedHeaderBeacon.StateRoot, "Attested block state root is not equal")
 
-	if l.AttestedBlock.Version() == version.Capella {
-		payloadInterface, err := l.AttestedBlock.Block().Body().Execution()
+	if attestedBlock.Version() == version.Capella {
+		payloadInterface, err := attestedBlock.Block().Body().Execution()
+		if payloadInterface == nil || payloadInterface.IsNil() {
+			l.T.Fatal("execution payload header is nil")
+			return
+		}
 		require.NoError(l.T, err)
 		transactionsRoot, err := payloadInterface.TransactionsRoot()
 		if errors.Is(err, consensus_types.ErrUnsupportedField) {
@@ -1190,10 +1631,18 @@ func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeade
 		}
 
 		updateAttestedHeaderExecution, err := header.Execution()
+		if updateAttestedHeaderExecution == nil || updateAttestedHeaderExecution.IsNil() {
+			l.T.Fatal("execution payload header is nil")
+			return
+		}
 		require.NoError(l.T, err)
 		require.DeepSSZEqual(l.T, execution, updateAttestedHeaderExecution.Proto(), "Attested Block Execution is not equal")
 
-		executionPayloadProof, err := blocks.PayloadProof(l.Ctx, l.AttestedBlock.Block())
+		executionPayloadProof, err := blocks.PayloadProof(l.Ctx, attestedBlock.Block())
+		if executionPayloadProof == nil {
+			l.T.Fatal("execution payload proof is nil")
+			return
+		}
 		require.NoError(l.T, err)
 		updateAttestedHeaderExecutionBranch, err := header.ExecutionBranch()
 		require.NoError(l.T, err)
@@ -1202,8 +1651,12 @@ func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeade
 		}
 	}
 
-	if l.AttestedBlock.Version() == version.Deneb {
-		payloadInterface, err := l.AttestedBlock.Block().Body().Execution()
+	if attestedBlock.Version() == version.Deneb {
+		payloadInterface, err := attestedBlock.Block().Body().Execution()
+		if payloadInterface == nil || payloadInterface.IsNil() {
+			l.T.Fatal("execution payload header is nil")
+			return
+		}
 		require.NoError(l.T, err)
 		transactionsRoot, err := payloadInterface.TransactionsRoot()
 		if errors.Is(err, consensus_types.ErrUnsupportedField) {
@@ -1244,10 +1697,18 @@ func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeade
 		}
 
 		updateAttestedHeaderExecution, err := header.Execution()
+		if updateAttestedHeaderExecution == nil || updateAttestedHeaderExecution.IsNil() {
+			l.T.Fatal("execution payload header is nil")
+			return
+		}
 		require.NoError(l.T, err)
 		require.DeepSSZEqual(l.T, execution, updateAttestedHeaderExecution.Proto(), "Attested Block Execution is not equal")
 
-		executionPayloadProof, err := blocks.PayloadProof(l.Ctx, l.AttestedBlock.Block())
+		executionPayloadProof, err := blocks.PayloadProof(l.Ctx, attestedBlock.Block())
+		if executionPayloadProof == nil {
+			l.T.Fatal("execution payload proof is nil")
+			return
+		}
 		require.NoError(l.T, err)
 		updateAttestedHeaderExecutionBranch, err := header.ExecutionBranch()
 		require.NoError(l.T, err)
@@ -1258,7 +1719,16 @@ func (l *TestLightClient) CheckAttestedHeader(header interfaces.LightClientHeade
 }
 
 func (l *TestLightClient) CheckSyncAggregate(sa *ethpb.SyncAggregate) {
-	syncAggregate, err := l.Block.Block().Body().SyncAggregate()
+	block := l.Block
+	if block == nil || block.IsNil() {
+		l.T.Fatal("block is nil")
+		return
+	}
+	syncAggregate, err := block.Block().Body().SyncAggregate()
+	if syncAggregate == nil {
+		l.T.Fatal("sync aggregate is nil")
+		return
+	}
 	require.NoError(l.T, err)
 	require.DeepSSZEqual(l.T, syncAggregate.SyncCommitteeBits, sa.SyncCommitteeBits, "SyncAggregate bits is not equal")
 	require.DeepSSZEqual(l.T, syncAggregate.SyncCommitteeSignature, sa.SyncCommitteeSignature, "SyncAggregate signature is not equal")
