@@ -115,6 +115,9 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 		if err != nil {
 			return errors.Wrapf(err, "failed to get attester duties for epoch `%d`", epoch)
 		}
+		if attesterDutiesContainer == nil {
+			return errors.New("attester duties response is nil")
+		}
 
 		for _, duty := range attesterDutiesContainer.Data {
 			validatorIndex, err := strconv.ParseUint(duty.ValidatorIndex, 10, 64)
@@ -175,6 +178,9 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 		if err != nil {
 			return errors.Wrapf(err, "failed to get proposer duties for epoch `%d`", epoch)
 		}
+		if proposerDutiesContainer == nil {
+			return errors.New("proposer duties response is nil")
+		}
 
 		for _, proposerDuty := range proposerDutiesContainer.Data {
 			validatorIndex, err := strconv.ParseUint(proposerDuty.ValidatorIndex, 10, 64)
@@ -193,6 +199,12 @@ func (c *beaconApiValidatorClient) dutiesForEpoch(
 
 	if err := wg.Wait(); err != nil {
 		return err
+	}
+	if proposerDutiesContainer == nil {
+		return errors.New("proposer duties response is nil")
+	}
+	if attesterDutiesContainer == nil {
+		return errors.New("attester duties response is nil")
 	}
 
 	duties := make([]*ethpb.ValidatorDuty, len(vals))
