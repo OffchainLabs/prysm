@@ -80,7 +80,14 @@ func (p *paths) MinerKeyPath() (string, error) {
 }
 
 // TestParams is the globally accessible var for getting config elements.
-var TestParams *params
+var TestParams = newParams()
+
+func newParams() *params {
+	return &params{
+		Ports: &ports{},
+		Paths: &paths{},
+	}
+}
 
 // Logfile gives the full path to a file in the bazel test environment log directory.
 // The relative path is specified as a variadic slice of path parts, in the same style as path.Join.
@@ -213,6 +220,7 @@ func Init(t *testing.T, beaconNodeCount int) error {
 		TestShardIndex:         testShardIndex,
 		BeaconNodeCount:        beaconNodeCount,
 		Ports:                  testPorts,
+		Paths:                  &paths{},
 		CLGenesisTime:          genTime,
 		Eth1GenesisTime:        genTime,
 		NumberOfExecutionCreds: PregenesisExecCreds,
@@ -267,6 +275,7 @@ func InitMultiClient(t *testing.T, beaconNodeCount int, lighthouseNodeCount int)
 		BeaconNodeCount:           beaconNodeCount,
 		LighthouseBeaconNodeCount: lighthouseNodeCount,
 		Ports:                     testPorts,
+		Paths:                     &paths{},
 		CLGenesisTime:             genTime,
 		Eth1GenesisTime:           genTime,
 		NumberOfExecutionCreds:    PregenesisExecCreds,
