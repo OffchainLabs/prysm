@@ -158,12 +158,20 @@ func (s *Server) GetBlockV2(w http.ResponseWriter, r *http.Request) {
 	if !shared.WriteBlockFetchError(w, blk, err) {
 		return
 	}
+	if blk == nil || blk.IsNil() {
+		httputil.HandleError(w, "Could not get block from block ID: "+errNilBlock.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	// Deal with block unblinding.
 	if blk.Version() >= version.Bellatrix && blk.IsBlinded() {
 		blk, err = s.ExecutionReconstructor.ReconstructFullBlock(ctx, blk)
 		if err != nil {
 			httputil.HandleError(w, errors.Wrapf(err, "could not reconstruct full execution payload to create signed beacon block").Error(), http.StatusBadRequest)
+			return
+		}
+		if blk == nil || blk.IsNil() {
+			httputil.HandleError(w, "Could not reconstruct full execution payload to create signed beacon block: "+errNilBlock.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -189,12 +197,20 @@ func (s *Server) GetBlindedBlock(w http.ResponseWriter, r *http.Request) {
 	if !shared.WriteBlockFetchError(w, blk, err) {
 		return
 	}
+	if blk == nil || blk.IsNil() {
+		httputil.HandleError(w, "Could not get block from block ID: "+errNilBlock.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	// Convert to blinded block (if it's not already).
 	if blk.Version() >= version.Bellatrix && !blk.IsBlinded() {
 		blk, err = blk.ToBlinded()
 		if err != nil {
 			shared.WriteBlockFetchError(w, blk, errors.Wrapf(err, "could not convert block to blinded block"))
+			return
+		}
+		if blk == nil || blk.IsNil() {
+			httputil.HandleError(w, "Could not convert block to blinded block: "+errNilBlock.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -208,6 +224,10 @@ func (s *Server) GetBlindedBlock(w http.ResponseWriter, r *http.Request) {
 
 // getBlockV2Ssz returns the SSZ-serialized version of the beacon block for given block ID.
 func (s *Server) getBlockV2Ssz(w http.ResponseWriter, blk interfaces.ReadOnlySignedBeaconBlock) {
+	if blk == nil || blk.IsNil() {
+		httputil.HandleError(w, "Could not get signed beacon block: "+errNilBlock.Error(), http.StatusInternalServerError)
+		return
+	}
 	result, err := s.getBlockResponseBodySsz(blk)
 	if err != nil {
 		httputil.HandleError(w, "Could not get signed beacon block: "+err.Error(), http.StatusInternalServerError)
@@ -349,6 +369,10 @@ func (s *Server) blockData(ctx context.Context, w http.ResponseWriter, r *http.R
 	}
 	blk, err := s.Blocker.Block(ctx, []byte(blockId))
 	if !shared.WriteBlockFetchError(w, blk, err) {
+		return nil, false, [32]byte{}
+	}
+	if blk == nil || blk.IsNil() {
+		httputil.HandleError(w, "Could not get block from block ID: "+errNilBlock.Error(), http.StatusInternalServerError)
 		return nil, false, [32]byte{}
 	}
 
@@ -889,9 +913,17 @@ func decodePhase0JSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 func broadcastSidecarsIfSupported(ctx context.Context, s *Server, b interfaces.SignedBeaconBlock, gb *eth.GenericSignedBeaconBlock, versionHeader string) error {
 	switch versionHeader {
 	case version.String(version.Electra):
-		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetElectra().Blobs, gb.GetElectra().KzgProofs)
+		electraBlock := gb.GetElectra()
+		if electraBlock == nil {
+			return errors.New("nil electra block")
+		}
+		return s.broadcastSeenBlockSidecars(ctx, b, electraBlock.Blobs, electraBlock.KzgProofs)
 	case version.String(version.Deneb):
-		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetDeneb().Blobs, gb.GetDeneb().KzgProofs)
+		denebBlock := gb.GetDeneb()
+		if denebBlock == nil {
+			return errors.New("nil deneb block")
+		}
+		return s.broadcastSeenBlockSidecars(ctx, b, denebBlock.Blobs, denebBlock.KzgProofs)
 	default:
 		// other forks before Deneb do not support blob sidecars
 		// forks after fulu do not support blob sidecars, instead support data columns, no need to rebroadcast
@@ -941,15 +973,17 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 	if err != nil {
 		return errors.Wrapf(err, "could not create signed beacon block")
 	}
+	if blk == nil || blk.IsNil() {
+		return errors.Wrap(blocks.ErrNilSignedBeaconBlock, "could not create signed beacon block")
+	}
 
 	parentBlockRoot := blk.Block().ParentRoot()
 	parentBlock, err := s.Blocker.Block(ctx, parentBlockRoot[:])
 	if err != nil {
 		return errors.Wrap(err, "could not get parent block")
 	}
-
-	if err := blocks.BeaconBlockIsNil(blk); err != nil {
-		return errors.Wrap(err, "could not validate block")
+	if parentBlock == nil || parentBlock.IsNil() {
+		return errors.Wrap(blocks.ErrNilSignedBeaconBlock, "could not get parent block")
 	}
 
 	parentStateRoot := parentBlock.Block().StateRoot()
@@ -993,14 +1027,26 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 	var proofs [][]byte
 	switch blk.Version() {
 	case version.Deneb:
-		blobs = b.GetDeneb().Blobs
-		proofs = b.GetDeneb().KzgProofs
+		denebBlock := b.GetDeneb()
+		if denebBlock == nil {
+			return errors.New("nil deneb block")
+		}
+		blobs = denebBlock.Blobs
+		proofs = denebBlock.KzgProofs
 	case version.Electra:
-		blobs = b.GetElectra().Blobs
-		proofs = b.GetElectra().KzgProofs
+		electraBlock := b.GetElectra()
+		if electraBlock == nil {
+			return errors.New("nil electra block")
+		}
+		blobs = electraBlock.Blobs
+		proofs = electraBlock.KzgProofs
 	case version.Fulu:
-		blobs = b.GetFulu().Blobs
-		proofs = b.GetFulu().KzgProofs
+		fuluBlock := b.GetFulu()
+		if fuluBlock == nil {
+			return errors.New("nil fulu block")
+		}
+		blobs = fuluBlock.Blobs
+		proofs = fuluBlock.KzgProofs
 	default:
 		return nil
 	}
@@ -1335,6 +1381,10 @@ func (s *Server) GetBlockHeader(w http.ResponseWriter, r *http.Request) {
 
 	blk, err := s.Blocker.Block(ctx, []byte(blockID))
 	if !shared.WriteBlockFetchError(w, blk, err) {
+		return
+	}
+	if blk == nil || blk.IsNil() {
+		httputil.HandleError(w, "Could not get block from block ID: "+errNilBlock.Error(), http.StatusInternalServerError)
 		return
 	}
 	blockHeader, err := blk.Header()
