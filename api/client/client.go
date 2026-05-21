@@ -45,11 +45,17 @@ func NewClient(host string, opts ...ClientOpt) (*Client, error) {
 
 // Token returns the bearer token used for jwt authentication
 func (c *Client) Token() string {
+	if c == nil {
+		return ""
+	}
 	return c.token
 }
 
 // BaseURL returns the base url of the client
 func (c *Client) BaseURL() *url.URL {
+	if c == nil {
+		return nil
+	}
 	return c.baseURL
 }
 
@@ -74,6 +80,9 @@ func urlForHost(h string) (*url.URL, error) {
 
 // NodeURL returns a human-readable string representation of the beacon node base url.
 func (c *Client) NodeURL() string {
+	if c == nil || c.baseURL == nil {
+		return ""
+	}
 	return c.baseURL.String()
 }
 
