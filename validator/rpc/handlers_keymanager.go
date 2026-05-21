@@ -579,7 +579,7 @@ func (s *Server) ListFeeRecipientByPubkey(w http.ResponseWriter, r *http.Request
 	if proposerSettings != nil && proposerSettings.ProposeConfig != nil {
 		proposerOption, found := proposerSettings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
 
-		if found && proposerOption.FeeRecipientConfig != nil {
+		if found && proposerOption != nil && proposerOption.FeeRecipientConfig != nil {
 			finalResp.Data.Ethaddress = proposerOption.FeeRecipientConfig.FeeRecipient.String()
 			httputil.WriteJson(w, finalResp)
 			return
@@ -697,7 +697,7 @@ func (s *Server) DeleteFeeRecipientByPubkey(w http.ResponseWriter, r *http.Reque
 	settings := s.validatorService.ProposerSettings()
 	if settings != nil && settings.ProposeConfig != nil {
 		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
-		if found {
+		if found && proposerOption != nil {
 			proposerOption.FeeRecipientConfig = nil
 		}
 	}
@@ -737,11 +737,11 @@ func (s *Server) GetGasLimit(w http.ResponseWriter, r *http.Request) {
 	if settings != nil {
 		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
 		if found {
-			if proposerOption.BuilderConfig != nil {
+			if proposerOption != nil && proposerOption.BuilderConfig != nil {
 				resp.Data.GasLimit = fmt.Sprintf("%d", proposerOption.BuilderConfig.GasLimit)
 			}
 		} else if settings.DefaultConfig != nil && settings.DefaultConfig.BuilderConfig != nil {
-			resp.Data.GasLimit = fmt.Sprintf("%d", s.validatorService.ProposerSettings().DefaultConfig.BuilderConfig.GasLimit)
+			resp.Data.GasLimit = fmt.Sprintf("%d", settings.DefaultConfig.BuilderConfig.GasLimit)
 		}
 	}
 	httputil.WriteJson(w, resp)
@@ -788,23 +788,31 @@ func (s *Server) SetGasLimit(w http.ResponseWriter, r *http.Request) {
 		}
 		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*proposer.Option)
 		option := settings.DefaultConfig.Clone()
+		if option == nil || option.BuilderConfig == nil {
+			httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
+			return
+		}
 		option.BuilderConfig.GasLimit = validator.Uint64(gasLimit)
 		settings.ProposeConfig[bytesutil.ToBytes48(pubkey)] = option
 	} else {
 		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
 		if found {
-			if proposerOption.BuilderConfig == nil || !proposerOption.BuilderConfig.Enabled {
+			if proposerOption == nil || proposerOption.BuilderConfig == nil || !proposerOption.BuilderConfig.Enabled {
 				httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
 				return
 			} else {
 				proposerOption.BuilderConfig.GasLimit = validator.Uint64(gasLimit)
 			}
 		} else {
-			if settings.DefaultConfig == nil {
+			if settings.DefaultConfig == nil || settings.DefaultConfig.BuilderConfig == nil || !settings.DefaultConfig.BuilderConfig.Enabled {
 				httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
 				return
 			}
 			option := settings.DefaultConfig.Clone()
+			if option == nil || option.BuilderConfig == nil {
+				httputil.HandleError(w, "Gas limit changes only apply when builder is enabled", http.StatusInternalServerError)
+				return
+			}
 			option.BuilderConfig.GasLimit = validator.Uint64(gasLimit)
 			settings.ProposeConfig[bytesutil.ToBytes48(pubkey)] = option
 		}
@@ -834,7 +842,7 @@ func (s *Server) DeleteGasLimit(w http.ResponseWriter, r *http.Request) {
 	proposerSettings := s.validatorService.ProposerSettings()
 	if proposerSettings != nil && proposerSettings.ProposeConfig != nil {
 		proposerOption, found := proposerSettings.ProposeConfig[bytesutil.ToBytes48(pubkey)]
-		if found && proposerOption.BuilderConfig != nil {
+		if found && proposerOption != nil && proposerOption.BuilderConfig != nil {
 			// If proposerSettings has default value, use it.
 			if proposerSettings.DefaultConfig != nil && proposerSettings.DefaultConfig.BuilderConfig != nil {
 				proposerOption.BuilderConfig.GasLimit = proposerSettings.DefaultConfig.BuilderConfig.GasLimit
