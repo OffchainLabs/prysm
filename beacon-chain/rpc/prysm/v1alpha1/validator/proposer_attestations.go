@@ -250,8 +250,12 @@ func (a proposerAtts) sortBySlotAndCommittee() (proposerAtts, error) {
 	var slots []primitives.Slot
 	attsBySlot := map[primitives.Slot]*slotAtts{}
 	for _, att := range a {
-		slot := att.GetData().Slot
-		ci := att.GetData().CommitteeIndex
+		data := att.GetData()
+		if data == nil {
+			continue
+		}
+		slot := data.Slot
+		ci := data.CommitteeIndex
 		if _, ok := attsBySlot[slot]; !ok {
 			attsBySlot[slot] = &slotAtts{}
 			attsBySlot[slot].candidates = make(map[primitives.CommitteeIndex]proposerAtts)
@@ -276,7 +280,11 @@ func (a proposerAtts) sortBySlotAndCommittee() (proposerAtts, error) {
 		return slots[i] > slots[j]
 	})
 	for _, slot := range slots {
-		sortedAtts = append(sortedAtts, sortSlotAttestations(attsBySlot[slot].selected)...)
+		sa := attsBySlot[slot]
+		if sa == nil {
+			continue
+		}
+		sortedAtts = append(sortedAtts, sortSlotAttestations(sa.selected)...)
 	}
 
 	return sortedAtts, nil
@@ -385,8 +393,14 @@ func (a proposerAtts) dedup() (proposerAtts, error) {
 	for _, atts := range attsByDataRoot {
 		for i := 0; i < len(atts); i++ {
 			a := atts[i]
+			if a == nil {
+				continue
+			}
 			for j := i + 1; j < len(atts); j++ {
 				b := atts[j]
+				if b == nil {
+					continue
+				}
 				if c, err := a.GetAggregationBits().Contains(b.GetAggregationBits()); err != nil {
 					return nil, err
 				} else if c {
@@ -456,12 +470,14 @@ func (vs *Server) deleteAttsInPool(ctx context.Context, atts []ethpb.Att) error 
 
 // isAttestationFromCurrentEpoch returns true if the attestation is from the current epoch.
 func (vs *Server) isAttestationFromCurrentEpoch(att ethpb.Att, currentEpoch primitives.Epoch) bool {
-	return att.GetData().Target.Epoch == currentEpoch
+	data := att.GetData()
+	return data != nil && data.Target != nil && data.Target.Epoch == currentEpoch
 }
 
 // isAttestationFromPreviousEpoch returns true if the attestation is from the previous epoch.
 func (vs *Server) isAttestationFromPreviousEpoch(att ethpb.Att, currentEpoch primitives.Epoch) bool {
-	return att.GetData().Target.Epoch+1 == currentEpoch
+	data := att.GetData()
+	return data != nil && data.Target != nil && data.Target.Epoch+1 == currentEpoch
 }
 
 // filterCurrentEpochAttestationByForkchoice filters attestations from the current epoch based on fork choice conditions.
@@ -474,8 +490,12 @@ func (vs *Server) filterCurrentEpochAttestationByForkchoice(ctx context.Context,
 		return false, nil
 	}
 
-	attTargetRoot := [32]byte(att.GetData().Target.Root)
-	attBlockRoot := [32]byte(att.GetData().BeaconBlockRoot)
+	data := att.GetData()
+	if data == nil || data.Target == nil {
+		return false, nil
+	}
+	attTargetRoot := [32]byte(data.Target.Root)
+	attBlockRoot := [32]byte(data.BeaconBlockRoot)
 	if attBlockRoot != attTargetRoot {
 		return false, nil
 	}
@@ -501,8 +521,12 @@ func (vs *Server) filterCurrentEpochAttestationByTarget(att ethpb.Att, targetRoo
 		return false, nil
 	}
 
-	attTargetRoot := [32]byte(att.GetData().Target.Root)
-	return att.GetData().Target.Epoch == targetEpoch && attTargetRoot == targetRoot, nil
+	data := att.GetData()
+	if data == nil || data.Target == nil {
+		return false, nil
+	}
+	attTargetRoot := [32]byte(data.Target.Root)
+	return data.Target.Epoch == targetEpoch && attTargetRoot == targetRoot, nil
 }
 
 // filterPreviousEpochAttestationByTarget returns true if an attestation from the previous epoch matches the fork choice previous target view.
@@ -514,7 +538,11 @@ func (vs *Server) filterPreviousEpochAttestationByTarget(att ethpb.Att, cp *ethp
 		return false, nil
 	}
 
-	return att.GetData().Target.Epoch == cp.Epoch && bytes.Equal(att.GetData().Target.Root, cp.Root), nil
+	data := att.GetData()
+	if data == nil || data.Target == nil {
+		return false, nil
+	}
+	return data.Target.Epoch == cp.Epoch && bytes.Equal(data.Target.Root, cp.Root), nil
 }
 
 // filterAttestationBySignature filters attestations based on specific conditions and performs batch signature verification.
@@ -635,11 +663,15 @@ func (a proposerAtts) filterIndividualSignature(ctx context.Context, st state.Be
 }
 
 func attestationFields(att ethpb.Att) logrus.Fields {
+	data := att.GetData()
+	if data == nil || data.Target == nil {
+		return logrus.Fields{}
+	}
 	return logrus.Fields{
-		"slot":            att.GetData().Slot,
-		"index":           att.GetData().CommitteeIndex,
-		"targetRoot":      fmt.Sprintf("%x", att.GetData().Target.Root),
-		"targetEpoch":     att.GetData().Target.Epoch,
-		"beaconBlockRoot": fmt.Sprintf("%x", att.GetData().BeaconBlockRoot),
+		"slot":            data.Slot,
+		"index":           data.CommitteeIndex,
+		"targetRoot":      fmt.Sprintf("%x", data.Target.Root),
+		"targetEpoch":     data.Target.Epoch,
+		"beaconBlockRoot": fmt.Sprintf("%x", data.BeaconBlockRoot),
 	}
 }
