@@ -209,8 +209,10 @@ func (q *queue) Pop() any {
 	old := *q
 	n := len(old)
 	item := old[n-1]
-	old[n-1] = nil  // avoid memory leak
-	item.index = -1 // for safety
+	if item != nil {
+		item.index = -1 // for safety
+	}
+	old[n-1] = nil // avoid memory leak
 	*q = old[0 : n-1]
 	return item
 }
