@@ -1,6 +1,7 @@
 package state_native
 
 import (
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
@@ -20,10 +21,10 @@ func (b *BeaconState) Eth1Data() *ethpb.Eth1Data {
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) eth1DataVal() *ethpb.Eth1Data {
 	if b.eth1Data == nil {
-		return nil
+		return &ethpb.Eth1Data{}
 	}
 
-	return b.eth1Data.Copy()
+	return copyEth1Data(b.eth1Data)
 }
 
 // Eth1DataVotes corresponds to votes from Ethereum on the canonical proof-of-work chain
@@ -49,9 +50,20 @@ func (b *BeaconState) eth1DataVotesVal() []*ethpb.Eth1Data {
 
 	res := make([]*ethpb.Eth1Data, len(b.eth1DataVotes))
 	for i := range res {
-		res[i] = b.eth1DataVotes[i].Copy()
+		res[i] = copyEth1Data(b.eth1DataVotes[i])
 	}
 	return res
+}
+
+func copyEth1Data(data *ethpb.Eth1Data) *ethpb.Eth1Data {
+	if data == nil {
+		return nil
+	}
+	return &ethpb.Eth1Data{
+		DepositRoot:  bytesutil.SafeCopyBytes(data.DepositRoot),
+		DepositCount: data.DepositCount,
+		BlockHash:    bytesutil.SafeCopyBytes(data.BlockHash),
+	}
 }
 
 // Eth1DepositIndex corresponds to the index of the deposit made to the
