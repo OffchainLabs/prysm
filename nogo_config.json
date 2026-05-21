@@ -31,7 +31,12 @@
   "nilaway": {
     "exclude_files": {
       "external/.*": "Third party code",
-      "rules_go_work-.*": "Third party code"
+      "rules_go_work-.*": "Third party code",
+      ".*_test\\.go": "Tests are ok",
+      ".*\\.pb\\.go": "Generated protobuf code",
+      ".*\\.pb\\.gw\\.go": "Generated protobuf gateway code",
+      ".*\\.ssz\\.go": "Generated SSZ code",
+      "bazel-out/.*": "Generated build artifacts"
     }
   },
   "pkgfact": {
