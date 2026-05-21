@@ -39,7 +39,7 @@ func (b *BeaconState) validatorsVal() []*ethpb.Validator {
 
 func (b *BeaconState) validatorsReadOnlyVal() []state.ReadOnlyValidator {
 	if b.validatorsMultiValue == nil {
-		return nil
+		return []state.ReadOnlyValidator{}
 	}
 	v := b.validatorsMultiValue.Value(b)
 
@@ -252,7 +252,7 @@ func (b *BeaconState) Balances() []uint64 {
 
 func (b *BeaconState) balancesVal() []uint64 {
 	if b.balancesMultiValue == nil {
-		return nil
+		return []uint64{}
 	}
 	return b.balancesMultiValue.Value(b)
 }
