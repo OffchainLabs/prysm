@@ -262,6 +262,7 @@ nogo(
         "@org_golang_x_tools//go/analysis/passes/unusedresult:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/unusedwrite:go_default_library",
         "@org_golang_x_tools//go/analysis/passes/usesgenerics:go_default_library",
+        "@org_uber_go_nilaway//:go_default_library",
     ] + select({
         # nogo checks that fail with coverage enabled.
         ":coverage_enabled": [],

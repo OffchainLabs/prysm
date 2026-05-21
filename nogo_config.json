@@ -23,6 +23,17 @@
       "rules_go_work-.*": "Third party code"
     }
   },
+  "nilaway_config": {
+    "analyzer_flags": {
+      "include-pkgs": "github.com/OffchainLabs/prysm"
+    }
+  },
+  "nilaway": {
+    "exclude_files": {
+      "external/.*": "Third party code",
+      "rules_go_work-.*": "Third party code"
+    }
+  },
   "pkgfact": {
     "exclude_files": {
       "external/.*": "Third party code",
