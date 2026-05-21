@@ -2754,6 +2754,85 @@ func TestSubmitPayloadAttestations(t *testing.T) {
 		s.SubmitPayloadAttestations(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
 	})
+	t.Run("ssz ok", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(0)
+		st, _ := util.DeterministicGenesisStateGloas(t, 64)
+		ptc, err := st.PayloadCommitteeReadOnly(slot)
+		require.NoError(t, err)
+		require.NotEqual(t, 0, len(ptc))
+
+		priv, err := bls.RandKey()
+		require.NoError(t, err)
+		sig := priv.Sign([]byte("test")).Marshal()
+
+		chainService := &blockchainmock.ChainService{Slot: &slot, State: st}
+		broadcaster := &p2pMock.MockBroadcaster{}
+		pool := &payloadattestationmock.PoolMock{}
+		s := &Server{
+			SyncChecker:            &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:            chainService,
+			TimeFetcher:            chainService,
+			OptimisticModeFetcher:  chainService,
+			Broadcaster:            broadcaster,
+			PayloadAttestationPool: pool,
+			OperationNotifier:      &blockchainmock.MockOperationNotifier{},
+		}
+
+		msg := &ethpbv1alpha1.PayloadAttestationMessage{
+			ValidatorIndex: ptc[0],
+			Data: &ethpbv1alpha1.PayloadAttestationData{
+				BeaconBlockRoot:   bytesutil.PadTo([]byte("root"), 32),
+				Slot:              0,
+				PayloadPresent:    true,
+				BlobDataAvailable: true,
+			},
+			Signature: sig,
+		}
+		body, err := msg.MarshalSSZ()
+		require.NoError(t, err)
+
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewReader(body))
+		request.Header.Set(api.VersionHeader, "gloas")
+		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitPayloadAttestations(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.Equal(t, 1, len(pool.Attestations))
+		assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
+	})
+	t.Run("ssz invalid size", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(0)
+		chainService := &blockchainmock.ChainService{Slot: &slot}
+		s := &Server{
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			HeadFetcher:           chainService,
+			TimeFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+		}
+
+		// Body length not a multiple of PayloadAttestationMessage SSZ size (146).
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewReader([]byte{0x01, 0x02, 0x03}))
+		request.Header.Set(api.VersionHeader, "gloas")
+		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitPayloadAttestations(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, "Invalid SSZ", writer.Body.String())
+	})
 }
 
 func TestListPayloadAttestations(t *testing.T) {
@@ -2912,5 +2991,49 @@ func TestListPayloadAttestations(t *testing.T) {
 		s.ListPayloadAttestations(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
 		assert.StringContains(t, "in the future", writer.Body.String())
+	})
+	t.Run("ssz response", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(1)
+		chainService := &blockchainmock.ChainService{Slot: &slot}
+		att := &ethpbv1alpha1.PayloadAttestation{
+			AggregationBits: bitfield.NewBitvector512(),
+			Data: &ethpbv1alpha1.PayloadAttestationData{
+				BeaconBlockRoot:   bytesutil.PadTo([]byte("root1"), 32),
+				Slot:              1,
+				PayloadPresent:    true,
+				BlobDataAvailable: true,
+			},
+			Signature: bytesutil.PadTo([]byte("sig1"), 96),
+		}
+		pool := &payloadattestationmock.PoolMock{
+			Attestations: []*ethpbv1alpha1.PayloadAttestation{att},
+		}
+		s := &Server{
+			TimeFetcher:            chainService,
+			PayloadAttestationPool: pool,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com?slot=1", nil)
+		request.Header.Set("Accept", api.OctetStreamMediaType)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.ListPayloadAttestations(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		assert.Equal(t, "gloas", writer.Header().Get(api.VersionHeader))
+
+		want, err := att.MarshalSSZ()
+		require.NoError(t, err)
+		assert.DeepEqual(t, want, writer.Body.Bytes())
+
+		// Confirm the body round-trips back to the same attestation.
+		got := &ethpbv1alpha1.PayloadAttestation{}
+		require.NoError(t, got.UnmarshalSSZ(writer.Body.Bytes()))
+		assert.DeepEqual(t, att, got)
 	})
 }

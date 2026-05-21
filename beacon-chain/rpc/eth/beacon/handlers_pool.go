@@ -964,9 +964,16 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var msgs []*structs.PayloadAttestationMessage
-	if err := json.NewDecoder(r.Body).Decode(&msgs); err != nil {
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+	var consensusMsgs []*eth.PayloadAttestationMessage
+	var failures []*server.IndexedError
+	var decodeErr error
+	if httputil.IsRequestSsz(r) {
+		consensusMsgs, failures, decodeErr = decodePayloadAttestationMessagesSSZ(r.Body)
+	} else {
+		consensusMsgs, failures, decodeErr = decodePayloadAttestationMessagesJSON(r.Body)
+	}
+	if decodeErr != nil {
+		httputil.HandleError(w, decodeErr.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -976,17 +983,10 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	failures := make([]*server.IndexedError, 0, len(msgs))
-	for i, msg := range msgs {
-		consensusMsg, err := msg.ToConsensus()
-		if err != nil {
-			failures = append(failures, &server.IndexedError{
-				Index:   i,
-				Message: "Could not convert message: " + err.Error(),
-			})
+	for i, consensusMsg := range consensusMsgs {
+		if consensusMsg == nil {
 			continue
 		}
-
 		if _, err = bls.SignatureFromBytes(consensusMsg.Signature); err != nil {
 			failures = append(failures, &server.IndexedError{
 				Index:   i,
@@ -1062,14 +1062,93 @@ func (s *Server) ListPayloadAttestations(w http.ResponseWriter, r *http.Request)
 
 	atts := s.PayloadAttestationPool.PendingPayloadAttestations(primitives.Slot(slot))
 
+	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+	if httputil.RespondWithSsz(r) {
+		body, err := marshalPayloadAttestationsSSZ(atts)
+		if err != nil {
+			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		httputil.WriteSsz(w, body)
+		return
+	}
+
 	data := make([]*structs.PayloadAttestation, len(atts))
 	for i, att := range atts {
 		data[i] = structs.PayloadAttestationFromConsensus(att)
 	}
-
-	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
 	httputil.WriteJson(w, &structs.GetPoolPayloadAttestationsResponse{
 		Version: version.String(version.Gloas),
 		Data:    data,
 	})
+}
+
+// decodePayloadAttestationMessagesSSZ decodes an SSZ-encoded
+// List[PayloadAttestationMessage, PTC_SIZE] from body. Returns one slot per
+// message in the input (nil for messages that failed to decode), plus the
+// per-index decode failures.
+func decodePayloadAttestationMessagesSSZ(r io.Reader) ([]*eth.PayloadAttestationMessage, []*server.IndexedError, error) {
+	body, err := io.ReadAll(r)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "could not read request body")
+	}
+	sszSize := (&eth.PayloadAttestationMessage{}).SizeSSZ()
+	if len(body) == 0 || len(body)%sszSize != 0 {
+		return nil, nil, errors.New("Invalid SSZ payload attestation message list size")
+	}
+	n := len(body) / sszSize
+	msgs := make([]*eth.PayloadAttestationMessage, n)
+	var failures []*server.IndexedError
+	for i := range n {
+		m := &eth.PayloadAttestationMessage{}
+		if err := m.UnmarshalSSZ(body[i*sszSize : (i+1)*sszSize]); err != nil {
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Could not decode SSZ message: " + err.Error(),
+			})
+			continue
+		}
+		msgs[i] = m
+	}
+	return msgs, failures, nil
+}
+
+// decodePayloadAttestationMessagesJSON decodes a JSON array of
+// PayloadAttestationMessage from body. Returns one slot per message in the
+// input (nil for messages that failed to convert), plus per-index conversion
+// failures.
+func decodePayloadAttestationMessagesJSON(r io.Reader) ([]*eth.PayloadAttestationMessage, []*server.IndexedError, error) {
+	var jsonMsgs []*structs.PayloadAttestationMessage
+	if err := json.NewDecoder(r).Decode(&jsonMsgs); err != nil {
+		return nil, nil, errors.Wrap(err, "could not decode request body")
+	}
+	msgs := make([]*eth.PayloadAttestationMessage, len(jsonMsgs))
+	var failures []*server.IndexedError
+	for i, msg := range jsonMsgs {
+		cm, err := msg.ToConsensus()
+		if err != nil {
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Could not convert message: " + err.Error(),
+			})
+			continue
+		}
+		msgs[i] = cm
+	}
+	return msgs, failures, nil
+}
+
+// marshalPayloadAttestationsSSZ serializes atts as the SSZ encoding of
+// List[PayloadAttestation, MAX_PAYLOAD_ATTESTATIONS].
+func marshalPayloadAttestationsSSZ(atts []*eth.PayloadAttestation) ([]byte, error) {
+	sszSize := (&eth.PayloadAttestation{}).SizeSSZ()
+	body := make([]byte, sszSize*len(atts))
+	for i, att := range atts {
+		b, err := att.MarshalSSZ()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not marshal payload attestation")
+		}
+		copy(body[i*sszSize:(i+1)*sszSize], b)
+	}
+	return body, nil
 }
