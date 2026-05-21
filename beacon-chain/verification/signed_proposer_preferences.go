@@ -26,6 +26,7 @@ var (
 	ErrProposerPreferencesSlotAlreadyPassed     = errors.New("proposer preferences proposal slot has already passed")
 	ErrProposerPreferencesInvalidProposalSlot   = errors.New("proposer preferences validator is not assigned to the proposal slot")
 	ErrProposerPreferencesDependentRootNotSeen  = errors.New("proposer preferences dependent_root block not seen")
+	ErrProposerPreferencesNilMessage            = errors.New("proposer preferences message is nil")
 )
 
 var _ SignedProposerPreferencesVerifier = &ProposerPreferencesVerifier{}
@@ -55,6 +56,9 @@ func (v *ProposerPreferencesVerifier) VerifyCurrentOrNextEpoch() (err error) {
 	defer v.record(RequireProposerPreferencesCurrentOrNextEpoch, &err)
 
 	msg := v.message()
+	if msg == nil {
+		return ErrProposerPreferencesNilMessage
+	}
 	currentSlot := v.clock.CurrentSlot()
 	currentEpoch := slots.ToEpoch(currentSlot)
 	proposalEpoch := slots.ToEpoch(msg.ProposalSlot)
@@ -77,6 +81,9 @@ func (v *ProposerPreferencesVerifier) VerifyValidProposalSlot(st state.ReadOnlyB
 	defer v.record(RequireProposerPreferencesProposalSlotValid, &err)
 
 	msg := v.message()
+	if msg == nil {
+		return ErrProposerPreferencesNilMessage
+	}
 	lookahead, err := st.ProposerLookahead()
 	if err != nil {
 		return errors.Wrap(err, "failed to get proposer lookahead")
@@ -103,6 +110,9 @@ func (v *ProposerPreferencesVerifier) VerifySignature(st state.ReadOnlyBeaconSta
 	defer v.record(RequireProposerPreferencesSignatureValid, &err)
 
 	msg := v.message()
+	if msg == nil {
+		return ErrProposerPreferencesNilMessage
+	}
 	epoch := slots.ToEpoch(msg.ProposalSlot)
 	fork, err := params.Fork(epoch)
 	if err != nil {
