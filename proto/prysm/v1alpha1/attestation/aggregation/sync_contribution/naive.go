@@ -1,6 +1,8 @@
 package sync_contribution
 
 import (
+	"errors"
+
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	v2 "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation"
@@ -98,6 +100,9 @@ func aggregate(c1, c2 *v2.SyncCommitteeContribution) (*v2.SyncCommitteeContribut
 	}
 
 	aggregatedSig := bls.AggregateSignatures([]bls.Signature{baseSig, newSig})
+	if aggregatedSig == nil {
+		return nil, errors.New("could not aggregate signatures")
+	}
 	baseContribution.Signature = aggregatedSig.Marshal()
 	baseContribution.AggregationBits = newBits
 
