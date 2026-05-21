@@ -73,6 +73,9 @@ var protobufPrivateFields = map[string]bool{
 
 func ProtobufPrettyDiff(a, b any) string {
 	d, _ := messagediff.DeepDiff(a, b)
+	if d == nil {
+		return ""
+	}
 	var dstr []string
 	appendNotProto := func(path, str string) {
 		parts := strings.Split(path, ".")
