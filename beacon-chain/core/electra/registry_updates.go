@@ -85,6 +85,9 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 		if err != nil && !errors.Is(err, validators.ErrValidatorAlreadyExited) {
 			return fmt.Errorf("failed to initiate validator exit at index %d: %w", idx, err)
 		}
+		if st == nil || st.IsNil() {
+			return errors.New("state is nil after initiating validator exit")
+		}
 	}
 
 	// Activate all eligible validators.

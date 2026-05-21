@@ -291,6 +291,9 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 	if err != nil {
 		return err
 	}
+	if pendingDeposits == nil {
+		return errors.New("pending deposits are nil")
+	}
 	for _, pendingDeposit := range pendingDeposits {
 		// Do not process pendingDeposit requests if Eth1 bridge deposits are not yet applied.
 		if pendingDeposit.Slot > params.BeaconConfig().GenesisSlot && st.Eth1DepositIndex() < startIndex {

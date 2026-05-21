@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -27,6 +28,9 @@ func GetProposerRewardNumerator(
 	totalBalance uint64,
 ) (uint64, error) {
 	data := att.GetData()
+	if data == nil {
+		return 0, errors.New("attestation data is nil")
+	}
 
 	delay, err := st.Slot().SafeSubSlot(data.Slot)
 	if err != nil {
