@@ -146,6 +146,7 @@ func TestGetSpec(t *testing.T) {
 	config.SyncMessageDueBPSGloas = primitives.BP(128)
 	config.ContributionDueBPSGloas = primitives.BP(129)
 	config.PayloadAttestationDueBPS = primitives.BP(130)
+	config.PayloadDueBPS = primitives.BP(131)
 	config.TerminalBlockHash = common.HexToHash("TerminalBlockHash")
 	config.TerminalBlockHashActivationEpoch = 72
 	config.TerminalTotalDifficulty = "73"
@@ -234,7 +235,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 205, len(data))
+	assert.Equal(t, 206, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -518,6 +519,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "129", v)
 			case "PAYLOAD_ATTESTATION_DUE_BPS":
 				assert.Equal(t, "130", v)
+			case "PAYLOAD_DUE_BPS":
+				assert.Equal(t, "131", v)
 			case "MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT":
 				assert.Equal(t, "8", v)
 			case "MAX_REQUEST_LIGHT_CLIENT_UPDATES":
