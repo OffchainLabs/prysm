@@ -954,12 +954,11 @@ func (s *Service) PayloadAttestationData(
 	if root == [32]byte{} {
 		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not retrieve highest received block root for slot %d", slot)}
 	}
-	payloadPresent := s.ForkchoiceFetcher.HasFullNode(root)
+	payloadEarly, _ := s.ForkchoiceFetcher.PayloadEarly(root)
 	return &ethpb.PayloadAttestationData{
-		BeaconBlockRoot: root[:],
-		Slot:            slot,
-		PayloadPresent:  payloadPresent,
-		// TODO: replace with real DA availability once DA paths are wired.
-		BlobDataAvailable: payloadPresent,
+		BeaconBlockRoot:   root[:],
+		Slot:              slot,
+		PayloadPresent:    payloadEarly,
+		BlobDataAvailable: s.ForkchoiceFetcher.HasFullNode(root),
 	}, nil
 }

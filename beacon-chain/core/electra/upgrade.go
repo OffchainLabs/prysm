@@ -1,6 +1,7 @@
 package electra
 
 import (
+	"context"
 	"sort"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -248,7 +249,7 @@ func ConvertToElectra(beaconState state.BeaconState) (state.BeaconState, error) 
 //	        queue_excess_active_balance(post, ValidatorIndex(index))
 //
 //	return post
-func UpgradeToElectra(beaconState state.BeaconState) (state.BeaconState, error) {
+func UpgradeToElectra(ctx context.Context, beaconState state.BeaconState) (state.BeaconState, error) {
 	s, err := ConvertToElectra(beaconState)
 	if err != nil {
 		return nil, err
@@ -277,7 +278,7 @@ func UpgradeToElectra(beaconState state.BeaconState) (state.BeaconState, error) 
 
 	// note: should be the same in prestate and post beaconState.
 	// we are deviating from the specs a bit as it calls for using the post beaconState
-	tab, err := helpers.TotalActiveBalance(beaconState)
+	tab, err := helpers.TotalActiveBalance(ctx, beaconState)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get total active balance")
 	}

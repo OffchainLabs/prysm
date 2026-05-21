@@ -2,15 +2,20 @@ package validator
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -29,11 +34,38 @@ func (vs *Server) PayloadAttestationData(
 	if vs.SyncChecker.Syncing() {
 		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
-	data, rpcErr := vs.CoreService.PayloadAttestationData(ctx, req.Slot)
-	if rpcErr != nil {
-		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
+	slot := req.Slot
+
+	slotStart, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), slot)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "could not compute slot start time: %v", err)
 	}
-	return data, nil
+	cfg := params.BeaconConfig()
+	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS))
+	if time.Now().Before(deadline) {
+		return nil, status.Errorf(codes.Unavailable, "PTC deadline not yet reached for slot %d", slot)
+	}
+
+	if cached := vs.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
+		return cached, nil
+	}
+
+	// dedupe concurrent callers at the PTC deadline.
+	v, err, _ := vs.payloadAttestationFlight.Do(strconv.FormatUint(uint64(slot), 10), func() (any, error) {
+		if cached := vs.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
+			return cached, nil
+		}
+		data, rpcErr := vs.CoreService.PayloadAttestationData(ctx, slot)
+		if rpcErr != nil {
+			return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
+		}
+		vs.payloadAttestationData.Store(data)
+		return data, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.(*ethpb.PayloadAttestationData), nil
 }
 
 // SubmitPayloadAttestation submits a payload attestation message to the network
@@ -85,14 +117,22 @@ func (vs *Server) SubmitPayloadAttestation(
 		},
 	})
 
-	log.WithField("slot", msg.Data.Slot).Debug("Submitted payload attestation message")
+	log.WithFields(logrus.Fields{
+		"slot":           msg.Data.Slot,
+		"blockRoot":      fmt.Sprintf("%#x", msg.Data.BeaconBlockRoot),
+		"validatorIndex": msg.ValidatorIndex,
+	}).Debug("Submitted payload attestation message")
 	return &emptypb.Empty{}, nil
 }
 
 func (vs *Server) payloadAttestationCommitteeIndex(ctx context.Context, msg *ethpb.PayloadAttestationMessage) (uint64, error) {
-	st, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
+	root := bytesutil.ToBytes32(msg.Data.BeaconBlockRoot)
+	st, err := vs.PayloadAttestationReceiver.PtcLookupState(ctx, root, msg.Data.Slot)
 	if err != nil {
 		return 0, err
+	}
+	if st == nil {
+		return 0, status.Errorf(codes.Unavailable, "unable to find state for payload attestation")
 	}
 	return gloas.PayloadCommitteeIndex(ctx, st, msg.Data.Slot, msg.ValidatorIndex)
 }

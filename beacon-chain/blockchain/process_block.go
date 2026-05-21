@@ -479,16 +479,29 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	if err := helpers.UpdateProposerIndicesInCache(ctx, st, e); err != nil {
 		return errors.Wrap(err, "could not update proposer index cache")
 	}
+
 	go func(ep primitives.Epoch) {
 		// Use a custom deadline here, since this method runs asynchronously.
 		// We ignore the parent method's context and instead create a new one
 		// with a custom deadline, therefore using the background context instead.
 		slotCtx, cancel := context.WithTimeout(context.Background(), slotDeadline)
 		defer cancel()
+
 		if err := helpers.UpdateCommitteeCache(slotCtx, st, ep+1); err != nil {
 			log.WithError(err).Warn("Could not update committee cache")
 		}
 	}(e)
+
+	// Prime the total active balance cache for the new epoch.
+	go func() {
+		slotCtx, cancel := context.WithTimeout(s.ctx, slotDeadline)
+		defer cancel()
+
+		if _, err := helpers.TotalActiveBalance(slotCtx, st); err != nil {
+			log.WithError(err).Warning("Could not prime total active balance cache")
+		}
+	}()
+
 	// The latest block header is from the previous epoch
 	r, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
@@ -641,6 +654,13 @@ func (s *Service) InsertSlashingsToForkChoiceStore(ctx context.Context, slashing
 			s.cfg.ForkChoiceStore.InsertSlashedIndex(ctx, primitives.ValidatorIndex(index))
 		}
 	}
+}
+
+// RecordBlockForEquivocation forwards to the forkchoice store under the write lock.
+func (s *Service) RecordBlockForEquivocation(slot primitives.Slot, proposer primitives.ValidatorIndex, root [32]byte) {
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
+	s.cfg.ForkChoiceStore.RecordBlockForEquivocation(slot, proposer, root)
 }
 
 // This saves post state info to DB or cache. This also saves post state info to fork choice store.

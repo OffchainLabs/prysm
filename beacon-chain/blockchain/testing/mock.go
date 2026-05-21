@@ -5,6 +5,7 @@ package testing
 import (
 	"bytes"
 	"context"
+	"slices"
 	"sync"
 	"time"
 
@@ -68,6 +69,7 @@ type ChainService struct {
 	Genesis                     time.Time
 	ForkChoiceStore             forkchoice.ForkChoicer
 	ReceiveBlockMockErr         error
+	ReceivePayloadEnvelopeErr   error
 	OptimisticCheckRootReceived [32]byte
 	FinalizedRoots              map[[32]byte]bool
 	OptimisticRoots             map[[32]byte]bool
@@ -80,13 +82,34 @@ type ChainService struct {
 	DependentRootCB             func([32]byte, primitives.Epoch) ([32]byte, error)
 	MockCanonicalRoots          map[primitives.Slot][32]byte
 	MockCanonicalFull           map[primitives.Slot]bool
+	MockPayloadEarly            map[[32]byte]bool
 
 	ParentPayloadReadyVal *bool
 	ForkchoiceRoots       map[[32]byte]bool
 	ForkchoiceBlockHashes map[[32]byte][32]byte
+	ForkchoiceGasLimits   map[[32]byte]uint64
+	// Ancestors lets a test stub the result of Ancestor(root, slot) without
+	// wiring a full forkchoice store. Keyed by the input root.
+	Ancestors map[[32]byte][32]byte
+
+	RecordedEquivocations map[EquivocationKey][][32]byte
+}
+
+type EquivocationKey struct {
+	Slot     primitives.Slot
+	Proposer primitives.ValidatorIndex
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
+	if s.Ancestors != nil {
+		r := bytesutil.ToBytes32(root)
+		if a, ok := s.Ancestors[r]; ok {
+			return a[:], nil
+		}
+	}
+	if s.ForkChoiceStore == nil {
+		return nil, errors.New("mock ChainService: no Ancestors map or ForkChoiceStore configured")
+	}
 	r, err := s.ForkChoiceStore.AncestorRoot(ctx, bytesutil.ToBytes32(root), slot)
 	return r[:], err
 }
@@ -757,6 +780,15 @@ func (s *ChainService) HasFullNode(root [32]byte) bool {
 	return false
 }
 
+// PayloadEarly mocks the same method in the chain service.
+func (s *ChainService) PayloadEarly(root [32]byte) (bool, bool) {
+	if s.MockPayloadEarly == nil {
+		return false, false
+	}
+	early, ok := s.MockPayloadEarly[root]
+	return early, ok
+}
+
 // FullBeatsEmpty mocks the same method in the chain service.
 func (s *ChainService) FullBeatsEmpty(root [32]byte) bool {
 	if s.ForkChoiceStore != nil {
@@ -771,6 +803,25 @@ func (s *ChainService) FullBeatsEmpty(root [32]byte) bool {
 // ShouldIgnoreData returns true if the data for the given parent root and slot should be ignored.
 func (s *ChainService) ShouldIgnoreData(_ [32]byte, _ primitives.Slot) bool {
 	return false
+}
+
+// RecordBlockForEquivocation mocks the same method in the chain service.
+func (s *ChainService) RecordBlockForEquivocation(slot primitives.Slot, proposer primitives.ValidatorIndex, root [32]byte) {
+	if s.ForkChoiceStore != nil {
+		s.ForkChoiceStore.RecordBlockForEquivocation(slot, proposer, root)
+	}
+	if s.RecordedEquivocations == nil {
+		s.RecordedEquivocations = make(map[EquivocationKey][][32]byte)
+	}
+	key := EquivocationKey{Slot: slot, Proposer: proposer}
+	roots := s.RecordedEquivocations[key]
+	if len(roots) >= 2 {
+		return
+	}
+	if slices.Contains(roots, root) {
+		return
+	}
+	s.RecordedEquivocations[key] = append(roots, root)
 }
 
 // InsertNode mocks the same method in the chain service
@@ -851,9 +902,17 @@ func (c *ChainService) ReceivePayloadAttestationMessage(_ context.Context, _ *et
 	return nil
 }
 
+// PtcLookupState implements the same method in the chain service.
+func (c *ChainService) PtcLookupState(_ context.Context, _ [32]byte, _ primitives.Slot) (state.ReadOnlyBeaconState, error) {
+	if c.State == nil {
+		return nil, nil
+	}
+	return c.State, nil
+}
+
 // ReceiveExecutionPayloadEnvelope implements the same method in the chain service.
 func (c *ChainService) ReceiveExecutionPayloadEnvelope(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) error {
-	return nil
+	return c.ReceivePayloadEnvelopeErr
 }
 
 // ParentPayloadReady mocks the same method in the chain service.
@@ -862,6 +921,16 @@ func (s *ChainService) ParentPayloadReady(_ interfaces.ReadOnlyBeaconBlock) bool
 		return *s.ParentPayloadReadyVal
 	}
 	return true
+}
+
+// GasLimit mocks the execution payload gas limit lookup for a beacon block root.
+func (s *ChainService) GasLimit(root [32]byte) (uint64, error) {
+	if s.ForkchoiceGasLimits != nil {
+		if gasLimit, ok := s.ForkchoiceGasLimits[root]; ok {
+			return gasLimit, nil
+		}
+	}
+	return 0, errors.New("gas limit not found")
 }
 
 // DependentRootForEpoch mocks the same method in the chain service

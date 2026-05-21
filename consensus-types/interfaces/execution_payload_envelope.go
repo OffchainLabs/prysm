@@ -21,6 +21,7 @@ type ROBlindedExecutionPayloadEnvelope interface {
 	ExecutionRequests() *enginev1.ExecutionRequests
 	BuilderIndex() primitives.BuilderIndex
 	BeaconBlockRoot() [field_params.RootLength]byte
+	ParentBeaconBlockRoot() [field_params.RootLength]byte
 	Slot() primitives.Slot
 	BlockHash() [field_params.RootLength]byte
 	IsBlinded() bool

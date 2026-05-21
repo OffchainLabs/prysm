@@ -268,4 +268,5 @@ type BeaconStateGloas struct {
 	BuilderPendingWithdrawals     []*BuilderPendingWithdrawal `json:"builder_pending_withdrawals"`
 	LatestBlockHash               string                      `json:"latest_block_hash"`
 	PayloadExpectedWithdrawals    []*Withdrawal               `json:"payload_expected_withdrawals"`
+	PtcWindow                     []*PTCs                     `json:"ptc_window"`
 }

@@ -111,7 +111,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	EpochsPerEth1VotingPeriod:        64,
 	SlotsPerHistoricalRoot:           8192,
 	MinValidatorWithdrawabilityDelay: 256,
-	MinBuilderWithdrawabilityDelay:   64,
+	MinBuilderWithdrawabilityDelay:   8192,
 	ShardCommitteePeriod:             256,
 	MinEpochsToInactivityPenalty:     4,
 	Eth1FollowDistance:               2048,
@@ -134,6 +134,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	SyncMessageDueBPSGloas:   primitives.BP(2500),
 	ContributionDueBPSGloas:  primitives.BP(5000),
 	PayloadAttestationDueBPS: primitives.BP(7500),
+	PayloadDueBPS:            primitives.BP(7500),
+	EquivocationEarlyDueBPS:  primitives.BP(7500),
 
 	// Ethereum PoW parameters.
 	DepositChainID:         1, // Chain ID of eth1 mainnet.
@@ -346,9 +348,12 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BalancePerAdditionalCustodyGroup:      32_000_000_000,
 
 	// Values related to gloas
-	BuilderPaymentThresholdNumerator:   6,
-	BuilderPaymentThresholdDenominator: 10,
-	MaxRequestPayloads:                 128,
+	BuilderPaymentThresholdNumerator:     6,
+	BuilderPaymentThresholdDenominator:   10,
+	MaxRequestPayloads:                   128,
+	ChurnLimitQuotientGloas:              32_768,
+	ConsolidationChurnLimitQuotient:      65_536,
+	MaxPerEpochActivationChurnLimitGloas: 256_000_000_000,
 
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
