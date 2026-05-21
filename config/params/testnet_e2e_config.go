@@ -25,11 +25,16 @@ func E2ETestConfig() *BeaconChainConfig {
 		}
 		e2eConfig = cfg
 	})
+	if e2eConfig == nil {
+		log.Fatal("e2e config is not initialized")
+		return &BeaconChainConfig{}
+	}
 	return e2eConfig
 }
 
 func E2EMainnetTestConfig() *BeaconChainConfig {
 	e2eConfig := MainnetConfig()
+	testConfig := E2ETestConfig()
 	e2eConfig.DepositContractAddress = "0x4242424242424242424242424242424242424242"
 	e2eConfig.Eth1FollowDistance = 8
 
@@ -51,12 +56,12 @@ func E2EMainnetTestConfig() *BeaconChainConfig {
 	e2eConfig.DepositNetworkID = 1337 // Network ID of eth1 dev net.
 
 	// Altair Fork Parameters.
-	e2eConfig.AltairForkEpoch = E2ETestConfig().AltairForkEpoch
-	e2eConfig.BellatrixForkEpoch = E2ETestConfig().BellatrixForkEpoch
-	e2eConfig.CapellaForkEpoch = E2ETestConfig().CapellaForkEpoch
-	e2eConfig.DenebForkEpoch = E2ETestConfig().DenebForkEpoch
-	e2eConfig.ElectraForkEpoch = E2ETestConfig().ElectraForkEpoch
-	e2eConfig.FuluForkEpoch = E2ETestConfig().FuluForkEpoch
+	e2eConfig.AltairForkEpoch = testConfig.AltairForkEpoch
+	e2eConfig.BellatrixForkEpoch = testConfig.BellatrixForkEpoch
+	e2eConfig.CapellaForkEpoch = testConfig.CapellaForkEpoch
+	e2eConfig.DenebForkEpoch = testConfig.DenebForkEpoch
+	e2eConfig.ElectraForkEpoch = testConfig.ElectraForkEpoch
+	e2eConfig.FuluForkEpoch = testConfig.FuluForkEpoch
 
 	// Terminal Total Difficulty.
 	e2eConfig.TerminalTotalDifficulty = "480"
