@@ -53,34 +53,35 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 ) (*empty.Empty, error) {
 	const endpoint = "/eth/v1/beacon/execution_payload_envelope"
 
-	// In stateless mode, drain the envelope cache and publish Contents (envelope
-	// + blobs + proofs). On cache miss, log and fall through to bare publish.
+	// Stateless mode requires the envelope cache (populated by the v4 block
+	// fetch) to provide blobs+proofs; a miss means we would silently lose blob
+	// broadcast against a stateless target BN, so error out.
 	if c.stateless && envelope != nil && envelope.Message != nil && envelope.Message.Payload != nil {
 		slot := primitives.Slot(envelope.Message.Payload.SlotNumber)
 		cachedEnv, blobs, kzgProofs := c.envelopeCache.Take(slot)
-		if cachedEnv != nil {
-			contents := &ethpb.SignedExecutionPayloadEnvelopeContents{
-				SignedExecutionPayloadEnvelope: envelope,
-				KzgProofs:                      kzgProofs,
-				Blobs:                          blobs,
-			}
-			ssz, err := contents.MarshalSSZ()
-			if err != nil {
-				return nil, errors.Wrap(err, "could not marshal envelope contents SSZ")
-			}
-			jsonFn := func() ([]byte, error) {
-				j, jerr := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(envelope, kzgProofs, blobs)
-				if jerr != nil {
-					return nil, jerr
-				}
-				return json.Marshal(j)
-			}
-			if err := c.postEnvelope(ctx, endpoint, ssz, jsonFn); err != nil {
-				return nil, errors.Wrap(err, "could not publish execution payload envelope contents")
-			}
-			return &empty.Empty{}, nil
+		if cachedEnv == nil {
+			return nil, errors.Errorf("stateless publish: envelope cache miss for slot %d", slot)
 		}
-		log.WithField("slot", slot).Warn("Stateless publish: envelope cache miss; falling back to bare envelope publish")
+		contents := &ethpb.SignedExecutionPayloadEnvelopeContents{
+			SignedExecutionPayloadEnvelope: envelope,
+			KzgProofs:                      kzgProofs,
+			Blobs:                          blobs,
+		}
+		ssz, err := contents.MarshalSSZ()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not marshal envelope contents SSZ")
+		}
+		jsonFn := func() ([]byte, error) {
+			j, jerr := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(envelope, kzgProofs, blobs)
+			if jerr != nil {
+				return nil, jerr
+			}
+			return json.Marshal(j)
+		}
+		if err := c.postEnvelope(ctx, endpoint, ssz, jsonFn); err != nil {
+			return nil, errors.Wrap(err, "could not publish execution payload envelope contents")
+		}
+		return &empty.Empty{}, nil
 	}
 
 	ssz, err := envelope.MarshalSSZ()

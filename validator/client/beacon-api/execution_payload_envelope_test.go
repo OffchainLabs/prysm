@@ -296,7 +296,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessSendsContentsWithEmptyBlobs(t 
 	require.NotNil(t, resp)
 }
 
-func TestPublishExecutionPayloadEnvelope_StatelessFallsBackWithoutBlobs(t *testing.T) {
+func TestPublishExecutionPayloadEnvelope_StatelessCacheMissErrors(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -305,26 +305,17 @@ func TestPublishExecutionPayloadEnvelope_StatelessFallsBackWithoutBlobs(t *testi
 		Message:   envelope,
 		Signature: bytesutil.PadTo([]byte("sig"), 96),
 	}
-	expectedBody, err := signed.MarshalSSZ()
-	require.NoError(t, err)
 
+	// No PostSSZ/Post expectation — must error before any HTTP call.
 	handler := mock.NewMockJsonRestHandler(ctrl)
-	handler.EXPECT().PostSSZ(
-		gomock.Any(),
-		"/eth/v1/beacon/execution_payload_envelope",
-		nil,
-		bytes.NewBuffer(expectedBody),
-	).Return(nil, nil, nil)
-
 	client := &beaconApiValidatorClient{
 		handler:       handler,
 		stateless:     true,
 		envelopeCache: newExecutionPayloadEnvelopeCache(),
 	}
 
-	resp, err := client.publishExecutionPayloadEnvelope(t.Context(), signed)
-	require.NoError(t, err)
-	require.NotNil(t, resp)
+	_, err := client.publishExecutionPayloadEnvelope(t.Context(), signed)
+	assert.ErrorContains(t, "stateless publish: envelope cache miss", err)
 }
 
 func TestPublishExecutionPayloadEnvelope_Error(t *testing.T) {
