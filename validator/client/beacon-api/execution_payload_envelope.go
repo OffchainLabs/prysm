@@ -5,9 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
@@ -22,39 +26,56 @@ func (c *beaconApiValidatorClient) getExecutionPayloadEnvelope(
 		return envelope, nil
 	}
 	endpoint := fmt.Sprintf("/eth/v1/validator/execution_payload_envelope/%d", slot)
-	var resp structs.GetValidatorExecutionPayloadEnvelopeResponse
-	if err := c.handler.Get(ctx, endpoint, &resp); err != nil {
+	body, header, err := c.handler.GetSSZ(ctx, endpoint)
+	if err != nil {
 		return nil, errors.Wrap(err, "could not get execution payload envelope")
+	}
+	if strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType) {
+		env := &ethpb.ExecutionPayloadEnvelope{}
+		if err := env.UnmarshalSSZ(body); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal execution payload envelope SSZ")
+		}
+		return env, nil
+	}
+	var resp structs.GetValidatorExecutionPayloadEnvelopeResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, errors.Wrap(err, "could not decode execution payload envelope JSON")
 	}
 	if resp.Data == nil {
 		return nil, errors.New("execution payload envelope data is nil")
 	}
-	envelope, err := resp.Data.ToConsensus()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not convert execution payload envelope to consensus")
-	}
-	return envelope, nil
+	return resp.Data.ToConsensus()
 }
 
 func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 	ctx context.Context,
 	envelope *ethpb.SignedExecutionPayloadEnvelope,
 ) (*empty.Empty, error) {
+	const endpoint = "/eth/v1/beacon/execution_payload_envelope"
+
 	// In stateless mode, drain the envelope cache and publish Contents (envelope
 	// + blobs + proofs). On cache miss, log and fall through to bare publish.
 	if c.stateless && envelope != nil && envelope.Message != nil && envelope.Message.Payload != nil {
 		slot := primitives.Slot(envelope.Message.Payload.SlotNumber)
 		cachedEnv, blobs, kzgProofs := c.envelopeCache.Take(slot)
 		if cachedEnv != nil {
-			contents, err := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(envelope, kzgProofs, blobs)
-			if err != nil {
-				return nil, errors.Wrap(err, "could not convert envelope contents to JSON")
+			contents := &ethpb.SignedExecutionPayloadEnvelopeContents{
+				SignedExecutionPayloadEnvelope: envelope,
+				KzgProofs:                      kzgProofs,
+				Blobs:                          blobs,
 			}
-			body, err := json.Marshal(contents)
+			ssz, err := contents.MarshalSSZ()
 			if err != nil {
-				return nil, errors.Wrap(err, "could not marshal envelope contents")
+				return nil, errors.Wrap(err, "could not marshal envelope contents SSZ")
 			}
-			if err := c.handler.Post(ctx, "/eth/v1/beacon/execution_payload_envelope", nil, bytes.NewBuffer(body), nil); err != nil {
+			jsonFn := func() ([]byte, error) {
+				j, jerr := structs.SignedExecutionPayloadEnvelopeContentsFromConsensus(envelope, kzgProofs, blobs)
+				if jerr != nil {
+					return nil, jerr
+				}
+				return json.Marshal(j)
+			}
+			if err := c.postEnvelope(ctx, endpoint, ssz, jsonFn); err != nil {
 				return nil, errors.Wrap(err, "could not publish execution payload envelope contents")
 			}
 			return &empty.Empty{}, nil
@@ -62,16 +83,40 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 		log.WithField("slot", slot).Warn("Stateless publish: envelope cache miss; falling back to bare envelope publish")
 	}
 
-	jsonEnvelope, err := structs.SignedExecutionPayloadEnvelopeFromConsensus(envelope)
+	ssz, err := envelope.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not convert envelope to JSON")
+		return nil, errors.Wrap(err, "could not marshal envelope SSZ")
 	}
-	body, err := json.Marshal(jsonEnvelope)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not marshal envelope")
+	jsonFn := func() ([]byte, error) {
+		j, jerr := structs.SignedExecutionPayloadEnvelopeFromConsensus(envelope)
+		if jerr != nil {
+			return nil, jerr
+		}
+		return json.Marshal(j)
 	}
-	if err := c.handler.Post(ctx, "/eth/v1/beacon/execution_payload_envelope", nil, bytes.NewBuffer(body), nil); err != nil {
+	if err := c.postEnvelope(ctx, endpoint, ssz, jsonFn); err != nil {
 		return nil, errors.Wrap(err, "could not publish execution payload envelope")
 	}
 	return &empty.Empty{}, nil
+}
+
+// postEnvelope publishes SSZ first; on 406 Not Acceptable falls back to JSON.
+func (c *beaconApiValidatorClient) postEnvelope(ctx context.Context, endpoint string, ssz []byte, jsonFn func() ([]byte, error)) error {
+	_, _, err := c.handler.PostSSZ(ctx, endpoint, nil, bytes.NewBuffer(ssz))
+	if err == nil {
+		return nil
+	}
+	errJson := &httputil.DefaultJsonError{}
+	if !errors.As(err, &errJson) {
+		return err
+	}
+	if errJson.Code != http.StatusNotAcceptable {
+		return errJson
+	}
+	log.WithError(err).Warn("Envelope SSZ publish rejected, falling back to JSON")
+	body, jerr := jsonFn()
+	if jerr != nil {
+		return errors.Wrap(jerr, "could not marshal envelope JSON for fallback")
+	}
+	return c.handler.Post(ctx, endpoint, nil, bytes.NewBuffer(body), nil)
 }
