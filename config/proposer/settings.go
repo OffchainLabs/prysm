@@ -203,7 +203,7 @@ func (po *Option) ToConsensus() *validatorpb.ProposerOptionPayload {
 // Clone creates a deep copy of the proposer settings
 func (ps *Settings) Clone() *Settings {
 	if ps == nil {
-		return nil
+		return &Settings{}
 	}
 	clone := &Settings{}
 	if ps.DefaultConfig != nil {
@@ -212,8 +212,20 @@ func (ps *Settings) Clone() *Settings {
 	if ps.ProposeConfig != nil {
 		clone.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
 		for k, v := range ps.ProposeConfig {
+			if v == nil {
+				continue
+			}
 			keyCopy := k
-			valCopy := v.Clone()
+			valCopy := &Option{}
+			if v.FeeRecipientConfig != nil {
+				valCopy.FeeRecipientConfig = v.FeeRecipientConfig.Clone()
+			}
+			if v.BuilderConfig != nil {
+				valCopy.BuilderConfig = v.BuilderConfig.Clone()
+			}
+			if v.GraffitiConfig != nil {
+				valCopy.GraffitiConfig = v.GraffitiConfig.Clone()
+			}
 			clone.ProposeConfig[keyCopy] = valCopy
 		}
 	}
