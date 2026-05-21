@@ -107,7 +107,15 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		}
 	}
 
-	_, signingRoot, err := v.domainAndSigningRoot(ctx, indexedAtt.GetData())
+	indexedAttData := indexedAtt.GetData()
+	if indexedAttData == nil {
+		log.Error("Attestation data is nil")
+		if v.emitAccountMetrics {
+			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
+		}
+		return
+	}
+	_, signingRoot, err := v.domainAndSigningRoot(ctx, indexedAttData)
 	if err != nil {
 		log.WithError(err).Error("Could not get domain and signing root from attestation")
 		if v.emitAccountMetrics {
@@ -230,6 +238,12 @@ func (v *validator) signAtt(ctx context.Context, pubKey [fieldparams.BLSPubkeyLe
 }
 
 func (v *validator) domainAndSigningRoot(ctx context.Context, data *ethpb.AttestationData) (*ethpb.DomainResponse, [32]byte, error) {
+	if data == nil {
+		return nil, [32]byte{}, errors.New("attestation data is nil")
+	}
+	if data.Target == nil {
+		return nil, [32]byte{}, errors.New("attestation target is nil")
+	}
 	domain, err := v.domainData(ctx, data.Target.Epoch, params.BeaconConfig().DomainBeaconAttester[:])
 	if err != nil {
 		return nil, [32]byte{}, err
@@ -313,15 +327,33 @@ func (v *validator) waitUntilAttestationDueOrValidBlock(ctx context.Context, slo
 }
 
 func attestationLogFields(pubKey [fieldparams.BLSPubkeyLength]byte, indexedAtt ethpb.IndexedAtt) logrus.Fields {
+	data := indexedAtt.GetData()
+	if data == nil {
+		return logrus.Fields{
+			"pubkey":    fmt.Sprintf("%#x", pubKey),
+			"signature": fmt.Sprintf("%#x", indexedAtt.GetSignature()),
+		}
+	}
+	source := data.Source
+	target := data.Target
+	if source == nil || target == nil {
+		return logrus.Fields{
+			"pubkey":         fmt.Sprintf("%#x", pubKey),
+			"slot":           data.Slot,
+			"committeeIndex": data.CommitteeIndex,
+			"blockRoot":      fmt.Sprintf("%#x", data.BeaconBlockRoot),
+			"signature":      fmt.Sprintf("%#x", indexedAtt.GetSignature()),
+		}
+	}
 	return logrus.Fields{
 		"pubkey":         fmt.Sprintf("%#x", pubKey),
-		"slot":           indexedAtt.GetData().Slot,
-		"committeeIndex": indexedAtt.GetData().CommitteeIndex,
-		"blockRoot":      fmt.Sprintf("%#x", indexedAtt.GetData().BeaconBlockRoot),
-		"sourceEpoch":    indexedAtt.GetData().Source.Epoch,
-		"sourceRoot":     fmt.Sprintf("%#x", indexedAtt.GetData().Source.Root),
-		"targetEpoch":    indexedAtt.GetData().Target.Epoch,
-		"targetRoot":     fmt.Sprintf("%#x", indexedAtt.GetData().Target.Root),
+		"slot":           data.Slot,
+		"committeeIndex": data.CommitteeIndex,
+		"blockRoot":      fmt.Sprintf("%#x", data.BeaconBlockRoot),
+		"sourceEpoch":    source.Epoch,
+		"sourceRoot":     fmt.Sprintf("%#x", source.Root),
+		"targetEpoch":    target.Epoch,
+		"targetRoot":     fmt.Sprintf("%#x", target.Root),
 		"signature":      fmt.Sprintf("%#x", indexedAtt.GetSignature()),
 	}
 }

@@ -199,7 +199,18 @@ func (v *validator) aggregateAndProofSig(ctx context.Context, pubKey [fieldparam
 	ctx, span := trace.StartSpan(ctx, "validator.aggregateAndProofSig")
 	defer span.End()
 
-	d, err := v.domainData(ctx, slots.ToEpoch(agg.AggregateVal().GetData().Slot), params.BeaconConfig().DomainAggregateAndProof[:])
+	if agg == nil {
+		return nil, errors.New("aggregate and proof is nil")
+	}
+	aggregate := agg.AggregateVal()
+	if aggregate == nil {
+		return nil, errors.New("aggregate attestation is nil")
+	}
+	data := aggregate.GetData()
+	if data == nil {
+		return nil, errors.New("aggregate attestation data is nil")
+	}
+	d, err := v.domainData(ctx, slots.ToEpoch(data.Slot), params.BeaconConfig().DomainAggregateAndProof[:])
 	if err != nil {
 		return nil, err
 	}
