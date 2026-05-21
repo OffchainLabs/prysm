@@ -866,7 +866,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 	// Collect KZG hashes for non-existing blobs
 	var kzgHashes []common.Hash
-	var kzgIndexes []int
+	kzgIndexes := make([]int, 0, len(kzgCommitments))
 	for i, commitment := range kzgCommitments {
 		if !hasIndex(uint64(i)) {
 			kzgHashes = append(kzgHashes, primitives.ConvertKzgCommitmentToVersionedHash(commitment))
@@ -1094,7 +1094,7 @@ func handleRPCError(err error) error {
 	}
 	var e gethRPC.Error
 	ok := errors.As(err, &e)
-	if !ok {
+	if !ok || e == nil {
 		if strings.Contains(err.Error(), "401 Unauthorized") {
 			log.Error("HTTP authentication to your execution client is not working. Please ensure " +
 				"you are setting a correct value for the --jwt-secret flag in Prysm, or use an IPC connection if on " +
@@ -1137,7 +1137,7 @@ func handleRPCError(err error) error {
 		// Only -32000 status codes are data errors in the RPC specification.
 		var errWithData gethRPC.DataError
 		ok := errors.As(err, &errWithData)
-		if !ok {
+		if !ok || errWithData == nil {
 			return errors.Wrapf(err, "got an unexpected error in JSON-RPC response")
 		}
 		return errors.Wrapf(ErrServer, "%v", errWithData.Error())
@@ -1157,7 +1157,7 @@ type httpTimeoutError interface {
 func isTimeout(e error) bool {
 	var t httpTimeoutError
 	ok := errors.As(e, &t)
-	return ok && t.Timeout()
+	return ok && t != nil && t.Timeout()
 }
 
 func tDStringToUint256(td string) (*uint256.Int, error) {

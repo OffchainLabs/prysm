@@ -31,6 +31,9 @@ func (s *Service) BlockExists(ctx context.Context, hash common.Hash) (bool, *big
 		if err != nil {
 			return false, nil, err
 		}
+		if hdrInfo == nil {
+			return false, nil, errors.New("nil header info")
+		}
 		span.SetAttributes(trace.BoolAttribute("blockCacheHit", true))
 		return true, hdrInfo.Number, nil
 	}
@@ -55,6 +58,9 @@ func (s *Service) BlockHashByHeight(ctx context.Context, height *big.Int) (commo
 	if exists, hInfo, err := s.headerCache.HeaderInfoByHeight(height); exists || err != nil {
 		if err != nil {
 			return [32]byte{}, err
+		}
+		if hInfo == nil {
+			return [32]byte{}, errors.New("nil header info")
 		}
 		span.SetAttributes(trace.BoolAttribute("headerCacheHit", true))
 		return hInfo.Hash, nil
@@ -218,6 +224,9 @@ func (s *Service) retrieveHeaderInfo(ctx context.Context, bNum uint64) (*types.H
 			return nil, err
 		}
 		info = hdr
+	}
+	if info == nil {
+		return nil, errors.New("nil header info")
 	}
 	return info, nil
 }
