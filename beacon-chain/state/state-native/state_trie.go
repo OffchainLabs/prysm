@@ -1071,7 +1071,9 @@ func (b *BeaconState) Copy() state.BeaconState {
 	}
 
 	for fldIdx, fieldTrie := range b.stateFieldLeaves {
-		dst.stateFieldLeaves[fldIdx] = fieldTrie.CopyTrie()
+		if fieldTrie != nil {
+			dst.stateFieldLeaves[fldIdx] = fieldTrie.CopyTrie()
+		}
 	}
 
 	if b.merkleLayers != nil {
@@ -1344,7 +1346,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 				return [32]byte{}, err
 			}
 			delete(b.rebuildTrie, field)
-			return b.stateFieldLeaves[field].TrieRoot()
+			return b.fieldTrieRoot(field)
 		}
 		return b.recomputeFieldTrie(field, b.eth1DataVotes)
 	case types.Validators:
@@ -1366,7 +1368,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 				return [32]byte{}, err
 			}
 			delete(b.rebuildTrie, field)
-			return b.stateFieldLeaves[field].TrieRoot()
+			return b.fieldTrieRoot(field)
 		}
 		return b.recomputeFieldTrie(field, b.previousEpochAttestations)
 	case types.CurrentEpochAttestations:
@@ -1380,7 +1382,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 				return [32]byte{}, err
 			}
 			delete(b.rebuildTrie, field)
-			return b.stateFieldLeaves[field].TrieRoot()
+			return b.fieldTrieRoot(field)
 		}
 		return b.recomputeFieldTrie(field, b.currentEpochAttestations)
 	case types.PreviousEpochParticipationBits:
@@ -1456,12 +1458,29 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	return [32]byte{}, errors.New("invalid field index provided")
 }
 
+// CopyAllTries copies our field tries from the state. This is used to
+// remove shared field tries which have references to other states and
+// only have this copied set referencing to the current state.
+func (b *BeaconState) CopyAllTries() {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	for fldIdx, fieldTrie := range b.stateFieldLeaves {
+		if fieldTrie != nil && fieldTrie.RefCount() > 1 {
+			b.stateFieldLeaves[fldIdx] = fieldTrie.CopyTrie()
+		}
+	}
+}
 func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements any) ([32]byte, error) {
-	trie, root, err := b.stateFieldLeaves[index].RecomputeTrie(b.dirtyIndices[index], elements)
-	b.stateFieldLeaves[index] = trie
+	fTrie := b.stateFieldLeaves[index]
+	if fTrie == nil {
+		return [32]byte{}, fmt.Errorf("field trie not initialized for index %v", index)
+	}
+	trie, root, err := fTrie.RecomputeTrie(b.dirtyIndices[index], elements)
 	if err != nil {
 		return [32]byte{}, err
 	}
+	b.stateFieldLeaves[index] = trie
 	b.dirtyIndices[index] = []uint64{}
 	return root, nil
 }
@@ -1474,6 +1493,14 @@ func (b *BeaconState) resetFieldTrie(index types.FieldIndex, elements any, lengt
 	b.stateFieldLeaves[index] = fTrie
 	b.dirtyIndices[index] = []uint64{}
 	return nil
+}
+
+func (b *BeaconState) fieldTrieRoot(index types.FieldIndex) ([32]byte, error) {
+	fTrie := b.stateFieldLeaves[index]
+	if fTrie == nil {
+		return [32]byte{}, fmt.Errorf("field trie not initialized for index %v", index)
+	}
+	return fTrie.TrieRoot()
 }
 
 func finalizerCleanup(b *BeaconState) {
@@ -1531,7 +1558,7 @@ func (b *BeaconState) blockRootsRootSelector(field types.FieldIndex) ([32]byte, 
 		}
 
 		delete(b.rebuildTrie, field)
-		return b.stateFieldLeaves[field].TrieRoot()
+		return b.fieldTrieRoot(field)
 	}
 	return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
 		Identifiable:    b,
@@ -1550,7 +1577,7 @@ func (b *BeaconState) stateRootsRootSelector(field types.FieldIndex) ([32]byte, 
 		}
 
 		delete(b.rebuildTrie, field)
-		return b.stateFieldLeaves[field].TrieRoot()
+		return b.fieldTrieRoot(field)
 	}
 	return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
 		Identifiable:    b,
@@ -1569,7 +1596,7 @@ func (b *BeaconState) validatorsRootSelector(field types.FieldIndex) ([32]byte, 
 		}
 
 		delete(b.rebuildTrie, field)
-		return b.stateFieldLeaves[field].TrieRoot()
+		return b.fieldTrieRoot(field)
 	}
 	return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[stateutil.CompactValidator]{
 		Identifiable:    b,
@@ -1587,7 +1614,7 @@ func (b *BeaconState) balancesRootSelector(field types.FieldIndex) ([32]byte, er
 			return [32]byte{}, err
 		}
 		delete(b.rebuildTrie, field)
-		return b.stateFieldLeaves[field].TrieRoot()
+		return b.fieldTrieRoot(field)
 	}
 	return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[uint64]{
 		Identifiable:    b,
@@ -1606,7 +1633,7 @@ func (b *BeaconState) randaoMixesRootSelector(field types.FieldIndex) ([32]byte,
 		}
 
 		delete(b.rebuildTrie, field)
-		return b.stateFieldLeaves[field].TrieRoot()
+		return b.fieldTrieRoot(field)
 	}
 	return b.recomputeFieldTrie(field, mvslice.MultiValueSliceComposite[[32]byte]{
 		Identifiable:    b,
