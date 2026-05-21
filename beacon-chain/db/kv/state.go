@@ -286,6 +286,9 @@ func (s *Store) saveStatesEfficientInternal(ctx context.Context, tx *bolt.Tx, bl
 }
 
 func (s *Store) processPhase0(ctx context.Context, pbState *ethpb.BeaconState, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	if pbState == nil {
+		return errors.New("nil phase0 state")
+	}
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	encodedState, err := encode(ctx, pbState)
@@ -303,6 +306,9 @@ func (s *Store) processPhase0(ctx context.Context, pbState *ethpb.BeaconState, r
 }
 
 func (s *Store) processAltair(ctx context.Context, pbState *ethpb.BeaconStateAltair, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	if pbState == nil {
+		return errors.New("nil altair state")
+	}
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	rawObj, err := pbState.MarshalSSZ()
@@ -321,6 +327,9 @@ func (s *Store) processAltair(ctx context.Context, pbState *ethpb.BeaconStateAlt
 }
 
 func (s *Store) processBellatrix(ctx context.Context, pbState *ethpb.BeaconStateBellatrix, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	if pbState == nil {
+		return errors.New("nil bellatrix state")
+	}
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	rawObj, err := pbState.MarshalSSZ()
@@ -339,6 +348,9 @@ func (s *Store) processBellatrix(ctx context.Context, pbState *ethpb.BeaconState
 }
 
 func (s *Store) processCapella(ctx context.Context, pbState *ethpb.BeaconStateCapella, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	if pbState == nil {
+		return errors.New("nil capella state")
+	}
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	rawObj, err := pbState.MarshalSSZ()
@@ -357,6 +369,9 @@ func (s *Store) processCapella(ctx context.Context, pbState *ethpb.BeaconStateCa
 }
 
 func (s *Store) processDeneb(ctx context.Context, pbState *ethpb.BeaconStateDeneb, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	if pbState == nil {
+		return errors.New("nil deneb state")
+	}
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	rawObj, err := pbState.MarshalSSZ()
@@ -375,6 +390,9 @@ func (s *Store) processDeneb(ctx context.Context, pbState *ethpb.BeaconStateDene
 }
 
 func (s *Store) processElectra(ctx context.Context, pbState *ethpb.BeaconStateElectra, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	if pbState == nil {
+		return errors.New("nil electra state")
+	}
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	rawObj, err := pbState.MarshalSSZ()
@@ -393,6 +411,9 @@ func (s *Store) processElectra(ctx context.Context, pbState *ethpb.BeaconStateEl
 }
 
 func (s *Store) processFulu(ctx context.Context, pbState *ethpb.BeaconStateFulu, rootHash []byte, bucket, valIdxBkt *bolt.Bucket, validatorKey []byte) error {
+	if pbState == nil {
+		return errors.New("nil fulu state")
+	}
 	valEntries := pbState.Validators
 	pbState.Validators = make([]*ethpb.Validator, 0)
 	rawObj, err := pbState.MarshalSSZ()

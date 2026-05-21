@@ -355,6 +355,9 @@ func addKey(v int, bytes []byte) ([]byte, error) {
 }
 
 func decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
+	if len(enc) == 0 {
+		return nil, errSnapshotNotFound
+	}
 	switch {
 	case hasGloasKey(enc):
 		var gloasState ethpb.BeaconStateGloas

@@ -248,6 +248,9 @@ func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(enc) == 0 {
+		return nil, errSnapshotNotFound
+	}
 
 	return decodeStateSnapshot(enc)
 }

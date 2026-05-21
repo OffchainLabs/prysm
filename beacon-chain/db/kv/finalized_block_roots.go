@@ -85,11 +85,17 @@ func (s *Store) updateFinalizedBlockRoots(ctx context.Context, tx *bolt.Tx, chec
 			tracing.AnnotateError(span, err)
 			return err
 		}
+		if signedBlock == nil {
+			return errors.New("nil signed block")
+		}
 		if err := blocks.BeaconBlockIsNil(signedBlock); err != nil {
 			tracing.AnnotateError(span, err)
 			return err
 		}
 		block := signedBlock.Block()
+		if block == nil {
+			return errors.New("nil block")
+		}
 
 		parentRoot := block.ParentRoot()
 		container := &ethpb.FinalizedBlockRootContainer{
