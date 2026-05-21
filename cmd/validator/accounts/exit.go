@@ -64,6 +64,9 @@ func Exit(c *cli.Context, r io.Reader) error {
 		if err != nil {
 			return errors.Wrapf(err, "could not configure remote signer")
 		}
+		if config == nil {
+			return errors.New("could not configure remote signer")
+		}
 		config.GenesisValidatorsRoot = resp.GenesisValidatorsRoot
 		w, km, err = walletWithWeb3SignerKeymanager(c, config)
 		if err != nil {
