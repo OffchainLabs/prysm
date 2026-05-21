@@ -13,6 +13,9 @@ type proposerSyncContributions []*eth.SyncCommitteeContribution
 func (cs proposerSyncContributions) filterByBlockRoot(r [32]byte) proposerSyncContributions {
 	matchedSyncContributions := make([]*eth.SyncCommitteeContribution, 0, len(cs))
 	for _, c := range cs {
+		if c == nil {
+			continue
+		}
 		if bytes.Equal(c.BlockRoot, r[:]) {
 			matchedSyncContributions = append(matchedSyncContributions, c)
 		}
@@ -25,6 +28,9 @@ func (cs proposerSyncContributions) filterByBlockRoot(r [32]byte) proposerSyncCo
 func (cs proposerSyncContributions) filterBySubIndex(i uint64) proposerSyncContributions {
 	matchedSyncContributions := make([]*eth.SyncCommitteeContribution, 0, len(cs))
 	for _, c := range cs {
+		if c == nil {
+			continue
+		}
 		if c.SubcommitteeIndex == i {
 			matchedSyncContributions = append(matchedSyncContributions, c)
 		}
@@ -41,6 +47,9 @@ func (cs proposerSyncContributions) dedup() (proposerSyncContributions, error) {
 	}
 	contributionsBySubIdx := make(map[uint64][]*eth.SyncCommitteeContribution, len(cs))
 	for _, c := range cs {
+		if c == nil {
+			continue
+		}
 		contributionsBySubIdx[c.SubcommitteeIndex] = append(contributionsBySubIdx[c.SubcommitteeIndex], c)
 	}
 
@@ -48,8 +57,14 @@ func (cs proposerSyncContributions) dedup() (proposerSyncContributions, error) {
 	for _, cs := range contributionsBySubIdx {
 		for i := 0; i < len(cs); i++ {
 			a := cs[i]
+			if a == nil {
+				continue
+			}
 			for j := i + 1; j < len(cs); j++ {
 				b := cs[j]
+				if b == nil {
+					continue
+				}
 				if aContainsB, err := a.AggregationBits.Contains(b.AggregationBits); err != nil {
 					return nil, err
 				} else if aContainsB {
@@ -82,10 +97,16 @@ func (cs proposerSyncContributions) mostProfitable() *eth.SyncCommitteeContribut
 		return nil
 	}
 	mostProfitable := cs[0]
+	if mostProfitable == nil {
+		return nil
+	}
 	if len(cs) < 2 {
 		return mostProfitable
 	}
 	for _, c := range cs[1:] {
+		if c == nil {
+			continue
+		}
 		if c.AggregationBits.Count() > mostProfitable.AggregationBits.Count() {
 			mostProfitable = c
 		}

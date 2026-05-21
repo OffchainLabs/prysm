@@ -70,9 +70,9 @@ func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, ro
 	proposerContributions = append(proposerContributions, aggregatedContributions...)
 
 	subcommitteeCount := params.BeaconConfig().SyncCommitteeSubnetCount
-	var bitsHolder [][]byte
-	for range subcommitteeCount {
-		bitsHolder = append(bitsHolder, ethpb.NewSyncCommitteeAggregationBits())
+	bitsHolder := make([][]byte, subcommitteeCount)
+	for i := range subcommitteeCount {
+		bitsHolder[i] = ethpb.NewSyncCommitteeAggregationBits()
 	}
 	sigsHolder := make([]bls.Signature, 0, params.BeaconConfig().SyncCommitteeSize/subcommitteeCount)
 
@@ -212,11 +212,16 @@ func aggregateSyncSubcommitteeMessages(
 			return nil, errors.Wrap(err, "could not create signature from bytes")
 		}
 	}
+	aggregatedSig := bls.AggregateSignatures(uncompressedSigs)
+	aggregatedSigBytes := common.InfiniteSignature
+	if aggregatedSig != nil {
+		aggregatedSigBytes = bytesutil.ToBytes96(aggregatedSig.Marshal())
+	}
 	return &ethpb.SyncCommitteeContribution{
 		Slot:              slot,
 		BlockRoot:         root[:],
 		SubcommitteeIndex: subcommitteeIndex,
 		AggregationBits:   bits.Bytes(),
-		Signature:         bls.AggregateSignatures(uncompressedSigs).Marshal(),
+		Signature:         aggregatedSigBytes[:],
 	}, nil
 }

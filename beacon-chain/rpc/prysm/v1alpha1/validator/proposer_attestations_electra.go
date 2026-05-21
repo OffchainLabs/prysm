@@ -7,6 +7,8 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
@@ -84,11 +86,16 @@ func computeOnChainAggregate(aggregates []ethpb.Att) ([]ethpb.Att, error) {
 			aggregationBits.SetBitAt(bi, true)
 		}
 
+		aggregatedSig := bls.AggregateSignatures(sigs)
+		aggregatedSigBytes := common.InfiniteSignature
+		if aggregatedSig != nil {
+			aggregatedSigBytes = bytesutil.ToBytes96(aggregatedSig.Marshal())
+		}
 		att := &ethpb.AttestationElectra{
 			AggregationBits: aggregationBits,
 			Data:            aggs[0].GetData(),
 			CommitteeBits:   cb,
-			Signature:       bls.AggregateSignatures(sigs).Marshal(),
+			Signature:       aggregatedSigBytes[:],
 		}
 		result = append(result, att)
 	}
