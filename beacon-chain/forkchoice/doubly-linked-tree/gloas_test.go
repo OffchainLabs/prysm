@@ -442,7 +442,7 @@ func TestGloasHeadComputation(t *testing.T) {
 	emptyB := s.choosePayloadContent(s.headNode)
 	require.NotNil(t, emptyB)
 	require.Equal(t, false, emptyB.full)
-	assert.Equal(t, uint64(8), s.headNode.weight)
+	assert.Equal(t, uint64(8), s.headNode.weight) // proposer boost applied (no equivocation evidence)
 	assert.Equal(t, uint64(8), s.headNode.balance)
 	assert.Equal(t, uint64(0), emptyB.balance)
 	assert.Equal(t, uint64(0), emptyB.weight)
@@ -450,7 +450,7 @@ func TestGloasHeadComputation(t *testing.T) {
 	assert.Equal(t, uint64(0), fullA.weight)  // the parent does not inherit proposer boost
 	assert.Equal(t, uint64(0), fullA.balance)
 	assert.Equal(t, uint64(0), fullA.node.balance)
-	assert.Equal(t, uint64(0), emptyA.weight)     // neither does the empty block of A
+	assert.Equal(t, uint64(0), emptyA.weight) // neither does the empty block of A
 	assert.Equal(t, uint64(8), fullA.node.weight)
 
 	// Process an attestation for rootA at slotB, voting empty (payloadStatus=false).
@@ -730,8 +730,8 @@ func TestGloasProposerBoostWithParentWeight(t *testing.T) {
 	assert.Equal(t, uint64(0), emptyA.weight)
 	assert.Equal(t, uint64(10), fullA.node.weight) // A.node: 0 + fullA(10) + emptyA(0)
 
-	// Insert C at slot 34 building on B (consecutive slot).
-	// B has no attestation weight → shouldApplyProposerBoost returns false → no boost for C.
+	// Insert C at slot 34 building on B. B has no attestation weight, but the
+	// equivocation map has no non-parent root for (slotB, proposerB), so boost applies.
 	rootC := indexToHash(3)
 	blockHashC := indexToHash(300)
 	nonMatchingHash := indexToHash(999)
@@ -745,6 +745,76 @@ func TestGloasProposerBoostWithParentWeight(t *testing.T) {
 
 	assert.Equal(t, uint64(8), s.headNode.weight)
 	assert.Equal(t, uint64(8), s.headNode.balance)
+}
+
+// TestGloasProposerBoostBlockedByEquivocation: a recorded non-parent root for B's
+// (slot, proposer) denies the proposer boost to C even with B's weight below the threshold.
+func TestGloasProposerBoostBlockedByEquivocation(t *testing.T) {
+	f := setupGloas(t, 1, 1)
+	s := f.store
+	ctx := t.Context()
+	balances := make([]uint64, 64)
+	for i := range balances {
+		balances[i] = 10
+	}
+	f.justifiedBalances = balances
+	f.store.committeeWeight = uint64(len(balances)*10) / uint64(params.BeaconConfig().SlotsPerEpoch)
+	zeroHash := params.BeaconConfig().ZeroHash
+
+	slotA := primitives.Slot(32)
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	driftGenesisTime(f, slotA, 0)
+	st, blk, err := prepareGloasForkchoiceState(ctx, slotA, rootA, zeroHash, blockHashA, zeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	_, err = f.Head(ctx)
+	require.NoError(t, err)
+
+	payloadDelay := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+	driftGenesisTime(f, slotA, payloadDelay)
+	pe, err := prepareGloasForkchoicePayload(rootA)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	f.ProcessAttestation(ctx, []uint64{9}, rootA, slotA, true)
+
+	slotB := slotA + 1
+	driftGenesisTime(f, slotB, 0)
+	require.NoError(t, f.NewSlot(ctx, slotB))
+	_, err = f.Head(ctx)
+	require.NoError(t, err)
+
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotB, rootB, rootA, blockHashB, blockHashA, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	_, err = f.Head(ctx)
+	require.NoError(t, err)
+
+	slotC := slotB + 1
+	driftGenesisTime(f, slotC, 0)
+	require.NoError(t, f.NewSlot(ctx, slotC))
+	_, err = f.Head(ctx)
+	require.NoError(t, err)
+
+	// Equivocation evidence for B's (slot, proposer).
+	f.RecordBlockForEquivocation(slotB, blk.Block().ProposerIndex(), indexToHash(99))
+
+	rootC := indexToHash(3)
+	blockHashC := indexToHash(300)
+	nonMatchingHash := indexToHash(999)
+	st, blk, err = prepareGloasForkchoiceState(ctx, slotC, rootC, rootB, blockHashC, nonMatchingHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	headRoot, err := f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rootC, headRoot)
+
+	assert.Equal(t, uint64(0), s.headNode.weight)
+	assert.Equal(t, uint64(0), s.headNode.balance)
 }
 
 func TestShouldExtendPayload(t *testing.T) {
@@ -979,7 +1049,7 @@ func TestGloasForkedBranches(t *testing.T) {
 	require.Equal(t, rootB, headRoot)
 
 	assert.Equal(t, uint64(0), emptyB.weight)
-	assert.Equal(t, uint64(8), emptyB.node.weight)
+	assert.Equal(t, uint64(8), emptyB.node.weight) // proposer boost applied (no equivocation evidence)
 	assert.Equal(t, uint64(0), emptyC.weight)
 	assert.Equal(t, uint64(0), fullC.weight)
 	assert.Equal(t, uint64(0), emptyC.node.weight)
@@ -990,7 +1060,7 @@ func TestGloasForkedBranches(t *testing.T) {
 	// Attestations shift head to C.
 	// Validators 0,1 vote for B (payloadStatus=false → pending B).
 	f.ProcessAttestation(ctx, []uint64{0, 1}, rootB, slotB, false)
-	// Validators 2,3,4 vote for C (payloadStatus=false → pendingC).
+
 	f.ProcessAttestation(ctx, []uint64{2, 3, 4}, rootC, slotB, false)
 
 	headRoot, err = f.Head(ctx)
@@ -1091,7 +1161,7 @@ func TestGloasPTCOverridesProposerBoost(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, rootC, headRoot)
 
-	assert.Equal(t, uint64(8), emptyB.node.weight)
+	assert.Equal(t, uint64(8), emptyB.node.weight) // proposer boost applied (no equivocation evidence)
 	assert.Equal(t, uint64(0), emptyC.node.weight)
 	assert.Equal(t, uint64(0), emptyA.weight)
 	assert.Equal(t, uint64(0), fullA.weight)
@@ -1110,7 +1180,7 @@ func TestGloasPTCOverridesProposerBoost(t *testing.T) {
 	assert.Equal(t, uint64(20), emptyA.weight)
 	assert.Equal(t, uint64(20), fullA.weight)
 
-	// One more attestation for B breaks the tie.
+
 	f.ProcessAttestation(ctx, []uint64{4}, rootB, slotB, false)
 
 	headRoot, err = f.Head(ctx)
@@ -1257,7 +1327,7 @@ func TestGloasDeepForkWeightPropagation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, rootC, headRoot)
 
-	assert.Equal(t, uint64(8), emptyC.node.weight)
+	assert.Equal(t, uint64(8), emptyC.node.weight) // proposer boost applied (no equivocation evidence)
 	assert.Equal(t, uint64(0), emptyD.node.weight)
 	assert.Equal(t, uint64(0), emptyB.weight)
 	assert.Equal(t, uint64(0), fullB.weight)
@@ -1266,7 +1336,7 @@ func TestGloasDeepForkWeightPropagation(t *testing.T) {
 	// Attestations at different levels.
 	// Validators 0,1 vote for C (payloadStatus=false → pending C).
 	f.ProcessAttestation(ctx, []uint64{0, 1}, rootC, slotC, false)
-	// Validators 2,3,4 vote for D (payloadStatus=true → fullD).
+
 	f.ProcessAttestation(ctx, []uint64{2, 3, 4}, rootD, slotC, true)
 	// Validators 5,6 vote for B (payloadStatus=true → fullB).
 	f.ProcessAttestation(ctx, []uint64{5, 6}, rootB, slotC, true)
@@ -1677,4 +1747,51 @@ func TestStore_Prune_IncompatibleFullFinalizedChildren(t *testing.T) {
 	require.Equal(t, false, emptyOk)
 	_, fullOk := s.fullNodeByRoot[rootC]
 	require.Equal(t, false, fullOk)
+}
+
+func TestGasLimit_UnknownRootErrors(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	_, err := f.GasLimit(indexToHash(999))
+	require.ErrorContains(t, ErrNilNode.Error(), err)
+}
+
+func TestGasLimit_GloasEmptyNodeWalksToFullAncestor(t *testing.T) {
+	f := setupGloas(t, 0, 0)
+	ctx := t.Context()
+
+	rootA := indexToHash(1)
+	blockHashA := indexToHash(100)
+	st, roblock, err := prepareGloasForkchoiceState(ctx, 1, rootA, params.BeaconConfig().ZeroHash, blockHashA, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	const gl = uint64(42_000_000)
+	env := &ethpb.ExecutionPayloadEnvelope{
+		BeaconBlockRoot:       rootA[:],
+		ParentBeaconBlockRoot: make([]byte, 32),
+		Payload:               &enginev1.ExecutionPayloadGloas{GasLimit: gl},
+	}
+	pe, err := blocks.WrappedROExecutionPayloadEnvelope(env)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertPayload(pe))
+
+	// Child B builds on full A (matching parent hash) — gas limit lookup walks to full ancestor A.
+	rootB := indexToHash(2)
+	blockHashB := indexToHash(200)
+	st, roblock, err = prepareGloasForkchoiceState(ctx, 2, rootB, rootA, blockHashB, blockHashA, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	// B has no full node — GasLimit should walk to A's full ancestor.
+	_, hasFullB := f.store.fullNodeByRoot[rootB]
+	require.Equal(t, false, hasFullB)
+
+	got, err := f.GasLimit(rootB)
+	require.NoError(t, err)
+	assert.Equal(t, gl, got)
+
+	// Direct full lookup on A also returns gl.
+	got, err = f.GasLimit(rootA)
+	require.NoError(t, err)
+	assert.Equal(t, gl, got)
 }

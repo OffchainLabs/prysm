@@ -95,7 +95,7 @@ func (vs *Server) SubmitSignedProposerPreferences(
 			DependentRoot:  dependentRoot,
 			ValidatorIndex: msg.Message.ValidatorIndex,
 			FeeRecipient:   bytesutil.ToBytes20(msg.Message.FeeRecipient),
-			GasLimit:       msg.Message.GasLimit,
+			TargetGasLimit: msg.Message.TargetGasLimit,
 		}, proposalSlot)
 		broadcast++
 	}

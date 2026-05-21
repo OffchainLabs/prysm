@@ -215,7 +215,7 @@ type ProposerPreferences struct {
 	ProposalSlot   github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot           `protobuf:"varint,2,opt,name=proposal_slot,json=proposalSlot,proto3" json:"proposal_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	ValidatorIndex github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex `protobuf:"varint,3,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	FeeRecipient   []byte                                                                     `protobuf:"bytes,4,opt,name=fee_recipient,json=feeRecipient,proto3" json:"fee_recipient,omitempty" ssz-size:"20"`
-	GasLimit       uint64                                                                     `protobuf:"varint,5,opt,name=gas_limit,json=gasLimit,proto3" json:"gas_limit,omitempty"`
+	TargetGasLimit uint64                                                                     `protobuf:"varint,5,opt,name=target_gas_limit,json=targetGasLimit,proto3" json:"target_gas_limit,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -278,9 +278,9 @@ func (x *ProposerPreferences) GetFeeRecipient() []byte {
 	return nil
 }
 
-func (x *ProposerPreferences) GetGasLimit() uint64 {
+func (x *ProposerPreferences) GetTargetGasLimit() uint64 {
 	if x != nil {
-		return x.GasLimit
+		return x.TargetGasLimit
 	}
 	return 0
 }

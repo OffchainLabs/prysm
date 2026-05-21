@@ -2250,7 +2250,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		require.Equal(t, 1, len(prefs))
 		require.Equal(t, primitives.ValidatorIndex(1), prefs[0].Message.ValidatorIndex)
 		require.Equal(t, nextEpochProposerSlot, prefs[0].Message.ProposalSlot)
-		require.Equal(t, uint64(42000000), prefs[0].Message.GasLimit)
+		require.Equal(t, uint64(42000000), prefs[0].Message.TargetGasLimit)
 		require.DeepEqual(t, feeRecipient[:], prefs[0].Message.FeeRecipient)
 		require.NotNil(t, prefs[0].Signature)
 	})
@@ -2446,7 +2446,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 		prefs := v.buildProposerPreferences(t.Context(), km, midEpochSlot, false)
 		require.Equal(t, 1, len(prefs))
 		require.DeepEqual(t, customFeeRecipient[:], prefs[0].Message.FeeRecipient)
-		require.Equal(t, uint64(99000000), prefs[0].Message.GasLimit)
+		require.Equal(t, uint64(99000000), prefs[0].Message.TargetGasLimit)
 
 		// Restore default settings for other subtests.
 		v.proposerSettings = &proposer.Settings{
@@ -2661,7 +2661,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{7},
 				},
 			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{},
+			NextEpochDuties:   []*ethpb.ValidatorDuty{},
 			PrevDependentRoot: testProposerPrefDependentRoot,
 			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
@@ -2728,7 +2728,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{midEpochSlot + 2},
 				},
 			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{},
+			NextEpochDuties:   []*ethpb.ValidatorDuty{},
 			PrevDependentRoot: testProposerPrefDependentRoot,
 			CurrDependentRoot: testProposerPrefDependentRoot,
 		})
@@ -2768,7 +2768,7 @@ func TestValidator_buildProposerPreferences(t *testing.T) {
 					ProposerSlots:  []primitives.Slot{5},
 				},
 			},
-			NextEpochDuties: []*ethpb.ValidatorDuty{},
+			NextEpochDuties:   []*ethpb.ValidatorDuty{},
 			PrevDependentRoot: testProposerPrefDependentRoot,
 			CurrDependentRoot: testProposerPrefDependentRoot,
 		})

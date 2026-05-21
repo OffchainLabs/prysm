@@ -80,12 +80,13 @@ func (vs *Server) PayloadAttestationData(
 			return nil, status.Errorf(codes.Internal, "could not retrieve highest received block root for slot %d", slot)
 		}
 		payloadPresent := vs.ForkchoiceFetcher.HasFullNode(root)
+		payloadEarly, _ := vs.ForkchoiceFetcher.PayloadEarly(root)
 
 		resp := &ethpb.PayloadAttestationData{
 			BeaconBlockRoot:   root[:],
 			Slot:              slot,
-			PayloadPresent:    payloadPresent,
-			BlobDataAvailable: payloadPresent, // TODO: Replace with real DA availability once DA paths are wired.
+			PayloadPresent:    payloadEarly,
+			BlobDataAvailable: payloadPresent,
 		}
 		vs.payloadAttestationData.Store(resp)
 		return resp, nil

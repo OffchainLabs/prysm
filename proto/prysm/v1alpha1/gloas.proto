@@ -75,8 +75,8 @@ message SignedExecutionPayloadBid {
   bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
-// ProposerPreferences communicates a proposer fee recipient and gas limit for a
-// future proposal slot.
+// ProposerPreferences communicates a proposer fee recipient and target gas
+// limit for a future proposal slot.
 //
 // Spec:
 // class ProposerPreferences(Container):
@@ -84,7 +84,7 @@ message SignedExecutionPayloadBid {
 //     proposal_slot: Slot
 //     validator_index: ValidatorIndex
 //     fee_recipient: ExecutionAddress
-//     gas_limit: uint64
+//     target_gas_limit: uint64
 message ProposerPreferences {
   bytes dependent_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
   uint64 proposal_slot = 2 [
@@ -96,7 +96,7 @@ message ProposerPreferences {
             "github.com/OffchainLabs/prysm/v7/consensus-types/"
             "primitives.ValidatorIndex" ];
   bytes fee_recipient = 4 [ (ethereum.eth.ext.ssz_size) = "20" ];
-  uint64 gas_limit = 5;
+  uint64 target_gas_limit = 5;
 }
 
 // SignedProposerPreferences wraps proposer preferences with a signature.
