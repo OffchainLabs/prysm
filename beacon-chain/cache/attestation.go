@@ -70,11 +70,15 @@ func (c *AttestationCache) Add(att ethpb.Att) error {
 	if err != nil {
 		return errors.Wrapf(err, "could not create attestation ID")
 	}
+	data := att.GetData()
+	if data == nil {
+		return errors.New("attestation data is nil")
+	}
 
 	group := c.atts[id]
 	if group == nil {
 		group = &attGroup{
-			slot: att.GetData().Slot,
+			slot: data.Slot,
 			atts: []ethpb.Att{att},
 		}
 		c.atts[id] = group
@@ -247,7 +251,11 @@ func GetBySlotAndCommitteeIndex[T ethpb.Att](c *AttestationCache, slot primitive
 			// We can safely compare the first attestation because all attestations in a group
 			// must have the same slot and committee index, since they are under the same key.
 			a, ok := group.atts[0].(T)
-			if ok && a.GetData().Slot == slot && a.CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
+			if !ok {
+				continue
+			}
+			data := a.GetData()
+			if data != nil && data.Slot == slot && a.CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
 				for _, a := range group.atts {
 					a, ok := a.(T)
 					if ok {
@@ -270,5 +278,9 @@ func aggregateSig(agg ethpb.Att, att ethpb.Att) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return bls.AggregateSignatures([]bls.Signature{aggSig, attSig}).Marshal(), nil
+	aggregatedSig := bls.AggregateSignatures([]bls.Signature{aggSig, attSig})
+	if aggregatedSig == nil {
+		return nil, errors.New("could not aggregate signatures")
+	}
+	return aggregatedSig.Marshal(), nil
 }
