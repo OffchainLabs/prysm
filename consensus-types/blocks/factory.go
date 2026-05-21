@@ -657,31 +657,34 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 // BeaconBlockContainerToSignedBeaconBlock converts BeaconBlockContainer (API response) to a SignedBeaconBlock.
 // This is particularly useful for using the values from API calls.
 func BeaconBlockContainerToSignedBeaconBlock(obj *eth.BeaconBlockContainer) (interfaces.ReadOnlySignedBeaconBlock, error) {
-	switch obj.Block.(type) {
+	if obj == nil {
+		return nil, ErrNilObject
+	}
+	switch b := obj.Block.(type) {
 	case *eth.BeaconBlockContainer_BlindedFuluBlock:
-		return NewSignedBeaconBlock(obj.GetBlindedFuluBlock())
+		return NewSignedBeaconBlock(b.BlindedFuluBlock)
 	case *eth.BeaconBlockContainer_FuluBlock:
-		return NewSignedBeaconBlock(obj.GetFuluBlock())
+		return NewSignedBeaconBlock(b.FuluBlock)
 	case *eth.BeaconBlockContainer_BlindedElectraBlock:
-		return NewSignedBeaconBlock(obj.GetBlindedElectraBlock())
+		return NewSignedBeaconBlock(b.BlindedElectraBlock)
 	case *eth.BeaconBlockContainer_ElectraBlock:
-		return NewSignedBeaconBlock(obj.GetElectraBlock())
+		return NewSignedBeaconBlock(b.ElectraBlock)
 	case *eth.BeaconBlockContainer_BlindedDenebBlock:
-		return NewSignedBeaconBlock(obj.GetBlindedDenebBlock())
+		return NewSignedBeaconBlock(b.BlindedDenebBlock)
 	case *eth.BeaconBlockContainer_DenebBlock:
-		return NewSignedBeaconBlock(obj.GetDenebBlock())
+		return NewSignedBeaconBlock(b.DenebBlock)
 	case *eth.BeaconBlockContainer_BlindedCapellaBlock:
-		return NewSignedBeaconBlock(obj.GetBlindedCapellaBlock())
+		return NewSignedBeaconBlock(b.BlindedCapellaBlock)
 	case *eth.BeaconBlockContainer_CapellaBlock:
-		return NewSignedBeaconBlock(obj.GetCapellaBlock())
+		return NewSignedBeaconBlock(b.CapellaBlock)
 	case *eth.BeaconBlockContainer_BlindedBellatrixBlock:
-		return NewSignedBeaconBlock(obj.GetBlindedBellatrixBlock())
+		return NewSignedBeaconBlock(b.BlindedBellatrixBlock)
 	case *eth.BeaconBlockContainer_BellatrixBlock:
-		return NewSignedBeaconBlock(obj.GetBellatrixBlock())
+		return NewSignedBeaconBlock(b.BellatrixBlock)
 	case *eth.BeaconBlockContainer_AltairBlock:
-		return NewSignedBeaconBlock(obj.GetAltairBlock())
+		return NewSignedBeaconBlock(b.AltairBlock)
 	case *eth.BeaconBlockContainer_Phase0Block:
-		return NewSignedBeaconBlock(obj.GetPhase0Block())
+		return NewSignedBeaconBlock(b.Phase0Block)
 	default:
 		return nil, errors.New("container block type not recognized")
 	}
