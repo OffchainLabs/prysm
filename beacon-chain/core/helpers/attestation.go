@@ -24,10 +24,14 @@ func ValidateNilAttestation(attestation ethpb.Att) error {
 	if attestation == nil || attestation.IsNil() {
 		return errors.New("attestation is nil")
 	}
-	if attestation.GetData().Source == nil {
+	data := attestation.GetData()
+	if data == nil {
+		return errors.New("attestation data is nil")
+	}
+	if data.Source == nil {
 		return errors.New("attestation's source can't be nil")
 	}
-	if attestation.GetData().Target == nil {
+	if data.Target == nil {
 		return errors.New("attestation's target can't be nil")
 	}
 	if attestation.IsSingle() {
@@ -84,7 +88,11 @@ func IsAggregator(committeeCount uint64, slotSig []byte) (bool, error) {
 //
 //	return uint64((committees_since_epoch_start + committee_index) % ATTESTATION_SUBNET_COUNT)
 func ComputeSubnetForAttestation(activeValCount uint64, att ethpb.Att) uint64 {
-	return ComputeSubnetFromCommitteeAndSlot(activeValCount, att.GetCommitteeIndex(), att.GetData().Slot)
+	data := att.GetData()
+	if data == nil {
+		return 0
+	}
+	return ComputeSubnetFromCommitteeAndSlot(activeValCount, att.GetCommitteeIndex(), data.Slot)
 }
 
 // ComputeSubnetFromCommitteeAndSlot is a flattened version of ComputeSubnetForAttestation where we only pass in
