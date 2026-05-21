@@ -36,6 +36,12 @@ func InitializePrecomputeValidators(ctx context.Context, beaconState state.Beaco
 	if err != nil {
 		return nil, nil, err
 	}
+	if inactivityScores == nil {
+		return nil, nil, errors.New("inactivity scores are nil")
+	}
+	if len(inactivityScores) != len(vals) {
+		return nil, nil, errors.New("inactivity score length does not match validator count")
+	}
 
 	// This shouldn't happen with a correct beacon state,
 	// but rather be safe to defend against index out of bound panics.
@@ -96,6 +102,12 @@ func ProcessInactivityScores(
 	inactivityScores, err := beaconState.InactivityScores()
 	if err != nil {
 		return nil, nil, err
+	}
+	if inactivityScores == nil {
+		return nil, nil, errors.New("inactivity scores are nil")
+	}
+	if len(inactivityScores) != len(vals) {
+		return nil, nil, errors.New("inactivity score length does not match validator count")
 	}
 
 	bias := cfg.InactivityScoreBias
