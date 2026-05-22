@@ -250,7 +250,13 @@ func (p *BeaconDbStater) stateByRoot(ctx context.Context, stateRoot []byte) (sta
 
 	stateRoots := headState.StateRoots()
 	blkRoots := headState.BlockRoots()
+	if stateRoots == nil || blkRoots == nil {
+		return nil, errors.New("nil state or block roots")
+	}
 	n := len(stateRoots)
+	if n == 0 || len(blkRoots) != n {
+		return nil, errors.New("invalid state or block roots")
+	}
 	s, err := math.Int(uint64(headState.Slot()))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert slot to int")
@@ -283,7 +289,7 @@ func (p *BeaconDbStater) stateByRoot(ctx context.Context, stateRoot []byte) (sta
 		}
 	}
 
-	stateNotFoundErr := NewStateNotFoundError(len(headState.StateRoots()), stateRoot)
+	stateNotFoundErr := NewStateNotFoundError(len(stateRoots), stateRoot)
 	return nil, &stateNotFoundErr
 }
 
@@ -440,13 +446,17 @@ func (p *BeaconDbStater) stateRootByRoot(ctx context.Context, stateRoot []byte) 
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get head state")
 	}
-	for _, root := range headState.StateRoots() {
+	stateRoots := headState.StateRoots()
+	if stateRoots == nil {
+		return nil, errors.New("nil state roots")
+	}
+	for _, root := range stateRoots {
 		if bytes.Equal(root, r[:]) {
 			return r[:], nil
 		}
 	}
 
-	rootNotFoundErr := NewStateRootNotFoundError(len(headState.StateRoots()))
+	rootNotFoundErr := NewStateRootNotFoundError(len(stateRoots))
 	return nil, &rootNotFoundErr
 }
 
