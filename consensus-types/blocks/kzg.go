@@ -56,6 +56,11 @@ func VerifyKZGInclusionProof(blob ROBlob) error {
 // MerkleProofKZGCommitment constructs a Merkle proof of inclusion of the KZG
 // commitment of index `index` into the Beacon Block with the given `body`
 func MerkleProofKZGCommitment(body interfaces.ReadOnlyBeaconBlockBody, index int) ([][]byte, error) {
+	bodyValue, ok := body.(*BeaconBlockBody)
+	if !ok || bodyValue == nil || bodyValue.IsNil() {
+		return nil, errNilBlockBody
+	}
+	body = bodyValue
 	bodyVersion := body.Version()
 	if bodyVersion < version.Deneb {
 		return nil, errUnsupportedBeaconBlockBody
@@ -76,6 +81,9 @@ func MerkleProofKZGCommitment(body interfaces.ReadOnlyBeaconBlockBody, index int
 	if err != nil {
 		return nil, err
 	}
+	if sparse == nil {
+		return nil, errors.New("sparse merkle trie is nil")
+	}
 	topProof, err := sparse.MerkleProof(kzgPosition)
 	if err != nil {
 		return nil, err
@@ -89,6 +97,11 @@ func MerkleProofKZGCommitment(body interfaces.ReadOnlyBeaconBlockBody, index int
 // PrecomputeMerkleProofComponents pre-computes the expensive parts of Merkle proof generation
 // that are shared across all blob indices for a given block body.
 func PrecomputeMerkleProofComponents(body interfaces.ReadOnlyBeaconBlockBody) (*MerkleProofComponents, error) {
+	bodyValue, ok := body.(*BeaconBlockBody)
+	if !ok || bodyValue == nil || bodyValue.IsNil() {
+		return nil, errNilBlockBody
+	}
+	body = bodyValue
 	bodyVersion := body.Version()
 	if bodyVersion < version.Deneb {
 		return nil, errUnsupportedBeaconBlockBody
@@ -110,6 +123,9 @@ func PrecomputeMerkleProofComponents(body interfaces.ReadOnlyBeaconBlockBody) (*
 	if err != nil {
 		return nil, err
 	}
+	if kzgSubtree == nil {
+		return nil, errors.New("kzg subtree is nil")
+	}
 
 	// Pre-compute top-level components
 	membersRoots, err := topLevelRoots(body)
@@ -119,6 +135,9 @@ func PrecomputeMerkleProofComponents(body interfaces.ReadOnlyBeaconBlockBody) (*
 	topLevelTrie, err := trie.GenerateTrieFromItems(membersRoots, logBodyLength)
 	if err != nil {
 		return nil, err
+	}
+	if topLevelTrie == nil {
+		return nil, errors.New("top-level merkle trie is nil")
 	}
 	topLevelProof, err := topLevelTrie.MerkleProof(kzgPosition)
 	if err != nil {
@@ -136,6 +155,9 @@ func PrecomputeMerkleProofComponents(body interfaces.ReadOnlyBeaconBlockBody) (*
 // MerkleProofKZGCommitmentFromComponents constructs a Merkle proof for a specific index
 // using pre-computed components, avoiding redundant calculations.
 func MerkleProofKZGCommitmentFromComponents(components *MerkleProofComponents, index int) ([][]byte, error) {
+	if components == nil || components.kzgSubtree == nil {
+		return nil, errors.New("missing merkle proof components")
+	}
 	// Generate index-specific proof from pre-computed KZG subtree
 	subtreeProof, err := components.kzgSubtree.MerkleProof(index)
 	if err != nil {
@@ -150,6 +172,11 @@ func MerkleProofKZGCommitmentFromComponents(components *MerkleProofComponents, i
 // MerkleProofKZGCommitments constructs a Merkle proof of inclusion of the KZG
 // commitments into the Beacon Block with the given `body`
 func MerkleProofKZGCommitments(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
+	bodyValue, ok := body.(*BeaconBlockBody)
+	if !ok || bodyValue == nil || bodyValue.IsNil() {
+		return nil, errNilBlockBody
+	}
+	body = bodyValue
 	bodyVersion := body.Version()
 	if bodyVersion < version.Deneb {
 		return nil, errUnsupportedBeaconBlockBody
@@ -163,6 +190,9 @@ func MerkleProofKZGCommitments(body interfaces.ReadOnlyBeaconBlockBody) ([][]byt
 	sparse, err := trie.GenerateTrieFromItems(membersRoots, logBodyLength)
 	if err != nil {
 		return nil, errors.Wrap(err, "generate trie from items")
+	}
+	if sparse == nil {
+		return nil, errors.New("sparse merkle trie is nil")
 	}
 
 	proof, err := sparse.MerkleProof(kzgPosition)
@@ -207,6 +237,9 @@ func bodyProof(commitments [][]byte, index int) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if sparse == nil {
+		return nil, errors.New("sparse merkle trie is nil")
+	}
 	proof, err := sparse.MerkleProof(index)
 	if err != nil {
 		return nil, err
@@ -218,6 +251,11 @@ func bodyProof(commitments [][]byte, index int) ([][]byte, error) {
 // BeaconBlockBody. Notice that the KZG commitments root is not needed for the
 // proof computation thus it's omitted
 func topLevelRoots(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
+	bodyValue, ok := body.(*BeaconBlockBody)
+	if !ok || bodyValue == nil || bodyValue.IsNil() {
+		return nil, errNilBlockBody
+	}
+	body = bodyValue
 	layer := make([][]byte, bodyLength)
 	for i := range layer {
 		layer[i] = make([]byte, 32)
