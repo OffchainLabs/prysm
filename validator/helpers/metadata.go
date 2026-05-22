@@ -11,6 +11,10 @@ import (
 )
 
 func ValidateMetadata(ctx context.Context, validatorDB iface.ValidatorDB, interchangeJSON *format.EIPSlashingProtectionFormat) error {
+	if interchangeJSON == nil {
+		return errors.New("slashing protection metadata is nil")
+	}
+
 	// We need to ensure the version in the metadata field matches the one we support.
 	version := interchangeJSON.Metadata.InterchangeFormatVersion
 	if version != format.InterchangeFormatVersion {
