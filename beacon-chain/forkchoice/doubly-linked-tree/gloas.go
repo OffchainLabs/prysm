@@ -421,7 +421,7 @@ func (f *ForkChoice) MarkFullNode(root [32]byte) {
 
 // InsertPayload inserts a full node into forkchoice after the Gloas fork.
 func (f *ForkChoice) InsertPayload(pe interfaces.ROExecutionPayloadEnvelope) error {
-	if pe.IsNil() {
+	if pe == nil || pe.IsNil() {
 		return errors.New("cannot insert nil payload")
 	}
 	s := f.store

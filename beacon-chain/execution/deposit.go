@@ -24,6 +24,9 @@ func DepositContractAddress() (string, error) {
 }
 
 func (s *Service) processDeposit(ctx context.Context, eth1Data *ethpb.Eth1Data, deposit *ethpb.Deposit) error {
+	if s == nil || s.preGenesisState == nil || s.preGenesisState.IsNil() {
+		return errors.New("service pre-genesis state is nil")
+	}
 	var err error
 	if err := s.preGenesisState.SetEth1Data(eth1Data); err != nil {
 		return err

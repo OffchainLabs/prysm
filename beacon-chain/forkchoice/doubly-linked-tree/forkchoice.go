@@ -56,6 +56,9 @@ func (f *ForkChoice) Head(
 ) ([32]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.Head")
 	defer span.End()
+	if f == nil || f.store == nil {
+		return [32]byte{}, errors.New("forkchoice store is nil")
+	}
 
 	calledHeadCount.Inc()
 
@@ -113,6 +116,9 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.InsertNode")
 	defer span.End()
 
+	if state == nil || state.IsNil() {
+		return errors.New("nil state")
+	}
 	jc := state.CurrentJustifiedCheckpoint()
 	if jc == nil {
 		return errInvalidNilCheckpoint
@@ -419,6 +425,9 @@ func (f *ForkChoice) SetOptimisticToInvalid(ctx context.Context, root, parentRoo
 // store-tracked list. Votes from these validators are not accounted for
 // in forkchoice.
 func (f *ForkChoice) InsertSlashedIndex(_ context.Context, index primitives.ValidatorIndex) {
+	if f == nil || f.store == nil {
+		return
+	}
 	// return early if the index was already included:
 	if f.store.slashedIndices[index] {
 		return

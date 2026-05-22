@@ -298,6 +298,9 @@ func (s *Service) ExecutionClientConnected() bool {
 
 // ExecutionClientEndpoint returns the URL of the current, connected execution client.
 func (s *Service) ExecutionClientEndpoint() string {
+	if s == nil || s.cfg == nil {
+		return ""
+	}
 	return s.cfg.currHttpEndpoint.Url
 }
 
@@ -307,6 +310,9 @@ func (s *Service) ExecutionClientConnectionErr() error {
 }
 
 func (s *Service) updateBeaconNodeStats() {
+	if s == nil || s.cfg == nil || s.cfg.beaconNodeStatsUpdater == nil {
+		return
+	}
 	bs := clientstats.BeaconNodeStats{}
 	if s.ExecutionClientConnected() {
 		bs.SyncEth1Connected = true
@@ -315,6 +321,9 @@ func (s *Service) updateBeaconNodeStats() {
 }
 
 func (s *Service) updateConnectedETH1(state bool) {
+	if s == nil {
+		return
+	}
 	s.connectedETH1 = state
 	s.updateBeaconNodeStats()
 }
@@ -344,6 +353,9 @@ func (s *Service) updateGraffitiInfo() {
 // refers to the latest eth1 block which follows the condition: eth1_timestamp +
 // SECONDS_PER_ETH1_BLOCK * ETH1_FOLLOW_DISTANCE <= current_unix_time
 func (s *Service) followedBlockHeight(ctx context.Context) (uint64, error) {
+	if s == nil {
+		return 0, errors.New("service is nil")
+	}
 	followTime := params.BeaconConfig().Eth1FollowDistance * params.BeaconConfig().SecondsPerETH1Block
 	latestBlockTime := uint64(0)
 	if s.latestEth1Data.BlockTime > followTime {
@@ -429,6 +441,9 @@ func (s *Service) initDepositCaches(ctx context.Context, ctrs []*ethpb.DepositCo
 // processBlockHeader adds a newly observed eth1 block to the block cache and
 // updates the latest blockHeight, blockHash, and blockTime properties of the service.
 func (s *Service) processBlockHeader(header *types.HeaderInfo) {
+	if s == nil || header == nil {
+		return
+	}
 	defer safelyHandlePanic()
 	blockNumberGauge.Set(float64(header.Number.Int64()))
 	s.latestEth1DataLock.Lock()
@@ -617,6 +632,9 @@ func (s *Service) initPOWService() {
 
 // run subscribes to all the services for the eth1 chain.
 func (s *Service) run(done <-chan struct{}) {
+	if s == nil {
+		return
+	}
 	s.runError = nil
 
 	s.initPOWService()
@@ -747,6 +765,9 @@ func (s *Service) cacheBlockHeaders(start, end uint64) error {
 
 // Determines the earliest voting block from which to start caching all our previous headers from.
 func (s *Service) determineEarliestVotingBlock(ctx context.Context, followBlock uint64) (uint64, error) {
+	if s == nil {
+		return 0, errors.New("service is nil")
+	}
 	genesisTime := s.chainStartData.GenesisTime
 	currSlot := slots.CurrentSlot(time.Unix(int64(genesisTime), 0)) // lint:ignore uintcast -- Genesis time will never exceed int64 in seconds.
 
@@ -782,6 +803,9 @@ func (s *Service) determineEarliestVotingBlock(ctx context.Context, followBlock 
 // initializes our service from the provided eth1data object by initializing all the relevant
 // fields and data.
 func (s *Service) initializeEth1Data(ctx context.Context, eth1DataInDB *ethpb.ETH1ChainData) error {
+	if s == nil {
+		return errors.New("service is nil")
+	}
 	// The node has no eth1data persisted on disk, so we exit and instead
 	// request from contract logs.
 	if eth1DataInDB == nil {
@@ -856,6 +880,9 @@ func validateDepositContainers(ctrs []*ethpb.DepositContainer) bool {
 // Validates the current powchain data is saved and makes sure that any
 // embedded genesis state is correctly accounted for.
 func (s *Service) validPowchainData(ctx context.Context) (*ethpb.ETH1ChainData, error) {
+	if s == nil || s.cfg == nil || s.cfg.beaconDB == nil {
+		return nil, errors.New("service is nil")
+	}
 	genState, err := s.cfg.beaconDB.GenesisState(ctx)
 	if err != nil {
 		return nil, err
@@ -917,6 +944,9 @@ func dedupEndpoints(endpoints []string) []string {
 }
 
 func (s *Service) migrateOldDepositTree(eth1DataInDB *ethpb.ETH1ChainData) error {
+	if s == nil {
+		return errors.New("service is nil")
+	}
 	oldDepositTrie, err := trie.CreateTrieFromProto(eth1DataInDB.Trie)
 	if err != nil {
 		return err
