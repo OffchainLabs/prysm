@@ -368,12 +368,18 @@ func (s *Service) initDepositCaches(ctx context.Context, ctrs []*ethpb.DepositCo
 	s.cfg.depositCache.InsertDepositContainers(ctx, ctrs)
 	if !s.chainStartData.Chainstarted {
 		// Do not add to pending cache if no genesis state exists.
+		if s.preGenesisState == nil || s.preGenesisState.IsNil() {
+			return errors.New("pre-genesis state is nil")
+		}
 		validDepositsCount.Add(float64(s.preGenesisState.Eth1DepositIndex()))
 		return nil
 	}
 	genesisState, err := s.cfg.beaconDB.GenesisState(ctx)
 	if err != nil {
 		return err
+	}
+	if genesisState == nil || genesisState.IsNil() {
+		return errors.New("genesis state is nil")
 	}
 	// Default to all post-genesis deposits in
 	// the event we cannot find a finalized state.
@@ -862,6 +868,9 @@ func (s *Service) validPowchainData(ctx context.Context) (*ethpb.ETH1ChainData, 
 		return eth1Data, nil
 	}
 	if s.depositRequestsStarted || eth1Data == nil || !eth1Data.ChainstartData.Chainstarted || !validateDepositContainers(eth1Data.DepositContainers) {
+		if s.preGenesisState == nil || s.preGenesisState.IsNil() {
+			return nil, errors.New("pre-genesis state is nil")
+		}
 		pbState, err := native.ProtobufBeaconStatePhase0(s.preGenesisState.ToProtoUnsafe())
 		if err != nil {
 			return nil, err
