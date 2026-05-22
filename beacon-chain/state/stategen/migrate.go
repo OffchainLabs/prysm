@@ -41,7 +41,14 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 	if err != nil {
 		return err
 	}
-	fSlot := fBlock.Block().Slot()
+	if fBlock == nil || fBlock.IsNil() {
+		return errUnknownBlock
+	}
+	block := fBlock.Block()
+	if block == nil {
+		return errUnknownBlock
+	}
+	fSlot := block.Slot()
 	if oldFSlot > fSlot {
 		return nil
 	}
