@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/binary"
+	"sync"
 	"testing"
 	"time"
 
@@ -246,5 +247,108 @@ func TestPayloadAttestationData(t *testing.T) {
 		assert.Equal(t, slot, data.Slot)
 		assert.Equal(t, true, data.PayloadPresent)
 		assert.Equal(t, true, data.BlobDataAvailable)
+	})
+	t.Run("before PTC deadline → Unavailable", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(0)
+		chain := &mockChain.ChainService{
+			Slot:    &slot,
+			Genesis: time.Now(),
+			Root:    bytesutil.PadTo([]byte{0xAA}, 32),
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(Unavailable), rpcErr.Reason)
+		assert.ErrorContains(t, "PTC deadline not yet reached", rpcErr.Err)
+		assert.Equal(t, (*ethpb.PayloadAttestationData)(nil), s.payloadAttestationData.Load())
+	})
+	t.Run("result is cached per slot and bypassed on slot change", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(7)
+		root := bytesutil.PadTo([]byte{0xAA}, 32)
+		chain := &mockChain.ChainService{
+			Slot:               &slot,
+			Root:               root,
+			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockCanonicalFull:  map[primitives.Slot]bool{slot: false},
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		first, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr)
+		require.DeepEqual(t, root, first.BeaconBlockRoot)
+
+		// Mutate the underlying mock; same-slot call must hit the cache.
+		newRoot := bytesutil.PadTo([]byte{0xBB}, 32)
+		chain.Root = newRoot
+		chain.MockCanonicalRoots[slot] = bytesutil.ToBytes32(newRoot)
+		chain.MockCanonicalFull[slot] = true
+
+		second, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr)
+		assert.Equal(t, true, first == second)
+		require.DeepEqual(t, root, second.BeaconBlockRoot)
+
+		// Advance to a new slot; cache must be bypassed.
+		nextSlot := slot + 1
+		chain.Slot = &nextSlot
+		chain.BlockSlot = nextSlot
+		chain.MockCanonicalRoots[nextSlot] = bytesutil.ToBytes32(newRoot)
+		chain.MockCanonicalFull[nextSlot] = true
+		chain.MockPayloadEarly = map[[32]byte]bool{bytesutil.ToBytes32(newRoot): true}
+
+		third, rpcErr := s.PayloadAttestationData(t.Context(), nextSlot)
+		require.IsNil(t, rpcErr)
+		assert.Equal(t, false, first == third)
+		require.DeepEqual(t, newRoot, third.BeaconBlockRoot)
+		assert.Equal(t, nextSlot, third.Slot)
+		assert.Equal(t, true, third.PayloadPresent)
+	})
+	t.Run("concurrent callers share a single computation", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(7)
+		root := bytesutil.PadTo([]byte{0xAA}, 32)
+		chain := &mockChain.ChainService{
+			Slot:               &slot,
+			Root:               root,
+			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockCanonicalFull:  map[primitives.Slot]bool{slot: false},
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		const callers = 16
+		results := make([]*ethpb.PayloadAttestationData, callers)
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		for i := range callers {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				<-start
+				resp, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+				require.IsNil(t, rpcErr)
+				results[i] = resp
+			}(i)
+		}
+		close(start)
+		wg.Wait()
+
+		for i := 1; i < callers; i++ {
+			assert.Equal(t, true, results[0] == results[i])
+		}
 	})
 }

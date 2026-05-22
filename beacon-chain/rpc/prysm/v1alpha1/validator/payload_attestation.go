@@ -3,8 +3,6 @@ package validator
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -34,38 +32,11 @@ func (vs *Server) PayloadAttestationData(
 	if vs.SyncChecker.Syncing() {
 		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
-	slot := req.Slot
-
-	slotStart, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), slot)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "could not compute slot start time: %v", err)
+	data, rpcErr := vs.CoreService.PayloadAttestationData(ctx, req.Slot)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
-	cfg := params.BeaconConfig()
-	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS))
-	if time.Now().Before(deadline) {
-		return nil, status.Errorf(codes.Unavailable, "PTC deadline not yet reached for slot %d", slot)
-	}
-
-	if cached := vs.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
-		return cached, nil
-	}
-
-	// dedupe concurrent callers at the PTC deadline.
-	v, err, _ := vs.payloadAttestationFlight.Do(strconv.FormatUint(uint64(slot), 10), func() (any, error) {
-		if cached := vs.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
-			return cached, nil
-		}
-		data, rpcErr := vs.CoreService.PayloadAttestationData(ctx, slot)
-		if rpcErr != nil {
-			return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
-		}
-		vs.payloadAttestationData.Store(data)
-		return data, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return v.(*ethpb.PayloadAttestationData), nil
+	return data, nil
 }
 
 // SubmitPayloadAttestation submits a payload attestation message to the network
