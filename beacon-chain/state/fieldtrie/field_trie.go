@@ -173,6 +173,9 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 // TrieRoot returns the root of the trie with the appropriate length mixin applied.
 func (f *FieldTrie) TrieRoot() ([32]byte, error) {
 	if f == nil {
+		return [32]byte{}, ErrInvalidFieldTrie
+	}
+	if f.Empty() {
 		return [32]byte{}, ErrEmptyFieldTrie
 	}
 	f.mu.RLock()

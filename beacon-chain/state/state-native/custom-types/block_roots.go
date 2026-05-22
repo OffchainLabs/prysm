@@ -70,7 +70,7 @@ func (_ BlockRoots) SizeSSZ() int {
 // Each item in the slice is a copy of the original item.
 func (r BlockRoots) Slice() [][]byte {
 	if r == nil {
-		return nil
+		return [][]byte{}
 	}
 	bRoots := make([][]byte, len(r))
 	for i, root := range r {

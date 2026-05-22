@@ -52,9 +52,13 @@ func (b *BeaconState) BlockRoots() [][]byte {
 
 	roots := b.blockRootsVal()
 	if roots == nil {
-		return nil
+		return [][]byte{}
 	}
-	return roots.Slice()
+	result := roots.Slice()
+	if result == nil {
+		return [][]byte{}
+	}
+	return result
 }
 
 func (b *BeaconState) blockRootsVal() customtypes.BlockRoots {

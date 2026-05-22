@@ -26,6 +26,9 @@ func (s *State) replayBlocks(
 ) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "stateGen.replayBlocks")
 	defer span.End()
+	if state == nil || state.IsNil() {
+		return nil, errors.New("state cannot be nil")
+	}
 	var err error
 
 	start := time.Now()
@@ -93,6 +96,9 @@ func executeStateTransitionStateGen(
 ) (state.BeaconState, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
+	}
+	if signed == nil || signed.IsNil() {
+		return nil, errors.New("signed block cannot be nil")
 	}
 	if err := blocks.BeaconBlockIsNil(signed); err != nil {
 		return nil, err
