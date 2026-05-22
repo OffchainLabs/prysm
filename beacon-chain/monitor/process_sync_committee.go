@@ -38,6 +38,10 @@ func (s *Service) processSyncAggregate(state state.ReadOnlyBeaconState, blk inte
 		log.WithError(err).Error("Could not get SyncAggregate")
 		return
 	}
+	if bits == nil {
+		log.Error("SyncAggregate is nil")
+		return
+	}
 	s.Lock()
 	defer s.Unlock()
 	for validatorIdx, committeeIndices := range s.trackedSyncCommitteeIndices {
