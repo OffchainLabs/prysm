@@ -144,7 +144,7 @@ func (s *State) StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) 
 	if err != nil {
 		return nil, err
 	}
-	if ok {
+	if ok && cachedInfo != nil && cachedInfo.state != nil && !cachedInfo.state.IsNil() {
 		return cachedInfo.state, nil
 	}
 
@@ -239,7 +239,7 @@ func (s *State) loadStateByRoot(ctx context.Context, blockRoot [32]byte) (state.
 		return nil, fmt.Errorf("get by block root: %w", err)
 	}
 
-	if ok && cachedInfo != nil {
+	if ok && cachedInfo != nil && cachedInfo.state != nil && !cachedInfo.state.IsNil() {
 		return cachedInfo.state, nil
 	}
 
@@ -369,7 +369,7 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 		if err != nil {
 			return nil, err
 		}
-		if ok {
+		if ok && cachedInfo != nil && cachedInfo.state != nil && !cachedInfo.state.IsNil() {
 			return cachedInfo.state, nil
 		}
 

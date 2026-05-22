@@ -110,8 +110,10 @@ func (s *State) saveStateByRoot(ctx context.Context, blockRoot [32]byte, st stat
 				}).Debug("Recovering state for epoch boundary cache")
 
 				hState := s.hotStateCache.get([32]byte(bRoot))
-				if err := s.epochBoundaryStateCache.put([32]byte(bRoot), hState); err != nil {
-					return err
+				if hState != nil && !hState.IsNil() {
+					if err := s.epochBoundaryStateCache.put([32]byte(bRoot), hState); err != nil {
+						return err
+					}
 				}
 			}
 		}

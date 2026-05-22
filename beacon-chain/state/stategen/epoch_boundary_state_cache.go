@@ -75,6 +75,9 @@ func (e *epochBoundaryState) ByBlockRoot(r [32]byte) (state.BeaconState, error) 
 	if !ok {
 		return nil, ErrNotInCache
 	}
+	if rsi == nil || rsi.state == nil || rsi.state.IsNil() {
+		return nil, errNilState
+	}
 	return rsi.state, nil
 }
 
@@ -97,6 +100,9 @@ func (e *epochBoundaryState) getByBlockRootLockFree(r [32]byte) (*rootStateInfo,
 	s, ok := obj.(*rootStateInfo)
 	if !ok {
 		return nil, false, errNotRootStateInfo
+	}
+	if s.state == nil || s.state.IsNil() {
+		return nil, false, errNilState
 	}
 
 	return &rootStateInfo{
@@ -129,6 +135,9 @@ func (e *epochBoundaryState) getBySlot(s primitives.Slot) (*rootStateInfo, bool,
 // least recently added state info if the cache size has reached the max cache
 // size limit.
 func (e *epochBoundaryState) put(blockRoot [32]byte, s state.ReadOnlyBeaconState) error {
+	if s == nil || s.IsNil() {
+		return errNilState
+	}
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
@@ -179,6 +188,9 @@ func (e *epochBoundaryState) delete(blockRoot [32]byte) error {
 	}
 	if !ok {
 		return nil
+	}
+	if rInfo == nil || rInfo.state == nil || rInfo.state.IsNil() {
+		return errNilState
 	}
 	slotInfo := &slotRootInfo{
 		slot:      rInfo.state.Slot(),
