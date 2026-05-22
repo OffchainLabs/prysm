@@ -92,12 +92,16 @@ func NewLightClientUpdateFromBeaconState(
 	}
 
 	// assert state.slot == state.latest_block_header.slot
-	if state.Slot() != state.LatestBlockHeader().Slot {
-		return nil, fmt.Errorf("state slot %d not equal to latest block header slot %d", state.Slot(), state.LatestBlockHeader().Slot)
+	stateHeader := state.LatestBlockHeader()
+	if stateHeader == nil {
+		return nil, errors.New("nil state latest block header")
+	}
+	if state.Slot() != stateHeader.Slot {
+		return nil, fmt.Errorf("state slot %d not equal to latest block header slot %d", state.Slot(), stateHeader.Slot)
 	}
 
 	// assert hash_tree_root(header) == hash_tree_root(block.message)
-	header := state.LatestBlockHeader()
+	header := stateHeader
 	stateRoot, err := state.HashTreeRoot(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get state root")
@@ -119,16 +123,19 @@ func NewLightClientUpdateFromBeaconState(
 	updateSignaturePeriod := slots.SyncCommitteePeriod(slots.ToEpoch(block.Block().Slot()))
 
 	// assert attested_state.slot == attested_state.latest_block_header.slot
-	if attestedState.Slot() != attestedState.LatestBlockHeader().Slot {
+	attestedHeader := attestedState.LatestBlockHeader()
+	if attestedHeader == nil {
+		return nil, errors.New("nil attested latest block header")
+	}
+	if attestedState.Slot() != attestedHeader.Slot {
 		return nil, fmt.Errorf(
 			"attested state slot %d not equal to attested latest block header slot %d",
 			attestedState.Slot(),
-			attestedState.LatestBlockHeader().Slot,
+			attestedHeader.Slot,
 		)
 	}
 
 	// attested_header = attested_state.latest_block_header.copy()
-	attestedHeader := attestedState.LatestBlockHeader()
 
 	// attested_header.state_root = hash_tree_root(attested_state)
 	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
@@ -181,6 +188,9 @@ func NewLightClientUpdateFromBeaconState(
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get next sync committee")
 		}
+		if tempNextSyncCommittee == nil {
+			return nil, errors.New("nil next sync committee")
+		}
 		nextSyncCommittee := &pb.SyncCommittee{
 			Pubkeys:         tempNextSyncCommittee.Pubkeys,
 			AggregatePubkey: tempNextSyncCommittee.AggregatePubkey,
@@ -216,8 +226,12 @@ func NewLightClientUpdateFromBeaconState(
 			}
 		} else {
 			// assert attested_state.finalized_checkpoint.root == Bytes32()
-			if !bytes.Equal(attestedState.FinalizedCheckpoint().Root, make([]byte, 32)) {
-				return nil, fmt.Errorf("invalid finalized header root %v", attestedState.FinalizedCheckpoint().Root)
+			finalizedCheckpoint := attestedState.FinalizedCheckpoint()
+			if finalizedCheckpoint == nil {
+				return nil, errors.New("nil finalized checkpoint")
+			}
+			if !bytes.Equal(finalizedCheckpoint.Root, make([]byte, 32)) {
+				return nil, fmt.Errorf("invalid finalized header root %v", finalizedCheckpoint.Root)
 			}
 		}
 
@@ -745,6 +759,9 @@ func NewLightClientBootstrapFromBeaconState(
 
 	// assert state.slot == state.latest_block_header.slot
 	latestBlockHeader := state.LatestBlockHeader()
+	if latestBlockHeader == nil {
+		return nil, errors.New("nil latest block header")
+	}
 	if state.Slot() != latestBlockHeader.Slot {
 		return nil, fmt.Errorf("state slot %d not equal to latest block header slot %d", state.Slot(), latestBlockHeader.Slot)
 	}

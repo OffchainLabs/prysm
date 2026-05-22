@@ -1482,6 +1482,10 @@ func (s *Server) GetFinalityCheckpoints(w http.ResponseWriter, r *http.Request) 
 	pj := st.PreviousJustifiedCheckpoint()
 	cj := st.CurrentJustifiedCheckpoint()
 	f := st.FinalizedCheckpoint()
+	if pj == nil || cj == nil || f == nil {
+		httputil.HandleError(w, "Could not retrieve finality checkpoints", http.StatusInternalServerError)
+		return
+	}
 	resp := &structs.GetFinalityCheckpointsResponse{
 		Data: &structs.FinalityCheckpoints{
 			PreviousJustified: &structs.Checkpoint{

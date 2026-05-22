@@ -262,6 +262,9 @@ func (s *Server) GetSyncCommittees(w http.ResponseWriter, r *http.Request) {
 }
 
 func committeeIndicesFromState(st state.BeaconState, committee *ethpbalpha.SyncCommittee) ([]string, *ethpbalpha.SyncCommittee, error) {
+	if committee == nil {
+		return nil, nil, errors.New("nil sync committee")
+	}
 	committeeIndices := make([]string, len(committee.Pubkeys))
 	for i, key := range committee.Pubkeys {
 		index, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(key))
@@ -283,6 +286,9 @@ func currentCommitteeIndicesFromState(st state.BeaconState) ([]string, *ethpbalp
 			"could not get sync committee: %w", err,
 		)
 	}
+	if committee == nil {
+		return nil, nil, errors.New("nil current sync committee")
+	}
 
 	return committeeIndicesFromState(st, committee)
 }
@@ -293,6 +299,9 @@ func nextCommitteeIndicesFromState(st state.BeaconState) ([]string, *ethpbalpha.
 		return nil, nil, fmt.Errorf(
 			"could not get sync committee: %w", err,
 		)
+	}
+	if committee == nil {
+		return nil, nil, errors.New("nil next sync committee")
 	}
 
 	return committeeIndicesFromState(st, committee)

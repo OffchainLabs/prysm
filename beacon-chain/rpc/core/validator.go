@@ -46,12 +46,11 @@ func (s *Service) ComputeValidatorPerformance(
 ) (*ethpb.ValidatorPerformanceResponse, *RpcError) {
 	ctx, span := trace.StartSpan(ctx, "coreService.ComputeValidatorPerformance")
 	defer span.End()
-	if req == nil {
-		return nil, &RpcError{Err: errors.New("request is nil"), Reason: BadRequest}
-	}
-
 	if s.SyncChecker.Syncing() {
 		return nil, &RpcError{Reason: Unavailable, Err: errors.New("Syncing to latest head, not ready to respond")}
+	}
+	if req == nil {
+		return nil, &RpcError{Err: errors.New("request is nil"), Reason: BadRequest}
 	}
 
 	headState, err := s.HeadFetcher.HeadState(ctx)
@@ -169,6 +168,10 @@ func (s *Service) ComputeValidatorPerformance(
 		}
 
 		summary := validatorSummary[idx]
+		if summary == nil {
+			missingValidators = append(missingValidators, pubKey[:])
+			continue
+		}
 		pubKeys = append(pubKeys, pubKey[:])
 		effectiveBalances = append(effectiveBalances, summary.CurrentEpochEffectiveBalance)
 		beforeTransitionBalances = append(beforeTransitionBalances, summary.BeforeEpochTransitionBalance)
@@ -562,6 +565,9 @@ func (s *Service) GetAttestationData(
 		}
 	}
 	justifiedCheckpoint := headState.CurrentJustifiedCheckpoint()
+	if justifiedCheckpoint == nil {
+		return nil, &RpcError{Reason: Internal, Err: errors.New("nil current justified checkpoint")}
+	}
 	var isPayloadFull bool
 	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
 		fcRoot, full := s.ChainInfoFetcher.CanonicalNodeAtSlot(req.Slot)
@@ -663,6 +669,9 @@ func RegisterSyncSubnetCurrentPeriod(s beaconState.BeaconState, epoch primitives
 	if err != nil {
 		return err
 	}
+	if committee == nil {
+		return errors.New("nil current sync committee")
+	}
 	syncCommPeriod := slots.SyncCommitteePeriod(epoch)
 	registerSyncSubnet(epoch, syncCommPeriod, pubKey, committee, status)
 	return nil
@@ -673,6 +682,9 @@ func RegisterSyncSubnetCurrentPeriodProto(s beaconState.BeaconState, epoch primi
 	committee, err := s.CurrentSyncCommittee()
 	if err != nil {
 		return err
+	}
+	if committee == nil {
+		return errors.New("nil current sync committee")
 	}
 	syncCommPeriod := slots.SyncCommitteePeriod(epoch)
 	registerSyncSubnetProto(epoch, syncCommPeriod, pubKey, committee, status)
@@ -685,6 +697,9 @@ func RegisterSyncSubnetNextPeriod(s beaconState.BeaconState, epoch primitives.Ep
 	if err != nil {
 		return err
 	}
+	if committee == nil {
+		return errors.New("nil next sync committee")
+	}
 	syncCommPeriod := slots.SyncCommitteePeriod(epoch)
 	registerSyncSubnet(epoch, syncCommPeriod+1, pubKey, committee, status)
 	return nil
@@ -695,6 +710,9 @@ func RegisterSyncSubnetNextPeriodProto(s beaconState.BeaconState, epoch primitiv
 	committee, err := s.NextSyncCommittee()
 	if err != nil {
 		return err
+	}
+	if committee == nil {
+		return errors.New("nil next sync committee")
 	}
 	syncCommPeriod := slots.SyncCommitteePeriod(epoch)
 	registerSyncSubnetProto(epoch, syncCommPeriod+1, pubKey, committee, status)
@@ -768,6 +786,9 @@ func registerSyncSubnetInternal(
 // subnetsFromCommittee retrieves the relevant subnets for the chosen validator.
 func subnetsFromCommittee(pubkey []byte, comm *ethpb.SyncCommittee) []uint64 {
 	positions := make([]uint64, 0)
+	if comm == nil {
+		return positions
+	}
 	for i, pkey := range comm.Pubkeys {
 		if bytes.Equal(pubkey, pkey) {
 			positions = append(positions, uint64(i)/(params.BeaconConfig().SyncCommitteeSize/params.BeaconConfig().SyncCommitteeSubnetCount))

@@ -185,6 +185,9 @@ func (s *SyncCommitteeCache) UpdatePositionsInCommittee(syncCommitteeBoundaryRoo
 	if err != nil {
 		return err
 	}
+	if csc == nil {
+		return errors.New("current sync committee is nil")
+	}
 	positionsMap := make(map[primitives.ValidatorIndex]*positionInCommittee)
 	for i, pubkey := range csc.Pubkeys {
 		p := bytesutil.ToBytes48(pubkey)
@@ -203,6 +206,9 @@ func (s *SyncCommitteeCache) UpdatePositionsInCommittee(syncCommitteeBoundaryRoo
 	nsc, err := st.NextSyncCommittee()
 	if err != nil {
 		return err
+	}
+	if nsc == nil {
+		return errors.New("next sync committee is nil")
 	}
 	for i, pubkey := range nsc.Pubkeys {
 		p := bytesutil.ToBytes48(pubkey)
