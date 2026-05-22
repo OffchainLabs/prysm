@@ -46,7 +46,11 @@ var ErrInsufficientSuitable = errors.New("no suitable peers")
 
 func (a *Assigner) freshPeers() ([]peer.ID, error) {
 	required := min(flags.Get().MinimumSyncPeers, min(flags.Get().MinimumSyncPeers, params.BeaconConfig().MaxPeersToSync))
-	_, peers := a.ps.BestFinalized(a.fc.FinalizedCheckpoint().Epoch)
+	finalizedCheckpoint := a.fc.FinalizedCheckpoint()
+	if finalizedCheckpoint == nil {
+		return nil, errors.New("nil finalized checkpoint")
+	}
+	_, peers := a.ps.BestFinalized(finalizedCheckpoint.Epoch)
 	if len(peers) < required {
 		log.WithFields(logrus.Fields{
 			"suitable": len(peers),

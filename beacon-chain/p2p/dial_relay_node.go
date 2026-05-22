@@ -21,13 +21,12 @@ func MakePeer(addr string) (*peer.AddrInfo, error) {
 func dialRelayNode(ctx context.Context, h host.Host, relayAddr string) error {
 	ctx, span := trace.StartSpan(ctx, "p2p_dialRelayNode")
 	defer span.End()
-	if h == nil {
-		return errors.New("host is nil")
-	}
-
 	p, err := MakePeer(relayAddr)
 	if err != nil {
 		return err
+	}
+	if h == nil {
+		return errors.New("host is nil")
 	}
 	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
 	defer cancel()

@@ -441,10 +441,14 @@ func (s *Service) initDepositCaches(ctx context.Context, ctrs []*ethpb.DepositCo
 // processBlockHeader adds a newly observed eth1 block to the block cache and
 // updates the latest blockHeight, blockHash, and blockTime properties of the service.
 func (s *Service) processBlockHeader(header *types.HeaderInfo) {
-	if s == nil || header == nil {
+	if s == nil {
 		return
 	}
 	defer safelyHandlePanic()
+	if header == nil {
+		log.WithField("r", "nil block header").Error("Panicked when handling data from ETH 1.0 Chain! Recovering...")
+		return
+	}
 	blockNumberGauge.Set(float64(header.Number.Int64()))
 	s.latestEth1DataLock.Lock()
 	s.latestEth1Data.BlockHeight = header.Number.Uint64()

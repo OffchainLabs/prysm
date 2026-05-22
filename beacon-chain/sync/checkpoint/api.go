@@ -119,7 +119,11 @@ func DownloadFinalizedData(ctx context.Context, client *beacon.Client) (*OriginD
 		return nil, errors.Wrap(err, "error unmarshaling finalized state to correct version")
 	}
 
-	slot := s.LatestBlockHeader().Slot
+	header := s.LatestBlockHeader()
+	if header == nil {
+		return nil, errors.New("nil latest block header")
+	}
+	slot := header.Slot
 	bb, err := client.GetBlock(ctx, beacon.IdFromSlot(slot))
 	if err != nil {
 		return nil, errors.Wrapf(err, "error requesting block by slot = %d", slot)
@@ -137,7 +141,7 @@ func DownloadFinalizedData(ctx context.Context, client *beacon.Client) (*OriginD
 		return nil, errors.Wrap(err, "error computing hash_tree_root of retrieved block body")
 	}
 
-	sbr := bytesutil.ToBytes32(s.LatestBlockHeader().BodyRoot)
+	sbr := bytesutil.ToBytes32(header.BodyRoot)
 	if sbr != bodyRoot {
 		return nil, errors.Wrapf(errCheckpointBlockMismatch, "state body root = %#x, block body root = %#x", sbr, bodyRoot)
 	}

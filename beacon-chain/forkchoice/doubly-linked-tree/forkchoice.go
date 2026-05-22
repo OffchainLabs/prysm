@@ -622,7 +622,11 @@ func (f *ForkChoice) FinalizedPayloadBlockHash() [32]byte {
 
 // JustifiedPayloadBlockHash returns the hash of the payload at the justified checkpoint
 func (f *ForkChoice) JustifiedPayloadBlockHash() [32]byte {
-	return f.store.checkpointPayloadHashForRoot(f.JustifiedCheckpoint().Root)
+	justifiedCheckpoint := f.JustifiedCheckpoint()
+	if justifiedCheckpoint == nil {
+		return [32]byte{}
+	}
+	return f.store.checkpointPayloadHashForRoot(justifiedCheckpoint.Root)
 }
 
 // UnrealizedJustifiedPayloadBlockHash returns the hash of the payload at the unrealized justified checkpoint
