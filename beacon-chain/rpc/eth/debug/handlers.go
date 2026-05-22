@@ -56,6 +56,10 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State not found", http.StatusNotFound)
+		return
+	}
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, id, s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
@@ -120,6 +124,10 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 				shared.WriteStateFetchError(w, err)
 				return
 			}
+			if st == nil || st.IsNil() {
+				httputil.HandleError(w, "State not found", http.StatusNotFound)
+				return
+			}
 		}
 		respSt, err = structs.BeaconStateGloasFromConsensus(st)
 		if err != nil {
@@ -151,6 +159,10 @@ func (s *Server) getBeaconStateSSZV2(ctx context.Context, w http.ResponseWriter,
 	st, err := s.Stater.State(ctx, id)
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State not found", http.StatusNotFound)
 		return
 	}
 	sszState, err := st.MarshalSSZ()
