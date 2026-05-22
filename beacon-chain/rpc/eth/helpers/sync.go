@@ -130,12 +130,16 @@ func isStateRootOptimistic(
 	if err != nil {
 		return true, lookup.NewFetchStateError(err)
 	}
-	if st.Slot() == chainInfo.HeadSlot() {
+	if st == nil || st.IsNil() {
+		return true, lookup.NewFetchStateError(errors.New("nil state"))
+	}
+	slot := st.Slot()
+	if slot == chainInfo.HeadSlot() {
 		return optimisticModeFetcher.IsOptimistic(ctx)
 	}
-	has, roots, err := database.BlockRootsBySlot(ctx, st.Slot())
+	has, roots, err := database.BlockRootsBySlot(ctx, slot)
 	if err != nil {
-		return true, errors.Wrapf(err, "could not get block roots for slot %d", st.Slot())
+		return true, errors.Wrapf(err, "could not get block roots for slot %d", slot)
 	}
 	if !has {
 		return true, lookup.NewBlockNotFoundError("no block roots returned from the database")
@@ -145,7 +149,14 @@ func isStateRootOptimistic(
 		if err != nil {
 			return true, errors.Wrapf(err, "could not obtain block")
 		}
-		if bytesutil.ToBytes32(stateId) != b.Block().StateRoot() {
+		if b == nil || b.IsNil() {
+			return true, errors.New("nil block")
+		}
+		block := b.Block()
+		if block == nil || block.IsNil() {
+			return true, errors.New("nil block")
+		}
+		if bytesutil.ToBytes32(stateId) != block.StateRoot() {
 			continue
 		}
 		return optimisticModeFetcher.IsOptimisticForRoot(ctx, r)
