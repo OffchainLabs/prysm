@@ -2821,10 +2821,8 @@ func testNewBlobVerifier() verification.NewBlobVerifier {
 	}
 }
 
-// TestGloasPayloadFromExecutionBlock_NotYetAvailable verifies that a block
-// returned with a zero Hash (the EL responded `null` to eth_getBlockByHash)
-// is reported via ErrExecutionBlockNotYetAvailable so the HTTP handler can
-// return 425 Too Early instead of a misleading 500.
+// A zero-Hash block (EL replied `null`) must surface as the sentinel so
+// the handler can return 425 instead of a 500 Header-decode error.
 func TestGloasPayloadFromExecutionBlock_NotYetAvailable(t *testing.T) {
 	requested := common.BytesToHash([]byte("not-yet-on-el"))
 	_, err := gloasPayloadFromExecutionBlock(requested, &pb.ExecutionBlock{})

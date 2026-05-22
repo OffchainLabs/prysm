@@ -112,10 +112,8 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 		Withdrawals []*withdrawalJSON `json:"withdrawals"`
 	}
 
-	// JSON-RPC servers return `null` as the result for an unknown block hash
-	// (eth_getBlockByHash spec). Short-circuit so callers can distinguish
-	// "not found" via a zero Hash instead of hitting Header.UnmarshalJSON's
-	// "missing required field 'parentHash'" gencodec error.
+	// `null` is the spec response for an unknown block; leave Hash zero so
+	// callers can tell "not found" apart from a decode error.
 	if bytes.Equal(bytes.TrimSpace(enc), []byte("null")) {
 		return nil
 	}

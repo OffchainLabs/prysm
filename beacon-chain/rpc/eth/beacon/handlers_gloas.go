@@ -55,10 +55,7 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 	}
 	full, err := s.ExecutionReconstructor.ReconstructExecutionPayloadEnvelope(ctx, blinded)
 	if err != nil {
-		// The EL may not yet have executed the payload that the CL has
-		// already gossipped a blinded envelope for. Surface this as 425 Too
-		// Early so callers (indexers, block explorers) retry rather than
-		// treat it as a permanent failure.
+		// EL is briefly behind the CL on payload execution: 425 so callers retry.
 		if errors.Is(err, execution.ErrExecutionBlockNotYetAvailable) {
 			w.Header().Set("Retry-After", "1")
 			httputil.HandleError(w, "execution payload not yet available on EL: "+err.Error(), http.StatusTooEarly)

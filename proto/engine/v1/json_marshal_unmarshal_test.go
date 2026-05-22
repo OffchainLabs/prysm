@@ -740,12 +740,8 @@ func TestExecutionBlock_MarshalUnmarshalJSON_MainnetBlock(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestExecutionBlock_UnmarshalJSON_Null verifies that a JSON-RPC `null` result
-// (returned by `eth_getBlockByHash` for an unknown block hash) is treated as
-// "not found" rather than failing with go-ethereum's gencodec error
-// `missing required field 'parentHash' for Header`. The Gloas envelope
-// reconstruction path relies on this to distinguish a race where the CL has a
-// blinded envelope but the EL has not yet executed the payload.
+// `null` from eth_getBlockByHash must decode to a zero block, not fail
+// Header's gencodec "missing required field 'parentHash'" check.
 func TestExecutionBlock_UnmarshalJSON_Null(t *testing.T) {
 	cases := []struct{ name, input string }{
 		{"null", "null"},

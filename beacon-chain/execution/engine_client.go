@@ -176,11 +176,8 @@ type EngineCaller interface {
 
 var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 
-// ErrExecutionBlockNotYetAvailable is returned when the execution client does
-// not yet have a block that the consensus client expects to be there. This is
-// a benign race that occurs when a blinded envelope has been gossiped to the
-// CL before the EL has executed the corresponding payload — callers should
-// treat it as "retry shortly", not as a hard failure.
+// ErrExecutionBlockNotYetAvailable signals a benign race: the CL has a
+// blinded envelope but the EL has not yet executed the payload. Retry.
 var ErrExecutionBlockNotYetAvailable = errors.New("execution block not yet available on EL")
 
 // NewPayload request calls the engine_newPayloadVX method via JSON-RPC.
@@ -816,9 +813,7 @@ func gloasPayloadFromExecutionBlock(
 	if blk == nil {
 		return nil, errors.New("execution block not found")
 	}
-	// A zero Hash means eth_getBlockByHash returned `null` for the requested
-	// hash — the EL has not yet executed this payload. See
-	// ErrExecutionBlockNotYetAvailable for the race this catches.
+	// Zero Hash = EL returned `null`, i.e. payload not yet executed.
 	if blk.Hash == (common.Hash{}) {
 		return nil, errors.Wrapf(ErrExecutionBlockNotYetAvailable, "hash %#x", requestedHash)
 	}
