@@ -162,7 +162,10 @@ func (s *Service) checkDoubleVotes(
 	existingAttWrappers := make(map[attestationInfo]*slashertypes.IndexedAttestationWrapper)
 
 	for _, incomingAttWrapper := range incomingAttWrappers {
-		targetEpoch := incomingAttWrapper.IndexedAttestation.GetData().Target.Epoch
+		_, targetEpoch, ok := attestationEpochs(incomingAttWrapper.IndexedAttestation)
+		if !ok {
+			continue
+		}
 
 		for _, validatorIndex := range incomingAttWrapper.IndexedAttestation.GetAttestingIndices() {
 			info := attestationInfo{
@@ -598,8 +601,10 @@ func (s *Service) applyAttestationForValidator(
 
 	var err error
 
-	sourceEpoch := attestation.IndexedAttestation.GetData().Source.Epoch
-	targetEpoch := attestation.IndexedAttestation.GetData().Target.Epoch
+	sourceEpoch, targetEpoch, ok := attestationEpochs(attestation.IndexedAttestation)
+	if !ok {
+		return nil, errors.New("attestation data is nil")
+	}
 
 	attestationDistance.Observe(float64(targetEpoch) - float64(sourceEpoch))
 	chunkIndex := s.params.chunkIndex(sourceEpoch)

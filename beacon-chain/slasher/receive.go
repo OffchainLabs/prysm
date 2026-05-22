@@ -33,7 +33,11 @@ func (s *Service) receiveAttestations(ctx context.Context, indexedAttsChan chan 
 			if !validateAttestationIntegrity(att) {
 				continue
 			}
-			dataRoot, err := att.GetData().HashTreeRoot()
+			data := att.GetData()
+			if data == nil {
+				continue
+			}
+			dataRoot, err := data.HashTreeRoot()
 			if err != nil {
 				log.WithError(err).Error("Could not get hash tree root of attestation")
 				continue
