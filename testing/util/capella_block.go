@@ -163,6 +163,9 @@ func GenerateFullBlockCapella(
 	}
 
 	newHeader := bState.LatestBlockHeader()
+	if newHeader == nil {
+		return nil, errors.New("nil latest block header")
+	}
 	prevStateRoot, err := bState.HashTreeRoot(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not hash state")

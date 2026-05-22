@@ -135,7 +135,12 @@ func runLightClientSingleMerkleProofTestBeaconState(t *testing.T, testFolderPath
 		require.NoError(t, err)
 		item = item32[:]
 	} else if strings.Contains(testName, "finality_root") {
-		item = beaconState.FinalizedCheckpoint().Root
+		finalizedCheckpoint := beaconState.FinalizedCheckpoint()
+		if finalizedCheckpoint == nil {
+			t.Fatal("finalized checkpoint is nil")
+			return
+		}
+		item = finalizedCheckpoint.Root
 	} else {
 		t.Fatalf("Unsupported test type BeaconState/%s", testName)
 	}
