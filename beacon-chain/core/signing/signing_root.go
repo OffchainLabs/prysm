@@ -56,6 +56,9 @@ const (
 
 // ComputeDomainAndSign computes the domain and signing root and sign it using the passed in private key.
 func ComputeDomainAndSign(st state.ReadOnlyBeaconState, epoch primitives.Epoch, obj fssz.HashRoot, domain [4]byte, key bls.SecretKey) ([]byte, error) {
+	if st == nil || st.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	return ComputeDomainAndSignWithoutState(st.Fork(), epoch, domain, st.GenesisValidatorsRoot(), obj, key)
 }
 
@@ -79,7 +82,14 @@ func ComputeDomainAndSignWithoutState(fork *ethpb.Fork, epoch primitives.Epoch, 
 	if err != nil {
 		return nil, err
 	}
-	return key.Sign(sr[:]).Marshal(), nil
+	if key == nil {
+		return nil, errors.New("secret key is nil")
+	}
+	sig := key.Sign(sr[:])
+	if sig == nil {
+		return nil, errors.New("signature is nil")
+	}
+	return sig.Marshal(), nil
 }
 
 // ComputeSigningRoot computes the root of the object by calculating the hash tree root of the signing data with the given domain.
@@ -95,12 +105,18 @@ func ComputeDomainAndSignWithoutState(fork *ethpb.Fork, epoch primitives.Epoch, 
 //	       domain=domain,
 //	   ))
 func ComputeSigningRoot(object fssz.HashRoot, domain []byte) ([32]byte, error) {
+	if object == nil {
+		return [32]byte{}, errors.New("object is nil")
+	}
 	return Data(object.HashTreeRoot, domain)
 }
 
 // Data computes the signing data by utilising the provided root function and then
 // returning the signing data of the container object.
 func Data(rootFunc func() ([32]byte, error), domain []byte) ([32]byte, error) {
+	if rootFunc == nil {
+		return [32]byte{}, errors.New("root function is nil")
+	}
 	objRoot, err := rootFunc()
 	if err != nil {
 		return [32]byte{}, err
@@ -120,9 +136,15 @@ func ComputeSigningRootForRoot(root [32]byte, domain []byte) ([32]byte, error) {
 
 // ComputeDomainVerifySigningRoot computes domain and verifies signing root of an object given the beacon state, validator index and signature.
 func ComputeDomainVerifySigningRoot(st state.ReadOnlyBeaconState, index primitives.ValidatorIndex, epoch primitives.Epoch, obj fssz.HashRoot, domain [4]byte, sig []byte) error {
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 	v, err := st.ValidatorAtIndex(index)
 	if err != nil {
 		return err
+	}
+	if v == nil {
+		return errors.New("validator is nil")
 	}
 	d, err := Domain(st.Fork(), epoch, domain, st.GenesisValidatorsRoot())
 	if err != nil {
@@ -137,9 +159,15 @@ func VerifySigningRoot(obj fssz.HashRoot, pub, signature, domain []byte) error {
 	if err != nil {
 		return errors.Wrap(err, "could not convert bytes to public key")
 	}
+	if publicKey == nil {
+		return errors.New("public key is nil")
+	}
 	sig, err := bls.SignatureFromBytes(signature)
 	if err != nil {
 		return errors.Wrap(err, "could not convert bytes to signature")
+	}
+	if sig == nil {
+		return errors.New("signature is nil")
 	}
 	root, err := ComputeSigningRoot(obj, domain)
 	if err != nil {
@@ -157,9 +185,18 @@ func VerifyBlockHeaderSigningRoot(blkHdr *ethpb.BeaconBlockHeader, pub, signatur
 	if err != nil {
 		return errors.Wrap(err, "could not convert bytes to public key")
 	}
+	if publicKey == nil {
+		return errors.New("public key is nil")
+	}
 	sig, err := bls.SignatureFromBytes(signature)
 	if err != nil {
 		return errors.Wrap(err, "could not convert bytes to signature")
+	}
+	if sig == nil {
+		return errors.New("signature is nil")
+	}
+	if blkHdr == nil {
+		return errors.New("block header is nil")
 	}
 	root, err := Data(blkHdr.HashTreeRoot, domain)
 	if err != nil {
@@ -177,14 +214,23 @@ func VerifyBlockSigningRoot(pub, signature, domain []byte, rootFunc func() ([32]
 	if err != nil {
 		return err
 	}
+	if set == nil || len(set.Signatures) == 0 || len(set.PublicKeys) == 0 || len(set.Messages) == 0 {
+		return errors.New("signature batch is nil or empty")
+	}
 	// We assume only one signature batch is returned here.
 	sig := set.Signatures[0]
 	publicKey := set.PublicKeys[0]
+	if publicKey == nil {
+		return errors.New("public key is nil")
+	}
 	root := set.Messages[0]
 
 	rSig, err := bls.SignatureFromBytes(sig)
 	if err != nil {
 		return err
+	}
+	if rSig == nil {
+		return errors.New("signature is nil")
 	}
 	if !rSig.Verify(publicKey, root[:]) {
 		return ErrSigFailedToVerify
@@ -198,6 +244,9 @@ func BlockSignatureBatch(pub, signature, domain []byte, rootFunc func() ([32]byt
 	publicKey, err := bls.PublicKeyFromBytes(pub)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert bytes to public key")
+	}
+	if publicKey == nil {
+		return nil, errors.New("public key is nil")
 	}
 	// utilize custom block hashing function
 	root, err := Data(rootFunc, domain)
