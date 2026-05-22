@@ -86,6 +86,9 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 	if protoUpdate == nil {
 		return pubsub.ValidationIgnore, errors.New("light client optimistic update is nil")
 	}
+	if msg == nil {
+		return pubsub.ValidationIgnore, errors.New("pubsub message is nil")
+	}
 	msg.ValidatorData = protoUpdate
 	return pubsub.ValidationAccept, nil
 }
@@ -159,6 +162,9 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 	protoUpdate := newUpdate.Proto()
 	if protoUpdate == nil {
 		return pubsub.ValidationIgnore, errors.New("light client finality update is nil")
+	}
+	if msg == nil {
+		return pubsub.ValidationIgnore, errors.New("pubsub message is nil")
 	}
 	msg.ValidatorData = protoUpdate
 	return pubsub.ValidationAccept, nil

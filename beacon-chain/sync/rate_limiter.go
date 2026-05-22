@@ -122,6 +122,9 @@ func (l *limiter) topicCollector(topic string) (*leakybucket.Collector, error) {
 
 // validates a request with the accompanying cost.
 func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
+	if stream == nil {
+		return errors.New("stream is nil")
+	}
 	l.RLock()
 	defer l.RUnlock()
 
@@ -148,6 +151,9 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 
 // This is used to validate all incoming rpc streams from external peers.
 func (l *limiter) validateRawRpcRequest(stream network.Stream, amt uint64) error {
+	if stream == nil {
+		return errors.New("stream is nil")
+	}
 	l.RLock()
 	defer l.RUnlock()
 
@@ -169,6 +175,9 @@ func (l *limiter) validateRawRpcRequest(stream network.Stream, amt uint64) error
 
 // adds the cost to our leaky bucket for the topic.
 func (l *limiter) add(stream network.Stream, amt int64) {
+	if stream == nil {
+		return
+	}
 	l.Lock()
 	defer l.Unlock()
 
@@ -186,6 +195,9 @@ func (l *limiter) add(stream network.Stream, amt int64) {
 
 // adds the cost to our leaky bucket for the peer.
 func (l *limiter) addRawStream(stream network.Stream) {
+	if stream == nil {
+		return
+	}
 	l.Lock()
 	defer l.Unlock()
 

@@ -237,6 +237,9 @@ func (s *Service) reValidatePeer(ctx context.Context, id peer.ID) error {
 // statusRPCHandler reads the incoming Status RPC from the peer and responds with our version of a status message.
 // This handler will disconnect any peer that does not match our fork version.
 func (s *Service) statusRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
+	if stream == nil {
+		return errors.New("stream is nil")
+	}
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
 	defer cancel()
 	SetRPCStreamDeadlines(stream)
@@ -284,9 +287,12 @@ func (s *Service) statusRPCHandler(ctx context.Context, msg any, stream libp2pco
 		resp, err := s.generateErrorResponse(respCode, err.Error())
 		if err != nil {
 			log.WithError(err).Debug("Could not generate a response error")
-		} else if _, err := stream.Write(resp); err != nil && !isUnwantedError(err) {
-			// The peer may already be ignoring us, as we disagree on fork version, so log this as debug only.
-			log.WithError(err).Debug("Could not write to stream")
+		} else {
+			_, err := stream.Write(resp)
+			if err != nil && !isUnwantedError(err) {
+				// The peer may already be ignoring us, as we disagree on fork version, so log this as debug only.
+				log.WithError(err).Debug("Could not write to stream")
+			}
 		}
 		closeStreamAndWait(stream, log)
 		if err := s.sendGoodByeAndDisconnect(ctx, p2ptypes.GoodbyeCodeGenericError, remotePeer); err != nil {

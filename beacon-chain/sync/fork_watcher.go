@@ -112,7 +112,9 @@ func (s *Service) ensureDeregistrationForEpoch(currentEpoch primitives.Epoch) er
 		topicsToRemove := removedRPCTopics(previousTopics, currentTopics)
 		for topic := range topicsToRemove {
 			fullTopic := topic + s.cfg.p2p.Encoding().ProtocolSuffix()
-			s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullTopic))
+			if host := s.cfg.p2p.Host(); host != nil {
+				host.RemoveStreamHandler(protocol.ID(fullTopic))
+			}
 			log.WithField("topic", fullTopic).Debug("Removed RPC handler")
 		}
 	}

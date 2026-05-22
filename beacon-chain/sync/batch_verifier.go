@@ -27,6 +27,9 @@ type kzgVerifier struct {
 // A routine that runs in the background to perform batch
 // verifications of incoming messages from gossip.
 func (s *Service) verifierRoutine() {
+	if s == nil || s.ctx == nil || s.cfg == nil {
+		return
+	}
 	verifierBatch := make([]*signatureVerifier, 0)
 	ticker := time.NewTicker(signatureVerificationInterval)
 	for {

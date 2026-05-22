@@ -19,6 +19,9 @@ import (
 // stream.
 // response_chunk  ::= <result> | <context-bytes> | <encoding-dependent-header> | <encoded-payload>
 func (s *Service) chunkBlockWriter(stream libp2pcore.Stream, blk interfaces.ReadOnlySignedBeaconBlock) error {
+	if stream == nil {
+		return errors.New("stream is nil")
+	}
 	SetStreamWriteDeadline(stream, defaultWriteDuration)
 	return WriteBlockChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), blk)
 }
@@ -26,6 +29,9 @@ func (s *Service) chunkBlockWriter(stream libp2pcore.Stream, blk interfaces.Read
 // WriteBlockChunk writes block chunk object to stream.
 // response_chunk  ::= <result> | <context-bytes> | <encoding-dependent-header> | <encoded-payload>
 func WriteBlockChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, blk interfaces.ReadOnlySignedBeaconBlock) error {
+	if stream == nil {
+		return errors.New("stream is nil")
+	}
 	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
 		return err
 	}

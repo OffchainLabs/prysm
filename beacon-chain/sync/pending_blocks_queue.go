@@ -56,6 +56,9 @@ func (s *Service) processPendingBlocksQueue() {
 
 // processPendingBlocks validates, processes, and broadcasts pending blocks.
 func (s *Service) processPendingBlocks(ctx context.Context) error {
+	if s == nil || s.cfg == nil {
+		return errors.New("sync service is nil")
+	}
 	ctx, span := prysmTrace.StartSpan(ctx, "processPendingBlocks")
 	defer span.End()
 
@@ -142,7 +145,11 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			if !isParentBlockInDB {
 				continue
 			}
-			if !s.cfg.chain.ParentPayloadReady(b.Block()) {
+			block := b.Block()
+			if block == nil || block.IsNil() {
+				continue
+			}
+			if !s.cfg.chain.ParentPayloadReady(block) {
 				go s.requestPayloadEnvelope(parentRoot)
 				continue
 			}
@@ -656,14 +663,20 @@ func (s *Service) deleteBlockFromPendingQueue(slot primitives.Slot, b interfaces
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return err
 	}
+	if b == nil || b.IsNil() {
+		return errors.New("pending block is nil")
+	}
+	bPb, err := b.Proto()
+	if err != nil {
+		return err
+	}
 
 	newBlks := make([]interfaces.ReadOnlySignedBeaconBlock, 0, len(blks))
 	for _, blk := range blks {
-		blkPb, err := blk.Proto()
-		if err != nil {
-			return err
+		if blk == nil || blk.IsNil() {
+			continue
 		}
-		bPb, err := b.Proto()
+		blkPb, err := blk.Proto()
 		if err != nil {
 			return err
 		}
@@ -690,6 +703,9 @@ func (s *Service) deleteBlockFromPendingQueue(slot primitives.Slot, b interfaces
 // This method manually clears our cache so that all expired
 // entries are correctly removed.
 func (s *Service) deleteExpiredBlocksFromCache() {
+	if s == nil || s.slotToPendingBlocks == nil {
+		return
+	}
 	s.pendingQueueLock.Lock()
 	defer s.pendingQueueLock.Unlock()
 
@@ -699,6 +715,9 @@ func (s *Service) deleteExpiredBlocksFromCache() {
 // Insert block to the list in the pending queue using the slot as key.
 // Note: this helper is not thread safe.
 func (s *Service) insertBlockToPendingQueue(_ primitives.Slot, b interfaces.ReadOnlySignedBeaconBlock, r [32]byte) error {
+	if s == nil || s.seenPendingBlocks == nil {
+		return errors.New("pending block service is nil")
+	}
 	mutexasserts.AssertRWMutexLocked(&s.pendingQueueLock)
 
 	if s.seenPendingBlocks[r] {
@@ -715,6 +734,9 @@ func (s *Service) insertBlockToPendingQueue(_ primitives.Slot, b interfaces.Read
 
 // This returns signed beacon blocks given input key from slotToPendingBlocks.
 func (s *Service) pendingBlocksInCache(slot primitives.Slot) []interfaces.ReadOnlySignedBeaconBlock {
+	if s == nil || s.slotToPendingBlocks == nil {
+		return []interfaces.ReadOnlySignedBeaconBlock{}
+	}
 	k := slotToCacheKey(slot)
 	value, ok := s.slotToPendingBlocks.Get(k)
 	if !ok {
@@ -732,15 +754,22 @@ func (s *Service) addPendingBlockToCache(b interfaces.ReadOnlySignedBeaconBlock)
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return err
 	}
+	if b == nil || b.IsNil() {
+		return errors.New("pending block is nil")
+	}
+	block := b.Block()
+	if block == nil || block.IsNil() {
+		return errors.New("pending block is nil")
+	}
 
-	blks := s.pendingBlocksInCache(b.Block().Slot())
+	blks := s.pendingBlocksInCache(block.Slot())
 
 	if len(blks) >= maxBlocksPerSlot {
 		return nil
 	}
 
 	blks = append(blks, b)
-	k := slotToCacheKey(b.Block().Slot())
+	k := slotToCacheKey(block.Slot())
 	s.slotToPendingBlocks.Set(k, blks, pendingBlockExpTime)
 	return nil
 }
