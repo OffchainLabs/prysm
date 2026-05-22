@@ -85,6 +85,10 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 		s.headLock.RUnlock()
 		return errors.Wrap(err, "could not get old head block")
 	}
+	if oldHeadBlock == nil || oldHeadBlock.IsNil() {
+		s.headLock.RUnlock()
+		return blocks.ErrNilSignedBeaconBlock
+	}
 	oldStateRoot := oldHeadBlock.Block().StateRoot()
 	s.headLock.RUnlock()
 	headSlot := s.HeadSlot()
@@ -199,6 +203,12 @@ func (s *Service) saveHeadNoDB(ctx context.Context, b interfaces.ReadOnlySignedB
 	if err != nil {
 		return err
 	}
+	if err := blocks.BeaconBlockIsNil(bCp); err != nil {
+		return err
+	}
+	if bCp == nil || bCp.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
+	}
 	if err := s.setHeadInitialSync(r, bCp, hs, optimistic); err != nil {
 		return errors.Wrap(err, "could not set head")
 	}
@@ -214,6 +224,12 @@ func (s *Service) setHead(newHead *head) error {
 	bCp, err := newHead.block.Copy()
 	if err != nil {
 		return err
+	}
+	if err := blocks.BeaconBlockIsNil(bCp); err != nil {
+		return err
+	}
+	if bCp == nil || bCp.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
 	}
 	s.head = &head{
 		root:       newHead.root,
@@ -234,9 +250,21 @@ func (s *Service) setHeadInitialSync(root [32]byte, block interfaces.ReadOnlySig
 	defer s.headLock.Unlock()
 
 	// This does a full copy of the block only.
+	if block == nil || block.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
+	}
+	if err := blocks.BeaconBlockIsNil(block); err != nil {
+		return err
+	}
 	bCp, err := block.Copy()
 	if err != nil {
 		return err
+	}
+	if err := blocks.BeaconBlockIsNil(bCp); err != nil {
+		return err
+	}
+	if bCp == nil || bCp.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
 	}
 	s.head = &head{
 		root:       root,
@@ -271,7 +299,23 @@ func (s *Service) headRoot() [32]byte {
 // It does a full copy on head block for immutability.
 // This is a lock free version.
 func (s *Service) headBlock() (interfaces.ReadOnlySignedBeaconBlock, error) {
-	return s.head.block.Copy()
+	if s.head == nil {
+		return nil, ErrNilHead
+	}
+	if err := blocks.BeaconBlockIsNil(s.head.block); err != nil {
+		return nil, err
+	}
+	bCp, err := s.head.block.Copy()
+	if err != nil {
+		return nil, err
+	}
+	if err := blocks.BeaconBlockIsNil(bCp); err != nil {
+		return nil, err
+	}
+	if bCp == nil || bCp.IsNil() {
+		return nil, blocks.ErrNilSignedBeaconBlock
+	}
+	return bCp, nil
 }
 
 // This returns the head state.
@@ -403,8 +447,12 @@ func (s *Service) saveOrphanedOperations(ctx context.Context, orphanedRoot [32]b
 			break
 		}
 		for _, a := range orphanedBlk.Block().Body().Attestations() {
+			data := a.GetData()
+			if data == nil {
+				continue
+			}
 			// if the attestation is one epoch older, it wouldn't been useful to save it.
-			if a.GetData().Slot+params.BeaconConfig().SlotsPerEpoch < s.CurrentSlot() {
+			if data.Slot+params.BeaconConfig().SlotsPerEpoch < s.CurrentSlot() {
 				continue
 			}
 			if features.Get().EnableExperimentalAttestationPool {
