@@ -1011,6 +1011,9 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 			}
 		}
 	}
+	if parentState == nil || parentState.IsNil() {
+		return errors.New("nil parent state")
+	}
 	blockRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
 		return errors.Wrap(err, "could not hash block")
