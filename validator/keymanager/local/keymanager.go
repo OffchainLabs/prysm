@@ -160,6 +160,9 @@ func (_ *Keymanager) ValidatingAccountNames() ([]string, error) {
 func (km *Keymanager) initializeKeysCachesFromKeystore() error {
 	lock.Lock()
 	defer lock.Unlock()
+	if km.accountsStore == nil {
+		return errors.New("accounts store is nil")
+	}
 	count := len(km.accountsStore.PrivateKeys)
 	orderedPublicKeys = make([][fieldparams.BLSPubkeyLength]byte, count)
 	secretKeysCache = make(map[[fieldparams.BLSPubkeyLength]byte]bls.SecretKey, count)

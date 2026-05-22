@@ -38,6 +38,9 @@ func (km *Keymanager) ImportKeystores(
 	statuses := make([]*keymanager.KeyStatus, len(keystores))
 	var err error
 	// 1) Copy the in memory keystore
+	if km.accountsStore == nil {
+		km.accountsStore = &accountStore{}
+	}
 	storeCopy := km.accountsStore.Copy()
 	importedKeys := make([][]byte, 0)
 	existingPubKeys := make(map[string]bool)
