@@ -388,6 +388,10 @@ func benchmarkHash(sszPath string, sszType string) {
 		if err != nil {
 			log.Fatal(err)
 		}
+		if stateTrieState == nil || stateTrieState.IsNil() {
+			log.Fatal("Nil state")
+			return
+		}
 		start := time.Now()
 		stat := &runtime.MemStats{}
 		runtime.ReadMemStats(stat)
