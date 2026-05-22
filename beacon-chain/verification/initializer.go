@@ -69,6 +69,9 @@ type Initializer struct {
 
 // NewBlobVerifier creates a BlobVerifier for a single blob, with the given set of requirements.
 func (ini *Initializer) NewBlobVerifier(b blocks.ROBlob, reqs []Requirement) *ROBlobVerifier {
+	if ini == nil {
+		return &ROBlobVerifier{results: newResults(reqs...)}
+	}
 	return &ROBlobVerifier{
 		sharedResources:      ini.shared,
 		blob:                 b,
@@ -80,6 +83,9 @@ func (ini *Initializer) NewBlobVerifier(b blocks.ROBlob, reqs []Requirement) *RO
 // NewDataColumnsVerifier creates a DataColumnVerifier for a slice of data columns, with the given set of requirements.
 // WARNING: The returned verifier is not thread-safe, and should not be used concurrently.
 func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColumn, reqs []Requirement) *RODataColumnsVerifier {
+	if ini == nil {
+		return &RODataColumnsVerifier{results: newResults(reqs...), stateByRoot: make(map[[fieldparams.RootLength]byte]state.BeaconState)}
+	}
 	return &RODataColumnsVerifier{
 		sharedResources:             ini.shared,
 		dataColumns:                 roDataColumns,

@@ -129,6 +129,9 @@ func (v *PayloadAttMsgVerifier) SatisfyRequirement(req Requirement) {
 
 // ValidatePayloadAttestationMessageSignature verifies the signature of a payload attestation message.
 func validatePayloadAttestationMessageSignature(st state.ReadOnlyBeaconState, payloadAtt payloadattestation.ROMessage) error {
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 	val, err := st.ValidatorAtIndex(payloadAtt.ValidatorIndex())
 	if err != nil {
 		return fmt.Errorf("validator %d: %w", payloadAtt.ValidatorIndex(), err)

@@ -125,6 +125,9 @@ func (v *EnvelopeVerifier) VerifySlotMatchesBlock(blockSlot primitives.Slot) (er
 // VerifyBuilderValid checks that the builder index matches the one in the bid.
 func (v *EnvelopeVerifier) VerifyBuilderValid(bid interfaces.ROExecutionPayloadBid) (err error) {
 	defer v.record(RequireBuilderValid, &err)
+	if bid == nil || bid.IsNil() {
+		return errors.New("bid is nil")
+	}
 	env, err := v.e.Envelope()
 	if err != nil {
 		return errors.Wrap(err, "failed to get envelope")
@@ -138,6 +141,9 @@ func (v *EnvelopeVerifier) VerifyBuilderValid(bid interfaces.ROExecutionPayloadB
 // VerifyPayloadHash checks that the payload blockhash matches the one in the bid.
 func (v *EnvelopeVerifier) VerifyPayloadHash(bid interfaces.ROExecutionPayloadBid) (err error) {
 	defer v.record(RequirePayloadHashValid, &err)
+	if bid == nil || bid.IsNil() {
+		return errors.New("bid is nil")
+	}
 	env, err := v.e.Envelope()
 	if err != nil {
 		return errors.Wrap(err, "failed to get envelope")
@@ -201,6 +207,9 @@ func (v *EnvelopeVerifier) record(req Requirement, err *error) {
 
 // validatePayloadEnvelopeSignature verifies the signature of a signed execution payload envelope
 func validatePayloadEnvelopeSignature(st state.ReadOnlyBeaconState, e interfaces.ROSignedExecutionPayloadEnvelope) error {
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 	env, err := e.Envelope()
 	if err != nil {
 		return errors.Wrap(err, "failed to get envelope")
