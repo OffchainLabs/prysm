@@ -236,6 +236,7 @@ func TestPayloadAttestationData(t *testing.T) {
 			Root:               root,
 			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
 			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
 		}
 		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
 
