@@ -16,6 +16,9 @@ var stateDefragmentationTime = promauto.NewSummary(prometheus.SummaryOpts{
 // a higher number of fragmented indexes are reallocated to a new separate slice for
 // that field.
 func (s *Service) defragmentState(st state.BeaconState) {
+	if st == nil || st.IsNil() {
+		return
+	}
 	startTime := time.Now()
 	st.Defragment()
 	elapsedTime := time.Since(startTime)
