@@ -371,6 +371,9 @@ func (p *BeaconDbBlocker) BlobSidecars(ctx context.Context, id string, opts ...o
 	if rpcErr != nil {
 		return nil, rpcErr
 	}
+	if bctx == nil {
+		return nil, &core.RpcError{Err: errors.New("could not resolve blob context"), Reason: core.Internal}
+	}
 
 	// If there are no commitments return 200 w/ empty list
 	if len(bctx.commitments) == 0 {
@@ -399,6 +402,9 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 	bctx, rpcErr := p.resolveBlobsContext(ctx, id, opts...)
 	if rpcErr != nil {
 		return nil, rpcErr
+	}
+	if bctx == nil {
+		return nil, &core.RpcError{Err: errors.New("could not resolve blob context"), Reason: core.Internal}
 	}
 
 	// If there are no commitments return 200 w/ empty list
