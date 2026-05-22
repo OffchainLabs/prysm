@@ -80,6 +80,9 @@ func ProcessDeposits(
 //	  signature=deposit.data.signature,
 //	 )
 func ProcessDeposit(beaconState state.BeaconState, deposit *ethpb.Deposit, allSignaturesVerified bool) (state.BeaconState, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	if err := helpers.VerifyDeposit(beaconState, deposit); err != nil {
 		if deposit == nil || deposit.Data == nil {
 			return nil, err
@@ -292,9 +295,12 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 		return err
 	}
 	if pendingDeposits == nil {
-		return errors.New("pending deposits are nil")
+		pendingDeposits = make([]*ethpb.PendingDeposit, 0)
 	}
 	for _, pendingDeposit := range pendingDeposits {
+		if pendingDeposit == nil {
+			return errors.New("pending deposit is nil")
+		}
 		// Do not process pendingDeposit requests if Eth1 bridge deposits are not yet applied.
 		if pendingDeposit.Slot > params.BeaconConfig().GenesisSlot && st.Eth1DepositIndex() < startIndex {
 			break
@@ -440,6 +446,9 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 func ApplyPendingDeposit(ctx context.Context, st state.BeaconState, deposit *ethpb.PendingDeposit) error {
 	_, span := trace.StartSpan(ctx, "electra.ApplyPendingDeposit")
 	defer span.End()
+	if deposit == nil {
+		return errors.New("deposit is nil")
+	}
 	index, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(deposit.PublicKey))
 	if !ok {
 		verified, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{

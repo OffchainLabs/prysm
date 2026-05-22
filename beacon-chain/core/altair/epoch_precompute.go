@@ -96,6 +96,9 @@ func ProcessInactivityScores(
 ) (state.BeaconState, []*precompute.Validator, error) {
 	_, span := trace.StartSpan(ctx, "altair.ProcessInactivityScores")
 	defer span.End()
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, nil, errors.New("beacon state is nil")
+	}
 
 	cfg := params.BeaconConfig()
 	if time.CurrentEpoch(beaconState) == cfg.GenesisEpoch {
@@ -169,18 +172,18 @@ func ProcessEpochParticipation(
 	_, span := trace.StartSpan(ctx, "altair.ProcessEpochParticipation")
 	defer span.End()
 	if beaconState == nil || beaconState.IsNil() {
-		return nil, nil, errors.New("beacon state is nil")
+		return vals, &precompute.Balance{}, errors.New("beacon state is nil")
 	}
 	if bal == nil {
-		return nil, nil, errors.New("precomputed balance is nil")
+		return vals, &precompute.Balance{}, errors.New("precomputed balance is nil")
 	}
 	if vals == nil {
-		return nil, nil, errors.New("precomputed validators are nil")
+		return []*precompute.Validator{}, bal, errors.New("precomputed validators are nil")
 	}
 
 	cp, err := beaconState.CurrentEpochParticipation()
 	if err != nil {
-		return nil, nil, err
+		return vals, bal, err
 	}
 	cfg := params.BeaconConfig()
 	targetIdx := cfg.TimelyTargetFlagIndex
@@ -188,18 +191,18 @@ func ProcessEpochParticipation(
 	headIdx := cfg.TimelyHeadFlagIndex
 	for i, b := range cp {
 		if i >= len(vals) || vals[i] == nil {
-			return nil, nil, errors.New("precomputed validator is nil")
+			return vals, bal, errors.New("precomputed validator is nil")
 		}
 		has, err := HasValidatorFlag(b, sourceIdx)
 		if err != nil {
-			return nil, nil, err
+			return vals, bal, err
 		}
 		if has && vals[i].IsActiveCurrentEpoch {
 			vals[i].IsCurrentEpochAttester = true
 		}
 		has, err = HasValidatorFlag(b, targetIdx)
 		if err != nil {
-			return nil, nil, err
+			return vals, bal, err
 		}
 		if has && vals[i].IsActiveCurrentEpoch {
 			vals[i].IsCurrentEpochAttester = true
@@ -208,15 +211,15 @@ func ProcessEpochParticipation(
 	}
 	pp, err := beaconState.PreviousEpochParticipation()
 	if err != nil {
-		return nil, nil, err
+		return vals, bal, err
 	}
 	for i, b := range pp {
 		if i >= len(vals) || vals[i] == nil {
-			return nil, nil, errors.New("precomputed validator is nil")
+			return vals, bal, errors.New("precomputed validator is nil")
 		}
 		has, err := HasValidatorFlag(b, sourceIdx)
 		if err != nil {
-			return nil, nil, err
+			return vals, bal, err
 		}
 		if has && vals[i].IsActivePrevEpoch {
 			vals[i].IsPrevEpochAttester = true
@@ -224,7 +227,7 @@ func ProcessEpochParticipation(
 		}
 		has, err = HasValidatorFlag(b, targetIdx)
 		if err != nil {
-			return nil, nil, err
+			return vals, bal, err
 		}
 		if has && vals[i].IsActivePrevEpoch {
 			vals[i].IsPrevEpochAttester = true
@@ -232,7 +235,7 @@ func ProcessEpochParticipation(
 		}
 		has, err = HasValidatorFlag(b, headIdx)
 		if err != nil {
-			return nil, nil, err
+			return vals, bal, err
 		}
 		if has && vals[i].IsActivePrevEpoch {
 			vals[i].IsPrevEpochHeadAttester = true
@@ -249,6 +252,12 @@ func ProcessRewardsAndPenaltiesPrecompute(
 	bal *precompute.Balance,
 	vals []*precompute.Validator,
 ) (state.BeaconState, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
+	if bal == nil {
+		return nil, errors.New("precomputed balance is nil")
+	}
 	// Don't process rewards and penalties in genesis epoch.
 	cfg := params.BeaconConfig()
 	if time.CurrentEpoch(beaconState) == cfg.GenesisEpoch {
@@ -292,6 +301,12 @@ func ProcessRewardsAndPenaltiesPrecompute(
 // AttestationsDelta computes and returns the rewards and penalties differences for individual validators based on the
 // voting records.
 func AttestationsDelta(beaconState state.BeaconState, bal *precompute.Balance, vals []*precompute.Validator) ([]*AttDelta, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
+	if bal == nil {
+		return nil, errors.New("precomputed balance is nil")
+	}
 	attDeltas := make([]*AttDelta, len(vals))
 
 	cfg := params.BeaconConfig()

@@ -37,6 +37,9 @@ import (
 //	        if is_eligible_for_activation(state, validator):
 //	            validator.activation_epoch = activation_epoch
 func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 	currentEpoch := time.CurrentEpoch(st)
 	ejectionBal := params.BeaconConfig().EjectionBalance
 	activationEpoch := helpers.ActivationExitEpoch(currentEpoch)

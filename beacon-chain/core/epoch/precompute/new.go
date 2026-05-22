@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/pkg/errors"
 )
 
 // New gets called at the beginning of process epoch cycle to return
@@ -19,6 +20,9 @@ import (
 func New(ctx context.Context, s state.BeaconState) ([]*Validator, *Balance, error) {
 	_, span := trace.StartSpan(ctx, "precomputeEpoch.New")
 	defer span.End()
+	if s == nil || s.IsNil() {
+		return []*Validator{}, &Balance{}, errors.New("state is nil")
+	}
 
 	pValidators := make([]*Validator, s.NumValidators())
 	pBal := &Balance{}

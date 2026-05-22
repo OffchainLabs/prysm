@@ -149,6 +149,9 @@ func UpgradeToAltair(ctx context.Context, state state.BeaconState) (state.Beacon
 //	        for flag_index in participation_flag_indices:
 //	            epoch_participation[index] = add_flag(epoch_participation[index], flag_index)
 func TranslateParticipation(ctx context.Context, state state.BeaconState, atts []*ethpb.PendingAttestation) (state.BeaconState, error) {
+	if state == nil || state.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	epochParticipation, err := state.PreviousEpochParticipation()
 	if err != nil {
 		return nil, err

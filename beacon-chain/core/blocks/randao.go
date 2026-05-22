@@ -32,10 +32,23 @@ func ProcessRandao(
 	beaconState state.BeaconState,
 	b interfaces.ReadOnlySignedBeaconBlock,
 ) (state.BeaconState, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
+	if b == nil || b.IsNil() {
+		return nil, blocks.ErrNilSignedBeaconBlock
+	}
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return nil, err
 	}
-	body := b.Block().Body()
+	blk := b.Block()
+	if blk == nil || blk.IsNil() {
+		return nil, blocks.ErrNilBeaconBlock
+	}
+	body := blk.Body()
+	if body == nil || body.IsNil() {
+		return nil, errors.New("beacon block body is nil")
+	}
 	buf, proposerPub, domain, err := randaoSigningData(ctx, beaconState)
 	if err != nil {
 		return nil, err
@@ -67,6 +80,9 @@ func ProcessRandaoNoVerify(
 	beaconState state.BeaconState,
 	randaoReveal []byte,
 ) (state.BeaconState, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	currentEpoch := slots.ToEpoch(beaconState.Slot())
 	// If block randao passed verification, we XOR the state's latest randao mix with the block's
 	// randao and update the state's corresponding latest randao mix value.

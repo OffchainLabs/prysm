@@ -61,6 +61,9 @@ func AreEth1DataEqual(a, b *ethpb.Eth1Data) bool {
 // appends eth1data to the state in the Eth1DataVotes list. Iterating through this list checks the
 // votes to see if they match the eth1data.
 func Eth1DataHasEnoughSupport(beaconState state.ReadOnlyBeaconState, data *ethpb.Eth1Data) (bool, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return false, errors.New("beacon state is nil")
+	}
 	voteCount := uint64(0)
 
 	for _, vote := range beaconState.Eth1DataVotes() {

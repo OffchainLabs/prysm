@@ -45,22 +45,32 @@ func ProcessBlockHeader(
 	beaconState state.BeaconState,
 	block interfaces.ReadOnlySignedBeaconBlock,
 ) (state.BeaconState, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, fmt.Errorf("beacon state is nil")
+	}
+	if block == nil || block.IsNil() {
+		return nil, blocks.ErrNilSignedBeaconBlock
+	}
 	if err := blocks.BeaconBlockIsNil(block); err != nil {
 		return nil, err
 	}
-	bodyRoot, err := block.Block().Body().HashTreeRoot()
+	blk := block.Block()
+	if blk == nil || blk.IsNil() {
+		return nil, blocks.ErrNilBeaconBlock
+	}
+	bodyRoot, err := blk.Body().HashTreeRoot()
 	if err != nil {
 		return nil, err
 	}
-	parentRoot := block.Block().ParentRoot()
-	beaconState, err = ProcessBlockHeaderNoVerify(ctx, beaconState, block.Block().Slot(), block.Block().ProposerIndex(), parentRoot[:], bodyRoot[:])
+	parentRoot := blk.ParentRoot()
+	beaconState, err = ProcessBlockHeaderNoVerify(ctx, beaconState, blk.Slot(), blk.ProposerIndex(), parentRoot[:], bodyRoot[:])
 	if err != nil {
 		return nil, err
 	}
 
 	// Verify proposer signature.
 	sig := block.Signature()
-	if err := VerifyBlockSignature(beaconState, block.Block().ProposerIndex(), sig[:], block.Block().HashTreeRoot); err != nil {
+	if err := VerifyBlockSignature(beaconState, blk.ProposerIndex(), sig[:], blk.HashTreeRoot); err != nil {
 		return nil, err
 	}
 
@@ -105,6 +115,9 @@ func ProcessBlockHeaderNoVerify(
 	ctx, span := trace.StartSpan(ctx, "blocks.ProcessBlockHeaderNoVerify")
 	defer span.End()
 
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, fmt.Errorf("beacon state is nil")
+	}
 	if beaconState.Slot() != slot {
 		return nil, fmt.Errorf("state slot: %d is different than block slot: %d", beaconState.Slot(), slot)
 	}

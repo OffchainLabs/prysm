@@ -117,6 +117,9 @@ func PreminedGenesisBeaconState(ctx context.Context, deposits []*ethpb.Deposit, 
 // OptimizedGenesisBeaconState is used to create a state that has already processed deposits. This is to efficiently
 // create a mainnet state at chainstart.
 func OptimizedGenesisBeaconState(genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data) (state.BeaconState, error) {
+	if preState == nil || preState.IsNil() {
+		return nil, errors.New("pre-state is nil")
+	}
 	if eth1Data == nil {
 		return nil, errors.New("no eth1data provided for genesis state")
 	}

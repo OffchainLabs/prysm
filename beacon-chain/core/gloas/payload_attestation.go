@@ -48,6 +48,12 @@ func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body 
 	_, span := trace.StartSpan(ctx, "gloas.ProcessPayloadAttestations")
 	defer span.End()
 
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
+	if body == nil || body.IsNil() {
+		return errors.New("block body is nil")
+	}
 	atts, err := body.PayloadAttestations()
 	if err != nil {
 		return errors.Wrap(err, "failed to get payload attestations from block body")
@@ -55,13 +61,19 @@ func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body 
 
 	span.SetAttributes(trace.Int64Attribute("count", int64(len(atts))))
 
-	if len(atts) == 0 {
+	if atts == nil || len(atts) == 0 {
 		return nil
 	}
 
 	header := st.LatestBlockHeader()
+	if header == nil {
+		return errors.New("latest block header is nil")
+	}
 
 	for i, att := range atts {
+		if att == nil || att.Data == nil {
+			return fmt.Errorf("payload attestation %d is nil", i)
+		}
 		data := att.Data
 		if !bytes.Equal(data.BeaconBlockRoot, header.ParentRoot) {
 			return fmt.Errorf("payload attestation %d has wrong parent: got %x want %x", i, data.BeaconBlockRoot, header.ParentRoot)
@@ -276,6 +288,44 @@ func selectByBalanceFill(
 	}
 
 	return selected, i, nil
+}
+
+// acceptByBalance determines if a validator is accepted based on its effective balance.
+//
+//	<spec fn="compute_balance_weighted_acceptance" fork="gloas" hash="9954dcd0">
+//	def compute_balance_weighted_acceptance(
+//	    state: BeaconState, index: ValidatorIndex, seed: Bytes32, i: uint64
+//	) -> bool:
+//	    """
+//	    Return whether to accept the selection of the validator ``index``, with probability
+//	    proportional to its ``effective_balance``, and randomness given by ``seed`` and ``i``.
+//	    """
+//	    MAX_RANDOM_VALUE = 2**16 - 1
+//	    random_bytes = hash(seed + uint_to_bytes(i // 16))
+//	    offset = i % 16 * 2
+//	    random_value = bytes_to_uint64(random_bytes[offset : offset + 2])
+//	    effective_balance = state.validators[index].effective_balance
+//	    return effective_balance * MAX_RANDOM_VALUE >= MAX_EFFECTIVE_BALANCE_ELECTRA * random_value
+//	</spec>
+func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex, seedBuf *[40]byte, hashFunc func([]byte) [32]byte, maxBalance uint64, round uint64) (bool, error) {
+	if st == nil || st.IsNil() {
+		return false, errors.New("state is nil")
+	}
+	if seedBuf == nil {
+		return false, errors.New("nil seed buffer")
+	}
+	// Reuse the seed buffer by overwriting the last 8 bytes with the round counter.
+	binary.LittleEndian.PutUint64(seedBuf[32:], round/16)
+	random := hashFunc(seedBuf[:])
+	offset := (round % 16) * 2
+	randomValue := uint64(binary.LittleEndian.Uint16(random[offset : offset+2])) // 16-bit draw per spec
+
+	val, err := st.ValidatorAtIndexReadOnly(idx)
+	if err != nil {
+		return false, errors.Wrapf(err, "validator %d", idx)
+	}
+
+	return val.EffectiveBalance()*fieldparams.MaxRandomValueElectra >= maxBalance*randomValue, nil
 }
 
 // validIndexedPayloadAttestation verifies the signature of an indexed payload attestation.

@@ -286,6 +286,9 @@ type CommitteeAssignment struct {
 // It checks if the epoch is not greater than the next epoch, and if the start slot of the epoch is greater
 // than or equal to the minimum valid start slot calculated based on the state's current slot and historical roots.
 func VerifyAssignmentEpoch(epoch primitives.Epoch, state state.BeaconState) error {
+	if state == nil || state.IsNil() {
+		return errors.New("state is nil")
+	}
 	nextEpoch := time.NextEpoch(state)
 	if epoch > nextEpoch {
 		return fmt.Errorf("epoch %d can't be greater than next epoch %d", epoch, nextEpoch)
@@ -461,6 +464,9 @@ func VerifyBitfieldLength(bf bitfield.Bitfield, committeeSize uint64) error {
 // ShuffledIndices uses input beacon state and returns the shuffled indices of the input epoch,
 // the shuffled indices then can be used to break up into committees.
 func ShuffledIndices(s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]primitives.ValidatorIndex, error) {
+	if s == nil || s.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	seed, err := Seed(s, epoch, params.BeaconConfig().DomainBeaconAttester)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not get seed for epoch %d", epoch)
@@ -584,6 +590,9 @@ func UpdateProposerIndicesInCache(ctx context.Context, state state.ReadOnlyBeaco
 
 // UpdateCachedCheckpointToStateRoot updates the map from checkpoints to state root in the proposer indices cache
 func UpdateCachedCheckpointToStateRoot(state state.ReadOnlyBeaconState, cp *forkchoicetypes.Checkpoint) error {
+	if state == nil || state.IsNil() {
+		return errors.New("nil state")
+	}
 	if cp.Epoch <= params.BeaconConfig().GenesisEpoch+params.BeaconConfig().MinSeedLookahead {
 		return nil
 	}
@@ -654,6 +663,9 @@ func ComputeCommittee(
 	shuffledList, err := UnshuffleList(shuffledIndices, seed)
 	if err != nil {
 		return nil, err
+	}
+	if shuffledList == nil {
+		return nil, errors.New("shuffled list is nil")
 	}
 
 	return shuffledList[start:end], nil

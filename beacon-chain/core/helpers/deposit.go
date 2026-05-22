@@ -19,6 +19,9 @@ import (
 
 // ActivateValidatorWithEffectiveBalance updates validator's effective balance, and if it's above MaxEffectiveBalance, validator becomes active in genesis.
 func ActivateValidatorWithEffectiveBalance(beaconState state.BeaconState, deposits []*ethpb.Deposit) (state.BeaconState, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	for _, d := range deposits {
 		pubkey := d.Data.PublicKey
 		index, ok := beaconState.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubkey))
@@ -157,6 +160,9 @@ func IsValidDepositSignature(data *ethpb.Deposit_Data) (bool, error) {
 
 // VerifyDeposit verifies the deposit data and signature given the beacon state and deposit information
 func VerifyDeposit(beaconState state.ReadOnlyBeaconState, deposit *ethpb.Deposit) error {
+	if beaconState == nil || beaconState.IsNil() {
+		return errors.New("beacon state is nil")
+	}
 	// Verify Merkle proof of deposit and deposit trie root.
 	if deposit == nil || deposit.Data == nil {
 		return errors.New("received nil deposit or nil deposit data")

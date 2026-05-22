@@ -30,6 +30,9 @@ func ProcessAttestationsNoVerifySignature(
 	ctx, span := trace.StartSpan(ctx, "altair.ProcessAttestationsNoVerifySignature")
 	defer span.End()
 
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	if b == nil || b.IsNil() {
 		return nil, consensusblocks.ErrNilBeaconBlock
 	}

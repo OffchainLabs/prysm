@@ -55,6 +55,9 @@ func UnrealizedCheckpoints(st state.BeaconState) (*ethpb.Checkpoint, *ethpb.Chec
 //	  current_target_balance = get_attesting_balance(state, current_attestations)
 //	  weigh_justification_and_finalization(state, total_active_balance, previous_target_balance, current_target_balance)
 func ProcessJustificationAndFinalizationPreCompute(state state.BeaconState, pBal *Balance) (state.BeaconState, error) {
+	if state == nil || state.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	canProcessSlot, err := slots.EpochStart(2 /*epoch*/)
 	if err != nil {
 		return nil, err

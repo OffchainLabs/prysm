@@ -32,6 +32,9 @@ var ErrValidatorAlreadyExited = errors.New("validator already exited")
 // ExitInformation returns information about validator exits.
 func ExitInformation(s state.BeaconState) *ExitInfo {
 	exitInfo := &ExitInfo{}
+	if s == nil || s.IsNil() {
+		return exitInfo
+	}
 
 	farFutureEpoch := params.BeaconConfig().FarFutureEpoch
 	currentEpoch := slots.ToEpoch(s.Slot())

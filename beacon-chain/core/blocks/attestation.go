@@ -56,6 +56,9 @@ func VerifyAttestationNoVerifySignature(
 ) error {
 	ctx, span := trace.StartSpan(ctx, "core.VerifyAttestationNoVerifySignature")
 	defer span.End()
+	if beaconState == nil || beaconState.IsNil() {
+		return errors.New("beacon state is nil")
+	}
 
 	if err := helpers.ValidateNilAttestation(att); err != nil {
 		return err
@@ -210,6 +213,9 @@ func ProcessAttestationNoVerifySignature(
 ) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "core.ProcessAttestationNoVerifySignature")
 	defer span.End()
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 
 	if err := VerifyAttestationNoVerifySignature(ctx, beaconState, att); err != nil {
 		return nil, err
@@ -265,6 +271,9 @@ func ProcessAttestationNoVerifySignature(
 func VerifyIndexedAttestation(ctx context.Context, beaconState state.ReadOnlyBeaconState, indexedAtt ethpb.IndexedAtt) error {
 	ctx, span := trace.StartSpan(ctx, "core.VerifyIndexedAttestation")
 	defer span.End()
+	if beaconState == nil || beaconState.IsNil() {
+		return errors.New("beacon state is nil")
+	}
 
 	if err := attestation.IsValidAttestationIndices(ctx, indexedAtt, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot); err != nil {
 		return err

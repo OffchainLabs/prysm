@@ -182,6 +182,9 @@ func ProcessSlotsUsingNextSlotCache(
 	ctx, span := prysmTrace.StartSpan(ctx, "core.state.ProcessSlotsUsingNextSlotCache")
 	defer span.End()
 
+	if parentState == nil || parentState.IsNil() {
+		return nil, errors.New("nil state")
+	}
 	nextSlotState := NextSlotState(parentRoot, slot)
 	if nextSlotState != nil {
 		parentState = nextSlotState
@@ -442,6 +445,9 @@ func UpgradeState(ctx context.Context, state state.BeaconState) (state.BeaconSta
 
 // VerifyOperationLengths verifies that block operation lengths are valid.
 func VerifyOperationLengths(_ context.Context, state state.BeaconState, b interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	if state == nil || state.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	if b == nil || b.IsNil() {
 		return nil, blocks.ErrNilBeaconBlock
 	}

@@ -59,6 +59,9 @@ func ProcessProposerSlashings(
 
 	span.SetAttributes(trace.Int64Attribute("count", int64(len(slashings))))
 
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	if exitInfo == nil && len(slashings) > 0 {
 		return nil, errors.New("exit info required to process proposer slashings")
 	}
@@ -156,6 +159,9 @@ func VerifyProposerSlashing(
 	beaconState state.ReadOnlyBeaconState,
 	slashing *ethpb.ProposerSlashing,
 ) error {
+	if beaconState == nil || beaconState.IsNil() {
+		return errors.New("beacon state is nil")
+	}
 	if slashing.Header_1 == nil || slashing.Header_1.Header == nil || slashing.Header_2 == nil || slashing.Header_2.Header == nil {
 		return errors.New("nil header cannot be verified")
 	}

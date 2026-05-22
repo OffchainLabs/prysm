@@ -26,6 +26,12 @@ import (
 //	    state.builder_pending_payments[payment_index] = BuilderPendingPayment()
 //	</spec>
 func RemoveBuilderPendingPayment(st state.BeaconState, header *eth.BeaconBlockHeader) error {
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
+	if header == nil {
+		return errors.New("header is nil")
+	}
 	proposalEpoch := slots.ToEpoch(header.Slot)
 	currentEpoch := time.CurrentEpoch(st)
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch

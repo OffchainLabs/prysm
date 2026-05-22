@@ -82,6 +82,12 @@ func VerifyBlockSignature(beaconState state.ReadOnlyBeaconState,
 
 // VerifyBlockHeaderSignature verifies the proposer signature of a beacon block header.
 func VerifyBlockHeaderSignature(beaconState state.BeaconState, header *ethpb.SignedBeaconBlockHeader) error {
+	if beaconState == nil || beaconState.IsNil() {
+		return errors.New("beacon state is nil")
+	}
+	if header == nil || header.Header == nil {
+		return errors.New("block header is nil")
+	}
 	currentEpoch := slots.ToEpoch(beaconState.Slot())
 	domain, err := signing.Domain(beaconState.Fork(), currentEpoch, params.BeaconConfig().DomainBeaconProposer, beaconState.GenesisValidatorsRoot())
 	if err != nil {
@@ -99,7 +105,17 @@ func VerifyBlockHeaderSignature(beaconState state.BeaconState, header *ethpb.Sig
 // from the above method by not using fork data from the state and instead retrieving it
 // via the respective epoch.
 func VerifyBlockSignatureUsingCurrentFork(beaconState state.ReadOnlyBeaconState, blk interfaces.ReadOnlySignedBeaconBlock, blkRoot [32]byte) error {
-	currentEpoch := slots.ToEpoch(blk.Block().Slot())
+	if beaconState == nil || beaconState.IsNil() {
+		return errors.New("beacon state is nil")
+	}
+	if blk == nil || blk.IsNil() {
+		return errors.New("signed beacon block is nil")
+	}
+	blkBlock := blk.Block()
+	if blkBlock == nil || blkBlock.IsNil() {
+		return errors.New("beacon block is nil")
+	}
+	currentEpoch := slots.ToEpoch(blkBlock.Slot())
 	fork, err := params.Fork(currentEpoch)
 	if err != nil {
 		return err
@@ -108,7 +124,7 @@ func VerifyBlockSignatureUsingCurrentFork(beaconState state.ReadOnlyBeaconState,
 	if err != nil {
 		return err
 	}
-	proposer, err := beaconState.ValidatorAtIndex(blk.Block().ProposerIndex())
+	proposer, err := beaconState.ValidatorAtIndex(blkBlock.ProposerIndex())
 	if err != nil {
 		return err
 	}
@@ -166,6 +182,9 @@ func createAttestationSignatureBatch(
 	atts []ethpb.Att,
 	domain []byte,
 ) (*bls.SignatureBatch, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	if len(atts) == 0 {
 		return nil, nil
 	}
@@ -217,6 +236,9 @@ func createAttestationSignatureBatch(
 // AttestationSignatureBatch retrieves all the related attestation signature data such as the relevant public keys,
 // signatures and attestation signing data and collate it into a signature batch object.
 func AttestationSignatureBatch(ctx context.Context, beaconState state.ReadOnlyBeaconState, atts []ethpb.Att) (*bls.SignatureBatch, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	if len(atts) == 0 {
 		return bls.NewSet(), nil
 	}

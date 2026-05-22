@@ -71,6 +71,9 @@ func ProcessBuilderPendingPayments(ctx context.Context, state state.BeaconState)
 //	    return uint64(quorum // BUILDER_PAYMENT_THRESHOLD_DENOMINATOR)
 //	</spec>
 func builderQuorumThreshold(ctx context.Context, state state.ReadOnlyBeaconState) (primitives.Gwei, error) {
+	if state == nil || state.IsNil() {
+		return 0, errors.New("state is nil")
+	}
 	activeBalance, err := helpers.TotalActiveBalance(ctx, state)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not get total active balance")

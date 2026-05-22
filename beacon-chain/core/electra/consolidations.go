@@ -55,10 +55,13 @@ func ProcessPendingConsolidations(ctx context.Context, st state.BeaconState) err
 		return err
 	}
 	if pendingConsolidations == nil {
-		return errors.New("pending consolidations are nil")
+		return nil
 	}
 	var nextPendingConsolidation uint64
 	for _, pc := range pendingConsolidations {
+		if pc == nil {
+			return errors.New("pending consolidation is nil")
+		}
 		sourceValidator, err := st.ValidatorAtIndexReadOnly(pc.SourceIndex)
 		if err != nil {
 			return err

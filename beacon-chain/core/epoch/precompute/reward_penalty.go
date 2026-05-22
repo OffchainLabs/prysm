@@ -22,6 +22,15 @@ func ProcessRewardsAndPenaltiesPrecompute(
 	attRewardsFunc attesterRewardsFunc,
 	proRewardsFunc proposerRewardsFunc,
 ) (state.BeaconState, error) {
+	if state == nil || state.IsNil() {
+		return nil, errors.New("state is nil")
+	}
+	if pBal == nil {
+		return nil, errors.New("precomputed balances are nil")
+	}
+	if vp == nil {
+		return nil, errors.New("precomputed validators are nil")
+	}
 	// Can't process rewards and penalties in genesis epoch.
 	if time.CurrentEpoch(state) == 0 {
 		return state, nil
@@ -69,6 +78,15 @@ func ProcessRewardsAndPenaltiesPrecompute(
 // AttestationsDelta computes and returns the rewards and penalties differences for individual validators based on the
 // voting records.
 func AttestationsDelta(state state.ReadOnlyBeaconState, pBal *Balance, vp []*Validator) ([]uint64, []uint64, error) {
+	if state == nil || state.IsNil() {
+		return nil, nil, errors.New("state is nil")
+	}
+	if pBal == nil {
+		return nil, nil, errors.New("precomputed balances are nil")
+	}
+	if vp == nil {
+		return nil, nil, errors.New("precomputed validators are nil")
+	}
 	numOfVals := state.NumValidators()
 	rewards := make([]uint64, numOfVals)
 	penalties := make([]uint64, numOfVals)
@@ -159,6 +177,15 @@ func attestationDelta(pBal *Balance, sqrtActiveCurrentEpoch uint64, v *Validator
 // ProposersDelta computes and returns the rewards and penalties differences for individual validators based on the
 // proposer inclusion records.
 func ProposersDelta(state state.ReadOnlyBeaconState, pBal *Balance, vp []*Validator) ([]uint64, error) {
+	if state == nil || state.IsNil() {
+		return nil, errors.New("state is nil")
+	}
+	if pBal == nil {
+		return nil, errors.New("precomputed balances are nil")
+	}
+	if vp == nil {
+		return nil, errors.New("precomputed validators are nil")
+	}
 	numofVals := state.NumValidators()
 	rewards := make([]uint64, numofVals)
 

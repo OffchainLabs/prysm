@@ -48,11 +48,17 @@ func IsActiveValidator(validator *ethpb.Validator, epoch primitives.Epoch) bool 
 
 // IsActiveValidatorUsingTrie checks if a read only validator is active.
 func IsActiveValidatorUsingTrie(validator state.ReadOnlyValidator, epoch primitives.Epoch) bool {
+	if validator == nil {
+		return false
+	}
 	return checkValidatorActiveStatus(validator.ActivationEpoch(), validator.ExitEpoch(), epoch)
 }
 
 // IsActiveNonSlashedValidatorUsingTrie checks if a read only validator is active and not slashed
 func IsActiveNonSlashedValidatorUsingTrie(validator state.ReadOnlyValidator, epoch primitives.Epoch) bool {
+	if validator == nil {
+		return false
+	}
 	active := checkValidatorActiveStatus(validator.ActivationEpoch(), validator.ExitEpoch(), epoch)
 	return active && !validator.Slashed()
 }
@@ -103,6 +109,9 @@ func checkValidatorSlashable(activationEpoch, withdrawableEpoch primitives.Epoch
 func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]primitives.ValidatorIndex, error) {
 	ctx, span := trace.StartSpan(ctx, "helpers.ActiveValidatorIndices")
 	defer span.End()
+	if s == nil || s.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 
 	seed, err := Seed(s, epoch, params.BeaconConfig().DomainBeaconAttester)
 	if err != nil {
@@ -157,6 +166,9 @@ func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, ep
 // ActiveValidatorCount returns the number of active validators in the state
 // at the given epoch.
 func ActiveValidatorCount(ctx context.Context, s state.ReadOnlyBeaconState, epoch primitives.Epoch) (uint64, error) {
+	if s == nil || s.IsNil() {
+		return 0, errors.New("state is nil")
+	}
 	seed, err := Seed(s, epoch, params.BeaconConfig().DomainBeaconAttester)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not get seed")
@@ -263,6 +275,9 @@ func ValidatorActivationChurnLimitDeneb(activeValidatorCount uint64) uint64 {
 //	  indices = get_active_validator_indices(state, epoch)
 //	  return compute_proposer_index(state, indices, seed)
 func BeaconProposerIndex(ctx context.Context, state state.ReadOnlyBeaconState) (primitives.ValidatorIndex, error) {
+	if state == nil || state.IsNil() {
+		return 0, errors.New("nil state")
+	}
 	return BeaconProposerIndexAtSlot(ctx, state, state.Slot())
 }
 
@@ -282,6 +297,9 @@ func cachedProposerIndexAtSlot(slot primitives.Slot, root [32]byte) (primitives.
 // ProposerIndexAtSlotFromCheckpoint returns the proposer index at the given
 // slot from the cache at the given checkpoint
 func ProposerIndexAtSlotFromCheckpoint(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, error) {
+	if c == nil {
+		return 0, errProposerIndexMiss
+	}
 	proposerIndices, has := proposerIndicesCache.IndicesFromCheckpoint(*c)
 	if !has {
 		return 0, errProposerIndexMiss
@@ -293,6 +311,9 @@ func ProposerIndexAtSlotFromCheckpoint(c *forkchoicetypes.Checkpoint, slot primi
 }
 
 func beaconProposerIndexAtSlotFulu(state state.ReadOnlyBeaconState, slot primitives.Slot) (primitives.ValidatorIndex, error) {
+	if state == nil || state.IsNil() {
+		return 0, errors.New("nil state")
+	}
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(state.Slot())
 	if e < stateEpoch || e > stateEpoch+1 {
@@ -313,6 +334,9 @@ func beaconProposerIndexAtSlotFulu(state state.ReadOnlyBeaconState, slot primiti
 // BeaconProposerIndexAtSlot returns proposer index at the given slot from the
 // point of view of the given state as head state
 func BeaconProposerIndexAtSlot(ctx context.Context, state state.ReadOnlyBeaconState, slot primitives.Slot) (primitives.ValidatorIndex, error) {
+	if state == nil || state.IsNil() {
+		return 0, errors.New("nil state")
+	}
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(state.Slot())
 	// Even if the state is post Fulu, we may request a past proposer index.
@@ -389,6 +413,12 @@ func BeaconProposerIndexAtSlot(ctx context.Context, state state.ReadOnlyBeaconSt
 //	           return candidate_index
 //	       i += 1
 func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []primitives.ValidatorIndex, seed [32]byte) (primitives.ValidatorIndex, error) {
+	if bState == nil || bState.IsNil() {
+		return 0, errors.New("state is nil")
+	}
+	if activeIndices == nil {
+		return 0, errors.New("nil active indices")
+	}
 	length := uint64(len(activeIndices))
 	if length == 0 {
 		return 0, errors.New("empty active indices list")
@@ -521,6 +551,9 @@ func isEligibleForActivation(activationEligibilityEpoch, activationEpoch, finali
 func LastActivatedValidatorIndex(ctx context.Context, st state.ReadOnlyBeaconState) (primitives.ValidatorIndex, error) {
 	_, span := trace.StartSpan(ctx, "helpers.LastActivatedValidatorIndex")
 	defer span.End()
+	if st == nil || st.IsNil() {
+		return 0, errors.New("state is nil")
+	}
 	var lastActivatedvalidatorIndex primitives.ValidatorIndex
 	// linear search because status are not sorted
 	for j := st.NumValidators() - 1; j >= 0; j-- {
