@@ -112,6 +112,9 @@ func (s *Store) AttestationHistoryForPubKey(ctx context.Context, pubKey [fieldpa
 	defer span.End()
 	err := s.view(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(pubKeysBucket)
+		if bucket == nil {
+			return errors.New("pubkeys bucket not found")
+		}
 		pkBucket := bucket.Bucket(pubKey[:])
 		if pkBucket == nil {
 			return nil
@@ -239,6 +242,9 @@ func (s *Store) CheckSlashableAttestation(
 			return ctx.Err()
 		}
 		bucket := tx.Bucket(pubKeysBucket)
+		if bucket == nil {
+			return errors.New("pubkeys bucket not found")
+		}
 		pkBucket := bucket.Bucket(pubKey[:])
 		if pkBucket == nil {
 			return nil
@@ -535,6 +541,9 @@ func (s *Store) saveAttestationRecords(ctx context.Context, atts []*common.Attes
 			return err
 		}
 		bucket := tx.Bucket(pubKeysBucket)
+		if bucket == nil {
+			return errors.New("pubkeys bucket not found")
+		}
 		for _, att := range atts {
 			pkBucket, err := bucket.CreateBucketIfNotExists(att.PubKey[:])
 			if err != nil {

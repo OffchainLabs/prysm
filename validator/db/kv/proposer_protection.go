@@ -26,6 +26,9 @@ func (s *Store) ProposedPublicKeys(ctx context.Context) ([][fieldparams.BLSPubke
 	proposedPublicKeys := make([][fieldparams.BLSPubkeyLength]byte, 0)
 	err = s.view(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(historicProposalsBucket)
+		if bucket == nil {
+			return errors.New("historic proposals bucket not found")
+		}
 		return bucket.ForEach(func(key []byte, _ []byte) error {
 			var pubKeyBytes [fieldparams.BLSPubkeyLength]byte
 			copy(pubKeyBytes[:], key)
@@ -51,6 +54,9 @@ func (s *Store) ProposalHistoryForSlot(ctx context.Context, publicKey [fieldpara
 
 	err = s.view(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(historicProposalsBucket)
+		if bucket == nil {
+			return errors.New("historic proposals bucket not found")
+		}
 		valBucket := bucket.Bucket(publicKey[:])
 		if valBucket == nil {
 			return nil
@@ -83,6 +89,9 @@ func (s *Store) ProposalHistoryForPubKey(ctx context.Context, publicKey [fieldpa
 	proposals := make([]*common.Proposal, 0)
 	err := s.view(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(historicProposalsBucket)
+		if bucket == nil {
+			return errors.New("historic proposals bucket not found")
+		}
 		valBucket := bucket.Bucket(publicKey[:])
 		if valBucket == nil {
 			return nil
@@ -110,6 +119,9 @@ func (s *Store) SaveProposalHistoryForSlot(ctx context.Context, pubKey [fieldpar
 
 	err := s.update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(historicProposalsBucket)
+		if bucket == nil {
+			return errors.New("historic proposals bucket not found")
+		}
 		valBucket, err := bucket.CreateBucketIfNotExists(pubKey[:])
 		if err != nil {
 			return fmt.Errorf("could not create bucket for public key %#x", pubKey)
@@ -117,6 +129,9 @@ func (s *Store) SaveProposalHistoryForSlot(ctx context.Context, pubKey [fieldpar
 
 		// If the incoming slot is lower than the lowest signed proposal slot, override.
 		lowestSignedBkt := tx.Bucket(lowestSignedProposalsBucket)
+		if lowestSignedBkt == nil {
+			return errors.New("lowest signed proposals bucket not found")
+		}
 		lowestSignedProposalBytes := lowestSignedBkt.Get(pubKey[:])
 		var lowestSignedProposalSlot primitives.Slot
 		if len(lowestSignedProposalBytes) >= 8 {
@@ -130,6 +145,9 @@ func (s *Store) SaveProposalHistoryForSlot(ctx context.Context, pubKey [fieldpar
 
 		// If the incoming slot is higher than the highest signed proposal slot, override.
 		highestSignedBkt := tx.Bucket(highestSignedProposalsBucket)
+		if highestSignedBkt == nil {
+			return errors.New("highest signed proposals bucket not found")
+		}
 		highestSignedProposalBytes := highestSignedBkt.Get(pubKey[:])
 		var highestSignedProposalSlot primitives.Slot
 		if len(highestSignedProposalBytes) >= 8 {

@@ -12,6 +12,9 @@ import (
 func (s *Store) SaveGenesisValidatorsRoot(_ context.Context, genValRoot []byte) error {
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(genesisInfoBucket)
+		if bkt == nil {
+			return errors.New("genesis info bucket not found")
+		}
 		enc := bkt.Get(genesisValidatorsRootKey)
 		if len(enc) != 0 && !bytes.Equal(enc, genValRoot) {
 			return fmt.Errorf("cannot overwrite existing genesis validators root: %#x", enc)
@@ -26,6 +29,9 @@ func (s *Store) GenesisValidatorsRoot(_ context.Context) ([]byte, error) {
 	var genValRoot []byte
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(genesisInfoBucket)
+		if bkt == nil {
+			return errors.New("genesis info bucket not found")
+		}
 		enc := bkt.Get(genesisValidatorsRootKey)
 		if len(enc) == 0 {
 			return nil

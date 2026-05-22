@@ -190,6 +190,9 @@ func NewKVStore(ctx context.Context, dirPath string, config *Config) (*Store, er
 func (s *Store) UpdatePublicKeysBuckets(pubKeys [][fieldparams.BLSPubkeyLength]byte) error {
 	return s.update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(historicProposalsBucket)
+		if bucket == nil {
+			return errors.New("historic proposals bucket not found")
+		}
 		for _, pubKey := range pubKeys {
 			if _, err := bucket.CreateBucketIfNotExists(pubKey[:]); err != nil {
 				return errors.Wrap(err, "failed to create proposal history bucket")
