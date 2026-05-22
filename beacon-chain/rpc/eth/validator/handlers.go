@@ -1502,6 +1502,10 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if headSt == nil || headSt.IsNil() {
+		httputil.HandleError(w, "Head state not found", http.StatusNotFound)
+		return
+	}
 	currEpoch := slots.ToEpoch(headSt.Slot())
 	if requestedEpoch > currEpoch {
 		httputil.HandleError(w, "Requested epoch cannot be in the future", http.StatusBadRequest)
@@ -1533,6 +1537,10 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 		st, err = s.Stater.StateBySlot(ctx, epochEnd)
 		if err != nil {
 			shared.WriteStateFetchError(w, err)
+			return
+		}
+		if st == nil || st.IsNil() {
+			httputil.HandleError(w, "State not found", http.StatusNotFound)
 			return
 		}
 		participation, err = st.CurrentEpochParticipation()
