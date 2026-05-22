@@ -581,6 +581,9 @@ func (s *Service) recoverStateSummary(ctx context.Context, blockRoot [32]byte) (
 		if err != nil {
 			return nil, err
 		}
+		if b == nil || b.IsNil() {
+			return nil, errBlockDoesNotExist
+		}
 		summary := &ethpb.StateSummary{Slot: b.Block().Slot(), Root: blockRoot[:]}
 		if err := s.cfg.BeaconDB.SaveStateSummary(ctx, summary); err != nil {
 			return nil, err

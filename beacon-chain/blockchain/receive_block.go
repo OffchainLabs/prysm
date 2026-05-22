@@ -93,6 +93,9 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	}
 	defer s.blockBeingSynced.unset(blockRoot)
 
+	if block == nil || block.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
+	}
 	blockCopy, err := block.Copy()
 	if err != nil {
 		return errors.Wrap(err, "block copy")
@@ -586,7 +589,13 @@ func (s *Service) handleCaches() error {
 // This performs the state transition function and returns the poststate or an
 // error if the block fails to verify the consensus rules
 func (s *Service) validateStateTransition(ctx context.Context, preState state.BeaconState, signed interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
+	if signed == nil || signed.IsNil() {
+		return nil, blocks.ErrNilSignedBeaconBlock
+	}
 	b := signed.Block()
+	if b == nil || b.IsNil() {
+		return nil, blocks.ErrNilSignedBeaconBlock
+	}
 	// Verify that the parent block is in forkchoice
 	parentRoot := b.ParentRoot()
 	if !s.InForkchoice(parentRoot) {
@@ -608,8 +617,19 @@ func (s *Service) validateStateTransition(ctx context.Context, preState state.Be
 // incoming block has updated it on forkchoice.
 func (s *Service) updateJustificationOnBlock(ctx context.Context, preState, postState state.BeaconState, preJustifiedEpoch primitives.Epoch) error {
 	justified := s.cfg.ForkChoiceStore.JustifiedCheckpoint()
-	preStateJustifiedEpoch := preState.CurrentJustifiedCheckpoint().Epoch
-	postStateJustifiedEpoch := postState.CurrentJustifiedCheckpoint().Epoch
+	if justified == nil {
+		return errNilJustifiedCheckpoint
+	}
+	preStateJustified := preState.CurrentJustifiedCheckpoint()
+	if preStateJustified == nil {
+		return errors.New("pre-state justified checkpoint is nil")
+	}
+	postStateJustified := postState.CurrentJustifiedCheckpoint()
+	if postStateJustified == nil {
+		return errors.New("post-state justified checkpoint is nil")
+	}
+	preStateJustifiedEpoch := preStateJustified.Epoch
+	postStateJustifiedEpoch := postStateJustified.Epoch
 	if justified.Epoch > preJustifiedEpoch || (justified.Epoch == postStateJustifiedEpoch && justified.Epoch > preStateJustifiedEpoch) {
 		if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, &ethpb.Checkpoint{
 			Epoch: justified.Epoch, Root: justified.Root[:],

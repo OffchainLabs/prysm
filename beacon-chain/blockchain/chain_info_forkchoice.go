@@ -161,6 +161,9 @@ func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byt
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get genesis state")
 	}
+	if st == nil || st.IsNil() {
+		return nil, errors.New("genesis state is nil")
+	}
 	if st.Version() < version.Bellatrix {
 		return nil, nil
 	}
