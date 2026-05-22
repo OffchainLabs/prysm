@@ -17,6 +17,9 @@ const backupsDirectoryName = "backups"
 // Backup the database to the datadir backup directory.
 // Example for backup at slot 345: $DATADIR/backups/prysm_beacondb_at_slot_0000345.backup
 func (s *Store) Backup(ctx context.Context, outputDir string, permissionOverride bool) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("store is nil")
+	}
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.Backup")
 	defer span.End()
 

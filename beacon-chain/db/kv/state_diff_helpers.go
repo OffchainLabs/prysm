@@ -221,6 +221,9 @@ func (s *Store) setOffset(slot primitives.Slot) error {
 }
 
 func (s *Store) getOffset() uint64 {
+	if s == nil || s.stateDiffCache == nil {
+		return 0
+	}
 	return s.stateDiffCache.getOffset()
 }
 
@@ -413,6 +416,9 @@ func decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
 }
 
 func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.BeaconState, []hdiff.HdiffBytes, error) {
+	if s == nil {
+		return nil, nil, errors.New("store is nil")
+	}
 	if uint64(slot) < offset {
 		return nil, nil, ErrSlotBeforeOffset
 	}

@@ -178,6 +178,9 @@ func NewDataColumnStorage(ctx context.Context, opts ...DataColumnStorageOption) 
 // WarmCache warms the cache of the data column filesystem.
 // It holds the database (read) lock for all the time it is running.
 func (dcs *DataColumnStorage) WarmCache() {
+	if dcs == nil || dcs.fs == nil || dcs.cache == nil {
+		return
+	}
 	start := time.Now()
 	log.Info("Data column filesystem cache warm-up started")
 
@@ -346,11 +349,17 @@ func (dcs *DataColumnStorage) processFile(filePath string) (primitives.Epoch, er
 
 // Summary returns the DataColumnStorageSummary.
 func (dcs *DataColumnStorage) Summary(root [fieldparams.RootLength]byte) DataColumnStorageSummary {
+	if dcs == nil || dcs.cache == nil {
+		return DataColumnStorageSummary{}
+	}
 	return dcs.cache.Summary(root)
 }
 
 // Save saves data column sidecars into the database and asynchronously performs pruning.
 func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataColumn) error {
+	if dcs == nil || dcs.cache == nil {
+		return errors.New("data column storage is nil")
+	}
 	startTime := time.Now()
 
 	if len(dataColumnSidecars) == 0 {

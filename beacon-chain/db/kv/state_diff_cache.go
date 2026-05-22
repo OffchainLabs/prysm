@@ -183,6 +183,9 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 }
 
 func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
+	if c == nil {
+		return nil
+	}
 	c.RLock()
 	defer c.RUnlock()
 
@@ -206,6 +209,9 @@ func (c *stateDiffCache) getAnchor(level int) state.ReadOnlyBeaconState {
 }
 
 func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) error {
+	if c == nil {
+		return errors.New("state diff cache is nil")
+	}
 	c.Lock()
 	defer c.Unlock()
 	if level >= len(c.anchors) || level < 0 {
@@ -231,6 +237,9 @@ func (c *stateDiffCache) setAnchor(level int, anchor state.ReadOnlyBeaconState) 
 }
 
 func (c *stateDiffCache) levelHasData(level int) bool {
+	if c == nil {
+		return false
+	}
 	c.RLock()
 	defer c.RUnlock()
 	if level < 0 || level >= len(c.levelsWithData) {
@@ -240,6 +249,9 @@ func (c *stateDiffCache) levelHasData(level int) bool {
 }
 
 func (c *stateDiffCache) setLevelHasData(level int) error {
+	if c == nil {
+		return errors.New("state diff cache is nil")
+	}
 	c.Lock()
 	defer c.Unlock()
 	if level < 0 || level >= len(c.levelsWithData) {
@@ -250,18 +262,27 @@ func (c *stateDiffCache) setLevelHasData(level int) error {
 }
 
 func (c *stateDiffCache) getOffset() uint64 {
+	if c == nil {
+		return 0
+	}
 	c.RLock()
 	defer c.RUnlock()
 	return c.offset
 }
 
 func (c *stateDiffCache) setOffset(offset uint64) {
+	if c == nil {
+		return
+	}
 	c.Lock()
 	defer c.Unlock()
 	c.offset = offset
 }
 
 func (c *stateDiffCache) clearAnchors() {
+	if c == nil {
+		return
+	}
 	c.Lock()
 	defer c.Unlock()
 	c.anchors = make([][]byte, len(flags.Get().StateDiffExponents)-1) // -1 because last level doesn't need to be cached

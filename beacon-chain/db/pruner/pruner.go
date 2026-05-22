@@ -89,11 +89,17 @@ func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSync
 }
 
 func (p *Service) Start() {
+	if p == nil {
+		return
+	}
 	log.Info("Starting Beacon DB pruner service")
 	p.run()
 }
 
 func (p *Service) Stop() error {
+	if p == nil {
+	return errors.New("pruner service is nil")
+	}
 	log.Info("Stopping Beacon DB pruner service")
 	close(p.done)
 	return nil
@@ -104,6 +110,9 @@ func (p *Service) Status() error {
 }
 
 func (p *Service) run() {
+	if p == nil {
+		return
+	}
 	if p.initSyncWaiter != nil {
 		log.Info("Waiting for initial sync service to complete before starting pruner")
 		if err := p.initSyncWaiter(); err != nil {

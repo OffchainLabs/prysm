@@ -144,6 +144,12 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 
 // SaveFullSnapshot saves the full level 0 state snapshot to the database.
 func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
+	if s == nil || s.db == nil || s.stateDiffCache == nil {
+		return errors.New("store is nil")
+	}
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 	slot := uint64(st.Slot())
 	key := makeKeyForStateDiffTree(0, slot)
 	stateBytes, err := st.MarshalSSZ()
@@ -186,6 +192,9 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 }
 
 func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
+	if s == nil || s.db == nil {
+		return hdiff.HdiffBytes{}, errors.New("store is nil")
+	}
 	key := makeKeyForStateDiffTree(lvl, slot)
 	var stateDiff []byte
 	var validatorDiff []byte
@@ -229,6 +238,9 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 }
 
 func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("store is nil")
+	}
 	key := makeKeyForStateDiffTree(0, slot)
 	var enc []byte
 

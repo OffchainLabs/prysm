@@ -352,13 +352,18 @@ func (s *Store) AvailableBlocks(ctx context.Context, blockRoots [][32]byte) map[
 
 	count := len(blockRoots)
 	availableRoots := make(map[[32]byte]bool, count)
+	if s == nil || s.db == nil {
+		return availableRoots
+	}
 
 	// First, check the cache for each block root.
 	notInCacheRoots := make([][32]byte, 0, count)
 	for _, root := range blockRoots {
-		if v, ok := s.blockCache.Get(string(root[:])); v != nil && ok {
-			availableRoots[root] = true
-			continue
+		if s.blockCache != nil {
+			if v, ok := s.blockCache.Get(string(root[:])); v != nil && ok {
+				availableRoots[root] = true
+				continue
+			}
 		}
 
 		notInCacheRoots = append(notInCacheRoots, root)
@@ -367,6 +372,9 @@ func (s *Store) AvailableBlocks(ctx context.Context, blockRoots [][32]byte) map[
 	// Next, check the database for the remaining block roots.
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(blocksBucket)
+		if bkt == nil {
+			return nil
+		}
 		for _, root := range notInCacheRoots {
 			if bkt.Get(root[:]) != nil {
 				availableRoots[root] = true
@@ -426,6 +434,9 @@ func (s *Store) BlockRootsBySlot(ctx context.Context, slot primitives.Slot) (boo
 // This deletes the root entry from all buckets in the blocks DB
 // If the block is finalized this function returns an error
 func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.DeleteBlock")
 	defer span.End()
 
@@ -439,6 +450,9 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(finalizedBlockRootsIndexBucket)
+		if bkt == nil {
+			return bolt.ErrBucketNotFound
+		}
 		if b := bkt.Get(root[:]); b != nil {
 			return ErrDeleteJustifiedAndFinalized
 		}
@@ -606,6 +620,9 @@ func (s *Store) SaveBlocks(ctx context.Context, blks []interfaces.ReadOnlySigned
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveBlocks")
 	defer span.End()
 
+	if s == nil {
+		return errors.New("store is nil")
+	}
 	robs := make([]blocks.ROBlock, len(blks))
 	for i := range blks {
 		rb, err := blocks.NewROBlock(blks[i])
@@ -651,6 +668,9 @@ func prepareBlockBatch(blks []blocks.ROBlock, shouldBlind bool) ([]blockBatchEnt
 }
 
 func (s *Store) SaveROBlocks(ctx context.Context, blks []blocks.ROBlock, cache bool) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	shouldBlind, err := s.shouldSaveBlinded()
 	if err != nil {
 		return err
@@ -677,6 +697,9 @@ func (s *Store) SaveROBlocks(ctx context.Context, blks []blocks.ROBlock, cache b
 		return nil
 	})
 	if !cache {
+		return err
+	}
+	if s.blockCache == nil {
 		return err
 	}
 	for i := range batch {
@@ -718,12 +741,21 @@ func (s *Store) SaveHeadBlockRoot(ctx context.Context, blockRoot [32]byte) error
 
 // GenesisBlock retrieves the genesis block of the beacon chain.
 func (s *Store) GenesisBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("store is nil")
+	}
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.GenesisBlock")
 	defer span.End()
 	var blk interfaces.ReadOnlySignedBeaconBlock
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(blocksBucket)
+		if bkt == nil {
+			return bolt.ErrBucketNotFound
+		}
 		root := bkt.Get(genesisBlockRootKey)
+		if root == nil {
+			return nil
+		}
 		enc := bkt.Get(root)
 		if enc == nil {
 			return nil
@@ -755,6 +787,9 @@ func (s *Store) GenesisBlockRoot(ctx context.Context) ([32]byte, error) {
 func (s *Store) SaveGenesisBlockRoot(ctx context.Context, blockRoot [32]byte) error {
 	_, span := trace.StartSpan(ctx, "BeaconDB.SaveGenesisBlockRoot")
 	defer span.End()
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(blocksBucket)
 		return bucket.Put(genesisBlockRootKey, blockRoot[:])

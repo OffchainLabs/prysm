@@ -123,6 +123,9 @@ func (s *Store) LegacyGenesisState(ctx context.Context) (state.BeaconState, erro
 func (s *Store) SaveState(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) (err error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveState")
 	defer span.End()
+	if s == nil {
+		return errors.New("store is nil")
+	}
 
 	startTime := time.Now()
 
@@ -458,6 +461,9 @@ func (s *Store) storeValidatorEntriesSeparately(ctx context.Context, tx *bolt.Tx
 
 // HasState checks if a state by root exists in the db.
 func (s *Store) HasState(ctx context.Context, blockRoot [32]byte) bool {
+	if s == nil || s.db == nil {
+		return false
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.HasState")
 	defer span.End()
 
@@ -473,6 +479,9 @@ func (s *Store) HasState(ctx context.Context, blockRoot [32]byte) bool {
 	hasState := false
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(stateBucket)
+		if bkt == nil {
+			return nil
+		}
 		stBytes := bkt.Get(blockRoot[:])
 		if len(stBytes) > 0 {
 			hasState = true
@@ -809,6 +818,9 @@ func marshalState(ctx context.Context, st state.ReadOnlyBeaconState) ([]byte, er
 // Retrieve the validator entries for a given block root. These entries are stored in a
 // separate bucket to reduce state size.
 func (s *Store) validatorEntries(ctx context.Context, blockRoot [32]byte) ([]*ethpb.Validator, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("store is nil")
+	}
 	ok, err := s.isStateValidatorMigrationOver()
 	if err != nil {
 		return nil, err
@@ -822,6 +834,9 @@ func (s *Store) validatorEntries(ctx context.Context, blockRoot [32]byte) ([]*et
 	err = s.db.View(func(tx *bolt.Tx) error {
 		// get the validator keys from the index bucket
 		idxBkt := tx.Bucket(blockRootValidatorHashesBucket)
+		if idxBkt == nil {
+			return errors.New("validator index bucket not found")
+		}
 		valKey := idxBkt.Get(blockRoot[:])
 		if len(valKey) == 0 {
 			return errors.Errorf("validator keys not found for given block root: %x", blockRoot)
@@ -871,11 +886,17 @@ func (s *Store) validatorEntries(ctx context.Context, blockRoot [32]byte) ([]*et
 
 // retrieves and assembles the state information from multiple buckets.
 func (s *Store) stateBytes(ctx context.Context, blockRoot [32]byte) ([]byte, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("store is nil")
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.stateBytes")
 	defer span.End()
 	var dst []byte
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(stateBucket)
+		if bkt == nil {
+			return nil
+		}
 		stBytes := bkt.Get(blockRoot[:])
 		if len(stBytes) == 0 {
 			return nil
@@ -1087,6 +1108,9 @@ func (s *Store) CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint pr
 }
 
 func (s *Store) isStateValidatorMigrationOver() (bool, error) {
+	if s == nil || s.db == nil {
+		return false, errors.New("store is nil")
+	}
 	// if flag is enabled, then always follow the new code path.
 	if features.Get().EnableHistoricalSpaceRepresentation {
 		return true, nil
@@ -1097,6 +1121,9 @@ func (s *Store) isStateValidatorMigrationOver() (bool, error) {
 	returnFlag := false
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		mb := tx.Bucket(migrationsBucket)
+		if mb == nil {
+			return nil
+		}
 		b := mb.Get(migrationStateValidatorsKey)
 		returnFlag = bytes.Equal(b, migrationCompleted)
 		return nil

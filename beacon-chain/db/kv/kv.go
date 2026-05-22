@@ -327,6 +327,9 @@ func (s *Store) ClearDB() error {
 
 // Close closes the underlying BoltDB database.
 func (s *Store) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
 	prometheus.Unregister(createBoltCollector(s.db))
 	// Clear cache references after close so shutdown releases memory promptly.
 	if s.blockCache != nil {
@@ -348,6 +351,9 @@ func (s *Store) Close() error {
 
 // DatabasePath at which this database writes files.
 func (s *Store) DatabasePath() string {
+	if s == nil {
+		return ""
+	}
 	return s.databasePath
 }
 
