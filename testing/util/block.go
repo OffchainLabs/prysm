@@ -628,6 +628,10 @@ func HydrateV1BeaconBlockBody(b *v1.BeaconBlockBody) *v1.BeaconBlockBody {
 func SaveBlock(tb assertions.AssertionTestingTB, ctx context.Context, db iface.NoHeadAccessDatabase, b any) interfaces.SignedBeaconBlock {
 	wsb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(tb, err)
+	if wsb == nil || wsb.IsNil() {
+		tb.Fatalf("nil signed beacon block")
+		return nil
+	}
 	require.NoError(tb, db.SaveBlock(ctx, wsb))
 	return wsb
 }
