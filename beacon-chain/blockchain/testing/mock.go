@@ -553,7 +553,14 @@ func (*ChainService) HeadGenesisValidatorsRoot() [32]byte {
 
 // VerifyLmdFfgConsistency mocks VerifyLmdFfgConsistency and always returns nil.
 func (*ChainService) VerifyLmdFfgConsistency(_ context.Context, a ethpb.Att) error {
-	if !bytes.Equal(a.GetData().BeaconBlockRoot, a.GetData().Target.Root) {
+	if a == nil || a.IsNil() {
+		return errors.New("nil attestation")
+	}
+	data := a.GetData()
+	if data == nil || data.Target == nil {
+		return errors.New("nil attestation data")
+	}
+	if !bytes.Equal(data.BeaconBlockRoot, data.Target.Root) {
 		return errors.New("LMD and FFG miss matched")
 	}
 	return nil
