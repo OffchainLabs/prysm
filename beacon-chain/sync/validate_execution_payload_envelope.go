@@ -90,14 +90,25 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
+	if block == nil || block.IsNil() {
+		return pubsub.ValidationIgnore, errors.New("block is nil")
+	}
+	beaconBlock := block.Block()
+	if beaconBlock == nil || beaconBlock.IsNil() {
+		return pubsub.ValidationIgnore, errors.New("beacon block is nil")
+	}
+	body := beaconBlock.Body()
+	if body == nil || body.IsNil() {
+		return pubsub.ValidationIgnore, errors.New("block body is nil")
+	}
 	// [REJECT] block.slot equals envelope.slot.
-	if err := v.VerifySlotMatchesBlock(block.Block().Slot()); err != nil {
+	if err := v.VerifySlotMatchesBlock(beaconBlock.Slot()); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
 	// Let bid alias block.body.signed_execution_payload_bid.message
 	// (notice that this can be obtained from the state.latest_execution_payload_bid).
-	signedBid, err := block.Block().Body().SignedExecutionPayloadBid()
+	signedBid, err := body.SignedExecutionPayloadBid()
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}

@@ -575,6 +575,9 @@ func openDB(ctx context.Context, dbPath string, clearer *dbClearer) (*kv.Store, 
 	if err != nil {
 		return nil, errors.Wrap(err, "could not clear database")
 	}
+	if d == nil {
+		return nil, errors.New("database is nil")
+	}
 
 	return d, d.RunMigrations(ctx)
 }
@@ -707,6 +710,9 @@ func (b *BeaconNode) fetchP2P() p2p.P2P {
 	if err := b.services.FetchService(&p); err != nil {
 		panic(err) // lint:nopanic -- This could panic application start if the services are misconfigured.
 	}
+	if p == nil {
+		panic("p2p service is nil") // lint:nopanic -- This could panic application start if the services are misconfigured.
+	}
 	return p
 }
 
@@ -735,6 +741,9 @@ func (b *BeaconNode) registerSlashingPoolService() error {
 	if err := b.services.FetchService(&chainService); err != nil {
 		return err
 	}
+	if chainService == nil {
+		return errors.New("blockchain service is nil")
+	}
 
 	s := slashings.NewPoolService(b.ctx, b.slashingsPool, slashings.WithElectraTimer(b.ClockWaiter, chainService.CurrentSlot))
 	return b.services.RegisterService(s)
@@ -744,6 +753,9 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 	var web3Service *execution.Service
 	if err := b.services.FetchService(&web3Service); err != nil {
 		return err
+	}
+	if web3Service == nil {
+		return errors.New("execution service is nil")
 	}
 
 	var attService *attestations.Service
@@ -946,6 +958,9 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 	if err := b.services.FetchService(&web3Service); err != nil {
 		return err
 	}
+	if web3Service == nil {
+		return errors.New("execution service is nil")
+	}
 
 	var syncService *initialsync.Service
 	if err := b.services.FetchService(&syncService); err != nil {
@@ -1050,6 +1065,9 @@ func (b *BeaconNode) registerPrometheusService(_ *cli.Context) error {
 	if err := b.services.FetchService(&p); err != nil {
 		panic(err) // lint:nopanic -- This could panic application start if the services are misconfigured.
 	}
+	if p == nil {
+		panic("p2p service is nil") // lint:nopanic -- This could panic application start if the services are misconfigured.
+	}
 	additionalHandlers = append(additionalHandlers, prometheus.Handler{Path: "/p2p", Handler: p.InfoHandler})
 
 	var c *blockchain.Service
@@ -1153,6 +1171,9 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 	if err := b.services.FetchService(&backfillService); err != nil {
 		return err
 	}
+	if backfillService == nil {
+		return errors.New("backfill service is nil")
+	}
 
 	var opts []pruner.ServiceOption
 	if cliCtx.IsSet(flags.PrunerRetentionEpochs.Name) {
@@ -1177,8 +1198,9 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 }
 
 func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.Store) error {
-	pa := peers.NewAssigner(b.fetchP2P().Peers(), b.forkChoicer)
-	bf, err := backfill.NewService(cliCtx.Context, bfs, b.BlobStorage, b.DataColumnStorage, b.ClockWaiter, b.fetchP2P(), pa, b.BackfillOpts...)
+	p2pService := b.fetchP2P()
+	pa := peers.NewAssigner(p2pService.Peers(), b.forkChoicer)
+	bf, err := backfill.NewService(cliCtx.Context, bfs, b.BlobStorage, b.DataColumnStorage, b.ClockWaiter, p2pService, pa, b.BackfillOpts...)
 	if err != nil {
 		return errors.Wrap(err, "error initializing backfill service")
 	}

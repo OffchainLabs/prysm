@@ -343,18 +343,25 @@ func (s *Service) initializeHead(ctx context.Context, st state.BeaconState) erro
 	if err != nil {
 		return errors.Wrap(err, "could not get head block")
 	}
+	if blk == nil || blk.IsNil() {
+		return errors.New("head block is nil")
+	}
+	blkBlock := blk.Block()
+	if blkBlock == nil || blkBlock.IsNil() {
+		return errors.New("head beacon block is nil")
+	}
 	if root != fRoot {
 		st, err = s.cfg.StateGen.StateByRoot(ctx, root)
 		if err != nil {
 			return errors.Wrap(err, "could not get head state")
 		}
 	}
-	if err := s.setHead(&head{root: root, block: blk, state: st, slot: blk.Block().Slot(), optimistic: false}); err != nil {
+	if err := s.setHead(&head{root: root, block: blk, state: st, slot: blkBlock.Slot(), optimistic: false}); err != nil {
 		return errors.Wrap(err, "could not set head")
 	}
 	log.WithFields(logrus.Fields{
 		"root": fmt.Sprintf("%#x", root),
-		"slot": blk.Block().Slot(),
+		"slot": blkBlock.Slot(),
 	}).Info("Initialized head block from DB")
 	return nil
 }

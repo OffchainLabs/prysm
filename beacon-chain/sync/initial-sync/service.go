@@ -245,7 +245,11 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 		return errors.Errorf("origin block for root %#x not found in database", blockRoot)
 	}
 
-	currentSlot, blockSlot := s.clock.CurrentSlot(), block.Block().Slot()
+	beaconBlock := block.Block()
+	if beaconBlock == nil || beaconBlock.IsNil() {
+		return errors.Errorf("origin beacon block for root %#x not found in database", blockRoot)
+	}
+	currentSlot, blockSlot := s.clock.CurrentSlot(), beaconBlock.Slot()
 	currentEpoch, blockEpoch := slots.ToEpoch(currentSlot), slots.ToEpoch(blockSlot)
 
 	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {

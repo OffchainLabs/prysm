@@ -30,12 +30,22 @@ func (c *dbClearer) clearKV(ctx context.Context, db *kv.Store) (*kv.Store, error
 	if !c.shouldProceed() {
 		return db, nil
 	}
+	if db == nil {
+		return nil, errors.New("database is nil")
+	}
 
 	log.Warning("Removing database")
 	if err := db.ClearDB(); err != nil {
 		return nil, errors.Wrap(err, "could not clear database")
 	}
-	return kv.NewKVStore(ctx, db.DatabasePath())
+	newDB, err := kv.NewKVStore(ctx, db.DatabasePath())
+	if err != nil {
+		return nil, err
+	}
+	if newDB == nil {
+		return nil, errors.New("database is nil")
+	}
+	return newDB, nil
 }
 
 func (c *dbClearer) clearGenesis(dir string) error {

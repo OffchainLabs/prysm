@@ -472,7 +472,11 @@ func (s *Service) validateStatusMessage(ctx context.Context, genericMsg any) err
 	if blk == nil || blk.IsNil() {
 		return p2ptypes.ErrGeneric
 	}
-	if slots.ToEpoch(blk.Block().Slot()) == msg.FinalizedEpoch {
+	blkBlock := blk.Block()
+	if blkBlock == nil || blkBlock.IsNil() {
+		return p2ptypes.ErrGeneric
+	}
+	if slots.ToEpoch(blkBlock.Slot()) == msg.FinalizedEpoch {
 		return nil
 	}
 
@@ -480,7 +484,7 @@ func (s *Service) validateStatusMessage(ctx context.Context, genericMsg any) err
 	if err != nil {
 		return p2ptypes.ErrGeneric
 	}
-	if startSlot > blk.Block().Slot() {
+	if startSlot > blkBlock.Slot() {
 		childBlock, err := s.cfg.beaconDB.FinalizedChildBlock(ctx, bytesutil.ToBytes32(msg.FinalizedRoot))
 		if err != nil {
 			return p2ptypes.ErrGeneric

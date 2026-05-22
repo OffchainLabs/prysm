@@ -64,7 +64,14 @@ func (s *Service) validateDataColumnGloas(
 	if err != nil {
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(err)
 	}
-	verifier := verification.NewGloasDataColumnVerifier(roDataColumn, block.Block(), verification.GossipDataColumnSidecarRequirementsGloas)
+	if block == nil || block.IsNil() {
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("block is nil"))
+	}
+	beaconBlock := block.Block()
+	if beaconBlock == nil || beaconBlock.IsNil() {
+		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("beacon block is nil"))
+	}
+	verifier := verification.NewGloasDataColumnVerifier(roDataColumn, beaconBlock, verification.GossipDataColumnSidecarRequirementsGloas)
 	verifier.SatisfyRequirement(verification.RequireBlockSeenGloas)
 
 	// [REJECT] The sidecar's slot matches the slot of the block with root beacon_block_root.

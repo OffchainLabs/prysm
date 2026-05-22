@@ -51,7 +51,7 @@ func initializeFromProviders(ctx context.Context, dir string, providers ...Provi
 }
 
 func newGenesisData(st state.BeaconState, dir string) (GenesisData, error) {
-	if state.IsNil(st) {
+	if st == nil || st.IsNil() || state.IsNil(st) {
 		return GenesisData{}, ErrGenesisStateNotInitialized
 	}
 	if dir == "" {

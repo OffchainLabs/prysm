@@ -69,7 +69,16 @@ func (s *Service) setupForkchoiceTree(st state.BeaconState) error {
 		log.WithError(err).Error("Could not get head block, starting with finalized block as head")
 		return nil
 	}
-	if slots.ToEpoch(blk.Block().Slot()) < cp.Epoch {
+	if blk == nil || blk.IsNil() {
+		log.Error("Head block is nil, starting with finalized block as head")
+		return nil
+	}
+	blkBlock := blk.Block()
+	if blkBlock == nil || blkBlock.IsNil() {
+		log.Error("Head beacon block is nil, starting with finalized block as head")
+		return nil
+	}
+	if slots.ToEpoch(blkBlock.Slot()) < cp.Epoch {
 		log.WithField("headRoot", fmt.Sprintf("%#x", headRoot)).Error("Head block is older than finalized block, starting with finalized block as head")
 		return nil
 	}
@@ -92,7 +101,14 @@ func (s *Service) buildForkchoiceChain(ctx context.Context, head interfaces.Read
 	cp := s.FinalizedCheckpt()
 	fRoot := s.ensureRootNotZeros([32]byte(cp.Root))
 	jp := s.CurrentJustifiedCheckpt()
-	root, err := head.Block().HashTreeRoot()
+	if head == nil || head.IsNil() {
+		return nil, errors.New("head block is nil")
+	}
+	headBlock := head.Block()
+	if headBlock == nil || headBlock.IsNil() {
+		return nil, errors.New("head beacon block is nil")
+	}
+	root, err := headBlock.HashTreeRoot()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get head block root")
 	}
@@ -106,7 +122,7 @@ func (s *Service) buildForkchoiceChain(ctx context.Context, head interfaces.Read
 		// block processing pipeline when setting the head state, to compute the right states for the justified
 		// checkpoint.
 		chain = append(chain, &forkchoicetypes.BlockAndCheckpoints{Block: roblock, JustifiedCheckpoint: jp, FinalizedCheckpoint: cp})
-		root = head.Block().ParentRoot()
+		root = headBlock.ParentRoot()
 		if root == fRoot {
 			break
 		}
@@ -114,7 +130,14 @@ func (s *Service) buildForkchoiceChain(ctx context.Context, head interfaces.Read
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get block")
 		}
-		if slots.ToEpoch(head.Block().Slot()) < cp.Epoch {
+		if head == nil || head.IsNil() {
+			return nil, errors.New("head block is nil")
+		}
+		headBlock = head.Block()
+		if headBlock == nil || headBlock.IsNil() {
+			return nil, errors.New("head beacon block is nil")
+		}
+		if slots.ToEpoch(headBlock.Slot()) < cp.Epoch {
 			return nil, errors.New("head block is not a descendant of the finalized checkpoint")
 		}
 	}
