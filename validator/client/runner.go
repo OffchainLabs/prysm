@@ -81,6 +81,10 @@ func newRunner(ctx context.Context, v iface.Validator, monitor *healthMonitor) (
 // 3 - Determine role at current slot
 // 4 - Perform assigned role, if any
 func (r *runner) run(ctx context.Context) {
+	if r == nil || r.validator == nil {
+		log.Error("validator runner is nil")
+		return
+	}
 	v := r.validator
 	cleanup := v.Done
 	defer cleanup()

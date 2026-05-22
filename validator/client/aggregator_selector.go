@@ -78,6 +78,9 @@ func (p *localSelector) cacheProof(key attSelectionKey, proof []byte) {
 }
 
 func (p *localSelector) RefreshSelectionProofs(context.Context) error {
+	if p == nil {
+		return errors.New("local selector is nil")
+	}
 	p.proofLock.Lock()
 	defer p.proofLock.Unlock()
 	p.proofCache = make(map[attSelectionKey][]byte)
@@ -85,6 +88,9 @@ func (p *localSelector) RefreshSelectionProofs(context.Context) error {
 }
 
 func (p *localSelector) AttestationSelectionProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error) {
+	if p == nil {
+		return nil, errors.New("local selector is nil")
+	}
 	idx, err := p.v.indexFromPubkey(pubKey)
 	if err != nil {
 		return nil, errors.Wrap(err, "index from pubkey")
@@ -112,6 +118,9 @@ func (p *localSelector) AttestationSelectionProof(ctx context.Context, slot prim
 }
 
 func (p *localSelector) ClaimAggregateSlot(slot primitives.Slot, committeeIndex primitives.CommitteeIndex) bool {
+	if p == nil {
+		return false
+	}
 	k := validatorSubnetSubscriptionKey(slot, committeeIndex)
 	p.dedupLock.Lock()
 	defer p.dedupLock.Unlock()
