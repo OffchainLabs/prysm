@@ -30,6 +30,9 @@ func OverrideBeaconConfig(c *BeaconChainConfig) {
 
 // Copy returns a copy of the config object.
 func (b *BeaconChainConfig) Copy() *BeaconChainConfig {
+	if b == nil {
+		panic("cannot copy nil BeaconChainConfig") // lint:nopanic -- Preserve nil receiver failure while keeping nonnil return contract.
+	}
 	cfgrw.RLock()
 	defer cfgrw.RUnlock()
 	config, ok := deepcopy.Copy(*b).(BeaconChainConfig)

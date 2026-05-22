@@ -88,6 +88,9 @@ func (c *Client) NodeURL() string {
 
 // Get is a generic, opinionated GET function to reduce boilerplate amongst the getters in this package.
 func (c *Client) Get(ctx context.Context, path string, opts ...ReqOption) ([]byte, error) {
+	if c == nil {
+		return nil, errors.New("client is nil")
+	}
 	u := c.baseURL.ResolveReference(&url.URL{Path: path})
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), http.NoBody)
 	if err != nil {

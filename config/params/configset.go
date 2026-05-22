@@ -166,6 +166,9 @@ func (r *configset) byName(name string) (*BeaconChainConfig, error) {
 	if !ok {
 		return nil, errors.Wrapf(errConfigNotFound, "name=%s is not a known BeaconChainConfig name", name)
 	}
+	if c == nil {
+		return nil, errors.Wrapf(errConfigNotFound, "name=%s has nil BeaconChainConfig", name)
+	}
 	return c, nil
 }
 
