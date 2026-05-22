@@ -197,6 +197,10 @@ func (s *Server) GetForkChoice(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get forkchoice dump: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if dump == nil {
+		httputil.HandleError(w, "Could not get forkchoice dump: nil dump", http.StatusInternalServerError)
+		return
+	}
 
 	nodes := make([]*structs.ForkChoiceNode, len(dump.ForkChoiceNodes))
 	for i, n := range dump.ForkChoiceNodes {
@@ -282,6 +286,10 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 
 	blk, err := s.Blocker.Block(ctx, []byte(blockId))
 	if !shared.WriteBlockFetchError(w, blk, err) {
+		return
+	}
+	if blk == nil || blk.IsNil() {
+		httputil.HandleError(w, "Block is nil", http.StatusInternalServerError)
 		return
 	}
 
