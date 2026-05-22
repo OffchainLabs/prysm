@@ -158,7 +158,11 @@ func (s *Store) CheckAttesterDoubleVotes(
 				signingRootsBkt := tx.Bucket(attestationDataRootsBucket)
 				attRecordsBkt := tx.Bucket(attestationRecordsBucket)
 
-				encEpoch := encodeTargetEpoch(attToProcess.IndexedAttestation.GetData().Target.Epoch)
+				data := attToProcess.IndexedAttestation.GetData()
+				if data == nil || data.Target == nil {
+					return errors.New("nil indexed attestation data")
+				}
+				encEpoch := encodeTargetEpoch(data.Target.Epoch)
 				localDoubleVotes := make([]*slashertypes.AttesterDoubleVote, 0)
 
 				for _, valIdx := range attToProcess.IndexedAttestation.GetAttestingIndices() {
@@ -196,7 +200,7 @@ func (s *Store) CheckAttesterDoubleVotes(
 					// Build the proof of double vote.
 					slashAtt := &slashertypes.AttesterDoubleVote{
 						ValidatorIndex: primitives.ValidatorIndex(valIdx),
-						Target:         attToProcess.IndexedAttestation.GetData().Target.Epoch,
+						Target:         data.Target.Epoch,
 						Wrapper_1:      existingAttRecord,
 						Wrapper_2:      attToProcess,
 					}
@@ -282,7 +286,11 @@ func (s *Store) SaveAttestationRecordsForValidators(
 	encodedRecords := make([][]byte, attWrappersCount)
 
 	for i, attestation := range attWrappers {
-		encEpoch := encodeTargetEpoch(attestation.IndexedAttestation.GetData().Target.Epoch)
+		data := attestation.IndexedAttestation.GetData()
+		if data == nil || data.Target == nil {
+			return errors.New("nil indexed attestation data")
+		}
+		encEpoch := encodeTargetEpoch(data.Target.Epoch)
 
 		value, err := encodeAttestationRecord(attestation)
 		if err != nil {
@@ -629,10 +637,14 @@ func (s *Store) HighestAttestations(
 					if err != nil {
 						return err
 					}
+					data := attWrapper.IndexedAttestation.GetData()
+					if data == nil || data.Source == nil || data.Target == nil {
+						return errors.New("nil indexed attestation data")
+					}
 					highestAtt := &ethpb.HighestAttestation{
 						ValidatorIndex:     uint64(indices[i]),
-						HighestSourceEpoch: attWrapper.IndexedAttestation.GetData().Source.Epoch,
-						HighestTargetEpoch: attWrapper.IndexedAttestation.GetData().Target.Epoch,
+						HighestSourceEpoch: data.Source.Epoch,
+						HighestTargetEpoch: data.Target.Epoch,
 					}
 					history = append(history, highestAtt)
 					break
