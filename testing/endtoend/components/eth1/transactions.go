@@ -34,6 +34,13 @@ const txCount = 20
 
 var fundedAccount *keystore.Key
 
+func fundedAccountAddress() (common.Address, error) {
+	if fundedAccount == nil {
+		return common.Address{}, errors.New("funded account is nil")
+	}
+	return fundedAccount.Address, nil
+}
+
 type TransactionGenerator struct {
 	keystore      string
 	seed          int64
@@ -131,7 +138,11 @@ func (s *TransactionGenerator) Started() <-chan struct{} {
 
 func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.Int, addr string, txCount uint64, backend *ethclient.Client, al bool, useLargeBlobs bool) error {
 	sender := common.HexToAddress(addr)
-	nonce, err := backend.PendingNonceAt(context.Background(), fundedAccount.Address)
+	fundedAddress, err := fundedAccountAddress()
+	if err != nil {
+		return err
+	}
+	nonce, err := backend.PendingNonceAt(context.Background(), fundedAddress)
 	if err != nil {
 		return err
 	}

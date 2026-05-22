@@ -2,6 +2,7 @@ package epoch_processing
 
 import (
 	"context"
+	"errors"
 	"path"
 	"testing"
 
@@ -33,6 +34,10 @@ func processRewardsAndPenaltiesPrecomputeWrapper(t *testing.T, st state.BeaconSt
 	require.NoError(t, err)
 	vp, bp, err = altair.ProcessEpochParticipation(ctx, st, bp, vp)
 	require.NoError(t, err)
+	if bp == nil {
+		t.Fatal("nil precompute balances")
+		return nil, errors.New("nil precompute balances")
+	}
 
 	st, err = altair.ProcessRewardsAndPenaltiesPrecompute(st, bp, vp)
 	require.NoError(t, err, "Could not process reward")

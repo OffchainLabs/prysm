@@ -93,6 +93,10 @@ func runLightClientSingleMerkleProofTestBeaconState(t *testing.T, testFolderPath
 	default:
 		t.Fatalf("Unsupported version: %d", v)
 	}
+	if beaconState == nil || beaconState.IsNil() {
+		t.Fatal("beacon state is nil")
+		return
+	}
 
 	beaconStateRoot, err := beaconState.HashTreeRoot(ctx)
 	require.NoError(t, err)
@@ -119,12 +123,14 @@ func runLightClientSingleMerkleProofTestBeaconState(t *testing.T, testFolderPath
 	if strings.Contains(testName, "current_sync_committee") {
 		syncCommittee, err := beaconState.CurrentSyncCommittee()
 		require.NoError(t, err)
+		require.NotNil(t, syncCommittee)
 		item32, err := syncCommittee.HashTreeRoot()
 		require.NoError(t, err)
 		item = item32[:]
 	} else if strings.Contains(testName, "next_sync_committee") {
 		syncCommittee, err := beaconState.NextSyncCommittee()
 		require.NoError(t, err)
+		require.NotNil(t, syncCommittee)
 		item32, err := syncCommittee.HashTreeRoot()
 		require.NoError(t, err)
 		item = item32[:]
@@ -153,6 +159,7 @@ func runLightClientSingleMerkleProofTestBeaconBlockBody(t *testing.T, testFolder
 		require.NoError(t, beaconBlockBody.UnmarshalSSZ(beaconBlockBodySSZ), "Failed to unmarshal")
 		beaconBlockBodyRoot, err = beaconBlockBody.HashTreeRoot()
 		require.NoError(t, err)
+		require.NotNil(t, beaconBlockBody.ExecutionPayload)
 		executionPayloadRoot, err = beaconBlockBody.ExecutionPayload.HashTreeRoot()
 		require.NoError(t, err)
 	case version.Deneb:
@@ -160,6 +167,7 @@ func runLightClientSingleMerkleProofTestBeaconBlockBody(t *testing.T, testFolder
 		require.NoError(t, beaconBlockBody.UnmarshalSSZ(beaconBlockBodySSZ), "Failed to unmarshal")
 		beaconBlockBodyRoot, err = beaconBlockBody.HashTreeRoot()
 		require.NoError(t, err)
+		require.NotNil(t, beaconBlockBody.ExecutionPayload)
 		executionPayloadRoot, err = beaconBlockBody.ExecutionPayload.HashTreeRoot()
 		require.NoError(t, err)
 	case version.Electra, version.Fulu:
@@ -167,6 +175,7 @@ func runLightClientSingleMerkleProofTestBeaconBlockBody(t *testing.T, testFolder
 		require.NoError(t, beaconBlockBody.UnmarshalSSZ(beaconBlockBodySSZ), "Failed to unmarshal")
 		beaconBlockBodyRoot, err = beaconBlockBody.HashTreeRoot()
 		require.NoError(t, err)
+		require.NotNil(t, beaconBlockBody.ExecutionPayload)
 		executionPayloadRoot, err = beaconBlockBody.ExecutionPayload.HashTreeRoot()
 		require.NoError(t, err)
 	default:

@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/pkg/errors"
 )
 
 func (s *Simulator) generateBlockHeadersForSlot(
@@ -72,6 +73,9 @@ func (s *Simulator) signBlockHeader(
 	beaconState state.BeaconState,
 	header *ethpb.SignedBeaconBlockHeader,
 ) (bls.Signature, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	domain, err := signing.Domain(
 		beaconState.Fork(),
 		0,
@@ -94,5 +98,8 @@ func (s *Simulator) signBlockHeader(
 		return nil, err
 	}
 	validatorPrivKey := s.srvConfig.PrivateKeysByValidatorIndex[header.Header.ProposerIndex]
+	if validatorPrivKey == nil {
+		return nil, errors.New("validator private key is nil")
+	}
 	return validatorPrivKey.Sign(signingRoot[:]), nil
 }

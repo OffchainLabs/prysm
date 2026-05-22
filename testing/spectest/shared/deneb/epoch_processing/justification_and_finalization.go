@@ -2,6 +2,7 @@ package epoch_processing
 
 import (
 	"context"
+	"errors"
 	"path"
 	"testing"
 
@@ -32,6 +33,10 @@ func processJustificationAndFinalizationPrecomputeWrapper(t *testing.T, st state
 	require.NoError(t, err)
 	_, bp, err = altair.ProcessEpochParticipation(ctx, st, bp, vp)
 	require.NoError(t, err)
+	if bp == nil {
+		t.Fatal("nil precompute balances")
+		return nil, errors.New("nil precompute balances")
+	}
 	activeBal, targetPrevious, targetCurrent, err := st.UnrealizedCheckpointBalances()
 	require.NoError(t, err)
 	require.Equal(t, bp.ActiveCurrentEpoch, activeBal)

@@ -142,72 +142,91 @@ func postEvaluation(nodeIdx int, requests map[string]endpoint, epoch primitives.
 	// verify that block SSZ responses have the correct structure
 	blockData := requests["/beacon/blocks/{param1}"]
 	blindedBlockData := requests["/beacon/blinded_blocks/{param1}"]
+	if blockData == nil || blindedBlockData == nil {
+		return errors.New("block endpoint data is nil")
+	}
+	blockSSZ := blockData.getSszResp()
+	if blockSSZ == nil {
+		return errors.New("block SSZ response is nil")
+	}
+	blindedBlockSSZ := blindedBlockData.getSszResp()
+	if blindedBlockSSZ == nil {
+		return errors.New("blinded block SSZ response is nil")
+	}
 	if epoch < params.BeaconConfig().AltairForkEpoch {
 		b := &ethpb.SignedBeaconBlock{}
-		if err := b.UnmarshalSSZ(blockData.getSszResp()); err != nil {
+		if err := b.UnmarshalSSZ(blockSSZ); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 		bb := &ethpb.SignedBeaconBlock{}
-		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
+		if err := bb.UnmarshalSSZ(blindedBlockSSZ); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 	} else if epoch < params.BeaconConfig().BellatrixForkEpoch {
 		b := &ethpb.SignedBeaconBlockAltair{}
-		if err := b.UnmarshalSSZ(blockData.getSszResp()); err != nil {
+		if err := b.UnmarshalSSZ(blockSSZ); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 		bb := &ethpb.SignedBeaconBlockAltair{}
-		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
+		if err := bb.UnmarshalSSZ(blindedBlockSSZ); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 	} else if epoch < params.BeaconConfig().CapellaForkEpoch {
 		b := &ethpb.SignedBeaconBlockBellatrix{}
-		if err := b.UnmarshalSSZ(blockData.getSszResp()); err != nil {
+		if err := b.UnmarshalSSZ(blockSSZ); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 		bb := &ethpb.SignedBlindedBeaconBlockBellatrix{}
-		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
+		if err := bb.UnmarshalSSZ(blindedBlockSSZ); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 	} else if epoch < params.BeaconConfig().DenebForkEpoch {
 		b := &ethpb.SignedBeaconBlockCapella{}
-		if err := b.UnmarshalSSZ(blockData.getSszResp()); err != nil {
+		if err := b.UnmarshalSSZ(blockSSZ); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 		bb := &ethpb.SignedBlindedBeaconBlockCapella{}
-		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
+		if err := bb.UnmarshalSSZ(blindedBlockSSZ); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 	} else if epoch < params.BeaconConfig().ElectraForkEpoch {
 		b := &ethpb.SignedBeaconBlockDeneb{}
-		if err := b.UnmarshalSSZ(blockData.getSszResp()); err != nil {
+		if err := b.UnmarshalSSZ(blockSSZ); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 		bb := &ethpb.SignedBlindedBeaconBlockDeneb{}
-		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
+		if err := bb.UnmarshalSSZ(blindedBlockSSZ); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 	} else {
 		b := &ethpb.SignedBeaconBlockElectra{}
-		if err := b.UnmarshalSSZ(blockData.getSszResp()); err != nil {
+		if err := b.UnmarshalSSZ(blockSSZ); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 		bb := &ethpb.SignedBlindedBeaconBlockElectra{}
-		if err := bb.UnmarshalSSZ(blindedBlockData.getSszResp()); err != nil {
+		if err := bb.UnmarshalSSZ(blindedBlockSSZ); err != nil {
 			return errors.Wrap(err, msgSSZUnmarshalFailed)
 		}
 	}
 
 	// verify that dependent root of proposer duties matches block header
 	blockHeaderData := requests["/beacon/headers/{param1}"]
-	header, ok := blockHeaderData.getPResp().(*structs.GetBlockHeaderResponse)
+	if blockHeaderData == nil {
+		return errors.New("block header endpoint data is nil")
+	}
+	blockHeaderResp := blockHeaderData.getPResp()
+	header, ok := blockHeaderResp.(*structs.GetBlockHeaderResponse)
 	if !ok {
-		return fmt.Errorf(msgWrongJSON, &structs.GetBlockHeaderResponse{}, blockHeaderData.getPResp())
+		return fmt.Errorf(msgWrongJSON, &structs.GetBlockHeaderResponse{}, blockHeaderResp)
 	}
 	dutiesData := requests["/validator/duties/proposer/{param1}"]
-	duties, ok := dutiesData.getPResp().(*structs.GetProposerDutiesResponse)
+	if dutiesData == nil {
+		return errors.New("duties endpoint data is nil")
+	}
+	dutiesResp := dutiesData.getPResp()
+	duties, ok := dutiesResp.(*structs.GetProposerDutiesResponse)
 	if !ok {
-		return fmt.Errorf(msgWrongJSON, &structs.GetProposerDutiesResponse{}, dutiesData.getPResp())
+		return fmt.Errorf(msgWrongJSON, &structs.GetProposerDutiesResponse{}, dutiesResp)
 	}
 	if header.Data.Root != duties.DependentRoot {
 		return fmt.Errorf("header root %s does not match duties root %s ", header.Data.Root, duties.DependentRoot)
@@ -225,9 +244,13 @@ func postEvaluation(nodeIdx int, requests map[string]endpoint, epoch primitives.
 	}
 
 	syncingData := requests["/node/syncing"]
-	sync, ok := syncingData.getPResp().(*structs.SyncStatusResponse)
+	if syncingData == nil {
+		return errors.New("syncing endpoint data is nil")
+	}
+	syncingResp := syncingData.getPResp()
+	sync, ok := syncingResp.(*structs.SyncStatusResponse)
 	if !ok {
-		return fmt.Errorf(msgWrongJSON, &structs.SyncStatusResponse{}, syncingData.getPResp())
+		return fmt.Errorf(msgWrongJSON, &structs.SyncStatusResponse{}, syncingResp)
 	}
 	headSlot := sync.Data.HeadSlot
 
