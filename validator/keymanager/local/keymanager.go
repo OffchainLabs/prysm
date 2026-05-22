@@ -205,6 +205,9 @@ func (km *Keymanager) FetchValidatingPrivateKeys(ctx context.Context) ([][32]byt
 		if !ok {
 			return nil, errors.New("Could not fetch private key")
 		}
+		if seckey == nil {
+			return nil, errors.New("private key is nil")
+		}
 		privKeys[i] = bytesutil.ToBytes32(seckey.Marshal())
 	}
 	return privKeys, nil
@@ -221,6 +224,9 @@ func (_ *Keymanager) Sign(ctx context.Context, req *validatorpb.SignRequest) (bl
 	lock.RUnlock()
 	if !ok {
 		return nil, errors.New("no signing key found in keys cache")
+	}
+	if secretKey == nil {
+		return nil, errors.New("nil signing key found in keys cache")
 	}
 	return secretKey.Sign(req.SigningRoot), nil
 }

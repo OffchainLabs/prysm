@@ -115,6 +115,9 @@ func (km *Keymanager) reloadAccountsFromKeystore(keystore *AccountsKeystoreRepre
 	if km.wallet == nil {
 		return errors.New("wallet is nil")
 	}
+	if keystore == nil || keystore.Crypto == nil {
+		return errors.New("keystore is nil")
+	}
 	decryptor := keystorev4.New()
 	encodedAccounts, err := decryptor.Decrypt(keystore.Crypto, km.wallet.Password())
 	if err != nil {
