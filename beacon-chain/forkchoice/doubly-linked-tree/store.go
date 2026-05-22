@@ -238,6 +238,9 @@ func (s *Store) pruneFinalizedNodeByRootMap(ctx context.Context, node, finalized
 		}
 	}
 	en := s.emptyNodeByRoot[node.root]
+	if en == nil {
+		return nil
+	}
 	en.children = nil
 	delete(s.emptyNodeByRoot, node.root)
 	fn := s.fullNodeByRoot[node.root]

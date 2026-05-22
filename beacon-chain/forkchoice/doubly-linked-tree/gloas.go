@@ -37,10 +37,16 @@ func (f *ForkChoice) CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool) 
 		return n.root, false
 	}
 	pn := s.choosePayloadContent(n)
+	if pn == nil || pn.node == nil {
+		return [32]byte{}, false
+	}
 	return pn.node.root, pn.full
 }
 
 func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock, parent **PayloadNode, blockHash *[32]byte) error {
+	if parent == nil || blockHash == nil {
+		return errors.New("nil payload status output")
+	}
 	sb, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
 		return err
@@ -55,15 +61,22 @@ func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock,
 	}
 	*blockHash = bid.BlockHash()
 	parentRoot := block.ParentRoot()
-	*parent = s.emptyNodeByRoot[parentRoot]
-	if *parent == nil {
+	p := s.emptyNodeByRoot[parentRoot]
+	if p == nil {
 		// This is the tree root node.
 		return nil
 	}
-	if bid.ParentBlockHash() == (*parent).node.blockHash {
-		// block builds on full
-		*parent = s.fullNodeByRoot[(*parent).node.root]
+	if p.node == nil {
+		return errors.New("nil parent payload node")
 	}
+	if bid.ParentBlockHash() == p.node.blockHash {
+		// block builds on full
+		p = s.fullNodeByRoot[p.node.root]
+		if p == nil || p.node == nil {
+			return errors.New("nil full parent payload node")
+		}
+	}
+	*parent = p
 	return nil
 }
 
@@ -72,6 +85,9 @@ func (s *Store) resolveParentPayloadStatus(block interfaces.ReadOnlyBeaconBlock,
 func (s *Store) applyWeightChangesConsensusNode(ctx context.Context, n *Node) error {
 	// Recursively calling the children to sum their weights.
 	en := s.emptyNodeByRoot[n.root]
+	if en == nil {
+		return errors.New("nil empty payload node")
+	}
 	if err := s.applyWeightChangesPayloadNode(ctx, en); err != nil {
 		return err
 	}
@@ -94,8 +110,7 @@ func (s *Store) applyWeightChangesConsensusNode(ctx context.Context, n *Node) er
 // using the current balance stored in each node.
 func (s *Store) applyWeightChangesPayloadNode(ctx context.Context, n *PayloadNode) error {
 	if n == nil {
-		log.Error("tried to apply weight changes to a nil payload node")
-		return nil
+		return errors.New("nil payload node")
 	}
 	// Recursively calling the children to sum their weights.
 	childrenWeight := uint64(0)
@@ -115,6 +130,9 @@ func (s *Store) applyWeightChangesPayloadNode(ctx context.Context, n *PayloadNod
 // allConsensusChildren returns the list of all consensus blocks that build on the given node.
 func (s *Store) allConsensusChildren(n *Node) []*Node {
 	en := s.emptyNodeByRoot[n.root]
+	if en == nil {
+		return nil
+	}
 	fn, ok := s.fullNodeByRoot[n.root]
 	if ok {
 		return append(slices.Clone(en.children), fn.children...)
@@ -124,6 +142,9 @@ func (s *Store) allConsensusChildren(n *Node) []*Node {
 
 // setNodeAndParentValidated sets the current node and all the ancestors as validated (i.e. non-optimistic).
 func (s *Store) setNodeAndParentValidated(ctx context.Context, pn *PayloadNode) error {
+	if pn == nil || pn.node == nil {
+		return errors.New("nil payload node")
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -135,6 +156,9 @@ func (s *Store) setNodeAndParentValidated(ctx context.Context, pn *PayloadNode) 
 	if pn.full {
 		// set the empty node also a as valid
 		en := s.emptyNodeByRoot[pn.node.root]
+		if en == nil {
+			return errors.New("nil empty payload node")
+		}
 		en.optimistic = false
 	}
 	if pn.node.parent == nil {
@@ -145,6 +169,9 @@ func (s *Store) setNodeAndParentValidated(ctx context.Context, pn *PayloadNode) 
 
 // fullParent returns the latest full node that this block builds on.
 func (s *Store) fullParent(pn *PayloadNode) *PayloadNode {
+	if pn == nil || pn.node == nil {
+		return nil
+	}
 	parent := pn.node.parent
 	for ; parent != nil && !parent.full; parent = parent.node.parent {
 	}
@@ -179,6 +206,9 @@ func (s *Store) checkpointPayloadHashForRoot(root [32]byte) [32]byte {
 // updateBestDescendantPayloadNode updates the best descendant of this node and its
 // children.
 func (s *Store) updateBestDescendantPayloadNode(ctx context.Context, n *PayloadNode, justifiedEpoch, finalizedEpoch, currentEpoch primitives.Epoch) error {
+	if n == nil {
+		return errors.New("nil payload node")
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -198,7 +228,7 @@ func (s *Store) updateBestDescendantPayloadNode(ctx context.Context, n *PayloadN
 			// parent's best child doesn't.
 			bestWeight = child.weight
 			bestChild = child
-		} else if childLeadsToViableHead {
+		} else if childLeadsToViableHead && bestChild != nil {
 			// If both are viable, compare their weights.
 			if child.weight == bestWeight {
 				// Tie-breaker of equal weights by root.
@@ -235,6 +265,9 @@ func (s *Store) updateBestDescendantConsensusNode(ctx context.Context, n *Node, 
 	}
 
 	en := s.emptyNodeByRoot[n.root]
+	if en == nil {
+		return errors.New("nil empty payload node")
+	}
 	if err := s.updateBestDescendantPayloadNode(ctx, en, justifiedEpoch, finalizedEpoch, currentEpoch); err != nil {
 		return err
 	}
@@ -246,7 +279,11 @@ func (s *Store) updateBestDescendantConsensusNode(ctx context.Context, n *Node, 
 	if err := s.updateBestDescendantPayloadNode(ctx, fn, justifiedEpoch, finalizedEpoch, currentEpoch); err != nil {
 		return err
 	}
-	n.bestDescendant = s.choosePayloadContent(n).bestDescendant
+	pn := s.choosePayloadContent(n)
+	if pn == nil || pn.node == nil {
+		return errors.New("nil payload node")
+	}
+	n.bestDescendant = pn.bestDescendant
 	return nil
 }
 
@@ -282,6 +319,9 @@ func (s *Store) choosePayloadContent(n *Node) *PayloadNode {
 	}
 	fn := s.fullNodeByRoot[n.root]
 	en := s.emptyNodeByRoot[n.root]
+	if en == nil {
+		return fn
+	}
 	if fn == nil {
 		return en
 	}
@@ -315,6 +355,9 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 		optimistic = n.parent.optimistic
 	}
 	en := s.emptyNodeByRoot[n.root]
+	if en == nil {
+		return nil, errors.New("nil empty payload node")
+	}
 	timestamp := en.timestamp
 	fn := s.fullNodeByRoot[n.root]
 	if fn != nil {
@@ -582,10 +625,10 @@ func (f *ForkChoice) FullHead(ctx context.Context) ([32]byte, [32]byte, bool, er
 		return hr, n.blockHash, true, nil
 	}
 	pn := f.store.choosePayloadContent(n)
-	if pn == nil {
+	if pn == nil || pn.node == nil {
 		return hr, [32]byte{}, false, nil
 	}
-	if pn.full {
+	if pn.full && slots.ToEpoch(n.slot) >= params.BeaconConfig().GloasForkEpoch {
 		return hr, pn.node.blockHash, true, nil
 	}
 	fullAncestor := f.store.fullParent(pn)

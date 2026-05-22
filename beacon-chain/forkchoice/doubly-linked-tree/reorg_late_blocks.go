@@ -51,6 +51,9 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 		return
 	}
 	head := f.store.choosePayloadContent(consensusHead)
+	if head == nil || head.node == nil {
+		return
+	}
 	// Only reorg blocks that arrive late
 	early, err := head.arrivedEarly(f.store.genesisTime)
 	if err != nil {
@@ -125,7 +128,7 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	if slots.ToEpoch(consensusHead.slot) >= params.BeaconConfig().GloasForkEpoch {
 		head = f.store.emptyNodeByRoot[consensusHead.root]
 	}
-	if head == nil {
+	if head == nil || head.node == nil {
 		return consensusHead.root
 	}
 	early, err := head.arrivedEarly(f.store.genesisTime)
