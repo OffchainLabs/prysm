@@ -535,6 +535,9 @@ func ProcessBlockForStateRoot(
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get sync aggregate from block")
 	}
+	if sa == nil {
+		return nil, errors.New("sync aggregate is nil")
+	}
 	state, _, err = altair.ProcessSyncAggregate(ctx, state, sa)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessSyncAggregateFailed, err.Error())
