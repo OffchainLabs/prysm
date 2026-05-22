@@ -77,7 +77,10 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		return pubsub.ValidationReject, wrapAttestationError(err, att)
 	}
 
-	data := att.GetData()
+	data := pendingAttData(att)
+	if data == nil || data.Source == nil || data.Target == nil {
+		return pubsub.ValidationReject, errNilMessage
+	}
 
 	// Do not process slot 0 attestations.
 	if data.Slot == 0 {
@@ -264,9 +267,12 @@ func (s *Service) validateCommitteeIndexAndCount(
 	a eth.Att,
 	bs state.ReadOnlyBeaconState,
 ) (primitives.CommitteeIndex, uint64, pubsub.ValidationResult, error) {
+	data := pendingAttData(a)
+	if data == nil {
+		return 0, 0, pubsub.ValidationReject, errNilMessage
+	}
 	// Validate committee index based on fork.
 	if a.Version() >= version.Electra {
-		data := a.GetData()
 		attEpoch := slots.ToEpoch(data.Slot)
 		postGloas := attEpoch >= params.BeaconConfig().GloasForkEpoch
 		if postGloas {
@@ -281,7 +287,7 @@ func (s *Service) validateCommitteeIndexAndCount(
 		}
 	}
 
-	valCount, err := helpers.ActiveValidatorCount(ctx, bs, slots.ToEpoch(a.GetData().Slot))
+	valCount, err := helpers.ActiveValidatorCount(ctx, bs, slots.ToEpoch(data.Slot))
 	if err != nil {
 		return 0, 0, pubsub.ValidationIgnore, err
 	}
@@ -371,6 +377,9 @@ func validateAttestingIndex(
 // [REJECT] If attestation.data.index == 1, the execution payload for the block passes validation. (New in Gloas)
 // [IGNORE] When attestation.data.index == 1, the execution payload for the block has been seen. (New in Gloas)
 func (s *Service) validateGloasCommitteeIndex(data *eth.AttestationData) (pubsub.ValidationResult, error) {
+	if data == nil {
+		return pubsub.ValidationReject, errNilMessage
+	}
 	if data.CommitteeIndex >= 2 {
 		return pubsub.ValidationReject, errors.New("attestation data's committee index must be < 2")
 	}
@@ -402,6 +411,10 @@ func (s *Service) validateGloasCommitteeIndex(data *eth.AttestationData) (pubsub
 
 // generateUnaggregatedAttCacheKey generates the cache key for unaggregated attestation tracking.
 func generateUnaggregatedAttCacheKey(att eth.Att) (string, error) {
+	data := pendingAttData(att)
+	if data == nil {
+		return "", errNilMessage
+	}
 	var attester uint64
 	if att.Version() >= version.Electra {
 		if !att.IsSingle() {
@@ -417,7 +430,7 @@ func generateUnaggregatedAttCacheKey(att eth.Att) (string, error) {
 	}
 
 	b := make([]byte, 24)
-	binary.LittleEndian.PutUint64(b, uint64(att.GetData().Slot))
+	binary.LittleEndian.PutUint64(b, uint64(data.Slot))
 	binary.LittleEndian.PutUint64(b[8:16], uint64(att.GetCommitteeIndex()))
 	binary.LittleEndian.PutUint64(b[16:], attester)
 	return string(b), nil
@@ -454,10 +467,16 @@ func (s *Service) hasBlockAndState(ctx context.Context, blockRoot [32]byte) bool
 }
 
 func wrapAttestationError(err error, att eth.Att) error {
+	if att == nil || att.IsNil() {
+		return errors.Wrap(err, "nil attestation")
+	}
+	attData := pendingAttData(att)
+	if attData == nil || attData.Source == nil || attData.Target == nil {
+		return errors.Wrap(err, "nil attestation data")
+	}
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 	committeeIndex := att.GetCommitteeIndex()
 
-	attData := att.GetData()
 	slot := attData.Slot
 	slotInEpoch := slot % slotsPerEpoch
 	oldCommitteeIndex := attData.CommitteeIndex
