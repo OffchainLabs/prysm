@@ -33,11 +33,17 @@ func GenerateFullBlockBellatrix(
 	slot primitives.Slot,
 ) (*ethpb.SignedBeaconBlockBellatrix, error) {
 	ctx := context.Background()
+	if bState == nil || bState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	currentSlot := bState.Slot()
 	if currentSlot > slot {
 		return nil, fmt.Errorf("current slot in state is larger than given slot. %d > %d", currentSlot, slot)
 	}
 	bState = bState.Copy()
+	if bState == nil || bState.IsNil() {
+		return nil, errors.New("beacon state copy is nil")
+	}
 
 	if conf == nil {
 		conf = &BlockGenConfig{}
@@ -122,9 +128,15 @@ func GenerateFullBlockBellatrix(
 	}
 
 	stCopy := bState.Copy()
+	if stCopy == nil || stCopy.IsNil() {
+		return nil, errors.New("beacon state copy is nil")
+	}
 	stCopy, err = transition.ProcessSlots(context.Background(), stCopy, slot)
 	if err != nil {
 		return nil, err
+	}
+	if stCopy == nil || stCopy.IsNil() {
+		return nil, errors.New("processed beacon state is nil")
 	}
 
 	parentExecution, err := stCopy.LatestExecutionPayloadHeader()
@@ -208,6 +220,9 @@ func GenerateFullBlockBellatrix(
 	signature, err := BlockSignature(bState, block, privs)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute block signature")
+	}
+	if signature == nil {
+		return nil, errors.New("block signature is nil")
 	}
 
 	return &ethpb.SignedBeaconBlockBellatrix{Block: block, Signature: signature.Marshal()}, nil
