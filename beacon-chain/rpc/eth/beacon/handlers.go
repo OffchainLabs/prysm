@@ -1068,14 +1068,21 @@ func (s *Server) validateEquivocation(blk interfaces.ReadOnlyBeaconBlock) error 
 func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte, proofs [][]byte) error {
 	const numberOfColumns = fieldparams.NumberOfColumns
 
+	if blk == nil || blk.IsNil() {
+		return errNilBlock
+	}
 	if blk.Version() < version.Deneb {
 		return nil
 	}
-	commitments, err := blk.Block().Body().BlobKzgCommitments()
+	block := blk.Block()
+	if block == nil || block.IsNil() {
+		return errNilBlock
+	}
+	commitments, err := block.Body().BlobKzgCommitments()
 	if err != nil {
 		return errors.Wrap(err, "could not get blob kzg commitments")
 	}
-	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(blk.Block().Slot())
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(block.Slot())
 	if len(blobs) > maxBlobsPerBlock {
 		return fmt.Errorf("number of blobs over max, %d > %d", len(blobs), maxBlobsPerBlock)
 	}
