@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -34,7 +33,12 @@ func (s *Server) BlockRewards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := blocks.BeaconBlockIsNil(blk); err != nil {
+	if blk == nil || blk.IsNil() {
+		httputil.HandleError(w, fmt.Sprintf("block id %s was not found", blockId), http.StatusNotFound)
+		return
+	}
+	blkBlock := blk.Block()
+	if blkBlock == nil || blkBlock.IsNil() {
 		httputil.HandleError(w, fmt.Sprintf("block id %s was not found", blockId), http.StatusNotFound)
 		return
 	}
@@ -49,12 +53,12 @@ func (s *Server) BlockRewards(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	blkRoot, err := blk.Block().HashTreeRoot()
+	blkRoot, err := blkBlock.HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	blockRewards, httpError := s.BlockRewardFetcher.GetBlockRewardsData(ctx, blk.Block())
+	blockRewards, httpError := s.BlockRewardFetcher.GetBlockRewardsData(ctx, blkBlock)
 	if httpError != nil {
 		httputil.WriteError(w, httpError)
 		return
@@ -72,6 +76,10 @@ func (s *Server) BlockRewards(w http.ResponseWriter, r *http.Request) {
 func (s *Server) AttestationRewards(w http.ResponseWriter, r *http.Request) {
 	st, ok := s.attRewardsState(w, r)
 	if !ok {
+		return
+	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
 		return
 	}
 	bal, vals, valIndices, ok := attRewardsBalancesAndVals(w, r, st)
@@ -92,7 +100,12 @@ func (s *Server) AttestationRewards(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	blkRoot, err := st.LatestBlockHeader().HashTreeRoot()
+	latestHeader := st.LatestBlockHeader()
+	if latestHeader == nil {
+		httputil.HandleError(w, "Latest block header is nil", http.StatusInternalServerError)
+		return
+	}
+	blkRoot, err := latestHeader.HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -120,17 +133,31 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 	if !shared.WriteBlockFetchError(w, blk, err) {
 		return
 	}
+	if blk == nil || blk.IsNil() {
+		httputil.HandleError(w, fmt.Sprintf("block id %s was not found", blockId), http.StatusNotFound)
+		return
+	}
+	blkBlock := blk.Block()
+	if blkBlock == nil || blkBlock.IsNil() {
+		httputil.HandleError(w, fmt.Sprintf("block id %s was not found", blockId), http.StatusNotFound)
+		return
+	}
 	if blk.Version() == version.Phase0 {
 		httputil.HandleError(w, "Sync committee rewards are not supported for Phase 0", http.StatusBadRequest)
 		return
 	}
 
-	st, httpErr := s.BlockRewardFetcher.GetStateForRewards(ctx, blk.Block())
+	st, httpErr := s.BlockRewardFetcher.GetStateForRewards(ctx, blkBlock)
 	if httpErr != nil {
 		httputil.WriteError(w, httpErr)
 		return
 	}
-	sa, err := blk.Block().Body().SyncAggregate()
+	body := blkBlock.Body()
+	if body == nil || body.IsNil() {
+		httputil.HandleError(w, "Block body is nil", http.StatusInternalServerError)
+		return
+	}
+	sa, err := body.SyncAggregate()
 	if err != nil {
 		httputil.HandleError(w, "Could not get sync aggregate: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -156,7 +183,7 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rewards := make([]int, len(preProcessBals))
-	proposerIndex := blk.Block().ProposerIndex()
+	proposerIndex := blkBlock.ProposerIndex()
 	for i, valIdx := range valIndices {
 		bal, err := st.BalanceAtIndex(valIdx)
 		if err != nil {
@@ -174,7 +201,7 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get optimistic mode info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	blkRoot, err := blk.Block().HashTreeRoot()
+	blkRoot, err := blkBlock.HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not get block root: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -225,6 +252,10 @@ func (s *Server) attRewardsState(w http.ResponseWriter, r *http.Request) (state.
 	st, err := s.Stater.StateBySlot(r.Context(), nextEpochEnd)
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
+		return nil, false
+	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
 		return nil, false
 	}
 	return st, true
