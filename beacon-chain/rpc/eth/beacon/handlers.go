@@ -1159,6 +1159,10 @@ func (s *Server) GetStateFork(w http.ResponseWriter, r *http.Request) {
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
+		return
+	}
 	fork := st.Fork()
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
@@ -1211,6 +1215,10 @@ func (s *Server) GetCommittees(w http.ResponseWriter, r *http.Request) {
 	st, err := s.Stater.State(ctx, []byte(stateId))
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
 		return
 	}
 
@@ -1455,6 +1463,10 @@ func (s *Server) GetFinalityCheckpoints(w http.ResponseWriter, r *http.Request) 
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
+		return
+	}
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
 		helpers.HandleIsOptimisticError(w, err)
@@ -1571,6 +1583,10 @@ func (s *Server) GetPendingConsolidations(w http.ResponseWriter, r *http.Request
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
+		return
+	}
 	if st.Version() < version.Electra {
 		httputil.HandleError(w, "state_id is prior to electra", http.StatusBadRequest)
 		return
@@ -1625,6 +1641,10 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 	st, err := s.Stater.State(ctx, []byte(stateId))
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
 		return
 	}
 	if st.Version() < version.Electra {
@@ -1683,6 +1703,10 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
+		return
+	}
 	if st.Version() < version.Electra {
 		httputil.HandleError(w, "state_id is prior to electra", http.StatusBadRequest)
 		return
@@ -1734,6 +1758,10 @@ func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
 	st, err := s.Stater.State(ctx, []byte(stateId))
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
 		return
 	}
 	if st.Version() < version.Fulu {
