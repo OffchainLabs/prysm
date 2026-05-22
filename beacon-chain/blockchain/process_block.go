@@ -604,6 +604,13 @@ func (s *Service) handleEpochBoundary(ctx context.Context, slot primitives.Slot,
 func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, st state.BeaconState) error {
 	// Feed in block's attestations to fork choice store.
 	for _, a := range blk.Body().Attestations() {
+		if a == nil || a.IsNil() {
+			return errors.New("nil attestation")
+		}
+		data := a.GetData()
+		if data == nil || data.Target == nil {
+			return errors.New("nil attestation data")
+		}
 		committees, err := helpers.AttestationCommitteesFromState(ctx, st, a)
 		if err != nil {
 			return err
@@ -612,13 +619,13 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 		if err != nil {
 			return err
 		}
-		r := bytesutil.ToBytes32(a.GetData().BeaconBlockRoot)
+		r := bytesutil.ToBytes32(data.BeaconBlockRoot)
 		if s.cfg.ForkChoiceStore.HasNode(r) {
 			payloadStatus := true
-			if a.GetData().Target.Epoch >= params.BeaconConfig().GloasForkEpoch {
-				payloadStatus = a.GetData().CommitteeIndex == 1
+			if data.Target.Epoch >= params.BeaconConfig().GloasForkEpoch {
+				payloadStatus = data.CommitteeIndex == 1
 			}
-			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, a.GetData().Slot, payloadStatus)
+			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, data.Slot, payloadStatus)
 		} else if features.Get().EnableExperimentalAttestationPool {
 			if err = s.cfg.AttestationCache.Add(a); err != nil {
 				return err
@@ -730,6 +737,13 @@ func (s *Service) pruneCoveredAttsFromPool(ctx context.Context, headState state.
 // Phase0. Even though we can't provide a valid signature for the dummy aggregate, it does not matter because
 // signatures play no part in pruning attestations.
 func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState state.BeaconState, att ethpb.Att) error {
+	if att == nil || att.IsNil() {
+		return errors.New("nil attestation")
+	}
+	data := att.GetData()
+	if data == nil {
+		return errors.New("nil attestation data")
+	}
 	if att.Version() == version.Phase0 {
 		log.Error("Called pruneCoveredElectraAttsFromPool with a Phase0 attestation")
 		return nil
@@ -768,7 +782,7 @@ func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState
 
 		a := &ethpb.AttestationElectra{
 			AggregationBits: ab,
-			Data:            att.GetData(),
+			Data:            data,
 			CommitteeBits:   cb,
 			Signature:       make([]byte, fieldparams.BLSSignatureLength),
 		}
