@@ -188,11 +188,15 @@ func matchingAtts(atts []ethpbalpha.Att, slot primitives.Slot, attDataRoot []byt
 	postElectra := slots.ToForkVersion(slot) >= version.Electra
 	result := make([]ethpbalpha.Att, 0)
 	for _, att := range atts {
-		if att.GetData().Slot != slot {
+		data := att.GetData()
+		if data == nil {
+			continue
+		}
+		if data.Slot != slot {
 			continue
 		}
 
-		root, err := att.GetData().HashTreeRoot()
+		root, err := data.HashTreeRoot()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get attestation data root")
 		}
@@ -638,6 +642,14 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 
 	if rpcError != nil {
 		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+		return
+	}
+	if attestationData == nil {
+		httputil.HandleError(w, "Could not get attestation data", http.StatusInternalServerError)
+		return
+	}
+	if attestationData.Source == nil || attestationData.Target == nil {
+		httputil.HandleError(w, "Attestation data has nil source or target", http.StatusInternalServerError)
 		return
 	}
 
