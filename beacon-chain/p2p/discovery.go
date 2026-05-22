@@ -88,6 +88,9 @@ func newListener(listenerCreator func() (*discover.UDPv5, error)) (*listenerWrap
 }
 
 func (l *listenerWrapper) Self() *enode.Node {
+	if l == nil || l.listener == nil {
+		return nil
+	}
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return l.listener.Self()
@@ -137,6 +140,9 @@ func (l *listenerWrapper) LocalNode() *enode.LocalNode {
 }
 
 func (l *listenerWrapper) RebootListener() error {
+	if l == nil || l.listener == nil || l.listenerCreator == nil {
+		return errors.New("listener is nil")
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

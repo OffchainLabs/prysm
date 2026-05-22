@@ -214,6 +214,9 @@ func (p *Status) ENR(pid peer.ID) (*enr.Record, error) {
 
 // SetChainState sets the chain state of the given remote peer.
 func (p *Status) SetChainState(pid peer.ID, chainState *pb.StatusV2) {
+	if p == nil || p.scorers == nil || p.scorers.PeerStatusScorer() == nil {
+		return
+	}
 	p.scorers.PeerStatusScorer().SetPeerStatus(pid, chainState, nil)
 }
 
@@ -221,6 +224,9 @@ func (p *Status) SetChainState(pid peer.ID, chainState *pb.StatusV2) {
 // This will error if the peer does not exist.
 // This will error if there is no known chain state for the peer.
 func (p *Status) ChainState(pid peer.ID) (*pb.StatusV2, error) {
+	if p == nil || p.scorers == nil || p.scorers.PeerStatusScorer() == nil {
+		return nil, peerdata.ErrPeerUnknown
+	}
 	return p.scorers.PeerStatusScorer().PeerStatus(pid)
 }
 
@@ -243,6 +249,9 @@ func (p *Status) IsAboveInboundLimit() bool {
 	defer p.store.RUnlock()
 	totalInbound := 0
 	for _, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.ConnState == Connected &&
 			peerData.Direction == network.DirInbound {
 			totalInbound += 1
@@ -262,6 +271,9 @@ func (p *Status) InboundLimit() int {
 
 // SetMetadata sets the metadata of the given remote peer.
 func (p *Status) SetMetadata(pid peer.ID, metaData metadata.Metadata) {
+	if p == nil || p.store == nil {
+		return
+	}
 	p.store.Lock()
 	defer p.store.Unlock()
 
@@ -272,6 +284,9 @@ func (p *Status) SetMetadata(pid peer.ID, metaData metadata.Metadata) {
 // Metadata returns a copy of the metadata corresponding to the provided
 // peer id.
 func (p *Status) Metadata(pid peer.ID) (metadata.Metadata, error) {
+	if p == nil || p.store == nil {
+		return nil, peerdata.ErrPeerUnknown
+	}
 	p.store.RLock()
 	defer p.store.RUnlock()
 
@@ -306,6 +321,9 @@ func (p *Status) SubscribedToSubnet(index uint64) []peer.ID {
 
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		// look at active peers
 		connectedStatus := peerData.ConnState == Connecting || peerData.ConnState == Connected
 		if connectedStatus && peerData.MetaData != nil && !peerData.MetaData.IsNil() && peerData.MetaData.AttnetsBitfield() != nil {
@@ -354,6 +372,9 @@ func (p *Status) ChainStateLastUpdated(pid peer.ID) (time.Time, error) {
 // IsBad states if the peer is to be considered bad (by *any* of the registered scorers).
 // If the peer is unknown this will return `false`, which makes using this function easier than returning an error.
 func (p *Status) IsBad(pid peer.ID) error {
+	if p == nil || p.store == nil {
+		return nil
+	}
 	p.store.RLock()
 	defer p.store.RUnlock()
 
@@ -394,6 +415,9 @@ func (p *Status) NextValidTime(pid peer.ID) (time.Time, error) {
 // SetNextValidTime sets the earliest possible time we are
 // able to contact this peer again.
 func (p *Status) SetNextValidTime(pid peer.ID, nextTime time.Time) {
+	if p == nil || p.store == nil {
+		return
+	}
 	p.store.Lock()
 	defer p.store.Unlock()
 
@@ -439,6 +463,9 @@ func (p *Status) Connecting() []peer.ID {
 	defer p.store.RUnlock()
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.ConnState == Connecting {
 			peers = append(peers, pid)
 		}
@@ -448,10 +475,16 @@ func (p *Status) Connecting() []peer.ID {
 
 // Connected returns the peers that are connected.
 func (p *Status) Connected() []peer.ID {
+	if p == nil || p.store == nil {
+		return []peer.ID{}
+	}
 	p.store.RLock()
 	defer p.store.RUnlock()
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.ConnState == Connected {
 			peers = append(peers, pid)
 		}
@@ -465,6 +498,9 @@ func (p *Status) Inbound() []peer.ID {
 	defer p.store.RUnlock()
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.Direction == network.DirInbound {
 			peers = append(peers, pid)
 		}
@@ -478,6 +514,9 @@ func (p *Status) InboundConnected() []peer.ID {
 	defer p.store.RUnlock()
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.ConnState == Connected && peerData.Direction == network.DirInbound {
 			peers = append(peers, pid)
 		}
@@ -491,6 +530,9 @@ func (p *Status) InboundConnectedWithProtocol(protocol InternetProtocol) []peer.
 	defer p.store.RUnlock()
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil || peerData.Address == nil {
+			continue
+		}
 		if peerData.ConnState == Connected && peerData.Direction == network.DirInbound && strings.Contains(peerData.Address.String(), string(protocol)) {
 			peers = append(peers, pid)
 		}
@@ -504,6 +546,9 @@ func (p *Status) Outbound() []peer.ID {
 	defer p.store.RUnlock()
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.Direction == network.DirOutbound {
 			peers = append(peers, pid)
 		}
@@ -517,6 +562,9 @@ func (p *Status) OutboundConnected() []peer.ID {
 	defer p.store.RUnlock()
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.ConnState == Connected && peerData.Direction == network.DirOutbound {
 			peers = append(peers, pid)
 		}
@@ -530,6 +578,9 @@ func (p *Status) OutboundConnectedWithProtocol(protocol InternetProtocol) []peer
 	defer p.store.RUnlock()
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil || peerData.Address == nil {
+			continue
+		}
 		if peerData.ConnState == Connected && peerData.Direction == network.DirOutbound && strings.Contains(peerData.Address.String(), string(protocol)) {
 			peers = append(peers, pid)
 		}
@@ -543,6 +594,9 @@ func (p *Status) Active() []peer.ID {
 	defer p.store.RUnlock()
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.ConnState == Connecting || peerData.ConnState == Connected {
 			peers = append(peers, pid)
 		}
@@ -556,6 +610,9 @@ func (p *Status) Disconnecting() []peer.ID {
 	defer p.store.RUnlock()
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.ConnState == Disconnecting {
 			peers = append(peers, pid)
 		}
@@ -569,6 +626,9 @@ func (p *Status) Disconnected() []peer.ID {
 	defer p.store.RUnlock()
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.ConnState == Disconnected {
 			peers = append(peers, pid)
 		}
@@ -582,6 +642,9 @@ func (p *Status) Inactive() []peer.ID {
 	defer p.store.RUnlock()
 	peers := make([]peer.ID, 0)
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.ConnState == Disconnecting || peerData.ConnState == Disconnected {
 			peers = append(peers, pid)
 		}
@@ -841,6 +904,9 @@ func (p *Status) PeersToPrune() []peer.ID {
 	peersToPrune := make([]*peerResp, 0)
 	// Select connected and inbound peers to prune.
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.ConnState == Connected &&
 			peerData.Direction == network.DirInbound && !p.store.IsTrustedPeer(pid) {
 			peersToPrune = append(peersToPrune, &peerResp{
@@ -907,6 +973,9 @@ func (p *Status) deprecatedPeersToPrune() []peer.ID {
 	peersToPrune := make([]*peerResp, 0)
 	// Select connected and inbound peers to prune.
 	for pid, peerData := range p.store.Peers() {
+		if peerData == nil {
+			continue
+		}
 		if peerData.ConnState == Connected &&
 			peerData.Direction == network.DirInbound && !p.store.IsTrustedPeer(pid) {
 			peersToPrune = append(peersToPrune, &peerResp{
@@ -952,6 +1021,9 @@ func (p *Status) deprecatedPeersToPrune() []peer.ID {
 
 // HighestEpoch returns the highest epoch reported epoch amongst peers.
 func (p *Status) HighestEpoch() primitives.Epoch {
+	if p == nil || p.store == nil {
+		return 0
+	}
 	p.store.RLock()
 	defer p.store.RUnlock()
 	var highestSlot primitives.Slot
@@ -1070,7 +1142,7 @@ func (p *Status) tallyIPTracker() {
 	tracker := map[string]uint64{}
 	// Iterate through all peers.
 	for _, peerData := range p.store.Peers() {
-		if peerData.Address == nil {
+		if peerData == nil || peerData.Address == nil {
 			continue
 		}
 		ip, err := manet.ToIP(peerData.Address)

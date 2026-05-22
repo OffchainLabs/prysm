@@ -9,6 +9,9 @@ import (
 // updates the node's discovery service to reflect any new fork version
 // changes.
 func (s *Service) forkWatcher() {
+	if s == nil {
+		return
+	}
 	// Exit early if discovery is disabled - there's no ENR to update
 	if s.dv5Listener == nil {
 		log.Debug("Discovery disabled, exiting fork watcher")

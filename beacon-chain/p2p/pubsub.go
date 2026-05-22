@@ -49,6 +49,9 @@ const gossipTopicPrefix = "/eth2/"
 
 // JoinTopic will join PubSub topic, if not already joined.
 func (s *Service) JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topic, error) {
+	if s == nil || s.pubsub == nil || s.joinedTopics == nil {
+		return nil, errors.New("service is nil")
+	}
 	s.joinedTopicsLock.Lock()
 	defer s.joinedTopicsLock.Unlock()
 
@@ -66,6 +69,9 @@ func (s *Service) JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topi
 // LeaveTopic closes topic and removes corresponding handler from list of joined topics.
 // This method will return error if there are outstanding event handlers or subscriptions.
 func (s *Service) LeaveTopic(topic string) error {
+	if s == nil || s.joinedTopics == nil {
+		return errors.New("service is nil")
+	}
 	s.joinedTopicsLock.Lock()
 	defer s.joinedTopicsLock.Unlock()
 
