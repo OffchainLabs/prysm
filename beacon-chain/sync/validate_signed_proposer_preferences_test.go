@@ -141,6 +141,51 @@ func TestValidateSignedProposerPreferencesGossip_HeadTooStale(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
+func TestValidateSignedProposerPreferencesGossip_DependentRootMismatchSkipsStateLoad(t *testing.T) {
+	ctx := context.Background()
+	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
+	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
+
+	chainService := s.cfg.chain.(*mock.ChainService)
+	chainService.HeadStateErr = errors.New("head state should not load")
+	chainService.DependentRootCB = func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+		require.Equal(t, [32]byte{}, root)
+		require.Equal(t, primitives.Epoch(0), epoch)
+		return [32]byte{0xbb}, nil
+	}
+
+	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+	require.ErrorContains(t, "dependent_root", err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
+func TestValidateSignedProposerPreferencesGossip_EpochPlus2DependentRootMismatch(t *testing.T) {
+	ctx := context.Background()
+	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
+	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+	signedPreferences.Message.ProposalSlot = primitives.Slot(64)
+	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
+
+	var called bool
+	var gotRoot [32]byte
+	var gotEpoch primitives.Epoch
+	expectedRoot := [32]byte{0xaa}
+	s.cfg.chain.(*mock.ChainService).DependentRootCB = func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+		called = true
+		gotRoot = root
+		gotEpoch = epoch
+		return expectedRoot, nil
+	}
+
+	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+	require.ErrorContains(t, "dependent_root", err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, true, called)
+	require.Equal(t, [32]byte{}, gotRoot)
+	require.Equal(t, primitives.Epoch(1), gotEpoch)
+}
+
 func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 	ctx := context.Background()
 	s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
@@ -236,9 +281,10 @@ func setupSignedProposerPreferencesService(t *testing.T) (*Service, *pubsub.Mess
 	require.NoError(t, db.SaveState(ctx, st, dependentRoot))
 
 	chainService := &mock.ChainService{
-		Genesis: time.Now(),
-		DB:      db,
-		State:   st,
+		Genesis:    time.Now(),
+		DB:         db,
+		State:      st,
+		TargetRoot: dependentRoot,
 		ForkchoiceRoots: map[[32]byte]bool{
 			dependentRoot: true,
 		},

@@ -72,22 +72,35 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		return pubsub.ValidationIgnore, nil
 	}
 
+	proposalEpoch := slots.ToEpoch(slot)
+	dependentEpoch, err := proposalEpoch.SafeSub(1)
+	if err != nil {
+		dependentEpoch = 0
+	}
+	headRoot, err := s.cfg.chain.HeadRoot(ctx)
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "head root")
+	}
+	expected, err := s.cfg.chain.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), dependentEpoch)
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "head dependent root")
+	}
+	if expected != dependentRoot {
+		return pubsub.ValidationIgnore, errors.Errorf("dependent_root %#x does not match head %#x", dependentRoot, expected)
+	}
+
 	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
 	if err != nil {
 		return pubsub.ValidationIgnore, errors.Wrap(err, "head state")
 	}
-	proposalEpoch := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(st.Slot())
+
 	// Sole permitted slot advance: next-epoch preference at the boundary before
 	// the head processes a block in the new epoch (proposalEpoch == stateEpoch+2).
 	if proposalEpoch == stateEpoch.AddEpoch(2) {
-		boundarySlot, err := slots.EpochStart(proposalEpoch.Sub(1))
+		boundarySlot, err := slots.EpochStart(dependentEpoch)
 		if err != nil {
 			return pubsub.ValidationIgnore, errors.Wrap(err, "compute boundary slot")
-		}
-		headRoot, err := s.cfg.chain.HeadRoot(ctx)
-		if err != nil {
-			return pubsub.ValidationIgnore, errors.Wrap(err, "head root")
 		}
 		st, err = transition.ProcessSlotsIfNeeded(ctx, st, headRoot, boundarySlot)
 		if err != nil {
@@ -95,10 +108,6 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		}
 	} else if proposalEpoch > stateEpoch.AddEpoch(1) {
 		return pubsub.ValidationIgnore, errors.Errorf("head epoch %d cannot verify proposal epoch %d", stateEpoch, proposalEpoch)
-	}
-
-	if expected, err := st.ProposerDependentRoot(slot); err == nil && expected != dependentRoot {
-		return pubsub.ValidationIgnore, errors.Errorf("dependent_root %#x does not match head %#x", dependentRoot, expected)
 	}
 
 	// [REJECT] is_valid_proposal_slot(state, preferences) returns True, where state
