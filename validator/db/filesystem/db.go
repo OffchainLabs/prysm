@@ -250,6 +250,9 @@ func (s *Store) configuration() (*Configuration, error) {
 
 	if config.ProposerSettings != nil && config.ProposerSettings.ProposerConfig != nil {
 		for _, option := range config.ProposerSettings.ProposerConfig {
+			if option == nil {
+				continue
+			}
 			if option.Builder != nil && len(option.Builder.Relays) == 0 {
 				option.Builder.Relays = nil
 			}

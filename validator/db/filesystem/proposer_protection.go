@@ -92,13 +92,18 @@ func (s *Store) SaveProposalHistoryForSlot(
 		return nil
 	}
 
+	latestSignedBlockSlot := validatorSlashingProtection.LatestSignedBlockSlot
+	if latestSignedBlockSlot == nil {
+		return errors.New("latest signed block slot is nil")
+	}
+
 	// Based on EIP-3076 (minimal database), validator should refuse to sign any proposal
 	// with slot less than or equal to the latest signed block slot in the DB.
-	if slotUInt64 <= *validatorSlashingProtection.LatestSignedBlockSlot {
+	if slotUInt64 <= *latestSignedBlockSlot {
 		return errors.Errorf(
 			"could not sign proposal with slot lower than or equal to recorded slot, %d <= %d",
 			slot,
-			*validatorSlashingProtection.LatestSignedBlockSlot,
+			*latestSignedBlockSlot,
 		)
 	}
 

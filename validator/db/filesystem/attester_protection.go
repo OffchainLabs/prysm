@@ -245,6 +245,9 @@ func (s *Store) SaveAttestationsForPubKey(
 
 	savedSourceEpochUInt64 := validatorSlashingProtection.LastSignedAttestationSourceEpoch
 	savedTargetEpochUInt64 := validatorSlashingProtection.LastSignedAttestationTargetEpoch
+	if savedTargetEpochUInt64 == nil {
+		savedTargetEpochUInt64 = &maxIncomingTargetEpochUInt64
+	}
 
 	maxSourceEpochUInt64 := maxIncomingSourceEpochUInt64
 	maxTargetEpochUInt64 := maxIncomingTargetEpochUInt64
