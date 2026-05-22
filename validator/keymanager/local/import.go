@@ -26,6 +26,9 @@ func (km *Keymanager) ImportKeystores(
 	keystores []*keymanager.Keystore,
 	passwords []string,
 ) ([]*keymanager.KeyStatus, error) {
+	if km == nil {
+		return nil, errors.New("keymanager is nil")
+	}
 	if len(passwords) == 0 {
 		return nil, ErrNoPasswords
 	}
