@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -15,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -207,10 +209,14 @@ func (s *State) recoverStateSummary(ctx context.Context, blockRoot [32]byte) (*e
 		if err != nil {
 			return nil, err
 		}
-		if b == nil || b.IsNil() || b.Block() == nil {
+		if err := blocks.BeaconBlockIsNil(b); err != nil {
+			return nil, err
+		}
+		block := b.Block()
+		if block == nil {
 			return nil, errNilState
 		}
-		summary := &ethpb.StateSummary{Slot: b.Block().Slot(), Root: blockRoot[:]}
+		summary := &ethpb.StateSummary{Slot: block.Slot(), Root: blockRoot[:]}
 		if err := s.beaconDB.SaveStateSummary(ctx, summary); err != nil {
 			return nil, err
 		}
@@ -316,6 +322,37 @@ func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32
 	return s.replayBlocks(ctx, startState, blks, targetSlot)
 }
 
+// blockRootForExecHash resolves a Gloas execution block hash to the corresponding
+// beacon block root by finding the block at the given slot whose bid commits to that hash.
+func (s *State) blockRootForExecHash(ctx context.Context, execHash [32]byte, slot primitives.Slot) ([32]byte, error) {
+	f := filters.NewFilter().SetStartSlot(slot).SetEndSlot(slot)
+	blks, roots, err := s.beaconDB.Blocks(ctx, f)
+	if err != nil {
+		return [32]byte{}, errors.Wrap(err, "could not query blocks by slot")
+	}
+	for i, blk := range blks {
+		if blk == nil || blk.IsNil() {
+			continue
+		}
+		block := blk.Block()
+		if block == nil || block.Version() < version.Gloas {
+			continue
+		}
+		body := block.Body()
+		if body == nil {
+			continue
+		}
+		bid, err := body.SignedExecutionPayloadBid()
+		if err != nil || bid == nil || bid.Message == nil || len(bid.Message.BlockHash) != 32 {
+			continue
+		}
+		if [32]byte(bid.Message.BlockHash) == execHash {
+			return roots[i], nil
+		}
+	}
+	return [32]byte{}, fmt.Errorf("no block at slot %d with execution block hash %#x", slot, execHash)
+}
+
 // latestAncestor returns the highest available ancestor state of the input block root.
 // It recursively looks up block's parent until a corresponding state of the block root
 // is found in the caches or DB.
@@ -347,16 +384,20 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
+		blk := b.Block()
+		if blk == nil {
+			return nil, errUnknownBlock
+		}
 
 		// Is the state the genesis state.
-		parentRoot := b.Block().ParentRoot()
+		parentRoot := blk.ParentRoot()
 		if parentRoot == params.BeaconConfig().ZeroHash {
 			s, err := s.beaconDB.GenesisState(ctx)
 			return s, errors.Wrap(err, "could not get genesis state")
 		}
 
 		// Return an error if slot hasn't been covered by checkpoint sync.
-		ps := b.Block().Slot() - 1
+		ps := blk.Slot() - 1
 		if !s.slotAvailable(ps) {
 			return nil, errors.Wrapf(ErrNoDataForSlot, "slot %d not in db due to checkpoint sync", ps)
 		}
@@ -394,8 +435,8 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to retrieve block from db")
 		}
-		if b == nil || b.IsNil() {
-			return nil, errUnknownBlock
+		if err := blocks.BeaconBlockIsNil(b); err != nil {
+			return nil, err
 		}
 	}
 }
