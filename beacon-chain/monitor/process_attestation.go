@@ -34,11 +34,15 @@ func (s *Service) canUpdateAttestedValidator(idx primitives.ValidatorIndex, slot
 
 // attestingIndices returns the indices of validators that participated in the given aggregated attestation.
 func attestingIndices(ctx context.Context, state state.ReadOnlyBeaconState, att ethpb.Att) ([]uint64, error) {
+	data := att.GetData()
+	if data == nil {
+		return nil, fmt.Errorf("attestation data is nil")
+	}
 	committeeBits := att.CommitteeBitsVal().BitIndices()
 	committees := make([][]primitives.ValidatorIndex, len(committeeBits))
 	var err error
 	for i, ci := range committeeBits {
-		committees[i], err = helpers.BeaconCommitteeFromState(ctx, state, att.GetData().Slot, primitives.CommitteeIndex(ci))
+		committees[i], err = helpers.BeaconCommitteeFromState(ctx, state, data.Slot, primitives.CommitteeIndex(ci))
 		if err != nil {
 			return nil, err
 		}
@@ -49,13 +53,21 @@ func attestingIndices(ctx context.Context, state state.ReadOnlyBeaconState, att 
 
 // logMessageTimelyFlagsForIndex returns the log message with performance info for the attestation (head, source, target)
 func logMessageTimelyFlagsForIndex(idx primitives.ValidatorIndex, data *ethpb.AttestationData) logrus.Fields {
-	return logrus.Fields{
+	fields := logrus.Fields{
 		"validatorIndex": idx,
-		"slot":           data.Slot,
-		"source":         fmt.Sprintf("%#x", bytesutil.Trunc(data.Source.Root)),
-		"target":         fmt.Sprintf("%#x", bytesutil.Trunc(data.Target.Root)),
-		"head":           fmt.Sprintf("%#x", bytesutil.Trunc(data.BeaconBlockRoot)),
 	}
+	if data == nil {
+		return fields
+	}
+	fields["slot"] = data.Slot
+	fields["head"] = fmt.Sprintf("%#x", bytesutil.Trunc(data.BeaconBlockRoot))
+	if data.Source != nil {
+		fields["source"] = fmt.Sprintf("%#x", bytesutil.Trunc(data.Source.Root))
+	}
+	if data.Target != nil {
+		fields["target"] = fmt.Sprintf("%#x", bytesutil.Trunc(data.Target.Root))
+	}
+	return fields
 }
 
 // processAttestations logs the event for the tracked validators' attestations inclusion in block
@@ -70,6 +82,10 @@ func (s *Service) processAttestations(ctx context.Context, state state.ReadOnlyB
 
 // processIncludedAttestation logs in the event for the tracked validators' and their latest attestation gets processed.
 func (s *Service) processIncludedAttestation(ctx context.Context, state state.ReadOnlyBeaconState, att ethpb.Att) {
+	data := att.GetData()
+	if data == nil {
+		return
+	}
 	attestingIndices, err := attestingIndices(ctx, state, att)
 	if err != nil {
 		log.WithError(err).Error("Could not get attesting indices")
@@ -78,8 +94,8 @@ func (s *Service) processIncludedAttestation(ctx context.Context, state state.Re
 	s.Lock()
 	defer s.Unlock()
 	for _, idx := range attestingIndices {
-		if s.canUpdateAttestedValidator(primitives.ValidatorIndex(idx), att.GetData().Slot) {
-			logFields := logMessageTimelyFlagsForIndex(primitives.ValidatorIndex(idx), att.GetData())
+		if s.canUpdateAttestedValidator(primitives.ValidatorIndex(idx), data.Slot) {
+			logFields := logMessageTimelyFlagsForIndex(primitives.ValidatorIndex(idx), data)
 			balance, err := state.BalanceAtIndex(primitives.ValidatorIndex(idx))
 			if err != nil {
 				log.WithError(err).Error("Could not get balance")
@@ -94,7 +110,7 @@ func (s *Service) processIncludedAttestation(ctx context.Context, state state.Re
 			balanceChg := int64(balance - latestPerf.balance)
 			latestPerf.balanceChange = balanceChg
 			latestPerf.balance = balance
-			latestPerf.attestedSlot = att.GetData().Slot
+			latestPerf.attestedSlot = data.Slot
 			latestPerf.inclusionSlot = state.Slot()
 			inclusionSlotGauge.WithLabelValues(fmt.Sprintf("%d", idx)).Set(float64(latestPerf.inclusionSlot))
 			aggregatedPerf.totalDistance += uint64(latestPerf.inclusionSlot - latestPerf.attestedSlot)
@@ -177,8 +193,12 @@ func (s *Service) processSingleAttestation(att ethpb.Att) {
 		return
 	}
 
-	if s.canUpdateAttestedValidator(single.AttesterIndex, single.GetData().Slot) {
-		logFields := logMessageTimelyFlagsForIndex(single.AttesterIndex, att.GetData())
+	data := single.GetData()
+	if data == nil {
+		return
+	}
+	if s.canUpdateAttestedValidator(single.AttesterIndex, data.Slot) {
+		logFields := logMessageTimelyFlagsForIndex(single.AttesterIndex, data)
 		log.WithFields(logFields).Info("Processed unaggregated attestation")
 	}
 }
@@ -187,7 +207,11 @@ func (s *Service) processSingleAttestation(att ethpb.Att) {
 func (s *Service) processUnaggregatedAttestation(ctx context.Context, att ethpb.Att) {
 	s.RLock()
 	defer s.RUnlock()
-	root := bytesutil.ToBytes32(att.GetData().BeaconBlockRoot)
+	data := att.GetData()
+	if data == nil {
+		return
+	}
+	root := bytesutil.ToBytes32(data.BeaconBlockRoot)
 	st := s.config.StateGen.StateByRootIfCachedNoCopy(root)
 	if st == nil {
 		log.WithField("beaconBlockRoot", fmt.Sprintf("%#x", bytesutil.Trunc(root[:]))).Debug(
@@ -200,8 +224,8 @@ func (s *Service) processUnaggregatedAttestation(ctx context.Context, att ethpb.
 		return
 	}
 	for _, idx := range attestingIndices {
-		if s.canUpdateAttestedValidator(primitives.ValidatorIndex(idx), att.GetData().Slot) {
-			logFields := logMessageTimelyFlagsForIndex(primitives.ValidatorIndex(idx), att.GetData())
+		if s.canUpdateAttestedValidator(primitives.ValidatorIndex(idx), data.Slot) {
+			logFields := logMessageTimelyFlagsForIndex(primitives.ValidatorIndex(idx), data)
 			log.WithFields(logFields).Info("Processed unaggregated attestation")
 		}
 	}
@@ -211,16 +235,22 @@ func (s *Service) processUnaggregatedAttestation(ctx context.Context, att ethpb.
 func (s *Service) processAggregatedAttestation(ctx context.Context, att ethpb.AggregateAttAndProof) {
 	s.Lock()
 	defer s.Unlock()
+	agg := att.AggregateVal()
+	if agg == nil || agg.IsNil() {
+		return
+	}
+	data := agg.GetData()
+	if data == nil {
+		return
+	}
 	if s.trackedIndex(att.GetAggregatorIndex()) {
 		log.WithFields(logrus.Fields{
 			"aggregatorIndex": att.GetAggregatorIndex(),
-			"slot":            att.AggregateVal().GetData().Slot,
+			"slot":            data.Slot,
 			"beaconBlockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(
-				att.AggregateVal().GetData().BeaconBlockRoot)),
-			"sourceRoot": fmt.Sprintf("%#x", bytesutil.Trunc(
-				att.AggregateVal().GetData().Source.Root)),
-			"targetRoot": fmt.Sprintf("%#x", bytesutil.Trunc(
-				att.AggregateVal().GetData().Target.Root)),
+				data.BeaconBlockRoot)),
+			"sourceRoot": logMessageTimelyFlagsForIndex(att.GetAggregatorIndex(), data)["source"],
+			"targetRoot": logMessageTimelyFlagsForIndex(att.GetAggregatorIndex(), data)["target"],
 		}).Info("Processed attestation aggregation")
 		aggregatedPerf := s.aggregatedPerformance[att.GetAggregatorIndex()]
 		aggregatedPerf.totalAggregations++
@@ -229,21 +259,21 @@ func (s *Service) processAggregatedAttestation(ctx context.Context, att ethpb.Ag
 	}
 
 	var root [32]byte
-	copy(root[:], att.AggregateVal().GetData().BeaconBlockRoot)
+	copy(root[:], data.BeaconBlockRoot)
 	st := s.config.StateGen.StateByRootIfCachedNoCopy(root)
 	if st == nil {
 		log.WithField("beaconBlockRoot", fmt.Sprintf("%#x", bytesutil.Trunc(root[:]))).Debug(
 			"Skipping aggregated attestation due to state not found in cache")
 		return
 	}
-	attestingIndices, err := attestingIndices(ctx, st, att.AggregateVal())
+	attestingIndices, err := attestingIndices(ctx, st, agg)
 	if err != nil {
 		log.WithError(err).Error("Could not get attesting indices")
 		return
 	}
 	for _, idx := range attestingIndices {
-		if s.canUpdateAttestedValidator(primitives.ValidatorIndex(idx), att.AggregateVal().GetData().Slot) {
-			logFields := logMessageTimelyFlagsForIndex(primitives.ValidatorIndex(idx), att.AggregateVal().GetData())
+		if s.canUpdateAttestedValidator(primitives.ValidatorIndex(idx), data.Slot) {
+			logFields := logMessageTimelyFlagsForIndex(primitives.ValidatorIndex(idx), data)
 			log.WithFields(logFields).Debug("Processed aggregated attestation")
 		}
 	}

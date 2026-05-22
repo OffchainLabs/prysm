@@ -121,8 +121,16 @@ func (s *Service) processSlashings(blk interfaces.ReadOnlyBeaconBlock) {
 	for _, slashing := range blk.Body().AttesterSlashings() {
 		for _, idx := range blocks.SlashableAttesterIndices(slashing) {
 			if s.trackedIndex(primitives.ValidatorIndex(idx)) {
-				data1 := slashing.FirstAttestation().GetData()
-				data2 := slashing.SecondAttestation().GetData()
+				first := slashing.FirstAttestation()
+				second := slashing.SecondAttestation()
+				if first == nil || first.IsNil() || second == nil || second.IsNil() {
+					continue
+				}
+				data1 := first.GetData()
+				data2 := second.GetData()
+				if data1 == nil || data1.Source == nil || data1.Target == nil || data2 == nil || data2.Source == nil || data2.Target == nil {
+					continue
+				}
 
 				log.WithFields(logrus.Fields{
 					"attesterIndex":      idx,
