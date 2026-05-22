@@ -20,7 +20,7 @@ var ErrProposerDependentRootUnderflow = errors.New("proposer dependent root: epo
 // LatestBlockHeader stored within the beacon state.
 func (b *BeaconState) LatestBlockHeader() *ethpb.BeaconBlockHeader {
 	if b.latestBlockHeader == nil {
-		return &ethpb.BeaconBlockHeader{}
+		return nil
 	}
 
 	b.lock.RLock()
@@ -33,7 +33,7 @@ func (b *BeaconState) LatestBlockHeader() *ethpb.BeaconBlockHeader {
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) latestBlockHeaderVal() *ethpb.BeaconBlockHeader {
 	if b.latestBlockHeader == nil {
-		return &ethpb.BeaconBlockHeader{}
+		return nil
 	}
 
 	return &ethpb.BeaconBlockHeader{

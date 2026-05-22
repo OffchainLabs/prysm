@@ -35,7 +35,7 @@ func (b *BeaconState) justificationBitsVal() bitfield.Bitvector4 {
 // PreviousJustifiedCheckpoint denoting an epoch and block root.
 func (b *BeaconState) PreviousJustifiedCheckpoint() *ethpb.Checkpoint {
 	if b.previousJustifiedCheckpoint == nil {
-		return &ethpb.Checkpoint{}
+		return nil
 	}
 
 	b.lock.RLock()
@@ -48,7 +48,7 @@ func (b *BeaconState) PreviousJustifiedCheckpoint() *ethpb.Checkpoint {
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) previousJustifiedCheckpointVal() *ethpb.Checkpoint {
 	if b.previousJustifiedCheckpoint == nil {
-		return &ethpb.Checkpoint{}
+		return nil
 	}
 	return &ethpb.Checkpoint{
 		Epoch: b.previousJustifiedCheckpoint.Epoch,
@@ -59,7 +59,7 @@ func (b *BeaconState) previousJustifiedCheckpointVal() *ethpb.Checkpoint {
 // CurrentJustifiedCheckpoint denoting an epoch and block root.
 func (b *BeaconState) CurrentJustifiedCheckpoint() *ethpb.Checkpoint {
 	if b.currentJustifiedCheckpoint == nil {
-		return &ethpb.Checkpoint{}
+		return nil
 	}
 
 	b.lock.RLock()
@@ -72,7 +72,7 @@ func (b *BeaconState) CurrentJustifiedCheckpoint() *ethpb.Checkpoint {
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) currentJustifiedCheckpointVal() *ethpb.Checkpoint {
 	if b.currentJustifiedCheckpoint == nil {
-		return &ethpb.Checkpoint{}
+		return nil
 	}
 	return &ethpb.Checkpoint{
 		Epoch: b.currentJustifiedCheckpoint.Epoch,
@@ -109,7 +109,7 @@ func (b *BeaconState) MatchPreviousJustifiedCheckpoint(c *ethpb.Checkpoint) bool
 // FinalizedCheckpoint denoting an epoch and block root.
 func (b *BeaconState) FinalizedCheckpoint() *ethpb.Checkpoint {
 	if b.finalizedCheckpoint == nil {
-		return &ethpb.Checkpoint{}
+		return nil
 	}
 
 	b.lock.RLock()
@@ -122,7 +122,7 @@ func (b *BeaconState) FinalizedCheckpoint() *ethpb.Checkpoint {
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) finalizedCheckpointVal() *ethpb.Checkpoint {
 	if b.finalizedCheckpoint == nil {
-		return &ethpb.Checkpoint{}
+		return nil
 	}
 	return &ethpb.Checkpoint{
 		Epoch: b.finalizedCheckpoint.Epoch,

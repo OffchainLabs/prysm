@@ -3,6 +3,7 @@ package state_native
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -62,8 +63,12 @@ func (b *BeaconState) FinalizedRootProof(ctx context.Context) ([][]byte, error) 
 	// The epoch field of a finalized checkpoint is the neighbor
 	// index of the finalized root field in its Merkle tree representation
 	// of the checkpoint. This neighbor is the first element added to the proof.
+	finalizedCheckpoint := b.finalizedCheckpointVal()
+	if finalizedCheckpoint == nil {
+		return nil, errors.New("finalized checkpoint is nil")
+	}
 	epochBuf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(epochBuf, uint64(b.finalizedCheckpointVal().Epoch))
+	binary.LittleEndian.PutUint64(epochBuf, uint64(finalizedCheckpoint.Epoch))
 	epochRoot := bytesutil.ToBytes32(epochBuf)
 	proof := make([][]byte, 0)
 	proof = append(proof, epochRoot[:])

@@ -945,6 +945,14 @@ func (b *BeaconState) Copy() state.BeaconState {
 		fieldCount = params.BeaconConfig().BeaconStateGloasFieldCount
 	}
 
+	fork := b.forkVal()
+	if b.fork == nil {
+		fork = nil
+	}
+	eth1Data := b.eth1DataVal()
+	if b.eth1Data == nil {
+		eth1Data = nil
+	}
 	dst := &BeaconState{
 		version: b.version,
 
@@ -988,9 +996,9 @@ func (b *BeaconState) Copy() state.BeaconState {
 		// Everything else, too small to be concerned about, constant size.
 		genesisValidatorsRoot:               b.genesisValidatorsRoot,
 		justificationBits:                   b.justificationBitsVal(),
-		fork:                                b.forkVal(),
+		fork:                                fork,
 		latestBlockHeader:                   b.latestBlockHeaderVal(),
-		eth1Data:                            b.eth1DataVal(),
+		eth1Data:                            eth1Data,
 		previousJustifiedCheckpoint:         b.previousJustifiedCheckpointVal(),
 		currentJustifiedCheckpoint:          b.currentJustifiedCheckpointVal(),
 		finalizedCheckpoint:                 b.finalizedCheckpointVal(),

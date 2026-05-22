@@ -46,6 +46,10 @@ func VerifyBeaconStatePreviousJustifiedCheckpoint(t *testing.T, factory getState
 	require.NoError(t, err)
 
 	checkpoint := s.PreviousJustifiedCheckpoint()
+	if checkpoint == nil {
+		t.Fatal("previous justified checkpoint is nil")
+		return
+	}
 	require.DeepEqual(t, orgCheckpoint.Root, checkpoint.Root)
 }
 
@@ -68,6 +72,10 @@ func VerifyBeaconStateCurrentJustifiedCheckpoint(t *testing.T, factory getStateW
 	require.NoError(t, err)
 
 	checkpoint := s.CurrentJustifiedCheckpoint()
+	if checkpoint == nil {
+		t.Fatal("current justified checkpoint is nil")
+		return
+	}
 	require.DeepEqual(t, orgCheckpoint.Root, checkpoint.Root)
 }
 
@@ -93,6 +101,10 @@ func VerifyBeaconStateFinalizedCheckpoint(t *testing.T, factory getStateWithChec
 	require.NoError(t, err)
 
 	checkpoint := s.FinalizedCheckpoint()
+	if checkpoint == nil {
+		t.Fatal("finalized checkpoint is nil")
+		return
+	}
 	require.DeepEqual(t, orgCheckpoint.Root, checkpoint.Root)
 	epoch := s.FinalizedCheckpointEpoch()
 	require.Equal(t, orgCheckpoint.Epoch, epoch)
