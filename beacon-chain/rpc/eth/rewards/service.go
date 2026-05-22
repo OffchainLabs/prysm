@@ -148,7 +148,14 @@ func (rs *BlockRewardService) GetStateForRewards(ctx context.Context, blk interf
 		}
 	}
 
-	st, err := rs.Replayer.ReplayerForSlot(slots.PrevSlot(blk.Slot())).ReplayToSlot(ctx, blk.Slot())
+	replayer := rs.Replayer.ReplayerForSlot(slots.PrevSlot(blk.Slot()))
+	if replayer == nil {
+		return nil, &httputil.DefaultJsonError{
+			Message: "Could not get state: replayer not found",
+			Code:    http.StatusInternalServerError,
+		}
+	}
+	st, err := replayer.ReplayToSlot(ctx, blk.Slot())
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{
 			Message: "Could not get state: " + err.Error(),
