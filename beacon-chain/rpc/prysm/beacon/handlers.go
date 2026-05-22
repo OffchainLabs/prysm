@@ -130,6 +130,10 @@ func (s *Server) GetIndividualVotes(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 		return
 	}
+	if votes == nil {
+		httputil.HandleError(w, "Individual votes are nil", http.StatusInternalServerError)
+		return
+	}
 	v := make([]*structs.IndividualVote, 0, len(votes.IndividualVotes))
 	for _, vote := range votes.IndividualVotes {
 		v = append(v, &structs.IndividualVote{
@@ -166,6 +170,10 @@ func (s *Server) GetChainHead(w http.ResponseWriter, r *http.Request) {
 	ch, rpcError := s.CoreService.ChainHead(ctx)
 	if rpcError != nil {
 		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+		return
+	}
+	if ch == nil {
+		httputil.HandleError(w, "Chain head is nil", http.StatusInternalServerError)
 		return
 	}
 	response := &structs.ChainHead{

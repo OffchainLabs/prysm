@@ -149,8 +149,17 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 	if !shared.WriteBlockFetchError(w, signedBlock, err) {
 		return
 	}
+	if signedBlock == nil || signedBlock.IsNil() {
+		httputil.HandleError(w, "Block is nil", http.StatusInternalServerError)
+		return
+	}
+	blk := signedBlock.Block()
+	if blk == nil || blk.IsNil() {
+		httputil.HandleError(w, "Block is nil", http.StatusInternalServerError)
+		return
+	}
 
-	protoBlock, err := signedBlock.Block().Proto()
+	protoBlock, err := blk.Proto()
 	if err != nil {
 		httputil.HandleError(w, "Could not convert block to proto: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -174,7 +183,7 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encodedBlock, err := signedBlock.Block().MarshalSSZ()
+	encodedBlock, err := blk.MarshalSSZ()
 	if err != nil {
 		httputil.HandleError(w, "Could not marshal block to SSZ: "+err.Error(), http.StatusInternalServerError)
 		return
