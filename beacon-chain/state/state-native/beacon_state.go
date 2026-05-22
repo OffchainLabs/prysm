@@ -9,6 +9,7 @@ import (
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -73,6 +74,7 @@ type BeaconState struct {
 	// Gloas fields
 	latestExecutionPayloadBid    *ethpb.ExecutionPayloadBid
 	builders                     []*ethpb.Builder
+	builderIdxMap                map[[fieldparams.BLSPubkeyLength]byte]primitives.BuilderIndex
 	nextWithdrawalBuilderIndex   primitives.BuilderIndex
 	executionPayloadAvailability []byte
 	builderPendingPayments       []*ethpb.BuilderPendingPayment
