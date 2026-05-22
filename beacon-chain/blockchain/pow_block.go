@@ -121,6 +121,9 @@ func canUseValidatedTerminalBlockHash(blkSlot primitives.Slot, payload interface
 	if bytesutil.ToBytes32(params.BeaconConfig().TerminalBlockHash.Bytes()) == [32]byte{} {
 		return false, nil
 	}
+	if payload == nil || payload.IsNil() {
+		return false, errors.New("execution payload is nil")
+	}
 	if params.BeaconConfig().TerminalBlockHashActivationEpoch > slots.ToEpoch(blkSlot) {
 		return false, errors.New("terminal block hash activation epoch not reached")
 	}

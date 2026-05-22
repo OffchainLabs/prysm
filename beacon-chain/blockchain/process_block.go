@@ -151,12 +151,18 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 
 // getBatchPrestate returns the pre-state to apply to the first beacon block in the batch and returns true if it applied the first envelope before
 func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope) (state.BeaconState, bool, error) {
+	if err := consensusblocks.BeaconBlockIsNil(b); err != nil {
+		return nil, false, err
+	}
 	if len(envelopes) == 0 || b.Version() < version.Gloas {
 		blockPreState, err := s.cfg.StateGen.StateByRootInitialSync(ctx, b.Block().ParentRoot())
 		if err != nil {
 			return nil, false, errors.Wrap(err, "could not get block pre state")
 		}
 		return blockPreState, false, nil
+	}
+	if envelopes[0] == nil {
+		return nil, false, errors.New("nil execution payload envelope")
 	}
 	parentRoot := b.Block().ParentRoot()
 	full, err := consensusblocks.BlockBuiltOnEnvelope(envelopes[0], b)
@@ -244,6 +250,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	var set *bls.SignatureBatch
 	boundaries := make(map[[32]byte]state.BeaconState)
 	for i, b := range blks {
+		if err := consensusblocks.BeaconBlockIsNil(b); err != nil {
+			return invalidBlock{error: err}
+		}
 		if features.BlacklistedBlock(b.Root()) {
 			return errBlacklistedRoot
 		}
@@ -452,6 +461,9 @@ func (s *Service) notifyEngineAndSaveData(
 }
 
 func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityChecker, roBlock consensusblocks.ROBlock) error {
+	if err := consensusblocks.BeaconBlockIsNil(roBlock); err != nil {
+		return err
+	}
 	blockVersion := roBlock.Version()
 	block := roBlock.Block()
 	slot := block.Slot()
@@ -709,7 +721,18 @@ func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interface
 // pruneAttsFromPool removes these attestations from the attestation pool
 // which are covered by attestations from the received block.
 func (s *Service) pruneAttsFromPool(ctx context.Context, headState state.BeaconState, headBlock interfaces.ReadOnlySignedBeaconBlock) {
-	for _, att := range headBlock.Block().Body().Attestations() {
+	if headBlock == nil || headBlock.IsNil() {
+		return
+	}
+	blk := headBlock.Block()
+	if blk == nil || blk.IsNil() {
+		return
+	}
+	body := blk.Body()
+	if body == nil || body.IsNil() {
+		return
+	}
+	for _, att := range body.Attestations() {
 		if err := s.pruneCoveredAttsFromPool(ctx, headState, att); err != nil {
 			log.WithError(err).Warn("Could not prune attestations covered by a received block's attestation")
 		}
@@ -942,6 +965,9 @@ func (s *Service) isDataAvailable(
 	ctx context.Context,
 	roBlock consensusblocks.ROBlock,
 ) error {
+	if err := consensusblocks.BeaconBlockIsNil(roBlock); err != nil {
+		return err
+	}
 	block := roBlock.Block()
 	if block == nil {
 		return errors.New("invalid nil beacon block")

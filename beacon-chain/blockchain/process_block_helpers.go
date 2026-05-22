@@ -385,7 +385,14 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 	if err != nil {
 		return err
 	}
-	root := signed.Block().ParentRoot()
+	if signed == nil || signed.IsNil() {
+		return errors.New("signed block is nil")
+	}
+	signedBlock := signed.Block()
+	if signedBlock == nil || signedBlock.IsNil() {
+		return errors.New("beacon block is nil")
+	}
+	root := signedBlock.ParentRoot()
 	child := signed
 	// As long as parent node is not in fork choice store, and parent node is in DB.
 	for !s.cfg.ForkChoiceStore.HasNode(root) && s.cfg.BeaconDB.HasBlock(ctx, root) {
@@ -393,7 +400,14 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		if err != nil {
 			return err
 		}
-		if b.Block().Slot() <= fSlot {
+		if b == nil || b.IsNil() {
+			return errors.New("parent block is nil")
+		}
+		parentBlock := b.Block()
+		if parentBlock == nil || parentBlock.IsNil() {
+			return errors.New("parent beacon block is nil")
+		}
+		if parentBlock.Slot() <= fSlot {
 			break
 		}
 		roblock, err := consensus_blocks.NewROBlockWithRoot(b, root)
@@ -402,25 +416,37 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		}
 		hasPayload := false
 		if roblock.Version() >= version.Gloas {
-			sbid, err := child.Block().Body().SignedExecutionPayloadBid()
+			childBlock := child.Block()
+			if childBlock == nil || childBlock.IsNil() {
+				return errors.New("child beacon block is nil")
+			}
+			childBody := childBlock.Body()
+			if childBody == nil || childBody.IsNil() {
+				return errors.New("child block body is nil")
+			}
+			sbid, err := childBody.SignedExecutionPayloadBid()
 			if err != nil {
-				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", child.Block().Slot())
+				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", childBlock.Slot())
 			}
 			if sbid == nil || sbid.Message == nil {
-				return fmt.Errorf("missing execution payload bid for block at slot %d", child.Block().Slot())
+				return fmt.Errorf("missing execution payload bid for block at slot %d", childBlock.Slot())
 			}
-			parentBid, err := b.Block().Body().SignedExecutionPayloadBid()
+			parentBody := parentBlock.Body()
+			if parentBody == nil || parentBody.IsNil() {
+				return errors.New("parent block body is nil")
+			}
+			parentBid, err := parentBody.SignedExecutionPayloadBid()
 			if err != nil {
-				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", b.Block().Slot())
+				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", parentBlock.Slot())
 			}
 			if parentBid == nil || parentBid.Message == nil {
-				return fmt.Errorf("missing execution payload bid for block at slot %d", b.Block().Slot())
+				return fmt.Errorf("missing execution payload bid for block at slot %d", parentBlock.Slot())
 			}
 			if bytes.Equal(sbid.Message.ParentBlockHash, parentBid.Message.BlockHash) {
 				hasPayload = true
 			}
 		}
-		root = b.Block().ParentRoot()
+		root = parentBlock.ParentRoot()
 		child = b
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
 			JustifiedCheckpoint: jCheckpoint,
