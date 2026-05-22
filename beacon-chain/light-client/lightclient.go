@@ -79,6 +79,9 @@ func NewLightClientUpdateFromBeaconState(
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get sync aggregate")
 	}
+	if syncAggregate == nil {
+		return nil, errors.New("sync aggregate is nil")
+	}
 	if syncAggregate.SyncCommitteeBits.Count() < params.BeaconConfig().MinSyncCommitteeParticipants {
 		return nil, fmt.Errorf(
 			"%s (got %d, need %d)",
