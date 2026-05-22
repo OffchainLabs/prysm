@@ -139,6 +139,11 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 	oneEpoch := time.Duration(1*params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
 	ctx, cancel := context.WithTimeout(ctx, oneEpoch)
 	defer cancel()
+	data := att.GetData()
+	if data == nil {
+		log.Debug("Attestation has nil data, discarding it")
+		return
+	}
 
 	// Ensure we have peers with this subnet.
 	s.subnetLocker(subnet).RLock()
@@ -147,7 +152,7 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 
 	span.SetAttributes(
 		trace.BoolAttribute("hasPeer", hasPeer),
-		trace.Int64Attribute("slot", int64(att.GetData().Slot)), // lint:ignore uintcast -- It's safe to do this for tracing.
+		trace.Int64Attribute("slot", int64(data.Slot)),           // lint:ignore uintcast -- It's safe to do this for tracing.
 		trace.Int64Attribute("subnet", int64(subnet)),           // lint:ignore uintcast -- It's safe to do this for tracing.
 	)
 
@@ -171,9 +176,9 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 	// In the event our attestation is outdated and beyond the
 	// acceptable threshold, we exit early and do not broadcast it.
 	currSlot := slots.CurrentSlot(s.genesisTime)
-	if err := helpers.ValidateAttestationTime(att.GetData().Slot, s.genesisTime, params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
+	if err := helpers.ValidateAttestationTime(data.Slot, s.genesisTime, params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
 		log.WithFields(logrus.Fields{
-			"attestationSlot": att.GetData().Slot,
+			"attestationSlot": data.Slot,
 			"currentSlot":     currSlot,
 		}).WithError(err).Debug("Attestation is too old to broadcast, discarding it")
 		return
