@@ -35,54 +35,93 @@ func NewSignedBeaconBlock(i any) (interfaces.SignedBeaconBlock, error) {
 	case nil:
 		return nil, ErrNilObject
 	case *eth.GenericSignedBeaconBlock_Phase0:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoPhase0(b.Phase0)
 	case *eth.SignedBeaconBlock:
 		return initSignedBlockFromProtoPhase0(b)
 	case *eth.GenericSignedBeaconBlock_Altair:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoAltair(b.Altair)
 	case *eth.SignedBeaconBlockAltair:
 		return initSignedBlockFromProtoAltair(b)
 	case *eth.GenericSignedBeaconBlock_Bellatrix:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoBellatrix(b.Bellatrix)
 	case *eth.SignedBeaconBlockBellatrix:
 		return initSignedBlockFromProtoBellatrix(b)
 	case *eth.GenericSignedBeaconBlock_BlindedBellatrix:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initBlindedSignedBlockFromProtoBellatrix(b.BlindedBellatrix)
 	case *eth.SignedBlindedBeaconBlockBellatrix:
 		return initBlindedSignedBlockFromProtoBellatrix(b)
 	case *eth.GenericSignedBeaconBlock_Capella:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoCapella(b.Capella)
 	case *eth.SignedBeaconBlockCapella:
 		return initSignedBlockFromProtoCapella(b)
 	case *eth.GenericSignedBeaconBlock_BlindedCapella:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initBlindedSignedBlockFromProtoCapella(b.BlindedCapella)
 	case *eth.SignedBlindedBeaconBlockCapella:
 		return initBlindedSignedBlockFromProtoCapella(b)
 	case *eth.GenericSignedBeaconBlock_Deneb:
+		if b == nil || b.Deneb == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoDeneb(b.Deneb.Block)
 	case *eth.SignedBeaconBlockDeneb:
 		return initSignedBlockFromProtoDeneb(b)
 	case *eth.SignedBlindedBeaconBlockDeneb:
 		return initBlindedSignedBlockFromProtoDeneb(b)
 	case *eth.GenericSignedBeaconBlock_BlindedDeneb:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initBlindedSignedBlockFromProtoDeneb(b.BlindedDeneb)
 	case *eth.GenericSignedBeaconBlock_Electra:
+		if b == nil || b.Electra == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoElectra(b.Electra.Block)
 	case *eth.SignedBeaconBlockElectra:
 		return initSignedBlockFromProtoElectra(b)
 	case *eth.SignedBlindedBeaconBlockElectra:
 		return initBlindedSignedBlockFromProtoElectra(b)
 	case *eth.GenericSignedBeaconBlock_BlindedElectra:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initBlindedSignedBlockFromProtoElectra(b.BlindedElectra)
 	case *eth.GenericSignedBeaconBlock_Fulu:
+		if b == nil || b.Fulu == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoFulu(b.Fulu.Block)
 	case *eth.SignedBeaconBlockFulu:
 		return initSignedBlockFromProtoFulu(b)
 	case *eth.SignedBlindedBeaconBlockFulu:
 		return initBlindedSignedBlockFromProtoFulu(b)
 	case *eth.GenericSignedBeaconBlock_BlindedFulu:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initBlindedSignedBlockFromProtoFulu(b.BlindedFulu)
 	case *eth.GenericSignedBeaconBlock_Gloas:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoGloas(b.Gloas)
 	case *eth.SignedBeaconBlockGloas:
 		return initSignedBlockFromProtoGloas(b)
