@@ -162,11 +162,17 @@ func (*MaxSpanChunksSlice) NeutralElement() uint16 {
 
 // Chunk returns the underlying slice of uint16's for the min chunks slice.
 func (m *MinSpanChunksSlice) Chunk() []uint16 {
+	if m == nil {
+		return nil
+	}
 	return m.data
 }
 
 // Chunk returns the underlying slice of uint16's for the max chunks slice.
 func (m *MaxSpanChunksSlice) Chunk() []uint16 {
+	if m == nil {
+		return nil
+	}
 	return m.data
 }
 
