@@ -265,6 +265,9 @@ func (s *Service) validateDataColumnFulu(
 
 // Returns true if the column with the same slot, proposer index, and column index has been seen before.
 func (s *Service) hasSeenDataColumnIndex(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) bool {
+	if s == nil || s.seenDataColumnCache == nil {
+		return false
+	}
 	key := computeCacheKey(slot, proposerIndex, index)
 	_, seen := s.seenDataColumnCache.Get(key)
 	return seen
@@ -272,6 +275,9 @@ func (s *Service) hasSeenDataColumnIndex(slot primitives.Slot, proposerIndex pri
 
 // Sets the data column with the same slot, proposer index, and data column index as seen.
 func (s *Service) setSeenDataColumnIndex(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) {
+	if s == nil || s.seenDataColumnCache == nil {
+		return
+	}
 	key := computeCacheKey(slot, proposerIndex, index)
 	s.seenDataColumnCache.Add(slot, key, true)
 }

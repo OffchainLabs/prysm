@@ -60,6 +60,9 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
+	if env == nil {
+		return pubsub.ValidationIgnore, errors.New("execution payload envelope is nil")
+	}
 
 	// [IGNORE] The envelope's block root envelope.block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue payload for processing once the block is retrieved).
@@ -163,6 +166,9 @@ func (s *Service) queuePendingPayloadEnvelope(
 	env interfaces.ROExecutionPayloadEnvelope,
 	signedEnvelope *ethpb.SignedExecutionPayloadEnvelope,
 ) (pubsub.ValidationResult, error) {
+	if env == nil {
+		return pubsub.ValidationIgnore, errors.New("execution payload envelope is nil")
+	}
 	currentSlot := s.cfg.clock.CurrentSlot()
 	if env.Slot() != currentSlot {
 		return pubsub.ValidationIgnore, nil

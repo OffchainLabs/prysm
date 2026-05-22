@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -81,7 +82,11 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 		"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
 	}).Debug("New gossiped light client optimistic update validated.")
 
-	msg.ValidatorData = newUpdate.Proto()
+	protoUpdate := newUpdate.Proto()
+	if protoUpdate == nil {
+		return pubsub.ValidationIgnore, errors.New("light client optimistic update is nil")
+	}
+	msg.ValidatorData = protoUpdate
 	return pubsub.ValidationAccept, nil
 }
 
@@ -151,6 +156,10 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
 	}).Debug("New gossiped light client finality update validated.")
 
-	msg.ValidatorData = newUpdate.Proto()
+	protoUpdate := newUpdate.Proto()
+	if protoUpdate == nil {
+		return pubsub.ValidationIgnore, errors.New("light client finality update is nil")
+	}
+	msg.ValidatorData = protoUpdate
 	return pubsub.ValidationAccept, nil
 }
