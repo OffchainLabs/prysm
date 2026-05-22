@@ -485,6 +485,7 @@ func TestLatePayloadTasks_ReturnsEarlyWhenBlockLate(t *testing.T) {
 
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 	base, _ := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
+	base.Fork = &ethpb.Fork{PreviousVersion: make([]byte, 4), CurrentVersion: make([]byte, 4)}
 	base.LatestBlockHash = blockHash[:]
 	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
 	require.NoError(t, err)
@@ -557,6 +558,7 @@ func TestLateBlockTasks_GloasFCU(t *testing.T) {
 
 	blockHash := bytesutil.ToBytes32([]byte("hash1"))
 	base, blk := testGloasState(t, 1, params.BeaconConfig().ZeroHash, blockHash)
+	base.Fork = &ethpb.Fork{PreviousVersion: make([]byte, 4), CurrentVersion: make([]byte, 4)}
 	base.LatestBlockHash = blockHash[:]
 	st, err := state_native.InitializeFromProtoUnsafeGloas(base)
 	require.NoError(t, err)

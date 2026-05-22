@@ -228,7 +228,12 @@ func (s *Service) Stop() error {
 	// lock before accessing s.head, s.head.state, s.head.state.FinalizedCheckpoint().Root
 	s.headLock.RLock()
 	if s.cfg.StateGen != nil && s.head != nil && s.head.state != nil {
-		r := s.head.state.FinalizedCheckpoint().Root
+		finalizedCheckpoint := s.head.state.FinalizedCheckpoint()
+		if finalizedCheckpoint == nil {
+			s.headLock.RUnlock()
+			return errors.New("nil finalized checkpoint")
+		}
+		r := finalizedCheckpoint.Root
 		s.headLock.RUnlock()
 		// Save the last finalized state so that starting up in the following run will be much faster.
 		if err := s.cfg.StateGen.ForceCheckpoint(s.ctx, r); err != nil {

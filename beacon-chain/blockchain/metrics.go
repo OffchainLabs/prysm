@@ -360,16 +360,28 @@ func reportEpochMetrics(ctx context.Context, postState, headState state.BeaconSt
 	validatorsEffectiveBalance.WithLabelValues("Slashing").Set(float64(slashingEffectiveBalance))
 
 	// Last justified slot
-	beaconCurrentJustifiedEpoch.Set(float64(postState.CurrentJustifiedCheckpoint().Epoch))
-	beaconCurrentJustifiedRoot.Set(float64(bytesutil.ToLowInt64(postState.CurrentJustifiedCheckpoint().Root)))
+	currentJustifiedCheckpoint := postState.CurrentJustifiedCheckpoint()
+	if currentJustifiedCheckpoint == nil {
+		return errors.New("nil current justified checkpoint")
+	}
+	beaconCurrentJustifiedEpoch.Set(float64(currentJustifiedCheckpoint.Epoch))
+	beaconCurrentJustifiedRoot.Set(float64(bytesutil.ToLowInt64(currentJustifiedCheckpoint.Root)))
 
 	// Last previous justified slot
-	beaconPrevJustifiedEpoch.Set(float64(postState.PreviousJustifiedCheckpoint().Epoch))
-	beaconPrevJustifiedRoot.Set(float64(bytesutil.ToLowInt64(postState.PreviousJustifiedCheckpoint().Root)))
+	previousJustifiedCheckpoint := postState.PreviousJustifiedCheckpoint()
+	if previousJustifiedCheckpoint == nil {
+		return errors.New("nil previous justified checkpoint")
+	}
+	beaconPrevJustifiedEpoch.Set(float64(previousJustifiedCheckpoint.Epoch))
+	beaconPrevJustifiedRoot.Set(float64(bytesutil.ToLowInt64(previousJustifiedCheckpoint.Root)))
 
 	// Last finalized slot
+	finalizedCheckpoint := postState.FinalizedCheckpoint()
+	if finalizedCheckpoint == nil {
+		return errors.New("nil finalized checkpoint")
+	}
 	beaconFinalizedEpoch.Set(float64(postState.FinalizedCheckpointEpoch()))
-	beaconFinalizedRoot.Set(float64(bytesutil.ToLowInt64(postState.FinalizedCheckpoint().Root)))
+	beaconFinalizedRoot.Set(float64(bytesutil.ToLowInt64(finalizedCheckpoint.Root)))
 	currentEth1DataDepositCount.Set(float64(postState.Eth1Data().DepositCount))
 	processedDepositsCount.Set(float64(postState.Eth1DepositIndex() + 1))
 

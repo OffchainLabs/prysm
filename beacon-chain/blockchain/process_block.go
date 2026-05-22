@@ -238,8 +238,16 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		br = env.BeaconBlockRoot()
 	}
 
+	finalizedCheckpoint := preState.FinalizedCheckpoint()
+	if finalizedCheckpoint == nil {
+		return errors.New("nil finalized checkpoint")
+	}
+	justifiedCheckpoint := preState.CurrentJustifiedCheckpoint()
+	if justifiedCheckpoint == nil {
+		return errors.New("nil current justified checkpoint")
+	}
 	// Fill in missing blocks
-	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], preState.FinalizedCheckpoint(), preState.CurrentJustifiedCheckpoint()); err != nil {
+	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], finalizedCheckpoint, justifiedCheckpoint); err != nil {
 		return errors.Wrap(err, "could not fill in missing blocks to forkchoice")
 	}
 
@@ -307,6 +315,12 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		}
 		jCheckpoints[i] = preState.CurrentJustifiedCheckpoint()
 		fCheckpoints[i] = preState.FinalizedCheckpoint()
+		if jCheckpoints[i] == nil {
+			return errors.New("nil current justified checkpoint")
+		}
+		if fCheckpoints[i] == nil {
+			return errors.New("nil finalized checkpoint")
+		}
 
 		v, h, err = getStateVersionAndPayload(preState)
 		if err != nil {
@@ -396,10 +410,18 @@ func (s *Service) notifyEngineAndSaveData(
 
 	for i, b := range blks {
 		root := b.Root()
+		justifiedCheckpoint := jCheckpoints[i]
+		if justifiedCheckpoint == nil {
+			return nil, false, errors.New("nil current justified checkpoint")
+		}
+		finalizedCheckpoint := fCheckpoints[i]
+		if finalizedCheckpoint == nil {
+			return nil, false, errors.New("nil finalized checkpoint")
+		}
 		args := &forkchoicetypes.BlockAndCheckpoints{
 			Block:               b,
-			JustifiedCheckpoint: jCheckpoints[i],
-			FinalizedCheckpoint: fCheckpoints[i],
+			JustifiedCheckpoint: justifiedCheckpoint,
+			FinalizedCheckpoint: finalizedCheckpoint,
 		}
 		if b.Version() < version.Gloas {
 			isValidPayload, err = s.notifyNewPayload(ctx,
@@ -444,16 +466,28 @@ func (s *Service) notifyEngineAndSaveData(
 			tracing.AnnotateError(span, err)
 			return nil, false, err
 		}
-		if i > 0 && jCheckpoints[i].Epoch > jCheckpoints[i-1].Epoch {
-			if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, jCheckpoints[i]); err != nil {
-				tracing.AnnotateError(span, err)
-				return nil, false, err
+		if i > 0 {
+			previousJustifiedCheckpoint := jCheckpoints[i-1]
+			if previousJustifiedCheckpoint == nil {
+				return nil, false, errors.New("nil previous current justified checkpoint")
+			}
+			if justifiedCheckpoint.Epoch > previousJustifiedCheckpoint.Epoch {
+				if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, justifiedCheckpoint); err != nil {
+					tracing.AnnotateError(span, err)
+					return nil, false, err
+				}
 			}
 		}
-		if i > 0 && fCheckpoints[i].Epoch > fCheckpoints[i-1].Epoch {
-			if err := s.updateFinalized(ctx, fCheckpoints[i]); err != nil {
-				tracing.AnnotateError(span, err)
-				return nil, false, err
+		if i > 0 {
+			previousFinalizedCheckpoint := fCheckpoints[i-1]
+			if previousFinalizedCheckpoint == nil {
+				return nil, false, errors.New("nil previous finalized checkpoint")
+			}
+			if finalizedCheckpoint.Epoch > previousFinalizedCheckpoint.Epoch {
+				if err := s.updateFinalized(ctx, finalizedCheckpoint); err != nil {
+					tracing.AnnotateError(span, err)
+					return nil, false, err
+				}
 			}
 		}
 	}

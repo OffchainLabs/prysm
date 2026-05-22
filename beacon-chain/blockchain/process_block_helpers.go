@@ -167,7 +167,12 @@ func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
 		return
 	}
 
-	finalizedRoot := attestedState.FinalizedCheckpoint().Root
+	finalizedCheckpoint := attestedState.FinalizedCheckpoint()
+	if finalizedCheckpoint == nil {
+		log.Error("processLightClientUpdates: Could not get finalized checkpoint")
+		return
+	}
+	finalizedRoot := finalizedCheckpoint.Root
 	finalizedBlock, err := s.getBlock(cfg.ctx, [32]byte(finalizedRoot))
 	if err != nil {
 		if errors.Is(err, errBlockNotFoundInCacheOrDB) {
@@ -309,6 +314,9 @@ func (s *Service) verifyBlkFinalizedSlot(b interfaces.ReadOnlyBeaconBlock) error
 func (s *Service) updateFinalized(ctx context.Context, cp *ethpb.Checkpoint) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.updateFinalized")
 	defer span.End()
+	if cp == nil {
+		return errors.New("nil finalized checkpoint")
+	}
 
 	// return early if new checkpoint is not newer than the one in DB
 	currentFinalized, err := s.cfg.BeaconDB.FinalizedCheckpoint(ctx)
@@ -380,6 +388,9 @@ func (s *Service) ancestorByDB(ctx context.Context, r [32]byte, slot primitives.
 // This is useful for block tree visualizer and additional vote accounting.
 func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
 	fCheckpoint, jCheckpoint *ethpb.Checkpoint) error {
+	if fCheckpoint == nil || jCheckpoint == nil {
+		return ErrInvalidCheckpointArgs
+	}
 	if fCheckpoint.Epoch > jCheckpoint.Epoch {
 		return ErrInvalidCheckpointArgs
 	}
@@ -387,6 +398,9 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 
 	// Fork choice only matters from last finalized slot.
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
+	if finalized == nil {
+		return errors.New("nil finalized checkpoint")
+	}
 	fSlot, err := slots.EpochStart(finalized.Epoch)
 	if err != nil {
 		return err
