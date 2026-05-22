@@ -322,11 +322,17 @@ func GenerateFullBlockAltair(
 	slot primitives.Slot,
 ) (*ethpb.SignedBeaconBlockAltair, error) {
 	ctx := context.Background()
+	if bState == nil || bState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	currentSlot := bState.Slot()
 	if currentSlot > slot {
 		return nil, fmt.Errorf("current slot in state is larger than given slot. %d > %d", currentSlot, slot)
 	}
 	bState = bState.Copy()
+	if bState == nil || bState.IsNil() {
+		return nil, errors.New("beacon state copy is nil")
+	}
 
 	if conf == nil {
 		conf = &BlockGenConfig{}
@@ -468,6 +474,9 @@ func GenerateFullBlockAltair(
 	signature, err := BlockSignature(bState, block, privs)
 	if err != nil {
 		return nil, err
+	}
+	if signature == nil {
+		return nil, errors.New("block signature is nil")
 	}
 
 	return &ethpb.SignedBeaconBlockAltair{Block: block, Signature: signature.Marshal()}, nil
