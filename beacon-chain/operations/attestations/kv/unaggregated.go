@@ -87,7 +87,11 @@ func (c *AttCaches) UnaggregatedAttestationsBySlotIndex(
 
 	unAggregatedAtts := c.unAggregatedAtt
 	for _, a := range unAggregatedAtts {
-		if a.Version() == version.Phase0 && slot == a.GetData().Slot && committeeIndex == a.GetData().CommitteeIndex {
+		data := a.GetData()
+		if data == nil {
+			continue
+		}
+		if a.Version() == version.Phase0 && slot == data.Slot && committeeIndex == data.CommitteeIndex {
 			att, ok := a.(*ethpb.Attestation)
 			// This will never fail in practice because we asserted the version
 			if ok {
@@ -116,7 +120,11 @@ func (c *AttCaches) UnaggregatedAttestationsBySlotIndexElectra(
 
 	unAggregatedAtts := c.unAggregatedAtt
 	for _, a := range unAggregatedAtts {
-		if a.Version() >= version.Electra && slot == a.GetData().Slot && a.CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
+		data := a.GetData()
+		if data == nil {
+			continue
+		}
+		if a.Version() >= version.Electra && slot == data.Slot && a.CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
 			att, ok := a.(*ethpb.AttestationElectra)
 			// This will never fail in practice because we asserted the version
 			if ok {
