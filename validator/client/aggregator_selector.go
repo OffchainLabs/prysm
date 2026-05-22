@@ -253,7 +253,7 @@ func (p *distributedSelector) RefreshSelectionProofs(ctx context.Context) error 
 
 func (p *distributedSelector) fetchSelectionProofs(ctx context.Context) (map[attSelectionKey]iface.BeaconCommitteeSelection, error) {
 	var req []iface.BeaconCommitteeSelection
-	for pk, duty := range p.v.duties.CurrentEpochDuties() {
+	for pk, duty := range p.v.duties.Snapshot().CurrentDuties() {
 		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 			continue
 		}

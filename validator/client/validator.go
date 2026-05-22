@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"iter"
 	"slices"
 	"strconv"
 	"strings"
@@ -542,7 +543,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 	defer span.End()
 
 	snap := v.duties.Snapshot()
-	if !snap.initialized {
+	if !snap.IsInitialized() {
 		return nil, errors.New("validator duties are not initialized")
 	}
 
@@ -551,7 +552,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		syncCommitteePubkeys [][fieldparams.BLSPubkeyLength]byte
 	)
 
-	for pk, duty := range snap.currentDuties {
+	for pk, duty := range snap.CurrentDuties() {
 		var roles []iface.ValidatorRole
 
 		if duty == nil {
@@ -1062,7 +1063,7 @@ func (v *validator) buildProposerPreferences(
 	v.submittedPrefSlotsLock.Unlock()
 
 	snap := v.duties.Snapshot()
-	if !snap.initialized {
+	if !snap.IsInitialized() {
 		return nil
 	}
 
@@ -1076,7 +1077,7 @@ func (v *validator) buildProposerPreferences(
 	//   - proposal in next epoch     → current_duty_dependent_root
 	prevDepRoot, currDepRoot := v.duties.DependentRoots()
 
-	processDuties := func(duties map[pubkey]*ethpb.ValidatorDuty, isNextEpoch bool) {
+	processDuties := func(duties iter.Seq2[pubkey, *ethpb.ValidatorDuty], isNextEpoch bool) {
 		v.submittedPrefSlotsLock.Lock()
 		defer v.submittedPrefSlotsLock.Unlock()
 		dependentRoot := prevDepRoot
@@ -1144,8 +1145,8 @@ func (v *validator) buildProposerPreferences(
 		}
 	}
 
-	currentDuties := snap.currentDuties
-	nextDuties := snap.nextDuties
+	currentDuties := snap.CurrentDuties()
+	nextDuties := snap.NextDuties()
 
 	var currentProposerCount, nextProposerCount int
 	for _, d := range currentDuties {

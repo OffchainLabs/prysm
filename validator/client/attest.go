@@ -192,10 +192,10 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 // Given the validator public key, this gets the validator assignment.
 func (v *validator) duty(pubKey [fieldparams.BLSPubkeyLength]byte) (*ethpb.ValidatorDuty, error) {
 	snap := v.duties.Snapshot()
-	if !snap.initialized {
+	if !snap.IsInitialized() {
 		return nil, errors.New("no duties for validators")
 	}
-	d, ok := snap.currentDuties[pubKey]
+	d, ok := snap.CurrentDuty(pubKey)
 	if !ok {
 		return nil, fmt.Errorf("pubkey %#x not in duties", bytesutil.Trunc(pubKey[:]))
 	}

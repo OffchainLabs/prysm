@@ -89,10 +89,10 @@ func TestUpdateDuties_OK(t *testing.T) {
 
 	util.WaitTimeout(&wg, 2*time.Second)
 
-	duties := v.duties.CurrentEpochDuties()
-	require.Equal(t, 1, len(duties), "Expected one duty")
+	snap := v.duties.Snapshot()
+	require.Equal(t, 1, snap.CurrentDutyCount(), "Expected one duty")
 	var gotDuty *ethpb.ValidatorDuty
-	for _, d := range duties {
+	for _, d := range snap.CurrentDuties() {
 		gotDuty = d
 	}
 	assert.Equal(t, params.BeaconConfig().SlotsPerEpoch+1, gotDuty.ProposerSlots[0], "Unexpected validator assignments")
@@ -548,10 +548,10 @@ func TestUpdateDutiesSplit(t *testing.T) {
 
 		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42}))
 
+		snap := v.duties.Snapshot()
 		// Current epoch: attester + proposer + sync + PTC.
-		current := v.duties.CurrentEpochDuties()
-		require.Equal(t, 1, len(current))
-		for _, d := range current {
+		require.Equal(t, 1, snap.CurrentDutyCount())
+		for _, d := range snap.CurrentDuties() {
 			assert.Equal(t, primitives.Slot(epoch)*spe+3, d.AttesterSlot)
 			require.Equal(t, 1, len(d.ProposerSlots))
 			assert.Equal(t, primitives.Slot(epoch)*spe+1, d.ProposerSlots[0])
@@ -561,9 +561,8 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		}
 
 		// Next epoch: attester + PTC look-ahead.
-		next := v.duties.NextEpochDuties()
-		require.Equal(t, 1, len(next))
-		for _, d := range next {
+		require.Equal(t, 1, snap.NextDutyCount())
+		for _, d := range snap.NextDuties() {
 			assert.Equal(t, primitives.Slot(epoch+1)*spe+7, d.AttesterSlot)
 			require.Equal(t, 1, len(d.PtcSlots))
 			assert.Equal(t, primitives.Slot(epoch+1)*spe+2, d.PtcSlots[0])
@@ -601,7 +600,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		err := v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42})
 		require.ErrorContains(t, "attester fail", err)
 		assert.Equal(t, true, v.duties.IsInitialized())
-		assert.Equal(t, 1, len(v.duties.CurrentEpochDuties()))
+		assert.Equal(t, 1, v.duties.Snapshot().CurrentDutyCount())
 	})
 
 	t.Run("proposer error preserves existing duties", func(t *testing.T) {
@@ -628,7 +627,7 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		err := v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42})
 		require.ErrorContains(t, "proposer fail", err)
 		assert.Equal(t, true, v.duties.IsInitialized())
-		assert.Equal(t, 1, len(v.duties.CurrentEpochDuties()))
+		assert.Equal(t, 1, v.duties.Snapshot().CurrentDutyCount())
 	})
 
 	t.Run("PTC error is non-fatal", func(t *testing.T) {
@@ -871,6 +870,48 @@ func TestUpdateDutiesSplit(t *testing.T) {
 		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42}))
 		// After a full fetch, missingNext is reset.
 		require.Equal(t, missingNextDuties(0), v.duties.data.missingNext)
+	})
+
+	t.Run("promote refreshes Status from pubkeyToStatus", func(t *testing.T) {
+		v, client, keys := setup(t)
+		spe := params.BeaconConfig().SlotsPerEpoch
+
+		// Seed the store as if the prior fetch saw the validator as PENDING
+		// (activation epoch reached, so it was admitted into the duty set).
+		{
+			var data dutyStoreData
+			data.setFromContainer(&ethpb.ValidatorDutiesContainer{
+				NextEpochDuties: []*ethpb.ValidatorDuty{{
+					PublicKey: keys.pub[:], ValidatorIndex: 42,
+					AttesterSlot: primitives.Slot(epoch)*spe + 3,
+					Status:       ethpb.ValidatorStatus_PENDING,
+				}},
+				CurrDependentRoot: bytesutil.PadTo([]byte{0xaa}, 32),
+			})
+			data.epoch = epoch - 1
+			data.indices = []primitives.ValidatorIndex{42}
+			v.duties.Write(data)
+		}
+
+		root := bytesutil.PadTo([]byte{0x01}, 32)
+		client.EXPECT().AttesterDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.AttesterDutiesResponse{
+			DependentRoot: root,
+			Duties: []*ethpb.AttesterDuty{{
+				Pubkey: keys.pub[:], ValidatorIndex: 42,
+				Slot: primitives.Slot(epoch+1)*spe + 7, CommitteeIndex: 2, CommitteeLength: 64, CommitteesAtSlot: 4,
+			}},
+		}, nil)
+		client.EXPECT().ProposerDuties(gomock.Any(), epoch+1).Return(&ethpb.ProposerDutiesResponse{DependentRoot: root}, nil)
+		client.EXPECT().SyncCommitteeDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.SyncCommitteeDutiesResponse{}, nil)
+		client.EXPECT().PTCDuties(gomock.Any(), epoch+1, gomock.Any()).Return(&ethpb.PTCDutiesResponse{}, nil)
+
+		require.NoError(t, v.updateDutiesSplit(t.Context(), epoch, []primitives.ValidatorIndex{42}))
+
+		snap := v.duties.Snapshot()
+		require.Equal(t, 1, snap.CurrentDutyCount())
+		for _, d := range snap.CurrentDuties() {
+			assert.Equal(t, ethpb.ValidatorStatus_ACTIVE, d.Status)
+		}
 	})
 }
 

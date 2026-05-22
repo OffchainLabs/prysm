@@ -269,11 +269,12 @@ func (v *validator) updateDutiesSplit(ctx context.Context, epoch primitives.Epoc
 // fetch, so no current-epoch refetch is needed.
 func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, indices []primitives.ValidatorIndex) (dutiesFetchResult, error) {
 	snap := v.duties.Snapshot()
-	currentDuties := make([]*ethpb.ValidatorDuty, 0, len(snap.nextDuties))
-	for _, d := range snap.nextDuties {
+	currentDuties := make([]*ethpb.ValidatorDuty, 0, snap.NextDutyCount())
+	for _, d := range snap.NextDuties() {
 		if d == nil {
 			continue
 		}
+		d.Status = v.statusForPubkey(d.PublicKey)
 		currentDuties = append(currentDuties, d)
 	}
 	res := dutiesFetchResult{
@@ -281,7 +282,7 @@ func (v *validator) promoteDuties(ctx context.Context, epoch primitives.Epoch, i
 		// On promotion, last cycle's currDependentRoot (which covered next-epoch
 		// duties) becomes this cycle's prevDepRoot (covering current-epoch
 		// duties).
-		prevDepRoot: snap.currDependentRoot,
+		prevDepRoot: snap.CurrDependentRoot(),
 	}
 
 	var (
@@ -599,7 +600,7 @@ func (v *validator) onDutiesUpdated(ctx context.Context) error {
 
 func (v *validator) logDuties(slot primitives.Slot) {
 	snap := v.duties.Snapshot()
-	if !snap.initialized {
+	if !snap.IsInitialized() {
 		return
 	}
 
@@ -620,7 +621,7 @@ func (v *validator) logDuties(slot primitives.Slot) {
 	}
 	var totalProposingKeys, totalAttestingKeys, totalPTCKeys uint64
 
-	for _, duty := range snap.currentDuties {
+	for _, duty := range snap.CurrentDuties() {
 		pk := fmt.Sprintf("%#x", duty.PublicKey)
 		if v.emitAccountMetrics {
 			ValidatorStatusesGaugeVec.WithLabelValues(pk, fmt.Sprintf("%#x", duty.ValidatorIndex)).Set(float64(duty.Status))
@@ -671,7 +672,7 @@ func (v *validator) logDuties(slot primitives.Slot) {
 			}
 		}
 	}
-	for _, duty := range snap.nextDuties {
+	for _, duty := range snap.NextDuties() {
 		pk := fmt.Sprintf("%#x", duty.PublicKey)
 		if duty.Status != ethpb.ValidatorStatus_ACTIVE && duty.Status != ethpb.ValidatorStatus_EXITING {
 			continue

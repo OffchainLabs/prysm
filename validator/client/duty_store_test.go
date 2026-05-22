@@ -38,8 +38,9 @@ func testDutyStore(current ...*ethpb.ValidatorDuty) *dutyStore {
 func TestDutyStore_Uninitialized(t *testing.T) {
 	ds := &dutyStore{}
 	assert.Equal(t, false, ds.IsInitialized())
-	assert.Equal(t, true, ds.CurrentEpochDuties() == nil)
-	assert.Equal(t, true, ds.NextEpochDuties() == nil)
+	snap := ds.Snapshot()
+	assert.Equal(t, 0, snap.CurrentDutyCount())
+	assert.Equal(t, 0, snap.NextDutyCount())
 
 	assert.Equal(t, true, ds.PrevDependentRoot() == nil)
 	assert.Equal(t, true, ds.CurrDependentRoot() == nil)
@@ -104,9 +105,12 @@ func TestDutyStore_Write(t *testing.T) {
 	assert.Equal(t, false, ok)
 
 	// Next duties.
-	next := ds.NextEpochDuties()
-	assert.Equal(t, 1, len(next))
-	assert.Equal(t, primitives.ValidatorIndex(20), next[pk2].ValidatorIndex)
+	snap := ds.Snapshot()
+	assert.Equal(t, 1, snap.NextDutyCount())
+	for pk, duty := range snap.NextDuties() {
+		assert.Equal(t, pk2, pk)
+		assert.Equal(t, primitives.ValidatorIndex(20), duty.ValidatorIndex)
+	}
 
 	// Dependent roots.
 	assert.DeepEqual(t, []byte("prev"), ds.PrevDependentRoot())
@@ -135,7 +139,7 @@ func TestDutyStore_Reset(t *testing.T) {
 
 	ds.Reset()
 	assert.Equal(t, false, ds.IsInitialized())
-	assert.Equal(t, true, ds.CurrentEpochDuties() == nil)
+	assert.Equal(t, 0, ds.Snapshot().CurrentDutyCount())
 }
 
 func TestDutyStore_WriteNilResets(t *testing.T) {
@@ -160,8 +164,9 @@ func TestDutyStore_WriteSkipsNilDuties(t *testing.T) {
 		})
 		ds.Write(data)
 	}
-	assert.Equal(t, 1, len(ds.CurrentEpochDuties()))
-	assert.Equal(t, 0, len(ds.NextEpochDuties()))
+	snap := ds.Snapshot()
+	assert.Equal(t, 1, snap.CurrentDutyCount())
+	assert.Equal(t, 0, snap.NextDutyCount())
 }
 
 func TestDutyStoreData_CanPromote(t *testing.T) {
