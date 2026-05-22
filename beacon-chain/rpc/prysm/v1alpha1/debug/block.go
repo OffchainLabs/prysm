@@ -70,7 +70,11 @@ func (ds *Server) GetInclusionSlot(ctx context.Context, req *pbrpc.InclusionSlot
 	targetStates := make(map[[32]byte]state.ReadOnlyBeaconState)
 	for _, blk := range blks {
 		for _, a := range blk.Block().Body().Attestations() {
-			tr := bytesutil.ToBytes32(a.GetData().Target.Root)
+			data := a.GetData()
+			if data == nil || data.Target == nil {
+				continue
+			}
+			tr := bytesutil.ToBytes32(data.Target.Root)
 			s, ok := targetStates[tr]
 			if !ok {
 				s, err = ds.StateGen.StateByRootNoCopy(ctx, tr)
@@ -79,7 +83,7 @@ func (ds *Server) GetInclusionSlot(ctx context.Context, req *pbrpc.InclusionSlot
 				}
 				targetStates[tr] = s
 			}
-			c, err := helpers.BeaconCommitteeFromState(ctx, s, a.GetData().Slot, a.GetData().CommitteeIndex)
+			c, err := helpers.BeaconCommitteeFromState(ctx, s, data.Slot, data.CommitteeIndex)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "Could not get committee: %v", err)
 			}
@@ -88,7 +92,7 @@ func (ds *Server) GetInclusionSlot(ctx context.Context, req *pbrpc.InclusionSlot
 				return nil, err
 			}
 			for _, i := range indices {
-				if req.Id == i && req.Slot == a.GetData().Slot {
+				if req.Id == i && req.Slot == data.Slot {
 					inclusionSlot = blk.Block().Slot()
 					break
 				}
