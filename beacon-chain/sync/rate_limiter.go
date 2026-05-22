@@ -253,7 +253,17 @@ func (_ *limiter) topicLogger(topic string) *logrus.Entry {
 }
 
 func (l *limiter) downscorePeer(peerID peer.ID, topic, reason string) {
-	newScore := l.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	newScore := 0
+	peers := l.p2p.Peers()
+	if peers != nil {
+		scorers := peers.Scorers()
+		if scorers != nil {
+			badResponsesScorer := scorers.BadResponsesScorer()
+			if badResponsesScorer != nil {
+				newScore = badResponsesScorer.Increment(peerID)
+			}
+		}
+	}
 	log.WithFields(logrus.Fields{
 		"peerID":   peerID.String(),
 		"reason":   reason,

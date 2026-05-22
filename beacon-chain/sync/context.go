@@ -35,6 +35,9 @@ func writeContextToStream(objCtx []byte, stream network.Stream) error {
 
 // reads any attached context-bytes to the payload.
 func readContextFromStream(stream network.Stream) ([]byte, error) {
+	if stream == nil {
+		return nil, errors.New("stream is nil")
+	}
 	hasCtx, err := expectRpcContext(stream)
 	if err != nil {
 		return nil, err
@@ -51,6 +54,9 @@ func readContextFromStream(stream network.Stream) ([]byte, error) {
 }
 
 func expectRpcContext(stream network.Stream) (bool, error) {
+	if stream == nil {
+		return false, errors.New("stream is nil")
+	}
 	_, message, version, err := p2p.TopicDeconstructor(string(stream.Protocol()))
 	if err != nil {
 		return false, err

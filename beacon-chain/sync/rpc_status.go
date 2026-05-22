@@ -189,7 +189,16 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, peer peer.ID) error 
 
 	// If validation fails, validation error is logged, and peer status scorer will mark peer as bad.
 	err = s.validateStatusMessage(ctx, msg)
-	s.cfg.p2p.Peers().Scorers().PeerStatusScorer().SetPeerStatus(peer, msg, err)
+	peers := s.cfg.p2p.Peers()
+	if peers != nil {
+		scorers := peers.Scorers()
+		if scorers != nil {
+			peerStatusScorer := scorers.PeerStatusScorer()
+			if peerStatusScorer != nil {
+				peerStatusScorer.SetPeerStatus(peer, msg, err)
+			}
+		}
+	}
 	if err := s.cfg.p2p.Peers().IsBad(peer); err != nil {
 		s.disconnectBadPeer(s.ctx, peer, err)
 	}
@@ -198,10 +207,13 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, peer peer.ID) error 
 }
 
 func (s *Service) decodeStatus(stream network.Stream, epoch primitives.Epoch) (*pb.StatusV2, error) {
+	if stream == nil {
+		return nil, errors.New("stream is nil")
+	}
 	if epoch >= params.BeaconConfig().FuluForkEpoch {
 		msg := new(pb.StatusV2)
 		if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-			s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+			incrementBadResponses(s.cfg.p2p, stream.Conn().RemotePeer())
 			return nil, errors.Wrap(err, "decode with max length")
 		}
 
@@ -210,7 +222,7 @@ func (s *Service) decodeStatus(stream network.Stream, epoch primitives.Epoch) (*
 
 	msg := new(pb.Status)
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		incrementBadResponses(s.cfg.p2p, stream.Conn().RemotePeer())
 		return nil, errors.Wrap(err, "decode with max length")
 	}
 
@@ -223,7 +235,16 @@ func (s *Service) decodeStatus(stream network.Stream, epoch primitives.Epoch) (*
 }
 
 func (s *Service) reValidatePeer(ctx context.Context, id peer.ID) error {
-	s.cfg.p2p.Peers().Scorers().PeerStatusScorer().SetHeadSlot(s.cfg.chain.HeadSlot())
+	peers := s.cfg.p2p.Peers()
+	if peers != nil {
+		scorers := peers.Scorers()
+		if scorers != nil {
+			peerStatusScorer := scorers.PeerStatusScorer()
+			if peerStatusScorer != nil {
+				peerStatusScorer.SetHeadSlot(s.cfg.chain.HeadSlot())
+			}
+		}
+	}
 	if err := s.sendRPCStatusRequest(ctx, id); err != nil {
 		return err
 	}

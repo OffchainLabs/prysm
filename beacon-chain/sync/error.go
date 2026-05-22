@@ -33,6 +33,9 @@ func (s *Service) generateErrorResponse(code byte, reason string) ([]byte, error
 
 // ReadStatusCode response from a RPC stream.
 func ReadStatusCode(stream network.Stream, encoding encoder.NetworkEncoding) (uint8, string, error) {
+	if stream == nil {
+		return 0, "", errors.New("stream is nil")
+	}
 	// Set ttfb deadline.
 	SetStreamReadDeadline(stream, params.BeaconConfig().TtfbTimeoutDuration())
 	b := make([]byte, 1)

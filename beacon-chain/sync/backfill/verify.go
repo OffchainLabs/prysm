@@ -145,6 +145,9 @@ func newDomainCache(vRoot []byte, dType [bls.DomainByteLength]byte) (*domainCach
 }
 
 func (dc *domainCache) forEpoch(e primitives.Epoch) ([]byte, error) {
+	if dc == nil || dc.forkDomains == nil {
+		return nil, errors.New("domain cache is nil")
+	}
 	fork, err := params.Fork(e)
 	if err != nil {
 		return nil, err

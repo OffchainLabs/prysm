@@ -149,6 +149,9 @@ func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, 
 }
 
 func (s *Service) updateComplete() bool {
+	if s == nil || s.batchSeq == nil || s.pool == nil {
+		return false
+	}
 	b, err := s.pool.complete()
 	if err != nil {
 		if errors.Is(err, errEndSequence) {
@@ -207,6 +210,9 @@ func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.S
 }
 
 func (s *Service) scheduleTodos() {
+	if s == nil || s.batchSeq == nil || s.pool == nil {
+		return
+	}
 	batches, err := s.batchSeq.sequence()
 	if err != nil {
 		// This typically means we have several importable batches, but they are stuck behind a batch that needs
@@ -227,6 +233,9 @@ func (s *Service) scheduleTodos() {
 
 // Start begins the runloop of backfill.Service in the current goroutine.
 func (s *Service) Start() {
+	if s == nil {
+		return
+	}
 	if !s.enabled {
 		log.Info("Service not enabled")
 		s.markComplete()

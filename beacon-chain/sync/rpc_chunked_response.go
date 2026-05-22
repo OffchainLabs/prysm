@@ -47,6 +47,9 @@ func WriteBlockChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, en
 // ReadChunkedBlock handles each response chunk that is sent by the
 // peer and converts it into a beacon block.
 func ReadChunkedBlock(stream libp2pcore.Stream, tor blockchain.TemporalOracle, p2p p2p.EncodingProvider, isFirstChunk bool) (interfaces.ReadOnlySignedBeaconBlock, error) {
+	if stream == nil {
+		return nil, errors.New("stream is nil")
+	}
 	// Handle deadlines differently for first chunk
 	if isFirstChunk {
 		return readFirstChunkedBlock(stream, tor, p2p)

@@ -376,6 +376,9 @@ func validUnprocessed(
 	isProc processedChecker,
 	isPayloadProc payloadChecker,
 ) ([]blocks.BlockWithROSidecars, []interfaces.ROSignedExecutionPayloadEnvelope, error) {
+	if bwb == nil {
+		return nil, nil, errors.New("block batch is nil")
+	}
 	// use a pointer to avoid confusing the zero-value with the case where the first element is processed.
 	var processed *int
 	for i := range bwb {

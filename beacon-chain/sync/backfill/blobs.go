@@ -73,6 +73,9 @@ func (bs *blobSync) needed() int {
 // call to Persist, and the call to IsDataAvailable (where the blobs are actually written to disk
 // if successfully verified).
 func (bs *blobSync) validateNext(rb blocks.ROBlob) error {
+	if bs == nil || bs.store == nil {
+		return errors.New("blob sync is nil")
+	}
 	if bs.next >= len(bs.expected) {
 		return errUnexpectedResponseSize
 	}
