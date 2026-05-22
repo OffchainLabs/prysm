@@ -1384,6 +1384,10 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
+		return
+	}
 
 	// Build a set of requested validators (also deduplicates per spec's uniqueItems requirement).
 	// Validate that each index exists in the validator registry.

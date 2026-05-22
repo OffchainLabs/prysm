@@ -46,6 +46,9 @@ func (s *Service) ComputeValidatorPerformance(
 ) (*ethpb.ValidatorPerformanceResponse, *RpcError) {
 	ctx, span := trace.StartSpan(ctx, "coreService.ComputeValidatorPerformance")
 	defer span.End()
+	if req == nil {
+		return nil, &RpcError{Err: errors.New("request is nil"), Reason: BadRequest}
+	}
 
 	if s.SyncChecker.Syncing() {
 		return nil, &RpcError{Reason: Unavailable, Err: errors.New("Syncing to latest head, not ready to respond")}

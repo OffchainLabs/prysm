@@ -18,6 +18,9 @@ import (
 func (vs *Server) getPayloadAttestations(ctx context.Context, head state.BeaconState, blockParentRoot [32]byte) []*ethpb.PayloadAttestation {
 	_, span := trace.StartSpan(ctx, "ProposerServer.getPayloadAttestations")
 	defer span.End()
+	if head == nil || head.IsNil() {
+		return nil
+	}
 
 	if slots.ToEpoch(head.Slot()) < params.BeaconConfig().GloasForkEpoch {
 		return nil

@@ -135,6 +135,9 @@ func (vs *Server) handleSuccesfulReorgAttempt(ctx context.Context, slot primitiv
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "could not obtain head state")
 	}
+	if head == nil || head.IsNil() {
+		return nil, status.Error(codes.Unavailable, "could not obtain head state")
+	}
 	return head, nil
 }
 
@@ -156,6 +159,9 @@ func (vs *Server) getHeadNoReorg(ctx context.Context, slot primitives.Slot, pare
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
 	}
+	if head == nil || head.IsNil() {
+		return nil, status.Error(codes.Internal, "Could not get head state")
+	}
 	return head, nil
 }
 
@@ -170,6 +176,9 @@ func (vs *Server) getParentStateFromReorgData(ctx context.Context, slot primitiv
 	}
 	if err != nil {
 		return nil, err
+	}
+	if head == nil || head.IsNil() {
+		return nil, status.Error(codes.Internal, "Could not get head state")
 	}
 	if head.Slot() >= slot {
 		return head, nil

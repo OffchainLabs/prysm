@@ -13,6 +13,9 @@ import (
 )
 
 func unblindBlobsSidecars(block interfaces.SignedBeaconBlock, bundle enginev1.BlobsBundler) ([]*ethpb.BlobSidecar, error) {
+	if block == nil || block.IsNil() {
+		return nil, errors.New("signed beacon block is nil")
+	}
 	if block.Version() < version.Deneb {
 		return nil, nil
 	}

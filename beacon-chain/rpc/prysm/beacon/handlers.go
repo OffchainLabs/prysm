@@ -63,7 +63,16 @@ func (s *Server) GetWeakSubjectivity(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
-	stateRoot := cb.Block().StateRoot()
+	if cb == nil || cb.IsNil() {
+		httputil.HandleError(w, fmt.Sprintf("Block with root %#x from slot index %d not found in db", cbr, wsSlot), http.StatusInternalServerError)
+		return
+	}
+	block := cb.Block()
+	if block == nil || block.IsNil() {
+		httputil.HandleError(w, fmt.Sprintf("Block with root %#x from slot index %d is nil", cbr, wsSlot), http.StatusInternalServerError)
+		return
+	}
+	stateRoot := block.StateRoot()
 	log.Printf("Weak subjectivity checkpoint reported as epoch=%d, block root=%#x, state root=%#x", wsEpoch, cbr, stateRoot)
 
 	resp := &structs.GetWeakSubjectivityResponse{

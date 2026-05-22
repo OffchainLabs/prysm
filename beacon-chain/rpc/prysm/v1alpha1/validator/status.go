@@ -327,7 +327,7 @@ func (vs *Server) validatorStatus(
 			return resp, nonExistentIndex
 		}
 		dep, eth1BlockNumBigInt := vs.DepositFetcher.DepositByPubkey(ctx, pubKey)
-		if eth1BlockNumBigInt == nil { // No deposit found in ETH1.
+		if eth1BlockNumBigInt == nil || dep == nil || dep.Data == nil { // No deposit found in ETH1.
 			return resp, nonExistentIndex
 		}
 		domain, err := signing.ComputeDomain(

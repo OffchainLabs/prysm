@@ -36,6 +36,9 @@ import (
 func (vs *Server) eth1DataMajorityVote(ctx context.Context, beaconState state.BeaconState) (*ethpb.Eth1Data, error) {
 	ctx, cancel := context.WithTimeout(ctx, eth1dataTimeout)
 	defer cancel()
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 
 	// post eth1 deposits, the Eth 1 data will then be frozen
 	if helpers.DepositRequestsStarted(beaconState) {
@@ -105,6 +108,9 @@ func (vs *Server) canonicalEth1Data(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	currentVote *ethpb.Eth1Data) (*ethpb.Eth1Data, *big.Int, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, nil, errors.New("beacon state is nil")
+	}
 	var eth1BlockHash [32]byte
 
 	// Add in current vote, to get accurate vote tally

@@ -68,10 +68,19 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
+		return
+	}
 
 	// NOTE: Using unsafe conversion to proto is acceptable here,
 	// as we play with a copy of the state returned by Stater.
-	sszObject, ok := st.ToProtoUnsafe().(query.SSZObject)
+	protoState := st.ToProtoUnsafe()
+	if protoState == nil {
+		httputil.HandleError(w, "State proto is nil", http.StatusInternalServerError)
+		return
+	}
+	sszObject, ok := protoState.(query.SSZObject)
 	if !ok {
 		httputil.HandleError(w, "Unsupported state version for querying: "+version.String(st.Version()), http.StatusBadRequest)
 		return

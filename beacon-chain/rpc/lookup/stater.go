@@ -157,7 +157,11 @@ func (p *BeaconDbStater) State(ctx context.Context, stateId []byte) (state.Beaco
 		// replay it to the start slot of our checkpoint's epoch. The replayer
 		// only ever accesses our canonical history, so the state retrieved will
 		// always be the finalized state at that epoch.
-		s, err = p.ReplayerBuilder.ReplayerForSlot(targetSlot).ReplayToSlot(ctx, targetSlot)
+		replayer := p.ReplayerBuilder.ReplayerForSlot(targetSlot)
+		if replayer == nil {
+			return nil, errors.New("replayer is nil")
+		}
+		s, err = replayer.ReplayToSlot(ctx, targetSlot)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get finalized state")
 		}
@@ -171,7 +175,11 @@ func (p *BeaconDbStater) State(ctx context.Context, stateId []byte) (state.Beaco
 		// replay it to the start slot of our checkpoint's epoch. The replayer
 		// only ever accesses our canonical history, so the state retrieved will
 		// always be the justified state at that epoch.
-		s, err = p.ReplayerBuilder.ReplayerForSlot(targetSlot).ReplayToSlot(ctx, targetSlot)
+		replayer := p.ReplayerBuilder.ReplayerForSlot(targetSlot)
+		if replayer == nil {
+			return nil, errors.New("replayer is nil")
+		}
+		s, err = replayer.ReplayToSlot(ctx, targetSlot)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get justified state")
 		}
@@ -196,7 +204,13 @@ func (p *BeaconDbStater) State(ctx context.Context, stateId []byte) (state.Beaco
 		}
 	}
 
-	return s, err
+	if err != nil {
+		return nil, err
+	}
+	if s == nil || s.IsNil() {
+		return nil, errors.New("state is nil")
+	}
+	return s, nil
 }
 
 // StateRoot returns a beacon state root for a given identifier. The identifier can be one of:
@@ -283,7 +297,11 @@ func (p *BeaconDbStater) stateByRoot(ctx context.Context, stateRoot []byte) (sta
 			if err != nil || b == nil || b.IsNil() {
 				continue
 			}
-			if b.Block().StateRoot() == bytesutil.ToBytes32(stateRoot) {
+			block := b.Block()
+			if block == nil || block.IsNil() {
+				continue
+			}
+			if block.StateRoot() == bytesutil.ToBytes32(stateRoot) {
 				return p.StateGenService.StateByRoot(ctx, r)
 			}
 		}
@@ -330,7 +348,11 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 		}
 	}
 
-	st, err := p.ReplayerBuilder.ReplayerForSlot(target).ReplayBlocks(ctx)
+	replayer := p.ReplayerBuilder.ReplayerForSlot(target)
+	if replayer == nil {
+		return nil, errors.New("replayer is nil")
+	}
+	st, err := replayer.ReplayBlocks(ctx)
 	if err != nil {
 		if errors.Is(err, stategen.ErrNoDataForSlot) {
 			return nil, &StateNotFoundError{
@@ -403,7 +425,11 @@ func (p *BeaconDbStater) genesisStateRoot(ctx context.Context) ([]byte, error) {
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return nil, err
 	}
-	stateRoot := b.Block().StateRoot()
+	block := b.Block()
+	if block == nil || block.IsNil() {
+		return nil, blocks.ErrNilBeaconBlock
+	}
+	stateRoot := block.StateRoot()
 	return stateRoot[:], nil
 }
 
@@ -416,10 +442,17 @@ func (p *BeaconDbStater) finalizedStateRoot(ctx context.Context) ([]byte, error)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get finalized block")
 	}
+	if b == nil || b.IsNil() {
+		return nil, blocks.ErrNilSignedBeaconBlock
+	}
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return nil, err
 	}
-	stateRoot := b.Block().StateRoot()
+	block := b.Block()
+	if block == nil || block.IsNil() {
+		return nil, blocks.ErrNilBeaconBlock
+	}
+	stateRoot := block.StateRoot()
 	return stateRoot[:], nil
 }
 
@@ -432,10 +465,17 @@ func (p *BeaconDbStater) justifiedStateRoot(ctx context.Context) ([]byte, error)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get justified block")
 	}
+	if b == nil || b.IsNil() {
+		return nil, blocks.ErrNilSignedBeaconBlock
+	}
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return nil, err
 	}
-	stateRoot := b.Block().StateRoot()
+	block := b.Block()
+	if block == nil || block.IsNil() {
+		return nil, blocks.ErrNilBeaconBlock
+	}
+	stateRoot := block.StateRoot()
 	return stateRoot[:], nil
 }
 

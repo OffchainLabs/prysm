@@ -22,11 +22,18 @@ import (
 )
 
 func (vs *Server) setSyncAggregate(ctx context.Context, blk interfaces.SignedBeaconBlock, headState state.BeaconState) {
+	if blk == nil || blk.IsNil() || headState == nil || headState.IsNil() {
+		return
+	}
 	if blk.Version() < version.Altair {
 		return
 	}
 
-	syncAggregate, err := vs.getSyncAggregate(ctx, slots.PrevSlot(blk.Block().Slot()), blk.Block().ParentRoot(), headState)
+	blkBlock := blk.Block()
+	if blkBlock == nil || blkBlock.IsNil() {
+		return
+	}
+	syncAggregate, err := vs.getSyncAggregate(ctx, slots.PrevSlot(blkBlock.Slot()), blkBlock.ParentRoot(), headState)
 	if err != nil {
 		log.WithError(err).Error("Could not get sync aggregate")
 		emptySig := [96]byte{0xC0}
