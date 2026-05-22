@@ -276,6 +276,9 @@ func reportSlotMetrics(stateSlot, headSlot, clockSlot primitives.Slot, finalized
 
 // reportEpochMetrics reports epoch related metrics.
 func reportEpochMetrics(ctx context.Context, postState, headState state.BeaconState) error {
+	if postState == nil || postState.IsNil() {
+		return errors.New("nil post state")
+	}
 	currentEpoch := primitives.Epoch(postState.Slot() / params.BeaconConfig().SlotsPerEpoch)
 
 	// Validator instances
@@ -409,6 +412,13 @@ func reportEpochMetrics(ctx context.Context, postState, headState state.BeaconSt
 
 func reportAttestationInclusion(blk interfaces.ReadOnlyBeaconBlock) {
 	for _, att := range blk.Body().Attestations() {
-		attestationInclusionDelay.Observe(float64(blk.Slot() - att.GetData().Slot))
+		if att == nil || att.IsNil() {
+			continue
+		}
+		data := att.GetData()
+		if data == nil {
+			continue
+		}
+		attestationInclusionDelay.Observe(float64(blk.Slot() - data.Slot))
 	}
 }
