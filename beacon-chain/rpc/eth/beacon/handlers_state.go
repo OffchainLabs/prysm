@@ -54,6 +54,10 @@ func (s *Server) GetStateRoot(w http.ResponseWriter, r *http.Request) {
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
+		return
+	}
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
 		helpers.HandleIsOptimisticError(w, err)
@@ -97,6 +101,10 @@ func (s *Server) GetRandao(w http.ResponseWriter, r *http.Request) {
 	st, err := s.Stater.State(ctx, []byte(stateId))
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
 		return
 	}
 
@@ -199,6 +207,10 @@ func (s *Server) GetSyncCommittees(w http.ResponseWriter, r *http.Request) {
 	}
 	st, ok := s.stateForSyncCommittee(ctx, w, syncCommitteeReq)
 	if !ok {
+		return
+	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
 		return
 	}
 
