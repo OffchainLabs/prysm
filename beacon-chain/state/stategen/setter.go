@@ -51,6 +51,9 @@ func (s *State) ForceCheckpoint(ctx context.Context, blockRoot []byte) error {
 func (s *State) saveStateByRoot(ctx context.Context, blockRoot [32]byte, st state.BeaconState) error {
 	ctx, span := trace.StartSpan(ctx, "stateGen.saveStateByRoot")
 	defer span.End()
+	if st == nil || st.IsNil() {
+		return errNilState
+	}
 
 	// Duration can't be 0 to prevent panic for division.
 	duration := uint64(max(float64(s.saveHotStateDB.duration), 1))

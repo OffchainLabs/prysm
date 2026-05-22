@@ -207,6 +207,9 @@ func (s *State) recoverStateSummary(ctx context.Context, blockRoot [32]byte) (*e
 		if err != nil {
 			return nil, err
 		}
+		if b == nil || b.IsNil() || b.Block() == nil {
+			return nil, errNilState
+		}
 		summary := &ethpb.StateSummary{Slot: b.Block().Slot(), Root: blockRoot[:]}
 		if err := s.beaconDB.SaveStateSummary(ctx, summary); err != nil {
 			return nil, err
@@ -273,8 +276,11 @@ func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32
 	// Short circuit if the state is already in the DB.
 	if s.beaconDB.HasState(ctx, blockRoot) {
 		st, err := s.beaconDB.State(ctx, blockRoot)
-		if err == nil {
+		if err == nil && st != nil && !st.IsNil() {
 			return st, nil
+		}
+		if err == nil {
+			return nil, errNilState
 		}
 		if !stderrors.Is(err, db.ErrNotFoundState) {
 			return nil, err
