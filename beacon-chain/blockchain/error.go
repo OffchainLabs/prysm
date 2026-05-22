@@ -109,7 +109,7 @@ func InvalidBlockLVH(e error) [32]byte {
 	}
 	var d invalidBlockError
 	ok := errors.As(e, &d)
-	if !ok {
+	if !ok || d == nil {
 		return [32]byte{}
 	}
 	return d.LastValidHash()
@@ -123,7 +123,7 @@ func InvalidBlockRoot(e error) [32]byte {
 	}
 	var d invalidBlockError
 	ok := errors.As(e, &d)
-	if !ok {
+	if !ok || d == nil {
 		return [32]byte{}
 	}
 	return d.BlockRoot()
@@ -136,7 +136,7 @@ func InvalidAncestorRoots(e error) [][32]byte {
 	}
 	var d invalidBlockError
 	ok := errors.As(e, &d)
-	if !ok {
+	if !ok || d == nil {
 		return [][32]byte{}
 	}
 	return d.InvalidAncestorRoots()
