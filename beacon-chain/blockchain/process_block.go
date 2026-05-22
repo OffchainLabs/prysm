@@ -840,6 +840,7 @@ func (s *Service) runLateBlockTasks() {
 				attThreshold = cfg.SlotComponentDuration(attDueBPS)
 				ticker = slots.NewSlotTickerWithOffset(s.genesisTime, attThreshold, cfg.SecondsPerSlot)
 			}
+			s.goroutineCounter.sample(slot)
 			s.lateBlockTasks(s.ctx)
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting routine")
