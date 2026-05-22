@@ -516,17 +516,35 @@ func (b *BeaconNode) Start() {
 
 // Close handles graceful shutdown of the system.
 func (b *BeaconNode) Close() {
+	if b == nil {
+		return
+	}
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
 	log.Info("Stopping beacon node")
-	b.services.StopAll()
-	if err := b.db.Close(); err != nil {
-		log.WithError(err).Error("Failed to close database")
+	if b.services != nil {
+		b.services.StopAll()
 	}
-	b.collector.unregister()
-	b.cancel()
-	close(b.stop)
+	if b.db != nil {
+		if err := b.db.Close(); err != nil {
+			log.WithError(err).Error("Failed to close database")
+		}
+	}
+	if b.collector != nil {
+		b.collector.unregister()
+	}
+	if b.cancel != nil {
+		b.cancel()
+	}
+	if b.stop == nil {
+		return
+	}
+	select {
+	case <-b.stop:
+	default:
+		close(b.stop)
+	}
 }
 
 func (b *BeaconNode) checkAndSaveDepositContract(depositAddress string) error {
