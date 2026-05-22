@@ -1,6 +1,7 @@
 package enginev1
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
 	"reflect"
@@ -109,6 +110,14 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 	}
 	type withdrawalsJson struct {
 		Withdrawals []*withdrawalJSON `json:"withdrawals"`
+	}
+
+	// JSON-RPC servers return `null` as the result for an unknown block hash
+	// (eth_getBlockByHash spec). Short-circuit so callers can distinguish
+	// "not found" via a zero Hash instead of hitting Header.UnmarshalJSON's
+	// "missing required field 'parentHash'" gencodec error.
+	if bytes.Equal(bytes.TrimSpace(enc), []byte("null")) {
+		return nil
 	}
 
 	if err := e.Header.UnmarshalJSON(enc); err != nil {

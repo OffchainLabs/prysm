@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -54,6 +55,15 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 	}
 	full, err := s.ExecutionReconstructor.ReconstructExecutionPayloadEnvelope(ctx, blinded)
 	if err != nil {
+		// The EL may not yet have executed the payload that the CL has
+		// already gossipped a blinded envelope for. Surface this as 425 Too
+		// Early so callers (indexers, block explorers) retry rather than
+		// treat it as a permanent failure.
+		if errors.Is(err, execution.ErrExecutionBlockNotYetAvailable) {
+			w.Header().Set("Retry-After", "1")
+			httputil.HandleError(w, "execution payload not yet available on EL: "+err.Error(), http.StatusTooEarly)
+			return
+		}
 		httputil.HandleError(w, "could not reconstruct execution payload envelope: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
