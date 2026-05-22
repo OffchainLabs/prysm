@@ -110,6 +110,9 @@ func (m *SparseMerkleTrie) Items() [][]byte {
 //	Spec Definition:
 //	 sha256(concat(node, self.to_little_endian_64(self.deposit_count), slice(zero_bytes32, start=0, len=24)))
 func (m *SparseMerkleTrie) HashTreeRoot() ([32]byte, error) {
+	if m == nil || len(m.branches) == 0 || len(m.branches[len(m.branches)-1]) == 0 {
+		return [32]byte{}, errors.New("trie is nil")
+	}
 	var enc [32]byte
 	depositCount := uint64(len(m.originalItems))
 	if len(m.originalItems) == 1 && bytes.Equal(m.originalItems[0], ZeroHashes[0][:]) {
@@ -122,6 +125,9 @@ func (m *SparseMerkleTrie) HashTreeRoot() ([32]byte, error) {
 
 // Insert an item into the trie.
 func (m *SparseMerkleTrie) Insert(item []byte, index int) error {
+	if m == nil {
+		return errors.New("trie is nil")
+	}
 	if index < 0 {
 		return fmt.Errorf("negative index provided: %d", index)
 	}
@@ -168,6 +174,9 @@ func (m *SparseMerkleTrie) Insert(item []byte, index int) error {
 
 // MerkleProof computes a proof from a trie's branches using a Merkle index.
 func (m *SparseMerkleTrie) MerkleProof(index int) ([][]byte, error) {
+	if m == nil {
+		return nil, errors.New("trie is nil")
+	}
 	if index < 0 {
 		return nil, fmt.Errorf("merkle index is negative: %d", index)
 	}
@@ -195,6 +204,9 @@ func (m *SparseMerkleTrie) MerkleProof(index int) ([][]byte, error) {
 // ToProto converts the underlying trie into its corresponding
 // proto object
 func (m *SparseMerkleTrie) ToProto() *protodb.SparseMerkleTrie {
+	if m == nil {
+		return &protodb.SparseMerkleTrie{}
+	}
 	trie := &protodb.SparseMerkleTrie{
 		Depth:         uint64(m.depth),
 		Layers:        make([]*protodb.TrieLayer, len(m.branches)),
@@ -253,6 +265,9 @@ func (m *SparseMerkleTrie) Copy() *SparseMerkleTrie {
 // where if there is only one item stored and it is an
 // empty 32-byte root.
 func (m *SparseMerkleTrie) NumOfItems() int {
+	if m == nil {
+		return 0
+	}
 	var zeroBytes [32]byte
 	if len(m.originalItems) == 1 && bytes.Equal(m.originalItems[0], zeroBytes[:]) {
 		return 0
