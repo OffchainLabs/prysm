@@ -154,6 +154,10 @@ func (s *Service) run() {
 // initializePerformanceStructures initializes the validatorLatestPerformance
 // and validatorAggregatedPerformance for each tracked validator.
 func (s *Service) initializePerformanceStructures(state state.BeaconState, epoch primitives.Epoch) {
+	if state == nil || state.IsNil() {
+		log.Error("Could not initialize performance structures with nil state")
+		return
+	}
 	for idx := range s.TrackedValidators {
 		balance, err := state.BalanceAtIndex(idx)
 		if err != nil {

@@ -8,6 +8,10 @@ import (
 
 // processExitsFromBlock logs the event when a tracked validators' exit was included in a block
 func (s *Service) processExitsFromBlock(blk interfaces.ReadOnlyBeaconBlock) {
+	if blk == nil || blk.IsNil() {
+		log.Error("Could not process exits from nil block")
+		return
+	}
 	s.RLock()
 	defer s.RUnlock()
 	for _, exit := range blk.Body().VoluntaryExits() {
