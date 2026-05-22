@@ -38,6 +38,9 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 		if err != nil {
 			return err
 		}
+		if agg == nil {
+			return errors.New("sync aggregate is nil")
+		}
 		log = log.WithField("syncBitsCount", agg.SyncCommitteeBits.Count())
 	}
 	if b.Version() >= version.Bellatrix && b.Version() < version.Gloas {
@@ -68,6 +71,8 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 		eReqs, err := b.Body().ExecutionRequests()
 		if err != nil {
 			log.WithError(err).Error("Failed to get execution requests")
+		} else if eReqs == nil {
+			log.Error("Execution requests are nil")
 		} else {
 			if len(eReqs.Deposits) > 0 {
 				log = log.WithField("depositRequestCount", len(eReqs.Deposits))
@@ -85,6 +90,8 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 		signedBid, err := b.Body().SignedExecutionPayloadBid()
 		if err != nil {
 			log.WithError(err).Error("Failed to get signed execution payload bid")
+		} else if signedBid == nil || signedBid.Message == nil {
+			log.Error("Signed execution payload bid is nil")
 		} else {
 			bid := signedBid.Message
 			log = log.WithFields(logrus.Fields{
@@ -137,7 +144,9 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 		signedBid, err := block.Body().SignedExecutionPayloadBid()
 		if err != nil {
 			log.WithError(err).Error("Failed to get signed execution payload bid for logging")
-		} else if signedBid != nil && signedBid.Message != nil {
+		} else if signedBid == nil || signedBid.Message == nil {
+			log.Error("Signed execution payload bid is nil")
+		} else {
 			moreFields["blockHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(signedBid.Message.BlockHash))
 			moreFields["parentHash"] = fmt.Sprintf("%#x", bytesutil.Trunc(signedBid.Message.ParentBlockHash))
 			moreFields["builderIndex"] = signedBid.Message.BuilderIndex
