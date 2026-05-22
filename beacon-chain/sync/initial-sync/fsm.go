@@ -117,6 +117,9 @@ func (smm *stateMachineManager) recalculateMachineAttribs() {
 // findStateMachine returns a state machine for a given start slot (if exists).
 func (smm *stateMachineManager) findStateMachine(startSlot primitives.Slot) (*stateMachine, bool) {
 	fsm, ok := smm.machines[startSlot]
+	if fsm == nil {
+		return nil, false
+	}
 	return fsm, ok
 }
 
@@ -126,6 +129,9 @@ func (smm *stateMachineManager) highestStartSlot() (primitives.Slot, error) {
 		return 0, errors.New("no state machine exist")
 	}
 	key := smm.keys[len(smm.keys)-1]
+	if smm.machines[key] == nil {
+		return 0, errors.New("state machine is nil")
+	}
 	return smm.machines[key].start, nil
 }
 
@@ -135,6 +141,9 @@ func (smm *stateMachineManager) allMachinesInState(state stateID) bool {
 		return false
 	}
 	for _, fsm := range smm.machines {
+		if fsm == nil {
+			return false
+		}
 		if fsm.state != state {
 			return false
 		}
@@ -149,6 +158,9 @@ func (smm *stateMachineManager) String() string {
 
 // setState updates the current state of a given state machine.
 func (m *stateMachine) setState(name stateID) {
+	if m == nil {
+		return
+	}
 	if m.state == name {
 		return
 	}
@@ -158,6 +170,9 @@ func (m *stateMachine) setState(name stateID) {
 
 // trigger invokes the event handler on a given state machine.
 func (m *stateMachine) trigger(event eventID, data any) error {
+	if m == nil || m.smm == nil {
+		return errors.New("state machine is nil")
+	}
 	handlers, ok := m.smm.handlers[m.state]
 	if !ok {
 		return fmt.Errorf("no event handlers registered for event: %v, state: %v", event, m.state)
