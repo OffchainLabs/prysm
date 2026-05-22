@@ -54,12 +54,19 @@ func (s *Service) AttestationTargetState(ctx context.Context, target *ethpb.Chec
 
 // VerifyLmdFfgConsistency verifies that attestation's LMD and FFG votes are consistency to each other.
 func (s *Service) VerifyLmdFfgConsistency(ctx context.Context, a ethpb.Att) error {
-	r, err := s.TargetRootForEpoch([32]byte(a.GetData().BeaconBlockRoot), a.GetData().Target.Epoch)
+	if a == nil || a.IsNil() {
+		return errors.New("nil attestation")
+	}
+	data := a.GetData()
+	if data == nil || data.Target == nil {
+		return errors.New("nil attestation data")
+	}
+	r, err := s.TargetRootForEpoch([32]byte(data.BeaconBlockRoot), data.Target.Epoch)
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(a.GetData().Target.Root, r[:]) {
-		return fmt.Errorf("FFG and LMD votes are not consistent, block root: %#x, target root: %#x, canonical target root: %#x", a.GetData().BeaconBlockRoot, a.GetData().Target.Root, r)
+	if !bytes.Equal(data.Target.Root, r[:]) {
+		return fmt.Errorf("FFG and LMD votes are not consistent, block root: %#x, target root: %#x, canonical target root: %#x", data.BeaconBlockRoot, data.Target.Root, r)
 	}
 	return nil
 }
@@ -202,16 +209,23 @@ func (s *Service) processAttestations(ctx context.Context, disparity time.Durati
 	}
 
 	for _, a := range atts {
+		if a == nil || a.IsNil() {
+			continue
+		}
+		data := a.GetData()
+		if data == nil || data.Target == nil {
+			continue
+		}
 		// Based on the spec, don't process the attestation until the subsequent slot.
 		// This delays consideration in the fork choice until their slot is in the past.
 		// https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/fork-choice.md#validate_on_attestation
-		nextSlot := a.GetData().Slot + 1
+		nextSlot := data.Slot + 1
 		if err := slots.VerifyTime(s.genesisTime, nextSlot, disparity); err != nil {
 			continue
 		}
 
-		hasState := s.cfg.BeaconDB.HasStateSummary(ctx, bytesutil.ToBytes32(a.GetData().BeaconBlockRoot))
-		hasBlock := s.hasBlock(ctx, bytesutil.ToBytes32(a.GetData().BeaconBlockRoot))
+		hasState := s.cfg.BeaconDB.HasStateSummary(ctx, bytesutil.ToBytes32(data.BeaconBlockRoot))
+		hasBlock := s.hasBlock(ctx, bytesutil.ToBytes32(data.BeaconBlockRoot))
 		if !(hasState && hasBlock) {
 			continue
 		}
@@ -224,7 +238,7 @@ func (s *Service) processAttestations(ctx context.Context, disparity time.Durati
 			log.WithError(err).Error("Could not delete fork choice attestation in pool")
 		}
 
-		if !helpers.VerifyCheckpointEpoch(a.GetData().Target, s.genesisTime) {
+		if !helpers.VerifyCheckpointEpoch(data.Target, s.genesisTime) {
 			continue
 		}
 
@@ -232,19 +246,19 @@ func (s *Service) processAttestations(ctx context.Context, disparity time.Durati
 			var fields logrus.Fields
 			if a.Version() >= version.Electra {
 				fields = logrus.Fields{
-					"slot":             a.GetData().Slot,
+					"slot":             data.Slot,
 					"committeeCount":   a.CommitteeBitsVal().Count(),
 					"committeeIndices": a.CommitteeBitsVal().BitIndices(),
-					"beaconBlockRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(a.GetData().BeaconBlockRoot)),
-					"targetRoot":       fmt.Sprintf("%#x", bytesutil.Trunc(a.GetData().Target.Root)),
+					"beaconBlockRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(data.BeaconBlockRoot)),
+					"targetRoot":       fmt.Sprintf("%#x", bytesutil.Trunc(data.Target.Root)),
 					"aggregatedCount":  a.GetAggregationBits().Count(),
 				}
 			} else {
 				fields = logrus.Fields{
-					"slot":            a.GetData().Slot,
-					"committeeIndex":  a.GetData().CommitteeIndex,
-					"beaconBlockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(a.GetData().BeaconBlockRoot)),
-					"targetRoot":      fmt.Sprintf("%#x", bytesutil.Trunc(a.GetData().Target.Root)),
+					"slot":            data.Slot,
+					"committeeIndex":  data.CommitteeIndex,
+					"beaconBlockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(data.BeaconBlockRoot)),
+					"targetRoot":      fmt.Sprintf("%#x", bytesutil.Trunc(data.Target.Root)),
 					"aggregatedCount": a.GetAggregationBits().Count(),
 				}
 			}
