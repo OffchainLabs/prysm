@@ -81,6 +81,9 @@ func NewStore(ctx context.Context, config *StoreConfig) *Store {
 // Important: it is assumed that store mutex is locked when calling this method.
 func (s *Store) PeerData(pid peer.ID) (*PeerData, bool) {
 	peerData, ok := s.peers[pid]
+	if !ok || peerData == nil {
+		return nil, false
+	}
 	return peerData, ok
 }
 

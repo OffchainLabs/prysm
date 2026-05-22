@@ -230,7 +230,10 @@ func (p *Status) IsActive(pid peer.ID) bool {
 	defer p.store.RUnlock()
 
 	peerData, ok := p.store.PeerData(pid)
-	return ok && (peerData.ConnState == Connected || peerData.ConnState == Connecting)
+	if !ok {
+		return false
+	}
+	return peerData.ConnState == Connected || peerData.ConnState == Connecting
 }
 
 // IsAboveInboundLimit checks if we are above our current inbound
