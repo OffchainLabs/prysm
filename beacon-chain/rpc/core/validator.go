@@ -377,6 +377,9 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 	attAndProof := agg.AggregateAttestationAndProof()
 	att := attAndProof.AggregateVal()
 	data := att.GetData()
+	if data == nil {
+		return &RpcError{Err: errors.New("attestation data can't be nil"), Reason: BadRequest}
+	}
 	emptySig := make([]byte, fieldparams.BLSSignatureLength)
 	if bytes.Equal(agg.GetSignature(), emptySig) || bytes.Equal(attAndProof.GetSelectionProof(), emptySig) {
 		return &RpcError{Err: errors.New("signed signatures can't be zero hashes"), Reason: BadRequest}
@@ -452,7 +455,11 @@ func (s *Service) AggregatedSigAndAggregationBits(
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "could not decompress signatures")
 		}
-		aggregatedSig = bls.AggregateSignatures(uncompressedSigs).Marshal()
+		sig := bls.AggregateSignatures(uncompressedSigs)
+		if sig == nil {
+			return nil, nil, errors.New("could not aggregate signatures")
+		}
+		aggregatedSig = sig.Marshal()
 	}
 	return aggregatedSig, bits, nil
 }
