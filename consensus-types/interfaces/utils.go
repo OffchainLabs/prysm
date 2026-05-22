@@ -7,6 +7,9 @@ import (
 
 // SignedBeaconBlockHeaderFromBlock function to retrieve signed block header from block.
 func SignedBeaconBlockHeaderFromBlock(block *ethpb.SignedBeaconBlock) (*ethpb.SignedBeaconBlockHeader, error) {
+	if block == nil {
+		return nil, errors.New("nil signed block")
+	}
 	if block.Block == nil || block.Block.Body == nil {
 		return nil, errors.New("nil block")
 	}
@@ -29,8 +32,11 @@ func SignedBeaconBlockHeaderFromBlock(block *ethpb.SignedBeaconBlock) (*ethpb.Si
 
 // SignedBeaconBlockHeaderFromBlockInterface function to retrieve signed block header from block.
 func SignedBeaconBlockHeaderFromBlockInterface(sb ReadOnlySignedBeaconBlock) (*ethpb.SignedBeaconBlockHeader, error) {
+	if sb == nil || sb.IsNil() {
+		return nil, errors.New("nil signed block")
+	}
 	b := sb.Block()
-	if b.IsNil() || b.Body().IsNil() {
+	if b == nil || b.IsNil() {
 		return nil, errors.New("nil block")
 	}
 
@@ -47,6 +53,9 @@ func SignedBeaconBlockHeaderFromBlockInterface(sb ReadOnlySignedBeaconBlock) (*e
 
 // BeaconBlockHeaderFromBlock function to retrieve block header from block.
 func BeaconBlockHeaderFromBlock(block *ethpb.BeaconBlock) (*ethpb.BeaconBlockHeader, error) {
+	if block == nil {
+		return nil, errors.New("nil block")
+	}
 	if block.Body == nil {
 		return nil, errors.New("nil block body")
 	}
@@ -66,11 +75,15 @@ func BeaconBlockHeaderFromBlock(block *ethpb.BeaconBlock) (*ethpb.BeaconBlockHea
 
 // BeaconBlockHeaderFromBlockInterface function to retrieve block header from block.
 func BeaconBlockHeaderFromBlockInterface(block ReadOnlyBeaconBlock) (*ethpb.BeaconBlockHeader, error) {
-	if block.Body().IsNil() {
+	if block == nil || block.IsNil() {
+		return nil, errors.New("nil block")
+	}
+	body := block.Body()
+	if body == nil || body.IsNil() {
 		return nil, errors.New("nil block body")
 	}
 
-	bodyRoot, err := block.Body().HashTreeRoot()
+	bodyRoot, err := body.HashTreeRoot()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get body root of block")
 	}
