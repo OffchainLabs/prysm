@@ -166,10 +166,16 @@ func GenerateFullBlock(
 	numToGen = conf.NumDeposits
 	var newDeposits []*ethpb.Deposit
 	eth1Data := bState.Eth1Data()
+	if eth1Data == nil {
+		return nil, errors.New("eth1 data is nil")
+	}
 	if numToGen > 0 {
 		newDeposits, eth1Data, err = generateDepositsAndEth1Data(bState, numToGen)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed generating %d deposits:", numToGen)
+		}
+		if eth1Data == nil {
+			return nil, errors.New("eth1 data is nil")
 		}
 	}
 
@@ -183,6 +189,9 @@ func GenerateFullBlock(
 	}
 
 	newHeader := bState.LatestBlockHeader()
+	if newHeader == nil {
+		return nil, errors.New("latest block header is nil")
+	}
 	prevStateRoot, err := bState.HashTreeRoot(ctx)
 	if err != nil {
 		return nil, err
