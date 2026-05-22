@@ -108,6 +108,12 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 			Code:    http.StatusInternalServerError,
 		}
 	}
+	if sa == nil {
+		return nil, &httputil.DefaultJsonError{
+			Message: "Sync aggregate is nil",
+			Code:    http.StatusInternalServerError,
+		}
+	}
 	var syncCommitteeReward uint64
 	_, syncCommitteeReward, err = altair.ProcessSyncAggregateNoVerifySig(ctx, st, sa)
 	if err != nil {

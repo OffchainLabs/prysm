@@ -162,6 +162,10 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get sync aggregate: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if sa == nil {
+		httputil.HandleError(w, "Sync aggregate is nil", http.StatusInternalServerError)
+		return
+	}
 
 	vals, valIndices, ok := syncRewardsVals(w, r, st)
 	if !ok {
