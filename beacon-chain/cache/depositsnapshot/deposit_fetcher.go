@@ -78,6 +78,9 @@ func (c *Cache) allDeposits(untilBlk *big.Int) []*ethpb.Deposit {
 func (c *Cache) AllDepositContainers(ctx context.Context) []*ethpb.DepositContainer {
 	_, span := trace.StartSpan(ctx, "Cache.AllDepositContainers")
 	defer span.End()
+	if c == nil {
+		return nil
+	}
 	c.depositsLock.RLock()
 	defer c.depositsLock.RUnlock()
 
@@ -183,6 +186,9 @@ func (c *Cache) NonFinalizedDeposits(ctx context.Context, lastFinalizedIndex int
 func (c *Cache) InsertPendingDeposit(ctx context.Context, d *ethpb.Deposit, blockNum uint64, index int64, depositRoot [32]byte) {
 	_, span := trace.StartSpan(ctx, "Cache.InsertPendingDeposit")
 	defer span.End()
+	if c == nil {
+		return
+	}
 	if d == nil {
 		log.WithFields(logrus.Fields{
 			"block":   blockNum,

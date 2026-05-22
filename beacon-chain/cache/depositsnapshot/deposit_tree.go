@@ -96,6 +96,9 @@ func (d *DepositTree) Finalize(eth1DepositIndex int64, executionHash common.Hash
 
 // getProof returns the deposit tree proof.
 func (d *DepositTree) getProof(index uint64) ([32]byte, [][32]byte, error) {
+	if d == nil || d.tree == nil {
+		return [32]byte{}, nil, errors.New("deposit tree is nil")
+	}
 	if d.depositCount <= 0 {
 		return [32]byte{}, nil, ErrInvalidDepositCount
 	}
@@ -127,6 +130,9 @@ func (d *DepositTree) getProof(index uint64) ([32]byte, [][32]byte, error) {
 
 // getRoot returns the root of the deposit tree.
 func (d *DepositTree) getRoot() [32]byte {
+	if d == nil || d.tree == nil {
+		return [32]byte{}
+	}
 	var enc [32]byte
 	binary.LittleEndian.PutUint64(enc[:], d.depositCount)
 
@@ -136,6 +142,9 @@ func (d *DepositTree) getRoot() [32]byte {
 
 // pushLeaf adds a new leaf to the tree.
 func (d *DepositTree) pushLeaf(leaf [32]byte) error {
+	if d == nil || d.tree == nil {
+		return errors.New("deposit tree is nil")
+	}
 	var err error
 	d.tree, err = d.tree.PushLeaf(leaf, DepositContractDepth)
 	if err != nil {
@@ -147,6 +156,9 @@ func (d *DepositTree) pushLeaf(leaf [32]byte) error {
 
 // Insert is defined as part of MerkleTree interface and adds a new leaf to the tree.
 func (d *DepositTree) Insert(item []byte, _ int) error {
+	if item == nil {
+		return errors.New("deposit item is nil")
+	}
 	var leaf [32]byte
 	copy(leaf[:], item[:32])
 	return d.pushLeaf(leaf)

@@ -27,6 +27,9 @@ var (
 func (c *Cache) InsertDeposit(ctx context.Context, d *ethpb.Deposit, blockNum uint64, index int64, depositRoot [32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "Cache.InsertDeposit")
 	defer span.End()
+	if c == nil {
+		return errors.New("deposit cache is nil")
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -88,6 +91,9 @@ func (c *Cache) InsertFinalizedDeposits(ctx context.Context, eth1DepositIndex in
 	executionHash common.Hash, executionNumber uint64) error {
 	ctx, span := trace.StartSpan(ctx, "Cache.InsertFinalizedDeposits")
 	defer span.End()
+	if c == nil || c.finalizedDeposits.depositTree == nil {
+		return errors.New("deposit cache is nil")
+	}
 	c.depositsLock.Lock()
 	defer c.depositsLock.Unlock()
 

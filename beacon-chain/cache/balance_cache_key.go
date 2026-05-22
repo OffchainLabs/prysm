@@ -12,6 +12,9 @@ import (
 // Given input state `st`, balance key is constructed as:
 // (block_root in `st` at epoch_start_slot - 1) + current_epoch + validator_count
 func balanceCacheKey(st state.ReadOnlyBeaconState) (string, error) {
+	if st == nil || st.IsNil() {
+		return "", fmt.Errorf("state is nil")
+	}
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 	currentEpoch := st.Slot().DivSlot(slotsPerEpoch)
 	epochStartSlot, err := slotsPerEpoch.SafeMul(uint64(currentEpoch))

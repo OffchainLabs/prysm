@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -173,6 +174,9 @@ func (s *SyncCommitteeCache) idxPositionInCommittee(
 // current epoch and next epoch. This should be called when `current_sync_committee` and `next_sync_committee`
 // change and that happens every `EPOCHS_PER_SYNC_COMMITTEE_PERIOD`.
 func (s *SyncCommitteeCache) UpdatePositionsInCommittee(syncCommitteeBoundaryRoot [32]byte, st state.ReadOnlyBeaconState) error {
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 	// since we call UpdatePositionsInCommittee asynchronously, keep track of the cache value
 	// seen at the beginning of the routine and compare at the end before updating. If the underlying value has been
 	// cycled (new address), don't update it.
