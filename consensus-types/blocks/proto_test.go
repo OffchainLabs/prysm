@@ -1835,6 +1835,10 @@ func TestInitSignedBlockFromProtoGloas(t *testing.T) {
 
 	sb, err := initSignedBlockFromProtoGloas(pb)
 	require.NoError(t, err)
+	if sb == nil {
+		t.Fatal("signed block is nil")
+		return
+	}
 	require.Equal(t, version.Gloas, sb.Version())
 
 	gotPayload, err := sb.Block().Body().PayloadAttestations()

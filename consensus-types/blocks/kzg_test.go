@@ -93,6 +93,10 @@ func Test_MerkleProofKZGCommitment(t *testing.T) {
 		logBodyLength,
 	)
 	require.NoError(t, err, "Failed to generate trie from member roots")
+	if bodySparse == nil {
+		t.Fatal("body sparse trie is nil")
+		return
+	}
 	require.Equal(t, bodyLength, bodySparse.NumOfItems())
 	topProof, err := bodySparse.MerkleProof(kzgPosition)
 	require.NoError(t, err, "Failed to generate Merkle proof")

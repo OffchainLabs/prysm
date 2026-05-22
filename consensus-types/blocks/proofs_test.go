@@ -19,6 +19,10 @@ func TestComputeBlockBodyFieldRoots_Phase0(t *testing.T) {
 	require.NoError(t, err)
 	trie, err := trie.GenerateTrieFromItems(fieldRoots, 3)
 	require.NoError(t, err)
+	if trie == nil {
+		t.Fatal("trie is nil")
+		return
+	}
 	layers := trie.ToProto().GetLayers()
 
 	hash := layers[len(layers)-1].Layer[0]
@@ -42,6 +46,10 @@ func TestComputeBlockBodyFieldRoots_Altair(t *testing.T) {
 	require.NoError(t, err)
 	trie, err := trie.GenerateTrieFromItems(fieldRoots, 4)
 	require.NoError(t, err)
+	if trie == nil {
+		t.Fatal("trie is nil")
+		return
+	}
 	layers := trie.ToProto().GetLayers()
 
 	hash := layers[len(layers)-1].Layer[0]
@@ -65,6 +73,10 @@ func TestComputeBlockBodyFieldRoots_Bellatrix(t *testing.T) {
 	require.NoError(t, err)
 	trie, err := trie.GenerateTrieFromItems(fieldRoots, 4)
 	require.NoError(t, err)
+	if trie == nil {
+		t.Fatal("trie is nil")
+		return
+	}
 	layers := trie.ToProto().GetLayers()
 
 	hash := layers[len(layers)-1].Layer[0]
@@ -88,6 +100,10 @@ func TestComputeBlockBodyFieldRoots_Capella(t *testing.T) {
 	require.NoError(t, err)
 	trie, err := trie.GenerateTrieFromItems(fieldRoots, 4)
 	require.NoError(t, err)
+	if trie == nil {
+		t.Fatal("trie is nil")
+		return
+	}
 	layers := trie.ToProto().GetLayers()
 
 	hash := layers[len(layers)-1].Layer[0]
@@ -111,6 +127,10 @@ func TestComputeBlockBodyFieldRoots_Deneb(t *testing.T) {
 	require.NoError(t, err)
 	trie, err := trie.GenerateTrieFromItems(fieldRoots, 4)
 	require.NoError(t, err)
+	if trie == nil {
+		t.Fatal("trie is nil")
+		return
+	}
 	layers := trie.ToProto().GetLayers()
 
 	hash := layers[len(layers)-1].Layer[0]
@@ -134,6 +154,10 @@ func TestComputeBlockBodyFieldRoots_Electra(t *testing.T) {
 	require.NoError(t, err)
 	trie, err := trie.GenerateTrieFromItems(fieldRoots, 4)
 	require.NoError(t, err)
+	if trie == nil {
+		t.Fatal("trie is nil")
+		return
+	}
 	layers := trie.ToProto().GetLayers()
 
 	hash := layers[len(layers)-1].Layer[0]

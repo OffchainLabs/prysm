@@ -319,6 +319,10 @@ func Test_BeaconBlock_AsSignRequestObject(t *testing.T) {
 	require.NoError(t, err)
 	b, err := initBlockFromProtoPhase0(pb)
 	require.NoError(t, err)
+	if b == nil {
+		t.Fatal("block is nil")
+		return
+	}
 	signRequestObj, err := b.AsSignRequestObject()
 	require.NoError(t, err)
 	actualSignRequestObj, ok := signRequestObj.(*validatorpb.SignRequest_Block)
