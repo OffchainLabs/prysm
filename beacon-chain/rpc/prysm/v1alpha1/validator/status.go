@@ -177,6 +177,9 @@ func (vs *Server) CheckDoppelGanger(ctx context.Context, req *ethpb.DoppelGanger
 	if err != nil {
 		return nil, errParticipation
 	}
+	if headCurrentParticipation == nil || headPreviousParticipation == nil || prevCurrentParticipation == nil || prevPreviousParticipation == nil {
+		return nil, errParticipation
+	}
 
 	resp = &ethpb.DoppelGangerResponse{
 		Responses: []*ethpb.DoppelGangerResponse_ValidatorResponse{},
@@ -198,6 +201,10 @@ func (vs *Server) CheckDoppelGanger(ctx context.Context, req *ethpb.DoppelGanger
 		if !ok {
 			// Ignore if validator pubkey doesn't exist.
 			continue
+		}
+		if uint64(valIndex) >= uint64(len(headCurrentParticipation)) || uint64(valIndex) >= uint64(len(headPreviousParticipation)) ||
+			uint64(valIndex) >= uint64(len(prevCurrentParticipation)) || uint64(valIndex) >= uint64(len(prevPreviousParticipation)) {
+			return nil, errParticipation
 		}
 
 		if (headCurrentParticipation[valIndex] != 0) || (headPreviousParticipation[valIndex] != 0) ||
