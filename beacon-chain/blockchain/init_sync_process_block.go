@@ -56,6 +56,9 @@ func (s *Service) getBlock(ctx context.Context, r [32]byte) (interfaces.ReadOnly
 			return nil, errors.Wrap(err, "could not retrieve block from db")
 		}
 	}
+	if b == nil || b.IsNil() {
+		return nil, errBlockNotFoundInCacheOrDB
+	}
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return nil, errBlockNotFoundInCacheOrDB
 	}

@@ -211,10 +211,18 @@ func (s *Service) getPayloadHash(ctx context.Context, root []byte) ([32]byte, er
 	if err != nil {
 		return [32]byte{}, err
 	}
-	if blocks.IsPreBellatrixVersion(blk.Block().Version()) {
+	beaconBlock := blk.Block()
+	if beaconBlock == nil || beaconBlock.IsNil() {
+		return [32]byte{}, errBlockNotFoundInCacheOrDB
+	}
+	if blocks.IsPreBellatrixVersion(beaconBlock.Version()) {
 		return params.BeaconConfig().ZeroHash, nil
 	}
-	payload, err := blk.Block().Body().Execution()
+	body := beaconBlock.Body()
+	if body == nil || body.IsNil() {
+		return [32]byte{}, errors.New("block body is nil")
+	}
+	payload, err := body.Execution()
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not get execution payload")
 	}
