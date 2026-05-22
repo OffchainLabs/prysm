@@ -374,6 +374,17 @@ func (s *Service) validatorEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
+			template: "/eth/v1/validator/proposer_preferences",
+			name:     namespace + ".SubmitSignedProposerPreferences",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.SubmitSignedProposerPreferences,
+			methods: []string{http.MethodPost},
+		},
+		{
 			template: "/eth/v1/validator/liveness/{epoch}",
 			name:     namespace + ".GetLiveness",
 			middleware: []middleware.Middleware{

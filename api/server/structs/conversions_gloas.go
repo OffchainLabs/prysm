@@ -2,9 +2,15 @@ package structs
 
 import (
 	"fmt"
+	"strconv"
 
+	"github.com/OffchainLabs/prysm/v7/api/server"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -107,4 +113,55 @@ func PTCsFromConsensus(p *ethpb.PTCs) *PTCs {
 		indices[i] = fmt.Sprintf("%d", idx)
 	}
 	return &PTCs{ValidatorIndices: indices}
+}
+
+func (s *SignedProposerPreferences) ToConsensus() (*ethpb.SignedProposerPreferences, error) {
+	if s == nil {
+		return nil, server.NewDecodeError(errNilValue, "SignedProposerPreferences")
+	}
+	if s.Message == nil {
+		return nil, server.NewDecodeError(errNilValue, "Message")
+	}
+	msg, err := s.Message.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Message")
+	}
+	sig, err := bytesutil.DecodeHexWithLength(s.Signature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Signature")
+	}
+	return &ethpb.SignedProposerPreferences{
+		Message:   msg,
+		Signature: sig,
+	}, nil
+}
+
+func (p *ProposerPreferences) ToConsensus() (*ethpb.ProposerPreferences, error) {
+	dependentRoot, err := bytesutil.DecodeHexWithLength(p.DependentRoot, fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "DependentRoot")
+	}
+	slot, err := strconv.ParseUint(p.ProposalSlot, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ProposalSlot")
+	}
+	valIdx, err := strconv.ParseUint(p.ValidatorIndex, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ValidatorIndex")
+	}
+	feeRecipient, err := bytesutil.DecodeHexWithLength(p.FeeRecipient, common.AddressLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "FeeRecipient")
+	}
+	gasLimit, err := strconv.ParseUint(p.TargetGasLimit, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "TargetGasLimit")
+	}
+	return &ethpb.ProposerPreferences{
+		DependentRoot:  dependentRoot,
+		ProposalSlot:   primitives.Slot(slot),
+		ValidatorIndex: primitives.ValidatorIndex(valIdx),
+		FeeRecipient:   feeRecipient,
+		TargetGasLimit: gasLimit,
+	}, nil
 }
