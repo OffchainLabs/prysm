@@ -208,6 +208,9 @@ func (w *p2pWorker) handleColumns(ctx context.Context, b batch) batch {
 	if err != nil {
 		return b.withRetryableError(errors.Wrap(err, "creating validating column request"))
 	}
+	if vr == nil {
+		return b.transitionToNext()
+	}
 	p := sync.DataColumnSidecarsParams{
 		Ctx:    ctx,
 		Tor:    w.cfg.clock,

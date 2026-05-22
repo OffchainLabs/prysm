@@ -255,6 +255,9 @@ func resetToRetryColumns(b batch, needs das.CurrentNeeds) batch {
 			continue
 		}
 		bc := b.columns.toDownload[root]
+		if bc == nil {
+			continue
+		}
 		bc.remaining.Merge(bisector.failuresFor(root))
 	}
 	b.columns.bisector.reset()
