@@ -96,10 +96,16 @@ func GenerateFullBlockBellatrix(
 	numToGen = conf.NumDeposits
 	var newDeposits []*ethpb.Deposit
 	eth1Data := bState.Eth1Data()
+	if eth1Data == nil {
+		return nil, errors.New("eth1 data is nil")
+	}
 	if numToGen > 0 {
 		newDeposits, eth1Data, err = generateDepositsAndEth1Data(bState, numToGen)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed generating %d deposits:", numToGen)
+		}
+		if eth1Data == nil {
+			return nil, errors.New("eth1 data is nil")
 		}
 	}
 
@@ -143,6 +149,9 @@ func GenerateFullBlockBellatrix(
 	if err != nil {
 		return nil, err
 	}
+	if parentExecution == nil {
+		return nil, errors.New("latest execution payload header is nil")
+	}
 	blockHash := indexToHash(uint64(slot))
 	newExecutionPayload := &enginev1.ExecutionPayload{
 		ParentHash:    parentExecution.BlockHash(),
@@ -174,6 +183,9 @@ func GenerateFullBlockBellatrix(
 	}
 
 	newHeader := bState.LatestBlockHeader()
+	if newHeader == nil {
+		return nil, errors.New("latest block header is nil")
+	}
 	prevStateRoot, err := bState.HashTreeRoot(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not hash state")
