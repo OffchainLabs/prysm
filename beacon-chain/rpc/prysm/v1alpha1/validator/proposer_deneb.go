@@ -11,10 +11,17 @@ import (
 
 // BuildBlobSidecars given a block, builds the blob sidecars for the block.
 func BuildBlobSidecars(blk interfaces.ReadOnlySignedBeaconBlock, blobs [][]byte, kzgProofs [][]byte) ([]*ethpb.BlobSidecar, error) {
+	if blk == nil || blk.IsNil() {
+		return nil, errors.New("nil signed beacon block")
+	}
 	if blk.Version() < version.Deneb {
 		return nil, nil // No blobs before deneb.
 	}
-	commits, err := blk.Block().Body().BlobKzgCommitments()
+	block := blk.Block()
+	if block == nil || block.IsNil() {
+		return nil, errors.New("nil beacon block")
+	}
+	commits, err := block.Body().BlobKzgCommitments()
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +34,10 @@ func BuildBlobSidecars(blk interfaces.ReadOnlySignedBeaconBlock, blobs [][]byte,
 	if err != nil {
 		return nil, err
 	}
-	body := blk.Block().Body()
+	body := block.Body()
+	if body == nil || body.IsNil() {
+		return nil, errors.New("nil beacon block body")
+	}
 	// Pre-compute subtrees once before the loop to avoid redundant calculations
 	proofComponents, err := blocks.PrecomputeMerkleProofComponents(body)
 	if err != nil {
