@@ -131,8 +131,11 @@ func (r *runner) run(ctx context.Context) {
 
 			// Start fetching domain data for the next epoch.
 			if slots.IsEpochEnd(slot) {
-				domainCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
-				go v.UpdateDomainDataCaches(domainCtx, slot+1)
+				domainCtx, domainCancel := context.WithDeadline(ctx, deadline)
+				go func() {
+					defer domainCancel()
+					v.UpdateDomainDataCaches(domainCtx, slot+1)
+				}()
 			}
 
 			var wg sync.WaitGroup
@@ -145,8 +148,9 @@ func (r *runner) run(ctx context.Context) {
 				continue
 			}
 			// performRoles calls span.End()
-			rolesCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
+			rolesCtx, rolesCancel := context.WithDeadline(ctx, deadline)
 			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
+			rolesCancel()
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
 		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot

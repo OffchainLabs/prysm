@@ -23,13 +23,20 @@ func newGrpcClientManager[T any](
 	newClient func(grpc.ClientConnInterface) T,
 ) *grpcClientManager[T] {
 	var lastConnCounter uint64
+	var client T
+	if conn == nil {
+		return &grpcClientManager[T]{newClient: newClient}
+	}
 	if provider := conn.GetGrpcConnectionProvider(); provider != nil {
 		lastConnCounter = provider.ConnectionCounter()
+	}
+	if grpcConn := conn.GetGrpcClientConn(); grpcConn != nil {
+		client = newClient(grpcConn)
 	}
 	return &grpcClientManager[T]{
 		conn:            conn,
 		newClient:       newClient,
-		client:          newClient(conn.GetGrpcClientConn()),
+		client:          client,
 		lastConnCounter: lastConnCounter,
 	}
 }
@@ -41,6 +48,9 @@ func newGrpcClientManager[T any](
 func (m *grpcClientManager[T]) getClient() T {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.conn == nil {
+		return m.client
+	}
 
 	provider := m.conn.GetGrpcConnectionProvider()
 	if provider == nil {
@@ -48,7 +58,9 @@ func (m *grpcClientManager[T]) getClient() T {
 	}
 	currentCounter := provider.ConnectionCounter()
 	if m.lastConnCounter != currentCounter {
-		m.client = m.newClient(m.conn.GetGrpcClientConn())
+		if grpcConn := m.conn.GetGrpcClientConn(); grpcConn != nil {
+			m.client = m.newClient(grpcConn)
+		}
 		m.lastConnCounter = currentCounter
 	}
 	return m.client
