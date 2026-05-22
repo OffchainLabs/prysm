@@ -37,7 +37,7 @@ func (b *SignedBeaconBlock) Block() interfaces.ReadOnlyBeaconBlock {
 
 // IsNil checks if the underlying beacon block is nil.
 func (b *SignedBeaconBlock) IsNil() bool {
-	return b == nil || b.block.IsNil()
+	return b == nil || b.block == nil || b.block.IsNil()
 }
 
 // Copy performs a deep copy of the signed beacon block object.
@@ -179,7 +179,11 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 	if b.block.IsNil() {
 		return nil, errors.New("cannot convert nil block to blinded format")
 	}
-	payload, err := b.block.Body().Execution()
+	body := b.block.Body()
+	if body.IsNil() {
+		return nil, errNilBlockBody
+	}
+	payload, err := body.Execution()
 	if err != nil {
 		return nil, err
 	}
@@ -358,7 +362,15 @@ func (b *SignedBeaconBlock) Unblind(e interfaces.ExecutionData) error {
 	if err != nil {
 		return err
 	}
-	header, err := b.Block().Body().Execution()
+	blk := b.Block()
+	if blk.IsNil() {
+		return errNilBlock
+	}
+	body := blk.Body()
+	if body.IsNil() {
+		return errNilBlockBody
+	}
+	header, err := body.Execution()
 	if err != nil {
 		return err
 	}
@@ -377,11 +389,17 @@ func (b *SignedBeaconBlock) Unblind(e interfaces.ExecutionData) error {
 
 // Version of the underlying protobuf object.
 func (b *SignedBeaconBlock) Version() int {
+	if b == nil {
+		return -1
+	}
 	return b.version
 }
 
 // IsBlinded metadata on whether a block is blinded
 func (b *SignedBeaconBlock) IsBlinded() bool {
+	if b.IsNil() || b.block.body == nil {
+		return false
+	}
 	return b.version < version.Gloas && b.version >= version.Bellatrix && b.block.body.executionPayload == nil
 }
 
@@ -722,11 +740,14 @@ func (b *BeaconBlock) Body() interfaces.ReadOnlyBeaconBlockBody {
 
 // IsNil checks if the beacon block is nil.
 func (b *BeaconBlock) IsNil() bool {
-	return b == nil || b.Body().IsNil()
+	return b == nil || b.body == nil || b.body.IsNil()
 }
 
 // IsBlinded checks if the beacon block is a blinded block.
 func (b *BeaconBlock) IsBlinded() bool {
+	if b.IsNil() {
+		return false
+	}
 	return b.version < version.Gloas && b.version >= version.Bellatrix && b.body.executionPayload == nil
 }
 
@@ -737,9 +758,15 @@ func (b *BeaconBlock) Version() int {
 
 // HashTreeRoot returns the ssz root of the block.
 func (b *BeaconBlock) HashTreeRoot() ([field_params.RootLength]byte, error) {
+	if b == nil {
+		return [field_params.RootLength]byte{}, errNilBlock
+	}
 	pb, err := b.Proto()
 	if err != nil {
 		return [field_params.RootLength]byte{}, err
+	}
+	if b.body == nil {
+		return [field_params.RootLength]byte{}, errNilBlockBody
 	}
 	switch b.version {
 	case version.Phase0:
@@ -781,9 +808,15 @@ func (b *BeaconBlock) HashTreeRoot() ([field_params.RootLength]byte, error) {
 
 // HashTreeRootWith ssz hashes the BeaconBlock object with a hasher.
 func (b *BeaconBlock) HashTreeRootWith(h *ssz.Hasher) error {
+	if b == nil {
+		return errNilBlock
+	}
 	pb, err := b.Proto()
 	if err != nil {
 		return err
+	}
+	if b.body == nil {
+		return errNilBlockBody
 	}
 	switch b.version {
 	case version.Phase0:
@@ -1318,6 +1351,9 @@ func (b *BeaconBlockBody) Version() int {
 
 // HashTreeRoot returns the ssz root of the block body.
 func (b *BeaconBlockBody) HashTreeRoot() ([field_params.RootLength]byte, error) {
+	if b == nil {
+		return [field_params.RootLength]byte{}, errNilBlockBody
+	}
 	pb, err := b.Proto()
 	if err != nil {
 		return [field_params.RootLength]byte{}, err
