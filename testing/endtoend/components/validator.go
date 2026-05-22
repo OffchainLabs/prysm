@@ -258,7 +258,7 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 		// Write the pubkeys as comma separated hex strings with 0x prefix.
 		// See: https://docs.teku.consensys.net/en/latest/HowTo/External-Signer/Use-External-Signer/
 		args = append(args,
-			fmt.Sprintf("--%s=http://localhost:%d", flags.Web3SignerURLFlag.Name, Web3RemoteSignerPort),
+			fmt.Sprintf("--%s=http://localhost:%d", flags.Web3SignerURLFlag.Name, e2e.TestParams.Ports.Web3SignerPort),
 		)
 		if v.config.UsePersistentKeyFile {
 			keysPath := filepath.Join(e2e.TestParams.TestPath, "proposer-settings", fmt.Sprintf("validator_%d", index), "keys.txt")

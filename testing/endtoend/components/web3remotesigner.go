@@ -29,8 +29,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const Web3RemoteSignerPort = 9000
-
 var _ e2etypes.ComponentRunner = (*Web3RemoteSigner)(nil)
 
 // rawKeyFile used for consensys's web3signer config files.
@@ -87,7 +85,7 @@ func (w *Web3RemoteSigner) Start(ctx context.Context) error {
 		// Global flags
 		fmt.Sprintf("--key-store-path=%s", keystorePath),
 		fmt.Sprintf("--data-path=%s", websignerDataDir),
-		fmt.Sprintf("--http-listen-port=%d", Web3RemoteSignerPort),
+		fmt.Sprintf("--http-listen-port=%d", e2e.TestParams.Ports.Web3SignerPort),
 		"--logging=ALL",
 		// Command
 		"eth2",
@@ -144,7 +142,7 @@ func (w *Web3RemoteSigner) Stop() error {
 func (w *Web3RemoteSigner) monitorStart() {
 	client := &http.Client{}
 	for {
-		req, err := http.NewRequestWithContext(w.ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/upcheck", Web3RemoteSignerPort), nil)
+		req, err := http.NewRequestWithContext(w.ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/upcheck", e2e.TestParams.Ports.Web3SignerPort), nil)
 		if err != nil {
 			panic(err)
 		}
@@ -176,7 +174,7 @@ func (w *Web3RemoteSigner) PublicKeys(ctx context.Context) ([]bls.PublicKey, err
 	w.wait(ctx)
 
 	client := &http.Client{}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/api/v1/eth2/publicKeys", Web3RemoteSignerPort), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/api/v1/eth2/publicKeys", e2e.TestParams.Ports.Web3SignerPort), nil)
 	if err != nil {
 		return nil, err
 	}

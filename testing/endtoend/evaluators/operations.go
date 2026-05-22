@@ -682,6 +682,12 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 			return nil
 		}
 
+		if ec.ExpectedEth1DataVote == nil {
+			ec.ExpectedEth1DataVote = vote
+			ec.Eth1DataMismatchCount = 0
+			continue
+		}
+
 		if !bytes.Equal(vote, ec.ExpectedEth1DataVote) {
 			// Allow some tolerance for eth1data vote differences.
 			// Validators may have slightly different views of the eth1 chain
