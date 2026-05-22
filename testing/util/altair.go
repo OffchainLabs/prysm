@@ -85,6 +85,9 @@ func buildGenesisBeaconState(genesisTime uint64, preState state.BeaconState, eth
 	if eth1Data == nil {
 		return nil, errors.New("no eth1data provided for genesis state")
 	}
+	if eth1Data.BlockHash == nil {
+		return nil, errors.New("eth1 data block hash is nil")
+	}
 
 	randaoMixes := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
 	for i := range randaoMixes {
@@ -385,10 +388,16 @@ func GenerateFullBlockAltair(
 	numToGen = conf.NumDeposits
 	var newDeposits []*ethpb.Deposit
 	eth1Data := bState.Eth1Data()
+	if eth1Data == nil {
+		return nil, errors.New("eth1 data is nil")
+	}
 	if numToGen > 0 {
 		newDeposits, eth1Data, err = generateDepositsAndEth1Data(bState, numToGen)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed generating %d deposits:", numToGen)
+		}
+		if eth1Data == nil {
+			return nil, errors.New("eth1 data is nil")
 		}
 	}
 
@@ -402,6 +411,9 @@ func GenerateFullBlockAltair(
 	}
 
 	newHeader := bState.LatestBlockHeader()
+	if newHeader == nil {
+		return nil, errors.New("latest block header is nil")
+	}
 	prevStateRoot, err := bState.HashTreeRoot(ctx)
 	if err != nil {
 		return nil, err
