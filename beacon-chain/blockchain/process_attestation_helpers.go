@@ -21,6 +21,9 @@ import (
 
 // The caller of this function must have a lock on forkchoice.
 func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) state.ReadOnlyBeaconState {
+	if c == nil {
+		return nil
+	}
 	headEpoch := slots.ToEpoch(s.HeadSlot())
 	if c.Epoch+1 < headEpoch || c.Epoch == 0 {
 		return nil
@@ -92,6 +95,9 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 // getAttPreState retrieves the att pre state by either from the cache or the DB.
 // The caller of this function must have a lock on forkchoice.
 func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (state.ReadOnlyBeaconState, error) {
+	if c == nil {
+		return nil, errors.New("nil attestation checkpoint")
+	}
 	// If the attestation is recent and canonical we can use the head state to compute the shuffling.
 	if st := s.getRecentPreState(ctx, c); st != nil {
 		return st, nil
@@ -166,6 +172,9 @@ func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (stat
 
 // verifyAttTargetEpoch validates attestation is from the current or previous epoch.
 func verifyAttTargetEpoch(_ context.Context, genesis, now time.Time, c *ethpb.Checkpoint) error {
+	if c == nil {
+		return errors.New("nil attestation checkpoint")
+	}
 	currentSlot := slots.At(genesis, now)
 	currentEpoch := slots.ToEpoch(currentSlot)
 	var prevEpoch primitives.Epoch
@@ -181,6 +190,9 @@ func verifyAttTargetEpoch(_ context.Context, genesis, now time.Time, c *ethpb.Ch
 
 // verifyBeaconBlock verifies beacon head block is known and not from the future.
 func (s *Service) verifyBeaconBlock(ctx context.Context, data *ethpb.AttestationData) error {
+	if data == nil {
+		return errors.New("nil attestation data")
+	}
 	r := bytesutil.ToBytes32(data.BeaconBlockRoot)
 	b, err := s.getBlock(ctx, r)
 	if err != nil {

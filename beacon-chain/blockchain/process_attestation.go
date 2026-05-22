@@ -44,10 +44,17 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 	if err := helpers.ValidateNilAttestation(a); err != nil {
 		return err
 	}
-	if err := helpers.ValidateSlotTargetEpoch(a.GetData()); err != nil {
+	data := a.GetData()
+	if data == nil || data.Target == nil {
+		return errors.New("nil attestation data")
+	}
+	if err := helpers.ValidateSlotTargetEpoch(data); err != nil {
 		return err
 	}
-	tgt := a.GetData().Target.Copy()
+	tgt := data.Target.Copy()
+	if tgt == nil {
+		return errors.New("nil attestation target")
+	}
 
 	// Note that target root check is ignored here because it was performed in sync's validation pipeline:
 	// validate_aggregate_proof.go and validate_beacon_attestation.go
@@ -66,7 +73,7 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 	}
 
 	// Verify attestation beacon block is known and not from the future.
-	if err := s.verifyBeaconBlock(ctx, a.GetData()); err != nil {
+	if err := s.verifyBeaconBlock(ctx, data); err != nil {
 		return errors.Wrap(err, "could not verify attestation beacon block")
 	}
 
@@ -74,7 +81,7 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 	// validate_aggregate_proof.go and validate_beacon_attestation.go
 
 	// Verify attestations can only affect the fork choice of subsequent slots.
-	if err := slots.VerifyTime(s.genesisTime, a.GetData().Slot+1, disparity); err != nil {
+	if err := slots.VerifyTime(s.genesisTime, data.Slot+1, disparity); err != nil {
 		return err
 	}
 
@@ -96,11 +103,10 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 	// We assume trusted attestation in this function has verified signature.
 
 	// Update forkchoice store with the new attestation for updating weight.
-	attData := a.GetData()
 	payloadStatus := true
-	if attData.Target.Epoch >= params.BeaconConfig().GloasForkEpoch {
-		payloadStatus = attData.CommitteeIndex == 1
+	if data.Target.Epoch >= params.BeaconConfig().GloasForkEpoch {
+		payloadStatus = data.CommitteeIndex == 1
 	}
-	s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indexedAtt.GetAttestingIndices(), bytesutil.ToBytes32(attData.BeaconBlockRoot), attData.Slot, payloadStatus)
+	s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indexedAtt.GetAttestingIndices(), bytesutil.ToBytes32(data.BeaconBlockRoot), data.Slot, payloadStatus)
 	return nil
 }
