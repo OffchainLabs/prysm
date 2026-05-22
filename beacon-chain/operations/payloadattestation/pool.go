@@ -169,7 +169,11 @@ func aggregateSigFromMessage(aggregated *ethpb.PayloadAttestation, message *ethp
 	if err != nil {
 		return nil, err
 	}
-	return bls.AggregateSignatures([]bls.Signature{aggSig, sig}).Marshal(), nil
+	aggregatedSig := bls.AggregateSignatures([]bls.Signature{aggSig, sig})
+	if aggregatedSig == nil {
+		return nil, errNilPayloadAttestationMessage
+	}
+	return aggregatedSig.Marshal(), nil
 }
 
 // dataKey derives the map key directly from PayloadAttestationData fields.
