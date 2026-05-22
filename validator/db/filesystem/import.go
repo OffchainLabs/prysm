@@ -20,6 +20,9 @@ import (
 // by Ethereum validators and imports its data into Prysm's internal minimal representation of slashing
 // protection in the validator client's database.
 func (s *Store) ImportStandardProtectionJSON(ctx context.Context, r io.Reader) error {
+	if s == nil {
+		return errors.New("store is nil")
+	}
 	// Read the JSON file
 	encodedJSON, err := io.ReadAll(r)
 	if err != nil {

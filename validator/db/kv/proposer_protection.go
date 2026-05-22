@@ -224,9 +224,15 @@ func (s *Store) SlashableProposalCheck(
 	emitAccountMetrics bool,
 	validatorProposeFailVec *prometheus.CounterVec,
 ) error {
+	if signedBlock == nil || signedBlock.IsNil() {
+		return errors.New("signed block is nil")
+	}
 	fmtKey := fmt.Sprintf("%#x", pubKey[:])
 
 	blk := signedBlock.Block()
+	if blk == nil || blk.IsNil() {
+		return errors.New("beacon block is nil")
+	}
 	prevSigningRoot, proposalAtSlotExists, prevSigningRootExists, err := s.ProposalHistoryForSlot(ctx, pubKey, blk.Slot())
 	if err != nil {
 		if emitAccountMetrics {

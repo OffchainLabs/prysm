@@ -63,17 +63,25 @@ func newDeprecatedAttestingHistory(target primitives.Epoch) deprecatedEncodedAtt
 	arraySize := latestEpochWrittenSize + historyDataSize
 	en := make(deprecatedEncodedAttestingHistory, arraySize)
 	enc := en
-	var err error
 	for i := primitives.Epoch(0); i <= target%params.BeaconConfig().WeakSubjectivityPeriod; i++ {
-		enc, err = enc.setTargetData(i, emptyHistoryData())
+		nextEnc, err := enc.setTargetData(i, emptyHistoryData())
 		if err != nil {
 			log.WithError(err).Error("Failed to set empty target data")
+			continue
 		}
+		if nextEnc == nil {
+			log.Error("Failed to set empty target data")
+			continue
+		}
+		enc = nextEnc
 	}
 	return enc
 }
 
 func (dh deprecatedEncodedAttestingHistory) getLatestEpochWritten() (primitives.Epoch, error) {
+	if dh == nil {
+		return 0, fmt.Errorf("attesting history is nil")
+	}
 	if err := dh.assertSize(); err != nil {
 		return 0, err
 	}
@@ -81,6 +89,9 @@ func (dh deprecatedEncodedAttestingHistory) getLatestEpochWritten() (primitives.
 }
 
 func (dh deprecatedEncodedAttestingHistory) setLatestEpochWritten(latestEpochWritten primitives.Epoch) (deprecatedEncodedAttestingHistory, error) {
+	if dh == nil {
+		return nil, fmt.Errorf("attesting history is nil")
+	}
 	if err := dh.assertSize(); err != nil {
 		return nil, err
 	}

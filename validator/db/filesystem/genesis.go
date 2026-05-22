@@ -8,6 +8,9 @@ import (
 )
 
 func (s *Store) GenesisValidatorsRoot(_ context.Context) ([]byte, error) {
+	if s == nil {
+		return nil, errors.New("store is nil")
+	}
 	// Get configuration.
 	configuration, err := s.configuration()
 	if err != nil {
@@ -35,6 +38,9 @@ func (s *Store) GenesisValidatorsRoot(_ context.Context) ([]byte, error) {
 
 // SaveGenesisValidatorsRoot saves the genesis validators root to db.
 func (s *Store) SaveGenesisValidatorsRoot(_ context.Context, genValRoot []byte) error {
+	if s == nil {
+		return errors.New("store is nil")
+	}
 	// Return nil if genesis validators root is empty.
 	if genValRoot == nil {
 		return nil

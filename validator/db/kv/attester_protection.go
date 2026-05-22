@@ -412,6 +412,9 @@ func (s *Store) SaveAttestationForPubKey(
 ) error {
 	ctx, span := trace.StartSpan(ctx, "Validator.SaveAttestationForPubKey")
 	defer span.End()
+	if s == nil || s.batchedAttestationsChan == nil || s.batchAttestationsFlushedFeed == nil {
+		return errors.New("store is nil")
+	}
 	data, err := indexedAttestationData(att)
 	if err != nil {
 		return err

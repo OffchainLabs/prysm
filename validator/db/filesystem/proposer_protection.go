@@ -136,9 +136,16 @@ func (s *Store) SlashableProposalCheck(
 	emitAccountMetrics bool,
 	validatorProposeFailVec *prometheus.CounterVec,
 ) error {
+	if signedBlock == nil || signedBlock.IsNil() {
+		return errors.New("signed block is nil")
+	}
+	blk := signedBlock.Block()
+	if blk == nil || blk.IsNil() {
+		return errors.New("beacon block is nil")
+	}
 	// Check if the proposal is potentially slashable regarding EIP-3076 minimal conditions.
 	// If not, save the new proposal into the database.
-	if err := s.SaveProposalHistoryForSlot(ctx, pubKey, signedBlock.Block().Slot(), signingRoot[:]); err != nil {
+	if err := s.SaveProposalHistoryForSlot(ctx, pubKey, blk.Slot(), signingRoot[:]); err != nil {
 		if strings.Contains(err.Error(), "could not sign proposal") {
 			return errors.Wrapf(err, common.FailedBlockSignLocalErr)
 		}
