@@ -58,6 +58,9 @@ func NewStateIdParseError(reason error) StateIdParseError {
 
 // Error returns the underlying error message.
 func (e *StateIdParseError) Error() string {
+	if e == nil {
+		return "could not parse state ID"
+	}
 	return e.message
 }
 
@@ -75,6 +78,9 @@ func NewStateNotFoundError(stateRootsSize int, stateRoot []byte) StateNotFoundEr
 
 // Error returns the underlying error message.
 func (e *StateNotFoundError) Error() string {
+	if e == nil {
+		return "state not found"
+	}
 	return e.message
 }
 
@@ -92,6 +98,9 @@ func NewStateRootNotFoundError(stateRootsSize int) StateRootNotFoundError {
 
 // Error returns the underlying error message.
 func (e *StateRootNotFoundError) Error() string {
+	if e == nil {
+		return "state root not found"
+	}
 	return e.message
 }
 

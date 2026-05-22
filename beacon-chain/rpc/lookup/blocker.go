@@ -37,6 +37,9 @@ func NewBlockNotFoundError(msg string) *BlockNotFoundError {
 }
 
 func (e *BlockNotFoundError) Error() string {
+	if e == nil {
+		return "block not found"
+	}
 	return e.message
 }
 
