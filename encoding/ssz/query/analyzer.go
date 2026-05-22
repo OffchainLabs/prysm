@@ -122,6 +122,9 @@ func PopulateVariableLengthInfo(sszInfo *SszInfo, value reflect.Value) error {
 
 		for _, fieldName := range containerInfo.order {
 			fieldInfo := containerInfo.fields[fieldName]
+			if fieldInfo == nil {
+				return fmt.Errorf("field info is nil for field %s", fieldName)
+			}
 			childSszInfo := fieldInfo.sszInfo
 			if childSszInfo == nil {
 				return fmt.Errorf("SszInfo is nil for field %s", fieldName)

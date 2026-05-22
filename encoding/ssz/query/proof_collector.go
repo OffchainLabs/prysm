@@ -273,6 +273,9 @@ func (pc *proofCollector) merkleizeContainer(info *SszInfo, v reflect.Value, cur
 
 	for i, name := range ci.order {
 		fieldInfo := ci.fields[name]
+		if fieldInfo == nil || fieldInfo.sszInfo == nil {
+			return [32]byte{}, fmt.Errorf("field info is nil for field %s", name)
+		}
 		fieldVal := v.FieldByName(fieldInfo.goFieldName)
 
 		// Field i's gindex: shift currentGindex left by depth, then OR with field index
