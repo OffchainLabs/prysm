@@ -8,24 +8,23 @@ import (
 const deprecatedUsage = "DEPRECATED. DO NOT USE."
 
 var (
-	deprecatedMaxGoroutines = &cli.IntFlag{
-		Name:   "max-goroutines",
+	// To deprecate a feature flag, first copy the example below, then insert deprecated flag in `deprecatedFlags`.
+	exampleDeprecatedFeatureFlag = &cli.StringFlag{
+		Name:   "name",
 		Usage:  deprecatedUsage,
 		Hidden: true,
 	}
 )
 
 // Deprecated flags for both the beacon node and validator client.
-var DeprecatedFlags = []cli.Flag{
-	deprecatedMaxGoroutines,
-}
+var deprecatedFlags = []cli.Flag{}
 
 var upcomingDeprecation = []cli.Flag{
 	enableHistoricalSpaceRepresentation,
 }
 
 // deprecatedBeaconFlags contains flags that are still used by other components
-// and therefore cannot be added to DeprecatedFlags
+// and therefore cannot be added to deprecatedFlags
 var deprecatedBeaconFlags = []cli.Flag{
 	deprecatedDisableLastEpochTargets,
 }

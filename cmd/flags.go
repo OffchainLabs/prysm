@@ -217,6 +217,12 @@ var (
 		Name:  "disable-log-colors",
 		Usage: "Disable color formatting for terminal logs.",
 	}
+	// MaxGoroutines specifies the maximum amount of goroutines tolerated, before a status check fails.
+	MaxGoroutines = &cli.IntFlag{
+		Name:  "max-goroutines",
+		Usage: "Specifies the upper limit of goroutines running before a status check fails",
+		Value: 5000,
+	}
 	// LogFileName specifies the log output file name.
 	LogFileName = &cli.StringFlag{
 		Name:  "log-file",

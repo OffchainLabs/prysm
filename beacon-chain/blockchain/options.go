@@ -24,6 +24,14 @@ import (
 
 type Option func(s *Service) error
 
+// WithMaxGoroutines to control resource use of the blockchain service.
+func WithMaxGoroutines(x int) Option {
+	return func(s *Service) error {
+		s.cfg.MaxRoutines = x
+		return nil
+	}
+}
+
 // WithLCStore for light client store access.
 func WithLCStore() Option {
 	return func(s *Service) error {
