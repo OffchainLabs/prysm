@@ -75,6 +75,14 @@ func (s *Server) AddTrustedPeer(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteError(w, errJson)
 		return
 	}
+	if addrRequest == nil {
+		errJson := &httputil.DefaultJsonError{
+			Message: "Peer address request is required",
+			Code:    http.StatusBadRequest,
+		}
+		httputil.WriteError(w, errJson)
+		return
+	}
 	info, err := peer.AddrInfoFromString(addrRequest.Addr)
 	if err != nil {
 		errJson := &httputil.DefaultJsonError{
