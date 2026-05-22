@@ -28,6 +28,9 @@ type AttDelta struct {
 func InitializePrecomputeValidators(ctx context.Context, beaconState state.BeaconState) ([]*precompute.Validator, *precompute.Balance, error) {
 	_, span := trace.StartSpan(ctx, "altair.InitializePrecomputeValidators")
 	defer span.End()
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, nil, errors.New("beacon state is nil")
+	}
 	vals := make([]*precompute.Validator, beaconState.NumValidators())
 	bal := &precompute.Balance{}
 	prevEpoch := time.PrevEpoch(beaconState)
@@ -165,6 +168,15 @@ func ProcessEpochParticipation(
 ) ([]*precompute.Validator, *precompute.Balance, error) {
 	_, span := trace.StartSpan(ctx, "altair.ProcessEpochParticipation")
 	defer span.End()
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, nil, errors.New("beacon state is nil")
+	}
+	if bal == nil {
+		return nil, nil, errors.New("precomputed balance is nil")
+	}
+	if vals == nil {
+		return nil, nil, errors.New("precomputed validators are nil")
+	}
 
 	cp, err := beaconState.CurrentEpochParticipation()
 	if err != nil {
@@ -175,6 +187,9 @@ func ProcessEpochParticipation(
 	sourceIdx := cfg.TimelySourceFlagIndex
 	headIdx := cfg.TimelyHeadFlagIndex
 	for i, b := range cp {
+		if i >= len(vals) || vals[i] == nil {
+			return nil, nil, errors.New("precomputed validator is nil")
+		}
 		has, err := HasValidatorFlag(b, sourceIdx)
 		if err != nil {
 			return nil, nil, err
@@ -196,6 +211,9 @@ func ProcessEpochParticipation(
 		return nil, nil, err
 	}
 	for i, b := range pp {
+		if i >= len(vals) || vals[i] == nil {
+			return nil, nil, errors.New("precomputed validator is nil")
+		}
 		has, err := HasValidatorFlag(b, sourceIdx)
 		if err != nil {
 			return nil, nil, err
