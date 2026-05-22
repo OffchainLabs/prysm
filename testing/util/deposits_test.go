@@ -274,6 +274,10 @@ func TestDepositTrieFromDeposits(t *testing.T) {
 
 	depositTrie, _, err := DepositTrieFromDeposits(deposits)
 	require.NoError(t, err)
+	if depositTrie == nil {
+		t.Fatal("deposit trie is nil")
+		return
+	}
 
 	root, err := depositTrie.HashTreeRoot()
 	if err != nil {
