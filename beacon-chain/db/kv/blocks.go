@@ -31,6 +31,9 @@ var errInvalidSlotRange = errors.New("invalid end slot and start slot provided")
 func (s *Store) Block(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.Block")
 	defer span.End()
+	if s == nil {
+		return nil, errors.New("store is nil")
+	}
 	blk, err := s.getBlock(ctx, blockRoot, nil)
 	if errors.Is(err, ErrNotFound) {
 		return nil, nil
@@ -39,6 +42,9 @@ func (s *Store) Block(ctx context.Context, blockRoot [32]byte) (interfaces.ReadO
 }
 
 func (s *Store) getBlock(ctx context.Context, blockRoot [32]byte, tx *bolt.Tx) (interfaces.ReadOnlySignedBeaconBlock, error) {
+	if s == nil {
+		return nil, errors.New("store is nil")
+	}
 	if v, ok := s.blockCache.Get(string(blockRoot[:])); v != nil && ok {
 		return v, nil
 	}
@@ -100,6 +106,9 @@ func (s *Store) HeadBlockRoot() ([32]byte, error) {
 func (s *Store) HeadBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.HeadBlock")
 	defer span.End()
+	if s == nil {
+		return nil, errors.New("store is nil")
+	}
 	var headBlock interfaces.ReadOnlySignedBeaconBlock
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(blocksBucket)
@@ -556,7 +565,17 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 func (s *Store) SaveBlock(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveBlock")
 	defer span.End()
-	blockRoot, err := signed.Block().HashTreeRoot()
+	if s == nil {
+		return errors.New("store is nil")
+	}
+	if signed == nil || signed.IsNil() {
+		return errors.New("signed block is nil")
+	}
+	blk := signed.Block()
+	if blk == nil || blk.IsNil() {
+		return errors.New("beacon block is nil")
+	}
+	blockRoot, err := blk.HashTreeRoot()
 	if err != nil {
 		return err
 	}
@@ -682,6 +701,9 @@ func blockIndices(slot primitives.Slot, parentRoot [32]byte) map[string][]byte {
 func (s *Store) SaveHeadBlockRoot(ctx context.Context, blockRoot [32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveHeadBlockRoot")
 	defer span.End()
+	if s == nil {
+		return errors.New("store is nil")
+	}
 	hasStateSummary := s.HasStateSummary(ctx, blockRoot)
 	hasStateInDB := s.HasState(ctx, blockRoot)
 	if !(hasStateInDB || hasStateSummary) {
