@@ -43,7 +43,7 @@ func InitializePrecomputeValidators(ctx context.Context, beaconState state.Beaco
 		return nil, nil, errors.New("inactivity scores are nil")
 	}
 	if len(inactivityScores) != len(vals) {
-		return nil, nil, errors.New("inactivity score length does not match validator count")
+		return nil, nil, errors.New("num of validators is different than num of inactivity scores")
 	}
 
 	// This shouldn't happen with a correct beacon state,
@@ -191,7 +191,7 @@ func ProcessEpochParticipation(
 	headIdx := cfg.TimelyHeadFlagIndex
 	for i, b := range cp {
 		if i >= len(vals) || vals[i] == nil {
-			return vals, bal, errors.New("precomputed validator is nil")
+			continue
 		}
 		has, err := HasValidatorFlag(b, sourceIdx)
 		if err != nil {
@@ -215,7 +215,7 @@ func ProcessEpochParticipation(
 	}
 	for i, b := range pp {
 		if i >= len(vals) || vals[i] == nil {
-			return vals, bal, errors.New("precomputed validator is nil")
+			continue
 		}
 		has, err := HasValidatorFlag(b, sourceIdx)
 		if err != nil {

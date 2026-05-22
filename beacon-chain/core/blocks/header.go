@@ -3,6 +3,7 @@ package blocks
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -129,6 +130,9 @@ func ProcessBlockHeaderNoVerify(
 		return nil, fmt.Errorf("proposer index: %d is different than calculated: %d", proposerIndex, idx)
 	}
 	parentHeader := beaconState.LatestBlockHeader()
+	if parentHeader == nil {
+		return nil, errors.New("latest block header is nil")
+	}
 	if parentHeader.Slot >= slot {
 		return nil, fmt.Errorf("block.Slot %d must be greater than state.LatestBlockHeader.Slot %d", slot, parentHeader.Slot)
 	}

@@ -298,6 +298,9 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 	} else {
 		justifiedCheckpt = beaconState.PreviousJustifiedCheckpoint()
 	}
+	if justifiedCheckpt == nil {
+		return nil, errors.New("nil justified checkpoint")
+	}
 
 	matchedSrc, matchedTgt, matchedHead, err := MatchingStatus(beaconState, data, justifiedCheckpt)
 	if err != nil {

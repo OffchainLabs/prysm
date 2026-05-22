@@ -125,13 +125,16 @@ func ProcessSlot(ctx context.Context, state state.BeaconState) (state.BeaconStat
 	zeroHash := params.BeaconConfig().ZeroHash
 	// Cache latest block header state root.
 	header := state.LatestBlockHeader()
+	if header == nil {
+		return nil, errors.New("nil latest block header")
+	}
 	if header.StateRoot == nil || bytes.Equal(header.StateRoot, zeroHash[:]) {
 		header.StateRoot = prevStateRoot[:]
 		if err := state.SetLatestBlockHeader(header); err != nil {
 			return nil, err
 		}
 	}
-	prevBlockRoot, err := state.LatestBlockHeader().HashTreeRoot()
+	prevBlockRoot, err := header.HashTreeRoot()
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return nil, errors.Wrap(err, "could not determine prev block root")

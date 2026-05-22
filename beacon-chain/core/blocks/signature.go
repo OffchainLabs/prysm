@@ -251,12 +251,12 @@ func AttestationSignatureBatch(ctx context.Context, beaconState state.ReadOnlyBe
 	var preForkAtts []ethpb.Att
 	var postForkAtts []ethpb.Att
 	for _, a := range atts {
+		data := a.GetData()
+		if data == nil || data.Target == nil || data.Source == nil {
+			return nil, errors.New("nil or missing indexed attestation data")
+		}
 		if err := helpers.ValidateNilAttestation(a); err != nil {
 			return nil, err
-		}
-		data := a.GetData()
-		if data == nil {
-			return nil, errors.New("attestation data is nil")
 		}
 		if slots.ToEpoch(data.Slot) < fork.Epoch {
 			preForkAtts = append(preForkAtts, a)

@@ -280,7 +280,11 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 	}
 	availableForProcessing := depBalToConsume + helpers.ActivationChurnLimitForVersion(st.Version(), activeBalance)
 
-	finalizedSlot, err := slots.EpochStart(st.FinalizedCheckpoint().Epoch)
+	finalizedCheckpoint := st.FinalizedCheckpoint()
+	if finalizedCheckpoint == nil {
+		return errors.New("finalized checkpoint is nil")
+	}
+	finalizedSlot, err := slots.EpochStart(finalizedCheckpoint.Epoch)
 	if err != nil {
 		return errors.Wrap(err, "could not get finalized slot")
 	}

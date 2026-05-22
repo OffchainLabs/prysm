@@ -35,6 +35,9 @@ func CurrentPeriodPositions(st state.BeaconState, indices []primitives.Validator
 		if err != nil {
 			return nil, err
 		}
+		if committee == nil {
+			return nil, errors.New("nil current sync committee")
+		}
 
 		// Fill in the cache on miss.
 		go func() {
@@ -64,22 +67,25 @@ func IsCurrentPeriodSyncCommittee(st state.BeaconState, valIdx primitives.Valida
 	if st == nil || st.IsNil() {
 		return false, errors.New("nil state")
 	}
+	val, err := st.ValidatorAtIndex(valIdx)
+	if err != nil {
+		return false, err
+	}
+	if val == nil {
+		return false, errors.New("nil validator")
+	}
 	root, err := SyncPeriodBoundaryRoot(st)
 	if err != nil {
 		return false, err
 	}
 	indices, err := syncCommitteeCache.CurrentPeriodIndexPosition(root, valIdx)
 	if errors.Is(err, cache.ErrNonExistingSyncCommitteeKey) {
-		val, err := st.ValidatorAtIndex(valIdx)
-		if err != nil {
-			return false, err
-		}
-		if val == nil {
-			return false, errors.New("nil validator")
-		}
 		committee, err := st.CurrentSyncCommittee()
 		if err != nil {
 			return false, err
+		}
+		if committee == nil {
+			return false, errors.New("nil current sync committee")
 		}
 
 		// Fill in the cache on miss.
@@ -125,6 +131,9 @@ func IsNextPeriodSyncCommittee(
 		if err != nil {
 			return false, err
 		}
+		if committee == nil {
+			return false, errors.New("nil next sync committee")
+		}
 		return len(findSubCommitteeIndices(pk[:], committee.Pubkeys)) > 0, nil
 	}
 	if err != nil {
@@ -151,10 +160,16 @@ func CurrentPeriodSyncSubcommitteeIndices(
 		if err != nil {
 			return nil, err
 		}
+		if val == nil {
+			return nil, errors.New("nil validator")
+		}
 		pk := val.PublicKey()
 		committee, err := st.CurrentSyncCommittee()
 		if err != nil {
 			return nil, err
+		}
+		if committee == nil {
+			return nil, errors.New("nil current sync committee")
 		}
 
 		// Fill in the cache on miss.
@@ -196,6 +211,9 @@ func NextPeriodSyncSubcommitteeIndices(
 		committee, err := st.NextSyncCommittee()
 		if err != nil {
 			return nil, err
+		}
+		if committee == nil {
+			return nil, errors.New("nil next sync committee")
 		}
 		return findSubCommitteeIndices(pk[:], committee.Pubkeys), nil
 	}

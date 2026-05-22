@@ -161,9 +161,21 @@ func computeCheckpoints(state state.BeaconState, newBits bitfield.Bitvector4) (*
 	currentEpoch := time.CurrentEpoch(state)
 	oldPrevJustifiedCheckpoint := state.PreviousJustifiedCheckpoint()
 	oldCurrJustifiedCheckpoint := state.CurrentJustifiedCheckpoint()
+	if oldPrevJustifiedCheckpoint == nil {
+		oldPrevJustifiedCheckpoint = &ethpb.Checkpoint{}
+	}
+	if oldCurrJustifiedCheckpoint == nil {
+		oldCurrJustifiedCheckpoint = &ethpb.Checkpoint{}
+	}
 
 	justifiedCheckpoint := state.CurrentJustifiedCheckpoint()
 	finalizedCheckpoint := state.FinalizedCheckpoint()
+	if justifiedCheckpoint == nil {
+		justifiedCheckpoint = &ethpb.Checkpoint{}
+	}
+	if finalizedCheckpoint == nil {
+		finalizedCheckpoint = &ethpb.Checkpoint{}
+	}
 
 	// If 2/3 or more of the total balance attested in the current epoch.
 	if newBits.BitAt(0) && currentEpoch >= justifiedCheckpoint.Epoch {
