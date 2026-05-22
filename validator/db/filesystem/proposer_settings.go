@@ -53,7 +53,8 @@ func (s *Store) ProposerSettingsExists(_ context.Context) (bool, error) {
 // SaveProposerSettings saves the proposer settings.
 func (s *Store) SaveProposerSettings(_ context.Context, proposerSettings *proposer.Settings) error {
 	if proposerSettings == nil {
-		return errors.New("proposer settings is nil")
+		log.Warn("proposer settings are empty, nothing has been saved")
+		return nil
 	}
 
 	// Check if there is something to save.

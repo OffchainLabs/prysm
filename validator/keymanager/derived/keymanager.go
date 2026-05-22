@@ -104,8 +104,11 @@ func (km *Keymanager) ValidatingAccountNames(_ context.Context) ([]string, error
 
 // Sign signs a message using a validator key.
 func (km *Keymanager) Sign(ctx context.Context, req *validatorpb.SignRequest) (bls.Signature, error) {
+	if req == nil || len(req.PublicKey) == 0 {
+		return nil, errors.New("nil public key")
+	}
 	if km == nil || km.localKM == nil {
-		return nil, errors.New("local keymanager is not initialized")
+		return nil, errors.New("no signing key found")
 	}
 	return km.localKM.Sign(ctx, req)
 }
