@@ -70,7 +70,13 @@ func NewAttestationElectra() *ethpb.AttestationElectra {
 func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numToGen uint64, slot primitives.Slot, randomRoot bool) ([]ethpb.Att, error) { // nolint:gocognit
 	var attestations []ethpb.Att
 	generateHeadState := false
+	if bState == nil || bState.IsNil() {
+		return nil, fmt.Errorf("beacon state is nil")
+	}
 	bState = bState.Copy()
+	if bState == nil || bState.IsNil() {
+		return nil, fmt.Errorf("beacon state copy is nil")
+	}
 	if slot > bState.Slot() {
 		// Going back a slot here so there's no inclusion delay issues.
 		slot--
@@ -226,6 +232,10 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 		if err != nil {
 			return nil, err
 		}
+		source := bState.CurrentJustifiedCheckpoint()
+		if source == nil {
+			return nil, fmt.Errorf("current justified checkpoint is nil")
+		}
 
 		ci := c
 		if bState.Version() >= version.Electra {
@@ -236,7 +246,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			Slot:            slot,
 			CommitteeIndex:  ci,
 			BeaconBlockRoot: headRoot,
-			Source:          bState.CurrentJustifiedCheckpoint(),
+			Source:          source,
 			Target: &ethpb.Checkpoint{
 				Epoch: currentEpoch,
 				Root:  targetRoot,
