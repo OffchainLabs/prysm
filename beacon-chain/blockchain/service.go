@@ -470,6 +470,11 @@ func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db d
 	gState, err := db.GenesisState(ctx)
 	if err != nil {
 		log.WithError(err).Fatal("Could not retrieve genesis state")
+		return
+	}
+	if gState == nil || gState.IsNil() {
+		log.WithError(errors.New("nil genesis state")).Fatal("Could not retrieve genesis state")
+		return
 	}
 	gRoot, err := gState.HashTreeRoot(ctx)
 	if err != nil {
