@@ -41,12 +41,18 @@ func (c *HighestExecutionPayloadBidCache) Get(
 		parentHash: parentHash,
 		parentRoot: parentRoot,
 	}]
+	if !ok || bid == nil || bid.Message == nil {
+		return nil, false
+	}
 	return bid, ok
 }
 
 // SetIfHigher inserts the bid if absent, or replaces the cached bid only if
 // the incoming value is strictly greater.
 func (c *HighestExecutionPayloadBidCache) SetIfHigher(bid *ethpb.SignedExecutionPayloadBid) bool {
+	if bid == nil || bid.Message == nil {
+		return false
+	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -56,6 +62,10 @@ func (c *HighestExecutionPayloadBidCache) SetIfHigher(bid *ethpb.SignedExecution
 		parentRoot: [32]byte(bid.Message.ParentBlockRoot),
 	}
 	cached, ok := c.bids[key]
+	if cached == nil || cached.Message == nil {
+		c.bids[key] = bid
+		return true
+	}
 	if !ok || bid.Message.Value > cached.Message.Value {
 		c.bids[key] = bid
 		return true
