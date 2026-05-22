@@ -500,6 +500,12 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 
 // the caller of this function must not hold a lock in forkchoice store.
 func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.BeaconState) error {
+	if s == nil || s.cfg == nil || s.cfg.ForkChoiceStore == nil {
+		return errors.New("service is nil")
+	}
+	if st == nil || st.IsNil() {
+		return errors.New("nil state")
+	}
 	e := coreTime.CurrentEpoch(st)
 	if err := helpers.UpdateCommitteeCache(ctx, st, e); err != nil {
 		return errors.Wrap(err, "could not update committee cache")
@@ -531,7 +537,11 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	}()
 
 	// The latest block header is from the previous epoch
-	r, err := st.LatestBlockHeader().HashTreeRoot()
+	header := st.LatestBlockHeader()
+	if header == nil {
+		return errors.New("nil latest block header")
+	}
+	r, err := header.HashTreeRoot()
 	if err != nil {
 		log.WithError(err).Error("Could not update proposer index state-root map")
 		return nil

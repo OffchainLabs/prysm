@@ -39,6 +39,9 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyForkchoiceUpdate")
 	defer span.End()
 
+	if s == nil || s.cfg == nil {
+		return nil, errors.New("service is nil")
+	}
 	if arg.headBlock == nil || arg.headBlock.IsNil() {
 		log.Error("Head block is nil")
 		return nil, nil
@@ -354,6 +357,10 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, headRoot, slot)
 		if err != nil {
 			log.WithError(err).Error("Could not process slots to get payload attribute")
+			return emptyAttri
+		}
+		if st == nil || st.IsNil() {
+			log.Error("State is nil after processing slots")
 			return emptyAttri
 		}
 	}

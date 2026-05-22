@@ -264,7 +264,10 @@ func (s *Service) Status() error {
 
 // StartFromSavedState initializes the blockchain using a previously saved finalized checkpoint.
 func (s *Service) StartFromSavedState(saved state.BeaconState) error {
-	if state.IsNil(saved) {
+	if s == nil {
+		return errors.New("service is nil")
+	}
+	if saved == nil || saved.IsNil() || state.IsNil(saved) {
 		return errors.New("Last finalized state at startup is nil")
 	}
 	log.Info("Blockchain data already exists in DB, initializing...")
@@ -292,6 +295,9 @@ func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 		return errors.Wrap(err, "could not verify initial checkpoint provided for chain sync")
 	}
 
+	if s.clockSetter == nil {
+		return errors.New("clock setter is nil")
+	}
 	vr := bytesutil.ToBytes32(saved.GenesisValidatorsRoot())
 	if err := s.clockSetter.SetClock(startup.NewClock(s.genesisTime, vr)); err != nil {
 		return errors.Wrap(err, "failed to initialize blockchain service")

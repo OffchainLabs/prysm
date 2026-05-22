@@ -96,6 +96,9 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig) {
 func (s *Service) forkchoiceUpdateWithExecution(ctx context.Context, args *fcuConfig) {
 	_, span := trace.StartSpan(ctx, "beacon-chain.blockchain.forkchoiceUpdateWithExecution")
 	defer span.End()
+	if s == nil {
+		return
+	}
 	// Note: Use the service context here to avoid the parent context being ended during a forkchoice update.
 	ctx = trace.NewContext(s.ctx, span)
 	s.ForkChoicer().Lock()

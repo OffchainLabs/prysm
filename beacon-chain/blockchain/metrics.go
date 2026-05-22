@@ -279,6 +279,9 @@ func reportEpochMetrics(ctx context.Context, postState, headState state.BeaconSt
 	if postState == nil || postState.IsNil() {
 		return errors.New("nil post state")
 	}
+	if headState == nil || headState.IsNil() {
+		return errors.New("nil head state")
+	}
 	currentEpoch := primitives.Epoch(postState.Slot() / params.BeaconConfig().SlotsPerEpoch)
 
 	// Validator instances

@@ -64,6 +64,9 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	if headState == nil || headState.IsNil() {
 		return errors.New("cannot save nil head state")
 	}
+	if headBlock == nil || headBlock.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
+	}
 	if err := blocks.BeaconBlockIsNil(headBlock); err != nil {
 		return err
 	}
@@ -198,6 +201,9 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 func (s *Service) saveHeadNoDB(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock, r [32]byte, hs state.BeaconState, optimistic bool) error {
 	if hs == nil || hs.IsNil() {
 		return errors.New("cannot save nil head state")
+	}
+	if b == nil || b.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
 	}
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return err

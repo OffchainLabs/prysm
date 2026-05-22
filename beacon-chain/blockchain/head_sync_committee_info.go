@@ -81,6 +81,9 @@ func (s *Service) headCurrentSyncCommitteeIndices(ctx context.Context, index pri
 	if err != nil {
 		return nil, err
 	}
+	if headState == nil || headState.IsNil() {
+		return nil, errors.New("nil state")
+	}
 	return helpers.CurrentPeriodSyncSubcommitteeIndices(headState, index)
 }
 
@@ -90,6 +93,9 @@ func (s *Service) headNextSyncCommitteeIndices(ctx context.Context, index primit
 	headState, err := s.getSyncCommitteeHeadState(ctx, slot)
 	if err != nil {
 		return nil, err
+	}
+	if headState == nil || headState.IsNil() {
+		return nil, errors.New("nil state")
 	}
 	return helpers.NextPeriodSyncSubcommitteeIndices(headState, index)
 }
@@ -143,6 +149,9 @@ func (s *Service) getSyncCommitteeHeadState(ctx context.Context, slot primitives
 	cachedState, err := s.syncCommitteeHeadState.Get(slot)
 	switch {
 	case err == nil:
+		if cachedState == nil || cachedState.IsNil() {
+			return nil, errors.New("nil state")
+		}
 		syncHeadStateHit.Inc()
 		headState = cachedState
 		return headState, nil
@@ -161,6 +170,9 @@ func (s *Service) getSyncCommitteeHeadState(ctx context.Context, slot primitives
 		headState, err = transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, slot)
 		if err != nil {
 			return nil, err
+		}
+		if headState == nil || headState.IsNil() {
+			return nil, errors.New("nil state")
 		}
 		syncHeadStateMiss.Inc()
 		err = s.syncCommitteeHeadState.Put(slot, headState)

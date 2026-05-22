@@ -36,6 +36,9 @@ var ErrInvalidCheckpointArgs = errors.New("finalized checkpoint cannot be greate
 
 // CurrentSlot returns the current slot based on time.
 func (s *Service) CurrentSlot() primitives.Slot {
+	if s == nil {
+		return 0
+	}
 	return slots.CurrentSlot(s.genesisTime)
 }
 
@@ -285,6 +288,9 @@ func (s *Service) verifyBlkPreState(ctx context.Context, parentRoot [field_param
 // verifyBlkFinalizedSlot validates input block is not less than or equal
 // to current finalized slot.
 func (s *Service) verifyBlkFinalizedSlot(b interfaces.ReadOnlyBeaconBlock) error {
+	if b == nil || b.IsNil() {
+		return consensus_blocks.ErrNilBeaconBlock
+	}
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
 	finalizedSlot, err := slots.EpochStart(finalized.Epoch)
 	if err != nil {
@@ -527,6 +533,9 @@ func (s *Service) pruneAllPendingDepositsAndProofs(ctx context.Context) {
 // fork choice justification routine.
 func (s *Service) ensureRootNotZeros(root [32]byte) [32]byte {
 	if root == params.BeaconConfig().ZeroHash {
+		if s == nil {
+			return root
+		}
 		return s.originBlockRoot
 	}
 	return root

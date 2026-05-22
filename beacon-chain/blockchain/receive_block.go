@@ -616,6 +616,12 @@ func (s *Service) validateStateTransition(ctx context.Context, preState state.Be
 // updateJustificationOnBlock updates the justified checkpoint on DB if the
 // incoming block has updated it on forkchoice.
 func (s *Service) updateJustificationOnBlock(ctx context.Context, preState, postState state.BeaconState, preJustifiedEpoch primitives.Epoch) error {
+	if preState == nil || preState.IsNil() {
+		return errors.New("pre-state is nil")
+	}
+	if postState == nil || postState.IsNil() {
+		return errors.New("post-state is nil")
+	}
 	justified := s.cfg.ForkChoiceStore.JustifiedCheckpoint()
 	if justified == nil {
 		return errNilJustifiedCheckpoint
@@ -643,8 +649,22 @@ func (s *Service) updateJustificationOnBlock(ctx context.Context, preState, post
 // updateFinalizationOnBlock performs some duties when the incoming block
 // changes the finalized checkpoint. It returns true when this has happened.
 func (s *Service) updateFinalizationOnBlock(ctx context.Context, preState, postState state.BeaconState, preFinalizedEpoch primitives.Epoch) (bool, error) {
-	preStateFinalizedEpoch := preState.FinalizedCheckpoint().Epoch
-	postStateFinalizedEpoch := postState.FinalizedCheckpoint().Epoch
+	if preState == nil || preState.IsNil() {
+		return false, errors.New("pre-state is nil")
+	}
+	if postState == nil || postState.IsNil() {
+		return false, errors.New("post-state is nil")
+	}
+	preStateFinalized := preState.FinalizedCheckpoint()
+	if preStateFinalized == nil {
+		return false, errors.New("pre-state finalized checkpoint is nil")
+	}
+	postStateFinalized := postState.FinalizedCheckpoint()
+	if postStateFinalized == nil {
+		return false, errors.New("post-state finalized checkpoint is nil")
+	}
+	preStateFinalizedEpoch := preStateFinalized.Epoch
+	postStateFinalizedEpoch := postStateFinalized.Epoch
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
 	if finalized.Epoch > preFinalizedEpoch || (finalized.Epoch == postStateFinalizedEpoch && finalized.Epoch > preStateFinalizedEpoch) {
 		if err := s.updateFinalized(ctx, &ethpb.Checkpoint{Epoch: finalized.Epoch, Root: finalized.Root[:]}); err != nil {
@@ -658,6 +678,15 @@ func (s *Service) updateFinalizationOnBlock(ctx context.Context, preState, postS
 // sendNewFinalizedEvent sends a new finalization checkpoint event over the
 // event feed. It needs to be called on the background
 func (s *Service) sendNewFinalizedEvent(ctx context.Context, postState state.BeaconState) {
+	if postState == nil || postState.IsNil() {
+		log.Error("Nil post state. Finalized event will not be emitted")
+		return
+	}
+	finalized := postState.FinalizedCheckpoint()
+	if finalized == nil {
+		log.Error("Nil finalized checkpoint. Finalized event will not be emitted")
+		return
+	}
 	isValidPayload := false
 	s.headLock.RLock()
 	if s.head != nil {
@@ -665,7 +694,7 @@ func (s *Service) sendNewFinalizedEvent(ctx context.Context, postState state.Bea
 	}
 	s.headLock.RUnlock()
 
-	blk, err := s.cfg.BeaconDB.Block(ctx, bytesutil.ToBytes32(postState.FinalizedCheckpoint().Root))
+	blk, err := s.cfg.BeaconDB.Block(ctx, bytesutil.ToBytes32(finalized.Root))
 	if err != nil {
 		log.WithError(err).Error("Could not retrieve block for finalized checkpoint root. Finalized event will not be emitted")
 		return
@@ -674,13 +703,18 @@ func (s *Service) sendNewFinalizedEvent(ctx context.Context, postState state.Bea
 		log.WithError(err).Error("Block retrieved for finalized checkpoint root is nil. Finalized event will not be emitted")
 		return
 	}
-	stateRoot := blk.Block().StateRoot()
+	block := blk.Block()
+	if block == nil || block.IsNil() {
+		log.Error("Block retrieved for finalized checkpoint root is nil. Finalized event will not be emitted")
+		return
+	}
+	stateRoot := block.StateRoot()
 	// Send an event regarding the new finalized checkpoint over a common event feed.
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.FinalizedCheckpoint,
 		Data: &ethpbv1.EventFinalizedCheckpoint{
-			Epoch:               postState.FinalizedCheckpoint().Epoch,
-			Block:               postState.FinalizedCheckpoint().Root,
+			Epoch:               finalized.Epoch,
+			Block:               finalized.Root,
 			State:               stateRoot[:],
 			ExecutionOptimistic: isValidPayload,
 		},
@@ -713,6 +747,9 @@ func (s *Service) sendBlockAttestationsToSlasher(signed interfaces.ReadOnlySigne
 
 // validateExecutionOnBlock notifies the engine of the incoming block execution payload and returns true if the payload is valid
 func (s *Service) validateExecutionOnBlock(ctx context.Context, ver int, header interfaces.ExecutionData, block blocks.ROBlock) (bool, error) {
+	if header == nil || header.IsNil() {
+		return false, errors.New("execution data is nil")
+	}
 	isValidPayload, err := s.notifyNewPayload(ctx, ver, header, block)
 	if err != nil {
 		s.cfg.ForkChoiceStore.Lock()
