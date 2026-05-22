@@ -112,9 +112,13 @@ func (s *Service) batchForkChoiceAtts(ctx context.Context) error {
 // This aggregates a list of attestations using the aggregation algorithm defined in AggregateAttestations
 // and saves the attestations for fork choice.
 func (s *Service) aggregateAndSaveForkChoiceAtts(atts []ethpb.Att) error {
-	clonedAtts := make([]ethpb.Att, len(atts))
-	for i, a := range atts {
-		clonedAtts[i] = a.Clone()
+	clonedAtts := make([]ethpb.Att, 0, len(atts))
+	for _, a := range atts {
+		cloned := a.Clone()
+		if cloned == nil {
+			continue
+		}
+		clonedAtts = append(clonedAtts, cloned)
 	}
 	aggregatedAtts, err := attaggregation.Aggregate(clonedAtts)
 	if err != nil {
