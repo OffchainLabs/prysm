@@ -211,7 +211,11 @@ func (s *Service) IndividualVotes(
 	if err != nil {
 		return nil, &RpcError{Err: err, Reason: Internal}
 	}
-	st, err := s.ReplayerBuilder.ReplayerForSlot(slot).ReplayBlocks(ctx)
+	replayer := s.ReplayerBuilder.ReplayerForSlot(slot)
+	if replayer == nil {
+		return nil, &RpcError{Err: errors.Errorf("could not get replayer for slot %d", slot), Reason: Internal}
+	}
+	st, err := replayer.ReplayBlocks(ctx)
 	if err != nil {
 		return nil, &RpcError{
 			Err:    errors.Wrapf(err, "failed to replay blocks for state at epoch %d", req.Epoch),
@@ -803,7 +807,11 @@ func (s *Service) ValidatorParticipation(
 	}
 
 	// ReplayerBuilder ensures that a canonical chain is followed to the slot
-	beaconSt, err := s.ReplayerBuilder.ReplayerForSlot(endSlot).ReplayBlocks(ctx)
+	replayer := s.ReplayerBuilder.ReplayerForSlot(endSlot)
+	if replayer == nil {
+		return nil, &RpcError{Reason: Internal, Err: errors.Errorf("could not get replayer for slot %d", endSlot)}
+	}
+	beaconSt, err := replayer.ReplayBlocks(ctx)
 	if err != nil {
 		return nil, &RpcError{Reason: Internal, Err: errors.Wrapf(err, "error replaying blocks for state at slot %d", endSlot)}
 	}
@@ -876,7 +884,14 @@ func (s *Service) ValidatorActiveSetChanges(
 	if err != nil {
 		return nil, &RpcError{Err: err, Reason: BadRequest}
 	}
-	requestedState, err := s.ReplayerBuilder.ReplayerForSlot(slot).ReplayBlocks(ctx)
+	replayer := s.ReplayerBuilder.ReplayerForSlot(slot)
+	if replayer == nil {
+		return nil, &RpcError{
+			Err:    errors.Errorf("could not get replayer for slot %d", slot),
+			Reason: Internal,
+		}
+	}
+	requestedState, err := replayer.ReplayBlocks(ctx)
 	if err != nil {
 		return nil, &RpcError{
 			Err:    errors.Wrapf(err, "error replaying blocks for state at slot %d", slot),
