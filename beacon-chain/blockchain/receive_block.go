@@ -97,6 +97,9 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err != nil {
 		return errors.Wrap(err, "block copy")
 	}
+	if blockCopy == nil || blockCopy.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
+	}
 	roblock, err := blocks.NewROBlockWithRoot(blockCopy, blockRoot)
 	if err != nil {
 		return errors.Wrap(err, "new ro block with root")
@@ -111,6 +114,9 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
 	if err != nil {
 		return errors.Wrap(err, "validator execution and consensus")
+	}
+	if postState == nil || postState.IsNil() {
+		return errors.New("nil post state")
 	}
 
 	daWaitedTime, err := s.handleDA(ctx, avs, roblock)
@@ -290,6 +296,10 @@ func (s *Service) reportPostBlockProcessing(
 	receivedTime time.Time,
 	daWaitedTime time.Duration,
 ) {
+	if signedBlock == nil || signedBlock.IsNil() {
+		log.WithField("blockRoot", blockRoot).Error("Nil signed block")
+		return
+	}
 	block := signedBlock.Block()
 	if block == nil {
 		log.WithField("blockRoot", blockRoot).Error("Nil block")
@@ -411,6 +421,9 @@ func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock
 		if err != nil {
 			return err
 		}
+		if blockCopy == nil || blockCopy.IsNil() {
+			return errors.New("nil signed block")
+		}
 		// Send notification of the processed block to the state feed.
 		s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 			Type: statefeed.BlockProcessed,
@@ -472,6 +485,9 @@ func (s *Service) ReceiveAttesterSlashing(ctx context.Context, slashing ethpb.At
 
 // prunePostBlockOperationPools only runs on new head otherwise should return a nil.
 func (s *Service) prunePostBlockOperationPools(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock, root [32]byte) error {
+	if blk == nil || blk.IsNil() {
+		return errors.New("nil signed block")
+	}
 	headRoot, err := s.HeadRoot(ctx)
 	if err != nil {
 		return err
@@ -655,6 +671,10 @@ func (s *Service) sendNewFinalizedEvent(ctx context.Context, postState state.Bea
 func (s *Service) sendBlockAttestationsToSlasher(signed interfaces.ReadOnlySignedBeaconBlock, preState state.BeaconState) {
 	// Feed the indexed attestation to slasher if enabled. This action
 	// is done in the background to avoid adding more load to this critical code path.
+	if signed == nil || signed.IsNil() {
+		log.Error("Nil signed block")
+		return
+	}
 	ctx := s.ctx
 	for _, att := range signed.Block().Body().Attestations() {
 		committees, err := helpers.AttestationCommitteesFromState(ctx, preState, att)

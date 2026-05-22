@@ -691,6 +691,9 @@ func (s *Service) RecordBlockForEquivocation(slot primitives.Slot, proposer prim
 func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interfaces.ReadOnlySignedBeaconBlock, st state.BeaconState) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.savePostStateInfo")
 	defer span.End()
+	if b == nil || b.IsNil() {
+		return errors.New("nil signed block")
+	}
 	if err := s.cfg.BeaconDB.SaveBlock(ctx, b); err != nil {
 		return errors.Wrapf(err, "could not save block from slot %d", b.Block().Slot())
 	}
