@@ -49,10 +49,17 @@ func NewROBlockWithRoot(b interfaces.ReadOnlySignedBeaconBlock, root [32]byte) (
 // NewROBlock creates a ROBlock from a ReadOnlySignedBeaconBlock. It uses the HashTreeRoot method of the given
 // ReadOnlySignedBeaconBlock.Block to compute the cached root.
 func NewROBlock(b interfaces.ReadOnlySignedBeaconBlock) (ROBlock, error) {
+	if b == nil || b.IsNil() {
+		return ROBlock{}, ErrNilSignedBeaconBlock
+	}
 	if err := BeaconBlockIsNil(b); err != nil {
 		return ROBlock{}, err
 	}
-	root, err := b.Block().HashTreeRoot()
+	block := b.Block()
+	if block == nil || block.IsNil() {
+		return ROBlock{}, errNilBlock
+	}
+	root, err := block.HashTreeRoot()
 	if err != nil {
 		return ROBlock{}, err
 	}

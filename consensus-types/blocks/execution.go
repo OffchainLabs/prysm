@@ -378,6 +378,9 @@ func (e executionPayloadHeader) ExcessBlobGas() (uint64, error) {
 
 // PayloadToHeader converts `payload` into execution payload header format.
 func PayloadToHeader(payload interfaces.ExecutionData) (*enginev1.ExecutionPayloadHeader, error) {
+	if payload == nil || payload.IsNil() {
+		return nil, consensus_types.ErrNilObjectWrapped
+	}
 	txs, err := payload.Transactions()
 	if err != nil {
 		return nil, err
@@ -732,6 +735,9 @@ func (e executionPayloadHeaderCapella) ExcessBlobGas() (uint64, error) {
 
 // PayloadToHeaderCapella converts `payload` into execution payload header format.
 func PayloadToHeaderCapella(payload interfaces.ExecutionData) (*enginev1.ExecutionPayloadHeaderCapella, error) {
+	if payload == nil || payload.IsNil() {
+		return nil, consensus_types.ErrNilObjectWrapped
+	}
 	txs, err := payload.Transactions()
 	if err != nil {
 		return nil, err
@@ -770,6 +776,9 @@ func PayloadToHeaderCapella(payload interfaces.ExecutionData) (*enginev1.Executi
 
 // PayloadToHeaderDeneb converts `payload` into execution payload header format.
 func PayloadToHeaderDeneb(payload interfaces.ExecutionData) (*enginev1.ExecutionPayloadHeaderDeneb, error) {
+	if payload == nil || payload.IsNil() {
+		return nil, consensus_types.ErrNilObjectWrapped
+	}
 	txs, err := payload.Transactions()
 	if err != nil {
 		return nil, err

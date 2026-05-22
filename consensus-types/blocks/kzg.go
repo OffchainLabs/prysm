@@ -346,6 +346,9 @@ func topLevelRoots(body interfaces.ReadOnlyBeaconBlockBody) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if ep == nil || ep.IsNil() {
+		return nil, errors.New("execution payload is nil")
+	}
 	root, err = ep.HashTreeRoot()
 	if err != nil {
 		return nil, err

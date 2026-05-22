@@ -335,6 +335,9 @@ func getWrappedPayload(payload any) (wrappedPayload interfaces.ExecutionData, wr
 }
 
 func checkPayloadAgainstHeader(wrappedPayload, payloadHeader interfaces.ExecutionData) error {
+	if payloadHeader == nil {
+		return errors.New("execution payload header is nil")
+	}
 	empty, err := IsEmptyExecutionData(wrappedPayload)
 	if err != nil {
 		return err

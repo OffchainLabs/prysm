@@ -187,6 +187,9 @@ func (b *SignedBeaconBlock) ToBlinded() (interfaces.ReadOnlySignedBeaconBlock, e
 	if err != nil {
 		return nil, err
 	}
+	if payload == nil || payload.IsNil() {
+		return nil, errors.New("execution payload is nil")
+	}
 
 	if b.version >= version.Fulu {
 		p, ok := payload.Proto().(*enginev1.ExecutionPayloadDeneb)
@@ -373,6 +376,9 @@ func (b *SignedBeaconBlock) Unblind(e interfaces.ExecutionData) error {
 	header, err := body.Execution()
 	if err != nil {
 		return err
+	}
+	if header == nil || header.IsNil() {
+		return errors.New("execution payload header is nil")
 	}
 	headerRoot, err := header.HashTreeRoot()
 	if err != nil {
