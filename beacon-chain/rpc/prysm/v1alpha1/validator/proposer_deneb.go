@@ -30,6 +30,9 @@ func BuildBlobSidecars(blk interfaces.ReadOnlySignedBeaconBlock, blobs [][]byte,
 		return nil, errors.New("blob KZG commitments don't match number of blobs or KZG proofs")
 	}
 	blobSidecars := make([]*ethpb.BlobSidecar, cLen)
+	if cLen == 0 {
+		return blobSidecars, nil
+	}
 	header, err := blk.Header()
 	if err != nil {
 		return nil, err

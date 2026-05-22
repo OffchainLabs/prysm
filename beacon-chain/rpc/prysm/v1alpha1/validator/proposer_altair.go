@@ -22,7 +22,7 @@ import (
 )
 
 func (vs *Server) setSyncAggregate(ctx context.Context, blk interfaces.SignedBeaconBlock, headState state.BeaconState) {
-	if blk == nil || blk.IsNil() || headState == nil || headState.IsNil() {
+	if blk == nil || blk.IsNil() {
 		return
 	}
 	if blk.Version() < version.Altair {
@@ -133,6 +133,10 @@ func (vs *Server) aggregatedSyncCommitteeMessages(
 	poolContributions []*ethpb.SyncCommitteeContribution,
 	st state.BeaconState,
 ) ([]*ethpb.SyncCommitteeContribution, error) {
+	if st == nil || st.IsNil() {
+		return nil, errors.New("head state is nil")
+	}
+
 	subcommitteeCount := params.BeaconConfig().SyncCommitteeSubnetCount
 	subcommitteeSize := params.BeaconConfig().SyncCommitteeSize / subcommitteeCount
 	sigsPerSubcommittee := make([][][]byte, subcommitteeCount)
