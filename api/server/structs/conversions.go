@@ -578,6 +578,9 @@ func (c *Checkpoint) ToConsensus() (*eth.Checkpoint, error) {
 }
 
 func CheckpointFromConsensus(c *eth.Checkpoint) *Checkpoint {
+	if c == nil {
+		return nil
+	}
 	return &Checkpoint{
 		Epoch: fmt.Sprintf("%d", c.Epoch),
 		Root:  hexutil.Encode(c.Root),
@@ -715,6 +718,9 @@ func (m *SyncCommitteeMessage) ToConsensus() (*eth.SyncCommitteeMessage, error) 
 }
 
 func SyncCommitteeFromConsensus(sc *eth.SyncCommittee) *SyncCommittee {
+	if sc == nil {
+		return nil
+	}
 	var sPubKeys []string
 	for _, p := range sc.Pubkeys {
 		sPubKeys = append(sPubKeys, hexutil.Encode(p))

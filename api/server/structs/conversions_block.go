@@ -211,6 +211,9 @@ func (b *BeaconBlock) ToConsensus() (*eth.BeaconBlock, error) {
 }
 
 func BeaconBlockHeaderFromConsensus(h *eth.BeaconBlockHeader) *BeaconBlockHeader {
+	if h == nil {
+		return nil
+	}
 	return &BeaconBlockHeader{
 		Slot:          fmt.Sprintf("%d", h.Slot),
 		ProposerIndex: fmt.Sprintf("%d", h.ProposerIndex),
