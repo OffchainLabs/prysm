@@ -51,7 +51,7 @@ func publicKeyFromBytes(pubKey []byte, cacheCopy bool) (common.PublicKey, error)
 		return nil, fmt.Errorf("public key must be %d bytes", params.BeaconConfig().BLSPubkeyLength)
 	}
 	newKey := (*[fieldparams.BLSPubkeyLength]byte)(pubKey)
-	if cv, ok := pubkeyCache.pubkey(*newKey); ok {
+	if cv, ok := pubkeyCache.pubkey(*newKey); ok && cv != nil {
 		if cacheCopy {
 			return cv.Copy(), nil
 		}
