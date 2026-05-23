@@ -201,6 +201,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	if len(blks) == 0 {
 		return errors.New("no blocks provided")
 	}
+	if envelopes == nil {
+		envelopes = make([]interfaces.ROSignedExecutionPayloadEnvelope, 0)
+	}
 
 	if err := consensusblocks.BeaconBlockIsNil(blks[0]); err != nil {
 		return invalidBlock{error: err}
@@ -223,6 +226,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	var br [32]byte
 	sigSet := bls.NewSet()
 	if applied {
+		if len(envelopes) == 0 || envelopes[0] == nil {
+			return errors.New("missing first payload envelope in batch")
+		}
 		eidx = 1
 		envSigSet, err := gloas.ExecutionPayloadEnvelopeSignatureBatch(preState, envelopes[0])
 		if err != nil {
@@ -364,6 +370,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	}
 	// Insert all nodes to forkchoice
 	if applied {
+		if len(envelopes) == 0 || envelopes[0] == nil {
+			return errors.New("missing first payload envelope in batch")
+		}
 		env, err := envelopes[0].Envelope()
 		if err != nil {
 			return err
@@ -1287,6 +1296,10 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		bid, err := headState.LatestExecutionPayloadBid()
 		if err != nil {
 			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve execution payload bid")
+			return
+		}
+		if bid == nil {
+			log.Debug("could not perform late block tasks: execution payload bid is nil")
 			return
 		}
 		bh := bid.ParentBlockHash()

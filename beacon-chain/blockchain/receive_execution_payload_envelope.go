@@ -46,6 +46,9 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		}
 		beaconExecutionPayloadEnvelopeValidTotal.Inc()
 	}()
+	if signed == nil {
+		return errors.New("signed execution payload envelope is nil")
+	}
 
 	envelope, err := signed.Envelope()
 	if err != nil {
@@ -153,6 +156,9 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	}
 	if envelope == nil {
 		return errors.New("execution payload envelope is nil")
+	}
+	if st == nil || st.IsNil() {
+		return errors.New("nil post payload state")
 	}
 	payload, err := envelope.Execution()
 	if err != nil {

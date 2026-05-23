@@ -220,10 +220,14 @@ func (s *Service) markFinalizedRootFull(chain []*forkchoicetypes.BlockAndCheckpo
 	if err != nil {
 		return errors.Wrap(err, "could not get finalized block")
 	}
-	if fBlock.Block().Version() < version.Gloas {
+	if fBlock == nil {
 		return nil
 	}
-	fBid, err := fBlock.Block().Body().SignedExecutionPayloadBid()
+	block := fBlock.Block()
+	if block == nil || block.Version() < version.Gloas {
+		return nil
+	}
+	fBid, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil || fBid == nil || fBid.Message == nil {
 		return nil
 	}
