@@ -782,9 +782,15 @@ func (s *Service) ReconstructFullGloasExecutionPayloadsByHash(
 	if len(bodiesV2) != len(requestHashes) {
 		return nil, errors.Errorf("payload bodies V2 count mismatch: got %d, want %d", len(bodiesV2), len(requestHashes))
 	}
+	if len(execBlocks) != len(requestHashes) {
+		return nil, errors.Errorf("execution blocks count mismatch: got %d, want %d", len(execBlocks), len(requestHashes))
+	}
 
 	for i, h := range requestHashes {
 		blk := execBlocks[i]
+		if blk == nil {
+			return nil, errors.Errorf("execution block at index %d is nil", i)
+		}
 		payload, err := gloasPayloadFromExecutionBlock(h, blk)
 		if err != nil {
 			return nil, err
