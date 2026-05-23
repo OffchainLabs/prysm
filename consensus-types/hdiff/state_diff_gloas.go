@@ -146,13 +146,19 @@ func diffBuilderPendingWithdrawals(diff *stateDiff, source, target state.ReadOnl
 	if err != nil {
 		return errors.Wrap(err, "failed to get target builder pending withdrawals")
 	}
+	if tBpw == nil {
+		tBpw = make([]*ethpb.BuilderPendingWithdrawal, 0)
+	}
 	tlen := len(tBpw)
 	tBpw = append(tBpw, nil)
-	var sBpw []*ethpb.BuilderPendingWithdrawal
+	sBpw := make([]*ethpb.BuilderPendingWithdrawal, 0)
 	if source.Version() >= version.Gloas {
 		sBpw, err = source.BuilderPendingWithdrawals()
 		if err != nil {
 			return errors.Wrap(err, "failed to get source builder pending withdrawals")
+		}
+		if sBpw == nil {
+			sBpw = make([]*ethpb.BuilderPendingWithdrawal, 0)
 		}
 	}
 	tBpw = append(tBpw, sBpw...)
@@ -465,6 +471,9 @@ func applyBuilderPendingWithdrawalsDiff(source state.BeaconState, diff *stateDif
 	sBpw, err := source.BuilderPendingWithdrawals()
 	if err != nil {
 		return errors.Wrap(err, "failed to get builder pending withdrawals")
+	}
+	if sBpw == nil {
+		sBpw = make([]*ethpb.BuilderPendingWithdrawal, 0)
 	}
 	sBpw = sBpw[int(diff.builderPendingWithdrawalsIndex):]
 	for _, d := range diff.builderPendingWithdrawalsDiff {

@@ -1375,6 +1375,12 @@ func diffInternal(source, target state.ReadOnlyBeaconState) (*hdiff, error) {
 
 // diffToState computes the difference between two BeaconStates and returns a stateDiff object.
 func diffToState(source, target state.ReadOnlyBeaconState) (*stateDiff, error) {
+	if source == nil || source.IsNil() {
+		return nil, errors.New("source state is nil")
+	}
+	if target == nil || target.IsNil() {
+		return nil, errors.New("target state is nil")
+	}
 	ret := &stateDiff{}
 	ret.targetVersion = target.Version()
 	ret.slot = target.Slot()
