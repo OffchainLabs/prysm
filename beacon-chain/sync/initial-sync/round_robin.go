@@ -267,7 +267,13 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 			}
 		}
 		if idx, ok := envIdxMap[b.Block.Root()]; ok {
+			if envelopes == nil {
+				continue
+			}
 			e := envelopes[idx]
+			if e == nil {
+				continue
+			}
 			if err := s.cfg.Chain.ReceiveExecutionPayloadEnvelope(ctx, e); err != nil {
 				logDataColumns.WithError(err).Warning("Execution payload envelope processing failure")
 				return uint64(i), err

@@ -253,7 +253,15 @@ func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, 
 	}
 
 	for pid := range badPeers {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(pid)
+		peers := s.cfg.p2p.Peers()
+		if peers == nil {
+			continue
+		}
+		scorers := peers.Scorers()
+		if scorers == nil {
+			continue
+		}
+		scorers.BadResponsesScorer().Increment(pid)
 	}
 
 	if len(verified) > 0 {
@@ -280,7 +288,11 @@ func (s *Service) hasPendingGloasColumns(root [fieldparams.RootLength]byte) bool
 
 // prunePendingGloasColumns removes stale entries every slot.
 func (s *Service) prunePendingGloasColumns() {
-	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+	genesisTime := s.cfg.clock.GenesisTime()
+	if genesisTime.IsZero() {
+		return
+	}
+	slotTicker := slots.NewSlotTicker(genesisTime, params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
 	for {
 		select {

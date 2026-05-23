@@ -254,7 +254,11 @@ func (s *Service) validateUnaggregatedAttTopic(ctx context.Context, a eth.Att, b
 	}
 	subnet := helpers.ComputeSubnetForAttestation(valCount, a)
 	format := p2p.GossipTypeMapping[reflect.TypeFor[*eth.Attestation]()]
-	digest := params.ForkDigest(slots.ToEpoch(a.GetData().Slot))
+	data := a.GetData()
+	if data == nil {
+		return pubsub.ValidationReject, errNilMessage
+	}
+	digest := params.ForkDigest(slots.ToEpoch(data.Slot))
 	if !strings.HasPrefix(t, fmt.Sprintf(format, digest, subnet)) {
 		return pubsub.ValidationReject, errors.New("attestation's subnet does not match with pubsub topic")
 	}

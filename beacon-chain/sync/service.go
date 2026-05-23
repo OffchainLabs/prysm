@@ -405,6 +405,9 @@ func (s *Service) Status() error {
 // HighestExecutionPayloadBidCache exposes sync's cache to the proposer RPC.
 // Sync is the sole writer (gossip); the proposer is a reader.
 func (s *Service) HighestExecutionPayloadBidCache() *cache.HighestExecutionPayloadBidCache {
+	if s == nil {
+		return nil
+	}
 	return s.highestExecutionPayloadBidCache
 }
 

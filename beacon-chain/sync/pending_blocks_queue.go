@@ -497,7 +497,11 @@ func (s *Service) fetchAndQueuePayloadEnvelopesForRoots(
 			log.WithError(err).WithField("root", fmt.Sprintf("%#x", root)).Debug("Could not inspect pending block by root")
 			continue
 		}
-		if !found || blk.Block().Slot() <= gloasStartSlot {
+		if !found || blk == nil {
+			continue
+		}
+		block := blk.Block()
+		if block == nil || block.Slot() <= gloasStartSlot {
 			continue
 		}
 		envelopeRoots = append(envelopeRoots, root)
