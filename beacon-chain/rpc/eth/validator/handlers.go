@@ -1004,6 +1004,10 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		shared.WriteStateFetchError(w, errors.New("nil state"))
+		return
+	}
 
 	dutyEpoch := requestedEpoch
 	if nextEpochLookahead {
@@ -1120,7 +1124,7 @@ func (s *Server) GetProposerDutiesV2(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var dependentRoot []byte
-	if dutiesEpoch == 0 || (dutiesEpoch == 1 && st.Version() >= version.Fulu) {
+	if dutiesEpoch == 0 || (dutiesEpoch == 1 && isFuluState(st)) {
 		root, err := s.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
 			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
@@ -1141,6 +1145,13 @@ func (s *Server) GetProposerDutiesV2(w http.ResponseWriter, r *http.Request) {
 		Data:                duties,
 		ExecutionOptimistic: isOptimistic,
 	})
+}
+
+func isFuluState(st state.BeaconState) bool {
+	if st == nil || st.IsNil() {
+		return false
+	}
+	return st.Version() >= version.Fulu
 }
 
 // GetSyncCommitteeDuties provides a set of sync committee duties for a particular epoch.

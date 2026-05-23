@@ -34,6 +34,9 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 	if local == nil {
 		return errors.New("nil local payload")
 	}
+	if sBlk == nil || sBlk.IsNil() || sBlk.Block() == nil {
+		return errors.New("signed beacon block is nil")
+	}
 
 	blockRoot, err := sBlk.Block().HashTreeRoot()
 	if err != nil {
