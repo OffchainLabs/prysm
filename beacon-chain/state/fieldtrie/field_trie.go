@@ -661,6 +661,10 @@ func (f *FieldTrie) recomputeOverlay(elements any, indices []uint64) ([32]byte, 
 
 // readOverlayNode reads a node from the overlay at (level, idx).
 func (f *FieldTrie) readOverlayNode(level uint64, idx uint64) ([32]byte, error) {
+	if f == nil || f.overridesData == nil || f.base == nil || f.base.nodesData == nil {
+		return [32]byte{}, ErrInvalidFieldTrie
+	}
+
 	// First, check if there is an override for this node.
 	if nodeByIdx := f.overridesData.levels[level]; nodeByIdx != nil {
 		if root, ok := nodeByIdx[idx]; ok {
@@ -821,6 +825,9 @@ func (f *FieldTrie) depth() uint64 {
 
 // levelSize returns the number of nodes at the given level.
 func (f *FieldTrie) levelSize(level uint64) uint64 {
+	if f == nil || f.nodesData == nil || uint64(len(f.nodesData.offsets)) <= level+1 {
+		return 0
+	}
 	return f.nodesData.offsets[level+1] - f.nodesData.offsets[level]
 }
 
