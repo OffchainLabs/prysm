@@ -31,6 +31,9 @@ func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, bl
 	if err != nil {
 		return errors.Wrap(err, "could not get parent execution payload bid")
 	}
+	if parentBid == nil {
+		return errors.New("parent execution payload bid is nil")
+	}
 
 	parentExecutionRequests, err := body.ParentExecutionRequests()
 	if err != nil {
@@ -45,6 +48,9 @@ func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, bl
 			return errors.New("parent was empty but parent_execution_requests is non-empty")
 		}
 		return nil
+	}
+	if parentExecutionRequests == nil {
+		return errors.New("parent execution requests is nil")
 	}
 
 	requestsRoot, err := parentExecutionRequests.HashTreeRoot()
@@ -69,9 +75,18 @@ func ApplyParentExecutionPayload(
 	st state.BeaconState,
 	reqs *enginev1.ExecutionRequests,
 ) error {
+	if st == nil || st.IsNil() {
+		return errors.New("nil state")
+	}
 	parentBid, err := st.LatestExecutionPayloadBid()
 	if err != nil {
 		return errors.Wrap(err, "could not get latest execution payload bid")
+	}
+	if parentBid == nil {
+		return errors.New("latest execution payload bid is nil")
+	}
+	if reqs == nil {
+		return errors.New("parent execution requests is nil")
 	}
 	parentSlot := parentBid.Slot()
 

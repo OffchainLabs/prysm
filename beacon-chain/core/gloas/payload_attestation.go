@@ -186,6 +186,9 @@ func PayloadCommitteeIndex(
 	slot primitives.Slot,
 	validatorIndex primitives.ValidatorIndex,
 ) (uint64, error) {
+	if st == nil || st.IsNil() {
+		return 0, errors.New("nil state")
+	}
 	ptc, err := st.PayloadCommitteeReadOnly(slot)
 	if err != nil {
 		return 0, err
@@ -408,6 +411,9 @@ func validIndexedPayloadAttestation(st state.ReadOnlyBeaconState, att *consensus
 func ProcessPTCWindow(ctx context.Context, st state.BeaconState) error {
 	_, span := trace.StartSpan(ctx, "gloas.ProcessPTCWindow")
 	defer span.End()
+	if st == nil || st.IsNil() {
+		return errors.New("nil state")
+	}
 
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 	lastEpoch := slots.ToEpoch(st.Slot()) + params.BeaconConfig().MinSeedLookahead + 1
