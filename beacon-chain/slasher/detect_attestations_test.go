@@ -57,9 +57,9 @@ func Test_processAttestations(t *testing.T) {
 		}
 	)
 
-	var tests []test
-
 	for _, v := range []int{version.Phase0, version.Electra} {
+		var tests []test
+
 		tests = append(tests, []test{
 			{
 				ver:  v,
@@ -599,25 +599,28 @@ func Test_processAttestations(t *testing.T) {
 			},
 		}...)
 
-		tests = append(tests, test{
-			name: "Different versions, same target with different signing roots - single step",
-			steps: []*step{
-				{
-					currentEpoch: 4,
-					attestationsInfo: []*attestationInfo{
-						{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
-						{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
-					},
-					expectedSlashingsInfo: []*slashingInfo{
-						{
-							ver:               version.Electra,
-							attestationInfo_1: &attestationInfo{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
-							attestationInfo_2: &attestationInfo{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
+		if v == version.Phase0 {
+			tests = append(tests, test{
+				ver:  version.Electra,
+				name: "Different versions, same target with different signing roots - single step",
+				steps: []*step{
+					{
+						currentEpoch: 4,
+						attestationsInfo: []*attestationInfo{
+							{ver: version.Phase0, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+							{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
+						},
+						expectedSlashingsInfo: []*slashingInfo{
+							{
+								ver:               version.Electra,
+								attestationInfo_1: &attestationInfo{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{1}},
+								attestationInfo_2: &attestationInfo{ver: version.Electra, source: 1, target: 2, indices: []uint64{0, 1}, beaconBlockRoot: []byte{2}},
+							},
 						},
 					},
 				},
-			},
-		})
+			})
+		}
 
 		for _, tt := range tests {
 			name := version.String(tt.ver) + ": " + tt.name
