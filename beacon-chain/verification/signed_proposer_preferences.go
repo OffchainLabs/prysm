@@ -43,7 +43,11 @@ type ProposerPreferencesVerifier struct {
 func (v *ProposerPreferencesVerifier) VerifyDependentRootSeen(seen func([32]byte) bool) (err error) {
 	defer v.record(RequireProposerPreferencesDependentRootSeen, &err)
 
-	root := [32]byte(v.message().DependentRoot)
+	msg := v.message()
+	if msg == nil {
+		return ErrProposerPreferencesNilMessage
+	}
+	root := [32]byte(msg.DependentRoot)
 	if seen != nil && seen(root) {
 		return nil
 	}

@@ -494,7 +494,12 @@ func (c *AttCaches) DeleteSeenAggregatedAttestationsBefore(expirySlot primitives
 	// share the same slot. We only need to check the first attestation's slot
 	// to determine whether to delete the entire entry.
 	for id, atts := range c.seenAggregatedAtt {
-		if len(atts) == 0 || atts[0].GetData().Slot < expirySlot {
+		if len(atts) == 0 {
+			delete(c.seenAggregatedAtt, id)
+			continue
+		}
+		data := atts[0].GetData()
+		if data == nil || data.Slot < expirySlot {
 			delete(c.seenAggregatedAtt, id)
 		}
 	}
