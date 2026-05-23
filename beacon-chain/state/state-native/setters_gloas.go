@@ -92,6 +92,9 @@ func (b *BeaconState) SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid)
 	if b.version < version.Gloas {
 		return errNotSupported("SetExecutionPayloadBid", b.version)
 	}
+	if h == nil {
+		return errors.New("execution payload bid is nil")
+	}
 
 	b.lock.Lock()
 	defer b.lock.Unlock()

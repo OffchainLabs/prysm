@@ -209,6 +209,9 @@ func (s *State) recoverStateSummary(ctx context.Context, blockRoot [32]byte) (*e
 		if err != nil {
 			return nil, err
 		}
+		if b == nil {
+			return nil, errors.New("could not find block in DB")
+		}
 		if err := blocks.BeaconBlockIsNil(b); err != nil {
 			return nil, err
 		}
@@ -376,6 +379,9 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 	if err != nil {
 		return nil, err
 	}
+	if b == nil {
+		return nil, errUnknownBlock
+	}
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return nil, err
 	}
@@ -434,6 +440,9 @@ func (s *State) latestAncestor(ctx context.Context, blockRoot [32]byte) (state.B
 		b, err = s.beaconDB.Block(ctx, parentRoot)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to retrieve block from db")
+		}
+		if b == nil {
+			return nil, errUnknownBlock
 		}
 		if err := blocks.BeaconBlockIsNil(b); err != nil {
 			return nil, err
