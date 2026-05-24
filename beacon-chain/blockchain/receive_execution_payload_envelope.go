@@ -153,9 +153,11 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 
-	if s.head != nil {
+	s.headLock.Lock()
+	if s.head != nil && s.head.root == root {
 		s.head.full = true
 	}
+	s.headLock.Unlock()
 
 	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot[:], true)
 	if s.inRegularSync() {
