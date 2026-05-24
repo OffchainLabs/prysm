@@ -78,7 +78,7 @@ func (s *Service) checkIfProposing(st state.ReadOnlyBeaconState, slot primitives
 // execution requests on a state copy before computing withdrawals.
 // If the parent was empty, it returns the existing payload_expected_withdrawals.
 func (s *Service) computePayloadWithdrawals(ctx context.Context, st state.BeaconState, parentRoot [32]byte, headFull bool) ([]*enginev1.Withdrawal, error) {
-	if slots.ToEpoch(s.head.slot) < params.BeaconConfig().GloasForkEpoch {
+	if slots.ToEpoch(s.HeadSlot()) < params.BeaconConfig().GloasForkEpoch {
 		result, err := st.ExpectedWithdrawalsGloas()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute expected withdrawals")
