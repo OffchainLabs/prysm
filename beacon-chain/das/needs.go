@@ -61,9 +61,9 @@ func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr *primitives.Slot, bl
 		fulu:              fulu,
 		blobRetentionFlag: blobRetentionFlag,
 	}
-	// We apply the --blob-retention-epochs flag to both blob and column retention.
-	sn.blobRetention = max(sn.blobRetentionFlag, params.BeaconConfig().MinEpochsForBlobsSidecarsRequest)
-	sn.colRetention = max(sn.blobRetentionFlag, params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest)
+	// HACK(hoodi-repro): use the user-provided flag verbatim, do not clamp up to spec minimum.
+	sn.blobRetention = sn.blobRetentionFlag
+	sn.colRetention = sn.blobRetentionFlag
 
 	// Override spec minimum block retention with user-provided flag only if it is lower than the spec minimum.
 	sn.blockRetention = primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)

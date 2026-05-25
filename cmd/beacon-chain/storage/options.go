@@ -176,11 +176,8 @@ func blobRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 	}
 
 	re := primitives.Epoch(cliCtx.Uint64(das.BlobRetentionEpochFlag.Name))
-	// Validate the epoch value against the spec default.
-	if re < params.BeaconConfig().MinEpochsForBlobsSidecarsRequest {
-		return spec, errors.Wrapf(errInvalidBlobRetentionEpochs, "%s=%d, spec=%d", das.BlobRetentionEpochFlag.Name, re, spec)
-	}
-
+	// HACK(hoodi-repro): spec minimum check disabled to allow tiny blob retention.
+	_ = spec
 	return re, nil
 }
 
@@ -195,12 +192,8 @@ func dataColumnRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 
 	// We use on purpose the same retention flag for both blobs and data columns.
 	customValue := primitives.Epoch(cliCtx.Uint64(das.BlobRetentionEpochFlag.Name))
-
-	// Validate the epoch value against the spec default.
-	if customValue < defaultValue {
-		return defaultValue, errors.Wrapf(errInvalidBlobRetentionEpochs, "%s=%d, spec=%d", das.BlobRetentionEpochFlag.Name, customValue, defaultValue)
-	}
-
+	// HACK(hoodi-repro): spec minimum check disabled to allow tiny column retention.
+	_ = defaultValue
 	return customValue, nil
 }
 

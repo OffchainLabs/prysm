@@ -31,17 +31,10 @@ type custodyUpdater interface {
 type ServiceOption func(*Service)
 
 // WithRetentionPeriod allows the user to specify a different data retention period than the spec default.
-// The retention period is specified in epochs, and must be >= MIN_EPOCHS_FOR_BLOCK_REQUESTS.
+// HACK(hoodi-repro): minimum-retention clamp removed so very small values are honored verbatim.
 func WithRetentionPeriod(retentionEpochs primitives.Epoch) ServiceOption {
 	return func(s *Service) {
-		defaultRetentionEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests) + 1
-		if retentionEpochs < defaultRetentionEpochs {
-			log.WithField("userEpochs", retentionEpochs).
-				WithField("minRequired", defaultRetentionEpochs).
-				Warn("Retention period too low, ignoring and using minimum required value")
-			retentionEpochs = defaultRetentionEpochs
-		}
-
+		log.WithField("userEpochs", retentionEpochs).Warn("HACK: using user-specified pruner retention without clamping")
 		s.ps = pruneStartSlotFunc(retentionEpochs)
 	}
 }
