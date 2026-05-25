@@ -444,26 +444,30 @@ func (s *Server) getValidatorIdentitiesJSON(
 		return
 	}
 
-	vals := st.ValidatorsReadOnly()
 	var identities []*structs.ValidatorIdentity
 	if len(ids) == 0 {
-		identities = make([]*structs.ValidatorIdentity, len(vals))
-		for i, v := range vals {
+		identities = make([]*structs.ValidatorIdentity, 0, st.NumValidators())
+		for i, v := range st.ValidatorsReadOnlySeq() {
 			pubkey := v.PublicKey()
-			identities[i] = &structs.ValidatorIdentity{
+			identities = append(identities, &structs.ValidatorIdentity{
 				Index:           strconv.FormatUint(uint64(i), 10),
 				Pubkey:          hexutil.Encode(pubkey[:]),
 				ActivationEpoch: strconv.FormatUint(uint64(v.ActivationEpoch()), 10),
-			}
+			})
 		}
 	} else {
 		identities = make([]*structs.ValidatorIdentity, len(ids))
 		for i, id := range ids {
-			pubkey := vals[id].PublicKey()
+			v, err := st.ValidatorAtIndexReadOnly(id)
+			if err != nil {
+				httputil.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %s", id, err.Error()), http.StatusInternalServerError)
+				return
+			}
+			pubkey := v.PublicKey()
 			identities[i] = &structs.ValidatorIdentity{
 				Index:           strconv.FormatUint(uint64(id), 10),
 				Pubkey:          hexutil.Encode(pubkey[:]),
-				ActivationEpoch: strconv.FormatUint(uint64(vals[id].ActivationEpoch()), 10),
+				ActivationEpoch: strconv.FormatUint(uint64(v.ActivationEpoch()), 10),
 			}
 		}
 	}
