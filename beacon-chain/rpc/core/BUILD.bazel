@@ -23,7 +23,6 @@ go_library(
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
-        "//beacon-chain/core/validators:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/operations/synccommittee:go_default_library",
