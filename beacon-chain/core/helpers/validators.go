@@ -137,13 +137,10 @@ func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, ep
 	}()
 
 	var indices []primitives.ValidatorIndex
-	if err := s.ReadFromEveryValidator(func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for idx, val := range s.ValidatorsReadOnlySeq() {
 		if IsActiveValidatorUsingTrie(val, epoch) {
 			indices = append(indices, idx)
 		}
-		return nil
-	}); err != nil {
-		return nil, err
 	}
 
 	if len(indices) == 0 {
@@ -190,13 +187,10 @@ func ActiveValidatorCount(ctx context.Context, s state.ReadOnlyBeaconState, epoc
 	}()
 
 	count := uint64(0)
-	if err := s.ReadFromEveryValidator(func(_ primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for _, val := range s.ValidatorsReadOnlySeq() {
 		if IsActiveValidatorUsingTrie(val, epoch) {
 			count++
 		}
-		return nil
-	}); err != nil {
-		return 0, err
 	}
 
 	if err := UpdateCommitteeCache(ctx, s, epoch); err != nil {

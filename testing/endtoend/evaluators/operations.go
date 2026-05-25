@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	corehelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -452,14 +451,10 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 		return errors.Wrap(err, "could not get state")
 	}
 	var execIndices []primitives.ValidatorIndex
-	err = st.ReadFromEveryValidator(func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for idx, val := range st.ValidatorsReadOnlySeq() {
 		if val.GetWithdrawalCredentials()[0] == params.BeaconConfig().ETH1AddressWithdrawalPrefixByte {
 			execIndices = append(execIndices, idx)
 		}
-		return nil
-	})
-	if err != nil {
-		return err
 	}
 	if len(execIndices) > numOfExits {
 		execIndices = execIndices[:numOfExits]

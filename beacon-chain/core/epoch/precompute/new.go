@@ -10,9 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	"github.com/pkg/errors"
 )
 
 // New gets called at the beginning of process epoch cycle to return
@@ -28,7 +26,7 @@ func New(ctx context.Context, s state.BeaconState) ([]*Validator, *Balance, erro
 	currentEpoch := time.CurrentEpoch(s)
 	prevEpoch := time.PrevEpoch(s)
 
-	if err := s.ReadFromEveryValidator(func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for idx, val := range s.ValidatorsReadOnlySeq() {
 		// Was validator withdrawable or slashed
 		withdrawable := prevEpoch+1 >= val.WithdrawableEpoch()
 		pVal := &Validator{
@@ -52,9 +50,6 @@ func New(ctx context.Context, s state.BeaconState) ([]*Validator, *Balance, erro
 		pVal.InclusionDistance = params.BeaconConfig().FarFutureSlot
 
 		pValidators[idx] = pVal
-		return nil
-	}); err != nil {
-		return nil, nil, errors.Wrap(err, "failed to initialize precompute")
 	}
 	return pValidators, pBal, nil
 }

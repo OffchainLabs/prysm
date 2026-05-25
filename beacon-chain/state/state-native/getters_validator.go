@@ -1,6 +1,8 @@
 package state_native
 
 import (
+	"iter"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -214,28 +216,29 @@ func (b *BeaconState) NumValidators() int {
 	return b.validatorsLen()
 }
 
-// ReadFromEveryValidator reads values from every validator and applies it to the provided function.
-//
-// WARNING: This method is potentially unsafe, as it exposes the actual validator registry.
-func (b *BeaconState) ReadFromEveryValidator(f func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error) error {
-	b.lock.RLock()
-	defer b.lock.RUnlock()
+// ValidatorsReadOnlySeq returns an iterator over every (index, read-only validator) pair in
+// the registry. The state's read lock is held for the entire duration of iteration, so callers
+// must not call mutating state methods from inside the loop.
+func (b *BeaconState) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorIndex, state.ReadOnlyValidator] {
+	return func(yield func(primitives.ValidatorIndex, state.ReadOnlyValidator) bool) {
+		b.lock.RLock()
+		defer b.lock.RUnlock()
 
-	if b.validatorsMultiValue == nil {
-		return state.ErrNilValidatorsInState
-	}
-	l := b.validatorsMultiValue.Len(b)
-	for i := range l {
-		v, err := b.validatorsMultiValue.At(b, uint64(i))
-		if err != nil {
-			return err
+		if b.validatorsMultiValue == nil {
+			return
 		}
-		rov := NewValidatorFromCompact(v)
-		if err = f(primitives.ValidatorIndex(i), rov); err != nil {
-			return err
+
+		for i := range b.validatorsMultiValue.Len(b) {
+			v, err := b.validatorsMultiValue.At(b, uint64(i))
+			if err != nil {
+				return
+			}
+
+			if !yield(primitives.ValidatorIndex(i), NewValidatorFromCompact(v)) {
+				return
+			}
 		}
 	}
-	return nil
 }
 
 // Balances of validators participating in consensus on the beacon chain.

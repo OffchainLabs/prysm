@@ -165,23 +165,29 @@ func (s *State) Resume(ctx context.Context, fState state.BeaconState) (state.Bea
 
 func populatePubkeyCache(ctx context.Context, st state.ReadOnlyBeaconState) {
 	epoch := slots.ToEpoch(st.Slot())
+
 	go populatePubkeyCacheOnce.Do(func() {
 		log.Debug("Populating pubkey cache")
 		start := time.Now()
-		if err := st.ReadFromEveryValidator(func(_ primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
-			if ctx.Err() != nil {
-				return ctx.Err()
+
+		for _, val := range st.ValidatorsReadOnlySeq() {
+			if err := ctx.Err(); err != nil {
+				log.WithError(err).Error("Failed to populate pubkey cache")
+				break
 			}
+
 			// Do not cache for non-active validators.
 			if !helpers.IsActiveValidatorUsingTrie(val, epoch) {
-				return nil
+				continue
 			}
+
 			pub := val.PublicKey()
-			_, err := bls.PublicKeyFromBytes(pub[:])
-			return err
-		}); err != nil {
-			log.WithError(err).Error("Failed to populate pubkey cache")
+			if _, err := bls.PublicKeyFromBytes(pub[:]); err != nil {
+				log.WithError(err).Error("Failed to populate pubkey cache")
+				break
+			}
 		}
+
 		log.WithField("duration", time.Since(start)).Debug("Done populating pubkey cache")
 	})
 }

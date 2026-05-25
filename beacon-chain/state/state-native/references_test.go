@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -565,10 +564,9 @@ func TestValidatorReferences_RemainsConsistent_Phase0(t *testing.T) {
 	}))
 
 	// Ensure reference is properly accounted for.
-	assert.NoError(t, a.ReadFromEveryValidator(func(_ primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for _, val := range a.ValidatorsReadOnlySeq() {
 		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey())
-		return nil
-	}))
+	}
 }
 
 func TestValidatorReferences_RemainsConsistent_Altair(t *testing.T) {
@@ -600,10 +598,9 @@ func TestValidatorReferences_RemainsConsistent_Altair(t *testing.T) {
 	}))
 
 	// Ensure reference is properly accounted for.
-	assert.NoError(t, a.ReadFromEveryValidator(func(_ primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for _, val := range a.ValidatorsReadOnlySeq() {
 		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey())
-		return nil
-	}))
+	}
 }
 
 func TestValidatorReferences_RemainsConsistent_Capella(t *testing.T) {
@@ -635,10 +632,9 @@ func TestValidatorReferences_RemainsConsistent_Capella(t *testing.T) {
 	}))
 
 	// Ensure reference is properly accounted for.
-	assert.NoError(t, a.ReadFromEveryValidator(func(_ primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for _, val := range a.ValidatorsReadOnlySeq() {
 		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey())
-		return nil
-	}))
+	}
 }
 
 func TestValidatorReferences_RemainsConsistent_Deneb(t *testing.T) {
@@ -670,10 +666,9 @@ func TestValidatorReferences_RemainsConsistent_Deneb(t *testing.T) {
 	}))
 
 	// Ensure reference is properly accounted for.
-	assert.NoError(t, a.ReadFromEveryValidator(func(_ primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for _, val := range a.ValidatorsReadOnlySeq() {
 		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey())
-		return nil
-	}))
+	}
 }
 
 func TestValidatorReferences_RemainsConsistent_Bellatrix(t *testing.T) {
@@ -705,10 +700,9 @@ func TestValidatorReferences_RemainsConsistent_Bellatrix(t *testing.T) {
 	}))
 
 	// Ensure reference is properly accounted for.
-	assert.NoError(t, a.ReadFromEveryValidator(func(_ primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for _, val := range a.ValidatorsReadOnlySeq() {
 		assert.NotEqual(t, bytesutil.ToBytes48([]byte{'V'}), val.PublicKey())
-		return nil
-	}))
+	}
 }
 
 func TestValidatorReferences_ApplyValidator_BalancesRead(t *testing.T) {

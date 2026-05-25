@@ -76,17 +76,14 @@ func TotalActiveBalance(ctx context.Context, s state.ReadOnlyBeaconState) (uint6
 
 	total := uint64(0)
 	epoch := slots.ToEpoch(s.Slot())
-	if err := s.ReadFromEveryValidator(func(_ primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for _, val := range s.ValidatorsReadOnlySeq() {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return 0, ctx.Err()
 		}
 
 		if IsActiveValidatorUsingTrie(val, epoch) {
 			total += val.EffectiveBalance()
 		}
-		return nil
-	}); err != nil {
-		return 0, err
 	}
 
 	// Spec defines `EffectiveBalanceIncrement` as min to avoid divisions by zero.

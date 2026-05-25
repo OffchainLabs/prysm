@@ -5,7 +5,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
 // ProcessSlashingsPrecompute processes the slashed validators during epoch processing.
@@ -24,18 +23,16 @@ func ProcessSlashingsPrecompute(s state.BeaconState, pBal *Balance) error {
 	minSlashing := min(totalSlashing*params.BeaconConfig().ProportionalSlashingMultiplier, pBal.ActiveCurrentEpoch)
 	epochToWithdraw := currentEpoch + exitLength/2
 
-	var hasSlashing bool
-	// Iterate through validator list in state, stop until a validator satisfies slashing condition of current epoch.
-	err := s.ReadFromEveryValidator(func(_ primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	// Iterate through validator list in state, stop as soon as a validator satisfies the slashing condition of current epoch.
+	hasSlashing := false
+	for _, val := range s.ValidatorsReadOnlySeq() {
 		correctEpoch := epochToWithdraw == val.WithdrawableEpoch()
 		if val.Slashed() && correctEpoch {
 			hasSlashing = true
+			break
 		}
-		return nil
-	})
-	if err != nil {
-		return err
 	}
+
 	// Exit early if there's no meaningful slashing to process.
 	if !hasSlashing {
 		return nil
@@ -43,17 +40,13 @@ func ProcessSlashingsPrecompute(s state.BeaconState, pBal *Balance) error {
 
 	increment := params.BeaconConfig().EffectiveBalanceIncrement
 	bals := s.Balances()
-	validatorFunc := func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for idx, val := range s.ValidatorsReadOnlySeq() {
 		correctEpoch := epochToWithdraw == val.WithdrawableEpoch()
 		if val.Slashed() && correctEpoch {
 			penaltyNumerator := val.EffectiveBalance() / increment * minSlashing
 			penalty := penaltyNumerator / pBal.ActiveCurrentEpoch * increment
 			bals[idx] = helpers.DecreaseBalanceWithVal(bals[idx], penalty)
 		}
-		return nil
-	}
-	if err := s.ReadFromEveryValidator(validatorFunc); err != nil {
-		return err
 	}
 	return s.SetBalances(bals)
 }

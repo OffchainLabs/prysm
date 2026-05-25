@@ -48,7 +48,7 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 	eligibleForEjection := make([]primitives.ValidatorIndex, 0)
 	eligibleForActivation := make([]primitives.ValidatorIndex, 0)
 
-	if err := st.ReadFromEveryValidator(func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for idx, val := range st.ValidatorsReadOnlySeq() {
 		// Collect validators eligible to enter the activation queue.
 		if helpers.IsEligibleForActivationQueue(val, currentEpoch) {
 			eligibleForActivationQ = append(eligibleForActivationQ, idx)
@@ -63,10 +63,6 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 		if helpers.IsEligibleForActivationUsingROVal(st, val) {
 			eligibleForActivation = append(eligibleForActivation, idx)
 		}
-
-		return nil
-	}); err != nil {
-		return fmt.Errorf("failed to read validators: %w", err)
 	}
 
 	// Handle validators eligible to join the activation queue.

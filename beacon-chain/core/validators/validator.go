@@ -38,7 +38,7 @@ func ExitInformation(s state.BeaconState) *ExitInfo {
 	currentEpoch := slots.ToEpoch(s.Slot())
 	totalActiveBalance := uint64(0)
 
-	err := s.ReadFromEveryValidator(func(_ primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
+	for _, val := range s.ValidatorsReadOnlySeq() {
 		e := val.ExitEpoch()
 		if e != farFutureEpoch {
 			if e > exitInfo.HighestExitEpoch {
@@ -53,10 +53,7 @@ func ExitInformation(s state.BeaconState) *ExitInfo {
 		if helpers.IsActiveValidatorUsingTrie(val, currentEpoch) {
 			totalActiveBalance += val.EffectiveBalance()
 		}
-
-		return nil
-	})
-	_ = err
+	}
 
 	// Apply minimum balance as per spec
 	exitInfo.TotalActiveBalance = max(params.BeaconConfig().EffectiveBalanceIncrement, totalActiveBalance)
