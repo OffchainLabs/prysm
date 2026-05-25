@@ -165,7 +165,7 @@ func ProcessSlotsIfNeeded(ctx context.Context, st state.ReadOnlyBeaconState, par
 		return st, nil
 	}
 	if cached := NextSlotState(parentRoot, slot); cached != nil {
-		if cached.Slot() == slot {
+		if cached.Slot() >= slot {
 			return cached, nil
 		}
 		return ProcessSlots(ctx, cached, slot)
