@@ -19,6 +19,7 @@ go_library(
         "merge_ascii_art.go",
         "metrics.go",
         "options.go",
+        "payload_arrivals.go",
         "pow_block.go",
         "process_attestation.go",
         "process_attestation_helpers.go",

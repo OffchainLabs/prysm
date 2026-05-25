@@ -33,6 +33,7 @@ const (
 	// Execution payload envelope specific.
 	RequireBuilderValid
 	RequirePayloadHashValid
+	RequireExecutionRequestsRootValid
 	RequireEnvelopeSlotAboveFinalized
 	RequireEnvelopeSlotMatchesBlock
 	RequireBuilderSignatureValid
@@ -42,7 +43,7 @@ const (
 	RequireBidBuilderActive
 	RequireBidExecutionPaymentZero
 	RequireBidFeeRecipientMatches
-	RequireBidGasLimitMatches
+	RequireBidGasLimitCompatible
 	RequireBidParentBlockRootSeen
 	RequireBidParentBlockHashValid
 	RequireBidBuilderCanCover
@@ -50,6 +51,7 @@ const (
 
 	// Signed proposer preferences specific.
 	RequireProposerPreferencesCurrentOrNextEpoch
+	RequireProposerPreferencesDependentRootSeen
 	RequireProposerPreferencesProposalSlotValid
 	RequireProposerPreferencesSignatureValid
 )

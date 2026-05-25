@@ -7,57 +7,89 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
+var (
+	rootA = [32]byte{0xaa}
+	rootB = [32]byte{0xbb}
+
+	feeA = primitives.ExecutionAddress{0x01}
+	feeB = primitives.ExecutionAddress{0x02}
+	feeC = primitives.ExecutionAddress{0x03}
+)
+
 func TestProposerPreferencesCache_AddGetHas(t *testing.T) {
 	c := NewProposerPreferencesCache()
 	slot := primitives.Slot(123)
-	feeRecipient := []byte{1, 2, 3, 4}
+	pref := ProposerPreference{
+		DependentRoot:  rootA,
+		ValidatorIndex: 7,
+		FeeRecipient:   primitives.ExecutionAddress{1, 2, 3, 4},
+		TargetGasLimit: 42,
+	}
 
-	require.Equal(t, false, c.Has(slot))
-	added := c.Add(slot, feeRecipient, 42)
-	require.Equal(t, true, added)
-	require.Equal(t, true, c.Has(slot))
+	require.Equal(t, false, c.Has(rootA, slot))
+	require.Equal(t, true, c.Add(pref, slot))
+	require.Equal(t, true, c.Has(rootA, slot))
 
-	pref, ok := c.Get(slot)
+	got, ok := c.Get(rootA, slot)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, feeRecipient, pref.FeeRecipient)
-	require.Equal(t, uint64(42), pref.GasLimit)
+	require.Equal(t, pref.ValidatorIndex, got.ValidatorIndex)
+	require.Equal(t, pref.FeeRecipient, got.FeeRecipient)
+	require.Equal(t, pref.TargetGasLimit, got.TargetGasLimit)
 }
 
-func TestProposerPreferencesCache_AddDuplicateSlot(t *testing.T) {
+func TestProposerPreferencesCache_AddDuplicate(t *testing.T) {
 	c := NewProposerPreferencesCache()
 	slot := primitives.Slot(456)
 
-	require.Equal(t, true, c.Add(slot, []byte{1}, 10))
-	require.Equal(t, false, c.Add(slot, []byte{2}, 20))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: feeA, TargetGasLimit: 10}, slot))
+	require.Equal(t, false, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: feeB, TargetGasLimit: 20}, slot))
 
-	pref, ok := c.Get(slot)
+	pref, ok := c.Get(rootA, slot)
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, []byte{1}, pref.FeeRecipient)
-	require.Equal(t, uint64(10), pref.GasLimit)
+	require.Equal(t, feeA, pref.FeeRecipient)
+	require.Equal(t, uint64(10), pref.TargetGasLimit)
+}
+
+func TestProposerPreferencesCache_DifferentBranchesSameSlot(t *testing.T) {
+	c := NewProposerPreferencesCache()
+	slot := primitives.Slot(456)
+
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: feeA, TargetGasLimit: 10}, slot))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootB, ValidatorIndex: 5, FeeRecipient: feeB, TargetGasLimit: 20}, slot))
+
+	prefA, ok := c.Get(rootA, slot)
+	require.Equal(t, true, ok)
+	require.Equal(t, primitives.ValidatorIndex(3), prefA.ValidatorIndex)
+	require.Equal(t, feeA, prefA.FeeRecipient)
+
+	prefB, ok := c.Get(rootB, slot)
+	require.Equal(t, true, ok)
+	require.Equal(t, primitives.ValidatorIndex(5), prefB.ValidatorIndex)
+	require.Equal(t, feeB, prefB.FeeRecipient)
 }
 
 func TestProposerPreferencesCache_Clear(t *testing.T) {
 	c := NewProposerPreferencesCache()
 	slot := primitives.Slot(789)
 
-	require.Equal(t, true, c.Add(slot, []byte{1}, 10))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 1, FeeRecipient: feeA, TargetGasLimit: 10}, slot))
 	c.Clear()
 
-	require.Equal(t, false, c.Has(slot))
-	_, ok := c.Get(slot)
+	require.Equal(t, false, c.Has(rootA, slot))
+	_, ok := c.Get(rootA, slot)
 	require.Equal(t, false, ok)
 }
 
 func TestProposerPreferencesCache_PruneBefore(t *testing.T) {
 	c := NewProposerPreferencesCache()
 
-	require.Equal(t, true, c.Add(10, []byte{1}, 10))
-	require.Equal(t, true, c.Add(11, []byte{2}, 11))
-	require.Equal(t, true, c.Add(12, []byte{3}, 12))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 1, FeeRecipient: feeA, TargetGasLimit: 10}, 10))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 2, FeeRecipient: feeB, TargetGasLimit: 11}, 11))
+	require.Equal(t, true, c.Add(ProposerPreference{DependentRoot: rootA, ValidatorIndex: 3, FeeRecipient: feeC, TargetGasLimit: 12}, 12))
 
 	c.PruneBefore(11)
 
-	require.Equal(t, false, c.Has(10))
-	require.Equal(t, true, c.Has(11))
-	require.Equal(t, true, c.Has(12))
+	require.Equal(t, false, c.Has(rootA, 10))
+	require.Equal(t, true, c.Has(rootA, 11))
+	require.Equal(t, true, c.Has(rootA, 12))
 }

@@ -304,20 +304,15 @@ func withdrawalsEqual(a, b []*enginev1.Withdrawal) bool {
 	return true
 }
 
-// IsParentBlockFull returns true if the last committed payload bid was fulfilled with a payload,
+// LatestBlockHashMatchesBidBlockHash returns true if the last committed payload bid was fulfilled with a payload,
 // which can only happen when both beacon block and payload were present.
 //
 // WARNING: This must be called on a beacon state before processing the bid for the current block
 // (process_execution_payload_bid), otherwise it will compare against the in-flight bid and produce
 // incorrect results.
-//
-//	<spec fn="is_parent_block_full" fork="gloas" hash="b59640c9">
-//	def is_parent_block_full(state: BeaconState) -> bool:
-//	    return state.latest_execution_payload_bid.block_hash == state.latest_block_hash
-//	</spec>
-func (b *BeaconState) IsParentBlockFull() (bool, error) {
+func (b *BeaconState) LatestBlockHashMatchesBidBlockHash() (bool, error) {
 	if b.version < version.Gloas {
-		return false, errNotSupported("IsParentBlockFull", b.version)
+		return false, errNotSupported("LatestBlockHashMatchesBidBlockHash", b.version)
 	}
 
 	b.lock.RLock()
@@ -372,15 +367,8 @@ func (b *BeaconState) BuilderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]b
 }
 
 func (b *BeaconState) builderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]byte) (primitives.BuilderIndex, bool) {
-	for i, builder := range b.builders {
-		if builder == nil {
-			continue
-		}
-		if bytes.Equal(builder.Pubkey, pubkey[:]) {
-			return primitives.BuilderIndex(i), true
-		}
-	}
-	return 0, false
+	idx, ok := b.builderIdxMap[pubkey]
+	return idx, ok
 }
 
 // ExpectedWithdrawalsGloas returns the withdrawals that a proposer will need to pack in the next block
@@ -669,14 +657,14 @@ func (b *BeaconState) PayloadExpectedWithdrawals() ([]*enginev1.Withdrawal, erro
 // fresh withdrawals are computed via ExpectedWithdrawalsGloas; otherwise
 // the existing payload_expected_withdrawals from state are reused unchanged.
 // This method does not acquire a lock directly; it delegates to
-// IsParentBlockFull, ExpectedWithdrawalsGloas, and PayloadExpectedWithdrawals
+// LatestBlockHashMatchesBidBlockHash, ExpectedWithdrawalsGloas, and PayloadExpectedWithdrawals
 // which each acquire their own read lock.
 func (b *BeaconState) WithdrawalsForPayload() ([]*enginev1.Withdrawal, error) {
 	if b.version < version.Gloas {
 		return nil, errNotSupported("WithdrawalsForPayload", b.version)
 	}
 
-	full, err := b.IsParentBlockFull()
+	full, err := b.LatestBlockHashMatchesBidBlockHash()
 	if err != nil {
 		return nil, err
 	}

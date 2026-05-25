@@ -1,0 +1,56 @@
+name: Check Generated Go Files
+
+on:
+  pull_request:
+    paths:
+      - 'proto/**/*.proto'
+      - 'proto/**/*.pb.go'
+      - 'proto/**/*.ssz.go'
+      - 'proto/**/BUILD'
+      - 'proto/**/BUILD.bazel'
+      - 'hack/update-go-pbs.sh'
+      - 'hack/update-go-ssz.sh'
+      - 'hack/common.sh'
+      - '.github/workflows/check-generated-go.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check-generated-go:
+    runs-on: ubuntu-4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go 1.25.1
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.1'
+
+      - name: Install Bazelisk and goimports
+        run: |
+          go install github.com/bazelbuild/bazelisk@v1.26.0
+          go install golang.org/x/tools/cmd/goimports@v0.40.0
+          mkdir -p "$HOME/bin"
+          ln -sf "$(go env GOPATH)/bin/bazelisk" "$HOME/bin/bazel"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Regenerate protobuf and SSZ Go files
+        run: |
+          ./hack/update-go-pbs.sh
+          ./hack/update-go-ssz.sh
+
+      - name: Check for generated file updates
+        run: |
+          if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            echo "Generated Go files are out-of-date."
+            echo "Run the following commands and commit the results:"
+            echo "  ./hack/update-go-pbs.sh"
+            echo "  ./hack/update-go-ssz.sh"
+            echo ""
+            git status --short --untracked-files=all
+            echo ""
+            git --no-pager diff --name-only
+            exit 1
+          fi

@@ -145,17 +145,18 @@ func copySignedExecutionPayloadBid(header *SignedExecutionPayloadBid) *SignedExe
 	}
 	if header.Message != nil {
 		copied.Message = &ExecutionPayloadBid{
-			ParentBlockHash:    bytesutil.SafeCopyBytes(header.Message.ParentBlockHash),
-			ParentBlockRoot:    bytesutil.SafeCopyBytes(header.Message.ParentBlockRoot),
-			BlockHash:          bytesutil.SafeCopyBytes(header.Message.BlockHash),
-			PrevRandao:         bytesutil.SafeCopyBytes(header.Message.PrevRandao),
-			FeeRecipient:       bytesutil.SafeCopyBytes(header.Message.FeeRecipient),
-			GasLimit:           header.Message.GasLimit,
-			BuilderIndex:       header.Message.BuilderIndex,
-			Slot:               header.Message.Slot,
-			Value:              header.Message.Value,
-			ExecutionPayment:   header.Message.ExecutionPayment,
-			BlobKzgCommitments: bytesutil.SafeCopy2dBytes(header.Message.BlobKzgCommitments),
+			ParentBlockHash:       bytesutil.SafeCopyBytes(header.Message.ParentBlockHash),
+			ParentBlockRoot:       bytesutil.SafeCopyBytes(header.Message.ParentBlockRoot),
+			BlockHash:             bytesutil.SafeCopyBytes(header.Message.BlockHash),
+			PrevRandao:            bytesutil.SafeCopyBytes(header.Message.PrevRandao),
+			FeeRecipient:          bytesutil.SafeCopyBytes(header.Message.FeeRecipient),
+			GasLimit:              header.Message.GasLimit,
+			BuilderIndex:          header.Message.BuilderIndex,
+			Slot:                  header.Message.Slot,
+			Value:                 header.Message.Value,
+			ExecutionPayment:      header.Message.ExecutionPayment,
+			BlobKzgCommitments:    bytesutil.SafeCopy2dBytes(header.Message.BlobKzgCommitments),
+			ExecutionRequestsRoot: bytesutil.SafeCopyBytes(header.Message.ExecutionRequestsRoot),
 		}
 	}
 	return copied
@@ -189,6 +190,7 @@ func copyBeaconBlockBodyGloas(body *BeaconBlockBodyGloas) *BeaconBlockBodyGloas 
 
 	copied.SignedExecutionPayloadBid = copySignedExecutionPayloadBid(body.SignedExecutionPayloadBid)
 	copied.PayloadAttestations = copyPayloadAttestations(body.PayloadAttestations)
+	copied.ParentExecutionRequests = CopyExecutionRequests(body.ParentExecutionRequests)
 
 	return copied
 }
@@ -210,12 +212,11 @@ func copyExecutionPayloadEnvelope(env *ExecutionPayloadEnvelope) *ExecutionPaylo
 		return nil
 	}
 	return &ExecutionPayloadEnvelope{
-		Payload:           env.Payload, // engine proto, not deep copied here
-		ExecutionRequests: env.ExecutionRequests,
-		BuilderIndex:      env.BuilderIndex,
-		BeaconBlockRoot:   bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
-		Slot:              env.Slot,
-		StateRoot:         bytesutil.SafeCopyBytes(env.StateRoot),
+		Payload:               env.Payload, // engine proto, not deep copied here
+		ExecutionRequests:     env.ExecutionRequests,
+		BuilderIndex:          env.BuilderIndex,
+		BeaconBlockRoot:       bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
+		ParentBeaconBlockRoot: bytesutil.SafeCopyBytes(env.ParentBeaconBlockRoot),
 	}
 }
 
@@ -236,13 +237,13 @@ func copyBlindedExecutionPayloadEnvelope(env *BlindedExecutionPayloadEnvelope) *
 		return nil
 	}
 	return &BlindedExecutionPayloadEnvelope{
-		BlockHash:         bytesutil.SafeCopyBytes(env.BlockHash),
-		ExecutionRequests: env.ExecutionRequests,
-		BuilderIndex:      env.BuilderIndex,
-		BeaconBlockRoot:   bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
-		Slot:              env.Slot,
-		StateRoot:         bytesutil.SafeCopyBytes(env.StateRoot),
-		ParentBlockHash:   bytesutil.SafeCopyBytes(env.ParentBlockHash),
+		BlockHash:             bytesutil.SafeCopyBytes(env.BlockHash),
+		ExecutionRequests:     env.ExecutionRequests,
+		BuilderIndex:          env.BuilderIndex,
+		BeaconBlockRoot:       bytesutil.SafeCopyBytes(env.BeaconBlockRoot),
+		Slot:                  env.Slot,
+		ParentBlockHash:       bytesutil.SafeCopyBytes(env.ParentBlockHash),
+		ParentBeaconBlockRoot: bytesutil.SafeCopyBytes(env.ParentBeaconBlockRoot),
 	}
 }
 

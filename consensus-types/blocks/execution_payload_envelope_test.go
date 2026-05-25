@@ -15,7 +15,7 @@ import (
 )
 
 func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
-	payload := &enginev1.ExecutionPayloadDeneb{
+	payload := &enginev1.ExecutionPayloadGloas{
 		ParentHash:    bytes.Repeat([]byte{0x01}, 32),
 		FeeRecipient:  bytes.Repeat([]byte{0x02}, 20),
 		StateRoot:     bytes.Repeat([]byte{0x03}, 32),
@@ -32,6 +32,7 @@ func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 		Withdrawals:   []*enginev1.Withdrawal{},
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
+		SlotNumber:    9,
 	}
 
 	return &ethpb.ExecutionPayloadEnvelope{
@@ -45,10 +46,9 @@ func validExecutionPayloadEnvelope() *ethpb.ExecutionPayloadEnvelope {
 				},
 			},
 		},
-		BuilderIndex:    10,
-		BeaconBlockRoot: bytes.Repeat([]byte{0xAA}, 32),
-		Slot:            9,
-		StateRoot:       bytes.Repeat([]byte{0xBB}, 32),
+		BuilderIndex:          10,
+		BeaconBlockRoot:       bytes.Repeat([]byte{0xAA}, 32),
+		ParentBeaconBlockRoot: bytes.Repeat([]byte{0xCC}, 32),
 	}
 }
 
@@ -75,7 +75,6 @@ func TestWrappedROExecutionPayloadEnvelope(t *testing.T) {
 		require.Equal(t, primitives.BuilderIndex(10), wrapped.BuilderIndex())
 		require.Equal(t, primitives.Slot(9), wrapped.Slot())
 		assert.DeepEqual(t, [32]byte(bytes.Repeat([]byte{0xAA}, 32)), wrapped.BeaconBlockRoot())
-		assert.DeepEqual(t, [32]byte(bytes.Repeat([]byte{0xBB}, 32)), wrapped.StateRoot())
 
 		reqs := wrapped.ExecutionRequests()
 		require.NotNil(t, reqs)
@@ -104,6 +103,14 @@ func TestWrappedROSignedExecutionPayloadEnvelope(t *testing.T) {
 
 	t.Run("returns error on nil envelope", func(t *testing.T) {
 		_, err := blocks.WrappedROSignedExecutionPayloadEnvelope(nil)
+		require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
+	})
+
+	t.Run("returns error on nil message", func(t *testing.T) {
+		signed := &ethpb.SignedExecutionPayloadEnvelope{
+			Signature: bytes.Repeat([]byte{0xAA}, 96),
+		}
+		_, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signed)
 		require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
 	})
 

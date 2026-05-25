@@ -1,9 +1,6 @@
 package state_native
 
 import (
-	"bytes"
-	"fmt"
-
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -34,57 +31,15 @@ func (b *BeaconState) PendingDeposits() ([]*ethpb.PendingDeposit, error) {
 	return b.pendingDepositsVal(), nil
 }
 
-// IsPendingValidator checks whether a pending deposit with a valid signature exists for the
-// given pubkey. This method requires access to the RLock on the state and only applies in
-// electra or later.
-//
-// <spec fn="is_pending_validator" fork="gloas" hash="f3f06b56">
-// def is_pending_validator(state: BeaconState, pubkey: BLSPubkey) -> bool:
-//
-//	"""
-//	Check if a pending deposit with a valid signature is in the queue for the given pubkey.
-//	"""
-//	for pending_deposit in state.pending_deposits:
-//	    if pending_deposit.pubkey != pubkey:
-//	        continue
-//	    if is_valid_deposit_signature(
-//	        pending_deposit.pubkey,
-//	        pending_deposit.withdrawal_credentials,
-//	        pending_deposit.amount,
-//	        pending_deposit.signature,
-//	    ):
-//	        return True
-//	return False
-//
-// </spec>
+// IsPendingValidator checks the state's pending_deposits queue under RLock; the underlying
+// slice is not copied.
 func (b *BeaconState) IsPendingValidator(pubkey []byte) (bool, error) {
 	if b.version < version.Electra {
 		return false, errNotSupported("IsPendingValidator", b.version)
 	}
 	b.lock.RLock()
 	defer b.lock.RUnlock()
-	for _, deposit := range b.pendingDeposits {
-		if deposit == nil {
-			continue
-		}
-		if !bytes.Equal(deposit.PublicKey, pubkey) {
-			continue
-		}
-		valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
-			PublicKey:             deposit.PublicKey,
-			WithdrawalCredentials: deposit.WithdrawalCredentials,
-			Amount:                deposit.Amount,
-			Signature:             deposit.Signature,
-		})
-		if err != nil {
-			log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Warn("Could not verify pending deposit signature")
-			continue
-		}
-		if valid {
-			return true, nil
-		}
-	}
-	return false, nil
+	return helpers.IsPendingValidator(b.pendingDeposits, pubkey)
 }
 
 func (b *BeaconState) pendingDepositsVal() []*ethpb.PendingDeposit {

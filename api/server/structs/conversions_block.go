@@ -2927,6 +2927,7 @@ func BeaconBlockGloasFromConsensus(b *eth.BeaconBlockGloas) (*BeaconBlockGloas, 
 			BLSToExecutionChanges:     SignedBLSChangesFromConsensus(b.Body.BlsToExecutionChanges),
 			SignedExecutionPayloadBid: SignedExecutionPayloadBidFromConsensus(b.Body.SignedExecutionPayloadBid),
 			PayloadAttestations:       payloadAttestations,
+			ParentExecutionRequests:   ExecutionRequestsFromConsensus(b.Body.ParentExecutionRequests),
 		},
 	}, nil
 }
@@ -2944,17 +2945,18 @@ func ExecutionPayloadBidFromConsensus(b *eth.ExecutionPayloadBid) *ExecutionPayl
 		blobKzgCommitments[i] = hexutil.Encode(b.BlobKzgCommitments[i])
 	}
 	return &ExecutionPayloadBid{
-		ParentBlockHash:    hexutil.Encode(b.ParentBlockHash),
-		ParentBlockRoot:    hexutil.Encode(b.ParentBlockRoot),
-		BlockHash:          hexutil.Encode(b.BlockHash),
-		PrevRandao:         hexutil.Encode(b.PrevRandao),
-		FeeRecipient:       hexutil.Encode(b.FeeRecipient),
-		GasLimit:           fmt.Sprintf("%d", b.GasLimit),
-		BuilderIndex:       fmt.Sprintf("%d", b.BuilderIndex),
-		Slot:               fmt.Sprintf("%d", b.Slot),
-		Value:              fmt.Sprintf("%d", b.Value),
-		ExecutionPayment:   fmt.Sprintf("%d", b.ExecutionPayment),
-		BlobKzgCommitments: blobKzgCommitments,
+		ParentBlockHash:       hexutil.Encode(b.ParentBlockHash),
+		ParentBlockRoot:       hexutil.Encode(b.ParentBlockRoot),
+		BlockHash:             hexutil.Encode(b.BlockHash),
+		PrevRandao:            hexutil.Encode(b.PrevRandao),
+		FeeRecipient:          hexutil.Encode(b.FeeRecipient),
+		GasLimit:              fmt.Sprintf("%d", b.GasLimit),
+		BuilderIndex:          fmt.Sprintf("%d", b.BuilderIndex),
+		Slot:                  fmt.Sprintf("%d", b.Slot),
+		Value:                 fmt.Sprintf("%d", b.Value),
+		ExecutionPayment:      fmt.Sprintf("%d", b.ExecutionPayment),
+		BlobKzgCommitments:    blobKzgCommitments,
+		ExecutionRequestsRoot: hexutil.Encode(b.ExecutionRequestsRoot),
 	}
 }
 
@@ -3126,6 +3128,13 @@ func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) 
 	if err != nil {
 		return nil, server.NewDecodeError(err, "PayloadAttestations")
 	}
+	var parentExecutionRequests *enginev1.ExecutionRequests
+	if b.ParentExecutionRequests != nil {
+		parentExecutionRequests, err = b.ParentExecutionRequests.ToConsensus()
+		if err != nil {
+			return nil, server.NewDecodeError(err, "ParentExecutionRequests")
+		}
+	}
 
 	return &eth.BeaconBlockBodyGloas{
 		RandaoReveal: randaoReveal,
@@ -3147,6 +3156,7 @@ func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) 
 		BlsToExecutionChanges:     blsChanges,
 		SignedExecutionPayloadBid: signedBid,
 		PayloadAttestations:       payloadAttestations,
+		ParentExecutionRequests:   parentExecutionRequests,
 	}, nil
 }
 
@@ -3232,18 +3242,23 @@ func (b *ExecutionPayloadBid) ToConsensus() (*eth.ExecutionPayloadBid, error) {
 		}
 		blobKzgCommitments[i] = kzg
 	}
+	executionRequestsRoot, err := bytesutil.DecodeHexWithLength(b.ExecutionRequestsRoot, fieldparams.RootLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ExecutionRequestsRoot")
+	}
 	return &eth.ExecutionPayloadBid{
-		ParentBlockHash:    parentBlockHash,
-		ParentBlockRoot:    parentBlockRoot,
-		BlockHash:          blockHash,
-		PrevRandao:         prevRandao,
-		FeeRecipient:       feeRecipient,
-		GasLimit:           gasLimit,
-		BuilderIndex:       primitives.BuilderIndex(builderIndex),
-		Slot:               primitives.Slot(slot),
-		Value:              primitives.Gwei(value),
-		ExecutionPayment:   primitives.Gwei(executionPayment),
-		BlobKzgCommitments: blobKzgCommitments,
+		ParentBlockHash:       parentBlockHash,
+		ParentBlockRoot:       parentBlockRoot,
+		BlockHash:             blockHash,
+		PrevRandao:            prevRandao,
+		FeeRecipient:          feeRecipient,
+		GasLimit:              gasLimit,
+		BuilderIndex:          primitives.BuilderIndex(builderIndex),
+		Slot:                  primitives.Slot(slot),
+		Value:                 primitives.Gwei(value),
+		ExecutionPayment:      primitives.Gwei(executionPayment),
+		BlobKzgCommitments:    blobKzgCommitments,
+		ExecutionRequestsRoot: executionRequestsRoot,
 	}, nil
 }
 
@@ -3305,9 +3320,32 @@ func (d *PayloadAttestationData) ToConsensus() (*eth.PayloadAttestationData, err
 	}, nil
 }
 
+func (p *PayloadAttestationMessage) ToConsensus() (*eth.PayloadAttestationMessage, error) {
+	if p == nil {
+		return nil, errNilValue
+	}
+	validatorIndex, err := strconv.ParseUint(p.ValidatorIndex, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ValidatorIndex")
+	}
+	data, err := p.Data.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Data")
+	}
+	sig, err := bytesutil.DecodeHexWithLength(p.Signature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Signature")
+	}
+	return &eth.PayloadAttestationMessage{
+		ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
+		Data:           data,
+		Signature:      sig,
+	}, nil
+}
+
 // ExecutionPayloadEnvelopeFromConsensus converts a proto envelope to the API struct.
 func ExecutionPayloadEnvelopeFromConsensus(e *eth.ExecutionPayloadEnvelope) (*ExecutionPayloadEnvelope, error) {
-	payload, err := ExecutionPayloadDenebFromConsensus(e.Payload)
+	payload, err := ExecutionPayloadGloasFromConsensus(e.Payload)
 	if err != nil {
 		return nil, err
 	}
@@ -3316,12 +3354,11 @@ func ExecutionPayloadEnvelopeFromConsensus(e *eth.ExecutionPayloadEnvelope) (*Ex
 		requests = ExecutionRequestsFromConsensus(e.ExecutionRequests)
 	}
 	return &ExecutionPayloadEnvelope{
-		Payload:           payload,
-		ExecutionRequests: requests,
-		BuilderIndex:      fmt.Sprintf("%d", e.BuilderIndex),
-		BeaconBlockRoot:   hexutil.Encode(e.BeaconBlockRoot),
-		Slot:              fmt.Sprintf("%d", e.Slot),
-		StateRoot:         hexutil.Encode(e.StateRoot),
+		Payload:               payload,
+		ExecutionRequests:     requests,
+		BuilderIndex:          fmt.Sprintf("%d", e.BuilderIndex),
+		BeaconBlockRoot:       hexutil.Encode(e.BeaconBlockRoot),
+		ParentBeaconBlockRoot: hexutil.Encode(e.ParentBeaconBlockRoot),
 	}, nil
 }
 
@@ -3337,8 +3374,9 @@ func SignedExecutionPayloadEnvelopeFromConsensus(e *eth.SignedExecutionPayloadEn
 	}, nil
 }
 
-// BlockContentsGloasFromConsensus converts a proto Gloas block and envelope to the API struct.
-func BlockContentsGloasFromConsensus(block *eth.BeaconBlockGloas, envelope *eth.ExecutionPayloadEnvelope) (*BlockContentsGloas, error) {
+// BlockContentsGloasFromConsensus converts a proto Gloas block, envelope, and
+// blob data to the API struct.
+func BlockContentsGloasFromConsensus(block *eth.BeaconBlockGloas, envelope *eth.ExecutionPayloadEnvelope, kzgProofs [][]byte, blobs [][]byte) (*BlockContentsGloas, error) {
 	b, err := BeaconBlockGloasFromConsensus(block)
 	if err != nil {
 		return nil, err
@@ -3347,11 +3385,19 @@ func BlockContentsGloasFromConsensus(block *eth.BeaconBlockGloas, envelope *eth.
 	if err != nil {
 		return nil, err
 	}
+	encodedProofs := make([]string, len(kzgProofs))
+	for i, p := range kzgProofs {
+		encodedProofs[i] = hexutil.Encode(p)
+	}
+	encodedBlobs := make([]string, len(blobs))
+	for i, b := range blobs {
+		encodedBlobs[i] = hexutil.Encode(b)
+	}
 	return &BlockContentsGloas{
 		Block:                    b,
 		ExecutionPayloadEnvelope: env,
-		KzgProofs:                []string{}, // TODO: populate from blobs bundle
-		Blobs:                    []string{}, // TODO: populate from blobs bundle
+		KzgProofs:                encodedProofs,
+		Blobs:                    encodedBlobs,
 	}, nil
 }
 
@@ -3379,21 +3425,16 @@ func (e *ExecutionPayloadEnvelope) ToConsensus() (*eth.ExecutionPayloadEnvelope,
 	if err != nil {
 		return nil, server.NewDecodeError(err, "BeaconBlockRoot")
 	}
-	slot, err := strconv.ParseUint(e.Slot, 10, 64)
+	parentBeaconBlockRoot, err := bytesutil.DecodeHexWithLength(e.ParentBeaconBlockRoot, fieldparams.RootLength)
 	if err != nil {
-		return nil, server.NewDecodeError(err, "Slot")
-	}
-	stateRoot, err := bytesutil.DecodeHexWithLength(e.StateRoot, fieldparams.RootLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "StateRoot")
+		return nil, server.NewDecodeError(err, "ParentBeaconBlockRoot")
 	}
 	return &eth.ExecutionPayloadEnvelope{
-		Payload:           payload,
-		ExecutionRequests: requests,
-		BuilderIndex:      primitives.BuilderIndex(builderIndex),
-		BeaconBlockRoot:   beaconBlockRoot,
-		Slot:              primitives.Slot(slot),
-		StateRoot:         stateRoot,
+		Payload:               payload,
+		ExecutionRequests:     requests,
+		BuilderIndex:          primitives.BuilderIndex(builderIndex),
+		BeaconBlockRoot:       beaconBlockRoot,
+		ParentBeaconBlockRoot: parentBeaconBlockRoot,
 	}, nil
 }
 
@@ -3414,4 +3455,55 @@ func (e *SignedExecutionPayloadEnvelope) ToConsensus() (*eth.SignedExecutionPayl
 		Message:   msg,
 		Signature: sig,
 	}, nil
+}
+
+// SignedExecutionPayloadEnvelopeContentsFromConsensus builds the API struct
+// used for stateless envelope publishing from native components.
+func SignedExecutionPayloadEnvelopeContentsFromConsensus(signed *eth.SignedExecutionPayloadEnvelope, kzgProofs [][]byte, blobs [][]byte) (*SignedExecutionPayloadEnvelopeContents, error) {
+	signedJSON, err := SignedExecutionPayloadEnvelopeFromConsensus(signed)
+	if err != nil {
+		return nil, err
+	}
+	encodedProofs := make([]string, len(kzgProofs))
+	for i, p := range kzgProofs {
+		encodedProofs[i] = hexutil.Encode(p)
+	}
+	encodedBlobs := make([]string, len(blobs))
+	for i, b := range blobs {
+		encodedBlobs[i] = hexutil.Encode(b)
+	}
+	return &SignedExecutionPayloadEnvelopeContents{
+		SignedExecutionPayloadEnvelope: signedJSON,
+		KzgProofs:                      encodedProofs,
+		Blobs:                          encodedBlobs,
+	}, nil
+}
+
+// ToConsensus decodes the API struct into the signed envelope plus raw blob and
+// KZG proof bytes used by the stateless publish path.
+func (c *SignedExecutionPayloadEnvelopeContents) ToConsensus() (*eth.SignedExecutionPayloadEnvelope, [][]byte, [][]byte, error) {
+	if c == nil {
+		return nil, nil, nil, server.NewDecodeError(errNilValue, "SignedExecutionPayloadEnvelopeContents")
+	}
+	signed, err := c.SignedExecutionPayloadEnvelope.ToConsensus()
+	if err != nil {
+		return nil, nil, nil, server.NewDecodeError(err, "SignedExecutionPayloadEnvelope")
+	}
+	proofs := make([][]byte, len(c.KzgProofs))
+	for i, p := range c.KzgProofs {
+		proof, err := bytesutil.DecodeHexWithLength(p, 48)
+		if err != nil {
+			return nil, nil, nil, server.NewDecodeError(err, fmt.Sprintf("KzgProofs[%d]", i))
+		}
+		proofs[i] = proof
+	}
+	blobs := make([][]byte, len(c.Blobs))
+	for i, b := range c.Blobs {
+		blob, err := bytesutil.DecodeHexWithLength(b, fieldparams.BlobSize)
+		if err != nil {
+			return nil, nil, nil, server.NewDecodeError(err, fmt.Sprintf("Blobs[%d]", i))
+		}
+		blobs[i] = blob
+	}
+	return signed, proofs, blobs, nil
 }

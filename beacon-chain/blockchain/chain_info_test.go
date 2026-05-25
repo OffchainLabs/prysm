@@ -711,8 +711,9 @@ func TestParentPayloadReady(t *testing.T) {
 
 	t.Run("builds on full with payload", func(t *testing.T) {
 		pe, err := blocks.WrappedROExecutionPayloadEnvelope(&ethpb.ExecutionPayloadEnvelope{
-			BeaconBlockRoot: parentRoot[:],
-			Payload:         &enginev1.ExecutionPayloadDeneb{},
+			BeaconBlockRoot:       parentRoot[:],
+			ParentBeaconBlockRoot: make([]byte, 32),
+			Payload:               &enginev1.ExecutionPayloadGloas{},
 		})
 		require.NoError(t, err)
 		require.NoError(t, fcs.InsertPayload(pe))

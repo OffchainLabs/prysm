@@ -63,7 +63,8 @@ func ExecuteStateTransitionNoVerifyAnySig(
 	interop.WriteBlockToDisk(signed, false /* Has the block failed */)
 	interop.WriteStateToDisk(st)
 
-	st, err = ProcessSlotsForBlock(ctx, st, signed.Block())
+	parentRoot := signed.Block().ParentRoot()
+	st, err = ProcessSlotsUsingNextSlotCache(ctx, st, parentRoot[:], signed.Block().Slot())
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not process slots")
 	}
@@ -149,7 +150,8 @@ func CalculatePostState(
 
 	// Execute per slots transition.
 	var err error
-	state, err = ProcessSlotsForBlock(ctx, state, signed.Block())
+	parentRoot := signed.Block().ParentRoot()
+	state, err = ProcessSlotsUsingNextSlotCache(ctx, state, parentRoot[:], signed.Block().Slot())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process slots")
 	}
@@ -359,27 +361,37 @@ func ProcessOperationsNoVerifyAttsSigs(
 		return nil, errors.Wrap(err, "could not verify operation lengths")
 	}
 
-	var err error
-	if beaconBlock.Version() == version.Phase0 {
-		state, err = phase0Operations(ctx, state, beaconBlock)
+	blockVersion := beaconBlock.Version()
+	if blockVersion >= version.Gloas {
+		state, err := gloasOperations(ctx, state, beaconBlock)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("gloas operations: %w", err)
 		}
-	} else if beaconBlock.Version() < version.Electra {
-		state, err = altairOperations(ctx, state, beaconBlock)
+
+		return state, nil
+	}
+
+	if blockVersion >= version.Electra {
+		state, err := electraOperations(ctx, state, beaconBlock)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("electra operations: %w", err)
 		}
-	} else if beaconBlock.Version() < version.Gloas {
-		state, err = electraOperations(ctx, state, beaconBlock)
+
+		return state, nil
+	}
+
+	if blockVersion > version.Phase0 {
+		state, err := altairOperations(ctx, state, beaconBlock)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("altair operations: %w", err)
 		}
-	} else {
-		state, err = gloasOperations(ctx, state, beaconBlock)
-		if err != nil {
-			return nil, err
-		}
+
+		return state, nil
+	}
+
+	state, err := phase0Operations(ctx, state, beaconBlock)
+	if err != nil {
+		return nil, fmt.Errorf("phase0 operations: %w", err)
 	}
 
 	return state, nil
@@ -411,6 +423,13 @@ func ProcessBlockForStateRoot(
 
 	blk := signed.Block()
 	body := blk.Body()
+
+	if state.Version() >= version.Gloas {
+		if err := gloas.ProcessParentExecutionPayload(ctx, state, blk); err != nil {
+			return nil, errors.Wrap(err, "could not process parent execution payload")
+		}
+	}
+
 	bodyRoot, err := body.HashTreeRoot()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not hash tree root beacon block body")
@@ -423,8 +442,10 @@ func ProcessBlockForStateRoot(
 	}
 
 	if state.Version() >= version.Gloas {
-		// <spec fn="process_block" fork="gloas" hash="cc0f05ee">
+		// <spec fn="process_block" fork="gloas" hash="a911a43e">
 		// def process_block(state: BeaconState, block: BeaconBlock) -> None:
+		//     # [New in Gloas:EIP7732]
+		//     process_parent_execution_payload(state, block)
 		//     process_block_header(state, block)
 		//     # [Modified in Gloas:EIP7732]
 		//     process_withdrawals(state)
@@ -503,6 +524,9 @@ func ProcessBlockForStateRoot(
 
 // This calls altair block operations.
 func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "core.state.altairOperations")
+	defer span.End()
+
 	var err error
 
 	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
@@ -544,6 +568,9 @@ func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock int
 
 // This calls phase 0 block operations.
 func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "core.state.phase0Operations")
+	defer span.End()
+
 	var err error
 	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
 	hasExits := len(beaconBlock.Body().VoluntaryExits()) > 0

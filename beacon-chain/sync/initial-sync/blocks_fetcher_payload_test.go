@@ -3,6 +3,7 @@ package initialsync
 import (
 	"testing"
 
+	prysmsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -12,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/pkg/errors"
 )
 
 // makeGloasBlock creates a Gloas ROBlock with the given slot, parentRoot, and parentBlockHash in the bid.
@@ -32,11 +34,10 @@ func makeEnvelope(t *testing.T, slot primitives.Slot, blockHash [32]byte, parent
 	env := &ethpb.SignedExecutionPayloadEnvelope{
 		Signature: make([]byte, fieldparams.BLSSignatureLength),
 		Message: &ethpb.ExecutionPayloadEnvelope{
-			Slot:              slot,
-			BeaconBlockRoot:   make([]byte, fieldparams.RootLength),
-			StateRoot:         make([]byte, fieldparams.RootLength),
-			ExecutionRequests: &enginev1.ExecutionRequests{},
-			Payload: &enginev1.ExecutionPayloadDeneb{
+			BeaconBlockRoot:       make([]byte, fieldparams.RootLength),
+			ParentBeaconBlockRoot: make([]byte, fieldparams.RootLength),
+			ExecutionRequests:     &enginev1.ExecutionRequests{},
+			Payload: &enginev1.ExecutionPayloadGloas{
 				ParentHash:    parentHash[:],
 				FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
 				StateRoot:     make([]byte, fieldparams.RootLength),
@@ -45,6 +46,7 @@ func makeEnvelope(t *testing.T, slot primitives.Slot, blockHash [32]byte, parent
 				PrevRandao:    make([]byte, fieldparams.RootLength),
 				BaseFeePerGas: make([]byte, fieldparams.RootLength),
 				BlockHash:     blockHash[:],
+				SlotNumber:    slot,
 			},
 		},
 	}
@@ -247,7 +249,7 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 		require.Equal(t, 1, len(r.envelopes))
 	})
 
-	t.Run("mismatched envelope sets error", func(t *testing.T) {
+	t.Run("mismatched envelope from different peer does not wrap ErrInvalidFetchedData", func(t *testing.T) {
 		wrongEnv := makeEnvelope(t, 10, [32]byte{0xff}, [32]byte{})
 		f := &blocksFetcher{}
 		r := &fetchRequestResponse{
@@ -261,5 +263,7 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 		}
 		f.validatePayloadBlockConsistency(r)
 		require.ErrorContains(t, "envelope does not match block", r.err)
+		require.Equal(t, false, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
 	})
+
 }

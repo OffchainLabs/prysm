@@ -10,10 +10,16 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	blockchainTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	rewardtesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards/testing"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -30,7 +36,7 @@ var (
 
 func testEnvelope() *eth.ExecutionPayloadEnvelope {
 	return &eth.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
+		Payload: &enginev1.ExecutionPayloadGloas{
 			ParentHash:    make([]byte, 32),
 			FeeRecipient:  make([]byte, 20),
 			StateRoot:     make([]byte, 32),
@@ -39,11 +45,11 @@ func testEnvelope() *eth.ExecutionPayloadEnvelope {
 			PrevRandao:    make([]byte, 32),
 			BaseFeePerGas: make([]byte, 32),
 			BlockHash:     make([]byte, 32),
+			SlotNumber:    1,
 		},
-		BuilderIndex:    0,
-		BeaconBlockRoot: make([]byte, 32),
-		Slot:            1,
-		StateRoot:       make([]byte, 32),
+		BuilderIndex:          0,
+		BeaconBlockRoot:       make([]byte, 32),
+		ParentBeaconBlockRoot: make([]byte, 32),
 	}
 }
 
@@ -95,6 +101,65 @@ func TestProduceBlockV4_IncludePayloadTrue(t *testing.T) {
 	require.Equal(t, "gloas", writer.Header().Get(api.VersionHeader))
 	require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
 	require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
+}
+
+// TestProduceBlockV4_IncludePayloadTrue_PopulatedCache covers the cache-hit
+// path: when the producer has cached data column sidecars for this slot, the
+// v4 response derives raw blobs and flat KZG proofs from them and embeds them
+// in the BlockContentsGloas body.
+func TestProduceBlockV4_IncludePayloadTrue_PopulatedCache(t *testing.T) {
+	require.NoError(t, kzg.Start())
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	const blobCount = 2
+	rawBlobs := make([]kzg.Blob, blobCount)
+	for i := range rawBlobs {
+		rawBlobs[i] = kzg.Blob{uint8(i + 1)}
+	}
+	cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, rawBlobs)
+	envelope := testEnvelope()
+	blockRoot := bytesutil.ToBytes32(envelope.BeaconBlockRoot)
+	roSidecars, err := peerdas.DataColumnSidecarsGloas(cellsPerBlob, proofsPerBlob, primitives.Slot(envelope.Payload.SlotNumber), blockRoot)
+	require.NoError(t, err)
+
+	envCache := cache.NewExecutionPayloadEnvelopeCache()
+	envCache.Set(&cache.ExecutionPayloadContents{
+		Envelope:    envelope,
+		DataColumns: roSidecars,
+	})
+
+	ctrl := gomock.NewController(t)
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(gloasGenericBlock(), nil)
+	v1alpha1Server.EXPECT().GetExecutionPayloadEnvelope(gomock.Any(), gomock.Any()).Return(
+		&eth.ExecutionPayloadEnvelopeResponse{Envelope: envelope}, nil,
+	)
+
+	server := &Server{
+		V1Alpha1Server:                v1alpha1Server,
+		ExecutionPayloadEnvelopeCache: envCache,
+		SyncChecker:                   &mockSync.Sync{IsSyncing: false},
+		OptimisticModeFetcher:         &blockchainTesting.ChainService{},
+		BlockRewardFetcher:            &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
+	}
+
+	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s", testRandao, testGraffiti), nil)
+	request.SetPathValue("slot", "1")
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.ProduceBlockV4(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+
+	var resp structs.ProduceBlockV4Response
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+	var blockContents structs.BlockContentsGloas
+	require.NoError(t, json.Unmarshal(resp.Data, &blockContents))
+	require.Equal(t, blobCount, len(blockContents.Blobs))
+	require.Equal(t, blobCount*fieldparams.NumberOfColumns, len(blockContents.KzgProofs))
 }
 
 func TestProduceBlockV4_IncludePayloadFalse(t *testing.T) {

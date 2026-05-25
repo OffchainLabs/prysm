@@ -17,7 +17,7 @@ import (
 
 // UpgradeToGloas updates inputs a generic state to return the version Gloas state.
 //
-//	<spec fn="upgrade_to_gloas" fork="gloas" hash="8f67112c">
+//	<spec fn="upgrade_to_gloas" fork="gloas" hash="d9a22a92">
 //	def upgrade_to_gloas(pre: fulu.BeaconState) -> BeaconState:
 //	    epoch = fulu.get_current_epoch(pre)
 //
@@ -54,9 +54,7 @@ import (
 //	        # [Modified in Gloas:EIP7732]
 //	        # Removed `latest_execution_payload_header`
 //	        # [New in Gloas:EIP7732]
-//	        latest_execution_payload_bid=ExecutionPayloadBid(
-//	            block_hash=pre.latest_execution_payload_header.block_hash,
-//	        ),
+//	        latest_block_hash=pre.latest_execution_payload_header.block_hash,
 //	        next_withdrawal_index=pre.next_withdrawal_index,
 //	        next_withdrawal_validator_index=pre.next_withdrawal_validator_index,
 //	        historical_summaries=pre.historical_summaries,
@@ -81,7 +79,11 @@ import (
 //	        # [New in Gloas:EIP7732]
 //	        builder_pending_withdrawals=[],
 //	        # [New in Gloas:EIP7732]
-//	        latest_block_hash=pre.latest_execution_payload_header.block_hash,
+//	        latest_execution_payload_bid=ExecutionPayloadBid(
+//	            block_hash=pre.latest_execution_payload_header.block_hash,
+//	            gas_limit=pre.latest_execution_payload_header.gas_limit,
+//	            execution_requests_root=hash_tree_root(ExecutionRequests()),
+//	        ),
 //	        # [New in Gloas:EIP7732]
 //	        payload_expected_withdrawals=[],
 //	        # [New in Gloas:EIP7732]
@@ -307,6 +309,11 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		}
 	}
 
+	emptyExecutionRequestsRoot, err := enginev1.EmptyExecutionRequestsHashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compute empty execution requests root")
+	}
+
 	s := &ethpb.BeaconStateGloas{
 		GenesisTime:           uint64(beaconState.GenesisTime().Unix()),
 		GenesisValidatorsRoot: beaconState.GenesisValidatorsRoot(),
@@ -337,11 +344,13 @@ func upgradeToGloas(beaconState state.BeaconState) (state.BeaconState, error) {
 		CurrentSyncCommittee:        currentSyncCommittee,
 		NextSyncCommittee:           nextSyncCommittee,
 		LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
-			BlockHash:       payloadHeader.BlockHash(),
-			FeeRecipient:    make([]byte, fieldparams.FeeRecipientLength),
-			ParentBlockHash: make([]byte, fieldparams.RootLength),
-			ParentBlockRoot: make([]byte, fieldparams.RootLength),
-			PrevRandao:      make([]byte, fieldparams.RootLength),
+			BlockHash:             payloadHeader.BlockHash(),
+			GasLimit:              payloadHeader.GasLimit(),
+			FeeRecipient:          make([]byte, fieldparams.FeeRecipientLength),
+			ParentBlockHash:       make([]byte, fieldparams.RootLength),
+			ParentBlockRoot:       make([]byte, fieldparams.RootLength),
+			PrevRandao:            make([]byte, fieldparams.RootLength),
+			ExecutionRequestsRoot: emptyExecutionRequestsRoot[:],
 		},
 		NextWithdrawalIndex:           wi,
 		NextWithdrawalValidatorIndex:  vi,

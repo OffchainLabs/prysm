@@ -2,14 +2,18 @@ package validator
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -20,48 +24,19 @@ func (vs *Server) PayloadAttestationData(
 	ctx context.Context,
 	req *ethpb.PayloadAttestationDataRequest,
 ) (*ethpb.PayloadAttestationData, error) {
-	_, span := trace.StartSpan(ctx, "grpc.PayloadAttestationData")
+	ctx, span := trace.StartSpan(ctx, "grpc.PayloadAttestationData")
 	defer span.End()
 	if req == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "payload attestation data request is nil")
 	}
-	slot := req.Slot
-
 	if vs.SyncChecker.Syncing() {
 		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
-	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
-		return nil, status.Errorf(codes.InvalidArgument,
-			"payload attestation data is not supported before Gloas fork (slot %d)", slot)
+	data, rpcErr := vs.CoreService.PayloadAttestationData(ctx, req.Slot)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
-
-	currentSlot := vs.TimeFetcher.CurrentSlot()
-	if slot != currentSlot {
-		return nil, status.Errorf(codes.InvalidArgument,
-			"payload attestation data is only available for current slot: requested %d, current %d", slot, currentSlot)
-	}
-
-	highestReceivedSlot := vs.ForkchoiceFetcher.HighestReceivedBlockSlot()
-	if highestReceivedSlot != slot {
-		return nil, status.Errorf(
-			codes.Unavailable,
-			"no valid block root for slot %d, highest received block slot is %d",
-			slot,
-			highestReceivedSlot,
-		)
-	}
-	root := vs.ForkchoiceFetcher.HighestReceivedBlockRoot()
-	if root == [32]byte{} {
-		return nil, status.Errorf(codes.Internal, "could not retrieve highest received block root for slot %d", slot)
-	}
-	payloadPresent := vs.ForkchoiceFetcher.HasFullNode(root)
-
-	return &ethpb.PayloadAttestationData{
-		BeaconBlockRoot:   root[:],
-		Slot:              slot,
-		PayloadPresent:    payloadPresent,
-		BlobDataAvailable: payloadPresent, // TODO: Replace with real DA availability once DA paths are wired.
-	}, nil
+	return data, nil
 }
 
 // SubmitPayloadAttestation submits a payload attestation message to the network
@@ -113,14 +88,22 @@ func (vs *Server) SubmitPayloadAttestation(
 		},
 	})
 
-	log.WithField("slot", msg.Data.Slot).Debug("Submitted payload attestation message")
+	log.WithFields(logrus.Fields{
+		"slot":           msg.Data.Slot,
+		"blockRoot":      fmt.Sprintf("%#x", msg.Data.BeaconBlockRoot),
+		"validatorIndex": msg.ValidatorIndex,
+	}).Debug("Submitted payload attestation message")
 	return &emptypb.Empty{}, nil
 }
 
 func (vs *Server) payloadAttestationCommitteeIndex(ctx context.Context, msg *ethpb.PayloadAttestationMessage) (uint64, error) {
-	st, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
+	root := bytesutil.ToBytes32(msg.Data.BeaconBlockRoot)
+	st, err := vs.PayloadAttestationReceiver.PtcLookupState(ctx, root, msg.Data.Slot)
 	if err != nil {
 		return 0, err
+	}
+	if st == nil {
+		return 0, status.Errorf(codes.Unavailable, "unable to find state for payload attestation")
 	}
 	return gloas.PayloadCommitteeIndex(ctx, st, msg.Data.Slot, msg.ValidatorIndex)
 }

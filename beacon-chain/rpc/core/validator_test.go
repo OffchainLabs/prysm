@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/binary"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -138,5 +140,215 @@ func TestService_SubmitSignedAggregateSelectionProof(t *testing.T) {
 		}
 		rpcError := s.SubmitSignedAggregateSelectionProof(t.Context(), agg)
 		assert.ErrorContains(t, "electra aggregate and proof not supported yet", rpcError.Err)
+	})
+}
+
+func TestPayloadAttestationData(t *testing.T) {
+	t.Run("pre-gloas → BadRequest", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 100
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(0)
+		chain := &mockChain.ChainService{Slot: &slot}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(BadRequest), rpcErr.Reason)
+		assert.ErrorContains(t, "Gloas fork", rpcErr.Err)
+	})
+	t.Run("slot mismatch → BadRequest", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		current := primitives.Slot(5)
+		chain := &mockChain.ChainService{Slot: &current}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		_, rpcErr := s.PayloadAttestationData(t.Context(), primitives.Slot(10))
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(BadRequest), rpcErr.Reason)
+		assert.ErrorContains(t, "current slot", rpcErr.Err)
+	})
+	t.Run("no block received for slot → Unavailable", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		timeChain := &mockChain.ChainService{Slot: &slot}
+		fcChain := &mockChain.ChainService{BlockSlot: primitives.Slot(4)}
+		s := &Service{GenesisTimeFetcher: timeChain, ForkchoiceFetcher: fcChain}
+
+		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(Unavailable), rpcErr.Reason)
+		assert.ErrorContains(t, "no valid block root for slot 5", rpcErr.Err)
+	})
+	t.Run("empty highest received root → Internal", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		timeChain := &mockChain.ChainService{Slot: &slot}
+		fcChain := &mockChain.ChainService{BlockSlot: slot}
+		s := &Service{GenesisTimeFetcher: timeChain, ForkchoiceFetcher: fcChain}
+
+		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(Internal), rpcErr.Reason)
+		assert.ErrorContains(t, "could not retrieve highest received block root", rpcErr.Err)
+	})
+	t.Run("ok with payload absent", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		root := bytesutil.PadTo([]byte("head-root"), 32)
+		chain := &mockChain.ChainService{Slot: &slot, Root: root}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr)
+		assert.DeepEqual(t, root, data.BeaconBlockRoot)
+		assert.Equal(t, slot, data.Slot)
+		assert.Equal(t, false, data.PayloadPresent)
+		assert.Equal(t, false, data.BlobDataAvailable)
+	})
+	t.Run("ok with payload present", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(5)
+		root := bytesutil.PadTo([]byte("head-root"), 32)
+		chain := &mockChain.ChainService{
+			Slot:               &slot,
+			Root:               root,
+			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockCanonicalFull:  map[primitives.Slot]bool{slot: true},
+			MockPayloadEarly:   map[[32]byte]bool{bytesutil.ToBytes32(root): true},
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		data, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr)
+		assert.DeepEqual(t, root, data.BeaconBlockRoot)
+		assert.Equal(t, slot, data.Slot)
+		assert.Equal(t, true, data.PayloadPresent)
+		assert.Equal(t, true, data.BlobDataAvailable)
+	})
+	t.Run("before PTC deadline → Unavailable", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(0)
+		chain := &mockChain.ChainService{
+			Slot:    &slot,
+			Genesis: time.Now(),
+			Root:    bytesutil.PadTo([]byte{0xAA}, 32),
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(Unavailable), rpcErr.Reason)
+		assert.ErrorContains(t, "PTC deadline not yet reached", rpcErr.Err)
+		assert.Equal(t, (*ethpb.PayloadAttestationData)(nil), s.payloadAttestationData.Load())
+	})
+	t.Run("result is cached per slot and bypassed on slot change", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(7)
+		root := bytesutil.PadTo([]byte{0xAA}, 32)
+		chain := &mockChain.ChainService{
+			Slot:               &slot,
+			Root:               root,
+			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockCanonicalFull:  map[primitives.Slot]bool{slot: false},
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		first, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr)
+		require.DeepEqual(t, root, first.BeaconBlockRoot)
+
+		// Mutate the underlying mock; same-slot call must hit the cache.
+		newRoot := bytesutil.PadTo([]byte{0xBB}, 32)
+		chain.Root = newRoot
+		chain.MockCanonicalRoots[slot] = bytesutil.ToBytes32(newRoot)
+		chain.MockCanonicalFull[slot] = true
+
+		second, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+		require.IsNil(t, rpcErr)
+		assert.Equal(t, true, first == second)
+		require.DeepEqual(t, root, second.BeaconBlockRoot)
+
+		// Advance to a new slot; cache must be bypassed.
+		nextSlot := slot + 1
+		chain.Slot = &nextSlot
+		chain.BlockSlot = nextSlot
+		chain.MockCanonicalRoots[nextSlot] = bytesutil.ToBytes32(newRoot)
+		chain.MockCanonicalFull[nextSlot] = true
+		chain.MockPayloadEarly = map[[32]byte]bool{bytesutil.ToBytes32(newRoot): true}
+
+		third, rpcErr := s.PayloadAttestationData(t.Context(), nextSlot)
+		require.IsNil(t, rpcErr)
+		assert.Equal(t, false, first == third)
+		require.DeepEqual(t, newRoot, third.BeaconBlockRoot)
+		assert.Equal(t, nextSlot, third.Slot)
+		assert.Equal(t, true, third.PayloadPresent)
+	})
+	t.Run("concurrent callers share a single computation", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.GloasForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+
+		slot := primitives.Slot(7)
+		root := bytesutil.PadTo([]byte{0xAA}, 32)
+		chain := &mockChain.ChainService{
+			Slot:               &slot,
+			Root:               root,
+			MockCanonicalRoots: map[primitives.Slot][32]byte{slot: bytesutil.ToBytes32(root)},
+			MockCanonicalFull:  map[primitives.Slot]bool{slot: false},
+		}
+		s := &Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain}
+
+		const callers = 16
+		results := make([]*ethpb.PayloadAttestationData, callers)
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		for i := range callers {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				<-start
+				resp, rpcErr := s.PayloadAttestationData(t.Context(), slot)
+				require.IsNil(t, rpcErr)
+				results[i] = resp
+			}(i)
+		}
+		close(start)
+		wg.Wait()
+
+		for i := 1; i < callers; i++ {
+			assert.Equal(t, true, results[0] == results[i])
+		}
 	})
 }

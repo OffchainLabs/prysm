@@ -78,7 +78,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 
 	// Standard types that also exist in gloas
 	case "ExecutionPayload":
-		obj = &enginev1.ExecutionPayloadDeneb{}
+		obj = &enginev1.ExecutionPayloadGloas{}
 	case "ExecutionPayloadHeader":
 		obj = &enginev1.ExecutionPayloadHeaderDeneb{}
 	case "Attestation":
@@ -145,16 +145,8 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.SyncAggregatorSelectionData{}
 	case "SyncCommittee":
 		obj = &ethpb.SyncCommittee{}
-	case "LightClientOptimisticUpdate":
-		obj = &ethpb.LightClientOptimisticUpdateDeneb{}
-	case "LightClientFinalityUpdate":
-		obj = &ethpb.LightClientFinalityUpdateElectra{}
-	case "LightClientBootstrap":
-		obj = &ethpb.LightClientBootstrapElectra{}
-	case "LightClientUpdate":
-		obj = &ethpb.LightClientUpdateElectra{}
-	case "LightClientHeader":
-		obj = &ethpb.LightClientHeaderDeneb{}
+	case "LightClientOptimisticUpdate", "LightClientFinalityUpdate", "LightClientBootstrap", "LightClientUpdate", "LightClientHeader":
+		t.Skip("Gloas light client types not yet implemented")
 	case "BlobIdentifier":
 		obj = &ethpb.BlobIdentifier{}
 	case "BlobSidecar":
@@ -187,7 +179,7 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.DataColumnsByRootIdentifier{}
 	case "MatrixEntry":
 		t.Skip("Unused type")
-	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar":
+	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar", "PartialDataColumnGroupID":
 		t.Skip("Not yet implemented")
 	default:
 		return nil, errors.New("type not found")

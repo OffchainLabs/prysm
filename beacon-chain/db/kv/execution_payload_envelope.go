@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -130,13 +131,13 @@ func (s *Store) DeleteExecutionPayloadEnvelope(ctx context.Context, blockRoot [3
 func blindEnvelope(env *ethpb.SignedExecutionPayloadEnvelope) *ethpb.SignedBlindedExecutionPayloadEnvelope {
 	return &ethpb.SignedBlindedExecutionPayloadEnvelope{
 		Message: &ethpb.BlindedExecutionPayloadEnvelope{
-			BlockHash:         env.Message.Payload.BlockHash,
-			ExecutionRequests: env.Message.ExecutionRequests,
-			BuilderIndex:      env.Message.BuilderIndex,
-			BeaconBlockRoot:   env.Message.BeaconBlockRoot,
-			Slot:              env.Message.Slot,
-			StateRoot:         env.Message.StateRoot,
-			ParentBlockHash:   env.Message.Payload.ParentHash,
+			BlockHash:             env.Message.Payload.BlockHash,
+			ExecutionRequests:     env.Message.ExecutionRequests,
+			BuilderIndex:          env.Message.BuilderIndex,
+			BeaconBlockRoot:       env.Message.BeaconBlockRoot,
+			Slot:                  primitives.Slot(env.Message.Payload.SlotNumber),
+			ParentBlockHash:       env.Message.Payload.ParentHash,
+			ParentBeaconBlockRoot: env.Message.ParentBeaconBlockRoot,
 		},
 		Signature: env.Signature,
 	}

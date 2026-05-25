@@ -108,16 +108,20 @@ func TestBidVerifier_VerifyFeeRecipientMatches(t *testing.T) {
 	require.ErrorIs(t, verifier.VerifyFeeRecipientMatches(bytes.Repeat([]byte{0xff}, 20)), ErrBidFeeRecipientMismatch)
 }
 
-func TestBidVerifier_VerifyGasLimitMatches(t *testing.T) {
+func TestBidVerifier_VerifyGasLimitTargetCompatible(t *testing.T) {
 	signed := testSignedExecutionPayloadBid(t, 1)
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signed)
 	require.NoError(t, err)
 
-	verifier := &BidVerifier{results: newResults(RequireBidGasLimitMatches), b: wrapped}
-	require.NoError(t, verifier.VerifyGasLimitMatches(signed.Message.GasLimit))
+	// bid.gas_limit is 1 (from testSignedExecutionPayloadBid). With parent=1 the
+	// elasticity rule allows only gas_limit=1, so compatible target is 1.
+	parentGasLimit := signed.Message.GasLimit
 
-	verifier = &BidVerifier{results: newResults(RequireBidGasLimitMatches), b: wrapped}
-	require.ErrorIs(t, verifier.VerifyGasLimitMatches(signed.Message.GasLimit+1), ErrBidGasLimitMismatch)
+	verifier := &BidVerifier{results: newResults(RequireBidGasLimitCompatible), b: wrapped}
+	require.NoError(t, verifier.VerifyGasLimitTargetCompatible(parentGasLimit, signed.Message.GasLimit))
+
+	verifier = &BidVerifier{results: newResults(RequireBidGasLimitCompatible), b: wrapped}
+	require.ErrorIs(t, verifier.VerifyGasLimitTargetCompatible(parentGasLimit, signed.Message.GasLimit+1), ErrBidGasLimitIncompatible)
 }
 
 func TestBidVerifier_VerifyParentBlockRootSeen(t *testing.T) {
@@ -218,16 +222,17 @@ func testSignedExecutionPayloadBid(t *testing.T, slot primitives.Slot) *ethpb.Si
 
 	return &ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
-			Slot:             slot,
-			BuilderIndex:     0,
-			ParentBlockHash:  bytes.Repeat([]byte{0x01}, 32),
-			ParentBlockRoot:  bytes.Repeat([]byte{0x02}, 32),
-			BlockHash:        bytes.Repeat([]byte{0x03}, 32),
-			PrevRandao:       bytes.Repeat([]byte{0x04}, 32),
-			FeeRecipient:     bytes.Repeat([]byte{0x05}, 20),
-			GasLimit:         30_000_000,
-			Value:            100,
-			ExecutionPayment: 0,
+			Slot:                  slot,
+			BuilderIndex:          0,
+			ParentBlockHash:       bytes.Repeat([]byte{0x01}, 32),
+			ParentBlockRoot:       bytes.Repeat([]byte{0x02}, 32),
+			BlockHash:             bytes.Repeat([]byte{0x03}, 32),
+			PrevRandao:            bytes.Repeat([]byte{0x04}, 32),
+			FeeRecipient:          bytes.Repeat([]byte{0x05}, 20),
+			GasLimit:              30_000_000,
+			Value:                 100,
+			ExecutionPayment:      0,
+			ExecutionRequestsRoot: make([]byte, 32),
 		},
 		Signature: bytes.Repeat([]byte{0x06}, 96),
 	}

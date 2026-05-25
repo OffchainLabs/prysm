@@ -193,6 +193,7 @@ type Service struct {
 	newExecutionPayloadBidVerifier       verification.NewExecutionPayloadBidVerifier
 	columnSidecarsExecSingleFlight       singleflight.Group
 	reconstructionSingleFlight           singleflight.Group
+	payloadEnvelopeRequestSingleFlight   singleflight.Group
 	availableBlocker                     coverage.AvailableBlocker
 	reconstructionRandGen                *rand.Rand
 	trackedValidatorsCache               *cache.TrackedValidatorsCache
@@ -393,6 +394,12 @@ func (s *Service) Status() error {
 		return errors.New("out of sync")
 	}
 	return nil
+}
+
+// HighestExecutionPayloadBidCache exposes sync's cache to the proposer RPC.
+// Sync is the sole writer (gossip); the proposer is a reader.
+func (s *Service) HighestExecutionPayloadBidCache() *cache.HighestExecutionPayloadBidCache {
+	return s.highestExecutionPayloadBidCache
 }
 
 // This initializes the caches to update seen beacon objects coming in from the wire
