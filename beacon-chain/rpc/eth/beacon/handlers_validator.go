@@ -372,26 +372,30 @@ func (s *Server) getValidatorIdentitiesSSZ(w http.ResponseWriter, st state.Beaco
 		return
 	}
 
-	vals := st.ValidatorsReadOnly()
 	var identities []*eth.ValidatorIdentity
 	if len(ids) == 0 {
-		identities = make([]*eth.ValidatorIdentity, len(vals))
-		for i, v := range vals {
+		identities = make([]*eth.ValidatorIdentity, 0, st.NumValidators())
+		for i, v := range st.ValidatorsReadOnlySeq() {
 			pubkey := v.PublicKey()
-			identities[i] = &eth.ValidatorIdentity{
-				Index:           primitives.ValidatorIndex(i),
+			identities = append(identities, &eth.ValidatorIdentity{
+				Index:           i,
 				Pubkey:          pubkey[:],
 				ActivationEpoch: v.ActivationEpoch(),
-			}
+			})
 		}
 	} else {
 		identities = make([]*eth.ValidatorIdentity, len(ids))
 		for i, id := range ids {
-			pubkey := vals[id].PublicKey()
+			v, err := st.ValidatorAtIndexReadOnly(id)
+			if err != nil {
+				httputil.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %s", id, err.Error()), http.StatusInternalServerError)
+				return
+			}
+			pubkey := v.PublicKey()
 			identities[i] = &eth.ValidatorIdentity{
 				Index:           id,
 				Pubkey:          pubkey[:],
-				ActivationEpoch: vals[id].ActivationEpoch(),
+				ActivationEpoch: v.ActivationEpoch(),
 			}
 		}
 	}
