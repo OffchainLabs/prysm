@@ -217,7 +217,7 @@ func (b *BeaconState) NumValidators() int {
 // ReadFromEveryValidator reads values from every validator and applies it to the provided function.
 //
 // WARNING: This method is potentially unsafe, as it exposes the actual validator registry.
-func (b *BeaconState) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyValidator) error) error {
+func (b *BeaconState) ReadFromEveryValidator(f func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error) error {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
@@ -231,7 +231,7 @@ func (b *BeaconState) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyV
 			return err
 		}
 		rov := NewValidatorFromCompact(v)
-		if err = f(i, rov); err != nil {
+		if err = f(primitives.ValidatorIndex(i), rov); err != nil {
 			return err
 		}
 	}

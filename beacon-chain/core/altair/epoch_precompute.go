@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/pkg/errors"
@@ -41,7 +42,7 @@ func InitializePrecomputeValidators(ctx context.Context, beaconState state.Beaco
 	if beaconState.NumValidators() != len(inactivityScores) {
 		return nil, nil, errors.New("num of validators is different than num of inactivity scores")
 	}
-	if err := beaconState.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	if err := beaconState.ReadFromEveryValidator(func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
 		// Set validator's balance, inactivity score and slashed/withdrawable status.
 		v := &precompute.Validator{
 			CurrentEpochEffectiveBalance: val.EffectiveBalance(),

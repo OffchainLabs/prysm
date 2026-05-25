@@ -846,14 +846,14 @@ func (v *validxStateOverride) SetLatestBlockHeader(val *ethpb.BeaconBlockHeader)
 	return nil
 }
 
-func (v *validxStateOverride) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyValidator) error) error {
+func (v *validxStateOverride) ReadFromEveryValidator(f func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error) error {
 	validators := v.Validators()
 	for i, val := range validators {
 		rov, err := state_native.NewValidator(val)
 		if err != nil {
 			return err
 		}
-		if err := f(i, rov); err != nil {
+		if err := f(primitives.ValidatorIndex(i), rov); err != nil {
 			return err
 		}
 	}

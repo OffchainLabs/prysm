@@ -168,7 +168,7 @@ func populatePubkeyCache(ctx context.Context, st state.ReadOnlyBeaconState) {
 	go populatePubkeyCacheOnce.Do(func() {
 		log.Debug("Populating pubkey cache")
 		start := time.Now()
-		if err := st.ReadFromEveryValidator(func(_ int, val state.ReadOnlyValidator) error {
+		if err := st.ReadFromEveryValidator(func(_ primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}

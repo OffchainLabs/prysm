@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/pkg/errors"
 )
@@ -27,7 +28,7 @@ func New(ctx context.Context, s state.BeaconState) ([]*Validator, *Balance, erro
 	currentEpoch := time.CurrentEpoch(s)
 	prevEpoch := time.PrevEpoch(s)
 
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	if err := s.ReadFromEveryValidator(func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
 		// Was validator withdrawable or slashed
 		withdrawable := prevEpoch+1 >= val.WithdrawableEpoch()
 		pVal := &Validator{

@@ -451,8 +451,8 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 	if err != nil {
 		return errors.Wrap(err, "could not get state")
 	}
-	var execIndices []int
-	err = st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	var execIndices []primitives.ValidatorIndex
+	err = st.ReadFromEveryValidator(func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
 		if val.GetWithdrawalCredentials()[0] == params.BeaconConfig().ETH1AddressWithdrawalPrefixByte {
 			execIndices = append(execIndices, idx)
 		}
@@ -503,7 +503,7 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 
 	// Send exits for keys which already contain execution credentials.
 	for _, idx := range execIndices {
-		if err := sendExit(primitives.ValidatorIndex(idx)); err != nil {
+		if err := sendExit(idx); err != nil {
 			return err
 		}
 	}

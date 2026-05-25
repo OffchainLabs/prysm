@@ -110,7 +110,7 @@ func (s *State) ActiveNonSlashedBalancesByRoot(ctx context.Context, blockRoot [3
 	epoch := time.CurrentEpoch(st)
 
 	balances := make([]uint64, st.NumValidators())
-	var balanceAccretor = func(idx int, val state.ReadOnlyValidator) error {
+	var balanceAccretor = func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
 		if helpers.IsActiveNonSlashedValidatorUsingTrie(val, epoch) {
 			balances[idx] = val.EffectiveBalance()
 		} else {

@@ -143,7 +143,7 @@ type ReadOnlyValidators interface {
 	PubkeyAtIndex(idx primitives.ValidatorIndex) [fieldparams.BLSPubkeyLength]byte
 	AggregateKeyFromIndices(idxs []uint64) (bls.PublicKey, error)
 	NumValidators() int
-	ReadFromEveryValidator(f func(idx int, val ReadOnlyValidator) error) error
+	ReadFromEveryValidator(f func(idx primitives.ValidatorIndex, val ReadOnlyValidator) error) error
 }
 
 // ReadOnlyBalances defines a struct which only has read access to balances methods.

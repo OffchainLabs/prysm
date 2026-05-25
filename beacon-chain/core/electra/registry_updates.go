@@ -48,20 +48,20 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 	eligibleForEjection := make([]primitives.ValidatorIndex, 0)
 	eligibleForActivation := make([]primitives.ValidatorIndex, 0)
 
-	if err := st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	if err := st.ReadFromEveryValidator(func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
 		// Collect validators eligible to enter the activation queue.
 		if helpers.IsEligibleForActivationQueue(val, currentEpoch) {
-			eligibleForActivationQ = append(eligibleForActivationQ, primitives.ValidatorIndex(idx))
+			eligibleForActivationQ = append(eligibleForActivationQ, idx)
 		}
 
 		// Collect validators to eject.
 		if val.EffectiveBalance() <= ejectionBal && helpers.IsActiveValidatorUsingTrie(val, currentEpoch) {
-			eligibleForEjection = append(eligibleForEjection, primitives.ValidatorIndex(idx))
+			eligibleForEjection = append(eligibleForEjection, idx)
 		}
 
 		// Collect validators eligible for activation and not yet dequeued for activation.
 		if helpers.IsEligibleForActivationUsingROVal(st, val) {
-			eligibleForActivation = append(eligibleForActivation, primitives.ValidatorIndex(idx))
+			eligibleForActivation = append(eligibleForActivation, idx)
 		}
 
 		return nil

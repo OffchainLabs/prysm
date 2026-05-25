@@ -259,15 +259,15 @@ func UpgradeToElectra(ctx context.Context, beaconState state.BeaconState) (state
 	earliestExitEpoch := helpers.ActivationExitEpoch(time.CurrentEpoch(beaconState))
 	preActivationIndices := make([]primitives.ValidatorIndex, 0)
 	compoundWithdrawalIndices := make([]primitives.ValidatorIndex, 0)
-	if err = beaconState.ReadFromEveryValidator(func(index int, val state.ReadOnlyValidator) error {
+	if err = beaconState.ReadFromEveryValidator(func(index primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
 		if val.ExitEpoch() != params.BeaconConfig().FarFutureEpoch && val.ExitEpoch() > earliestExitEpoch {
 			earliestExitEpoch = val.ExitEpoch()
 		}
 		if val.ActivationEpoch() == params.BeaconConfig().FarFutureEpoch {
-			preActivationIndices = append(preActivationIndices, primitives.ValidatorIndex(index))
+			preActivationIndices = append(preActivationIndices, index)
 		}
 		if val.HasCompoundingWithdrawalCredentials() {
-			compoundWithdrawalIndices = append(compoundWithdrawalIndices, primitives.ValidatorIndex(index))
+			compoundWithdrawalIndices = append(compoundWithdrawalIndices, index)
 		}
 		return nil
 	}); err != nil {

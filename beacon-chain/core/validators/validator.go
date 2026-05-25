@@ -38,7 +38,7 @@ func ExitInformation(s state.BeaconState) *ExitInfo {
 	currentEpoch := slots.ToEpoch(s.Slot())
 	totalActiveBalance := uint64(0)
 
-	err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	err := s.ReadFromEveryValidator(func(_ primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
 		e := val.ExitEpoch()
 		if e != farFutureEpoch {
 			if e > exitInfo.HighestExitEpoch {

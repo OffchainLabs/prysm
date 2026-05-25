@@ -462,9 +462,9 @@ func ShuffledIndices(s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]pri
 	}
 
 	indices := make([]primitives.ValidatorIndex, 0, s.NumValidators())
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	if err := s.ReadFromEveryValidator(func(idx primitives.ValidatorIndex, val state.ReadOnlyValidator) error {
 		if IsActiveValidatorUsingTrie(val, epoch) {
-			indices = append(indices, primitives.ValidatorIndex(idx))
+			indices = append(indices, idx)
 		}
 		return nil
 	}); err != nil {
