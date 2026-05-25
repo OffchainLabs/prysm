@@ -309,7 +309,7 @@ func ActivatedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Valid
 	activations := make([]primitives.ValidatorIndex, 0)
 	for i := range validators {
 		val := validators[i]
-		if val.ActivationEpoch <= epoch && epoch < val.ExitEpoch {
+		if val.ActivationEpoch == epoch {
 			activations = append(activations, primitives.ValidatorIndex(i))
 		}
 	}

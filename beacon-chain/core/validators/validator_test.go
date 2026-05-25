@@ -276,59 +276,46 @@ func TestSlashValidator_Electra(t *testing.T) {
 }
 
 func TestActivatedValidatorIndices(t *testing.T) {
+	const epoch primitives.Epoch = 5
 	tests := []struct {
-		state  *ethpb.BeaconState
-		wanted []primitives.ValidatorIndex
+		name       string
+		validators []*ethpb.Validator
+		wanted     []primitives.ValidatorIndex
 	}{
 		{
-			state: &ethpb.BeaconState{
-				Validators: []*ethpb.Validator{
-					{
-						ActivationEpoch: 0,
-						ExitEpoch:       1,
-					},
-					{
-						ActivationEpoch: 0,
-						ExitEpoch:       1,
-					},
-					{
-						ActivationEpoch: 5,
-					},
-					{
-						ActivationEpoch: 0,
-						ExitEpoch:       1,
-					},
-				},
+			name: "only validators newly activated at epoch are returned",
+			validators: []*ethpb.Validator{
+				{ActivationEpoch: epoch, ExitEpoch: epoch + 10},     // Activated this epoch.
+				{ActivationEpoch: epoch - 1, ExitEpoch: epoch + 10}, // Already active (activated in a past epoch) - must be excluded.
+				{ActivationEpoch: epoch, ExitEpoch: epoch + 10},     // Activated this epoch.
+				{ActivationEpoch: epoch + 1},                        // Future activation - must be excluded.
+
+				{ActivationEpoch: epoch, ExitEpoch: epoch + 1}, // Activated this epoch but exiting next epoch - still counts.
 			},
-			wanted: []primitives.ValidatorIndex{0, 1, 3},
+			wanted: []primitives.ValidatorIndex{0, 2, 4},
 		},
 		{
-			state: &ethpb.BeaconState{
-				Validators: []*ethpb.Validator{
-					{
-						ActivationEpoch: helpers.ActivationExitEpoch(10),
-					},
-				},
+			name: "no validator activated this epoch",
+			validators: []*ethpb.Validator{
+				{ActivationEpoch: helpers.ActivationExitEpoch(10)},
+				{ActivationEpoch: epoch - 1, ExitEpoch: epoch + 10},
+				{ActivationEpoch: epoch + 1},
 			},
 			wanted: []primitives.ValidatorIndex{},
 		},
 		{
-			state: &ethpb.BeaconState{
-				Validators: []*ethpb.Validator{
-					{
-						ActivationEpoch: 0,
-						ExitEpoch:       1,
-					},
-				},
+			name: "single validator activated this epoch",
+			validators: []*ethpb.Validator{
+				{ActivationEpoch: epoch, ExitEpoch: epoch + 1},
 			},
 			wanted: []primitives.ValidatorIndex{0},
 		},
 	}
 	for _, tt := range tests {
-		s, err := state_native.InitializeFromProtoPhase0(tt.state)
-		require.NoError(t, err)
-		activatedIndices := validators.ActivatedValidatorIndices(time.CurrentEpoch(s), tt.state.Validators)
-		assert.DeepEqual(t, tt.wanted, activatedIndices)
+		t.Run(tt.name, func(t *testing.T) {
+			activatedIndices := validators.ActivatedValidatorIndices(epoch, tt.validators)
+			assert.DeepEqual(t, tt.wanted, activatedIndices)
+		})
 	}
 }
 
