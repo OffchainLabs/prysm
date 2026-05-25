@@ -683,7 +683,6 @@ func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash)
 	}
 
 	getBlobsV3RequestsTotal.Inc()
-	getBlobsV3Latency.Observe(time.Since(start).Seconds())
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
 	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes)
 	getBlobsV3Latency.Observe(time.Since(start).Seconds())
