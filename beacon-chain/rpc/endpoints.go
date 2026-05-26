@@ -564,7 +564,6 @@ func (s *Service) beaconEndpoints(
 	coreService *core.Service,
 ) []endpoint {
 	server := &beacon.Server{
-<<<<<<< proposer-preference-rest
 		CanonicalHistory:         ch,
 		BeaconDB:                 s.cfg.BeaconDB,
 		AttestationCache:         s.cfg.AttestationCache,
@@ -588,41 +587,12 @@ func (s *Service) beaconEndpoints(
 		SyncChecker:              s.cfg.SyncService,
 		ExecutionReconstructor:   s.cfg.ExecutionReconstructor,
 		BLSChangesPool:           s.cfg.BLSChangesPool,
+		PayloadAttestationPool:   s.cfg.PayloadAttestationPool,
 		FinalizationFetcher:      s.cfg.FinalizationFetcher,
 		ForkchoiceFetcher:        s.cfg.ForkchoiceFetcher,
 		CoreService:              coreService,
 		AttestationStateFetcher:  s.cfg.AttestationReceiver,
 		ProposerPreferencesCache: s.cfg.ProposerPreferencesCache,
-=======
-		CanonicalHistory:        ch,
-		BeaconDB:                s.cfg.BeaconDB,
-		AttestationCache:        s.cfg.AttestationCache,
-		AttestationsPool:        s.cfg.AttestationsPool,
-		SlashingsPool:           s.cfg.SlashingsPool,
-		ChainInfoFetcher:        s.cfg.ChainInfoFetcher,
-		GenesisTimeFetcher:      s.cfg.GenesisTimeFetcher,
-		BlockNotifier:           s.cfg.BlockNotifier,
-		OperationNotifier:       s.cfg.OperationNotifier,
-		Broadcaster:             s.cfg.Broadcaster,
-		BlockReceiver:           s.cfg.BlockReceiver,
-		StateGenService:         s.cfg.StateGen,
-		Stater:                  stater,
-		Blocker:                 blocker,
-		OptimisticModeFetcher:   s.cfg.OptimisticModeFetcher,
-		HeadFetcher:             s.cfg.HeadFetcher,
-		TimeFetcher:             s.cfg.GenesisTimeFetcher,
-		VoluntaryExitsPool:      s.cfg.ExitPool,
-		V1Alpha1ValidatorServer: validatorServer,
-		DataColumnReceiver:      s.cfg.DataColumnReceiver,
-		SyncChecker:             s.cfg.SyncService,
-		ExecutionReconstructor:  s.cfg.ExecutionReconstructor,
-		BLSChangesPool:          s.cfg.BLSChangesPool,
-		PayloadAttestationPool:  s.cfg.PayloadAttestationPool,
-		FinalizationFetcher:     s.cfg.FinalizationFetcher,
-		ForkchoiceFetcher:       s.cfg.ForkchoiceFetcher,
-		CoreService:             coreService,
-		AttestationStateFetcher: s.cfg.AttestationReceiver,
->>>>>>> develop
 	}
 
 	const namespace = "beacon"
