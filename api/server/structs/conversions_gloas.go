@@ -136,6 +136,29 @@ func (s *SignedProposerPreferences) ToConsensus() (*ethpb.SignedProposerPreferen
 	}, nil
 }
 
+func SignedProposerPreferencesFromConsensus(s *ethpb.SignedProposerPreferences) *SignedProposerPreferences {
+	if s == nil {
+		return nil
+	}
+	return &SignedProposerPreferences{
+		Message:   ProposerPreferencesFromConsensus(s.Message),
+		Signature: hexutil.Encode(s.Signature),
+	}
+}
+
+func ProposerPreferencesFromConsensus(p *ethpb.ProposerPreferences) *ProposerPreferences {
+	if p == nil {
+		return nil
+	}
+	return &ProposerPreferences{
+		DependentRoot:  hexutil.Encode(p.DependentRoot),
+		ProposalSlot:   fmt.Sprintf("%d", p.ProposalSlot),
+		ValidatorIndex: fmt.Sprintf("%d", p.ValidatorIndex),
+		FeeRecipient:   hexutil.Encode(p.FeeRecipient),
+		TargetGasLimit: fmt.Sprintf("%d", p.TargetGasLimit),
+	}
+}
+
 func (p *ProposerPreferences) ToConsensus() (*ethpb.ProposerPreferences, error) {
 	dependentRoot, err := bytesutil.DecodeHexWithLength(p.DependentRoot, fieldparams.RootLength)
 	if err != nil {

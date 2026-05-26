@@ -93,9 +93,11 @@ func (vs *Server) SubmitSignedProposerPreferences(
 
 		vs.ProposerPreferencesCache.Add(cache.ProposerPreference{
 			DependentRoot:  dependentRoot,
+			ProposalSlot:   proposalSlot,
 			ValidatorIndex: msg.Message.ValidatorIndex,
 			FeeRecipient:   bytesutil.ToBytes20(msg.Message.FeeRecipient),
 			TargetGasLimit: msg.Message.TargetGasLimit,
+			Signature:      bytesutil.ToBytes96(msg.Signature),
 		}, proposalSlot)
 		broadcast++
 	}

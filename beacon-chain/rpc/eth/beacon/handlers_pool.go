@@ -30,6 +30,7 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -863,6 +864,32 @@ func (s *Server) submitAttesterSlashing(
 			return
 		}
 	}
+}
+
+// GetProposerPreferences retrieves signed proposer preferences known by the
+// node but not yet acted on.
+func (s *Server) GetProposerPreferences(w http.ResponseWriter, r *http.Request) {
+	_, span := trace.StartSpan(r.Context(), "beacon.GetProposerPreferences")
+	defer span.End()
+
+	var data []*structs.SignedProposerPreferences
+	if s.ProposerPreferencesCache != nil {
+		entries := s.ProposerPreferencesCache.List()
+		data = make([]*structs.SignedProposerPreferences, 0, len(entries))
+		for _, e := range entries {
+			data = append(data, &structs.SignedProposerPreferences{
+				Message: &structs.ProposerPreferences{
+					DependentRoot:  hexutil.Encode(e.DependentRoot[:]),
+					ProposalSlot:   fmt.Sprintf("%d", e.ProposalSlot),
+					ValidatorIndex: fmt.Sprintf("%d", e.ValidatorIndex),
+					FeeRecipient:   hexutil.Encode(e.FeeRecipient[:]),
+					TargetGasLimit: fmt.Sprintf("%d", e.TargetGasLimit),
+				},
+				Signature: hexutil.Encode(e.Signature[:]),
+			})
+		}
+	}
+	httputil.WriteJson(w, &structs.GetProposerPreferencesResponse{Data: data})
 }
 
 // GetProposerSlashings retrieves proposer slashings known by the node

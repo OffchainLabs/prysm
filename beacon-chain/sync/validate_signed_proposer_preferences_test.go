@@ -177,7 +177,9 @@ func TestSignedProposerPreferencesSubscriber_WrongMessage(t *testing.T) {
 }
 
 func TestSignedProposerPreferencesSubscriber_HappyPath(t *testing.T) {
-	s := &Service{}
+	s := &Service{
+		cfg: &config{operationNotifier: &mock.MockOperationNotifier{}},
+	}
 	err := s.signedProposerPreferencesSubscriber(context.Background(), &ethpb.SignedProposerPreferences{})
 	require.NoError(t, err)
 }

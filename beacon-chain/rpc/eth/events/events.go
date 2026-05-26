@@ -81,6 +81,8 @@ const (
 	ExecutionPayloadBidTopic = "execution_payload_bid"
 	// PayloadAttestationMessageTopic represents a new payload attestation message event topic.
 	PayloadAttestationMessageTopic = "payload_attestation_message"
+	// ProposerPreferencesTopic represents a new signed proposer preferences event topic.
+	ProposerPreferencesTopic = "proposer_preferences"
 )
 
 var (
@@ -116,6 +118,7 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.BlockGossipReceived:               BlockGossipTopic,
 	operation.DataColumnReceived:                DataColumnTopic,
 	operation.PayloadAttestationMessageReceived: PayloadAttestationMessageTopic,
+	operation.ProposerPreferencesReceived:       ProposerPreferencesTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -481,6 +484,8 @@ func topicForEvent(event *feed.Event) string {
 		return DataColumnTopic
 	case *operation.PayloadAttestationMessageReceivedData:
 		return PayloadAttestationMessageTopic
+	case *operation.ProposerPreferencesReceivedData:
+		return ProposerPreferencesTopic
 	case *statefeed.PayloadProcessedData:
 		return ExecutionPayloadTopic
 	default:
@@ -658,6 +663,10 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 	case *operation.PayloadAttestationMessageReceivedData:
 		return func() io.Reader {
 			return jsonMarshalReader(eventName, structs.PayloadAttestationMessageFromConsensus(v.Message))
+		}, nil
+	case *operation.ProposerPreferencesReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.SignedProposerPreferencesFromConsensus(v.SignedProposerPreferences))
 		}, nil
 	case *statefeed.PayloadProcessedData:
 		return func() io.Reader {

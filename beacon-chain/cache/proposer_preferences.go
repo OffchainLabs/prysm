@@ -3,6 +3,7 @@ package cache
 import (
 	"sync"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
@@ -10,9 +11,11 @@ import (
 // via DependentRoot (Gloas spec).
 type ProposerPreference struct {
 	DependentRoot  [32]byte
+	ProposalSlot   primitives.Slot
 	ValidatorIndex primitives.ValidatorIndex
 	FeeRecipient   primitives.ExecutionAddress
 	TargetGasLimit uint64
+	Signature      [fieldparams.BLSSignatureLength]byte
 }
 
 // ProposerPreferencesCache stores broadcast proposer preferences indexed by
@@ -81,6 +84,18 @@ func (c *ProposerPreferencesCache) PruneBefore(slot primitives.Slot) {
 			delete(c.preferences, cachedSlot)
 		}
 	}
+}
+
+// List returns a flat slice of every cached proposer preference.
+func (c *ProposerPreferencesCache) List() []ProposerPreference {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	var out []ProposerPreference
+	for _, prefs := range c.preferences {
+		out = append(out, prefs...)
+	}
+	return out
 }
 
 // Clear removes all cached proposer preferences.
