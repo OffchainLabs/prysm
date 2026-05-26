@@ -51,6 +51,26 @@ func TestValidateExecutionPayloadBidGossip_AlreadySeenBuilder(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
+// Dedup must short-circuit before every later check; duplicates pay only the cache lookup.
+func TestValidateExecutionPayloadBidGossip_DedupShortCircuitsAllLaterChecks(t *testing.T) {
+	ctx := context.Background()
+	s, msg, signedBid := setupExecutionPayloadBidService(t)
+	key := executionPayloadBidBuilderKey(signedBid.Message.Slot, signedBid.Message.BuilderIndex)
+	s.setSeenExecutionPayloadBidBuilder(signedBid.Message.Slot, key)
+	// Every subsequent verifier method would Reject/Ignore if it ran; the cache hit must skip them all.
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
+		errCurrentOrNextSlot:    errors.New("slot"),
+		errBuilderActive:        errors.New("builder"),
+		errExecutionPayment:     errors.New("payment"),
+		errFeeRecipientMismatch: errors.New("fee"),
+		errSignature:            errors.New("sig"),
+	})
+
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
 func TestValidateExecutionPayloadBidGossip_ProposerPreferencesUnseen(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _ := setupExecutionPayloadBidService(t)
