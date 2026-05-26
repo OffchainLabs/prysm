@@ -15,7 +15,7 @@ import (
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
-	mockstategen "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -429,45 +429,47 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 	failingState, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
 
+	otherRoot := bytesutil.ToBytes32(bytesutil.PadTo([]byte("other-root"), 32))
+
 	cases := []struct {
-		name           string
-		query          string
-		highestRoot    [32]byte
-		highestSlot    primitives.Slot
-		addState       bool
-		expectPublish  bool
-		expectedStatus int
-		expectedBody   string
+		name              string
+		query             string
+		headRoot          [32]byte
+		headState         state.BeaconState
+		canonicalAtEnvSlt *[32]byte // nil → CanonicalNodeAtSlot returns ok=false
+		expectPublish     bool
+		expectedStatus    int
+		expectedBody      string
 	}{
 		{name: "default (gossip)", query: "", expectPublish: true, expectedStatus: http.StatusOK},
 		{name: "explicit gossip", query: "?broadcast_validation=gossip", expectPublish: true, expectedStatus: http.StatusOK},
 		{
-			name:           "consensus state missing",
+			name:           "consensus envRoot not head",
 			query:          "?broadcast_validation=consensus",
+			headRoot:       otherRoot,
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   "could not get state for envelope beacon block root",
+			expectedBody:   "is not canonical head",
 		},
 		{
 			name:           "consensus verification fails",
 			query:          "?broadcast_validation=consensus",
-			addState:       true,
+			headRoot:       envRoot,
+			headState:      failingState,
 			expectedStatus: http.StatusBadRequest,
 			expectedBody:   "consensus validation failed",
 		},
 		{
-			name:           "consensus_and_equivocation equivocation detected",
-			query:          "?broadcast_validation=consensus_and_equivocation",
-			highestRoot:    bytesutil.ToBytes32(bytesutil.PadTo([]byte("other-root"), 32)),
-			highestSlot:    envSlot,
-			expectedStatus: http.StatusBadRequest,
-			expectedBody:   "block is equivocated",
+			name:              "consensus_and_equivocation equivocation detected",
+			query:             "?broadcast_validation=consensus_and_equivocation",
+			canonicalAtEnvSlt: &otherRoot,
+			expectedStatus:    http.StatusBadRequest,
+			expectedBody:      "block is equivocated",
 		},
 		{
 			name:           "consensus_and_equivocation no equivocation runs consensus check",
 			query:          "?broadcast_validation=consensus_and_equivocation",
-			highestRoot:    envRoot,
-			highestSlot:    envSlot,
-			addState:       true,
+			headRoot:       envRoot,
+			headState:      failingState,
 			expectedStatus: http.StatusBadRequest,
 			expectedBody:   "consensus validation failed",
 		},
@@ -489,17 +491,18 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 				).Return(&emptypb.Empty{}, nil)
 			}
 
-			stateGen := mockstategen.NewService()
-			if tc.addState {
-				stateGen.AddStateForRoot(failingState, envRoot)
+			chainSvc := &chainMock.ChainService{
+				Root:  tc.headRoot[:],
+				State: tc.headState,
+			}
+			if tc.canonicalAtEnvSlt != nil {
+				chainSvc.MockCanonicalRoots = map[primitives.Slot][32]byte{envSlot: *tc.canonicalAtEnvSlt}
+				chainSvc.MockCanonicalFull = map[primitives.Slot]bool{envSlot: true}
 			}
 			s := &Server{
 				V1Alpha1ValidatorServer: v1alpha1Server,
-				ForkchoiceFetcher: &chainMock.ChainService{
-					BlockSlot: tc.highestSlot,
-					Root:      tc.highestRoot[:],
-				},
-				StateGenService: stateGen,
+				ForkchoiceFetcher:       chainSvc,
+				HeadFetcher:             chainSvc,
 			}
 			req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope"+tc.query, bytes.NewReader(body))
 			w := httptest.NewRecorder()
