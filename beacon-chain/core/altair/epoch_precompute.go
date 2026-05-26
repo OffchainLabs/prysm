@@ -55,7 +55,7 @@ func InitializePrecomputeValidators(ctx context.Context, beaconState state.Beaco
 			v.IsActiveCurrentEpoch = true
 			bal.ActiveCurrentEpoch, err = math.Add64(bal.ActiveCurrentEpoch, val.EffectiveBalance())
 			if err != nil {
-				return nil, nil, fmt.Errorf("add 64: %w", err)
+				return nil, nil, fmt.Errorf("add64: %w", err)
 			}
 		}
 		// Set validator's active status for previous epoch.
@@ -63,7 +63,7 @@ func InitializePrecomputeValidators(ctx context.Context, beaconState state.Beaco
 			v.IsActivePrevEpoch = true
 			bal.ActivePrevEpoch, err = math.Add64(bal.ActivePrevEpoch, val.EffectiveBalance())
 			if err != nil {
-				return nil, nil, fmt.Errorf("add 64: %w", err)
+				return nil, nil, fmt.Errorf("add64: %w", err)
 			}
 		}
 		vals[idx] = v

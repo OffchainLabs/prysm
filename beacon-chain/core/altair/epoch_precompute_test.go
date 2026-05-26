@@ -74,7 +74,7 @@ func TestInitializeEpochValidators_Overflow(t *testing.T) {
 	})
 	require.NoError(t, err)
 	_, _, err = InitializePrecomputeValidators(t.Context(), s)
-	require.ErrorContains(t, "add 64: addition overflows", err)
+	require.ErrorContains(t, "add64: addition overflows", err)
 }
 
 func TestInitializeEpochValidators_BadState(t *testing.T) {
