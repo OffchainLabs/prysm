@@ -3320,6 +3320,29 @@ func (d *PayloadAttestationData) ToConsensus() (*eth.PayloadAttestationData, err
 	}, nil
 }
 
+func (p *PayloadAttestationMessage) ToConsensus() (*eth.PayloadAttestationMessage, error) {
+	if p == nil {
+		return nil, errNilValue
+	}
+	validatorIndex, err := strconv.ParseUint(p.ValidatorIndex, 10, 64)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "ValidatorIndex")
+	}
+	data, err := p.Data.ToConsensus()
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Data")
+	}
+	sig, err := bytesutil.DecodeHexWithLength(p.Signature, fieldparams.BLSSignatureLength)
+	if err != nil {
+		return nil, server.NewDecodeError(err, "Signature")
+	}
+	return &eth.PayloadAttestationMessage{
+		ValidatorIndex: primitives.ValidatorIndex(validatorIndex),
+		Data:           data,
+		Signature:      sig,
+	}, nil
+}
+
 // ExecutionPayloadEnvelopeFromConsensus converts a proto envelope to the API struct.
 func ExecutionPayloadEnvelopeFromConsensus(e *eth.ExecutionPayloadEnvelope) (*ExecutionPayloadEnvelope, error) {
 	payload, err := ExecutionPayloadGloasFromConsensus(e.Payload)

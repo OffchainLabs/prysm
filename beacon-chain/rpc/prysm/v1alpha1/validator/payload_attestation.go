@@ -3,12 +3,11 @@ package validator
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -25,76 +24,19 @@ func (vs *Server) PayloadAttestationData(
 	ctx context.Context,
 	req *ethpb.PayloadAttestationDataRequest,
 ) (*ethpb.PayloadAttestationData, error) {
-	_, span := trace.StartSpan(ctx, "grpc.PayloadAttestationData")
+	ctx, span := trace.StartSpan(ctx, "grpc.PayloadAttestationData")
 	defer span.End()
 	if req == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "payload attestation data request is nil")
 	}
-	slot := req.Slot
-
 	if vs.SyncChecker.Syncing() {
 		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
-	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
-		return nil, status.Errorf(codes.InvalidArgument,
-			"payload attestation data is not supported before Gloas fork (slot %d)", slot)
+	data, rpcErr := vs.CoreService.PayloadAttestationData(ctx, req.Slot)
+	if rpcErr != nil {
+		return nil, status.Errorf(core.ErrorReasonToGRPC(rpcErr.Reason), "%v", rpcErr.Err)
 	}
-
-	currentSlot := vs.TimeFetcher.CurrentSlot()
-	if slot != currentSlot {
-		return nil, status.Errorf(codes.InvalidArgument,
-			"payload attestation data is only available for current slot: requested %d, current %d", slot, currentSlot)
-	}
-
-	slotStart, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), slot)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "could not compute slot start time: %v", err)
-	}
-	cfg := params.BeaconConfig()
-	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS))
-	if time.Now().Before(deadline) {
-		return nil, status.Errorf(codes.Unavailable, "PTC deadline not yet reached for slot %d", slot)
-	}
-
-	if cached := vs.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
-		return cached, nil
-	}
-
-	// dedupe concurrent callers at the PTC deadline.
-	v, err, _ := vs.payloadAttestationFlight.Do(strconv.FormatUint(uint64(slot), 10), func() (any, error) {
-		if cached := vs.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
-			return cached, nil
-		}
-
-		highestReceivedSlot := vs.ForkchoiceFetcher.HighestReceivedBlockSlot()
-		if highestReceivedSlot != slot {
-			return nil, status.Errorf(
-				codes.Unavailable,
-				"no valid block root for slot %d, highest received block slot is %d",
-				slot,
-				highestReceivedSlot,
-			)
-		}
-		root := vs.ForkchoiceFetcher.HighestReceivedBlockRoot()
-		if root == [32]byte{} {
-			return nil, status.Errorf(codes.Internal, "could not retrieve highest received block root for slot %d", slot)
-		}
-		payloadPresent := vs.ForkchoiceFetcher.HasFullNode(root)
-		payloadEarly, _ := vs.ForkchoiceFetcher.PayloadEarly(root)
-
-		resp := &ethpb.PayloadAttestationData{
-			BeaconBlockRoot:   root[:],
-			Slot:              slot,
-			PayloadPresent:    payloadEarly,
-			BlobDataAvailable: payloadPresent,
-		}
-		vs.payloadAttestationData.Store(resp)
-		return resp, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return v.(*ethpb.PayloadAttestationData), nil
+	return data, nil
 }
 
 // SubmitPayloadAttestation submits a payload attestation message to the network
