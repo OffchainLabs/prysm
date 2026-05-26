@@ -8,7 +8,6 @@ import (
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -69,39 +68,48 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	}
 
 	slot := signedPreferences.Message.ProposalSlot
-	// [IGNORE] dedup on (dependent_root, proposal_slot) before the checkpoint
-	// state load so byte-mutated duplicates can't amplify state work.
+	// [IGNORE] dedup on (dependent_root, proposal_slot) before any state work
+	// so byte-mutated duplicates can't amplify it.
 	if s.proposerPreferencesCache.Has(dependentRoot, slot) {
 		return pubsub.ValidationIgnore, nil
 	}
 
-	// Checkpoint state at epoch(proposal_slot)-1 anchored to dependent_root.
 	proposalEpoch := slots.ToEpoch(slot)
-	// Underflow at epoch 0 collapses to epoch 0 — the spec's genesis-adjacent fallback.
-	dependentEpoch, _ := proposalEpoch.SafeSub(1)
-	boundarySlot, err := slots.EpochStart(dependentEpoch)
+	dependentEpoch := proposalEpoch
+	if dependentEpoch > 0 {
+		dependentEpoch--
+	}
+	headRoot, err := s.cfg.chain.HeadRoot(ctx)
 	if err != nil {
-		return pubsub.ValidationIgnore, errors.Wrap(err, "compute checkpoint boundary slot")
+		return pubsub.ValidationIgnore, errors.Wrap(err, "head root")
 	}
-	var st state.ReadOnlyBeaconState
-	// NextSlotState is only worth probing for next-epoch preferences whose
-	// boundary lands on the current epoch start (head still in prev epoch);
-	// for current-epoch preferences the boundary is older and the 2-slot
-	// cache will miss.
-	if proposalEpoch > slots.ToEpoch(s.cfg.clock.CurrentSlot()) {
-		if cached := transition.NextSlotState(dependentRoot[:], boundarySlot); cached != nil && cached.Slot() == boundarySlot {
-			st = cached
-		}
+	expected, err := s.cfg.chain.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), dependentEpoch)
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "head dependent root")
 	}
-	if st == nil {
-		loaded, err := s.cfg.stateGen.StateByRootNoCopy(ctx, dependentRoot)
+	if expected != dependentRoot {
+		return pubsub.ValidationIgnore, errors.Errorf("dependent_root %#x does not match head %#x", dependentRoot, expected)
+	}
+
+	st, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	if err != nil {
+		return pubsub.ValidationIgnore, errors.Wrap(err, "head state")
+	}
+	stateEpoch := slots.ToEpoch(st.Slot())
+
+	// Sole permitted slot advance: next-epoch preference at the boundary before
+	// the head processes a block in the new epoch (proposalEpoch == stateEpoch+2).
+	if proposalEpoch == stateEpoch.AddEpoch(2) {
+		boundarySlot, err := slots.EpochStart(dependentEpoch)
 		if err != nil {
-			return pubsub.ValidationIgnore, errors.Wrap(err, "load checkpoint state")
+			return pubsub.ValidationIgnore, errors.Wrap(err, "compute boundary slot")
 		}
-		st, err = transition.ProcessSlotsIfNeeded(ctx, loaded, dependentRoot[:], boundarySlot)
+		st, err = transition.ProcessSlotsIfNeeded(ctx, st, headRoot, boundarySlot)
 		if err != nil {
-			return pubsub.ValidationIgnore, errors.Wrap(err, "advance checkpoint state to boundary")
+			return pubsub.ValidationIgnore, errors.Wrap(err, "advance head state to boundary")
 		}
+	} else if proposalEpoch > stateEpoch.AddEpoch(1) {
+		return pubsub.ValidationIgnore, errors.Errorf("head epoch %d cannot verify proposal epoch %d", stateEpoch, proposalEpoch)
 	}
 
 	// [REJECT] is_valid_proposal_slot(state, preferences) returns True, where state
