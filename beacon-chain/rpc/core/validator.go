@@ -877,10 +877,14 @@ func (s *Service) ValidatorActiveSetChanges(
 		}
 	}
 
-	var (
-		activatedIndices, exitedIndices, slashedIndices, ejectedIndices []primitives.ValidatorIndex
-		activatedKeys, exitedKeys, slashedKeys, ejectedKeys             [][]byte
-	)
+	activatedIndices := make([]primitives.ValidatorIndex, 0)
+	exitedIndices := make([]primitives.ValidatorIndex, 0)
+	slashedIndices := make([]primitives.ValidatorIndex, 0)
+	ejectedIndices := make([]primitives.ValidatorIndex, 0)
+	activatedKeys := make([][]byte, 0)
+	exitedKeys := make([][]byte, 0)
+	slashedKeys := make([][]byte, 0)
+	ejectedKeys := make([][]byte, 0)
 
 	ejectionBalance := params.BeaconConfig().EjectionBalance
 	slashingsVector := params.BeaconConfig().EpochsPerSlashingsVector
