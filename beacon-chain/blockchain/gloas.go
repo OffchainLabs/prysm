@@ -120,17 +120,11 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 		return emptyAttri
 	}
 
-	if slot > st.Slot() {
-		writable, ok := st.(state.BeaconState)
-		if !ok {
-			log.Error("head state is not writable; cannot advance slots")
-			return emptyAttri
-		}
-		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, writable, headRoot, slot)
-		if err != nil {
-			log.WithError(err).Error("Could not process slots to get payload attribute")
-			return emptyAttri
-		}
+	var err error
+	st, err = transition.ProcessSlotsIfNeeded(ctx, st, headRoot, slot)
+	if err != nil {
+		log.WithError(err).Error("Could not process slots to get payload attribute")
+		return emptyAttri
 	}
 
 	prevRando, err := helpers.RandaoMix(st, time.CurrentEpoch(st))

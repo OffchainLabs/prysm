@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
@@ -40,4 +41,5 @@ type Server struct {
 	ProposerPreferencesCache      *cache.ProposerPreferencesCache
 	SubscribedValidatorsCache     *cache.SubscribedValidatorsCache
 	PayloadIDCache                *cache.PayloadIDCache
+	PayloadAttestationPool        payloadattestation.PoolManager
 }

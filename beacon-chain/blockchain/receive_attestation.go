@@ -116,7 +116,7 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 }
 
 // UpdateHead updates the canonical head of the chain based on information from fork-choice attestations and votes.
-// The caller of this function MUST hold a lock in forkchoice
+// The caller of this function MUST NOT hold the forkchoice lock; it is acquired inside.
 func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot) {
 	ctx, span := trace.StartSpan(ctx, "beacon-chain.blockchain.UpdateHead")
 	defer span.End()

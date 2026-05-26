@@ -1552,3 +1552,42 @@ func (s *Server) BeaconCommitteeSelections(w http.ResponseWriter, _ *http.Reques
 func (s *Server) SyncCommitteeSelections(w http.ResponseWriter, _ *http.Request) {
 	httputil.HandleError(w, "Endpoint not implemented", 501)
 }
+
+// GetPayloadAttestationData produces payload attestation data for the requested slot.
+func (s *Server) GetPayloadAttestationData(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.GetPayloadAttestationData")
+	defer span.End()
+
+	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
+		return
+	}
+
+	_, slot, ok := shared.UintFromRoute(w, r, "slot")
+	if !ok {
+		return
+	}
+
+	data, rpcErr := s.CoreService.PayloadAttestationData(ctx, primitives.Slot(slot))
+	if rpcErr != nil {
+		httputil.HandleError(w, rpcErr.Err.Error(), core.ErrorReasonToHTTP(rpcErr.Reason))
+		return
+	}
+
+	if httputil.RespondWithSsz(r) {
+		sszData, err := data.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal payload attestation data: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+		httputil.WriteSsz(w, sszData)
+		return
+	}
+
+	response := &structs.GetPayloadAttestationDataResponse{
+		Version: version.String(version.Gloas),
+		Data:    structs.PayloadAttestationDataFromConsensus(data),
+	}
+	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+	httputil.WriteJson(w, response)
+}

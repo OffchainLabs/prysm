@@ -55,6 +55,13 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, err
 	}
 
+	// [IGNORE] this is the first signed bid seen with a valid signature from the given builder for this slot.
+	// Cache is populated only after VerifySignature below; a hit here implies a valid-sig bid was already seen.
+	builderKey := executionPayloadBidBuilderKey(bid.Slot(), bid.BuilderIndex())
+	if s.hasSeenExecutionPayloadBidBuilder(builderKey) {
+		return pubsub.ValidationIgnore, nil
+	}
+
 	// [IGNORE] bid.slot is the current slot or the next slot.
 	if err := v.VerifyCurrentOrNextSlot(); err != nil {
 		return pubsub.ValidationIgnore, err
@@ -86,16 +93,8 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyFeeRecipientMatches(pref.FeeRecipient[:]); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	// The spec lists signature validation later, but the "first signed bid seen
-	// with a valid signature" gate below depends on knowing validity first.
 	if err := v.VerifySignature(st); err != nil {
 		return pubsub.ValidationReject, err
-	}
-
-	// [IGNORE] this is the first signed bid seen with a valid signature from the given builder for this slot.
-	builderKey := executionPayloadBidBuilderKey(bid.Slot(), bid.BuilderIndex())
-	if s.hasSeenExecutionPayloadBidBuilder(builderKey) {
-		return pubsub.ValidationIgnore, nil
 	}
 	s.setSeenExecutionPayloadBidBuilder(bid.Slot(), builderKey)
 	// [IGNORE] this bid is the highest value bid seen for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
@@ -122,8 +121,6 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyParentBlockRootSeen(s.cfg.chain.InForkchoice); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	// [REJECT] signed_execution_payload_bid.signature is valid with respect to the bid.builder_index.
-	// Verified earlier to satisfy the "first valid signed bid seen" condition.
 	msg.ValidatorData = signedBid
 	return pubsub.ValidationAccept, nil
 }
