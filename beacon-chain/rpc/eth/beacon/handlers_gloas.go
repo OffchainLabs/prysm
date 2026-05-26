@@ -276,12 +276,17 @@ func (s *Server) validateEnvelopeBroadcast(ctx context.Context, r *http.Request,
 		}
 	}
 
-	st, err := s.StateGenService.StateByRoot(ctx, envRoot)
+	// Submission path: envelope must be for the current head.
+	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
 	if err != nil {
-		return errors.Wrap(err, "could not get state for envelope beacon block root")
+		return errors.Wrap(err, "could not get head root")
 	}
-	if st == nil || st.IsNil() {
-		return errors.Errorf("could not get state for envelope beacon block root %#x", envRoot)
+	if !bytes.Equal(headRoot, envRoot[:]) {
+		return errors.Errorf("envelope beacon block root %#x is not canonical head", envRoot)
+	}
+	st, err := s.HeadFetcher.HeadState(ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not get head state")
 	}
 	roSigned, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(signed)
 	if err != nil {
