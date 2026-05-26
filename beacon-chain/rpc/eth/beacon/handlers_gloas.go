@@ -252,22 +252,24 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 
 // validateEnvelopeBroadcast applies broadcast_validation semantics to an
 // envelope publish before it is broadcast to gossip. Spec: beacon-APIs #580.
-//   - gossip (default): no extra checks.
-//   - consensus: run full envelope consensus checks (signature + payload
-//     consistency against the pre-state at envelope.beacon_block_root).
+//   - gossip (default): no extra REST-layer checks — the downstream gossip
+//     pipeline performs validation.
+//   - consensus: full envelope consensus checks against the head state. Submission
+//     path requires envRoot to equal head.
 //   - consensus_and_equivocation: consensus + reject if a different beacon
 //     block at the envelope's slot has already been received.
 func (s *Server) validateEnvelopeBroadcast(ctx context.Context, r *http.Request, signed *eth.SignedExecutionPayloadEnvelope) error {
 	level := r.URL.Query().Get(broadcastValidationQueryParam)
 	switch level {
 	case "", broadcastValidationGossip:
+		// TODO: run lightweight gossip checks (sig + bid consistency) here — beacon-APIs #580.
 		return nil
 	case broadcastValidationConsensus, broadcastValidationConsensusAndEquivocation:
 	default:
 		return errors.Errorf("invalid %s value: %q", broadcastValidationQueryParam, level)
 	}
 
-	envSlot := primitives.Slot(signed.Message.Payload.SlotNumber)
+	envSlot := signed.Message.Payload.SlotNumber
 	envRoot := bytesutil.ToBytes32(signed.Message.BeaconBlockRoot)
 
 	if level == broadcastValidationConsensusAndEquivocation {
