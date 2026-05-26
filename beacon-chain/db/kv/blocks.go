@@ -477,14 +477,10 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 		return 0, err
 	}
 
-	// Return early if there's nothing to delete.
-	if len(slotRoots) == 0 {
-		return 0, nil
-	}
-
 	// Perform all deletions in a single transaction for atomicity
 	var numSlotsDeleted int
 	err = s.db.Update(func(tx *bolt.Tx) error {
+		blocksBkt := tx.Bucket(blocksBucket)
 		for _, sr := range slotRoots {
 			// Return if context is cancelled or deadline is exceeded.
 			if ctx.Err() != nil {
@@ -541,6 +537,13 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 			s.blockCache.Del(string(sr.root[:]))
 			// Delete state summary from cache
 			s.stateSummaryCache.delete(sr.root)
+		}
+
+		originRoot := blocksBkt.Get(originCheckpointBlockRootKey)
+		if originRoot != nil && blocksBkt.Get(originRoot) == nil {
+			if err = blocksBkt.Delete(originCheckpointBlockRootKey); err != nil {
+				return errors.Wrap(err, "could not delete origin checkpoint block root")
+			}
 		}
 
 		return nil

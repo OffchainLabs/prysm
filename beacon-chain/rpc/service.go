@@ -213,6 +213,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		BeaconDB:              s.cfg.BeaconDB,
 		ChainInfoFetcher:      s.cfg.ChainInfoFetcher,
 		HeadFetcher:           s.cfg.HeadFetcher,
+		ForkchoiceFetcher:     s.cfg.ForkchoiceFetcher,
 		GenesisTimeFetcher:    s.cfg.GenesisTimeFetcher,
 		SyncChecker:           s.cfg.SyncService,
 		Broadcaster:           s.cfg.Broadcaster,
