@@ -50,7 +50,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "beacon_engine_getBlobsV3_request_duration_seconds",
 			Help:    "Duration of engine_getBlobsV3 requests in seconds",
-			Buckets: []float64{0.025, 0.05, 0.1, 0.2, 0.5, 1, 2, 4},
+			Buckets: prometheus.DefBuckets,
 		},
 	)
 	hasBlobsRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
@@ -61,7 +61,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "beacon_engine_hasBlobs_request_duration_seconds",
 			Help:    "Duration of engine_hasBlobs requests in seconds",
-			Buckets: []float64{0.025, 0.05, 0.1, 0.2, 0.5, 1, 2, 4},
+			Buckets: prometheus.DefBuckets,
 		},
 	)
 	errParseCount = promauto.NewCounter(prometheus.CounterOpts{
