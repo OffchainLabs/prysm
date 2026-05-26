@@ -73,9 +73,9 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	}
 
 	proposalEpoch := slots.ToEpoch(slot)
-	dependentEpoch, err := proposalEpoch.SafeSub(1)
-	if err != nil {
-		dependentEpoch = 0
+	dependentEpoch := proposalEpoch
+	if dependentEpoch > 0 {
+		dependentEpoch--
 	}
 	headRoot, err := s.cfg.chain.HeadRoot(ctx)
 	if err != nil {
