@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
 )
@@ -103,7 +104,8 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 
 // postEnvelope publishes SSZ first; on 406 Not Acceptable falls back to JSON.
 func (c *beaconApiValidatorClient) postEnvelope(ctx context.Context, endpoint string, ssz []byte, jsonFn func() ([]byte, error)) error {
-	_, _, err := c.handler.PostSSZ(ctx, endpoint, nil, bytes.NewBuffer(ssz))
+	headers := map[string]string{api.VersionHeader: version.String(version.Gloas)}
+	_, _, err := c.handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(ssz))
 	if err == nil {
 		return nil
 	}
@@ -119,5 +121,5 @@ func (c *beaconApiValidatorClient) postEnvelope(ctx context.Context, endpoint st
 	if jerr != nil {
 		return errors.Wrap(jerr, "could not marshal envelope JSON for fallback")
 	}
-	return c.handler.Post(ctx, endpoint, nil, bytes.NewBuffer(body), nil)
+	return c.handler.Post(ctx, endpoint, headers, bytes.NewBuffer(body), nil)
 }

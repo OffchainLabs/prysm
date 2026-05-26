@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -277,23 +276,9 @@ func (s *Server) validateEnvelopeBroadcast(ctx context.Context, r *http.Request,
 		}
 	}
 
-	// Fast path: validators normally publish envelopes for the current head, so
-	// avoid a stategen replay when envRoot matches head.
-	var (
-		st  state.BeaconState
-		err error
-	)
-	headRoot, herr := s.HeadFetcher.HeadRoot(ctx)
-	if herr == nil && bytes.Equal(headRoot, envRoot[:]) {
-		st, err = s.HeadFetcher.HeadState(ctx)
-		if err != nil {
-			return errors.Wrap(err, "could not get head state")
-		}
-	} else {
-		st, err = s.StateGenService.StateByRoot(ctx, envRoot)
-		if err != nil {
-			return errors.Wrap(err, "could not get state for envelope beacon block root")
-		}
+	st, err := s.StateGenService.StateByRoot(ctx, envRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not get state for envelope beacon block root")
 	}
 	if st == nil || st.IsNil() {
 		return errors.Errorf("could not get state for envelope beacon block root %#x", envRoot)

@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
@@ -172,11 +174,12 @@ func TestPublishExecutionPayloadEnvelope_SSZ(t *testing.T) {
 	expectedBody, err := signed.MarshalSSZ()
 	require.NoError(t, err)
 
+	expectedHeaders := map[string]string{api.VersionHeader: version.String(version.Gloas)}
 	handler := mock.NewMockJsonRestHandler(ctrl)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelope",
-		nil,
+		expectedHeaders,
 		bytes.NewBuffer(expectedBody),
 	).Return(nil, nil, nil)
 
@@ -200,6 +203,7 @@ func TestPublishExecutionPayloadEnvelope_JSONFallbackOn406(t *testing.T) {
 	expectedJSON, err := json.Marshal(jsonEnvelope)
 	require.NoError(t, err)
 
+	expectedHeaders := map[string]string{api.VersionHeader: version.String(version.Gloas)}
 	handler := mock.NewMockJsonRestHandler(ctrl)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
@@ -207,7 +211,7 @@ func TestPublishExecutionPayloadEnvelope_JSONFallbackOn406(t *testing.T) {
 	handler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelope",
-		nil,
+		expectedHeaders,
 		bytes.NewBuffer(expectedJSON),
 		nil,
 	).Return(nil)
@@ -237,11 +241,12 @@ func TestPublishExecutionPayloadEnvelope_StatelessSendsContents(t *testing.T) {
 	}).MarshalSSZ()
 	require.NoError(t, err)
 
+	expectedHeaders := map[string]string{api.VersionHeader: version.String(version.Gloas)}
 	handler := mock.NewMockJsonRestHandler(ctrl)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelope",
-		nil,
+		expectedHeaders,
 		bytes.NewBuffer(expectedBody),
 	).Return(nil, nil, nil)
 
@@ -275,11 +280,12 @@ func TestPublishExecutionPayloadEnvelope_StatelessSendsContentsWithEmptyBlobs(t 
 	}).MarshalSSZ()
 	require.NoError(t, err)
 
+	expectedHeaders := map[string]string{api.VersionHeader: version.String(version.Gloas)}
 	handler := mock.NewMockJsonRestHandler(ctrl)
 	handler.EXPECT().PostSSZ(
 		gomock.Any(),
 		"/eth/v1/beacon/execution_payload_envelope",
-		nil,
+		expectedHeaders,
 		bytes.NewBuffer(expectedBody),
 	).Return(nil, nil, nil)
 
