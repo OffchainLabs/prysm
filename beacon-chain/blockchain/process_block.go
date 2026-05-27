@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
@@ -259,6 +260,21 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		if err != nil {
 			return invalidBlock{error: err}
 		}
+		sig := b.Signature()
+		root := b.Root()
+		domain, err := signing.Domain(preState.Fork(), slots.ToEpoch(preState.Slot()), params.BeaconConfig().DomainBeaconProposer, preState.GenesisValidatorsRoot())
+		if err != nil {
+			return err
+		}
+		proposer, err := preState.ValidatorAtIndex(b.Block().ProposerIndex())
+		if err != nil {
+			return err
+		}
+		proposerSig, err := signing.BlockSignatureBatch(proposer.PublicKey, sig[:], domain, func() ([32]byte, error) { return root, nil })
+		if err != nil {
+			return err
+		}
+		sigSet.Join(proposerSig)
 		if b.Root() == br && eidx < len(envelopes) {
 			envSigSet, err := gloas.VerifyExecutionPayloadEnvelopeWithDeferredSig(ctx, preState, envelopes[eidx])
 			if err != nil {

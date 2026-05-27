@@ -90,7 +90,7 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	if err != nil {
 		return errors.Wrap(err, "could not get latest execution payload bid")
 	}
-	if len(bid.BlobKzgCommitments()) > 0 {
+	if bid != nil && len(bid.BlobKzgCommitments()) > 0 {
 		if err := s.areDataColumnsAvailable(ctx, root, envelope.Slot()); err != nil {
 			return errors.Wrap(err, "data availability check failed for payload envelope")
 		}
@@ -153,9 +153,11 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 
-	if s.head != nil {
+	s.headLock.Lock()
+	if s.head != nil && s.head.root == root {
 		s.head.full = true
 	}
+	s.headLock.Unlock()
 
 	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot[:], true)
 	if s.inRegularSync() {
@@ -253,10 +255,13 @@ func (s *Service) notifyNewEnvelope(ctx context.Context, st state.BeaconState, e
 	if err != nil {
 		return false, errors.Wrap(err, "could not get latest execution payload bid")
 	}
-	commitments := latestBid.BlobKzgCommitments()
-	versionedHashes := make([]common.Hash, len(commitments))
-	for i, c := range commitments {
-		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
+	var versionedHashes []common.Hash
+	if latestBid != nil {
+		commitments := latestBid.BlobKzgCommitments()
+		versionedHashes = make([]common.Hash, len(commitments))
+		for i, c := range commitments {
+			versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
+		}
 	}
 	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), envelope.ExecutionRequests(), envelope.Slot())
 }
