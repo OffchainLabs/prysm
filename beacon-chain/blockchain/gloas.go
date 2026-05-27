@@ -140,10 +140,6 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 		log.WithError(err).Error("Could not get payload withdrawals to get payload attribute")
 		return emptyAttri
 	}
-	if withdrawals == nil {
-		withdrawals = make([]*enginev1.Withdrawal, 0)
-	}
-
 	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
 		Timestamp:             uint64(t.Unix()),
 		PrevRandao:            prevRando,
