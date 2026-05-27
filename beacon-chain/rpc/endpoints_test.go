@@ -113,12 +113,11 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/validator/execution_payload_envelope/{slot}": {http.MethodGet},
 		"/eth/v1/validator/sync_committee_contribution":       {http.MethodGet},
 		"/eth/v1/validator/contribution_and_proofs":           {http.MethodPost},
-		"/eth/v1/beacon/pool/proposer_preferences":            {http.MethodGet},
 		"/eth/v1/validator/prepare_beacon_proposer":           {http.MethodPost},
 		"/eth/v1/validator/proposer_preferences":              {http.MethodPost},
 		"/eth/v1/validator/register_validator":                {http.MethodPost},
 		"/eth/v1/validator/liveness/{epoch}":                  {http.MethodPost},
-    "/eth/v1/validator/payload_attestation_data/{slot}":   {http.MethodGet},
+		"/eth/v1/validator/payload_attestation_data/{slot}":   {http.MethodGet},
 	}
 
 	prysmBeaconRoutes := map[string][]string{

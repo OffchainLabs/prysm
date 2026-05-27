@@ -202,10 +202,6 @@ type GetProposerSlashingsResponse struct {
 	Data []*ProposerSlashing `json:"data"`
 }
 
-type GetProposerPreferencesResponse struct {
-	Data []*SignedProposerPreferences `json:"data"`
-}
-
 type GetWeakSubjectivityResponse struct {
 	Data *WeakSubjectivityData `json:"data"`
 }

@@ -80,7 +80,6 @@ go_test(
         "handlers_gloas_bid_test.go",
         "handlers_gloas_test.go",
         "handlers_pool_test.go",
-        "handlers_proposer_preferences_test.go",
         "handlers_state_test.go",
         "handlers_test.go",
         "handlers_validators_test.go",
