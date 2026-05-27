@@ -50,7 +50,7 @@ type Server struct {
 	ExecutionReconstructor   execution.Reconstructor
 	FinalizationFetcher      blockchain.FinalizationFetcher
 	BLSChangesPool           blstoexec.PoolManager
-  PayloadAttestationPool   payloadattestation.PoolManager
+	PayloadAttestationPool   payloadattestation.PoolManager
 	ForkchoiceFetcher        blockchain.ForkchoiceFetcher
 	CoreService              *core.Service
 	AttestationStateFetcher  blockchain.AttestationStateFetcher
