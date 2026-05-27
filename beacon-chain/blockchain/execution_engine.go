@@ -43,13 +43,11 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 		return nil, errors.New("service is nil")
 	}
 	if arg.headBlock == nil || arg.headBlock.IsNil() {
-		log.Error("Head block is nil")
-		return nil, nil
+		return nil, errors.New("head block is nil")
 	}
 	headBlk := arg.headBlock.Block()
 	if headBlk == nil || headBlk.IsNil() || headBlk.Body().IsNil() {
-		log.Error("Head block is nil")
-		return nil, nil
+		return nil, errors.New("head block or body is nil")
 	}
 	// Must not call fork choice updated until the transition conditions are met on the Pow network.
 	isExecutionBlk, err := blocks.IsExecutionBlock(headBlk.Body())
