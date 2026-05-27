@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -165,6 +166,7 @@ func TestPublishExecutionPayloadEnvelope_OK(t *testing.T) {
 
 	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -175,6 +177,7 @@ func TestPublishExecutionPayloadEnvelope_OK(t *testing.T) {
 func TestPublishExecutionPayloadEnvelope_InvalidBody(t *testing.T) {
 	s := &Server{}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader([]byte("not json")))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -204,6 +207,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_NoBlobs(t *testing.T)
 	// skipped, so the handler does not need a Broadcaster or DataColumnReceiver.
 	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -267,6 +271,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_WithBlobs(t *testing.
 		DataColumnReceiver:      &chainMock.ChainService{},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -290,6 +295,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *t
 		DataColumnReceiver: &chainMock.ChainService{},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -319,6 +325,7 @@ func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
 
 	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -346,6 +353,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ(t *testing.T) {
 	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(sszBody))
 	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -371,6 +379,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_InvalidBody(t *testing.T) {
 			s := &Server{}
 			req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/octet-stream")
+			req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 			w := httptest.NewRecorder()
 			w.Body = &bytes.Buffer{}
 
@@ -403,6 +412,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_Contents(t *testing.T) {
 	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(sszBody))
 	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -505,6 +515,7 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 				HeadFetcher:             chainSvc,
 			}
 			req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope"+tc.query, bytes.NewReader(body))
+			req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 			w := httptest.NewRecorder()
 			w.Body = &bytes.Buffer{}
 
