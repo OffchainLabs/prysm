@@ -99,16 +99,16 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishExecutionPayloadEnvelope")
 	defer span.End()
-  versionHeader := r.Header.Get(api.VersionHeader)
-  if versionHeader == "" {
-      httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
-      return
-  }
-  if versionHeader != version.String(version.Gloas) {
-      httputil.HandleError(w, api.VersionHeader+" header must be gloas", http.StatusBadRequest)
-      return
-  }
-  
+	versionHeader := r.Header.Get(api.VersionHeader)
+	if versionHeader == "" {
+		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		return
+	}
+	if versionHeader != version.String(version.Gloas) {
+		httputil.HandleError(w, api.VersionHeader+" header must be gloas", http.StatusBadRequest)
+		return
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		httputil.HandleError(w, "could not read request body: "+err.Error(), http.StatusInternalServerError)
