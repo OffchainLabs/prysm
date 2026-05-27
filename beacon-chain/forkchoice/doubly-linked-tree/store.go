@@ -189,7 +189,21 @@ func (s *Store) insert(ctx context.Context,
 		boostThreshold := params.BeaconConfig().SlotComponentDuration(bps)
 		isFirstBlock := s.proposerBoostRoot == [32]byte{}
 		if currentSlot == slot && sss < boostThreshold && isFirstBlock {
-			s.proposerBoostRoot = root
+			depEpoch := slots.ToEpoch(currentSlot)
+			if depEpoch > 1 {
+				depEpoch -= 2
+			}
+			depRoot, err := s.dependentRootForEpoch(root, depEpoch)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get block dependent root.")
+			}
+			headDepRoot, err := s.dependentRoot(depEpoch)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not get head dependent root.")
+			}
+			if depRoot == headDepRoot {
+				s.proposerBoostRoot = root
+			}
 		}
 
 		// Update best descendants
