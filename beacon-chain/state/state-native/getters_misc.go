@@ -47,7 +47,7 @@ func (b *BeaconState) Slot() primitives.Slot {
 // Fork version of the beacon chain.
 func (b *BeaconState) Fork() *ethpb.Fork {
 	if b.fork == nil {
-		return nil
+		return &ethpb.Fork{}
 	}
 
 	b.lock.RLock()
