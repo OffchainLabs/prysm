@@ -594,9 +594,13 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	if e > 0 {
 		e = e - 1
 	}
-	s.ForkChoicer().RLock()
+	fc := s.ForkChoicer()
+	if fc == nil {
+		return errors.New("forkchoice store is nil")
+	}
+	fc.RLock()
 	target, err := s.cfg.ForkChoiceStore.TargetRootForEpoch(r, e)
-	s.ForkChoicer().RUnlock()
+	fc.RUnlock()
 	if err != nil {
 		log.WithError(err).Error("Could not update proposer index state-root map")
 		return nil
