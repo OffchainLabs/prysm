@@ -1185,6 +1185,12 @@ def prysm_deps():
         version = "v0.0.0-20181222135242-d2cdd8c08219",
     )
     go_repository(
+        name = "com_github_golangci_plugin_module_register",
+        importpath = "github.com/golangci/plugin-module-register",
+        sum = "h1:e5WM6PO6NIAEcij3B053CohVp3HIYbzSuP53UAYgOpg=",
+        version = "v0.1.2",
+    )
+    go_repository(
         name = "com_github_google_btree",
         importpath = "github.com/google/btree",
         sum = "h1:gK4Kx5IaGY9CD5sPJ36FHiBJ6ZXl0kilRiiCj+jdYp4=",
