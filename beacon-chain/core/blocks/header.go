@@ -47,7 +47,7 @@ func ProcessBlockHeader(
 	block interfaces.ReadOnlySignedBeaconBlock,
 ) (state.BeaconState, error) {
 	if beaconState == nil || beaconState.IsNil() {
-		return nil, fmt.Errorf("beacon state is nil")
+		return nil, errors.New("beacon state is nil")
 	}
 	if block == nil || block.IsNil() {
 		return nil, blocks.ErrNilSignedBeaconBlock
@@ -117,7 +117,7 @@ func ProcessBlockHeaderNoVerify(
 	defer span.End()
 
 	if beaconState == nil || beaconState.IsNil() {
-		return nil, fmt.Errorf("beacon state is nil")
+		return nil, errors.New("beacon state is nil")
 	}
 	if beaconState.Slot() != slot {
 		return nil, fmt.Errorf("state slot: %d is different than block slot: %d", beaconState.Slot(), slot)

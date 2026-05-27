@@ -14,6 +14,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -122,7 +123,7 @@ func spreadKeysAcrossLocalWallets(
 	walletPassword string,
 ) error {
 	if privKeys == nil || pubKeys == nil {
-		return fmt.Errorf("keys are nil")
+		return errors.New("keys are nil")
 	}
 	ctx := context.Background()
 	for i := range numWallets {

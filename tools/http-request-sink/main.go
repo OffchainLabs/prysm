@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -70,7 +71,7 @@ func captureRequest(f *os.File, m map[string]any) error {
 
 func parseRequest(req *http.Request, unmarshalStruct any) error {
 	if req == nil {
-		return fmt.Errorf("request is nil")
+		return errors.New("request is nil")
 	}
 	body, err := io.ReadAll(req.Body)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -80,7 +81,7 @@ func newDeprecatedAttestingHistory(target primitives.Epoch) deprecatedEncodedAtt
 
 func (dh deprecatedEncodedAttestingHistory) getLatestEpochWritten() (primitives.Epoch, error) {
 	if dh == nil {
-		return 0, fmt.Errorf("attesting history is nil")
+		return 0, errors.New("attesting history is nil")
 	}
 	if err := dh.assertSize(); err != nil {
 		return 0, err
@@ -90,7 +91,7 @@ func (dh deprecatedEncodedAttestingHistory) getLatestEpochWritten() (primitives.
 
 func (dh deprecatedEncodedAttestingHistory) setLatestEpochWritten(latestEpochWritten primitives.Epoch) (deprecatedEncodedAttestingHistory, error) {
 	if dh == nil {
-		return nil, fmt.Errorf("attesting history is nil")
+		return nil, errors.New("attesting history is nil")
 	}
 	if err := dh.assertSize(); err != nil {
 		return nil, err

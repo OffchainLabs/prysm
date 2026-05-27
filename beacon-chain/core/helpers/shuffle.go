@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -163,7 +164,7 @@ func UnshuffleList(input []primitives.ValidatorIndex, seed [32]byte) ([]primitiv
 // shuffles or unshuffles, shuffle=false to un-shuffle.
 func innerShuffleList(input []primitives.ValidatorIndex, seed [32]byte, shuffle bool) ([]primitives.ValidatorIndex, error) {
 	if input == nil {
-		return nil, fmt.Errorf("input is nil")
+		return nil, errors.New("input is nil")
 	}
 	if len(input) <= 1 {
 		return input, nil

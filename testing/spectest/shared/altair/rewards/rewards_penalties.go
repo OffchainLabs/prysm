@@ -28,7 +28,7 @@ type Delta struct {
 // unmarshalSSZ deserializes specs data into a simple aggregating container.
 func (d *Delta) unmarshalSSZ(buf []byte) error {
 	if buf == nil {
-		return fmt.Errorf("nil SSZ buffer")
+		return errors.New("nil SSZ buffer")
 	}
 	offset1 := binary.LittleEndian.Uint32(buf[:4])
 	offset2 := binary.LittleEndian.Uint32(buf[4:8])

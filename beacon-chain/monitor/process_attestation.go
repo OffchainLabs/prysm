@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
@@ -36,7 +37,7 @@ func (s *Service) canUpdateAttestedValidator(idx primitives.ValidatorIndex, slot
 func attestingIndices(ctx context.Context, state state.ReadOnlyBeaconState, att ethpb.Att) ([]uint64, error) {
 	data := att.GetData()
 	if data == nil {
-		return nil, fmt.Errorf("attestation data is nil")
+		return nil, errors.New("attestation data is nil")
 	}
 	committeeBits := att.CommitteeBitsVal().BitIndices()
 	committees := make([][]primitives.ValidatorIndex, len(committeeBits))

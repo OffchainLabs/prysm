@@ -5,6 +5,7 @@ package testing
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -128,7 +129,7 @@ func (p *TestP2P) Connect(b *TestP2P) {
 
 func connect(a, b host.Host) error {
 	if a == nil || b == nil {
-		return fmt.Errorf("nil host")
+		return errors.New("nil host")
 	}
 	pinfo := peer.AddrInfo{
 		ID:    b.ID(),

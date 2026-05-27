@@ -20,6 +20,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -71,11 +72,11 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 	var attestations []ethpb.Att
 	generateHeadState := false
 	if bState == nil || bState.IsNil() {
-		return nil, fmt.Errorf("beacon state is nil")
+		return nil, errors.New("beacon state is nil")
 	}
 	bState = bState.Copy()
 	if bState == nil || bState.IsNil() {
-		return nil, fmt.Errorf("beacon state copy is nil")
+		return nil, errors.New("beacon state copy is nil")
 	}
 	if slot > bState.Slot() {
 		// Going back a slot here so there's no inclusion delay issues.
@@ -234,7 +235,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 		}
 		source := bState.CurrentJustifiedCheckpoint()
 		if source == nil {
-			return nil, fmt.Errorf("current justified checkpoint is nil")
+			return nil, errors.New("current justified checkpoint is nil")
 		}
 
 		ci := c
@@ -274,7 +275,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			}
 			aggregatedSig := bls.AggregateSignatures(sigs)
 			if aggregatedSig == nil {
-				return nil, fmt.Errorf("aggregate signature is nil")
+				return nil, errors.New("aggregate signature is nil")
 			}
 
 			var att ethpb.Att
