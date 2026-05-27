@@ -127,11 +127,9 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 
 	s.proposerPreferencesCache.Add(cache.ProposerPreference{
 		DependentRoot:  dependentRoot,
-		ProposalSlot:   slot,
 		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
 		FeeRecipient:   bytesutil.ToBytes20(signedPreferences.Message.FeeRecipient),
 		TargetGasLimit: signedPreferences.Message.TargetGasLimit,
-		Signature:      bytesutil.ToBytes96(signedPreferences.Signature),
 	}, slot)
 	msg.ValidatorData = signedPreferences
 	return pubsub.ValidationAccept, nil
