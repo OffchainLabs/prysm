@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	stateTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/state/testing"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -65,4 +67,67 @@ func TestPendingDeposits(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.DepositBalanceToConsume()
 	require.ErrorContains(t, "not supported", err)
+}
+
+func TestIsPendingValidator(t *testing.T) {
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	validDeposit := stateTesting.GeneratePendingDeposit(t, sk, 1000, [32]byte{0x01}, 0)
+
+	t.Run("valid signature returns true", func(t *testing.T) {
+		s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
+			PendingDeposits: []*eth.PendingDeposit{validDeposit},
+		})
+		require.NoError(t, err)
+
+		ok, err := s.IsPendingValidator(validDeposit.PublicKey)
+		require.NoError(t, err)
+		require.Equal(t, true, ok)
+	})
+
+	t.Run("invalid signature returns false", func(t *testing.T) {
+		invalidDeposit := &eth.PendingDeposit{
+			PublicKey:             validDeposit.PublicKey,
+			WithdrawalCredentials: validDeposit.WithdrawalCredentials,
+			Amount:                validDeposit.Amount,
+			Signature:             make([]byte, 96), // invalid empty signature
+		}
+		s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
+			PendingDeposits: []*eth.PendingDeposit{invalidDeposit},
+		})
+		require.NoError(t, err)
+
+		ok, err := s.IsPendingValidator(validDeposit.PublicKey)
+		require.NoError(t, err)
+		require.Equal(t, false, ok)
+	})
+
+	t.Run("unknown pubkey returns false", func(t *testing.T) {
+		s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
+			PendingDeposits: []*eth.PendingDeposit{validDeposit},
+		})
+		require.NoError(t, err)
+
+		ok, err := s.IsPendingValidator([]byte{9, 9, 9})
+		require.NoError(t, err)
+		require.Equal(t, false, ok)
+	})
+
+	t.Run("nil deposit skipped", func(t *testing.T) {
+		s, err := state_native.InitializeFromProtoElectra(&eth.BeaconStateElectra{
+			PendingDeposits: []*eth.PendingDeposit{nil, validDeposit},
+		})
+		require.NoError(t, err)
+
+		ok, err := s.IsPendingValidator(validDeposit.PublicKey)
+		require.NoError(t, err)
+		require.Equal(t, true, ok)
+	})
+
+	t.Run("pre-electra not supported", func(t *testing.T) {
+		s, err := state_native.InitializeFromProtoDeneb(&eth.BeaconStateDeneb{})
+		require.NoError(t, err)
+		_, err = s.IsPendingValidator([]byte{1, 2, 3})
+		require.ErrorContains(t, "not supported", err)
+	})
 }

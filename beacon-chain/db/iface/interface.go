@@ -34,6 +34,7 @@ type ReadOnlyDatabase interface {
 	IsFinalizedBlock(ctx context.Context, blockRoot [32]byte) bool
 	FinalizedChildBlock(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HighestRootsBelowSlot(ctx context.Context, slot primitives.Slot) (primitives.Slot, [][32]byte, error)
+	LowestRootsAtOrAboveSlot(ctx context.Context, slot primitives.Slot) (primitives.Slot, [][32]byte, error)
 	EarliestSlot(ctx context.Context) (primitives.Slot, error)
 	// State related methods.
 	State(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
@@ -65,6 +66,11 @@ type ReadOnlyDatabase interface {
 	// Origin checkpoint sync support
 	OriginCheckpointBlockRoot(ctx context.Context) ([32]byte, error)
 	BackfillStatus(context.Context) (*dbval.BackfillStatus, error)
+
+	// Execution payload envelope operations (Gloas+).
+	ExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error)
+	ExecutionPayloadEnvelopeByBlockHash(ctx context.Context, blockHash [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error)
+	HasExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) bool
 
 	// P2P Metadata operations.
 	MetadataSeqNum(ctx context.Context) (uint64, error)
@@ -117,6 +123,10 @@ type NoHeadAccessDatabase interface {
 	// light client operations
 	SaveLightClientUpdate(ctx context.Context, period uint64, update interfaces.LightClientUpdate) error
 	SaveLightClientBootstrap(ctx context.Context, blockRoot []byte, bootstrap interfaces.LightClientBootstrap) error
+
+	// Execution payload envelope operations (Gloas+).
+	SaveExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedExecutionPayloadEnvelope) error
+	DeleteExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) error
 
 	CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error
 	DeleteHistoricalDataBeforeSlot(ctx context.Context, slot primitives.Slot, batchSize int) (int, error)

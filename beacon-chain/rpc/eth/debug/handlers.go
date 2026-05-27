@@ -113,25 +113,37 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 			httputil.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+	case version.Gloas:
+		if strings.ToLower(string(id)) == "head" {
+			st, err = s.Stater.State(ctx, []byte(strconv.FormatUint(uint64(s.HeadFetcher.HeadSlot()), 10)))
+			if err != nil {
+				shared.WriteStateFetchError(w, err)
+				return
+			}
+		}
+		respSt, err = structs.BeaconStateGloasFromConsensus(st)
+		if err != nil {
+			httputil.HandleError(w, errMsgStateFromConsensus+": "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	default:
 		httputil.HandleError(w, "Unsupported state version", http.StatusInternalServerError)
 		return
 	}
 
-	jsonBytes, err := json.Marshal(respSt)
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal state into JSON: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
 	ver := version.String(st.Version())
-	resp := &structs.GetBeaconStateV2Response{
-		Version:             ver,
-		ExecutionOptimistic: isOptimistic,
-		Finalized:           isFinalized,
-		Data:                jsonBytes,
-	}
 	w.Header().Set(api.VersionHeader, ver)
-	httputil.WriteJson(w, resp)
+
+	// NOTE: Use an anonymous struct with Data as any instead of GetBeaconStateV2Response
+	// (which has Data as json.RawMessage) to avoid a double-encode: json.Marshal(state)
+	// into []byte, then json.Encode(response) copying those bytes again. With Data as any,
+	// the encoder marshals the state directly in a single pass, halving memory usage.
+	httputil.WriteJson(w, struct {
+		Version             string `json:"version"`
+		ExecutionOptimistic bool   `json:"execution_optimistic"`
+		Finalized           bool   `json:"finalized"`
+		Data                any    `json:"data"`
+	}{ver, isOptimistic, isFinalized, respSt})
 }
 
 // getBeaconStateSSZV2 returns the SSZ-serialized version of the full beacon state object for given state ID.
@@ -249,8 +261,7 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	segments := strings.Split(r.URL.Path, "/")
-	blockId := segments[len(segments)-1]
+	blockId := r.PathValue("block_id")
 
 	verifiedDataColumns, rpcErr := s.Blocker.DataColumns(ctx, blockId, indices)
 	if rpcErr != nil {
@@ -298,7 +309,22 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := buildDataColumnSidecarsJsonResponse(verifiedDataColumns)
+	var data json.RawMessage
+	if blk.Version() >= version.Gloas {
+		sidecars := buildDataColumnSidecarsGloasJsonResponse(verifiedDataColumns)
+		data, err = json.Marshal(sidecars)
+	} else {
+		sidecars, buildErr := buildDataColumnSidecarsJsonResponse(verifiedDataColumns)
+		if buildErr != nil {
+			httputil.HandleError(w, "Could not build data column sidecars response: "+buildErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		data, err = json.Marshal(sidecars)
+	}
+	if err != nil {
+		httputil.HandleError(w, "Could not marshal data column sidecars: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 	resp := &structs.GetDebugDataColumnSidecarsResponse{
 		Version:             version.String(blk.Version()),
 		Data:                data,
@@ -340,36 +366,74 @@ loop:
 	return indices, nil
 }
 
-func buildDataColumnSidecarsJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) []*structs.DataColumnSidecar {
+func buildDataColumnSidecarsJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) ([]*structs.DataColumnSidecar, error) {
 	sidecars := make([]*structs.DataColumnSidecar, len(verifiedDataColumns))
 	for i, dc := range verifiedDataColumns {
-		column := make([]string, len(dc.Column))
-		for j, cell := range dc.Column {
+		cells := dc.Column()
+		column := make([]string, len(cells))
+		for j, cell := range cells {
 			column[j] = hexutil.Encode(cell)
 		}
 
-		kzgCommitments := make([]string, len(dc.KzgCommitments))
-		for j, commitment := range dc.KzgCommitments {
+		comms, err := dc.KzgCommitments()
+		if err != nil {
+			return nil, err
+		}
+		kzgCommitments := make([]string, len(comms))
+		for j, commitment := range comms {
 			kzgCommitments[j] = hexutil.Encode(commitment)
 		}
 
-		kzgProofs := make([]string, len(dc.KzgProofs))
-		for j, proof := range dc.KzgProofs {
+		kzgProofs := make([]string, len(dc.KzgProofs()))
+		for j, proof := range dc.KzgProofs() {
 			kzgProofs[j] = hexutil.Encode(proof)
 		}
 
-		kzgCommitmentsInclusionProof := make([]string, len(dc.KzgCommitmentsInclusionProof))
-		for j, proof := range dc.KzgCommitmentsInclusionProof {
+		incProof, err := dc.KzgCommitmentsInclusionProof()
+		if err != nil {
+			return nil, err
+		}
+		kzgCommitmentsInclusionProof := make([]string, len(incProof))
+		for j, proof := range incProof {
 			kzgCommitmentsInclusionProof[j] = hexutil.Encode(proof)
 		}
 
+		sbh, err := dc.SignedBlockHeader()
+		if err != nil {
+			return nil, err
+		}
 		sidecars[i] = &structs.DataColumnSidecar{
-			Index:                        strconv.FormatUint(dc.Index, 10),
+			Index:                        strconv.FormatUint(dc.Index(), 10),
 			Column:                       column,
 			KzgCommitments:               kzgCommitments,
 			KzgProofs:                    kzgProofs,
-			SignedBeaconBlockHeader:      structs.SignedBeaconBlockHeaderFromConsensus(dc.SignedBlockHeader),
+			SignedBeaconBlockHeader:      structs.SignedBeaconBlockHeaderFromConsensus(sbh),
 			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+		}
+	}
+	return sidecars, nil
+}
+
+func buildDataColumnSidecarsGloasJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) []*structs.DataColumnSidecarGloas {
+	sidecars := make([]*structs.DataColumnSidecarGloas, len(verifiedDataColumns))
+	for i, dc := range verifiedDataColumns {
+		cells := dc.Column()
+		column := make([]string, len(cells))
+		for j, cell := range cells {
+			column[j] = hexutil.Encode(cell)
+		}
+		proofs := dc.KzgProofs()
+		kzgProofs := make([]string, len(proofs))
+		for j, proof := range proofs {
+			kzgProofs[j] = hexutil.Encode(proof)
+		}
+		root := dc.BlockRoot()
+		sidecars[i] = &structs.DataColumnSidecarGloas{
+			Index:           strconv.FormatUint(dc.Index(), 10),
+			Column:          column,
+			KzgProofs:       kzgProofs,
+			Slot:            strconv.FormatUint(uint64(dc.Slot()), 10),
+			BeaconBlockRoot: hexutil.Encode(root[:]),
 		}
 	}
 	return sidecars

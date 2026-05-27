@@ -638,6 +638,10 @@ type mockStateByRooter struct {
 	calledForRoot map[[32]byte]bool
 }
 
+func (sbr *mockStateByRooter) StateByRootIfCachedNoCopy(_ [32]byte) state.ReadOnlyBeaconState {
+	return nil
+}
+
 func (sbr *mockStateByRooter) StateByRoot(ctx context.Context, root [32]byte) (state.BeaconState, error) {
 	if sbr.calledForRoot == nil {
 		sbr.calledForRoot = make(map[[32]byte]bool)

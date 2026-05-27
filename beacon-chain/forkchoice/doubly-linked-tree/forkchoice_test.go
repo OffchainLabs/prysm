@@ -3,7 +3,6 @@ package doublylinkedtree
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
@@ -94,9 +93,9 @@ func TestForkChoice_UpdateBalancesPositiveChange(t *testing.T) {
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
 	f.votes = []Vote{
-		{indexToHash(1), indexToHash(1), 0},
-		{indexToHash(2), indexToHash(2), 0},
-		{indexToHash(3), indexToHash(3), 0},
+		{indexToHash(1), indexToHash(1), 1, 0, true, true},
+		{indexToHash(2), indexToHash(2), 2, 0, true, true},
+		{indexToHash(3), indexToHash(3), 3, 0, true, true},
 	}
 
 	// Each node gets one unique vote. The weight should look like 103 <- 102 <- 101 because
@@ -104,9 +103,36 @@ func TestForkChoice_UpdateBalancesPositiveChange(t *testing.T) {
 	f.justifiedBalances = []uint64{10, 20, 30}
 	require.NoError(t, f.updateBalances())
 	s := f.store
-	assert.Equal(t, uint64(10), s.nodeByRoot[indexToHash(1)].balance)
-	assert.Equal(t, uint64(20), s.nodeByRoot[indexToHash(2)].balance)
-	assert.Equal(t, uint64(30), s.nodeByRoot[indexToHash(3)].balance)
+	assert.Equal(t, uint64(10), s.fullNodeByRoot[indexToHash(1)].balance)
+	assert.Equal(t, uint64(20), s.fullNodeByRoot[indexToHash(2)].balance)
+	assert.Equal(t, uint64(30), s.fullNodeByRoot[indexToHash(3)].balance)
+}
+
+func TestForkChoice_UpdateBalancesSameSlot(t *testing.T) {
+	f := setup(0, 0)
+	ctx := t.Context()
+	st, roblock, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+	st, roblock, err = prepareForkchoiceState(ctx, 2, indexToHash(2), indexToHash(1), params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	s := f.store
+	s.fullNodeByRoot[indexToHash(1)].balance = 100
+	s.fullNodeByRoot[indexToHash(2)].balance = 100
+
+	f.balances = []uint64{100, 100}
+	f.votes = []Vote{
+		{indexToHash(1), indexToHash(1), 1, 1, true, true},
+		{indexToHash(2), indexToHash(2), 2, 2, true, true},
+	}
+
+	// Balance changes with same slot should still update node balances.
+	f.justifiedBalances = []uint64{50, 200}
+	require.NoError(t, f.updateBalances())
+	assert.Equal(t, uint64(50), s.fullNodeByRoot[indexToHash(1)].balance)
+	assert.Equal(t, uint64(200), s.fullNodeByRoot[indexToHash(2)].balance)
 }
 
 func TestForkChoice_UpdateBalancesNegativeChange(t *testing.T) {
@@ -122,22 +148,22 @@ func TestForkChoice_UpdateBalancesNegativeChange(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 	s := f.store
-	s.nodeByRoot[indexToHash(1)].balance = 100
-	s.nodeByRoot[indexToHash(2)].balance = 100
-	s.nodeByRoot[indexToHash(3)].balance = 100
+	s.fullNodeByRoot[indexToHash(1)].balance = 100
+	s.fullNodeByRoot[indexToHash(2)].balance = 100
+	s.fullNodeByRoot[indexToHash(3)].balance = 100
 
 	f.balances = []uint64{100, 100, 100}
 	f.votes = []Vote{
-		{indexToHash(1), indexToHash(1), 0},
-		{indexToHash(2), indexToHash(2), 0},
-		{indexToHash(3), indexToHash(3), 0},
+		{indexToHash(1), indexToHash(1), 1, 0, true, true},
+		{indexToHash(2), indexToHash(2), 2, 0, true, true},
+		{indexToHash(3), indexToHash(3), 3, 0, true, true},
 	}
 
 	f.justifiedBalances = []uint64{10, 20, 30}
 	require.NoError(t, f.updateBalances())
-	assert.Equal(t, uint64(10), s.nodeByRoot[indexToHash(1)].balance)
-	assert.Equal(t, uint64(20), s.nodeByRoot[indexToHash(2)].balance)
-	assert.Equal(t, uint64(30), s.nodeByRoot[indexToHash(3)].balance)
+	assert.Equal(t, uint64(10), s.fullNodeByRoot[indexToHash(1)].balance)
+	assert.Equal(t, uint64(20), s.fullNodeByRoot[indexToHash(2)].balance)
+	assert.Equal(t, uint64(30), s.fullNodeByRoot[indexToHash(3)].balance)
 }
 
 func TestForkChoice_UpdateBalancesUnderflow(t *testing.T) {
@@ -153,22 +179,22 @@ func TestForkChoice_UpdateBalancesUnderflow(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 	s := f.store
-	s.nodeByRoot[indexToHash(1)].balance = 100
-	s.nodeByRoot[indexToHash(2)].balance = 100
-	s.nodeByRoot[indexToHash(3)].balance = 100
+	s.fullNodeByRoot[indexToHash(1)].balance = 100
+	s.fullNodeByRoot[indexToHash(2)].balance = 100
+	s.fullNodeByRoot[indexToHash(3)].balance = 100
 
 	f.balances = []uint64{125, 125, 125}
 	f.votes = []Vote{
-		{indexToHash(1), indexToHash(1), 0},
-		{indexToHash(2), indexToHash(2), 0},
-		{indexToHash(3), indexToHash(3), 0},
+		{indexToHash(1), indexToHash(1), 1, 0, true, true},
+		{indexToHash(2), indexToHash(2), 2, 0, true, true},
+		{indexToHash(3), indexToHash(3), 3, 0, true, true},
 	}
 
 	f.justifiedBalances = []uint64{10, 20, 30}
 	require.NoError(t, f.updateBalances())
-	assert.Equal(t, uint64(0), s.nodeByRoot[indexToHash(1)].balance)
-	assert.Equal(t, uint64(0), s.nodeByRoot[indexToHash(2)].balance)
-	assert.Equal(t, uint64(5), s.nodeByRoot[indexToHash(3)].balance)
+	assert.Equal(t, uint64(0), s.fullNodeByRoot[indexToHash(1)].balance)
+	assert.Equal(t, uint64(0), s.fullNodeByRoot[indexToHash(2)].balance)
+	assert.Equal(t, uint64(5), s.fullNodeByRoot[indexToHash(3)].balance)
 }
 
 func TestForkChoice_IsCanonical(t *testing.T) {
@@ -224,12 +250,12 @@ func TestForkChoice_IsCanonicalReorg(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
-	f.store.nodeByRoot[[32]byte{'3'}].balance = 10
-	require.NoError(t, f.store.treeRootNode.applyWeightChanges(ctx))
-	require.Equal(t, uint64(10), f.store.nodeByRoot[[32]byte{'1'}].weight)
-	require.Equal(t, uint64(0), f.store.nodeByRoot[[32]byte{'2'}].weight)
+	f.store.emptyNodeByRoot[[32]byte{'3'}].balance = 10
+	require.NoError(t, f.store.applyWeightChangesConsensusNode(ctx, f.store.treeRootNode))
+	require.Equal(t, uint64(10), f.store.emptyNodeByRoot[[32]byte{'1'}].node.weight)
+	require.Equal(t, uint64(0), f.store.emptyNodeByRoot[[32]byte{'2'}].node.weight)
 
-	require.NoError(t, f.store.treeRootNode.updateBestDescendant(ctx, 1, 1, 1))
+	require.NoError(t, f.store.updateBestDescendantConsensusNode(ctx, f.store.treeRootNode, 1, 1, 1))
 	require.DeepEqual(t, [32]byte{'3'}, f.store.treeRootNode.bestDescendant.root)
 
 	r1 := [32]byte{'1'}
@@ -260,7 +286,7 @@ func TestForkChoice_AncestorRoot(t *testing.T) {
 	st, roblock, err = prepareForkchoiceState(ctx, 5, indexToHash(3), indexToHash(2), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
-	f.store.treeRootNode = f.store.nodeByRoot[indexToHash(1)]
+	f.store.treeRootNode = f.store.emptyNodeByRoot[indexToHash(1)].node
 	f.store.treeRootNode.parent = nil
 
 	r, err := f.AncestorRoot(ctx, indexToHash(3), 6)
@@ -333,8 +359,8 @@ func TestForkChoice_RemoveEquivocating(t *testing.T) {
 	require.Equal(t, [32]byte{'c'}, head)
 
 	// Insert two attestations for block b, one for c it becomes head
-	f.ProcessAttestation(ctx, []uint64{1, 2}, [32]byte{'b'}, 1)
-	f.ProcessAttestation(ctx, []uint64{3}, [32]byte{'c'}, 1)
+	f.ProcessAttestation(ctx, []uint64{1, 2}, [32]byte{'b'}, params.BeaconConfig().SlotsPerEpoch, true)
+	f.ProcessAttestation(ctx, []uint64{3}, [32]byte{'c'}, params.BeaconConfig().SlotsPerEpoch, true)
 	f.justifiedBalances = []uint64{100, 200, 200, 300}
 	head, err = f.Head(ctx)
 	require.NoError(t, err)
@@ -342,21 +368,21 @@ func TestForkChoice_RemoveEquivocating(t *testing.T) {
 
 	// Process b's slashing, c is now head
 	f.InsertSlashedIndex(ctx, 1)
-	require.Equal(t, uint64(200), f.store.nodeByRoot[[32]byte{'b'}].balance)
+	require.Equal(t, uint64(200), f.store.fullNodeByRoot[[32]byte{'b'}].balance)
 	f.justifiedBalances = []uint64{100, 200, 200, 300}
 	head, err = f.Head(ctx)
-	require.Equal(t, uint64(200), f.store.nodeByRoot[[32]byte{'b'}].weight)
-	require.Equal(t, uint64(300), f.store.nodeByRoot[[32]byte{'c'}].weight)
+	require.Equal(t, uint64(200), f.store.fullNodeByRoot[[32]byte{'b'}].weight)
+	require.Equal(t, uint64(300), f.store.fullNodeByRoot[[32]byte{'c'}].weight)
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{'c'}, head)
 
 	// Process b's slashing again, should be a noop
 	f.InsertSlashedIndex(ctx, 1)
-	require.Equal(t, uint64(200), f.store.nodeByRoot[[32]byte{'b'}].balance)
+	require.Equal(t, uint64(200), f.store.fullNodeByRoot[[32]byte{'b'}].balance)
 	f.justifiedBalances = []uint64{100, 200, 200, 300}
 	head, err = f.Head(ctx)
-	require.Equal(t, uint64(200), f.store.nodeByRoot[[32]byte{'b'}].weight)
-	require.Equal(t, uint64(300), f.store.nodeByRoot[[32]byte{'c'}].weight)
+	require.Equal(t, uint64(200), f.store.fullNodeByRoot[[32]byte{'b'}].weight)
+	require.Equal(t, uint64(300), f.store.fullNodeByRoot[[32]byte{'c'}].weight)
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{'c'}, head)
 
@@ -370,6 +396,72 @@ func indexToHash(i uint64) [32]byte {
 	var b [8]byte
 	binary.LittleEndian.PutUint64(b[:], i)
 	return hash.Hash(b[:])
+}
+
+func TestForkChoice_RecordBlockForEquivocation_AppendAndCap(t *testing.T) {
+	f := setup(0, 0)
+	slot := primitives.Slot(5)
+	proposer := primitives.ValidatorIndex(7)
+	rootA := [32]byte{'a'}
+	rootB := [32]byte{'b'}
+	rootC := [32]byte{'c'}
+
+	f.RecordBlockForEquivocation(slot, proposer, rootA)
+	f.RecordBlockForEquivocation(slot, proposer, rootB)
+	f.RecordBlockForEquivocation(slot, proposer, rootC)
+
+	key := proposerSlotKey{slot: slot, proposer: proposer}
+	require.Equal(t, 2, len(f.store.blockRootsBySlotProposer[key]))
+	require.Equal(t, rootA, f.store.blockRootsBySlotProposer[key][0])
+	require.Equal(t, rootB, f.store.blockRootsBySlotProposer[key][1])
+}
+
+func TestForkChoice_RecordBlockForEquivocation_DedupesRoot(t *testing.T) {
+	f := setup(0, 0)
+	slot := primitives.Slot(5)
+	proposer := primitives.ValidatorIndex(7)
+	root := [32]byte{'a'}
+
+	f.RecordBlockForEquivocation(slot, proposer, root)
+	f.RecordBlockForEquivocation(slot, proposer, root)
+
+	key := proposerSlotKey{slot: slot, proposer: proposer}
+	require.Equal(t, 1, len(f.store.blockRootsBySlotProposer[key]))
+}
+
+func TestForkChoice_InsertNode_RecordsFirstSeen(t *testing.T) {
+	f := setup(0, 0)
+	blockRoot := indexToHash(1)
+	st, roblock, err := prepareForkchoiceState(t.Context(), 1, blockRoot, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(t.Context(), st, roblock))
+
+	key := proposerSlotKey{slot: 1, proposer: roblock.Block().ProposerIndex()}
+	roots := f.store.blockRootsBySlotProposer[key]
+	require.Equal(t, 1, len(roots))
+	require.Equal(t, blockRoot, roots[0])
+}
+
+func TestForkChoice_RecordBlockForEquivocation_PrunedOnFinalization(t *testing.T) {
+	f := setup(0, 0)
+	slotsPerEpoch := primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+	earlySlot := primitives.Slot(2)
+	lateSlot := slotsPerEpoch*3 + 1
+	proposer := primitives.ValidatorIndex(7)
+	earlyRoot := [32]byte{'e'}
+	lateRoot := [32]byte{'l'}
+
+	f.RecordBlockForEquivocation(earlySlot, proposer, earlyRoot)
+	f.RecordBlockForEquivocation(lateSlot, proposer, lateRoot)
+
+	fc := &forkchoicetypes.Checkpoint{Root: [32]byte{'f'}, Epoch: 2}
+	require.NoError(t, f.UpdateFinalizedCheckpoint(fc))
+
+	_, earlyPresent := f.store.blockRootsBySlotProposer[proposerSlotKey{slot: earlySlot, proposer: proposer}]
+	require.Equal(t, false, earlyPresent)
+	_, latePresent := f.store.blockRootsBySlotProposer[proposerSlotKey{slot: lateSlot, proposer: proposer}]
+	require.Equal(t, true, latePresent)
 }
 
 func TestForkChoice_UpdateJustifiedAndFinalizedCheckpoints(t *testing.T) {
@@ -514,58 +606,6 @@ func TestStore_CommonAncestor(t *testing.T) {
 		})
 	}
 
-	// a -- b -- c -- d
-	f = setup(0, 0)
-	st, roblock, err = prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, roblock))
-	st, roblock, err = prepareForkchoiceState(ctx, 1, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, roblock))
-	st, roblock, err = prepareForkchoiceState(ctx, 2, [32]byte{'c'}, [32]byte{'b'}, [32]byte{'C'}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, roblock))
-	st, roblock, err = prepareForkchoiceState(ctx, 3, [32]byte{'d'}, [32]byte{'c'}, [32]byte{}, 1, 1)
-	require.NoError(t, err)
-	require.NoError(t, f.InsertNode(ctx, st, roblock))
-	tests = []struct {
-		name     string
-		r1       [32]byte
-		r2       [32]byte
-		wantRoot [32]byte
-		wantSlot primitives.Slot
-	}{
-		{
-			name:     "Common ancestor between a and b is a",
-			r1:       [32]byte{'a'},
-			r2:       [32]byte{'b'},
-			wantRoot: [32]byte{'a'},
-			wantSlot: 0,
-		},
-		{
-			name:     "Common ancestor between b and d is b",
-			r1:       [32]byte{'d'},
-			r2:       [32]byte{'b'},
-			wantRoot: [32]byte{'b'},
-			wantSlot: 1,
-		},
-		{
-			name:     "Common ancestor between d and a is a",
-			r1:       [32]byte{'d'},
-			r2:       [32]byte{'a'},
-			wantRoot: [32]byte{'a'},
-			wantSlot: 0,
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			gotRoot, gotSlot, err := f.CommonAncestor(ctx, tc.r1, tc.r2)
-			require.NoError(t, err)
-			require.Equal(t, tc.wantRoot, gotRoot)
-			require.Equal(t, tc.wantSlot, gotSlot)
-		})
-	}
-
 	// Equal inputs should return the same root.
 	r, s, err := f.CommonAncestor(ctx, [32]byte{'b'}, [32]byte{'b'})
 	require.NoError(t, err)
@@ -590,7 +630,7 @@ func TestStore_CommonAncestor(t *testing.T) {
 		unrealizedFinalizedEpoch: 1,
 	}
 
-	f.store.nodeByRoot[[32]byte{'y'}] = n
+	f.store.emptyNodeByRoot[[32]byte{'y'}] = &PayloadNode{node: n, optimistic: true}
 	// broken link
 	_, _, err = f.CommonAncestor(ctx, [32]byte{'y'}, [32]byte{'a'})
 	require.ErrorIs(t, err, forkchoice.ErrUnknownCommonAncestor)
@@ -609,7 +649,8 @@ func TestStore_InsertChain(t *testing.T) {
 	require.NoError(t, err)
 	roblock, err := blocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	blks = append(blks, &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
+	blks = append(blks, &forkchoicetypes.BlockAndCheckpoints{
+		Block:               roblock,
 		JustifiedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 		FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 	})
@@ -624,7 +665,8 @@ func TestStore_InsertChain(t *testing.T) {
 		require.NoError(t, err)
 		roblock, err := blocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		blks = append(blks, &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
+		blks = append(blks, &forkchoicetypes.BlockAndCheckpoints{
+			Block:               roblock,
 			JustifiedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 			FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 		})
@@ -741,7 +783,7 @@ func TestWeight(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
-	n, ok := f.store.nodeByRoot[root]
+	n, ok := f.store.emptyNodeByRoot[root]
 	require.Equal(t, true, ok)
 	n.weight = 10
 	w, err := f.Weight(root)
@@ -760,22 +802,59 @@ func TestForkchoice_UpdateJustifiedBalances(t *testing.T) {
 		return balances, nil
 	}
 	require.NoError(t, f.updateJustifiedBalances(t.Context(), [32]byte{}))
-	require.Equal(t, uint64(7), f.numActiveValidators)
 	require.Equal(t, uint64(430)/32, f.store.committeeWeight)
 	require.DeepEqual(t, balances, f.justifiedBalances)
 }
 
 func TestForkChoice_UnrealizedJustifiedPayloadBlockHash(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 100
+	params.OverrideBeaconConfig(cfg)
+
 	ctx := t.Context()
 	f := setup(0, 0)
 
+	// Insert block 'a' at slot 0 with blockHash 'A', parent is genesis.
 	st, roblock, err := prepareForkchoiceState(ctx, 0, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, st, roblock))
 
+	// Pre-Gloas there is no empty/full ambiguity, so the checkpoint payload hash
+	// is the block's own payload hash.
 	f.store.unrealizedJustifiedCheckpoint.Root = [32]byte{'a'}
 	got := f.UnrealizedJustifiedPayloadBlockHash()
 	require.Equal(t, [32]byte{'A'}, got)
+
+	// Insert block 'b' at slot 1 with blockHash 'B', parent is 'a'.
+	st, roblock, err = prepareForkchoiceState(ctx, 1, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	// Pre-Gloas the checkpoint payload hash is still the block's own payload hash.
+	f.store.unrealizedJustifiedCheckpoint.Root = [32]byte{'b'}
+	got = f.UnrealizedJustifiedPayloadBlockHash()
+	require.Equal(t, [32]byte{'B'}, got)
+}
+
+func TestForkChoice_FinalizedAndJustifiedPayloadBlockHash_PreGloas(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.GloasForkEpoch = 100
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	f := setup(0, 0)
+
+	st, roblock, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, params.BeaconConfig().ZeroHash, [32]byte{'A'}, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	require.NoError(t, f.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Root: [32]byte{'a'}}))
+	f.store.justifiedCheckpoint.Root = [32]byte{'a'}
+
+	require.Equal(t, [32]byte{'A'}, f.FinalizedPayloadBlockHash())
+	require.Equal(t, [32]byte{'A'}, f.JustifiedPayloadBlockHash())
 }
 
 func TestForkChoiceIsViableForCheckpoint(t *testing.T) {
@@ -914,15 +993,55 @@ func TestForkchoiceParentRoot(t *testing.T) {
 	require.Equal(t, zeroHash, root)
 }
 
-func TestForkChoice_CleanupInserting(t *testing.T) {
+func prepareBellatrixForkchoiceStateWithGasLimit(
+	slot primitives.Slot,
+	blockRoot [32]byte,
+	parentRoot [32]byte,
+	payloadHash [32]byte,
+	gasLimit uint64,
+) (state.BeaconState, blocks.ROBlock, error) {
+	blockHeader := &ethpb.BeaconBlockHeader{ParentRoot: parentRoot[:]}
+	executionHeader := &enginev1.ExecutionPayloadHeader{BlockHash: payloadHash[:], GasLimit: gasLimit}
+	base := &ethpb.BeaconStateBellatrix{
+		Slot:                         slot,
+		RandaoMixes:                  make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector),
+		CurrentJustifiedCheckpoint:   &ethpb.Checkpoint{},
+		FinalizedCheckpoint:          &ethpb.Checkpoint{},
+		LatestExecutionPayloadHeader: executionHeader,
+		LatestBlockHeader:            blockHeader,
+	}
+	st, err := state_native.InitializeFromProtoBellatrix(base)
+	if err != nil {
+		return nil, blocks.ROBlock{}, err
+	}
+	blk := &ethpb.SignedBeaconBlockBellatrix{
+		Block: &ethpb.BeaconBlockBellatrix{
+			Slot:       slot,
+			ParentRoot: parentRoot[:],
+			Body: &ethpb.BeaconBlockBodyBellatrix{
+				ExecutionPayload: &enginev1.ExecutionPayload{BlockHash: payloadHash[:], GasLimit: gasLimit},
+			},
+		},
+	}
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	if err != nil {
+		return nil, blocks.ROBlock{}, err
+	}
+	roblock, err := blocks.NewROBlockWithRoot(signed, blockRoot)
+	return st, roblock, err
+}
+
+func TestGasLimit_BellatrixInsertStoresGasLimit(t *testing.T) {
 	f := setup(0, 0)
 	ctx := t.Context()
-	st, roblock, err := prepareForkchoiceState(ctx, 1, indexToHash(1), params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 2, 2)
-	f.SetBalancesByRooter(func(_ context.Context, _ [32]byte) ([]uint64, error) {
-		return f.justifiedBalances, errors.New("mock err")
-	})
 
+	root := indexToHash(1)
+	const gl = uint64(30_000_000)
+	st, roblock, err := prepareBellatrixForkchoiceStateWithGasLimit(1, root, params.BeaconConfig().ZeroHash, indexToHash(100), gl)
 	require.NoError(t, err)
-	require.NotNil(t, f.InsertNode(ctx, st, roblock))
-	require.Equal(t, false, f.HasNode(roblock.Root()))
+	require.NoError(t, f.InsertNode(ctx, st, roblock))
+
+	got, err := f.GasLimit(root)
+	require.NoError(t, err)
+	assert.Equal(t, gl, got)
 }

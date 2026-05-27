@@ -105,17 +105,22 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 			if len(lastValidHash) == 0 {
 				lastValidHash = defaultLatestValidHash
 			}
-			invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, headRoot, headBlk.ParentRoot(), bytesutil.ToBytes32(lastValidHash))
+			// this call has guaranteed to have the `headRoot` with its payload in forkchoice.
+			invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, headRoot, headBlk.ParentRoot(), bytesutil.ToBytes32(headPayload.ParentHash()), bytesutil.ToBytes32(lastValidHash))
 			if err != nil {
 				log.WithError(err).Error("Could not set head root to invalid")
 				return nil, nil
+			}
+			// TODO: Gloas, we should not include the head root in this call
+			if len(invalidRoots) == 0 || invalidRoots[0] != headRoot {
+				invalidRoots = append([][32]byte{headRoot}, invalidRoots...)
 			}
 			if err := s.removeInvalidBlockAndState(ctx, invalidRoots); err != nil {
 				log.WithError(err).Error("Could not remove invalid block and state")
 				return nil, nil
 			}
 
-			r, err := s.cfg.ForkChoiceStore.Head(ctx)
+			r, _, full, err := s.cfg.ForkChoiceStore.FullHead(ctx)
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"slot":                 headBlk.Slot(),
@@ -144,7 +149,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 				return nil, err // Returning err because it's recursive here.
 			}
 
-			if err := s.saveHead(ctx, r, b, st); err != nil {
+			if err := s.saveHead(ctx, r, b, st, full); err != nil {
 				log.WithError(err).Error("Could not save head after pruning invalid blocks")
 			}
 
@@ -236,6 +241,9 @@ func (s *Service) notifyNewPayload(ctx context.Context, stVersion int, header in
 	if stVersion < version.Bellatrix {
 		return true, nil
 	}
+	if blk.Version() >= version.Gloas {
+		return false, nil
+	}
 	body := blk.Block().Body()
 	enabled, err := blocks.IsExecutionEnabledUsingHeader(header, body)
 	if err != nil {
@@ -298,10 +306,10 @@ func (s *Service) notifyNewPayload(ctx context.Context, stVersion int, header in
 	return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 }
 
-// reportInvalidBlock deals with the event that an invalid block was detected by the execution layer
-func (s *Service) pruneInvalidBlock(ctx context.Context, root, parentRoot, lvh [32]byte) error {
+// pruneInvalidBlock deals with the event that an invalid block was detected by the execution layer
+func (s *Service) pruneInvalidBlock(ctx context.Context, root, parentRoot, parentHash [32]byte, lvh [32]byte) error {
 	newPayloadInvalidNodeCount.Inc()
-	invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, root, parentRoot, lvh)
+	invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, root, parentRoot, parentHash, lvh)
 	if err != nil {
 		return err
 	}
@@ -321,7 +329,7 @@ func (s *Service) pruneInvalidBlock(ctx context.Context, root, parentRoot, lvh [
 
 // getPayloadAttributes returns the payload attributes for the given state and slot.
 // The attribute is required to initiate a payload build process in the context of an `engine_forkchoiceUpdated` call.
-func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot []byte) payloadattribute.Attributer {
+func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot []byte, headFull bool) payloadattribute.Attributer {
 	emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
 
 	// If it is an epoch boundary then process slots to get the right
@@ -371,66 +379,97 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	}
 
 	v := st.Version()
-
-	if v >= version.Deneb {
-		withdrawals, _, err := st.ExpectedWithdrawals()
+	switch {
+	case v >= version.Gloas:
+		withdrawals, err := s.computePayloadWithdrawals(ctx, st, bytesutil.ToBytes32(headRoot), headFull)
 		if err != nil {
-			log.WithError(err).Error("Could not get expected withdrawals to get payload attribute")
+			log.WithError(err).Error("Could not get withdrawals for payload attribute")
 			return emptyAttri
 		}
-
-		attr, err := payloadattribute.New(&enginev1.PayloadAttributesV3{
-			Timestamp:             uint64(t.Unix()),
-			PrevRandao:            prevRando,
-			SuggestedFeeRecipient: val.FeeRecipient[:],
-			Withdrawals:           withdrawals,
-			ParentBeaconBlockRoot: headRoot,
-		})
-		if err != nil {
-			log.WithError(err).Error("Could not get payload attribute")
-			return emptyAttri
+		targetGasLimit := val.GasLimit
+		if targetGasLimit == 0 {
+			targetGasLimit = params.BeaconConfig().DefaultBuilderGasLimit
 		}
-
-		return attr
+		return payloadAttributesGloas(uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot, withdrawals, slot, targetGasLimit)
+	case v >= version.Deneb:
+		return payloadAttributesDeneb(st, uint64(t.Unix()), prevRando, val.FeeRecipient[:], headRoot)
+	case v >= version.Capella:
+		return payloadAttributesCapella(st, uint64(t.Unix()), prevRando, val.FeeRecipient[:])
+	case v >= version.Bellatrix:
+		return payloadAttributesBellatrix(uint64(t.Unix()), prevRando, val.FeeRecipient[:])
+	default:
+		log.WithField("version", version.String(v)).Error("Could not get payload attribute due to unknown state version")
+		return payloadattribute.EmptyWithVersion(v)
 	}
+}
 
-	if v >= version.Capella {
-		withdrawals, _, err := st.ExpectedWithdrawals()
-		if err != nil {
-			log.WithError(err).Error("Could not get expected withdrawals to get payload attribute")
-			return emptyAttri
-		}
-
-		attr, err := payloadattribute.New(&enginev1.PayloadAttributesV2{
-			Timestamp:             uint64(t.Unix()),
-			PrevRandao:            prevRando,
-			SuggestedFeeRecipient: val.FeeRecipient[:],
-			Withdrawals:           withdrawals,
-		})
-		if err != nil {
-			log.WithError(err).Error("Could not get payload attribute")
-			return emptyAttri
-		}
-
-		return attr
+func payloadAttributesGloas(timestamp uint64, prevRandao, feeRecipient, parentBeaconBlockRoot []byte, withdrawals []*enginev1.Withdrawal, slot primitives.Slot, targetGasLimit uint64) payloadattribute.Attributer {
+	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
+		Timestamp:             timestamp,
+		PrevRandao:            prevRandao,
+		SuggestedFeeRecipient: feeRecipient,
+		Withdrawals:           withdrawals,
+		ParentBeaconBlockRoot: parentBeaconBlockRoot,
+		SlotNumber:            uint64(slot),
+		TargetGasLimit:        targetGasLimit,
+	})
+	if err != nil {
+		log.WithError(err).Error("Could not get payload attribute")
+		return payloadattribute.EmptyWithVersion(version.Gloas)
 	}
+	return attr
+}
 
-	if v >= version.Bellatrix {
-		attr, err := payloadattribute.New(&enginev1.PayloadAttributes{
-			Timestamp:             uint64(t.Unix()),
-			PrevRandao:            prevRando,
-			SuggestedFeeRecipient: val.FeeRecipient[:],
-		})
-		if err != nil {
-			log.WithError(err).Error("Could not get payload attribute")
-			return emptyAttri
-		}
-
-		return attr
+func payloadAttributesDeneb(st state.BeaconState, timestamp uint64, prevRandao, feeRecipient, parentBeaconBlockRoot []byte) payloadattribute.Attributer {
+	withdrawals, _, err := st.ExpectedWithdrawals()
+	if err != nil {
+		log.WithError(err).Error("Could not get expected withdrawals to get payload attribute")
+		return payloadattribute.EmptyWithVersion(st.Version())
 	}
+	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV3{
+		Timestamp:             timestamp,
+		PrevRandao:            prevRandao,
+		SuggestedFeeRecipient: feeRecipient,
+		Withdrawals:           withdrawals,
+		ParentBeaconBlockRoot: parentBeaconBlockRoot,
+	})
+	if err != nil {
+		log.WithError(err).Error("Could not get payload attribute")
+		return payloadattribute.EmptyWithVersion(st.Version())
+	}
+	return attr
+}
 
-	log.WithField("version", version.String(st.Version())).Error("Could not get payload attribute due to unknown state version")
-	return emptyAttri
+func payloadAttributesCapella(st state.BeaconState, timestamp uint64, prevRandao, feeRecipient []byte) payloadattribute.Attributer {
+	withdrawals, _, err := st.ExpectedWithdrawals()
+	if err != nil {
+		log.WithError(err).Error("Could not get expected withdrawals to get payload attribute")
+		return payloadattribute.EmptyWithVersion(st.Version())
+	}
+	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV2{
+		Timestamp:             timestamp,
+		PrevRandao:            prevRandao,
+		SuggestedFeeRecipient: feeRecipient,
+		Withdrawals:           withdrawals,
+	})
+	if err != nil {
+		log.WithError(err).Error("Could not get payload attribute")
+		return payloadattribute.EmptyWithVersion(st.Version())
+	}
+	return attr
+}
+
+func payloadAttributesBellatrix(timestamp uint64, prevRandao, feeRecipient []byte) payloadattribute.Attributer {
+	attr, err := payloadattribute.New(&enginev1.PayloadAttributes{
+		Timestamp:             timestamp,
+		PrevRandao:            prevRandao,
+		SuggestedFeeRecipient: feeRecipient,
+	})
+	if err != nil {
+		log.WithError(err).Error("Could not get payload attribute")
+		return payloadattribute.EmptyWithVersion(version.Bellatrix)
+	}
+	return attr
 }
 
 // removeInvalidBlockAndState removes the invalid block, blob and its corresponding state from the cache and DB.

@@ -46,7 +46,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 	//            0
 	//           / \
 	//          2  1 <- +vote, new head
-	f.ProcessAttestation(t.Context(), []uint64{0}, indexToHash(1), 2)
+	f.ProcessAttestation(t.Context(), []uint64{0}, indexToHash(1), 2*params.BeaconConfig().SlotsPerEpoch, true)
 	r, err = f.Head(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, indexToHash(1), r, "Incorrect head for with justified epoch at 1")
@@ -55,7 +55,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 	//                     0
 	//                    / \
 	// vote, new head -> 2  1
-	f.ProcessAttestation(t.Context(), []uint64{1}, indexToHash(2), 2)
+	f.ProcessAttestation(t.Context(), []uint64{1}, indexToHash(2), 2*params.BeaconConfig().SlotsPerEpoch, true)
 	r, err = f.Head(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, indexToHash(2), r, "Incorrect head for with justified epoch at 1")
@@ -80,7 +80,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 	//  head -> 2  1 <- old vote
 	//             |
 	//             3 <- new vote
-	f.ProcessAttestation(t.Context(), []uint64{0}, indexToHash(3), 3)
+	f.ProcessAttestation(t.Context(), []uint64{0}, indexToHash(3), 3*params.BeaconConfig().SlotsPerEpoch, true)
 	r, err = f.Head(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, indexToHash(2), r, "Incorrect head for with justified epoch at 1")
@@ -91,7 +91,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 	// old vote -> 2  1 <- new vote
 	//                |
 	//                3 <- head
-	f.ProcessAttestation(t.Context(), []uint64{1}, indexToHash(1), 3)
+	f.ProcessAttestation(t.Context(), []uint64{1}, indexToHash(1), 3*params.BeaconConfig().SlotsPerEpoch, true)
 	r, err = f.Head(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, indexToHash(3), r, "Incorrect head for with justified epoch at 1")
@@ -150,7 +150,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 	assert.Equal(t, indexToHash(6), r, "Incorrect head for with justified epoch at 3")
 
 	// Moved 2 votes to block 5:
-	f.ProcessAttestation(t.Context(), []uint64{0, 1}, indexToHash(5), 4)
+	f.ProcessAttestation(t.Context(), []uint64{0, 1}, indexToHash(5), 4*params.BeaconConfig().SlotsPerEpoch, true)
 
 	// Inset blocks 7 and 8
 	// 6 should still be the head, even though 5 has all the votes.
@@ -227,7 +227,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 
 	// Move two votes for 10, verify it's head
 
-	f.ProcessAttestation(t.Context(), []uint64{0, 1}, indexToHash(10), 5)
+	f.ProcessAttestation(t.Context(), []uint64{0, 1}, indexToHash(10), 5*params.BeaconConfig().SlotsPerEpoch, true)
 	r, err = f.Head(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, indexToHash(10), r, "Incorrect head for with justified epoch at 3")
@@ -235,7 +235,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 	// Add 3 more validators to the system.
 	f.justifiedBalances = []uint64{1, 1, 1, 1, 1}
 	// The new validators voted for 9
-	f.ProcessAttestation(t.Context(), []uint64{2, 3, 4}, indexToHash(9), 5)
+	f.ProcessAttestation(t.Context(), []uint64{2, 3, 4}, indexToHash(9), 5*params.BeaconConfig().SlotsPerEpoch, true)
 	// The new head should be 9.
 	r, err = f.Head(t.Context())
 	require.NoError(t, err)
@@ -243,6 +243,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 
 	// Set the f.justifiedBalances of the last 2 validators to 0.
 	f.justifiedBalances = []uint64{1, 1, 1, 0, 0}
+	f.ProcessAttestation(t.Context(), []uint64{3, 4}, indexToHash(9), 6*params.BeaconConfig().SlotsPerEpoch, true)
 	// The head should be back to 10.
 	r, err = f.Head(t.Context())
 	require.NoError(t, err)
@@ -250,6 +251,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 
 	// Set the f.justifiedBalances back to normal.
 	f.justifiedBalances = []uint64{1, 1, 1, 1, 1}
+	f.ProcessAttestation(t.Context(), []uint64{3, 4}, indexToHash(9), 7*params.BeaconConfig().SlotsPerEpoch, true)
 	// The head should be back to 9.
 	r, err = f.Head(t.Context())
 	require.NoError(t, err)
@@ -257,6 +259,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 
 	// Remove the last 2 validators.
 	f.justifiedBalances = []uint64{1, 1, 1}
+	f.ProcessAttestation(t.Context(), []uint64{3, 4}, indexToHash(9), 8*params.BeaconConfig().SlotsPerEpoch, true)
 	// The head should be back to 10.
 	r, err = f.Head(t.Context())
 	require.NoError(t, err)
@@ -284,7 +287,7 @@ func TestVotes_CanFindHead(t *testing.T) {
 	//        9  10
 	f.store.finalizedCheckpoint.Root = indexToHash(5)
 	require.NoError(t, f.store.prune(t.Context()))
-	assert.Equal(t, 5, len(f.store.nodeByRoot), "Incorrect nodes length after prune")
+	assert.Equal(t, 5, len(f.store.emptyNodeByRoot), "Incorrect nodes length after prune")
 	// we pruned artificially the justified root.
 	f.store.justifiedCheckpoint.Root = indexToHash(5)
 

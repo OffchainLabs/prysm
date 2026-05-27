@@ -1,0 +1,3 @@
+### Changed
+
+- Update Discord invite link in README to a permanent (non-expiring) URL.

@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"slices"
@@ -22,6 +23,7 @@ import (
 	mathutil "github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -38,57 +40,72 @@ func (s *Service) CurrentSlot() primitives.Slot {
 }
 
 // getFCUArgs returns the arguments to call forkchoice update
-func (s *Service) getFCUArgs(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
-	if err := s.getFCUArgsEarlyBlock(cfg, fcuArgs); err != nil {
-		return err
+// this function is only called pre-gloas hence we pass in full to getPayloadAttribute
+func (s *Service) getFCUArgs(cfg *postBlockProcessConfig) (*fcuConfig, error) {
+	fcuArgs, err := s.getFCUArgsEarlyBlock(cfg)
+	if err != nil {
+		return nil, err
 	}
-	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:])
-	return nil
+
+	if !s.inRegularSync() {
+		return fcuArgs, nil
+	}
+
+	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:], true)
+	return fcuArgs, nil
 }
 
-func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
+func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
 	if cfg.roblock.Root() == cfg.headRoot {
-		fcuArgs.headState = cfg.postState
-		fcuArgs.headBlock = cfg.roblock
-		fcuArgs.headRoot = cfg.headRoot
-		fcuArgs.proposingSlot = s.CurrentSlot() + 1
-		return nil
+		return &fcuConfig{
+			headState:     cfg.postState,
+			headBlock:     cfg.roblock,
+			headRoot:      cfg.headRoot,
+			proposingSlot: s.CurrentSlot() + 1,
+		}, nil
 	}
-	return s.fcuArgsNonCanonicalBlock(cfg, fcuArgs)
+	return s.fcuArgsNonCanonicalBlock(cfg)
 }
 
 // logNonCanonicalBlockReceived prints a message informing that the received
 // block is not the head of the chain. It requires the caller holds a lock on
 // Forkchoice.
 func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]byte) {
-	receivedWeight, err := s.cfg.ForkChoiceStore.Weight(blockRoot)
+	receivedWeight, err := s.cfg.ForkChoiceStore.ConsensusNodeWeight(blockRoot)
 	if err != nil {
 		log.WithField("root", fmt.Sprintf("%#x", blockRoot)).Warn("Could not determine node weight")
 	}
-	headWeight, err := s.cfg.ForkChoiceStore.Weight(headRoot)
+	headWeight, err := s.cfg.ForkChoiceStore.ConsensusNodeWeight(headRoot)
 	if err != nil {
 		log.WithField("root", fmt.Sprintf("%#x", headRoot)).Warn("Could not determine node weight")
 	}
-	log.WithFields(logrus.Fields{
+	fields := logrus.Fields{
 		"receivedRoot":   fmt.Sprintf("%#x", blockRoot),
 		"receivedWeight": receivedWeight,
 		"headRoot":       fmt.Sprintf("%#x", headRoot),
 		"headWeight":     headWeight,
-	}).Debug("Head block is not the received block")
+	}
+	headEmpty, headFull, err := s.cfg.ForkChoiceStore.PayloadWeights(headRoot)
+	if err == nil {
+		fields["headEmptyWeight"] = headEmpty
+		fields["headFullWeight"] = headFull
+	}
+	log.WithFields(fields).Debug("Head block is not the received block")
 }
 
 // fcuArgsNonCanonicalBlock returns the arguments to the FCU call when the
 // incoming block is non-canonical, that is, based on the head root.
-func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
-	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot)
+func (s *Service) fcuArgsNonCanonicalBlock(cfg *postBlockProcessConfig) (*fcuConfig, error) {
+	headState, headBlock, err := s.getStateAndBlock(cfg.ctx, cfg.headRoot, cfg.headRoot)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fcuArgs.headState = headState
-	fcuArgs.headBlock = headBlock
-	fcuArgs.headRoot = cfg.headRoot
-	fcuArgs.proposingSlot = s.CurrentSlot() + 1
-	return nil
+	return &fcuConfig{
+		headState:     headState,
+		headBlock:     headBlock,
+		headRoot:      cfg.headRoot,
+		proposingSlot: s.CurrentSlot() + 1,
+	}, nil
 }
 
 // sendStateFeedOnBlock sends an event that a new block has been synced
@@ -183,42 +200,60 @@ func (s *Service) updateCachesPostBlockProcessing(cfg *postBlockProcessConfig) {
 	}
 }
 
+// GetPrestateToPropose returns the pre-state for a proposer to base its block on.
+func (s *Service) GetPrestateToPropose(ctx context.Context, b consensus_blocks.ROBlock) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "blockChain.GetPreStateToPropose")
+	defer span.End()
+
+	parentRoot := b.Block().ParentRoot()
+	bl := b.Block()
+	preState, err := s.cfg.StateGen.StateByRoot(ctx, parentRoot)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not get pre state for slot %d", bl.Slot())
+	}
+	if preState == nil || preState.IsNil() {
+		return nil, errors.Wrapf(err, "nil pre state for slot %d", bl.Slot())
+	}
+	return preState, nil
+}
+
 // reportProcessingTime reports the metric of how long it took to process the
 // current block
 func reportProcessingTime(startTime time.Time) {
 	onBlockProcessingTime.Observe(float64(time.Since(startTime).Milliseconds()))
 }
 
-// getBlockPreState returns the pre state of an incoming block. It uses the parent root of the block
+// GetBlockPreState returns the pre state of an incoming block. It uses the parent root of the block
 // to retrieve the state in DB. It verifies the pre state's validity and the incoming block
 // is in the correct time window.
-func (s *Service) getBlockPreState(ctx context.Context, b interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+func (s *Service) GetBlockPreState(ctx context.Context, b consensus_blocks.ROBlock) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.getBlockPreState")
 	defer span.End()
 
+	parentRoot := b.Block().ParentRoot()
 	// Verify incoming block has a valid pre state.
-	if err := s.verifyBlkPreState(ctx, b.ParentRoot()); err != nil {
+	if err := s.verifyBlkPreState(ctx, parentRoot); err != nil {
 		return nil, err
 	}
 
-	preState, err := s.cfg.StateGen.StateByRoot(ctx, b.ParentRoot())
+	bl := b.Block()
+	preState, err := s.cfg.StateGen.StateByRoot(ctx, parentRoot)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not get pre state for slot %d", b.Slot())
+		return nil, errors.Wrapf(err, "could not get pre state for slot %d", bl.Slot())
 	}
 	if preState == nil || preState.IsNil() {
-		return nil, errors.Wrapf(err, "nil pre state for slot %d", b.Slot())
+		return nil, errors.Wrapf(err, "nil pre state for slot %d", bl.Slot())
 	}
 
 	// Verify block slot time is not from the future.
-	if err := slots.VerifyTime(s.genesisTime, b.Slot(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
+	if err := slots.VerifyTime(s.genesisTime, bl.Slot(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
 		return nil, err
 	}
 
 	// Verify block is later than the finalized epoch slot.
-	if err := s.verifyBlkFinalizedSlot(b); err != nil {
+	if err := s.verifyBlkFinalizedSlot(bl); err != nil {
 		return nil, err
 	}
-
 	return preState, nil
 }
 
@@ -351,6 +386,7 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		return err
 	}
 	root := signed.Block().ParentRoot()
+	child := signed
 	// As long as parent node is not in fork choice store, and parent node is in DB.
 	for !s.cfg.ForkChoiceStore.HasNode(root) && s.cfg.BeaconDB.HasBlock(ctx, root) {
 		b, err := s.getBlock(ctx, root)
@@ -364,10 +400,33 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		if err != nil {
 			return err
 		}
+		hasPayload := false
+		if roblock.Version() >= version.Gloas {
+			sbid, err := child.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", child.Block().Slot())
+			}
+			if sbid == nil || sbid.Message == nil {
+				return fmt.Errorf("missing execution payload bid for block at slot %d", child.Block().Slot())
+			}
+			parentBid, err := b.Block().Body().SignedExecutionPayloadBid()
+			if err != nil {
+				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", b.Block().Slot())
+			}
+			if parentBid == nil || parentBid.Message == nil {
+				return fmt.Errorf("missing execution payload bid for block at slot %d", b.Block().Slot())
+			}
+			if bytes.Equal(sbid.Message.ParentBlockHash, parentBid.Message.BlockHash) {
+				hasPayload = true
+			}
+		}
 		root = b.Block().ParentRoot()
+		child = b
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
 			JustifiedCheckpoint: jCheckpoint,
-			FinalizedCheckpoint: fCheckpoint}
+			FinalizedCheckpoint: fCheckpoint,
+			HasPayload:          hasPayload,
+		}
 		pendingNodes = append(pendingNodes, args)
 	}
 	if len(pendingNodes) == 0 {

@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -39,19 +40,29 @@ type ChainInfoFetcher interface {
 // of locking forkchoice
 type ForkchoiceFetcher interface {
 	Ancestor(context.Context, []byte, primitives.Slot) ([]byte, error)
+	BlockHash(root [32]byte) ([32]byte, error)
+	GasLimit(root [32]byte) (uint64, error)
 	CachedHeadRoot() [32]byte
 	GetProposerHead() [32]byte
 	SetForkChoiceGenesisTime(time.Time)
 	UpdateHead(context.Context, primitives.Slot)
 	HighestReceivedBlockSlot() primitives.Slot
+	HighestReceivedBlockRoot() [32]byte
+	HasFullNode([32]byte) bool
+	PayloadEarly([32]byte) (bool, bool)
+	FullBeatsEmpty([32]byte) bool
 	ReceivedBlocksLastEpoch() (uint64, error)
 	InsertNode(context.Context, state.BeaconState, consensus_blocks.ROBlock) error
+	InsertPayload(interfaces.ROExecutionPayloadEnvelope) error
 	ForkChoiceDump(context.Context) (*forkchoice.Dump, error)
 	NewSlot(context.Context, primitives.Slot) error
 	ProposerBoost() [32]byte
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
 	IsCanonical(ctx context.Context, blockRoot [32]byte) (bool, error)
 	DependentRoot(primitives.Epoch) ([32]byte, error)
+	CanonicalNodeAtSlot(primitives.Slot) ([32]byte, bool)
+	ShouldIgnoreData(parentRoot [32]byte, dataSlot primitives.Slot) bool
+	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
 	RootsMissingExecutionProofs() ([][32]byte, error)
 	BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot [32]byte) ([32]byte, primitives.Slot, bool)
 }
@@ -115,6 +126,7 @@ type FinalizationFetcher interface {
 	FinalizedBlockHash() [32]byte
 	InForkchoice([32]byte) bool
 	IsFinalized(ctx context.Context, blockRoot [32]byte) bool
+	ParentPayloadReady(interfaces.ReadOnlyBeaconBlock) bool
 }
 
 // OptimisticModeFetcher retrieves information about optimistic status of the node.
@@ -404,6 +416,32 @@ func (s *Service) InForkchoice(root [32]byte) bool {
 	return s.cfg.ForkChoiceStore.HasNode(root)
 }
 
+// ParentPayloadReady returns true if the block's parent payload is available
+// in forkchoice. For pre-Gloas blocks or blocks building on empty, this always
+// returns true. For blocks building on full, it checks that the full node
+// exists.
+func (s *Service) ParentPayloadReady(blk interfaces.ReadOnlyBeaconBlock) bool {
+	if blk.Version() < version.Gloas {
+		return true
+	}
+	parentRoot := blk.ParentRoot()
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	blockHash, err := s.cfg.ForkChoiceStore.BlockHash(parentRoot)
+	if err != nil {
+		return false
+	}
+	bid, err := blk.Body().SignedExecutionPayloadBid()
+	if err != nil || bid == nil || bid.Message == nil {
+		return false
+	}
+	parentBlockHash := [32]byte(bid.Message.ParentBlockHash)
+	if parentBlockHash != blockHash {
+		return true // builds on empty, no full node needed
+	}
+	return s.cfg.ForkChoiceStore.HasFullNode(parentRoot)
+}
+
 // IsOptimisticForRoot takes the root as argument instead of the current head
 // and returns true if it is optimistic.
 func (s *Service) IsOptimisticForRoot(ctx context.Context, root [32]byte) (bool, error) {
@@ -473,11 +511,23 @@ func (s *Service) IsOptimisticForRoot(ctx context.Context, root [32]byte) (bool,
 	return !isCanonical, nil
 }
 
-// DependentRootForEpoch wraps the corresponding method in forkchoice
+// DependentRootForEpoch wraps the corresponding method in forkchoice. The
+// genesis-era underflow (slot < 2 epochs) is handled by falling back to the
+// origin block root so callers don't have to special-case it.
 func (s *Service) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	if epoch == 0 {
+		return s.originBlockRoot, nil
+	}
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
-	return s.cfg.ForkChoiceStore.DependentRootForEpoch(root, epoch)
+	depRoot, err := s.cfg.ForkChoiceStore.DependentRootForEpoch(root, epoch)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if depRoot == [32]byte{} {
+		return s.originBlockRoot, nil
+	}
+	return depRoot, nil
 }
 
 // TargetRootForEpoch wraps the corresponding method in forkchoice
@@ -584,4 +634,27 @@ func (s *Service) inRegularSync() bool {
 // registered for proposing.
 func (s *Service) validating() bool {
 	return s.cfg.TrackedValidatorsCache.Validating()
+}
+
+// ShouldIgnoreData returns true if the data for the given parent root and slot should be ignored.
+func (s *Service) ShouldIgnoreData(parentRoot [32]byte, dataSlot primitives.Slot) bool {
+	currentEpoch := slots.ToEpoch(s.CurrentSlot())
+	if slots.ToEpoch(dataSlot) < currentEpoch {
+		return false
+	}
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	parentSlot, err := s.cfg.ForkChoiceStore.Slot(parentRoot)
+	if err != nil {
+		// This should not happen. The caller should have already checked the parent is in forkchoice.
+		return false
+	}
+	j := s.cfg.ForkChoiceStore.JustifiedCheckpoint()
+	if j == nil {
+		return false
+	}
+	if slots.ToEpoch(parentSlot) >= j.Epoch {
+		return false
+	}
+	return s.cfg.ForkChoiceStore.IsCanonical(parentRoot)
 }

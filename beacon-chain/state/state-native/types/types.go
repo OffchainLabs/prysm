@@ -130,6 +130,8 @@ func (f FieldIndex) String() string {
 		return "latestBlockHash"
 	case PayloadExpectedWithdrawals:
 		return "payloadExpectedWithdrawals"
+	case PTCWindow:
+		return "ptcWindow"
 	default:
 		return fmt.Sprintf("unknown field index number: %d", f)
 	}
@@ -187,7 +189,7 @@ func (f FieldIndex) RealPosition() int {
 		return 22
 	case NextSyncCommittee:
 		return 23
-	case LatestExecutionPayloadHeader, LatestExecutionPayloadHeaderCapella, LatestExecutionPayloadHeaderDeneb, LatestExecutionPayloadBid:
+	case LatestExecutionPayloadHeader, LatestExecutionPayloadHeaderCapella, LatestExecutionPayloadHeaderDeneb, LatestBlockHash:
 		return 24
 	case NextWithdrawalIndex:
 		return 25
@@ -225,10 +227,12 @@ func (f FieldIndex) RealPosition() int {
 		return 41
 	case BuilderPendingWithdrawals:
 		return 42
-	case LatestBlockHash:
+	case LatestExecutionPayloadBid:
 		return 43
 	case PayloadExpectedWithdrawals:
 		return 44
+	case PTCWindow:
+		return 45
 	default:
 		return -1
 	}
@@ -302,6 +306,7 @@ const (
 	BuilderPendingWithdrawals     // Gloas: EIP-7732
 	LatestBlockHash               // Gloas: EIP-7732
 	PayloadExpectedWithdrawals    // Gloas: EIP-7732
+	PTCWindow                     // Gloas: EIP-7732
 )
 
 // Enumerator keeps track of the number of states created since the node's start.

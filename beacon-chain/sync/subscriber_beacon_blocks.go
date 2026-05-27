@@ -80,12 +80,25 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "process pending atts for block")
 	}
 
+	go s.processPendingPayloadEnvelope(s.ctx, root)
+
+	s.processPendingGloasColumns(root, signed)
+
 	return nil
 }
 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) error {
+	if roBlock.Version() >= version.Gloas {
+		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBid(roBlock)); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			return errors.Wrap(err, "process data column sidecars from execution (bid)")
+		}
+		return nil
+	}
 	if roBlock.Version() >= version.Fulu {
 		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
 			// Do not log if the context was cancelled on purpose.
@@ -205,10 +218,15 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			return nil, errors.Wrap(err, "column indices to sample")
 		}
 
+		proposerIndex, err := source.ProposerIndex()
+		if err != nil {
+			return nil, errors.Wrap(err, "proposer index")
+		}
+
 		log := log.WithFields(logrus.Fields{
 			"root":          fmt.Sprintf("%#x", source.Root()),
 			"slot":          source.Slot(),
-			"proposerIndex": source.ProposerIndex(),
+			"proposerIndex": proposerIndex,
 			"type":          source.Type(),
 		})
 
@@ -217,7 +235,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			log = log.WithField("iteration", iteration)
 
 			// Exit early if all sidecars to sample have been seen.
-			if s.haveAllSidecarsBeenSeen(source.Slot(), source.ProposerIndex(), columnIndicesToSample) {
+			if s.haveAllSidecarsBeenSeen(source.Slot(), proposerIndex, columnIndicesToSample) {
 				if iteration > 0 && constructedSidecarCount == 0 {
 					log.Debug("No data column sidecars constructed from the execution client")
 				}
@@ -248,7 +266,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedSidecarCount, fieldparams.NumberOfColumns)
 			}
 
-			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), source.ProposerIndex(), columnIndicesToSample, constructedSidecars)
+			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), proposerIndex, columnIndicesToSample, constructedSidecars)
 			if err != nil {
 				return nil, errors.Wrap(err, "broadcast and receive unseen data column sidecars")
 			}
@@ -259,7 +277,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				log.WithFields(logrus.Fields{
 					"root":          fmt.Sprintf("%#x", source.Root()),
 					"slot":          source.Slot(),
-					"proposerIndex": source.ProposerIndex(),
+					"proposerIndex": proposerIndex,
 					"iteration":     iteration,
 					"type":          source.Type(),
 					"count":         len(unseenIndices),
@@ -292,17 +310,17 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 	unseenIndices := make(map[uint64]bool, len(sidecars))
 	for _, sidecar := range sidecars {
 		// Skip data column sidecars we don't need.
-		if !neededIndices[sidecar.Index] {
+		if !neededIndices[sidecar.Index()] {
 			continue
 		}
 
 		// Skip already seen data column sidecars.
-		if s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index) {
+		if s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index()) {
 			continue
 		}
 
 		unseenSidecars = append(unseenSidecars, sidecar)
-		unseenIndices[sidecar.Index] = true
+		unseenIndices[sidecar.Index()] = true
 	}
 
 	// Exit early if there are no nothing to broadcast or receive.

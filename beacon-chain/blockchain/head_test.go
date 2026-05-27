@@ -33,7 +33,7 @@ func TestSaveHead_Same(t *testing.T) {
 	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 	require.NoError(t, err)
 	st, _ := util.DeterministicGenesisState(t, 1)
-	require.NoError(t, service.saveHead(t.Context(), r, b, st))
+	require.NoError(t, service.saveHead(t.Context(), r, b, st, false))
 	assert.Equal(t, primitives.Slot(0), service.headSlot(), "Head did not stay the same")
 	assert.Equal(t, r, service.headRoot(), "Head did not stay the same")
 }
@@ -75,7 +75,7 @@ func TestSaveHead_Different(t *testing.T) {
 	require.NoError(t, headState.SetSlot(1))
 	require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(t.Context(), &ethpb.StateSummary{Slot: 1, Root: newRoot[:]}))
 	require.NoError(t, service.cfg.BeaconDB.SaveState(t.Context(), headState, newRoot))
-	require.NoError(t, service.saveHead(t.Context(), newRoot, wsb, headState))
+	require.NoError(t, service.saveHead(t.Context(), newRoot, wsb, headState, false))
 
 	assert.Equal(t, primitives.Slot(1), service.HeadSlot(), "Head did not change")
 
@@ -130,7 +130,7 @@ func TestSaveHead_Different_Reorg(t *testing.T) {
 	require.NoError(t, headState.SetSlot(1))
 	require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(t.Context(), &ethpb.StateSummary{Slot: 1, Root: newRoot[:]}))
 	require.NoError(t, service.cfg.BeaconDB.SaveState(t.Context(), headState, newRoot))
-	require.NoError(t, service.saveHead(t.Context(), newRoot, wsb, headState))
+	require.NoError(t, service.saveHead(t.Context(), newRoot, wsb, headState, false))
 
 	assert.Equal(t, primitives.Slot(1), service.HeadSlot(), "Head did not change")
 
@@ -152,7 +152,6 @@ func TestSaveHead_Different_Reorg(t *testing.T) {
 
 func Test_notifyNewHeadEvent(t *testing.T) {
 	t.Run("genesis_state_root", func(t *testing.T) {
-		bState, _ := util.DeterministicGenesisState(t, 10)
 		srv := testServiceWithDB(t)
 		srv.SetGenesisTime(time.Now())
 		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
@@ -165,7 +164,7 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		st, blk, err = prepareForkchoiceState(t.Context(), 1, newHeadRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
-		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), 1, bState, newHeadStateRoot[:], newHeadRoot[:]))
+		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), 1, newHeadStateRoot[:], newHeadRoot[:]))
 		events := notifier.ReceivedEvents()
 		require.Equal(t, 1, len(events))
 
@@ -202,7 +201,7 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		st, blk, err = prepareForkchoiceState(t.Context(), 0, newHeadRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
-		err = srv.notifyNewHeadEvent(t.Context(), epoch2Start, bState, newHeadStateRoot[:], newHeadRoot[:])
+		err = srv.notifyNewHeadEvent(t.Context(), epoch2Start, newHeadStateRoot[:], newHeadRoot[:])
 		require.NoError(t, err)
 		events := notifier.ReceivedEvents()
 		require.Equal(t, 1, len(events))
@@ -214,13 +213,12 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 			Block:                     newHeadRoot[:],
 			State:                     newHeadStateRoot[:],
 			EpochTransition:           true,
-			PreviousDutyDependentRoot: make([]byte, 32),
+			PreviousDutyDependentRoot: srv.originBlockRoot[:],
 			CurrentDutyDependentRoot:  srv.originBlockRoot[:],
 		}
 		require.DeepSSZEqual(t, wanted, eventHead)
 	})
 	t.Run("epoch transition", func(t *testing.T) {
-		bState, _ := util.DeterministicGenesisState(t, 10)
 		srv := testServiceWithDB(t)
 		srv.SetGenesisTime(time.Now())
 		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
@@ -234,7 +232,7 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		newHeadSlot := params.BeaconConfig().SlotsPerEpoch
-		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), newHeadSlot, bState, newHeadStateRoot[:], newHeadRoot[:]))
+		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), newHeadSlot, newHeadStateRoot[:], newHeadRoot[:]))
 		events := notifier.ReceivedEvents()
 		require.Equal(t, 1, len(events))
 
@@ -245,10 +243,34 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 			Block:                     newHeadRoot[:],
 			State:                     newHeadStateRoot[:],
 			EpochTransition:           true,
-			PreviousDutyDependentRoot: params.BeaconConfig().ZeroHash[:],
+			PreviousDutyDependentRoot: srv.originBlockRoot[:],
 			CurrentDutyDependentRoot:  srv.originBlockRoot[:],
 		}
 		require.DeepSSZEqual(t, wanted, eventHead)
+	})
+	t.Run("previous dependent root zero hash falls back to origin", func(t *testing.T) {
+		srv := testServiceWithDB(t)
+		srv.SetGenesisTime(time.Now())
+		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
+		srv.originBlockRoot = [32]byte{0xab}
+		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
+		newHeadRoot := [32]byte{3}
+		st, blk, err = prepareForkchoiceState(t.Context(), 32, newHeadRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
+		newHeadSlot := params.BeaconConfig().SlotsPerEpoch
+		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), newHeadSlot, []byte{2}, newHeadRoot[:]))
+		events := notifier.ReceivedEvents()
+		require.Equal(t, 1, len(events))
+
+		eventHead, ok := events[0].Data.(*ethpbv1.EventHead)
+		require.Equal(t, true, ok)
+		// DependentRoot(0) returns zero hash since the forkchoice tree is sparse.
+		// The fix ensures it falls back to originBlockRoot instead of sending zeros.
+		assert.DeepEqual(t, srv.originBlockRoot[:], eventHead.PreviousDutyDependentRoot)
+		assert.DeepEqual(t, srv.originBlockRoot[:], eventHead.CurrentDutyDependentRoot)
 	})
 }
 
@@ -286,7 +308,7 @@ func TestRetrieveHead_ReadOnly(t *testing.T) {
 	require.NoError(t, headState.SetSlot(1))
 	require.NoError(t, service.cfg.BeaconDB.SaveStateSummary(t.Context(), &ethpb.StateSummary{Slot: 1, Root: newRoot[:]}))
 	require.NoError(t, service.cfg.BeaconDB.SaveState(t.Context(), headState, newRoot))
-	require.NoError(t, service.saveHead(t.Context(), newRoot, wsb, headState))
+	require.NoError(t, service.saveHead(t.Context(), newRoot, wsb, headState, false))
 
 	rOnlyState, err := service.HeadStateReadOnly(ctx)
 	require.NoError(t, err)

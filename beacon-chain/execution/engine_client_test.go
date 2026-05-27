@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
@@ -998,6 +999,99 @@ func TestClient_HTTP(t *testing.T) {
 		resp, err := service.ExecutionBlockByHash(ctx, arg, true /* with txs */)
 		require.NoError(t, err)
 		require.DeepEqual(t, want, resp)
+	})
+	t.Run(GetClientVersionV1, func(t *testing.T) {
+		tests := []struct {
+			name     string
+			want     any
+			resp     []*structs.ClientVersionV1
+			hasError bool
+			errMsg   string
+		}{
+			{
+				name: "happy path",
+				want: []*structs.ClientVersionV1{{
+					Code:    "GE",
+					Name:    "go-ethereum",
+					Version: "1.15.11-stable",
+					Commit:  "36b2371c",
+				}},
+				resp: []*structs.ClientVersionV1{{
+					Code:    "GE",
+					Name:    "go-ethereum",
+					Version: "1.15.11-stable",
+					Commit:  "36b2371c",
+				}},
+			},
+			{
+				name:     "empty response",
+				want:     []*structs.ClientVersionV1{},
+				hasError: true,
+				errMsg:   "execution client returned no result",
+			},
+			{
+				name:     "RPC error",
+				want:     "brokenMsg",
+				hasError: true,
+				errMsg:   "unexpected error in JSON-RPC",
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					defer func() {
+						require.NoError(t, r.Body.Close())
+					}()
+					enc, err := io.ReadAll(r.Body)
+					require.NoError(t, err)
+					jsonRequestString := string(enc)
+
+					// We expect the JSON string RPC request contains the right method name.
+					require.Equal(t, true, strings.Contains(
+						jsonRequestString, GetClientVersionV1,
+					))
+					require.Equal(t, true, strings.Contains(
+						jsonRequestString, "\"code\":\"PM\"",
+					))
+					require.Equal(t, true, strings.Contains(
+						jsonRequestString, "\"name\":\"Prysm\"",
+					))
+					require.Equal(t, true, strings.Contains(
+						jsonRequestString, fmt.Sprintf("\"version\":\"%s\"", version.SemanticVersion()),
+					))
+					require.Equal(t, true, strings.Contains(
+						jsonRequestString, fmt.Sprintf("\"commit\":\"%s\"", version.GitCommit()[:8]),
+					))
+					resp := map[string]any{
+						"jsonrpc": "2.0",
+						"id":      1,
+						"result":  tc.want,
+					}
+					err = json.NewEncoder(w).Encode(resp)
+					require.NoError(t, err)
+				}))
+				defer srv.Close()
+
+				rpcClient, err := rpc.DialHTTP(srv.URL)
+				require.NoError(t, err)
+				defer rpcClient.Close()
+
+				service := &Service{}
+				service.rpcClient = rpcClient
+
+				// We call the RPC method via HTTP and expect a proper result.
+				resp, err := service.GetClientVersionV1(ctx)
+				if tc.hasError {
+					require.NotNil(t, err)
+					require.ErrorContains(t, tc.errMsg, err)
+				} else {
+					require.NoError(t, err)
+				}
+				require.DeepEqual(t, tc.resp, resp)
+			})
+		}
 	})
 }
 
@@ -2725,4 +2819,54 @@ func testNewBlobVerifier() verification.NewBlobVerifier {
 			},
 		}
 	}
+}
+
+func TestGloasPayloadFromExecutionBlock_PropagatesBlockAccessList(t *testing.T) {
+	hash := common.BytesToHash([]byte("block-hash"))
+	blobGasUsed := uint64(123)
+	excessBlobGas := uint64(456)
+	slotNumber := uint64(789)
+	bal := []byte{0x01, 0x02, 0x03, 0x04}
+
+	blk := &pb.ExecutionBlock{
+		Hash: hash,
+		Header: gethtypes.Header{
+			ParentHash:    common.BytesToHash([]byte("parent")),
+			Coinbase:      common.BytesToAddress([]byte("coinbase")),
+			Root:          common.BytesToHash([]byte("state")),
+			ReceiptHash:   common.BytesToHash([]byte("receipts")),
+			Number:        big.NewInt(1),
+			BaseFee:       big.NewInt(1),
+			BlobGasUsed:   &blobGasUsed,
+			ExcessBlobGas: &excessBlobGas,
+			SlotNumber:    &slotNumber,
+		},
+		BlockAccessList: bal,
+	}
+
+	payload, err := gloasPayloadFromExecutionBlock(hash, blk)
+	require.NoError(t, err)
+	require.DeepEqual(t, bal, payload.BlockAccessList)
+}
+
+func TestExecutionBlock_MarshalUnmarshalJSON_BlockAccessList(t *testing.T) {
+	bal := hexutil.Bytes{0xde, 0xad, 0xbe, 0xef}
+	original := &pb.ExecutionBlock{
+		Version: version.Gloas,
+		Hash:    common.BytesToHash([]byte("block-hash")),
+		Header: gethtypes.Header{
+			ParentHash: common.BytesToHash([]byte("parent")),
+			Number:     big.NewInt(1),
+			Difficulty: big.NewInt(0),
+		},
+		BlockAccessList: bal,
+	}
+
+	enc, err := original.MarshalJSON()
+	require.NoError(t, err)
+	require.Equal(t, true, strings.Contains(string(enc), "blockAccessList"))
+
+	decoded := &pb.ExecutionBlock{}
+	require.NoError(t, decoded.UnmarshalJSON(enc))
+	require.DeepEqual(t, []byte(bal), []byte(decoded.BlockAccessList))
 }

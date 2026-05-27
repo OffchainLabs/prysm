@@ -53,8 +53,8 @@ type ChainReorgEvent struct {
 	Slot                string `json:"slot"`
 	Depth               string `json:"depth"`
 	OldHeadBlock        string `json:"old_head_block"`
-	NewHeadBlock        string `json:"old_head_state"`
-	OldHeadState        string `json:"new_head_block"`
+	NewHeadBlock        string `json:"new_head_block"`
+	OldHeadState        string `json:"old_head_state"`
 	NewHeadState        string `json:"new_head_state"`
 	Epoch               string `json:"epoch"`
 	ExecutionOptimistic bool   `json:"execution_optimistic"`
@@ -111,4 +111,9 @@ type LightClientFinalityUpdateEvent struct {
 type LightClientOptimisticUpdateEvent struct {
 	Version string                       `json:"version"`
 	Data    *LightClientOptimisticUpdate `json:"data"`
+}
+
+type PayloadEvent struct {
+	Slot      string `json:"slot"`
+	BlockRoot string `json:"block_root"`
 }

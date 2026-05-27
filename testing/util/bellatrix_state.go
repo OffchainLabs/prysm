@@ -84,7 +84,7 @@ func emptyGenesisStateBellatrix() (state.BeaconState, error) {
 
 		LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{},
 	}
-	return state_native.InitializeFromProtoBellatrix(st)
+	return state_native.InitializeFromProtoUnsafeBellatrix(st)
 }
 
 func buildGenesisBeaconStateBellatrix(genesisTime time.Time, preState state.BeaconState, eth1Data *ethpb.Eth1Data) (state.BeaconState, error) {
@@ -118,7 +118,8 @@ func buildGenesisBeaconStateBellatrix(genesisTime time.Time, preState state.Beac
 
 	slashings := make([]uint64, params.BeaconConfig().EpochsPerSlashingsVector)
 
-	genesisValidatorsRoot, err := stateutil.ValidatorRegistryRoot(preState.Validators())
+	compactValidators := stateutil.CompactValidatorsFromProto(preState.Validators())
+	genesisValidatorsRoot, err := stateutil.ValidatorRegistryRoot(compactValidators)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not hash tree root genesis validators %v", err)
 	}
@@ -250,7 +251,7 @@ func buildGenesisBeaconStateBellatrix(genesisTime time.Time, preState state.Beac
 		TransactionsRoot: make([]byte, 32),
 	}
 
-	bs, err := state_native.InitializeFromProtoBellatrix(st)
+	bs, err := state_native.InitializeFromProtoUnsafeBellatrix(st)
 	if err != nil {
 		return nil, err
 	}

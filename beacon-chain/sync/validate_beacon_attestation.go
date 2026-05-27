@@ -251,11 +251,7 @@ func (s *Service) validateUnaggregatedAttTopic(ctx context.Context, a eth.Att, b
 	}
 	subnet := helpers.ComputeSubnetForAttestation(valCount, a)
 	format := p2p.GossipTypeMapping[reflect.TypeFor[*eth.Attestation]()]
-	digest, err := s.currentForkDigest()
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return pubsub.ValidationIgnore, err
-	}
+	digest := params.ForkDigest(slots.ToEpoch(a.GetData().Slot))
 	if !strings.HasPrefix(t, fmt.Sprintf(format, digest, subnet)) {
 		return pubsub.ValidationReject, errors.New("attestation's subnet does not match with pubsub topic")
 	}
@@ -268,10 +264,23 @@ func (s *Service) validateCommitteeIndexAndCount(
 	a eth.Att,
 	bs state.ReadOnlyBeaconState,
 ) (primitives.CommitteeIndex, uint64, pubsub.ValidationResult, error) {
-	// - [REJECT] attestation.data.index == 0
-	if a.Version() >= version.Electra && a.GetData().CommitteeIndex != 0 {
-		return 0, 0, pubsub.ValidationReject, errors.New("attestation data's committee index must be 0")
+	// Validate committee index based on fork.
+	if a.Version() >= version.Electra {
+		data := a.GetData()
+		attEpoch := slots.ToEpoch(data.Slot)
+		postGloas := attEpoch >= params.BeaconConfig().GloasForkEpoch
+		if postGloas {
+			if result, err := s.validateGloasCommitteeIndex(data); result != pubsub.ValidationAccept {
+				return 0, 0, result, err
+			}
+		} else {
+			// [REJECT] attestation.data.index == 0 (New in Electra, removed in Gloas)
+			if data.CommitteeIndex != 0 {
+				return 0, 0, pubsub.ValidationReject, errors.New("attestation data's committee index must be 0")
+			}
+		}
 	}
+
 	valCount, err := helpers.ActiveValidatorCount(ctx, bs, slots.ToEpoch(a.GetData().Slot))
 	if err != nil {
 		return 0, 0, pubsub.ValidationIgnore, err
@@ -351,6 +360,41 @@ func validateAttestingIndex(
 	inCommittee := slices.Contains(committee, attestingIndex)
 	if !inCommittee {
 		return pubsub.ValidationReject, errors.Errorf("attester %d is not a member of the committee", attestingIndex)
+	}
+
+	return pubsub.ValidationAccept, nil
+}
+
+// validateGloasCommitteeIndex validates committee index rules for Gloas fork.
+// [REJECT] attestation.data.index < 2. (New in Gloas)
+// [REJECT] attestation.data.index == 0 if block.slot == attestation.data.slot. (New in Gloas)
+// [REJECT] If attestation.data.index == 1, the execution payload for the block passes validation. (New in Gloas)
+// [IGNORE] When attestation.data.index == 1, the execution payload for the block has been seen. (New in Gloas)
+func (s *Service) validateGloasCommitteeIndex(data *eth.AttestationData) (pubsub.ValidationResult, error) {
+	if data.CommitteeIndex >= 2 {
+		return pubsub.ValidationReject, errors.New("attestation data's committee index must be < 2")
+	}
+
+	// Same-slot attestations must use committee index 0
+	if data.CommitteeIndex != 0 {
+		blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
+		slot, err := s.cfg.chain.RecentBlockSlot(blockRoot)
+		if err != nil {
+			return pubsub.ValidationIgnore, err
+		}
+		if slot == data.Slot {
+			return pubsub.ValidationReject, errors.New("same slot attestations must use committee index 0")
+		}
+		// [REJECT] If index == 1, the execution payload for the block must not be invalid.
+		if s.hasBadPayload(blockRoot) {
+			return pubsub.ValidationReject, errors.New("execution payload for attested block is invalid")
+		}
+		// [IGNORE] If index == 1, the execution payload for the block must have been seen.
+		// Request the payload envelope if not yet available.
+		if !s.cfg.chain.HasFullNode(blockRoot) {
+			go s.requestPayloadEnvelope(blockRoot)
+			return pubsub.ValidationIgnore, errors.New("execution payload for attested block has not been seen")
+		}
 	}
 
 	return pubsub.ValidationAccept, nil

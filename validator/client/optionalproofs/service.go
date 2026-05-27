@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
-	api_client "github.com/OffchainLabs/prysm/v7/api/client"
 	"github.com/OffchainLabs/prysm/v7/api/client/event"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -32,7 +32,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/sirupsen/logrus"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -55,21 +54,22 @@ type Service struct {
 }
 
 // NewService creates a new optional proofs service.
-func NewService(ctx context.Context, cfg *Config) *Service {
+func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	restHandler := beaconApi.NewBeaconApiRestHandler(
-		http.Client{Transport: otelhttp.NewTransport(api_client.NewCustomHeadersTransport(http.DefaultTransport, nil))},
-		cfg.BeaconApiEndpoint,
-	)
+	restProvider, err := rest.NewRestConnectionProvider(cfg.BeaconApiEndpoint, rest.WithTracing())
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("create REST connection provider: %w", err)
+	}
 
 	return &Service{
 		ctx:             ctx,
 		cancel:          cancel,
 		cfg:             cfg,
-		nodeClient:      beaconApi.NewNodeClientWithFallback(restHandler, nil),
-		validatorClient: beaconApi.NewBeaconApiValidatorClient(restHandler),
-	}
+		nodeClient:      beaconApi.NewNodeClientWithFallback(restProvider.Handler(), nil),
+		validatorClient: beaconApi.NewBeaconApiValidatorClient(restProvider),
+	}, nil
 }
 
 // Start the optional proofs service.
@@ -127,15 +127,46 @@ func (s *Service) processBlockEvent(ev *event.Event) {
 }
 
 func (s *Service) handleBlockEvent(data []byte) error {
+	const (
+		maxBlockFetchRetries = 10
+		blockFetchRetryDelay = 200 * time.Millisecond
+	)
+
 	blockEvent := &structs.BlockEvent{}
 	if err := json.Unmarshal(data, blockEvent); err != nil {
 		return fmt.Errorf("unmarshal block event: %w", err)
 	}
 	log.WithField("slot", blockEvent.Slot).WithField("block", blockEvent.Block).Info("Received block event")
 
-	blockData, err := s.fetchBlock(blockEvent.Slot)
+	var (
+		blockData *blockData
+		err       error
+	)
+
+	for attempt := range maxBlockFetchRetries {
+		blockData, err = s.fetchBlock(blockEvent.Slot)
+		if err == nil {
+			break
+		}
+
+		log.WithError(err).
+			WithField("slot", blockEvent.Slot).
+			WithField("attempt", attempt+1).
+			WithField("maxAttempts", maxBlockFetchRetries).
+			Warning("Failed to fetch block")
+
+		if attempt == maxBlockFetchRetries {
+			break
+		}
+
+		select {
+		case <-s.ctx.Done():
+			return s.ctx.Err()
+		case <-time.After(blockFetchRetryDelay):
+		}
+	}
 	if err != nil {
-		return fmt.Errorf("fetch block for slot %s: %w", blockEvent.Slot, err)
+		return fmt.Errorf("fetch block for slot %s after %d attempts: %w", blockEvent.Slot, maxBlockFetchRetries+1, err)
 	}
 
 	req, err := buildNewPayloadRequest(blockData)

@@ -125,6 +125,7 @@ var appFlags = []cli.Flag{
 	cmd.ClearDB,
 	cmd.ForceClearDB,
 	cmd.LogFormat,
+	cmd.DisableLogColor,
 	cmd.MaxGoroutines,
 	debug.PProfFlag,
 	debug.PProfAddrFlag,
@@ -189,8 +190,8 @@ func before(ctx *cli.Context) error {
 		return errors.Wrap(err, "failed to parse log vmodule")
 	}
 
-	// set the global logging level to allow for the highest verbosity requested
-	logs.SetLoggingLevel(max(verbosityLevel, maxLevel))
+	// set the global logging level and data
+	logs.SetLoggingLevelAndData(verbosityLevel, vmodule, maxLevel, ctx.Bool(flags.DisableEphemeralLogFile.Name))
 
 	format := ctx.String(cmd.LogFormat.Name)
 	switch format {
@@ -204,6 +205,7 @@ func before(ctx *cli.Context) error {
 		formatter.FullTimestamp = true
 		formatter.ForceFormatting = true
 		formatter.ForceColors = true
+		formatter.DisableColors = ctx.Bool(cmd.DisableLogColor.Name)
 		formatter.VModule = vmodule
 		formatter.BaseVerbosity = verbosityLevel
 
@@ -211,21 +213,36 @@ func before(ctx *cli.Context) error {
 			Formatter:     formatter,
 			Writer:        os.Stderr,
 			AllowedLevels: logrus.AllLevels[:max(verbosityLevel, maxLevel)+1],
+			Identifier:    logs.LogTargetUser,
 		})
 	case "fluentd":
-		f := joonix.NewFormatter()
+		// disabling logrus default output so we can control it via hooks
+		logrus.SetOutput(io.Discard)
 
+		f := joonix.NewFormatter()
 		if err := joonix.DisableTimestampFormat(f); err != nil {
 			panic(err) // lint:nopanic -- This shouldn't happen, but crashing immediately at startup is OK.
 		}
 
-		logrus.SetFormatter(f)
+		logrus.AddHook(&logs.WriterHook{
+			Formatter:     f,
+			Writer:        os.Stderr,
+			AllowedLevels: logrus.AllLevels[:verbosityLevel+1],
+			Identifier:    logs.LogTargetUser,
+		})
 	case "json":
-		logrus.SetFormatter(&logrus.JSONFormatter{
-			TimestampFormat: "2006-01-02 15:04:05.00",
+		// disabling logrus default output so we can control it via hooks
+		logrus.SetOutput(io.Discard)
+		logrus.AddHook(&logs.WriterHook{
+			Formatter: &logrus.JSONFormatter{
+				TimestampFormat: "2006-01-02 15:04:05.00",
+			},
+			Writer:        os.Stderr,
+			AllowedLevels: logrus.AllLevels[:verbosityLevel+1],
+			Identifier:    logs.LogTargetUser,
 		})
 	case "journald":
-		if err := journald.Enable(); err != nil {
+		if err := journald.Enable(verbosityLevel); err != nil {
 			return err
 		}
 	default:
@@ -368,17 +385,8 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 		backfill.BeaconNodeOptions,
 		das.BeaconNodeOptions,
 	}
-	for _, of := range optFuncs {
-		ofo, err := of(ctx)
-		if err != nil {
-			return err
-		}
-		if ofo != nil {
-			opts = append(opts, ofo...)
-		}
-	}
 
-	beacon, err := node.New(ctx, cancel, opts...)
+	beacon, err := node.New(ctx, cancel, optFuncs, opts...)
 	if err != nil {
 		return fmt.Errorf("unable to start beacon node: %w", err)
 	}

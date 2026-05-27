@@ -192,8 +192,60 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 			Block:     electraGenesisBlock(root),
 			Signature: params.BeaconConfig().EmptySignature[:],
 		})
+	case *ethpb.BeaconStateGloas:
+		gs := ps.(*ethpb.BeaconStateGloas)
+		return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
+			Block:     gloasGenesisBlock(root, gs.LatestExecutionPayloadBid),
+			Signature: params.BeaconConfig().EmptySignature[:],
+		})
 	default:
 		return nil, ErrUnrecognizedState
+	}
+}
+
+func gloasGenesisBlock(root [fieldparams.RootLength]byte, latestBid *ethpb.ExecutionPayloadBid) *ethpb.BeaconBlockGloas {
+	// The genesis block body's signed_execution_payload_bid mirrors the state's
+	// latest_execution_payload_bid so the reconstructed block's body_root matches
+	// state.latest_block_header.body_root (which the genesis distribution tool
+	// commits to). Falling back to a zero bid is only useful in tests that
+	// initialize a Gloas state without populating latest_execution_payload_bid.
+	bidMessage := latestBid.Copy()
+	if bidMessage == nil {
+		bidMessage = &ethpb.ExecutionPayloadBid{
+			ParentBlockHash:       make([]byte, 32),
+			ParentBlockRoot:       make([]byte, 32),
+			BlockHash:             make([]byte, 32),
+			PrevRandao:            make([]byte, 32),
+			FeeRecipient:          make([]byte, 20),
+			BlobKzgCommitments:    make([][]byte, 0),
+			ExecutionRequestsRoot: make([]byte, 32),
+		}
+	}
+	return &ethpb.BeaconBlockGloas{
+		ParentRoot: params.BeaconConfig().ZeroHash[:],
+		StateRoot:  root[:],
+		Body: &ethpb.BeaconBlockBodyGloas{
+			RandaoReveal: make([]byte, 96),
+			Eth1Data: &ethpb.Eth1Data{
+				DepositRoot: make([]byte, 32),
+				BlockHash:   make([]byte, 32),
+			},
+			Graffiti: make([]byte, 32),
+			SyncAggregate: &ethpb.SyncAggregate{
+				SyncCommitteeBits:      make([]byte, fieldparams.SyncCommitteeLength/8),
+				SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			SignedExecutionPayloadBid: &ethpb.SignedExecutionPayloadBid{
+				Message:   bidMessage,
+				Signature: make([]byte, fieldparams.BLSSignatureLength),
+			},
+			PayloadAttestations: make([]*ethpb.PayloadAttestation, 0),
+			ParentExecutionRequests: &enginev1.ExecutionRequests{
+				Withdrawals:    make([]*enginev1.WithdrawalRequest, 0),
+				Deposits:       make([]*enginev1.DepositRequest, 0),
+				Consolidations: make([]*enginev1.ConsolidationRequest, 0),
+			},
+		},
 	}
 }
 

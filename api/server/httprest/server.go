@@ -29,6 +29,8 @@ type Server struct {
 	startFailure error
 }
 
+const eventStreamPath = "/eth/v1/events"
+
 // New returns a new instance of the Server.
 func New(ctx context.Context, opts ...Option) (*Server, error) {
 	g := &Server{
@@ -48,7 +50,17 @@ func New(ctx context.Context, opts ...Option) (*Server, error) {
 	handler = middleware.MiddlewareChain(g.cfg.router, g.cfg.middlewares)
 	if g.cfg.timeout > 0*time.Second {
 		defaultReadHeaderTimeout = g.cfg.timeout
-		handler = http.TimeoutHandler(handler, g.cfg.timeout, "request timed out")
+		baseHandler := handler
+		timeoutHandler := http.TimeoutHandler(baseHandler, g.cfg.timeout, "request timed out")
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// SSE streams stay open indefinitely, so the global timeout wrapper must not
+			// cancel `/eth/v1/events` before the handler starts streaming responses.
+			if r.URL != nil && r.URL.Path == eventStreamPath {
+				baseHandler.ServeHTTP(w, r)
+				return
+			}
+			timeoutHandler.ServeHTTP(w, r)
+		})
 	}
 	g.server = &http.Server{
 		Addr:              g.cfg.httpAddr,

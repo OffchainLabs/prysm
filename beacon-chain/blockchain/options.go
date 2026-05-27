@@ -97,6 +97,15 @@ func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
 	}
 }
 
+// WithProposerPreferencesCache sets the proposer preferences cache used to
+// look up fee recipient and gas limit from Gloas gossip preferences.
+func WithProposerPreferencesCache(c *cache.ProposerPreferencesCache) Option {
+	return func(s *Service) error {
+		s.cfg.ProposerPreferencesCache = c
+		return nil
+	}
+}
+
 // WithAttestationCache for attestation lifecycle after chain inclusion.
 func WithAttestationCache(c *cache.AttestationCache) Option {
 	return func(s *Service) error {

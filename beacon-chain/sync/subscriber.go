@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -317,7 +318,7 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 		})
 	}
 
-	// New gossip topic in Fulu.
+	// Data column gossip topic (Fulu and Gloas).
 	if params.BeaconConfig().FuluForkEpoch <= nse.Epoch {
 		s.spawn(func() {
 			s.subscribeWithParameters(subscribeParameters{
@@ -341,6 +342,45 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 			})
 		}
 	}
+
+	// New gossip topic in Gloas.
+	if params.BeaconConfig().GloasForkEpoch <= nse.Epoch {
+		s.spawn(func() {
+			s.subscribe(
+				p2p.PayloadAttestationMessageTopicFormat,
+				s.validatePayloadAttestation,
+				s.payloadAttestationSubscriber,
+				nse,
+			)
+		})
+
+		s.spawn(func() {
+			s.subscribe(
+				p2p.ExecutionPayloadEnvelopeTopicFormat,
+				s.validateExecutionPayloadEnvelope,
+				s.executionPayloadEnvelopeSubscriber,
+				nse,
+			)
+		})
+
+		s.spawn(func() {
+			s.subscribe(
+				p2p.ExecutionPayloadBidTopicFormat,
+				s.validateExecutionPayloadBidGossip,
+				s.executionPayloadBidSubscriber,
+				nse,
+			)
+		})
+
+		s.spawn(func() {
+			s.subscribe(
+				p2p.SignedProposerPreferencesTopicFormat,
+				s.validateSignedProposerPreferencesGossip,
+				s.signedProposerPreferencesSubscriber,
+				nse,
+			)
+		})
+	}
 	return true
 }
 
@@ -361,13 +401,10 @@ func (s *Service) subscribeLogFields(topic string, nse params.NetworkScheduleEnt
 // subscribe to a given topic with a given validator and subscription handler.
 // The base protobuf message is used to initialize new messages for decoding.
 func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandler, nse params.NetworkScheduleEntry) {
-	if err := s.waitForInitialSync(s.ctx); err != nil {
-		log.WithFields(s.subscribeLogFields(topic, nse)).WithError(err).Debug("Context cancelled while waiting for initial sync, not subscribing to topic")
-		return
-	}
-	// Check if this subscribe request is still valid - we may have crossed another fork epoch while waiting for initial sync.
+	// Subscriptions need to come up before initial sync completes so the node can
+	// follow new gossip immediately after the synced flag flips. Validators already
+	// ignore messages while initial sync is still active.
 	if s.subscriptionRequestExpired(nse) {
-		// If we are already past the next fork epoch, do not subscribe to this topic.
 		log.WithFields(s.subscribeLogFields(topic, nse)).Debug("Not subscribing to topic as we are already past the next fork epoch")
 		return
 	}
@@ -499,8 +536,13 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 			return pubsub.ValidationIgnore
 		}
 		if currDigest != retDigest {
-			log.WithField("topic", topic).Debugf("Received message from outdated fork digest %#x", retDigest)
-			return pubsub.ValidationIgnore
+			// Only proposer preferences are accepted from the next epoch's fork
+			// digest, allowing them to arrive before a fork activates.
+			if !strings.Contains(topic, p2p.GossipSignedProposerPreferencesMessage) ||
+				params.ForkDigest(s.cfg.clock.CurrentEpoch()+1) != retDigest {
+				log.WithField("topic", topic).Debugf("Received message from outdated fork digest %#x", retDigest)
+				return pubsub.ValidationIgnore
+			}
 		}
 		b, err := v(ctx, pid, msg)
 		// We do not penalize peers if we are hitting pubsub timeouts
@@ -556,10 +598,6 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 	go s.ensurePeers(ctx, tracker)
 	go s.logMinimumPeersPerSubnet(ctx, p)
 
-	if err := s.waitForInitialSync(ctx); err != nil {
-		log.WithFields(p.logFields()).WithError(err).Debug("Could not subscribe to subnets as initial sync failed")
-		return
-	}
 	s.trySubscribeSubnets(tracker)
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
@@ -585,7 +623,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 }
 
 // trySubscribeSubnets attempts to subscribe to any missing subnets that we should be subscribed to.
-// Only if initial sync is complete.
+// Validators gate message processing while initial sync is active, so subscriptions can come up early.
 func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
 	s.pruneNotWanted(t, subnetsToJoin)
@@ -736,8 +774,9 @@ func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Sl
 	return mapFromSlice(persistentSubnetIndices, aggregatorSubnetIndices)
 }
 
-// filters out required peers for the node to function, not
-// pruning peers who are in our attestation subnets.
+// filterNeededPeers filters out the set of peers required to maintain
+// at least minimumPeersPerSubnet in our attestation subnets. Peers that participate
+// in multiple subnets count toward all of them.
 func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	currentSlot := s.cfg.clock.CurrentSlot()
@@ -764,35 +803,54 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()]
 
-	// Map of peers in subnets
-	peerMap := make(map[peer.ID]bool)
+	pidSet := make(map[peer.ID]bool, len(pids))
+	for _, pid := range pids {
+		pidSet[pid] = true
+	}
+
+	// For each wanted subnet, get the current peer count and track which
+	// candidate peers participate in each subnet.
+	subnetPeerCount := make(map[uint64]int, len(wantedSubnets))
+	peerSubnets := make(map[peer.ID][]uint64)
 	for subnet := range wantedSubnets {
 		subnetTopic := fmt.Sprintf(topic, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
 		peers := s.cfg.p2p.PubSub().ListPeers(subnetTopic)
-		if len(peers) > minimumPeersPerSubnet {
-			// In the event we have more than the minimum, we can
-			// mark the remaining as viable for pruning.
-			peers = peers[:minimumPeersPerSubnet]
-		}
-
-		// Add peer to peer map.
-		for _, peer := range peers {
-			// Even if the peer ID has already been seen we still set it,
-			// as the outcome is the same.
-			peerMap[peer] = true
+		subnetPeerCount[subnet] = len(peers)
+		for _, pid := range peers {
+			if pidSet[pid] {
+				peerSubnets[pid] = append(peerSubnets[pid], subnet)
+			}
 		}
 	}
 
-	// Clear out necessary peers from the peers to prune.
-	newPeers := make([]peer.ID, 0, len(pids))
+	// Sort candidates by ascending subnet count so we try to prune peers
+	// covering fewer subnets first, preserving multi-subnet peers that are
+	// more valuable for maintaining minimums across subnets.
+	slices.SortFunc(pids, func(a, b peer.ID) int {
+		return len(peerSubnets[a]) - len(peerSubnets[b])
+	})
 
+	// Greedily prune each candidate if doing so would not drop any of its
+	// subnets below the minimum peer threshold.
+	prunable := make([]peer.ID, 0, len(pids))
 	for _, pid := range pids {
-		if peerMap[pid] {
-			continue
+		subnets := peerSubnets[pid]
+		canPrune := true
+		for _, subnet := range subnets {
+			if subnetPeerCount[subnet] <= minimumPeersPerSubnet {
+				canPrune = false
+				break
+			}
 		}
-		newPeers = append(newPeers, pid)
+		if canPrune {
+			prunable = append(prunable, pid)
+			for _, subnet := range subnets {
+				subnetPeerCount[subnet]--
+			}
+		}
 	}
-	return newPeers
+
+	return prunable
 }
 
 // Add fork digest to topic.

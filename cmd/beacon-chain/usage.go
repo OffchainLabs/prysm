@@ -198,6 +198,7 @@ var appHelpFlagGroups = []flagGroup{
 		// Flags in the "log" section control how Prysm handles logging.
 		Name: "log",
 		Flags: []cli.Flag{
+			cmd.DisableLogColor,
 			cmd.LogFormat,
 			cmd.LogFileName,
 			cmd.VerbosityFlag,

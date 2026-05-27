@@ -68,6 +68,12 @@ const (
 	// DataColumnSidecarsByRangeName is the name for the DataColumnSidecarsByRange v1 message topic.
 	DataColumnSidecarsByRangeName = "/data_column_sidecars_by_range"
 
+	// ExecutionPayloadEnvelopesByRootName is the name for the ExecutionPayloadEnvelopesByRoot v1 message topic.
+	ExecutionPayloadEnvelopesByRootName = "/execution_payload_envelopes_by_root"
+
+	// ExecutionPayloadEnvelopesByRangeName is the name for the ExecutionPayloadEnvelopesByRange v1 message topic.
+	ExecutionPayloadEnvelopesByRangeName = "/execution_payload_envelopes_by_range"
+
 	// ExecutionProofsByRootName is the name for the ExecutionProofsByRoot v1 message topic.
 	ExecutionProofsByRootName = "/execution_proofs_by_root"
 
@@ -115,6 +121,13 @@ const (
 	// RPCDataColumnSidecarsByRangeTopicV1 is a topic for requesting data column sidecars by their slot.
 	// /eth2/beacon_chain/req/data_column_sidecars_by_range/1 - New in Fulu.
 	RPCDataColumnSidecarsByRangeTopicV1 = protocolPrefix + DataColumnSidecarsByRangeName + SchemaVersionV1
+	// RPCExecutionPayloadEnvelopesByRootTopicV1 is a topic for requesting execution payload envelopes by their beacon block root.
+	// /eth2/beacon_chain/req/execution_payload_envelopes_by_root/1 - New in Gloas.
+	RPCExecutionPayloadEnvelopesByRootTopicV1 = protocolPrefix + ExecutionPayloadEnvelopesByRootName + SchemaVersionV1
+	// RPCExecutionPayloadEnvelopesByRangeTopicV1 is a topic for requesting execution payload envelopes
+	// in the slot range [start_slot, start_slot + count). New in Gloas.
+	// /eth2/beacon_chain/req/execution_payload_envelopes_by_range/1/
+	RPCExecutionPayloadEnvelopesByRangeTopicV1 = protocolPrefix + ExecutionPayloadEnvelopesByRangeName + SchemaVersionV1
 	// RPCExecutionProofsByRootTopicV1 is a topic for requesting execution proofs by their block root.
 	// /eth2/beacon_chain/req/execution_proofs_by_root/1 - New in Fulu.
 	RPCExecutionProofsByRootTopicV1 = protocolPrefix + ExecutionProofsByRootName + SchemaVersionV1
@@ -186,6 +199,9 @@ var (
 		// DataColumnSidecarsByRange v1 Message
 		RPCDataColumnSidecarsByRangeTopicV1: new(pb.DataColumnSidecarsByRangeRequest),
 
+		// ExecutionPayloadEnvelopesByRange v1 Message
+		RPCExecutionPayloadEnvelopesByRangeTopicV1: new(pb.ExecutionPayloadEnvelopesByRangeRequest),
+
 		// DataColumnSidecarsByRoot v1 Message
 		RPCDataColumnSidecarsByRootTopicV1: p2ptypes.DataColumnsByRootIdentifiers{},
 
@@ -197,6 +213,9 @@ var (
 
 		// ExecutionProofStatus v1 Message
 		RPCExecutionProofStatusTopicV1: &p2ptypes.ExecutionProofStatus{},
+
+		// ExecutionPayloadEnvelopesByRoot v1 Message
+		RPCExecutionPayloadEnvelopesByRootTopicV1: new(p2ptypes.ExecutionPayloadEnvelopesByRootReq),
 	}
 
 	// Maps all registered protocol prefixes.
@@ -206,23 +225,25 @@ var (
 
 	// Maps all the protocol message names for the different rpc topics.
 	messageMapping = map[string]bool{
-		StatusMessageName:               true,
-		GoodbyeMessageName:              true,
-		BeaconBlocksByRangeMessageName:  true,
-		BeaconBlocksByRootsMessageName:  true,
-		PingMessageName:                 true,
-		MetadataMessageName:             true,
-		BlobSidecarsByRangeName:         true,
-		BlobSidecarsByRootName:          true,
-		LightClientBootstrapName:        true,
-		LightClientUpdatesByRangeName:   true,
-		LightClientFinalityUpdateName:   true,
-		LightClientOptimisticUpdateName: true,
-		DataColumnSidecarsByRootName:    true,
-		DataColumnSidecarsByRangeName:   true,
-		ExecutionProofsByRootName:       true,
-		ExecutionProofsByRangeName:      true,
-		ExecutionProofStatusName:        true,
+		StatusMessageName:                    true,
+		GoodbyeMessageName:                   true,
+		BeaconBlocksByRangeMessageName:       true,
+		BeaconBlocksByRootsMessageName:       true,
+		PingMessageName:                      true,
+		MetadataMessageName:                  true,
+		BlobSidecarsByRangeName:              true,
+		BlobSidecarsByRootName:               true,
+		LightClientBootstrapName:             true,
+		LightClientUpdatesByRangeName:        true,
+		LightClientFinalityUpdateName:        true,
+		LightClientOptimisticUpdateName:      true,
+		DataColumnSidecarsByRootName:         true,
+		DataColumnSidecarsByRangeName:        true,
+		ExecutionPayloadEnvelopesByRootName:  true,
+		ExecutionPayloadEnvelopesByRangeName: true,
+		ExecutionProofsByRootName:            true,
+		ExecutionProofsByRangeName:           true,
+		ExecutionProofStatusName:             true,
 	}
 
 	// Maps all the RPC messages which are to updated in altair.

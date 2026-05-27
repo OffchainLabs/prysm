@@ -20,5 +20,6 @@ type BlockAndCheckpoints struct {
 	Block                 consensus_blocks.ROBlock
 	JustifiedCheckpoint   *ethpb.Checkpoint
 	FinalizedCheckpoint   *ethpb.Checkpoint
+	HasPayload            bool
 	NewPayloadRequestRoot [fieldparams.RootLength]byte
 }

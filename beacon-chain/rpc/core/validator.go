@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server"
@@ -30,6 +31,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -475,18 +477,13 @@ func (s *Service) GetAttestationData(
 		return nil, &RpcError{Reason: BadRequest, Err: errors.Errorf("invalid request: %v", err)}
 	}
 
-	committeeIndex := primitives.CommitteeIndex(0)
-	if slots.ToEpoch(req.Slot) < params.BeaconConfig().ElectraForkEpoch {
-		committeeIndex = req.CommitteeIndex
-	}
-
 	s.AttestationCache.RLock()
 	res := s.AttestationCache.Get()
 	if res != nil && res.Slot == req.Slot {
 		s.AttestationCache.RUnlock()
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
-			CommitteeIndex:  committeeIndex,
+			CommitteeIndex:  attestationDataIndex(req, res.IsPayloadFull),
 			BeaconBlockRoot: res.HeadRoot,
 			Source: &ethpb.Checkpoint{
 				Epoch: res.Source.Epoch,
@@ -510,7 +507,7 @@ func (s *Service) GetAttestationData(
 	if res != nil && res.Slot == req.Slot {
 		return &ethpb.AttestationData{
 			Slot:            res.Slot,
-			CommitteeIndex:  committeeIndex,
+			CommitteeIndex:  attestationDataIndex(req, res.IsPayloadFull),
 			BeaconBlockRoot: res.HeadRoot,
 			Source: &ethpb.Checkpoint{
 				Epoch: res.Source.Epoch,
@@ -552,10 +549,22 @@ func (s *Service) GetAttestationData(
 		}
 	}
 	justifiedCheckpoint := headState.CurrentJustifiedCheckpoint()
+	var isPayloadFull bool
+	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
+		fcRoot, full := s.ChainInfoFetcher.CanonicalNodeAtSlot(req.Slot)
+		if fcRoot != bytesutil.ToBytes32(headRoot) {
+			log.WithFields(logrus.Fields{
+				"fcRoot":   hexutil.Encode(fcRoot[:]),
+				"headRoot": hexutil.Encode(headRoot),
+			}).Error("Forkchoice head root does not match head root")
+		}
+		isPayloadFull = full
+	}
 
 	if err = s.AttestationCache.Put(&cache.AttestationConsensusData{
-		Slot:     req.Slot,
-		HeadRoot: headRoot,
+		Slot:          req.Slot,
+		HeadRoot:      headRoot,
+		IsPayloadFull: isPayloadFull,
 		Target: forkchoicetypes.Checkpoint{
 			Epoch: targetEpoch,
 			Root:  targetRoot,
@@ -570,7 +579,7 @@ func (s *Service) GetAttestationData(
 
 	return &ethpb.AttestationData{
 		Slot:            req.Slot,
-		CommitteeIndex:  committeeIndex,
+		CommitteeIndex:  attestationDataIndex(req, isPayloadFull),
 		BeaconBlockRoot: headRoot,
 		Source: &ethpb.Checkpoint{
 			Epoch: justifiedCheckpoint.Epoch,
@@ -581,6 +590,25 @@ func (s *Service) GetAttestationData(
 			Root:  targetRoot[:],
 		},
 	}, nil
+}
+
+// attestationDataIndex returns the index for attestation data.
+// Pre-Electra: uses the requested committee index.
+// Electra to Gloas: always 0.
+// Post-Gloas: signals payload status of the attested head block.
+func attestationDataIndex(req *ethpb.AttestationDataRequest, isPayloadFull bool) primitives.CommitteeIndex {
+	epoch := slots.ToEpoch(req.Slot)
+	if epoch < params.BeaconConfig().ElectraForkEpoch {
+		return req.CommitteeIndex
+	}
+	if epoch < params.BeaconConfig().GloasForkEpoch {
+		// eip-7549 moves index outside
+		return 0
+	}
+	if isPayloadFull {
+		return 1
+	}
+	return 0
 }
 
 // SubmitSyncMessage submits the sync committee message to the network.
@@ -899,5 +927,79 @@ func (s *Service) ValidatorActiveSetChanges(
 		SlashedIndices:      slashedIndices,
 		EjectedPublicKeys:   ejectedKeys,
 		EjectedIndices:      ejectedIndices,
+	}, nil
+}
+
+// PayloadAttestationData produces the PTC attestation data for the given slot.
+// It enforces the gloas-fork gate, slot-equality with the current slot, the PTC
+// deadline, and requires that a block for the requested slot has been received.
+func (s *Service) PayloadAttestationData(
+	ctx context.Context,
+	slot primitives.Slot,
+) (*ethpb.PayloadAttestationData, *RpcError) {
+	_, span := trace.StartSpan(ctx, "coreService.PayloadAttestationData")
+	defer span.End()
+
+	if slots.ToEpoch(slot) < params.BeaconConfig().GloasForkEpoch {
+		return nil, &RpcError{Reason: BadRequest, Err: fmt.Errorf("payload attestation data is not supported before Gloas fork (slot %d)", slot)}
+	}
+	currentSlot := s.GenesisTimeFetcher.CurrentSlot()
+	if slot != currentSlot {
+		return nil, &RpcError{Reason: BadRequest, Err: fmt.Errorf("payload attestation data is only available for current slot: requested %d, current %d", slot, currentSlot)}
+	}
+
+	slotStart, err := slots.StartTime(s.GenesisTimeFetcher.GenesisTime(), slot)
+	if err != nil {
+		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not compute slot start time: %w", err)}
+	}
+	cfg := params.BeaconConfig()
+	deadline := slotStart.Add(cfg.SlotComponentDuration(cfg.PayloadAttestationDueBPS))
+	if prysmTime.Now().Before(deadline) {
+		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("PTC deadline not yet reached for slot %d", slot)}
+	}
+
+	if cached := s.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
+		return cached, nil
+	}
+
+	v, sfErr, _ := s.payloadAttestationFlight.Do(strconv.FormatUint(uint64(slot), 10), func() (any, error) {
+		if cached := s.payloadAttestationData.Load(); cached != nil && cached.Slot == slot {
+			return cached, nil
+		}
+		data, rpcErr := s.buildPayloadAttestationData(slot)
+		if rpcErr != nil {
+			return rpcErr, nil
+		}
+		s.payloadAttestationData.Store(data)
+		return data, nil
+	})
+	if sfErr != nil {
+		return nil, &RpcError{Reason: Internal, Err: sfErr}
+	}
+	switch r := v.(type) {
+	case *ethpb.PayloadAttestationData:
+		return r, nil
+	case *RpcError:
+		return nil, r
+	default:
+		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("unexpected singleflight result type %T", v)}
+	}
+}
+
+func (s *Service) buildPayloadAttestationData(slot primitives.Slot) (*ethpb.PayloadAttestationData, *RpcError) {
+	highestReceivedSlot := s.ForkchoiceFetcher.HighestReceivedBlockSlot()
+	if highestReceivedSlot != slot {
+		return nil, &RpcError{Reason: Unavailable, Err: fmt.Errorf("no valid block root for slot %d, highest received block slot is %d", slot, highestReceivedSlot)}
+	}
+	root := s.ForkchoiceFetcher.HighestReceivedBlockRoot()
+	if root == [32]byte{} {
+		return nil, &RpcError{Reason: Internal, Err: fmt.Errorf("could not retrieve highest received block root for slot %d", slot)}
+	}
+	payloadEarly, _ := s.ForkchoiceFetcher.PayloadEarly(root)
+	return &ethpb.PayloadAttestationData{
+		BeaconBlockRoot:   root[:],
+		Slot:              slot,
+		PayloadPresent:    payloadEarly,
+		BlobDataAvailable: s.ForkchoiceFetcher.HasFullNode(root),
 	}, nil
 }

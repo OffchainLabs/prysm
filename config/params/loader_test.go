@@ -27,39 +27,31 @@ var placeholderFields = []string{
 	"ATTESTATION_DEADLINE",
 	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
 	"CELLS_PER_EXT_BLOB",
+	"CONFIRMATION_BYZANTINE_THRESHOLD",
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
 	"EIP7002_FORK_EPOCH",
 	"EIP7002_FORK_VERSION",
-	"EIP7441_FORK_EPOCH",
-	"EIP7441_FORK_VERSION",
 	"EIP7732_FORK_EPOCH",
 	"EIP7732_FORK_VERSION",
-	"EIP7805_FORK_EPOCH",
-	"EIP7805_FORK_VERSION",
 	"EIP7928_FORK_EPOCH",
 	"EIP7928_FORK_VERSION",
+	"EIP8025_FORK_EPOCH",
+	"EIP8025_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
 	"FIELD_ELEMENTS_PER_CELL",     // Configured as a constant in config/fieldparams/mainnet.go
 	"FIELD_ELEMENTS_PER_EXT_BLOB", // Configured in proto/ssz_proto_library.bzl
-	"GLOAS_FORK_VERSION",
+	"HEZE_FORK_EPOCH",
+	"HEZE_FORK_VERSION",
+	"INCLUSION_LIST_COMMITTEE_SIZE",
+	"INCLUSION_LIST_DUE_BPS",
 	"INCLUSION_LIST_SUBMISSION_DEADLINE",
-	"INCLUSION_LIST_SUBMISSION_DUE_BPS",
 	"KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH", // Configured in proto/ssz_proto_library.bzl
 	"MAX_BYTES_PER_INCLUSION_LIST",
-	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_INCLUSION_LIST",
-	"MAX_REQUEST_PAYLOADS", // Compile time constant on BeaconBlockBody.ExecutionRequests
-	"MIN_BUILDER_WITHDRAWABILITY_DELAY",
 	"NUMBER_OF_COLUMNS", // Configured as a constant in config/fieldparams/mainnet.go
-	"PAYLOAD_ATTESTATION_DUE_BPS",
-	"PROPOSER_INCLUSION_LIST_CUTOFF",
-	"PROPOSER_INCLUSION_LIST_CUTOFF_BPS",
-	"PROPOSER_SELECTION_GAP",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
-	"VIEW_FREEZE_CUTOFF_BPS",
-	"VIEW_FREEZE_DEADLINE",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",
 	"WHISK_FORK_EPOCH",
 	"WHISK_FORK_VERSION",
@@ -119,6 +111,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	// Initial values.
 	assert.DeepEqual(t, expected.GenesisForkVersion, actual.GenesisForkVersion, "%s: GenesisForkVersion", name)
 	assert.DeepEqual(t, expected.BLSWithdrawalPrefixByte, actual.BLSWithdrawalPrefixByte, "%s: BLSWithdrawalPrefixByte", name)
+	assert.DeepEqual(t, expected.BuilderWithdrawalPrefixByte, actual.BuilderWithdrawalPrefixByte, "%s: BuilderWithdrawalPrefixByte", name)
 	assert.DeepEqual(t, expected.ETH1AddressWithdrawalPrefixByte, actual.ETH1AddressWithdrawalPrefixByte, "%s: ETH1AddressWithdrawalPrefixByte", name)
 
 	// Time parameters.
@@ -175,6 +168,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.Equal(t, expected.DenebForkEpoch, actual.DenebForkEpoch, "%s: DenebForkEpoch", name)
 	assert.Equal(t, expected.ElectraForkEpoch, actual.ElectraForkEpoch, "%s: ElectraForkEpoch", name)
 	assert.Equal(t, expected.FuluForkEpoch, actual.FuluForkEpoch, "%s: FuluForkEpoch", name)
+	assert.Equal(t, expected.GloasForkEpoch, actual.GloasForkEpoch, "%s: GloasForkEpoch", name)
 	assert.Equal(t, expected.SqrRootSlotsPerEpoch, actual.SqrRootSlotsPerEpoch, "%s: SqrRootSlotsPerEpoch", name)
 	assert.DeepEqual(t, expected.GenesisForkVersion, actual.GenesisForkVersion, "%s: GenesisForkVersion", name)
 	assert.DeepEqual(t, expected.AltairForkVersion, actual.AltairForkVersion, "%s: AltairForkVersion", name)
@@ -183,6 +177,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.DeepEqual(t, expected.DenebForkVersion, actual.DenebForkVersion, "%s: DenebForkVersion", name)
 	assert.DeepEqual(t, expected.ElectraForkVersion, actual.ElectraForkVersion, "%s: ElectraForkVersion", name)
 	assert.DeepEqual(t, expected.FuluForkVersion, actual.FuluForkVersion, "%s: FuluForkVersion", name)
+	assert.DeepEqual(t, expected.GloasForkVersion, actual.GloasForkVersion, "%s: GloasForkVersion", name)
 
 	assertYamlFieldsMatch(t, name, fields, expected, actual)
 }

@@ -164,14 +164,26 @@ func Test_SignedBeaconBlock_Header(t *testing.T) {
 	assert.DeepEqual(t, expectedHTR[:], h.Header.BodyRoot)
 }
 
-func Test_SignedBeaconBlock_PbGenericBlockGloasUnsupported(t *testing.T) {
-	sb := &SignedBeaconBlock{
-		version: version.Gloas,
-		block:   &BeaconBlock{version: version.Gloas, body: &BeaconBlockBody{version: version.Gloas}},
+func Test_SignedBeaconBlock_PbGenericBlockGloas(t *testing.T) {
+	blk := &eth.SignedBeaconBlockGloas{
+		Block: &eth.BeaconBlockGloas{
+			ParentRoot: make([]byte, fieldparams.RootLength),
+			StateRoot:  make([]byte, fieldparams.RootLength),
+			Body: &eth.BeaconBlockBodyGloas{
+				RandaoReveal: make([]byte, fieldparams.BLSSignatureLength),
+				Graffiti:     make([]byte, fieldparams.RootLength),
+			},
+		},
+		Signature: make([]byte, fieldparams.BLSSignatureLength),
 	}
+	sb, err := NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
 
-	_, err := sb.PbGenericBlock()
-	require.ErrorContains(t, "Gloas blocks don't support GenericSignedBeaconBlock conversion", err)
+	generic, err := sb.PbGenericBlock()
+	require.NoError(t, err)
+	require.NotNil(t, generic)
+	_, ok := generic.Block.(*eth.GenericSignedBeaconBlock_Gloas)
+	require.Equal(t, true, ok)
 }
 
 func Test_SignedBeaconBlock_UnmarshalSSZ(t *testing.T) {
@@ -666,15 +678,17 @@ func hydrateBeaconBlockBodyGloas() *eth.BeaconBlockBodyGloas {
 		},
 		SignedExecutionPayloadBid: &eth.SignedExecutionPayloadBid{
 			Message: &eth.ExecutionPayloadBid{
-				ParentBlockHash:        make([]byte, fieldparams.RootLength),
-				ParentBlockRoot:        make([]byte, fieldparams.RootLength),
-				BlockHash:              make([]byte, fieldparams.RootLength),
-				PrevRandao:             make([]byte, fieldparams.RootLength),
-				FeeRecipient:           make([]byte, 20),
-				BlobKzgCommitmentsRoot: make([]byte, fieldparams.RootLength),
+				ParentBlockHash:       make([]byte, fieldparams.RootLength),
+				ParentBlockRoot:       make([]byte, fieldparams.RootLength),
+				BlockHash:             make([]byte, fieldparams.RootLength),
+				PrevRandao:            make([]byte, fieldparams.RootLength),
+				FeeRecipient:          make([]byte, 20),
+				BlobKzgCommitments:    [][]byte{make([]byte, fieldparams.BLSPubkeyLength)},
+				ExecutionRequestsRoot: make([]byte, fieldparams.RootLength),
 			},
 			Signature: make([]byte, fieldparams.BLSSignatureLength),
 		},
+		ParentExecutionRequests: &pb.ExecutionRequests{},
 		PayloadAttestations: []*eth.PayloadAttestation{
 			{
 				AggregationBits: bits,

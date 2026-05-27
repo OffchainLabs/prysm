@@ -205,6 +205,22 @@ var (
 			"pubkey",
 		},
 	)
+	validatorPayloadAttestationSubmissionTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "validator",
+			Name:      "payload_attestation_submission_total",
+			Help:      "The number of payload attestation submissions by result in the validator client.",
+		},
+		[]string{"result"},
+	)
+	validatorSelfBuildEnvelopeSubmissionTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "validator",
+			Name:      "self_build_envelope_submission_total",
+			Help:      "The number of self-build execution payload envelope submissions by result.",
+		},
+		[]string{"result"},
+	)
 )
 
 // LogValidatorGainsAndLosses logs important metrics related to this validator client's

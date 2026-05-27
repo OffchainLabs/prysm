@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -17,6 +18,8 @@ const (
 	validatorSuffix = "_v"
 	balancesSuffix  = "_b"
 )
+
+var errSnapshotNotFound = errors.New("full snapshot not found")
 
 /*
 	We use a level-based approach to save state diffs. Each level corresponds to an exponent of 2 (exponents[lvl]).
@@ -57,7 +60,7 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 	}
 
 	// Get anchor state to compute the diff from.
-	anchorState, err := s.getAnchorState(offset, lvl, slot)
+	anchorState, err := s.getAnchorState(ctx, offset, lvl, slot)
 	if err != nil {
 		return err
 	}
@@ -132,6 +135,9 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 			return err
 		}
 	}
+	if err := s.stateDiffCache.setLevelHasData(lvl); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -167,8 +173,12 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	}
 	// Save the full state to the cache, and invalidate other levels.
 	s.stateDiffCache.clearAnchors()
-	err = s.stateDiffCache.setAnchor(0, st)
-	if err != nil {
+	if len(flags.Get().StateDiffExponents) > 1 {
+		if err = s.stateDiffCache.setAnchor(0, st); err != nil {
+			return err
+		}
+	}
+	if err := s.stateDiffCache.setLevelHasData(0); err != nil {
 		return err
 	}
 
@@ -187,20 +197,23 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 			return bolt.ErrBucketNotFound
 		}
 		buf := append(key, stateSuffix...)
-		stateDiff = bucket.Get(buf)
-		if stateDiff == nil {
+		rawStateDiff := bucket.Get(buf)
+		if len(rawStateDiff) == 0 {
 			return errors.New("state diff not found")
 		}
+		stateDiff = slices.Clone(rawStateDiff)
 		buf = append(key, validatorSuffix...)
-		validatorDiff = bucket.Get(buf)
-		if validatorDiff == nil {
+		rawValidatorDiff := bucket.Get(buf)
+		if len(rawValidatorDiff) == 0 {
 			return errors.New("validator diff not found")
 		}
+		validatorDiff = slices.Clone(rawValidatorDiff)
 		buf = append(key, balancesSuffix...)
-		balancesDiff = bucket.Get(buf)
-		if balancesDiff == nil {
+		rawBalancesDiff := bucket.Get(buf)
+		if len(rawBalancesDiff) == 0 {
 			return errors.New("balances diff not found")
 		}
+		balancesDiff = slices.Clone(rawBalancesDiff)
 		return nil
 	})
 
@@ -224,10 +237,11 @@ func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
 		}
-		enc = bucket.Get(key)
-		if enc == nil {
-			return errors.New("state not found")
+		rawEnc := bucket.Get(key)
+		if rawEnc == nil {
+			return errSnapshotNotFound
 		}
+		enc = slices.Clone(rawEnc)
 		return nil
 	})
 

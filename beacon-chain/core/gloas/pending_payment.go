@@ -1,6 +1,8 @@
 package gloas
 
 import (
+	"context"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -10,19 +12,23 @@ import (
 )
 
 // ProcessBuilderPendingPayments processes the builder pending payments from the previous epoch.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// def process_builder_pending_payments(state: BeaconState) -> None:
 //
-//	quorum = get_builder_payment_quorum_threshold(state)
-//	for payment in state.builder_pending_payments[:SLOTS_PER_EPOCH]:
-//	    if payment.weight >= quorum:
-//	        state.builder_pending_withdrawals.append(payment.withdrawal)
+//	<spec fn="process_builder_pending_payments" fork="gloas" hash="10da48dd">
+//	def process_builder_pending_payments(state: BeaconState) -> None:
+//	    """
+//	    Processes the builder pending payments from the previous epoch.
+//	    """
+//	    quorum = get_builder_payment_quorum_threshold(state)
+//	    for payment in state.builder_pending_payments[:SLOTS_PER_EPOCH]:
+//	        if payment.weight >= quorum:
+//	            state.builder_pending_withdrawals.append(payment.withdrawal)
 //
-//	old_payments = state.builder_pending_payments[SLOTS_PER_EPOCH:]
-//	new_payments = [BuilderPendingPayment() for _ in range(SLOTS_PER_EPOCH)]
-//	state.builder_pending_payments = old_payments + new_payments
-func ProcessBuilderPendingPayments(state state.BeaconState) error {
-	quorum, err := builderQuorumThreshold(state)
+//	    old_payments = state.builder_pending_payments[SLOTS_PER_EPOCH:]
+//	    new_payments = [BuilderPendingPayment() for _ in range(SLOTS_PER_EPOCH)]
+//	    state.builder_pending_payments = old_payments + new_payments
+//	</spec>
+func ProcessBuilderPendingPayments(ctx context.Context, state state.BeaconState) error {
+	quorum, err := builderQuorumThreshold(ctx, state)
 	if err != nil {
 		return errors.Wrap(err, "could not compute builder payment quorum threshold")
 	}
@@ -48,19 +54,24 @@ func ProcessBuilderPendingPayments(state state.BeaconState) error {
 	if err := state.RotateBuilderPendingPayments(); err != nil {
 		return errors.Wrap(err, "could not rotate builder pending payments")
 	}
+	builderPendingPaymentsProcessedTotal.Add(float64(len(withdrawals)))
 
 	return nil
 }
 
 // builderQuorumThreshold calculates the quorum threshold for builder payments.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// def get_builder_payment_quorum_threshold(state: BeaconState) -> uint64:
 //
-//	per_slot_balance = get_total_active_balance(state) // SLOTS_PER_EPOCH
-//	quorum = per_slot_balance * BUILDER_PAYMENT_THRESHOLD_NUMERATOR
-//	return uint64(quorum // BUILDER_PAYMENT_THRESHOLD_DENOMINATOR)
-func builderQuorumThreshold(state state.ReadOnlyBeaconState) (primitives.Gwei, error) {
-	activeBalance, err := helpers.TotalActiveBalance(state)
+//	<spec fn="get_builder_payment_quorum_threshold" fork="gloas" hash="a64b7ffb">
+//	def get_builder_payment_quorum_threshold(state: BeaconState) -> uint64:
+//	    """
+//	    Calculate the quorum threshold for builder payments.
+//	    """
+//	    per_slot_balance = get_total_active_balance(state) // SLOTS_PER_EPOCH
+//	    quorum = per_slot_balance * BUILDER_PAYMENT_THRESHOLD_NUMERATOR
+//	    return uint64(quorum // BUILDER_PAYMENT_THRESHOLD_DENOMINATOR)
+//	</spec>
+func builderQuorumThreshold(ctx context.Context, state state.ReadOnlyBeaconState) (primitives.Gwei, error) {
+	activeBalance, err := helpers.TotalActiveBalance(ctx, state)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not get total active balance")
 	}

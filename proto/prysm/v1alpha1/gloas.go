@@ -10,17 +10,18 @@ func (header *ExecutionPayloadBid) Copy() *ExecutionPayloadBid {
 		return nil
 	}
 	return &ExecutionPayloadBid{
-		ParentBlockHash:        bytesutil.SafeCopyBytes(header.ParentBlockHash),
-		ParentBlockRoot:        bytesutil.SafeCopyBytes(header.ParentBlockRoot),
-		BlockHash:              bytesutil.SafeCopyBytes(header.BlockHash),
-		PrevRandao:             bytesutil.SafeCopyBytes(header.PrevRandao),
-		FeeRecipient:           bytesutil.SafeCopyBytes(header.FeeRecipient),
-		GasLimit:               header.GasLimit,
-		BuilderIndex:           header.BuilderIndex,
-		Slot:                   header.Slot,
-		Value:                  header.Value,
-		ExecutionPayment:       header.ExecutionPayment,
-		BlobKzgCommitmentsRoot: bytesutil.SafeCopyBytes(header.BlobKzgCommitmentsRoot),
+		ParentBlockHash:       bytesutil.SafeCopyBytes(header.ParentBlockHash),
+		ParentBlockRoot:       bytesutil.SafeCopyBytes(header.ParentBlockRoot),
+		BlockHash:             bytesutil.SafeCopyBytes(header.BlockHash),
+		PrevRandao:            bytesutil.SafeCopyBytes(header.PrevRandao),
+		FeeRecipient:          bytesutil.SafeCopyBytes(header.FeeRecipient),
+		GasLimit:              header.GasLimit,
+		BuilderIndex:          header.BuilderIndex,
+		Slot:                  header.Slot,
+		Value:                 header.Value,
+		ExecutionPayment:      header.ExecutionPayment,
+		BlobKzgCommitments:    bytesutil.SafeCopy2dBytes(header.BlobKzgCommitments),
+		ExecutionRequestsRoot: bytesutil.SafeCopyBytes(header.ExecutionRequestsRoot),
 	}
 }
 

@@ -46,6 +46,14 @@ const (
 	GossipLightClientOptimisticUpdateMessage = "light_client_optimistic_update"
 	// GossipDataColumnSidecarMessage is the name for the data column sidecar message type.
 	GossipDataColumnSidecarMessage = "data_column_sidecar"
+	// GossipPayloadAttestationMessageMessage is the name for the payload attestation message type.
+	GossipPayloadAttestationMessageMessage = "payload_attestation_message"
+	// GossipExecutionPayloadEnvelopeMessage is the name for the execution payload envelope message type.
+	GossipExecutionPayloadEnvelopeMessage = "execution_payload"
+	// GossipExecutionPayloadBidMessage is the name for the execution payload bid message type.
+	GossipExecutionPayloadBidMessage = "execution_payload_bid"
+	// GossipSignedProposerPreferencesMessage is the name for the proposer preferences message type.
+	GossipSignedProposerPreferencesMessage = "proposer_preferences"
 	// GossipExecutionProofMessage is the name for the execution proof message type.
 	GossipExecutionProofMessage = "execution_proof"
 
@@ -77,6 +85,14 @@ const (
 	LightClientOptimisticUpdateTopicFormat = GossipProtocolAndDigest + GossipLightClientOptimisticUpdateMessage
 	// DataColumnSubnetTopicFormat is the topic format for the data column subnet.
 	DataColumnSubnetTopicFormat = GossipProtocolAndDigest + GossipDataColumnSidecarMessage + "_%d"
+	// PayloadAttestationMessageTopicFormat is the topic format for payload attestation messages.
+	PayloadAttestationMessageTopicFormat = GossipProtocolAndDigest + GossipPayloadAttestationMessageMessage
+	// ExecutionPayloadEnvelopeTopicFormat is the topic format for execution payload envelopes.
+	ExecutionPayloadEnvelopeTopicFormat = GossipProtocolAndDigest + GossipExecutionPayloadEnvelopeMessage
+	// ExecutionPayloadBidTopicFormat is the topic format for execution payload bids.
+	ExecutionPayloadBidTopicFormat = GossipProtocolAndDigest + GossipExecutionPayloadBidMessage
+	// SignedProposerPreferencesTopicFormat is the topic format for signed proposer preferences.
+	SignedProposerPreferencesTopicFormat = GossipProtocolAndDigest + GossipSignedProposerPreferencesMessage
 	// ExecutionProofSubnetTopicFormat is the topic format for the execution proof subnet.
 	ExecutionProofSubnetTopicFormat = GossipProtocolAndDigest + GossipExecutionProofMessage // + "_%d" (PoC only have one global topic)
 )
@@ -145,7 +161,7 @@ func (s *Service) allTopics() []topic {
 	cfg := params.BeaconConfig()
 	// bellatrix: no special topics; electra: blobs topics handled all together
 	genesis, altair, capella := cfg.GenesisEpoch, cfg.AltairForkEpoch, cfg.CapellaForkEpoch
-	deneb, fulu, future := cfg.DenebForkEpoch, cfg.FuluForkEpoch, cfg.FarFutureEpoch
+	deneb, fulu, gloas, future := cfg.DenebForkEpoch, cfg.FuluForkEpoch, cfg.GloasForkEpoch, cfg.FarFutureEpoch
 	// Templates are starter topics - they have a placeholder digest and the subnet is set to the maximum value
 	// for the subnet (see how this is used in allSubnetsBelow). These are not directly returned by the method,
 	// they are copied and modified for each digest where they apply based on the start and end epochs.
@@ -162,6 +178,10 @@ func (s *Service) allTopics() []topic {
 		newTopic(altair, future, empty, GossipLightClientOptimisticUpdateMessage),
 		newTopic(altair, future, empty, GossipLightClientFinalityUpdateMessage),
 		newTopic(capella, future, empty, GossipBlsToExecutionChangeMessage),
+		newTopic(gloas, future, empty, GossipPayloadAttestationMessageMessage),
+		newTopic(gloas, future, empty, GossipExecutionPayloadEnvelopeMessage),
+		newTopic(gloas, future, empty, GossipExecutionPayloadBidMessage),
+		newTopic(gloas, future, empty, GossipSignedProposerPreferencesMessage),
 		newTopic(fulu, future, empty, GossipExecutionProofMessage),
 	}
 	last := params.GetNetworkScheduleEntry(genesis)

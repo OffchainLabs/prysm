@@ -57,7 +57,7 @@ func Test_BaseReward(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := altair.BaseReward(tt.st, tt.valIdx)
+			got, err := altair.BaseReward(t.Context(), tt.st, tt.valIdx)
 			if (err != nil) && (tt.errString != "") {
 				require.ErrorContains(t, tt.errString, err)
 				return

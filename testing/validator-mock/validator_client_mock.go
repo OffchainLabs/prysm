@@ -17,8 +17,8 @@ import (
 	primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	iface "github.com/OffchainLabs/prysm/v7/validator/client/iface"
+	empty "github.com/golang/protobuf/ptypes/empty"
 	gomock "go.uber.org/mock/gomock"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // MockValidatorClient is a mock of ValidatorClient interface.
@@ -90,6 +90,21 @@ func (mr *MockValidatorClientMockRecorder) AttestationData(ctx, in any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttestationData", reflect.TypeOf((*MockValidatorClient)(nil).AttestationData), ctx, in)
 }
 
+// AttesterDuties mocks base method.
+func (m *MockValidatorClient) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*eth.AttesterDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AttesterDuties", ctx, epoch, validatorIndices)
+	ret0, _ := ret[0].(*eth.AttesterDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AttesterDuties indicates an expected call of AttesterDuties.
+func (mr *MockValidatorClientMockRecorder) AttesterDuties(ctx, epoch, validatorIndices any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttesterDuties", reflect.TypeOf((*MockValidatorClient)(nil).AttesterDuties), ctx, epoch, validatorIndices)
+}
+
 // BeaconBlock mocks base method.
 func (m *MockValidatorClient) BeaconBlock(ctx context.Context, in *eth.BlockRequest) (*eth.GenericBeaconBlock, error) {
 	m.ctrl.T.Helper()
@@ -150,6 +165,20 @@ func (mr *MockValidatorClientMockRecorder) Duties(ctx, in any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Duties", reflect.TypeOf((*MockValidatorClient)(nil).Duties), ctx, in)
 }
 
+// EnsureReady mocks base method.
+func (m *MockValidatorClient) EnsureReady(ctx context.Context) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureReady", ctx)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// EnsureReady indicates an expected call of EnsureReady.
+func (mr *MockValidatorClientMockRecorder) EnsureReady(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureReady", reflect.TypeOf((*MockValidatorClient)(nil).EnsureReady), ctx)
+}
+
 // EventStreamIsRunning mocks base method.
 func (m *MockValidatorClient) EventStreamIsRunning() bool {
 	m.ctrl.T.Helper()
@@ -177,6 +206,21 @@ func (m *MockValidatorClient) FeeRecipientByPubKey(ctx context.Context, in *eth.
 func (mr *MockValidatorClientMockRecorder) FeeRecipientByPubKey(ctx, in any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FeeRecipientByPubKey", reflect.TypeOf((*MockValidatorClient)(nil).FeeRecipientByPubKey), ctx, in)
+}
+
+// GetExecutionPayloadEnvelope mocks base method.
+func (m *MockValidatorClient) GetExecutionPayloadEnvelope(ctx context.Context, slot primitives.Slot) (*eth.ExecutionPayloadEnvelope, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetExecutionPayloadEnvelope", ctx, slot)
+	ret0, _ := ret[0].(*eth.ExecutionPayloadEnvelope)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetExecutionPayloadEnvelope indicates an expected call of GetExecutionPayloadEnvelope.
+func (mr *MockValidatorClientMockRecorder) GetExecutionPayloadEnvelope(ctx, slot any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).GetExecutionPayloadEnvelope), ctx, slot)
 }
 
 // Host mocks base method.
@@ -208,11 +252,41 @@ func (mr *MockValidatorClientMockRecorder) MultipleValidatorStatus(ctx, in any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MultipleValidatorStatus", reflect.TypeOf((*MockValidatorClient)(nil).MultipleValidatorStatus), ctx, in)
 }
 
+// PTCDuties mocks base method.
+func (m *MockValidatorClient) PTCDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*eth.PTCDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PTCDuties", ctx, epoch, validatorIndices)
+	ret0, _ := ret[0].(*eth.PTCDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PTCDuties indicates an expected call of PTCDuties.
+func (mr *MockValidatorClientMockRecorder) PTCDuties(ctx, epoch, validatorIndices any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PTCDuties", reflect.TypeOf((*MockValidatorClient)(nil).PTCDuties), ctx, epoch, validatorIndices)
+}
+
+// PayloadAttestationData mocks base method.
+func (m *MockValidatorClient) PayloadAttestationData(ctx context.Context, slot primitives.Slot) (*eth.PayloadAttestationData, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PayloadAttestationData", ctx, slot)
+	ret0, _ := ret[0].(*eth.PayloadAttestationData)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PayloadAttestationData indicates an expected call of PayloadAttestationData.
+func (mr *MockValidatorClientMockRecorder) PayloadAttestationData(ctx, slot any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PayloadAttestationData", reflect.TypeOf((*MockValidatorClient)(nil).PayloadAttestationData), ctx, slot)
+}
+
 // PrepareBeaconProposer mocks base method.
-func (m *MockValidatorClient) PrepareBeaconProposer(ctx context.Context, in *eth.PrepareBeaconProposerRequest) (*emptypb.Empty, error) {
+func (m *MockValidatorClient) PrepareBeaconProposer(ctx context.Context, in *eth.PrepareBeaconProposerRequest) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PrepareBeaconProposer", ctx, in)
-	ret0, _ := ret[0].(*emptypb.Empty)
+	ret0, _ := ret[0].(*empty.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -283,16 +357,64 @@ func (mr *MockValidatorClientMockRecorder) ProposeExit(ctx, in any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeExit", reflect.TypeOf((*MockValidatorClient)(nil).ProposeExit), ctx, in)
 }
 
-// SetHost mocks base method.
-func (m *MockValidatorClient) SetHost(host string) {
+// ProposerDuties mocks base method.
+func (m *MockValidatorClient) ProposerDuties(ctx context.Context, epoch primitives.Epoch) (*eth.ProposerDutiesResponse, error) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetHost", host)
+	ret := m.ctrl.Call(m, "ProposerDuties", ctx, epoch)
+	ret0, _ := ret[0].(*eth.ProposerDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// SetHost indicates an expected call of SetHost.
-func (mr *MockValidatorClientMockRecorder) SetHost(host any) *gomock.Call {
+// ProposerDuties indicates an expected call of ProposerDuties.
+func (mr *MockValidatorClientMockRecorder) ProposerDuties(ctx, epoch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHost", reflect.TypeOf((*MockValidatorClient)(nil).SetHost), host)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposerDuties", reflect.TypeOf((*MockValidatorClient)(nil).ProposerDuties), ctx, epoch)
+}
+
+// PublishExecutionPayloadEnvelope mocks base method.
+func (m *MockValidatorClient) PublishExecutionPayloadEnvelope(ctx context.Context, in *eth.SignedExecutionPayloadEnvelope) (*empty.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishExecutionPayloadEnvelope", ctx, in)
+	ret0, _ := ret[0].(*empty.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishExecutionPayloadEnvelope indicates an expected call of PublishExecutionPayloadEnvelope.
+func (mr *MockValidatorClientMockRecorder) PublishExecutionPayloadEnvelope(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockValidatorClient)(nil).PublishExecutionPayloadEnvelope), ctx, in)
+}
+
+// SubmitSignedProposerPreferences mocks base method.
+func (m *MockValidatorClient) SubmitSignedProposerPreferences(ctx context.Context, in *eth.SubmitSignedProposerPreferencesRequest) (*empty.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitSignedProposerPreferences", ctx, in)
+	ret0, _ := ret[0].(*empty.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitSignedProposerPreferences indicates an expected call of SubmitSignedProposerPreferences.
+func (mr *MockValidatorClientMockRecorder) SubmitSignedProposerPreferences(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedProposerPreferences", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedProposerPreferences), ctx, in)
+}
+
+// SubmitSignedExecutionPayloadBid mocks base method.
+func (m *MockValidatorClient) SubmitSignedExecutionPayloadBid(ctx context.Context, in *eth.SignedExecutionPayloadBid) (*empty.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitSignedExecutionPayloadBid", ctx, in)
+	ret0, _ := ret[0].(*empty.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitSignedExecutionPayloadBid indicates an expected call of SubmitSignedExecutionPayloadBid.
+func (mr *MockValidatorClientMockRecorder) SubmitSignedExecutionPayloadBid(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedExecutionPayloadBid", reflect.TypeOf((*MockValidatorClient)(nil).SubmitSignedExecutionPayloadBid), ctx, in)
 }
 
 // StartEventStream mocks base method.
@@ -337,6 +459,21 @@ func (mr *MockValidatorClientMockRecorder) SubmitAggregateSelectionProofElectra(
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitAggregateSelectionProofElectra", reflect.TypeOf((*MockValidatorClient)(nil).SubmitAggregateSelectionProofElectra), ctx, in, arg2, arg3)
 }
 
+// SubmitPayloadAttestation mocks base method.
+func (m *MockValidatorClient) SubmitPayloadAttestation(ctx context.Context, in *eth.PayloadAttestationMessage) (*empty.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitPayloadAttestation", ctx, in)
+	ret0, _ := ret[0].(*empty.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitPayloadAttestation indicates an expected call of SubmitPayloadAttestation.
+func (mr *MockValidatorClientMockRecorder) SubmitPayloadAttestation(ctx, in any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPayloadAttestation", reflect.TypeOf((*MockValidatorClient)(nil).SubmitPayloadAttestation), ctx, in)
+}
+
 // SubmitSignedAggregateSelectionProof mocks base method.
 func (m *MockValidatorClient) SubmitSignedAggregateSelectionProof(ctx context.Context, in *eth.SignedAggregateSubmitRequest) (*eth.SignedAggregateSubmitResponse, error) {
 	m.ctrl.T.Helper()
@@ -368,10 +505,10 @@ func (mr *MockValidatorClientMockRecorder) SubmitSignedAggregateSelectionProofEl
 }
 
 // SubmitSignedContributionAndProof mocks base method.
-func (m *MockValidatorClient) SubmitSignedContributionAndProof(ctx context.Context, in *eth.SignedContributionAndProof) (*emptypb.Empty, error) {
+func (m *MockValidatorClient) SubmitSignedContributionAndProof(ctx context.Context, in *eth.SignedContributionAndProof) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubmitSignedContributionAndProof", ctx, in)
-	ret0, _ := ret[0].(*emptypb.Empty)
+	ret0, _ := ret[0].(*empty.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -383,10 +520,10 @@ func (mr *MockValidatorClientMockRecorder) SubmitSignedContributionAndProof(ctx,
 }
 
 // SubmitSyncMessage mocks base method.
-func (m *MockValidatorClient) SubmitSyncMessage(ctx context.Context, in *eth.SyncCommitteeMessage) (*emptypb.Empty, error) {
+func (m *MockValidatorClient) SubmitSyncMessage(ctx context.Context, in *eth.SyncCommitteeMessage) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubmitSyncMessage", ctx, in)
-	ret0, _ := ret[0].(*emptypb.Empty)
+	ret0, _ := ret[0].(*empty.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -398,10 +535,10 @@ func (mr *MockValidatorClientMockRecorder) SubmitSyncMessage(ctx, in any) *gomoc
 }
 
 // SubmitValidatorRegistrations mocks base method.
-func (m *MockValidatorClient) SubmitValidatorRegistrations(ctx context.Context, in *eth.SignedValidatorRegistrationsV1) (*emptypb.Empty, error) {
+func (m *MockValidatorClient) SubmitValidatorRegistrations(ctx context.Context, in *eth.SignedValidatorRegistrationsV1) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubmitValidatorRegistrations", ctx, in)
-	ret0, _ := ret[0].(*emptypb.Empty)
+	ret0, _ := ret[0].(*empty.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -413,10 +550,10 @@ func (mr *MockValidatorClientMockRecorder) SubmitValidatorRegistrations(ctx, in 
 }
 
 // SubscribeCommitteeSubnets mocks base method.
-func (m *MockValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *eth.CommitteeSubnetsSubscribeRequest, duties []*eth.ValidatorDuty) (*emptypb.Empty, error) {
+func (m *MockValidatorClient) SubscribeCommitteeSubnets(ctx context.Context, in *eth.CommitteeSubnetsSubscribeRequest, duties []*eth.ValidatorDuty) (*empty.Empty, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubscribeCommitteeSubnets", ctx, in, duties)
-	ret0, _ := ret[0].(*emptypb.Empty)
+	ret0, _ := ret[0].(*empty.Empty)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -442,8 +579,23 @@ func (mr *MockValidatorClientMockRecorder) SyncCommitteeContribution(ctx, in any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncCommitteeContribution", reflect.TypeOf((*MockValidatorClient)(nil).SyncCommitteeContribution), ctx, in)
 }
 
+// SyncCommitteeDuties mocks base method.
+func (m *MockValidatorClient) SyncCommitteeDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*eth.SyncCommitteeDutiesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SyncCommitteeDuties", ctx, epoch, validatorIndices)
+	ret0, _ := ret[0].(*eth.SyncCommitteeDutiesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SyncCommitteeDuties indicates an expected call of SyncCommitteeDuties.
+func (mr *MockValidatorClientMockRecorder) SyncCommitteeDuties(ctx, epoch, validatorIndices any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncCommitteeDuties", reflect.TypeOf((*MockValidatorClient)(nil).SyncCommitteeDuties), ctx, epoch, validatorIndices)
+}
+
 // SyncMessageBlockRoot mocks base method.
-func (m *MockValidatorClient) SyncMessageBlockRoot(ctx context.Context, in *emptypb.Empty) (*eth.SyncMessageBlockRootResponse, error) {
+func (m *MockValidatorClient) SyncMessageBlockRoot(ctx context.Context, in *empty.Empty) (*eth.SyncMessageBlockRootResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SyncMessageBlockRoot", ctx, in)
 	ret0, _ := ret[0].(*eth.SyncMessageBlockRootResponse)
@@ -503,7 +655,7 @@ func (mr *MockValidatorClientMockRecorder) ValidatorStatus(ctx, in any) *gomock.
 }
 
 // WaitForChainStart mocks base method.
-func (m *MockValidatorClient) WaitForChainStart(ctx context.Context, in *emptypb.Empty) (*eth.ChainStartResponse, error) {
+func (m *MockValidatorClient) WaitForChainStart(ctx context.Context, in *empty.Empty) (*eth.ChainStartResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WaitForChainStart", ctx, in)
 	ret0, _ := ret[0].(*eth.ChainStartResponse)

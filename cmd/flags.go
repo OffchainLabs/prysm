@@ -53,27 +53,26 @@ var (
 		Usage: `Serves HTTP handler to initiate database backups.
 		The handler is served on the monitoring port at path /db/backup.`,
 	}
-	// EnableTracingFlag defines a flag to enable p2p message tracing.
+	// EnableTracingFlag defines a flag to enable OpenTelemetry tracing.
 	EnableTracingFlag = &cli.BoolFlag{
 		Name:  "enable-tracing",
-		Usage: "Enables request tracing.",
+		Usage: "Enables OpenTelemetry tracing.",
 	}
 	// TracingProcessNameFlag defines a flag to specify a process name.
 	TracingProcessNameFlag = &cli.StringFlag{
 		Name:  "tracing-process-name",
 		Usage: "Name to apply to tracing tag `process_name`.",
 	}
-	// TracingEndpointFlag flag defines the http endpoint for serving traces to Jaeger.
+	// TracingEndpointFlag defines the OTLP/HTTP endpoint that traces are exported to.
 	TracingEndpointFlag = &cli.StringFlag{
 		Name:  "tracing-endpoint",
-		Usage: "Tracing endpoint defines where beacon chain traces are exposed to Jaeger.",
+		Usage: "OTLP/HTTP endpoint that traces are exported to (e.g. an OpenTelemetry Collector or a Tempo receiver).",
 		Value: "http://127.0.0.1:14268/api/traces",
 	}
-	// TraceSampleFractionFlag defines a flag to indicate what fraction of p2p
-	// messages are sampled for tracing.
+	// TraceSampleFractionFlag defines the head-sampling ratio applied to all traces.
 	TraceSampleFractionFlag = &cli.Float64Flag{
 		Name:  "trace-sample-fraction",
-		Usage: "Indicates what fraction of p2p messages are sampled for tracing.",
+		Usage: "Head-sampling ratio applied to every trace started by the process. 1.0 keeps all traces.",
 		Value: 0.20,
 	}
 	// MonitoringHostFlag defines the host used to serve prometheus metrics.
@@ -212,6 +211,11 @@ var (
 		Name:  "log-format",
 		Usage: "Specifies log formatting. Supports: text, json, fluentd, journald.",
 		Value: "text",
+	}
+	// DisableLogColor disables ANSI color codes in log output, useful when redirecting output to a file or pipe.
+	DisableLogColor = &cli.BoolFlag{
+		Name:  "disable-log-colors",
+		Usage: "Disable color formatting for terminal logs.",
 	}
 	// MaxGoroutines specifies the maximum amount of goroutines tolerated, before a status check fails.
 	MaxGoroutines = &cli.IntFlag{

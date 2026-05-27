@@ -18,19 +18,21 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func (s *Service) isNewHead(r [32]byte) bool {
+func (s *Service) isNewHead(r [32]byte, full bool) bool {
 	s.headLock.RLock()
 	defer s.headLock.RUnlock()
 
 	currentHeadRoot := s.originBlockRoot
+	currentFull := false
 	if s.head != nil {
 		currentHeadRoot = s.headRoot()
+		currentFull = s.head.full
 	}
 
-	return r != currentHeadRoot || r == [32]byte{}
+	return r != currentHeadRoot || full != currentFull || r == [32]byte{}
 }
 
-func (s *Service) getStateAndBlock(ctx context.Context, r [32]byte) (state.BeaconState, interfaces.ReadOnlySignedBeaconBlock, error) {
+func (s *Service) getStateAndBlock(ctx context.Context, r, h [32]byte) (state.BeaconState, interfaces.ReadOnlySignedBeaconBlock, error) {
 	if !s.hasBlockInInitSyncOrDB(ctx, r) {
 		return nil, nil, errors.New("block does not exist")
 	}
@@ -38,7 +40,7 @@ func (s *Service) getStateAndBlock(ctx context.Context, r [32]byte) (state.Beaco
 	if err != nil {
 		return nil, nil, err
 	}
-	headState, err := s.cfg.StateGen.StateByRoot(ctx, r)
+	headState, err := s.cfg.StateGen.StateByRoot(ctx, h)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -56,7 +58,7 @@ type fcuConfig struct {
 // sendFCU handles the logic to notify the engine of a forckhoice update
 // when processing an incoming block during regular sync. It
 // always updates the shuffling caches and handles epoch transitions .
-func (s *Service) sendFCU(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
+func (s *Service) sendFCU(cfg *postBlockProcessConfig) {
 	if cfg.postState.Version() < version.Fulu {
 		// update the caches to compute the right proposer index
 		// this function is called under a forkchoice lock which we need to release.
@@ -64,12 +66,13 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
 		s.updateCachesPostBlockProcessing(cfg)
 		s.ForkChoicer().Lock()
 	}
-	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
+	fcuArgs, err := s.getFCUArgs(cfg)
+	if err != nil {
 		log.WithError(err).Error("Could not get forkchoice update argument")
 		return
 	}
 	// If head has not been updated and attributes are nil, we can skip the FCU.
-	if !s.isNewHead(cfg.headRoot) && (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) {
+	if !s.isNewHead(cfg.headRoot, true) && (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) {
 		return
 	}
 	// If we are proposing and we aim to reorg the block, we have already sent FCU with attributes on lateBlockTasks
@@ -80,8 +83,8 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
 		go s.forkchoiceUpdateWithExecution(cfg.ctx, fcuArgs)
 	}
 
-	if s.isNewHead(fcuArgs.headRoot) {
-		if err := s.saveHead(cfg.ctx, fcuArgs.headRoot, fcuArgs.headBlock, fcuArgs.headState); err != nil {
+	if s.isNewHead(fcuArgs.headRoot, true) {
+		if err := s.saveHead(cfg.ctx, fcuArgs.headRoot, fcuArgs.headBlock, fcuArgs.headState, true); err != nil {
 			log.WithError(err).Error("Could not save head")
 		}
 		s.pruneAttsFromPool(s.ctx, fcuArgs.headState, fcuArgs.headBlock)

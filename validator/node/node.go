@@ -415,6 +415,11 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		return err
 	}
 
+	stateless := cliCtx.Bool(flags.EnableStatelessFlag.Name)
+	if stateless && !features.Get().EnableBeaconRESTApi {
+		log.Warnf("--%s requires --%s; the flag will be ignored.", flags.EnableStatelessFlag.Name, features.EnableBeaconRESTApi.Name)
+	}
+
 	validatorService, err := client.NewValidatorService(cliCtx.Context, &client.Config{
 		DB:                      c.db,
 		Wallet:                  c.wallet,
@@ -438,6 +443,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
+		Stateless:               stateless,
 		CloseClientFunc:         c.Close,
 		MaxHealthChecks:         cliCtx.Int(flags.MaxHealthChecksFlag.Name),
 	})
@@ -463,11 +469,14 @@ func (c *ValidatorClient) registerOptionalProofsService(cliCtx *cli.Context) err
 		return fmt.Errorf("--%s requires --%s to be set", flags.GenerateProofsFlag.Name, flags.BeaconRESTApiProviderFlag.Name)
 	}
 
-	s := optionalproofs.NewService(cliCtx.Context, &optionalproofs.Config{
+	s, err := optionalproofs.NewService(cliCtx.Context, &optionalproofs.Config{
 		BeaconApiEndpoint: beaconApiEndpoint,
 		ProverApiEndpoint: proverApiEndpoint,
 		Wallet:            c.wallet,
 	})
+	if err != nil {
+		return fmt.Errorf("optional proofs new service: %w", err)
+	}
 
 	return c.services.RegisterService(s)
 }

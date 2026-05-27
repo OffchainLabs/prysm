@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/math"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -237,10 +238,39 @@ func (p *BeaconDbStater) stateByRoot(ctx context.Context, stateRoot []byte) (sta
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get head state")
 	}
-	for i, root := range headState.StateRoots() {
-		if bytes.Equal(root, stateRoot) {
-			blockRoot := headState.BlockRoots()[i]
+
+	stateRoots := headState.StateRoots()
+	blkRoots := headState.BlockRoots()
+	n := len(stateRoots)
+	s, err := math.Int(uint64(headState.Slot()))
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert slot to int")
+	}
+	startIdx := s % n
+	isPostGloas := slots.ToEpoch(p.ChainInfoFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch
+
+	// iterate from the head state backwards, wrapping the list.
+	for i := range n {
+		idx := (startIdx - i + n) % n
+
+		if bytes.Equal(stateRoots[idx], stateRoot) {
+			blockRoot := blkRoots[idx]
 			return p.StateGenService.StateByRoot(ctx, bytesutil.ToBytes32(blockRoot))
+		}
+
+		// this is to support fetching states by pre-payload state roots after gloas
+		if isPostGloas {
+			r := bytesutil.ToBytes32(blkRoots[idx])
+			if r == params.BeaconConfig().ZeroHash {
+				continue
+			}
+			b, err := p.BeaconDB.Block(ctx, r)
+			if err != nil || b == nil || b.IsNil() {
+				continue
+			}
+			if b.Block().StateRoot() == bytesutil.ToBytes32(stateRoot) {
+				return p.StateGenService.StateByRoot(ctx, r)
+			}
 		}
 	}
 
@@ -261,8 +291,37 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 		return nil, errors.New("requested slot is in the future")
 	}
 
+	if p.BeaconDB != nil {
+		earliestSlot, err := p.BeaconDB.EarliestSlot(ctx)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			return nil, errors.Wrap(err, "could not determine state availability")
+		}
+		if err == nil && target > 0 && target < earliestSlot {
+			return nil, &StateNotFoundError{
+				message: fmt.Sprintf("requested slot %d is unavailable; earliest available slot is %d", target, earliestSlot),
+			}
+		}
+
+		backfillStatus, err := p.BeaconDB.BackfillStatus(ctx)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			return nil, errors.Wrap(err, "could not determine state availability")
+		}
+		if err == nil && backfillStatus != nil {
+			if target > 0 && target < primitives.Slot(backfillStatus.LowSlot) {
+				return nil, &StateNotFoundError{
+					message: fmt.Sprintf("requested slot %d is unavailable; backfill starts at slot %d", target, backfillStatus.LowSlot),
+				}
+			}
+		}
+	}
+
 	st, err := p.ReplayerBuilder.ReplayerForSlot(target).ReplayBlocks(ctx)
 	if err != nil {
+		if errors.Is(err, stategen.ErrNoDataForSlot) {
+			return nil, &StateNotFoundError{
+				message: fmt.Sprintf("requested slot %d is unavailable; historical data not available", target),
+			}
+		}
 		msg := fmt.Sprintf("error while replaying history to slot=%d", target)
 		return nil, errors.Wrap(err, msg)
 	}

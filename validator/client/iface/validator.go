@@ -30,6 +30,8 @@ const (
 	RoleSyncCommittee
 	// RoleSyncCommitteeAggregator means the validator should aggregate sync committee messages and submit a sync committee contribution.
 	RoleSyncCommitteeAggregator
+	// RolePTCMember means the validator should submit a payload attestation.
+	RolePTCMember
 )
 
 // Validator interface defines the primary methods of a validator client.
@@ -51,6 +53,7 @@ type Validator interface {
 	SubmitAggregateAndProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte)
 	SubmitSyncCommitteeMessage(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte)
 	SubmitSignedContributionAndProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte)
+	SubmitPayloadAttestation(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte)
 	LogSubmittedAtts(slot primitives.Slot)
 	LogSubmittedSyncCommitteeMessages()
 	UpdateDomainDataCaches(ctx context.Context, slot primitives.Slot)
@@ -69,7 +72,7 @@ type Validator interface {
 	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error
 	DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error
 	Host() string
-	FindHealthyHost(ctx context.Context) bool
+	EnsureReady(ctx context.Context) bool
 	SetTicker()
 	RandomActiveValidator() ([fieldparams.BLSPubkeyLength]byte, primitives.ValidatorIndex, error)
 }

@@ -31,6 +31,11 @@ type GetAttestationDataResponse struct {
 	Data *AttestationData `json:"data"`
 }
 
+type GetPayloadAttestationDataResponse struct {
+	Version string                  `json:"version"`
+	Data    *PayloadAttestationData `json:"data"`
+}
+
 type ProduceSyncCommitteeContributionResponse struct {
 	Data *SyncCommitteeContribution `json:"data"`
 }
@@ -74,6 +79,18 @@ type SyncCommitteeDuty struct {
 	ValidatorSyncCommitteeIndices []string `json:"validator_sync_committee_indices"`
 }
 
+type GetPTCDutiesResponse struct {
+	DependentRoot       string     `json:"dependent_root"`
+	ExecutionOptimistic bool       `json:"execution_optimistic"`
+	Data                []*PTCDuty `json:"data"`
+}
+
+type PTCDuty struct {
+	Pubkey         string `json:"pubkey"`
+	ValidatorIndex string `json:"validator_index"`
+	Slot           string `json:"slot"`
+}
+
 // ProduceBlockV3Response is a wrapper json object for the returned block from the ProduceBlockV3 endpoint
 type ProduceBlockV3Response struct {
 	Version                 string          `json:"version"`
@@ -81,6 +98,14 @@ type ProduceBlockV3Response struct {
 	ExecutionPayloadValue   string          `json:"execution_payload_value"`
 	ConsensusBlockValue     string          `json:"consensus_block_value"`
 	Data                    json.RawMessage `json:"data"` // represents the block values based on the version
+}
+
+// ProduceBlockV4Response is a wrapper json object for the returned block from the ProduceBlockV4 endpoint
+type ProduceBlockV4Response struct {
+	Version                  string          `json:"version"`
+	ConsensusBlockValue      string          `json:"consensus_block_value"`
+	ExecutionPayloadIncluded bool            `json:"execution_payload_included"`
+	Data                     json.RawMessage `json:"data"`
 }
 
 type GetLivenessResponse struct {
@@ -137,6 +162,11 @@ type ValidatorParticipation struct {
 	PreviousEpochAttestingGwei       string `json:"previous_epoch_attesting_gwei"`
 	PreviousEpochTargetAttestingGwei string `json:"previous_epoch_target_attesting_gwei"`
 	PreviousEpochHeadAttestingGwei   string `json:"previous_epoch_head_attesting_gwei"`
+}
+
+type GetValidatorExecutionPayloadEnvelopeResponse struct {
+	Version string                    `json:"version"`
+	Data    *ExecutionPayloadEnvelope `json:"data"`
 }
 
 type ActiveSetChanges struct {

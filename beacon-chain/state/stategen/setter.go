@@ -47,7 +47,7 @@ func (s *State) ForceCheckpoint(ctx context.Context, blockRoot []byte) error {
 
 // This saves a post beacon state. On the epoch boundary,
 // it saves a full state. On an intermediate slot, it saves a back pointer to the
-// nearest epoch boundary state.
+// nearest epoch boundary state. If state-diff mode is enabled, it skips saving to hot state db.
 func (s *State) saveStateByRoot(ctx context.Context, blockRoot [32]byte, st state.BeaconState) error {
 	ctx, span := trace.StartSpan(ctx, "stateGen.saveStateByRoot")
 	defer span.End()

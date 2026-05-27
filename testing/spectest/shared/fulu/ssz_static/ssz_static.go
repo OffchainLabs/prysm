@@ -25,7 +25,7 @@ func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	}
 
 	htrs = append(htrs, func(s any) ([32]byte, error) {
-		beaconState, err := state_native.InitializeFromProtoFulu(s.(*ethpb.BeaconStateFulu))
+		beaconState, err := state_native.InitializeFromProtoUnsafeFulu(s.(*ethpb.BeaconStateFulu))
 		require.NoError(t, err)
 		return beaconState.HashTreeRoot(context.Background())
 	})
@@ -155,6 +155,8 @@ func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.DataColumnsByRootIdentifier{}
 	case "MatrixEntry":
 		t.Skip("Unused type")
+	case "PartialDataColumnHeader", "PartialDataColumnPartsMetadata", "PartialDataColumnSidecar":
+		t.Skip("Not yet implemented")
 	default:
 		return nil, errors.New("type not found")
 	}

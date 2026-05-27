@@ -875,7 +875,7 @@ func TestColumnsNotStored(t *testing.T) {
 			if len(tc.stored) > 0 {
 				resultIndices := make(map[uint64]bool)
 				for _, col := range result {
-					resultIndices[col.Index] = true
+					resultIndices[col.Index()] = true
 				}
 				for _, storedIdx := range tc.stored {
 					require.Equal(t, false, resultIndices[storedIdx],
@@ -887,8 +887,8 @@ func TestColumnsNotStored(t *testing.T) {
 			if len(tc.expected) > 0 && len(tc.stored) == 0 {
 				// Only check exact order for non-stored cases (where we know they stay in same order)
 				for i, expectedIdx := range tc.expected {
-					require.Equal(t, columns[expectedIdx].Index, result[i].Index,
-						fmt.Sprintf("column %d: expected index %d, got %d", i, columns[expectedIdx].Index, result[i].Index))
+					require.Equal(t, columns[expectedIdx].Index(), result[i].Index(),
+						fmt.Sprintf("column %d: expected index %d, got %d", i, columns[expectedIdx].Index(), result[i].Index()))
 				}
 			}
 

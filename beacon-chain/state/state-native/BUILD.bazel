@@ -26,6 +26,8 @@ go_library(
         "getters_withdrawal.go",
         "gloas.go",
         "hasher.go",
+        "log.go",
+        "metrics_gloas.go",
         "multi_value_slices.go",
         "proofs.go",
         "readonly_validator.go",
@@ -85,6 +87,7 @@ go_library(
         "@com_github_prometheus_client_golang//prometheus/promauto:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
+        "@com_github_sirupsen_logrus//:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )
@@ -134,6 +137,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native/types:go_default_library",

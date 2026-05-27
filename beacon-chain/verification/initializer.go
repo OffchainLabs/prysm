@@ -13,6 +13,8 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattestation "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attestation"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"golang.org/x/sync/singleflight"
@@ -33,6 +35,7 @@ type Forkchoicer interface {
 // StateByRooter describes a stategen-ish type that can produce arbitrary states by their root
 type StateByRooter interface {
 	StateByRoot(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
+	StateByRootIfCachedNoCopy(blockRoot [32]byte) state.ReadOnlyBeaconState
 }
 
 // HeadStateProvider describes a type that can provide access to the current head state and related methods.
@@ -85,6 +88,44 @@ func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColu
 		results:                     newResults(reqs...),
 		verifyDataColumnsCommitment: peerdas.VerifyDataColumnsSidecarKZGProofs,
 		stateByRoot:                 make(map[[fieldparams.RootLength]byte]state.BeaconState),
+	}
+}
+
+// NewPayloadAttestationMsgVerifier creates a PayloadAttestationMsgVerifier for a single payload attestation message,
+// with the given set of requirements.
+func (ini *Initializer) NewPayloadAttestationMsgVerifier(pa payloadattestation.ROMessage, reqs []Requirement) *PayloadAttMsgVerifier {
+	return &PayloadAttMsgVerifier{
+		sharedResources: ini.shared,
+		results:         newResults(reqs...),
+		pa:              pa,
+	}
+}
+
+// NewSignedProposerPreferencesVerifier creates a SignedProposerPreferencesVerifier for a single signed proposer preferences
+// message, with the given set of requirements.
+func (ini *Initializer) NewSignedProposerPreferencesVerifier(p *ethpb.SignedProposerPreferences, reqs []Requirement) *ProposerPreferencesVerifier {
+	return &ProposerPreferencesVerifier{
+		sharedResources: ini.shared,
+		results:         newResults(reqs...),
+		p:               p,
+	}
+}
+
+// NewExecutionPayloadBidVerifier creates an ExecutionPayloadBidVerifier for a single signed execution payload bid
+// with the given set of requirements.
+func (ini *Initializer) NewExecutionPayloadBidVerifier(b interfaces.ROSignedExecutionPayloadBid, reqs []Requirement) *BidVerifier {
+	return &BidVerifier{
+		sharedResources: ini.shared,
+		results:         newResults(reqs...),
+		b:               b,
+	}
+}
+
+// NewPayloadEnvelopeVerifier creates a SignedExecutionPayloadEnvelopeVerifier for a single signed execution payload envelope with the given set of requirements.
+func (ini *Initializer) NewPayloadEnvelopeVerifier(ee interfaces.ROSignedExecutionPayloadEnvelope, reqs []Requirement) *EnvelopeVerifier {
+	return &EnvelopeVerifier{
+		results: newResults(reqs...),
+		e:       ee,
 	}
 }
 

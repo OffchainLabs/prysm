@@ -187,11 +187,6 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
 	defer bootListener.Close()
-
-	// Allow bootnode's table to have its initial refresh. This allows
-	// inbound nodes to be added in.
-	time.Sleep(5 * time.Second)
-
 	bootNode := bootListener.Self()
 
 	var listeners []*listenerWrapper
@@ -228,15 +223,13 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 		}
 	}()
 
-	// Wait for the nodes to have their local routing tables to be populated with the other nodes
-	time.Sleep(discoveryWaitTime)
-
+	var nodes []*enode.Node
 	lastListener := listeners[len(listeners)-1]
-	nodes := lastListener.Lookup(bootNode.ID())
-	if len(nodes) < 4 {
-		t.Errorf("The node's local table doesn't have the expected number of nodes. "+
-			"Expected more than or equal to %d but got %d", 4, len(nodes))
-	}
+	require.Eventually(t, func() bool {
+		nodes = lastListener.Lookup(bootNode.ID())
+		return len(nodes) > 4
+	}, 10*time.Second, 100*time.Millisecond, fmt.Errorf("The node's local table doesn't have the expected number of nodes. "+
+		"Expected more than or equal to %d but got %d", 4, len(nodes)))
 }
 
 func TestCreateLocalNode(t *testing.T) {

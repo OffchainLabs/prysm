@@ -2,12 +2,13 @@ package state_native
 
 import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/pkg/errors"
 )
 
 // Validators participating in consensus on the beacon chain.
@@ -27,21 +28,11 @@ func (b *BeaconState) ValidatorsReadOnly() []state.ReadOnlyValidator {
 }
 
 func (b *BeaconState) validatorsVal() []*ethpb.Validator {
-	var v []*ethpb.Validator
 	if b.validatorsMultiValue == nil {
 		return nil
 	}
-	v = b.validatorsMultiValue.Value(b)
-
-	res := make([]*ethpb.Validator, len(v))
-	for i := range res {
-		val := v[i]
-		if val == nil {
-			continue
-		}
-		res[i] = ethpb.CopyValidator(val)
-	}
-	return res
+	v := b.validatorsMultiValue.Value(b)
+	return stateutil.CompactValidatorsToProto(v)
 }
 
 func (b *BeaconState) validatorsReadOnlyVal() []state.ReadOnlyValidator {
@@ -51,18 +42,18 @@ func (b *BeaconState) validatorsReadOnlyVal() []state.ReadOnlyValidator {
 	v := b.validatorsMultiValue.Value(b)
 
 	res := make([]state.ReadOnlyValidator, len(v))
-	var err error
 	for i := range res {
-		val := v[i]
-		if val == nil {
-			continue
-		}
-		res[i], err = NewValidator(val)
-		if err != nil {
-			continue
-		}
+		res[i] = NewValidatorFromCompact(v[i])
 	}
 	return res
+}
+
+// validatorsCompactVal returns the raw compact validator slice for internal use (hashing).
+func (b *BeaconState) validatorsCompactVal() []stateutil.CompactValidator {
+	if b.validatorsMultiValue == nil {
+		return nil
+	}
+	return b.validatorsMultiValue.Value(b)
 }
 
 func (b *BeaconState) validatorsLen() int {
@@ -80,6 +71,40 @@ func (b *BeaconState) ValidatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Va
 	return b.validatorAtIndex(idx)
 }
 
+// EffectiveBalances returns the sum of the effective balances of the given list of validator indices, the eb of each given validator, or an
+// error if one of the indices is out of bounds, or the state wasn't correctly initialized.
+func (b *BeaconState) EffectiveBalanceSum(idxs []primitives.ValidatorIndex) (uint64, error) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	var sum uint64
+	for i := range idxs {
+		if b.validatorsMultiValue == nil {
+			return 0, errors.Wrap(state.ErrNilValidatorsInState, "nil validators multi-value slice")
+		}
+		v, err := b.validatorsMultiValue.At(b, uint64(idxs[i]))
+		if err != nil {
+			return 0, errors.Wrap(err, "validators multi value at index")
+		}
+		sum += v.EffectiveBalance
+	}
+	return sum, nil
+}
+
+// EffectiveBalanceAtIndex returns the effective balance of the validator at the given index
+// without materializing a Validator struct.
+func (b *BeaconState) EffectiveBalanceAtIndex(idx primitives.ValidatorIndex) (uint64, error) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	if b.validatorsMultiValue == nil {
+		return 0, state.ErrNilValidatorsInState
+	}
+	v, err := b.validatorsMultiValue.At(b, uint64(idx))
+	if err != nil {
+		return 0, err
+	}
+	return v.EffectiveBalance, nil
+}
+
 func (b *BeaconState) validatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Validator, error) {
 	if b.validatorsMultiValue == nil {
 		return &ethpb.Validator{}, nil
@@ -88,7 +113,7 @@ func (b *BeaconState) validatorAtIndex(idx primitives.ValidatorIndex) (*ethpb.Va
 	if err != nil {
 		return nil, err
 	}
-	return ethpb.CopyValidator(v), nil
+	return v.ToProto(), nil
 }
 
 // ValidatorAtIndexReadOnly is the validator at the provided index. This method
@@ -108,7 +133,7 @@ func (b *BeaconState) validatorAtIndexReadOnly(idx primitives.ValidatorIndex) (s
 	if err != nil {
 		return nil, err
 	}
-	return NewValidator(v)
+	return NewValidatorFromCompact(v), nil
 }
 
 // ValidatorIndexByPubkey returns a given validator by its 48-byte public key.
@@ -119,6 +144,11 @@ func (b *BeaconState) ValidatorIndexByPubkey(key [fieldparams.BLSPubkeyLength]by
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
+	return b.validatorIndexByPubkey(key)
+}
+
+// Lock free version of ValidatorIndexByPubkey. This assumes that a lock is already held on BeaconState.
+func (b *BeaconState) validatorIndexByPubkey(key [fieldparams.BLSPubkeyLength]byte) (primitives.ValidatorIndex, bool) {
 	numOfVals := b.validatorsMultiValue.Len(b)
 
 	idx, ok := b.valMapHandler.Get(key)
@@ -139,10 +169,7 @@ func (b *BeaconState) PubkeyAtIndex(idx primitives.ValidatorIndex) [fieldparams.
 		return [fieldparams.BLSPubkeyLength]byte{}
 	}
 
-	if v == nil {
-		return [fieldparams.BLSPubkeyLength]byte{}
-	}
-	return bytesutil.ToBytes48(v.PublicKey)
+	return v.PublicKey
 }
 
 // AggregateKeyFromIndices builds an aggregated public key from the provided
@@ -157,10 +184,7 @@ func (b *BeaconState) AggregateKeyFromIndices(idxs []uint64) (bls.PublicKey, err
 		if err != nil {
 			return nil, err
 		}
-		if v == nil {
-			return nil, ErrNilWrappedValidator
-		}
-		pubKeys[i] = v.PublicKey
+		pubKeys[i] = v.PublicKey[:]
 	}
 	return bls.AggregatePublicKeys(pubKeys)
 }
@@ -177,7 +201,7 @@ func (b *BeaconState) PublicKeys() ([][fieldparams.BLSPubkeyLength]byte, error) 
 		if err != nil {
 			return nil, err
 		}
-		copy(res[i][:], val.PublicKey)
+		res[i] = val.PublicKey
 	}
 	return res, nil
 }
@@ -206,10 +230,7 @@ func (b *BeaconState) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyV
 		if err != nil {
 			return err
 		}
-		rov, err := NewValidator(v)
-		if err != nil {
-			return err
-		}
+		rov := NewValidatorFromCompact(v)
 		if err = f(i, rov); err != nil {
 			return err
 		}

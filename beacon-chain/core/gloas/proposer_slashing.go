@@ -11,16 +11,20 @@ import (
 )
 
 // RemoveBuilderPendingPayment removes the pending builder payment for the proposal slot.
-// Spec v1.7.0 (pseudocode):
 //
+//	<spec fn="process_proposer_slashing" fork="gloas" lines="22-32" hash="4da721ef">
+//	# [New in Gloas:EIP7732]
+//	# Remove the BuilderPendingPayment corresponding to
+//	# this proposal if it is still in the 2-epoch window.
 //	slot = header_1.slot
 //	proposal_epoch = compute_epoch_at_slot(slot)
 //	if proposal_epoch == get_current_epoch(state):
-//	  payment_index = SLOTS_PER_EPOCH + slot % SLOTS_PER_EPOCH
-//	  state.builder_pending_payments[payment_index] = BuilderPendingPayment()
+//	    payment_index = SLOTS_PER_EPOCH + slot % SLOTS_PER_EPOCH
+//	    state.builder_pending_payments[payment_index] = BuilderPendingPayment()
 //	elif proposal_epoch == get_previous_epoch(state):
-//	  payment_index = slot % SLOTS_PER_EPOCH
-//	  state.builder_pending_payments[payment_index] = BuilderPendingPayment()
+//	    payment_index = slot % SLOTS_PER_EPOCH
+//	    state.builder_pending_payments[payment_index] = BuilderPendingPayment()
+//	</spec>
 func RemoveBuilderPendingPayment(st state.BeaconState, header *eth.BeaconBlockHeader) error {
 	proposalEpoch := slots.ToEpoch(header.Slot)
 	currentEpoch := time.CurrentEpoch(st)

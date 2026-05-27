@@ -188,6 +188,11 @@ type BLSToExecutionChangesPoolResponse struct {
 	Data []*SignedBLSToExecutionChange `json:"data"`
 }
 
+type GetPoolPayloadAttestationsResponse struct {
+	Version string                `json:"version"`
+	Data    []*PayloadAttestation `json:"data"`
+}
+
 type GetAttesterSlashingsResponse struct {
 	Version string          `json:"version,omitempty"`
 	Data    json.RawMessage `json:"data"` // Accepts both `[]*AttesterSlashing` and `[]*AttesterSlashingElectra` types
@@ -283,6 +288,13 @@ type GetBlobsResponse struct {
 	ExecutionOptimistic bool     `json:"execution_optimistic"`
 	Finalized           bool     `json:"finalized"`
 	Data                []string `json:"data"` //blobs
+}
+
+type GetExecutionPayloadEnvelopeResponse struct {
+	Version             string                          `json:"version"`
+	ExecutionOptimistic bool                            `json:"execution_optimistic"`
+	Finalized           bool                            `json:"finalized"`
+	Data                *SignedExecutionPayloadEnvelope `json:"data"`
 }
 
 type SSZQueryRequest struct {

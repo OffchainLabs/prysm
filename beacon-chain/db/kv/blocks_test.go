@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -151,6 +152,17 @@ var blockTests = []struct {
 			}
 			return blocks.NewSignedBeaconBlock(b)
 		}},
+	{
+		name: "gloas",
+		newBlock: func(slot primitives.Slot, root []byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
+			b := util.NewBeaconBlockGloas()
+			b.Block.Slot = slot
+			if root != nil {
+				b.Block.ParentRoot = root
+			}
+			return blocks.NewSignedBeaconBlock(b)
+		},
+	},
 }
 
 func TestStore_SaveBlock_NoDuplicates(t *testing.T) {
@@ -211,7 +223,7 @@ func TestStore_BlocksCRUD(t *testing.T) {
 			retrievedBlock, err = db.Block(ctx, blockRoot)
 			require.NoError(t, err)
 			wanted := retrievedBlock
-			if retrievedBlock.Version() >= version.Bellatrix {
+			if retrievedBlock.Version() >= version.Bellatrix && retrievedBlock.Version() < version.Gloas {
 				wanted, err = retrievedBlock.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -606,6 +618,66 @@ func TestStore_HistoricalDataBeforeSlot(t *testing.T) {
 
 }
 
+func TestStore_DeleteHistoricalDataBeforeSlot_ClearsOriginCheckpointPointerWhenOriginBlockPruned(t *testing.T) {
+	db := setupDB(t)
+	ctx := t.Context()
+
+	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisBlockRoot))
+	blks := makeBlocks(t, 0, 8, genesisBlockRoot)
+	require.NoError(t, db.SaveBlocks(ctx, blks))
+
+	originBlk := blks[2]
+	originRoot, err := originBlk.Block().HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveOriginCheckpointBlockRoot(ctx, originRoot))
+
+	gotRoot, err := db.OriginCheckpointBlockRoot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, originRoot, gotRoot)
+	gotBlock, err := db.Block(ctx, originRoot)
+	require.NoError(t, err)
+	require.NotNil(t, gotBlock)
+
+	slotsDeleted, err := db.DeleteHistoricalDataBeforeSlot(ctx, originBlk.Block().Slot()+1, 8)
+	require.NoError(t, err)
+	require.NotEqual(t, 0, slotsDeleted)
+
+	_, err = db.OriginCheckpointBlockRoot(ctx)
+	require.ErrorIs(t, err, ErrNotFoundOriginBlockRoot)
+	gotBlock, err = db.Block(ctx, originRoot)
+	require.NoError(t, err)
+	require.Equal(t, nil, gotBlock)
+}
+
+func TestStore_DeleteHistoricalDataBeforeSlot_ClearsAlreadyDanglingOriginCheckpointPointer(t *testing.T) {
+	db := setupDB(t)
+	ctx := t.Context()
+
+	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisBlockRoot))
+	blks := makeBlocks(t, 0, 2, genesisBlockRoot)
+	require.NoError(t, db.SaveBlocks(ctx, blks))
+
+	originBlk := blks[0]
+	originRoot, err := originBlk.Block().HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveOriginCheckpointBlockRoot(ctx, originRoot))
+	require.NoError(t, db.DeleteBlock(ctx, originRoot))
+
+	gotRoot, err := db.OriginCheckpointBlockRoot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, originRoot, gotRoot)
+	gotBlock, err := db.Block(ctx, originRoot)
+	require.NoError(t, err)
+	require.Equal(t, nil, gotBlock)
+
+	slotsDeleted, err := db.DeleteHistoricalDataBeforeSlot(ctx, primitives.Slot(0), 8)
+	require.NoError(t, err)
+	require.Equal(t, 0, slotsDeleted)
+
+	_, err = db.OriginCheckpointBlockRoot(ctx)
+	require.ErrorIs(t, err, ErrNotFoundOriginBlockRoot)
+}
+
 func TestStore_GenesisBlock(t *testing.T) {
 	db := setupDB(t)
 	ctx := t.Context()
@@ -643,7 +715,7 @@ func TestStore_BlocksCRUD_NoCache(t *testing.T) {
 			require.NoError(t, err)
 
 			wanted := blk
-			if blk.Version() >= version.Bellatrix {
+			if blk.Version() >= version.Bellatrix && blk.Version() < version.Gloas {
 				wanted, err = blk.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1014,7 +1086,7 @@ func TestStore_SaveBlock_CanGetHighestAt(t *testing.T) {
 			b, err := db.Block(ctx, root)
 			require.NoError(t, err)
 			wanted := block1
-			if block1.Version() >= version.Bellatrix {
+			if block1.Version() >= version.Bellatrix && block1.Version() < version.Gloas {
 				wanted, err = wanted.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1032,7 +1104,7 @@ func TestStore_SaveBlock_CanGetHighestAt(t *testing.T) {
 			b, err = db.Block(ctx, root)
 			require.NoError(t, err)
 			wanted2 := block2
-			if block2.Version() >= version.Bellatrix {
+			if block2.Version() >= version.Bellatrix && block2.Version() < version.Gloas {
 				wanted2, err = block2.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1050,7 +1122,7 @@ func TestStore_SaveBlock_CanGetHighestAt(t *testing.T) {
 			b, err = db.Block(ctx, root)
 			require.NoError(t, err)
 			wanted = block3
-			if block3.Version() >= version.Bellatrix {
+			if block3.Version() >= version.Bellatrix && block3.Version() < version.Gloas {
 				wanted, err = wanted.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1086,7 +1158,7 @@ func TestStore_GenesisBlock_CanGetHighestAt(t *testing.T) {
 			b, err := db.Block(ctx, root)
 			require.NoError(t, err)
 			wanted := block1
-			if block1.Version() >= version.Bellatrix {
+			if block1.Version() >= version.Bellatrix && block1.Version() < version.Gloas {
 				wanted, err = block1.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1103,7 +1175,7 @@ func TestStore_GenesisBlock_CanGetHighestAt(t *testing.T) {
 			b, err = db.Block(ctx, root)
 			require.NoError(t, err)
 			wanted = genesisBlock
-			if genesisBlock.Version() >= version.Bellatrix {
+			if genesisBlock.Version() >= version.Bellatrix && genesisBlock.Version() < version.Gloas {
 				wanted, err = genesisBlock.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1120,7 +1192,7 @@ func TestStore_GenesisBlock_CanGetHighestAt(t *testing.T) {
 			b, err = db.Block(ctx, root)
 			require.NoError(t, err)
 			wanted = genesisBlock
-			if genesisBlock.Version() >= version.Bellatrix {
+			if genesisBlock.Version() >= version.Bellatrix && genesisBlock.Version() < version.Gloas {
 				wanted, err = genesisBlock.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1216,7 +1288,7 @@ func TestStore_BlocksBySlot_BlockRootsBySlot(t *testing.T) {
 			require.NoError(t, err)
 
 			wanted := b1
-			if b1.Version() >= version.Bellatrix {
+			if b1.Version() >= version.Bellatrix && b1.Version() < version.Gloas {
 				wanted, err = b1.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1232,7 +1304,7 @@ func TestStore_BlocksBySlot_BlockRootsBySlot(t *testing.T) {
 				t.Fatalf("Expected 2 blocks, received %d blocks", len(retrievedBlocks))
 			}
 			wanted = b2
-			if b2.Version() >= version.Bellatrix {
+			if b2.Version() >= version.Bellatrix && b2.Version() < version.Gloas {
 				wanted, err = b2.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1242,7 +1314,7 @@ func TestStore_BlocksBySlot_BlockRootsBySlot(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, true, proto.Equal(wantedPb, retrieved0Pb), "Wanted: %v, received: %v", retrievedBlocks[0], wanted)
 			wanted = b3
-			if b3.Version() >= version.Bellatrix {
+			if b3.Version() >= version.Bellatrix && b3.Version() < version.Gloas {
 				wanted, err = b3.ToBlinded()
 				require.NoError(t, err)
 			}
@@ -1448,4 +1520,75 @@ func TestStore_EarliestSlot(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, nextEpochSlot, slot)
 	})
+}
+
+func TestStore_LowestRootsAtOrAboveSlot(t *testing.T) {
+	for _, tt := range blockTests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setupDB(t)
+			ctx := t.Context()
+
+			block1, err := tt.newBlock(primitives.Slot(10), nil)
+			require.NoError(t, err)
+			block2, err := tt.newBlock(primitives.Slot(50), nil)
+			require.NoError(t, err)
+			block3, err := tt.newBlock(primitives.Slot(100), nil)
+			require.NoError(t, err)
+
+			require.NoError(t, db.SaveBlock(ctx, block1))
+			require.NoError(t, db.SaveBlock(ctx, block2))
+			require.NoError(t, db.SaveBlock(ctx, block3))
+
+			// Before first block: slot 5 → block at slot 10.
+			foundSlot, roots, err := db.LowestRootsAtOrAboveSlot(ctx, 5)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(roots))
+			assert.Equal(t, primitives.Slot(10), foundSlot)
+
+			// Exact match: slot 10 → block at slot 10.
+			foundSlot, roots, err = db.LowestRootsAtOrAboveSlot(ctx, 10)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(roots))
+			assert.Equal(t, primitives.Slot(10), foundSlot)
+
+			// Gap: slot 11 → block at slot 50 (slots 11-49 missing).
+			foundSlot, roots, err = db.LowestRootsAtOrAboveSlot(ctx, 11)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(roots))
+			assert.Equal(t, primitives.Slot(50), foundSlot)
+
+			// Past last block: slot 101 → nothing.
+			_, roots, err = db.LowestRootsAtOrAboveSlot(ctx, 101)
+			require.NoError(t, err)
+			assert.Equal(t, 0, len(roots))
+
+			// Max-slot: should return empty.
+			_, roots, err = db.LowestRootsAtOrAboveSlot(ctx, math.MaxUint64)
+			require.NoError(t, err)
+			assert.Equal(t, 0, len(roots))
+		})
+	}
+}
+
+func TestStore_LowestRootsAtOrAboveSlot_MultipleBlocksSameSlot(t *testing.T) {
+	for _, tt := range blockTests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setupDB(t)
+			ctx := t.Context()
+
+			// Save two different blocks at the same slot with different parent roots.
+			block1, err := tt.newBlock(primitives.Slot(20), bytesutil.PadTo([]byte{1}, 32))
+			require.NoError(t, err)
+			block2, err := tt.newBlock(primitives.Slot(20), bytesutil.PadTo([]byte{2}, 32))
+			require.NoError(t, err)
+
+			require.NoError(t, db.SaveBlock(ctx, block1))
+			require.NoError(t, db.SaveBlock(ctx, block2))
+
+			foundSlot, roots, err := db.LowestRootsAtOrAboveSlot(ctx, 20)
+			require.NoError(t, err)
+			assert.Equal(t, primitives.Slot(20), foundSlot)
+			assert.Equal(t, 2, len(roots))
+		})
+	}
 }
