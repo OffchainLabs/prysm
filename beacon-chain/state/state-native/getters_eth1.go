@@ -8,7 +8,7 @@ import (
 // Eth1Data corresponding to the proof-of-work chain information stored in the beacon state.
 func (b *BeaconState) Eth1Data() *ethpb.Eth1Data {
 	if b.eth1Data == nil {
-		return nil
+		return &ethpb.Eth1Data{}
 	}
 
 	b.lock.RLock()
