@@ -5,6 +5,9 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/math"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -405,6 +408,130 @@ func MapSyncAggregatorSelectionData(data *ethpb.SyncAggregatorSelectionData) (*S
 		Slot:              fmt.Sprint(data.Slot),
 		SubcommitteeIndex: fmt.Sprint(data.SubcommitteeIndex),
 	}, nil
+}
+
+// MapExecutionPayloadEnvelope maps the gloas ExecutionPayloadEnvelope proto to the Web3Signer spec.
+func MapExecutionPayloadEnvelope(envelope *ethpb.ExecutionPayloadEnvelope) (*ExecutionPayloadEnvelope, error) {
+	if envelope == nil {
+		return nil, fmt.Errorf("execution payload envelope is nil")
+	}
+	payload, err := MapExecutionPayloadGloas(envelope.Payload)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not map execution payload")
+	}
+	requests, err := MapExecutionRequests(envelope.ExecutionRequests)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not map execution requests")
+	}
+	return &ExecutionPayloadEnvelope{
+		Payload:           payload,
+		ExecutionRequests: requests,
+		BuilderIndex:      fmt.Sprint(envelope.BuilderIndex),
+		BeaconBlockRoot:   envelope.BeaconBlockRoot,
+	}, nil
+}
+
+// MapExecutionPayloadGloas maps the gloas ExecutionPayloadGloas proto to the Web3Signer spec.
+func MapExecutionPayloadGloas(payload *enginev1.ExecutionPayloadGloas) (*ExecutionPayloadGloas, error) {
+	if payload == nil {
+		return nil, fmt.Errorf("execution payload is nil")
+	}
+	baseFee, err := sszBytesToUint256String(payload.BaseFeePerGas)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert base_fee_per_gas")
+	}
+	txs := make([]hexutil.Bytes, len(payload.Transactions))
+	for i, tx := range payload.Transactions {
+		txs[i] = tx
+	}
+	withdrawals := make([]*Withdrawal, len(payload.Withdrawals))
+	for i, w := range payload.Withdrawals {
+		if w == nil {
+			return nil, fmt.Errorf("withdrawal at index %d is nil", i)
+		}
+		withdrawals[i] = &Withdrawal{
+			Index:          fmt.Sprint(w.Index),
+			ValidatorIndex: fmt.Sprint(w.ValidatorIndex),
+			Address:        w.Address,
+			Amount:         fmt.Sprint(w.Amount),
+		}
+	}
+	return &ExecutionPayloadGloas{
+		ParentHash:      payload.ParentHash,
+		FeeRecipient:    payload.FeeRecipient,
+		StateRoot:       payload.StateRoot,
+		ReceiptsRoot:    payload.ReceiptsRoot,
+		LogsBloom:       payload.LogsBloom,
+		PrevRandao:      payload.PrevRandao,
+		BlockNumber:     fmt.Sprint(payload.BlockNumber),
+		GasLimit:        fmt.Sprint(payload.GasLimit),
+		GasUsed:         fmt.Sprint(payload.GasUsed),
+		Timestamp:       fmt.Sprint(payload.Timestamp),
+		ExtraData:       payload.ExtraData,
+		BaseFeePerGas:   baseFee,
+		BlockHash:       payload.BlockHash,
+		Transactions:    txs,
+		Withdrawals:     withdrawals,
+		BlobGasUsed:     fmt.Sprint(payload.BlobGasUsed),
+		ExcessBlobGas:   fmt.Sprint(payload.ExcessBlobGas),
+		BlockAccessList: payload.BlockAccessList,
+		SlotNumber:      fmt.Sprint(payload.SlotNumber),
+	}, nil
+}
+
+// MapExecutionRequests maps the electra+ ExecutionRequests proto to the Web3Signer spec.
+func MapExecutionRequests(requests *enginev1.ExecutionRequests) (*ExecutionRequests, error) {
+	if requests == nil {
+		return nil, fmt.Errorf("execution requests is nil")
+	}
+	deposits := make([]*DepositRequest, len(requests.Deposits))
+	for i, d := range requests.Deposits {
+		if d == nil {
+			return nil, fmt.Errorf("deposit request at index %d is nil", i)
+		}
+		deposits[i] = &DepositRequest{
+			Pubkey:                d.Pubkey,
+			WithdrawalCredentials: d.WithdrawalCredentials,
+			Amount:                fmt.Sprint(d.Amount),
+			Signature:             d.Signature,
+			Index:                 fmt.Sprint(d.Index),
+		}
+	}
+	withdrawals := make([]*WithdrawalRequest, len(requests.Withdrawals))
+	for i, w := range requests.Withdrawals {
+		if w == nil {
+			return nil, fmt.Errorf("withdrawal request at index %d is nil", i)
+		}
+		withdrawals[i] = &WithdrawalRequest{
+			SourceAddress:   w.SourceAddress,
+			ValidatorPubkey: w.ValidatorPubkey,
+			Amount:          fmt.Sprint(w.Amount),
+		}
+	}
+	consolidations := make([]*ConsolidationRequest, len(requests.Consolidations))
+	for i, c := range requests.Consolidations {
+		if c == nil {
+			return nil, fmt.Errorf("consolidation request at index %d is nil", i)
+		}
+		consolidations[i] = &ConsolidationRequest{
+			SourceAddress: c.SourceAddress,
+			SourcePubkey:  c.SourcePubkey,
+			TargetPubkey:  c.TargetPubkey,
+		}
+	}
+	return &ExecutionRequests{
+		Deposits:       deposits,
+		Withdrawals:    withdrawals,
+		Consolidations: consolidations,
+	}, nil
+}
+
+func sszBytesToUint256String(b []byte) (string, error) {
+	bi := bytesutil.LittleEndianBytesToBigInt(b)
+	if !math.IsValidUint256(bi) {
+		return "", fmt.Errorf("%s is not a valid Uint256", bi.String())
+	}
+	return bi.String(), nil
 }
 
 // MapContributionAndProof maps the eth2.ContributionAndProof proto to the Web3Signer spec.

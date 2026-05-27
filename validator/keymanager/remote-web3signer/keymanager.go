@@ -433,14 +433,15 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	case *validatorpb.SignRequest_BlindedBlockFulu:
 		return handleBlindedBlockFulu(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockGloas:
-		// TODO: Implement Gloas block signing for web3signer.
-		return nil, fmt.Errorf("web3signer Gloas block signing not yet implemented")
+		return handleBlockGloas(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_ExecutionPayloadBid:
+		return handleExecutionPayloadBid(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_ExecutionPayloadEnvelope:
-		// TODO: Implement execution payload envelope signing for web3signer.
-		return nil, fmt.Errorf("web3signer execution payload envelope signing not yet implemented")
+		return handleExecutionPayloadEnvelope(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_PayloadAttestationData:
+		return handlePayloadAttestationMessage(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_ProposerPreference:
-		// TODO: Implement proposer preferences signing for web3signer.
-		return nil, fmt.Errorf("web3signer proposer preferences signing not yet implemented")
+		return handleProposerPreferences(ctx, validator, request, genesisValidatorsRoot)
 
 	// We do not support "DEPOSIT" type.
 	/*
@@ -644,6 +645,66 @@ func handleBlindedBlockFulu(ctx context.Context, validator *validator.Validate, 
 	}
 	remoteBlockSignRequestsTotal.WithLabelValues("fulu", "true").Inc()
 	return json.Marshal(blindedBlockv2FuluSignRequest)
+}
+
+func handleBlockGloas(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	signReq, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, signReq); err != nil {
+		return nil, err
+	}
+	remoteBlockSignRequestsTotal.WithLabelValues("gloas", "false").Inc()
+	return json.Marshal(signReq)
+}
+
+func handleExecutionPayloadBid(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	signReq, err := types.GetExecutionPayloadBidSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, signReq); err != nil {
+		return nil, err
+	}
+	executionPayloadBidSignRequestsTotal.Inc()
+	return json.Marshal(signReq)
+}
+
+func handleExecutionPayloadEnvelope(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	signReq, err := types.GetExecutionPayloadEnvelopeSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, signReq); err != nil {
+		return nil, err
+	}
+	executionPayloadEnvelopeSignRequestsTotal.Inc()
+	return json.Marshal(signReq)
+}
+
+func handlePayloadAttestationMessage(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	signReq, err := types.GetPayloadAttestationMessageSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, signReq); err != nil {
+		return nil, err
+	}
+	payloadAttestationMessageSignRequestsTotal.Inc()
+	return json.Marshal(signReq)
+}
+
+func handleProposerPreferences(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	signReq, err := types.GetProposerPreferencesSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, signReq); err != nil {
+		return nil, err
+	}
+	proposerPreferencesSignRequestsTotal.Inc()
+	return json.Marshal(signReq)
 }
 
 func handleRandaoReveal(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {

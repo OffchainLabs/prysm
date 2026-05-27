@@ -9,6 +9,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -451,6 +452,79 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 				BlindedBlockFulu: util.HydrateBlindedBeaconBlockFulu(&eth.BlindedBeaconBlockFulu{}),
 			},
 		}
+	case "BLOCK_V2_GLOAS":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_BlockGloas{
+				BlockGloas: util.HydrateBeaconBlockGloas(&eth.BeaconBlockGloas{}),
+			},
+		}
+	case "EXECUTION_PAYLOAD_BID":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_ExecutionPayloadBid{
+				ExecutionPayloadBid: &eth.ExecutionPayloadBid{
+					ParentBlockHash:       make([]byte, fieldparams.RootLength),
+					ParentBlockRoot:       make([]byte, fieldparams.RootLength),
+					BlockHash:             make([]byte, fieldparams.RootLength),
+					PrevRandao:            make([]byte, fieldparams.RootLength),
+					FeeRecipient:          make([]byte, fieldparams.FeeRecipientLength),
+					GasLimit:              30_000_000,
+					BuilderIndex:          0,
+					Slot:                  0,
+					Value:                 0,
+					ExecutionPayment:      0,
+					BlobKzgCommitments:    [][]byte{},
+					ExecutionRequestsRoot: make([]byte, fieldparams.RootLength),
+				},
+			},
+			SigningSlot: 0,
+		}
+	case "EXECUTION_PAYLOAD_ENVELOPE":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_ExecutionPayloadEnvelope{
+				ExecutionPayloadEnvelope: ExecutionPayloadEnvelopeProto(),
+			},
+			SigningSlot: 0,
+		}
+	case "PAYLOAD_ATTESTATION_MESSAGE":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_PayloadAttestationData{
+				PayloadAttestationData: &eth.PayloadAttestationData{
+					BeaconBlockRoot:   make([]byte, fieldparams.RootLength),
+					Slot:              0,
+					PayloadPresent:    true,
+					BlobDataAvailable: false,
+				},
+			},
+			SigningSlot: 0,
+		}
+	case "PROPOSER_PREFERENCES":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_ProposerPreference{
+				ProposerPreference: &eth.ProposerPreferences{
+					DependentRoot:  make([]byte, fieldparams.RootLength),
+					ProposalSlot:   0,
+					ValidatorIndex: 0,
+					FeeRecipient:   make([]byte, fieldparams.FeeRecipientLength),
+					TargetGasLimit: 30_000_000,
+				},
+			},
+			SigningSlot: 0,
+		}
 	case "RANDAO_REVEAL":
 		return &validatorpb.SignRequest{
 			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
@@ -696,6 +770,132 @@ func VoluntaryExitSignRequest() *types.VoluntaryExitSignRequest {
 		VoluntaryExit: &types.VoluntaryExit{
 			Epoch:          "0",
 			ValidatorIndex: "0",
+		},
+	}
+}
+
+// ExecutionPayloadBidSignRequest is a mock implementation of the ExecutionPayloadBidSignRequest.
+func ExecutionPayloadBidSignRequest() *types.ExecutionPayloadBidSignRequest {
+	return &types.ExecutionPayloadBidSignRequest{
+		Type:        "EXECUTION_PAYLOAD_BID",
+		ForkInfo:    ForkInfo(),
+		SigningRoot: make([]byte, fieldparams.RootLength),
+		ExecutionPayloadBid: &types.ExecutionPayloadBid{
+			ParentBlockHash:       make([]byte, fieldparams.RootLength),
+			ParentBlockRoot:       make([]byte, fieldparams.RootLength),
+			BlockHash:             make([]byte, fieldparams.RootLength),
+			PrevRandao:            make([]byte, fieldparams.RootLength),
+			FeeRecipient:          make([]byte, fieldparams.FeeRecipientLength),
+			GasLimit:              "30000000",
+			BuilderIndex:          "0",
+			Slot:                  "0",
+			Value:                 "0",
+			ExecutionPayment:      "0",
+			BlobKzgCommitments:    []hexutil.Bytes{},
+			ExecutionRequestsRoot: make([]byte, fieldparams.RootLength),
+		},
+	}
+}
+
+// ExecutionPayloadEnvelopeProto returns a minimal hydrated gloas ExecutionPayloadEnvelope proto.
+func ExecutionPayloadEnvelopeProto() *eth.ExecutionPayloadEnvelope {
+	return &eth.ExecutionPayloadEnvelope{
+		Payload: &enginev1.ExecutionPayloadGloas{
+			ParentHash:      make([]byte, fieldparams.RootLength),
+			FeeRecipient:    make([]byte, fieldparams.FeeRecipientLength),
+			StateRoot:       make([]byte, fieldparams.RootLength),
+			ReceiptsRoot:    make([]byte, fieldparams.RootLength),
+			LogsBloom:       make([]byte, fieldparams.LogsBloomLength),
+			PrevRandao:      make([]byte, fieldparams.RootLength),
+			BlockNumber:     0,
+			GasLimit:        30_000_000,
+			GasUsed:         0,
+			Timestamp:       0,
+			ExtraData:       []byte{},
+			BaseFeePerGas:   make([]byte, fieldparams.RootLength),
+			BlockHash:       make([]byte, fieldparams.RootLength),
+			Transactions:    [][]byte{},
+			Withdrawals:     []*enginev1.Withdrawal{},
+			BlobGasUsed:     0,
+			ExcessBlobGas:   0,
+			BlockAccessList: []byte{},
+			SlotNumber:      0,
+		},
+		ExecutionRequests: &enginev1.ExecutionRequests{
+			Deposits:       []*enginev1.DepositRequest{},
+			Withdrawals:    []*enginev1.WithdrawalRequest{},
+			Consolidations: []*enginev1.ConsolidationRequest{},
+		},
+		BuilderIndex:    0,
+		BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+	}
+}
+
+// ExecutionPayloadEnvelopeSignRequest is a mock implementation of the ExecutionPayloadEnvelopeSignRequest.
+func ExecutionPayloadEnvelopeSignRequest() *types.ExecutionPayloadEnvelopeSignRequest {
+	return &types.ExecutionPayloadEnvelopeSignRequest{
+		Type:        "EXECUTION_PAYLOAD_ENVELOPE",
+		ForkInfo:    ForkInfo(),
+		SigningRoot: make([]byte, fieldparams.RootLength),
+		ExecutionPayloadEnvelope: &types.ExecutionPayloadEnvelope{
+			Payload: &types.ExecutionPayloadGloas{
+				ParentHash:      make([]byte, fieldparams.RootLength),
+				FeeRecipient:    make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:       make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:    make([]byte, fieldparams.RootLength),
+				LogsBloom:       make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:      make([]byte, fieldparams.RootLength),
+				BlockNumber:     "0",
+				GasLimit:        "30000000",
+				GasUsed:         "0",
+				Timestamp:       "0",
+				ExtraData:       []byte{},
+				BaseFeePerGas:   "0",
+				BlockHash:       make([]byte, fieldparams.RootLength),
+				Transactions:    []hexutil.Bytes{},
+				Withdrawals:     []*types.Withdrawal{},
+				BlobGasUsed:     "0",
+				ExcessBlobGas:   "0",
+				BlockAccessList: []byte{},
+				SlotNumber:      "0",
+			},
+			ExecutionRequests: &types.ExecutionRequests{
+				Deposits:       []*types.DepositRequest{},
+				Withdrawals:    []*types.WithdrawalRequest{},
+				Consolidations: []*types.ConsolidationRequest{},
+			},
+			BuilderIndex:    "0",
+			BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+		},
+	}
+}
+
+// PayloadAttestationMessageSignRequest is a mock implementation of the PayloadAttestationMessageSignRequest.
+func PayloadAttestationMessageSignRequest() *types.PayloadAttestationMessageSignRequest {
+	return &types.PayloadAttestationMessageSignRequest{
+		Type:        "PAYLOAD_ATTESTATION_MESSAGE",
+		ForkInfo:    ForkInfo(),
+		SigningRoot: make([]byte, fieldparams.RootLength),
+		PayloadAttestationMessage: &types.PayloadAttestationData{
+			BeaconBlockRoot:   make([]byte, fieldparams.RootLength),
+			Slot:              "0",
+			PayloadPresent:    true,
+			BlobDataAvailable: false,
+		},
+	}
+}
+
+// ProposerPreferencesSignRequest is a mock implementation of the ProposerPreferencesSignRequest.
+func ProposerPreferencesSignRequest() *types.ProposerPreferencesSignRequest {
+	return &types.ProposerPreferencesSignRequest{
+		Type:        "PROPOSER_PREFERENCES",
+		ForkInfo:    ForkInfo(),
+		SigningRoot: make([]byte, fieldparams.RootLength),
+		ProposerPreferences: &types.ProposerPreferences{
+			ProposalSlot:   "0",
+			ValidatorIndex: "0",
+			FeeRecipient:   make([]byte, fieldparams.FeeRecipientLength),
+			GasLimit:       "30000000",
 		},
 	}
 }

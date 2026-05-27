@@ -469,6 +469,46 @@ func TestKeymanager_Sign(t *testing.T) {
 			want:    desiredSig,
 			wantErr: false,
 		},
+		{
+			name: "BLOCK_V2_GLOAS",
+			args: args{
+				request: mock.GetMockSignRequest("BLOCK_V2_GLOAS"),
+			},
+			want:    desiredSig,
+			wantErr: false,
+		},
+		{
+			name: "EXECUTION_PAYLOAD_BID",
+			args: args{
+				request: mock.GetMockSignRequest("EXECUTION_PAYLOAD_BID"),
+			},
+			want:    desiredSig,
+			wantErr: false,
+		},
+		{
+			name: "EXECUTION_PAYLOAD_ENVELOPE",
+			args: args{
+				request: mock.GetMockSignRequest("EXECUTION_PAYLOAD_ENVELOPE"),
+			},
+			want:    desiredSig,
+			wantErr: false,
+		},
+		{
+			name: "PAYLOAD_ATTESTATION_MESSAGE",
+			args: args{
+				request: mock.GetMockSignRequest("PAYLOAD_ATTESTATION_MESSAGE"),
+			},
+			want:    desiredSig,
+			wantErr: false,
+		},
+		{
+			name: "PROPOSER_PREFERENCES",
+			args: args{
+				request: mock.GetMockSignRequest("PROPOSER_PREFERENCES"),
+			},
+			want:    desiredSig,
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
