@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -878,45 +877,48 @@ func (s *Service) ValidatorActiveSetChanges(
 		}
 	}
 
-	vs := requestedState.Validators()
-	activatedIndices := validators.ActivatedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	exitedIndices, err := validators.ExitedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	if err != nil {
-		return nil, &RpcError{
-			Err:    errors.Wrap(err, "could not determine exited validator indices"),
-			Reason: Internal,
+	activatedIndices := make([]primitives.ValidatorIndex, 0)
+	exitedIndices := make([]primitives.ValidatorIndex, 0)
+	slashedIndices := make([]primitives.ValidatorIndex, 0)
+	ejectedIndices := make([]primitives.ValidatorIndex, 0)
+	activatedKeys := make([][]byte, 0)
+	exitedKeys := make([][]byte, 0)
+	slashedKeys := make([][]byte, 0)
+	ejectedKeys := make([][]byte, 0)
+
+	ejectionBalance := params.BeaconConfig().EjectionBalance
+	slashingsVector := params.BeaconConfig().EpochsPerSlashingsVector
+
+	for idx, validator := range requestedState.ValidatorsReadOnlySeq() {
+		if validator.ActivationEpoch() == requestedEpoch {
+			publicKey := validator.PublicKey()
+			activatedIndices = append(activatedIndices, idx)
+			activatedKeys = append(activatedKeys, publicKey[:])
 		}
-	}
-	slashedIndices := validators.SlashedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	ejectedIndices, err := validators.EjectedValidatorIndices(coreTime.CurrentEpoch(requestedState), vs)
-	if err != nil {
-		return nil, &RpcError{
-			Err:    errors.Wrap(err, "could not determine ejected validator indices"),
-			Reason: Internal,
+
+		maxWithdrawableEpoch := primitives.MaxEpoch(validator.WithdrawableEpoch(), requestedEpoch+slashingsVector)
+
+		if validator.Slashed() && validator.WithdrawableEpoch() == maxWithdrawableEpoch {
+			publicKey := validator.PublicKey()
+			slashedIndices = append(slashedIndices, idx)
+			slashedKeys = append(slashedKeys, publicKey[:])
 		}
+
+		if validator.ExitEpoch() != requestedEpoch {
+			continue
+		}
+
+		publicKey := validator.PublicKey()
+		if validator.EffectiveBalance() > ejectionBalance {
+			exitedIndices = append(exitedIndices, idx)
+			exitedKeys = append(exitedKeys, publicKey[:])
+			continue
+		}
+
+		ejectedIndices = append(ejectedIndices, idx)
+		ejectedKeys = append(ejectedKeys, publicKey[:])
 	}
 
-	// Retrieve public keys for the indices.
-	activatedKeys := make([][]byte, len(activatedIndices))
-	exitedKeys := make([][]byte, len(exitedIndices))
-	slashedKeys := make([][]byte, len(slashedIndices))
-	ejectedKeys := make([][]byte, len(ejectedIndices))
-	for i, idx := range activatedIndices {
-		pubkey := requestedState.PubkeyAtIndex(idx)
-		activatedKeys[i] = pubkey[:]
-	}
-	for i, idx := range exitedIndices {
-		pubkey := requestedState.PubkeyAtIndex(idx)
-		exitedKeys[i] = pubkey[:]
-	}
-	for i, idx := range slashedIndices {
-		pubkey := requestedState.PubkeyAtIndex(idx)
-		slashedKeys[i] = pubkey[:]
-	}
-	for i, idx := range ejectedIndices {
-		pubkey := requestedState.PubkeyAtIndex(idx)
-		ejectedKeys[i] = pubkey[:]
-	}
 	return &ethpb.ActiveSetChanges{
 		Epoch:               requestedEpoch,
 		ActivatedPublicKeys: activatedKeys,

@@ -45,7 +45,6 @@ go_library(
         "//beacon-chain/rpc/lookup:go_default_library",
         "//beacon-chain/rpc/prysm/v1alpha1/validator:go_default_library",
         "//beacon-chain/state:go_default_library",
-        "//beacon-chain/state/state-native:go_default_library",
         "//beacon-chain/state/stategen:go_default_library",
         "//beacon-chain/sync:go_default_library",
         "//config/features:go_default_library",

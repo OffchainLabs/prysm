@@ -2,6 +2,7 @@ package altair
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -41,7 +42,7 @@ func InitializePrecomputeValidators(ctx context.Context, beaconState state.Beaco
 	if beaconState.NumValidators() != len(inactivityScores) {
 		return nil, nil, errors.New("num of validators is different than num of inactivity scores")
 	}
-	if err := beaconState.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	for idx, val := range beaconState.ValidatorsReadOnlySeq() {
 		// Set validator's balance, inactivity score and slashed/withdrawable status.
 		v := &precompute.Validator{
 			CurrentEpochEffectiveBalance: val.EffectiveBalance(),
@@ -54,7 +55,7 @@ func InitializePrecomputeValidators(ctx context.Context, beaconState state.Beaco
 			v.IsActiveCurrentEpoch = true
 			bal.ActiveCurrentEpoch, err = math.Add64(bal.ActiveCurrentEpoch, val.EffectiveBalance())
 			if err != nil {
-				return err
+				return nil, nil, fmt.Errorf("add64: %w", err)
 			}
 		}
 		// Set validator's active status for previous epoch.
@@ -62,13 +63,10 @@ func InitializePrecomputeValidators(ctx context.Context, beaconState state.Beaco
 			v.IsActivePrevEpoch = true
 			bal.ActivePrevEpoch, err = math.Add64(bal.ActivePrevEpoch, val.EffectiveBalance())
 			if err != nil {
-				return err
+				return nil, nil, fmt.Errorf("add64: %w", err)
 			}
 		}
 		vals[idx] = v
-		return nil
-	}); err != nil {
-		return nil, nil, errors.Wrap(err, "could not read every validator")
 	}
 	return vals, bal, nil
 }
