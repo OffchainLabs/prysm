@@ -3,6 +3,7 @@ package rewards
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"path"
 	"reflect"
