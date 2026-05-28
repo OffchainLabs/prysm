@@ -2984,6 +2984,9 @@ func PayloadAttestationMessageFromConsensus(m *eth.PayloadAttestationMessage) *P
 }
 
 func PayloadAttestationDataFromConsensus(d *eth.PayloadAttestationData) *PayloadAttestationData {
+	if d == nil {
+		return nil
+	}
 	return &PayloadAttestationData{
 		BeaconBlockRoot:   hexutil.Encode(d.BeaconBlockRoot),
 		Slot:              fmt.Sprintf("%d", d.Slot),
