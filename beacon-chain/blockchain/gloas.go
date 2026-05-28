@@ -120,7 +120,6 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 		return emptyAttri
 	}
 
-	var err error
 	st, err = transition.ProcessSlotsIfNeeded(ctx, st, headRoot, slot)
 	if err != nil {
 		log.WithError(err).Error("Could not process slots to get payload attribute")
