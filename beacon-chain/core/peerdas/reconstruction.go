@@ -146,8 +146,11 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
 
-	referenceSidecar := verifiedRoSidecars[0]
-	blobCount := len(referenceSidecar.Column())
+	commitments, err := block.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return nil, errors.Wrap(err, "blob kzg commitments")
+	}
+	blobCount := len(commitments)
 	blockRoot := block.Root()
 	for _, sidecar := range verifiedRoSidecars {
 		if len(sidecar.Column()) != blobCount {
