@@ -162,7 +162,8 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 		return nil, status.Errorf(codes.Internal, "could not wrap signed envelope: %v", err)
 	}
 	if err := vs.ExecutionPayloadEnvelopeReceiver.ReceiveExecutionPayloadEnvelope(ctx, roSigned); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to receive execution payload envelope: %v", err)
+		// Broadcast already succeeded; import failed. REST maps Aborted -> 202 (beacon-APIs #580).
+		return nil, status.Errorf(codes.Aborted, "failed to receive execution payload envelope: %v", err)
 	}
 
 	log.Info("Successfully published execution payload envelope")

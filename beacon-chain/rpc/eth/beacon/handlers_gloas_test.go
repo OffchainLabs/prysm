@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	executiontesting "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
@@ -28,11 +29,32 @@ import (
 	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
+
+func envelopeCacheFor(signed *ethpb.SignedExecutionPayloadEnvelope) *cache.ExecutionPayloadEnvelopeCache {
+	c := cache.NewExecutionPayloadEnvelopeCache()
+	c.Set(&cache.ExecutionPayloadContents{Envelope: signed.Message})
+	return c
+}
+
+func blindedJSONBody(t *testing.T, signed *ethpb.SignedExecutionPayloadEnvelope) []byte {
+	t.Helper()
+	blinded, err := ethpb.SignedWireBlindedFromFull(signed)
+	require.NoError(t, err)
+	msg, err := structs.BlindedExecutionPayloadEnvelopeFromConsensus(blinded.Message)
+	require.NoError(t, err)
+	body, err := json.Marshal(&structs.SignedBlindedExecutionPayloadEnvelope{
+		Message:   msg,
+		Signature: hexutil.Encode(blinded.Signature),
+	})
+	require.NoError(t, err)
+	return body
+}
 
 func TestGetExecutionPayloadEnvelope_AcceptsSlotID(t *testing.T) {
 	ctx := t.Context()
@@ -145,7 +167,8 @@ func testSignedEnvelope() *ethpb.SignedExecutionPayloadEnvelope {
 	}
 }
 
-func TestPublishExecutionPayloadEnvelope_OK(t *testing.T) {
+// Stateful: body is the spec-wire blinded envelope; BN reconstructs full from cache.
+func TestPublishExecutionPayloadEnvelope_StatefulBlinded_OK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.GloasForkEpoch = 0
@@ -159,14 +182,15 @@ func TestPublishExecutionPayloadEnvelope_OK(t *testing.T) {
 		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil)
 
-	jsonEnvelope, err := structs.SignedExecutionPayloadEnvelopeFromConsensus(signed)
-	require.NoError(t, err)
-	body, err := json.Marshal(jsonEnvelope)
-	require.NoError(t, err)
+	body := blindedJSONBody(t, signed)
 
-	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	s := &Server{
+		V1Alpha1ValidatorServer:       v1alpha1Server,
+		ExecutionPayloadEnvelopeCache: envelopeCacheFor(signed),
+	}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "true")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -174,10 +198,24 @@ func TestPublishExecutionPayloadEnvelope_OK(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
+// Missing Eth-Execution-Payload-Blinded header must be a 400.
+func TestPublishExecutionPayloadEnvelope_MissingBlindedHeader(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader([]byte("{}")))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte(api.ExecutionPayloadBlindedHeader)))
+}
+
 func TestPublishExecutionPayloadEnvelope_InvalidBody(t *testing.T) {
 	s := &Server{}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader([]byte("not json")))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "false")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -208,11 +246,36 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_NoBlobs(t *testing.T)
 	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "false")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
 	s.PublishExecutionPayloadEnvelope(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
+}
+
+// Broadcast succeeded but DB integration failed -> Aborted maps to 202.
+func TestPublishExecutionPayloadEnvelope_ImportFailureReturns202(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	signed := testSignedEnvelope()
+
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
+		gomock.Any(), gomock.Any(),
+	).Return(nil, status.Error(codes.Aborted, "import failed"))
+
+	s := &Server{
+		V1Alpha1ValidatorServer:       v1alpha1Server,
+		ExecutionPayloadEnvelopeCache: envelopeCacheFor(signed),
+	}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(blindedJSONBody(t, signed)))
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "true")
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusAccepted, w.Code)
 }
 
 // statelessContentsBody builds a SignedExecutionPayloadEnvelopeContents JSON
@@ -272,6 +335,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_WithBlobs(t *testing.
 	}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "false")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -296,6 +360,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *t
 	}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "false")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -318,14 +383,15 @@ func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
 	).Return(nil, status.Error(codes.Internal, "broadcast failed"))
 
 	signed := testSignedEnvelope()
-	jsonEnvelope, err := structs.SignedExecutionPayloadEnvelopeFromConsensus(signed)
-	require.NoError(t, err)
-	body, err := json.Marshal(jsonEnvelope)
-	require.NoError(t, err)
+	body := blindedJSONBody(t, signed)
 
-	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	s := &Server{
+		V1Alpha1ValidatorServer:       v1alpha1Server,
+		ExecutionPayloadEnvelopeCache: envelopeCacheFor(signed),
+	}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "true")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -333,7 +399,8 @@ func TestPublishExecutionPayloadEnvelope_ServerError(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-func TestPublishExecutionPayloadEnvelope_SSZ(t *testing.T) {
+// SSZ stateful: send SignedWireBlindedExecutionPayloadEnvelope, header=true.
+func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBlinded(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.GloasForkEpoch = 0
@@ -341,19 +408,24 @@ func TestPublishExecutionPayloadEnvelope_SSZ(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
+	blinded, err := ethpb.SignedWireBlindedFromFull(signed)
+	require.NoError(t, err)
+	sszBody, err := blinded.MarshalSSZ()
+	require.NoError(t, err)
 
 	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 	v1alpha1Server.EXPECT().PublishExecutionPayloadEnvelope(
 		gomock.Any(), gomock.Any(),
 	).Return(&emptypb.Empty{}, nil)
 
-	sszBody, err := signed.MarshalSSZ()
-	require.NoError(t, err)
-
-	s := &Server{V1Alpha1ValidatorServer: v1alpha1Server}
+	s := &Server{
+		V1Alpha1ValidatorServer:       v1alpha1Server,
+		ExecutionPayloadEnvelopeCache: envelopeCacheFor(signed),
+	}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(sszBody))
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "true")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -361,33 +433,32 @@ func TestPublishExecutionPayloadEnvelope_SSZ(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestPublishExecutionPayloadEnvelope_SSZ_InvalidBody(t *testing.T) {
-	cases := []struct {
-		name     string
-		body     []byte
-		contains string // expected substring identifies which decoder fired
-	}{
-		// No Contents prefix → falls through to envelope decoder.
-		{name: "too short", body: []byte{0x00, 0x01, 0x02}, contains: "could not decode SSZ envelope:"},
-		{name: "no prefix match", body: []byte{0x05, 0x00, 0x00, 0x00, 0x00, 0x00}, contains: "could not decode SSZ envelope:"},
-		{name: "envelope lead offset but truncated", body: []byte{0x64, 0x00, 0x00, 0x00}, contains: "could not decode SSZ envelope:"},
-		// Contents prefix matches → contents decoder fires and reports specifically.
-		{name: "contents lead offset but truncated", body: []byte{0x0c, 0x00, 0x00, 0x00}, contains: "could not decode SSZ envelope contents:"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			s := &Server{}
-			req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(tc.body))
-			req.Header.Set("Content-Type", "application/octet-stream")
-			req.Header.Set(api.VersionHeader, version.String(version.Gloas))
-			w := httptest.NewRecorder()
-			w.Body = &bytes.Buffer{}
+// SSZ stateful with no cache entry must fail (cannot reconstruct full).
+func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBlinded_CacheMiss(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 
-			s.PublishExecutionPayloadEnvelope(w, req)
-			require.Equal(t, http.StatusBadRequest, w.Code)
-			assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte(tc.contains)))
-		})
+	signed := testSignedEnvelope()
+	blinded, err := ethpb.SignedWireBlindedFromFull(signed)
+	require.NoError(t, err)
+	sszBody, err := blinded.MarshalSSZ()
+	require.NoError(t, err)
+
+	s := &Server{
+		ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
 	}
+	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(sszBody))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "true")
+	w := httptest.NewRecorder()
+	w.Body = &bytes.Buffer{}
+
+	s.PublishExecutionPayloadEnvelope(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, true, bytes.Contains(w.Body.Bytes(), []byte("no cached execution payload envelope")))
 }
 
 func TestPublishExecutionPayloadEnvelope_SSZ_Contents(t *testing.T) {
@@ -413,6 +484,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_Contents(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(sszBody))
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+	req.Header.Set(api.ExecutionPayloadBlindedHeader, "false")
 	w := httptest.NewRecorder()
 	w.Body = &bytes.Buffer{}
 
@@ -429,10 +501,7 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 	signed := testSignedEnvelope()
 	envRoot := bytesutil.ToBytes32(signed.Message.BeaconBlockRoot)
 	envSlot := primitives.Slot(signed.Message.Payload.SlotNumber)
-	jsonEnvelope, err := structs.SignedExecutionPayloadEnvelopeFromConsensus(signed)
-	require.NoError(t, err)
-	body, err := json.Marshal(jsonEnvelope)
-	require.NoError(t, err)
+	body := blindedJSONBody(t, signed)
 
 	// State that fails gloas.VerifyExecutionPayloadEnvelope (slot mismatch is
 	// enough). Lets us exercise the consensus path and assert it actually runs.
@@ -510,12 +579,14 @@ func TestPublishExecutionPayloadEnvelope_BroadcastValidation(t *testing.T) {
 				chainSvc.MockCanonicalFull = map[primitives.Slot]bool{envSlot: true}
 			}
 			s := &Server{
-				V1Alpha1ValidatorServer: v1alpha1Server,
-				ForkchoiceFetcher:       chainSvc,
-				HeadFetcher:             chainSvc,
+				V1Alpha1ValidatorServer:       v1alpha1Server,
+				ForkchoiceFetcher:             chainSvc,
+				HeadFetcher:                   chainSvc,
+				ExecutionPayloadEnvelopeCache: envelopeCacheFor(signed),
 			}
 			req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope"+tc.query, bytes.NewReader(body))
 			req.Header.Set(api.VersionHeader, version.String(version.Gloas))
+			req.Header.Set(api.ExecutionPayloadBlindedHeader, "true")
 			w := httptest.NewRecorder()
 			w.Body = &bytes.Buffer{}
 

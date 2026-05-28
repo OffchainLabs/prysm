@@ -556,6 +556,23 @@ message SignedBlindedExecutionPayloadEnvelope {
   bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
+// WireBlindedExecutionPayloadEnvelope is the beacon-APIs #580 wire form: payload replaced by
+// payload_root so HTR matches the full envelope. Distinct from the storage-form BlindedExecutionPayloadEnvelope above.
+message WireBlindedExecutionPayloadEnvelope {
+  bytes payload_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  ethereum.engine.v1.ExecutionRequests execution_requests = 2;
+  uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
+                                 "github.com/OffchainLabs/prysm/v7/"
+                                 "consensus-types/primitives.BuilderIndex" ];
+  bytes beacon_block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes parent_beacon_block_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+message SignedWireBlindedExecutionPayloadEnvelope {
+  WireBlindedExecutionPayloadEnvelope message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
 // Builder represents a builder in the Gloas fork.
 //
 // Spec:

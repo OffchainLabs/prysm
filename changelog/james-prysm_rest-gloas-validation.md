@@ -1,4 +1,25 @@
 ### Added
 
-- support for ssz on get and propose payload envelope and payload envelope content
-- query parameter for gossip validation on payload envelope
+- SSZ support for GET and POST of execution payload envelope and envelope contents.
+- `broadcast_validation` query parameter on POST execution payload envelope.
+- Spec-wire `WireBlindedExecutionPayloadEnvelope` types and `Eth-Execution-Payload-Blinded`
+  header for the stateful publish path (beacon-APIs #580).
+- `202` response on POST execution payload envelope when the envelope is broadcast
+  but fails database integration (beacon-APIs #580).
+- `ProduceBlockV4` returns only the beacon block when the produced block uses an
+  external builder bid, regardless of `include_payload` (beacon-APIs #580).
+
+### Changed
+
+- `GET /eth/v1/validator/execution_payload_envelope/{slot}` →
+  `GET /eth/v1/validator/execution_payload_envelopes/{slot}/{beacon_block_root}`;
+  the response is the spec-wire `BlindedExecutionPayloadEnvelope` (HTR equivalent
+  to the full envelope, transactions/withdrawals omitted), with
+  `Eth-Execution-Payload-Blinded: true` set on the response.
+- `POST /eth/v1/beacon/execution_payload_envelopes` body shape is now selected by
+  the required `Eth-Execution-Payload-Blinded` request header:
+  - `true` → `SignedBlindedExecutionPayloadEnvelope` (stateful — BN reconstructs
+    the full envelope from its cache).
+  - `false` → `SignedExecutionPayloadEnvelopeContents` (stateless — body carries
+    blobs and KZG proofs).
+  Replaces the prior SSZ-lead-offset / JSON wrapper-key probe.

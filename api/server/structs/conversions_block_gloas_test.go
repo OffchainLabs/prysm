@@ -54,6 +54,64 @@ func TestExecutionPayloadEnvelopeFromConsensus_NilRequests(t *testing.T) {
 	require.Equal(t, (*ExecutionRequests)(nil), result.ExecutionRequests)
 }
 
+func testWireBlindedProto() *eth.WireBlindedExecutionPayloadEnvelope {
+	return &eth.WireBlindedExecutionPayloadEnvelope{
+		PayloadRoot:           fillByteSlice(32, 0x55),
+		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		BuilderIndex:          7,
+		BeaconBlockRoot:       fillByteSlice(32, 0x33),
+		ParentBeaconBlockRoot: fillByteSlice(32, 0x44),
+	}
+}
+
+func TestBlindedExecutionPayloadEnvelopeFromConsensus(t *testing.T) {
+	b := testWireBlindedProto()
+	result, err := BlindedExecutionPayloadEnvelopeFromConsensus(b)
+	require.NoError(t, err)
+	require.Equal(t, hexutil.Encode(b.PayloadRoot), result.PayloadRoot)
+	require.Equal(t, "7", result.BuilderIndex)
+	require.Equal(t, hexutil.Encode(b.BeaconBlockRoot), result.BeaconBlockRoot)
+	require.Equal(t, hexutil.Encode(b.ParentBeaconBlockRoot), result.ParentBeaconBlockRoot)
+	require.NotNil(t, result.ExecutionRequests)
+}
+
+func TestBlindedExecutionPayloadEnvelopeFromConsensus_Nil(t *testing.T) {
+	_, err := BlindedExecutionPayloadEnvelopeFromConsensus(nil)
+	require.NotNil(t, err)
+}
+
+func TestBlindedExecutionPayloadEnvelope_ToConsensusRoundTrip(t *testing.T) {
+	b := testWireBlindedProto()
+	api, err := BlindedExecutionPayloadEnvelopeFromConsensus(b)
+	require.NoError(t, err)
+	back, err := api.ToConsensus()
+	require.NoError(t, err)
+	require.DeepEqual(t, b.PayloadRoot, back.PayloadRoot)
+	require.Equal(t, b.BuilderIndex, back.BuilderIndex)
+	require.DeepEqual(t, b.BeaconBlockRoot, back.BeaconBlockRoot)
+	require.DeepEqual(t, b.ParentBeaconBlockRoot, back.ParentBeaconBlockRoot)
+	require.NotNil(t, back.ExecutionRequests)
+}
+
+func TestSignedBlindedExecutionPayloadEnvelope_ToConsensus(t *testing.T) {
+	msg, err := BlindedExecutionPayloadEnvelopeFromConsensus(testWireBlindedProto())
+	require.NoError(t, err)
+	sig := fillByteSlice(96, 0x66)
+	signed := &SignedBlindedExecutionPayloadEnvelope{Message: msg, Signature: hexutil.Encode(sig)}
+	result, err := signed.ToConsensus()
+	require.NoError(t, err)
+	require.NotNil(t, result.Message)
+	require.DeepEqual(t, sig, result.Signature)
+}
+
+func TestSignedBlindedExecutionPayloadEnvelope_ToConsensus_BadSignature(t *testing.T) {
+	msg, err := BlindedExecutionPayloadEnvelopeFromConsensus(testWireBlindedProto())
+	require.NoError(t, err)
+	signed := &SignedBlindedExecutionPayloadEnvelope{Message: msg, Signature: "0xdead"}
+	_, err = signed.ToConsensus()
+	require.NotNil(t, err)
+}
+
 func TestBlockContentsGloasFromConsensus(t *testing.T) {
 	block := util.NewBeaconBlockGloas().Block
 	env := testEnvelopeProto()

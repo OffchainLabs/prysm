@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -92,10 +93,9 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// PublishExecutionPayloadEnvelope broadcasts a signed envelope. Body may be
-// either SignedExecutionPayloadEnvelope (stateful) or
-// SignedExecutionPayloadEnvelopeContents (stateless, with blobs+proofs).
-// Endpoint: POST /eth/v1/beacon/execution_payload_envelope
+// PublishExecutionPayloadEnvelope broadcasts a signed envelope. Eth-Execution-Payload-Blinded
+// selects the body: true=blinded (stateful, BN reconstructs from cache), false=contents (stateless).
+// Endpoint: POST /eth/v1/beacon/execution_payload_envelopes
 func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishExecutionPayloadEnvelope")
 	defer span.End()
@@ -108,6 +108,16 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 		httputil.HandleError(w, api.VersionHeader+" header must be gloas", http.StatusBadRequest)
 		return
 	}
+	blindedHeader := r.Header.Get(api.ExecutionPayloadBlindedHeader)
+	if blindedHeader == "" {
+		httputil.HandleError(w, api.ExecutionPayloadBlindedHeader+" header is required", http.StatusBadRequest)
+		return
+	}
+	isBlinded, err := strconv.ParseBool(blindedHeader)
+	if err != nil {
+		httputil.HandleError(w, "invalid "+api.ExecutionPayloadBlindedHeader+" value: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -115,69 +125,96 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 		return
 	}
 
-	var consensus *eth.SignedExecutionPayloadEnvelope
+	if isBlinded {
+		s.publishBlindedEnvelope(ctx, w, r, body)
+		return
+	}
+	s.publishEnvelopeContents(ctx, w, r, body)
+}
+
+// publishBlindedEnvelope reconstructs the full envelope from cache by beacon_block_root.
+// HTR(blinded) == HTR(full), so the validator signature stays valid.
+func (s *Server) publishBlindedEnvelope(ctx context.Context, w http.ResponseWriter, r *http.Request, body []byte) {
+	signedBlinded := &eth.SignedWireBlindedExecutionPayloadEnvelope{}
 	if httputil.IsRequestSsz(r) {
-		// Dispatch by SSZ lead offset: 12 = Contents, 100 = bare envelope.
-		contentsLeadOffset := []byte{12, 0, 0, 0}
-		if bytes.HasPrefix(body, contentsLeadOffset) {
-			contents := &eth.SignedExecutionPayloadEnvelopeContents{}
-			if err := contents.UnmarshalSSZ(body); err != nil {
-				httputil.HandleError(w, "could not decode SSZ envelope contents: "+err.Error(), http.StatusBadRequest)
-				return
-			}
-			s.publishExecutionPayloadEnvelopeContentsSSZ(ctx, w, r, contents)
-			return
-		}
-		consensus = &eth.SignedExecutionPayloadEnvelope{}
-		if err := consensus.UnmarshalSSZ(body); err != nil {
-			httputil.HandleError(w, "could not decode SSZ envelope: "+err.Error(), http.StatusBadRequest)
+		if err := signedBlinded.UnmarshalSSZ(body); err != nil {
+			httputil.HandleError(w, "could not decode SSZ blinded envelope: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 	} else {
-		// Contents wraps the signed envelope alongside blobs/kzg_proofs; the
-		// wrapper key distinguishes it from a bare envelope body.
-		var probe map[string]json.RawMessage
-		if err := json.Unmarshal(body, &probe); err != nil {
-			httputil.HandleError(w, "could not decode request body: "+err.Error(), http.StatusBadRequest)
+		var jsonBlinded structs.SignedBlindedExecutionPayloadEnvelope
+		if err := json.Unmarshal(body, &jsonBlinded); err != nil {
+			httputil.HandleError(w, "could not decode JSON blinded envelope: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		if _, isContents := probe["signed_execution_payload_envelope"]; isContents {
-			s.publishExecutionPayloadEnvelopeContents(ctx, w, r, body)
-			return
-		}
-
-		var jsonEnvelope structs.SignedExecutionPayloadEnvelope
-		if err := json.Unmarshal(body, &jsonEnvelope); err != nil {
-			httputil.HandleError(w, "could not decode request body: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		consensus, err = jsonEnvelope.ToConsensus()
+		consensus, err := jsonBlinded.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, "invalid signed execution payload envelope: "+err.Error(), http.StatusBadRequest)
+			httputil.HandleError(w, "invalid signed blinded envelope: "+err.Error(), http.StatusBadRequest)
 			return
 		}
+		signedBlinded = consensus
+	}
+	if signedBlinded.Message == nil {
+		httputil.HandleError(w, "blinded envelope message is nil", http.StatusBadRequest)
+		return
 	}
 
-	if err := s.validateEnvelopeBroadcast(ctx, r, consensus); err != nil {
+	cached, ok := s.ExecutionPayloadEnvelopeCache.Contents()
+	if !ok || cached.Envelope == nil {
+		httputil.HandleError(w, "no cached execution payload envelope to reconstruct from", http.StatusBadRequest)
+		return
+	}
+	if !bytes.Equal(cached.Envelope.BeaconBlockRoot, signedBlinded.Message.BeaconBlockRoot) {
+		httputil.HandleError(w, "cached envelope beacon_block_root does not match blinded envelope", http.StatusBadRequest)
+		return
+	}
+
+	full := &eth.SignedExecutionPayloadEnvelope{
+		Message:   cached.Envelope,
+		Signature: signedBlinded.Signature,
+	}
+
+	if err := s.validateEnvelopeBroadcast(ctx, r, full); err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, consensus); err != nil {
-		if st, ok := status.FromError(err); ok {
-			switch st.Code() {
-			case codes.InvalidArgument:
-				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
-			default:
-				httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
-			}
-			return
-		}
-		httputil.HandleError(w, "could not publish execution payload envelope: "+err.Error(), http.StatusInternalServerError)
+	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, full); err != nil {
+		writeEnvelopePublishError(w, err)
 		return
 	}
-
 	w.WriteHeader(http.StatusOK)
+}
+
+// writeEnvelopePublishError maps the v1alpha1 publish outcome to the spec status
+// codes: InvalidArgument -> 400, Aborted -> 202 (broadcast ok, import failed).
+func writeEnvelopePublishError(w http.ResponseWriter, err error) {
+	if st, ok := status.FromError(err); ok {
+		switch st.Code() {
+		case codes.InvalidArgument:
+			httputil.HandleError(w, st.Message(), http.StatusBadRequest)
+		case codes.Aborted:
+			httputil.HandleError(w, st.Message(), http.StatusAccepted)
+		default:
+			httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
+		}
+		return
+	}
+	httputil.HandleError(w, "could not publish execution payload envelope: "+err.Error(), http.StatusInternalServerError)
+}
+
+// publishEnvelopeContents handles the stateless flow (header=false).
+func (s *Server) publishEnvelopeContents(ctx context.Context, w http.ResponseWriter, r *http.Request, body []byte) {
+	if httputil.IsRequestSsz(r) {
+		contents := &eth.SignedExecutionPayloadEnvelopeContents{}
+		if err := contents.UnmarshalSSZ(body); err != nil {
+			httputil.HandleError(w, "could not decode SSZ envelope contents: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		s.publishExecutionPayloadEnvelopeContentsSSZ(ctx, w, r, contents)
+		return
+	}
+	s.publishExecutionPayloadEnvelopeContents(ctx, w, r, body)
 }
 
 // publishExecutionPayloadEnvelopeContents handles the JSON stateless variant.
@@ -244,16 +281,7 @@ func (s *Server) processEnvelopeContents(ctx context.Context, w http.ResponseWri
 	}
 
 	if _, err := s.V1Alpha1ValidatorServer.PublishExecutionPayloadEnvelope(ctx, signed); err != nil {
-		if st, ok := status.FromError(err); ok {
-			switch st.Code() {
-			case codes.InvalidArgument:
-				httputil.HandleError(w, st.Message(), http.StatusBadRequest)
-			default:
-				httputil.HandleError(w, st.Message(), http.StatusInternalServerError)
-			}
-			return
-		}
-		httputil.HandleError(w, "could not publish execution payload envelope contents: "+err.Error(), http.StatusInternalServerError)
+		writeEnvelopePublishError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)

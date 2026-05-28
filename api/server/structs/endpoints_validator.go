@@ -169,6 +169,11 @@ type GetValidatorExecutionPayloadEnvelopeResponse struct {
 	Data    *ExecutionPayloadEnvelope `json:"data"`
 }
 
+type GetValidatorBlindedExecutionPayloadEnvelopeResponse struct {
+	Version string                           `json:"version"`
+	Data    *BlindedExecutionPayloadEnvelope `json:"data"`
+}
+
 type ActiveSetChanges struct {
 	Epoch               string   `json:"epoch"`
 	ActivatedPublicKeys []string `json:"activated_public_keys"`

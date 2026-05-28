@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"strings"
+	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -14,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
 )
@@ -26,38 +26,23 @@ func (c *beaconApiValidatorClient) getExecutionPayloadEnvelope(
 	if envelope != nil {
 		return envelope, nil
 	}
-	endpoint := fmt.Sprintf("/eth/v1/validator/execution_payload_envelope/%d", slot)
-	body, header, err := c.handler.GetSSZ(ctx, endpoint)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get execution payload envelope")
-	}
-	if strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType) {
-		env := &ethpb.ExecutionPayloadEnvelope{}
-		if err := env.UnmarshalSSZ(body); err != nil {
-			return nil, errors.Wrap(err, "could not unmarshal execution payload envelope SSZ")
-		}
-		return env, nil
-	}
-	var resp structs.GetValidatorExecutionPayloadEnvelopeResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, errors.Wrap(err, "could not decode execution payload envelope JSON")
-	}
-	if resp.Data == nil {
-		return nil, errors.New("execution payload envelope data is nil")
-	}
-	return resp.Data.ToConsensus()
+	// BN GET returns the blinded form, which can't be rebuilt into a full envelope client-side.
+	return nil, errors.Errorf("execution payload envelope cache miss for slot %d: include_payload=true required for cross-VC envelope fetch", slot)
 }
 
 func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 	ctx context.Context,
 	envelope *ethpb.SignedExecutionPayloadEnvelope,
 ) (*empty.Empty, error) {
-	const endpoint = "/eth/v1/beacon/execution_payload_envelope"
+	const endpoint = "/eth/v1/beacon/execution_payload_envelopes"
+	if envelope == nil || envelope.Message == nil || envelope.Message.Payload == nil {
+		return nil, errors.New("nil signed envelope or payload")
+	}
 
 	// Stateless mode requires the envelope cache (populated by the v4 block
 	// fetch) to provide blobs+proofs; a miss means we would silently lose blob
 	// broadcast against a stateless target BN, so error out.
-	if c.stateless && envelope != nil && envelope.Message != nil && envelope.Message.Payload != nil {
+	if c.stateless {
 		slot := primitives.Slot(envelope.Message.Payload.SlotNumber)
 		cachedEnv, blobs, kzgProofs := c.envelopeCache.Take(slot)
 		if cachedEnv == nil {
@@ -79,32 +64,49 @@ func (c *beaconApiValidatorClient) publishExecutionPayloadEnvelope(
 			}
 			return json.Marshal(j)
 		}
-		if err := c.postEnvelope(ctx, endpoint, ssz, jsonFn); err != nil {
+		headers := envelopeHeaders(false)
+		if err := c.postEnvelope(ctx, endpoint, headers, ssz, jsonFn); err != nil {
 			return nil, errors.Wrap(err, "could not publish execution payload envelope contents")
 		}
 		return &empty.Empty{}, nil
 	}
 
-	ssz, err := envelope.MarshalSSZ()
+	// Stateful single-BN: send blinded; BN reconstructs full from cache, sig valid by HTR equivalence.
+	blinded, err := ethpb.SignedWireBlindedFromFull(envelope)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not marshal envelope SSZ")
+		return nil, errors.Wrap(err, "could not derive blinded envelope")
+	}
+	ssz, err := blinded.MarshalSSZ()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not marshal blinded envelope SSZ")
 	}
 	jsonFn := func() ([]byte, error) {
-		j, jerr := structs.SignedExecutionPayloadEnvelopeFromConsensus(envelope)
+		msg, jerr := structs.BlindedExecutionPayloadEnvelopeFromConsensus(blinded.Message)
 		if jerr != nil {
 			return nil, jerr
 		}
+		j := &structs.SignedBlindedExecutionPayloadEnvelope{
+			Message:   msg,
+			Signature: hexutil.Encode(blinded.Signature),
+		}
 		return json.Marshal(j)
 	}
-	if err := c.postEnvelope(ctx, endpoint, ssz, jsonFn); err != nil {
-		return nil, errors.Wrap(err, "could not publish execution payload envelope")
+	headers := envelopeHeaders(true)
+	if err := c.postEnvelope(ctx, endpoint, headers, ssz, jsonFn); err != nil {
+		return nil, errors.Wrap(err, "could not publish blinded execution payload envelope")
 	}
 	return &empty.Empty{}, nil
 }
 
+func envelopeHeaders(blinded bool) map[string]string {
+	return map[string]string{
+		api.VersionHeader:                 version.String(version.Gloas),
+		api.ExecutionPayloadBlindedHeader: strconv.FormatBool(blinded),
+	}
+}
+
 // postEnvelope publishes SSZ first; on 406 Not Acceptable falls back to JSON.
-func (c *beaconApiValidatorClient) postEnvelope(ctx context.Context, endpoint string, ssz []byte, jsonFn func() ([]byte, error)) error {
-	headers := map[string]string{api.VersionHeader: version.String(version.Gloas)}
+func (c *beaconApiValidatorClient) postEnvelope(ctx context.Context, endpoint string, headers map[string]string, ssz []byte, jsonFn func() ([]byte, error)) error {
 	_, _, err := c.handler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(ssz))
 	if err == nil {
 		return nil

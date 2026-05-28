@@ -27,6 +27,7 @@ import (
 	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 )
 
@@ -48,6 +49,7 @@ func testEnvelope() *eth.ExecutionPayloadEnvelope {
 			BlockHash:     make([]byte, 32),
 			SlotNumber:    1,
 		},
+		ExecutionRequests:     &enginev1.ExecutionRequests{},
 		BuilderIndex:          0,
 		BeaconBlockRoot:       make([]byte, 32),
 		ParentBeaconBlockRoot: make([]byte, 32),
@@ -55,10 +57,14 @@ func testEnvelope() *eth.ExecutionPayloadEnvelope {
 }
 
 func gloasGenericBlock() *eth.GenericBeaconBlock {
+	return gloasGenericBlockWithBuilder(params.BeaconConfig().BuilderIndexSelfBuild)
+}
+
+func gloasGenericBlockWithBuilder(builderIndex primitives.BuilderIndex) *eth.GenericBeaconBlock {
+	blk := util.NewBeaconBlockGloas().Block
+	blk.Body.SignedExecutionPayloadBid.Message.BuilderIndex = builderIndex
 	return &eth.GenericBeaconBlock{
-		Block: &eth.GenericBeaconBlock_Gloas{
-			Gloas: util.NewBeaconBlockGloas().Block,
-		},
+		Block: &eth.GenericBeaconBlock_Gloas{Gloas: blk},
 	}
 }
 
@@ -199,6 +205,41 @@ func TestProduceBlockV4_IncludePayloadFalse(t *testing.T) {
 	require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
 }
 
+// An external builder bid returns only the block, even with include_payload=true.
+func TestProduceBlockV4_BuilderBidExcludesPayload(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctrl := gomock.NewController(t)
+	v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+	// Builder index != self-build, so GetExecutionPayloadEnvelope must not be called.
+	v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), gomock.Any()).Return(gloasGenericBlockWithBuilder(3), nil)
+
+	server := &Server{
+		V1Alpha1Server:        v1alpha1Server,
+		SyncChecker:           &mockSync.Sync{IsSyncing: false},
+		OptimisticModeFetcher: &blockchainTesting.ChainService{},
+		BlockRewardFetcher:    &rewardtesting.MockBlockRewardFetcher{Rewards: &structs.BlockRewards{Total: "10"}},
+	}
+	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v4/validator/blocks/1?randao_reveal=%s&graffiti=%s", testRandao, testGraffiti), nil)
+	request.SetPathValue("slot", "1")
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.ProduceBlockV4(writer, request)
+	require.Equal(t, http.StatusOK, writer.Code)
+
+	var resp structs.ProduceBlockV4Response
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
+	assert.Equal(t, false, resp.ExecutionPayloadIncluded)
+	require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadIncludedHeader))
+
+	var block structs.BeaconBlockGloas
+	require.NoError(t, json.Unmarshal(resp.Data, &block))
+	assert.NotNil(t, block.Body)
+}
+
 func TestProduceBlockV4_PreGloasSlotRejected(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -274,6 +315,7 @@ func TestProduceBlockV4_SSZ_IncludePayloadTrue(t *testing.T) {
 	assert.Equal(t, true, writer.Body.Len() > 0)
 }
 
+// GET returns blinded SSZ that must roundtrip with HTR matching the full envelope.
 func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -288,8 +330,10 @@ func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 	)
 
 	server := &Server{V1Alpha1Server: v1alpha1Server}
-	request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/validator/execution_payload_envelope/1", nil)
+	bbrHex := hexutil.Encode(envelope.BeaconBlockRoot)
+	request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/validator/execution_payload_envelope/1/"+bbrHex, nil)
 	request.SetPathValue("slot", "1")
+	request.SetPathValue("beacon_block_root", bbrHex)
 	request.Header.Set("Accept", "application/octet-stream")
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
@@ -297,9 +341,15 @@ func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 	assert.Equal(t, http.StatusOK, writer.Code)
 	assert.Equal(t, "application/octet-stream", writer.Header().Get("Content-Type"))
 	assert.Equal(t, version.String(version.Gloas), writer.Header().Get("Eth-Consensus-Version"))
-	expected, err := envelope.MarshalSSZ()
+	assert.Equal(t, "true", writer.Header().Get("Eth-Execution-Payload-Blinded"))
+
+	blinded := &eth.WireBlindedExecutionPayloadEnvelope{}
+	require.NoError(t, blinded.UnmarshalSSZ(writer.Body.Bytes()))
+	wantHTR, err := envelope.HashTreeRoot()
 	require.NoError(t, err)
-	assert.DeepEqual(t, expected, writer.Body.Bytes())
+	gotHTR, err := blinded.HashTreeRoot()
+	require.NoError(t, err)
+	assert.Equal(t, wantHTR, gotHTR)
 }
 
 func TestProduceBlockV4_SSZ_IncludePayloadFalse(t *testing.T) {
