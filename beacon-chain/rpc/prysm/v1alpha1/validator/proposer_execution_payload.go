@@ -141,6 +141,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 		if err != nil {
 			return nil, err
 		}
+		parentGasLimit := helpers.ParentTargetGasLimit(st)
 		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV4{
 			Timestamp:             uint64(t.Unix()),
 			PrevRandao:            random,
@@ -148,7 +149,7 @@ func (vs *Server) getLocalPayloadFromEngine(
 			Withdrawals:           withdrawals,
 			ParentBeaconBlockRoot: parentRoot[:],
 			SlotNumber:            uint64(slot),
-			TargetGasLimit:        val.GasLimitOrDefault(),
+			TargetGasLimit:        val.GasLimitOr(parentGasLimit),
 		})
 		if err != nil {
 			return nil, err

@@ -705,8 +705,10 @@ func TestComputePayloadAttributes_CacheMissEmitsDefaults(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	ctx := t.Context()
+	const parentGasLimit uint64 = 40_000_000
 	st, err := util.NewBeaconStateGloas(func(s *eth.BeaconStateGloas) error {
 		s.LatestExecutionPayloadBid.BlockHash = bytesutil.PadTo([]byte{0x01}, 32)
+		s.LatestExecutionPayloadBid.GasLimit = parentGasLimit
 		return nil
 	})
 	require.NoError(t, err)
@@ -724,7 +726,7 @@ func TestComputePayloadAttributes_CacheMissEmitsDefaults(t *testing.T) {
 
 	v4, err := attr.PbV4()
 	require.NoError(t, err)
-	require.Equal(t, cfg.DefaultBuilderGasLimit, v4.TargetGasLimit)
+	require.Equal(t, parentGasLimit, v4.TargetGasLimit)
 }
 
 func setActiveValidators(t *testing.T, st state.BeaconState, count int) {

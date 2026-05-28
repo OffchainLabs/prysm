@@ -145,6 +145,7 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 	}
 
 	feeRecipient := val.FeeRecipientOrDefault()
+	parentGasLimit := helpers.ParentTargetGasLimit(st)
 
 	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
 		Timestamp:             uint64(t.Unix()),
@@ -153,7 +154,7 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: headRoot,
 		SlotNumber:            uint64(slot),
-		TargetGasLimit:        val.GasLimitOrDefault(),
+		TargetGasLimit:        val.GasLimitOr(parentGasLimit),
 	})
 	if err != nil {
 		log.WithError(err).Error("Could not get payload attribute")

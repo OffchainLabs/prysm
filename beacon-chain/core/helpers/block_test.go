@@ -132,6 +132,35 @@ func TestBlockRootAtSlot_OutOfBounds(t *testing.T) {
 	}
 }
 
+func TestParentTargetGasLimit(t *testing.T) {
+	t.Run("pre-Gloas state returns default builder gas limit", func(t *testing.T) {
+		s, err := state_native.InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 1})
+		require.NoError(t, err)
+		assert.Equal(t, params.BeaconConfig().DefaultBuilderGasLimit, helpers.ParentTargetGasLimit(s))
+	})
+
+	t.Run("Gloas state with no bid returns default builder gas limit", func(t *testing.T) {
+		s, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{})
+		require.NoError(t, err)
+		assert.Equal(t, params.BeaconConfig().DefaultBuilderGasLimit, helpers.ParentTargetGasLimit(s))
+	})
+
+	t.Run("Gloas state with bid returns bid's gas limit", func(t *testing.T) {
+		s, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+			LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
+				ParentBlockHash: make([]byte, 32),
+				ParentBlockRoot: make([]byte, 32),
+				BlockHash:       make([]byte, 32),
+				PrevRandao:      make([]byte, 32),
+				FeeRecipient:    make([]byte, 20),
+				GasLimit:        42_000_000,
+			},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, uint64(42_000_000), helpers.ParentTargetGasLimit(s))
+	})
+}
+
 func TestProposerDependentRootOrGenesis(t *testing.T) {
 	ctx := context.Background()
 	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)

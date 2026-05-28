@@ -34,6 +34,18 @@ func ProposerDependentRootOrGenesis(ctx context.Context, db GenesisBlockRootRead
 	return st.ProposerDependentRoot(slot)
 }
 
+// ParentTargetGasLimit returns the parent execution payload's gas limit, used
+// as the payload-attributes fallback when the proposer has no signed
+// preference. Falls back to DefaultBuilderGasLimit on pre-Gloas states or
+// when no bid is cached (e.g. at genesis).
+func ParentTargetGasLimit(st state.ReadOnlyBeaconState) uint64 {
+	bid, err := st.LatestExecutionPayloadBid()
+	if err != nil || bid == nil {
+		return params.BeaconConfig().DefaultBuilderGasLimit
+	}
+	return bid.GasLimit()
+}
+
 // BlockRootAtSlot returns the block root stored in the BeaconState for a recent slot.
 // It returns an error if the requested block root is not within the slot range.
 //

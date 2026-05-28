@@ -37,12 +37,13 @@ func (p *ProposerPreference) FeeRecipientOrDefault() primitives.ExecutionAddress
 	return p.FeeRecipient
 }
 
-// GasLimitOrDefault returns the preference's TargetGasLimit, substituting
-// DefaultBuilderGasLimit when zero so payload attributes never advertise a
-// zero target to the EL.
-func (p *ProposerPreference) GasLimitOrDefault() uint64 {
+// GasLimitOr returns the preference's TargetGasLimit, substituting fallback
+// when zero. Callers pass the parent payload's gas limit so a cache miss
+// signals "no change" to the EL rather than nudging toward a configured
+// network default.
+func (p *ProposerPreference) GasLimitOr(fallback uint64) uint64 {
 	if p.TargetGasLimit == 0 {
-		return params.BeaconConfig().DefaultBuilderGasLimit
+		return fallback
 	}
 	return p.TargetGasLimit
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -685,15 +686,15 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 	// isn't cached. On total miss emit the BN's configured defaults so SSE
 	// matches what FCU will actually send to the EL.
 	feeRecpt := primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
-	gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
+	var pref *cache.ProposerPreference
 	if dependentRoot, err := helpers.ProposerDependentRootOrGenesis(ctx, s.BeaconDB, st, slot); err == nil {
-		if pref, ok := s.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposer); ok {
-			feeRecpt = pref.FeeRecipientOrDefault()
-			gasLimit = pref.GasLimitOrDefault()
+		if p, ok := s.ProposerPreferencesCache.BestFor(dependentRoot, slot, proposer); ok {
+			pref = &p
+			feeRecpt = p.FeeRecipientOrDefault()
 		}
-	} else if pref, ok := s.ProposerPreferencesCache.Default(proposer); ok {
-		feeRecpt = pref.FeeRecipientOrDefault()
-		gasLimit = pref.GasLimitOrDefault()
+	} else if p, ok := s.ProposerPreferencesCache.Default(proposer); ok {
+		pref = &p
+		feeRecpt = p.FeeRecipientOrDefault()
 	}
 
 	if v == version.Bellatrix {
@@ -735,6 +736,11 @@ func (s *Server) computePayloadAttributes(ctx context.Context, st state.ReadOnly
 		})
 	}
 
+	parentGasLimit := helpers.ParentTargetGasLimit(st)
+	gasLimit := parentGasLimit
+	if pref != nil {
+		gasLimit = pref.GasLimitOr(parentGasLimit)
+	}
 	return payloadattribute.New(&engine.PayloadAttributesV4{
 		Timestamp:             timestamp,
 		PrevRandao:            randao,

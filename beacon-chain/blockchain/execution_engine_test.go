@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
@@ -813,6 +814,43 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 			require.Equal(t, hr, [32]byte(attrV3.ParentBeaconBlockRoot))
 		})
 	}
+}
+
+func Test_GetPayloadAttribute_GloasParentGasLimitFallback(t *testing.T) {
+	const parentGasLimit uint64 = 40_000_000
+
+	st, _ := util.DeterministicGenesisStateGloas(t, 1)
+	bid, err := st.LatestExecutionPayloadBid()
+	require.NoError(t, err)
+	require.NotNil(t, bid)
+	blockHash := bid.BlockHash()
+	updated := &ethpb.ExecutionPayloadBid{
+		ParentBlockHash:       bytesutil.PadTo([]byte{}, 32),
+		ParentBlockRoot:       bytesutil.PadTo([]byte{}, 32),
+		BlockHash:             blockHash[:],
+		PrevRandao:            bytesutil.PadTo([]byte{}, 32),
+		FeeRecipient:          bytesutil.PadTo([]byte{}, 20),
+		ExecutionRequestsRoot: bytesutil.PadTo([]byte{}, 32),
+		GasLimit:              parentGasLimit,
+	}
+	wrapped, err := consensusblocks.WrappedROExecutionPayloadBid(updated)
+	require.NoError(t, err)
+	require.NoError(t, st.SetExecutionPayloadBid(wrapped))
+
+	service, tr := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
+	ctx := tr.ctx
+
+	proposerIdx, err := helpers.BeaconProposerIndexAtSlot(ctx, st, 1)
+	require.NoError(t, err)
+	service.cfg.SubscribedValidatorsCache.Add(proposerIdx)
+	slot := primitives.Slot(1)
+	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
+
+	attr := service.getPayloadAttribute(ctx, st, slot, params.BeaconConfig().ZeroHash[:], false)
+	require.Equal(t, false, attr.IsEmpty())
+	v4, err := attr.PbV4()
+	require.NoError(t, err)
+	require.Equal(t, parentGasLimit, v4.TargetGasLimit)
 }
 
 func Test_UpdateLastValidatedCheckpoint(t *testing.T) {
