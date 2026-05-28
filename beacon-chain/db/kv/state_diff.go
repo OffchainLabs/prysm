@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/hdiff"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
 )
@@ -155,6 +156,7 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	if err != nil {
 		return err
 	}
+	compressed := snappy.Encode(nil, enc)
 
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
@@ -162,7 +164,7 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 			return bolt.ErrBucketNotFound
 		}
 
-		if err := bucket.Put(key, enc); err != nil {
+		if err := bucket.Put(key, compressed); err != nil {
 			return err
 		}
 
@@ -230,7 +232,7 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 
 func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 	key := makeKeyForStateDiffTree(0, slot)
-	var enc []byte
+	var compressed []byte
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
@@ -241,10 +243,14 @@ func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 		if rawEnc == nil {
 			return errSnapshotNotFound
 		}
-		enc = slices.Clone(rawEnc)
+		compressed = slices.Clone(rawEnc)
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
+	enc, err := snappy.Decode(nil, compressed)
 	if err != nil {
 		return nil, err
 	}
