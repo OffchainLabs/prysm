@@ -140,6 +140,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 				continue
 			}
 			if !isParentBlockInDB {
+				go s.requestPayloadEnvelope(parentRoot)
 				continue
 			}
 			if !s.cfg.chain.ParentPayloadReady(b.Block()) {
