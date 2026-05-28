@@ -67,9 +67,20 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 				return
 			}
 
+			signedBlock, err := s.cfg.beaconDB.Block(ctx, root)
+			if err != nil {
+				log.WithError(err).Error("Failed to get block for data column reconstruction")
+				return
+			}
+			roBlock, err := blocks.NewROBlockWithRoot(signedBlock, root)
+			if err != nil {
+				log.WithError(err).Error("Failed to wrap block for data column reconstruction")
+				return
+			}
+
 			// Reconstruct all the data column sidecars.
 			startTime := time.Now()
-			reconstructedSidecars, err := peerdas.ReconstructDataColumnSidecars(verifiedSidecars)
+			reconstructedSidecars, err := peerdas.ReconstructDataColumnSidecars(verifiedSidecars, roBlock)
 			if err != nil {
 				log.WithError(err).Error("Failed to reconstruct data column sidecars")
 				return

@@ -28,27 +28,27 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("empty input", func(t *testing.T) {
-		_, err := peerdas.ReconstructDataColumnSidecars(nil)
+		_, err := peerdas.ReconstructDataColumnSidecars(nil, blocks.ROBlock{})
 		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
 	})
 
 	t.Run("columns lengths differ", func(t *testing.T) {
-		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
+		roBlock, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
 
 		// Arbitrarily alter the column with index 3
 		verifiedRoSidecars[3].DataColumnSidecar().Column = verifiedRoSidecars[3].DataColumnSidecar().Column[1:]
 
-		_, err := peerdas.ReconstructDataColumnSidecars(verifiedRoSidecars)
+		_, err := peerdas.ReconstructDataColumnSidecars(verifiedRoSidecars, roBlock)
 		require.ErrorIs(t, err, peerdas.ErrColumnLengthsDiffer)
 	})
 
 	t.Run("roots differ", func(t *testing.T) {
-		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3, util.WithParentRoot([fieldparams.RootLength]byte{1}))
+		roBlock, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3, util.WithParentRoot([fieldparams.RootLength]byte{1}))
 		_, _, verifiedRoSidecarsAlter := util.GenerateTestFuluBlockWithSidecars(t, 3, util.WithParentRoot([fieldparams.RootLength]byte{2}))
 
 		// Arbitrarily alter the column with index 3
 		verifiedRoSidecars[3] = verifiedRoSidecarsAlter[3]
-		_, err := peerdas.ReconstructDataColumnSidecars(verifiedRoSidecars)
+		_, err := peerdas.ReconstructDataColumnSidecars(verifiedRoSidecars, roBlock)
 		require.ErrorIs(t, err, peerdas.ErrBlockRootMismatch)
 	})
 
@@ -66,16 +66,16 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	block.Body.BlobKzgCommitments = commitments
 
 	t.Run("not enough columns to enable reconstruction", func(t *testing.T) {
-		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
+		roBlock, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
 
 		minimum := peerdas.MinimumColumnCountToReconstruct()
-		_, err := peerdas.ReconstructDataColumnSidecars(verifiedRoSidecars[:minimum-1])
+		_, err := peerdas.ReconstructDataColumnSidecars(verifiedRoSidecars[:minimum-1], roBlock)
 		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
 	})
 
 	t.Run("nominal", func(t *testing.T) {
 		// Build a full set of verified data column sidecars.
-		_, _, inputVerifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
+		roBlock, _, inputVerifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
 
 		// Arbitrarily keep only the even sicars.
 		filteredVerifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(inputVerifiedRoSidecars)/2)
@@ -84,7 +84,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		}
 
 		// Reconstruct the data column sidecars.
-		reconstructedVerifiedRoSidecars, err := peerdas.ReconstructDataColumnSidecars(filteredVerifiedRoSidecars)
+		reconstructedVerifiedRoSidecars, err := peerdas.ReconstructDataColumnSidecars(filteredVerifiedRoSidecars, roBlock)
 		require.NoError(t, err)
 
 		// Verify that the reconstructed sidecars are equal to the original ones.

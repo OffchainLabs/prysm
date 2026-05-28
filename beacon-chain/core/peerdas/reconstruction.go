@@ -141,19 +141,15 @@ func recoverCellsAndProofsForBlobs(verifiedRoSidecars []blocks.VerifiedRODataCol
 // All input sidecars must be committed to the same block.
 // `inVerifiedRoSidecars` should contain enough sidecars to reconstruct the missing columns, and should not contain any duplicate.
 // WARNING: This function sorts inplace `verifiedRoSidecars` by index.
-func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
-	// Check if there is at least one input sidecar.
+func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataColumn, block blocks.ROBlock) ([]blocks.VerifiedRODataColumn, error) {
 	if len(verifiedRoSidecars) == 0 {
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
 
-	// Safely retrieve the first sidecar as a reference.
 	referenceSidecar := verifiedRoSidecars[0]
-
-	// Check if all columns have the same length and are commmitted to the same block.
 	blobCount := len(referenceSidecar.Column())
-	blockRoot := referenceSidecar.BlockRoot()
-	for _, sidecar := range verifiedRoSidecars[1:] {
+	blockRoot := block.Root()
+	for _, sidecar := range verifiedRoSidecars {
 		if len(sidecar.Column()) != blobCount {
 			return nil, ErrColumnLengthsDiffer
 		}
@@ -163,18 +159,15 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 		}
 	}
 
-	// Check if there is enough sidecars to reconstruct the missing columns.
 	sidecarCount := len(verifiedRoSidecars)
 	if uint64(sidecarCount) < MinimumColumnCountToReconstruct() {
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
 
-	// Sort the input sidecars by index.
 	sort.Slice(verifiedRoSidecars, func(i, j int) bool {
 		return verifiedRoSidecars[i].Index() < verifiedRoSidecars[j].Index()
 	})
 
-	// Recover cells and compute proofs in parallel.
 	blobIndices := make([]int, blobCount)
 	for i := range blobIndices {
 		blobIndices[i] = i
@@ -184,7 +177,7 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 		return nil, errors.Wrap(err, "recover cells and proofs for blobs")
 	}
 
-	outSidecars, err := DataColumnSidecars(cellsPerBlob, proofsPerBlob, PopulateFromSidecar(referenceSidecar))
+	outSidecars, err := DataColumnSidecars(cellsPerBlob, proofsPerBlob, PopulateFromBlock(block))
 	if err != nil {
 		return nil, errors.Wrap(err, "data column sidecars from items")
 	}
@@ -203,7 +196,7 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 // reconstructIfNeeded validates the input data column sidecars and returns the prepared sidecars
 // (reconstructed if necessary). This function performs common validation and reconstruction logic used by
 // both ReconstructBlobs and ReconstructBlobSidecars.
-func reconstructIfNeeded(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
+func reconstructIfNeeded(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
 	if len(verifiedDataColumnSidecars) == 0 {
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
@@ -231,7 +224,7 @@ func reconstructIfNeeded(verifiedDataColumnSidecars []blocks.VerifiedRODataColum
 	}
 
 	// We need to reconstruct the data column sidecars.
-	return ReconstructDataColumnSidecars(verifiedDataColumnSidecars)
+	return ReconstructDataColumnSidecars(verifiedDataColumnSidecars, block)
 }
 
 // ReconstructBlobSidecars constructs verified read only blobs sidecars from verified read only blob sidecars.
@@ -248,7 +241,7 @@ func ReconstructBlobSidecars(block blocks.ROBlock, verifiedDataColumnSidecars []
 
 	// Validate and prepare data columns (reconstruct if necessary).
 	// This also checks if input is empty.
-	preparedDataColumnSidecars, err := reconstructIfNeeded(verifiedDataColumnSidecars)
+	preparedDataColumnSidecars, err := reconstructIfNeeded(block, verifiedDataColumnSidecars)
 	if err != nil {
 		return nil, err
 	}

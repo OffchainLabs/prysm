@@ -80,6 +80,7 @@ func FetchDataColumnSidecars(
 	storedIndicesByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, blockCount)
 
 	commitmentsByRoot := make(map[[fieldparams.RootLength]byte][][]byte, blockCount)
+	blocksByRoot := make(map[[fieldparams.RootLength]byte]blocks.ROBlock, blockCount)
 
 	for _, roBlock := range roBlocks {
 		block := roBlock.Block()
@@ -100,6 +101,7 @@ func FetchDataColumnSidecars(
 		slotByRoot[root] = slot
 		slotsWithCommitments[slot] = true
 		commitmentsByRoot[root] = commitments
+		blocksByRoot[root] = roBlock
 
 		storedIndices := params.Storage.Summary(root).Stored()
 		if len(storedIndices) > 0 {
@@ -129,7 +131,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Merge sidecars in storage and those received from peers. Reconstruct if needed.
-	mergedSidecarsByRoot, err := mergeAvailableSidecars(params.Storage, requestedIndices, storedIndicesByRoot, incompleteRoots, directSidecarsByRoot)
+	mergedSidecarsByRoot, err := mergeAvailableSidecars(params.Storage, requestedIndices, storedIndicesByRoot, incompleteRoots, blocksByRoot, directSidecarsByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "try merge storage and mandatory inputs")
 	}
@@ -148,7 +150,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Merge sidecars in storage and those received from peers. Reconstruct if needed.
-	mergedSidecarsByRoot, err = mergeAvailableSidecars(params.Storage, requestedIndices, storedIndicesByRoot, incompleteRoots, indirectSidecarsByRoot)
+	mergedSidecarsByRoot, err = mergeAvailableSidecars(params.Storage, requestedIndices, storedIndicesByRoot, incompleteRoots, blocksByRoot, indirectSidecarsByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "try merge storage and all inputs")
 	}
@@ -490,6 +492,7 @@ func mergeAvailableSidecars(
 	requestedIndices map[uint64]bool,
 	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	roots map[[fieldparams.RootLength]byte]bool,
+	blocksByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
@@ -526,6 +529,11 @@ func mergeAvailableSidecars(
 
 		// Reconstruct if reconstruction is needed and possible.
 		if isReconstructionNeeded && isReconstructionPossible {
+			block, ok := blocksByRoot[root]
+			if !ok {
+				return nil, errors.Errorf("no block available for reconstruction at root %#x", root)
+			}
+
 			// Load all we have in the store.
 			stored, err := storage.Get(root, nil)
 			if err != nil {
@@ -537,7 +545,7 @@ func mergeAvailableSidecars(
 			allAvailable = append(allAvailable, alreadyAvailable...)
 
 			// Attempt reconstruction.
-			reconstructedSidecars, err := peerdas.ReconstructDataColumnSidecars(allAvailable)
+			reconstructedSidecars, err := peerdas.ReconstructDataColumnSidecars(allAvailable, block)
 			if err != nil {
 				return nil, errors.Wrapf(err, "reconstruct data column sidecars for root %#x", root)
 			}
