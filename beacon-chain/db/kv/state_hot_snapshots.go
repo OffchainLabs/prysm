@@ -94,16 +94,15 @@ func (s *Store) ClearHotStateSnapshots(ctx context.Context) error {
 	defer span.End()
 
 	return s.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(hotStateSnapshotsBucket)
-		if bkt == nil {
+		if tx.Bucket(hotStateSnapshotsBucket) == nil {
 			return bolt.ErrBucketNotFound
 		}
-		c := bkt.Cursor()
-		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			if err := c.Delete(); err != nil {
-				return err
-			}
+
+		if err := tx.DeleteBucket(hotStateSnapshotsBucket); err != nil {
+			return err
 		}
-		return nil
+
+		_, err := tx.CreateBucket(hotStateSnapshotsBucket)
+		return err
 	})
 }
