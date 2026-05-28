@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -102,13 +103,19 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 			continue
 		}
 
+		saveStart := time.Now()
 		if err := s.beaconDB.SaveState(ctx, aState, aRoot); err != nil {
 			return err
 		}
+
+		duration := time.Since(saveStart)
+		saveStateToColdSummary.Observe(float64(duration.Milliseconds()))
+
 		log.WithFields(
 			logrus.Fields{
-				"slot": aState.Slot(),
-				"root": hex.EncodeToString(bytesutil.Trunc(aRoot[:])),
+				"slot":     aState.Slot(),
+				"root":     hex.EncodeToString(bytesutil.Trunc(aRoot[:])),
+				"duration": duration,
 			}).Info("Saved state in DB")
 	}
 

@@ -9,6 +9,7 @@ import (
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	mockstategen "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
@@ -16,6 +17,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -350,5 +352,84 @@ func TestPayloadAttestationData(t *testing.T) {
 		for i := 1; i < callers; i++ {
 			assert.Equal(t, true, results[0] == results[i])
 		}
+	})
+}
+
+func TestValidatorActiveSetChanges(t *testing.T) {
+	t.Run("future epoch", func(t *testing.T) {
+		currentSlot, err := slots.EpochStart(primitives.Epoch(3))
+		require.NoError(t, err)
+		chain := &mockChain.ChainService{Slot: &currentSlot}
+		s := &Service{GenesisTimeFetcher: chain}
+
+		_, rpcErr := s.ValidatorActiveSetChanges(t.Context(), primitives.Epoch(4))
+		require.NotNil(t, rpcErr)
+		assert.Equal(t, ErrorReason(BadRequest), rpcErr.Reason)
+		assert.ErrorContains(t, "cannot retrieve information about an epoch in the future, current epoch 3, requesting 4", rpcErr.Err)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		const numValidators = 8
+
+		validators := make([]*ethpb.Validator, numValidators)
+		for i := range validators {
+			activationEpoch := params.BeaconConfig().FarFutureEpoch
+			withdrawableEpoch := params.BeaconConfig().FarFutureEpoch
+			exitEpoch := params.BeaconConfig().FarFutureEpoch
+			slashed := false
+			balance := params.BeaconConfig().MaxEffectiveBalance
+			switch {
+			case i%2 == 0:
+				// Activated at epoch 0.
+				activationEpoch = 0
+			case i%3 == 0:
+				// Slashed.
+				withdrawableEpoch = params.BeaconConfig().EpochsPerSlashingsVector
+				slashed = true
+			case i%5 == 0:
+				// Exited at epoch 0.
+				exitEpoch = 0
+				withdrawableEpoch = params.BeaconConfig().MinValidatorWithdrawabilityDelay
+			case i%7 == 0:
+				// Ejected at epoch 0 (effective balance at ejection threshold).
+				exitEpoch = 0
+				withdrawableEpoch = params.BeaconConfig().MinValidatorWithdrawabilityDelay
+				balance = params.BeaconConfig().EjectionBalance
+			}
+			validators[i] = &ethpb.Validator{
+				ActivationEpoch:       activationEpoch,
+				PublicKey:             pubKey(uint64(i)),
+				EffectiveBalance:      balance,
+				WithdrawalCredentials: make([]byte, 32),
+				WithdrawableEpoch:     withdrawableEpoch,
+				Slashed:               slashed,
+				ExitEpoch:             exitEpoch,
+			}
+		}
+
+		headState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, headState.SetSlot(0))
+		require.NoError(t, headState.SetValidators(validators))
+
+		slot := primitives.Slot(0)
+		chain := &mockChain.ChainService{Slot: &slot}
+		s := &Service{
+			GenesisTimeFetcher: chain,
+			ReplayerBuilder:    mockstategen.NewReplayerBuilder(mockstategen.WithMockState(headState)),
+		}
+
+		res, rpcErr := s.ValidatorActiveSetChanges(t.Context(), primitives.Epoch(0))
+		require.IsNil(t, rpcErr)
+
+		assert.Equal(t, primitives.Epoch(0), res.Epoch)
+		assert.DeepEqual(t, []primitives.ValidatorIndex{0, 2, 4, 6}, res.ActivatedIndices)
+		assert.DeepEqual(t, [][]byte{pubKey(0), pubKey(2), pubKey(4), pubKey(6)}, res.ActivatedPublicKeys)
+		assert.DeepEqual(t, []primitives.ValidatorIndex{5}, res.ExitedIndices)
+		assert.DeepEqual(t, [][]byte{pubKey(5)}, res.ExitedPublicKeys)
+		assert.DeepEqual(t, []primitives.ValidatorIndex{3}, res.SlashedIndices)
+		assert.DeepEqual(t, [][]byte{pubKey(3)}, res.SlashedPublicKeys)
+		assert.DeepEqual(t, []primitives.ValidatorIndex{7}, res.EjectedIndices)
+		assert.DeepEqual(t, [][]byte{pubKey(7)}, res.EjectedPublicKeys)
 	})
 }
