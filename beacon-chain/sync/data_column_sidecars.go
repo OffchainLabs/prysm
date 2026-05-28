@@ -28,6 +28,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var ErrSidecarHeaderMismatch = errors.New("data column sidecar signed block header does not match local block")
+
 // DataColumnSidecarsParams stores the common parameters needed to
 // fetch data column sidecars from peers.
 type DataColumnSidecarsParams struct {
@@ -80,6 +82,7 @@ func FetchDataColumnSidecars(
 	storedIndicesByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, blockCount)
 
 	commitmentsByRoot := make(map[[fieldparams.RootLength]byte][][]byte, blockCount)
+	blockByRoot := make(map[[fieldparams.RootLength]byte]blocks.ROBlock, blockCount)
 
 	for _, roBlock := range roBlocks {
 		block := roBlock.Block()
@@ -100,6 +103,7 @@ func FetchDataColumnSidecars(
 		slotByRoot[root] = slot
 		slotsWithCommitments[slot] = true
 		commitmentsByRoot[root] = commitments
+		blockByRoot[root] = roBlock
 
 		storedIndices := params.Storage.Summary(root).Stored()
 		if len(storedIndices) > 0 {
@@ -123,7 +127,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Request direct sidecars from peers.
-	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, slotByRoot, requestedIndices, slotsWithCommitments, storedIndicesByRoot, incompleteRoots, commitmentsByRoot)
+	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, slotByRoot, requestedIndices, slotsWithCommitments, storedIndicesByRoot, incompleteRoots, commitmentsByRoot, blockByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "request direct sidecars from peers")
 	}
@@ -142,7 +146,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Request all possible indirect sidecars from peers which are neither stored nor in `directSidecarsByRoot`
-	indirectSidecarsByRoot, err := requestIndirectSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, storedIndicesByRoot, directSidecarsByRoot, requestedIndices, incompleteRoots, commitmentsByRoot)
+	indirectSidecarsByRoot, err := requestIndirectSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, storedIndicesByRoot, directSidecarsByRoot, requestedIndices, incompleteRoots, commitmentsByRoot, blockByRoot)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "request all sidecars from peers")
 	}
@@ -234,6 +238,7 @@ func requestDirectSidecarsFromPeers(
 	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	incompleteRoots map[[fieldparams.RootLength]byte]bool,
 	commitmentsByRoot map[[fieldparams.RootLength]byte][][]byte,
+	blockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	start := time.Now()
 
@@ -294,7 +299,7 @@ func requestDirectSidecarsFromPeers(
 		setBidCommitments(commitmentsByRoot, roDataColumnsByPeer)
 
 		// Verify the received data column sidecars.
-		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(params.P2P, params.NewVerifier, roDataColumnsByPeer)
+		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(params.P2P, params.NewVerifier, blockByRoot, roDataColumnsByPeer)
 		if err != nil {
 			return nil, errors.Wrap(err, "verify data columns sidecars by peer")
 		}
@@ -344,6 +349,7 @@ func requestIndirectSidecarsFromPeers(
 	requestedIndices map[uint64]bool,
 	roots map[[fieldparams.RootLength]byte]bool,
 	commitmentsByRoot map[[fieldparams.RootLength]byte][][]byte,
+	blockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	start := time.Now()
 
@@ -416,7 +422,7 @@ func requestIndirectSidecarsFromPeers(
 		setBidCommitments(commitmentsByRoot, roDataColumnsByPeer)
 
 		// Verify the received data column sidecars.
-		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(p.P2P, p.NewVerifier, roDataColumnsByPeer)
+		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(p.P2P, p.NewVerifier, blockByRoot, roDataColumnsByPeer)
 		if err != nil {
 			return nil, errors.Wrap(err, "verify data columns sidecars by peer")
 		}
@@ -962,6 +968,7 @@ func buildByRootRequest(indicesByRoot map[[fieldparams.RootLength]byte]map[uint6
 func verifyDataColumnSidecarsByPeer(
 	p2p prysmP2P.P2P,
 	newVerifier verification.NewDataColumnsVerifier,
+	blockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	roDataColumnsByPeer map[goPeer.ID][]blocks.RODataColumn,
 ) ([]blocks.VerifiedRODataColumn, error) {
 	// First optimistically verify all received data columns in a single batch.
@@ -975,7 +982,7 @@ func verifyDataColumnSidecarsByPeer(
 		roDataColumnSidecars = append(roDataColumnSidecars, columns...)
 	}
 
-	verifiedRoDataColumnSidecars, err := verifyByRootDataColumnSidecars(newVerifier, roDataColumnSidecars)
+	verifiedRoDataColumnSidecars, err := verifyByRootDataColumnSidecars(newVerifier, blockByRoot, roDataColumnSidecars)
 	if err == nil {
 		// This is the happy path where all sidecars are verified.
 		return verifiedRoDataColumnSidecars, nil
@@ -985,7 +992,7 @@ func verifyDataColumnSidecarsByPeer(
 	// Reverify peer by peer to identify faulty peer(s), reject all its sidecars, and downscore it.
 	verifiedRoDataColumnSidecars = make([]blocks.VerifiedRODataColumn, 0, count)
 	for peer, columns := range roDataColumnsByPeer {
-		peerVerifiedRoDataColumnSidecars, err := verifyByRootDataColumnSidecars(newVerifier, columns)
+		peerVerifiedRoDataColumnSidecars, err := verifyByRootDataColumnSidecars(newVerifier, blockByRoot, columns)
 		if err != nil {
 			// This peer has invalid sidecars.
 			log := log.WithError(err).WithField("peerID", peer)
@@ -1002,7 +1009,11 @@ func verifyDataColumnSidecarsByPeer(
 
 // verifyByRootDataColumnSidecars verifies the provided read-only data columns against the
 // requirements for data column sidecars received via the by root request.
-func verifyByRootDataColumnSidecars(newVerifier verification.NewDataColumnsVerifier, roDataColumns []blocks.RODataColumn) ([]blocks.VerifiedRODataColumn, error) {
+func verifyByRootDataColumnSidecars(
+	newVerifier verification.NewDataColumnsVerifier,
+	blockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
+	roDataColumns []blocks.RODataColumn,
+) ([]blocks.VerifiedRODataColumn, error) {
 	verifier := newVerifier(roDataColumns, verification.ByRootRequestDataColumnSidecarRequirements)
 
 	if err := verifier.ValidFields(); err != nil {
@@ -1015,6 +1026,17 @@ func verifyByRootDataColumnSidecars(newVerifier verification.NewDataColumnsVerif
 
 	if err := verifier.SidecarKzgProofVerified(); err != nil {
 		return nil, errors.Wrap(err, "sidecar KZG proof verified")
+	}
+
+	for _, sidecar := range roDataColumns {
+		block, ok := blockByRoot[sidecar.BlockRoot()]
+		if !ok {
+			return nil, fmt.Errorf("no local block for sidecar root %#x: %w", sidecar.BlockRoot(), ErrSidecarHeaderMismatch)
+		}
+
+		if err := verifySidecarHeaderMatchesBlock(sidecar, block); err != nil {
+			return nil, fmt.Errorf("root %#x: %w", sidecar.BlockRoot(), err)
+		}
 	}
 
 	verifiedRoDataColumns, err := verifier.VerifiedRODataColumns()
@@ -1222,4 +1244,24 @@ func computeTotalCount(input map[[fieldparams.RootLength]byte]map[uint64]bool) i
 		totalCount += len(indices)
 	}
 	return totalCount
+}
+
+// verifySidecarHeaderMatchesBlock checks that the signature in the sidecar's embedded SignedBlockHeader matches the block's signature.
+func verifySidecarHeaderMatchesBlock(sidecar blocks.RODataColumn, block blocks.ROBlock) error {
+	// Gloas sidecars do not include a SignedBlockHeader.
+	if sidecar.IsGloas() {
+		return nil
+	}
+
+	sidecarHeader, err := sidecar.SignedBlockHeader()
+	if err != nil {
+		return fmt.Errorf("signed block header: %w", err)
+	}
+
+	blockSignature := block.Signature()
+	if !bytes.Equal(sidecarHeader.Signature, blockSignature[:]) {
+		return ErrSidecarHeaderMismatch
+	}
+
+	return nil
 }
