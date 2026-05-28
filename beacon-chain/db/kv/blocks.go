@@ -496,6 +496,9 @@ func (s *Store) DeleteBlock(ctx context.Context, root [32]byte) error {
 func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot primitives.Slot, batchSize int) (int, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.DeleteHistoricalDataBeforeSlot")
 	defer span.End()
+	if s == nil || s.db == nil {
+		return 0, errors.New("store is nil")
+	}
 
 	// Collect slot/root pairs to perform deletions in a separate read only transaction.
 	slotRoots, err := s.slotRootsInRange(ctx, primitives.Slot(0), cutoffSlot, batchSize)
