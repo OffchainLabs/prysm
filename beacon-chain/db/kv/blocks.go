@@ -72,6 +72,9 @@ func (s *Store) getBlock(ctx context.Context, blockRoot [32]byte, tx *bolt.Tx) (
 func (s *Store) OriginCheckpointBlockRoot(ctx context.Context) ([32]byte, error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.OriginCheckpointBlockRoot")
 	defer span.End()
+	if s == nil || s.db == nil {
+		return [32]byte{}, errors.New("store is nil")
+	}
 
 	var root [32]byte
 	err := s.db.View(func(tx *bolt.Tx) error {
@@ -803,6 +806,9 @@ func (s *Store) SaveGenesisBlockRoot(ctx context.Context, blockRoot [32]byte) er
 func (s *Store) SaveOriginCheckpointBlockRoot(ctx context.Context, blockRoot [32]byte) error {
 	_, span := trace.StartSpan(ctx, "BeaconDB.SaveOriginCheckpointBlockRoot")
 	defer span.End()
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(blocksBucket)
 		return bucket.Put(originCheckpointBlockRootKey, blockRoot[:])
