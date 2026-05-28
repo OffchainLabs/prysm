@@ -6,7 +6,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/fulu"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
@@ -200,7 +199,7 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err != nil {
 		return err
 	}
-	if err := fulu.ProcessProposerLookahead(ctx, state); err != nil {
+	if err := gloas.ProcessProposerLookahead(ctx, state); err != nil {
 		return err
 	}
 	return gloas.ProcessPTCWindow(ctx, state)

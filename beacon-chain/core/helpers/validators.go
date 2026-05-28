@@ -154,6 +154,27 @@ func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, ep
 	return indices, nil
 }
 
+// ActiveNonSlashedValidatorIndices returns the indices of validators that are
+// both active at ``epoch`` and not slashed. It is used to build the
+// EIP-8045 proposer lookahead.
+//
+// Spec pseudocode definition (EIP-8045):
+//
+//	indices = [i for i in get_active_validator_indices(state, epoch)
+//	           if not state.validators[i].slashed]
+func ActiveNonSlashedValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]primitives.ValidatorIndex, error) {
+	_, span := trace.StartSpan(ctx, "helpers.ActiveNonSlashedValidatorIndices")
+	defer span.End()
+
+	var indices []primitives.ValidatorIndex
+	for idx, val := range s.ValidatorsReadOnlySeq() {
+		if IsActiveNonSlashedValidatorUsingTrie(val, epoch) {
+			indices = append(indices, idx)
+		}
+	}
+	return indices, nil
+}
+
 // ActiveValidatorCount returns the number of active validators in the state
 // at the given epoch.
 func ActiveValidatorCount(ctx context.Context, s state.ReadOnlyBeaconState, epoch primitives.Epoch) (uint64, error) {
