@@ -291,6 +291,9 @@ func (b *BeaconState) UpdateBuilderAtIndex(index primitives.BuilderIndex, builde
 	if b.version < version.Gloas {
 		return errNotSupported("UpdateBuilderAtIndex", b.version)
 	}
+	if builder == nil {
+		return errors.New("builder is nil")
+	}
 
 	b.lock.Lock()
 	defer b.lock.Unlock()
