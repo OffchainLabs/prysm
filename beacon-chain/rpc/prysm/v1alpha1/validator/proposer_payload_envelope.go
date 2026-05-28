@@ -90,7 +90,7 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request cannot be nil")
 	}
-	span.SetAttributes(trace.Int64Attribute("slot", int64(req.Slot))) // lint:ignore uintcast -- safe for tracing.
+	span.SetAttributes(trace.StringAttribute("slot", fmt.Sprintf("%d", req.Slot)))
 
 	if slots.ToEpoch(req.Slot) < params.BeaconConfig().GloasForkEpoch {
 		return nil, status.Errorf(codes.InvalidArgument,
@@ -131,8 +131,8 @@ func (vs *Server) PublishExecutionPayloadEnvelope(
 
 	beaconBlockRoot := bytesutil.ToBytes32(req.Message.BeaconBlockRoot)
 	span.SetAttributes(
-		trace.Int64Attribute("slot", int64(envSlot)),                          // lint:ignore uintcast -- safe for tracing.
-		trace.Int64Attribute("builderIndex", int64(req.Message.BuilderIndex)), // lint:ignore uintcast -- safe for tracing.
+		trace.StringAttribute("slot", fmt.Sprintf("%d", envSlot)),
+		trace.StringAttribute("builderIndex", fmt.Sprintf("%d", req.Message.BuilderIndex)),
 		trace.StringAttribute("beaconBlockRoot", fmt.Sprintf("%#x", beaconBlockRoot[:8])),
 	)
 
