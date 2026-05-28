@@ -819,7 +819,7 @@ func Test_GetPayloadAttributeV3(t *testing.T) {
 func Test_GetPayloadAttribute_GloasParentGasLimitFallback(t *testing.T) {
 	const parentGasLimit uint64 = 40_000_000
 
-	st, _ := util.DeterministicGenesisStateGloas(t, 1)
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
 	bid, err := st.LatestExecutionPayloadBid()
 	require.NoError(t, err)
 	require.NotNil(t, bid)
