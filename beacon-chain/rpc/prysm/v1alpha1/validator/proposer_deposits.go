@@ -87,6 +87,11 @@ func (vs *Server) deposits(
 		return []*ethpb.Deposit{}, nil
 	}
 
+	// Legacy deposits are removed from Fulu onward (consensus-specs#4704).
+	if beaconState.Version() >= version.Fulu {
+		return []*ethpb.Deposit{}, nil
+	}
+
 	if !vs.Eth1InfoFetcher.ExecutionClientConnected() {
 		log.Warn("Not connected to eth1 node, skip pending deposit insertion")
 		return []*ethpb.Deposit{}, nil

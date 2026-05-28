@@ -130,11 +130,12 @@ func TestGloasOperations_ProcessingErrors(t *testing.T) {
 		},
 
 		{
-			name: "ErrProcessDepositsFailed – empty merkle proof",
+			// Legacy eth1 deposits are rejected post-Fulu (consensus-specs#4704).
+			name: "ErrProcessDepositsFailed – legacy deposits rejected",
 			modifyBlk: func(b *ethpb.BeaconBlockBodyGloas) {
 				b.Deposits = []*ethpb.Deposit{
 					{
-						Proof: [][]byte{}, // invalid: proof must not be empty
+						Proof: make([][]byte, 33),
 						Data: &ethpb.Deposit_Data{
 							PublicKey:             make([]byte, 48),
 							WithdrawalCredentials: make([]byte, 32),
@@ -145,7 +146,7 @@ func TestGloasOperations_ProcessingErrors(t *testing.T) {
 				}
 			},
 			errSentinel: transition.ErrProcessDepositsFailed,
-			errSubstr:   "process deposits failed",
+			errSubstr:   "legacy deposits not allowed post-Fulu",
 		},
 
 		{

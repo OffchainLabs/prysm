@@ -214,3 +214,32 @@ func TestElectraOperations_ProcessingErrors(t *testing.T) {
 		})
 	}
 }
+
+// Fulu removes the legacy eth1 deposit mechanism (consensus-specs#4704):
+// a block carrying any body.deposits must be rejected.
+func TestFuluOperations_RejectsLegacyDeposits(t *testing.T) {
+	st, ks := util.DeterministicGenesisStateFulu(t, 128)
+	blk, err := util.GenerateFullBlockFulu(st, ks, util.DefaultBlockGenConfig(), 1)
+	require.NoError(t, err)
+
+	blk.Block.Body.Deposits = []*ethpb.Deposit{
+		{
+			Proof: make([][]byte, 33),
+			Data: &ethpb.Deposit_Data{
+				PublicKey:             make([]byte, 48),
+				WithdrawalCredentials: make([]byte, 32),
+				Amount:                32_000_000_000,
+				Signature:             make([]byte, 96),
+			},
+		},
+	}
+
+	b, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	require.NoError(t, st.SetSlot(primitives.Slot(1)))
+
+	_, err = transition.ElectraOperations(t.Context(), st, b.Block())
+	require.NotNil(t, err)
+	require.ErrorContains(t, "legacy deposits not allowed post-Fulu", err)
+	require.Equal(t, true, errors.Is(err, transition.ErrProcessDepositsFailed))
+}

@@ -211,3 +211,22 @@ func TestProposer_PendingDeposits_Electra(t *testing.T) {
 	assert.Equal(t, 0, len(deposits), "Received unexpected number of pending deposits")
 
 }
+
+// Fulu states should never produce legacy eth1 deposits (consensus-specs#4704).
+func TestProposer_PendingDeposits_Fulu_ReturnsEmpty(t *testing.T) {
+	beaconState, err := state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{
+		Eth1Data: &ethpb.Eth1Data{
+			BlockHash:    make([]byte, 32),
+			DepositRoot:  make([]byte, 32),
+			DepositCount: 5,
+		},
+		Eth1DepositIndex:          1,
+		DepositRequestsStartIndex: 7,
+	})
+	require.NoError(t, err)
+
+	bs := &Server{}
+	deposits, err := bs.deposits(t.Context(), beaconState, &ethpb.Eth1Data{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(deposits))
+}

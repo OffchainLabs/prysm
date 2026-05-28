@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -81,8 +82,14 @@ func electraOperations(ctx context.Context, st state.BeaconState, block interfac
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessAttestationsFailed, err.Error())
 	}
-	if _, err := electra.ProcessDeposits(ctx, st, bb.Deposits()); err != nil {
-		return nil, errors.Wrap(ErrProcessDepositsFailed, err.Error())
+	if block.Version() >= version.Fulu {
+		if len(bb.Deposits()) != 0 {
+			return nil, errors.Wrap(ErrProcessDepositsFailed, "legacy deposits not allowed post-Fulu")
+		}
+	} else {
+		if _, err := electra.ProcessDeposits(ctx, st, bb.Deposits()); err != nil {
+			return nil, errors.Wrap(ErrProcessDepositsFailed, err.Error())
+		}
 	}
 	st, err = blocks.ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits(), exitInfo)
 	if err != nil {
