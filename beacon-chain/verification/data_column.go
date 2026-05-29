@@ -82,6 +82,7 @@ type PartialColumnVerifier struct {
 	Column *blocks.PartialDataColumn
 }
 
+// NewPartialColumnVerifier creates a PartialColumnVerifier that wraps the given DataColumnsVerifier and partial column.
 func NewPartialColumnVerifier(dv DataColumnsVerifier, col *blocks.PartialDataColumn) *PartialColumnVerifier {
 	return &PartialColumnVerifier{
 		DataColumnsVerifier: dv,
@@ -89,6 +90,8 @@ func NewPartialColumnVerifier(dv DataColumnsVerifier, col *blocks.PartialDataCol
 	}
 }
 
+// Complete returns the fully VerifiedRODataColumn once every cell has been collected and the column passes
+// verification. The boolean is false (with a nil error) while the column is still incomplete.
 func (pv *PartialColumnVerifier) Complete() (blocks.VerifiedRODataColumn, bool, error) {
 	if !pv.Column.IsComplete() {
 		return blocks.VerifiedRODataColumn{}, false, nil
@@ -111,6 +114,7 @@ func (pv *PartialColumnVerifier) Complete() (blocks.VerifiedRODataColumn, bool, 
 	return cols[0], true, nil
 }
 
+// ExtendFromVerifiedCell adds an already-verified cell and proof at the given index, returning true if it was newly added.
 func (pv *PartialColumnVerifier) ExtendFromVerifiedCell(cellIndex uint64, cell, proof []byte) bool {
 	return pv.Column.ExtendFromVerifiedCell(cellIndex, cell, proof)
 }
@@ -454,6 +458,8 @@ func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
 		}
 		parentSlot, err := dv.fc.Slot(parentRoot)
 		if err != nil {
+			// Wrap ErrSidecarParentUnknown (rather than err) so callers can match it with errors.Is;
+			// see sync/validate_partial_header.go which special-cases this sentinel.
 			return columnErrBuilder(errors.Wrap(ErrSidecarParentUnknown, err.Error()))
 		}
 
