@@ -98,7 +98,7 @@ func (p *Service) Start() {
 
 func (p *Service) Stop() error {
 	if p == nil {
-	return errors.New("pruner service is nil")
+		return errors.New("pruner service is nil")
 	}
 	log.Info("Stopping Beacon DB pruner service")
 	close(p.done)

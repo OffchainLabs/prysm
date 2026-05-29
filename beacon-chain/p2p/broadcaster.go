@@ -152,8 +152,8 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 
 	span.SetAttributes(
 		trace.BoolAttribute("hasPeer", hasPeer),
-		trace.Int64Attribute("slot", int64(data.Slot)),           // lint:ignore uintcast -- It's safe to do this for tracing.
-		trace.Int64Attribute("subnet", int64(subnet)),           // lint:ignore uintcast -- It's safe to do this for tracing.
+		trace.Int64Attribute("slot", int64(data.Slot)), // lint:ignore uintcast -- It's safe to do this for tracing.
+		trace.Int64Attribute("subnet", int64(subnet)),  // lint:ignore uintcast -- It's safe to do this for tracing.
 	)
 
 	if !hasPeer {
