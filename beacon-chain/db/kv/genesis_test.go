@@ -12,7 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 )
 
 func TestStore_SaveGenesisData(t *testing.T) {

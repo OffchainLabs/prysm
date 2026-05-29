@@ -13,7 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"github.com/golang/snappy"
 	fssz "github.com/prysmaticlabs/fastssz"
 )

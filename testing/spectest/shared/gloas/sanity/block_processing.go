@@ -18,7 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"github.com/golang/snappy"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/proto"

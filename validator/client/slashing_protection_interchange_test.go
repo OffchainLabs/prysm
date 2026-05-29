@@ -15,7 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/validator/helpers"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 )
 
 type eip3076TestCase struct {

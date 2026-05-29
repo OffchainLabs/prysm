@@ -6,7 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 )
 
 func TestHoleskyConfigMatchesUpstreamYaml(t *testing.T) {

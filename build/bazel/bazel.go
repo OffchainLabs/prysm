@@ -42,6 +42,20 @@ func RunfilesPath() (string, error) {
 	return inner.RunfilesPath()
 }
 
+// ListRunfiles is a convenience wrapper around the rules_go variant, converting
+// its entries to the package-local RunfileEntry type.
+func ListRunfiles() ([]RunfileEntry, error) {
+	innerEntries, err := inner.ListRunfiles()
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]RunfileEntry, len(innerEntries))
+	for i, e := range innerEntries {
+		entries[i] = RunfileEntry{Path: e.Path, ShortPath: e.ShortPath, Workspace: e.Workspace}
+	}
+	return entries, nil
+}
+
 // TestTmpDir is a convenience wrapper around the rules_go variant.
 func TestTmpDir() string {
 	return inner.TestTmpDir()

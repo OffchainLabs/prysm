@@ -8,7 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/go-yaml/yaml"
 )

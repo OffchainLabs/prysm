@@ -4,7 +4,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"github.com/pkg/errors"
 )
 
