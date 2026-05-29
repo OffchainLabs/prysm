@@ -419,35 +419,16 @@ func (f *ForkChoice) updateNewFullNodeWeight(fn *PayloadNode) {
 	fn.weight = fn.balance
 }
 
-// SetPTCVote sets the PTC vote bits on the consensus node identified by root.
+// SetPTCVote records ptcIdx's vote on root, overwriting any previous vote from the same index.
 func (f *ForkChoice) SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool) {
 	n := f.store.emptyNodeByRoot[root]
 	if n == nil {
 		return
 	}
 	ptcVoteCount.Inc()
-	if payloadPresent {
-		n.node.setPayloadAvailabilityVote(ptcIdx)
-	}
-	if blobDataAvailable {
-		n.node.setPayloadDataAvailabilityVote(ptcIdx)
-	}
-}
-
-func (n *Node) setPayloadAvailabilityVote(idx uint64) {
-	n.payloadAvailabilityVote.SetBitAt(idx, true)
-}
-
-func (n *Node) setPayloadDataAvailabilityVote(idx uint64) {
-	n.payloadDataAvailabilityVote.SetBitAt(idx, true)
-}
-
-func (n *Node) payloadAvailabilityVoteCount() uint64 {
-	return n.payloadAvailabilityVote.Count()
-}
-
-func (n *Node) payloadDataAvailabilityVoteCount() uint64 {
-	return n.payloadDataAvailabilityVote.Count()
+	n.node.payloadAttesters.SetBitAt(ptcIdx, true)
+	n.node.payloadAvailabilityVote.SetBitAt(ptcIdx, payloadPresent)
+	n.node.payloadDataAvailabilityVote.SetBitAt(ptcIdx, blobDataAvailable)
 }
 
 // resolveVoteNode returns the node that should receive the balance of a vote. It returns always a PayloadNode, but the boolean indicates

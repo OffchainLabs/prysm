@@ -586,7 +586,7 @@ func TestGloasHeadComputation(t *testing.T) {
 
 	// Set full PTC votes for C's payload. Head is still D
 	for i := range uint64(fieldparams.PTCSize) {
-		emptyC.node.setPayloadAvailabilityVote(i)
+		emptyC.node.payloadAvailabilityVote.SetBitAt(i, true)
 	}
 
 	headRoot, err = f.Head(ctx)
@@ -595,7 +595,7 @@ func TestGloasHeadComputation(t *testing.T) {
 
 	// Set data availability votes now for C, head should become C full
 	for i := range uint64(fieldparams.PTCSize) {
-		emptyC.node.setPayloadDataAvailabilityVote(i)
+		emptyC.node.payloadDataAvailabilityVote.SetBitAt(i, true)
 	}
 	headRoot, err = f.Head(ctx)
 	require.NoError(t, err)
@@ -845,8 +845,8 @@ func TestShouldExtendPayload(t *testing.T) {
 
 	t.Run("quorum met returns true", func(t *testing.T) {
 		for i := uint64(0); i <= fieldparams.PTCSize/2; i++ {
-			n.setPayloadAvailabilityVote(i)
-			n.setPayloadDataAvailabilityVote(i)
+			n.payloadAvailabilityVote.SetBitAt(i, true)
+			n.payloadDataAvailabilityVote.SetBitAt(i, true)
 		}
 		assert.Equal(t, true, f.store.shouldExtendPayload(fn))
 		n.payloadAvailabilityVote = bitfield.NewBitvector512()
@@ -855,7 +855,7 @@ func TestShouldExtendPayload(t *testing.T) {
 
 	t.Run("only availability quorum not enough", func(t *testing.T) {
 		for i := uint64(0); i <= fieldparams.PTCSize/2; i++ {
-			n.setPayloadAvailabilityVote(i)
+			n.payloadAvailabilityVote.SetBitAt(i, true)
 		}
 		// Set a proposer boost so we don't short-circuit on empty boost root.
 		rootB := indexToHash(2)
@@ -1129,8 +1129,8 @@ func TestGloasPTCOverridesProposerBoost(t *testing.T) {
 	// PTC quorum for A's payload.
 	emptyA := s.emptyNodeByRoot[rootA]
 	for i := range uint64(fieldparams.PTCSize) {
-		emptyA.node.setPayloadAvailabilityVote(i)
-		emptyA.node.setPayloadDataAvailabilityVote(i)
+		emptyA.node.payloadAvailabilityVote.SetBitAt(i, true)
+		emptyA.node.payloadDataAvailabilityVote.SetBitAt(i, true)
 	}
 
 	slotB := slotA + 1
@@ -1180,7 +1180,6 @@ func TestGloasPTCOverridesProposerBoost(t *testing.T) {
 	assert.Equal(t, uint64(20), emptyA.weight)
 	assert.Equal(t, uint64(20), fullA.weight)
 
-
 	f.ProcessAttestation(ctx, []uint64{4}, rootB, slotB, false)
 
 	headRoot, err = f.Head(ctx)
@@ -1205,6 +1204,9 @@ func TestSetPTCVote(t *testing.T) {
 
 	t.Run("unknown root is no-op", func(t *testing.T) {
 		f.SetPTCVote(indexToHash(999), 0, true, true)
+		en := f.store.emptyNodeByRoot[root]
+		require.NotNil(t, en)
+		assert.Equal(t, uint64(0), en.node.payloadAttesters.Count())
 	})
 
 	t.Run("payload present only", func(t *testing.T) {
@@ -1213,6 +1215,7 @@ func TestSetPTCVote(t *testing.T) {
 		require.NotNil(t, en)
 		assert.Equal(t, true, en.node.payloadAvailabilityVote.BitAt(5))
 		assert.Equal(t, false, en.node.payloadDataAvailabilityVote.BitAt(5))
+		assert.Equal(t, true, en.node.payloadAttesters.BitAt(5))
 	})
 
 	t.Run("blob data available only", func(t *testing.T) {
@@ -1221,6 +1224,7 @@ func TestSetPTCVote(t *testing.T) {
 		require.NotNil(t, en)
 		assert.Equal(t, false, en.node.payloadAvailabilityVote.BitAt(7))
 		assert.Equal(t, true, en.node.payloadDataAvailabilityVote.BitAt(7))
+		assert.Equal(t, true, en.node.payloadAttesters.BitAt(7))
 	})
 
 	t.Run("both flags", func(t *testing.T) {
@@ -1229,6 +1233,7 @@ func TestSetPTCVote(t *testing.T) {
 		require.NotNil(t, en)
 		assert.Equal(t, true, en.node.payloadAvailabilityVote.BitAt(10))
 		assert.Equal(t, true, en.node.payloadDataAvailabilityVote.BitAt(10))
+		assert.Equal(t, true, en.node.payloadAttesters.BitAt(10))
 	})
 
 	t.Run("neither flag", func(t *testing.T) {
@@ -1237,6 +1242,22 @@ func TestSetPTCVote(t *testing.T) {
 		require.NotNil(t, en)
 		assert.Equal(t, false, en.node.payloadAvailabilityVote.BitAt(15))
 		assert.Equal(t, false, en.node.payloadDataAvailabilityVote.BitAt(15))
+		assert.Equal(t, true, en.node.payloadAttesters.BitAt(15))
+	})
+
+	t.Run("later vote overwrites earlier", func(t *testing.T) {
+		f.SetPTCVote(root, 5, false, true)
+		en := f.store.emptyNodeByRoot[root]
+		require.NotNil(t, en)
+		assert.Equal(t, false, en.node.payloadAvailabilityVote.BitAt(5))
+		assert.Equal(t, true, en.node.payloadDataAvailabilityVote.BitAt(5))
+		assert.Equal(t, true, en.node.payloadAttesters.BitAt(5))
+	})
+
+	t.Run("attester count reflects distinct voters", func(t *testing.T) {
+		en := f.store.emptyNodeByRoot[root]
+		require.NotNil(t, en)
+		assert.Equal(t, uint64(4), en.node.payloadAttesters.Count())
 	})
 }
 
