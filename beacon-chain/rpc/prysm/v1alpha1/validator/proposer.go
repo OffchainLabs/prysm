@@ -463,12 +463,7 @@ func (vs *Server) handleUnblindedBlock(
 
 		included := bitfield.NewBitlist(uint64(len(cellsPerBlob)))
 		included = included.Not() // all bits set to 1
-		var partialColumnOpts []blocks.PartialDataColumnOption
-		if vs.BlockProposalEagerPushCells {
-			log.Debug("Block proposer eager push cells enabled, including cells in eager push")
-			partialColumnOpts = append(partialColumnOpts, blocks.WithByBlockProposer())
-		}
-		partialColumns, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block), partialColumnOpts...)
+		partialColumns, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
 		if err != nil {
 			return nil, nil, nil, errors.Wrap(err, "data column sidecars")
 		}

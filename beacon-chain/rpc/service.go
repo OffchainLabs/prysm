@@ -98,7 +98,6 @@ type Config struct {
 	ExecutionChainInfoFetcher        execution.ChainInfoFetcher
 	GenesisTimeFetcher               blockchain.TimeFetcher
 	GenesisFetcher                   blockchain.GenesisFetcher
-	BlockProposalEagerPushCells      bool
 	MockEth1Votes                    bool
 	EnableDebugRPCEndpoints          bool
 	AttestationCache                 *cache.AttestationCache
@@ -271,7 +270,6 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		PayloadIDCache:                   s.cfg.PayloadIDCache,
 		AttestationStateFetcher:          s.cfg.AttestationReceiver,
 		GraffitiInfo:                     s.cfg.GraffitiInfo,
-		BlockProposalEagerPushCells:      s.cfg.BlockProposalEagerPushCells,
 	}
 	s.validatorServer = validatorServer
 	nodeServer := &nodev1alpha1.Server{
