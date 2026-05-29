@@ -190,8 +190,8 @@ func (s *Store) insert(ctx context.Context,
 		isFirstBlock := s.proposerBoostRoot == [32]byte{}
 		if currentSlot == slot && sss < boostThreshold && isFirstBlock {
 			depEpoch := slots.ToEpoch(currentSlot)
-			if depEpoch > 1 {
-				depEpoch -= 2
+			if depEpoch > 0 {
+				depEpoch--
 			}
 			depRoot, err := s.dependentRootForEpoch(root, depEpoch)
 			if err != nil {

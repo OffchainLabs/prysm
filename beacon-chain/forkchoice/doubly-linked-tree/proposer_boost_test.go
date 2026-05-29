@@ -482,22 +482,22 @@ func TestForkChoice_BoostProposerRoot_OnlySameShuffling(t *testing.T) {
 	ctx := t.Context()
 	zeroHash := params.BeaconConfig().ZeroHash
 	headEpochZero := indexToHash(1)
-	headEpochOne := indexToHash(2)
+	headEpochTwo := indexToHash(2)
 
 	t.Run("does not boost a block on a different shuffling than head", func(t *testing.T) {
 		f := setup(0, 0)
 
-		// Head chain: genesis <- headEpochZero (slot 20) <- headEpochOne (slot 33).
+		// Head chain: genesis <- headEpochZero (slot 20) <- headEpochTwo (slot 65).
 		state, blk, err := prepareForkchoiceState(ctx, 20, headEpochZero, zeroHash, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blk))
-		state, blk, err = prepareForkchoiceState(ctx, 33, headEpochOne, headEpochZero, zeroHash, 0, 0)
+		state, blk, err = prepareForkchoiceState(ctx, 65, headEpochTwo, headEpochZero, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blk))
 
 		headRoot, err := f.Head(ctx) // caches the head before the boosted insertion
 		require.NoError(t, err)
-		require.Equal(t, headEpochOne, headRoot)
+		require.Equal(t, headEpochTwo, headRoot)
 		headDep, err := f.DependentRoot(1)
 		require.NoError(t, err)
 		require.Equal(t, headEpochZero, headDep)
@@ -510,8 +510,8 @@ func TestForkChoice_BoostProposerRoot_OnlySameShuffling(t *testing.T) {
 
 		newRoot := indexToHash(4)
 		f.store.proposerBoostRoot = [32]byte{}
-		driftGenesisTime(f, 34, 0)
-		state, blk, err = prepareForkchoiceState(ctx, 34, newRoot, forkEpochZero, zeroHash, 0, 0)
+		driftGenesisTime(f, 66, 0)
+		state, blk, err = prepareForkchoiceState(ctx, 66, newRoot, forkEpochZero, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blk))
 
@@ -527,18 +527,18 @@ func TestForkChoice_BoostProposerRoot_OnlySameShuffling(t *testing.T) {
 		state, blk, err := prepareForkchoiceState(ctx, 20, headEpochZero, zeroHash, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blk))
-		state, blk, err = prepareForkchoiceState(ctx, 33, headEpochOne, headEpochZero, zeroHash, 0, 0)
+		state, blk, err = prepareForkchoiceState(ctx, 65, headEpochTwo, headEpochZero, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blk))
 
 		headRoot, err := f.Head(ctx)
 		require.NoError(t, err)
-		require.Equal(t, headEpochOne, headRoot)
+		require.Equal(t, headEpochTwo, headRoot)
 
 		newRoot := indexToHash(5)
 		f.store.proposerBoostRoot = [32]byte{}
-		driftGenesisTime(f, 34, 0)
-		state, blk, err = prepareForkchoiceState(ctx, 34, newRoot, headEpochOne, zeroHash, 0, 0)
+		driftGenesisTime(f, 66, 0)
+		state, blk, err = prepareForkchoiceState(ctx, 66, newRoot, headEpochTwo, zeroHash, 0, 0)
 		require.NoError(t, err)
 		require.NoError(t, f.InsertNode(ctx, state, blk))
 
