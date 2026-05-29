@@ -674,14 +674,13 @@ func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash)
 	start := time.Now()
 
 	if !s.capabilityCache.has(GetBlobsV3) {
-		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV3))
+		return nil, fmt.Errorf("%s is not supported", GetBlobsV3)
 	}
 
 	getBlobsV3RequestsTotal.Inc()
-	getBlobsV3Latency.Observe(time.Since(start).Seconds())
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
 	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes)
-	getBlobsV3Latency.Observe(time.Since(start).Seconds())
+	getBlobsV3Latency.Observe(float64(time.Since(start).Milliseconds()))
 	return result, handleRPCError(err)
 }
 
@@ -961,7 +960,10 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	if err != nil {
 		return nil, nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
-	log.Debug("Received cells and proofs from execution client", "included", cp.Included, "cells count", len(cp.CellsPerBlob), "err", err)
+	log.WithFields(logrus.Fields{
+		"included":    cp.Included,
+		"cells count": len(cp.CellsPerBlob),
+	}).Debug("Received cells and proofs from execution client")
 
 	var partialColumns []blocks.PartialDataColumn
 	if s.partialColumnsSupported {
@@ -1004,8 +1006,8 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 
 	// Fetch all blobsAndCellsProofs from the execution client.
 	var err error
-	useV3 := s.useV3()
-	if useV3 {
+	useGetBlobsV3 := s.useGetBlobsV3()
+	if useGetBlobsV3 {
 		// v3 can return a partial response. V2 is all or nothing
 		blobAndProofs, err = s.GetBlobsV3(ctx, versionedHashes)
 	} else {
@@ -1021,7 +1023,7 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	if err != nil {
 		return peerdas.StructuredCellsAndProofs{}, errors.Wrap(err, "compute cells and proofs")
 	}
-	if useV3 {
+	if useGetBlobsV3 {
 		if result.Included.Count() == uint64(len(kzgCommitments)) {
 			getBlobsV3CompleteResponsesTotal.Inc()
 		} else if result.Included.Count() > 0 {
@@ -1032,7 +1034,7 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	return result, nil
 }
 
-func (s *Service) useV3() bool {
+func (s *Service) useGetBlobsV3() bool {
 	return s.capabilityCache.has(GetBlobsV3) && s.partialColumnsSupported
 }
 
