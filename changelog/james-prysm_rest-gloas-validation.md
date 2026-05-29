@@ -23,3 +23,7 @@
   - `false` → `SignedExecutionPayloadEnvelopeContents` (stateless — body carries
     blobs and KZG proofs).
   Replaces the prior SSZ-lead-offset / JSON wrapper-key probe.
+- Pluralized gloas execution payload endpoint paths to match the REST naming
+  convention (beacon-APIs #613): `POST /eth/v1/beacon/execution_payload_bid` →
+  `/eth/v1/beacon/execution_payload_bids`, and the execution payload envelope
+  paths use `execution_payload_envelopes`.
