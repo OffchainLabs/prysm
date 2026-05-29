@@ -354,6 +354,96 @@ func (s *Store) nodeTreeDump(ctx context.Context, n *Node, nodes []*forkchoice2.
 	return nodes, nil
 }
 
+// nodeTreeDumpV2 appends to the given list one entry per (root, payload_status) tuple descending from n.
+func (s *Store) nodeTreeDumpV2(ctx context.Context, n *Node, nodes []*forkchoice2.NodeV2) ([]*forkchoice2.NodeV2, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	var parentRoot [32]byte
+	if n.parent != nil {
+		parentRoot = n.parent.node.root
+	}
+	target := [32]byte{}
+	if n.target != nil {
+		target = n.target.root
+	}
+	en := s.emptyNodeByRoot[n.root]
+	fn := s.fullNodeByRoot[n.root]
+	optimistic := false
+	if n.parent != nil {
+		optimistic = n.parent.optimistic
+	}
+	if fn != nil {
+		optimistic = fn.optimistic
+	}
+
+	pending := &forkchoice2.NodeV2{
+		PayloadStatus:                   forkchoice2.PayloadStatusPending,
+		BlockRoot:                       n.root[:],
+		ParentRoot:                      parentRoot[:],
+		Slot:                            n.slot,
+		Weight:                          n.weight,
+		Balance:                         n.balance,
+		ExecutionOptimistic:             optimistic,
+		Timestamp:                       en.timestamp,
+		ExecutionBlockHash:              n.blockHash[:],
+		Target:                          target[:],
+		JustifiedEpoch:                  n.justifiedEpoch,
+		FinalizedEpoch:                  n.finalizedEpoch,
+		UnrealizedJustifiedEpoch:        n.unrealizedJustifiedEpoch,
+		UnrealizedFinalizedEpoch:        n.unrealizedFinalizedEpoch,
+		PayloadAttesterCount:            n.payloadAttesters.Count(),
+		PayloadAvailabilityYesCount:     n.payloadAvailabilityVote.Count(),
+		PayloadDataAvailabilityYesCount: n.payloadDataAvailabilityVote.Count(),
+	}
+	if optimistic {
+		pending.Validity = forkchoice2.Optimistic
+	} else {
+		pending.Validity = forkchoice2.Valid
+	}
+	nodes = append(nodes, pending)
+
+	emptyEntry := &forkchoice2.NodeV2{
+		PayloadStatus:       forkchoice2.PayloadStatusEmpty,
+		BlockRoot:           n.root[:],
+		ParentRoot:          parentRoot[:],
+		Slot:                n.slot,
+		Weight:              en.weight,
+		Balance:             en.balance,
+		Validity:            pending.Validity,
+		ExecutionOptimistic: en.optimistic,
+		Timestamp:           en.timestamp,
+		ExecutionBlockHash:  n.blockHash[:],
+	}
+	nodes = append(nodes, emptyEntry)
+
+	if fn != nil {
+		fullEntry := &forkchoice2.NodeV2{
+			PayloadStatus:       forkchoice2.PayloadStatusFull,
+			BlockRoot:           n.root[:],
+			ParentRoot:          parentRoot[:],
+			Slot:                n.slot,
+			Weight:              fn.weight,
+			Balance:             fn.balance,
+			Validity:            pending.Validity,
+			ExecutionOptimistic: fn.optimistic,
+			Timestamp:           fn.timestamp,
+			ExecutionBlockHash:  n.blockHash[:],
+			GasLimit:            fn.gasLimit,
+		}
+		nodes = append(nodes, fullEntry)
+	}
+
+	var err error
+	for _, child := range s.allConsensusChildren(n) {
+		nodes, err = s.nodeTreeDumpV2(ctx, child, nodes)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nodes, nil
+}
+
 // MarkFullNode creates a full payload node for an existing empty node at the
 // given beacon block root. This is used during forkchoice tree reconstruction on
 // startup to mark blocks whose execution payload was delivered. The caller must
