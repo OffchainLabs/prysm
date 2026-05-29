@@ -28,7 +28,7 @@ func ProcessProposerLookahead(ctx context.Context, state state.BeaconState) erro
 	}
 	lastEpochStart := len(lookAhead) - int(params.BeaconConfig().SlotsPerEpoch)
 	copy(lookAhead[:lastEpochStart], lookAhead[params.BeaconConfig().SlotsPerEpoch:])
-	lastEpoch := slots.ToEpoch(state.Slot()) + params.BeaconConfig().MinSeedLookahead + 1
+	 lastEpoch := slots.ToEpoch(state.Slot()).AddEpoch(params.BeaconConfig().MinSeedLookahead).Add(1)  
 	indices, err := helpers.ActiveNonSlashedValidatorIndices(ctx, state, lastEpoch)
 	if err != nil {
 		return err
