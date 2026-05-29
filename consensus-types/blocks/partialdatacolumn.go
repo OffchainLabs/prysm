@@ -62,11 +62,10 @@ func WithByBlockProposer() PartialDataColumnOption {
 
 // NewPartialDataColumnFromVerifiedRODataColumn builds a PartialDataColumn from
 // an already verified RO data column, marking all of its cells as included.
-func NewPartialDataColumnFromVerifiedRODataColumn(c VerifiedRODataColumn) PartialDataColumn {
+func NewPartialDataColumnFromVerifiedRODataColumn(c VerifiedRODataColumn) (PartialDataColumn, error) {
 	commitments, err := c.KzgCommitments()
 	if err != nil {
-		log.WithError(err).Error("Failed to get KZG commitments")
-		return PartialDataColumn{}
+		return PartialDataColumn{}, errors.Wrap(err, "get KZG commitments")
 	}
 	included := bitfield.NewBitlist(uint64(len(commitments)))
 	included = included.Not()
@@ -76,7 +75,7 @@ func NewPartialDataColumnFromVerifiedRODataColumn(c VerifiedRODataColumn) Partia
 		root:              c.root,
 		Included:          included,
 		groupID:           groupIdFromRoot(c.root),
-	}
+	}, nil
 }
 
 func groupIdFromRoot(root [fieldparams.RootLength]byte) []byte {
@@ -284,7 +283,9 @@ func (p *PartialDataColumn) PartsMetadata() (partialmessages.PartsMetadata, erro
 	return marshalPartsMetadata(meta)
 }
 
-// MergeAvailableIntoPartsMetadata merges additional available cells into the base partsmetadata's available cells.
+// MergeAvailableIntoPartsMetadata returns a new parts metadata whose available
+// cells are the union of base's available cells and additionalAvailable. The
+// base argument is not modified.
 func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata, additionalAvailable bitfield.Bitlist) (*ethpb.PartialDataColumnPartsMetadata, error) {
 	if base == nil {
 		return nil, errors.New("base is nil")
@@ -294,36 +295,59 @@ func MergeAvailableIntoPartsMetadata(base *ethpb.PartialDataColumnPartsMetadata,
 	}
 	merged, err := base.Available.Or(additionalAvailable)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "merge available cells")
 	}
-	base.Available = merged
-	return base, nil
+	return &ethpb.PartialDataColumnPartsMetadata{
+		Available: merged,
+		Requests:  slices.Clone(base.Requests),
+	}, nil
 }
 
+// PublishActionsFn returns a PublishActionsFn that, for each known peer, computes
+// the next peer state and the publish action to send to that peer. headerSentCache
+// tracks whether the block header has already been sent to a peer so it is only
+// included once; it is updated as actions are produced.
 func (p *PartialDataColumn) PublishActionsFn(headerSentCache map[peer.ID]bool) partialmessages.PublishActionsFn[PartialDataColumnPeerState] {
 	return func(peerStates map[peer.ID]PartialDataColumnPeerState, peerRequestsPartial func(peer.ID) bool) iter.Seq2[peer.ID, partialmessages.PublishAction] {
-		return func(yield func(peer.ID, partialmessages.PublishAction) bool) {
-			for peer, peerState := range peerStates {
-				nextState, action, includeHeader := p.forPeer(peer, peerRequestsPartial(peer), peerState, !headerSentCache[peer])
-				if action.Err == nil {
-					v := headerSentCache[peer]
-					headerSentCache[peer] = headerSentCache[peer] || includeHeader
-					if v != headerSentCache[peer] {
-						log.WithFields(logrus.Fields{
-							"peer":            peer,
-							"index":           p.Index,
-							"includeHeader":   includeHeader,
-							"headerSentCache": headerSentCache[peer],
-						}).Debug("Header sent cache updated")
-					}
-					// Only update state if there was no error.
-					peerStates[peer] = nextState
-				}
-				if !yield(peer, action) {
-					return
-				}
+		return p.publishActions(peerStates, peerRequestsPartial, headerSentCache)
+	}
+}
+
+// publishActions yields the publish action for each peer in peerStates. On a
+// successful action it updates peerStates with the next state and records sent
+// headers in headerSentCache.
+func (p *PartialDataColumn) publishActions(
+	peerStates map[peer.ID]PartialDataColumnPeerState,
+	peerRequestsPartial func(peer.ID) bool,
+	headerSentCache map[peer.ID]bool,
+) iter.Seq2[peer.ID, partialmessages.PublishAction] {
+	return func(yield func(peer.ID, partialmessages.PublishAction) bool) {
+		for peerID, peerState := range peerStates {
+			nextState, action, includeHeader := p.forPeer(peerID, peerRequestsPartial(peerID), peerState, !headerSentCache[peerID])
+			// Only update state if there was no error.
+			if action.Err == nil {
+				p.recordHeaderSent(peerID, includeHeader, headerSentCache)
+				peerStates[peerID] = nextState
+			}
+			if !yield(peerID, action) {
+				return
 			}
 		}
+	}
+}
+
+// recordHeaderSent marks in headerSentCache that the header was sent to peerID if
+// includeHeader is true, logging the transition when the cached value changes.
+func (p *PartialDataColumn) recordHeaderSent(peerID peer.ID, includeHeader bool, headerSentCache map[peer.ID]bool) {
+	prev := headerSentCache[peerID]
+	headerSentCache[peerID] = prev || includeHeader
+	if prev != headerSentCache[peerID] {
+		log.WithFields(logrus.Fields{
+			"peer":            peerID,
+			"index":           p.Index,
+			"includeHeader":   includeHeader,
+			"headerSentCache": headerSentCache[peerID],
+		}).Debug("Header sent cache updated")
 	}
 }
 

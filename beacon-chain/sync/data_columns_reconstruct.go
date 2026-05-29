@@ -111,7 +111,12 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 								}
 								subnet := peerdas.ComputeSubnetForDataColumnSidecar(sc.Index())
 								topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
-								if !yield(topic, blocks.NewPartialDataColumnFromVerifiedRODataColumn(sc)) {
+								partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sc)
+								if err != nil {
+									log.WithError(err).WithField("index", sc.Index()).Error("Failed to create partial data column from verified RO data column")
+									continue
+								}
+								if !yield(topic, partialColumn) {
 									return
 								}
 							}

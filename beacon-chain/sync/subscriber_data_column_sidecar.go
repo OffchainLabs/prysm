@@ -57,7 +57,12 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 				err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
 					subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index())
 					topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
-					yield(topic, blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar))
+					partialColumn, err := blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar)
+					if err != nil {
+						log.WithError(err).Error("Failed to create partial data column from verified RO data column")
+						return
+					}
+					yield(topic, partialColumn)
 				})
 				if err != nil {
 					log.WithError(err).Error("Failed to publish partial column on getting data column sidecar")
