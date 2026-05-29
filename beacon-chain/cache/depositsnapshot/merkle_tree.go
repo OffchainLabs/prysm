@@ -45,13 +45,13 @@ type MerkleTreeNode interface {
 
 // create builds a new merkle tree
 func create(leaves [][32]byte, depth uint64) MerkleTreeNode {
-	length := uint64(len(leaves))
-	if length == 0 {
+	if len(leaves) == 0 {
 		return &ZeroNode{depth: depth}
 	}
 	if depth == 0 {
 		return &LeafNode{hash: leaves[0]}
 	}
+	length := uint64(len(leaves))
 	split := min(math.PowerOf2(depth-1), length)
 	left := create(leaves[0:split], depth-1)
 	right := create(leaves[split:], depth-1)
