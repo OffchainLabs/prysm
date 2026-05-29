@@ -294,22 +294,6 @@ func selectByBalanceFill(
 }
 
 // acceptByBalance determines if a validator is accepted based on its effective balance.
-//
-//	<spec fn="compute_balance_weighted_acceptance" fork="gloas" hash="9954dcd0">
-//	def compute_balance_weighted_acceptance(
-//	    state: BeaconState, index: ValidatorIndex, seed: Bytes32, i: uint64
-//	) -> bool:
-//	    """
-//	    Return whether to accept the selection of the validator ``index``, with probability
-//	    proportional to its ``effective_balance``, and randomness given by ``seed`` and ``i``.
-//	    """
-//	    MAX_RANDOM_VALUE = 2**16 - 1
-//	    random_bytes = hash(seed + uint_to_bytes(i // 16))
-//	    offset = i % 16 * 2
-//	    random_value = bytes_to_uint64(random_bytes[offset : offset + 2])
-//	    effective_balance = state.validators[index].effective_balance
-//	    return effective_balance * MAX_RANDOM_VALUE >= MAX_EFFECTIVE_BALANCE_ELECTRA * random_value
-//	</spec>
 func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex, seedBuf *[40]byte, hashFunc func([]byte) [32]byte, maxBalance uint64, round uint64) (bool, error) {
 	if st == nil || st.IsNil() {
 		return false, errors.New("state is nil")
