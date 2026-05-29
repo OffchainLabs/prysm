@@ -8,20 +8,14 @@ import (
 	engine "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 )
 
-// ComputeNewPayloadRequestRoot derives the hash tree root of the
-// NewPayloadRequest associated with the given signed beacon block, using the
-// same assembly as the gossip path. The block must carry a full execution
-// payload (not a blinded header); callers are expected to reconstruct blinded
-// blocks before calling.
-func ComputeNewPayloadRequestRoot(signed interfaces.ReadOnlySignedBeaconBlock) ([32]byte, error) {
-	if err := BeaconBlockIsNil(signed); err != nil {
-		return [32]byte{}, fmt.Errorf("beacon block is nil: %w", err)
+// NewPayloadRequestRoot derives the hash tree root of the
+// NewPayloadRequest associated with the given execution payload envelope.
+func NewPayloadRequestRoot(envelope interfaces.ROExecutionPayloadEnvelope, blobKzgCommitments [][]byte) ([32]byte, error) {
+	if envelope == nil || envelope.IsNil() {
+		return [32]byte{}, fmt.Errorf("nil envelope")
 	}
 
-	block := signed.Block()
-	body := block.Body()
-
-	execution, err := body.Execution()
+	execution, err := envelope.Execution()
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("execution: %w", err)
 	}
@@ -66,29 +60,18 @@ func ComputeNewPayloadRequestRoot(signed interfaces.ReadOnlySignedBeaconBlock) (
 		ExcessBlobGas: excessBlobGas,
 	}
 
-	kzgCommitments, err := body.BlobKzgCommitments()
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("blob kzg commitments: %w", err)
-	}
-
-	versionedHashes := make([][]byte, 0, len(kzgCommitments))
-	for _, kzgCommitment := range kzgCommitments {
+	versionedHashes := make([][]byte, 0, len(blobKzgCommitments))
+	for _, kzgCommitment := range blobKzgCommitments {
 		versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(kzgCommitment)
 		versionedHashes = append(versionedHashes, versionedHash[:])
 	}
 
-	parentBlockRoot := block.ParentRoot()
-
-	executionRequests, err := body.ExecutionRequests()
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("execution requests: %w", err)
-	}
-
+	parentBlockRoot := envelope.ParentBeaconBlockRoot()
 	newPayloadRequest := engine.NewPayloadRequest{
 		ExecutionPayload:  executionPayload,
 		VersionedHashes:   versionedHashes,
 		ParentBlockRoot:   parentBlockRoot[:],
-		ExecutionRequests: executionRequests,
+		ExecutionRequests: envelope.ExecutionRequests(),
 	}
 
 	return newPayloadRequest.HashTreeRoot()

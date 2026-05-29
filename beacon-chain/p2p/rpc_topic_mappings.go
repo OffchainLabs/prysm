@@ -129,13 +129,13 @@ const (
 	// /eth2/beacon_chain/req/execution_payload_envelopes_by_range/1/
 	RPCExecutionPayloadEnvelopesByRangeTopicV1 = protocolPrefix + ExecutionPayloadEnvelopesByRangeName + SchemaVersionV1
 	// RPCExecutionProofsByRootTopicV1 is a topic for requesting execution proofs by their block root.
-	// /eth2/beacon_chain/req/execution_proofs_by_root/1 - New in Fulu.
+	// /eth2/beacon_chain/req/execution_proofs_by_root/1 - New in Gloas (EIP-8025).
 	RPCExecutionProofsByRootTopicV1 = protocolPrefix + ExecutionProofsByRootName + SchemaVersionV1
 	// RPCExecutionProofsByRangeTopicV1 is a topic for requesting execution proofs by slot range.
-	// /eth2/beacon_chain/req/execution_proofs_by_range/1 - New in Fulu (EIP-8025).
+	// /eth2/beacon_chain/req/execution_proofs_by_range/1 - New in Gloas (EIP-8025).
 	RPCExecutionProofsByRangeTopicV1 = protocolPrefix + ExecutionProofsByRangeName + SchemaVersionV1
 	// RPCExecutionProofStatusTopicV1 is a topic for exchanging the peer's most recent proof-validated block.
-	// /eth2/beacon_chain/req/execution_proof_status/1 - New in Fulu (EIP-8025).
+	// /eth2/beacon_chain/req/execution_proof_status/1 - New in Gloas (EIP-8025).
 	RPCExecutionProofStatusTopicV1 = protocolPrefix + ExecutionProofStatusName + SchemaVersionV1
 
 	// V2 RPC Topics

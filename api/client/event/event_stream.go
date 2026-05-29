@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	EventHead  = "head"
-	EventBlock = "block"
+	EventHead                      = "head"
+	EventExecutionPayloadAvailable = "execution_payload_available"
 
 	EventError           = "error"
 	EventConnectionError = "connection_error"

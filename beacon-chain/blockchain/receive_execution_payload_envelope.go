@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -100,6 +101,19 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	}
 	if err := s.InsertPayload(envelope); err != nil {
 		return errors.Wrap(err, "could not insert payload into forkchoice")
+	}
+
+	if features.Get().IsZkvmEnabled() {
+		newPayloadRequestRoot, err := blocks.NewPayloadRequestRoot(envelope, bid.BlobKzgCommitments())
+		if err != nil {
+			return fmt.Errorf("new payload request root: %w", err)
+		}
+
+		if err := s.cfg.BeaconDB.SaveNewPayloadRequestRoot(ctx, root, newPayloadRequestRoot); err != nil {
+			return fmt.Errorf("save new payload request root: %w", err)
+		}
+
+		s.cfg.ForkChoiceStore.SetNewPayloadRequestRoot(root, newPayloadRequestRoot)
 	}
 
 	if isValidPayload {

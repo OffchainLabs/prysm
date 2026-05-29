@@ -147,7 +147,7 @@ func (s *Service) setupForkchoiceRoot(st state.BeaconState) error {
 		return errors.Wrap(err, "could not insert finalized block to forkchoice")
 	}
 
-	// Rehydrate the NewPayloadRequest index for the finalized block (post-Fulu).
+	// Rehydrate the NewPayloadRequest index for the finalized block (post-Gloas).
 	newPayloadRequestRoot, ok, err := s.cfg.BeaconDB.NewPayloadRequestRoot(s.ctx, fRoot)
 	if err != nil {
 		return fmt.Errorf("new payload request root: %w", err)

@@ -75,7 +75,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 // Start the optional proofs service.
 func (s *Service) Start() {
 	log.Info("Starting optional proofs service")
-	go s.listenToBlockEvents()
+	go s.listenToPayloadEnvelopeEvents()
 	go s.listenToProverEvents()
 }
 
@@ -91,13 +91,13 @@ func (s *Service) Status() error {
 	return nil
 }
 
-func (s *Service) listenToBlockEvents() {
+func (s *Service) listenToPayloadEnvelopeEvents() {
 	eventsChannel := make(chan *event.Event, 1)
 
 	httpClient := &http.Client{}
-	eventStream, err := event.NewEventStream(s.ctx, httpClient, s.cfg.BeaconApiEndpoint, []string{event.EventBlock})
+	eventStream, err := event.NewEventStream(s.ctx, httpClient, s.cfg.BeaconApiEndpoint, []string{event.EventExecutionPayloadAvailable})
 	if err != nil {
-		log.WithError(err).Error("Failed to create block event stream")
+		log.WithError(err).Error("Failed to create execution_payload_available event stream")
 		return
 	}
 
@@ -108,83 +108,106 @@ func (s *Service) listenToBlockEvents() {
 		case <-s.ctx.Done():
 			return
 		case ev := <-eventsChannel:
-			s.processBlockEvent(ev)
+			s.processPayloadEnvelopeEvent(ev)
 		}
 	}
 }
 
-func (s *Service) processBlockEvent(ev *event.Event) {
+func (s *Service) processPayloadEnvelopeEvent(ev *event.Event) {
 	switch ev.EventType {
-	case event.EventBlock:
-		if err := s.handleBlockEvent(ev.Data); err != nil {
-			log.WithError(err).Error("Failed to handle block event")
+	case event.EventExecutionPayloadAvailable:
+		if err := s.handlePayloadEnvelopeEvent(ev.Data); err != nil {
+			log.WithError(err).Error("Failed to handle execution_payload_available event")
 		}
 	case event.EventConnectionError:
-		log.WithField("error", string(ev.Data)).Error("Block event stream connection error")
+		log.WithField("error", string(ev.Data)).Error("Envelope event stream connection error")
 	case event.EventError:
-		log.WithField("error", string(ev.Data)).Error("Block event stream error")
+		log.WithField("error", string(ev.Data)).Error("Envelope event stream error")
 	}
 }
 
-func (s *Service) handleBlockEvent(data []byte) error {
+func (s *Service) handlePayloadEnvelopeEvent(data []byte) error {
 	const (
-		maxBlockFetchRetries = 10
-		blockFetchRetryDelay = 200 * time.Millisecond
+		maxFetchRetries = 10
+		fetchRetryDelay = 200 * time.Millisecond
 	)
 
-	blockEvent := &structs.BlockEvent{}
-	if err := json.Unmarshal(data, blockEvent); err != nil {
-		return fmt.Errorf("unmarshal block event: %w", err)
+	payloadEvent := &structs.PayloadEvent{}
+	if err := json.Unmarshal(data, payloadEvent); err != nil {
+		return fmt.Errorf("unmarshal payload event: %w", err)
 	}
-	log.WithField("slot", blockEvent.Slot).WithField("block", blockEvent.Block).Info("Received block event")
+	log.WithField("slot", payloadEvent.Slot).WithField("blockRoot", payloadEvent.BlockRoot).Info("Received execution_payload_available event")
 
 	var (
-		blockData *blockData
-		err       error
+		payload *payloadData
+		err     error
 	)
 
-	for attempt := range maxBlockFetchRetries {
-		blockData, err = s.fetchBlock(blockEvent.Slot)
+	for attempt := range maxFetchRetries {
+		payload, err = s.fetchPayloadData(payloadEvent.BlockRoot)
 		if err == nil {
 			break
 		}
 
 		log.WithError(err).
-			WithField("slot", blockEvent.Slot).
+			WithField("blockRoot", payloadEvent.BlockRoot).
 			WithField("attempt", attempt+1).
-			WithField("maxAttempts", maxBlockFetchRetries).
-			Warning("Failed to fetch block")
+			WithField("maxAttempts", maxFetchRetries).
+			Warning("Failed to fetch envelope and bid")
 
-		if attempt == maxBlockFetchRetries {
+		if attempt == maxFetchRetries {
 			break
 		}
 
 		select {
 		case <-s.ctx.Done():
 			return s.ctx.Err()
-		case <-time.After(blockFetchRetryDelay):
+		case <-time.After(fetchRetryDelay):
 		}
 	}
 	if err != nil {
-		return fmt.Errorf("fetch block for slot %s after %d attempts: %w", blockEvent.Slot, maxBlockFetchRetries+1, err)
+		return fmt.Errorf("fetch envelope/bid for block %s after %d attempts: %w", payloadEvent.BlockRoot, maxFetchRetries+1, err)
 	}
 
-	req, err := buildNewPayloadRequest(blockData)
+	req, err := buildNewPayloadRequest(payload)
 	if err != nil {
-		return fmt.Errorf("build NewPayloadRequest for slot %s: %w", blockEvent.Slot, err)
+		return fmt.Errorf("build NewPayloadRequest for block %s: %w", payloadEvent.BlockRoot, err)
 	}
 
 	if err := s.submitToProver(req); err != nil {
-		return fmt.Errorf("submit to prover for slot %s: %w", blockEvent.Slot, err)
+		return fmt.Errorf("submit to prover for block %s: %w", payloadEvent.BlockRoot, err)
 	}
 
 	return nil
 }
 
-// fetchBlock fetches a full beacon block by slot from the beacon API and extracts the fields
-// needed to build a NewPayloadRequest.
-func (s *Service) fetchBlock(slot string) (*blockData, error) {
-	url := s.cfg.BeaconApiEndpoint + "/eth/v2/beacon/blocks/" + slot
+// fetchPayloadData fetches the execution payload envelope and the beacon
+// block (for the bid's blob kzg commitments) by block root, and returns the
+// fields needed to build a NewPayloadRequest.
+func (s *Service) fetchPayloadData(blockRoot string) (*payloadData, error) {
+	envelope, err := s.fetchExecutionPayloadEnvelope(blockRoot)
+	if err != nil {
+		return nil, fmt.Errorf("fetch envelope: %w", err)
+	}
+	if envelope == nil || envelope.Message == nil || envelope.Message.Payload == nil {
+		return nil, fmt.Errorf("envelope response missing payload")
+	}
+
+	commitments, err := s.fetchBlobKzgCommitments(blockRoot)
+	if err != nil {
+		return nil, fmt.Errorf("fetch bid commitments: %w", err)
+	}
+
+	return &payloadData{
+		ParentBeaconBlockRoot: envelope.Message.ParentBeaconBlockRoot,
+		ExecutionPayload:      envelope.Message.Payload,
+		ExecutionRequests:     envelope.Message.ExecutionRequests,
+		BlobKzgCommitments:    commitments,
+	}, nil
+}
+
+func (s *Service) fetchExecutionPayloadEnvelope(blockRoot string) (*structs.SignedExecutionPayloadEnvelope, error) {
+	url := s.cfg.BeaconApiEndpoint + "/eth/v1/beacon/execution_payload_envelope/" + blockRoot
 
 	req, err := http.NewRequestWithContext(s.ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -194,7 +217,43 @@ func (s *Service) fetchBlock(slot string) (*blockData, error) {
 
 	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("fetch block: %w", err)
+		return nil, fmt.Errorf("get envelope: %w", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.WithError(err).Error("Failed to close envelope response body")
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	var envelopeResp structs.GetExecutionPayloadEnvelopeResponse
+	if err := json.Unmarshal(body, &envelopeResp); err != nil {
+		return nil, fmt.Errorf("unmarshal envelope response: %w", err)
+	}
+	return envelopeResp.Data, nil
+}
+
+func (s *Service) fetchBlobKzgCommitments(blockRoot string) ([]string, error) {
+	url := s.cfg.BeaconApiEndpoint + "/eth/v2/beacon/blocks/" + blockRoot
+
+	req, err := http.NewRequestWithContext(s.ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("get block: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -212,49 +271,54 @@ func (s *Service) fetchBlock(slot string) (*blockData, error) {
 		return nil, fmt.Errorf("read body: %w", err)
 	}
 
-	// Parse version and signed block envelope.
 	var blockResp structs.GetBlockV2Response
 	if err := json.Unmarshal(body, &blockResp); err != nil {
 		return nil, fmt.Errorf("unmarshal block response: %w", err)
 	}
-
+	if blockResp.Version != "gloas" {
+		return nil, fmt.Errorf("unsupported block version: %s", blockResp.Version)
+	}
 	if blockResp.Data == nil {
 		return nil, fmt.Errorf("block response data is nil")
 	}
 
-	// Unmarshal the block message based on version.
-	// Currently supports Electra; can be extended for other versions.
-	switch blockResp.Version {
-	case "electra", "fulu":
-		return parseElectraBlock(blockResp.Data.Message)
-	default:
-		return nil, fmt.Errorf("unsupported block version: %s", blockResp.Version)
+	var block structs.BeaconBlockGloas
+	if err := json.Unmarshal(blockResp.Data.Message, &block); err != nil {
+		return nil, fmt.Errorf("unmarshal gloas block: %w", err)
 	}
+	if block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
+		return nil, fmt.Errorf("gloas block missing signed_execution_payload_bid")
+	}
+	return block.Body.SignedExecutionPayloadBid.Message.BlobKzgCommitments, nil
 }
 
-func parseElectraBlock(raw json.RawMessage) (*blockData, error) {
-	var block structs.BeaconBlockElectra
-	if err := json.Unmarshal(raw, &block); err != nil {
-		return nil, fmt.Errorf("unmarshal electra block: %w", err)
-	}
-
-	if block.Body == nil {
-		return nil, fmt.Errorf("block body is nil")
-	}
-	if block.Body.ExecutionPayload == nil {
-		return nil, fmt.Errorf("execution payload is nil")
-	}
-
-	return &blockData{
-		ParentRoot:         block.ParentRoot,
-		ExecutionPayload:   block.Body.ExecutionPayload,
-		BlobKzgCommitments: block.Body.BlobKzgCommitments,
-		ExecutionRequests:  block.Body.ExecutionRequests,
-	}, nil
-}
-
-func buildNewPayloadRequest(data *blockData) (*enginev1.NewPayloadRequest, error) {
-	payload, err := data.ExecutionPayload.ToConsensus()
+func buildNewPayloadRequest(data *payloadData) (*enginev1.NewPayloadRequest, error) {
+	// Downconvert the gloas execution payload to the Deneb shape used by
+	// enginev1.NewPayloadRequest. The gloas-specific BlockAccessList and
+	// SlotNumber fields are dropped; this is acceptable because NewPayloadRequest
+	// here is only used as a stable identifier between BN and prover (its hash
+	// becomes PublicInput.NewPayloadRequestRoot). Both ends must agree on the
+	// same lossy projection.
+	p := data.ExecutionPayload
+	payload, err := (&structs.ExecutionPayloadDeneb{
+		ParentHash:    p.ParentHash,
+		FeeRecipient:  p.FeeRecipient,
+		StateRoot:     p.StateRoot,
+		ReceiptsRoot:  p.ReceiptsRoot,
+		LogsBloom:     p.LogsBloom,
+		PrevRandao:    p.PrevRandao,
+		BlockNumber:   p.BlockNumber,
+		GasLimit:      p.GasLimit,
+		GasUsed:       p.GasUsed,
+		Timestamp:     p.Timestamp,
+		ExtraData:     p.ExtraData,
+		BaseFeePerGas: p.BaseFeePerGas,
+		BlockHash:     p.BlockHash,
+		Transactions:  p.Transactions,
+		Withdrawals:   p.Withdrawals,
+		BlobGasUsed:   p.BlobGasUsed,
+		ExcessBlobGas: p.ExcessBlobGas,
+	}).ToConsensus()
 	if err != nil {
 		return nil, fmt.Errorf("convert execution payload: %w", err)
 	}
@@ -272,7 +336,7 @@ func buildNewPayloadRequest(data *blockData) (*enginev1.NewPayloadRequest, error
 		return nil, fmt.Errorf("convert kzg commitments: %w", err)
 	}
 
-	parentRoot, err := hex.DecodeString(strings.TrimPrefix(data.ParentRoot, "0x"))
+	parentRoot, err := hex.DecodeString(strings.TrimPrefix(data.ParentBeaconBlockRoot, "0x"))
 	if err != nil {
 		return nil, fmt.Errorf("decode parent root: %w", err)
 	}

@@ -889,17 +889,17 @@ func (f *ForkChoice) BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot [fie
 	return node.root, node.slot, true
 }
 
-// RootsMissingExecutionProofs returns roots of all post-Fulu nodes that
+// RootsMissingExecutionProofs returns roots of all post-Gloas nodes that
 // not yet have enough execution proofs.
 func (f *ForkChoice) RootsMissingExecutionProofs() ([][32]byte, error) {
-	fuluStart, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
+	gloasStart, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
 	if err != nil {
-		return nil, fmt.Errorf("fulu fork epoch start: %w", err)
+		return nil, fmt.Errorf("gloas fork epoch start: %w", err)
 	}
 
 	roots := make([][32]byte, 0, len(f.store.emptyNodeByRoot))
 	for root, en := range f.store.emptyNodeByRoot {
-		if en == nil || en.node == nil || en.node.slot < fuluStart {
+		if en == nil || en.node == nil || en.node.slot < gloasStart {
 			continue
 		}
 

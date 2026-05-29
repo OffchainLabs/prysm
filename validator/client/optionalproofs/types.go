@@ -10,12 +10,14 @@ import (
 
 const blobCommitmentVersionKZG byte = 0x01
 
-// blockData holds the fields extracted from a beacon block needed to build a NewPayloadRequest.
-type blockData struct {
-	ParentRoot         string
-	ExecutionPayload   *structs.ExecutionPayloadDeneb
-	BlobKzgCommitments []string
-	ExecutionRequests  *structs.ExecutionRequests
+// payloadData holds the fields extracted from a gloas execution payload
+// envelope (and its bid, for blob commitments) needed to build a
+// NewPayloadRequest for the prover.
+type payloadData struct {
+	ParentBeaconBlockRoot string
+	ExecutionPayload      *structs.ExecutionPayloadGloas
+	BlobKzgCommitments    []string
+	ExecutionRequests     *structs.ExecutionRequests
 }
 
 // kzgCommitmentsToVersionedHashes converts KZG commitments (hex strings) to versioned hashes.

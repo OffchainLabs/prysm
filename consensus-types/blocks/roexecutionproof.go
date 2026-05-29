@@ -99,7 +99,7 @@ func NewVerifiedROSignedExecutionProof(ro ROSignedExecutionProof) VerifiedROSign
 // internally merkleizes the chunks into a single root, then
 // MerkleizeWithMixin re-merkleizes that root with the list limit).
 func ExecutionProofHashTreeRoot(ep *ethpb.ExecutionProof) ([32]byte, error) {
-	const maxProofDataChunks = (307200 + 31) / 32 // ceil(MAX_PROOF_SIZE / 32)
+	const maxProofDataChunks = (409600 + 31) / 32 // ceil(MAX_PROOF_SIZE / 32)
 
 	// Field 0: proof_data — ByteList[MAX_PROOF_SIZE]
 	proofDataChunks := packBytes(ep.ProofData)

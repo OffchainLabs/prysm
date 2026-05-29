@@ -193,8 +193,6 @@ ssz_fulu_objs = [
     "SignedBeaconBlockContentsFulu",
     "SignedBeaconBlockFulu",
     "SignedBlindedBeaconBlockFulu",
-    "SignedExecutionProof",
-    "ProofByRootIdentifier",
 ]
 
 ssz_gloas_objs = [
@@ -217,6 +215,12 @@ ssz_gloas_objs = [
     "BeaconBlockContentsGloas",
     "SignedBeaconBlockGloas",
     "BeaconStateGloas",
+]
+
+# EIP-8025: generated into a dedicated execution_proof.ssz.go file.
+ssz_execution_proof_objs = [
+    "SignedExecutionProof",
+    "ProofByRootIdentifier",
 ]
 
 ssz_gen_marshal(
@@ -323,6 +327,18 @@ ssz_gen_marshal(
 )
 
 ssz_gen_marshal(
+    name = "ssz_generated_execution_proof",
+    out = "execution_proof.ssz.go",
+    go_proto = ":go_proto",
+    includes = [
+        "//consensus-types/primitives:go_default_library",
+        "//math:go_default_library",
+        "//proto/engine/v1:go_default_library",
+    ],
+    objs = ssz_execution_proof_objs,
+)
+
+ssz_gen_marshal(
     name = "ssz_generated_non_core",
     out = "non-core.ssz.go",
     go_proto = ":go_proto",
@@ -394,6 +410,7 @@ go_library(
         ":ssz_generated_capella",  # keep
         ":ssz_generated_deneb",  # keep
         ":ssz_generated_electra",  # keep
+        ":ssz_generated_execution_proof",  # keep
         ":ssz_generated_fulu",  # keep
         ":ssz_generated_gloas",  # keep
         ":ssz_generated_non_core",  # keep

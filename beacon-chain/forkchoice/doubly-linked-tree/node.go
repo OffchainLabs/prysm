@@ -37,7 +37,7 @@ func (n *Node) leadsToViableHead(justifiedEpoch, currentEpoch primitives.Epoch) 
 
 // isNodeReady returns true if this node's local conditions for being
 // valid (ie. non optimistic) are met: the node is EL-validated, and if the ZKVM
-// feature is enabled and the node's slot is at or after the Fulu fork, it also
+// feature is enabled and the node's slot is at or after the Gloas fork, it also
 // has enough execution proofs.
 func (pn *PayloadNode) isNodeReady() (bool, error) {
 	if !pn.elValidated {
@@ -48,12 +48,12 @@ func (pn *PayloadNode) isNodeReady() (bool, error) {
 		return true, nil
 	}
 
-	fuluStart, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
+	gloasStart, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
 	if err != nil {
-		return false, fmt.Errorf("could not compute Fulu epoch start: %w", err)
+		return false, fmt.Errorf("could not compute Gloas epoch start: %w", err)
 	}
 
-	if pn.node != nil && pn.node.slot >= fuluStart && !pn.hasEnoughProofs {
+	if pn.node != nil && pn.node.slot >= gloasStart && !pn.hasEnoughProofs {
 		return false, nil
 	}
 

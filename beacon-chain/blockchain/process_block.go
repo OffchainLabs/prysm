@@ -82,19 +82,6 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		return errors.Wrapf(err, "could not insert block %d to fork choice store", cfg.roblock.Block().Slot())
 	}
 
-	if cfg.roblock.Version() >= version.Fulu {
-		newPayloadRequestRoot, err := consensusblocks.ComputeNewPayloadRequestRoot(cfg.roblock)
-		if err != nil {
-			return fmt.Errorf("compute new payload request root: %w", err)
-		}
-
-		if err := s.cfg.BeaconDB.SaveNewPayloadRequestRoot(ctx, cfg.roblock.Root(), newPayloadRequestRoot); err != nil {
-			return fmt.Errorf("save new payload request root: %w", err)
-		}
-
-		s.cfg.ForkChoiceStore.SetNewPayloadRequestRoot(cfg.roblock.Root(), newPayloadRequestRoot)
-	}
-
 	if err := s.handleBlockAttestations(ctx, cfg.roblock.Block(), cfg.postState); err != nil {
 		return errors.Wrap(err, "could not handle block's attestations")
 	}
@@ -419,19 +406,6 @@ func (s *Service) notifyEngineAndSaveData(
 		}
 		if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
 			return nil, false, errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
-		}
-
-		if b.Version() >= version.Fulu {
-			newPayloadRequestRoot, err := consensusblocks.ComputeNewPayloadRequestRoot(b)
-			if err != nil {
-				return nil, false, fmt.Errorf("compute new payload request root: %w", err)
-			}
-
-			if err := s.cfg.BeaconDB.SaveNewPayloadRequestRoot(ctx, root, newPayloadRequestRoot); err != nil {
-				return nil, false, fmt.Errorf("save new payload request root: %w", err)
-			}
-
-			args.NewPayloadRequestRoot = newPayloadRequestRoot
 		}
 
 		pendingNodes[i] = args
