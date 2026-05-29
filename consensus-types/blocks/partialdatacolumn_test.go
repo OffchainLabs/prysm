@@ -241,7 +241,8 @@ func TestMarshalPartsMetadata(t *testing.T) {
 		{
 			name: "available too large",
 			meta: &ethpb.PartialDataColumnPartsMetadata{
-				Available: bitfield.NewBitlist(4096),
+				// 32768 bits serializes to 4097 bytes, one over the 4096-byte ssz_max.
+				Available: bitfield.NewBitlist(32768),
 				Requests:  bitfield.NewBitlist(1),
 			},
 			wantErr: "Available",
@@ -250,7 +251,7 @@ func TestMarshalPartsMetadata(t *testing.T) {
 			name: "requests too large",
 			meta: &ethpb.PartialDataColumnPartsMetadata{
 				Available: bitfield.NewBitlist(1),
-				Requests:  bitfield.NewBitlist(4096),
+				Requests:  bitfield.NewBitlist(32768),
 			},
 			wantErr: "Requests",
 		},
@@ -347,7 +348,8 @@ func TestPartialDataColumn_PartsMetadata(t *testing.T) {
 				DataColumnSidecar: &ethpb.DataColumnSidecar{
 					KzgCommitments: make([][]byte, 4096),
 				},
-				Included: bitfield.NewBitlist(4096),
+				// 32768 bits serializes to 4097 bytes, one over the 4096-byte ssz_max.
+				Included: bitfield.NewBitlist(32768),
 			},
 			expectErr: "Available",
 		},

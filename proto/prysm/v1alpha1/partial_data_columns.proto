@@ -22,7 +22,7 @@ option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
 
 message PartialDataColumnSidecar {
   bytes cells_present_bitmap = 1 [
-    (ethereum.eth.ext.ssz_max) = "max_blob_commitments_bitmap.size",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size",
     (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
   repeated bytes partial_column = 2 [
@@ -47,11 +47,11 @@ message PartialDataColumnHeader {
 
 message PartialDataColumnPartsMetadata {
   bytes available = 1 [
-    (ethereum.eth.ext.ssz_max) = "max_blob_commitments_bitmap.size",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size",
     (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
   bytes requests = 2 [
-    (ethereum.eth.ext.ssz_max) = "max_blob_commitments_bitmap.size",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size",
     (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
 }
