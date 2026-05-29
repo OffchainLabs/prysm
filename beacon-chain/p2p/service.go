@@ -202,6 +202,9 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 
 // Start the p2p service.
 func (s *Service) Start() {
+	if s == nil {
+		return
+	}
 	if s.started {
 		log.Error("Attempted to start p2p service when it was already started")
 		return
@@ -309,6 +312,9 @@ func (s *Service) Start() {
 
 // Stop the p2p service and terminate all peer connections.
 func (s *Service) Stop() error {
+	if s == nil {
+		return nil
+	}
 	defer s.cancel()
 	s.started = false
 	if s.dv5Listener != nil {
@@ -452,6 +458,9 @@ func (s *Service) pingPeersAndLogEnr() {
 // for initializing the p2p service as p2p needs to be aware
 // of genesis information for peering.
 func (s *Service) awaitStateInitialized() {
+	if s == nil || s.cfg == nil || s.cfg.ClockWaiter == nil {
+		return
+	}
 	s.initializationLock.Lock()
 	defer s.initializationLock.Unlock()
 	if s.isInitialized() {
@@ -550,6 +559,9 @@ func (s *Service) connectToBootnodes() error {
 // Returns true if the service is aware of the genesis time and genesis validators root. This is
 // required for discovery and pubsub validation.
 func (s *Service) isInitialized() bool {
+	if s == nil {
+		return false
+	}
 	return !s.genesisTime.IsZero() && len(s.genesisValidatorsRoot) == 32
 }
 

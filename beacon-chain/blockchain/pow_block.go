@@ -39,17 +39,24 @@ import (
 //	# Check if `pow_block` is a valid terminal PoW block
 //	assert is_valid_terminal_pow_block(pow_block, pow_parent)
 func (s *Service) validateMergeBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock) error {
+	if b == nil || b.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
+	}
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return err
 	}
-	payload, err := b.Block().Body().Execution()
+	block := b.Block()
+	if block == nil || block.IsNil() {
+		return blocks.ErrNilBeaconBlock
+	}
+	payload, err := block.Body().Execution()
 	if err != nil {
 		return err
 	}
 	if payload == nil || payload.IsNil() {
 		return errors.New("nil execution payload")
 	}
-	ok, err := canUseValidatedTerminalBlockHash(b.Block().Slot(), payload)
+	ok, err := canUseValidatedTerminalBlockHash(block.Slot(), payload)
 	if err != nil {
 		return errors.Wrap(err, "could not validate terminal block hash")
 	}
@@ -75,7 +82,7 @@ func (s *Service) validateMergeBlock(ctx context.Context, b interfaces.ReadOnlyS
 	}
 
 	log.WithFields(logrus.Fields{
-		"slot":                            b.Block().Slot(),
+		"slot":                            block.Slot(),
 		"mergeBlockHash":                  common.BytesToHash(payload.ParentHash()).String(),
 		"mergeBlockParentHash":            common.BytesToHash(mergeBlockParentHash).String(),
 		"terminalTotalDifficulty":         params.BeaconConfig().TerminalTotalDifficulty,
@@ -120,6 +127,9 @@ func (s *Service) getBlkParentHashAndTD(ctx context.Context, blkHash []byte) ([]
 func canUseValidatedTerminalBlockHash(blkSlot primitives.Slot, payload interfaces.ExecutionData) (bool, error) {
 	if bytesutil.ToBytes32(params.BeaconConfig().TerminalBlockHash.Bytes()) == [32]byte{} {
 		return false, nil
+	}
+	if payload == nil || payload.IsNil() {
+		return false, errors.New("execution payload is nil")
 	}
 	if params.BeaconConfig().TerminalBlockHashActivationEpoch > slots.ToEpoch(blkSlot) {
 		return false, errors.New("terminal block hash activation epoch not reached")

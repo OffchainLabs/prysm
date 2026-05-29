@@ -78,6 +78,9 @@ func (p *localSelector) cacheProof(key attSelectionKey, proof []byte) {
 }
 
 func (p *localSelector) RefreshSelectionProofs(context.Context) error {
+	if p == nil {
+		return errors.New("local selector is nil")
+	}
 	p.proofLock.Lock()
 	defer p.proofLock.Unlock()
 	p.proofCache = make(map[attSelectionKey][]byte)
@@ -85,6 +88,9 @@ func (p *localSelector) RefreshSelectionProofs(context.Context) error {
 }
 
 func (p *localSelector) AttestationSelectionProof(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error) {
+	if p == nil {
+		return nil, errors.New("local selector is nil")
+	}
 	idx, err := p.v.indexFromPubkey(pubKey)
 	if err != nil {
 		return nil, errors.Wrap(err, "index from pubkey")
@@ -112,6 +118,9 @@ func (p *localSelector) AttestationSelectionProof(ctx context.Context, slot prim
 }
 
 func (p *localSelector) ClaimAggregateSlot(slot primitives.Slot, committeeIndex primitives.CommitteeIndex) bool {
+	if p == nil {
+		return false
+	}
 	k := validatorSubnetSubscriptionKey(slot, committeeIndex)
 	p.dedupLock.Lock()
 	defer p.dedupLock.Unlock()
@@ -135,6 +144,9 @@ func (p *localSelector) signSyncSelectionProofs(ctx context.Context, slot primit
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "can't fetch sync subcommittee index")
+	}
+	if res == nil {
+		return nil, errors.New("sync subcommittee index response is nil")
 	}
 	proofs := make([]syncSelectionProof, 0, len(res.Indices))
 	for _, index := range res.Indices {
@@ -176,6 +188,9 @@ func (p *localSelector) SyncCommitteeAggregators(ctx context.Context, slot primi
 func (p *localSelector) SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse) ([][]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "localSelector.SyncCommitteeSelectionProofs")
 	defer span.End()
+	if indexRes == nil {
+		return nil, errors.New("sync subcommittee index response is nil")
+	}
 
 	selectionProofs := make([][]byte, len(indexRes.Indices))
 	for i, index := range indexRes.Indices {
@@ -333,6 +348,9 @@ func (p *distributedSelector) SyncCommitteeAggregators(_ context.Context, _ prim
 func (p *distributedSelector) SyncCommitteeSelectionProofs(ctx context.Context, slot primitives.Slot, pubKey [fieldparams.BLSPubkeyLength]byte, indexRes *ethpb.SyncSubcommitteeIndexResponse) ([][]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "distributedSelector.SyncCommitteeSelectionProofs")
 	defer span.End()
+	if indexRes == nil {
+		return nil, errors.New("sync subcommittee index response is nil")
+	}
 
 	idx, err := p.v.indexFromPubkey(pubKey)
 	if err != nil {

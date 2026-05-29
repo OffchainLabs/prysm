@@ -15,6 +15,10 @@ import (
 
 // GeneratePendingDeposit is used for testing and producing a signed pending deposit
 func GeneratePendingDeposit(t *testing.T, key common.SecretKey, amount uint64, withdrawalCredentials [32]byte, slot primitives.Slot) *ethpb.PendingDeposit {
+	if key == nil {
+		t.Fatal("key is nil")
+		return nil
+	}
 	dm := &ethpb.DepositMessage{
 		PublicKey:             key.PublicKey().Marshal(),
 		WithdrawalCredentials: withdrawalCredentials[:],
@@ -25,6 +29,7 @@ func GeneratePendingDeposit(t *testing.T, key common.SecretKey, amount uint64, w
 	sr, err := signing.ComputeSigningRoot(dm, domain)
 	require.NoError(t, err)
 	sig := key.Sign(sr[:])
+	require.NotNil(t, sig)
 	depositData := &ethpb.Deposit_Data{
 		PublicKey:             bytesutil.SafeCopyBytes(dm.PublicKey),
 		WithdrawalCredentials: bytesutil.SafeCopyBytes(dm.WithdrawalCredentials),

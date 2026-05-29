@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
+	"github.com/pkg/errors"
 )
 
 // ConvertToAltair converts a Phase 0 beacon state to an Altair beacon state.
@@ -148,17 +149,27 @@ func UpgradeToAltair(ctx context.Context, state state.BeaconState) (state.Beacon
 //	        for flag_index in participation_flag_indices:
 //	            epoch_participation[index] = add_flag(epoch_participation[index], flag_index)
 func TranslateParticipation(ctx context.Context, state state.BeaconState, atts []*ethpb.PendingAttestation) (state.BeaconState, error) {
+	if state == nil || state.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	epochParticipation, err := state.PreviousEpochParticipation()
 	if err != nil {
 		return nil, err
 	}
+	if epochParticipation == nil {
+		return nil, errors.New("previous epoch participation is nil")
+	}
 
 	for _, att := range atts {
-		participatedFlags, err := AttestationParticipationFlagIndices(state, att.Data, att.InclusionDelay)
+		data := att.GetData()
+		if data == nil {
+			return nil, errors.New("pending attestation data is nil")
+		}
+		participatedFlags, err := AttestationParticipationFlagIndices(state, data, att.InclusionDelay)
 		if err != nil {
 			return nil, err
 		}
-		committee, err := helpers.BeaconCommitteeFromState(ctx, state, att.GetData().Slot, att.GetData().CommitteeIndex)
+		committee, err := helpers.BeaconCommitteeFromState(ctx, state, data.Slot, data.CommitteeIndex)
 		if err != nil {
 			return nil, err
 		}

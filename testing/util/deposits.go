@@ -73,6 +73,12 @@ func DeterministicDepositsAndKeys(numDeposits uint64) ([]*ethpb.Deposit, []bls.S
 			}
 		}
 	}
+	if cachedDeposits == nil {
+		cachedDeposits = []*ethpb.Deposit{}
+	}
+	if privKeys == nil {
+		privKeys = []bls.SecretKey{}
+	}
 
 	depositTrie, _, err := DeterministicDepositTrie(int(numDeposits)) // lint:ignore uintcast
 	if err != nil {
@@ -101,6 +107,12 @@ func DepositsWithBalance(balances []uint64) ([]*ethpb.Deposit, *trie.SparseMerkl
 	}
 
 	numDeposits := uint64(len(balances))
+	if cachedDeposits == nil {
+		cachedDeposits = []*ethpb.Deposit{}
+	}
+	if privKeys == nil {
+		privKeys = []bls.SecretKey{}
+	}
 	numExisting := uint64(len(cachedDeposits))
 	numRequired := numDeposits - uint64(len(cachedDeposits))
 
@@ -273,10 +285,17 @@ func DeterministicGenesisState(t testing.TB, numValidators uint64) (state.Beacon
 
 // DepositTrieFromDeposits takes an array of deposits and returns the deposit trie.
 func DepositTrieFromDeposits(deposits []*ethpb.Deposit) (*trie.SparseMerkleTrie, [][32]byte, error) {
+	if deposits == nil {
+		return nil, [][32]byte{}, errors.New("deposits are nil")
+	}
 	encodedDeposits := make([][]byte, len(deposits))
 	roots := make([][32]byte, len(deposits))
 	for i := range encodedDeposits {
-		hashedDeposit, err := deposits[i].Data.HashTreeRoot()
+		deposit := deposits[i]
+		if deposit == nil || deposit.Data == nil {
+			return nil, [][32]byte{}, errors.New("deposit data is nil")
+		}
+		hashedDeposit, err := deposit.Data.HashTreeRoot()
 		if err != nil {
 			return nil, [][32]byte{}, errors.Wrap(err, "could not tree hash deposit data")
 		}
@@ -287,6 +306,9 @@ func DepositTrieFromDeposits(deposits []*ethpb.Deposit) (*trie.SparseMerkleTrie,
 	depositTrie, err := trie.GenerateTrieFromItems(encodedDeposits, params.BeaconConfig().DepositContractTreeDepth)
 	if err != nil {
 		return nil, [][32]byte{}, errors.Wrap(err, "Could not generate deposit trie")
+	}
+	if depositTrie == nil {
+		return nil, [][32]byte{}, errors.New("deposit trie is nil")
 	}
 
 	return depositTrie, roots, nil
@@ -379,6 +401,12 @@ func DeterministicDepositsAndKeysSameValidator(numDeposits uint64) ([]*ethpb.Dep
 	depositTrie, _, err := DeterministicDepositTrie(int(numDeposits))
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to create deposit trie")
+	}
+	if cachedDeposits == nil {
+		cachedDeposits = []*ethpb.Deposit{}
+	}
+	if privKeys == nil {
+		privKeys = []bls.SecretKey{}
 	}
 	requestedDeposits := cachedDeposits[:numDeposits]
 	for i := range requestedDeposits {

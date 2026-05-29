@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -23,6 +24,9 @@ func (s *Store) SaveStateSummaries(ctx context.Context, summaries []*ethpb.State
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveStateSummaries")
 	defer span.End()
 
+	if s == nil || s.db == nil || s.stateSummaryCache == nil {
+		return errors.New("store is nil")
+	}
 	// When we reach the state summary cache prune count,
 	// dump the cached state summaries to the DB.
 	if s.stateSummaryCache.len() >= stateSummaryCachePruneCount {
@@ -40,15 +44,22 @@ func (s *Store) SaveStateSummaries(ctx context.Context, summaries []*ethpb.State
 
 // StateSummary returns the state summary object from the db using input block root.
 func (s *Store) StateSummary(ctx context.Context, blockRoot [32]byte) (*ethpb.StateSummary, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("store is nil")
+	}
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.StateSummary")
 	defer span.End()
 
-	if s.stateSummaryCache.has(blockRoot) {
+	if s.stateSummaryCache != nil && s.stateSummaryCache.has(blockRoot) {
 		return s.stateSummaryCache.get(blockRoot), nil
 	}
 	var enc []byte
 	if err := s.db.View(func(tx *bolt.Tx) error {
-		rawEnc := tx.Bucket(stateSummaryBucket).Get(blockRoot[:])
+		bucket := tx.Bucket(stateSummaryBucket)
+		if bucket == nil {
+			return nil
+		}
+		rawEnc := bucket.Get(blockRoot[:])
 		if len(rawEnc) == 0 {
 			return nil
 		}
@@ -69,16 +80,23 @@ func (s *Store) StateSummary(ctx context.Context, blockRoot [32]byte) (*ethpb.St
 
 // HasStateSummary returns true if a state summary exists in DB.
 func (s *Store) HasStateSummary(ctx context.Context, blockRoot [32]byte) bool {
+	if s == nil || s.db == nil {
+		return false
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.HasStateSummary")
 	defer span.End()
 
-	if s.stateSummaryCache.has(blockRoot) {
+	if s.stateSummaryCache != nil && s.stateSummaryCache.has(blockRoot) {
 		return true
 	}
 
 	var hasSummary bool
 	if err := s.db.View(func(tx *bolt.Tx) error {
-		enc := tx.Bucket(stateSummaryBucket).Get(blockRoot[:])
+		bucket := tx.Bucket(stateSummaryBucket)
+		if bucket == nil {
+			return nil
+		}
+		enc := bucket.Get(blockRoot[:])
 		hasSummary = len(enc) > 0
 		return nil
 	}); err != nil {

@@ -139,6 +139,9 @@ func spanAction(cliCtx *cli.Context) error {
 	); err != nil {
 		return errors.Wrapf(err, "could not get chunk from database")
 	}
+	if chunk == nil {
+		return errors.New("chunk is nil")
+	}
 
 	// fetch information related to chunk
 	fmt.Printf("\n################################ CHUNK #####################################\n")
@@ -162,6 +165,9 @@ func spanAction(cliCtx *cli.Context) error {
 
 			// rows
 			b := chunk.Chunk()
+			if b == nil {
+				return errors.New("chunk bytes are nil")
+			}
 			c := uint64(0)
 			for z := uint64(0); z < uint64(len(b)); z += params.ChunkSize() {
 				end := min(z+params.ChunkSize(), uint64(len(b)))
@@ -186,6 +192,9 @@ func spanAction(cliCtx *cli.Context) error {
 
 			// rows
 			b := chunk.Chunk()
+			if b == nil {
+				return errors.New("chunk bytes are nil")
+			}
 			c := uint64(0)
 			for z := uint64(0); z < uint64(len(b)); z += params.ChunkSize() {
 				end := min(z+params.ChunkSize(), uint64(len(b)))
@@ -209,6 +218,9 @@ func spanAction(cliCtx *cli.Context) error {
 
 			// rows
 			b := chunk.Chunk()
+			if b == nil {
+				return errors.New("chunk bytes are nil")
+			}
 			validatorFirstEpochIdx := uint64(i.Mod(params.ValidatorChunkSize())) * params.ChunkSize()
 			subChunk := b[validatorFirstEpochIdx : validatorFirstEpochIdx+params.ChunkSize()]
 			row := make(table.Row, params.ChunkSize()+1)
@@ -226,6 +238,9 @@ func spanAction(cliCtx *cli.Context) error {
 
 			// rows
 			b := chunk.Chunk()
+			if b == nil {
+				return errors.New("chunk bytes are nil")
+			}
 			validatorFirstEpochIdx := uint64(i.Mod(params.ValidatorChunkSize())) * params.ChunkSize()
 			subChunk := b[validatorFirstEpochIdx : validatorFirstEpochIdx+params.ChunkSize()]
 			row := make(table.Row, 2)

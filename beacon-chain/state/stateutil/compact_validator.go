@@ -49,6 +49,10 @@ func CompactValidatorsToProto(compactValidators []CompactValidator) []*ethpb.Val
 
 // CompactValidatorFromProto converts a protobuf Validator to a CompactValidator.
 func CompactValidatorFromProto(v *ethpb.Validator) CompactValidator {
+	if v == nil {
+		return CompactValidator{}
+	}
+
 	var publicKey [fieldparams.BLSPubkeyLength]byte
 	copy(publicKey[:], v.PublicKey)
 

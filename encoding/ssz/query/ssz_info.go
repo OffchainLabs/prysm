@@ -193,9 +193,14 @@ func printRecursive(info *SszInfo, builder *strings.Builder, prefix string) {
 				nextPrefix = prefix + "   "
 			}
 
-			builder.WriteString(fmt.Sprintf("%s%s %s (offset: %d) ", prefix, connector, key, info.containerInfo.fields[key].offset))
+			fieldInfo := info.containerInfo.fields[key]
+			if fieldInfo == nil {
+				builder.WriteString(fmt.Sprintf("%s%s %s (missing field info)\n", prefix, connector, key))
+				continue
+			}
+			builder.WriteString(fmt.Sprintf("%s%s %s (offset: %d) ", prefix, connector, key, fieldInfo.offset))
 
-			if nestedInfo := info.containerInfo.fields[key].sszInfo; nestedInfo != nil {
+			if nestedInfo := fieldInfo.sszInfo; nestedInfo != nil {
 				printRecursive(nestedInfo, builder, nextPrefix)
 			} else {
 				builder.WriteString("\n")

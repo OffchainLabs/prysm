@@ -498,7 +498,7 @@ func (chk *checker) check(b *block) {
 	chk.seen[b] = true
 
 	for obj, ops := range b.ops {
-		if chk.vars[obj].escapes {
+		if v := chk.vars[obj]; v == nil || v.escapes {
 			continue
 		}
 	ops:

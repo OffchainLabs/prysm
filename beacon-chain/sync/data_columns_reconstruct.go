@@ -127,6 +127,9 @@ func (s *Service) shouldReconstruct(root [fieldparams.RootLength]byte) bool {
 // computeRandomDelay computes a random delay duration to wait before reconstructing data column sidecars.
 func (s *Service) computeRandomDelay(slotStartTime time.Time) time.Duration {
 	const maxReconstructionDelaySec = 2.
+	if s == nil || s.reconstructionRandGen == nil {
+		return 0
+	}
 
 	randFloat := s.reconstructionRandGen.Float64()
 	timeIntoSlot := time.Duration(maxReconstructionDelaySec * randFloat * float64(time.Second))

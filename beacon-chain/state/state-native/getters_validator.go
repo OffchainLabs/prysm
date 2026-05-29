@@ -39,7 +39,7 @@ func (b *BeaconState) validatorsVal() []*ethpb.Validator {
 
 func (b *BeaconState) validatorsReadOnlyVal() []state.ReadOnlyValidator {
 	if b.validatorsMultiValue == nil {
-		return nil
+		return []state.ReadOnlyValidator{}
 	}
 	v := b.validatorsMultiValue.Value(b)
 
@@ -252,7 +252,7 @@ func (b *BeaconState) Balances() []uint64 {
 
 func (b *BeaconState) balancesVal() []uint64 {
 	if b.balancesMultiValue == nil {
-		return nil
+		return []uint64{}
 	}
 	return b.balancesMultiValue.Value(b)
 }
@@ -286,7 +286,7 @@ func (b *BeaconState) BalancesLength() int {
 // Slashings of validators on the beacon chain.
 func (b *BeaconState) Slashings() []uint64 {
 	if b.slashings == nil {
-		return nil
+		return []uint64{}
 	}
 
 	b.lock.RLock()
@@ -299,7 +299,7 @@ func (b *BeaconState) Slashings() []uint64 {
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) slashingsVal() []uint64 {
 	if b.slashings == nil {
-		return nil
+		return []uint64{}
 	}
 
 	res := make([]uint64, len(b.slashings))

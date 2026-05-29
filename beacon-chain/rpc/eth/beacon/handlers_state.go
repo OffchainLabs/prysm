@@ -54,6 +54,10 @@ func (s *Server) GetStateRoot(w http.ResponseWriter, r *http.Request) {
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
+		return
+	}
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
 		helpers.HandleIsOptimisticError(w, err)
@@ -97,6 +101,10 @@ func (s *Server) GetRandao(w http.ResponseWriter, r *http.Request) {
 	st, err := s.Stater.State(ctx, []byte(stateId))
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
 		return
 	}
 
@@ -201,6 +209,10 @@ func (s *Server) GetSyncCommittees(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
+		return
+	}
 
 	var committeeIndices []string
 	var committee *ethpbalpha.SyncCommittee
@@ -250,6 +262,9 @@ func (s *Server) GetSyncCommittees(w http.ResponseWriter, r *http.Request) {
 }
 
 func committeeIndicesFromState(st state.BeaconState, committee *ethpbalpha.SyncCommittee) ([]string, *ethpbalpha.SyncCommittee, error) {
+	if committee == nil {
+		return nil, nil, errors.New("nil sync committee")
+	}
 	committeeIndices := make([]string, len(committee.Pubkeys))
 	for i, key := range committee.Pubkeys {
 		index, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(key))
@@ -271,6 +286,9 @@ func currentCommitteeIndicesFromState(st state.BeaconState) ([]string, *ethpbalp
 			"could not get sync committee: %w", err,
 		)
 	}
+	if committee == nil {
+		return nil, nil, errors.New("nil current sync committee")
+	}
 
 	return committeeIndicesFromState(st, committee)
 }
@@ -281,6 +299,9 @@ func nextCommitteeIndicesFromState(st state.BeaconState) ([]string, *ethpbalpha.
 		return nil, nil, fmt.Errorf(
 			"could not get sync committee: %w", err,
 		)
+	}
+	if committee == nil {
+		return nil, nil, errors.New("nil next sync committee")
 	}
 
 	return committeeIndicesFromState(st, committee)

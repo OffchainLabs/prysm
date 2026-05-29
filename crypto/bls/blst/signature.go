@@ -135,6 +135,9 @@ func (s *Signature) Verify(pubKey common.PublicKey, msg []byte) bool {
 //
 // Deprecated: Use FastAggregateVerify or use this method in spectests only.
 func (s *Signature) AggregateVerify(pubKeys []common.PublicKey, msgs [][32]byte) bool {
+	if pubKeys == nil {
+		return false
+	}
 	size := len(pubKeys)
 	if size == 0 {
 		return false
@@ -145,6 +148,9 @@ func (s *Signature) AggregateVerify(pubKeys []common.PublicKey, msgs [][32]byte)
 	msgSlices := make([][]byte, len(msgs))
 	rawKeys := make([]*blstPublicKey, len(msgs))
 	for i := range size {
+		if pubKeys[i] == nil {
+			return false
+		}
 		msgSlices[i] = msgs[i][:]
 		rawKeys[i] = pubKeys[i].(*PublicKey).p
 	}

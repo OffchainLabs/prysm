@@ -26,6 +26,10 @@ func VerifyBeaconStateLatestBlockHeader(
 	s, err = factoryLBH(want)
 	require.NoError(t, err)
 	got = s.LatestBlockHeader()
+	if got == nil {
+		t.Fatal("latest block header is nil")
+		return
+	}
 	require.DeepEqual(t, want, got)
 
 	// Test copy does not mutate.

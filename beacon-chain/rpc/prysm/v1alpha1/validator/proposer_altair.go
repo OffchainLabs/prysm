@@ -22,11 +22,18 @@ import (
 )
 
 func (vs *Server) setSyncAggregate(ctx context.Context, blk interfaces.SignedBeaconBlock, headState state.BeaconState) {
+	if blk == nil || blk.IsNil() {
+		return
+	}
 	if blk.Version() < version.Altair {
 		return
 	}
 
-	syncAggregate, err := vs.getSyncAggregate(ctx, slots.PrevSlot(blk.Block().Slot()), blk.Block().ParentRoot(), headState)
+	blkBlock := blk.Block()
+	if blkBlock == nil || blkBlock.IsNil() {
+		return
+	}
+	syncAggregate, err := vs.getSyncAggregate(ctx, slots.PrevSlot(blkBlock.Slot()), blkBlock.ParentRoot(), headState)
 	if err != nil {
 		log.WithError(err).Error("Could not get sync aggregate")
 		emptySig := [96]byte{0xC0}
@@ -70,9 +77,9 @@ func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, ro
 	proposerContributions = append(proposerContributions, aggregatedContributions...)
 
 	subcommitteeCount := params.BeaconConfig().SyncCommitteeSubnetCount
-	var bitsHolder [][]byte
-	for range subcommitteeCount {
-		bitsHolder = append(bitsHolder, ethpb.NewSyncCommitteeAggregationBits())
+	bitsHolder := make([][]byte, subcommitteeCount)
+	for i := range subcommitteeCount {
+		bitsHolder[i] = ethpb.NewSyncCommitteeAggregationBits()
 	}
 	sigsHolder := make([]bls.Signature, 0, params.BeaconConfig().SyncCommitteeSize/subcommitteeCount)
 
@@ -126,6 +133,10 @@ func (vs *Server) aggregatedSyncCommitteeMessages(
 	poolContributions []*ethpb.SyncCommitteeContribution,
 	st state.BeaconState,
 ) ([]*ethpb.SyncCommitteeContribution, error) {
+	if st == nil || st.IsNil() {
+		return nil, errors.New("head state is nil")
+	}
+
 	subcommitteeCount := params.BeaconConfig().SyncCommitteeSubnetCount
 	subcommitteeSize := params.BeaconConfig().SyncCommitteeSize / subcommitteeCount
 	sigsPerSubcommittee := make([][][]byte, subcommitteeCount)
@@ -212,11 +223,16 @@ func aggregateSyncSubcommitteeMessages(
 			return nil, errors.Wrap(err, "could not create signature from bytes")
 		}
 	}
+	aggregatedSig := bls.AggregateSignatures(uncompressedSigs)
+	aggregatedSigBytes := common.InfiniteSignature
+	if aggregatedSig != nil {
+		aggregatedSigBytes = bytesutil.ToBytes96(aggregatedSig.Marshal())
+	}
 	return &ethpb.SyncCommitteeContribution{
 		Slot:              slot,
 		BlockRoot:         root[:],
 		SubcommitteeIndex: subcommitteeIndex,
 		AggregationBits:   bits.Bytes(),
-		Signature:         bls.AggregateSignatures(uncompressedSigs).Marshal(),
+		Signature:         aggregatedSigBytes[:],
 	}, nil
 }

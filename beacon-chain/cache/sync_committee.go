@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -173,6 +174,9 @@ func (s *SyncCommitteeCache) idxPositionInCommittee(
 // current epoch and next epoch. This should be called when `current_sync_committee` and `next_sync_committee`
 // change and that happens every `EPOCHS_PER_SYNC_COMMITTEE_PERIOD`.
 func (s *SyncCommitteeCache) UpdatePositionsInCommittee(syncCommitteeBoundaryRoot [32]byte, st state.ReadOnlyBeaconState) error {
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 	// since we call UpdatePositionsInCommittee asynchronously, keep track of the cache value
 	// seen at the beginning of the routine and compare at the end before updating. If the underlying value has been
 	// cycled (new address), don't update it.
@@ -180,6 +184,9 @@ func (s *SyncCommitteeCache) UpdatePositionsInCommittee(syncCommitteeBoundaryRoo
 	csc, err := st.CurrentSyncCommittee()
 	if err != nil {
 		return err
+	}
+	if csc == nil {
+		return errors.New("current sync committee is nil")
 	}
 	positionsMap := make(map[primitives.ValidatorIndex]*positionInCommittee)
 	for i, pubkey := range csc.Pubkeys {
@@ -199,6 +206,9 @@ func (s *SyncCommitteeCache) UpdatePositionsInCommittee(syncCommitteeBoundaryRoo
 	nsc, err := st.NextSyncCommittee()
 	if err != nil {
 		return err
+	}
+	if nsc == nil {
+		return errors.New("next sync committee is nil")
 	}
 	for i, pubkey := range nsc.Pubkeys {
 		p := bytesutil.ToBytes48(pubkey)

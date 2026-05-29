@@ -46,9 +46,11 @@ func (s *Service) ComputeValidatorPerformance(
 ) (*ethpb.ValidatorPerformanceResponse, *RpcError) {
 	ctx, span := trace.StartSpan(ctx, "coreService.ComputeValidatorPerformance")
 	defer span.End()
-
 	if s.SyncChecker.Syncing() {
 		return nil, &RpcError{Reason: Unavailable, Err: errors.New("Syncing to latest head, not ready to respond")}
+	}
+	if req == nil {
+		return nil, &RpcError{Err: errors.New("request is nil"), Reason: BadRequest}
 	}
 
 	headState, err := s.HeadFetcher.HeadState(ctx)
@@ -166,6 +168,10 @@ func (s *Service) ComputeValidatorPerformance(
 		}
 
 		summary := validatorSummary[idx]
+		if summary == nil {
+			missingValidators = append(missingValidators, pubKey[:])
+			continue
+		}
 		pubKeys = append(pubKeys, pubKey[:])
 		effectiveBalances = append(effectiveBalances, summary.CurrentEpochEffectiveBalance)
 		beforeTransitionBalances = append(beforeTransitionBalances, summary.BeforeEpochTransitionBalance)
@@ -211,7 +217,11 @@ func (s *Service) IndividualVotes(
 	if err != nil {
 		return nil, &RpcError{Err: err, Reason: Internal}
 	}
-	st, err := s.ReplayerBuilder.ReplayerForSlot(slot).ReplayBlocks(ctx)
+	replayer := s.ReplayerBuilder.ReplayerForSlot(slot)
+	if replayer == nil {
+		return nil, &RpcError{Err: errors.Errorf("could not get replayer for slot %d", slot), Reason: Internal}
+	}
+	st, err := replayer.ReplayBlocks(ctx)
 	if err != nil {
 		return nil, &RpcError{
 			Err:    errors.Wrapf(err, "failed to replay blocks for state at epoch %d", req.Epoch),
@@ -377,6 +387,9 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 	attAndProof := agg.AggregateAttestationAndProof()
 	att := attAndProof.AggregateVal()
 	data := att.GetData()
+	if data == nil {
+		return &RpcError{Err: errors.New("attestation data can't be nil"), Reason: BadRequest}
+	}
 	emptySig := make([]byte, fieldparams.BLSSignatureLength)
 	if bytes.Equal(agg.GetSignature(), emptySig) || bytes.Equal(attAndProof.GetSelectionProof(), emptySig) {
 		return &RpcError{Err: errors.New("signed signatures can't be zero hashes"), Reason: BadRequest}
@@ -452,7 +465,11 @@ func (s *Service) AggregatedSigAndAggregationBits(
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "could not decompress signatures")
 		}
-		aggregatedSig = bls.AggregateSignatures(uncompressedSigs).Marshal()
+		sig := bls.AggregateSignatures(uncompressedSigs)
+		if sig == nil {
+			return nil, nil, errors.New("could not aggregate signatures")
+		}
+		aggregatedSig = sig.Marshal()
 	}
 	return aggregatedSig, bits, nil
 }
@@ -548,6 +565,9 @@ func (s *Service) GetAttestationData(
 		}
 	}
 	justifiedCheckpoint := headState.CurrentJustifiedCheckpoint()
+	if justifiedCheckpoint == nil {
+		return nil, &RpcError{Reason: Internal, Err: errors.New("nil current justified checkpoint")}
+	}
 	var isPayloadFull bool
 	if slots.ToEpoch(req.Slot) >= params.BeaconConfig().GloasForkEpoch {
 		fcRoot, full := s.ChainInfoFetcher.CanonicalNodeAtSlot(req.Slot)
@@ -649,6 +669,9 @@ func RegisterSyncSubnetCurrentPeriod(s beaconState.BeaconState, epoch primitives
 	if err != nil {
 		return err
 	}
+	if committee == nil {
+		return errors.New("nil current sync committee")
+	}
 	syncCommPeriod := slots.SyncCommitteePeriod(epoch)
 	registerSyncSubnet(epoch, syncCommPeriod, pubKey, committee, status)
 	return nil
@@ -659,6 +682,9 @@ func RegisterSyncSubnetCurrentPeriodProto(s beaconState.BeaconState, epoch primi
 	committee, err := s.CurrentSyncCommittee()
 	if err != nil {
 		return err
+	}
+	if committee == nil {
+		return errors.New("nil current sync committee")
 	}
 	syncCommPeriod := slots.SyncCommitteePeriod(epoch)
 	registerSyncSubnetProto(epoch, syncCommPeriod, pubKey, committee, status)
@@ -671,6 +697,9 @@ func RegisterSyncSubnetNextPeriod(s beaconState.BeaconState, epoch primitives.Ep
 	if err != nil {
 		return err
 	}
+	if committee == nil {
+		return errors.New("nil next sync committee")
+	}
 	syncCommPeriod := slots.SyncCommitteePeriod(epoch)
 	registerSyncSubnet(epoch, syncCommPeriod+1, pubKey, committee, status)
 	return nil
@@ -681,6 +710,9 @@ func RegisterSyncSubnetNextPeriodProto(s beaconState.BeaconState, epoch primitiv
 	committee, err := s.NextSyncCommittee()
 	if err != nil {
 		return err
+	}
+	if committee == nil {
+		return errors.New("nil next sync committee")
 	}
 	syncCommPeriod := slots.SyncCommitteePeriod(epoch)
 	registerSyncSubnetProto(epoch, syncCommPeriod+1, pubKey, committee, status)
@@ -754,6 +786,9 @@ func registerSyncSubnetInternal(
 // subnetsFromCommittee retrieves the relevant subnets for the chosen validator.
 func subnetsFromCommittee(pubkey []byte, comm *ethpb.SyncCommittee) []uint64 {
 	positions := make([]uint64, 0)
+	if comm == nil {
+		return positions
+	}
 	for i, pkey := range comm.Pubkeys {
 		if bytes.Equal(pubkey, pkey) {
 			positions = append(positions, uint64(i)/(params.BeaconConfig().SyncCommitteeSize/params.BeaconConfig().SyncCommitteeSubnetCount))
@@ -796,7 +831,11 @@ func (s *Service) ValidatorParticipation(
 	}
 
 	// ReplayerBuilder ensures that a canonical chain is followed to the slot
-	beaconSt, err := s.ReplayerBuilder.ReplayerForSlot(endSlot).ReplayBlocks(ctx)
+	replayer := s.ReplayerBuilder.ReplayerForSlot(endSlot)
+	if replayer == nil {
+		return nil, &RpcError{Reason: Internal, Err: errors.Errorf("could not get replayer for slot %d", endSlot)}
+	}
+	beaconSt, err := replayer.ReplayBlocks(ctx)
 	if err != nil {
 		return nil, &RpcError{Reason: Internal, Err: errors.Wrapf(err, "error replaying blocks for state at slot %d", endSlot)}
 	}
@@ -869,7 +908,14 @@ func (s *Service) ValidatorActiveSetChanges(
 	if err != nil {
 		return nil, &RpcError{Err: err, Reason: BadRequest}
 	}
-	requestedState, err := s.ReplayerBuilder.ReplayerForSlot(slot).ReplayBlocks(ctx)
+	replayer := s.ReplayerBuilder.ReplayerForSlot(slot)
+	if replayer == nil {
+		return nil, &RpcError{
+			Err:    errors.Errorf("could not get replayer for slot %d", slot),
+			Reason: Internal,
+		}
+	}
+	requestedState, err := replayer.ReplayBlocks(ctx)
 	if err != nil {
 		return nil, &RpcError{
 			Err:    errors.Wrapf(err, "error replaying blocks for state at slot %d", slot),

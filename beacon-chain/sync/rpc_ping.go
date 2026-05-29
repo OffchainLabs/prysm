@@ -21,6 +21,9 @@ import (
 // a METADATA request is sent to the peer to retrieve and update the latest metadata.
 // Note: This function is misnamed, as it performs more than just reading a ping message.
 func (s *Service) pingHandler(_ context.Context, msg any, stream libp2pcore.Stream) error {
+	if stream == nil {
+		return errors.New("stream is nil")
+	}
 	SetRPCStreamDeadlines(stream)
 
 	// Convert the message to SSW Uint64 type.
@@ -123,6 +126,9 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 	if err != nil {
 		return errors.Wrap(err, "send ping request")
 	}
+	if stream == nil {
+		return errors.New("stream is nil")
+	}
 	defer closeStream(stream, log)
 
 	startTime := time.Now()
@@ -134,7 +140,9 @@ func (s *Service) sendPingRequest(ctx context.Context, peerID peer.ID) error {
 	}
 
 	// Record the latency of the ping request for that peer.
-	s.cfg.p2p.Host().Peerstore().RecordLatency(peerID, time.Now().Sub(startTime))
+	if host := s.cfg.p2p.Host(); host != nil {
+		host.Peerstore().RecordLatency(peerID, time.Now().Sub(startTime))
+	}
 
 	// If the peer responded with an error, increment the bad responses scorer.
 	if code != 0 {

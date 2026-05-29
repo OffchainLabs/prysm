@@ -27,6 +27,9 @@ func ProcessAttestations(
 ) ([]*Validator, *Balance, error) {
 	ctx, span := trace.StartSpan(ctx, "precomputeEpoch.ProcessAttestations")
 	defer span.End()
+	if state == nil || state.IsNil() {
+		return nil, nil, errors.New("state is nil")
+	}
 
 	v := &Validator{}
 	var err error
@@ -54,7 +57,11 @@ func ProcessAttestations(
 			return nil, nil, errors.Wrap(err, "could not check validator attested previous epoch")
 		}
 
-		committee, err := helpers.BeaconCommitteeFromState(ctx, state, a.GetData().Slot, a.GetData().CommitteeIndex)
+		data := a.GetData()
+		if data == nil {
+			return nil, nil, errors.New("pending attestation data is nil")
+		}
+		committee, err := helpers.BeaconCommitteeFromState(ctx, state, data.Slot, data.CommitteeIndex)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -62,7 +69,7 @@ func ProcessAttestations(
 		if err != nil {
 			return nil, nil, err
 		}
-		vp = UpdateValidator(vp, v, indices, a, a.Data.Slot)
+		vp = UpdateValidator(vp, v, indices, a, data.Slot)
 	}
 
 	pBal = UpdateBalance(vp, pBal, state.Version())
@@ -142,9 +149,15 @@ func SameHead(state state.ReadOnlyBeaconState, a *ethpb.PendingAttestation) (boo
 
 // UpdateValidator updates pre computed validator store.
 func UpdateValidator(vp []*Validator, record *Validator, indices []uint64, a *ethpb.PendingAttestation, aSlot primitives.Slot) []*Validator {
+	if vp == nil || record == nil || a == nil {
+		return vp
+	}
 	inclusionSlot := aSlot + a.InclusionDelay
 
 	for _, i := range indices {
+		if i >= uint64(len(vp)) || vp[i] == nil {
+			continue
+		}
 		if record.IsCurrentEpochAttester {
 			vp[i].IsCurrentEpochAttester = true
 		}
@@ -172,7 +185,13 @@ func UpdateValidator(vp []*Validator, record *Validator, indices []uint64, a *et
 
 // UpdateBalance updates pre computed balance store.
 func UpdateBalance(vp []*Validator, bBal *Balance, stateVersion int) *Balance {
+	if bBal == nil {
+		bBal = &Balance{}
+	}
 	for _, v := range vp {
+		if v == nil {
+			continue
+		}
 		if !v.IsSlashed {
 			if v.IsCurrentEpochAttester {
 				bBal.CurrentEpochAttested += v.CurrentEpochEffectiveBalance
@@ -201,6 +220,9 @@ func UpdateBalance(vp []*Validator, bBal *Balance, stateVersion int) *Balance {
 // EnsureBalancesLowerBound ensures all the balances such as active current epoch, active previous epoch and more
 // have EffectiveBalanceIncrement(1 eth) as a lower bound.
 func EnsureBalancesLowerBound(bBal *Balance) *Balance {
+	if bBal == nil {
+		bBal = &Balance{}
+	}
 	ebi := params.BeaconConfig().EffectiveBalanceIncrement
 	if ebi > bBal.ActiveCurrentEpoch {
 		bBal.ActiveCurrentEpoch = ebi

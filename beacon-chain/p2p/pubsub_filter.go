@@ -34,6 +34,9 @@ var _ pubsub.SubscriptionFilter = (*Service)(nil)
 const pubsubSubscriptionRequestLimit = 500
 
 func (s *Service) setAllForkDigests() {
+	if s == nil {
+		return
+	}
 	entries := params.SortedNetworkScheduleEntries()
 	s.allForkDigests = make(map[[4]byte]struct{}, len(entries))
 	for _, entry := range entries {

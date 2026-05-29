@@ -36,6 +36,9 @@ var ErrInvalidCheckpointArgs = errors.New("finalized checkpoint cannot be greate
 
 // CurrentSlot returns the current slot based on time.
 func (s *Service) CurrentSlot() primitives.Slot {
+	if s == nil {
+		return 0
+	}
 	return slots.CurrentSlot(s.genesisTime)
 }
 
@@ -164,7 +167,12 @@ func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
 		return
 	}
 
-	finalizedRoot := attestedState.FinalizedCheckpoint().Root
+	finalizedCheckpoint := attestedState.FinalizedCheckpoint()
+	if finalizedCheckpoint == nil {
+		log.Error("processLightClientUpdates: Could not get finalized checkpoint")
+		return
+	}
+	finalizedRoot := finalizedCheckpoint.Root
 	finalizedBlock, err := s.getBlock(cfg.ctx, [32]byte(finalizedRoot))
 	if err != nil {
 		if errors.Is(err, errBlockNotFoundInCacheOrDB) {
@@ -285,6 +293,9 @@ func (s *Service) verifyBlkPreState(ctx context.Context, parentRoot [field_param
 // verifyBlkFinalizedSlot validates input block is not less than or equal
 // to current finalized slot.
 func (s *Service) verifyBlkFinalizedSlot(b interfaces.ReadOnlyBeaconBlock) error {
+	if b == nil || b.IsNil() {
+		return consensus_blocks.ErrNilBeaconBlock
+	}
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
 	finalizedSlot, err := slots.EpochStart(finalized.Epoch)
 	if err != nil {
@@ -303,6 +314,9 @@ func (s *Service) verifyBlkFinalizedSlot(b interfaces.ReadOnlyBeaconBlock) error
 func (s *Service) updateFinalized(ctx context.Context, cp *ethpb.Checkpoint) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.updateFinalized")
 	defer span.End()
+	if cp == nil {
+		return errors.New("nil finalized checkpoint")
+	}
 
 	// return early if new checkpoint is not newer than the one in DB
 	currentFinalized, err := s.cfg.BeaconDB.FinalizedCheckpoint(ctx)
@@ -374,6 +388,9 @@ func (s *Service) ancestorByDB(ctx context.Context, r [32]byte, slot primitives.
 // This is useful for block tree visualizer and additional vote accounting.
 func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
 	fCheckpoint, jCheckpoint *ethpb.Checkpoint) error {
+	if fCheckpoint == nil || jCheckpoint == nil {
+		return ErrInvalidCheckpointArgs
+	}
 	if fCheckpoint.Epoch > jCheckpoint.Epoch {
 		return ErrInvalidCheckpointArgs
 	}
@@ -381,11 +398,21 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 
 	// Fork choice only matters from last finalized slot.
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
+	if finalized == nil {
+		return errors.New("nil finalized checkpoint")
+	}
 	fSlot, err := slots.EpochStart(finalized.Epoch)
 	if err != nil {
 		return err
 	}
-	root := signed.Block().ParentRoot()
+	if signed == nil || signed.IsNil() {
+		return errors.New("signed block is nil")
+	}
+	signedBlock := signed.Block()
+	if signedBlock == nil || signedBlock.IsNil() {
+		return errors.New("beacon block is nil")
+	}
+	root := signedBlock.ParentRoot()
 	child := signed
 	// As long as parent node is not in fork choice store, and parent node is in DB.
 	for !s.cfg.ForkChoiceStore.HasNode(root) && s.cfg.BeaconDB.HasBlock(ctx, root) {
@@ -393,7 +420,14 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		if err != nil {
 			return err
 		}
-		if b.Block().Slot() <= fSlot {
+		if b == nil || b.IsNil() {
+			return errors.New("parent block is nil")
+		}
+		parentBlock := b.Block()
+		if parentBlock == nil || parentBlock.IsNil() {
+			return errors.New("parent beacon block is nil")
+		}
+		if parentBlock.Slot() <= fSlot {
 			break
 		}
 		roblock, err := consensus_blocks.NewROBlockWithRoot(b, root)
@@ -402,25 +436,37 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		}
 		hasPayload := false
 		if roblock.Version() >= version.Gloas {
-			sbid, err := child.Block().Body().SignedExecutionPayloadBid()
+			childBlock := child.Block()
+			if childBlock == nil || childBlock.IsNil() {
+				return errors.New("child beacon block is nil")
+			}
+			childBody := childBlock.Body()
+			if childBody == nil || childBody.IsNil() {
+				return errors.New("child block body is nil")
+			}
+			sbid, err := childBody.SignedExecutionPayloadBid()
 			if err != nil {
-				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", child.Block().Slot())
+				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", childBlock.Slot())
 			}
 			if sbid == nil || sbid.Message == nil {
-				return fmt.Errorf("missing execution payload bid for block at slot %d", child.Block().Slot())
+				return fmt.Errorf("missing execution payload bid for block at slot %d", childBlock.Slot())
 			}
-			parentBid, err := b.Block().Body().SignedExecutionPayloadBid()
+			parentBody := parentBlock.Body()
+			if parentBody == nil || parentBody.IsNil() {
+				return errors.New("parent block body is nil")
+			}
+			parentBid, err := parentBody.SignedExecutionPayloadBid()
 			if err != nil {
-				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", b.Block().Slot())
+				return errors.Wrapf(err, "could not get execution payload bid for block at slot %d", parentBlock.Slot())
 			}
 			if parentBid == nil || parentBid.Message == nil {
-				return fmt.Errorf("missing execution payload bid for block at slot %d", b.Block().Slot())
+				return fmt.Errorf("missing execution payload bid for block at slot %d", parentBlock.Slot())
 			}
 			if bytes.Equal(sbid.Message.ParentBlockHash, parentBid.Message.BlockHash) {
 				hasPayload = true
 			}
 		}
-		root = b.Block().ParentRoot()
+		root = parentBlock.ParentRoot()
 		child = b
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
 			JustifiedCheckpoint: jCheckpoint,
@@ -501,6 +547,9 @@ func (s *Service) pruneAllPendingDepositsAndProofs(ctx context.Context) {
 // fork choice justification routine.
 func (s *Service) ensureRootNotZeros(root [32]byte) [32]byte {
 	if root == params.BeaconConfig().ZeroHash {
+		if s == nil {
+			return root
+		}
 		return s.originBlockRoot
 	}
 	return root

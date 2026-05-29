@@ -30,6 +30,15 @@ type submittedAtt struct {
 type submittedAttKey [96]byte
 
 func (k submittedAttKey) FromAttData(data *ethpb.AttestationData) error {
+	if data == nil {
+		return errors.New("attestation data is nil")
+	}
+	if data.Source == nil {
+		return errors.New("attestation source is nil")
+	}
+	if data.Target == nil {
+		return errors.New("attestation target is nil")
+	}
 	sourceRoot, err := data.Source.HashTreeRoot()
 	if err != nil {
 		return err
@@ -50,6 +59,9 @@ func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate b
 	v.attLogsLock.Lock()
 	defer v.attLogsLock.Unlock()
 	data := att.GetData()
+	if data == nil {
+		return errors.New("attestation data is nil")
+	}
 	key := submittedAttKey{}
 	if err := key.FromAttData(data); err != nil {
 		return errors.Wrapf(err, "could not create submitted attestation key")

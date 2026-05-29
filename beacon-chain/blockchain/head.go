@@ -61,16 +61,22 @@ type head struct {
 func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock interfaces.ReadOnlySignedBeaconBlock, headState state.BeaconState, full bool) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.saveHead")
 	defer span.End()
-
-	if !s.isNewHead(newHeadRoot, full) {
-		return nil
+	if headState == nil || headState.IsNil() {
+		return errors.New("cannot save nil head state")
 	}
-
+	if headBlock == nil || headBlock.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
+	}
 	if err := blocks.BeaconBlockIsNil(headBlock); err != nil {
 		return err
 	}
-	if headState == nil || headState.IsNil() {
-		return errors.New("cannot save nil head state")
+	headBeaconBlock := headBlock.Block()
+	if headBeaconBlock == nil || headBeaconBlock.IsNil() {
+		return blocks.ErrNilBeaconBlock
+	}
+
+	if !s.isNewHead(newHeadRoot, full) {
+		return nil
 	}
 
 	// If the head state is not available, just return nil.
@@ -85,11 +91,20 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 		s.headLock.RUnlock()
 		return errors.Wrap(err, "could not get old head block")
 	}
-	oldStateRoot := oldHeadBlock.Block().StateRoot()
+	if oldHeadBlock == nil || oldHeadBlock.IsNil() {
+		s.headLock.RUnlock()
+		return blocks.ErrNilSignedBeaconBlock
+	}
+	oldBeaconBlock := oldHeadBlock.Block()
+	if oldBeaconBlock == nil || oldBeaconBlock.IsNil() {
+		s.headLock.RUnlock()
+		return blocks.ErrNilBeaconBlock
+	}
+	oldStateRoot := oldBeaconBlock.StateRoot()
 	s.headLock.RUnlock()
 	headSlot := s.HeadSlot()
-	newHeadSlot := headBlock.Block().Slot()
-	newStateRoot := headBlock.Block().StateRoot()
+	newHeadSlot := headBeaconBlock.Slot()
+	newStateRoot := headBeaconBlock.StateRoot()
 
 	r, err := s.HeadRoot(ctx)
 	if err != nil {
@@ -100,7 +115,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	if err != nil {
 		log.WithError(err).Error("Could not check if node is optimistically synced")
 	}
-	if headBlock.Block().ParentRoot() != oldHeadRoot {
+	if headBeaconBlock.ParentRoot() != oldHeadRoot {
 		// A chain re-org occurred, so we fire an event notifying the rest of the services.
 		commonRoot, forkSlot, err := s.cfg.ForkChoiceStore.CommonAncestor(ctx, oldHeadRoot, newHeadRoot)
 		if err != nil {
@@ -157,7 +172,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 		block:      headBlock,
 		state:      headState,
 		optimistic: isOptimistic,
-		slot:       headBlock.Block().Slot(),
+		slot:       headBeaconBlock.Slot(),
 		full:       full,
 	}
 	if err := s.setHead(newHead); err != nil {
@@ -184,6 +199,12 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 // root in DB. With the inception of initial-sync-cache-state flag, it uses finalized
 // check point as anchors to resume sync therefore head is no longer needed to be saved on per slot basis.
 func (s *Service) saveHeadNoDB(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock, r [32]byte, hs state.BeaconState, optimistic bool) error {
+	if hs == nil || hs.IsNil() {
+		return errors.New("cannot save nil head state")
+	}
+	if b == nil || b.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
+	}
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return err
 	}
@@ -198,6 +219,12 @@ func (s *Service) saveHeadNoDB(ctx context.Context, b interfaces.ReadOnlySignedB
 	bCp, err := b.Copy()
 	if err != nil {
 		return err
+	}
+	if err := blocks.BeaconBlockIsNil(bCp); err != nil {
+		return err
+	}
+	if bCp == nil || bCp.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
 	}
 	if err := s.setHeadInitialSync(r, bCp, hs, optimistic); err != nil {
 		return errors.Wrap(err, "could not set head")
@@ -214,6 +241,12 @@ func (s *Service) setHead(newHead *head) error {
 	bCp, err := newHead.block.Copy()
 	if err != nil {
 		return err
+	}
+	if err := blocks.BeaconBlockIsNil(bCp); err != nil {
+		return err
+	}
+	if bCp == nil || bCp.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
 	}
 	s.head = &head{
 		root:       newHead.root,
@@ -234,9 +267,21 @@ func (s *Service) setHeadInitialSync(root [32]byte, block interfaces.ReadOnlySig
 	defer s.headLock.Unlock()
 
 	// This does a full copy of the block only.
+	if block == nil || block.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
+	}
+	if err := blocks.BeaconBlockIsNil(block); err != nil {
+		return err
+	}
 	bCp, err := block.Copy()
 	if err != nil {
 		return err
+	}
+	if err := blocks.BeaconBlockIsNil(bCp); err != nil {
+		return err
+	}
+	if bCp == nil || bCp.IsNil() {
+		return blocks.ErrNilSignedBeaconBlock
 	}
 	s.head = &head{
 		root:       root,
@@ -271,7 +316,23 @@ func (s *Service) headRoot() [32]byte {
 // It does a full copy on head block for immutability.
 // This is a lock free version.
 func (s *Service) headBlock() (interfaces.ReadOnlySignedBeaconBlock, error) {
-	return s.head.block.Copy()
+	if s.head == nil {
+		return nil, ErrNilHead
+	}
+	if err := blocks.BeaconBlockIsNil(s.head.block); err != nil {
+		return nil, err
+	}
+	bCp, err := s.head.block.Copy()
+	if err != nil {
+		return nil, err
+	}
+	if err := blocks.BeaconBlockIsNil(bCp); err != nil {
+		return nil, err
+	}
+	if bCp == nil || bCp.IsNil() {
+		return nil, blocks.ErrNilSignedBeaconBlock
+	}
+	return bCp, nil
 }
 
 // This returns the head state.
@@ -403,8 +464,12 @@ func (s *Service) saveOrphanedOperations(ctx context.Context, orphanedRoot [32]b
 			break
 		}
 		for _, a := range orphanedBlk.Block().Body().Attestations() {
+			data := a.GetData()
+			if data == nil {
+				continue
+			}
 			// if the attestation is one epoch older, it wouldn't been useful to save it.
-			if a.GetData().Slot+params.BeaconConfig().SlotsPerEpoch < s.CurrentSlot() {
+			if data.Slot+params.BeaconConfig().SlotsPerEpoch < s.CurrentSlot() {
 				continue
 			}
 			if features.Get().EnableExperimentalAttestationPool {

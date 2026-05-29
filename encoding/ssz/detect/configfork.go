@@ -102,6 +102,9 @@ func FromForkVersion(cv [fieldparams.VersionLength]byte) (*VersionedUnmarshaler,
 // UnmarshalBeaconState uses internal knowledge in the VersionedUnmarshaler to pick the right concrete BeaconState type,
 // then Unmarshal()s the type and returns an instance of state.BeaconState if successful.
 func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.BeaconState, err error) {
+	if cf == nil {
+		return nil, errors.New("versioned unmarshaler is nil")
+	}
 	forkName := version.String(cf.Fork)
 	switch fork := cf.Fork; fork {
 	case version.Phase0:

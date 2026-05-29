@@ -81,7 +81,13 @@ func WithdrawalCredentialsHash(withdrawalKey bls.SecretKey) []byte {
 
 // VerifyDepositSignature verifies the correctness of Eth1 deposit BLS signature
 func VerifyDepositSignature(dd *ethpb.Deposit_Data, domain []byte) error {
+	if dd == nil {
+		return errors.New("deposit data is nil")
+	}
 	ddCopy := dd.Copy()
+	if ddCopy == nil {
+		return errors.New("deposit data is nil")
+	}
 	publicKey, err := bls.PublicKeyFromBytes(ddCopy.PublicKey)
 	if err != nil {
 		return errors.Wrap(err, "could not convert bytes to public key")

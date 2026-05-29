@@ -42,6 +42,9 @@ func (s *SignatureBatch) Join(set *SignatureBatch) *SignatureBatch {
 
 // Verify the current signature batch using the batch verify algorithm.
 func (s *SignatureBatch) Verify() (bool, error) {
+	if s == nil {
+		return false, errors.New("signature batch is nil")
+	}
 	return VerifyMultipleSignatures(s.Signatures, s.Messages, s.PublicKeys)
 }
 

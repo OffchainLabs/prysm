@@ -24,7 +24,7 @@ var FinalizationOccurs = func(epoch primitives.Epoch) types.Evaluator {
 }
 
 func finalizationOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	client := eth.NewBeaconChainClient(conn)
 	chainHead, err := client.GetChainHead(context.Background(), &emptypb.Empty{})
 	if err != nil {

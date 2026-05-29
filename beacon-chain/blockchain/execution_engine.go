@@ -39,14 +39,15 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyForkchoiceUpdate")
 	defer span.End()
 
+	if s == nil || s.cfg == nil {
+		return nil, errors.New("service is nil")
+	}
 	if arg.headBlock == nil || arg.headBlock.IsNil() {
-		log.Error("Head block is nil")
-		return nil, nil
+		return nil, errors.New("head block is nil")
 	}
 	headBlk := arg.headBlock.Block()
 	if headBlk == nil || headBlk.IsNil() || headBlk.Body().IsNil() {
-		log.Error("Head block is nil")
-		return nil, nil
+		return nil, errors.New("head block or body is nil")
 	}
 	// Must not call fork choice updated until the transition conditions are met on the Pow network.
 	isExecutionBlk, err := blocks.IsExecutionBlock(headBlk.Body())
@@ -211,10 +212,18 @@ func (s *Service) getPayloadHash(ctx context.Context, root []byte) ([32]byte, er
 	if err != nil {
 		return [32]byte{}, err
 	}
-	if blocks.IsPreBellatrixVersion(blk.Block().Version()) {
+	beaconBlock := blk.Block()
+	if beaconBlock == nil || beaconBlock.IsNil() {
+		return [32]byte{}, errBlockNotFoundInCacheOrDB
+	}
+	if blocks.IsPreBellatrixVersion(beaconBlock.Version()) {
 		return params.BeaconConfig().ZeroHash, nil
 	}
-	payload, err := blk.Block().Body().Execution()
+	body := beaconBlock.Body()
+	if body == nil || body.IsNil() {
+		return [32]byte{}, errors.New("block body is nil")
+	}
+	payload, err := body.Execution()
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not get execution payload")
 	}
@@ -346,6 +355,10 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, headRoot, slot)
 		if err != nil {
 			log.WithError(err).Error("Could not process slots to get payload attribute")
+			return emptyAttri
+		}
+		if st == nil || st.IsNil() {
+			log.Error("State is nil after processing slots")
 			return emptyAttri
 		}
 	}

@@ -27,6 +27,10 @@ func TestFuzzProcessAttestationNoVerify_10000(t *testing.T) {
 		fuzzer.Fuzz(att)
 		s, err := state_native.InitializeFromProtoUnsafePhase0(state)
 		require.NoError(t, err)
+		if s == nil || s.IsNil() {
+			t.Fatal("nil beacon state")
+			continue
+		}
 		_, err = ProcessAttestationNoVerifySignature(ctx, s, att)
 		_ = err
 		fuzz.FreeMemory(i)
@@ -44,11 +48,19 @@ func TestFuzzProcessBlockHeader_10000(t *testing.T) {
 
 		s, err := state_native.InitializeFromProtoUnsafePhase0(state)
 		require.NoError(t, err)
+		if s == nil || s.IsNil() {
+			t.Fatal("nil beacon state")
+			continue
+		}
 		if block.Block == nil || block.Block.Body == nil || block.Block.Body.Eth1Data == nil {
 			continue
 		}
 		wsb, err := blocks.NewSignedBeaconBlock(block)
 		require.NoError(t, err)
+		if wsb == nil || wsb.IsNil() {
+			t.Fatal("nil signed beacon block")
+			continue
+		}
 		_, err = ProcessBlockHeader(t.Context(), s, wsb)
 		_ = err
 		fuzz.FreeMemory(i)
@@ -84,6 +96,10 @@ func TestFuzzProcessEth1DataInBlock_10000(t *testing.T) {
 	e := &ethpb.Eth1Data{}
 	state, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
 	require.NoError(t, err)
+	if state == nil || state.IsNil() {
+		t.Fatal("nil beacon state")
+		return
+	}
 	for range 10000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(e)

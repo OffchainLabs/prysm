@@ -30,6 +30,9 @@ func (acm *CLIManager) List(ctx context.Context) error {
 }
 
 func listValidatorIndices(ctx context.Context, km keymanager.IKeymanager, client iface.ValidatorClient) error {
+	if km == nil {
+		return errors.New("keymanager is nil")
+	}
 	pubKeys, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not get validating public keys")
@@ -42,6 +45,9 @@ func listValidatorIndices(ctx context.Context, km keymanager.IKeymanager, client
 	resp, err := client.MultipleValidatorStatus(ctx, req)
 	if err != nil {
 		return errors.Wrap(err, "could not request validator indices")
+	}
+	if resp == nil {
+		return errors.New("validator status response is nil")
 	}
 	fmt.Println(au.BrightGreen("Validator indices:").Bold())
 	for i, idx := range resp.Indices {

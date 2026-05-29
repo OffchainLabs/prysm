@@ -98,12 +98,18 @@ func (*Store) Close() error {
 
 // DatabasePath returns the path at which this database writes files.
 func (s *Store) DatabasePath() string {
+	if s == nil {
+		return ""
+	}
 	// The returned path is actually the parent path, to be consistent with the BoltDB implementation.
 	return s.databaseParentPath
 }
 
 // ClearDB removes any previously stored data at the configured data directory.
 func (s *Store) ClearDB() error {
+	if s == nil {
+		return errors.New("store is nil")
+	}
 	if err := os.RemoveAll(s.databasePath); err != nil {
 		return errors.Wrapf(err, "cannot remove database at path %s", s.databasePath)
 	}
@@ -113,6 +119,9 @@ func (s *Store) ClearDB() error {
 
 // Backup creates a backup of the database.
 func (s *Store) Backup(_ context.Context, outputDir string, permissionOverride bool) error {
+	if s == nil {
+		return errors.New("store is nil")
+	}
 	// Get backups directory path.
 	backupsDir := path.Join(outputDir, backupsDirectoryName)
 	if len(outputDir) != 0 {
@@ -151,6 +160,9 @@ func (s *Store) Backup(_ context.Context, outputDir string, permissionOverride b
 
 // UpdatePublicKeysBuckets creates a file for each public key in the database directory if needed.
 func (s *Store) UpdatePublicKeysBuckets(pubKeys [][fieldparams.BLSPubkeyLength]byte) error {
+	if s == nil {
+		return errors.New("store is nil")
+	}
 	validatorSlashingProtection := ValidatorSlashingProtection{}
 
 	// Marshal the ValidatorSlashingProtection struct.
@@ -190,11 +202,17 @@ func (s *Store) UpdatePublicKeysBuckets(pubKeys [][fieldparams.BLSPubkeyLength]b
 
 // slashingProtectionDirPath returns the path of the slashing protection directory.
 func (s *Store) slashingProtectionDirPath() string {
+	if s == nil {
+		return ""
+	}
 	return path.Join(s.databasePath, slashingProtectionDirName)
 }
 
 // pubkeySlashingProtectionFilePath returns the path of the slashing protection file for a public key.
 func (s *Store) pubkeySlashingProtectionFilePath(pubKey [fieldparams.BLSPubkeyLength]byte) string {
+	if s == nil {
+		return ""
+	}
 	slashingProtectionDirPath := s.slashingProtectionDirPath()
 	pubkeyFileName := fmt.Sprintf("%s.yaml", hexutil.Encode(pubKey[:]))
 
@@ -203,11 +221,17 @@ func (s *Store) pubkeySlashingProtectionFilePath(pubKey [fieldparams.BLSPubkeyLe
 
 // configurationFilePath returns the path of the configuration file.
 func (s *Store) configurationFilePath() string {
+	if s == nil {
+		return ""
+	}
 	return path.Join(s.databasePath, configurationFileName)
 }
 
 // configuration returns the configuration.
 func (s *Store) configuration() (*Configuration, error) {
+	if s == nil {
+		return nil, errors.New("store is nil")
+	}
 	config := &Configuration{}
 
 	// Get the path of config file.
@@ -250,6 +274,9 @@ func (s *Store) configuration() (*Configuration, error) {
 
 	if config.ProposerSettings != nil && config.ProposerSettings.ProposerConfig != nil {
 		for _, option := range config.ProposerSettings.ProposerConfig {
+			if option == nil {
+				continue
+			}
 			if option.Builder != nil && len(option.Builder.Relays) == 0 {
 				option.Builder.Relays = nil
 			}
@@ -261,6 +288,9 @@ func (s *Store) configuration() (*Configuration, error) {
 
 // saveConfiguration saves the configuration.
 func (s *Store) saveConfiguration(config *Configuration) error {
+	if s == nil {
+		return errors.New("store is nil")
+	}
 	// If config is nil, return
 	if config == nil {
 		return nil
@@ -294,6 +324,9 @@ func (s *Store) saveConfiguration(config *Configuration) error {
 
 // validatorSlashingProtection returns the slashing protection for a public key.
 func (s *Store) validatorSlashingProtection(publicKey [fieldparams.BLSPubkeyLength]byte) (*ValidatorSlashingProtection, error) {
+	if s == nil || s.pkToSlashingMu == nil {
+		return nil, errors.New("store is nil")
+	}
 	var mu *sync.RWMutex
 	validatorSlashingProtection := &ValidatorSlashingProtection{}
 
@@ -346,6 +379,9 @@ func (s *Store) saveValidatorSlashingProtection(
 	publicKey [fieldparams.BLSPubkeyLength]byte,
 	validatorSlashingProtection *ValidatorSlashingProtection,
 ) error {
+	if s == nil || s.pkToSlashingMu == nil {
+		return errors.New("store is nil")
+	}
 	// If the ValidatorSlashingProtection struct is nil, return.
 	if validatorSlashingProtection == nil {
 		return nil
@@ -393,6 +429,9 @@ func (s *Store) saveValidatorSlashingProtection(
 
 // publicKeys returns the public keys existing in the database directory.
 func (s *Store) publicKeys() ([][fieldparams.BLSPubkeyLength]byte, error) {
+	if s == nil {
+		return nil, errors.New("store is nil")
+	}
 	// Get the slashing protection directory path.
 	slashingProtectionDirPath := s.slashingProtectionDirPath()
 

@@ -503,21 +503,23 @@ func (s *Slice[V]) fillOriginalItems(obj Identifiable, items *[]V) {
 
 func (s *Slice[V]) updateOriginalItem(obj Identifiable, index uint64, val V) {
 	ind, ok := s.individualItems[index]
-	if ok {
-		for mvi, v := range ind.Values {
-			// if we find an existing value, we remove it
-			foundIndex, found := containsId(v.ids, obj.Id())
-			if found {
-				if len(v.ids) == 1 {
-					// There is an improvement to be made here. If len(ind.Values) == 1,
-					// then after removing the item from the slice s.individualItems[i]
-					// will be a useless map entry whose value is an empty slice.
-					ind.Values = deleteElemFromSlice(ind.Values, mvi)
-				} else {
-					v.ids = deleteElemFromSlice(v.ids, foundIndex)
-				}
-				break
+	if !ok || ind == nil {
+		s.individualItems[index] = &MultiValueItem[V]{Values: []*Value[V]{{val: val, ids: []uint64{obj.Id()}}}}
+		return
+	}
+	for mvi, v := range ind.Values {
+		// if we find an existing value, we remove it
+		foundIndex, found := containsId(v.ids, obj.Id())
+		if found {
+			if len(v.ids) == 1 {
+				// There is an improvement to be made here. If len(ind.Values) == 1,
+				// then after removing the item from the slice s.individualItems[i]
+				// will be a useless map entry whose value is an empty slice.
+				ind.Values = deleteElemFromSlice(ind.Values, mvi)
+			} else {
+				v.ids = deleteElemFromSlice(v.ids, foundIndex)
 			}
+			break
 		}
 	}
 
@@ -525,20 +527,16 @@ func (s *Slice[V]) updateOriginalItem(obj Identifiable, index uint64, val V) {
 		return
 	}
 
-	if !ok {
-		s.individualItems[index] = &MultiValueItem[V]{Values: []*Value[V]{{val: val, ids: []uint64{obj.Id()}}}}
-	} else {
-		newValue := true
-		for _, v := range ind.Values {
-			if v.val == val {
-				v.ids = append(v.ids, obj.Id())
-				newValue = false
-				break
-			}
+	newValue := true
+	for _, v := range ind.Values {
+		if v.val == val {
+			v.ids = append(v.ids, obj.Id())
+			newValue = false
+			break
 		}
-		if newValue {
-			ind.Values = append(ind.Values, &Value[V]{val: val, ids: []uint64{obj.Id()}})
-		}
+	}
+	if newValue {
+		ind.Values = append(ind.Values, &Value[V]{val: val, ids: []uint64{obj.Id()}})
 	}
 }
 

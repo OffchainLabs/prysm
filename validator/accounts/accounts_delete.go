@@ -13,6 +13,9 @@ import (
 
 // Delete the accounts that the user requests to be deleted from the wallet.
 func (acm *CLIManager) Delete(ctx context.Context) error {
+	if acm == nil || acm.keymanager == nil {
+		return errors.New("account manager keymanager is nil")
+	}
 	rawPublicKeys := make([][]byte, len(acm.filteredPubKeys))
 	formattedPubKeys := make([]string, len(acm.filteredPubKeys))
 	for i, pk := range acm.filteredPubKeys {
@@ -64,6 +67,9 @@ func (acm *CLIManager) Delete(ctx context.Context) error {
 
 // DeleteAccount performs the deletion on the Keymanager.
 func DeleteAccount(ctx context.Context, cfg *DeleteConfig) error {
+	if cfg == nil || cfg.Keymanager == nil {
+		return errors.New("delete account keymanager is nil")
+	}
 	if len(cfg.DeletePublicKeys) == 1 {
 		log.Info("Deleting account...")
 	} else {

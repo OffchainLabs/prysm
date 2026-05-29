@@ -41,6 +41,10 @@ func (s *Server) GetPerformance(w http.ResponseWriter, r *http.Request) {
 		handleHTTPError(w, "Could not compute validator performance: "+rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 		return
 	}
+	if computed == nil {
+		handleHTTPError(w, "Computed validator performance is nil", http.StatusInternalServerError)
+		return
+	}
 	response := &structs.GetValidatorPerformanceResponse{
 		PublicKeys:                    computed.PublicKeys,
 		CorrectlyVotedSource:          computed.CorrectlyVotedSource,

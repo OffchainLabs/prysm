@@ -1521,7 +1521,7 @@ func RecastHexutilByteSlice(h []hexutil.Bytes) [][]byte {
 
 // UnmarshalJSON implements the json unmarshaler interface for BlobAndProof.
 func (b *BlobAndProof) UnmarshalJSON(enc []byte) error {
-	var dec *BlobAndProofJson
+	var dec BlobAndProofJson
 	if err := json.Unmarshal(enc, &dec); err != nil {
 		return err
 	}
@@ -1543,7 +1543,7 @@ type BlobAndProofV2Json struct {
 }
 
 func (b *BlobAndProofV2) UnmarshalJSON(enc []byte) error {
-	var dec *BlobAndProofV2Json
+	var dec BlobAndProofV2Json
 	if err := json.Unmarshal(enc, &dec); err != nil {
 		return err
 	}

@@ -76,7 +76,11 @@ func (s *Simulator) generateAttestationsForSlot(ctx context.Context, ver int, sl
 				}
 			}
 
-			beaconState, err := s.srvConfig.AttestationStateFetcher.AttestationTargetState(ctx, att.GetData().Target)
+			data := att.GetData()
+			if data == nil || data.Target == nil {
+				return nil, nil, errors.New("attestation data is nil")
+			}
+			beaconState, err := s.srvConfig.AttestationStateFetcher.AttestationTargetState(ctx, data.Target)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -109,7 +113,7 @@ func (s *Simulator) generateAttestationsForSlot(ctx context.Context, ver int, sl
 
 				slashedIndices = append(slashedIndices, slashableAtt.GetAttestingIndices()...)
 
-				attDataRoot, err := att.GetData().HashTreeRoot()
+				attDataRoot, err := data.HashTreeRoot()
 				if err != nil {
 					return nil, nil, errors.Wrap(err, "cannot compte `att` hash tree root")
 				}
@@ -166,42 +170,60 @@ func (s *Simulator) generateAttestationsForSlot(ctx context.Context, ver int, sl
 func (s *Simulator) aggregateSigForAttestation(
 	beaconState state.ReadOnlyBeaconState, att ethpb.IndexedAtt,
 ) (bls.Signature, error) {
+	data := att.GetData()
+	if data == nil || data.Target == nil {
+		return nil, errors.New("attestation data is nil")
+	}
 	domain, err := signing.Domain(
 		beaconState.Fork(),
-		att.GetData().Target.Epoch,
+		data.Target.Epoch,
 		params.BeaconConfig().DomainBeaconAttester,
 		beaconState.GenesisValidatorsRoot(),
 	)
 	if err != nil {
 		return nil, err
 	}
-	signingRoot, err := signing.ComputeSigningRoot(att.GetData(), domain)
+	signingRoot, err := signing.ComputeSigningRoot(data, domain)
 	if err != nil {
 		return nil, err
 	}
 	sigs := make([]bls.Signature, len(att.GetAttestingIndices()))
 	for i, validatorIndex := range att.GetAttestingIndices() {
 		privKey := s.srvConfig.PrivateKeysByValidatorIndex[primitives.ValidatorIndex(validatorIndex)]
+		if privKey == nil {
+			return nil, errors.New("validator private key is nil")
+		}
 		sigs[i] = privKey.Sign(signingRoot[:])
 	}
-	return bls.AggregateSignatures(sigs), nil
+	aggSig := bls.AggregateSignatures(sigs)
+	if aggSig == nil {
+		return nil, errors.New("aggregate signature is nil")
+	}
+	return aggSig, nil
 }
 
 func makeSlashableFromAtt(att ethpb.IndexedAtt, indices []uint64) ethpb.IndexedAtt {
-	if att.GetData().Source.Epoch <= 2 {
+	data := att.GetData()
+	if data == nil || data.Source == nil {
+		return att
+	}
+	if data.Source.Epoch <= 2 {
 		return makeDoubleVoteFromAtt(att, indices)
 	}
+	if data.Target == nil {
+		return att
+	}
 	attData := &ethpb.AttestationData{
-		Slot:            att.GetData().Slot,
-		CommitteeIndex:  att.GetData().CommitteeIndex,
-		BeaconBlockRoot: att.GetData().BeaconBlockRoot,
+		Slot:            data.Slot,
+		CommitteeIndex:  data.CommitteeIndex,
+		BeaconBlockRoot: data.BeaconBlockRoot,
 		Source: &ethpb.Checkpoint{
-			Epoch: att.GetData().Source.Epoch - 3,
-			Root:  att.GetData().Source.Root,
+			Epoch: data.Source.Epoch - 3,
+			Root:  data.Source.Root,
 		},
 		Target: &ethpb.Checkpoint{
-			Epoch: att.GetData().Target.Epoch,
-			Root:  att.GetData().Target.Root,
+			Epoch: data.Target.Epoch,
+			Root:  data.Target.Root,
 		},
 	}
 
@@ -221,17 +243,21 @@ func makeSlashableFromAtt(att ethpb.IndexedAtt, indices []uint64) ethpb.IndexedA
 }
 
 func makeDoubleVoteFromAtt(att ethpb.IndexedAtt, indices []uint64) ethpb.IndexedAtt {
+	data := att.GetData()
+	if data == nil || data.Source == nil || data.Target == nil {
+		return att
+	}
 	attData := &ethpb.AttestationData{
-		Slot:            att.GetData().Slot,
-		CommitteeIndex:  att.GetData().CommitteeIndex,
+		Slot:            data.Slot,
+		CommitteeIndex:  data.CommitteeIndex,
 		BeaconBlockRoot: bytesutil.PadTo([]byte("slash me"), 32),
 		Source: &ethpb.Checkpoint{
-			Epoch: att.GetData().Source.Epoch,
-			Root:  att.GetData().Source.Root,
+			Epoch: data.Source.Epoch,
+			Root:  data.Source.Root,
 		},
 		Target: &ethpb.Checkpoint{
-			Epoch: att.GetData().Target.Epoch,
-			Root:  att.GetData().Target.Root,
+			Epoch: data.Target.Epoch,
+			Root:  data.Target.Root,
 		},
 	}
 

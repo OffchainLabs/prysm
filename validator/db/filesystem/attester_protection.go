@@ -131,7 +131,11 @@ func (s *Store) SaveAttestationForPubKey(
 	att ethpb.IndexedAtt,
 ) error {
 	// If there is no attestation, return on error.
-	if att == nil || att.IsNil() || att.GetData().Source == nil || att.GetData().Target == nil {
+	if att == nil || att.IsNil() {
+		return errors.New("incoming attestation does not contain source and/or target epoch")
+	}
+	data := att.GetData()
+	if data == nil || data.Source == nil || data.Target == nil {
 		return errors.New("incoming attestation does not contain source and/or target epoch")
 	}
 	// Get validator slashing protection.
@@ -140,8 +144,8 @@ func (s *Store) SaveAttestationForPubKey(
 		return errors.Wrap(err, "could not get validator slashing protection")
 	}
 
-	incomingSourceEpochUInt64 := uint64(att.GetData().Source.Epoch)
-	incomingTargetEpochUInt64 := uint64(att.GetData().Target.Epoch)
+	incomingSourceEpochUInt64 := uint64(data.Source.Epoch)
+	incomingTargetEpochUInt64 := uint64(data.Target.Epoch)
 
 	if validatorSlashingProtection == nil {
 		// If there is no validator slashing protection, create one.
@@ -166,7 +170,7 @@ func (s *Store) SaveAttestationForPubKey(
 	if incomingSourceEpochUInt64 < savedSourceEpoch {
 		return errors.Errorf(
 			"could not sign attestation with source lower than recorded source epoch, %d < %d",
-			att.GetData().Source.Epoch,
+			data.Source.Epoch,
 			validatorSlashingProtection.LastSignedAttestationSourceEpoch,
 		)
 	}
@@ -176,7 +180,7 @@ func (s *Store) SaveAttestationForPubKey(
 	if savedTargetEpoch != nil && incomingTargetEpochUInt64 <= *savedTargetEpoch {
 		return errors.Errorf(
 			"could not sign attestation with target lower than or equal to recorded target epoch, %d <= %d",
-			att.GetData().Target.Epoch,
+			data.Target.Epoch,
 			*savedTargetEpoch,
 		)
 	}
@@ -241,6 +245,9 @@ func (s *Store) SaveAttestationsForPubKey(
 
 	savedSourceEpochUInt64 := validatorSlashingProtection.LastSignedAttestationSourceEpoch
 	savedTargetEpochUInt64 := validatorSlashingProtection.LastSignedAttestationTargetEpoch
+	if savedTargetEpochUInt64 == nil {
+		savedTargetEpochUInt64 = &maxIncomingTargetEpochUInt64
+	}
 
 	maxSourceEpochUInt64 := maxIncomingSourceEpochUInt64
 	maxTargetEpochUInt64 := maxIncomingTargetEpochUInt64
@@ -298,16 +305,22 @@ func maxSourceTargetEpoch(atts []*ethpb.IndexedAttestation) (primitives.Epoch, p
 	maxTargetEpoch := primitives.Epoch(0)
 
 	for _, att := range atts {
-		if att == nil || att.Data == nil || att.Data.Source == nil || att.Data.Target == nil {
+		if att == nil {
 			return 0, 0, errors.New("incoming attestation does not contain source and/or target epoch")
 		}
+		data := att.Data
+		if data == nil || data.Source == nil || data.Target == nil {
+			return 0, 0, errors.New("incoming attestation does not contain source and/or target epoch")
+		}
+		source := data.Source
+		target := data.Target
 
-		if att.Data.Source.Epoch > maxSourceEpoch {
-			maxSourceEpoch = att.Data.Source.Epoch
+		if source.Epoch > maxSourceEpoch {
+			maxSourceEpoch = source.Epoch
 		}
 
-		if att.Data.Target.Epoch > maxTargetEpoch {
-			maxTargetEpoch = att.Data.Target.Epoch
+		if target.Epoch > maxTargetEpoch {
+			maxTargetEpoch = target.Epoch
 		}
 	}
 	return maxSourceEpoch, maxTargetEpoch, nil

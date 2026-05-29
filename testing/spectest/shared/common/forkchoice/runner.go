@@ -247,6 +247,10 @@ func runBlobStep(t *testing.T,
 		require.NoError(t, err)
 		kzgs, err := block.Body().BlobKzgCommitments()
 		require.NoError(t, err)
+		if kzgs == nil {
+			t.Fatal("blob kzg commitments are nil")
+			return
+		}
 
 		blobsFile, err := util.BazelFileBytes(testsFolderPath, folder.Name(), fmt.Sprint(*blobs, ".ssz_snappy"))
 		require.NoError(t, err)

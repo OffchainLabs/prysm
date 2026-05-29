@@ -350,12 +350,19 @@ func (s *Service) validatePhase0Block(ctx context.Context, blk interfaces.ReadOn
 // The returned state is guaranteed to be at the same epoch as the block's epoch, and have the same randao mix and active validator indices as the
 // block's parent state advanced to the block's slot.
 func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (state.ReadOnlyBeaconState, error) {
+	if blk == nil || blk.IsNil() {
+		return nil, errors.New("signed beacon block is nil")
+	}
+	block := blk.Block()
+	if block == nil || block.IsNil() {
+		return nil, errors.New("beacon block is nil")
+	}
 	headRoot, err := s.cfg.chain.HeadRoot(ctx)
 	if err != nil {
 		return nil, err
 	}
-	parentRoot := blk.Block().ParentRoot()
-	blockSlot := blk.Block().Slot()
+	parentRoot := block.ParentRoot()
+	blockSlot := block.Slot()
 	blockEpoch := slots.ToEpoch(blockSlot)
 	headSlot := s.cfg.chain.HeadSlot()
 	headEpoch := slots.ToEpoch(headSlot)
@@ -370,7 +377,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 		if err != nil {
 			return nil, err
 		}
-		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, parentRoot[:], blk.Block().Slot())
+		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, parentRoot[:], block.Slot())
 	}
 	// If head and block are in the same epoch and head is compatible with the parent's dependent root, then use head
 	if blockEpoch == headEpoch {
@@ -399,7 +406,7 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 	if blockEpoch == parentEpoch {
 		return parentState, nil
 	}
-	return transition.ProcessSlotsUsingNextSlotCache(ctx, parentState, parentRoot[:], blk.Block().Slot())
+	return transition.ProcessSlotsUsingNextSlotCache(ctx, parentState, parentRoot[:], block.Slot())
 }
 
 func validateDenebBeaconBlock(blk interfaces.ReadOnlyBeaconBlock) error {
@@ -583,15 +590,22 @@ func isBlockQueueable(genesisTime time.Time, slot primitives.Slot, receivedTime 
 }
 
 func getBlockFields(b interfaces.ReadOnlySignedBeaconBlock) logrus.Fields {
+	if b == nil || b.IsNil() {
+		return logrus.Fields{}
+	}
 	if consensusblocks.BeaconBlockIsNil(b) != nil {
 		return logrus.Fields{}
 	}
-	graffiti := b.Block().Body().Graffiti()
+	block := b.Block()
+	if block == nil || block.IsNil() || block.Body() == nil || block.Body().IsNil() {
+		return logrus.Fields{}
+	}
+	graffiti := block.Body().Graffiti()
 	return logrus.Fields{
-		"slot":          b.Block().Slot(),
-		"proposerIndex": b.Block().ProposerIndex(),
+		"slot":          block.Slot(),
+		"proposerIndex": block.ProposerIndex(),
 		"graffiti":      string(graffiti[:]),
-		"version":       b.Block().Version(),
+		"version":       block.Version(),
 	}
 }
 

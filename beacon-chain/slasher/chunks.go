@@ -162,11 +162,17 @@ func (*MaxSpanChunksSlice) NeutralElement() uint16 {
 
 // Chunk returns the underlying slice of uint16's for the min chunks slice.
 func (m *MinSpanChunksSlice) Chunk() []uint16 {
+	if m == nil {
+		return nil
+	}
 	return m.data
 }
 
 // Chunk returns the underlying slice of uint16's for the max chunks slice.
 func (m *MaxSpanChunksSlice) Chunk() []uint16 {
+	if m == nil {
+		return nil
+	}
 	return m.data
 }
 
@@ -187,8 +193,10 @@ func (m *MinSpanChunksSlice) CheckSlashable(
 	validatorIdx primitives.ValidatorIndex,
 	incomingAttWrapper *slashertypes.IndexedAttestationWrapper,
 ) (ethpb.AttSlashing, error) {
-	sourceEpoch := incomingAttWrapper.IndexedAttestation.GetData().Source.Epoch
-	targetEpoch := incomingAttWrapper.IndexedAttestation.GetData().Target.Epoch
+	sourceEpoch, targetEpoch, ok := attestationEpochs(incomingAttWrapper.IndexedAttestation)
+	if !ok {
+		return nil, errors.New("incoming attestation data is nil")
+	}
 
 	minTarget, err := chunkDataAtEpoch(m.params, m.data, validatorIdx, sourceEpoch)
 	if err != nil {
@@ -222,7 +230,11 @@ func (m *MinSpanChunksSlice) CheckSlashable(
 		return nil, nil
 	}
 
-	if existingAttWrapper.IndexedAttestation.GetData().Source.Epoch <= sourceEpoch {
+	existingSourceEpoch, _, ok := attestationEpochs(existingAttWrapper.IndexedAttestation)
+	if !ok {
+		return nil, errors.New("existing attestation data is nil")
+	}
+	if existingSourceEpoch <= sourceEpoch {
 		// This case should normally not happen, since if we have targetEpoch > minTarget,
 		// then there is at least one attestation we surround.
 		// However, it can happens if we have multiple attestation with the same target
@@ -320,8 +332,10 @@ func (m *MaxSpanChunksSlice) CheckSlashable(
 	validatorIdx primitives.ValidatorIndex,
 	incomingAttWrapper *slashertypes.IndexedAttestationWrapper,
 ) (ethpb.AttSlashing, error) {
-	sourceEpoch := incomingAttWrapper.IndexedAttestation.GetData().Source.Epoch
-	targetEpoch := incomingAttWrapper.IndexedAttestation.GetData().Target.Epoch
+	sourceEpoch, targetEpoch, ok := attestationEpochs(incomingAttWrapper.IndexedAttestation)
+	if !ok {
+		return nil, errors.New("incoming attestation data is nil")
+	}
 
 	maxTarget, err := chunkDataAtEpoch(m.params, m.data, validatorIdx, sourceEpoch)
 	if err != nil {
@@ -355,7 +369,11 @@ func (m *MaxSpanChunksSlice) CheckSlashable(
 		return nil, nil
 	}
 
-	if existingAttWrapper.IndexedAttestation.GetData().Source.Epoch >= sourceEpoch {
+	existingSourceEpoch, _, ok := attestationEpochs(existingAttWrapper.IndexedAttestation)
+	if !ok {
+		return nil, errors.New("existing attestation data is nil")
+	}
+	if existingSourceEpoch >= sourceEpoch {
 		// This case should normally not happen, since if we have targetEpoch < maxTarget,
 		// then there is at least one attestation that surrounds us.
 		// However, it can happens if we have multiple attestation with the same target

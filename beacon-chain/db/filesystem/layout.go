@@ -124,6 +124,9 @@ func warmCache(l fsLayout, cache *blobStorageSummaryCache) error {
 }
 
 func migrateLayout(fs afero.Fs, from, to fsLayout, cache *blobStorageSummaryCache) error {
+	if from == nil || to == nil {
+		return errors.Wrap(errMigrationFailure, "nil filesystem layout")
+	}
 	start := time.Now()
 	iter, err := from.iterateIdents(0)
 	if err != nil {

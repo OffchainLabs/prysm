@@ -92,6 +92,9 @@ func (s *Service) FindAndDialPeersWithSubnets(
 ) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.FindAndDialPeersWithSubnet")
 	defer span.End()
+	if s == nil {
+		return errors.New("service is nil")
+	}
 
 	// Return early if the discovery listener isn't set.
 	if s.dv5Listener == nil {
@@ -263,6 +266,9 @@ func (s *Service) defectiveSubnets(
 	subnets map[uint64]bool,
 ) map[uint64]int {
 	missingCountPerSubnet := make(map[uint64]int, len(subnets))
+	if s == nil || s.pubsub == nil {
+		return missingCountPerSubnet
+	}
 	for subnet := range subnets {
 		topic := fmt.Sprintf(topicFormat, digest, subnet) + s.Encoding().ProtocolSuffix()
 		peers := s.pubsub.ListPeers(topic)

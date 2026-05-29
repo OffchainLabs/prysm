@@ -39,6 +39,9 @@ import (
 // [REJECT] The aggregate signature is valid for the message beacon_block_root and aggregate pubkey derived from the participation
 // info in aggregation_bits for the subcommittee specified by the contribution.subcommittee_index.
 func (s *Service) validateSyncContributionAndProof(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
+	if s == nil || s.cfg == nil || s.cfg.operationNotifier == nil {
+		return pubsub.ValidationIgnore, errors.New("sync service is nil")
+	}
 	ctx, span := trace.StartSpan(ctx, "sync.validateSyncContributionAndProof")
 	defer span.End()
 
@@ -317,6 +320,9 @@ func (s *Service) setSyncContributionIndexSlotSeen(slot primitives.Slot, aggrega
 
 // Set sync contribution's slot, root, committee index and bits.
 func (s *Service) setSyncContributionBits(c *ethpb.SyncCommitteeContribution) error {
+	if s == nil || s.syncContributionBitsOverlapCache == nil {
+		return errors.New("sync contribution bits cache is nil")
+	}
 	s.syncContributionBitsOverlapLock.Lock()
 	defer s.syncContributionBitsOverlapLock.Unlock()
 	// Copying due to how pb unmarshalling is carried out, prevent mutation.
@@ -344,6 +350,9 @@ func (s *Service) setSyncContributionBits(c *ethpb.SyncCommitteeContribution) er
 
 // Check sync contribution bits don't have an overlap with one's in cache.
 func (s *Service) hasSeenSyncContributionBits(c *ethpb.SyncCommitteeContribution) (bool, error) {
+	if s == nil || s.syncContributionBitsOverlapCache == nil {
+		return false, nil
+	}
 	s.syncContributionBitsOverlapLock.RLock()
 	defer s.syncContributionBitsOverlapLock.RUnlock()
 	b := append(c.BlockRoot, bytesutil.Bytes32(uint64(c.Slot))...)

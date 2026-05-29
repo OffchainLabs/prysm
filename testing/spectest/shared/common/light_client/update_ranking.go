@@ -43,6 +43,10 @@ func RunLightClientUpdateRankingTests(t *testing.T, config string, v int) {
 	_, testsFolderPath := utils.TestFolders(t, config, version.String(v), "light_client/update_ranking/pyspec_tests/")
 	testTypes, err := util.BazelListDirectories(testsFolderPath)
 	require.NoError(t, err)
+	if testTypes == nil {
+		t.Fatal("test types are nil")
+		return
+	}
 
 	if len(testTypes) == 0 {
 		t.Fatalf("No test types found for %s", testsFolderPath)
@@ -72,12 +76,20 @@ func runLightClientUpdateRankingTest(t *testing.T, testFolderPath string, v int)
 		oldUpdateSSZ, err := snappy.Decode(nil, oldUpdateFile)
 		require.NoError(t, err, "Failed to decompress")
 		oldUpdate := createUpdate(t, oldUpdateSSZ, v)
+		if oldUpdate == nil {
+			t.Fatal("old update is nil")
+			return
+		}
 
 		newUpdateFile, err := util.BazelFileBytes(path.Join(testFolderPath, fmt.Sprintf("updates_%d.ssz_snappy", i+1)))
 		require.NoError(t, err)
 		newUpdateSSZ, err := snappy.Decode(nil, newUpdateFile)
 		require.NoError(t, err, "Failed to decompress")
 		newUpdate := createUpdate(t, newUpdateSSZ, v)
+		if newUpdate == nil {
+			t.Fatal("new update is nil")
+			return
+		}
 
 		result, err := lightclient.IsBetterUpdate(newUpdate, oldUpdate)
 		require.NoError(t, err)

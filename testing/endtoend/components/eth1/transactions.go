@@ -34,6 +34,13 @@ const txCount = 20
 
 var fundedAccount *keystore.Key
 
+func fundedAccountAddress() (common.Address, error) {
+	if fundedAccount == nil {
+		return common.Address{}, errors.New("funded account is nil")
+	}
+	return fundedAccount.Address, nil
+}
+
 type TransactionGenerator struct {
 	keystore      string
 	seed          int64
@@ -131,7 +138,11 @@ func (s *TransactionGenerator) Started() <-chan struct{} {
 
 func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.Int, addr string, txCount uint64, backend *ethclient.Client, al bool, useLargeBlobs bool) error {
 	sender := common.HexToAddress(addr)
-	nonce, err := backend.PendingNonceAt(context.Background(), fundedAccount.Address)
+	fundedAddress, err := fundedAccountAddress()
+	if err != nil {
+		return err
+	}
+	nonce, err := backend.PendingNonceAt(context.Background(), fundedAddress)
 	if err != nil {
 		return err
 	}
@@ -148,8 +159,11 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 	}
 
 	cfg := params.BeaconConfig()
+	// Check if we're post-Deneb/Fulu fork.
 	clock := startup.NewClock(e2e.TestParams.CLGenesisTime, [32]byte{})
-	isPostFulu := clock.CurrentEpoch() >= cfg.FuluForkEpoch
+	currentEpoch := clock.CurrentEpoch()
+	isPostDeneb := currentEpoch >= cfg.DenebForkEpoch
+	isPostFulu := currentEpoch >= cfg.FuluForkEpoch
 	// Skip pre-Fulu V0 sends only when Fulu is scheduled: V0 sidecars left in
 	// the pool at the Osaka boundary become invalid under geth >= v1.17 and
 	// occupy maxTxsPerAccount=16, blocking later V1 cell-proof txs. When Fulu
@@ -159,25 +173,31 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 	g, _ := errgroup.WithContext(context.Background())
 	var txs []*types.Transaction
 
-	switch {
-	case isPostFulu:
-		logrus.Info("Sending blob transactions with cell proofs")
-		txs = make([]*types.Transaction, 5)
-		for index := range uint64(5) {
+	// Send blob transactions - use different versions pre/post Fulu
+	if !isPostDeneb {
+		logrus.Debug("Skipping blob transactions before Deneb/Cancun")
+	} else if fuluScheduled && !isPostFulu {
+		logrus.Debug("Skipping blob transactions before scheduled Fulu fork")
+	} else if isPostFulu {
+		logrus.Info("Sending blob transactions with sidecars for Fulu")
+		// Two large blob transactions are enough to exceed Electra's 9-blob limit
+		// after BPO raises the cap, without filling geth's 16 blob-tx account pool.
+		txs = make([]*types.Transaction, 2)
+		for index := range uint64(2) {
 			g.Go(func() error {
-				tx, err := RandomBlobCellTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
+				tx, err := RandomBlobTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
 				if err != nil {
-					return errors.Wrap(err, "Could not create blob cell tx")
+					return errors.Wrap(err, "Could not create blob tx")
 				}
 				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
 				if err != nil {
-					return errors.Wrap(err, "Could not sign blob cell tx")
+					return errors.Wrap(err, "Could not sign blob tx")
 				}
 				txs[index] = signedTx
 				return nil
 			})
 		}
-	case !fuluScheduled:
+	} else {
 		logrus.Info("Sending blob transactions with sidecars")
 		txs = make([]*types.Transaction, 5)
 		for index := range uint64(5) {
@@ -209,14 +229,13 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 		if tx == nil {
 			continue
 		}
-		if err := backend.SendTransaction(context.Background(), tx); err != nil {
-			entry := logrus.WithError(err).WithField("index", i).WithField("nonce", tx.Nonce())
-			if strings.Contains(err.Error(), "account limit exceeded") {
-				entry.Debug("Blob tx send stopped: pool full (backpressure)")
-			} else {
-				entry.Warn("Blob tx send failed; stopping batch to avoid nonce gap")
+		err = backend.SendTransaction(context.Background(), tx)
+		if err != nil {
+			if isBlobTxpoolBackpressure(err) {
+				logrus.WithError(err).WithField("index", i).WithField("nonce", tx.Nonce()).WithField("blobHashes", len(tx.BlobHashes())).Debug("Blob transaction deferred by txpool backpressure")
+				break
 			}
-			break
+			return errors.Wrapf(err, "could not send blob transaction type %d with %d blob hashes", tx.Type(), len(tx.BlobHashes()))
 		}
 	}
 
@@ -328,7 +347,7 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 	switch mathRand.Intn(mod) {
 	case 0:
 		// Blob transaction with cell proofs (Version 1 sidecar)
-		tip, feecap, err := getCaps(rpc, gasPrice)
+		tip, feecap, blobFeeCap, err := getCaps(rpc, gasPrice)
 		if err != nil {
 			return nil, errors.Wrap(err, "getCaps")
 		}
@@ -338,7 +357,7 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 			return nil, errors.Wrap(err, "getBlobData")
 		}
 
-		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, make(types.AccessList, 0))
+		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, blobFeeCap, data, make(types.AccessList, 0))
 	case 1:
 		// Blob transaction with cell proofs and access list
 		tx := types.NewTx(&types.LegacyTx{
@@ -366,7 +385,7 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 		if err != nil {
 			return nil, errors.Wrap(err, "CreateAccessList")
 		}
-		tip, feecap, err := getCaps(rpc, gasPrice)
+		tip, feecap, blobFeeCap, err := getCaps(rpc, gasPrice)
 		if err != nil {
 			return nil, errors.Wrap(err, "getCaps")
 		}
@@ -375,7 +394,7 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 			return nil, errors.Wrap(err, "getBlobData")
 		}
 
-		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, *al)
+		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, blobFeeCap, data, *al)
 	}
 
 	return nil, nil
@@ -423,7 +442,7 @@ func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice
 	case 0:
 		// 4844 transaction without AL
 
-		tip, feecap, err := getCaps(rpc, gasPrice)
+		tip, feecap, blobFeeCap, err := getCaps(rpc, gasPrice)
 		if err != nil {
 			return nil, errors.Wrap(err, "getCaps")
 		}
@@ -432,7 +451,7 @@ func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice
 		if err != nil {
 			return nil, errors.Wrap(err, "getBlobData")
 		}
-		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, make(types.AccessList, 0)), nil
+		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, blobFeeCap, data, make(types.AccessList, 0)), nil
 	case 1:
 		// 4844 transaction with AL nonce, to, value, gas, gasPrice, code
 		tx := types.NewTx(&types.LegacyTx{
@@ -460,7 +479,7 @@ func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice
 		if err != nil {
 			return nil, errors.Wrap(err, "CreateAccessList")
 		}
-		tip, feecap, err := getCaps(rpc, gasPrice)
+		tip, feecap, blobFeeCap, err := getCaps(rpc, gasPrice)
 		if err != nil {
 			return nil, errors.Wrap(err, "getCaps")
 		}
@@ -468,7 +487,7 @@ func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice
 		if err != nil {
 			return nil, errors.Wrap(err, "getBlobData")
 		}
-		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, *al), nil
+		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, blobFeeCap, data, *al), nil
 	}
 	return nil, errors.New("asdf")
 }
@@ -727,22 +746,44 @@ func randomAddress() common.Address {
 	return common.Address{}
 }
 
-func getCaps(rpc *rpc.Client, defaultGasPrice *big.Int) (*big.Int, *big.Int, error) {
+func getCaps(rpc *rpc.Client, defaultGasPrice *big.Int) (*big.Int, *big.Int, *big.Int, error) {
+	defaultBlobFeeCap := big.NewInt(1000000)
 	if rpc == nil {
 		tip := new(big.Int).Mul(big.NewInt(1), big.NewInt(0).SetUint64(params.BeaconConfig().GweiPerEth))
 		if defaultGasPrice.Cmp(tip) >= 0 {
 			feeCap := new(big.Int).Sub(defaultGasPrice, tip)
-			return tip, feeCap, nil
+			return tip, feeCap, defaultBlobFeeCap, nil
 		}
-		return big.NewInt(0), defaultGasPrice, nil
+		return big.NewInt(0), defaultGasPrice, defaultBlobFeeCap, nil
 	}
 	client := ethclient.NewClient(rpc)
 	tip, err := client.SuggestGasTipCap(context.Background())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	feeCap, err := client.SuggestGasPrice(context.Background())
-	return tip, feeCap, err
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	blobFeeCap := defaultBlobFeeCap
+	blobBaseFee, err := client.BlobBaseFee(context.Background())
+	if err == nil && blobBaseFee != nil {
+		blobFeeCap = new(big.Int).Mul(blobBaseFee, big.NewInt(2))
+		if blobFeeCap.Cmp(defaultBlobFeeCap) < 0 {
+			blobFeeCap = defaultBlobFeeCap
+		}
+	}
+	return tip, feeCap, blobFeeCap, nil
+}
+
+func isBlobTxpoolBackpressure(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "account limit exceeded") ||
+		strings.Contains(msg, "replacement transaction underpriced") ||
+		(strings.Contains(msg, "nonce too high") && strings.Contains(msg, "gapped nonce"))
 }
 
 func fundAccount(client *rpc.Client, sourceKey, destKey *keystore.Key) error {

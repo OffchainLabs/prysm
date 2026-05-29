@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/pkg/errors"
 )
 
 // Seed returns the randao seed used for shuffling of a given epoch.
@@ -48,5 +49,8 @@ func Seed(state state.ReadOnlyBeaconState, epoch primitives.Epoch, domain [bls.D
 //	 """
 //	 return state.randao_mixes[epoch % EPOCHS_PER_HISTORICAL_VECTOR]
 func RandaoMix(state state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]byte, error) {
+	if state == nil || state.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	return state.RandaoMixAtIndex(uint64(epoch % params.BeaconConfig().EpochsPerHistoricalVector))
 }

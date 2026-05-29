@@ -3,6 +3,7 @@ package validator
 import (
 	"bytes"
 	"context"
+	"sort"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -18,6 +19,9 @@ import (
 func (vs *Server) getPayloadAttestations(ctx context.Context, head state.BeaconState, blockParentRoot [32]byte) []*ethpb.PayloadAttestation {
 	_, span := trace.StartSpan(ctx, "ProposerServer.getPayloadAttestations")
 	defer span.End()
+	if head == nil || head.IsNil() {
+		return nil
+	}
 
 	if slots.ToEpoch(head.Slot()) < params.BeaconConfig().GloasForkEpoch {
 		return nil
@@ -46,6 +50,9 @@ func (vs *Server) getPayloadAttestations(ctx context.Context, head state.BeaconS
 		}
 		atts = append(atts, att)
 	}
+	sort.Slice(atts, func(i, j int) bool {
+		return !atts[i].Data.PayloadPresent && atts[j].Data.PayloadPresent
+	})
 
 	log.WithFields(map[string]any{
 		"slot":          head.Slot(),

@@ -274,21 +274,30 @@ func ProcessBlockNoVerifyAnySig(
 	ctx, span := trace.StartSpan(ctx, "core.state.ProcessBlockNoVerifyAnySig")
 	defer span.End()
 	set := BlockSignatureBatches{}
+	if st == nil || st.IsNil() {
+		return set, nil, errors.New("state is nil")
+	}
+	if signed == nil || signed.IsNil() {
+		return set, nil, blocks.ErrNilSignedBeaconBlock
+	}
 	if err := blocks.BeaconBlockIsNil(signed); err != nil {
 		return set, nil, err
 	}
-
-	if st.Version() != signed.Block().Version() {
-		return set, nil, fmt.Errorf("state and block are different version. %d != %d", st.Version(), signed.Block().Version())
+	blk := signed.Block()
+	if blk == nil || blk.IsNil() {
+		return set, nil, blocks.ErrNilBeaconBlock
 	}
 
-	blk := signed.Block()
+	if st.Version() != blk.Version() {
+		return set, nil, fmt.Errorf("state and block are different version. %d != %d", st.Version(), blk.Version())
+	}
+
 	st, err := ProcessBlockForStateRoot(ctx, st, signed)
 	if err != nil {
 		return set, nil, err
 	}
 
-	randaoReveal := signed.Block().Body().RandaoReveal()
+	randaoReveal := blk.Body().RandaoReveal()
 	rSet, err := b.RandaoSignatureBatch(ctx, st, randaoReveal[:])
 	if err != nil {
 		tracing.AnnotateError(span, err)
@@ -353,6 +362,9 @@ func ProcessOperationsNoVerifyAttsSigs(
 	beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "core.state.ProcessOperationsNoVerifyAttsSigs")
 	defer span.End()
+	if state == nil || state.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	if beaconBlock == nil || beaconBlock.IsNil() {
 		return nil, blocks.ErrNilBeaconBlock
 	}
@@ -417,11 +429,20 @@ func ProcessBlockForStateRoot(
 ) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "core.state.ProcessBlockForStateRoot")
 	defer span.End()
+	if state == nil || state.IsNil() {
+		return nil, errors.New("state is nil")
+	}
+	if signed == nil || signed.IsNil() {
+		return nil, blocks.ErrNilSignedBeaconBlock
+	}
 	if err := blocks.BeaconBlockIsNil(signed); err != nil {
 		return nil, err
 	}
 
 	blk := signed.Block()
+	if blk == nil || blk.IsNil() {
+		return nil, blocks.ErrNilBeaconBlock
+	}
 	body := blk.Body()
 
 	if state.Version() >= version.Gloas {
@@ -487,32 +508,35 @@ func ProcessBlockForStateRoot(
 		}
 	}
 
-	randaoReveal := signed.Block().Body().RandaoReveal()
+	randaoReveal := blk.Body().RandaoReveal()
 	state, err = b.ProcessRandaoNoVerify(state, randaoReveal[:])
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return nil, errors.Wrap(ErrProcessRandaoFailed, err.Error())
 	}
 
-	state, err = b.ProcessEth1DataInBlock(ctx, state, signed.Block().Body().Eth1Data())
+	state, err = b.ProcessEth1DataInBlock(ctx, state, blk.Body().Eth1Data())
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return nil, errors.Wrap(ErrProcessEth1DataFailed, err.Error())
 	}
 
-	state, err = ProcessOperationsNoVerifyAttsSigs(ctx, state, signed.Block())
+	state, err = ProcessOperationsNoVerifyAttsSigs(ctx, state, blk)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return nil, errors.Wrap(err, "could not process block operation")
 	}
 
-	if signed.Block().Version() == version.Phase0 {
+	if blk.Version() == version.Phase0 {
 		return state, nil
 	}
 
-	sa, err := signed.Block().Body().SyncAggregate()
+	sa, err := blk.Body().SyncAggregate()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get sync aggregate from block")
+	}
+	if sa == nil {
+		return nil, errors.New("sync aggregate is nil")
 	}
 	state, _, err = altair.ProcessSyncAggregate(ctx, state, sa)
 	if err != nil {

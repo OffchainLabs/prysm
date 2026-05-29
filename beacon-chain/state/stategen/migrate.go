@@ -41,7 +41,14 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 	if err != nil {
 		return err
 	}
-	fSlot := fBlock.Block().Slot()
+	if fBlock == nil || fBlock.IsNil() {
+		return errUnknownBlock
+	}
+	block := fBlock.Block()
+	if block == nil {
+		return errUnknownBlock
+	}
+	fSlot := block.Slot()
 	if oldFSlot > fSlot {
 		return nil
 	}
@@ -75,7 +82,7 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 		// we have to regenerate the state which will represent epoch boundary.
 		// By finding the highest available block below epoch boundary slot, we
 		// generate the state for that block root.
-		if exists {
+		if exists && cached != nil && cached.state != nil && !cached.state.IsNil() {
 			aRoot = cached.root
 			aState = cached.state
 		} else {
@@ -102,6 +109,9 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 			s.migrateHotToCold(aRoot)
 			continue
 		}
+		if aState == nil || aState.IsNil() {
+			return errNilState
+		}
 
 		saveStart := time.Now()
 		if err := s.beaconDB.SaveState(ctx, aState, aRoot); err != nil {
@@ -124,7 +134,7 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 	if err != nil {
 		return err
 	}
-	if ok {
+	if ok && fInfo != nil && fInfo.state != nil && !fInfo.state.IsNil() {
 		s.SaveFinalizedState(fSlot, fRoot, fInfo.state)
 	}
 
@@ -165,7 +175,7 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 		}
 		var aRoot [32]byte
 		var aState state.BeaconState
-		if exists {
+		if exists && cached != nil && cached.state != nil && !cached.state.IsNil() {
 			aRoot = cached.root
 			aState = cached.state
 		} else {
@@ -189,7 +199,13 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 				return err
 			}
 		}
-
+		if s.beaconDB.HasState(ctx, aRoot) {
+			s.migrateHotToCold(aRoot)
+			continue
+		}
+		if aState == nil || aState.IsNil() {
+			return errNilState
+		}
 		// advance slots to the target slot
 		if aState.Slot() < slot {
 			aState, err = transition.ProcessSlots(ctx, aState, slot)
@@ -216,7 +232,7 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 	if err != nil {
 		return err
 	}
-	if ok {
+	if ok && fInfo != nil && fInfo.state != nil && !fInfo.state.IsNil() {
 		s.SaveFinalizedState(fSlot, fRoot, fInfo.state)
 	}
 	return nil

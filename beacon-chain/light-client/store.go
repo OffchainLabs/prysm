@@ -62,12 +62,20 @@ func (s *Store) SaveLCData(ctx context.Context,
 	if err != nil {
 		return errors.Wrapf(err, "failed to create light client optimistic update")
 	}
-	period := slots.SyncCommitteePeriod(slots.ToEpoch(update.AttestedHeader().Beacon().Slot))
+	attestedHeader := update.AttestedHeader()
+	if attestedHeader == nil {
+		return errors.New("light client update attested header is nil")
+	}
+	attestedBeaconHeader := attestedHeader.Beacon()
+	if attestedBeaconHeader == nil {
+		return errors.New("light client update attested beacon header is nil")
+	}
+	period := slots.SyncCommitteePeriod(slots.ToEpoch(attestedBeaconHeader.Slot))
 	blockRoot, err := attestedBlock.Block().HashTreeRoot()
 	if err != nil {
 		return errors.Wrapf(err, "failed to compute attested block root")
 	}
-	parentRoot := [32]byte(update.AttestedHeader().Beacon().ParentRoot)
+	parentRoot := [32]byte(attestedBeaconHeader.ParentRoot)
 	signatureBlockRoot, err := block.Block().HashTreeRoot()
 	if err != nil {
 		return errors.Wrapf(err, "failed to compute signature block root")

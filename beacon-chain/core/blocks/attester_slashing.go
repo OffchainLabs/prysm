@@ -48,6 +48,9 @@ func ProcessAttesterSlashings(
 
 	span.SetAttributes(trace.Int64Attribute("count", int64(len(slashings))))
 
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	if exitInfo == nil && len(slashings) > 0 {
 		return nil, errors.New("exit info required to process attester slashings")
 	}
@@ -70,6 +73,9 @@ func ProcessAttesterSlashingsNoVerify(
 	slashings []ethpb.AttSlashing,
 	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	if exitInfo == nil && len(slashings) > 0 {
 		return nil, errors.New("exit info required to process attester slashings")
 	}
@@ -90,6 +96,9 @@ func ProcessAttesterSlashing(
 	slashing ethpb.AttSlashing,
 	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	if exitInfo == nil {
 		return nil, errors.New("exit info is required to process attester slashing")
 	}
@@ -108,6 +117,9 @@ func ProcessAttesterSlashingNoVerify(
 	slashing ethpb.AttSlashing,
 	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	if exitInfo == nil {
 		return nil, errors.New("exit info is required to process attester slashing")
 	}
@@ -120,6 +132,9 @@ func processAttesterSlashing(
 	slashing ethpb.AttSlashing,
 	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	slashableIndices := SlashableAttesterIndices(slashing)
 	sort.SliceStable(slashableIndices, func(i, j int) bool {
 		return slashableIndices[i] < slashableIndices[j]

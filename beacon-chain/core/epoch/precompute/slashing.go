@@ -5,11 +5,18 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/pkg/errors"
 )
 
 // ProcessSlashingsPrecompute processes the slashed validators during epoch processing.
 // This is an optimized version by passing in precomputed total epoch balances.
 func ProcessSlashingsPrecompute(s state.BeaconState, pBal *Balance) error {
+	if s == nil || s.IsNil() {
+		return errors.New("state is nil")
+	}
+	if pBal == nil {
+		return errors.New("precomputed balances are nil")
+	}
 	currentEpoch := time.CurrentEpoch(s)
 	exitLength := params.BeaconConfig().EpochsPerSlashingsVector
 

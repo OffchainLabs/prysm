@@ -36,6 +36,9 @@ var backOffTime = map[primitives.SSZUint64]time.Duration{
 
 // goodbyeRPCHandler reads the incoming goodbye rpc message from the peer.
 func (s *Service) goodbyeRPCHandler(_ context.Context, msg any, stream libp2pcore.Stream) error {
+	if stream == nil {
+		return errors.New("stream is nil")
+	}
 	const amount = 1
 	SetRPCStreamDeadlines(stream)
 	peerID := stream.Conn().RemotePeer()
@@ -75,7 +78,14 @@ func (s *Service) goodbyeRPCHandler(_ context.Context, msg any, stream libp2pcor
 // disconnectBadPeer checks whether peer is considered bad by some scorer, and tries to disconnect
 // the peer, if that is the case. Additionally, disconnection reason is obtained from scorer.
 func (s *Service) disconnectBadPeer(ctx context.Context, id peer.ID, badPeerErr error) {
-	err := s.cfg.p2p.Peers().Scorers().ValidationError(id)
+	var err error
+	peers := s.cfg.p2p.Peers()
+	if peers != nil {
+		scorers := peers.Scorers()
+		if scorers != nil {
+			err = scorers.ValidationError(id)
+		}
+	}
 	goodbyeCode := p2ptypes.ErrToGoodbyeCode(err)
 	if err == nil {
 		goodbyeCode = p2ptypes.GoodbyeCodeBanned
@@ -104,7 +114,8 @@ func (s *Service) sendGoodByeAndDisconnect(ctx context.Context, code p2ptypes.RP
 	defer lock.Unlock()
 	// In the event we are already disconnected, exit early from the
 	// goodbye method to prevent redundant streams from being created.
-	if s.cfg.p2p.Host().Network().Connectedness(id) == network.NotConnected {
+	host := s.cfg.p2p.Host()
+	if host == nil || host.Network().Connectedness(id) == network.NotConnected {
 		return nil
 	}
 	if err := s.sendGoodByeMessage(ctx, code, id); err != nil {
@@ -127,6 +138,9 @@ func (s *Service) sendGoodByeMessage(ctx context.Context, code p2ptypes.RPCGoodb
 	stream, err := s.cfg.p2p.Send(ctx, &code, topic, id)
 	if err != nil {
 		return err
+	}
+	if stream == nil {
+		return errors.New("stream is nil")
 	}
 	defer closeStream(stream, log)
 

@@ -126,6 +126,9 @@ func (ks Keystore) JoinPath(filename string) string {
 // EncryptKey encrypts a key using the specified scrypt parameters into a JSON
 // blob that can be decrypted later on.
 func EncryptKey(key *Key, password string, scryptN, scryptP int) ([]byte, error) {
+	if key == nil || key.SecretKey == nil || key.PublicKey == nil {
+		return nil, errors.New("invalid nil key")
+	}
 	authArray := []byte(password)
 	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {

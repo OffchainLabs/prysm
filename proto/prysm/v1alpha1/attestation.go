@@ -211,7 +211,7 @@ func (*PendingAttestation) GetAttestingIndex() primitives.ValidatorIndex {
 
 // CommitteeBitsVal --
 func (a *PendingAttestation) CommitteeBitsVal() bitfield.Bitfield {
-	return nil
+	return primitives.NewAttestationCommitteeBits()
 }
 
 // GetSignature --
@@ -285,7 +285,7 @@ func (a *AttestationElectra) SetSignature(sig []byte) {
 
 // GetCommitteeIndex --
 func (a *AttestationElectra) GetCommitteeIndex() primitives.CommitteeIndex {
-	if len(a.CommitteeBits) == 0 {
+	if a == nil || len(a.CommitteeBits) == 0 {
 		return 0
 	}
 	indices := a.CommitteeBits.BitIndices()
@@ -349,7 +349,7 @@ func (a *SingleAttestation) CommitteeBitsVal() bitfield.Bitfield {
 
 // GetAggregationBits --
 func (a *SingleAttestation) GetAggregationBits() bitfield.Bitlist {
-	return nil
+	return bitfield.NewBitlist(0)
 }
 
 // SetSignature --

@@ -136,6 +136,9 @@ func NewFieldTrie(field types.FieldIndex, fieldInfo types.DataType, elements any
 
 // CopyTrie creates a lightweight copy that shares the underlying trie data.
 func (f *FieldTrie) CopyTrie() *FieldTrie {
+	if f == nil {
+		return nil
+	}
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -169,6 +172,12 @@ func (f *FieldTrie) CopyTrie() *FieldTrie {
 
 // TrieRoot returns the root of the trie with the appropriate length mixin applied.
 func (f *FieldTrie) TrieRoot() ([32]byte, error) {
+	if f == nil {
+		return [32]byte{}, ErrInvalidFieldTrie
+	}
+	if f.Empty() {
+		return [32]byte{}, ErrEmptyFieldTrie
+	}
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -181,6 +190,9 @@ func (f *FieldTrie) TrieRoot() ([32]byte, error) {
 // in place of the one on which this method was called with, even if an error
 // is returned.
 func (f *FieldTrie) RecomputeTrie(indices []uint64, elements any) (*FieldTrie, [32]byte, error) {
+	if f == nil {
+		return nil, [32]byte{}, ErrEmptyFieldTrie
+	}
 	if indices != nil {
 		// Deduplicating indices to avoid redundant recomputation.
 		indices = slice.SetUint64(indices)
@@ -235,6 +247,9 @@ func (f *FieldTrie) Empty() bool {
 // BeaconState instances are sharing this trie.
 // A count of 1 means no sharing, and >1 means shared.
 func (f *FieldTrie) RefCount() uint {
+	if f == nil {
+		return 0
+	}
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -245,6 +260,9 @@ func (f *FieldTrie) RefCount() uint {
 // bypasses the normal method of field computation, it is only
 // meant to be used in tests.
 func (f *FieldTrie) InsertFieldLayer(nodes [][32]byte, offsets []uint64) {
+	if f == nil {
+		return
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -643,6 +661,10 @@ func (f *FieldTrie) recomputeOverlay(elements any, indices []uint64) ([32]byte, 
 
 // readOverlayNode reads a node from the overlay at (level, idx).
 func (f *FieldTrie) readOverlayNode(level uint64, idx uint64) ([32]byte, error) {
+	if f == nil || f.overridesData == nil || f.base == nil || f.base.nodesData == nil {
+		return [32]byte{}, ErrInvalidFieldTrie
+	}
+
 	// First, check if there is an override for this node.
 	if nodeByIdx := f.overridesData.levels[level]; nodeByIdx != nil {
 		if root, ok := nodeByIdx[idx]; ok {
@@ -803,6 +825,9 @@ func (f *FieldTrie) depth() uint64 {
 
 // levelSize returns the number of nodes at the given level.
 func (f *FieldTrie) levelSize(level uint64) uint64 {
+	if f == nil || f.nodesData == nil || uint64(len(f.nodesData.offsets)) <= level+1 {
+		return 0
+	}
 	return f.nodesData.offsets[level+1] - f.nodesData.offsets[level]
 }
 

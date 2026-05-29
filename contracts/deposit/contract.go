@@ -3,6 +3,7 @@
 package deposit
 
 import (
+	"errors"
 	"math/big"
 	"strings"
 
@@ -180,6 +181,9 @@ func (_DepositContract *DepositContractCaller) GetDepositCount(opts *bind.CallOp
 	if err != nil {
 		return *new([]byte), err
 	}
+	if len(out) == 0 {
+		return nil, errors.New("get_deposit_count returned no values")
+	}
 
 	out0 := *abi.ConvertType(out[0], new([]byte)).(*[]byte)
 
@@ -211,6 +215,9 @@ func (_DepositContract *DepositContractCaller) GetDepositRoot(opts *bind.CallOpt
 	if err != nil {
 		return *new([32]byte), err
 	}
+	if len(out) == 0 {
+		return [32]byte{}, errors.New("get_deposit_root returned no values")
+	}
 
 	out0 := *abi.ConvertType(out[0], new([32]byte)).(*[32]byte)
 
@@ -241,6 +248,9 @@ func (_DepositContract *DepositContractCaller) SupportsInterface(opts *bind.Call
 
 	if err != nil {
 		return *new(bool), err
+	}
+	if len(out) == 0 {
+		return false, errors.New("supportsInterface returned no values")
 	}
 
 	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)

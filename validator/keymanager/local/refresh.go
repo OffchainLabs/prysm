@@ -112,6 +112,12 @@ func (km *Keymanager) reloadAccountsFromKeystoreFile(accountsFilePath string) {
 // Replaces the accounts store struct in the local keymanager with
 // the contents of a keystore file by decrypting it with the accounts password.
 func (km *Keymanager) reloadAccountsFromKeystore(keystore *AccountsKeystoreRepresentation) error {
+	if km.wallet == nil {
+		return errors.New("wallet is nil")
+	}
+	if keystore == nil || keystore.Crypto == nil {
+		return errors.New("keystore is nil")
+	}
 	decryptor := keystorev4.New()
 	encodedAccounts, err := decryptor.Decrypt(keystore.Crypto, km.wallet.Password())
 	if err != nil {

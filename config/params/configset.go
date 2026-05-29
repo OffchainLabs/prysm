@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var configs *configset
+var configs = newConfigset()
 
 // All returns a slice of every BeaconChainConfig contained in the configset.
 func All() []*BeaconChainConfig {
@@ -165,6 +165,9 @@ func (r *configset) byName(name string) (*BeaconChainConfig, error) {
 	c, ok := r.nameToConfig[name]
 	if !ok {
 		return nil, errors.Wrapf(errConfigNotFound, "name=%s is not a known BeaconChainConfig name", name)
+	}
+	if c == nil {
+		return nil, errors.Wrapf(errConfigNotFound, "name=%s has nil BeaconChainConfig", name)
 	}
 	return c, nil
 }

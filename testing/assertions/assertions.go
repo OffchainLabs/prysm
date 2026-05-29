@@ -56,10 +56,14 @@ func DeepEqual(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
 		errMsg := parseMsg("Values are not equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
 		var opts cmp.Options
+		if expectedType := reflect.TypeOf(expected); expectedType != nil && expectedType.Kind() == reflect.Struct {
+			opts = append(opts, cmp.AllowUnexported(expected))
+		}
+		if actualType := reflect.TypeOf(actual); actualType != nil && actualType.Kind() == reflect.Struct {
+			opts = append(opts, cmp.AllowUnexported(actual))
+		}
 		if _, isProto := expected.(proto.Message); isProto {
 			opts = cmp.Options{protocmp.Transform()}
-		} else {
-			opts = cmp.Options{cmp.AllowUnexported(expected), cmp.AllowUnexported(actual)}
 		}
 		diff := cmp.Diff(expected, actual, opts...)
 		loggerFn("%s:%d %s, expected != actual, diff: %s", filepath.Base(file), line, errMsg, diff)
@@ -73,6 +77,9 @@ var protobufPrivateFields = map[string]bool{
 
 func ProtobufPrettyDiff(a, b any) string {
 	d, _ := messagediff.DeepDiff(a, b)
+	if d == nil {
+		return ""
+	}
 	var dstr []string
 	appendNotProto := func(path, str string) {
 		parts := strings.Split(path, ".")

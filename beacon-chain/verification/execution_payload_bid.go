@@ -64,6 +64,9 @@ func (v *BidVerifier) VerifyCurrentOrNextSlot() (err error) {
 // VerifyBuilderActive verifies the bid builder index refers to an active builder.
 func (v *BidVerifier) VerifyBuilderActive(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireBidBuilderActive, &err)
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 
 	bid, err := v.b.Bid()
 	if err != nil {
@@ -189,6 +192,9 @@ func (v *BidVerifier) VerifyParentBlockHash(resolveBlockHash func([32]byte) ([32
 // VerifyBuilderCanCoverBid verifies the builder has enough balance to cover the bid value.
 func (v *BidVerifier) VerifyBuilderCanCoverBid(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireBidBuilderCanCover, &err)
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 
 	bid, err := v.b.Bid()
 	if err != nil {
@@ -207,6 +213,9 @@ func (v *BidVerifier) VerifyBuilderCanCoverBid(st state.ReadOnlyBeaconState) (er
 // VerifySignature verifies the bid signature against the builder's public key.
 func (v *BidVerifier) VerifySignature(st state.ReadOnlyBeaconState) (err error) {
 	defer v.record(RequireBidSignatureValid, &err)
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 	return gloas.ValidatePayloadBidSignature(st, v.b)
 }
 

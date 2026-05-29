@@ -60,6 +60,9 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
+	if env == nil {
+		return pubsub.ValidationIgnore, errors.New("execution payload envelope is nil")
+	}
 
 	// [IGNORE] The envelope's block root envelope.block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue payload for processing once the block is retrieved).
@@ -90,14 +93,25 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
+	if block == nil || block.IsNil() {
+		return pubsub.ValidationIgnore, errors.New("block is nil")
+	}
+	beaconBlock := block.Block()
+	if beaconBlock == nil || beaconBlock.IsNil() {
+		return pubsub.ValidationIgnore, errors.New("beacon block is nil")
+	}
+	body := beaconBlock.Body()
+	if body == nil || body.IsNil() {
+		return pubsub.ValidationIgnore, errors.New("block body is nil")
+	}
 	// [REJECT] block.slot equals envelope.slot.
-	if err := v.VerifySlotMatchesBlock(block.Block().Slot()); err != nil {
+	if err := v.VerifySlotMatchesBlock(beaconBlock.Slot()); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
 	// Let bid alias block.body.signed_execution_payload_bid.message
 	// (notice that this can be obtained from the state.latest_execution_payload_bid).
-	signedBid, err := block.Block().Body().SignedExecutionPayloadBid()
+	signedBid, err := body.SignedExecutionPayloadBid()
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
@@ -152,6 +166,9 @@ func (s *Service) queuePendingPayloadEnvelope(
 	env interfaces.ROExecutionPayloadEnvelope,
 	signedEnvelope *ethpb.SignedExecutionPayloadEnvelope,
 ) (pubsub.ValidationResult, error) {
+	if env == nil {
+		return pubsub.ValidationIgnore, errors.New("execution payload envelope is nil")
+	}
 	currentSlot := s.cfg.clock.CurrentSlot()
 	if env.Slot() != currentSlot {
 		return pubsub.ValidationIgnore, nil

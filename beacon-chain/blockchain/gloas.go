@@ -118,6 +118,10 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 		log.WithError(err).Error("Could not process slots to get payload attribute")
 		return emptyAttri
 	}
+	if st == nil || st.IsNil() {
+		log.Error("Could not process nil state to get payload attribute")
+		return emptyAttri
+	}
 
 	prevRando, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	if err != nil {
@@ -136,7 +140,6 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 		log.WithError(err).Error("Could not get payload withdrawals to get payload attribute")
 		return emptyAttri
 	}
-
 	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
 		Timestamp:             uint64(t.Unix()),
 		PrevRandao:            prevRando,

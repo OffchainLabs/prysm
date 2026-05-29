@@ -55,12 +55,18 @@ func UnrealizedCheckpoints(st state.BeaconState) (*ethpb.Checkpoint, *ethpb.Chec
 //	  current_target_balance = get_attesting_balance(state, current_attestations)
 //	  weigh_justification_and_finalization(state, total_active_balance, previous_target_balance, current_target_balance)
 func ProcessJustificationAndFinalizationPreCompute(state state.BeaconState, pBal *Balance) (state.BeaconState, error) {
+	if state == nil || state.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	canProcessSlot, err := slots.EpochStart(2 /*epoch*/)
 	if err != nil {
 		return nil, err
 	}
 	if state.Slot() <= canProcessSlot {
 		return state, nil
+	}
+	if pBal == nil {
+		return nil, errors.New("precomputed balances are nil")
 	}
 
 	newBits := processJustificationBits(state, pBal.ActiveCurrentEpoch, pBal.PrevEpochTargetAttested, pBal.CurrentEpochTargetAttested)
@@ -155,9 +161,21 @@ func computeCheckpoints(state state.BeaconState, newBits bitfield.Bitvector4) (*
 	currentEpoch := time.CurrentEpoch(state)
 	oldPrevJustifiedCheckpoint := state.PreviousJustifiedCheckpoint()
 	oldCurrJustifiedCheckpoint := state.CurrentJustifiedCheckpoint()
+	if oldPrevJustifiedCheckpoint == nil {
+		oldPrevJustifiedCheckpoint = &ethpb.Checkpoint{}
+	}
+	if oldCurrJustifiedCheckpoint == nil {
+		oldCurrJustifiedCheckpoint = &ethpb.Checkpoint{}
+	}
 
 	justifiedCheckpoint := state.CurrentJustifiedCheckpoint()
 	finalizedCheckpoint := state.FinalizedCheckpoint()
+	if justifiedCheckpoint == nil {
+		justifiedCheckpoint = &ethpb.Checkpoint{}
+	}
+	if finalizedCheckpoint == nil {
+		finalizedCheckpoint = &ethpb.Checkpoint{}
+	}
 
 	// If 2/3 or more of the total balance attested in the current epoch.
 	if newBits.BitAt(0) && currentEpoch >= justifiedCheckpoint.Epoch {

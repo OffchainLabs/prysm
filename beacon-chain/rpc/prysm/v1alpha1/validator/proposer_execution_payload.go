@@ -43,6 +43,9 @@ var (
 )
 
 func setFeeRecipientIfBurnAddress(val *cache.TrackedValidator) {
+	if val == nil {
+		return
+	}
 	if val.FeeRecipient == primitives.ExecutionAddress([20]byte{}) && val.Index == 0 {
 		val.FeeRecipient = primitives.ExecutionAddress(params.BeaconConfig().DefaultFeeRecipient)
 	}
@@ -331,6 +334,9 @@ func (vs *Server) applyParentExecutionPayloadToHead(ctx context.Context, head st
 //
 // Otherwise, the terminal block hash is fetched based on the slot's time, and an error is returned if it doesn't exist.
 func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot [32]byte, parentFull bool) ([]byte, error) {
+	if st == nil || st.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	if st.Version() >= version.Gloas {
 		parentSlot, err := vs.ForkchoiceFetcher.RecentBlockSlot(headRoot)
 		if err != nil {
@@ -342,6 +348,9 @@ func (vs *Server) getParentBlockHash(ctx context.Context, st state.BeaconState, 
 		bid, err := st.LatestExecutionPayloadBid()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get latest execution payload bid")
+		}
+		if bid == nil {
+			return nil, errors.New("latest execution payload bid is nil")
 		}
 		if parentFull {
 			bh := bid.BlockHash()

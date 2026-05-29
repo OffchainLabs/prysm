@@ -59,6 +59,15 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 	if !shared.WriteBlockFetchError(w, blk, err) {
 		return
 	}
+	if blk == nil || blk.IsNil() {
+		httputil.HandleError(w, "Block is nil", http.StatusInternalServerError)
+		return
+	}
+	blkBlock := blk.Block()
+	if blkBlock == nil || blkBlock.IsNil() {
+		httputil.HandleError(w, "Block is nil", http.StatusInternalServerError)
+		return
+	}
 
 	if httputil.RespondWithSsz(r) {
 		sszResp, err := buildSidecarsSSZResponse(verifiedBlobs)
@@ -71,7 +80,7 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blkRoot, err := blk.Block().HashTreeRoot()
+	blkRoot, err := blkBlock.HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not hash block: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -166,6 +175,15 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 	if !shared.WriteBlockFetchError(w, blk, err) {
 		return
 	}
+	if blk == nil || blk.IsNil() {
+		httputil.HandleError(w, "Block is nil", http.StatusInternalServerError)
+		return
+	}
+	blkBlock := blk.Block()
+	if blkBlock == nil || blkBlock.IsNil() {
+		httputil.HandleError(w, "Block is nil", http.StatusInternalServerError)
+		return
+	}
 
 	if httputil.RespondWithSsz(r) {
 		sszLen := fieldparams.BlobSize
@@ -179,7 +197,7 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blkRoot, err := blk.Block().HashTreeRoot()
+	blkRoot, err := blkBlock.HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not hash block: "+err.Error(), http.StatusInternalServerError)
 		return

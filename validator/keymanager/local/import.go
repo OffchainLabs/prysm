@@ -26,6 +26,9 @@ func (km *Keymanager) ImportKeystores(
 	keystores []*keymanager.Keystore,
 	passwords []string,
 ) ([]*keymanager.KeyStatus, error) {
+	if km == nil {
+		return nil, errors.New("keymanager is nil")
+	}
 	if len(passwords) == 0 {
 		return nil, ErrNoPasswords
 	}
@@ -38,6 +41,9 @@ func (km *Keymanager) ImportKeystores(
 	statuses := make([]*keymanager.KeyStatus, len(keystores))
 	var err error
 	// 1) Copy the in memory keystore
+	if km.accountsStore == nil {
+		km.accountsStore = &accountStore{}
+	}
 	storeCopy := km.accountsStore.Copy()
 	importedKeys := make([][]byte, 0)
 	existingPubKeys := make(map[string]bool)

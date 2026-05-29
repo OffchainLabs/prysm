@@ -165,6 +165,9 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 }
 
 func (km *Keymanager) refreshRemoteKeysFromFileChangesWithRetry(ctx context.Context, retryDelay time.Duration) error {
+	if km == nil {
+		return errors.New("keymanager is nil")
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -184,6 +187,9 @@ func (km *Keymanager) refreshRemoteKeysFromFileChangesWithRetry(ctx context.Cont
 }
 
 func (km *Keymanager) readKeyFile() ([][48]byte, map[string][48]byte, error) {
+	if km == nil {
+		return nil, nil, errors.New("keymanager is nil")
+	}
 	km.lock.RLock()
 	defer km.lock.RUnlock()
 
@@ -243,6 +249,9 @@ func (km *Keymanager) readKeyFile() ([][48]byte, map[string][48]byte, error) {
 }
 
 func (km *Keymanager) savePublicKeysToFile(providedPublicKeys map[string][48]byte) error {
+	if km == nil {
+		return errors.New("keymanager is nil")
+	}
 	if km.keyFilePath == "" {
 		return errors.New("no key file provided")
 	}
@@ -360,6 +369,9 @@ func (km *Keymanager) refreshRemoteKeysFromFileChanges(ctx context.Context) erro
 }
 
 func (km *Keymanager) updatePublicKeys(keys [][48]byte) {
+	if km == nil {
+		return
+	}
 	km.lock.Lock()
 	defer km.lock.Unlock()
 	km.providedPublicKeys = keys
@@ -369,6 +381,9 @@ func (km *Keymanager) updatePublicKeys(keys [][48]byte) {
 
 // FetchValidatingPublicKeys fetches the validating public keys
 func (km *Keymanager) FetchValidatingPublicKeys(_ context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
+	if km == nil {
+		return nil, errors.New("keymanager is nil")
+	}
 	km.lock.RLock()
 	defer km.lock.RUnlock()
 	log.WithField("count", len(km.providedPublicKeys)).Debug("Fetched validating public keys")
@@ -778,6 +793,9 @@ func DisplayRemotePublicKeys(validatingPubKeys [][48]byte) {
 
 // AddPublicKeys imports a list of public keys into the keymanager for web3signer use. Returns status with message.
 func (km *Keymanager) AddPublicKeys(pubKeys []string) ([]*keymanager.KeyStatus, error) {
+	if km == nil {
+		return nil, errors.New("keymanager is nil")
+	}
 	importedRemoteKeysStatuses := make([]*keymanager.KeyStatus, len(pubKeys))
 	// Using a map to track both existing and new public keys efficiently
 	combinedKeys := make(map[string][48]byte)
@@ -841,6 +859,9 @@ func (km *Keymanager) AddPublicKeys(pubKeys []string) ([]*keymanager.KeyStatus, 
 
 // DeletePublicKeys removes a list of public keys from the keymanager for web3signer use. Returns status with message.
 func (km *Keymanager) DeletePublicKeys(publicKeys []string) ([]*keymanager.KeyStatus, error) {
+	if km == nil {
+		return nil, errors.New("keymanager is nil")
+	}
 	deletedRemoteKeysStatuses := make([]*keymanager.KeyStatus, len(publicKeys))
 	// Using a map to track both existing and new public keys efficiently
 	combinedKeys := make(map[string][48]byte)

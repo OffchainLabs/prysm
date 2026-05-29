@@ -126,7 +126,20 @@ func (ps *Settings) ToConsensus() *validatorpb.ProposerSettingsPayload {
 	if ps.ProposeConfig != nil {
 		payload.ProposerConfig = make(map[string]*validatorpb.ProposerOptionPayload)
 		for key, option := range ps.ProposeConfig {
-			payload.ProposerConfig[hexutil.Encode(key[:])] = option.ToConsensus()
+			if option == nil {
+				continue
+			}
+			optionPayload := &validatorpb.ProposerOptionPayload{}
+			if option.FeeRecipientConfig != nil {
+				optionPayload.FeeRecipient = option.FeeRecipientConfig.FeeRecipient.Hex()
+			}
+			if option.BuilderConfig != nil {
+				optionPayload.Builder = option.BuilderConfig.ToConsensus()
+			}
+			if option.GraffitiConfig != nil {
+				optionPayload.Graffiti = &option.GraffitiConfig.Graffiti
+			}
+			payload.ProposerConfig[hexutil.Encode(key[:])] = optionPayload
 		}
 	}
 	if ps.DefaultConfig != nil {
@@ -190,7 +203,7 @@ func (po *Option) ToConsensus() *validatorpb.ProposerOptionPayload {
 // Clone creates a deep copy of the proposer settings
 func (ps *Settings) Clone() *Settings {
 	if ps == nil {
-		return nil
+		return &Settings{}
 	}
 	clone := &Settings{}
 	if ps.DefaultConfig != nil {
@@ -199,8 +212,20 @@ func (ps *Settings) Clone() *Settings {
 	if ps.ProposeConfig != nil {
 		clone.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*Option)
 		for k, v := range ps.ProposeConfig {
+			if v == nil {
+				continue
+			}
 			keyCopy := k
-			valCopy := v.Clone()
+			valCopy := &Option{}
+			if v.FeeRecipientConfig != nil {
+				valCopy.FeeRecipientConfig = v.FeeRecipientConfig.Clone()
+			}
+			if v.BuilderConfig != nil {
+				valCopy.BuilderConfig = v.BuilderConfig.Clone()
+			}
+			if v.GraffitiConfig != nil {
+				valCopy.GraffitiConfig = v.GraffitiConfig.Clone()
+			}
 			clone.ProposeConfig[keyCopy] = valCopy
 		}
 	}

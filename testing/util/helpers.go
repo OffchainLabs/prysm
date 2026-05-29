@@ -48,6 +48,9 @@ func BlockSignature(
 	var wsb interfaces.ReadOnlySignedBeaconBlock
 	var err error
 	// copy the state since we need to process slots
+	if bState == nil || bState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	bState = bState.Copy()
 	switch b := block.(type) {
 	case *ethpb.BeaconBlock:

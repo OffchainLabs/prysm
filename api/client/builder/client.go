@@ -148,6 +148,9 @@ func urlForHost(h string) (*url.URL, error) {
 
 // NodeURL returns a human-readable string representation of the beacon node base url.
 func (c *Client) NodeURL() string {
+	if c == nil || c.baseURL == nil {
+		return ""
+	}
 	return c.baseURL.String()
 }
 
@@ -156,6 +159,9 @@ type reqOption func(*http.Request)
 // do is a generic, opinionated request function to reduce boilerplate amongst the methods in this package api/client/builder.
 // It validates that the HTTP response status matches the expectedStatus parameter.
 func (c *Client) do(ctx context.Context, method string, path string, body io.Reader, expectedStatus int, opts ...reqOption) (res []byte, header http.Header, err error) {
+	if c == nil {
+		return nil, nil, errors.New("nil builder client")
+	}
 	ctx, span := trace.StartSpan(ctx, "builder.client.do")
 	defer func() {
 		tracing.AnnotateError(span, err)
@@ -467,6 +473,9 @@ func getVersionsBlockToPayload(blockVersion int) (int, error) {
 // SubmitBlindedBlock calls the builder API endpoint that binds the validator to the builder and submits the block.
 // The response is the full execution payload used to create the blinded block.
 func (c *Client) SubmitBlindedBlock(ctx context.Context, sb interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error) {
+	if sb == nil || sb.IsNil() {
+		return nil, nil, blocks.ErrNilSignedBeaconBlock
+	}
 	body, postOpts, err := c.buildBlindedBlockRequest(sb)
 	if err != nil {
 		return nil, nil, err

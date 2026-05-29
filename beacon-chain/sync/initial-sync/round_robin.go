@@ -267,7 +267,13 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 			}
 		}
 		if idx, ok := envIdxMap[b.Block.Root()]; ok {
+			if envelopes == nil {
+				continue
+			}
 			e := envelopes[idx]
+			if e == nil {
+				continue
+			}
 			if err := s.cfg.Chain.ReceiveExecutionPayloadEnvelope(ctx, e); err != nil {
 				logDataColumns.WithError(err).Warning("Execution payload envelope processing failure")
 				return uint64(i), err
@@ -376,6 +382,9 @@ func validUnprocessed(
 	isProc processedChecker,
 	isPayloadProc payloadChecker,
 ) ([]blocks.BlockWithROSidecars, []interfaces.ROSignedExecutionPayloadEnvelope, error) {
+	if bwb == nil {
+		return nil, nil, errors.New("block batch is nil")
+	}
 	// use a pointer to avoid confusing the zero-value with the case where the first element is processed.
 	var processed *int
 	for i := range bwb {

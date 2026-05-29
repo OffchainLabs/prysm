@@ -239,6 +239,9 @@ func (b *BeaconState) BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, 
 
 	b.lock.RLock()
 	defer b.lock.RUnlock()
+	if b.builderPendingPayments == nil {
+		return nil, errors.New("nil builder pending payments")
+	}
 
 	return b.builderPendingPaymentsVal(), nil
 }
@@ -352,7 +355,7 @@ func (b *BeaconState) Builder(index primitives.BuilderIndex) (*ethpb.Builder, er
 		return nil, fmt.Errorf("builder index %d out of bounds", index)
 	}
 	if b.builders[index] == nil {
-		return nil, nil
+		return nil, errors.New("nil builder")
 	}
 
 	return ethpb.CopyBuilder(b.builders[index]), nil

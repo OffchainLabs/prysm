@@ -228,7 +228,12 @@ func (s *Service) Stop() error {
 	// lock before accessing s.head, s.head.state, s.head.state.FinalizedCheckpoint().Root
 	s.headLock.RLock()
 	if s.cfg.StateGen != nil && s.head != nil && s.head.state != nil {
-		r := s.head.state.FinalizedCheckpoint().Root
+		finalizedCheckpoint := s.head.state.FinalizedCheckpoint()
+		if finalizedCheckpoint == nil {
+			s.headLock.RUnlock()
+			return errors.New("nil finalized checkpoint")
+		}
+		r := finalizedCheckpoint.Root
 		s.headLock.RUnlock()
 		// Save the last finalized state so that starting up in the following run will be much faster.
 		if err := s.cfg.StateGen.ForceCheckpoint(s.ctx, r); err != nil {
@@ -264,7 +269,10 @@ func (s *Service) Status() error {
 
 // StartFromSavedState initializes the blockchain using a previously saved finalized checkpoint.
 func (s *Service) StartFromSavedState(saved state.BeaconState) error {
-	if state.IsNil(saved) {
+	if s == nil {
+		return errors.New("service is nil")
+	}
+	if saved == nil || saved.IsNil() || state.IsNil(saved) {
 		return errors.New("Last finalized state at startup is nil")
 	}
 	log.Info("Blockchain data already exists in DB, initializing...")
@@ -292,6 +300,9 @@ func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 		return errors.Wrap(err, "could not verify initial checkpoint provided for chain sync")
 	}
 
+	if s.clockSetter == nil {
+		return errors.New("clock setter is nil")
+	}
 	vr := bytesutil.ToBytes32(saved.GenesisValidatorsRoot())
 	if err := s.clockSetter.SetClock(startup.NewClock(s.genesisTime, vr)); err != nil {
 		return errors.Wrap(err, "failed to initialize blockchain service")
@@ -343,18 +354,25 @@ func (s *Service) initializeHead(ctx context.Context, st state.BeaconState) erro
 	if err != nil {
 		return errors.Wrap(err, "could not get head block")
 	}
+	if blk == nil || blk.IsNil() {
+		return errors.New("head block is nil")
+	}
+	blkBlock := blk.Block()
+	if blkBlock == nil || blkBlock.IsNil() {
+		return errors.New("head beacon block is nil")
+	}
 	if root != fRoot {
 		st, err = s.cfg.StateGen.StateByRoot(ctx, root)
 		if err != nil {
 			return errors.Wrap(err, "could not get head state")
 		}
 	}
-	if err := s.setHead(&head{root: root, block: blk, state: st, slot: blk.Block().Slot(), optimistic: false}); err != nil {
+	if err := s.setHead(&head{root: root, block: blk, state: st, slot: blkBlock.Slot(), optimistic: false}); err != nil {
 		return errors.Wrap(err, "could not set head")
 	}
 	log.WithFields(logrus.Fields{
 		"root": fmt.Sprintf("%#x", root),
-		"slot": blk.Block().Slot(),
+		"slot": blkBlock.Slot(),
 	}).Info("Initialized head block from DB")
 	return nil
 }
@@ -470,6 +488,11 @@ func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db d
 	gState, err := db.GenesisState(ctx)
 	if err != nil {
 		log.WithError(err).Fatal("Could not retrieve genesis state")
+		return
+	}
+	if gState == nil || gState.IsNil() {
+		log.WithError(errors.New("nil genesis state")).Fatal("Could not retrieve genesis state")
+		return
 	}
 	gRoot, err := gState.HashTreeRoot(ctx)
 	if err != nil {

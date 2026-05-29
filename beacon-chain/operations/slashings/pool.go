@@ -129,6 +129,9 @@ func (p *Pool) InsertAttesterSlashing(
 	state state.ReadOnlyBeaconState,
 	slashing ethpb.AttSlashing,
 ) error {
+	if slashing == nil || slashing.FirstAttestation() == nil || slashing.SecondAttestation() == nil {
+		return errors.New("attester slashing is nil")
+	}
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	ctx, span := trace.StartSpan(ctx, "operations.InsertAttesterSlashing")
@@ -306,6 +309,9 @@ func (p *Pool) validatorSlashingPreconditionCheck(
 ) (bool, error) {
 	if !mutexasserts.RWMutexLocked(&p.lock) && !mutexasserts.RWMutexRLocked(&p.lock) {
 		return false, errors.New("pool.validatorSlashingPreconditionCheck: caller must hold read/write lock")
+	}
+	if state == nil || state.IsNil() {
+		return false, errors.New("state is nil")
 	}
 
 	// Check if the validator index has been included recently.

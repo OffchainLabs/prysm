@@ -66,6 +66,7 @@ func newGloasState(t *testing.T, slot primitives.Slot, availability []byte) stat
 	cfg := params.BeaconConfig()
 	protoState := &ethpb.BeaconStateGloas{
 		Slot:                         slot,
+		Fork:                         &ethpb.Fork{PreviousVersion: make([]byte, 4), CurrentVersion: make([]byte, 4)},
 		LatestBlockHeader:            testBeaconBlockHeader(),
 		BlockRoots:                   make([][]byte, cfg.SlotsPerHistoricalRoot),
 		StateRoots:                   make([][]byte, cfg.SlotsPerHistoricalRoot),

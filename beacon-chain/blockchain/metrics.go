@@ -276,6 +276,12 @@ func reportSlotMetrics(stateSlot, headSlot, clockSlot primitives.Slot, finalized
 
 // reportEpochMetrics reports epoch related metrics.
 func reportEpochMetrics(ctx context.Context, postState, headState state.BeaconState) error {
+	if postState == nil || postState.IsNil() {
+		return errors.New("nil post state")
+	}
+	if headState == nil || headState.IsNil() {
+		return errors.New("nil head state")
+	}
 	currentEpoch := primitives.Epoch(postState.Slot() / params.BeaconConfig().SlotsPerEpoch)
 
 	// Validator instances
@@ -354,16 +360,28 @@ func reportEpochMetrics(ctx context.Context, postState, headState state.BeaconSt
 	validatorsEffectiveBalance.WithLabelValues("Slashing").Set(float64(slashingEffectiveBalance))
 
 	// Last justified slot
-	beaconCurrentJustifiedEpoch.Set(float64(postState.CurrentJustifiedCheckpoint().Epoch))
-	beaconCurrentJustifiedRoot.Set(float64(bytesutil.ToLowInt64(postState.CurrentJustifiedCheckpoint().Root)))
+	currentJustifiedCheckpoint := postState.CurrentJustifiedCheckpoint()
+	if currentJustifiedCheckpoint == nil {
+		return errors.New("nil current justified checkpoint")
+	}
+	beaconCurrentJustifiedEpoch.Set(float64(currentJustifiedCheckpoint.Epoch))
+	beaconCurrentJustifiedRoot.Set(float64(bytesutil.ToLowInt64(currentJustifiedCheckpoint.Root)))
 
 	// Last previous justified slot
-	beaconPrevJustifiedEpoch.Set(float64(postState.PreviousJustifiedCheckpoint().Epoch))
-	beaconPrevJustifiedRoot.Set(float64(bytesutil.ToLowInt64(postState.PreviousJustifiedCheckpoint().Root)))
+	previousJustifiedCheckpoint := postState.PreviousJustifiedCheckpoint()
+	if previousJustifiedCheckpoint == nil {
+		return errors.New("nil previous justified checkpoint")
+	}
+	beaconPrevJustifiedEpoch.Set(float64(previousJustifiedCheckpoint.Epoch))
+	beaconPrevJustifiedRoot.Set(float64(bytesutil.ToLowInt64(previousJustifiedCheckpoint.Root)))
 
 	// Last finalized slot
+	finalizedCheckpoint := postState.FinalizedCheckpoint()
+	if finalizedCheckpoint == nil {
+		return errors.New("nil finalized checkpoint")
+	}
 	beaconFinalizedEpoch.Set(float64(postState.FinalizedCheckpointEpoch()))
-	beaconFinalizedRoot.Set(float64(bytesutil.ToLowInt64(postState.FinalizedCheckpoint().Root)))
+	beaconFinalizedRoot.Set(float64(bytesutil.ToLowInt64(finalizedCheckpoint.Root)))
 	currentEth1DataDepositCount.Set(float64(postState.Eth1Data().DepositCount))
 	processedDepositsCount.Set(float64(postState.Eth1DepositIndex() + 1))
 
@@ -409,6 +427,13 @@ func reportEpochMetrics(ctx context.Context, postState, headState state.BeaconSt
 
 func reportAttestationInclusion(blk interfaces.ReadOnlyBeaconBlock) {
 	for _, att := range blk.Body().Attestations() {
-		attestationInclusionDelay.Observe(float64(blk.Slot() - att.GetData().Slot))
+		if att == nil || att.IsNil() {
+			continue
+		}
+		data := att.GetData()
+		if data == nil {
+			continue
+		}
+		attestationInclusionDelay.Observe(float64(blk.Slot() - data.Slot))
 	}
 }

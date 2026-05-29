@@ -126,11 +126,15 @@ func IsWithinWeakSubjectivityPeriod(
 	if wsState == nil || wsState.IsNil() || wsState.LatestBlockHeader() == nil {
 		return false, errors.New("invalid weak subjectivity state or checkpoint")
 	}
+	header := wsState.LatestBlockHeader()
+	if header == nil {
+		return false, errors.New("invalid weak subjectivity state or checkpoint")
+	}
 
 	// Assert that state and checkpoint have the same root and epoch.
-	if bytesutil.ToBytes32(wsState.LatestBlockHeader().StateRoot) != wsStateRoot {
+	if bytesutil.ToBytes32(header.StateRoot) != wsStateRoot {
 		return false, fmt.Errorf("state (%#x) and checkpoint (%#x) roots do not match",
-			wsState.LatestBlockHeader().StateRoot, wsStateRoot)
+			header.StateRoot, wsStateRoot)
 	}
 	if slots.ToEpoch(wsState.Slot()) != wsEpoch {
 		return false, fmt.Errorf("state (%v) and checkpoint (%v) epochs do not match",

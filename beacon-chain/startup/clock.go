@@ -27,16 +27,25 @@ type Clock struct {
 
 // GenesisTime returns the genesis timestamp.
 func (g *Clock) GenesisTime() time.Time {
+	if g == nil {
+		return time.Time{}
+	}
 	return g.t
 }
 
 // GenesisValidatorsRoot returns the genesis state validator root
 func (g *Clock) GenesisValidatorsRoot() [32]byte {
+	if g == nil {
+		return [32]byte{}
+	}
 	return g.vr
 }
 
 // CurrentSlot returns the current slot relative to the time.Time value that Clock embeds.
 func (g *Clock) CurrentSlot() types.Slot {
+	if g == nil || g.now == nil {
+		return 0
+	}
 	now := g.now()
 	return slots.Duration(g.t, now)
 }
@@ -48,11 +57,17 @@ func (g *Clock) CurrentEpoch() types.Epoch {
 
 // SlotStart computes the time the given slot begins.
 func (g *Clock) SlotStart(slot types.Slot) (time.Time, error) {
+	if g == nil {
+		return slots.StartTime(time.Time{}, slot)
+	}
 	return slots.StartTime(g.t, slot)
 }
 
 // Now provides a value for time.Now() that can be overridden in tests.
 func (g *Clock) Now() time.Time {
+	if g == nil || g.now == nil {
+		return time.Time{}
+	}
 	return g.now()
 }
 

@@ -56,6 +56,10 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State not found", http.StatusNotFound)
+		return
+	}
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, id, s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
@@ -120,6 +124,10 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 				shared.WriteStateFetchError(w, err)
 				return
 			}
+			if st == nil || st.IsNil() {
+				httputil.HandleError(w, "State not found", http.StatusNotFound)
+				return
+			}
 		}
 		respSt, err = structs.BeaconStateGloasFromConsensus(st)
 		if err != nil {
@@ -151,6 +159,10 @@ func (s *Server) getBeaconStateSSZV2(ctx context.Context, w http.ResponseWriter,
 	st, err := s.Stater.State(ctx, id)
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State not found", http.StatusNotFound)
 		return
 	}
 	sszState, err := st.MarshalSSZ()
@@ -195,6 +207,10 @@ func (s *Server) GetForkChoice(w http.ResponseWriter, r *http.Request) {
 	dump, err := s.ForkchoiceFetcher.ForkChoiceDump(ctx)
 	if err != nil {
 		httputil.HandleError(w, "Could not get forkchoice dump: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if dump == nil {
+		httputil.HandleError(w, "Could not get forkchoice dump: nil dump", http.StatusInternalServerError)
 		return
 	}
 
@@ -282,6 +298,10 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 
 	blk, err := s.Blocker.Block(ctx, []byte(blockId))
 	if !shared.WriteBlockFetchError(w, blk, err) {
+		return
+	}
+	if blk == nil || blk.IsNil() {
+		httputil.HandleError(w, "Block is nil", http.StatusInternalServerError)
 		return
 	}
 

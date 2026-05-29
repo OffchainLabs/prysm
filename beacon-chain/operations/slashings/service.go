@@ -44,6 +44,9 @@ func (p *PoolService) Start() {
 }
 
 func (p *PoolService) run() {
+	if p == nil || p.poolManager == nil {
+		return
+	}
 	if !p.runElectraTimer {
 		return
 	}

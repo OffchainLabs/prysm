@@ -91,9 +91,19 @@ func (s *Service) processAttestations(ctx context.Context, attestations []any) {
 	var blockRoot []byte
 	switch v := firstAttestation.(type) {
 	case ethpb.Att:
-		blockRoot = v.GetData().BeaconBlockRoot
+		data := pendingAttData(v)
+		if data == nil {
+			log.Debug("Pending attestation has nil data, skipping processing")
+			return
+		}
+		blockRoot = data.BeaconBlockRoot
 	case ethpb.SignedAggregateAttAndProof:
-		blockRoot = v.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot
+		data := pendingAggregateData(v)
+		if data == nil {
+			log.Debug("Pending aggregate attestation has nil data, skipping processing")
+			return
+		}
+		blockRoot = data.BeaconBlockRoot
 	default:
 		log.Warnf("Unexpected attestation type %T, skipping processing", v)
 		return
@@ -161,6 +171,10 @@ func (s *Service) processAttestationBucket(ctx context.Context, bucket *attestat
 	}
 
 	data := bucket.data
+	if data == nil {
+		log.Debug("Pending attestation bucket has nil data")
+		return
+	}
 
 	// Shared validations for the entire bucket.
 	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
@@ -301,7 +315,11 @@ func (s *Service) processVerifiedAttestation(
 	poolAtt ethpb.Att,
 	preState state.ReadOnlyBeaconState,
 ) {
-	data := broadcastAtt.GetData()
+	data := pendingAttData(broadcastAtt)
+	if data == nil {
+		log.Debug("Pending attestation has nil data")
+		return
+	}
 
 	if err := s.saveAttestation(poolAtt); err != nil {
 		log.WithError(err).Debug("Failed to save unaggregated attestation")
@@ -360,12 +378,23 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 		return errors.New("Pending aggregated attestation failed validation")
 	}
 
-	att := aggregate.AggregateAttestationAndProof().AggregateVal()
+	aggAndProof := aggregate.AggregateAttestationAndProof()
+	if aggAndProof == nil {
+		return errors.New("nil pending aggregate attestation")
+	}
+	att := aggAndProof.AggregateVal()
+	if att == nil || att.IsNil() {
+		return errors.New("nil pending aggregate attestation")
+	}
+	data := att.GetData()
+	if data == nil || data.Target == nil {
+		return errors.New("nil pending aggregate attestation data")
+	}
 	if err := s.saveAttestation(att); err != nil {
 		return errors.Wrap(err, "save attestation")
 	}
 
-	_ = s.setAggregatorIndexEpochSeen(att.GetData().Target.Epoch, aggregate.AggregateAttestationAndProof().GetAggregatorIndex())
+	_ = s.setAggregatorIndexEpochSeen(data.Target.Epoch, aggAndProof.GetAggregatorIndex())
 
 	if err := s.cfg.p2p.Broadcast(ctx, aggregate); err != nil {
 		log.WithError(err).Debug("Could not broadcast aggregated attestation")
@@ -379,7 +408,12 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 // that voted for that block root. The caller of this function is responsible
 // for not sending repeated aggregates to the pending queue.
 func (s *Service) savePendingAggregate(agg ethpb.SignedAggregateAttAndProof) {
-	root := bytesutil.ToBytes32(agg.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)
+	data := pendingAggregateData(agg)
+	if data == nil {
+		log.Debug("Pending aggregate attestation has nil data")
+		return
+	}
+	root := bytesutil.ToBytes32(data.BeaconBlockRoot)
 
 	s.savePending(root, agg, func(other any) bool {
 		a, ok := other.(ethpb.SignedAggregateAttAndProof)
@@ -392,12 +426,21 @@ func (s *Service) savePendingAggregate(agg ethpb.SignedAggregateAttAndProof) {
 // that voted for that block root. The caller of this function is responsible
 // for not sending repeated attestations to the pending queue.
 func (s *Service) savePendingAtt(att ethpb.Att) {
+	if att == nil || att.IsNil() {
+		log.Debug("Nil attestation sent to pending attestation pool. Attestation will be ignored")
+		return
+	}
 	if att.Version() >= version.Electra && !att.IsSingle() {
 		log.Debug("Non-single attestation sent to pending attestation pool. Attestation will be ignored")
 		return
 	}
 
-	root := bytesutil.ToBytes32(att.GetData().BeaconBlockRoot)
+	data := pendingAttData(att)
+	if data == nil {
+		log.Debug("Pending attestation has nil data")
+		return
+	}
+	root := bytesutil.ToBytes32(data.BeaconBlockRoot)
 
 	s.savePending(root, att, func(other any) bool {
 		a, ok := other.(ethpb.Att)
@@ -441,19 +484,35 @@ func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any
 // pendingAggregatesAreEqual checks if two pending aggregate attestations are equal.
 // The filter parameter controls whether aggregator index is considered in the equality check.
 func pendingAggregatesAreEqual(a, b ethpb.SignedAggregateAttAndProof, filter aggregatorIndexFilter) bool {
+	if a == nil || b == nil {
+		return false
+	}
 	if a.Version() != b.Version() {
+		return false
+	}
+	aAggAndProof := a.AggregateAttestationAndProof()
+	bAggAndProof := b.AggregateAttestationAndProof()
+	if aAggAndProof == nil || bAggAndProof == nil {
 		return false
 	}
 
 	if filter == includeAggregatorIndex {
-		if a.AggregateAttestationAndProof().GetAggregatorIndex() != b.AggregateAttestationAndProof().GetAggregatorIndex() {
+		if aAggAndProof.GetAggregatorIndex() != bAggAndProof.GetAggregatorIndex() {
 			return false
 		}
 	}
 
-	aAtt := a.AggregateAttestationAndProof().AggregateVal()
-	bAtt := b.AggregateAttestationAndProof().AggregateVal()
-	if aAtt.GetData().Slot != bAtt.GetData().Slot {
+	aAtt := aAggAndProof.AggregateVal()
+	bAtt := bAggAndProof.AggregateVal()
+	if aAtt == nil || aAtt.IsNil() || bAtt == nil || bAtt.IsNil() {
+		return false
+	}
+	aData := aAtt.GetData()
+	bData := bAtt.GetData()
+	if aData == nil || bData == nil {
+		return false
+	}
+	if aData.Slot != bData.Slot {
 		return false
 	}
 	if aAtt.GetCommitteeIndex() != bAtt.GetCommitteeIndex() {
@@ -463,10 +522,18 @@ func pendingAggregatesAreEqual(a, b ethpb.SignedAggregateAttAndProof, filter agg
 }
 
 func pendingAttsAreEqual(a, b ethpb.Att) bool {
+	if a == nil || a.IsNil() || b == nil || b.IsNil() {
+		return false
+	}
 	if a.Version() != b.Version() {
 		return false
 	}
-	if a.GetData().Slot != b.GetData().Slot {
+	aData := pendingAttData(a)
+	bData := pendingAttData(b)
+	if aData == nil || bData == nil {
+		return false
+	}
+	if aData.Slot != bData.Slot {
 		return false
 	}
 	if a.Version() >= version.Electra {
@@ -494,9 +561,21 @@ func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot)
 			var attSlot primitives.Slot
 			switch t := atts[i].(type) {
 			case ethpb.Att:
-				attSlot = t.GetData().Slot
+				data := pendingAttData(t)
+				if data == nil {
+					atts[i] = atts[len(atts)-1]
+					atts = atts[:len(atts)-1]
+					continue
+				}
+				attSlot = data.Slot
 			case ethpb.SignedAggregateAttAndProof:
-				attSlot = t.AggregateAttestationAndProof().AggregateVal().GetData().Slot
+				data := pendingAggregateData(t)
+				if data == nil {
+					atts[i] = atts[len(atts)-1]
+					atts = atts[:len(atts)-1]
+					continue
+				}
+				attSlot = data.Slot
 			default:
 				log.Debugf("Unexpected item of type %T in pending attestation queue. Item will be removed", t)
 				// Remove the pending attestation from the map in place.
@@ -525,7 +604,11 @@ func bucketAttestationsByData(attestations []ethpb.Att) map[[32]byte]*attestatio
 	bucketMap := make(map[[32]byte]*attestationBucket)
 
 	for _, att := range attestations {
-		data := att.GetData()
+		data := pendingAttData(att)
+		if data == nil {
+			log.Debug("Pending attestation has nil data, skipping attestation")
+			continue
+		}
 		dataHash, err := data.HashTreeRoot()
 		if err != nil {
 			log.WithError(err).Debug("Failed to hash attestation data, skipping attestation")
@@ -544,4 +627,26 @@ func bucketAttestationsByData(attestations []ethpb.Att) map[[32]byte]*attestatio
 	}
 
 	return bucketMap
+}
+
+func pendingAttData(att ethpb.Att) *ethpb.AttestationData {
+	if att == nil || att.IsNil() {
+		return nil
+	}
+	return att.GetData()
+}
+
+func pendingAggregateData(agg ethpb.SignedAggregateAttAndProof) *ethpb.AttestationData {
+	if agg == nil {
+		return nil
+	}
+	aggAndProof := agg.AggregateAttestationAndProof()
+	if aggAndProof == nil {
+		return nil
+	}
+	att := aggAndProof.AggregateVal()
+	if att == nil || att.IsNil() {
+		return nil
+	}
+	return att.GetData()
 }

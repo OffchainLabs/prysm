@@ -11,5 +11,10 @@ import ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 //
 //	a surrounds b if: s_a < s_b and t_b < t_a
 func IsSurround(a, b ethpb.IndexedAtt) bool {
-	return a.GetData().Source.Epoch < b.GetData().Source.Epoch && b.GetData().Target.Epoch < a.GetData().Target.Epoch
+	dataA := a.GetData()
+	dataB := b.GetData()
+	if dataA == nil || dataB == nil || dataA.Source == nil || dataB.Source == nil || dataA.Target == nil || dataB.Target == nil {
+		return false
+	}
+	return dataA.Source.Epoch < dataB.Source.Epoch && dataB.Target.Epoch < dataA.Target.Epoch
 }

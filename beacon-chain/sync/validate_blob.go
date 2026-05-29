@@ -27,14 +27,13 @@ import (
 
 func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
 	receivedTime := prysmTime.Now()
-
 	if pid == s.cfg.p2p.PeerID() {
 		return pubsub.ValidationAccept, nil
 	}
 	if s.cfg.initialSync.Syncing() {
 		return pubsub.ValidationIgnore, nil
 	}
-	if msg.Topic == nil {
+	if msg == nil || msg.Topic == nil {
 		return pubsub.ValidationReject, p2p.ErrInvalidTopic
 	}
 	m, err := s.decodePubsubMessage(msg)

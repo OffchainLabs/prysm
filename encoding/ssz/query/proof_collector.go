@@ -172,6 +172,9 @@ func (pc *proofCollector) collectSibling(gindex uint64, hash [32]byte) {
 // - [32]byte: Merkle root of the current subtree.
 // - error: any error encountered during traversal/merkleization.
 func (pc *proofCollector) merkleize(info *SszInfo, v reflect.Value, currentGindex uint64) ([32]byte, error) {
+	if info == nil {
+		return [32]byte{}, errors.New("ssz info is nil")
+	}
 	if info.sszType.isBasic() {
 		return pc.merkleizeBasicType(info.sszType, v, currentGindex)
 	}
@@ -273,6 +276,9 @@ func (pc *proofCollector) merkleizeContainer(info *SszInfo, v reflect.Value, cur
 
 	for i, name := range ci.order {
 		fieldInfo := ci.fields[name]
+		if fieldInfo == nil || fieldInfo.sszInfo == nil {
+			return [32]byte{}, fmt.Errorf("field info is nil for field %s", name)
+		}
 		fieldVal := v.FieldByName(fieldInfo.goFieldName)
 
 		// Field i's gindex: shift currentGindex left by depth, then OR with field index

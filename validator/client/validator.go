@@ -474,6 +474,9 @@ func (v *validator) CheckDoppelGanger(ctx context.Context) error {
 			continue
 		}
 		r := retrieveLatestRecord(attRec)
+		if r == nil {
+			return errors.New("latest attestation record is nil")
+		}
 		if copiedKey != r.PubKey {
 			return errors.New("attestation record mismatched public key")
 		}

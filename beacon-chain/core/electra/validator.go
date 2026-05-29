@@ -20,6 +20,9 @@ import (
 //	validator.withdrawal_credentials = COMPOUNDING_WITHDRAWAL_PREFIX + validator.withdrawal_credentials[1:]
 //	queue_excess_active_balance(state, index)
 func SwitchToCompoundingValidator(s state.BeaconState, idx primitives.ValidatorIndex) error {
+	if s == nil || s.IsNil() {
+		return errors.New("state is nil")
+	}
 	v, err := s.ValidatorAtIndex(idx)
 	if err != nil {
 		return err
@@ -102,6 +105,9 @@ func QueueExcessActiveBalance(s state.BeaconState, idx primitives.ValidatorIndex
 //
 //nolint:dupword
 func QueueEntireBalanceAndResetValidator(s state.BeaconState, idx primitives.ValidatorIndex) error {
+	if s == nil || s.IsNil() {
+		return errors.New("state is nil")
+	}
 	bal, err := s.BalanceAtIndex(idx)
 	if err != nil {
 		return err

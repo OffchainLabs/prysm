@@ -55,6 +55,7 @@ type ports struct {
 	LighthouseBeaconNodeMetricsPort int
 	ValidatorMetricsPort            int
 	ValidatorHTTPPort               int
+	Web3SignerPort                  int
 	JaegerTracingPort               int
 }
 
@@ -80,7 +81,14 @@ func (p *paths) MinerKeyPath() (string, error) {
 }
 
 // TestParams is the globally accessible var for getting config elements.
-var TestParams *params
+var TestParams = newParams()
+
+func newParams() *params {
+	return &params{
+		Ports: &ports{},
+		Paths: &paths{},
+	}
+}
 
 // Logfile gives the full path to a file in the bazel test environment log directory.
 // The relative path is specified as a variadic slice of path parts, in the same style as path.Join.
@@ -153,6 +161,7 @@ const (
 
 	validatorHTTPPort    = 6150
 	validatorMetricsPort = validatorHTTPPort + portSpan
+	web3SignerPort       = validatorHTTPPort + 2*portSpan
 
 	jaegerTracingPort = 9150
 
@@ -213,6 +222,7 @@ func Init(t *testing.T, beaconNodeCount int) error {
 		TestShardIndex:         testShardIndex,
 		BeaconNodeCount:        beaconNodeCount,
 		Ports:                  testPorts,
+		Paths:                  &paths{},
 		CLGenesisTime:          genTime,
 		Eth1GenesisTime:        genTime,
 		NumberOfExecutionCreds: PregenesisExecCreds,
@@ -267,6 +277,7 @@ func InitMultiClient(t *testing.T, beaconNodeCount int, lighthouseNodeCount int)
 		BeaconNodeCount:           beaconNodeCount,
 		LighthouseBeaconNodeCount: lighthouseNodeCount,
 		Ports:                     testPorts,
+		Paths:                     &paths{},
 		CLGenesisTime:             genTime,
 		Eth1GenesisTime:           genTime,
 		NumberOfExecutionCreds:    PregenesisExecCreds,
@@ -356,6 +367,10 @@ func initializeStandardPorts(shardCount, shardIndex int, ports *ports, existingR
 	if err != nil {
 		return err
 	}
+	web3SignerPort, err := port(web3SignerPort, shardCount, shardIndex, existingRegistrations)
+	if err != nil {
+		return err
+	}
 	jaegerTracingPort, err := port(jaegerTracingPort, shardCount, shardIndex, existingRegistrations)
 	if err != nil {
 		return err
@@ -376,6 +391,7 @@ func initializeStandardPorts(shardCount, shardIndex int, ports *ports, existingR
 	ports.PrysmBeaconNodePprofPort = beaconNodePprofPort
 	ports.ValidatorMetricsPort = validatorMetricsPort
 	ports.ValidatorHTTPPort = validatorHTTPPort
+	ports.Web3SignerPort = web3SignerPort
 	ports.JaegerTracingPort = jaegerTracingPort
 	return nil
 }

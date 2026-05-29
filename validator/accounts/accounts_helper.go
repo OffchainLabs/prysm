@@ -91,6 +91,9 @@ func selectAccounts(selectionPrompt string, pubKeys [][fieldparams.BLSPubkeyLeng
 	// Filter the public keys based on user input.
 	filteredPubKeys = make([]bls.PublicKey, 0)
 	for selectedIndex := range seen {
+		if selectedIndex >= len(pubKeys) {
+			return nil, errors.Errorf("selected account index %d exceeds public key count %d", selectedIndex, len(pubKeys))
+		}
 		pk, err := bls.PublicKeyFromBytes(pubKeys[selectedIndex][:])
 		if err != nil {
 			return nil, err

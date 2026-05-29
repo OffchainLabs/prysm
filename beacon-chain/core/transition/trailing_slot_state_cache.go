@@ -56,6 +56,9 @@ func NextSlotState(root []byte, wantedSlot types.Slot) state.BeaconState {
 // by calling `ProcessSlots`, it also saves the input root for later look up.
 // This is useful to call after successfully processing a block.
 func UpdateNextSlotCache(ctx context.Context, root []byte, state state.ReadOnlyBeaconState) error {
+	if state == nil || state.IsNil() {
+		return errors.New("state is nil")
+	}
 	// Advancing one slot by using a copied state.
 	copied := state.Copy()
 	copied, err := ProcessSlots(ctx, copied, copied.Slot()+1)

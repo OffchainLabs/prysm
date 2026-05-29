@@ -30,8 +30,16 @@ func processJustificationAndFinalizationPrecomputeWrapper(t *testing.T, st state
 	ctx := context.Background()
 	vp, bp, err := electra.InitializePrecomputeValidators(ctx, st)
 	require.NoError(t, err)
+	if bp == nil {
+		t.Fatal("precompute balances are nil")
+		return nil, nil
+	}
 	_, bp, err = electra.ProcessEpochParticipation(ctx, st, bp, vp)
 	require.NoError(t, err)
+	if bp == nil {
+		t.Fatal("precompute balances are nil")
+		return nil, nil
+	}
 	activeBal, targetPrevious, targetCurrent, err := st.UnrealizedCheckpointBalances()
 	require.NoError(t, err)
 	require.Equal(t, bp.ActiveCurrentEpoch, activeBal)

@@ -57,7 +57,11 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
 
-	resp, err := vs.proposeAtt(ctx, att, att.GetData().CommitteeIndex)
+	if att == nil || att.GetData() == nil {
+		return nil, status.Error(codes.InvalidArgument, "nil attestation data")
+	}
+	data := att.GetData()
+	resp, err := vs.proposeAtt(ctx, att, data.CommitteeIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -69,6 +73,10 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 			}
 		} else {
 			attCopy := att.Copy()
+			if attCopy == nil {
+				log.Error("Could not copy attestation")
+				return
+			}
 			if err := vs.AttPool.SaveUnaggregatedAttestation(attCopy); err != nil {
 				log.WithError(err).Error("Could not save unaggregated attestation")
 			}
@@ -90,6 +98,9 @@ func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethp
 	if vs.SyncChecker.Syncing() {
 		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
+	if singleAtt == nil || singleAtt.Data == nil || singleAtt.Data.Target == nil {
+		return nil, status.Error(codes.InvalidArgument, "nil attestation data")
+	}
 
 	resp, err := vs.proposeAtt(ctx, singleAtt, singleAtt.GetCommitteeIndex())
 	if err != nil {
@@ -106,6 +117,9 @@ func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethp
 	}
 
 	singleAttCopy := singleAtt.Copy()
+	if singleAttCopy == nil {
+		return nil, status.Error(codes.Internal, "Could not copy attestation")
+	}
 	att := singleAttCopy.ToAttestationElectra(committee)
 	go func() {
 		if features.Get().EnableExperimentalAttestationPool {
@@ -177,11 +191,15 @@ func (vs *Server) proposeAtt(
 	att ethpb.Att,
 	committeeIndex primitives.CommitteeIndex,
 ) (*ethpb.AttestResponse, error) {
+	if att == nil || att.GetData() == nil {
+		return nil, status.Error(codes.InvalidArgument, "nil attestation data")
+	}
+	data := att.GetData()
 	if _, err := bls.SignatureFromBytes(att.GetSignature()); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "Incorrect attestation signature")
 	}
 
-	root, err := att.GetData().HashTreeRoot()
+	root, err := data.HashTreeRoot()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get attestation root: %v", err)
 	}
@@ -194,7 +212,6 @@ func (vs *Server) proposeAtt(
 		if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
 			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("ProposeAttestationElectra not supported yet. The current epoch is %d supported starting epoch is %d", currentEpoch, params.BeaconConfig().ElectraForkEpoch))
 		}
-		data := att.GetData()
 		attEpoch := slots.ToEpoch(data.Slot)
 		if attEpoch >= params.BeaconConfig().ElectraForkEpoch && attEpoch < params.BeaconConfig().GloasForkEpoch {
 			if data.CommitteeIndex != 0 {
@@ -235,12 +252,12 @@ func (vs *Server) proposeAtt(
 	}
 
 	// Determine subnet to broadcast attestation to
-	wantedEpoch := slots.ToEpoch(att.GetData().Slot)
+	wantedEpoch := slots.ToEpoch(data.Slot)
 	vals, err := vs.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
 	if err != nil {
 		return nil, err
 	}
-	subnet := helpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), committeeIndex, att.GetData().Slot)
+	subnet := helpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), committeeIndex, data.Slot)
 
 	// Broadcast the new attestation to the network.
 	if err := vs.P2P.BroadcastAttestation(ctx, subnet, att); err != nil {

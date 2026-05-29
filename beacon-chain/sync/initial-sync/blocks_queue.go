@@ -221,6 +221,9 @@ func (q *blocksQueue) loop() {
 		case <-ticker.C:
 			for _, key := range q.smm.keys {
 				fsm := q.smm.machines[key]
+				if fsm == nil {
+					continue
+				}
 				if err := fsm.trigger(eventTick, nil); err != nil {
 					log.WithFields(logrus.Fields{
 						"highestExpectedSlot":       q.highestExpectedSlot,
@@ -265,6 +268,9 @@ func (q *blocksQueue) loop() {
 			}
 			// Update state of an epoch for which data is received.
 			if fsm, ok := q.smm.findStateMachine(response.start); ok {
+				if fsm == nil {
+					continue
+				}
 				if err := fsm.trigger(eventDataReceived, response); err != nil {
 					log.WithFields(logrus.Fields{
 						"event": eventDataReceived,

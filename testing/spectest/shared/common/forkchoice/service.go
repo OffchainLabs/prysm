@@ -41,9 +41,22 @@ func startChainService(t testing.TB,
 	clockSync *startup.ClockSynchronizer,
 ) (*blockchain.Service, *stategen.State, forkchoice.ForkChoicer) {
 	ctx := context.Background()
+	if st == nil || st.IsNil() {
+		t.Fatal("state is nil")
+		return nil, nil, nil
+	}
+	if block == nil || block.IsNil() {
+		t.Fatal("block is nil")
+		return nil, nil, nil
+	}
+	beaconBlock := block.Block()
+	if beaconBlock == nil || beaconBlock.IsNil() {
+		t.Fatal("beacon block is nil")
+		return nil, nil, nil
+	}
 	db := testDB.SetupDB(t)
 	require.NoError(t, db.SaveBlock(ctx, block))
-	r, err := block.Block().HashTreeRoot()
+	r, err := beaconBlock.HashTreeRoot()
 	require.NoError(t, err)
 	require.NoError(t, db.SaveGenesisBlockRoot(ctx, r))
 

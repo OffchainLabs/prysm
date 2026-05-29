@@ -1,6 +1,8 @@
 package state_native
 
 import (
+	"bytes"
+
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -34,22 +36,13 @@ func (b *BeaconState) latestBlockHeaderVal() *ethpb.BeaconBlockHeader {
 		return nil
 	}
 
-	hdr := &ethpb.BeaconBlockHeader{
+	return &ethpb.BeaconBlockHeader{
 		Slot:          b.latestBlockHeader.Slot,
 		ProposerIndex: b.latestBlockHeader.ProposerIndex,
+		ParentRoot:    bytes.Clone(b.latestBlockHeader.ParentRoot),
+		BodyRoot:      bytes.Clone(b.latestBlockHeader.BodyRoot),
+		StateRoot:     bytes.Clone(b.latestBlockHeader.StateRoot),
 	}
-
-	parentRoot := make([]byte, len(b.latestBlockHeader.ParentRoot))
-	bodyRoot := make([]byte, len(b.latestBlockHeader.BodyRoot))
-	stateRoot := make([]byte, len(b.latestBlockHeader.StateRoot))
-
-	copy(parentRoot, b.latestBlockHeader.ParentRoot)
-	copy(bodyRoot, b.latestBlockHeader.BodyRoot)
-	copy(stateRoot, b.latestBlockHeader.StateRoot)
-	hdr.ParentRoot = parentRoot
-	hdr.BodyRoot = bodyRoot
-	hdr.StateRoot = stateRoot
-	return hdr
 }
 
 // BlockRoots kept track of in the beacon state.
@@ -59,9 +52,13 @@ func (b *BeaconState) BlockRoots() [][]byte {
 
 	roots := b.blockRootsVal()
 	if roots == nil {
-		return nil
+		return [][]byte{}
 	}
-	return roots.Slice()
+	result := roots.Slice()
+	if result == nil {
+		return [][]byte{}
+	}
+	return result
 }
 
 func (b *BeaconState) blockRootsVal() customtypes.BlockRoots {

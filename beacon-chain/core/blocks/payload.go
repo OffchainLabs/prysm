@@ -209,6 +209,12 @@ func ValidatePayload(st state.BeaconState, payload interfaces.ExecutionData) err
 //	    transactions_root=hash_tree_root(payload.transactions),
 //	)
 func ProcessPayload(st state.BeaconState, body interfaces.ReadOnlyBeaconBlockBody) error {
+	if st == nil || st.IsNil() {
+		return errors.New("beacon state is nil")
+	}
+	if body == nil {
+		return errors.New("beacon block body is nil")
+	}
 	payload, err := body.Execution()
 	if err != nil {
 		return err

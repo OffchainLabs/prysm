@@ -97,6 +97,9 @@ func electraOperations(ctx context.Context, st state.BeaconState, block interfac
 	if err != nil {
 		return nil, electra.NewExecReqError(errors.Wrap(err, "could not get execution requests").Error())
 	}
+	if requests == nil {
+		return nil, electra.NewExecReqError("execution requests are nil")
+	}
 	for _, d := range requests.Deposits {
 		if d == nil {
 			return nil, electra.NewExecReqError("nil deposit request")

@@ -129,7 +129,7 @@ func (c *SkipSlotCache) MarkNotInProgress(r [32]byte) {
 
 // Put the response in the cache.
 func (c *SkipSlotCache) Put(_ context.Context, r [32]byte, state state.BeaconState) {
-	if c.disabled {
+	if c == nil || c.disabled || state == nil || state.IsNil() {
 		return
 	}
 	// Copy state so cached value is not mutated.

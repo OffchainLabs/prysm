@@ -278,12 +278,16 @@ func buildGenericSignedBlockDenebWithBlobs(pb proto.Message, b *ethpb.GenericBea
 	if !ok {
 		return nil, errors.New("could cast to deneb block")
 	}
+	denebContents := b.GetDeneb()
+	if denebContents == nil {
+		return nil, errors.New("generic beacon block missing deneb contents")
+	}
 	return &ethpb.GenericSignedBeaconBlock{
 		Block: &ethpb.GenericSignedBeaconBlock_Deneb{
 			Deneb: &ethpb.SignedBeaconBlockContentsDeneb{
 				Block:     denebBlock,
-				KzgProofs: b.GetDeneb().KzgProofs,
-				Blobs:     b.GetDeneb().Blobs,
+				KzgProofs: denebContents.KzgProofs,
+				Blobs:     denebContents.Blobs,
 			},
 		},
 	}, nil
@@ -294,12 +298,16 @@ func buildGenericSignedBlockElectraWithBlobs(pb proto.Message, b *ethpb.GenericB
 	if !ok {
 		return nil, errors.New("could cast to electra block")
 	}
+	electraContents := b.GetElectra()
+	if electraContents == nil {
+		return nil, errors.New("generic beacon block missing electra contents")
+	}
 	return &ethpb.GenericSignedBeaconBlock{
 		Block: &ethpb.GenericSignedBeaconBlock_Electra{
 			Electra: &ethpb.SignedBeaconBlockContentsElectra{
 				Block:     electraBlock,
-				KzgProofs: b.GetElectra().KzgProofs,
-				Blobs:     b.GetElectra().Blobs,
+				KzgProofs: electraContents.KzgProofs,
+				Blobs:     electraContents.Blobs,
 			},
 		},
 	}, nil
@@ -310,12 +318,16 @@ func buildGenericSignedBlockFuluWithBlobs(pb proto.Message, b *ethpb.GenericBeac
 	if !ok {
 		return nil, errors.New("could cast to fulu block")
 	}
+	fuluContents := b.GetFulu()
+	if fuluContents == nil {
+		return nil, errors.New("generic beacon block missing fulu contents")
+	}
 	return &ethpb.GenericSignedBeaconBlock{
 		Block: &ethpb.GenericSignedBeaconBlock_Fulu{
 			Fulu: &ethpb.SignedBeaconBlockContentsFulu{
 				Block:     fuluBlock,
-				KzgProofs: b.GetFulu().KzgProofs,
-				Blobs:     b.GetFulu().Blobs,
+				KzgProofs: fuluContents.KzgProofs,
+				Blobs:     fuluContents.Blobs,
 			},
 		},
 	}, nil

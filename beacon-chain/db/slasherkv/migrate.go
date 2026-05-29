@@ -26,6 +26,9 @@ import (
 // part in the key stored as a big-endian.
 // We start the iterate by the highest key and iterate down until we reach the current slot (resp. epoch).
 func (s *Store) Migrate(ctx context.Context, headEpoch, maxPruningEpoch primitives.Epoch, batchSize int) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	// Migrate attestations.
 	log.Info("Starting migration of attestations. This may take a while.")
 	start := time.Now()
@@ -50,6 +53,9 @@ func (s *Store) Migrate(ctx context.Context, headEpoch, maxPruningEpoch primitiv
 }
 
 func (s *Store) migrateAttestations(ctx context.Context, headEpoch, maxPruningEpoch primitives.Epoch, batchSize int) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	done := false
 	var epochLittleEndian uint64
 
@@ -59,6 +65,9 @@ func (s *Store) migrateAttestations(ctx context.Context, headEpoch, maxPruningEp
 		if err := s.db.Update(func(tx *bolt.Tx) error {
 			signingRootsBkt := tx.Bucket(attestationDataRootsBucket)
 			attRecordsBkt := tx.Bucket(attestationRecordsBucket)
+			if signingRootsBkt == nil || attRecordsBkt == nil {
+				return bolt.ErrBucketNotFound
+			}
 
 			// We begin a migrating iteration starting from the last item in the bucket.
 			c := signingRootsBkt.Cursor()

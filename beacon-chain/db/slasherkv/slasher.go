@@ -36,6 +36,9 @@ const (
 func (s *Store) LastEpochWrittenForValidators(
 	ctx context.Context, validatorIndexes []primitives.ValidatorIndex,
 ) ([]*slashertypes.AttestedEpochForValidator, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("store is nil")
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.LastEpochWrittenForValidators")
 	defer span.End()
 
@@ -43,6 +46,9 @@ func (s *Store) LastEpochWrittenForValidators(
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(attestedEpochsByValidator)
+		if bkt == nil {
+			return bolt.ErrBucketNotFound
+		}
 
 		for _, validatorIndex := range validatorIndexes {
 			encodedIndex := encodeValidatorIndex(validatorIndex)
@@ -77,6 +83,9 @@ func (s *Store) LastEpochWrittenForValidators(
 func (s *Store) SaveLastEpochWrittenForValidators(
 	ctx context.Context, epochByValIndex map[primitives.ValidatorIndex]primitives.Epoch,
 ) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveLastEpochWrittenForValidators")
 	defer span.End()
 
@@ -114,6 +123,9 @@ func (s *Store) SaveLastEpochWrittenForValidators(
 			}
 
 			bkt := tx.Bucket(attestedEpochsByValidator)
+			if bkt == nil {
+				return bolt.ErrBucketNotFound
+			}
 			end := min(start+batchSize, len(encodedIndexes))
 
 			for j, encodedIndex := range encodedIndexes[start:end] {
@@ -158,7 +170,11 @@ func (s *Store) CheckAttesterDoubleVotes(
 				signingRootsBkt := tx.Bucket(attestationDataRootsBucket)
 				attRecordsBkt := tx.Bucket(attestationRecordsBucket)
 
-				encEpoch := encodeTargetEpoch(attToProcess.IndexedAttestation.GetData().Target.Epoch)
+				data := attToProcess.IndexedAttestation.GetData()
+				if data == nil || data.Target == nil {
+					return errors.New("nil indexed attestation data")
+				}
+				encEpoch := encodeTargetEpoch(data.Target.Epoch)
 				localDoubleVotes := make([]*slashertypes.AttesterDoubleVote, 0)
 
 				for _, valIdx := range attToProcess.IndexedAttestation.GetAttestingIndices() {
@@ -196,7 +212,7 @@ func (s *Store) CheckAttesterDoubleVotes(
 					// Build the proof of double vote.
 					slashAtt := &slashertypes.AttesterDoubleVote{
 						ValidatorIndex: primitives.ValidatorIndex(valIdx),
-						Target:         attToProcess.IndexedAttestation.GetData().Target.Epoch,
+						Target:         data.Target.Epoch,
 						Wrapper_1:      existingAttRecord,
 						Wrapper_2:      attToProcess,
 					}
@@ -267,6 +283,9 @@ func (s *Store) SaveAttestationRecordsForValidators(
 	ctx context.Context,
 	attWrappers []*slashertypes.IndexedAttestationWrapper,
 ) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.SaveAttestationRecordsForValidators")
 	defer span.End()
 
@@ -282,7 +301,11 @@ func (s *Store) SaveAttestationRecordsForValidators(
 	encodedRecords := make([][]byte, attWrappersCount)
 
 	for i, attestation := range attWrappers {
-		encEpoch := encodeTargetEpoch(attestation.IndexedAttestation.GetData().Target.Epoch)
+		data := attestation.IndexedAttestation.GetData()
+		if data == nil || data.Target == nil {
+			return errors.New("nil indexed attestation data")
+		}
+		encEpoch := encodeTargetEpoch(data.Target.Epoch)
 
 		value, err := encodeAttestationRecord(attestation)
 		if err != nil {
@@ -315,6 +338,9 @@ func (s *Store) SaveAttestationRecordsForValidators(
 		if err := s.db.Update(func(tx *bolt.Tx) error {
 			attRecordsBkt := tx.Bucket(attestationRecordsBucket)
 			dataRootsBkt := tx.Bucket(attestationDataRootsBucket)
+			if attRecordsBkt == nil || dataRootsBkt == nil {
+				return bolt.ErrBucketNotFound
+			}
 
 			for i := currentBatchSize - 1; i >= 0; i-- {
 				attWrapper := attWrappersBatch[i]
@@ -351,6 +377,9 @@ func (s *Store) SaveAttestationRecordsForValidators(
 func (s *Store) LoadSlasherChunks(
 	ctx context.Context, kind slashertypes.ChunkKind, chunkKeys [][]byte,
 ) ([][]uint16, []bool, error) {
+	if s == nil || s.db == nil {
+		return nil, nil, errors.New("store is nil")
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.LoadSlasherChunk")
 	defer span.End()
 
@@ -376,6 +405,9 @@ func (s *Store) LoadSlasherChunks(
 
 		if err := s.db.View(func(tx *bolt.Tx) error {
 			bkt := tx.Bucket(slasherChunksBucket)
+			if bkt == nil {
+				return bolt.ErrBucketNotFound
+			}
 
 			for _, encodedKey := range encodedKeysBatch {
 				chunkBytes := bkt.Get(encodedKey)
@@ -409,6 +441,9 @@ func (s *Store) LoadSlasherChunks(
 func (s *Store) SaveSlasherChunks(
 	ctx context.Context, kind slashertypes.ChunkKind, chunkKeys [][]byte, chunks [][]uint16,
 ) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.SaveSlasherChunks")
 	defer span.End()
 
@@ -451,6 +486,9 @@ func (s *Store) SaveSlasherChunks(
 
 		if err := s.db.Update(func(tx *bolt.Tx) error {
 			bkt := tx.Bucket(slasherChunksBucket)
+			if bkt == nil {
+				return bolt.ErrBucketNotFound
+			}
 
 			for i := range batchSize {
 				if err := bkt.Put(encodedKeysBatch[i], encodedChunksBatch[i]); err != nil {
@@ -475,6 +513,9 @@ func (s *Store) SaveSlasherChunks(
 func (s *Store) CheckDoubleBlockProposals(
 	ctx context.Context, incomingProposals []*slashertypes.SignedBlockHeaderWrapper,
 ) ([]*ethpb.ProposerSlashing, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("store is nil")
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.CheckDoubleBlockProposals")
 	defer span.End()
 
@@ -483,6 +524,9 @@ func (s *Store) CheckDoubleBlockProposals(
 	err := s.db.View(func(tx *bolt.Tx) error {
 		// Retrieve the proposal records bucket
 		bkt := tx.Bucket(proposalRecordsBucket)
+		if bkt == nil {
+			return bolt.ErrBucketNotFound
+		}
 
 		for _, incomingProposal := range incomingProposals {
 			// Build the key corresponding to this slot + validator index combination
@@ -554,6 +598,9 @@ func (s *Store) BlockProposalForValidator(
 func (s *Store) SaveBlockProposals(
 	ctx context.Context, proposals []*slashertypes.SignedBlockHeaderWrapper,
 ) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.SaveBlockProposals")
 	defer span.End()
 
@@ -582,6 +629,9 @@ func (s *Store) SaveBlockProposals(
 	return s.db.Update(func(tx *bolt.Tx) error {
 		// Retrieve the proposal records bucket.
 		bkt := tx.Bucket(proposalRecordsBucket)
+		if bkt == nil {
+			return bolt.ErrBucketNotFound
+		}
 
 		// Save all proposals.
 		for i := range proposals {
@@ -599,6 +649,9 @@ func (s *Store) HighestAttestations(
 	_ context.Context,
 	indices []primitives.ValidatorIndex,
 ) ([]*ethpb.HighestAttestation, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("store is nil")
+	}
 	if len(indices) == 0 {
 		return nil, nil
 	}
@@ -617,6 +670,9 @@ func (s *Store) HighestAttestations(
 	err = s.db.View(func(tx *bolt.Tx) error {
 		signingRootsBkt := tx.Bucket(attestationDataRootsBucket)
 		attRecordsBkt := tx.Bucket(attestationRecordsBucket)
+		if signingRootsBkt == nil || attRecordsBkt == nil {
+			return bolt.ErrBucketNotFound
+		}
 		for i := range encodedIndices {
 			c := signingRootsBkt.Cursor()
 			for k, v := c.Last(); k != nil; k, v = c.Prev() {
@@ -629,10 +685,14 @@ func (s *Store) HighestAttestations(
 					if err != nil {
 						return err
 					}
+					data := attWrapper.IndexedAttestation.GetData()
+					if data == nil || data.Source == nil || data.Target == nil {
+						return errors.New("nil indexed attestation data")
+					}
 					highestAtt := &ethpb.HighestAttestation{
 						ValidatorIndex:     uint64(indices[i]),
-						HighestSourceEpoch: attWrapper.IndexedAttestation.GetData().Source.Epoch,
-						HighestTargetEpoch: attWrapper.IndexedAttestation.GetData().Target.Epoch,
+						HighestSourceEpoch: data.Source.Epoch,
+						HighestTargetEpoch: data.Target.Epoch,
 					}
 					history = append(history, highestAtt)
 					break

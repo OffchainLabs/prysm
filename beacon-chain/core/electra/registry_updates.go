@@ -37,6 +37,9 @@ import (
 //	        if is_eligible_for_activation(state, validator):
 //	            validator.activation_epoch = activation_epoch
 func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 	currentEpoch := time.CurrentEpoch(st)
 	ejectionBal := params.BeaconConfig().EjectionBalance
 	activationEpoch := helpers.ActivationExitEpoch(currentEpoch)
@@ -84,6 +87,9 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 		st, err = validators.InitiateValidatorExit(ctx, st, idx, &validators.ExitInfo{})
 		if err != nil && !errors.Is(err, validators.ErrValidatorAlreadyExited) {
 			return fmt.Errorf("failed to initiate validator exit at index %d: %w", idx, err)
+		}
+		if st == nil || st.IsNil() {
+			return errors.New("state is nil after initiating validator exit")
 		}
 	}
 

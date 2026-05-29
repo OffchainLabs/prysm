@@ -29,6 +29,12 @@ const executionToBLSPadding = 12
 func ProcessBLSToExecutionChanges(
 	st state.BeaconState,
 	b interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	if st == nil || st.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
+	if b == nil || b.IsNil() {
+		return nil, errors.New("beacon block is nil")
+	}
 	if b.Version() < version.Capella {
 		return st, nil
 	}
@@ -71,6 +77,9 @@ func ProcessBLSToExecutionChanges(
 //	    + address_change.to_execution_address
 //	)
 func processBLSToExecutionChange(st state.BeaconState, signed *ethpb.SignedBLSToExecutionChange) (state.BeaconState, error) {
+	if st == nil || st.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	// Checks that the message passes the validation conditions.
 	val, err := ValidateBLSToExecutionChange(st, signed)
 	if err != nil {
@@ -232,6 +241,9 @@ func BLSChangesSignatureBatch(
 	st state.ReadOnlyBeaconState,
 	changes []*ethpb.SignedBLSToExecutionChange,
 ) (*bls.SignatureBatch, error) {
+	if st == nil || st.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	// Return early if no changes
 	if len(changes) == 0 {
 		return bls.NewSet(), nil
@@ -271,6 +283,12 @@ func VerifyBLSChangeSignature(
 	st state.ReadOnlyBeaconState,
 	change *ethpb.SignedBLSToExecutionChange,
 ) error {
+	if st == nil || st.IsNil() {
+		return errors.New("beacon state is nil")
+	}
+	if change == nil || change.Message == nil {
+		return errNilSignedWithdrawalMessage
+	}
 	c := params.BeaconConfig()
 	domain, err := signing.ComputeDomain(c.DomainBLSToExecutionChange, c.GenesisForkVersion, st.GenesisValidatorsRoot())
 	if err != nil {

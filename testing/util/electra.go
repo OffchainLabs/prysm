@@ -33,6 +33,18 @@ type electraBlockGenerator struct {
 	payload  *enginev1.ExecutionPayloadDeneb
 }
 
+func commitmentBytes(commitment kzg.Commitment) []byte {
+	out := make([]byte, len(commitment))
+	copy(out, commitment[:])
+	return out
+}
+
+func proofBytes(proof kzg.Proof) []byte {
+	out := make([]byte, len(proof))
+	copy(out, proof[:])
+	return out
+}
+
 func WithElectraPayload(p *enginev1.ExecutionPayloadDeneb) ElectraBlockGeneratorOption {
 	return func(g *electraBlockGenerator) {
 		g.payload = p
@@ -111,19 +123,27 @@ func GenerateTestElectraBlockWithSidecar(t *testing.T, parent [32]byte, slot pri
 		require.NoError(t, err)
 
 		blobs = append(blobs, blob[:])
-		commitments = append(commitments, commitment[:])
-		kzgProofs = append(kzgProofs, kzgProof[:])
+		commitments = append(commitments, commitmentBytes(commitment))
+		kzgProofs = append(kzgProofs, proofBytes(kzgProof))
 	}
 
 	block.Block.Body.BlobKzgCommitments = commitments
 
 	body, err := blocks.NewBeaconBlockBody(block.Block.Body)
 	require.NoError(t, err)
+	if body == nil || body.IsNil() {
+		t.Fatal("beacon block body is nil")
+		return blocks.ROBlock{}, nil
+	}
 
 	inclusionProofs := make([][][]byte, 0, g.nblobs)
 	for i := range g.nblobs {
 		inclusionProof, err := blocks.MerkleProofKZGCommitment(body, i)
 		require.NoError(t, err)
+		if inclusionProof == nil {
+			t.Fatal("KZG inclusion proof is nil")
+			return blocks.ROBlock{}, nil
+		}
 
 		inclusionProofs = append(inclusionProofs, inclusionProof)
 	}
@@ -142,9 +162,17 @@ func GenerateTestElectraBlockWithSidecar(t *testing.T, parent [32]byte, slot pri
 
 	sbb, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
+	if sbb == nil || sbb.IsNil() {
+		t.Fatal("signed beacon block is nil")
+		return blocks.ROBlock{}, nil
+	}
 
 	sh, err := sbb.Header()
 	require.NoError(t, err)
+	if sh == nil {
+		t.Fatal("signed beacon block header is nil")
+		return blocks.ROBlock{}, nil
+	}
 
 	roSidecars := make([]blocks.ROBlob, 0, g.nblobs)
 	for i := range g.nblobs {

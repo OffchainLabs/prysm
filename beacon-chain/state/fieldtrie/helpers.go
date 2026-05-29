@@ -200,7 +200,7 @@ func validateElements(field types.FieldIndex, fieldInfo types.DataType, elements
 // If indices is nil, roots for all elements are returned.
 func fieldConverters(field types.FieldIndex, elements any, indices []uint64) ([][32]byte, error) {
 	if elements == nil {
-		return nil, nil
+		return [][32]byte{}, nil
 	}
 
 	switch field {
@@ -408,7 +408,7 @@ func handleBalanceMVSlice(mv multi_value_slice.MultiValueSliceComposite[uint64],
 			// indices are chunk-level: chunkIdx maps to the group
 			// [chunkIdx*numOfElems .. chunkIdx*numOfElems+numOfElems).
 			startGroup := chunkIdx * numOfElems
-			var chunk [32]byte
+			chunk := [32]byte{}
 			sizeOfElem := len(chunk) / iNumOfElems
 			for i, j := 0, startGroup; j < startGroup+numOfElems; i, j = i+sizeOfElem, j+1 {
 				wantedVal := uint64(0)

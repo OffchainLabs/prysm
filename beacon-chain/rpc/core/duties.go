@@ -57,6 +57,9 @@ type PTCDutyResult struct {
 func (s *Service) AttesterDuties(ctx context.Context, st state.BeaconState, epoch primitives.Epoch, indices []primitives.ValidatorIndex) ([]*AttesterDutyResult, *RpcError) {
 	ctx, span := trace.StartSpan(ctx, "coreService.AttesterDuties")
 	defer span.End()
+	if st == nil || st.IsNil() {
+		return nil, &RpcError{Err: errors.New("beacon state is nil"), Reason: Internal}
+	}
 
 	assignments, err := helpers.CommitteeAssignments(ctx, st, epoch, indices)
 	if err != nil {
@@ -97,6 +100,9 @@ func (s *Service) AttesterDuties(ctx context.Context, st state.BeaconState, epoc
 func (s *Service) ProposerDuties(ctx context.Context, st state.BeaconState, epoch primitives.Epoch) ([]*ProposerDutyResult, *RpcError) {
 	ctx, span := trace.StartSpan(ctx, "coreService.ProposerDuties")
 	defer span.End()
+	if st == nil || st.IsNil() {
+		return nil, &RpcError{Err: errors.New("beacon state is nil"), Reason: Internal}
+	}
 
 	assignments, err := helpers.ProposerAssignments(ctx, st, epoch)
 	if err != nil {
@@ -128,6 +134,9 @@ func (s *Service) ProposerDuties(ctx context.Context, st state.BeaconState, epoc
 func (s *Service) SyncCommitteeDuties(ctx context.Context, st state.BeaconState, requestedEpoch primitives.Epoch, currentEpoch primitives.Epoch, indices []primitives.ValidatorIndex) ([]*SyncCommitteeDutyResult, *RpcError) {
 	_, span := trace.StartSpan(ctx, "coreService.SyncCommitteeDuties")
 	defer span.End()
+	if st == nil || st.IsNil() {
+		return nil, &RpcError{Err: errors.New("beacon state is nil"), Reason: Internal}
+	}
 
 	// Determine which sync committee to use based on the requested epoch.
 	startingEpoch := min(requestedEpoch, currentEpoch)
@@ -193,6 +202,9 @@ func (s *Service) SyncCommitteeDuties(ctx context.Context, st state.BeaconState,
 func (s *Service) PTCDuties(ctx context.Context, st state.BeaconState, epoch primitives.Epoch, indices []primitives.ValidatorIndex) ([]*PTCDutyResult, *RpcError) {
 	_, span := trace.StartSpan(ctx, "coreService.PTCDuties")
 	defer span.End()
+	if st == nil || st.IsNil() {
+		return nil, &RpcError{Err: errors.New("beacon state is nil"), Reason: Internal}
+	}
 
 	if len(indices) == 0 || epoch < params.BeaconConfig().GloasForkEpoch || st.Version() < version.Gloas {
 		return []*PTCDutyResult{}, nil
@@ -306,6 +318,9 @@ func ProposalDependentRoot(s state.BeaconState, epoch primitives.Epoch) ([]byte,
 
 // ProposalDependentRootV2 returns the dependent root for proposer duties.
 func ProposalDependentRootV2(s state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
+	if s == nil || s.IsNil() {
+		return nil, errors.New("nil state")
+	}
 	if s.Version() >= version.Fulu {
 		// Post-Fulu (EIP-7917) the proposer schedule is deterministic from the
 		// previous epoch's state, so the dependent root is (prev_epoch_start - 1),

@@ -92,13 +92,18 @@ func (s *Store) SaveProposalHistoryForSlot(
 		return nil
 	}
 
+	latestSignedBlockSlot := validatorSlashingProtection.LatestSignedBlockSlot
+	if latestSignedBlockSlot == nil {
+		return errors.New("latest signed block slot is nil")
+	}
+
 	// Based on EIP-3076 (minimal database), validator should refuse to sign any proposal
 	// with slot less than or equal to the latest signed block slot in the DB.
-	if slotUInt64 <= *validatorSlashingProtection.LatestSignedBlockSlot {
+	if slotUInt64 <= *latestSignedBlockSlot {
 		return errors.Errorf(
 			"could not sign proposal with slot lower than or equal to recorded slot, %d <= %d",
 			slot,
-			*validatorSlashingProtection.LatestSignedBlockSlot,
+			*latestSignedBlockSlot,
 		)
 	}
 
@@ -131,9 +136,16 @@ func (s *Store) SlashableProposalCheck(
 	emitAccountMetrics bool,
 	validatorProposeFailVec *prometheus.CounterVec,
 ) error {
+	if signedBlock == nil || signedBlock.IsNil() {
+		return errors.New("signed block is nil")
+	}
+	blk := signedBlock.Block()
+	if blk == nil || blk.IsNil() {
+		return errors.New("beacon block is nil")
+	}
 	// Check if the proposal is potentially slashable regarding EIP-3076 minimal conditions.
 	// If not, save the new proposal into the database.
-	if err := s.SaveProposalHistoryForSlot(ctx, pubKey, signedBlock.Block().Slot(), signingRoot[:]); err != nil {
+	if err := s.SaveProposalHistoryForSlot(ctx, pubKey, blk.Slot(), signingRoot[:]); err != nil {
 		if strings.Contains(err.Error(), "could not sign proposal") {
 			return errors.Wrapf(err, common.FailedBlockSignLocalErr)
 		}

@@ -10,6 +10,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
+	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	light_client "github.com/OffchainLabs/prysm/v7/consensus-types/light-client"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -78,6 +79,9 @@ func NewLightClientUpdateFromBeaconState(
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get sync aggregate")
 	}
+	if syncAggregate == nil {
+		return nil, errors.New("sync aggregate is nil")
+	}
 	if syncAggregate.SyncCommitteeBits.Count() < params.BeaconConfig().MinSyncCommitteeParticipants {
 		return nil, fmt.Errorf(
 			"%s (got %d, need %d)",
@@ -88,12 +92,16 @@ func NewLightClientUpdateFromBeaconState(
 	}
 
 	// assert state.slot == state.latest_block_header.slot
-	if state.Slot() != state.LatestBlockHeader().Slot {
-		return nil, fmt.Errorf("state slot %d not equal to latest block header slot %d", state.Slot(), state.LatestBlockHeader().Slot)
+	stateHeader := state.LatestBlockHeader()
+	if stateHeader == nil {
+		return nil, errors.New("nil state latest block header")
+	}
+	if state.Slot() != stateHeader.Slot {
+		return nil, fmt.Errorf("state slot %d not equal to latest block header slot %d", state.Slot(), stateHeader.Slot)
 	}
 
 	// assert hash_tree_root(header) == hash_tree_root(block.message)
-	header := state.LatestBlockHeader()
+	header := stateHeader
 	stateRoot, err := state.HashTreeRoot(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get state root")
@@ -115,16 +123,19 @@ func NewLightClientUpdateFromBeaconState(
 	updateSignaturePeriod := slots.SyncCommitteePeriod(slots.ToEpoch(block.Block().Slot()))
 
 	// assert attested_state.slot == attested_state.latest_block_header.slot
-	if attestedState.Slot() != attestedState.LatestBlockHeader().Slot {
+	attestedHeader := attestedState.LatestBlockHeader()
+	if attestedHeader == nil {
+		return nil, errors.New("nil attested latest block header")
+	}
+	if attestedState.Slot() != attestedHeader.Slot {
 		return nil, fmt.Errorf(
 			"attested state slot %d not equal to attested latest block header slot %d",
 			attestedState.Slot(),
-			attestedState.LatestBlockHeader().Slot,
+			attestedHeader.Slot,
 		)
 	}
 
 	// attested_header = attested_state.latest_block_header.copy()
-	attestedHeader := attestedState.LatestBlockHeader()
 
 	// attested_header.state_root = hash_tree_root(attested_state)
 	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
@@ -177,6 +188,9 @@ func NewLightClientUpdateFromBeaconState(
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get next sync committee")
 		}
+		if tempNextSyncCommittee == nil {
+			return nil, errors.New("nil next sync committee")
+		}
 		nextSyncCommittee := &pb.SyncCommittee{
 			Pubkeys:         tempNextSyncCommittee.Pubkeys,
 			AggregatePubkey: tempNextSyncCommittee.AggregatePubkey,
@@ -212,8 +226,12 @@ func NewLightClientUpdateFromBeaconState(
 			}
 		} else {
 			// assert attested_state.finalized_checkpoint.root == Bytes32()
-			if !bytes.Equal(attestedState.FinalizedCheckpoint().Root, make([]byte, 32)) {
-				return nil, fmt.Errorf("invalid finalized header root %v", attestedState.FinalizedCheckpoint().Root)
+			finalizedCheckpoint := attestedState.FinalizedCheckpoint()
+			if finalizedCheckpoint == nil {
+				return nil, errors.New("nil finalized checkpoint")
+			}
+			if !bytes.Equal(finalizedCheckpoint.Root, make([]byte, 32)) {
+				return nil, fmt.Errorf("invalid finalized header root %v", finalizedCheckpoint.Root)
 			}
 		}
 
@@ -251,8 +269,17 @@ func CreateDefaultLightClientUpdate(attestedBlock interfaces.ReadOnlySignedBeaco
 		AggregatePubkey: make([]byte, fieldparams.BLSPubkeyLength),
 	}
 
+	if attestedBlock == nil || attestedBlock.IsNil() {
+		return nil, consensus_blocks.ErrNilSignedBeaconBlock
+	}
+	attestedBeaconBlock := attestedBlock.Block()
+	if attestedBeaconBlock == nil || attestedBeaconBlock.IsNil() {
+		return nil, consensus_blocks.ErrNilBeaconBlock
+	}
+	attestedVersion := attestedBlock.Version()
+
 	var nextSyncCommitteeBranch [][]byte
-	if attestedBlock.Version() >= version.Electra {
+	if attestedVersion >= version.Electra {
 		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepthElectra)
 	} else {
 		nextSyncCommitteeBranch = make([][]byte, fieldparams.SyncCommitteeBranchDepth)
@@ -267,7 +294,7 @@ func CreateDefaultLightClientUpdate(attestedBlock interfaces.ReadOnlySignedBeaco
 	}
 
 	var finalityBranch [][]byte
-	if attestedBlock.Version() >= version.Electra {
+	if attestedVersion >= version.Electra {
 		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepthElectra)
 	} else {
 		finalityBranch = make([][]byte, fieldparams.FinalityBranchDepth)
@@ -277,12 +304,12 @@ func CreateDefaultLightClientUpdate(attestedBlock interfaces.ReadOnlySignedBeaco
 	}
 
 	var m proto.Message
-	switch attestedBlock.Version() {
+	switch attestedVersion {
 	case version.Altair, version.Bellatrix:
 		m = &pb.LightClientUpdateAltair{
 			AttestedHeader: &pb.LightClientHeaderAltair{
 				Beacon: &pb.BeaconBlockHeader{
-					Slot:       attestedBlock.Block().Slot(),
+					Slot:       attestedBeaconBlock.Slot(),
 					ParentRoot: make([]byte, 32),
 					StateRoot:  make([]byte, 32),
 					BodyRoot:   make([]byte, 32),
@@ -592,13 +619,25 @@ func HasFinality(update interfaces.LightClientUpdate) (bool, error) {
 }
 
 func IsBetterUpdate(newUpdate, oldUpdate interfaces.LightClientUpdate) (bool, error) {
+	if newUpdate == nil || newUpdate.IsNil() {
+		return false, errors.New("new light client update is nil")
+	}
 	if oldUpdate == nil || oldUpdate.IsNil() {
 		return true, nil
 	}
 
-	maxActiveParticipants := newUpdate.SyncAggregate().SyncCommitteeBits.Len()
-	newNumActiveParticipants := newUpdate.SyncAggregate().SyncCommitteeBits.Count()
-	oldNumActiveParticipants := oldUpdate.SyncAggregate().SyncCommitteeBits.Count()
+	newSyncAggregate := newUpdate.SyncAggregate()
+	if newSyncAggregate == nil {
+		return false, errors.New("new light client update sync aggregate is nil")
+	}
+	oldSyncAggregate := oldUpdate.SyncAggregate()
+	if oldSyncAggregate == nil {
+		return false, errors.New("old light client update sync aggregate is nil")
+	}
+
+	maxActiveParticipants := newSyncAggregate.SyncCommitteeBits.Len()
+	newNumActiveParticipants := newSyncAggregate.SyncCommitteeBits.Count()
+	oldNumActiveParticipants := oldSyncAggregate.SyncCommitteeBits.Count()
 	newHasSupermajority := newNumActiveParticipants*3 >= maxActiveParticipants*2
 	oldHasSupermajority := oldNumActiveParticipants*3 >= maxActiveParticipants*2
 
@@ -609,8 +648,22 @@ func IsBetterUpdate(newUpdate, oldUpdate interfaces.LightClientUpdate) (bool, er
 		return newNumActiveParticipants > oldNumActiveParticipants, nil
 	}
 
-	newUpdateAttestedHeaderBeacon := newUpdate.AttestedHeader().Beacon()
-	oldUpdateAttestedHeaderBeacon := oldUpdate.AttestedHeader().Beacon()
+	newUpdateAttestedHeader := newUpdate.AttestedHeader()
+	if newUpdateAttestedHeader == nil {
+		return false, errors.New("new light client update attested header is nil")
+	}
+	newUpdateAttestedHeaderBeacon := newUpdateAttestedHeader.Beacon()
+	if newUpdateAttestedHeaderBeacon == nil {
+		return false, errors.New("new light client update attested beacon header is nil")
+	}
+	oldUpdateAttestedHeader := oldUpdate.AttestedHeader()
+	if oldUpdateAttestedHeader == nil {
+		return false, errors.New("old light client update attested header is nil")
+	}
+	oldUpdateAttestedHeaderBeacon := oldUpdateAttestedHeader.Beacon()
+	if oldUpdateAttestedHeaderBeacon == nil {
+		return false, errors.New("old light client update attested beacon header is nil")
+	}
 
 	// Compare presence of relevant sync committee
 	newHasRelevantSyncCommittee, err := HasRelevantSyncCommittee(newUpdate)
@@ -643,11 +696,25 @@ func IsBetterUpdate(newUpdate, oldUpdate interfaces.LightClientUpdate) (bool, er
 		return newHasFinality, nil
 	}
 
-	newUpdateFinalizedHeaderBeacon := newUpdate.FinalizedHeader().Beacon()
-	oldUpdateFinalizedHeaderBeacon := oldUpdate.FinalizedHeader().Beacon()
-
 	// Compare sync committee finality
 	if newHasFinality {
+		newUpdateFinalizedHeader := newUpdate.FinalizedHeader()
+		if newUpdateFinalizedHeader == nil {
+			return false, errors.New("new light client update finalized header is nil")
+		}
+		newUpdateFinalizedHeaderBeacon := newUpdateFinalizedHeader.Beacon()
+		if newUpdateFinalizedHeaderBeacon == nil {
+			return false, errors.New("new light client update finalized beacon header is nil")
+		}
+		oldUpdateFinalizedHeader := oldUpdate.FinalizedHeader()
+		if oldUpdateFinalizedHeader == nil {
+			return false, errors.New("old light client update finalized header is nil")
+		}
+		oldUpdateFinalizedHeaderBeacon := oldUpdateFinalizedHeader.Beacon()
+		if oldUpdateFinalizedHeaderBeacon == nil {
+			return false, errors.New("old light client update finalized beacon header is nil")
+		}
+
 		newHasSyncCommitteeFinality :=
 			slots.SyncCommitteePeriod(slots.ToEpoch(newUpdateFinalizedHeaderBeacon.Slot)) ==
 				slots.SyncCommitteePeriod(slots.ToEpoch(newUpdateAttestedHeaderBeacon.Slot))
@@ -679,6 +746,12 @@ func NewLightClientBootstrapFromBeaconState(
 	state state.BeaconState,
 	block interfaces.ReadOnlySignedBeaconBlock,
 ) (interfaces.LightClientBootstrap, error) {
+	if state == nil || state.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
+	if block == nil || block.IsNil() {
+		return nil, errors.New("signed beacon block is nil")
+	}
 	// assert compute_epoch_at_slot(state.slot) >= ALTAIR_FORK_EPOCH
 	if slots.ToEpoch(state.Slot()) < params.BeaconConfig().AltairForkEpoch {
 		return nil, fmt.Errorf("light client bootstrap is not supported before Altair, invalid slot %d", state.Slot())
@@ -686,6 +759,9 @@ func NewLightClientBootstrapFromBeaconState(
 
 	// assert state.slot == state.latest_block_header.slot
 	latestBlockHeader := state.LatestBlockHeader()
+	if latestBlockHeader == nil {
+		return nil, errors.New("nil latest block header")
+	}
 	if state.Slot() != latestBlockHeader.Slot {
 		return nil, fmt.Errorf("state slot %d not equal to latest block header slot %d", state.Slot(), latestBlockHeader.Slot)
 	}
@@ -729,6 +805,9 @@ func NewLightClientBootstrapFromBeaconState(
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get current sync committee")
 	}
+	if currentSyncCommittee == nil {
+		return nil, errors.New("current sync committee is nil")
+	}
 
 	err = bootstrap.SetCurrentSyncCommittee(currentSyncCommittee)
 	if err != nil {
@@ -738,6 +817,9 @@ func NewLightClientBootstrapFromBeaconState(
 	currentSyncCommitteeProof, err := state.CurrentSyncCommitteeProof(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get current sync committee proof")
+	}
+	if currentSyncCommitteeProof == nil {
+		return nil, errors.New("current sync committee proof is nil")
 	}
 
 	err = bootstrap.SetCurrentSyncCommitteeBranch(currentSyncCommitteeProof)
@@ -757,6 +839,9 @@ func UpdateHasSupermajority(syncAggregate *pb.SyncAggregate) bool {
 // IsFinalityUpdateValidForBroadcast checks if a finality update needs to be broadcasted.
 // It is also used to check if an incoming gossiped finality update is valid for forwarding and saving.
 func IsFinalityUpdateValidForBroadcast(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
+	if newUpdate == nil || newUpdate.IsNil() {
+		return false
+	}
 	if oldUpdate == nil {
 		return true
 	}
@@ -782,6 +867,9 @@ func IsFinalityUpdateValidForBroadcast(newUpdate, oldUpdate interfaces.LightClie
 // This does not concern broadcasting, but rather the decision of whether to save the new update.
 // For broadcasting checks, use IsFinalityUpdateValidForBroadcast.
 func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
+	if newUpdate == nil || newUpdate.IsNil() {
+		return false
+	}
 	if oldUpdate == nil || oldUpdate.IsNil() {
 		return true
 	}

@@ -462,6 +462,9 @@ func newNetworkSchedule(entries []NetworkScheduleEntry) *NetworkSchedule {
 }
 
 func (ns *NetworkSchedule) epochIdx(epoch primitives.Epoch) int {
+	if ns == nil {
+		return -1
+	}
 	for i := len(ns.entries) - 1; i >= 0; i-- {
 		if ns.entries[i].Epoch <= epoch {
 			return i
@@ -471,7 +474,7 @@ func (ns *NetworkSchedule) epochIdx(epoch primitives.Epoch) int {
 }
 
 func (ns *NetworkSchedule) safeIndex(idx int) NetworkScheduleEntry {
-	if idx < 0 || len(ns.entries) == 0 {
+	if ns == nil || idx < 0 || len(ns.entries) == 0 {
 		return genesisNetworkScheduleEntry()
 	}
 	if idx >= len(ns.entries) {
@@ -485,6 +488,9 @@ func (ns *NetworkSchedule) Next(epoch primitives.Epoch) NetworkScheduleEntry {
 }
 
 func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
+	if ns == nil {
+		return genesisNetworkScheduleEntry()
+	}
 	for i := len(ns.entries) - 1; i >= 0; i-- {
 		if ns.entries[i].Epoch != BeaconConfig().FarFutureEpoch {
 			return ns.entries[i]
@@ -495,6 +501,9 @@ func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
 
 // LastFork is the last full fork (this is used by e2e testing)
 func (ns *NetworkSchedule) LastFork() NetworkScheduleEntry {
+	if ns == nil {
+		return genesisNetworkScheduleEntry()
+	}
 	for i := len(ns.entries) - 1; i >= 0; i-- {
 		if ns.entries[i].isFork && ns.entries[i].Epoch != BeaconConfig().FarFutureEpoch {
 			return ns.entries[i]

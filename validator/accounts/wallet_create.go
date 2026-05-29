@@ -13,6 +13,9 @@ import (
 
 // WalletCreate creates wallet specified by configuration options.
 func (acm *CLIManager) WalletCreate(ctx context.Context) (*wallet.Wallet, error) {
+	if acm == nil {
+		return nil, errors.New("nil account manager")
+	}
 	w := wallet.New(&wallet.Config{
 		WalletDir:      acm.walletDir,
 		KeymanagerKind: acm.keymanagerKind,

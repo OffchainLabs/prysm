@@ -156,6 +156,9 @@ func (s *Service) isHighestExecutionPayloadBid(bid interfaces.ROExecutionPayload
 	if !ok {
 		return true
 	}
+	if cached == nil || cached.Message == nil {
+		return true
+	}
 	return bid.Value() > cached.Message.Value
 }
 

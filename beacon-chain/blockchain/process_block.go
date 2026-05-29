@@ -151,12 +151,18 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 
 // getBatchPrestate returns the pre-state to apply to the first beacon block in the batch and returns true if it applied the first envelope before
 func (s *Service) getBatchPrestate(ctx context.Context, b consensusblocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope) (state.BeaconState, bool, error) {
+	if err := consensusblocks.BeaconBlockIsNil(b); err != nil {
+		return nil, false, err
+	}
 	if len(envelopes) == 0 || b.Version() < version.Gloas {
 		blockPreState, err := s.cfg.StateGen.StateByRootInitialSync(ctx, b.Block().ParentRoot())
 		if err != nil {
 			return nil, false, errors.Wrap(err, "could not get block pre state")
 		}
 		return blockPreState, false, nil
+	}
+	if envelopes[0] == nil {
+		return nil, false, errors.New("nil execution payload envelope")
 	}
 	parentRoot := b.Block().ParentRoot()
 	full, err := consensusblocks.BlockBuiltOnEnvelope(envelopes[0], b)
@@ -195,6 +201,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	if len(blks) == 0 {
 		return errors.New("no blocks provided")
 	}
+	if envelopes == nil {
+		envelopes = make([]interfaces.ROSignedExecutionPayloadEnvelope, 0)
+	}
 
 	if err := consensusblocks.BeaconBlockIsNil(blks[0]); err != nil {
 		return invalidBlock{error: err}
@@ -217,6 +226,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	var br [32]byte
 	sigSet := bls.NewSet()
 	if applied {
+		if len(envelopes) == 0 || envelopes[0] == nil {
+			return errors.New("missing first payload envelope in batch")
+		}
 		eidx = 1
 		envSigSet, err := gloas.ExecutionPayloadEnvelopeSignatureBatch(preState, envelopes[0])
 		if err != nil {
@@ -232,8 +244,16 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		br = env.BeaconBlockRoot()
 	}
 
+	finalizedCheckpoint := preState.FinalizedCheckpoint()
+	if finalizedCheckpoint == nil {
+		return errors.New("nil finalized checkpoint")
+	}
+	justifiedCheckpoint := preState.CurrentJustifiedCheckpoint()
+	if justifiedCheckpoint == nil {
+		return errors.New("nil current justified checkpoint")
+	}
 	// Fill in missing blocks
-	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], preState.FinalizedCheckpoint(), preState.CurrentJustifiedCheckpoint()); err != nil {
+	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], finalizedCheckpoint, justifiedCheckpoint); err != nil {
 		return errors.Wrap(err, "could not fill in missing blocks to forkchoice")
 	}
 
@@ -244,6 +264,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	var set *bls.SignatureBatch
 	boundaries := make(map[[32]byte]state.BeaconState)
 	for i, b := range blks {
+		if err := consensusblocks.BeaconBlockIsNil(b); err != nil {
+			return invalidBlock{error: err}
+		}
 		if features.BlacklistedBlock(b.Root()) {
 			return errBlacklistedRoot
 		}
@@ -298,6 +321,12 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		}
 		jCheckpoints[i] = preState.CurrentJustifiedCheckpoint()
 		fCheckpoints[i] = preState.FinalizedCheckpoint()
+		if jCheckpoints[i] == nil {
+			return errors.New("nil current justified checkpoint")
+		}
+		if fCheckpoints[i] == nil {
+			return errors.New("nil finalized checkpoint")
+		}
 
 		v, h, err = getStateVersionAndPayload(preState)
 		if err != nil {
@@ -341,6 +370,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	}
 	// Insert all nodes to forkchoice
 	if applied {
+		if len(envelopes) == 0 || envelopes[0] == nil {
+			return errors.New("missing first payload envelope in batch")
+		}
 		env, err := envelopes[0].Envelope()
 		if err != nil {
 			return err
@@ -387,10 +419,18 @@ func (s *Service) notifyEngineAndSaveData(
 
 	for i, b := range blks {
 		root := b.Root()
+		justifiedCheckpoint := jCheckpoints[i]
+		if justifiedCheckpoint == nil {
+			return nil, false, errors.New("nil current justified checkpoint")
+		}
+		finalizedCheckpoint := fCheckpoints[i]
+		if finalizedCheckpoint == nil {
+			return nil, false, errors.New("nil finalized checkpoint")
+		}
 		args := &forkchoicetypes.BlockAndCheckpoints{
 			Block:               b,
-			JustifiedCheckpoint: jCheckpoints[i],
-			FinalizedCheckpoint: fCheckpoints[i],
+			JustifiedCheckpoint: justifiedCheckpoint,
+			FinalizedCheckpoint: finalizedCheckpoint,
 		}
 		if b.Version() < version.Gloas {
 			isValidPayload, err = s.notifyNewPayload(ctx,
@@ -435,16 +475,28 @@ func (s *Service) notifyEngineAndSaveData(
 			tracing.AnnotateError(span, err)
 			return nil, false, err
 		}
-		if i > 0 && jCheckpoints[i].Epoch > jCheckpoints[i-1].Epoch {
-			if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, jCheckpoints[i]); err != nil {
-				tracing.AnnotateError(span, err)
-				return nil, false, err
+		if i > 0 {
+			previousJustifiedCheckpoint := jCheckpoints[i-1]
+			if previousJustifiedCheckpoint == nil {
+				return nil, false, errors.New("nil previous current justified checkpoint")
+			}
+			if justifiedCheckpoint.Epoch > previousJustifiedCheckpoint.Epoch {
+				if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, justifiedCheckpoint); err != nil {
+					tracing.AnnotateError(span, err)
+					return nil, false, err
+				}
 			}
 		}
-		if i > 0 && fCheckpoints[i].Epoch > fCheckpoints[i-1].Epoch {
-			if err := s.updateFinalized(ctx, fCheckpoints[i]); err != nil {
-				tracing.AnnotateError(span, err)
-				return nil, false, err
+		if i > 0 {
+			previousFinalizedCheckpoint := fCheckpoints[i-1]
+			if previousFinalizedCheckpoint == nil {
+				return nil, false, errors.New("nil previous finalized checkpoint")
+			}
+			if finalizedCheckpoint.Epoch > previousFinalizedCheckpoint.Epoch {
+				if err := s.updateFinalized(ctx, finalizedCheckpoint); err != nil {
+					tracing.AnnotateError(span, err)
+					return nil, false, err
+				}
 			}
 		}
 	}
@@ -452,6 +504,9 @@ func (s *Service) notifyEngineAndSaveData(
 }
 
 func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityChecker, roBlock consensusblocks.ROBlock) error {
+	if err := consensusblocks.BeaconBlockIsNil(roBlock); err != nil {
+		return err
+	}
 	blockVersion := roBlock.Version()
 	block := roBlock.Block()
 	slot := block.Slot()
@@ -488,6 +543,12 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 
 // the caller of this function must not hold a lock in forkchoice store.
 func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.BeaconState) error {
+	if s == nil || s.cfg == nil || s.cfg.ForkChoiceStore == nil {
+		return errors.New("service is nil")
+	}
+	if st == nil || st.IsNil() {
+		return errors.New("nil state")
+	}
 	e := coreTime.CurrentEpoch(st)
 	if err := helpers.UpdateCommitteeCache(ctx, st, e); err != nil {
 		return errors.Wrap(err, "could not update committee cache")
@@ -519,7 +580,11 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	}()
 
 	// The latest block header is from the previous epoch
-	r, err := st.LatestBlockHeader().HashTreeRoot()
+	header := st.LatestBlockHeader()
+	if header == nil {
+		return errors.New("nil latest block header")
+	}
+	r, err := header.HashTreeRoot()
 	if err != nil {
 		log.WithError(err).Error("Could not update proposer index state-root map")
 		return nil
@@ -529,9 +594,13 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	if e > 0 {
 		e = e - 1
 	}
-	s.ForkChoicer().RLock()
+	fc := s.ForkChoicer()
+	if fc == nil {
+		return errors.New("forkchoice store is nil")
+	}
+	fc.RLock()
 	target, err := s.cfg.ForkChoiceStore.TargetRootForEpoch(r, e)
-	s.ForkChoicer().RUnlock()
+	fc.RUnlock()
 	if err != nil {
 		log.WithError(err).Error("Could not update proposer index state-root map")
 		return nil
@@ -604,6 +673,13 @@ func (s *Service) handleEpochBoundary(ctx context.Context, slot primitives.Slot,
 func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, st state.BeaconState) error {
 	// Feed in block's attestations to fork choice store.
 	for _, a := range blk.Body().Attestations() {
+		if a == nil || a.IsNil() {
+			return errors.New("nil attestation")
+		}
+		data := a.GetData()
+		if data == nil || data.Target == nil {
+			return errors.New("nil attestation data")
+		}
 		committees, err := helpers.AttestationCommitteesFromState(ctx, st, a)
 		if err != nil {
 			return err
@@ -612,13 +688,13 @@ func (s *Service) handleBlockAttestations(ctx context.Context, blk interfaces.Re
 		if err != nil {
 			return err
 		}
-		r := bytesutil.ToBytes32(a.GetData().BeaconBlockRoot)
+		r := bytesutil.ToBytes32(data.BeaconBlockRoot)
 		if s.cfg.ForkChoiceStore.HasNode(r) {
 			payloadStatus := true
-			if a.GetData().Target.Epoch >= params.BeaconConfig().GloasForkEpoch {
-				payloadStatus = a.GetData().CommitteeIndex == 1
+			if data.Target.Epoch >= params.BeaconConfig().GloasForkEpoch {
+				payloadStatus = data.CommitteeIndex == 1
 			}
-			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, a.GetData().Slot, payloadStatus)
+			s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indices, r, data.Slot, payloadStatus)
 		} else if features.Get().EnableExperimentalAttestationPool {
 			if err = s.cfg.AttestationCache.Add(a); err != nil {
 				return err
@@ -684,6 +760,9 @@ func (s *Service) RecordBlockForEquivocation(slot primitives.Slot, proposer prim
 func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interfaces.ReadOnlySignedBeaconBlock, st state.BeaconState) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.savePostStateInfo")
 	defer span.End()
+	if b == nil || b.IsNil() {
+		return errors.New("nil signed block")
+	}
 	if err := s.cfg.BeaconDB.SaveBlock(ctx, b); err != nil {
 		return errors.Wrapf(err, "could not save block from slot %d", b.Block().Slot())
 	}
@@ -699,7 +778,18 @@ func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interface
 // pruneAttsFromPool removes these attestations from the attestation pool
 // which are covered by attestations from the received block.
 func (s *Service) pruneAttsFromPool(ctx context.Context, headState state.BeaconState, headBlock interfaces.ReadOnlySignedBeaconBlock) {
-	for _, att := range headBlock.Block().Body().Attestations() {
+	if headBlock == nil || headBlock.IsNil() {
+		return
+	}
+	blk := headBlock.Block()
+	if blk == nil || blk.IsNil() {
+		return
+	}
+	body := blk.Body()
+	if body == nil || body.IsNil() {
+		return
+	}
+	for _, att := range body.Attestations() {
 		if err := s.pruneCoveredAttsFromPool(ctx, headState, att); err != nil {
 			log.WithError(err).Warn("Could not prune attestations covered by a received block's attestation")
 		}
@@ -730,6 +820,13 @@ func (s *Service) pruneCoveredAttsFromPool(ctx context.Context, headState state.
 // Phase0. Even though we can't provide a valid signature for the dummy aggregate, it does not matter because
 // signatures play no part in pruning attestations.
 func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState state.BeaconState, att ethpb.Att) error {
+	if att == nil || att.IsNil() {
+		return errors.New("nil attestation")
+	}
+	data := att.GetData()
+	if data == nil {
+		return errors.New("nil attestation data")
+	}
 	if att.Version() == version.Phase0 {
 		log.Error("Called pruneCoveredElectraAttsFromPool with a Phase0 attestation")
 		return nil
@@ -768,7 +865,7 @@ func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState
 
 		a := &ethpb.AttestationElectra{
 			AggregationBits: ab,
-			Data:            att.GetData(),
+			Data:            data,
 			CommitteeBits:   cb,
 			Signature:       make([]byte, fieldparams.BLSSignatureLength),
 		}
@@ -925,6 +1022,9 @@ func (s *Service) isDataAvailable(
 	ctx context.Context,
 	roBlock consensusblocks.ROBlock,
 ) error {
+	if err := consensusblocks.BeaconBlockIsNil(roBlock); err != nil {
+		return err
+	}
 	block := roBlock.Block()
 	if block == nil {
 		return errors.New("invalid nil beacon block")
@@ -1200,6 +1300,10 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		bid, err := headState.LatestExecutionPayloadBid()
 		if err != nil {
 			log.WithError(err).Debug("could not perform late block tasks: failed to retrieve execution payload bid")
+			return
+		}
+		if bid == nil {
+			log.Debug("could not perform late block tasks: execution payload bid is nil")
 			return
 		}
 		bh := bid.ParentBlockHash()

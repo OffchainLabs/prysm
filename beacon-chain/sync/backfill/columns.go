@@ -178,6 +178,9 @@ type validatingColumnRequest struct {
 }
 
 func (v *validatingColumnRequest) validate(cd blocks.RODataColumn) (err error) {
+	if v == nil {
+		return errors.New("validating column request is nil")
+	}
 	defer func(validity string, start time.Time) {
 		dataColumnSidecarVerifyMs.Observe(float64(time.Since(start).Milliseconds()))
 		if err != nil {
@@ -196,6 +199,9 @@ func (v *validatingColumnRequest) validate(cd blocks.RODataColumn) (err error) {
 // construct the request. It also does cheap sanity checks on the DataColumnSidecar values like
 // ensuring that the commitments line up with the block.
 func (v *validatingColumnRequest) countedValidation(cd blocks.RODataColumn) error {
+	if v == nil || v.columnSync == nil || v.bisector == nil {
+		return errors.New("validating column request is nil")
+	}
 	root := cd.BlockRoot()
 	expected := v.columnSync.blockColumns(root)
 	if expected == nil {

@@ -98,7 +98,16 @@ func (bb *Builder) SetPayloadStatus(resp *MockEngineResp) error {
 
 // block returns the block root.
 func (bb *Builder) block(t testing.TB, b interfaces.ReadOnlySignedBeaconBlock) [32]byte {
-	r, err := b.Block().HashTreeRoot()
+	if b == nil || b.IsNil() {
+		t.Fatal("block is nil")
+		return [32]byte{}
+	}
+	beaconBlock := b.Block()
+	if beaconBlock == nil || beaconBlock.IsNil() {
+		t.Fatal("beacon block is nil")
+		return [32]byte{}
+	}
+	r, err := beaconBlock.HashTreeRoot()
 	require.NoError(t, err)
 	return r
 }

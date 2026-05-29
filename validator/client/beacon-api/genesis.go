@@ -44,6 +44,9 @@ func (c *beaconApiValidatorClient) waitForChainStart(ctx context.Context) (*ethp
 			return nil, errors.New("context canceled")
 		}
 	}
+	if genesis == nil {
+		return nil, errors.New("genesis data is nil")
+	}
 
 	genesisTime, err := strconv.ParseUint(genesis.GenesisTime, 10, 64)
 	if err != nil {

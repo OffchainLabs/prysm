@@ -91,6 +91,9 @@ func (s *Service) ProcessETH1Block(ctx context.Context, blkNum *big.Int) error {
 // ProcessLog is the main method which handles the processing of all
 // logs from the deposit contract on the eth1 chain.
 func (s *Service) ProcessLog(ctx context.Context, depositLog *gethtypes.Log) error {
+	if s == nil {
+		return errors.New("service is nil")
+	}
 	s.processingLock.RLock()
 	defer s.processingLock.RUnlock()
 	// Process logs according to their event signature.
@@ -552,6 +555,9 @@ func (s *Service) currentCountAndTime(ctx context.Context, blockTime uint64) (ui
 }
 
 func (s *Service) processChainStartIfReady(ctx context.Context, blockHash [32]byte, blockNumber *big.Int, blockTime uint64) {
+	if s == nil {
+		return
+	}
 	valCount, genesisTime := s.currentCountAndTime(ctx, blockTime)
 	if valCount == 0 {
 		return

@@ -32,7 +32,7 @@ var BuilderIsActive = e2etypes.Evaluator{
 const maxNonBuilderBlocks = 2
 
 func builderActive(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	client := ethpb.NewNodeClient(conn)
 	beaconClient := ethpb.NewBeaconChainClient(conn)
 	genesis, err := client.GetGenesis(context.Background(), &emptypb.Empty{})

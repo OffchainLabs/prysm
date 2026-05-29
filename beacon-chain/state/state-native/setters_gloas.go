@@ -92,6 +92,9 @@ func (b *BeaconState) SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid)
 	if b.version < version.Gloas {
 		return errNotSupported("SetExecutionPayloadBid", b.version)
 	}
+	if h == nil {
+		return errors.New("execution payload bid is nil")
+	}
 
 	b.lock.Lock()
 	defer b.lock.Unlock()
@@ -287,6 +290,9 @@ func (b *BeaconState) SetExecutionPayloadAvailability(index primitives.Slot, ava
 func (b *BeaconState) UpdateBuilderAtIndex(index primitives.BuilderIndex, builder *ethpb.Builder) error {
 	if b.version < version.Gloas {
 		return errNotSupported("UpdateBuilderAtIndex", b.version)
+	}
+	if builder == nil {
+		return errors.New("builder is nil")
 	}
 
 	b.lock.Lock()

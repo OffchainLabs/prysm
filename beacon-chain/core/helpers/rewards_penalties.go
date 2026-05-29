@@ -29,11 +29,17 @@ var balanceCache = cache.NewEffectiveBalanceCache()
 //	 """
 //	 return Gwei(max(EFFECTIVE_BALANCE_INCREMENT, sum([state.validators[index].effective_balance for index in indices])))
 func TotalBalance(state state.ReadOnlyValidators, indices []primitives.ValidatorIndex) uint64 {
+	if state == nil {
+		return params.BeaconConfig().EffectiveBalanceIncrement
+	}
 	total := uint64(0)
 
 	for _, idx := range indices {
 		val, err := state.ValidatorAtIndexReadOnly(idx)
 		if err != nil {
+			continue
+		}
+		if val == nil {
 			continue
 		}
 		total += val.EffectiveBalance()
@@ -62,6 +68,9 @@ func TotalActiveBalance(ctx context.Context, s state.ReadOnlyBeaconState) (uint6
 	_, span := trace.StartSpan(ctx, "helpers.TotalActiveBalance")
 	defer span.End()
 
+	if s == nil || s.IsNil() {
+		return 0, errors.New("state is nil")
+	}
 	bal, err := balanceCache.Get(s)
 	if err == nil {
 		span.SetAttributes(trace.BoolAttribute("cacheHit", true))
@@ -110,6 +119,9 @@ func UpdateTotalActiveBalanceCache(s state.BeaconState, total uint64) error {
 //	  """
 //	  state.balances[index] += delta
 func IncreaseBalance(state state.BeaconState, idx primitives.ValidatorIndex, delta uint64) error {
+	if state == nil || state.IsNil() {
+		return errors.New("state is nil")
+	}
 	balAtIdx, err := state.BalanceAtIndex(idx)
 	if err != nil {
 		return err
@@ -146,6 +158,9 @@ func IncreaseBalanceWithVal(currBalance, delta uint64) (uint64, error) {
 //	  """
 //	  state.balances[index] = 0 if delta > state.balances[index] else state.balances[index] - delta
 func DecreaseBalance(state state.BeaconState, idx primitives.ValidatorIndex, delta uint64) error {
+	if state == nil || state.IsNil() {
+		return errors.New("state is nil")
+	}
 	balAtIdx, err := state.BalanceAtIndex(idx)
 	if err != nil {
 		return err

@@ -2,6 +2,7 @@ package keygen
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 
@@ -21,6 +22,9 @@ type UnencryptedKeys struct {
 
 // SaveUnencryptedKeysToFile JSON encodes the container and writes to the writer.
 func SaveUnencryptedKeysToFile(w io.Writer, ctnr *UnencryptedKeysContainer) error {
+	if w == nil {
+		return errors.New("writer is nil")
+	}
 	enc, err := json.Marshal(ctnr)
 	if err != nil {
 		log.Fatal(err)

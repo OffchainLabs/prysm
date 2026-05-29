@@ -146,6 +146,9 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err != nil {
 		return err
 	}
+	if bp == nil {
+		return errors.New("precomputed balances are nil")
+	}
 	state, err = precompute.ProcessJustificationAndFinalizationPreCompute(state, bp)
 	if err != nil {
 		return errors.Wrap(err, "could not process justification")

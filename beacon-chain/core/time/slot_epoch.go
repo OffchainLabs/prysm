@@ -19,6 +19,9 @@ import (
 //	  """
 //	  return compute_epoch_at_slot(state.slot)
 func CurrentEpoch(state state.ReadOnlyBeaconState) primitives.Epoch {
+	if state == nil || state.IsNil() {
+		return 0
+	}
 	return slots.ToEpoch(state.Slot())
 }
 
@@ -45,6 +48,9 @@ func PrevEpoch(state state.ReadOnlyBeaconState) primitives.Epoch {
 // NextEpoch returns the next epoch number calculated from
 // the slot number stored in beacon state.
 func NextEpoch(state state.ReadOnlyBeaconState) primitives.Epoch {
+	if state == nil || state.IsNil() {
+		return 0
+	}
 	return slots.ToEpoch(state.Slot()) + 1
 }
 

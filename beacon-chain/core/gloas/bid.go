@@ -183,6 +183,9 @@ func validateBidConsistency(st state.BeaconState, bid interfaces.ROExecutionPayl
 // It validates that the signature was created by the builder specified in the bid
 // using the appropriate domain for the beacon builder.
 func ValidatePayloadBidSignature(st state.ReadOnlyBeaconState, signedBid interfaces.ROSignedExecutionPayloadBid) error {
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 	bid, err := signedBid.Bid()
 	if err != nil {
 		return errors.Wrap(err, "failed to get bid")

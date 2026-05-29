@@ -60,7 +60,7 @@ var ValidatorSyncParticipation = types.Evaluator{
 }
 
 func validatorsAreActive(ec *types.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	client := ethpb.NewBeaconChainClient(conn)
 
 	// Balances actually fluctuate but we just want to check initial balance.
@@ -123,7 +123,7 @@ func validatorsAreActive(ec *types.EvaluationContext, conns ...*grpc.ClientConn)
 
 // validatorsParticipating ensures the validators have an acceptable participation rate.
 func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	client := ethpb.NewBeaconChainClient(conn)
 	validatorRequest := &ethpb.GetValidatorParticipationRequest{}
 	participation, err := client.GetValidatorParticipation(context.Background(), validatorRequest)
@@ -235,7 +235,7 @@ func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientCo
 // validatorsSyncParticipation ensures the validators have an acceptable participation rate for
 // sync committee assignments.
 func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
-	conn := conns[0]
+	conn := firstConn(conns)
 	client := ethpb.NewNodeClient(conn)
 	altairClient := ethpb.NewBeaconChainClient(conn)
 	genesis, err := client.GetGenesis(context.Background(), &emptypb.Empty{})
@@ -256,6 +256,31 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 	if err != nil {
 		return errors.Wrap(err, "failed to get validator participation")
 	}
+	forkEpochs := []primitives.Epoch{
+		params.BeaconConfig().AltairForkEpoch,
+		params.BeaconConfig().BellatrixForkEpoch,
+		params.BeaconConfig().CapellaForkEpoch,
+		params.BeaconConfig().DenebForkEpoch,
+		params.BeaconConfig().ElectraForkEpoch,
+		params.BeaconConfig().FuluForkEpoch,
+	}
+	shouldSkipForkTransitionSlot := func(slot primitives.Slot) (bool, error) {
+		for _, forkEpoch := range forkEpochs {
+			// Skip fork epochs set to far future (not scheduled).
+			if forkEpoch == params.BeaconConfig().FarFutureEpoch {
+				continue
+			}
+			forkSlot, err := slots.EpochStart(forkEpoch)
+			if err != nil {
+				return false, err
+			}
+			// Skip the first two slots of each fork epoch.
+			if slot == forkSlot || slot == forkSlot+1 {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
 	for _, ctr := range blockCtrs.BlockContainers {
 		b, err := syncCompatibleBlockFromCtr(ctr)
 		if err != nil {
@@ -273,9 +298,16 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 			// Skip fork slot.
 			continue
 		}
-		// Skip slots 1-2 at genesis - validators need time to ramp up after chain start
-		// due to doppelganger protection. This is a startup timing issue, not a fork transition issue.
-		if b.Block().Slot() < 3 {
+		// Skip slots 1-4 at genesis - validators need time to ramp up after chain start
+		// due to doppelganger protection, and a block's sync aggregate reflects the previous slot.
+		if b.Block().Slot() < 5 {
+			continue
+		}
+		skipSlot, err := shouldSkipForkTransitionSlot(b.Block().Slot())
+		if err != nil {
+			return err
+		}
+		if skipSlot {
 			continue
 		}
 		expectedParticipation := expectedSyncParticipation
@@ -313,29 +345,9 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		}
 		// Skip evaluation of fork transition slots as sync participation
 		// tends to drop briefly when transitioning between forks.
-		forkEpochs := []primitives.Epoch{
-			params.BeaconConfig().AltairForkEpoch,
-			params.BeaconConfig().BellatrixForkEpoch,
-			params.BeaconConfig().CapellaForkEpoch,
-			params.BeaconConfig().DenebForkEpoch,
-			params.BeaconConfig().ElectraForkEpoch,
-			params.BeaconConfig().FuluForkEpoch,
-		}
-		skipSlot := false
-		for _, forkEpoch := range forkEpochs {
-			// Skip fork epochs set to far future (not scheduled).
-			if forkEpoch == params.BeaconConfig().FarFutureEpoch {
-				continue
-			}
-			forkSlot, err := slots.EpochStart(forkEpoch)
-			if err != nil {
-				return err
-			}
-			// Skip the first two slots of each fork epoch.
-			if b.Block().Slot() == forkSlot || b.Block().Slot() == forkSlot+1 {
-				skipSlot = true
-				break
-			}
+		skipSlot, err := shouldSkipForkTransitionSlot(b.Block().Slot())
+		if err != nil {
+			return err
 		}
 		if skipSlot {
 			continue

@@ -73,19 +73,31 @@ type Store struct {
 
 // Close closes the underlying boltdb database.
 func (s *Store) Close() error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	prometheus.Unregister(createBoltCollector(s.db))
 	return s.db.Close()
 }
 
 func (s *Store) update(fn func(*bolt.Tx) error) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	return s.db.Update(fn)
 }
 func (s *Store) view(fn func(*bolt.Tx) error) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	return s.db.View(fn)
 }
 
 // ClearDB removes any previously stored data at the configured data directory.
 func (s *Store) ClearDB() error {
+	if s == nil {
+		return errors.New("store is nil")
+	}
 	if err := s.Close(); err != nil {
 		return fmt.Errorf("failed to close db: %w", err)
 	}
@@ -97,6 +109,9 @@ func (s *Store) ClearDB() error {
 
 // DatabasePath at which this database writes files.
 func (s *Store) DatabasePath() string {
+	if s == nil {
+		return ""
+	}
 	return s.databasePath
 }
 
@@ -190,6 +205,9 @@ func NewKVStore(ctx context.Context, dirPath string, config *Config) (*Store, er
 func (s *Store) UpdatePublicKeysBuckets(pubKeys [][fieldparams.BLSPubkeyLength]byte) error {
 	return s.update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(historicProposalsBucket)
+		if bucket == nil {
+			return errors.New("historic proposals bucket not found")
+		}
 		for _, pubKey := range pubKeys {
 			if _, err := bucket.CreateBucketIfNotExists(pubKey[:]); err != nil {
 				return errors.Wrap(err, "failed to create proposal history bucket")

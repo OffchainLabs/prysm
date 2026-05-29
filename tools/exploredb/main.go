@@ -254,11 +254,18 @@ func readBucketStat(dbNameWithPath string, statsC chan<- *bucketStat) {
 }
 
 func readStates(ctx context.Context, db *kv.Store, stateC chan<- *modifiedState, keys [][]byte, sizes []uint64) {
+	if keys == nil || sizes == nil || len(sizes) < len(keys) {
+		close(stateC)
+		return
+	}
 	stateMap := make(map[uint64]*modifiedState)
 	for rowCount, key := range keys {
 		st, stateErr := db.State(ctx, bytesutil.ToBytes32(key))
 		if stateErr != nil {
 			log.WithError(stateErr).Errorf("Could not get state for key : %s", hexutils.BytesToHex(key))
+			continue
+		}
+		if st == nil || st.IsNil() {
 			continue
 		}
 		mst := &modifiedState{
@@ -279,10 +286,17 @@ func readStates(ctx context.Context, db *kv.Store, stateC chan<- *modifiedState,
 }
 
 func readStateSummary(ctx context.Context, db *kv.Store, stateSummaryC chan<- *modifiedStateSummary, keys [][]byte, sizes []uint64) {
+	if keys == nil || sizes == nil || len(sizes) < len(keys) {
+		close(stateSummaryC)
+		return
+	}
 	for rowCount, key := range keys {
 		ss, ssErr := db.StateSummary(ctx, bytesutil.ToBytes32(key))
 		if ssErr != nil {
 			log.WithError(ssErr).Errorf("Could not get state summary for key : %s", hexutils.BytesToHex(key))
+			continue
+		}
+		if ss == nil {
 			continue
 		}
 		mst := &modifiedStateSummary{
@@ -414,10 +428,17 @@ func checkValidatorMigration(dbNameWithPath, destDbNameWithPath string) {
 
 	ctx := context.Background()
 	failCount := 0
+	if len(sourceStateKeys) <= 910 {
+		return
+	}
 	for rowCount, key := range sourceStateKeys[910:] {
 		sourceState, stateErr := sourceDB.State(ctx, bytesutil.ToBytes32(key))
 		if stateErr != nil {
 			log.WithError(stateErr).WithField("key", hexutils.BytesToHex(key)).Fatalf("Could not get from source db, the state for key")
+		}
+		if sourceState == nil || sourceState.IsNil() {
+			log.WithField("key", hexutils.BytesToHex(key)).Fatal("Source state is nil")
+			return
 		}
 		destinationState, stateErr := destDB.State(ctx, bytesutil.ToBytes32(key))
 		if stateErr != nil {
@@ -464,10 +485,13 @@ func keysOfBucket(dbNameWithPath string, bucketName []byte, rowLimit uint64) ([]
 	}()
 
 	// get all the keys of the given bucket.
-	var keys [][]byte
-	var sizes []uint64
+	keys := make([][]byte, 0)
+	sizes := make([]uint64, 0)
 	if viewErr := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketName)
+		if b == nil {
+			return nil
+		}
 		c := b.Cursor()
 		count := uint64(0)
 		for k, v := c.First(); k != nil; k, v = c.Next() {

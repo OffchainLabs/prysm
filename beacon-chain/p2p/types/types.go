@@ -68,6 +68,12 @@ func (r *BeaconBlockByRootsReq) SizeSSZ() int {
 // UnmarshalSSZ unmarshals the provided bytes buffer into the
 // block by roots request object.
 func (r *BeaconBlockByRootsReq) UnmarshalSSZ(buf []byte) error {
+	if r == nil {
+		return errors.New("request is nil")
+	}
+	if buf == nil {
+		buf = []byte{}
+	}
 	bufLen := len(buf)
 	maxLength := int(params.BeaconConfig().MaxRequestBlocks * fieldparams.RootLength)
 	if bufLen > maxLength {
@@ -244,6 +250,12 @@ func (r *ExecutionPayloadEnvelopesByRootReq) SizeSSZ() int {
 // UnmarshalSSZ unmarshals the provided bytes buffer into the
 // execution payload envelopes by roots request object.
 func (r *ExecutionPayloadEnvelopesByRootReq) UnmarshalSSZ(buf []byte) error {
+	if r == nil {
+		return errors.New("request is nil")
+	}
+	if buf == nil {
+		buf = []byte{}
+	}
 	bufLen := len(buf)
 	maxLength := int(params.BeaconConfig().MaxRequestPayloads * fieldparams.RootLength)
 	if bufLen > maxLength {
@@ -282,6 +294,9 @@ var dataColumnIdSize int
 
 // UnmarshalSSZ implements ssz.Unmarshaler. It unmarshals the provided bytes buffer into the DataColumnSidecarsByRootReq value.
 func (d *DataColumnsByRootIdentifiers) UnmarshalSSZ(buf []byte) error {
+	if d == nil {
+		return errors.New("data column identifiers are nil")
+	}
 	// Exit early if the buffer is too small.
 	if len(buf) < bytesPerLengthOffset {
 		return nil

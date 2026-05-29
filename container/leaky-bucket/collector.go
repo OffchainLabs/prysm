@@ -56,6 +56,9 @@ func NewCollector(rate float64, capacity int64, period time.Duration, deleteEmpt
 // deleteEmptyBuckets = true, then the goroutine looking for empty buckets,
 // will be stopped.
 func (c *Collector) Free() {
+	if c == nil {
+		return
+	}
 	c.Reset()
 	close(c.quit)
 }
@@ -63,6 +66,9 @@ func (c *Collector) Free() {
 // Reset removes all internal buckets and resets the collector back to as if it
 // was just created.
 func (c *Collector) Reset() {
+	if c == nil {
+		return
+	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -73,11 +79,17 @@ func (c *Collector) Reset() {
 
 // Capacity returns the collector's capacity.
 func (c *Collector) Capacity() int64 {
+	if c == nil {
+		return 0
+	}
 	return c.capacity
 }
 
 // Rate returns the collector's rate.
 func (c *Collector) Rate() float64 {
+	if c == nil {
+		return 0
+	}
 	return c.rate
 }
 
@@ -85,12 +97,18 @@ func (c *Collector) Rate() float64 {
 // with key.  If key is not associated with a bucket internally, it is treated
 // as being empty.
 func (c *Collector) Remaining(key string) int64 {
+	if c == nil {
+		return 0
+	}
 	return c.capacity - c.Count(key)
 }
 
 // Count returns the count of the internal bucket associated with key. If key
 // is not associated with a bucket internally, it is treated as being empty.
 func (c *Collector) Count(key string) int64 {
+	if c == nil {
+		return 0
+	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -106,6 +124,9 @@ func (c *Collector) Count(key string) int64 {
 // associated with key is empty. If key is not associated with a bucket
 // internally, it is treated as being empty.
 func (c *Collector) TillEmpty(key string) time.Duration {
+	if c == nil {
+		return 0
+	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -120,6 +141,9 @@ func (c *Collector) TillEmpty(key string) time.Duration {
 // Remove deletes the internal bucket associated with key. If key is not
 // associated with a bucket internally, nothing is done.
 func (c *Collector) Remove(key string) {
+	if c == nil {
+		return
+	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -139,6 +163,9 @@ func (c *Collector) Remove(key string) {
 // If key is not associated with a bucket internally, a new bucket is created
 // and amount is added to it.
 func (c *Collector) Add(key string, amount int64) int64 {
+	if c == nil {
+		return 0
+	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -168,6 +195,9 @@ func (c *Collector) Add(key string, amount int64) int64 {
 
 // Prune removes all empty buckets in the collector.
 func (c *Collector) Prune() {
+	if c == nil {
+		return
+	}
 	c.lock.Lock()
 	for c.heap.Peak() != nil {
 		b := c.heap.Peak()
@@ -187,6 +217,9 @@ func (c *Collector) Prune() {
 // PeriodicPrune runs a concurrent goroutine that calls Prune() at the given
 // time interval.
 func (c *Collector) PeriodicPrune() {
+	if c == nil {
+		return
+	}
 	go func() {
 		ticker := time.NewTicker(c.period)
 		for {

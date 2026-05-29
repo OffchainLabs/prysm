@@ -188,11 +188,15 @@ func matchingAtts(atts []ethpbalpha.Att, slot primitives.Slot, attDataRoot []byt
 	postElectra := slots.ToForkVersion(slot) >= version.Electra
 	result := make([]ethpbalpha.Att, 0)
 	for _, att := range atts {
-		if att.GetData().Slot != slot {
+		data := att.GetData()
+		if data == nil {
+			continue
+		}
+		if data.Slot != slot {
 			continue
 		}
 
-		root, err := att.GetData().HashTreeRoot()
+		root, err := data.HashTreeRoot()
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get attestation data root")
 		}
@@ -640,6 +644,14 @@ func (s *Server) GetAttestationData(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 		return
 	}
+	if attestationData == nil {
+		httputil.HandleError(w, "Could not get attestation data", http.StatusInternalServerError)
+		return
+	}
+	if attestationData.Source == nil || attestationData.Target == nil {
+		httputil.HandleError(w, "Attestation data has nil source or target", http.StatusInternalServerError)
+		return
+	}
 
 	if httputil.RespondWithSsz(r) {
 		data, err := attestationData.MarshalSSZ()
@@ -992,6 +1004,10 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		shared.WriteStateFetchError(w, errors.New("nil state"))
+		return
+	}
 
 	dutyEpoch := requestedEpoch
 	if nextEpochLookahead {
@@ -1108,7 +1124,7 @@ func (s *Server) GetProposerDutiesV2(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var dependentRoot []byte
-	if dutiesEpoch == 0 || (dutiesEpoch == 1 && st.Version() >= version.Fulu) {
+	if dutiesEpoch == 0 || (dutiesEpoch == 1 && isFuluState(st)) {
 		root, err := s.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
 			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
@@ -1129,6 +1145,13 @@ func (s *Server) GetProposerDutiesV2(w http.ResponseWriter, r *http.Request) {
 		Data:                duties,
 		ExecutionOptimistic: isOptimistic,
 	})
+}
+
+func isFuluState(st state.BeaconState) bool {
+	if st == nil || st.IsNil() {
+		return false
+	}
+	return st.Version() >= version.Fulu
 }
 
 // GetSyncCommitteeDuties provides a set of sync committee duties for a particular epoch.
@@ -1372,6 +1395,10 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
+		return
+	}
 
 	// Build a set of requested validators (also deduplicates per spec's uniqueItems requirement).
 	// Validate that each index exists in the validator registry.
@@ -1490,6 +1517,10 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if headSt == nil || headSt.IsNil() {
+		httputil.HandleError(w, "Head state not found", http.StatusNotFound)
+		return
+	}
 	currEpoch := slots.ToEpoch(headSt.Slot())
 	if requestedEpoch > currEpoch {
 		httputil.HandleError(w, "Requested epoch cannot be in the future", http.StatusBadRequest)
@@ -1521,6 +1552,10 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 		st, err = s.Stater.StateBySlot(ctx, epochEnd)
 		if err != nil {
 			shared.WriteStateFetchError(w, err)
+			return
+		}
+		if st == nil || st.IsNil() {
+			httputil.HandleError(w, "State not found", http.StatusNotFound)
 			return
 		}
 		participation, err = st.CurrentEpochParticipation()

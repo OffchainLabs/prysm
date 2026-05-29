@@ -39,6 +39,7 @@ go_library(
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//container/multi-value-slice:go_default_library",
+        "//container/trie:go_default_library",
         "//crypto/hash:go_default_library",
         "//crypto/hash/htr:go_default_library",
         "//encoding/bytesutil:go_default_library",

@@ -157,6 +157,9 @@ func (c *CanonicalHistory) getState(ctx context.Context, blockRoot [32]byte) (st
 func (c *CanonicalHistory) ancestorChain(ctx context.Context, tail interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, []interfaces.ReadOnlySignedBeaconBlock, error) {
 	ctx, span := trace.StartSpan(ctx, "canonicalChainer.ancestorChain")
 	defer span.End()
+	if tail == nil || tail.IsNil() {
+		return nil, nil, errors.New("tail block cannot be nil")
+	}
 	chain := make([]interfaces.ReadOnlySignedBeaconBlock, 0)
 	for {
 		if err := ctx.Err(); err != nil {
@@ -193,6 +196,9 @@ func (c *CanonicalHistory) ancestorChain(ctx context.Context, tail interfaces.Re
 		if blocks.BeaconBlockIsNil(parent) != nil {
 			msg := fmt.Sprintf("unable to retrieve parent of block at slot=%d by root=%#x", b.Slot(), b.ParentRoot())
 			return nil, nil, errors.Wrap(db.ErrNotFound, msg)
+		}
+		if parent == nil || parent.IsNil() {
+			return nil, nil, errors.New("parent block is nil")
 		}
 		chain = append(chain, tail)
 		tail = parent

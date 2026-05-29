@@ -60,6 +60,9 @@ func ValidateNilSyncContribution(s *ethpb.SignedContributionAndProof) error {
 //	aggregate_pubkey = bls.AggregatePKs(pubkeys)
 //	return SyncCommittee(pubkeys=pubkeys, aggregate_pubkey=aggregate_pubkey)
 func NextSyncCommittee(ctx context.Context, s state.BeaconState) (*ethpb.SyncCommittee, error) {
+	if s == nil || s.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	indices, err := NextSyncCommitteeIndices(ctx, s)
 	if err != nil {
 		return nil, err
@@ -184,6 +187,9 @@ func NextSyncCommitteeIndices(ctx context.Context, s state.BeaconState) ([]primi
 //	i = subcommittee_index * sync_subcommittee_size
 //	return sync_committee.pubkeys[i:i + sync_subcommittee_size]
 func SyncSubCommitteePubkeys(syncCommittee *ethpb.SyncCommittee, subComIdx primitives.CommitteeIndex) ([][]byte, error) {
+	if syncCommittee == nil {
+		return nil, errors.New("nil sync committee")
+	}
 	cfg := params.BeaconConfig()
 	subCommSize := cfg.SyncCommitteeSize / cfg.SyncCommitteeSubnetCount
 	i := uint64(subComIdx) * subCommSize

@@ -35,54 +35,93 @@ func NewSignedBeaconBlock(i any) (interfaces.SignedBeaconBlock, error) {
 	case nil:
 		return nil, ErrNilObject
 	case *eth.GenericSignedBeaconBlock_Phase0:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoPhase0(b.Phase0)
 	case *eth.SignedBeaconBlock:
 		return initSignedBlockFromProtoPhase0(b)
 	case *eth.GenericSignedBeaconBlock_Altair:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoAltair(b.Altair)
 	case *eth.SignedBeaconBlockAltair:
 		return initSignedBlockFromProtoAltair(b)
 	case *eth.GenericSignedBeaconBlock_Bellatrix:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoBellatrix(b.Bellatrix)
 	case *eth.SignedBeaconBlockBellatrix:
 		return initSignedBlockFromProtoBellatrix(b)
 	case *eth.GenericSignedBeaconBlock_BlindedBellatrix:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initBlindedSignedBlockFromProtoBellatrix(b.BlindedBellatrix)
 	case *eth.SignedBlindedBeaconBlockBellatrix:
 		return initBlindedSignedBlockFromProtoBellatrix(b)
 	case *eth.GenericSignedBeaconBlock_Capella:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoCapella(b.Capella)
 	case *eth.SignedBeaconBlockCapella:
 		return initSignedBlockFromProtoCapella(b)
 	case *eth.GenericSignedBeaconBlock_BlindedCapella:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initBlindedSignedBlockFromProtoCapella(b.BlindedCapella)
 	case *eth.SignedBlindedBeaconBlockCapella:
 		return initBlindedSignedBlockFromProtoCapella(b)
 	case *eth.GenericSignedBeaconBlock_Deneb:
+		if b == nil || b.Deneb == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoDeneb(b.Deneb.Block)
 	case *eth.SignedBeaconBlockDeneb:
 		return initSignedBlockFromProtoDeneb(b)
 	case *eth.SignedBlindedBeaconBlockDeneb:
 		return initBlindedSignedBlockFromProtoDeneb(b)
 	case *eth.GenericSignedBeaconBlock_BlindedDeneb:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initBlindedSignedBlockFromProtoDeneb(b.BlindedDeneb)
 	case *eth.GenericSignedBeaconBlock_Electra:
+		if b == nil || b.Electra == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoElectra(b.Electra.Block)
 	case *eth.SignedBeaconBlockElectra:
 		return initSignedBlockFromProtoElectra(b)
 	case *eth.SignedBlindedBeaconBlockElectra:
 		return initBlindedSignedBlockFromProtoElectra(b)
 	case *eth.GenericSignedBeaconBlock_BlindedElectra:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initBlindedSignedBlockFromProtoElectra(b.BlindedElectra)
 	case *eth.GenericSignedBeaconBlock_Fulu:
+		if b == nil || b.Fulu == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoFulu(b.Fulu.Block)
 	case *eth.SignedBeaconBlockFulu:
 		return initSignedBlockFromProtoFulu(b)
 	case *eth.SignedBlindedBeaconBlockFulu:
 		return initBlindedSignedBlockFromProtoFulu(b)
 	case *eth.GenericSignedBeaconBlock_BlindedFulu:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initBlindedSignedBlockFromProtoFulu(b.BlindedFulu)
 	case *eth.GenericSignedBeaconBlock_Gloas:
+		if b == nil {
+			return nil, ErrNilObject
+		}
 		return initSignedBlockFromProtoGloas(b.Gloas)
 	case *eth.SignedBeaconBlockGloas:
 		return initSignedBlockFromProtoGloas(b)
@@ -296,6 +335,9 @@ func getWrappedPayload(payload any) (wrappedPayload interfaces.ExecutionData, wr
 }
 
 func checkPayloadAgainstHeader(wrappedPayload, payloadHeader interfaces.ExecutionData) error {
+	if payloadHeader == nil {
+		return errors.New("execution payload header is nil")
+	}
 	empty, err := IsEmptyExecutionData(wrappedPayload)
 	if err != nil {
 		return err
@@ -657,31 +699,34 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 // BeaconBlockContainerToSignedBeaconBlock converts BeaconBlockContainer (API response) to a SignedBeaconBlock.
 // This is particularly useful for using the values from API calls.
 func BeaconBlockContainerToSignedBeaconBlock(obj *eth.BeaconBlockContainer) (interfaces.ReadOnlySignedBeaconBlock, error) {
-	switch obj.Block.(type) {
+	if obj == nil {
+		return nil, ErrNilObject
+	}
+	switch b := obj.Block.(type) {
 	case *eth.BeaconBlockContainer_BlindedFuluBlock:
-		return NewSignedBeaconBlock(obj.GetBlindedFuluBlock())
+		return NewSignedBeaconBlock(b.BlindedFuluBlock)
 	case *eth.BeaconBlockContainer_FuluBlock:
-		return NewSignedBeaconBlock(obj.GetFuluBlock())
+		return NewSignedBeaconBlock(b.FuluBlock)
 	case *eth.BeaconBlockContainer_BlindedElectraBlock:
-		return NewSignedBeaconBlock(obj.GetBlindedElectraBlock())
+		return NewSignedBeaconBlock(b.BlindedElectraBlock)
 	case *eth.BeaconBlockContainer_ElectraBlock:
-		return NewSignedBeaconBlock(obj.GetElectraBlock())
+		return NewSignedBeaconBlock(b.ElectraBlock)
 	case *eth.BeaconBlockContainer_BlindedDenebBlock:
-		return NewSignedBeaconBlock(obj.GetBlindedDenebBlock())
+		return NewSignedBeaconBlock(b.BlindedDenebBlock)
 	case *eth.BeaconBlockContainer_DenebBlock:
-		return NewSignedBeaconBlock(obj.GetDenebBlock())
+		return NewSignedBeaconBlock(b.DenebBlock)
 	case *eth.BeaconBlockContainer_BlindedCapellaBlock:
-		return NewSignedBeaconBlock(obj.GetBlindedCapellaBlock())
+		return NewSignedBeaconBlock(b.BlindedCapellaBlock)
 	case *eth.BeaconBlockContainer_CapellaBlock:
-		return NewSignedBeaconBlock(obj.GetCapellaBlock())
+		return NewSignedBeaconBlock(b.CapellaBlock)
 	case *eth.BeaconBlockContainer_BlindedBellatrixBlock:
-		return NewSignedBeaconBlock(obj.GetBlindedBellatrixBlock())
+		return NewSignedBeaconBlock(b.BlindedBellatrixBlock)
 	case *eth.BeaconBlockContainer_BellatrixBlock:
-		return NewSignedBeaconBlock(obj.GetBellatrixBlock())
+		return NewSignedBeaconBlock(b.BellatrixBlock)
 	case *eth.BeaconBlockContainer_AltairBlock:
-		return NewSignedBeaconBlock(obj.GetAltairBlock())
+		return NewSignedBeaconBlock(b.AltairBlock)
 	case *eth.BeaconBlockContainer_Phase0Block:
-		return NewSignedBeaconBlock(obj.GetPhase0Block())
+		return NewSignedBeaconBlock(b.Phase0Block)
 	default:
 		return nil, errors.New("container block type not recognized")
 	}

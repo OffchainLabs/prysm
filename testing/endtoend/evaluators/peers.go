@@ -20,7 +20,7 @@ var PeersCheck = types.Evaluator{
 }
 
 func peersTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
-	debugClient := eth.NewDebugClient(conns[0])
+	debugClient := eth.NewDebugClient(firstConn(conns))
 
 	peerResponses, err := debugClient.ListPeers(context.Background(), &emptypb.Empty{})
 	if err != nil {

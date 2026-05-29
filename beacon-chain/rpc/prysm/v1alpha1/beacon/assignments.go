@@ -61,7 +61,11 @@ func (bs *Server) ListValidatorAssignments(
 	if err != nil {
 		return nil, err
 	}
-	requestedState, err := bs.ReplayerBuilder.ReplayerForSlot(startSlot).ReplayBlocks(ctx)
+	replayer := bs.ReplayerBuilder.ReplayerForSlot(startSlot)
+	if replayer == nil {
+		return nil, status.Error(codes.Internal, "Replayer is nil")
+	}
+	requestedState, err := replayer.ReplayBlocks(ctx)
 	if err != nil {
 		msg := fmt.Sprintf("could not replay all blocks from the closest stored state (at slot %d) "+
 			"to the requested epoch (%d) - %v", startSlot, requestedEpoch, err)
@@ -123,6 +127,9 @@ func (bs *Server) ListValidatorAssignments(
 				index, requestedState.NumValidators())
 		}
 		a := assignments[index]
+		if a == nil {
+			return nil, status.Errorf(codes.Internal, "Could not retrieve committee assignment for validator index %d", index)
+		}
 		pubkey := requestedState.PubkeyAtIndex(index)
 		assign := &ethpb.ValidatorAssignments_CommitteeAssignment{
 			BeaconCommittees: a.Committee,

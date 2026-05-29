@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -17,6 +18,9 @@ const backupsDirectoryName = "backups"
 // Backup the database to the datadir backup directory.
 // Example for backup at slot 345: $DATADIR/backups/prysm_beacondb_at_slot_0000345.backup
 func (s *Store) Backup(ctx context.Context, outputDir string, permissionOverride bool) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.Backup")
 	defer span.End()
 

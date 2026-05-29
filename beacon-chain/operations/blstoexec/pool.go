@@ -113,6 +113,9 @@ func (p *Pool) BLSToExecChangesForInclusion(st state.ReadOnlyBeaconState) ([]*et
 
 // InsertBLSToExecChange inserts an object into the pool.
 func (p *Pool) InsertBLSToExecChange(change *ethpb.SignedBLSToExecutionChange) {
+	if change == nil || change.Message == nil {
+		return
+	}
 	p.lock.Lock()
 	defer p.lock.Unlock()
 

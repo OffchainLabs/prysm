@@ -26,10 +26,16 @@ var errBlockTimeTooLate = errors.New("provided time is later than the current et
 func (s *Service) BlockExists(ctx context.Context, hash common.Hash) (bool, *big.Int, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.BlockExists")
 	defer span.End()
+	if s == nil || s.headerCache == nil {
+		return false, nil, errors.New("service is nil")
+	}
 
 	if exists, hdrInfo, err := s.headerCache.HeaderInfoByHash(hash); exists || err != nil {
 		if err != nil {
 			return false, nil, err
+		}
+		if hdrInfo == nil {
+			return false, nil, errors.New("nil header info")
 		}
 		span.SetAttributes(trace.BoolAttribute("blockCacheHit", true))
 		return true, hdrInfo.Number, nil
@@ -51,10 +57,16 @@ func (s *Service) BlockExists(ctx context.Context, hash common.Hash) (bool, *big
 func (s *Service) BlockHashByHeight(ctx context.Context, height *big.Int) (common.Hash, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.BlockHashByHeight")
 	defer span.End()
+	if s == nil || s.headerCache == nil {
+		return [32]byte{}, errors.New("service is nil")
+	}
 
 	if exists, hInfo, err := s.headerCache.HeaderInfoByHeight(height); exists || err != nil {
 		if err != nil {
 			return [32]byte{}, err
+		}
+		if hInfo == nil {
+			return [32]byte{}, errors.New("nil header info")
 		}
 		span.SetAttributes(trace.BoolAttribute("headerCacheHit", true))
 		return hInfo.Hash, nil
@@ -81,6 +93,9 @@ func (s *Service) BlockHashByHeight(ctx context.Context, height *big.Int) (commo
 func (s *Service) BlockTimeByHeight(ctx context.Context, height *big.Int) (uint64, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.BlockTimeByHeight")
 	defer span.End()
+	if s == nil {
+		return 0, errors.New("service is nil")
+	}
 	if s.rpcClient == nil {
 		err := errors.New("nil rpc client")
 		tracing.AnnotateError(span, err)
@@ -100,6 +115,9 @@ func (s *Service) BlockTimeByHeight(ctx context.Context, height *big.Int) (uint6
 func (s *Service) BlockByTimestamp(ctx context.Context, time uint64) (*types.HeaderInfo, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.BlockByTimestamp")
 	defer span.End()
+	if s == nil {
+		return nil, errors.New("service is nil")
+	}
 
 	s.latestEth1DataLock.RLock()
 	latestBlkHeight := s.latestEth1Data.BlockHeight
@@ -181,6 +199,9 @@ func (s *Service) findMaxTargetEth1Block(ctx context.Context, upperBoundBlk *big
 // Performs a search to find a target eth1 block which is just earlier than or equal to the
 // target time. This method is used when head.time < targetTime
 func (s *Service) findMinTargetEth1Block(ctx context.Context, lowerBoundBlk *big.Int, targetTime uint64) (*types.HeaderInfo, error) {
+	if s == nil {
+		return nil, errors.New("service is nil")
+	}
 	for bn := lowerBoundBlk; ; bn = new(big.Int).Add(bn, big.NewInt(1)) {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -201,6 +222,9 @@ func (s *Service) findMinTargetEth1Block(ctx context.Context, lowerBoundBlk *big
 }
 
 func (s *Service) retrieveHeaderInfo(ctx context.Context, bNum uint64) (*types.HeaderInfo, error) {
+	if s == nil || s.headerCache == nil {
+		return nil, errors.New("service is nil")
+	}
 	bn := new(big.Int).SetUint64(bNum)
 	exists, info, err := s.headerCache.HeaderInfoByHeight(bn)
 	if err != nil {
@@ -218,6 +242,9 @@ func (s *Service) retrieveHeaderInfo(ctx context.Context, bNum uint64) (*types.H
 			return nil, err
 		}
 		info = hdr
+	}
+	if info == nil {
+		return nil, errors.New("nil header info")
 	}
 	return info, nil
 }

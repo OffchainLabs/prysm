@@ -85,6 +85,9 @@ func buildGenesisBeaconState(genesisTime uint64, preState state.BeaconState, eth
 	if eth1Data == nil {
 		return nil, errors.New("no eth1data provided for genesis state")
 	}
+	if eth1Data.BlockHash == nil {
+		return nil, errors.New("eth1 data block hash is nil")
+	}
 
 	randaoMixes := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
 	for i := range randaoMixes {
@@ -322,11 +325,17 @@ func GenerateFullBlockAltair(
 	slot primitives.Slot,
 ) (*ethpb.SignedBeaconBlockAltair, error) {
 	ctx := context.Background()
+	if bState == nil || bState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	currentSlot := bState.Slot()
 	if currentSlot > slot {
 		return nil, fmt.Errorf("current slot in state is larger than given slot. %d > %d", currentSlot, slot)
 	}
 	bState = bState.Copy()
+	if bState == nil || bState.IsNil() {
+		return nil, errors.New("beacon state copy is nil")
+	}
 
 	if conf == nil {
 		conf = &BlockGenConfig{}
@@ -379,10 +388,16 @@ func GenerateFullBlockAltair(
 	numToGen = conf.NumDeposits
 	var newDeposits []*ethpb.Deposit
 	eth1Data := bState.Eth1Data()
+	if eth1Data == nil {
+		return nil, errors.New("eth1 data is nil")
+	}
 	if numToGen > 0 {
 		newDeposits, eth1Data, err = generateDepositsAndEth1Data(bState, numToGen)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed generating %d deposits:", numToGen)
+		}
+		if eth1Data == nil {
+			return nil, errors.New("eth1 data is nil")
 		}
 	}
 
@@ -396,6 +411,9 @@ func GenerateFullBlockAltair(
 	}
 
 	newHeader := bState.LatestBlockHeader()
+	if newHeader == nil {
+		return nil, errors.New("latest block header is nil")
+	}
 	prevStateRoot, err := bState.HashTreeRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -468,6 +486,9 @@ func GenerateFullBlockAltair(
 	signature, err := BlockSignature(bState, block, privs)
 	if err != nil {
 		return nil, err
+	}
+	if signature == nil {
+		return nil, errors.New("block signature is nil")
 	}
 
 	return &ethpb.SignedBeaconBlockAltair{Block: block, Signature: signature.Marshal()}, nil

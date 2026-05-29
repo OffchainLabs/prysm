@@ -58,6 +58,9 @@ func ProcessVoluntaryExits(
 
 	span.SetAttributes(trace.Int64Attribute("count", int64(len(exits))))
 
+	if beaconState == nil {
+		return nil, errors.New("nil state")
+	}
 	// Avoid calculating the epoch churn if no exits exist.
 	if len(exits) == 0 {
 		return beaconState, nil
@@ -89,6 +92,9 @@ func ProcessVoluntaryExits(
 		beaconState, err = v.InitiateValidatorExit(ctx, beaconState, exit.Exit.ValidatorIndex, exitInfo)
 		if err != nil && !errors.Is(err, v.ErrValidatorAlreadyExited) {
 			return nil, err
+		}
+		if beaconState == nil {
+			return nil, errors.New("nil state after initiating validator exit")
 		}
 	}
 	return beaconState, nil
@@ -125,10 +131,16 @@ func VerifyExitAndSignature(
 	if signed == nil || signed.Exit == nil {
 		return errors.New("nil exit")
 	}
+	if st == nil {
+		return errors.New("nil state")
+	}
 
 	// [New in Gloas:EIP7732] Builder exits are verified separately.
 	if st.Version() >= version.Gloas && signed.Exit.ValidatorIndex.IsBuilderIndex() {
 		return verifyBuilderExitAndSignature(st, signed)
+	}
+	if validator == nil {
+		return errors.New("nil validator")
 	}
 
 	fork := st.Fork()

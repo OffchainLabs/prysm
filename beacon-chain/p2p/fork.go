@@ -28,6 +28,9 @@ const (
 // ForkDigest returns the current fork digest of
 // the node according to the local clock.
 func (s *Service) currentForkDigest() ([4]byte, error) {
+	if s == nil {
+		return [4]byte{}, errors.New("service is nil")
+	}
 	if !s.isInitialized() {
 		return [4]byte{}, errors.New("state is not initialized")
 	}

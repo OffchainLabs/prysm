@@ -60,6 +60,9 @@ func NewKeymanager(
 func (km *Keymanager) RecoverAccountsFromMnemonic(
 	ctx context.Context, mnemonic, mnemonicLanguage, mnemonicPassphrase string, numAccounts int,
 ) error {
+	if km == nil || km.localKM == nil {
+		return errors.New("local keymanager is not initialized")
+	}
 	seed, err := seedFromMnemonic(mnemonic, mnemonicLanguage, mnemonicPassphrase)
 	if err != nil {
 		return errors.Wrap(err, "could not initialize new wallet seed file")
@@ -85,26 +88,44 @@ func (km *Keymanager) RecoverAccountsFromMnemonic(
 func (km *Keymanager) ExtractKeystores(
 	ctx context.Context, publicKeys []bls.PublicKey, password string,
 ) ([]*keymanager.Keystore, error) {
+	if km == nil || km.localKM == nil {
+		return nil, errors.New("local keymanager is not initialized")
+	}
 	return km.localKM.ExtractKeystores(ctx, publicKeys, password)
 }
 
 // ValidatingAccountNames for the derived keymanager.
 func (km *Keymanager) ValidatingAccountNames(_ context.Context) ([]string, error) {
+	if km == nil || km.localKM == nil {
+		return nil, errors.New("local keymanager is not initialized")
+	}
 	return km.localKM.ValidatingAccountNames()
 }
 
 // Sign signs a message using a validator key.
 func (km *Keymanager) Sign(ctx context.Context, req *validatorpb.SignRequest) (bls.Signature, error) {
+	if req == nil || len(req.PublicKey) == 0 {
+		return nil, errors.New("nil public key")
+	}
+	if km == nil || km.localKM == nil {
+		return nil, errors.New("no signing key found")
+	}
 	return km.localKM.Sign(ctx, req)
 }
 
 // FetchValidatingPublicKeys fetches the list of validating public keys from the keymanager.
 func (km *Keymanager) FetchValidatingPublicKeys(ctx context.Context) ([][fieldparams.BLSPubkeyLength]byte, error) {
+	if km == nil || km.localKM == nil {
+		return nil, errors.New("local keymanager is not initialized")
+	}
 	return km.localKM.FetchValidatingPublicKeys(ctx)
 }
 
 // FetchValidatingPrivateKeys fetches the list of validating private keys from the keymanager.
 func (km *Keymanager) FetchValidatingPrivateKeys(ctx context.Context) ([][32]byte, error) {
+	if km == nil || km.localKM == nil {
+		return nil, errors.New("local keymanager is not initialized")
+	}
 	return km.localKM.FetchValidatingPrivateKeys(ctx)
 }
 
@@ -112,6 +133,9 @@ func (km *Keymanager) FetchValidatingPrivateKeys(ctx context.Context) ([][32]byt
 func (km *Keymanager) ImportKeystores(
 	ctx context.Context, keystores []*keymanager.Keystore, passwords []string,
 ) ([]*keymanager.KeyStatus, error) {
+	if km == nil || km.localKM == nil {
+		return nil, errors.New("local keymanager is not initialized")
+	}
 	return km.localKM.ImportKeystores(ctx, keystores, passwords)
 }
 
@@ -119,6 +143,9 @@ func (km *Keymanager) ImportKeystores(
 func (km *Keymanager) DeleteKeystores(
 	ctx context.Context, publicKeys [][]byte,
 ) ([]*keymanager.KeyStatus, error) {
+	if km == nil || km.localKM == nil {
+		return nil, errors.New("local keymanager is not initialized")
+	}
 	return km.localKM.DeleteKeystores(ctx, publicKeys)
 }
 
@@ -126,6 +153,9 @@ func (km *Keymanager) DeleteKeystores(
 // to listen for public key changes at runtime, such as when new validator accounts
 // are imported into the keymanager while the validator process is running.
 func (km *Keymanager) SubscribeAccountChanges(pubKeysChan chan [][fieldparams.BLSPubkeyLength]byte) event.Subscription {
+	if km == nil || km.localKM == nil {
+		return nil
+	}
 	return km.localKM.SubscribeAccountChanges(pubKeysChan)
 }
 

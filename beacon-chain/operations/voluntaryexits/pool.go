@@ -124,6 +124,9 @@ func (p *Pool) ExitsForInclusion(st state.ReadOnlyBeaconState, slot types.Slot) 
 
 // InsertVoluntaryExit into the pool.
 func (p *Pool) InsertVoluntaryExit(exit *ethpb.SignedVoluntaryExit) {
+	if exit == nil || exit.Exit == nil {
+		return
+	}
 	p.lock.Lock()
 	defer p.lock.Unlock()
 

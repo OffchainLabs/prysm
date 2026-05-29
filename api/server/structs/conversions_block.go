@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
@@ -210,6 +211,9 @@ func (b *BeaconBlock) ToConsensus() (*eth.BeaconBlock, error) {
 }
 
 func BeaconBlockHeaderFromConsensus(h *eth.BeaconBlockHeader) *BeaconBlockHeader {
+	if h == nil {
+		return nil
+	}
 	return &BeaconBlockHeader{
 		Slot:          fmt.Sprintf("%d", h.Slot),
 		ProposerIndex: fmt.Sprintf("%d", h.ProposerIndex),
@@ -239,6 +243,9 @@ func BeaconBlockFromConsensus(b *eth.BeaconBlock) *BeaconBlock {
 }
 
 func SignedBeaconBlockMessageJsoner(block interfaces.ReadOnlySignedBeaconBlock) (SignedMessageJsoner, error) {
+	if block == nil || block.IsNil() {
+		return nil, blocks.ErrNilSignedBeaconBlock
+	}
 	pb, err := block.Proto()
 	if err != nil {
 		return nil, err
@@ -2977,6 +2984,9 @@ func PayloadAttestationMessageFromConsensus(m *eth.PayloadAttestationMessage) *P
 }
 
 func PayloadAttestationDataFromConsensus(d *eth.PayloadAttestationData) *PayloadAttestationData {
+	if d == nil {
+		return nil
+	}
 	return &PayloadAttestationData{
 		BeaconBlockRoot:   hexutil.Encode(d.BeaconBlockRoot),
 		Slot:              fmt.Sprintf("%d", d.Slot),

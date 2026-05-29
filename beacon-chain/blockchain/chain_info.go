@@ -159,6 +159,9 @@ func (s *Service) CurrentJustifiedCheckpt() *ethpb.Checkpoint {
 
 // HeadSlot returns the slot of the head of the chain.
 func (s *Service) HeadSlot() primitives.Slot {
+	if s == nil {
+		return 0
+	}
 	s.headLock.RLock()
 	defer s.headLock.RUnlock()
 
@@ -171,6 +174,9 @@ func (s *Service) HeadSlot() primitives.Slot {
 
 // HeadRoot returns the root of the head of the chain.
 func (s *Service) HeadRoot(ctx context.Context) ([]byte, error) {
+	if s == nil || s.cfg == nil || s.cfg.BeaconDB == nil {
+		return nil, errors.New("service is nil")
+	}
 	s.headLock.RLock()
 	defer s.headLock.RUnlock()
 
@@ -186,7 +192,11 @@ func (s *Service) HeadRoot(ctx context.Context) ([]byte, error) {
 		return params.BeaconConfig().ZeroHash[:], nil
 	}
 
-	r, err := b.Block().HashTreeRoot()
+	block := b.Block()
+	if block == nil || block.IsNil() {
+		return nil, consensus_blocks.ErrNilBeaconBlock
+	}
+	r, err := block.HashTreeRoot()
 	if err != nil {
 		return nil, err
 	}
@@ -274,6 +284,9 @@ func (s *Service) HeadGenesisValidatorsRoot() [32]byte {
 
 // HeadETH1Data returns the eth1data of the current head state.
 func (s *Service) HeadETH1Data() *ethpb.Eth1Data {
+	if s == nil {
+		return &ethpb.Eth1Data{}
+	}
 	s.headLock.RLock()
 	defer s.headLock.RUnlock()
 
@@ -316,6 +329,9 @@ func (s *Service) CurrentFork() *ethpb.Fork {
 
 // IsCanonical returns true if the input block root is part of the canonical chain.
 func (s *Service) IsCanonical(ctx context.Context, blockRoot [32]byte) (bool, error) {
+	if s == nil || s.cfg == nil || s.cfg.ForkChoiceStore == nil || s.cfg.BeaconDB == nil {
+		return false, errors.New("service is nil")
+	}
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	// If the block has not been finalized, check fork choice store to see if the block is canonical
@@ -353,6 +369,9 @@ func (s *Service) HeadValidatorIndexToPublicKey(_ context.Context, index primiti
 
 // ForkChoicer returns the forkchoice interface.
 func (s *Service) ForkChoicer() f.ForkChoicer {
+	if s == nil || s.cfg == nil || s.cfg.ForkChoiceStore == nil {
+		return nil
+	}
 	return s.cfg.ForkChoiceStore
 }
 
@@ -551,6 +570,9 @@ func (s *Service) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32
 func (s *Service) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ancestor")
 	defer span.End()
+	if s == nil || s.cfg == nil || s.cfg.ForkChoiceStore == nil {
+		return nil, errors.New("service is nil")
+	}
 
 	r := bytesutil.ToBytes32(root)
 	// Get ancestor root from fork choice store instead of recursively looking up blocks in DB.
@@ -580,6 +602,9 @@ func (s *Service) recoverStateSummary(ctx context.Context, blockRoot [32]byte) (
 		b, err := s.cfg.BeaconDB.Block(ctx, blockRoot)
 		if err != nil {
 			return nil, err
+		}
+		if b == nil || b.IsNil() {
+			return nil, errBlockDoesNotExist
 		}
 		summary := &ethpb.StateSummary{Slot: b.Block().Slot(), Root: blockRoot[:]}
 		if err := s.cfg.BeaconDB.SaveStateSummary(ctx, summary); err != nil {

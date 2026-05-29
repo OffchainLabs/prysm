@@ -81,6 +81,9 @@ func NewStore(ctx context.Context, config *StoreConfig) *Store {
 // Important: it is assumed that store mutex is locked when calling this method.
 func (s *Store) PeerData(pid peer.ID) (*PeerData, bool) {
 	peerData, ok := s.peers[pid]
+	if !ok || peerData == nil {
+		return nil, false
+	}
 	return peerData, ok
 }
 
@@ -88,7 +91,7 @@ func (s *Store) PeerData(pid peer.ID) (*PeerData, bool) {
 // If no data has been associated yet, newly created and associated data object is returned.
 // Important: it is assumed that store mutex is locked when calling this method.
 func (s *Store) PeerDataGetOrCreate(pid peer.ID) *PeerData {
-	if peerData, ok := s.peers[pid]; ok {
+	if peerData, ok := s.peers[pid]; ok && peerData != nil {
 		return peerData
 	}
 	s.peers[pid] = &PeerData{}

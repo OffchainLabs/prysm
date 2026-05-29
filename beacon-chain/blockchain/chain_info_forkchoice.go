@@ -150,6 +150,9 @@ func (s *Service) ParentRoot(root [32]byte) ([32]byte, error) {
 
 // hashForGenesisBlock returns the right hash for the genesis block
 func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byte, error) {
+	if s == nil || s.cfg == nil || s.cfg.BeaconDB == nil {
+		return nil, errors.New("service is nil")
+	}
 	genRoot, err := s.cfg.BeaconDB.GenesisBlockRoot(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get genesis block root")
@@ -160,6 +163,9 @@ func (s *Service) hashForGenesisBlock(ctx context.Context, root [32]byte) ([]byt
 	st, err := s.cfg.BeaconDB.GenesisState(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get genesis state")
+	}
+	if st == nil || st.IsNil() {
+		return nil, errors.New("genesis state is nil")
 	}
 	if st.Version() < version.Bellatrix {
 		return nil, nil

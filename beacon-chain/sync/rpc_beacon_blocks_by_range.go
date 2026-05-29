@@ -22,6 +22,9 @@ import (
 
 // beaconBlocksByRangeRPCHandler looks up the request blocks from the database from a given start block.
 func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
+	if stream == nil {
+		return errors.New("stream is nil")
+	}
 	ctx, span := trace.StartSpan(ctx, "sync.BeaconBlocksByRangeHandler")
 	defer span.End()
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
@@ -222,6 +225,6 @@ func (s *Service) downscorePeer(peerID peer.ID, reason string, fields ...logrus.
 		log = log.WithFields(field)
 	}
 
-	newScore := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	newScore := incrementBadResponses(s.cfg.p2p, peerID)
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

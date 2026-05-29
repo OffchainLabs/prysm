@@ -53,15 +53,19 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 	if !ok {
 		return pubsub.ValidationReject, errors.Errorf("invalid message type: %T", raw)
 	}
-	if m.AggregateAttestationAndProof() == nil {
+	aggAndProof := m.AggregateAttestationAndProof()
+	if aggAndProof == nil {
 		return pubsub.ValidationReject, errNilMessage
 	}
 
-	aggregate := m.AggregateAttestationAndProof().AggregateVal()
+	aggregate := aggAndProof.AggregateVal()
 	if err := helpers.ValidateNilAttestation(aggregate); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	data := aggregate.GetData()
+	data := pendingAttData(aggregate)
+	if data == nil || data.Source == nil || data.Target == nil {
+		return pubsub.ValidationReject, errNilMessage
+	}
 	// Do not process slot 0 aggregates.
 	if data.Slot == 0 {
 		return pubsub.ValidationIgnore, nil
@@ -72,7 +76,7 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 	s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
 		Type: operation.AggregatedAttReceived,
 		Data: &operation.AggregatedAttReceivedData{
-			Attestation: m.AggregateAttestationAndProof(),
+			Attestation: aggAndProof,
 		},
 	})
 
@@ -92,7 +96,7 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 	}
 
 	// Verify this is the first aggregate received from the aggregator with index and slot.
-	if s.hasSeenAggregatorIndexEpoch(data.Target.Epoch, m.AggregateAttestationAndProof().GetAggregatorIndex()) {
+	if s.hasSeenAggregatorIndexEpoch(data.Target.Epoch, aggAndProof.GetAggregatorIndex()) {
 		return pubsub.ValidationIgnore, nil
 	}
 	// Check that the block being voted on isn't invalid.
@@ -137,7 +141,7 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 		return validationRes, err
 	}
 
-	if first := s.setAggregatorIndexEpochSeen(data.Target.Epoch, m.AggregateAttestationAndProof().GetAggregatorIndex()); !first {
+	if first := s.setAggregatorIndexEpochSeen(data.Target.Epoch, aggAndProof.GetAggregatorIndex()); !first {
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -152,10 +156,19 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 	ctx, span := trace.StartSpan(ctx, "sync.validateAggregatedAtt")
 	defer span.End()
 
+	if signed == nil {
+		return pubsub.ValidationReject, errNilMessage
+	}
 	aggregateAndProof := signed.AggregateAttestationAndProof()
+	if aggregateAndProof == nil {
+		return pubsub.ValidationReject, errNilMessage
+	}
 	aggregatorIndex := aggregateAndProof.GetAggregatorIndex()
 	aggregate := aggregateAndProof.AggregateVal()
-	data := aggregate.GetData()
+	data := pendingAttData(aggregate)
+	if data == nil || data.Source == nil || data.Target == nil {
+		return pubsub.ValidationReject, errNilMessage
+	}
 
 	// Verify attestation target root is consistent with the head root.
 	// This verification is not in the spec, however we guard against it as it opens us up
@@ -186,7 +199,7 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 		return result, err
 	}
 
-	committee, err := helpers.BeaconCommitteeFromState(ctx, bs, aggregate.GetData().Slot, committeeIndex)
+	committee, err := helpers.BeaconCommitteeFromState(ctx, bs, data.Slot, committeeIndex)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationIgnore, err
@@ -246,7 +259,11 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 // If not, it store this attestation in the map of pending attestations.
 func (s *Service) validateBlockInAttestation(ctx context.Context, satt ethpb.SignedAggregateAttAndProof) bool {
 	// Verify the block being voted and the processed state is in beaconDB. The block should have passed validation if it's in the beaconDB.
-	blockRoot := bytesutil.ToBytes32(satt.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)
+	data := pendingAggregateData(satt)
+	if data == nil {
+		return false
+	}
+	blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
 	if !s.hasBlockAndState(ctx, blockRoot) {
 		// A node doesn't have the block, it'll request from peer while saving the pending attestation to a queue.
 		s.savePendingAggregate(satt)
@@ -362,7 +379,13 @@ func validateSelectionIndex(
 
 // This returns aggregator signature set which can be used to batch verify.
 func aggSigSet(s state.ReadOnlyBeaconState, a ethpb.SignedAggregateAttAndProof) (*bls.SignatureBatch, error) {
+	if a == nil {
+		return nil, errNilMessage
+	}
 	aggregateAndProof := a.AggregateAttestationAndProof()
+	if aggregateAndProof == nil {
+		return nil, errNilMessage
+	}
 
 	v, err := s.ValidatorAtIndexReadOnly(aggregateAndProof.GetAggregatorIndex())
 	if err != nil {
@@ -374,7 +397,11 @@ func aggSigSet(s state.ReadOnlyBeaconState, a ethpb.SignedAggregateAttAndProof) 
 		return nil, err
 	}
 
-	epoch := slots.ToEpoch(aggregateAndProof.AggregateVal().GetData().Slot)
+	data := pendingAttData(aggregateAndProof.AggregateVal())
+	if data == nil {
+		return nil, errNilMessage
+	}
+	epoch := slots.ToEpoch(data.Slot)
 	d, err := signing.Domain(s.Fork(), epoch, params.BeaconConfig().DomainAggregateAndProof, s.GenesisValidatorsRoot())
 	if err != nil {
 		return nil, err

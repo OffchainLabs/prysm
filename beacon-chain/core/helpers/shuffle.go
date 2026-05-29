@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -21,6 +22,9 @@ var maxShuffleListSize uint64 = 1 << 40
 
 // SplitIndices splits a list into n pieces.
 func SplitIndices(l []uint64, n uint64) [][]uint64 {
+	if l == nil {
+		return nil
+	}
 	var divided [][]uint64
 	var lSize = uint64(len(l))
 	for i := range n {
@@ -159,6 +163,9 @@ func UnshuffleList(input []primitives.ValidatorIndex, seed [32]byte) ([]primitiv
 
 // shuffles or unshuffles, shuffle=false to un-shuffle.
 func innerShuffleList(input []primitives.ValidatorIndex, seed [32]byte, shuffle bool) ([]primitives.ValidatorIndex, error) {
+	if input == nil {
+		return nil, errors.New("input is nil")
+	}
 	if len(input) <= 1 {
 		return input, nil
 	}

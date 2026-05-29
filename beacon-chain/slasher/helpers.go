@@ -52,7 +52,14 @@ func (s *Service) groupByChunkIndex(
 	attestationsByChunkIndex := make(map[uint64][]*slashertypes.IndexedAttestationWrapper)
 
 	for _, attestation := range attestations {
-		chunkIndex := s.params.chunkIndex(attestation.IndexedAttestation.GetData().Source.Epoch)
+		if attestation == nil {
+			continue
+		}
+		sourceEpoch, _, ok := attestationEpochs(attestation.IndexedAttestation)
+		if !ok {
+			continue
+		}
+		chunkIndex := s.params.chunkIndex(sourceEpoch)
 		attestationsByChunkIndex[chunkIndex] = append(attestationsByChunkIndex[chunkIndex], attestation)
 	}
 
@@ -68,20 +75,25 @@ func (s *Service) filterAttestations(
 	validInFuture = make([]*slashertypes.IndexedAttestationWrapper, 0, len(attWrappers))
 
 	for _, attWrapper := range attWrappers {
-		if attWrapper == nil || !validateAttestationIntegrity(attWrapper.IndexedAttestation) {
+		if attWrapper == nil {
+			numDropped++
+			continue
+		}
+		sourceEpoch, targetEpoch, ok := attestationEpochs(attWrapper.IndexedAttestation)
+		if !ok || !validateAttestationEpochs(sourceEpoch, targetEpoch) {
 			numDropped++
 			continue
 		}
 
 		// If an attestation's source is epoch is older than the max history length
 		// we keep track of for slashing detection, we drop it.
-		if attWrapper.IndexedAttestation.GetData().Source.Epoch+s.params.historyLength <= currentEpoch {
+		if sourceEpoch+s.params.historyLength <= currentEpoch {
 			numDropped++
 			continue
 		}
 
 		// If an attestation's target epoch is in the future, we defer processing for later.
-		if attWrapper.IndexedAttestation.GetData().Target.Epoch > currentEpoch {
+		if targetEpoch > currentEpoch {
 			validInFuture = append(validInFuture, attWrapper)
 			continue
 		}
@@ -97,14 +109,14 @@ func (s *Service) filterAttestations(
 // be less than the target epoch, which is a precondition for performing slashing
 // detection (except for the genesis epoch).
 func validateAttestationIntegrity(att ethpb.IndexedAtt) bool {
-	// If an attestation is malformed, we drop it.
-	if att == nil || att.IsNil() || att.GetData().Source == nil || att.GetData().Target == nil {
+	sourceEpoch, targetEpoch, ok := attestationEpochs(att)
+	if !ok {
 		return false
 	}
+	return validateAttestationEpochs(sourceEpoch, targetEpoch)
+}
 
-	sourceEpoch := att.GetData().Source.Epoch
-	targetEpoch := att.GetData().Target.Epoch
-
+func validateAttestationEpochs(sourceEpoch, targetEpoch primitives.Epoch) bool {
 	// The genesis epoch is a special case, since all attestations formed in it
 	// will have source and target 0, and they should be considered valid.
 	if sourceEpoch == 0 && targetEpoch == 0 {
@@ -113,6 +125,17 @@ func validateAttestationIntegrity(att ethpb.IndexedAtt) bool {
 
 	// All valid attestations must have source epoch < target epoch.
 	return sourceEpoch < targetEpoch
+}
+
+func attestationEpochs(att ethpb.IndexedAtt) (primitives.Epoch, primitives.Epoch, bool) {
+	if att == nil || att.IsNil() {
+		return 0, 0, false
+	}
+	data := att.GetData()
+	if data == nil || data.Source == nil || data.Target == nil {
+		return 0, 0, false
+	}
+	return data.Source.Epoch, data.Target.Epoch, true
 }
 
 // Validates the signed beacon block header integrity, ensuring we have no nil values.
@@ -129,12 +152,20 @@ func validateBlockHeaderIntegrity(header *ethpb.SignedBeaconBlockHeader) bool {
 
 func logAttesterSlashing(slashing ethpb.AttSlashing) {
 	indices := slice.IntersectionUint64(slashing.FirstAttestation().GetAttestingIndices(), slashing.SecondAttestation().GetAttestingIndices())
+	prevSourceEpoch, prevTargetEpoch, ok := attestationEpochs(slashing.FirstAttestation())
+	if !ok {
+		return
+	}
+	sourceEpoch, targetEpoch, ok := attestationEpochs(slashing.SecondAttestation())
+	if !ok {
+		return
+	}
 	log.WithFields(logrus.Fields{
 		"validatorIndex":  indices,
-		"prevSourceEpoch": slashing.FirstAttestation().GetData().Source.Epoch,
-		"prevTargetEpoch": slashing.FirstAttestation().GetData().Target.Epoch,
-		"sourceEpoch":     slashing.SecondAttestation().GetData().Source.Epoch,
-		"targetEpoch":     slashing.SecondAttestation().GetData().Target.Epoch,
+		"prevSourceEpoch": prevSourceEpoch,
+		"prevTargetEpoch": prevTargetEpoch,
+		"sourceEpoch":     sourceEpoch,
+		"targetEpoch":     targetEpoch,
 	}).Info("Attester slashing detected")
 }
 

@@ -27,6 +27,9 @@ func SetRPCStreamDeadlines(stream network.Stream) {
 // issues being able to properly close streams, leading to unexpected failures and possible
 // memory leaks.
 func SetStreamReadDeadline(stream network.Stream, duration time.Duration) {
+	if stream == nil {
+		return
+	}
 	if err := stream.SetReadDeadline(time.Now().Add(duration)); err != nil &&
 		!strings.Contains(err.Error(), "stream closed") {
 		log.WithError(err).WithFields(logrus.Fields{
@@ -46,6 +49,9 @@ func SetStreamReadDeadline(stream network.Stream, duration time.Duration) {
 // issues being able to properly close streams, leading to unexpected failures and possible
 // memory leaks.
 func SetStreamWriteDeadline(stream network.Stream, duration time.Duration) {
+	if stream == nil {
+		return
+	}
 	if err := stream.SetWriteDeadline(time.Now().Add(duration)); err != nil {
 		log.WithError(err).WithFields(logrus.Fields{
 			"peer":      stream.Conn().RemotePeer(),

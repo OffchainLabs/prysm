@@ -62,9 +62,14 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig) {
 	if cfg.postState.Version() < version.Fulu {
 		// update the caches to compute the right proposer index
 		// this function is called under a forkchoice lock which we need to release.
-		s.ForkChoicer().Unlock()
+		fc := s.ForkChoicer()
+		if fc == nil {
+			log.Error("Forkchoice store is nil")
+			return
+		}
+		fc.Unlock()
 		s.updateCachesPostBlockProcessing(cfg)
-		s.ForkChoicer().Lock()
+		fc.Lock()
 	}
 	fcuArgs, err := s.getFCUArgs(cfg)
 	if err != nil {
@@ -96,10 +101,18 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig) {
 func (s *Service) forkchoiceUpdateWithExecution(ctx context.Context, args *fcuConfig) {
 	_, span := trace.StartSpan(ctx, "beacon-chain.blockchain.forkchoiceUpdateWithExecution")
 	defer span.End()
+	if s == nil {
+		return
+	}
 	// Note: Use the service context here to avoid the parent context being ended during a forkchoice update.
 	ctx = trace.NewContext(s.ctx, span)
-	s.ForkChoicer().Lock()
-	defer s.ForkChoicer().Unlock()
+	fc := s.ForkChoicer()
+	if fc == nil {
+		log.Error("Forkchoice store is nil")
+		return
+	}
+	fc.Lock()
+	defer fc.Unlock()
 	_, err := s.notifyForkchoiceUpdate(ctx, args)
 	if err != nil {
 		log.WithError(err).Error("Could not notify forkchoice update")

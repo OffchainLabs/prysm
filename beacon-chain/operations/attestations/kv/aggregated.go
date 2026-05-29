@@ -204,7 +204,14 @@ func (c *AttCaches) AggregatedAttestationsBySlotIndex(
 	c.aggregatedAttLock.RLock()
 	defer c.aggregatedAttLock.RUnlock()
 	for _, as := range c.aggregatedAtt {
-		if as[0].Version() == version.Phase0 && slot == as[0].GetData().Slot && committeeIndex == as[0].GetData().CommitteeIndex {
+		if len(as) == 0 {
+			continue
+		}
+		data := as[0].GetData()
+		if data == nil {
+			continue
+		}
+		if as[0].Version() == version.Phase0 && slot == data.Slot && committeeIndex == data.CommitteeIndex {
 			for _, a := range as {
 				att, ok := a.(*ethpb.Attestation)
 				// This will never fail in practice because we asserted the version
@@ -233,7 +240,14 @@ func (c *AttCaches) AggregatedAttestationsBySlotIndexElectra(
 	c.aggregatedAttLock.RLock()
 	defer c.aggregatedAttLock.RUnlock()
 	for _, as := range c.aggregatedAtt {
-		if as[0].Version() >= version.Electra && slot == as[0].GetData().Slot && as[0].CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
+		if len(as) == 0 {
+			continue
+		}
+		data := as[0].GetData()
+		if data == nil {
+			continue
+		}
+		if as[0].Version() >= version.Electra && slot == data.Slot && as[0].CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
 			for _, a := range as {
 				att, ok := a.(*ethpb.AttestationElectra)
 				// This will never fail in practice because we asserted the version
@@ -480,7 +494,12 @@ func (c *AttCaches) DeleteSeenAggregatedAttestationsBefore(expirySlot primitives
 	// share the same slot. We only need to check the first attestation's slot
 	// to determine whether to delete the entire entry.
 	for id, atts := range c.seenAggregatedAtt {
-		if len(atts) == 0 || atts[0].GetData().Slot < expirySlot {
+		if len(atts) == 0 {
+			delete(c.seenAggregatedAtt, id)
+			continue
+		}
+		data := atts[0].GetData()
+		if data == nil || data.Slot < expirySlot {
 			delete(c.seenAggregatedAtt, id)
 		}
 	}

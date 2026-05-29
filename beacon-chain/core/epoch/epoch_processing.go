@@ -48,6 +48,9 @@ import (
 //	     validator = state.validators[index]
 //	     validator.activation_epoch = compute_activation_exit_epoch(get_current_epoch(state))
 func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.BeaconState, error) {
+	if st == nil || st.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	currentEpoch := time.CurrentEpoch(st)
 	var err error
 	ejectionBal := params.BeaconConfig().EjectionBalance
@@ -102,6 +105,9 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 			st, err = validators.InitiateValidatorExit(ctx, st, idx, exitInfo)
 			if err != nil && !errors.Is(err, validators.ErrValidatorAlreadyExited) {
 				return nil, errors.Wrapf(err, "could not initiate exit for validator %d", idx)
+			}
+			if st == nil || st.IsNil() {
+				return nil, errors.New("state is nil after initiating validator exit")
 			}
 		}
 	}
@@ -203,6 +209,9 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 //	            penalty = penalty_numerator // total_balance * increment
 //	            decrease_balance(state, ValidatorIndex(index), penalty)
 func ProcessSlashings(ctx context.Context, st state.BeaconState) error {
+	if st == nil || st.IsNil() {
+		return errors.New("state is nil")
+	}
 	slashingMultiplier, err := st.ProportionalSlashingMultiplier()
 	if err != nil {
 		return errors.Wrap(err, "could not get proportional slashing multiplier")
@@ -457,6 +466,9 @@ func ProcessParticipationRecordUpdates(state state.BeaconState) (state.BeaconSta
 
 // ProcessFinalUpdates processes the final updates during epoch processing.
 func ProcessFinalUpdates(state state.BeaconState) (state.BeaconState, error) {
+	if state == nil || state.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	var err error
 
 	// Reset ETH1 data votes.

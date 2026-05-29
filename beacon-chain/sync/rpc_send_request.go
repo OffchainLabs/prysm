@@ -758,6 +758,9 @@ func readChunkedDataColumnSidecar(
 	ctxMap ContextByteVersions,
 	validationFunctions ...DataColumnResponseValidation,
 ) (*blocks.RODataColumn, error) {
+	if stream == nil {
+		return nil, errors.New("stream is nil")
+	}
 	// Read the status code from the stream.
 	statusCode, errMessage, err := ReadStatusCode(stream, p2pApi.Encoding())
 	if err != nil {
@@ -822,8 +825,27 @@ func downscorePeer(p2p p2p.P2P, peerID peer.ID, reason string, fields ...logrus.
 		log = log.WithFields(field)
 	}
 
-	newScore := p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	newScore := incrementBadResponses(p2p, peerID)
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
+}
+
+func incrementBadResponses(p2p p2p.P2P, peerID peer.ID) int {
+	if p2p == nil {
+		return 0
+	}
+	peers := p2p.Peers()
+	if peers == nil {
+		return 0
+	}
+	scorers := peers.Scorers()
+	if scorers == nil {
+		return 0
+	}
+	badResponsesScorer := scorers.BadResponsesScorer()
+	if badResponsesScorer == nil {
+		return 0
+	}
+	return badResponsesScorer.Increment(peerID)
 }
 
 // ---------------------------------
@@ -891,6 +913,9 @@ func readChunkedExecutionPayloadEnvelope(
 	encoding encoder.NetworkEncoding,
 	ctxMap ContextByteVersions,
 ) (*ethpb.SignedExecutionPayloadEnvelope, error) {
+	if stream == nil {
+		return nil, errors.New("stream is nil")
+	}
 	code, msg, err := ReadStatusCode(stream, encoding)
 	if err != nil {
 		return nil, err

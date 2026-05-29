@@ -82,6 +82,12 @@ func (s *Store) pullTips(state state.BeaconState, node *Node, jc, fc *ethpb.Chec
 		log.WithError(err).Debug("could not compute unrealized checkpoints")
 		uj, uf = jc, fc
 	}
+	if uj == nil || uf == nil {
+		uj, uf = jc, fc
+	}
+	if uj == nil || uf == nil {
+		return jc, fc
+	}
 
 	// Update store's unrealized checkpoints.
 	if uj.Epoch > s.unrealizedJustifiedCheckpoint.Epoch {

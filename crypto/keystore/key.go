@@ -21,6 +21,7 @@ package keystore
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -131,6 +132,9 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 
 // NewKeyFromBLS creates a new keystore Key type using a BLS private key.
 func NewKeyFromBLS(blsKey bls.SecretKey) (*Key, error) {
+	if blsKey == nil {
+		return nil, errors.New("nil BLS secret key")
+	}
 	id := uuid.NewRandom()
 	pubkey := blsKey.PublicKey()
 	key := &Key{

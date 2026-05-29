@@ -53,6 +53,9 @@ func (s *Store) FinalizedCheckpoint(ctx context.Context) (*ethpb.Checkpoint, err
 
 // SaveJustifiedCheckpoint saves justified checkpoint in beacon chain.
 func (s *Store) SaveJustifiedCheckpoint(ctx context.Context, checkpoint *ethpb.Checkpoint) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveJustifiedCheckpoint")
 	defer span.End()
 
@@ -64,6 +67,9 @@ func (s *Store) SaveFinalizedCheckpoint(ctx context.Context, checkpoint *ethpb.C
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveFinalizedCheckpoint")
 	defer span.End()
 
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	enc, err := encode(ctx, checkpoint)
 	if err != nil {
 		tracing.AnnotateError(span, err)
@@ -90,8 +96,14 @@ func (s *Store) SaveFinalizedCheckpoint(ctx context.Context, checkpoint *ethpb.C
 }
 
 func (s *Store) saveCheckpoint(ctx context.Context, key []byte, checkpoint *ethpb.Checkpoint) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.saveCheckpoint")
 	defer span.End()
+	if checkpoint == nil {
+		return errors.New("checkpoint is nil")
+	}
 
 	enc, err := encode(ctx, checkpoint)
 	if err != nil {
@@ -102,6 +114,9 @@ func (s *Store) saveCheckpoint(ctx context.Context, key []byte, checkpoint *ethp
 	hasStateInDB := s.HasState(ctx, bytesutil.ToBytes32(checkpoint.Root))
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(checkpointBucket)
+		if bucket == nil {
+			return bolt.ErrBucketNotFound
+		}
 		if !(hasStateInDB || hasStateSummary) {
 			log.WithField("root", fmt.Sprintf("%#x", bytesutil.Trunc(checkpoint.Root))).Warn("Recovering state summary")
 			if err := recoverStateSummary(ctx, tx, checkpoint.Root); err != nil {

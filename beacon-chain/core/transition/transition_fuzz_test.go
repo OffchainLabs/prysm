@@ -66,6 +66,10 @@ func TestFuzzProcessSlot_1000(t *testing.T) {
 	ctx := t.Context()
 	state, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
 	require.NoError(t, err)
+	if state == nil || state.IsNil() {
+		t.Fatal("nil beacon state")
+		return
+	}
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
 	for range 1000 {
@@ -83,6 +87,10 @@ func TestFuzzProcessSlots_1000(t *testing.T) {
 	ctx := t.Context()
 	state, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
 	require.NoError(t, err)
+	if state == nil || state.IsNil() {
+		t.Fatal("nil beacon state")
+		return
+	}
 	slot := primitives.Slot(0)
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
@@ -102,6 +110,10 @@ func TestFuzzprocessOperationsNoVerify_1000(t *testing.T) {
 	ctx := t.Context()
 	state, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
 	require.NoError(t, err)
+	if state == nil || state.IsNil() {
+		t.Fatal("nil beacon state")
+		return
+	}
 	bb := &ethpb.BeaconBlock{}
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
@@ -125,6 +137,10 @@ func TestFuzzverifyOperationLengths_10000(t *testing.T) {
 	defer SkipSlotCache.Enable()
 	state, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
 	require.NoError(t, err)
+	if state == nil || state.IsNil() {
+		t.Fatal("nil beacon state")
+		return
+	}
 	bb := &ethpb.BeaconBlock{}
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
@@ -146,6 +162,10 @@ func TestFuzzCanProcessEpoch_10000(t *testing.T) {
 	defer SkipSlotCache.Enable()
 	state, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
 	require.NoError(t, err)
+	if state == nil || state.IsNil() {
+		t.Fatal("nil beacon state")
+		return
+	}
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
 	for range 10000 {

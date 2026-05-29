@@ -82,6 +82,9 @@ func (vs *Server) deposits(
 ) ([]*ethpb.Deposit, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.deposits")
 	defer span.End()
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 
 	if vs.MockEth1Votes {
 		return []*ethpb.Deposit{}, nil

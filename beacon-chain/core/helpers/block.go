@@ -22,6 +22,9 @@ import (
 //	  assert slot < state.slot <= slot + SLOTS_PER_HISTORICAL_ROOT
 //	  return state.block_roots[slot % SLOTS_PER_HISTORICAL_ROOT]
 func BlockRootAtSlot(state state.ReadOnlyBeaconState, slot primitives.Slot) ([]byte, error) {
+	if state == nil || state.IsNil() {
+		return []byte{}, errors.New("state is nil")
+	}
 	if math.MaxUint64-slot < params.BeaconConfig().SlotsPerHistoricalRoot {
 		return []byte{}, errors.New("slot overflows uint64")
 	}

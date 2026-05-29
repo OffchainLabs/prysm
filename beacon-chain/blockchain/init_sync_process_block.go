@@ -11,6 +11,9 @@ import (
 // This saves a beacon block to the initial sync blocks cache. It rate limits how many blocks
 // the cache keeps in memory (2 epochs worth of blocks) and saves them to DB when it hits this limit.
 func (s *Service) saveInitSyncBlock(ctx context.Context, r [32]byte, b interfaces.ReadOnlySignedBeaconBlock) error {
+	if s == nil || s.cfg == nil || s.cfg.BeaconDB == nil {
+		return errors.New("service is nil")
+	}
 	s.initSyncBlocksLock.Lock()
 	s.initSyncBlocks[r] = b
 	numBlocks := len(s.initSyncBlocks)
@@ -44,6 +47,9 @@ func (s *Service) hasBlockInInitSyncOrDB(ctx context.Context, r [32]byte) bool {
 // Returns block for a given root `r` from either the initial sync blocks cache or the DB.
 // Error is returned if the block is not found in either cache or DB.
 func (s *Service) getBlock(ctx context.Context, r [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
+	if s == nil || s.cfg == nil || s.cfg.BeaconDB == nil {
+		return nil, errors.New("service is nil")
+	}
 	s.initSyncBlocksLock.RLock()
 
 	// Check cache first because it's faster.
@@ -55,6 +61,9 @@ func (s *Service) getBlock(ctx context.Context, r [32]byte) (interfaces.ReadOnly
 		if err != nil {
 			return nil, errors.Wrap(err, "could not retrieve block from db")
 		}
+	}
+	if b == nil || b.IsNil() {
+		return nil, errBlockNotFoundInCacheOrDB
 	}
 	if err := blocks.BeaconBlockIsNil(b); err != nil {
 		return nil, errBlockNotFoundInCacheOrDB

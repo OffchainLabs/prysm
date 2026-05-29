@@ -20,6 +20,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -70,7 +71,13 @@ func NewAttestationElectra() *ethpb.AttestationElectra {
 func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numToGen uint64, slot primitives.Slot, randomRoot bool) ([]ethpb.Att, error) { // nolint:gocognit
 	var attestations []ethpb.Att
 	generateHeadState := false
+	if bState == nil || bState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	bState = bState.Copy()
+	if bState == nil || bState.IsNil() {
+		return nil, errors.New("beacon state copy is nil")
+	}
 	if slot > bState.Slot() {
 		// Going back a slot here so there's no inclusion delay issues.
 		slot--
@@ -226,6 +233,10 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 		if err != nil {
 			return nil, err
 		}
+		source := bState.CurrentJustifiedCheckpoint()
+		if source == nil {
+			return nil, errors.New("current justified checkpoint is nil")
+		}
 
 		ci := c
 		if bState.Version() >= version.Electra {
@@ -236,7 +247,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			Slot:            slot,
 			CommitteeIndex:  ci,
 			BeaconBlockRoot: headRoot,
-			Source:          bState.CurrentJustifiedCheckpoint(),
+			Source:          source,
 			Target: &ethpb.Checkpoint{
 				Epoch: currentEpoch,
 				Root:  targetRoot,
@@ -262,6 +273,10 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 			if len(sigs) == 0 {
 				continue
 			}
+			aggregatedSig := bls.AggregateSignatures(sigs)
+			if aggregatedSig == nil {
+				return nil, errors.New("aggregate signature is nil")
+			}
 
 			var att ethpb.Att
 			if bState.Version() >= version.Electra {
@@ -271,13 +286,13 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 					Data:            attData,
 					CommitteeBits:   cb,
 					AggregationBits: aggregationBits,
-					Signature:       bls.AggregateSignatures(sigs).Marshal(),
+					Signature:       aggregatedSig.Marshal(),
 				}
 			} else {
 				att = &ethpb.Attestation{
 					Data:            attData,
 					AggregationBits: aggregationBits,
-					Signature:       bls.AggregateSignatures(sigs).Marshal(),
+					Signature:       aggregatedSig.Marshal(),
 				}
 			}
 			attestations = append(attestations, att)

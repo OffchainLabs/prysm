@@ -11,6 +11,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -288,6 +290,114 @@ func verifyExecutionPayloadEnvelopeSignature(st state.BeaconState, signedEnvelop
 
 	if !signature.Verify(publicKey, signingRoot[:]) {
 		return fmt.Errorf("signature verification failed: %w", signing.ErrSigFailedToVerify)
+	}
+
+	return nil
+}
+
+func ApplyExecutionPayloadStateMutations(
+	ctx context.Context,
+	st state.BeaconState,
+	executionRequests *enginev1.ExecutionRequests,
+	blockHash [32]byte,
+) error {
+	if err := processExecutionRequests(ctx, st, executionRequests); err != nil {
+		return errors.Wrap(err, "could not process execution requests")
+	}
+
+	if err := st.QueueBuilderPaymentForSlot(st.Slot()); err != nil {
+		return errors.Wrap(err, "could not queue builder payment")
+	}
+
+	if err := st.SetExecutionPayloadAvailability(st.Slot(), true); err != nil {
+		return errors.Wrap(err, "could not set execution payload availability")
+	}
+
+	if err := st.SetLatestBlockHash(blockHash); err != nil {
+		return errors.Wrap(err, "could not set latest block hash")
+	}
+
+	return nil
+}
+
+// ApplyBlindedExecutionPayloadEnvelopeForStateGen applies the post-bid state mutations from a
+// blinded execution payload envelope for replay/state-generation paths.
+//
+// This path uses the persisted blinded envelope data (keyed by beacon block root) and validates
+// the minimal consistency required to safely advance state.latest_block_hash and related fields.
+func ApplyBlindedExecutionPayloadEnvelopeForStateGen(
+	ctx context.Context,
+	st state.BeaconState,
+	previousStateRoot [32]byte,
+	signedEnvelope *ethpb.SignedBlindedExecutionPayloadEnvelope,
+) error {
+	if st == nil || st.IsNil() {
+		return errors.New("nil beacon state")
+	}
+	if signedEnvelope == nil {
+		return nil
+	}
+	envelope := signedEnvelope.Message
+	if envelope == nil {
+		return errors.New("nil blinded execution payload envelope")
+	}
+
+	latestHeader := st.LatestBlockHeader()
+	if latestHeader == nil {
+		return errors.New("latest block header is nil")
+	}
+	latestHeader.StateRoot = previousStateRoot[:]
+	if err := st.SetLatestBlockHeader(latestHeader); err != nil {
+		return errors.Wrap(err, "could not set latest block header")
+	}
+
+	if envelope.Slot != st.Slot() {
+		return errors.Errorf("blinded envelope slot does not match state slot: envelope=%d, state=%d", envelope.Slot, st.Slot())
+	}
+
+	latestBid, err := st.LatestExecutionPayloadBid()
+	if err != nil {
+		return errors.Wrap(err, "could not get latest execution payload bid")
+	}
+	if latestBid == nil {
+		return errors.New("latest execution payload bid is nil")
+	}
+	if primitives.BuilderIndex(envelope.BuilderIndex) != latestBid.BuilderIndex() {
+		return errors.Errorf(
+			"blinded envelope builder index does not match committed bid builder index: envelope=%d, bid=%d",
+			envelope.BuilderIndex,
+			latestBid.BuilderIndex(),
+		)
+	}
+
+	bidBlockHash := latestBid.BlockHash()
+	if !bytes.Equal(envelope.BlockHash, bidBlockHash[:]) {
+		return errors.Errorf(
+			"blinded envelope block hash does not match committed bid block hash: envelope=%#x, bid=%#x",
+			envelope.BlockHash,
+			bidBlockHash,
+		)
+	}
+
+	reqs := envelope.ExecutionRequests
+	if reqs == nil {
+		reqs = &enginev1.ExecutionRequests{}
+	}
+	if err := processExecutionRequests(ctx, st, reqs); err != nil {
+		return errors.Wrap(err, "could not process execution requests")
+	}
+
+	if err := st.QueueBuilderPaymentForSlot(st.Slot()); err != nil {
+		return errors.Wrap(err, "could not queue builder payment")
+	}
+
+	if err := st.SetExecutionPayloadAvailability(st.Slot(), true); err != nil {
+		return errors.Wrap(err, "could not set execution payload availability")
+	}
+
+	payloadBlockHash := [32]byte(envelope.BlockHash)
+	if err := st.SetLatestBlockHash(payloadBlockHash); err != nil {
+		return errors.Wrap(err, "could not set latest block hash")
 	}
 
 	return nil

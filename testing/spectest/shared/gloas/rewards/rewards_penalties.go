@@ -26,6 +26,9 @@ type Delta struct {
 }
 
 func (d *Delta) unmarshalSSZ(buf []byte) error {
+	if len(buf) < 8 {
+		return fmt.Errorf("invalid delta ssz length %d", len(buf))
+	}
 	offset1 := binary.LittleEndian.Uint32(buf[:4])
 	offset2 := binary.LittleEndian.Uint32(buf[4:8])
 
@@ -66,12 +69,24 @@ func runPrecomputeRewardsAndPenaltiesTest(t *testing.T, testFolderPath string) {
 	require.NoError(t, preBeaconStateBase.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
 	preBeaconState, err := state_native.InitializeFromProtoUnsafeGloas(preBeaconStateBase)
 	require.NoError(t, err)
+	if preBeaconState == nil || preBeaconState.IsNil() {
+		t.Fatal("pre beacon state is nil")
+		return
+	}
 
 	vp, bp, err := electra.InitializePrecomputeValidators(ctx, preBeaconState)
 	require.NoError(t, err)
+	if bp == nil {
+		t.Fatal("precompute balances are nil")
+		return
+	}
 
 	vp, bp, err = electra.ProcessEpochParticipation(ctx, preBeaconState, bp, vp)
 	require.NoError(t, err)
+	if bp == nil {
+		t.Fatal("precompute balances are nil")
+		return
+	}
 
 	activeBal, targetPrevious, targetCurrent, err := preBeaconState.UnrealizedCheckpointBalances()
 	require.NoError(t, err)
@@ -109,6 +124,7 @@ func runPrecomputeRewardsAndPenaltiesTest(t *testing.T, testFolderPath string) {
 		require.NoError(t, err)
 		sourceSSZ, err := snappy.Decode(nil /* dst */, sourceFile)
 		require.NoError(t, err, "Failed to decompress")
+		require.NotNil(t, sourceSSZ)
 		d := &Delta{}
 		require.NoError(t, d.unmarshalSSZ(sourceSSZ), "Failed to unmarshal")
 		for i, reward := range d.Rewards {

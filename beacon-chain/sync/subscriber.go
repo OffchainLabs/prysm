@@ -903,6 +903,9 @@ func computeAllNeededSubnets(
 }
 
 func agentString(pid peer.ID, hst host.Host) string {
+	if hst == nil {
+		return ""
+	}
 	rawVersion, storeErr := hst.Peerstore().Get(pid, "AgentVersion")
 	agString, ok := rawVersion.(string)
 	if storeErr != nil || !ok {

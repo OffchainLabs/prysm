@@ -73,6 +73,9 @@ func New(ctx context.Context, opts ...Option) (*Server, error) {
 
 // Start the http rest service.
 func (g *Server) Start() {
+	if g == nil {
+		return
+	}
 	g.ctx, g.cancel = context.WithCancel(g.ctx)
 
 	go func() {
@@ -87,6 +90,9 @@ func (g *Server) Start() {
 
 // Status of the HTTP server. Returns an error if this service is unhealthy.
 func (g *Server) Status() error {
+	if g == nil {
+		return errors.New("server is nil")
+	}
 	if g.startFailure != nil {
 		return g.startFailure
 	}
@@ -95,6 +101,9 @@ func (g *Server) Status() error {
 
 // Stop the HTTP server with a graceful shutdown.
 func (g *Server) Stop() error {
+	if g == nil {
+		return nil
+	}
 	if g.server != nil {
 		shutdownCtx, shutdownCancel := context.WithTimeout(g.ctx, 2*time.Second)
 		defer shutdownCancel()

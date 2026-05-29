@@ -262,6 +262,9 @@ func buildGenesisBeaconStateFulu(ctx context.Context, genesisTime uint64, preSta
 
 	var pubKeys [][]byte
 	vals := preState.Validators()
+	if len(vals) == 0 {
+		return nil, errors.New("validators are nil")
+	}
 	for i := uint64(0); i < params.BeaconConfig().SyncCommitteeSize; i++ {
 		j := i % uint64(len(vals))
 		pubKeys = append(pubKeys, vals[j].PublicKey)

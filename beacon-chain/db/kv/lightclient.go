@@ -36,6 +36,9 @@ func (s *Store) SaveLightClientUpdate(ctx context.Context, period uint64, update
 func (s *Store) SaveLightClientBootstrap(ctx context.Context, blockRoot []byte, bootstrap interfaces.LightClientBootstrap) error {
 	_, span := trace.StartSpan(ctx, "BeaconDB.SaveLightClientBootstrap")
 	defer span.End()
+	if bootstrap == nil {
+		return errors.New("light client bootstrap is nil")
+	}
 
 	bootstrapCopy, err := light_client.NewWrappedBootstrap(proto.Clone(bootstrap.Proto()))
 	if err != nil {

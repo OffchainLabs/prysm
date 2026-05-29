@@ -14,6 +14,9 @@ import (
 
 // SetLatestExecutionPayloadHeader for the beacon state.
 func (b *BeaconState) SetLatestExecutionPayloadHeader(val interfaces.ExecutionData) error {
+	if val == nil || val.IsNil() {
+		return errors.New("execution payload header is nil")
+	}
 	b.lock.Lock()
 	defer b.lock.Unlock()
 

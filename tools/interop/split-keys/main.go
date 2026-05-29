@@ -14,6 +14,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -121,6 +122,9 @@ func spreadKeysAcrossLocalWallets(
 	walletOutputDir,
 	walletPassword string,
 ) error {
+	if privKeys == nil || pubKeys == nil {
+		return errors.New("keys are nil")
+	}
 	ctx := context.Background()
 	for i := range numWallets {
 		w := wallet.New(&wallet.Config{
@@ -135,7 +139,12 @@ func spreadKeysAcrossLocalWallets(
 			return err
 		}
 		log.Printf("Importing %d keys into wallet %d\n", keysPerWallet, i)
-		if err := km.ImportKeypairs(ctx, privKeys[i*keysPerWallet:(i+1)*keysPerWallet], pubKeys[i*keysPerWallet:(i+1)*keysPerWallet]); err != nil {
+		start := i * keysPerWallet
+		end := (i + 1) * keysPerWallet
+		if end > len(privKeys) || end > len(pubKeys) {
+			return fmt.Errorf("not enough keys for wallet %d", i)
+		}
+		if err := km.ImportKeypairs(ctx, privKeys[start:end], pubKeys[start:end]); err != nil {
 			return err
 		}
 	}

@@ -140,7 +140,21 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 		return errors.Wrap(err, "could not load successor block")
 	}
-	bid, err := successorBlock.Block().Body().SignedExecutionPayloadBid()
+	if successorBlock == nil || successorBlock.IsNil() {
+		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		return errors.New("successor block is nil")
+	}
+	beaconBlock := successorBlock.Block()
+	if beaconBlock == nil || beaconBlock.IsNil() {
+		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		return errors.New("successor beacon block is nil")
+	}
+	body := beaconBlock.Body()
+	if body == nil || body.IsNil() {
+		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
+		return errors.New("successor block body is nil")
+	}
+	bid, err := body.SignedExecutionPayloadBid()
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 		return errors.Wrap(err, "could not get bid from successor block")

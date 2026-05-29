@@ -45,13 +45,13 @@ type MerkleTreeNode interface {
 
 // create builds a new merkle tree
 func create(leaves [][32]byte, depth uint64) MerkleTreeNode {
-	length := uint64(len(leaves))
-	if length == 0 {
+	if len(leaves) == 0 {
 		return &ZeroNode{depth: depth}
 	}
 	if depth == 0 {
 		return &LeafNode{hash: leaves[0]}
 	}
+	length := uint64(len(leaves))
 	split := min(math.PowerOf2(depth-1), length)
 	left := create(leaves[0:split], depth-1)
 	right := create(leaves[split:], depth-1)
@@ -101,12 +101,20 @@ func generateProof(tree MerkleTreeNode, index uint64, depth uint64) ([32]byte, [
 	node := tree
 	for depth > 0 {
 		ithBit := (index >> (depth - 1)) & 0x1
+		left := node.Left()
+		right := node.Right()
+		if left == nil {
+			left = &ZeroNode{depth: depth - 1}
+		}
+		if right == nil {
+			right = &ZeroNode{depth: depth - 1}
+		}
 		if ithBit == 1 {
-			proof = append(proof, node.Left().GetRoot())
-			node = node.Right()
+			proof = append(proof, left.GetRoot())
+			node = right
 		} else {
-			proof = append(proof, node.Right().GetRoot())
-			node = node.Left()
+			proof = append(proof, right.GetRoot())
+			node = left
 		}
 		depth--
 	}

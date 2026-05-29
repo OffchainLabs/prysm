@@ -81,6 +81,10 @@ func newRunner(ctx context.Context, v iface.Validator, monitor *healthMonitor) (
 // 3 - Determine role at current slot
 // 4 - Perform assigned role, if any
 func (r *runner) run(ctx context.Context) {
+	if r == nil || r.validator == nil {
+		log.Error("validator runner is nil")
+		return
+	}
 	v := r.validator
 	cleanup := v.Done
 	defer cleanup()
@@ -125,14 +129,17 @@ func (r *runner) run(ctx context.Context) {
 			// call push proposer settings often to account for the following edge cases:
 			// proposer is activated at the start of epoch and tries to propose immediately
 			// account has changed in the middle of an epoch
-			if err := v.PushProposerSettings(slotCtx, slot, false); err != nil {
+			if err := v.PushProposerSettings(ctx, slot, false); err != nil {
 				log.WithError(err).Warn("Failed to update proposer settings")
 			}
 
 			// Start fetching domain data for the next epoch.
 			if slots.IsEpochEnd(slot) {
-				domainCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
-				go v.UpdateDomainDataCaches(domainCtx, slot+1)
+				domainCtx, domainCancel := context.WithDeadline(ctx, deadline)
+				go func() {
+					defer domainCancel()
+					v.UpdateDomainDataCaches(domainCtx, slot+1)
+				}()
 			}
 
 			var wg sync.WaitGroup
@@ -144,9 +151,8 @@ func (r *runner) run(ctx context.Context) {
 				cancel()
 				continue
 			}
-			// performRoles calls span.End()
-			rolesCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
-			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
+			// performRoles calls span.End() and cancel().
+			performRoles(slotCtx, cancel, allRoles, v, slot, &wg, span)
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
 		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot
@@ -235,7 +241,7 @@ func initialize(ctx context.Context, v iface.Validator) error {
 	return nil
 }
 
-func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.ValidatorRole, v iface.Validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
+func performRoles(slotCtx context.Context, cancel context.CancelFunc, allRoles map[[48]byte][]iface.ValidatorRole, v iface.Validator, slot primitives.Slot, wg *sync.WaitGroup, span trace.Span) {
 	for pubKey, roles := range allRoles {
 		wg.Add(len(roles))
 		for _, role := range roles {
@@ -266,6 +272,7 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]iface.Validat
 	// Wait for all processes to complete, then report span complete.
 	go func() {
 		wg.Wait()
+		defer cancel()
 		defer span.End()
 		defer func() {
 			if err := recover(); err != nil { // catch any panic in logging

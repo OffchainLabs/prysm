@@ -12,12 +12,21 @@ import (
 
 // LastArchivedSlot from the db.
 func (s *Store) LastArchivedSlot(ctx context.Context) (primitives.Slot, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.LastArchivedSlot")
 	defer span.End()
 	var index primitives.Slot
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(stateSlotIndicesBucket)
+		if bkt == nil {
+			return nil
+		}
 		b, _ := bkt.Cursor().Last()
+		if b == nil {
+			return nil
+		}
 		index = bytesutil.BytesToSlotBigEndian(b)
 		return nil
 	})
@@ -27,12 +36,18 @@ func (s *Store) LastArchivedSlot(ctx context.Context) (primitives.Slot, error) {
 
 // LastArchivedRoot from the db.
 func (s *Store) LastArchivedRoot(ctx context.Context) [32]byte {
+	if s == nil || s.db == nil {
+		return [32]byte{}
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.LastArchivedRoot")
 	defer span.End()
 
 	var blockRoot []byte
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(stateSlotIndicesBucket)
+		if bkt == nil {
+			return nil
+		}
 		_, blockRoot = bkt.Cursor().Last()
 		if len(blockRoot) > 0 {
 			blockRoot = slices.Clone(blockRoot)
@@ -48,12 +63,18 @@ func (s *Store) LastArchivedRoot(ctx context.Context) [32]byte {
 // ArchivedPointRoot returns the block root of an archived point from the DB.
 // This is essential for cold state management and to restore a cold state.
 func (s *Store) ArchivedPointRoot(ctx context.Context, slot primitives.Slot) [32]byte {
+	if s == nil || s.db == nil {
+		return [32]byte{}
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.ArchivedPointRoot")
 	defer span.End()
 
 	var blockRoot []byte
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateSlotIndicesBucket)
+		if bucket == nil {
+			return nil
+		}
 		blockRoot = bucket.Get(bytesutil.SlotToBytesBigEndian(slot))
 		if len(blockRoot) > 0 {
 			blockRoot = slices.Clone(blockRoot)

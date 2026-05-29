@@ -978,6 +978,9 @@ func BeaconStateFuluFromConsensus(st beaconState.BeaconState) (*BeaconStateFulu,
 // ----------------------------------------------------------------------------
 
 func BeaconStateGloasFromConsensus(st beaconState.BeaconState) (*BeaconStateGloas, error) {
+	if st == nil || st.IsNil() {
+		return nil, errors.New("state is nil")
+	}
 	srcBr := st.BlockRoots()
 	br := make([]string, len(srcBr))
 	for i, r := range srcBr {

@@ -15,12 +15,12 @@ import (
 // The argument error should be a result of fetching state.
 func WriteStateFetchError(w http.ResponseWriter, err error) {
 	var stateNotFoundError *lookup.StateNotFoundError
-	if errors.As(err, &stateNotFoundError) || errors.Is(err, stategen.ErrNoDataForSlot) {
+	if (errors.As(err, &stateNotFoundError) && stateNotFoundError != nil) || errors.Is(err, stategen.ErrNoDataForSlot) {
 		httputil.HandleError(w, "State not found", http.StatusNotFound)
 		return
 	}
 	var parseErr *lookup.StateIdParseError
-	if errors.As(err, &parseErr) {
+	if errors.As(err, &parseErr) && parseErr != nil {
 		httputil.HandleError(w, "Invalid state ID: "+parseErr.Error(), http.StatusBadRequest)
 		return
 	}
@@ -34,12 +34,12 @@ func writeBlockIdError(w http.ResponseWriter, err error, fallbackMsg string) boo
 		return false
 	}
 	var blockNotFoundErr *lookup.BlockNotFoundError
-	if errors.As(err, &blockNotFoundErr) {
+	if errors.As(err, &blockNotFoundErr) && blockNotFoundErr != nil {
 		httputil.HandleError(w, "Block not found: "+blockNotFoundErr.Error(), http.StatusNotFound)
 		return true
 	}
 	var invalidBlockIdErr *lookup.BlockIdParseError
-	if errors.As(err, &invalidBlockIdErr) {
+	if errors.As(err, &invalidBlockIdErr) && invalidBlockIdErr != nil {
 		httputil.HandleError(w, "Invalid block ID: "+invalidBlockIdErr.Error(), http.StatusBadRequest)
 		return true
 	}

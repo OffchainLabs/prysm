@@ -28,6 +28,9 @@ func (vs *Server) setExecutionPayloadBid(
 ) (bool, error) {
 	_, span := trace.StartSpan(ctx, "ProposerServer.setExecutionPayloadBid")
 	defer span.End()
+	if sBlk == nil || sBlk.IsNil() {
+		return false, errors.New("signed beacon block is nil")
+	}
 
 	if local == nil || local.ExecutionData == nil {
 		return false, errors.New("local execution payload is nil")
@@ -41,7 +44,11 @@ func (vs *Server) setExecutionPayloadBid(
 	}
 
 	// Fall back to self-build bid.
-	bid, err := vs.createSelfBuildExecutionPayloadBid(local, sBlk.Block())
+	blk := sBlk.Block()
+	if blk == nil || blk.IsNil() {
+		return false, errors.New("beacon block is nil")
+	}
+	bid, err := vs.createSelfBuildExecutionPayloadBid(local, blk)
 	if err != nil {
 		return false, errors.Wrap(err, "could not create execution payload bid")
 	}
@@ -73,6 +80,9 @@ func (vs *Server) winningP2PBid(
 	copy(parentHash[:], ed.ParentHash())
 	cached, ok := vs.HighestBidCache.Get(sBlk.Block().Slot(), parentHash, sBlk.Block().ParentRoot())
 	if !ok {
+		return nil
+	}
+	if cached == nil || cached.Message == nil {
 		return nil
 	}
 

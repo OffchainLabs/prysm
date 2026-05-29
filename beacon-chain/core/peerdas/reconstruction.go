@@ -468,6 +468,9 @@ func ReconstructBlobs(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, 
 		if err != nil {
 			return nil, errors.Wrap(err, "recover cells")
 		}
+		if reconstructedCells == nil {
+			return nil, errors.New("reconstructed cells are nil")
+		}
 	}
 
 	// Extract blob data without computing proofs.
@@ -483,7 +486,11 @@ func ReconstructBlobs(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, 
 				cell = verifiedDataColumnSidecars[columnIndex].Column()[blobIndex]
 			} else {
 				// Use reconstructed cells
-				cell = reconstructedCells[blobIndex][columnIndex][:]
+				blobCells := reconstructedCells[blobIndex]
+				if len(blobCells) <= columnIndex {
+					return nil, errors.New("not enough reconstructed cells")
+				}
+				cell = blobCells[columnIndex][:]
 			}
 
 			if copy(blob[kzg.BytesPerCell*columnIndex:], cell) != kzg.BytesPerCell {

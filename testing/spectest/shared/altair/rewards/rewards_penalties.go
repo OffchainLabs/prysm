@@ -3,6 +3,7 @@ package rewards
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"path"
 	"reflect"
@@ -27,6 +28,9 @@ type Delta struct {
 
 // unmarshalSSZ deserializes specs data into a simple aggregating container.
 func (d *Delta) unmarshalSSZ(buf []byte) error {
+	if buf == nil {
+		return errors.New("nil SSZ buffer")
+	}
 	offset1 := binary.LittleEndian.Uint32(buf[:4])
 	offset2 := binary.LittleEndian.Uint32(buf[4:8])
 
@@ -71,11 +75,23 @@ func runPrecomputeRewardsAndPenaltiesTest(t *testing.T, testFolderPath string) {
 	require.NoError(t, preBeaconStateBase.UnmarshalSSZ(preBeaconStateSSZ), "Failed to unmarshal")
 	preBeaconState, err := state_native.InitializeFromProtoUnsafeAltair(preBeaconStateBase)
 	require.NoError(t, err)
+	if preBeaconState == nil || preBeaconState.IsNil() {
+		t.Fatal("nil pre beacon state")
+		return
+	}
 
 	vp, bp, err := altair.InitializePrecomputeValidators(ctx, preBeaconState)
 	require.NoError(t, err)
+	if bp == nil {
+		t.Fatal("nil precompute balances")
+		return
+	}
 	vp, bp, err = altair.ProcessEpochParticipation(ctx, preBeaconState, bp, vp)
 	require.NoError(t, err)
+	if bp == nil {
+		t.Fatal("nil precompute balances")
+		return
+	}
 
 	activeBal, targetPrevious, targetCurrent, err := preBeaconState.UnrealizedCheckpointBalances()
 	require.NoError(t, err)
@@ -114,6 +130,10 @@ func runPrecomputeRewardsAndPenaltiesTest(t *testing.T, testFolderPath string) {
 		require.NoError(t, err)
 		sourceSSZ, err := snappy.Decode(nil /* dst */, sourceFile)
 		require.NoError(t, err, "Failed to decompress")
+		if sourceSSZ == nil {
+			t.Fatal("nil decoded source SSZ")
+			return
+		}
 		d := &Delta{}
 		require.NoError(t, d.unmarshalSSZ(sourceSSZ), "Failed to unmarshal")
 		for i, reward := range d.Rewards {

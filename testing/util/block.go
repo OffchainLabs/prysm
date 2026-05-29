@@ -103,11 +103,17 @@ func GenerateFullBlock(
 	slot primitives.Slot,
 ) (*ethpb.SignedBeaconBlock, error) {
 	ctx := context.Background()
+	if bState == nil || bState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	currentSlot := bState.Slot()
 	if currentSlot > slot {
 		return nil, fmt.Errorf("current slot in state is larger than given slot. %d > %d", currentSlot, slot)
 	}
 	bState = bState.Copy()
+	if bState == nil || bState.IsNil() {
+		return nil, errors.New("beacon state copy is nil")
+	}
 
 	if conf == nil {
 		conf = &BlockGenConfig{}
@@ -160,10 +166,16 @@ func GenerateFullBlock(
 	numToGen = conf.NumDeposits
 	var newDeposits []*ethpb.Deposit
 	eth1Data := bState.Eth1Data()
+	if eth1Data == nil {
+		return nil, errors.New("eth1 data is nil")
+	}
 	if numToGen > 0 {
 		newDeposits, eth1Data, err = generateDepositsAndEth1Data(bState, numToGen)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed generating %d deposits:", numToGen)
+		}
+		if eth1Data == nil {
+			return nil, errors.New("eth1 data is nil")
 		}
 	}
 
@@ -177,6 +189,9 @@ func GenerateFullBlock(
 	}
 
 	newHeader := bState.LatestBlockHeader()
+	if newHeader == nil {
+		return nil, errors.New("latest block header is nil")
+	}
 	prevStateRoot, err := bState.HashTreeRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -228,6 +243,9 @@ func GenerateFullBlock(
 	signature, err := BlockSignature(bState, block, privs)
 	if err != nil {
 		return nil, err
+	}
+	if signature == nil {
+		return nil, errors.New("block signature is nil")
 	}
 
 	return &ethpb.SignedBeaconBlock{Block: block, Signature: signature.Marshal()}, nil
@@ -628,6 +646,10 @@ func HydrateV1BeaconBlockBody(b *v1.BeaconBlockBody) *v1.BeaconBlockBody {
 func SaveBlock(tb assertions.AssertionTestingTB, ctx context.Context, db iface.NoHeadAccessDatabase, b any) interfaces.SignedBeaconBlock {
 	wsb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(tb, err)
+	if wsb == nil || wsb.IsNil() {
+		tb.Fatalf("nil signed beacon block")
+		return nil
+	}
 	require.NoError(tb, db.SaveBlock(ctx, wsb))
 	return wsb
 }

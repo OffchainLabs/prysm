@@ -5,6 +5,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/pkg/errors"
 )
 
 type blockMutator struct {
@@ -15,6 +16,9 @@ type blockMutator struct {
 }
 
 func (m blockMutator) apply(b interfaces.SignedBeaconBlock) (interfaces.SignedBeaconBlock, error) {
+	if b == nil || b.IsNil() {
+		return nil, errors.New("signed beacon block is nil")
+	}
 	pb, err := b.Proto()
 	if err != nil {
 		return nil, err

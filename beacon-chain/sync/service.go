@@ -362,7 +362,11 @@ func (s *Service) Stop() error {
 	// Use WaitGroup to ensure all goodbye messages complete
 	var wg sync.WaitGroup
 	for _, peerID := range s.cfg.p2p.Peers().Connected() {
-		if s.cfg.p2p.Host().Network().Connectedness(peerID) == network.Connected {
+		host := s.cfg.p2p.Host()
+		if host == nil {
+			continue
+		}
+		if host.Network().Connectedness(peerID) == network.Connected {
 			wg.Add(1)
 			go func(pid peer.ID) {
 				defer wg.Done()
@@ -376,8 +380,10 @@ func (s *Service) Stop() error {
 	log.Debug("All goodbye messages sent successfully")
 
 	// Now safe to remove handlers / unsubscribe.
-	for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
-		s.cfg.p2p.Host().RemoveStreamHandler(p)
+	if host := s.cfg.p2p.Host(); host != nil {
+		for _, p := range host.Mux().Protocols() {
+			host.RemoveStreamHandler(p)
+		}
 	}
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
@@ -399,12 +405,18 @@ func (s *Service) Status() error {
 // HighestExecutionPayloadBidCache exposes sync's cache to the proposer RPC.
 // Sync is the sole writer (gossip); the proposer is a reader.
 func (s *Service) HighestExecutionPayloadBidCache() *cache.HighestExecutionPayloadBidCache {
+	if s == nil {
+		return nil
+	}
 	return s.highestExecutionPayloadBidCache
 }
 
 // This initializes the caches to update seen beacon objects coming in from the wire
 // and prevent DoS.
 func (s *Service) initCaches() {
+	if s == nil {
+		return
+	}
 	s.seenBlockCache = lruwrpr.New(seenBlockSize)
 	s.seenPayloadEnvelopeCache = lruwrpr.New(seenPayloadEnvelopeSize)
 	s.seenExecutionPayloadBidCache = newSlotAwareCache(seenExecutionPayloadBidSize)

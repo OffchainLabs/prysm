@@ -35,7 +35,15 @@ func (s sortableAttestations) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // Less reports whether the element with index i must sort before the element with index j.
 func (s sortableAttestations) Less(i, j int) bool {
-	return s[i].GetData().Slot < s[j].GetData().Slot
+	iData := s[i].GetData()
+	jData := s[j].GetData()
+	if iData == nil {
+		return false
+	}
+	if jData == nil {
+		return true
+	}
+	return iData.Slot < jData.Slot
 }
 
 func mapAttestationsByTargetRoot(atts []ethpb.Att) map[[32]byte][]ethpb.Att {
@@ -44,7 +52,12 @@ func mapAttestationsByTargetRoot(atts []ethpb.Att) map[[32]byte][]ethpb.Att {
 		return attsMap
 	}
 	for _, att := range atts {
-		attsMap[bytesutil.ToBytes32(att.GetData().Target.Root)] = append(attsMap[bytesutil.ToBytes32(att.GetData().Target.Root)], att)
+		data := att.GetData()
+		if data == nil || data.Target == nil {
+			continue
+		}
+		targetRoot := bytesutil.ToBytes32(data.Target.Root)
+		attsMap[targetRoot] = append(attsMap[targetRoot], att)
 	}
 	return attsMap
 }
@@ -448,7 +461,11 @@ func blockIndexedAttestations[T ethpb.IndexedAtt](
 		}
 		for i := range atts {
 			att := atts[i]
-			committee, err := helpers.BeaconCommitteeFromState(ctx, attState, att.GetData().Slot, att.GetData().CommitteeIndex)
+			data := att.GetData()
+			if data == nil {
+				continue
+			}
+			committee, err := helpers.BeaconCommitteeFromState(ctx, attState, data.Slot, data.CommitteeIndex)
 			if err != nil {
 				return nil, status.Errorf(
 					codes.Internal,

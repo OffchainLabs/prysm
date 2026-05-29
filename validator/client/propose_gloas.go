@@ -69,6 +69,9 @@ func (v *validator) proposeSelfBuildEnvelope(
 	pubKey [fieldparams.BLSPubkeyLength]byte,
 	blk interfaces.SignedBeaconBlock,
 ) error {
+	if blk == nil || blk.IsNil() {
+		return errors.New("signed beacon block is nil")
+	}
 	if blk.Version() < version.Gloas {
 		return nil
 	}

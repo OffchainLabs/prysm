@@ -91,6 +91,9 @@ func (s *Service) Stop() error {
 func (s *Service) SubmitBlindedBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error) {
 	ctx, span := trace.StartSpan(ctx, "builder.SubmitBlindedBlock")
 	defer span.End()
+	if s == nil {
+		return nil, nil, ErrNoBuilder
+	}
 	start := time.Now()
 	defer func() {
 		submitBlindedBlockLatency.Observe(float64(time.Since(start).Milliseconds()))
@@ -122,6 +125,9 @@ func (s *Service) SubmitBlindedBlockPostFulu(ctx context.Context, b interfaces.R
 func (s *Service) GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubKey [48]byte) (builder.SignedBid, error) {
 	ctx, span := trace.StartSpan(ctx, "builder.GetHeader")
 	defer span.End()
+	if s == nil {
+		return nil, ErrNoBuilder
+	}
 	start := time.Now()
 	defer func() {
 		getHeaderLatency.Observe(float64(time.Since(start).Milliseconds()))
@@ -151,6 +157,9 @@ func (s *Service) Status() error {
 func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error {
 	ctx, span := trace.StartSpan(ctx, "builder.RegisterValidator")
 	defer span.End()
+	if s == nil || s.cfg == nil {
+		return ErrNoBuilder
+	}
 	start := time.Now()
 	defer func() {
 		registerValidatorLatency.Observe(float64(time.Since(start).Milliseconds()))
@@ -209,6 +218,9 @@ func (s *Service) RegistrationByValidatorID(ctx context.Context, id primitives.V
 
 // Configured returns true if the user has configured a builder client.
 func (s *Service) Configured() bool {
+	if s == nil {
+		return false
+	}
 	return s.c != nil && !reflect.ValueOf(s.c).IsNil()
 }
 

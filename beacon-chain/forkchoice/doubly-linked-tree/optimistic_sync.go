@@ -107,6 +107,9 @@ func (s *Store) removeNode(ctx context.Context, pn *PayloadNode) ([][32]byte, er
 
 // removeNodeAndChildren removes `node` and all of its descendant from the Store
 func (s *Store) removeNodeAndChildren(ctx context.Context, pn *PayloadNode, invalidRoots [][32]byte) ([][32]byte, error) {
+	if pn == nil || pn.node == nil {
+		return invalidRoots, errors.New("nil payload node")
+	}
 	var err error
 	// If we are removing an empty node, then remove the full node as well if it exists.
 	if !pn.full {
@@ -125,6 +128,9 @@ func (s *Store) removeNodeAndChildren(ctx context.Context, pn *PayloadNode, inva
 		}
 		// We need to remove only the empty node here since the recursion will take care of the full one.
 		en := s.emptyNodeByRoot[child.root]
+		if en == nil {
+			continue
+		}
 		if invalidRoots, err = s.removeNodeAndChildren(ctx, en, invalidRoots); err != nil {
 			return invalidRoots, err
 		}

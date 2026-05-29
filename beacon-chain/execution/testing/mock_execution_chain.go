@@ -149,6 +149,9 @@ func (*RPCClient) Close() {}
 
 func (r *RPCClient) CallContext(ctx context.Context, obj any, methodName string, args ...any) error {
 	if r.BlockNumMap != nil && methodName == "eth_getBlockByNumber" {
+		if len(args) == 0 {
+			return errors.New("missing block argument")
+		}
 		val, ok := args[0].(string)
 		if !ok {
 			return errors.Errorf("wrong argument type provided: %T", args[0])
@@ -183,6 +186,9 @@ func (r *RPCClient) CallContext(ctx context.Context, obj any, methodName string,
 	}
 	switch methodName {
 	case "eth_getBlockByNumber":
+		if len(args) == 0 {
+			return errors.New("missing block argument")
+		}
 		val, ok := args[0].(string)
 		if !ok {
 			return errors.Errorf("wrong argument type provided: %T", args[0])
@@ -209,6 +215,9 @@ func (r *RPCClient) CallContext(ctx context.Context, obj any, methodName string,
 			Time:   h.Time,
 		}
 	case "eth_getBlockByHash":
+		if len(args) == 0 {
+			return errors.New("missing block argument")
+		}
 		val, ok := args[0].(common.Hash)
 		if !ok {
 			return errors.Errorf("wrong argument type provided: %T", args[0])

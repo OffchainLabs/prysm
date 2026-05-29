@@ -33,6 +33,9 @@ func (s *Service) generateErrorResponse(code byte, reason string) ([]byte, error
 
 // ReadStatusCode response from a RPC stream.
 func ReadStatusCode(stream network.Stream, encoding encoder.NetworkEncoding) (uint8, string, error) {
+	if stream == nil {
+		return 0, "", errors.New("stream is nil")
+	}
 	// Set ttfb deadline.
 	SetStreamReadDeadline(stream, params.BeaconConfig().TtfbTimeoutDuration())
 	b := make([]byte, 1)
@@ -59,6 +62,9 @@ func ReadStatusCode(stream network.Stream, encoding encoder.NetworkEncoding) (ui
 }
 
 func writeErrorResponseToStream(responseCode byte, reason string, stream libp2pcore.Stream, encoder p2p.EncodingProvider) {
+	if stream == nil {
+		return
+	}
 	resp, err := createErrorResponse(responseCode, reason, encoder)
 	if err != nil {
 		log.WithError(err).Debug("Could not generate a response error")
@@ -108,6 +114,9 @@ func isValidStreamError(err error) bool {
 }
 
 func closeStream(stream network.Stream, log *logrus.Entry) {
+	if stream == nil {
+		return
+	}
 	if err := stream.Close(); isValidStreamError(err) {
 		log.WithError(err).
 			WithFields(logrus.Fields{
@@ -119,6 +128,9 @@ func closeStream(stream network.Stream, log *logrus.Entry) {
 }
 
 func closeStreamAndWait(stream network.Stream, log *logrus.Entry) {
+	if stream == nil {
+		return
+	}
 	if err := stream.CloseWrite(); err != nil {
 		_err := stream.Reset()
 		_ = _err

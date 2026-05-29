@@ -19,6 +19,9 @@ import (
 // stream.
 // response_chunk  ::= <result> | <context-bytes> | <encoding-dependent-header> | <encoded-payload>
 func (s *Service) chunkBlockWriter(stream libp2pcore.Stream, blk interfaces.ReadOnlySignedBeaconBlock) error {
+	if stream == nil {
+		return errors.New("stream is nil")
+	}
 	SetStreamWriteDeadline(stream, defaultWriteDuration)
 	return WriteBlockChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), blk)
 }
@@ -26,6 +29,9 @@ func (s *Service) chunkBlockWriter(stream libp2pcore.Stream, blk interfaces.Read
 // WriteBlockChunk writes block chunk object to stream.
 // response_chunk  ::= <result> | <context-bytes> | <encoding-dependent-header> | <encoded-payload>
 func WriteBlockChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, encoding encoder.NetworkEncoding, blk interfaces.ReadOnlySignedBeaconBlock) error {
+	if stream == nil {
+		return errors.New("stream is nil")
+	}
 	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
 		return err
 	}
@@ -41,6 +47,9 @@ func WriteBlockChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, en
 // ReadChunkedBlock handles each response chunk that is sent by the
 // peer and converts it into a beacon block.
 func ReadChunkedBlock(stream libp2pcore.Stream, tor blockchain.TemporalOracle, p2p p2p.EncodingProvider, isFirstChunk bool) (interfaces.ReadOnlySignedBeaconBlock, error) {
+	if stream == nil {
+		return nil, errors.New("stream is nil")
+	}
 	// Handle deadlines differently for first chunk
 	if isFirstChunk {
 		return readFirstChunkedBlock(stream, tor, p2p)

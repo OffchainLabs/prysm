@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	coregloas "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -30,6 +31,13 @@ func (vs *Server) storeExecutionPayloadEnvelope(
 	sBlk interfaces.SignedBeaconBlock,
 	local *consensusblocks.GetPayloadResponse,
 ) error {
+	if local == nil {
+		return errors.New("nil local payload")
+	}
+	if sBlk == nil || sBlk.IsNil() || sBlk.Block() == nil {
+		return errors.New("signed beacon block is nil")
+	}
+
 	blockRoot, err := sBlk.Block().HashTreeRoot()
 	if err != nil {
 		return errors.Wrap(err, "could not compute block hash tree root")
@@ -106,6 +114,39 @@ func (vs *Server) GetExecutionPayloadEnvelope(
 	return &ethpb.ExecutionPayloadEnvelopeResponse{
 		Envelope: contents.Envelope,
 	}, nil
+}
+
+// computePostPayloadStateRoot retrieves the post-block state (after the block has
+// been submitted and processed) and applies the execution payload state mutations
+// to compute the post-payload state root for the envelope.
+func (vs *Server) computePostPayloadStateRoot(ctx context.Context, envelope interfaces.ROExecutionPayloadEnvelope) ([]byte, error) {
+	ctx, span := trace.StartSpan(ctx, "ProposerServer.computePostPayloadStateRoot")
+	defer span.End()
+
+	if envelope == nil {
+		return nil, errors.New("execution payload envelope is nil")
+	}
+	beaconState, err := vs.StateGen.StateByRoot(ctx, envelope.BeaconBlockRoot())
+	if err != nil {
+		return nil, errors.Wrap(err, "could not retrieve post-block state")
+	}
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("could not retrieve post-block state")
+	}
+	beaconState = beaconState.Copy()
+	payload, err := envelope.Execution()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get execution payload from envelope")
+	}
+	blockHash := bytesutil.ToBytes32(payload.BlockHash())
+	if err := coregloas.ApplyExecutionPayloadStateMutations(ctx, beaconState, envelope.ExecutionRequests(), blockHash); err != nil {
+		return nil, errors.Wrapf(err, "could not apply execution payload at slot %d", beaconState.Slot())
+	}
+	root, err := beaconState.HashTreeRoot(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not compute post-payload state root at slot %d", beaconState.Slot())
+	}
+	return root[:], nil
 }
 
 // PublishExecutionPayloadEnvelope validates and broadcasts a signed execution payload envelope.

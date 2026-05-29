@@ -32,10 +32,18 @@ func (s *Server) GetParticipation(w http.ResponseWriter, r *http.Request) {
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
+		return
+	}
 	stEpoch := slots.ToEpoch(st.Slot())
 	vp, rpcError := s.CoreService.ValidatorParticipation(ctx, stEpoch)
 	if rpcError != nil {
 		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+		return
+	}
+	if vp == nil || vp.Participation == nil {
+		httputil.HandleError(w, "Validator participation is nil", http.StatusInternalServerError)
 		return
 	}
 
@@ -77,11 +85,19 @@ func (s *Server) GetActiveSetChanges(w http.ResponseWriter, r *http.Request) {
 		shared.WriteStateFetchError(w, err)
 		return
 	}
+	if st == nil || st.IsNil() {
+		httputil.HandleError(w, "State is nil", http.StatusInternalServerError)
+		return
+	}
 	stEpoch := slots.ToEpoch(st.Slot())
 
 	as, rpcError := s.CoreService.ValidatorActiveSetChanges(ctx, stEpoch)
 	if rpcError != nil {
 		httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+		return
+	}
+	if as == nil {
+		httputil.HandleError(w, "Active set changes are nil", http.StatusInternalServerError)
 		return
 	}
 

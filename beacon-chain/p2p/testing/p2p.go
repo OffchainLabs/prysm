@@ -5,6 +5,7 @@ package testing
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -127,6 +128,9 @@ func (p *TestP2P) Connect(b *TestP2P) {
 }
 
 func connect(a, b host.Host) error {
+	if a == nil || b == nil {
+		return errors.New("nil host")
+	}
 	pinfo := peer.AddrInfo{
 		ID:    b.ID(),
 		Addrs: b.Addrs(),
@@ -138,6 +142,10 @@ func connect(a, b host.Host) error {
 func (p *TestP2P) ReceiveRPC(topic string, msg proto.Message) {
 	h, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}))
 	require.NoError(p.t, err)
+	if h == nil {
+		p.t.Fatal("Nil host")
+		return
+	}
 	p.t.Cleanup(func() {
 		require.NoError(p.t, h.Close())
 	})
@@ -147,6 +155,10 @@ func (p *TestP2P) ReceiveRPC(topic string, msg proto.Message) {
 	s, err := h.NewStream(context.Background(), p.BHost.ID(), protocol.ID(topic+p.Encoding().ProtocolSuffix()))
 	if err != nil {
 		p.t.Fatalf("Failed to open stream %v", err)
+	}
+	if s == nil {
+		p.t.Fatal("Nil stream")
+		return
 	}
 	defer func() {
 		if err := s.Close(); err != nil {
@@ -172,6 +184,10 @@ func (p *TestP2P) ReceiveRPC(topic string, msg proto.Message) {
 func (p *TestP2P) ReceivePubSub(topic string, msg proto.Message) {
 	h, err := libp2p.New(libp2p.ResourceManager(&network.NullResourceManager{}))
 	require.NoError(p.t, err)
+	if h == nil {
+		p.t.Fatal("Nil host")
+		return
+	}
 	p.t.Cleanup(func() {
 		require.NoError(p.t, h.Close())
 	})

@@ -30,6 +30,9 @@ func generateSyncAggregate(st state.BeaconState, privs []bls.SecretKey, parentRo
 			return nil, err
 		}
 	}
+	if syncCommittee == nil {
+		return nil, errors.New("sync committee is nil")
+	}
 	sigs := make([]bls.Signature, 0, len(syncCommittee.Pubkeys))
 	var bVector []byte
 	currSize := new(ethpb.SyncAggregate).SyncCommitteeBits.Len()
@@ -69,5 +72,8 @@ func generateSyncAggregate(st state.BeaconState, privs []bls.SecretKey, parentRo
 		return &ethpb.SyncAggregate{SyncCommitteeSignature: fakeSig[:], SyncCommitteeBits: bVector}, nil
 	}
 	aggSig := bls.AggregateSignatures(sigs)
+	if aggSig == nil {
+		return nil, errors.New("aggregate signature is nil")
+	}
 	return &ethpb.SyncAggregate{SyncCommitteeSignature: aggSig.Marshal(), SyncCommitteeBits: bVector}, nil
 }

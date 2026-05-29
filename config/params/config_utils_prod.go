@@ -22,6 +22,9 @@ func OverrideBeaconConfig(c *BeaconChainConfig) {
 
 // Copy returns a copy of the config object.
 func (b *BeaconChainConfig) Copy() *BeaconChainConfig {
+	if b == nil {
+		panic("cannot copy nil BeaconChainConfig") // lint:nopanic -- A nil config is a programming error and should fail immediately.
+	}
 	config, ok := deepcopy.Copy(*b).(BeaconChainConfig)
 	if !ok {
 		panic("somehow deepcopy produced a BeaconChainConfig that is not of the same type as the original") // lint:nopanic -- This would only panic with an application misconfiguration and it should fail right away.

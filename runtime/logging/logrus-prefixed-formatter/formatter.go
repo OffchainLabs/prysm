@@ -436,6 +436,9 @@ func (f *TextFormatter) appendValue(b *bytes.Buffer, value any) (err error) {
 			_, err = fmt.Fprintf(b, "%s%v%s", f.QuoteCharacter, value, f.QuoteCharacter)
 		}
 	case error:
+		if value == nil {
+			return nil
+		}
 		errmsg := value.Error()
 		if !f.needsQuoting(errmsg) {
 			_, err = b.WriteString(errmsg)

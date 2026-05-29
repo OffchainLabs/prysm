@@ -30,6 +30,9 @@ func ProcessAttestationsNoVerifySignature(
 	ctx, span := trace.StartSpan(ctx, "altair.ProcessAttestationsNoVerifySignature")
 	defer span.End()
 
+	if beaconState == nil || beaconState.IsNil() {
+		return nil, errors.New("beacon state is nil")
+	}
 	if b == nil || b.IsNil() {
 		return nil, consensusblocks.ErrNilBeaconBlock
 	}
@@ -64,12 +67,16 @@ func ProcessAttestationNoVerifySignature(
 	if err := blocks.VerifyAttestationNoVerifySignature(ctx, beaconState, att); err != nil {
 		return nil, err
 	}
-
-	delay, err := beaconState.Slot().SafeSubSlot(att.GetData().Slot)
-	if err != nil {
-		return nil, fmt.Errorf("att slot %d can't be greater than state slot %d", att.GetData().Slot, beaconState.Slot())
+	data := att.GetData()
+	if data == nil {
+		return nil, errors.New("attestation data is nil")
 	}
-	participatedFlags, err := AttestationParticipationFlagIndices(beaconState, att.GetData(), delay)
+
+	delay, err := beaconState.Slot().SafeSubSlot(data.Slot)
+	if err != nil {
+		return nil, fmt.Errorf("att slot %d can't be greater than state slot %d", data.Slot, beaconState.Slot())
+	}
+	participatedFlags, err := AttestationParticipationFlagIndices(beaconState, data, delay)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +93,7 @@ func ProcessAttestationNoVerifySignature(
 		return nil, errors.Wrap(err, "failed to update pending payment weight")
 	}
 
-	return SetParticipationAndRewardProposer(ctx, beaconState, att.GetData().Target.Epoch, indices, participatedFlags, totalBalance, att)
+	return SetParticipationAndRewardProposer(ctx, beaconState, data.Target.Epoch, indices, participatedFlags, totalBalance, att)
 }
 
 // SetParticipationAndRewardProposer retrieves and sets the epoch participation bits in state. Based on the epoch participation, it rewards
@@ -281,12 +288,18 @@ func RewardProposer(ctx context.Context, beaconState state.BeaconState, proposer
 //
 //	return participation_flag_indices
 func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, data *ethpb.AttestationData, delay primitives.Slot) (map[uint8]bool, error) {
+	if data == nil {
+		return nil, errors.New("attestation data is nil")
+	}
 	currEpoch := time.CurrentEpoch(beaconState)
 	var justifiedCheckpt *ethpb.Checkpoint
 	if data.Target.Epoch == currEpoch {
 		justifiedCheckpt = beaconState.CurrentJustifiedCheckpoint()
 	} else {
 		justifiedCheckpt = beaconState.PreviousJustifiedCheckpoint()
+	}
+	if justifiedCheckpt == nil {
+		return nil, errors.New("nil justified checkpoint")
 	}
 
 	matchedSrc, matchedTgt, matchedHead, err := MatchingStatus(beaconState, data, justifiedCheckpt)
@@ -339,6 +352,9 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 //	is_matching_target = is_matching_source and data.target.root == get_block_root(state, data.target.epoch)
 //	is_matching_head = is_matching_target and data.beacon_block_root == get_block_root_at_slot(state, data.slot)
 func MatchingStatus(beaconState state.ReadOnlyBeaconState, data *ethpb.AttestationData, cp *ethpb.Checkpoint) (matchedSrc, matchedTgt, matchedHead bool, err error) {
+	if data == nil {
+		return false, false, false, errors.New("attestation data is nil")
+	}
 	matchedSrc = attestation.CheckPointIsEqual(data.Source, cp)
 
 	r, err := helpers.BlockRoot(beaconState, data.Target.Epoch)

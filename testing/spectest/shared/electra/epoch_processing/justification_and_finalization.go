@@ -2,6 +2,7 @@ package epoch_processing
 
 import (
 	"context"
+	"errors"
 	"path"
 	"testing"
 
@@ -30,8 +31,16 @@ func processJustificationAndFinalizationPrecomputeWrapper(t *testing.T, st state
 	ctx := context.Background()
 	vp, bp, err := electra.InitializePrecomputeValidators(ctx, st)
 	require.NoError(t, err)
+	if bp == nil {
+		t.Fatal("nil precompute balances")
+		return nil, errors.New("nil precompute balances")
+	}
 	_, bp, err = electra.ProcessEpochParticipation(ctx, st, bp, vp)
 	require.NoError(t, err)
+	if bp == nil {
+		t.Fatal("nil precompute balances")
+		return nil, errors.New("nil precompute balances")
+	}
 	activeBal, targetPrevious, targetCurrent, err := st.UnrealizedCheckpointBalances()
 	require.NoError(t, err)
 	require.Equal(t, bp.ActiveCurrentEpoch, activeBal)

@@ -271,22 +271,28 @@ func (s *Simulator) verifySlashingsWereDetected(ctx context.Context) {
 		}).Info("Correctly detected simulated proposer slashing")
 	}
 	for slashingRoot, slashing := range s.sentAttesterSlashings {
+		firstData := slashing.FirstAttestation().GetData()
+		secondData := slashing.SecondAttestation().GetData()
+		if firstData == nil || secondData == nil || firstData.Target == nil || secondData.Target == nil || firstData.Source == nil || secondData.Source == nil {
+			log.Error("Simulated attester slashing has nil data")
+			continue
+		}
 		if _, ok := detectedAttesterSlashings[slashingRoot]; !ok {
 			log.WithFields(logrus.Fields{
-				"targetEpoch":         slashing.FirstAttestation().GetData().Target.Epoch,
-				"prevTargetEpoch":     slashing.SecondAttestation().GetData().Target.Epoch,
-				"sourceEpoch":         slashing.FirstAttestation().GetData().Source.Epoch,
-				"prevSourceEpoch":     slashing.SecondAttestation().GetData().Source.Epoch,
-				"prevBeaconBlockRoot": fmt.Sprintf("%#x", slashing.FirstAttestation().GetData().BeaconBlockRoot),
-				"newBeaconBlockRoot":  fmt.Sprintf("%#x", slashing.SecondAttestation().GetData().BeaconBlockRoot),
+				"targetEpoch":         firstData.Target.Epoch,
+				"prevTargetEpoch":     secondData.Target.Epoch,
+				"sourceEpoch":         firstData.Source.Epoch,
+				"prevSourceEpoch":     secondData.Source.Epoch,
+				"prevBeaconBlockRoot": fmt.Sprintf("%#x", firstData.BeaconBlockRoot),
+				"newBeaconBlockRoot":  fmt.Sprintf("%#x", secondData.BeaconBlockRoot),
 			}).Errorf("Did not detect simulated attester slashing")
 			continue
 		}
 		log.WithFields(logrus.Fields{
-			"targetEpoch":     slashing.FirstAttestation().GetData().Target.Epoch,
-			"prevTargetEpoch": slashing.SecondAttestation().GetData().Target.Epoch,
-			"sourceEpoch":     slashing.FirstAttestation().GetData().Source.Epoch,
-			"prevSourceEpoch": slashing.SecondAttestation().GetData().Source.Epoch,
+			"targetEpoch":     firstData.Target.Epoch,
+			"prevTargetEpoch": secondData.Target.Epoch,
+			"sourceEpoch":     firstData.Source.Epoch,
+			"prevSourceEpoch": secondData.Source.Epoch,
 		}).Info("Correctly detected simulated attester slashing")
 	}
 }

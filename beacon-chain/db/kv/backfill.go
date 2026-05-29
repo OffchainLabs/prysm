@@ -14,6 +14,9 @@ import (
 // This value is used by the backfill service to keep track of the range of blocks that need to be synced. It is also used by the
 // code that serves blocks or regenerates states to keep track of what range of blocks are available.
 func (s *Store) SaveBackfillStatus(ctx context.Context, bf *dbval.BackfillStatus) error {
+	if s == nil || s.db == nil {
+		return errors.New("store is nil")
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.SaveBackfillStatus")
 	defer span.End()
 	bfb, err := proto.Marshal(bf)
@@ -22,6 +25,9 @@ func (s *Store) SaveBackfillStatus(ctx context.Context, bf *dbval.BackfillStatus
 	}
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(blocksBucket)
+		if bucket == nil {
+			return bolt.ErrBucketNotFound
+		}
 		return bucket.Put(backfillStatusKey, bfb)
 	})
 }
@@ -29,11 +35,17 @@ func (s *Store) SaveBackfillStatus(ctx context.Context, bf *dbval.BackfillStatus
 // BackfillStatus retrieves the most recently saved version of the BackfillStatus protobuf struct.
 // This is used to persist information about backfill status across restarts.
 func (s *Store) BackfillStatus(ctx context.Context) (*dbval.BackfillStatus, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("store is nil")
+	}
 	_, span := trace.StartSpan(ctx, "BeaconDB.BackfillStatus")
 	defer span.End()
 	bf := &dbval.BackfillStatus{}
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(blocksBucket)
+		if bucket == nil {
+			return bolt.ErrBucketNotFound
+		}
 		bs := bucket.Get(backfillStatusKey)
 		if len(bs) == 0 {
 			return errors.Wrap(ErrNotFound, "BackfillStatus not found")

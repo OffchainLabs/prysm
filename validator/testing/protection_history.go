@@ -53,6 +53,9 @@ func MockSlashingProtectionJSON(
 // MockAttestingAndProposalHistories given a number of validators, creates mock attesting
 // and proposing histories within WEAK_SUBJECTIVITY_PERIOD bounds.
 func MockAttestingAndProposalHistories(pubkeys [][fieldparams.BLSPubkeyLength]byte) ([][]*common.AttestationRecord, []common.ProposalHistoryForPubkey) {
+	if pubkeys == nil {
+		return [][]*common.AttestationRecord{}, []common.ProposalHistoryForPubkey{}
+	}
 	// deduplicate and transform them into our internal format.
 	numValidators := len(pubkeys)
 	attData := make([][]*common.AttestationRecord, numValidators)

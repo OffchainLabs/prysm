@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -45,6 +46,9 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 		}
 		beaconExecutionPayloadEnvelopeValidTotal.Inc()
 	}()
+	if signed == nil {
+		return errors.New("signed execution payload envelope is nil")
+	}
 
 	envelope, err := signed.Envelope()
 	if err != nil {
@@ -90,7 +94,10 @@ func (s *Service) ReceiveExecutionPayloadEnvelope(ctx context.Context, signed in
 	if err != nil {
 		return errors.Wrap(err, "could not get latest execution payload bid")
 	}
-	if bid != nil && len(bid.BlobKzgCommitments()) > 0 {
+	if bid == nil {
+		return errors.New("latest execution payload bid is nil")
+	}
+	if len(bid.BlobKzgCommitments()) > 0 {
 		if err := s.areDataColumnsAvailable(ctx, root, envelope.Slot()); err != nil {
 			return errors.Wrap(err, "data availability check failed for payload envelope")
 		}
@@ -147,19 +154,38 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 	if headRoot != root {
 		return nil
 	}
+	if envelope == nil {
+		return errors.New("execution payload envelope is nil")
+	}
+	if st == nil || st.IsNil() {
+		return errors.New("nil post payload state")
+	}
 	payload, err := envelope.Execution()
 	if err != nil {
 		return errors.Wrap(err, "could not get execution payload from envelope")
 	}
 	blockHash := bytesutil.ToBytes32(payload.BlockHash())
 
+	envelopeSlot := envelope.Slot()
 	s.headLock.Lock()
 	if s.head != nil && s.head.root == root {
+		s.head.state = st
 		s.head.full = true
 	}
 	s.headLock.Unlock()
 
-	attr := s.getPayloadAttribute(ctx, st, envelope.Slot()+1, headRoot[:], true)
+	go func() {
+		ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
+		defer cancel()
+		if err := transition.UpdateNextSlotCache(ctx, blockHash[:], st); err != nil {
+			log.WithError(err).Error("Could not update next slot cache")
+		}
+		if err := s.handleEpochBoundary(ctx, envelopeSlot, st, blockHash[:]); err != nil {
+			log.WithError(err).Error("Could not handle epoch boundary")
+		}
+	}()
+
+	attr := s.getPayloadAttribute(ctx, st, envelopeSlot+1, headRoot[:], true)
 	if s.inRegularSync() {
 		go func() {
 			pid, err := s.notifyForkchoiceUpdateGloas(s.ctx, blockHash, attr)
@@ -170,7 +196,7 @@ func (s *Service) postPayloadTasks(ctx context.Context, envelope interfaces.ROEx
 			if attr != nil && !attr.IsEmpty() && pid != nil {
 				var pId [8]byte
 				copy(pId[:], pid[:])
-				s.cfg.PayloadIDCache.Set(envelope.Slot()+1, root, pId)
+				s.cfg.PayloadIDCache.Set(envelopeSlot+1, root, pId)
 			}
 		}()
 	}
@@ -181,6 +207,9 @@ func (s *Service) getPayloadEnvelopePrestate(ctx context.Context, envelope inter
 	ctx, span := trace.StartSpan(ctx, "blockChain.getPayloadEnvelopePrestate")
 	defer span.End()
 
+	if envelope == nil {
+		return nil, errors.New("execution payload envelope is nil")
+	}
 	root := envelope.BeaconBlockRoot()
 	if !s.InForkchoice(root) {
 		return nil, fmt.Errorf("beacon block root %#x not found in forkchoice", root)
@@ -247,6 +276,12 @@ func (s *Service) notifyNewEnvelope(ctx context.Context, st state.BeaconState, e
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyNewEnvelope")
 	defer span.End()
 
+	if st == nil || st.IsNil() {
+		return false, errors.New("state is nil")
+	}
+	if envelope == nil {
+		return false, errors.New("execution payload envelope is nil")
+	}
 	payload, err := envelope.Execution()
 	if err != nil {
 		return false, errors.Wrap(err, "could not get execution payload from envelope")
@@ -255,25 +290,39 @@ func (s *Service) notifyNewEnvelope(ctx context.Context, st state.BeaconState, e
 	if err != nil {
 		return false, errors.Wrap(err, "could not get latest execution payload bid")
 	}
-	var versionedHashes []common.Hash
-	if latestBid != nil {
-		commitments := latestBid.BlobKzgCommitments()
-		versionedHashes = make([]common.Hash, len(commitments))
-		for i, c := range commitments {
-			versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
-		}
+	if latestBid == nil {
+		return false, errors.New("latest execution payload bid is nil")
+	}
+	commitments := latestBid.BlobKzgCommitments()
+	versionedHashes := make([]common.Hash, len(commitments))
+	for i, c := range commitments {
+		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
+	}
+	latestHeader := st.LatestBlockHeader()
+	if latestHeader == nil {
+		return false, errors.New("latest block header is nil")
 	}
 	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), envelope.ExecutionRequests(), envelope.Slot())
 }
 
 func (s *Service) validateExecutionOnEnvelope(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) (bool, error) {
+	if st == nil || st.IsNil() {
+		return false, errors.New("state is nil")
+	}
+	if envelope == nil {
+		return false, errors.New("execution payload envelope is nil")
+	}
 	isValid, err := s.notifyNewEnvelope(ctx, st, envelope)
 	if err == nil {
 		return isValid, nil
 	}
 
 	blockRoot := envelope.BeaconBlockRoot()
-	parentRoot := bytesutil.ToBytes32(st.LatestBlockHeader().ParentRoot)
+	latestHeader := st.LatestBlockHeader()
+	if latestHeader == nil {
+		return false, errors.New("latest block header is nil")
+	}
+	parentRoot := bytesutil.ToBytes32(latestHeader.ParentRoot)
 	payload, payloadErr := envelope.Execution()
 	if payloadErr != nil {
 		return false, errors.Wrap(payloadErr, "could not get execution payload from envelope")
@@ -289,11 +338,17 @@ func (s *Service) savePostPayload(ctx context.Context, signed interfaces.ROSigne
 	ctx, span := trace.StartSpan(ctx, "blockChain.savePostPayload")
 	defer span.End()
 
+	if signed == nil {
+		return errors.New("signed execution payload envelope is nil")
+	}
 	protoEnv, ok := signed.Proto().(*ethpb.SignedExecutionPayloadEnvelope)
 	if !ok {
 		return errors.New("could not type assert signed envelope to proto")
 	}
-	return s.cfg.BeaconDB.SaveExecutionPayloadEnvelope(ctx, protoEnv)
+	if err := s.cfg.BeaconDB.SaveExecutionPayloadEnvelope(ctx, protoEnv); err != nil {
+		return errors.Wrap(err, "could not save execution payload envelope")
+	}
+	return nil
 }
 
 func (s *Service) recordPayloadArrival(root [32]byte, slot primitives.Slot, arrivedAt time.Time) {

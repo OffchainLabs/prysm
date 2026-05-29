@@ -172,14 +172,21 @@ func (q queue) Len() int { return len(q) }
 // internally; the Item with the lower value wins. (priority zero is higher
 // priority than 1). The priority of Items with equal values is undetermined.
 func (q queue) Less(i, j int) bool {
+	if q[i] == nil || q[j] == nil {
+		return false
+	}
 	return q[i].Priority < q[j].Priority
 }
 
 // Swap swaps things in-place; part of sort.Interface
 func (q queue) Swap(i, j int) {
 	q[i], q[j] = q[j], q[i]
-	q[i].index = i
-	q[j].index = j
+	if q[i] != nil {
+		q[i].index = i
+	}
+	if q[j] != nil {
+		q[j].index = j
+	}
 }
 
 // Push is used by heap.Interface to push items onto the heap. This method is
@@ -202,8 +209,10 @@ func (q *queue) Pop() any {
 	old := *q
 	n := len(old)
 	item := old[n-1]
-	old[n-1] = nil  // avoid memory leak
-	item.index = -1 // for safety
+	if item != nil {
+		item.index = -1 // for safety
+	}
+	old[n-1] = nil // avoid memory leak
 	*q = old[0 : n-1]
 	return item
 }

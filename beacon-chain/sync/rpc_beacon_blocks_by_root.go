@@ -200,6 +200,9 @@ func (s *Service) beaconBlocksRootRPCHandler(ctx context.Context, msg any, strea
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, "no block roots provided in request", stream)
 		return errors.New("no block roots provided")
 	}
+	if stream == nil {
+		return errors.New("stream is nil")
+	}
 
 	remotePeer := stream.Conn().RemotePeer()
 
@@ -218,11 +221,18 @@ func (s *Service) beaconBlocksRootRPCHandler(ctx context.Context, msg any, strea
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 			return err
 		}
+		if blk == nil || blk.IsNil() {
+			continue
+		}
 		if err := blocks.BeaconBlockIsNil(blk); err != nil {
 			continue
 		}
+		beaconBlock := blk.Block()
+		if beaconBlock == nil || beaconBlock.IsNil() {
+			continue
+		}
 
-		if blk.Block().IsBlinded() {
+		if beaconBlock.IsBlinded() {
 			blk, err = s.cfg.executionReconstructor.ReconstructFullBlock(ctx, blk)
 			if err != nil {
 				if errors.Is(err, execution.ErrEmptyBlockHash) {
