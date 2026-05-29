@@ -155,7 +155,7 @@ func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, ep
 }
 
 // ActiveNonSlashedValidatorIndices returns the indices of validators that are
-// both active at ``epoch`` and not slashed. It is used to build the
+// both active at “epoch“ and not slashed. It is used to build the
 // EIP-8045 proposer lookahead.
 //
 // Spec pseudocode definition (EIP-8045):
