@@ -266,14 +266,13 @@ func (s *Server) ExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	blinded, err := eth.WireBlindedFromFull(resp.Envelope)
+	blinded, err := structs.WireBlindedFromFull(resp.Envelope)
 	if err != nil {
 		httputil.HandleError(w, "could not build blinded envelope: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
-	w.Header().Set(api.ExecutionPayloadBlindedHeader, "true")
 
 	if httputil.RespondWithSsz(r) {
 		sszBytes, err := blinded.MarshalSSZ()

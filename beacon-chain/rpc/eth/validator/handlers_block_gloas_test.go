@@ -341,7 +341,6 @@ func TestExecutionPayloadEnvelope_SSZ(t *testing.T) {
 	assert.Equal(t, http.StatusOK, writer.Code)
 	assert.Equal(t, "application/octet-stream", writer.Header().Get("Content-Type"))
 	assert.Equal(t, version.String(version.Gloas), writer.Header().Get("Eth-Consensus-Version"))
-	assert.Equal(t, "true", writer.Header().Get("Eth-Execution-Payload-Blinded"))
 
 	blinded := &eth.WireBlindedExecutionPayloadEnvelope{}
 	require.NoError(t, blinded.UnmarshalSSZ(writer.Body.Bytes()))

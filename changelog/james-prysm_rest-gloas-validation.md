@@ -13,9 +13,12 @@
 
 - `GET /eth/v1/validator/execution_payload_envelope/{slot}` →
   `GET /eth/v1/validator/execution_payload_envelopes/{slot}/{beacon_block_root}`;
-  the response is the spec-wire `BlindedExecutionPayloadEnvelope` (HTR equivalent
-  to the full envelope, transactions/withdrawals omitted), with
-  `Eth-Execution-Payload-Blinded: true` set on the response.
+  the response is the spec-wire `BlindedExecutionPayloadEnvelope` (payload replaced
+  by `payload_root`, HTR equivalent to the full envelope). Returns only
+  `Eth-Consensus-Version` (beacon-APIs #580 / PR #10).
+- Stateful self-build now works end to end: the validator client fetches the blinded
+  envelope from the BN, signs its (HTR-equivalent) root, and publishes the
+  `SignedBlindedExecutionPayloadEnvelope`.
 - `POST /eth/v1/beacon/execution_payload_envelopes` body shape is now selected by
   the required `Eth-Execution-Payload-Blinded` request header:
   - `true` → `SignedBlindedExecutionPayloadEnvelope` (stateful — BN reconstructs

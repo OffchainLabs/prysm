@@ -5,9 +5,6 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
-	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestExecutionPayloadBid_Copy(t *testing.T) {
@@ -227,57 +224,3 @@ func TestCopyBuilder(t *testing.T) {
 	}
 }
 
-// HTR(blinded) must equal HTR(full) so the signature stays valid.
-func TestWireBlindedHTRMatchesFull(t *testing.T) {
-	full := &ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadGloas{
-			ParentHash:    bytesutil.PadTo([]byte("parent"), 32),
-			FeeRecipient:  bytesutil.PadTo([]byte("fee"), 20),
-			StateRoot:     bytesutil.PadTo([]byte("state"), 32),
-			ReceiptsRoot:  bytesutil.PadTo([]byte("receipts"), 32),
-			LogsBloom:     make([]byte, 256),
-			PrevRandao:    bytesutil.PadTo([]byte("randao"), 32),
-			BaseFeePerGas: bytesutil.PadTo([]byte{1}, 32),
-			BlockHash:     bytesutil.PadTo([]byte("blockhash"), 32),
-			Transactions:  [][]byte{[]byte("tx1"), []byte("tx2")},
-			Withdrawals:   []*enginev1.Withdrawal{},
-			SlotNumber:    primitives.Slot(100),
-		},
-		ExecutionRequests:     &enginev1.ExecutionRequests{},
-		BuilderIndex:          primitives.BuilderIndex(42),
-		BeaconBlockRoot:       bytesutil.PadTo([]byte("beacon-root"), 32),
-		ParentBeaconBlockRoot: bytesutil.PadTo([]byte("parent-beacon-root"), 32),
-	}
-
-	blinded, err := WireBlindedFromFull(full)
-	require.NoError(t, err)
-
-	fullHTR, err := full.HashTreeRoot()
-	require.NoError(t, err)
-	blindedHTR, err := blinded.HashTreeRoot()
-	require.NoError(t, err)
-	require.Equal(t, fullHTR, blindedHTR)
-
-	// SSZ roundtrip.
-	enc, err := blinded.MarshalSSZ()
-	require.NoError(t, err)
-	decoded := &WireBlindedExecutionPayloadEnvelope{}
-	require.NoError(t, decoded.UnmarshalSSZ(enc))
-	rtHTR, err := decoded.HashTreeRoot()
-	require.NoError(t, err)
-	require.Equal(t, fullHTR, rtHTR)
-
-	// Signed wrapper SSZ roundtrip.
-	signedBlinded, err := SignedWireBlindedFromFull(&SignedExecutionPayloadEnvelope{
-		Message:   full,
-		Signature: bytesutil.PadTo([]byte("sig"), 96),
-	})
-	require.NoError(t, err)
-	signedEnc, err := signedBlinded.MarshalSSZ()
-	require.NoError(t, err)
-	decodedSigned := &SignedWireBlindedExecutionPayloadEnvelope{}
-	require.NoError(t, decodedSigned.UnmarshalSSZ(signedEnc))
-	rtBlindedHTR, err := decodedSigned.Message.HashTreeRoot()
-	require.NoError(t, err)
-	require.Equal(t, fullHTR, rtBlindedHTR)
-}
