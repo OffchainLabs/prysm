@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"iter"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -171,4 +172,90 @@ func TestDataColumn_ProposerIndex(t *testing.T) {
 	pi, err := dataColumn.ProposerIndex()
 	assert.NoError(t, err)
 	assert.Equal(t, proposerIndex, pi)
+}
+
+func collectBundles(seq iter.Seq[CellProofBundle]) []CellProofBundle {
+	var out []CellProofBundle
+	for b := range seq {
+		out = append(out, b)
+	}
+	return out
+}
+
+func TestRODataColumnsToCellProofBundles(t *testing.T) {
+	sidecars := []RODataColumn{
+		{fulu: &ethpb.DataColumnSidecar{
+			Index:          1,
+			Column:         sizedSlices(2, 2048, 1),
+			KzgCommitments: sizedSlices(2, 48, 10),
+			KzgProofs:      sizedSlices(2, 48, 20),
+		}},
+		{fulu: &ethpb.DataColumnSidecar{
+			Index:          2,
+			Column:         sizedSlices(3, 2048, 30),
+			KzgCommitments: sizedSlices(3, 48, 40),
+			KzgProofs:      sizedSlices(3, 48, 50),
+		}},
+	}
+
+	got := collectBundles(RODataColumnsToCellProofBundles(sidecars))
+	require.Equal(t, 5, len(got))
+
+	// First bundle pairs the first sidecar's first cell/commitment/proof.
+	require.Equal(t, uint64(1), got[0].ColumnIndex)
+	require.DeepEqual(t, sidecars[0].Column()[0], got[0].Cell)
+	require.DeepEqual(t, sidecars[0].fulu.KzgCommitments[0], got[0].Commitment)
+	require.DeepEqual(t, sidecars[0].KzgProofs()[0], got[0].Proof)
+
+	// Bundles for the second sidecar carry its own column index.
+	require.Equal(t, uint64(2), got[2].ColumnIndex)
+}
+
+func TestRODataColumnsToCellProofBundlesStopsEarly(t *testing.T) {
+	sidecars := []RODataColumn{
+		{fulu: &ethpb.DataColumnSidecar{
+			Index:          1,
+			Column:         sizedSlices(3, 2048, 1),
+			KzgCommitments: sizedSlices(3, 48, 10),
+			KzgProofs:      sizedSlices(3, 48, 20),
+		}},
+	}
+
+	count := 0
+	for range RODataColumnsToCellProofBundles(sidecars) {
+		count++
+		break
+	}
+	require.Equal(t, 1, count)
+}
+
+func TestRODataColumnsToCellProofBundlesLengthMismatch(t *testing.T) {
+	cases := []struct {
+		name string
+		dc   *ethpb.DataColumnSidecar
+	}{
+		{
+			name: "fewer commitments than cells",
+			dc: &ethpb.DataColumnSidecar{
+				Column:         sizedSlices(3, 2048, 1),
+				KzgCommitments: sizedSlices(2, 48, 10),
+				KzgProofs:      sizedSlices(3, 48, 20),
+			},
+		},
+		{
+			name: "fewer proofs than cells",
+			dc: &ethpb.DataColumnSidecar{
+				Column:         sizedSlices(3, 2048, 1),
+				KzgCommitments: sizedSlices(3, 48, 10),
+				KzgProofs:      sizedSlices(2, 48, 20),
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Must not panic on a mismatched sidecar; it yields nothing.
+			got := collectBundles(RODataColumnsToCellProofBundles([]RODataColumn{{fulu: tc.dc}}))
+			require.Equal(t, 0, len(got))
+		})
+	}
 }

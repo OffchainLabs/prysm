@@ -253,6 +253,13 @@ func RODataColumnsToCellProofBundles(sidecars []RODataColumn) iter.Seq[CellProof
 				return
 			}
 			kps := sidecar.KzgProofs()
+			if len(kcs) != len(cells) || len(kps) != len(cells) {
+				log.WithField("cells", len(cells)).
+					WithField("commitments", len(kcs)).
+					WithField("proofs", len(kps)).
+					Error("mismatched cell/commitment/proof counts in data column sidecar")
+				return
+			}
 			for i := range cells {
 				if !yield(CellProofBundle{
 					ColumnIndex: sidecar.Index(),
