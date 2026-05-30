@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("vR9\xcb[:)1\x98\xa6\x13c\x98\xbfg;\x90\x1f\x9fע")
