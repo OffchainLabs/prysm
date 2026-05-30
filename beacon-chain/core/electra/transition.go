@@ -52,7 +52,7 @@ var (
 //	    process_participation_flag_updates(state)
 //	    process_sync_committee_updates(state)
 func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
-	_, span := trace.StartSpan(ctx, "electra.ProcessEpoch")
+	ctx, span := trace.StartSpan(ctx, "electra.ProcessEpoch")
 	defer span.End()
 
 	if state == nil || state.IsNil() {

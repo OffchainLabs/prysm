@@ -184,16 +184,19 @@ func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
 // boundary in order to compute the right proposer indices after processing
 // state transition. The caller of this function must not hold a lock in forkchoice store.
 func (s *Service) updateCachesPostBlockProcessing(cfg *postBlockProcessConfig) {
+	ctx, span := trace.StartSpan(cfg.ctx, "blockChain.updateCachesPostBlockProcessing")
+	defer span.End()
+
 	slot := cfg.postState.Slot()
 	root := cfg.roblock.Root()
-	if err := transition.UpdateNextSlotCache(cfg.ctx, root[:], cfg.postState); err != nil {
+	if err := transition.UpdateNextSlotCache(ctx, root[:], cfg.postState); err != nil {
 		log.WithError(err).Error("Could not update next slot state cache")
 		return
 	}
 	if !slots.IsEpochEnd(slot) {
 		return
 	}
-	if err := s.handleEpochBoundary(cfg.ctx, slot, cfg.postState, root[:]); err != nil {
+	if err := s.handleEpochBoundary(ctx, slot, cfg.postState, root[:]); err != nil {
 		log.WithError(err).Error("Could not handle epoch boundary")
 	}
 }
