@@ -4,7 +4,6 @@ import (
 	"runtime"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	multi_value_slice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -112,15 +111,13 @@ func NewMultiValueInactivityScores(scores []uint64) *MultiValueInactivityScores 
 	return mv
 }
 
-// MultiValueValidators is a multi-value slice of compact validators.
-type MultiValueValidators = multi_value_slice.Slice[stateutil.CompactValidator]
+// MultiValueValidators is a multi-value slice of validator references.
+type MultiValueValidators = multi_value_slice.Slice[*ethpb.Validator]
 
 // NewMultiValueValidators creates a new slice whose shared items will be populated with input values.
-// It converts the protobuf validators to compact representation internally.
 func NewMultiValueValidators(vals []*ethpb.Validator) *MultiValueValidators {
-	compactVals := stateutil.CompactValidatorsFromProto(vals)
 	mv := &MultiValueValidators{}
-	mv.Init(compactVals)
+	mv.Init(vals)
 	multiValueCountGauge.WithLabelValues(types.Validators.String()).Inc()
 	runtime.SetFinalizer(mv, validatorsFinalizer)
 	return mv

@@ -1188,16 +1188,10 @@ func TestGetValidatorBalances(t *testing.T) {
 func TestGetValidatorIdentities(t *testing.T) {
 	count := uint64(4)
 	genesisState, _ := util.DeterministicGenesisState(t, count)
-	for i := range count {
-		val, err := genesisState.ValidatorAtIndex(primitives.ValidatorIndex(i))
-		require.NoError(t, err)
-
-		val.ActivationEpoch = primitives.Epoch(i)
-		err = genesisState.UpdateValidatorAtIndex(primitives.ValidatorIndex(i), val)
-		require.NoError(t, err)
-	}
-
 	st := genesisState.ToProtoUnsafe().(*eth.BeaconState)
+	for i := range count {
+		st.Validators[i].ActivationEpoch = primitives.Epoch(i)
+	}
 
 	t.Run("json", func(t *testing.T) {
 		t.Run("get all", func(t *testing.T) {
@@ -1225,9 +1219,9 @@ func TestGetValidatorIdentities(t *testing.T) {
 			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 			require.Equal(t, 4, len(resp.Data))
 			for i := range count {
-				require.Equal(t, fmt.Sprintf("%d", i), resp.Data[i].Index)
-				require.DeepEqual(t, hexutil.Encode(st.Validators[i].PublicKey), resp.Data[i].Pubkey)
-				require.Equal(t, fmt.Sprintf("%d", st.Validators[i].ActivationEpoch), resp.Data[i].ActivationEpoch)
+				assert.Equal(t, fmt.Sprintf("%d", i), resp.Data[i].Index)
+				assert.DeepEqual(t, hexutil.Encode(st.Validators[i].PublicKey), resp.Data[i].Pubkey)
+				assert.Equal(t, fmt.Sprintf("%d", st.Validators[i].ActivationEpoch), resp.Data[i].ActivationEpoch)
 			}
 		})
 		t.Run("get by index", func(t *testing.T) {

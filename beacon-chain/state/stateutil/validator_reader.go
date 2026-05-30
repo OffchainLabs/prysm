@@ -2,21 +2,22 @@ package stateutil
 
 import (
 	multi_value_slice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // ValReader specifies an interface through which we can access the validator registry.
 type ValReader interface {
 	Len() int
-	At(i int) (CompactValidator, error)
+	At(i int) (*ethpb.Validator, error)
 }
 
 // ValSliceReader describes a struct that conforms to the ValReader interface
 type ValSliceReader struct {
-	Validators []CompactValidator
+	Validators []*ethpb.Validator
 }
 
 // NewValSliceReader constructs a ValSliceReader object.
-func NewValSliceReader(vals []CompactValidator) ValSliceReader {
+func NewValSliceReader(vals []*ethpb.Validator) ValSliceReader {
 	return ValSliceReader{Validators: vals}
 }
 
@@ -26,7 +27,7 @@ func (v ValSliceReader) Len() int {
 }
 
 // At returns the validator at the provided index.
-func (v ValSliceReader) At(i int) (CompactValidator, error) {
+func (v ValSliceReader) At(i int) (*ethpb.Validator, error) {
 	return v.Validators[i], nil
 }
 
@@ -34,12 +35,12 @@ func (v ValSliceReader) At(i int) (CompactValidator, error) {
 // This struct is specifically designed for accessing validator data from a
 // multivalue slice.
 type ValMultiValueSliceReader struct {
-	ValMVSlice *multi_value_slice.Slice[CompactValidator]
+	ValMVSlice *multi_value_slice.Slice[*ethpb.Validator]
 	Identifier multi_value_slice.Identifiable
 }
 
 // NewValMultiValueSliceReader constructs a new val reader object.
-func NewValMultiValueSliceReader(valSlice *multi_value_slice.Slice[CompactValidator],
+func NewValMultiValueSliceReader(valSlice *multi_value_slice.Slice[*ethpb.Validator],
 	identifier multi_value_slice.Identifiable) ValMultiValueSliceReader {
 	return ValMultiValueSliceReader{
 		ValMVSlice: valSlice,
@@ -53,6 +54,6 @@ func (v ValMultiValueSliceReader) Len() int {
 }
 
 // At returns the validator at the provided index.
-func (v ValMultiValueSliceReader) At(i int) (CompactValidator, error) {
+func (v ValMultiValueSliceReader) At(i int) (*ethpb.Validator, error) {
 	return v.ValMVSlice.At(v.Identifier, uint64(i))
 }

@@ -258,7 +258,7 @@ func findValidatorIndexInCommittee(committee []primitives.ValidatorIndex, valida
 // It returns Active for any active validator and Pending otherwise.
 func syncDutyStatus(st state.BeaconState, idx primitives.ValidatorIndex) validator.Status {
 	val, err := st.ValidatorAtIndexReadOnly(idx)
-	if err != nil {
+	if err != nil || val.IsNil() {
 		return validator.Pending
 	}
 	currentEpoch := coreTime.CurrentEpoch(st)

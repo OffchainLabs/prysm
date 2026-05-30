@@ -411,7 +411,7 @@ func statusForPubKey(headState state.ReadOnlyBeaconState, pubKey []byte) (ethpb.
 
 func assignmentStatus(beaconState state.ReadOnlyBeaconState, validatorIndex primitives.ValidatorIndex) ethpb.ValidatorStatus {
 	validator, err := beaconState.ValidatorAtIndexReadOnly(validatorIndex)
-	if err != nil {
+	if err != nil || validator.IsNil() {
 		return ethpb.ValidatorStatus_UNKNOWN_STATUS
 	}
 

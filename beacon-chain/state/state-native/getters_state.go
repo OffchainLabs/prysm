@@ -2,7 +2,6 @@ package state_native
 
 import (
 	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
@@ -30,7 +29,7 @@ func (b *BeaconState) ToProtoUnsafe() any {
 		inactivityScores = b.inactivityScoresMultiValue.Value(b)
 	}
 	if b.validatorsMultiValue != nil {
-		vals = stateutil.CompactValidatorsToProto(b.validatorsMultiValue.Value(b))
+		vals = b.validatorsMultiValue.Value(b)
 	}
 
 	switch b.version {
