@@ -455,7 +455,10 @@ func VerifyBitfieldLength(bf bitfield.Bitfield, committeeSize uint64) error {
 
 // ShuffledIndices uses input beacon state and returns the shuffled indices of the input epoch,
 // the shuffled indices then can be used to break up into committees.
-func ShuffledIndices(s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]primitives.ValidatorIndex, error) {
+func ShuffledIndices(ctx context.Context, s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]primitives.ValidatorIndex, error) {
+	_, span := trace.StartSpan(ctx, "helpers.ShuffledIndices")
+	defer span.End()
+
 	seed, err := Seed(s, epoch, params.BeaconConfig().DomainBeaconAttester)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not get seed for epoch %d", epoch)
@@ -500,7 +503,7 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 	if committeeCache.HasEntry(string(seed[:])) {
 		return nil
 	}
-	shuffledIndices, err := ShuffledIndices(state, e)
+	shuffledIndices, err := ShuffledIndices(ctx, state, e)
 	if err != nil {
 		return err
 	}
