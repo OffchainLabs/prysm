@@ -41,9 +41,11 @@ func (b *BeaconState) validatorsReadOnlyVal() []state.ReadOnlyValidator {
 	}
 	v := b.validatorsMultiValue.Value(b)
 
+	backing := make([]readOnlyValidator, len(v))
 	res := make([]state.ReadOnlyValidator, len(v))
-	for i := range res {
-		res[i] = NewValidatorFromCompact(v[i])
+	for i := range v {
+		backing[i].validator = v[i]
+		res[i] = &backing[i]
 	}
 	return res
 }
