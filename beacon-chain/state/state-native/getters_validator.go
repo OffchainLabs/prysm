@@ -210,12 +210,13 @@ func (b *BeaconState) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyV
 		return state.ErrNilValidatorsInState
 	}
 	l := b.validatorsMultiValue.Len(b)
+	rov := new(readOnlyValidator)
 	for i := range l {
 		v, err := b.validatorsMultiValue.At(b, uint64(i))
 		if err != nil {
 			return err
 		}
-		rov := NewValidatorFromCompact(v)
+		rov.validator = v
 		if err = f(i, rov); err != nil {
 			return err
 		}
