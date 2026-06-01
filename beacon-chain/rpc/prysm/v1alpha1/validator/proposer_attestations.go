@@ -522,7 +522,7 @@ func (vs *Server) filterPreviousEpochAttestationByTarget(att ethpb.Att, cp *ethp
 // 1. The attestation matches the current target view defined in `filterCurrentEpochAttestationByTarget`.
 // 2. The attestation matches the previous target view defined in `filterPreviousEpochAttestationByTarget`.
 // 3. The attestation matches certain fork choice conditions defined in `filterCurrentEpochAttestationByForkchoice`.
-// The remaining attestations are sent for batch signature verification. If the batch verification fails, each signature is verified individually.
+// The attestations are sent for batch signature verification. If the batch verification fails, each signature is verified individually.
 func (vs *Server) filterAttestationBySignature(ctx context.Context, atts proposerAtts, st state.BeaconState) (proposerAtts, error) {
 	headSlot := vs.HeadFetcher.HeadSlot()
 	targetEpoch := slots.ToEpoch(headSlot)
@@ -582,13 +582,8 @@ func (vs *Server) filterAttestationBySignature(ctx context.Context, atts propose
 		unverifiedAtts = append(unverifiedAtts, att)
 	}
 
-	if len(unverifiedAtts) == 0 {
-		return verifiedAtts, nil
-	}
-
-	unverifiedAtts = unverifiedAtts.filterBatchSignature(ctx, st)
-
-	return append(verifiedAtts, unverifiedAtts...), nil
+	candidateAtts := append(verifiedAtts, unverifiedAtts...)
+	return candidateAtts.filterBatchSignature(ctx, st), nil
 }
 
 // filterBatchSignature verifies the signatures of the attestation set.

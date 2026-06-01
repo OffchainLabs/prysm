@@ -804,6 +804,59 @@ func Test_filterBatchSignature(t *testing.T) {
 	assert.DeepEqual(t, aGood[0], aFiltered[0])
 }
 
+func Test_filterAttestationBySignature_VerifiesTargetAndForkchoiceMatches(t *testing.T) {
+	st, k := util.DeterministicGenesisState(t, 64)
+	atts, err := util.GenerateAttestations(st, k, 1, 0, false)
+	require.NoError(t, err)
+	goodAtt := atts[0]
+	badAtt := goodAtt.Clone()
+	badAtt.SetSignature(make([]byte, 96))
+
+	targetRoot := [32]byte(goodAtt.GetData().Target.Root)
+	headRoot := bytesutil.PadTo([]byte("head"), 32)
+	headSlot := primitives.Slot(0)
+	currentSlot := primitives.Slot(0)
+	s := &Server{
+		HeadFetcher: &chainMock.ChainService{
+			MockHeadSlot: &headSlot,
+			Root:         headRoot,
+			TargetRoot:   targetRoot,
+		},
+		TimeFetcher: &chainMock.ChainService{Slot: &currentSlot},
+	}
+
+	filtered, err := s.filterAttestationBySignature(t.Context(), proposerAtts{goodAtt, badAtt}, st)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(filtered))
+	require.DeepEqual(t, goodAtt, filtered[0])
+
+	currentSlot = params.BeaconConfig().SlotsPerEpoch
+	headSlot = currentSlot
+	filtered, err = s.filterAttestationBySignature(t.Context(), proposerAtts{badAtt}, st)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(filtered))
+
+	forkchoiceAtt := goodAtt.Clone()
+	forkchoiceAtt.GetData().Slot = params.BeaconConfig().SlotsPerEpoch
+	forkchoiceAtt.GetData().Target.Epoch = slots.ToEpoch(forkchoiceAtt.GetData().Slot)
+	forkchoiceAtt.GetData().BeaconBlockRoot = forkchoiceAtt.GetData().Target.Root
+	forkchoiceAtt.SetSignature(make([]byte, 96))
+	forkchoiceRoot := [32]byte(forkchoiceAtt.GetData().BeaconBlockRoot)
+	nonMatchingTargetRoot := [32]byte{'x'}
+	s.HeadFetcher = &chainMock.ChainService{
+		MockHeadSlot: &headSlot,
+		Root:         headRoot,
+		TargetRoot:   nonMatchingTargetRoot,
+	}
+	s.ForkchoiceFetcher = &chainMock.ChainService{
+		BlockSlot:      0,
+		CanonicalRoots: map[[32]byte]bool{forkchoiceRoot: true},
+	}
+	filtered, err = s.filterAttestationBySignature(t.Context(), proposerAtts{forkchoiceAtt}, st)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(filtered))
+}
+
 func Test_isAttestationFromCurrentEpoch(t *testing.T) {
 	slot := primitives.Slot(1)
 	epoch := slots.ToEpoch(slot)
