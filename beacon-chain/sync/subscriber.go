@@ -614,7 +614,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 		log.WithFields(p.logFields()).WithError(err).Debug("Could not subscribe to subnets as initial sync failed")
 		return
 	}
-	s.trySubscribeSubnets(tracker)
+	s.trySubscribeSubnets(ctx, tracker)
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
 	for {
@@ -631,7 +631,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 				}).Debug("Exiting topic subnet subscription loop")
 				return
 			}
-			s.trySubscribeSubnets(tracker)
+			s.trySubscribeSubnets(ctx, tracker)
 		case <-s.ctx.Done():
 			return
 		}
@@ -640,7 +640,7 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 
 // trySubscribeSubnets attempts to subscribe to any missing subnets that we should be subscribed to.
 // Only if initial sync is complete.
-func (s *Service) trySubscribeSubnets(t *subnetTracker) {
+func (s *Service) trySubscribeSubnets(ctx context.Context, t *subnetTracker) {
 	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
 	s.pruneNotWanted(t, subnetsToJoin)
 	suffix := s.cfg.p2p.Encoding().ProtocolSuffix()
@@ -664,7 +664,7 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 			log.Info("Subscribing to partial columns on", topicStr)
 			// A failed partial subscription is non-fatal; we log and continue, and still
 			// subscribe to the full columns below as a fallback.
-			if err := t.partial.broadcaster.Subscribe(s.ctx, topic); err != nil {
+			if err := t.partial.broadcaster.Subscribe(ctx, topic); err != nil {
 				log.WithError(err).Error("Failed to subscribe to partial column")
 			}
 		}
