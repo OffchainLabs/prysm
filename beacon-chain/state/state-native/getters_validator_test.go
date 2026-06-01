@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	testtmpl "github.com/OffchainLabs/prysm/v7/beacon-chain/state/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -171,5 +172,23 @@ func BenchmarkReadFromEveryValidator(b *testing.B) {
 			_ = v.EffectiveBalance()
 			return nil
 		}))
+	}
+}
+
+// BenchmarkAggregateKeyFromIndices measures the cost of aggregating validator public
+// keys.
+func BenchmarkAggregateKeyFromIndices(b *testing.B) {
+	n := params.BeaconConfig().MaxValidatorsPerCommittee
+
+	st, _ := util.DeterministicGenesisState(b, n)
+	idxs := make([]uint64, n)
+	for i := range idxs {
+		idxs[i] = uint64(i)
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		_, err := st.AggregateKeyFromIndices(idxs)
+		require.NoError(b, err)
 	}
 }
