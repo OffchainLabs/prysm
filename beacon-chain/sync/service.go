@@ -239,9 +239,9 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	}
 	// Initialize signature channel with configured limit
 	r.signatureChan = make(chan *signatureVerifier, r.cfg.batchVerifierLimit)
-	// Initialize KZG channel with fixed buffer size of 100.
+	// Initialize KZG channel with fixed buffer size of 128 (maximum number of column topics).
 	// This buffer size is designed to handle burst traffic of partial data column cells:
-	r.kzgChan = make(chan *kzgVerifier, 100)
+	r.kzgChan = make(chan *kzgVerifier, 128)
 
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
