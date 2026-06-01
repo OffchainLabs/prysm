@@ -11,10 +11,13 @@ import (
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/mock"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/blst"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -465,9 +468,6 @@ func Test_packAttestations(t *testing.T) {
 	}
 	cb := primitives.NewAttestationCommitteeBits()
 	cb.SetBitAt(0, true)
-	key, err := blst.RandKey()
-	require.NoError(t, err)
-	sig := key.Sign([]byte{'X'})
 	electraAtt := &ethpb.AttestationElectra{
 		AggregationBits: bitfield.Bitlist{0b11111},
 		CommitteeBits:   cb,
@@ -482,16 +482,17 @@ func Test_packAttestations(t *testing.T) {
 				Root:  make([]byte, 32),
 			},
 		},
-		Signature: sig.Marshal(),
+		Signature: make([]byte, 96),
 	}
-	pool := attestations.NewPool()
-	require.NoError(t, pool.SaveAggregatedAttestations([]ethpb.Att{phase0Att, electraAtt}))
 	slot := primitives.Slot(1)
-	s := &Server{AttPool: pool, HeadFetcher: &chainMock.ChainService{}, TimeFetcher: &chainMock.ChainService{Slot: &slot}}
 
 	t.Run("Phase 0", func(t *testing.T) {
-		st, _ := util.DeterministicGenesisState(t, 64)
+		st, keys := util.DeterministicGenesisState(t, 64)
+		signTestAttestation(t, st, keys, phase0Att)
+		pool := attestations.NewPool()
+		require.NoError(t, pool.SaveAggregatedAttestations([]ethpb.Att{phase0Att, electraAtt}))
 		require.NoError(t, st.SetSlot(1))
+		s := &Server{AttPool: pool, HeadFetcher: &chainMock.ChainService{}, TimeFetcher: &chainMock.ChainService{Slot: &slot}}
 
 		atts, err := s.packAttestations(ctx, st, 0)
 		require.NoError(t, err)
@@ -504,8 +505,12 @@ func Test_packAttestations(t *testing.T) {
 		cfg.ElectraForkEpoch = 1
 		params.OverrideBeaconConfig(cfg)
 
-		st, _ := util.DeterministicGenesisStateElectra(t, 64)
+		st, keys := util.DeterministicGenesisStateElectra(t, 64)
+		signTestAttestation(t, st, keys, electraAtt)
+		pool := attestations.NewPool()
+		require.NoError(t, pool.SaveAggregatedAttestations([]ethpb.Att{phase0Att, electraAtt}))
 		require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
+		s := &Server{AttPool: pool, HeadFetcher: &chainMock.ChainService{}, TimeFetcher: &chainMock.ChainService{Slot: &slot}}
 
 		atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
 		require.NoError(t, err)
@@ -518,8 +523,12 @@ func Test_packAttestations(t *testing.T) {
 		cfg.ElectraForkEpoch = 1
 		params.OverrideBeaconConfig(cfg)
 
-		st, _ := util.DeterministicGenesisStateDeneb(t, 64)
+		st, keys := util.DeterministicGenesisStateDeneb(t, 64)
+		signTestAttestation(t, st, keys, electraAtt)
+		pool := attestations.NewPool()
+		require.NoError(t, pool.SaveAggregatedAttestations([]ethpb.Att{phase0Att, electraAtt}))
 		require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
+		s := &Server{AttPool: pool, HeadFetcher: &chainMock.ChainService{}, TimeFetcher: &chainMock.ChainService{Slot: &slot}}
 
 		atts, err := s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch)
 		require.NoError(t, err)
@@ -536,10 +545,6 @@ func TestPackAttestations_ElectraOnChainAggregates(t *testing.T) {
 	cfg.ElectraForkEpoch = 1
 	params.OverrideBeaconConfig(cfg)
 
-	key, err := blst.RandKey()
-	require.NoError(t, err)
-	sig := key.Sign([]byte{'X'})
-
 	cb0 := primitives.NewAttestationCommitteeBits()
 	cb0.SetBitAt(0, true)
 	cb1 := primitives.NewAttestationCommitteeBits()
@@ -552,13 +557,18 @@ func TestPackAttestations_ElectraOnChainAggregates(t *testing.T) {
 		BeaconBlockRoot: bytesutil.PadTo([]byte{'1'}, 32),
 	})
 
+	// 192 validators -> 2 committees per slot with 6 validators each
+	st, keys := util.DeterministicGenesisStateElectra(t, 192)
+	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
+
 	att := func(bits byte, cb []byte, data *ethpb.AttestationData) *ethpb.AttestationElectra {
-		return &ethpb.AttestationElectra{
+		att := &ethpb.AttestationElectra{
 			AggregationBits: bitfield.Bitlist{bits},
 			CommitteeBits:   cb,
 			Data:            util.HydrateAttestationData(data),
-			Signature:       sig.Marshal(),
 		}
+		signTestAttestation(t, st, keys, att)
+		return att
 	}
 
 	// Glossary:
@@ -579,10 +589,6 @@ func TestPackAttestations_ElectraOnChainAggregates(t *testing.T) {
 
 	pool := &mock.PoolMock{}
 	require.NoError(t, pool.SaveAggregatedAttestations(sliceCast(aggregates)))
-
-	// 192 validators → 2 committees per slot with 6 validators each
-	st, _ := util.DeterministicGenesisStateElectra(t, 192)
-	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
 
 	slot := primitives.Slot(1)
 	headSlot := primitives.Slot(0)
@@ -672,6 +678,37 @@ func TestPackAttestations_ElectraOnChainAggregates(t *testing.T) {
 			require.Equal(t, want, got)
 		}
 	})
+}
+
+func signTestAttestation(t testing.TB, st state.ReadOnlyBeaconState, keys []bls.SecretKey, att ethpb.Att) {
+	t.Helper()
+	committees, err := helpers.AttestationCommitteesFromState(t.Context(), st, att)
+	require.NoError(t, err)
+
+	forkEpoch := st.Fork().Epoch
+	domainEpoch := forkEpoch
+	if slots.ToEpoch(att.GetData().Slot) < forkEpoch {
+		require.NotEqual(t, primitives.Epoch(0), forkEpoch)
+		domainEpoch = forkEpoch.Sub(1)
+	}
+	domain, err := signing.Domain(st.Fork(), domainEpoch, params.BeaconConfig().DomainBeaconAttester, st.GenesisValidatorsRoot())
+	require.NoError(t, err)
+	dataRoot, err := signing.ComputeSigningRoot(att.GetData(), domain)
+	require.NoError(t, err)
+
+	var sigs []bls.Signature
+	offset := uint64(0)
+	for _, committee := range committees {
+		for i, validatorIndex := range committee {
+			if att.GetAggregationBits().BitAt(offset + uint64(i)) {
+				sigs = append(sigs, keys[validatorIndex].Sign(dataRoot[:]))
+			}
+		}
+		offset += uint64(len(committee))
+	}
+	require.Equal(t, offset, att.GetAggregationBits().Len())
+	require.NotEqual(t, 0, len(sigs))
+	att.SetSignature(bls.AggregateSignatures(sigs).Marshal())
 }
 
 func sliceCast(atts []*ethpb.AttestationElectra) []ethpb.Att {
