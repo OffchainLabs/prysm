@@ -321,7 +321,7 @@ func (p *TestP2P) PubSub() *pubsub.PubSub {
 	return p.pubsub
 }
 
-func (p *TestP2P) PartialColumnBroadcaster() *partialdatacolumnbroadcaster.PartialColumnBroadcaster {
+func (p *TestP2P) PartialColumnBroadcaster() partialdatacolumnbroadcaster.Broadcaster {
 	return nil
 }
 

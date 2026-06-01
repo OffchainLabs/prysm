@@ -109,7 +109,7 @@ func (*FakeP2P) PubSub() *pubsub.PubSub {
 	return nil
 }
 
-func (*FakeP2P) PartialColumnBroadcaster() *partialdatacolumnbroadcaster.PartialColumnBroadcaster {
+func (*FakeP2P) PartialColumnBroadcaster() partialdatacolumnbroadcaster.Broadcaster {
 	return nil
 }
 

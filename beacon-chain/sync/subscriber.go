@@ -68,7 +68,7 @@ type subscribeParameters struct {
 }
 
 type partialSubscribeParameters struct {
-	broadcaster *partialdatacolumnbroadcaster.PartialColumnBroadcaster
+	broadcaster partialdatacolumnbroadcaster.Broadcaster
 }
 
 // shortTopic is a less verbose version of topic strings used for logging.

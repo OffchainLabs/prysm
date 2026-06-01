@@ -97,7 +97,7 @@ type (
 
 	// PubSubProvider provides the p2p pubsub protocol.
 	PartialColumnBroadcasterProvider interface {
-		PartialColumnBroadcaster() *partialdatacolumnbroadcaster.PartialColumnBroadcaster
+		PartialColumnBroadcaster() partialdatacolumnbroadcaster.Broadcaster
 	}
 
 	// PeerManager abstracts some peer management methods from libp2p.

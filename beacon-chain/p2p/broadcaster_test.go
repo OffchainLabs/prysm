@@ -3,8 +3,10 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"iter"
 	"net"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
@@ -803,6 +806,163 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	var result ethpb.DataColumnSidecar
 	require.NoError(t, service.Encoding().DecodeGossip(msg.Data, &result))
 	require.DeepEqual(t, &result, verifiedRoSidecar.DataColumnSidecar())
+}
+
+type publishedPartial struct {
+	topic string
+	index uint64
+}
+
+type fakePartialColumnBroadcaster struct {
+	mu        sync.Mutex
+	published []publishedPartial
+	err       error
+}
+
+var _ partialdatacolumnbroadcaster.Broadcaster = (*fakePartialColumnBroadcaster)(nil)
+
+func (f *fakePartialColumnBroadcaster) Publish(_ context.Context, seq iter.Seq2[string, blocks.PartialDataColumn]) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for topic, col := range seq {
+		f.published = append(f.published, publishedPartial{topic: topic, index: col.Index})
+	}
+	return f.err
+}
+
+func (f *fakePartialColumnBroadcaster) publishedColumns() []publishedPartial {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.published)
+}
+
+func (*fakePartialColumnBroadcaster) Start(partialdatacolumnbroadcaster.ColumnCallbacks) {}
+func (*fakePartialColumnBroadcaster) Stop()                                              {}
+func (*fakePartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubsub.Option {
+	return opts
+}
+func (*fakePartialColumnBroadcaster) Subscribe(context.Context, *pubsub.Topic) error { return nil }
+func (*fakePartialColumnBroadcaster) Unsubscribe(context.Context, string) error      { return nil }
+
+// buildTestPartialColumn builds a minimal partial data column for the given column index.
+// The cells/proofs are not populated because the broadcast paths only inspect the column index.
+func buildTestPartialColumn(t *testing.T, index uint64) blocks.PartialDataColumn {
+	t.Helper()
+	header := util.HydrateSignedBeaconHeader(&ethpb.SignedBeaconBlockHeader{})
+	root, err := header.Header.HashTreeRoot()
+	require.NoError(t, err)
+	commitments := [][]byte{bytesutil.PadTo([]byte{'C'}, fieldparams.KzgCommitmentSize)}
+	pc, err := blocks.NewPartialDataColumn(root, header, index, commitments, nil)
+	require.NoError(t, err)
+	return pc
+}
+
+// TestService_BroadcastDataColumnPartialWithPeers exercises the "items with peers" partial-column path:
+// when a peer is already subscribed to the column's subnet, the partial column is published directly
+// via the broadcaster (no peer discovery).
+func TestService_BroadcastDataColumnPartialWithPeers(t *testing.T) {
+	const columnIndex = 12
+
+	// Require at least one peer per subnet so hasPeerWithSubnet is meaningful.
+	gFlags := new(flags.GlobalFlags)
+	gFlags.MinimumPeersPerSubnet = 1
+	flags.Init(gFlags)
+	defer flags.Init(new(flags.GlobalFlags))
+
+	ctx := t.Context()
+	p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+	p1.Connect(p2)
+	require.NotEqual(t, 0, len(p1.BHost.Network().Peers()), "No peers")
+
+	fake := &fakePartialColumnBroadcaster{}
+	service := &Service{
+		ctx:                      ctx,
+		host:                     p1.BHost,
+		pubsub:                   p1.PubSub(),
+		joinedTopics:             map[string]*pubsub.Topic{},
+		cfg:                      &Config{},
+		genesisTime:              time.Now(),
+		genesisValidatorsRoot:    bytesutil.PadTo([]byte{'A'}, 32),
+		subnetsLock:              make(map[uint64]*sync.RWMutex),
+		subnetsLockLock:          sync.Mutex{},
+		peers:                    peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+		partialColumnBroadcaster: fake,
+	}
+
+	digest, err := service.currentForkDigest()
+	require.NoError(t, err)
+
+	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
+	topic := fmt.Sprintf(DataColumnSubnetTopicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
+
+	// p2 subscribes to the subnet topic so service sees a peer for it.
+	_, err = p2.SubscribeToTopic(topic)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		return len(service.pubsub.ListPeers(topic)) > 0
+	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
+
+	pc := buildTestPartialColumn(t, columnIndex)
+	require.NoError(t, service.BroadcastDataColumnSidecars(ctx, nil, []blocks.PartialDataColumn{pc}))
+
+	require.Eventually(t, func() bool {
+		return len(fake.publishedColumns()) == 1
+	}, 5*time.Second, 10*time.Millisecond, "partial column was not published")
+
+	published := fake.publishedColumns()
+	require.Equal(t, 1, len(published))
+	require.Equal(t, topic, published[0].topic)
+	require.Equal(t, uint64(columnIndex), published[0].index)
+}
+
+func TestService_BroadcastDataColumnPartialWithoutPeers(t *testing.T) {
+	const columnIndex = 12
+
+	// Require at least one peer per subnet so the column is categorized as "without peers".
+	gFlags := new(flags.GlobalFlags)
+	gFlags.MinimumPeersPerSubnet = 1
+	flags.Init(gFlags)
+	defer flags.Init(new(flags.GlobalFlags))
+
+	ctx := t.Context()
+	p1 := p2ptest.NewTestP2P(t)
+
+	fake := &fakePartialColumnBroadcaster{}
+	service := &Service{
+		ctx:                      ctx,
+		host:                     p1.BHost,
+		pubsub:                   p1.PubSub(),
+		joinedTopics:             map[string]*pubsub.Topic{},
+		cfg:                      &Config{},
+		genesisTime:              time.Now(),
+		genesisValidatorsRoot:    bytesutil.PadTo([]byte{'A'}, 32),
+		subnetsLock:              make(map[uint64]*sync.RWMutex),
+		subnetsLockLock:          sync.Mutex{},
+		peers:                    peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+		partialColumnBroadcaster: fake,
+		// dv5Listener is nil, so FindAndDialPeersWithSubnets returns immediately without discovery.
+	}
+
+	digest, err := service.currentForkDigest()
+	require.NoError(t, err)
+
+	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
+	expectedTopic := fmt.Sprintf(DataColumnSubnetTopicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
+
+	// No peer is subscribed to the subnet, so hasPeerWithSubnet is false.
+	require.Equal(t, 0, len(service.pubsub.ListPeers(expectedTopic)))
+
+	pc := buildTestPartialColumn(t, columnIndex)
+	require.NoError(t, service.BroadcastDataColumnSidecars(ctx, nil, []blocks.PartialDataColumn{pc}))
+
+	require.Eventually(t, func() bool {
+		return len(fake.publishedColumns()) == 1
+	}, 5*time.Second, 10*time.Millisecond, "partial column was not published")
+
+	published := fake.publishedColumns()
+	require.Equal(t, 1, len(published))
+	require.Equal(t, expectedTopic, published[0].topic)
+	require.Equal(t, uint64(columnIndex), published[0].index)
 }
 
 type topicInvoked struct {

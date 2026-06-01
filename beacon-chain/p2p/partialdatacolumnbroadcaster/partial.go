@@ -63,6 +63,18 @@ type ColumnCallbacks interface {
 	HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string)
 }
 
+// Broadcaster is the behaviour of the partial data column broadcaster used by the rest of the node.
+type Broadcaster interface {
+	Start(callbacks ColumnCallbacks)
+	Stop()
+	Publish(ctx context.Context, topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error
+	AppendPubSubOpts(opts []pubsub.Option) []pubsub.Option
+	Subscribe(ctx context.Context, t *pubsub.Topic) error
+	Unsubscribe(ctx context.Context, topic string) error
+}
+
+var _ Broadcaster = (*PartialColumnBroadcaster)(nil)
+
 type PartialColumnBroadcaster struct {
 	logger *logrus.Logger
 
