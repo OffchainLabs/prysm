@@ -228,6 +228,30 @@ func TestServer_getParentBlockHash_Gloas_Empty(t *testing.T) {
 	require.DeepEqual(t, parentBlockHash[:], got)
 }
 
+
+func TestServer_getParentBlockHash_Gloas_Transition(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	blockHash := bytesutil.ToBytes32([]byte("parent-exec-block-hash"))
+	headRoot := bytesutil.ToBytes32([]byte("head-root"))
+	st, err := util.NewBeaconStateGloas(func(state *ethpb.BeaconStateGloas) error {
+		state.LatestExecutionPayloadBid.BlockHash = blockHash[:]
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Parent at slot 0 is pre-gloas (epoch 0 < GloasForkEpoch 1). A pre-gloas parent is always full,
+	// so even with parentFull=false we expect the parent's block hash, not an error.
+	chain := &chainMock.ChainService{BlockSlot: 0}
+	vs := &Server{ForkchoiceFetcher: chain, HeadFetcher: chain}
+	got, err := vs.getParentBlockHash(context.Background(), st, primitives.Slot(params.BeaconConfig().SlotsPerEpoch), headRoot, false)
+	require.NoError(t, err)
+	require.DeepEqual(t, blockHash[:], got)
+}
+
 func TestServer_applyParentExecutionPayloadToHead_PreGloas(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()

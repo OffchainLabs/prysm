@@ -13,6 +13,10 @@ func (b *BeaconState) LatestExecutionPayloadHeader() (interfaces.ExecutionData, 
 	if b.version < version.Bellatrix {
 		return nil, errNotSupported("LatestExecutionPayloadHeader", b.version)
 	}
+	// gloas removed latest_execution_payload_header; callers must use LatestBlockHash or the bid.
+	if b.version >= version.Gloas {
+		return nil, errNotSupported("LatestExecutionPayloadHeader", b.version)
+	}
 
 	b.lock.RLock()
 	defer b.lock.RUnlock()
