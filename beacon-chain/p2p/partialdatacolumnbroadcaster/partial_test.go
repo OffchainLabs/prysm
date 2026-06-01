@@ -174,7 +174,7 @@ func (m *mockPubSub) publishedColumnCount() int {
 
 func newBroadcasterHarness(t *testing.T, ps *mockPubSub) *broadcasterHarness {
 	t.Helper()
-	broadcaster := NewBroadcaster(logrus.New())
+	broadcaster := NewBroadcaster(t.Context(), logrus.New())
 	broadcaster.peerFeedback = ps.peerFeedback
 	broadcaster.publishPartialCol = ps.publishPartialCol
 

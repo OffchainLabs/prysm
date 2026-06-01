@@ -96,8 +96,8 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 
 		logger := logrus.New()
 		logger.SetLevel(logrus.DebugLevel)
-		broadcaster1 := partialdatacolumnbroadcaster.NewBroadcaster(logger)
-		broadcaster2 := partialdatacolumnbroadcaster.NewBroadcaster(logger)
+		broadcaster1 := partialdatacolumnbroadcaster.NewBroadcaster(t.Context(), logger)
+		broadcaster2 := partialdatacolumnbroadcaster.NewBroadcaster(t.Context(), logger)
 
 		opts1 := broadcaster1.AppendPubSubOpts([]pubsub.Option{
 			pubsub.WithMessageSigning(false),

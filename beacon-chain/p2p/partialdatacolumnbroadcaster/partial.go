@@ -78,6 +78,8 @@ var _ Broadcaster = (*PartialColumnBroadcaster)(nil)
 type PartialColumnBroadcaster struct {
 	logger *logrus.Logger
 
+	ctx context.Context
+
 	peerFeedback      func(topic string, peer peer.ID, kind pubsub.PeerFeedbackKind) error
 	publishPartialCol func(topic string, groupID []byte, col *blocks.PartialDataColumn) error
 	stop              chan struct{}
@@ -175,7 +177,7 @@ func (p *PartialColumnBroadcaster) enqueue(ctx context.Context, kind requestKind
 // tryEnqueue creates and enqueues a request without blocking.
 // Returns false if the request channel is full.
 func (p *PartialColumnBroadcaster) tryEnqueue(kind requestKind, v requestValues) (request, bool) {
-	req := newRequest(context.Background(), kind, v)
+	req := newRequest(p.ctx, kind, v)
 	select {
 	case p.incomingReq <- req:
 		return req, true
@@ -242,9 +244,10 @@ type gossip struct {
 	groupID []byte
 }
 
-func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
+func NewBroadcaster(ctx context.Context, logger *logrus.Logger) *PartialColumnBroadcaster {
 	concurrency := params.BeaconConfig().DataColumnSidecarSubnetCount
 	return &PartialColumnBroadcaster{
+		ctx:              ctx,
 		topics:           make(map[string]*pubsub.Topic),
 		partialMsgStore:  make(map[string]map[string]*verification.PartialColumnVerifier),
 		groupTTL:         make(map[string]int8),
@@ -344,7 +347,6 @@ var (
 
 func (p *PartialColumnBroadcaster) loop() {
 	cleanup := time.NewTicker(time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot))
-	defer cleanup.Stop()
 	for {
 		select {
 		case req := <-p.incomingReq:
@@ -716,7 +718,7 @@ func (p *PartialColumnBroadcaster) handlePartialCells(ourDataColumn *blocks.Part
 				return
 			}
 			_ = p.peerFeedback(topicId, rpc.from, pubsub.PeerFeedbackUsefulMessage)
-			_, _ = p.enqueue(context.Background(), requestKindCellsValidated, requestValues{
+			_, _ = p.enqueue(p.ctx, requestKindCellsValidated, requestValues{
 				cellsValidated: &cellsValidated{
 					validationTook: time.Since(start),
 					topic:          topicId,

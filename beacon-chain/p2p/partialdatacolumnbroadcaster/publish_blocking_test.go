@@ -16,7 +16,7 @@ import (
 // context error when the event loop is not processing requests, rather
 // than blocking indefinitely.
 func TestPublishReturnsOnContextDeadline(t *testing.T) {
-	b := NewBroadcaster(logrus.New())
+	b := NewBroadcaster(t.Context(), logrus.New())
 	b.peerFeedback = func(_ string, _ peer.ID, _ pubsub.PeerFeedbackKind) error { return nil }
 	b.publishPartialCol = func(_ string, _ []byte, _ *blocks.PartialDataColumn) error { return nil }
 
