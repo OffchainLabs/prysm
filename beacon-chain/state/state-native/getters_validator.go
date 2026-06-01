@@ -164,12 +164,15 @@ func (b *BeaconState) AggregateKeyFromIndices(idxs []uint64) (bls.PublicKey, err
 	defer b.lock.RUnlock()
 
 	pubKeys := make([][]byte, len(idxs))
+	backing := make([]byte, len(idxs)*fieldparams.BLSPubkeyLength)
 	for i, idx := range idxs {
 		v, err := b.validatorsMultiValue.At(b, idx)
 		if err != nil {
 			return nil, err
 		}
-		pubKeys[i] = v.PublicKey[:]
+		buf := backing[i*fieldparams.BLSPubkeyLength : (i+1)*fieldparams.BLSPubkeyLength]
+		copy(buf, v.PublicKey[:])
+		pubKeys[i] = buf
 	}
 	return bls.AggregatePublicKeys(pubKeys)
 }
