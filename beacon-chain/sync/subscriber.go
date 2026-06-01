@@ -656,8 +656,8 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 
 		topic, err := s.cfg.p2p.JoinTopic(topicStr, pubsubOpts...)
 		if err != nil {
-			log.WithError(err).Error("Failed to join topic")
-			return
+			log.WithError(err).WithField("topic", topicStr).Error("Failed to join topic")
+			continue
 		}
 
 		if requestPartial {
