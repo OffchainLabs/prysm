@@ -189,6 +189,34 @@ func BenchmarkValidatorsReadOnlySeq(b *testing.B) {
 	}
 }
 
+// BenchmarkValidatorsReadOnly measures the cost of building the full slice of read-only
+// validator wrappers returned by ValidatorsReadOnly.
+func BenchmarkValidatorsReadOnly(b *testing.B) {
+	const n = 2_300_000 // ~ number of validators on mainnet at the time of writing
+
+	vals := make([]*ethpb.Validator, n)
+	for i := range vals {
+		pk := make([]byte, 48)
+		wc := make([]byte, 32)
+		pk[0] = byte(i)
+		vals[i] = &ethpb.Validator{
+			PublicKey:             pk,
+			WithdrawalCredentials: wc,
+			EffectiveBalance:      32_000_000_000,
+			ExitEpoch:             100,
+			ActivationEpoch:       1,
+		}
+	}
+	st, err := statenative.InitializeFromProtoUnsafeDeneb(&ethpb.BeaconStateDeneb{Validators: vals})
+	require.NoError(b, err)
+
+	b.ReportAllocs()
+	for b.Loop() {
+		ros := st.ValidatorsReadOnly()
+		require.Equal(b, n, len(ros))
+	}
+}
+
 // BenchmarkAggregateKeyFromIndices measures the cost of aggregating validator public
 // keys.
 func BenchmarkAggregateKeyFromIndices(b *testing.B) {
