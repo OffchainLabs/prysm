@@ -29,6 +29,10 @@ const TTLInSlots = 3
 
 var errInvalidHeader = errors.New("invalid header")
 
+// errUnsolicitedCells is returned when a peer pushes cells before we have
+// advertised our parts metadata (availability/request bitmap) for the column.
+var errUnsolicitedCells = errors.New("peer sent cells before we advertised our parts metadata")
+
 const dataColumnSidecarPrefix = "data_column_sidecar_"
 
 func extractColumnIndexFromTopic(topic string) (uint64, error) {
@@ -516,6 +520,14 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	if ourVerifier == nil && hasMessage {
 		header, headerWasCached := p.getHeader(groupID, message)
 		if header == nil {
+			// We have no header for this group, so we have never advertised our
+			// parts metadata. If the peer nonetheless pushed us cells, it is
+			// sending unsolicited data; downscore it.
+			if message.CellsPresentBitmap.Count() > 0 {
+				p.logger.WithFields(rpc.logFields()).Debug("Peer pushed cells for an unknown group before we advertised our parts metadata; downscoring")
+				_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+				return errUnsolicitedCells
+			}
 			return nil
 		}
 
@@ -573,6 +585,15 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpc incomingPartialRPC) err
 	ourDataColumn := ourVerifier.Column
 
 	if hasMessage {
+		// A peer should only send us cells after we have published
+		// our parts metadata (availability/request bitmap) for this column. Cells
+		// that arrive while we have not yet published are
+		// unsolicited; downscore the peer.
+		if message.CellsPresentBitmap.Count() > 0 && !ourDataColumn.Published {
+			p.logger.WithFields(rpc.logFields()).Debug("Peer pushed cells before we advertised our parts metadata; downscoring")
+			_ = p.peerFeedback(topicID, rpc.from, pubsub.PeerFeedbackInvalidMessage)
+			return errUnsolicitedCells
+		}
 		err := p.handlePartialCells(ourDataColumn, message, rpc)
 		if err != nil {
 			return err

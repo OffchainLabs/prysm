@@ -845,6 +845,8 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				existing := createPartialColumn(t, 3, map[uint64][]byte{
 					0: {0x11},
 				})
+				// We have published our parts metadata, so the incoming cells are solicited.
+				existing.Published = true
 				group := existing.GroupID()
 				b.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
 					string(group): newMarkedVerifier(existing),
@@ -883,6 +885,9 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 				existing := createPartialColumn(t, 3, map[uint64][]byte{
 					0: {0x33},
 				})
+				// We have published our parts metadata, so the incoming cells are solicited
+				// and reach KZG validation (which fails for this case).
+				existing.Published = true
 				group := existing.GroupID()
 				b.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
 					string(group): newMarkedVerifier(existing),
@@ -906,6 +911,50 @@ func TestPartialColumnBroadcaster_handleIncomingRPC(t *testing.T) {
 					0: {0x33},
 				})
 			},
+		},
+		{
+			name:                "unsolicited cells before publish report invalid peer feedback and are not validated",
+			expectedErrContains: "peer sent cells before we advertised our parts metadata",
+			setup: func(t *testing.T, b *PartialColumnBroadcaster) testSetup {
+				existing := createPartialColumn(t, 3, map[uint64][]byte{
+					0: {0x11},
+				})
+				// We have NOT published our parts metadata, so any incoming cells are unsolicited.
+				group := existing.GroupID()
+				b.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{
+					string(group): newMarkedVerifier(existing),
+				}
+				msg := buildSidecarWithCells(3, map[uint64][]byte{
+					1: {0x22},
+				})
+				return testSetup{
+					inputRPC: buildIncomingRPC(validTopic, group, msg, nil),
+				}
+			},
+			expectPeerFeedbackCall: true,
+			expectPeerFeedback:     pubsub.PeerFeedbackInvalidMessage,
+			expectedStoreColumn: func(t *testing.T) *blocks.PartialDataColumn {
+				// Column is unchanged: the unsolicited cell is dropped, not merged.
+				return createPartialColumn(t, 3, map[uint64][]byte{
+					0: {0x11},
+				})
+			},
+		},
+		{
+			name:                "cells for unknown group report invalid peer feedback",
+			expectedErrContains: "peer sent cells before we advertised our parts metadata",
+			setup: func(t *testing.T, _ *PartialColumnBroadcaster) testSetup {
+				group := []byte("unknown-group")
+				// Cells present (non-empty bitmap) but no header and no tracked column.
+				msg := buildSidecarWithCells(2, map[uint64][]byte{
+					1: {0x22},
+				})
+				return testSetup{
+					inputRPC: buildIncomingRPC(validTopic, group, msg, nil),
+				}
+			},
+			expectPeerFeedbackCall: true,
+			expectPeerFeedback:     pubsub.PeerFeedbackInvalidMessage,
 		},
 		{
 			name: "parts metadata difference republishes when getBlobs was called",
