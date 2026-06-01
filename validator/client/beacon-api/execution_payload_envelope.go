@@ -29,7 +29,7 @@ func (c *beaconApiValidatorClient) getExecutionPayloadEnvelope(
 	slot primitives.Slot,
 	beaconBlockRoot [32]byte,
 ) (*ethpb.ExecutionPayloadEnvelope, *ethpb.WireBlindedExecutionPayloadEnvelope, error) {
-	if envelope, _, _ := c.envelopeCache.peek(slot); envelope != nil {
+	if envelope, _, _ := c.envelopeCache.Peek(slot); envelope != nil {
 		return envelope, nil, nil
 	}
 

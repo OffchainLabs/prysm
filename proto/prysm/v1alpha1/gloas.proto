@@ -573,6 +573,17 @@ message SignedWireBlindedExecutionPayloadEnvelope {
   bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
+// GenericSignedExecutionPayloadEnvelope carries one of the two publish forms: the stateless
+// contents (full envelope + blobs + proofs) or the stateful blinded envelope (payload_root, the BN
+// reconstructs the full payload from its cache). One publish RPC accepts both, mirroring
+// GenericSignedBeaconBlock.
+message GenericSignedExecutionPayloadEnvelope {
+  oneof envelope {
+    SignedExecutionPayloadEnvelopeContents contents = 1;
+    SignedWireBlindedExecutionPayloadEnvelope blinded = 2;
+  }
+}
+
 // Builder represents a builder in the Gloas fork.
 //
 // Spec:

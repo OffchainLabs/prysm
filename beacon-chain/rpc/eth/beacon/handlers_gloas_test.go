@@ -16,10 +16,12 @@ import (
 	executiontesting "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
+	validatorv1alpha1 "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/validator"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -44,7 +46,7 @@ func envelopeCacheFor(signed *ethpb.SignedExecutionPayloadEnvelope) *cache.Execu
 
 func blindedJSONBody(t *testing.T, signed *ethpb.SignedExecutionPayloadEnvelope) []byte {
 	t.Helper()
-	blinded, err := structs.SignedWireBlindedFromFull(signed)
+	blinded, err := blocks.SignedWireBlindedFromFull(signed)
 	require.NoError(t, err)
 	msg, err := structs.BlindedExecutionPayloadEnvelopeFromConsensus(blinded.Message)
 	require.NoError(t, err)
@@ -354,10 +356,9 @@ func TestPublishExecutionPayloadEnvelope_StatelessContents_RejectsBadProofs(t *t
 		flatProofs[0] = bytes.Repeat([]byte{0xff}, 48)
 	})
 
-	s := &Server{
-		Broadcaster:        &mockp2p.MockBroadcaster{},
-		DataColumnReceiver: &chainMock.ChainService{},
-	}
+	// A real (empty) v1alpha1 server is enough: bad proofs are rejected in verifyCellProofs before
+	// any P2P/cache/receiver dependency is touched.
+	s := &Server{V1Alpha1ValidatorServer: &validatorv1alpha1.Server{}}
 	req := httptest.NewRequest(http.MethodPost, "/eth/v1/beacon/execution_payload_envelope", bytes.NewReader(body))
 	req.Header.Set(api.VersionHeader, version.String(version.Gloas))
 	req.Header.Set(api.ExecutionPayloadBlindedHeader, "false")
@@ -408,7 +409,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBlinded(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	signed := testSignedEnvelope()
-	blinded, err := structs.SignedWireBlindedFromFull(signed)
+	blinded, err := blocks.SignedWireBlindedFromFull(signed)
 	require.NoError(t, err)
 	sszBody, err := blinded.MarshalSSZ()
 	require.NoError(t, err)
@@ -441,7 +442,7 @@ func TestPublishExecutionPayloadEnvelope_SSZ_StatefulBlinded_CacheMiss(t *testin
 	params.OverrideBeaconConfig(cfg)
 
 	signed := testSignedEnvelope()
-	blinded, err := structs.SignedWireBlindedFromFull(signed)
+	blinded, err := blocks.SignedWireBlindedFromFull(signed)
 	require.NoError(t, err)
 	sszBody, err := blinded.MarshalSSZ()
 	require.NoError(t, err)

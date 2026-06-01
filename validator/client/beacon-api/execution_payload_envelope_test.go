@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -18,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
+	"github.com/OffchainLabs/prysm/v7/validator/client/cache"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"go.uber.org/mock/gomock"
@@ -55,7 +57,7 @@ func TestGetExecutionPayloadEnvelope_CachedHit(t *testing.T) {
 	envelope := testProtoEnvelope()
 	client := &beaconApiValidatorClient{
 		handler:       handler,
-		envelopeCache: newExecutionPayloadEnvelopeCache(),
+		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
 	}
 	client.envelopeCache.Add(100, envelope, nil, nil)
 
@@ -66,7 +68,7 @@ func TestGetExecutionPayloadEnvelope_CachedHit(t *testing.T) {
 	assert.Equal(t, primitives.BuilderIndex(42), full.BuilderIndex)
 
 	// Peek must leave the entry in the cache so the publish path can read blob data.
-	cached, _, _ := client.envelopeCache.peek(100)
+	cached, _, _ := client.envelopeCache.Peek(100)
 	require.NotNil(t, cached)
 }
 
@@ -76,7 +78,7 @@ func TestGetExecutionPayloadEnvelope_StatefulFetchesBlinded(t *testing.T) {
 	defer ctrl.Finish()
 
 	envelope := testProtoEnvelope()
-	blinded, err := structs.WireBlindedFromFull(envelope)
+	blinded, err := blocks.WireBlindedFromFull(envelope)
 	require.NoError(t, err)
 	body, err := blinded.MarshalSSZ()
 	require.NoError(t, err)
@@ -91,7 +93,7 @@ func TestGetExecutionPayloadEnvelope_StatefulFetchesBlinded(t *testing.T) {
 		fmt.Sprintf("/eth/v1/validator/execution_payload_envelopes/100/%s", hexutil.Encode(root[:])),
 	).Return(body, respHeader, nil)
 
-	client := &beaconApiValidatorClient{handler: handler, envelopeCache: newExecutionPayloadEnvelopeCache()}
+	client := &beaconApiValidatorClient{handler: handler, envelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
 	full, gotBlinded, err := client.getExecutionPayloadEnvelope(t.Context(), 100, root)
 	require.NoError(t, err)
 	require.IsNil(t, full)
@@ -105,7 +107,7 @@ func TestPublishBlindedExecutionPayloadEnvelope(t *testing.T) {
 	defer ctrl.Finish()
 
 	signed := &ethpb.SignedExecutionPayloadEnvelope{Message: testProtoEnvelope(), Signature: bytesutil.PadTo([]byte("sig"), 96)}
-	signedBlinded, err := structs.SignedWireBlindedFromFull(signed)
+	signedBlinded, err := blocks.SignedWireBlindedFromFull(signed)
 	require.NoError(t, err)
 	expectedBody, err := signedBlinded.MarshalSSZ()
 	require.NoError(t, err)
@@ -133,7 +135,7 @@ func TestPublishBlindedExecutionPayloadEnvelope_JSONFallbackOn406(t *testing.T) 
 	defer ctrl.Finish()
 
 	signed := &ethpb.SignedExecutionPayloadEnvelope{Message: testProtoEnvelope(), Signature: bytesutil.PadTo([]byte("sig"), 96)}
-	signedBlinded, err := structs.SignedWireBlindedFromFull(signed)
+	signedBlinded, err := blocks.SignedWireBlindedFromFull(signed)
 	require.NoError(t, err)
 	msg, err := structs.BlindedExecutionPayloadEnvelopeFromConsensus(signedBlinded.Message)
 	require.NoError(t, err)
@@ -199,7 +201,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessSendsContents(t *testing.T) {
 	client := &beaconApiValidatorClient{
 		handler:       handler,
 		stateless:     true,
-		envelopeCache: newExecutionPayloadEnvelopeCache(),
+		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
 	}
 	client.envelopeCache.Add(primitives.Slot(envelope.Payload.SlotNumber), envelope, [][]byte{blob}, [][]byte{proof})
 
@@ -208,7 +210,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessSendsContents(t *testing.T) {
 	require.NotNil(t, resp)
 
 	// Cache must be drained after publish.
-	cached, _, _ := client.envelopeCache.peek(primitives.Slot(envelope.Payload.SlotNumber))
+	cached, _, _ := client.envelopeCache.Peek(primitives.Slot(envelope.Payload.SlotNumber))
 	assert.Equal(t, (*ethpb.ExecutionPayloadEnvelope)(nil), cached)
 }
 
@@ -225,7 +227,7 @@ func TestPublishExecutionPayloadEnvelope_StatelessCacheMissErrors(t *testing.T) 
 	handler := mock.NewMockJsonRestHandler(ctrl)
 	client := &beaconApiValidatorClient{
 		handler:       handler,
-		envelopeCache: newExecutionPayloadEnvelopeCache(),
+		envelopeCache: cache.NewExecutionPayloadEnvelopeCache(),
 	}
 
 	_, err := client.publishExecutionPayloadEnvelope(t.Context(), signed)
@@ -247,7 +249,7 @@ func TestPublishExecutionPayloadEnvelope_Error(t *testing.T) {
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Return(nil, nil, errors.New("server error"))
 
-	client := &beaconApiValidatorClient{handler: handler, envelopeCache: newExecutionPayloadEnvelopeCache()}
+	client := &beaconApiValidatorClient{handler: handler, envelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
 	client.envelopeCache.Add(primitives.Slot(envelope.Payload.SlotNumber), envelope, nil, nil)
 
 	_, err := client.publishExecutionPayloadEnvelope(t.Context(), signed)

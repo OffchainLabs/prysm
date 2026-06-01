@@ -403,7 +403,7 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) ProposeExit(arg0, arg1 any)
 }
 
 // PublishExecutionPayloadEnvelope mocks base method.
-func (m *MockBeaconNodeValidatorServer) PublishExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.SignedExecutionPayloadEnvelope) (*emptypb.Empty, error) {
+func (m *MockBeaconNodeValidatorServer) PublishExecutionPayloadEnvelope(arg0 context.Context, arg1 *eth.GenericSignedExecutionPayloadEnvelope) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PublishExecutionPayloadEnvelope", arg0, arg1)
 	ret0, _ := ret[0].(*emptypb.Empty)

@@ -113,9 +113,13 @@ func TestGetExecutionPayloadEnvelopeRPC_PreFork(t *testing.T) {
 func TestPublishExecutionPayloadEnvelope_NilRequest(t *testing.T) {
 	vs := &Server{}
 	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), nil)
-	require.ErrorContains(t, "signed envelope or payload cannot be nil", err)
+	require.ErrorContains(t, "must set contents or blinded", err)
 
-	_, err = vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.SignedExecutionPayloadEnvelope{})
+	_, err = vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
+			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{SignedExecutionPayloadEnvelope: &ethpb.SignedExecutionPayloadEnvelope{}},
+		},
+	})
 	require.ErrorContains(t, "signed envelope or payload cannot be nil", err)
 }
 
@@ -126,9 +130,15 @@ func TestPublishExecutionPayloadEnvelope_PreFork(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	vs := &Server{}
-	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.SignedExecutionPayloadEnvelope{
-		Message: &ethpb.ExecutionPayloadEnvelope{
-			Payload: &enginev1.ExecutionPayloadGloas{SlotNumber: 0}, // epoch 0, before GloasForkEpoch 10
+	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
+			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{
+				SignedExecutionPayloadEnvelope: &ethpb.SignedExecutionPayloadEnvelope{
+					Message: &ethpb.ExecutionPayloadEnvelope{
+						Payload: &enginev1.ExecutionPayloadGloas{SlotNumber: 0}, // epoch 0, before GloasForkEpoch 10
+					},
+				},
+			},
 		},
 	})
 	require.ErrorContains(t, "not supported before Gloas fork", err)
@@ -152,8 +162,10 @@ func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {
 			BlockHash:     make([]byte, 32),
 			SlotNumber:    1,
 		},
-		BuilderIndex:    primitives.BuilderIndex(0),
-		BeaconBlockRoot: make([]byte, 32),
+		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		BuilderIndex:          primitives.BuilderIndex(0),
+		BeaconBlockRoot:       make([]byte, 32),
+		ParentBeaconBlockRoot: make([]byte, 32),
 	}
 
 	vs := &Server{ExecutionPayloadEnvelopeCache: cache.NewExecutionPayloadEnvelopeCache()}
@@ -164,7 +176,13 @@ func TestGetExecutionPayloadEnvelopeRPC_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	require.DeepEqual(t, envelope, resp.Envelope)
+	// The RPC returns the blinded wire form; its HTR must equal the cached full envelope's HTR.
+	require.NotNil(t, resp.Blinded)
+	wantHTR, err := envelope.HashTreeRoot()
+	require.NoError(t, err)
+	gotHTR, err := resp.Blinded.HashTreeRoot()
+	require.NoError(t, err)
+	require.Equal(t, wantHTR, gotHTR)
 }
 
 func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
@@ -202,7 +220,11 @@ func TestPublishExecutionPayloadEnvelope_Success(t *testing.T) {
 		Signature: make([]byte, 96),
 	}
 
-	resp, err := vs.PublishExecutionPayloadEnvelope(t.Context(), req)
+	resp, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
+			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{SignedExecutionPayloadEnvelope: req},
+		},
+	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.Equal(t, true, broadcaster.BroadcastCalled.Load())
@@ -244,7 +266,11 @@ func TestPublishExecutionPayloadEnvelope_ImportFailureIsAborted(t *testing.T) {
 		Signature: make([]byte, 96),
 	}
 
-	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), req)
+	_, err := vs.PublishExecutionPayloadEnvelope(t.Context(), &ethpb.GenericSignedExecutionPayloadEnvelope{
+		Envelope: &ethpb.GenericSignedExecutionPayloadEnvelope_Contents{
+			Contents: &ethpb.SignedExecutionPayloadEnvelopeContents{SignedExecutionPayloadEnvelope: req},
+		},
+	})
 	require.NotNil(t, err)
 	// Broadcast must have happened before the import failure (spec 202).
 	require.Equal(t, true, broadcaster.BroadcastCalled.Load())
