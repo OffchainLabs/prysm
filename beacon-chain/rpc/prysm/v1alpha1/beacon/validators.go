@@ -65,11 +65,11 @@ func (bs *Server) ListValidatorBalances(
 	if err != nil {
 		return nil, err
 	}
-		replayer := bs.ReplayerBuilder.ReplayerForSlot(startSlot)
-		if replayer == nil {
-			return nil, status.Error(codes.Internal, "Replayer is nil")
-		}
-		requestedState, err := replayer.ReplayBlocks(ctx)
+	replayer := bs.ReplayerBuilder.ReplayerForSlot(startSlot)
+	if replayer == nil {
+		return nil, status.Error(codes.Internal, "Replayer is nil")
+	}
+	requestedState, err := replayer.ReplayBlocks(ctx)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error replaying blocks for state at slot %d: %v", startSlot, err))
 	}
