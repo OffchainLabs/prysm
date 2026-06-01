@@ -42,7 +42,7 @@ func signedGloasBlock(t *testing.T, slot primitives.Slot, builderIndex primitive
 
 func testExecutionPayloadEnvelope(slot primitives.Slot, builderIndex primitives.BuilderIndex) *ethpb.ExecutionPayloadEnvelope {
 	return &ethpb.ExecutionPayloadEnvelope{
-		Payload: &enginev1.ExecutionPayloadDeneb{
+		Payload: &enginev1.ExecutionPayloadGloas{
 			ParentHash:    make([]byte, 32),
 			FeeRecipient:  make([]byte, 20),
 			StateRoot:     make([]byte, 32),
@@ -52,12 +52,12 @@ func testExecutionPayloadEnvelope(slot primitives.Slot, builderIndex primitives.
 			BaseFeePerGas: make([]byte, 32),
 			BlockHash:     make([]byte, 32),
 			ExtraData:     make([]byte, 0),
+			SlotNumber:    slot,
 		},
-		ExecutionRequests: &enginev1.ExecutionRequests{},
-		Slot:              slot,
-		BuilderIndex:      builderIndex,
-		BeaconBlockRoot:   make([]byte, 32),
-		StateRoot:         make([]byte, 32),
+		ExecutionRequests:     &enginev1.ExecutionRequests{},
+		BuilderIndex:          builderIndex,
+		BeaconBlockRoot:       make([]byte, 32),
+		ParentBeaconBlockRoot: make([]byte, 32),
 	}
 }
 

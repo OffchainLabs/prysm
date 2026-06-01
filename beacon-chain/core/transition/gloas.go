@@ -57,6 +57,9 @@ import (
 //	    for_ops(body.payload_attestations, process_payload_attestation)
 //	</spec>
 func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "core.state.gloasOperations")
+	defer span.End()
+
 	var err error
 
 	bb := block.Body()
@@ -105,7 +108,7 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 //
 // Spec definition:
 //
-//	<spec fn="process_epoch" fork="gloas" hash="393b69ef">
+//	<spec fn="process_epoch" fork="gloas" hash="24b959ba">
 //	def process_epoch(state: BeaconState) -> None:
 //	    process_justification_and_finalization(state)
 //	    process_inactivity_updates(state)
@@ -113,6 +116,7 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 //	    process_registry_updates(state)
 //	    process_slashings(state)
 //	    process_eth1_data_reset(state)
+//	    # [Modified in Gloas:EIP8061]
 //	    process_pending_deposits(state)
 //	    process_pending_consolidations(state)
 //	    # [New in Gloas:EIP7732]
@@ -124,6 +128,8 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 //	    process_participation_flag_updates(state)
 //	    process_sync_committee_updates(state)
 //	    process_proposer_lookahead(state)
+//	    # [New in Gloas:EIP7732]
+//	    process_ptc_window(state)
 //	</spec>
 func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	_, span := trace.StartSpan(ctx, "gloas.ProcessEpoch")
@@ -155,7 +161,7 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err := electra.ProcessRegistryUpdates(ctx, state); err != nil {
 		return errors.Wrap(err, "could not process registry updates")
 	}
-	if err := electra.ProcessSlashings(state); err != nil {
+	if err := electra.ProcessSlashings(ctx, state); err != nil {
 		return err
 	}
 	state, err = electra.ProcessEth1DataReset(state)
@@ -168,7 +174,7 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err = electra.ProcessPendingConsolidations(ctx, state); err != nil {
 		return err
 	}
-	if err = gloas.ProcessBuilderPendingPayments(state); err != nil {
+	if err = gloas.ProcessBuilderPendingPayments(ctx, state); err != nil {
 		return err
 	}
 	if err = electra.ProcessEffectiveBalanceUpdates(state); err != nil {
@@ -197,5 +203,5 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err := fulu.ProcessProposerLookahead(ctx, state); err != nil {
 		return err
 	}
-	return nil
+	return gloas.ProcessPTCWindow(ctx, state)
 }

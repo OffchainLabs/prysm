@@ -33,7 +33,7 @@ func (s *Service) canUpdateAttestedValidator(idx primitives.ValidatorIndex, slot
 }
 
 // attestingIndices returns the indices of validators that participated in the given aggregated attestation.
-func attestingIndices(ctx context.Context, state state.BeaconState, att ethpb.Att) ([]uint64, error) {
+func attestingIndices(ctx context.Context, state state.ReadOnlyBeaconState, att ethpb.Att) ([]uint64, error) {
 	committeeBits := att.CommitteeBitsVal().BitIndices()
 	committees := make([][]primitives.ValidatorIndex, len(committeeBits))
 	var err error
@@ -59,7 +59,7 @@ func logMessageTimelyFlagsForIndex(idx primitives.ValidatorIndex, data *ethpb.At
 }
 
 // processAttestations logs the event for the tracked validators' attestations inclusion in block
-func (s *Service) processAttestations(ctx context.Context, state state.BeaconState, blk interfaces.ReadOnlyBeaconBlock) {
+func (s *Service) processAttestations(ctx context.Context, state state.ReadOnlyBeaconState, blk interfaces.ReadOnlyBeaconBlock) {
 	if blk == nil || blk.Body() == nil {
 		return
 	}
@@ -69,7 +69,7 @@ func (s *Service) processAttestations(ctx context.Context, state state.BeaconSta
 }
 
 // processIncludedAttestation logs in the event for the tracked validators' and their latest attestation gets processed.
-func (s *Service) processIncludedAttestation(ctx context.Context, state state.BeaconState, att ethpb.Att) {
+func (s *Service) processIncludedAttestation(ctx context.Context, state state.ReadOnlyBeaconState, att ethpb.Att) {
 	attestingIndices, err := attestingIndices(ctx, state, att)
 	if err != nil {
 		log.WithError(err).Error("Could not get attesting indices")
@@ -99,7 +99,7 @@ func (s *Service) processIncludedAttestation(ctx context.Context, state state.Be
 			inclusionSlotGauge.WithLabelValues(fmt.Sprintf("%d", idx)).Set(float64(latestPerf.inclusionSlot))
 			aggregatedPerf.totalDistance += uint64(latestPerf.inclusionSlot - latestPerf.attestedSlot)
 
-			if state.Version() == version.Altair {
+			if state.Version() >= version.Altair {
 				targetIdx := params.BeaconConfig().TimelyTargetFlagIndex
 				sourceIdx := params.BeaconConfig().TimelySourceFlagIndex
 				headIdx := params.BeaconConfig().TimelyHeadFlagIndex
@@ -244,7 +244,7 @@ func (s *Service) processAggregatedAttestation(ctx context.Context, att ethpb.Ag
 	for _, idx := range attestingIndices {
 		if s.canUpdateAttestedValidator(primitives.ValidatorIndex(idx), att.AggregateVal().GetData().Slot) {
 			logFields := logMessageTimelyFlagsForIndex(primitives.ValidatorIndex(idx), att.AggregateVal().GetData())
-			log.WithFields(logFields).Info("Processed aggregated attestation")
+			log.WithFields(logFields).Debug("Processed aggregated attestation")
 		}
 	}
 }

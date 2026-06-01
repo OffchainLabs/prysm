@@ -5,7 +5,11 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	testtmpl "github.com/OffchainLabs/prysm/v7/beacon-chain/state/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestBeaconState_LatestBlockHeader_Phase0(t *testing.T) {
@@ -186,4 +190,35 @@ func TestBeaconState_BlockRootAtIndex_Deneb(t *testing.T) {
 			return InitializeFromProtoDeneb(&ethpb.BeaconStateDeneb{BlockRoots: BR})
 		},
 	)
+}
+
+func TestBeaconState_ProposerDependentRoot(t *testing.T) {
+	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+
+	t.Run("epoch < 2 returns sentinel", func(t *testing.T) {
+		s, err := InitializeFromProtoPhase0(&ethpb.BeaconState{Slot: 1})
+		require.NoError(t, err)
+		_, err = s.ProposerDependentRoot(primitives.Slot(slotsPerEpoch - 1))
+		require.ErrorIs(t, err, ErrProposerDependentRootUnderflow)
+	})
+
+	t.Run("happy path returns block_roots[epoch_start(epoch-1)-1]", func(t *testing.T) {
+		var blockRoots [][]byte
+		for i := uint64(0); i < uint64(params.BeaconConfig().SlotsPerHistoricalRoot); i++ {
+			blockRoots = append(blockRoots, []byte{byte(i)})
+		}
+		// slot in epoch 2 → boundary = epoch_start(1) = SlotsPerEpoch → expect block_roots[SlotsPerEpoch-1].
+		proposalSlot := primitives.Slot(2 * slotsPerEpoch)
+		s, err := InitializeFromProtoPhase0(&ethpb.BeaconState{
+			BlockRoots: blockRoots,
+			Slot:       primitives.Slot(3 * slotsPerEpoch),
+		})
+		require.NoError(t, err)
+
+		got, err := s.ProposerDependentRoot(proposalSlot)
+		require.NoError(t, err)
+		var expected [32]byte
+		expected[0] = byte(slotsPerEpoch - 1)
+		assert.DeepEqual(t, expected, got)
+	})
 }

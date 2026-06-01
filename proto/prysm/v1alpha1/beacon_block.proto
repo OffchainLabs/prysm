@@ -198,7 +198,6 @@ message BeaconBlockBody {
       [ (ethereum.eth.ext.ssz_max) = "16" ];
 }
 
-
 // Attestor slashings are proofs that a slashable offense has been committed by
 // attesting to two conflicting pieces of information by the same validator.
 message AttesterSlashing {
@@ -217,7 +216,6 @@ message IndexedAttestation {
   // 96 bytes aggregate signature.
   bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
-
 
 message SignedValidatorRegistrationsV1 {
   option deprecated = true;
@@ -323,7 +321,6 @@ message BeaconBlockBodyAltair {
   // New in Altair network upgrade.
   SyncAggregate sync_aggregate = 9;
 }
-
 
 // ----------------------------------------------------------------------------
 // Bellatrix
@@ -826,16 +823,19 @@ message BuilderBidDeneb {
 }
 
 message BuilderBidElectra {
-    ethereum.engine.v1.ExecutionPayloadHeaderDeneb header = 1;
-    repeated bytes blob_kzg_commitments = 2 [(ethereum.eth.ext.ssz_size) = "?,48", (ethereum.eth.ext.ssz_max)  = "max_blob_commitments.size"];
-    ethereum.engine.v1.ExecutionRequests execution_requests = 3;
-    bytes value = 4 [(ethereum.eth.ext.ssz_size) = "32"];
-    bytes pubkey = 5 [(ethereum.eth.ext.ssz_size) = "48"];
+  ethereum.engine.v1.ExecutionPayloadHeaderDeneb header = 1;
+  repeated bytes blob_kzg_commitments = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+  ethereum.engine.v1.ExecutionRequests execution_requests = 3;
+  bytes value = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes pubkey = 5 [ (ethereum.eth.ext.ssz_size) = "48" ];
 }
 
 message SignedBuilderBidElectra {
-    BuilderBidElectra message = 1 ;
-    bytes signature = 2 [(ethereum.eth.ext.ssz_size) = "96"];
+  BuilderBidElectra message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
 message BlobSidecars {

@@ -19,17 +19,22 @@ import (
 func TestService_isNewHead(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
-	require.Equal(t, true, service.isNewHead([32]byte{}))
 
+	// Zero root is always a new head
+	require.Equal(t, true, service.isNewHead([32]byte{}, false))
+
+	// Different root is a new head
 	service.head = &head{root: [32]byte{1}}
-	require.Equal(t, true, service.isNewHead([32]byte{2}))
-	require.Equal(t, false, service.isNewHead([32]byte{1}))
+	require.Equal(t, true, service.isNewHead([32]byte{2}, false))
+
+	// Same root is not a new head.
+	require.Equal(t, false, service.isNewHead([32]byte{1}, false))
 
 	// Nil head should use origin root
 	service.head = nil
 	service.originBlockRoot = [32]byte{3}
-	require.Equal(t, true, service.isNewHead([32]byte{2}))
-	require.Equal(t, false, service.isNewHead([32]byte{3}))
+	require.Equal(t, true, service.isNewHead([32]byte{2}, false))
+	require.Equal(t, false, service.isNewHead([32]byte{3}, false))
 }
 
 func TestService_getHeadStateAndBlock(t *testing.T) {

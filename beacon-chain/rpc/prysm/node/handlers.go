@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -105,8 +104,7 @@ func (s *Server) RemoveTrustedPeer(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "node.RemoveTrustedPeer")
 	defer span.End()
 
-	segments := strings.Split(r.URL.Path, "/")
-	id := segments[len(segments)-1]
+	id := r.PathValue("peer_id")
 	peerId, err := peer.Decode(id)
 	if err != nil {
 		errJson := &httputil.DefaultJsonError{

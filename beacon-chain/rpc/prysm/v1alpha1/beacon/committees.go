@@ -108,7 +108,7 @@ func (bs *Server) retrieveCommitteesForRoot(
 	ctx context.Context,
 	root []byte,
 ) (SlotToCommiteesMap, []primitives.ValidatorIndex, error) {
-	requestedState, err := bs.StateGen.StateByRoot(ctx, bytesutil.ToBytes32(root))
+	requestedState, err := bs.StateGen.StateByRootNoCopy(ctx, bytesutil.ToBytes32(root))
 	if err != nil {
 		return nil, nil, status.Error(codes.Internal, fmt.Sprintf("Could not get state: %v", err))
 	}

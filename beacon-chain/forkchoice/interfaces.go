@@ -39,6 +39,7 @@ type RLocker interface {
 // HeadRetriever retrieves head root and optimistic info of the current chain.
 type HeadRetriever interface {
 	Head(context.Context) ([32]byte, error)
+	FullHead(context.Context) ([32]byte, [32]byte, bool, error)
 	GetProposerHead() [32]byte
 	CachedHeadRoot() [32]byte
 }
@@ -71,7 +72,9 @@ type Getter interface {
 type FastGetter interface {
 	FinalizedCheckpoint() *forkchoicetypes.Checkpoint
 	FinalizedPayloadBlockHash() [32]byte
+	HasFullNode([32]byte) bool
 	HasNode([32]byte) bool
+	FullBeatsEmpty([32]byte) bool
 	HighestReceivedBlockSlot() primitives.Slot
 	HighestReceivedBlockRoot() [32]byte
 	IsCanonical(root [32]byte) bool
@@ -90,8 +93,12 @@ type FastGetter interface {
 	TargetRootForEpoch([32]byte, primitives.Epoch) ([32]byte, error)
 	UnrealizedJustifiedPayloadBlockHash() [32]byte
 	Weight(root [32]byte) (uint64, error)
+	ConsensusNodeWeight(root [32]byte) (uint64, error)
+	PayloadWeights(root [32]byte) (emptyWeight, fullWeight uint64, err error)
 	ParentRoot(root [32]byte) ([32]byte, error)
 	BlockHash(root [32]byte) ([32]byte, error)
+	GasLimit(root [32]byte) (uint64, error)
+	CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool)
 }
 
 // Setter allows to set forkchoice information
@@ -105,5 +112,7 @@ type Setter interface {
 	NewSlot(context.Context, primitives.Slot) error
 	SetBalancesByRooter(BalancesByRooter)
 	InsertSlashedIndex(context.Context, primitives.ValidatorIndex)
+	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
 	SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool)
+	MarkFullNode(root [32]byte)
 }

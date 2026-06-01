@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"testing"
 
@@ -504,6 +505,73 @@ func Test_applyValidatorDiff(t *testing.T) {
 	for i, val := range resultVals {
 		require.Equal(t, targetVals[i].Slashed, val.Slashed)
 		require.Equal(t, targetVals[i].EffectiveBalance, val.EffectiveBalance)
+	}
+}
+
+// TestApplyDiff_WithSignificantValidatorGrowth reproduces a bug where a Diff created from a
+// source with N validators to a target with >2N validators (all existing changed + many new)
+// fails on ApplyDiff. This is the mainnet scenario: genesis has ~21k validators, and by slot
+// 131072 all have EffectiveBalance changes and ~6.5k new ones activated.
+func TestApplyDiff_WithSignificantValidatorGrowth(t *testing.T) {
+	numSource := uint64(32)
+	numNew := uint64(48)
+	source, _ := util.DeterministicGenesisStateElectra(t, numSource)
+	target := source.Copy()
+
+	vals := target.Validators()
+	for i := range vals {
+		vals[i] = &ethpb.Validator{
+			PublicKey:                  vals[i].PublicKey,
+			WithdrawalCredentials:      vals[i].WithdrawalCredentials,
+			EffectiveBalance:           vals[i].EffectiveBalance + 1000,
+			Slashed:                    vals[i].Slashed,
+			ActivationEligibilityEpoch: vals[i].ActivationEligibilityEpoch,
+			ActivationEpoch:            vals[i].ActivationEpoch,
+			ExitEpoch:                  vals[i].ExitEpoch,
+			WithdrawableEpoch:          vals[i].WithdrawableEpoch,
+		}
+	}
+	for i := range numNew {
+		pubkey := make([]byte, fieldparams.BLSPubkeyLength)
+		binary.LittleEndian.PutUint64(pubkey, 1000+i)
+		wc := make([]byte, 32)
+		binary.LittleEndian.PutUint64(wc, 2000+i)
+		vals = append(vals, &ethpb.Validator{
+			PublicKey:                  pubkey,
+			WithdrawalCredentials:      wc,
+			EffectiveBalance:           32000000000,
+			Slashed:                    false,
+			ActivationEligibilityEpoch: primitives.Epoch(i),
+			ActivationEpoch:            primitives.Epoch(i + 1),
+			ExitEpoch:                  math.MaxUint64,
+			WithdrawableEpoch:          math.MaxUint64,
+		})
+	}
+	require.NoError(t, target.SetValidators(vals))
+
+	bals := target.Balances()
+	for range numNew {
+		bals = append(bals, 32000000000)
+	}
+	require.NoError(t, target.SetBalances(bals))
+	require.NoError(t, target.SetSlot(source.Slot()+1))
+
+	diffBytes, err := Diff(source, target)
+	require.NoError(t, err)
+
+	result, err := ApplyDiff(t.Context(), source.Copy(), diffBytes)
+	require.NoError(t, err, "ApplyDiff should handle diffs with significant validator growth")
+
+	resultVals := result.Validators()
+	targetVals := target.Validators()
+	require.Equal(t, len(targetVals), len(resultVals))
+	for i, val := range resultVals {
+		require.DeepEqual(t, targetVals[i].PublicKey, val.PublicKey)
+		require.Equal(t, targetVals[i].EffectiveBalance, val.EffectiveBalance)
+		require.Equal(t, targetVals[i].Slashed, val.Slashed)
+		require.Equal(t, targetVals[i].ActivationEpoch, val.ActivationEpoch)
+		require.Equal(t, targetVals[i].ExitEpoch, val.ExitEpoch)
+		require.Equal(t, targetVals[i].WithdrawableEpoch, val.WithdrawableEpoch)
 	}
 }
 

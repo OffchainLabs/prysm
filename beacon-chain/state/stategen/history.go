@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 
@@ -39,6 +40,19 @@ type CanonicalHistory struct {
 	cc    CanonicalChecker
 	cs    CurrentSlotter
 	cache CachedGetter
+}
+
+func (c *CanonicalHistory) executionPayloadEnvelope(
+	ctx context.Context,
+	blockRoot [32]byte,
+) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error) {
+	reader, ok := c.h.(interface {
+		ExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error)
+	})
+	if !ok {
+		return nil, nil
+	}
+	return reader.ExecutionPayloadEnvelope(ctx, blockRoot)
 }
 
 func (c *CanonicalHistory) ReplayerForSlot(target primitives.Slot) Replayer {

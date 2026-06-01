@@ -5,11 +5,7 @@ package runtime
 import (
 	"fmt"
 	"reflect"
-
-	"github.com/sirupsen/logrus"
 )
-
-var log = logrus.WithField("prefix", "registry")
 
 // Service is a struct that can be registered into a ServiceRegistry for
 // easy dependency management.

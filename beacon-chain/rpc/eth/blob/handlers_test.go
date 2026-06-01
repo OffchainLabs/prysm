@@ -64,6 +64,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("genesis", func(t *testing.T) {
 		u := "http://foo.example/genesis"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "genesis")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{}
@@ -78,6 +79,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("head", func(t *testing.T) {
 		u := "http://foo.example/head"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -126,6 +128,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("finalized", func(t *testing.T) {
 		u := "http://foo.example/finalized"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "finalized")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -150,6 +153,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("root", func(t *testing.T) {
 		u := "http://foo.example/" + hexutil.Encode(blockRoot[:])
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", hexutil.Encode(blockRoot[:]))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -174,6 +178,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("slot", func(t *testing.T) {
 		u := fmt.Sprintf("http://foo.example/%d", es)
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", fmt.Sprintf("%d", es))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -198,6 +203,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("slot not found", func(t *testing.T) {
 		u := fmt.Sprintf("http://foo.example/%d", es-1)
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", fmt.Sprintf("%d", es-1))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -215,6 +221,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("one blob only", func(t *testing.T) {
 		u := fmt.Sprintf("http://foo.example/%d?indices=2", es)
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", fmt.Sprintf("%d", es))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -246,6 +253,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("no blobs returns an empty array", func(t *testing.T) {
 		u := fmt.Sprintf("http://foo.example/%d", es)
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", fmt.Sprintf("%d", es))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -271,6 +279,7 @@ func TestBlobs(t *testing.T) {
 		overLimit := params.BeaconConfig().MaxBlobsPerBlock(ds)
 		u := fmt.Sprintf("http://foo.example/%d?indices=%d", es, overLimit)
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", fmt.Sprintf("%d", es))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{}
@@ -285,6 +294,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("outside retention period returns 200 with what we have", func(t *testing.T) {
 		u := fmt.Sprintf("http://foo.example/%d", es)
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", fmt.Sprintf("%d", es))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		moc := &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}, Block: denebBlock}
@@ -315,6 +325,7 @@ func TestBlobs(t *testing.T) {
 
 		u := fmt.Sprintf("http://foo.example/%d", es+128)
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", fmt.Sprintf("%d", es+128))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -345,6 +356,7 @@ func TestBlobs(t *testing.T) {
 
 		u := "http://foo.example/31"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "31")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -367,6 +379,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("malformed block ID", func(t *testing.T) {
 		u := "http://foo.example/foo"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "foo")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{}
@@ -381,6 +394,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("ssz", func(t *testing.T) {
 		u := "http://foo.example/finalized?indices=0"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "finalized")
 		request.Header.Add("Accept", "application/octet-stream")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -404,6 +418,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("ssz multiple blobs", func(t *testing.T) {
 		u := "http://foo.example/finalized"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "finalized")
 		request.Header.Add("Accept", "application/octet-stream")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -455,6 +470,7 @@ func TestBlobs_Electra(t *testing.T) {
 	t.Run("max blobs for electra", func(t *testing.T) {
 		u := fmt.Sprintf("http://foo.example/%d", es)
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", fmt.Sprintf("%d", es))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -487,6 +503,7 @@ func TestBlobs_Electra(t *testing.T) {
 		limit := params.BeaconConfig().MaxBlobsPerBlock(es) - 1
 		u := fmt.Sprintf("http://foo.example/%d?indices=%d", es, limit)
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", fmt.Sprintf("%d", es))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -519,6 +536,7 @@ func TestBlobs_Electra(t *testing.T) {
 		overLimit := params.BeaconConfig().MaxBlobsPerBlock(es)
 		u := fmt.Sprintf("http://foo.example/%d?indices=%d", es, overLimit)
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", fmt.Sprintf("%d", es))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{}
@@ -617,6 +635,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("genesis", func(t *testing.T) {
 		u := "http://foo.example/genesis"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "genesis")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{}
@@ -631,6 +650,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("head", func(t *testing.T) {
 		u := "http://foo.example/head"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "head")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -665,6 +685,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("finalized", func(t *testing.T) {
 		u := "http://foo.example/finalized"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "finalized")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -688,6 +709,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("root", func(t *testing.T) {
 		u := "http://foo.example/" + hexutil.Encode(blockRoot[:])
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", hexutil.Encode(blockRoot[:]))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -711,6 +733,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("slot", func(t *testing.T) {
 		u := "http://foo.example/123"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "123")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -734,6 +757,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("slot not found", func(t *testing.T) {
 		u := "http://foo.example/122"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "122")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -751,6 +775,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("no blobs returns an empty array", func(t *testing.T) {
 		u := "http://foo.example/123"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "123")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -774,6 +799,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("outside retention period still returns 200 what we have in db ", func(t *testing.T) {
 		u := "http://foo.example/123"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "123")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		moc := &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}, Block: denebBlock}
@@ -803,6 +829,7 @@ func TestGetBlobs(t *testing.T) {
 
 		u := "http://foo.example/333"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "333")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -832,6 +859,7 @@ func TestGetBlobs(t *testing.T) {
 
 		u := "http://foo.example/31"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "31")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -853,6 +881,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("malformed block ID", func(t *testing.T) {
 		u := "http://foo.example/foo"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "foo")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{}
@@ -867,6 +896,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("ssz", func(t *testing.T) {
 		u := "http://foo.example/finalized"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "finalized")
 		request.Header.Add("Accept", "application/octet-stream")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -889,6 +919,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("ssz multiple blobs", func(t *testing.T) {
 		u := "http://foo.example/finalized"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "finalized")
 		request.Header.Add("Accept", "application/octet-stream")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -910,6 +941,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("versioned_hashes invalid hex", func(t *testing.T) {
 		u := "http://foo.example/finalized?versioned_hashes=invalidhex,invalid2hex"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "finalized")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -935,6 +967,7 @@ func TestGetBlobs(t *testing.T) {
 		shortHash := "0x1234567890abcdef1234567890abcdef"
 		u := fmt.Sprintf("http://foo.example/finalized?versioned_hashes=%s", shortHash)
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "finalized")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -961,6 +994,7 @@ func TestGetBlobs(t *testing.T) {
 
 		u := fmt.Sprintf("http://foo.example/finalized?versioned_hashes=%s", hexutil.Encode(versionedHash[:]))
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "finalized")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -990,6 +1024,7 @@ func TestGetBlobs(t *testing.T) {
 		u := fmt.Sprintf("http://foo.example/finalized?versioned_hashes=%s&versioned_hashes=%s",
 			hexutil.Encode(versionedHash1[:]), hexutil.Encode(versionedHash3[:]))
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "finalized")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -1026,6 +1061,7 @@ func TestGetBlobs(t *testing.T) {
 
 		u := "http://foo.example/323"
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", "323")
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -1063,6 +1099,7 @@ func TestGetBlobs(t *testing.T) {
 
 		u := fmt.Sprintf("http://foo.example/%d", fuluForkSlot)
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", fmt.Sprintf("%d", fuluForkSlot))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		// Create an empty blob storage (won't be used but needs to be non-nil)
@@ -1117,6 +1154,7 @@ func TestGetBlobs(t *testing.T) {
 			hexutil.Encode(versionedHash1[:]),
 			hexutil.Encode(versionedHash2[:]))
 		request := httptest.NewRequest("GET", u, nil)
+		request.SetPathValue("block_id", fmt.Sprintf("%d", fuluForkSlot2))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		// Create an empty blob storage (won't be used but needs to be non-nil)

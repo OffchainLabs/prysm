@@ -69,7 +69,7 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 	pendingRoots := make([][32]byte, 0, len(s.blkRootToPendingAtts))
 	s.pendingQueueLock.RLock()
 	for r := range s.blkRootToPendingAtts {
-		if !s.seenPendingBlocks[r] {
+		if !s.seenPendingBlocks[r] && !s.cfg.chain.InForkchoice(r) && !s.cfg.chain.BlockBeingSynced(r) {
 			pendingRoots = append(pendingRoots, r)
 		}
 	}

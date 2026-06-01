@@ -945,13 +945,8 @@ func TestInitializeProposerLookahead_RegressionTest(t *testing.T) {
 		endIdx := startIdx + slotsPerEpoch
 		actualProposers := proposerLookahead[startIdx:endIdx]
 
-		expectedUint64 := make([]uint64, len(expectedProposers))
-		for i, proposer := range expectedProposers {
-			expectedUint64[i] = uint64(proposer)
-		}
-
 		// This assertion would fail with the original bug:
-		for i, expected := range expectedUint64 {
+		for i, expected := range expectedProposers {
 			require.Equal(t, expected, actualProposers[i],
 				"Proposer index mismatch at slot %d in epoch %d", i, targetEpoch)
 		}

@@ -82,6 +82,51 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 	}
 }
 
+// TestSubscribe_DoesNotWaitForInitialSyncToRegisterTopic verifies regular-sync topics are registered before initial sync completes.
+func TestSubscribe_DoesNotWaitForInitialSyncToRegisterTopic(t *testing.T) {
+	p2pService := p2ptest.NewTestP2P(t)
+	gt := time.Now()
+	vr := [32]byte{'A'}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	r := Service{
+		ctx: ctx,
+		cfg: &config{
+			p2p:         p2pService,
+			initialSync: &mockSync.Sync{IsSyncing: true},
+			chain: &mockChain.ChainService{
+				ValidatorsRoot: vr,
+				Genesis:        gt,
+			},
+			clock: startup.NewClock(gt, vr),
+		},
+		subHandler:          newSubTopicHandler(),
+		chainStarted:        abool.New(),
+		initialSyncComplete: make(chan struct{}),
+	}
+	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
+	p2pService.Digest = nse.ForkDigest
+	topic := "/eth2/%x/voluntary_exit"
+
+	done := make(chan struct{})
+	go func() {
+		r.subscribe(topic, r.noopValidator, func(_ context.Context, _ proto.Message) error {
+			return nil
+		}, nse)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("the node reported sync complete before it was ready to follow new gossip blocks")
+	}
+
+	fullTopic := fmt.Sprintf(topic, p2pService.Digest) + p2pService.Encoding().ProtocolSuffix()
+	assert.Equal(t, true, r.subHandler.topicExists(fullTopic))
+	r.unSubscribeFromTopic(fullTopic)
+}
+
 func markInitSyncComplete(_ *testing.T, s *Service) {
 	s.initialSyncComplete = make(chan struct{})
 	close(s.initialSyncComplete)
@@ -440,6 +485,84 @@ func Test_wrapAndReportValidation(t *testing.T) {
 	}
 }
 
+func Test_wrapAndReportValidation_NextEpochDigest(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	mChain := &mockChain.ChainService{
+		Genesis:        time.Now(),
+		ValidatorsRoot: [32]byte{0x01},
+	}
+	clock := startup.NewClock(mChain.Genesis, mChain.ValidatorsRoot)
+	currDigest := params.ForkDigest(clock.CurrentEpoch())
+	nextDigest := params.ForkDigest(clock.CurrentEpoch() + 1)
+	require.NotEqual(t, currDigest, nextDigest, "test requires different fork digests across epochs")
+
+	acceptValidator := func(ctx context.Context, id peer.ID, message *pubsub.Message) (pubsub.ValidationResult, error) {
+		return pubsub.ValidationAccept, nil
+	}
+
+	t.Run("proposer preferences next epoch fork digest accepted", func(t *testing.T) {
+		nextTopic := fmt.Sprintf(p2p.SignedProposerPreferencesTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+		chainStarted := abool.New()
+		chainStarted.SetTo(true)
+		s := &Service{
+			chainStarted: chainStarted,
+			cfg: &config{
+				chain: mChain,
+				clock: clock,
+			},
+			subHandler: newSubTopicHandler(),
+		}
+		_, v := s.wrapAndReportValidation(nextTopic, acceptValidator)
+		got := v(t.Context(), "", &pubsub.Message{
+			Message: &pubsubpb.Message{Topic: &nextTopic},
+		})
+		assert.Equal(t, pubsub.ValidationAccept, got)
+	})
+
+	t.Run("non proposer preferences next epoch fork digest rejected", func(t *testing.T) {
+		nextTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, nextDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+		chainStarted := abool.New()
+		chainStarted.SetTo(true)
+		s := &Service{
+			chainStarted: chainStarted,
+			cfg: &config{
+				chain: mChain,
+				clock: clock,
+			},
+			subHandler: newSubTopicHandler(),
+		}
+		_, v := s.wrapAndReportValidation(nextTopic, acceptValidator)
+		got := v(t.Context(), "", &pubsub.Message{
+			Message: &pubsubpb.Message{Topic: &nextTopic},
+		})
+		assert.Equal(t, pubsub.ValidationIgnore, got)
+	})
+
+	t.Run("wrong fork digest rejected", func(t *testing.T) {
+		badDigest := [4]byte{0xde, 0xad, 0xbe, 0xef}
+		badTopic := fmt.Sprintf(p2p.BlockSubnetTopicFormat, badDigest) + encoder.SszNetworkEncoder{}.ProtocolSuffix()
+		chainStarted := abool.New()
+		chainStarted.SetTo(true)
+		s := &Service{
+			chainStarted: chainStarted,
+			cfg: &config{
+				chain: mChain,
+				clock: clock,
+			},
+			subHandler: newSubTopicHandler(),
+		}
+		_, v := s.wrapAndReportValidation(badTopic, acceptValidator)
+		got := v(t.Context(), "", &pubsub.Message{
+			Message: &pubsubpb.Message{Topic: &badTopic},
+		})
+		assert.Equal(t, pubsub.ValidationIgnore, got)
+	})
+}
+
 func TestFilterSubnetPeers(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.MainnetConfig()
@@ -451,7 +574,10 @@ func TestFilterSubnetPeers(t *testing.T) {
 	flags.Init(gFlags)
 	// Reset config.
 	defer flags.Init(new(flags.GlobalFlags))
-	p := p2ptest.NewTestP2P(t)
+
+	tracer := p2ptest.NewGossipTracer()
+	p := p2ptest.NewTestP2PWithPubsubOptions(t, []pubsub.Option{pubsub.WithRawTracer(tracer)})
+
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	currSlot := primitives.Slot(100)
@@ -492,17 +618,22 @@ func TestFilterSubnetPeers(t *testing.T) {
 	subnet20 := r.addDigestAndIndexToTopic(defaultTopic, digest, 20)
 	cache.SubnetIDs.AddAttesterSubnetID(currSlot, 20)
 
+	_, err = tracer.JoinAndWatchTopic(t.Context(), subnet10, p)
+	require.NoError(t, err)
+	_, err = tracer.JoinAndWatchTopic(t.Context(), subnet20, p)
+	require.NoError(t, err)
+
 	p1 := createPeer(t, subnet10)
 	p2 := createPeer(t, subnet10, subnet20)
 	p3 := createPeer(t)
 
-	// Connect to all peers.
 	p.Connect(p1)
 	p.Connect(p2)
 	p.Connect(p3)
 
-	// Sleep a while to allow peers to connect.
-	time.Sleep(100 * time.Millisecond)
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet10, p1.PeerID()))
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet10, p2.PeerID()))
+	require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet20, p2.PeerID()))
 
 	wantedPeers := []peer.ID{p1.PeerID(), p2.PeerID(), p3.PeerID()}
 	// Expect Peer 3 to be marked as suitable.
@@ -515,8 +646,9 @@ func TestFilterSubnetPeers(t *testing.T) {
 	for i := 1; i <= flags.Get().MinimumPeersPerSubnet; i++ {
 		nPeer := createPeer(t, subnet20)
 		p.Connect(nPeer)
+		require.NoError(t, tracer.CanPublishToPeer(t.Context(), subnet20, nPeer.PeerID()))
+
 		wantedPeers = append(wantedPeers, nPeer.BHost.ID())
-		time.Sleep(100 * time.Millisecond)
 	}
 
 	recPeers = r.filterNeededPeers(wantedPeers)

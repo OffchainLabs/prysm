@@ -143,11 +143,11 @@ func setupPayloadAttTestConfig(t *testing.T) {
 
 func activeValidator(pub []byte) *eth.Validator {
 	return &eth.Validator{
-		PublicKey:                  pub,
-		EffectiveBalance:           params.BeaconConfig().MaxEffectiveBalance,
-		WithdrawalCredentials:      make([]byte, 32),
-		ExitEpoch:                  params.BeaconConfig().FarFutureEpoch,
-		WithdrawableEpoch:          params.BeaconConfig().FarFutureEpoch,
+		PublicKey:             pub,
+		EffectiveBalance:      params.BeaconConfig().MaxEffectiveBalance,
+		WithdrawalCredentials: make([]byte, 32),
+		ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
+		WithdrawableEpoch:     params.BeaconConfig().FarFutureEpoch,
 	}
 }
 

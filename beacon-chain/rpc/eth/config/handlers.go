@@ -191,6 +191,11 @@ func prepareConfigSpec() (map[string]any, error) {
 	data["KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH"] = convertValueForJSON(reflect.ValueOf(uint64(4)), "KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH")
 	// UPDATE_TIMEOUT is derived from SLOTS_PER_EPOCH * EPOCHS_PER_SYNC_COMMITTEE_PERIOD
 	data["UPDATE_TIMEOUT"] = convertValueForJSON(reflect.ValueOf(uint64(config.SlotsPerEpoch)*uint64(config.EpochsPerSyncCommitteePeriod)), "UPDATE_TIMEOUT")
+	// Add Gloas config values from fieldparams required by the /eth/v1/config/spec API.
+	data["PTC_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.PTCSize)), "PTC_SIZE")
+	data["MAX_PAYLOAD_ATTESTATIONS"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxPayloadAttestations)), "MAX_PAYLOAD_ATTESTATIONS")
+	data["BUILDER_REGISTRY_LIMIT"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.BuilderRegistryLimit)), "BUILDER_REGISTRY_LIMIT")
+	data["BUILDER_PENDING_WITHDRAWALS_LIMIT"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.BuilderPendingWithdrawalsLimit)), "BUILDER_PENDING_WITHDRAWALS_LIMIT")
 
 	return data, nil
 }

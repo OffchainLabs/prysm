@@ -138,6 +138,11 @@ func (*FakeP2P) Disconnect(_ peer.ID) error {
 	return nil
 }
 
+// BroadcastForEpoch -- fake.
+func (*FakeP2P) BroadcastForEpoch(_ context.Context, _ proto.Message, _ primitives.Epoch) error {
+	return nil
+}
+
 // Broadcast -- fake.
 func (*FakeP2P) Broadcast(_ context.Context, _ proto.Message) error {
 	return nil

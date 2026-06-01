@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -23,6 +24,7 @@ var (
 	errUnexpectedBlockRoot       = errors.Wrap(errInvalidDataColumnResponse, "unexpected sidecar block root")
 	errCommitmentLengthMismatch  = errors.Wrap(errInvalidDataColumnResponse, "sidecar has different commitment count than block")
 	errCommitmentValueMismatch   = errors.Wrap(errInvalidDataColumnResponse, "sidecar commitments do not match block")
+	errSidecarSignatureMismatch  = errors.Wrap(errInvalidDataColumnResponse, "sidecar signed block header signature does not match block")
 )
 
 // tune the amount of columns we try to download from peers at once.
@@ -38,9 +40,10 @@ type columnBatch struct {
 }
 
 type toDownload struct {
-	remaining   peerdas.ColumnIndices
-	commitments [][]byte
-	slot        primitives.Slot
+	remaining      peerdas.ColumnIndices
+	commitments    [][]byte
+	slot           primitives.Slot
+	blockSignature [fieldparams.BLSSignatureLength]byte
 }
 
 func (cs *columnBatch) needed() peerdas.ColumnIndices {
@@ -183,7 +186,7 @@ func (v *validatingColumnRequest) validate(cd blocks.RODataColumn) (err error) {
 		if err != nil {
 			validity = "invalid"
 		}
-		dataColumnSidecarDownloadCount.WithLabelValues(fmt.Sprintf("%d", cd.Index), validity).Inc()
+		dataColumnSidecarDownloadCount.WithLabelValues(fmt.Sprintf("%d", cd.Index()), validity).Inc()
 		dataColumnSidecarDownloadBytes.Add(float64(cd.SizeSSZ()))
 	}("valid", time.Now())
 	return v.countedValidation(cd)
@@ -203,22 +206,40 @@ func (v *validatingColumnRequest) countedValidation(cd blocks.RODataColumn) erro
 	}
 	// We don't need this column, but we trust the column state machine verified we asked for it as part of a range request.
 	// So we can just skip over it and not try to persist it.
-	if !expected.remaining.Has(cd.Index) {
+	if !expected.remaining.Has(cd.Index()) {
 		return nil
 	}
-	if len(cd.KzgCommitments) != len(expected.commitments) {
-		return errors.Wrapf(errCommitmentLengthMismatch, "root=%#x, slot=%d, index=%d", root, cd.Slot(), cd.Index)
+	comms, err := cd.KzgCommitments()
+	if err != nil {
+		return err
 	}
-	for i, cmt := range cd.KzgCommitments {
+	if len(comms) != len(expected.commitments) {
+		return errors.Wrapf(errCommitmentLengthMismatch, "root=%#x, slot=%d, index=%d", root, cd.Slot(), cd.Index())
+	}
+	for i, cmt := range comms {
 		if !bytes.Equal(cmt, expected.commitments[i]) {
-			return errors.Wrapf(errCommitmentValueMismatch, "root=%#x, slot=%d, index=%d", root, cd.Slot(), cd.Index)
+			return errors.Wrapf(errCommitmentValueMismatch, "root=%#x, slot=%d, index=%d", root, cd.Slot(), cd.Index())
 		}
 	}
+
+	// Cross-check the sidecar's embedded SignedBlockHeader signature against the
+	// locally held block. Gloas sidecars carry no header on the wire, so skip them.
+	if !cd.IsGloas() {
+		sbh, err := cd.SignedBlockHeader()
+		if err != nil {
+			return fmt.Errorf("sidecar signed block header root=%#x, index=%d: %w", root, cd.Index(), err)
+		}
+
+		if !bytes.Equal(sbh.Signature, expected.blockSignature[:]) {
+			return fmt.Errorf("root=%#x, slot=%d, index=%d: %w", root, cd.Slot(), cd.Index(), errSidecarSignatureMismatch)
+		}
+	}
+
 	if err := v.columnSync.store.Persist(v.columnSync.current, cd); err != nil {
 		return errors.Wrap(err, "persisting data column")
 	}
 	v.bisector.addPeerColumns(v.columnSync.peer, cd)
-	expected.remaining.Unset(cd.Index)
+	expected.remaining.Unset(cd.Index())
 	return nil
 }
 
@@ -272,9 +293,10 @@ func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p
 		}
 		summary.last = slot
 		summary.toDownload[b.Root()] = &toDownload{
-			remaining:   das.IndicesNotStored(store.Summary(b.Root()), indices),
-			commitments: cmts,
-			slot:        slot,
+			remaining:      das.IndicesNotStored(store.Summary(b.Root()), indices),
+			commitments:    cmts,
+			slot:           slot,
+			blockSignature: b.Signature(),
 		}
 	}
 

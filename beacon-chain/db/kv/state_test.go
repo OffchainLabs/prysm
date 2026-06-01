@@ -26,7 +26,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	logTest "github.com/sirupsen/logrus/hooks/test"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -1349,7 +1348,7 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 
 		readSt, err := db.State(context.Background(), [32]byte{'A'})
 		require.IsNil(t, readSt)
-		require.ErrorContains(t, "neither state summary nor block found", err)
+		require.ErrorIs(t, err, ErrNotFoundState)
 	})
 
 	t.Run("Slot not in tree", func(t *testing.T) {
@@ -1369,7 +1368,7 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 		require.NoError(t, err)
 
 		readSt, err := db.State(context.Background(), r)
-		require.ErrorContains(t, "slot not in tree", err)
+		require.ErrorContains(t, "state not found", err)
 		require.IsNil(t, readSt)
 
 	})
@@ -1391,7 +1390,7 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 		require.NoError(t, err)
 
 		readSt, err := db.State(context.Background(), r)
-		require.ErrorContains(t, "state not found", err)
+		require.ErrorContains(t, "snapshot not found", err)
 		require.IsNil(t, readSt)
 	})
 
@@ -1410,6 +1409,58 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 		st, err := db.getStateUsingStateDiff(t.Context(), r)
 		require.ErrorIs(t, err, ErrSlotBeforeOffset)
 		require.IsNil(t, st)
+	})
+
+	t.Run("block missing for summary root returns unverified state", func(t *testing.T) {
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		err := setOffsetInDB(db, 0)
+		require.NoError(t, err)
+
+		st, _ := createState(t, 0, version.Phase0)
+		err = db.saveStateByDiff(t.Context(), st)
+		require.NoError(t, err)
+
+		r := bytesutil.ToBytes32([]byte{'M'})
+		ss := &ethpb.StateSummary{Slot: 0, Root: r[:]}
+		err = db.SaveStateSummary(t.Context(), ss)
+		require.NoError(t, err)
+
+		got, err := db.getStateUsingStateDiff(t.Context(), r)
+		require.NoError(t, err)
+		require.NotNil(t, got)
+	})
+
+	t.Run("state summary missing falls back to block slot", func(t *testing.T) {
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		require.NoError(t, setOffsetInDB(db, 0))
+
+		st, _ := createState(t, 0, version.Phase0)
+		require.NoError(t, db.saveStateByDiff(t.Context(), st))
+
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = 0
+		signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.NoError(t, db.SaveBlock(t.Context(), signedBlk))
+		r, err := signedBlk.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		got, err := db.getStateUsingStateDiff(t.Context(), r)
+		require.ErrorContains(t, "state root mismatch for block", err)
+		require.ErrorIs(t, err, ErrNotFoundState)
+		require.IsNil(t, got)
 	})
 
 	t.Run("Full state snapshot", func(t *testing.T) {
@@ -1477,14 +1528,8 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 					require.NoError(t, err)
 
 					readSt, err := db.State(context.Background(), r)
-					require.NoError(t, err)
-					require.NotNil(t, readSt)
-
-					stSSZ, err := st.MarshalSSZ()
-					require.NoError(t, err)
-					readStSSZ, err := readSt.MarshalSSZ()
-					require.NoError(t, err)
-					require.DeepSSZEqual(t, stSSZ, readStSSZ)
+					require.ErrorIs(t, err, ErrNotFoundState)
+					require.IsNil(t, readSt)
 				})
 			}
 		})
@@ -1578,14 +1623,8 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 					require.NoError(t, err)
 
 					readSt, err := db.State(context.Background(), r)
-					require.NoError(t, err)
-					require.NotNil(t, readSt)
-
-					stSSZ, err := st.MarshalSSZ()
-					require.NoError(t, err)
-					readStSSZ, err := readSt.MarshalSSZ()
-					require.NoError(t, err)
-					require.DeepSSZEqual(t, stSSZ, readStSSZ)
+					require.ErrorIs(t, err, ErrNotFoundState)
+					require.IsNil(t, readSt)
 				})
 			}
 		})
@@ -1594,7 +1633,6 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 
 func TestStore_HasStateUsingStateDiff(t *testing.T) {
 	t.Run("No state summary or block", func(t *testing.T) {
-		hook := logTest.NewGlobal()
 		db := setupDB(t)
 		featCfg := &features.Flags{}
 		featCfg.EnableStateDiff = true
@@ -1607,10 +1645,9 @@ func TestStore_HasStateUsingStateDiff(t *testing.T) {
 
 		hasSt := db.HasState(t.Context(), [32]byte{'A'})
 		require.Equal(t, false, hasSt)
-		require.LogsContain(t, hook, "neither state summary nor block found")
 	})
 
-	t.Run("slot in tree or not", func(t *testing.T) {
+	t.Run("Slot not in tree", func(t *testing.T) {
 		db := setupDB(t)
 		featCfg := &features.Flags{}
 		featCfg.EnableStateDiff = true
@@ -1621,27 +1658,13 @@ func TestStore_HasStateUsingStateDiff(t *testing.T) {
 		err := setOffsetInDB(db, 0)
 		require.NoError(t, err)
 
-		testCases := []struct {
-			slot     primitives.Slot
-			expected bool
-		}{
-			{slot: 1, expected: false},                                      // slot 1 not in tree
-			{slot: 32, expected: true},                                      // slot 32 in tree
-			{slot: 0, expected: true},                                       // slot 0 in tree
-			{slot: primitives.Slot(math.PowerOf2(21)), expected: true},      // slot in tree
-			{slot: primitives.Slot(math.PowerOf2(21) - 1), expected: false}, // slot not in tree
-			{slot: primitives.Slot(math.PowerOf2(22)), expected: true},      // slot in tree
-		}
+		r := bytesutil.ToBytes32([]byte{'A'})
+		ss := &ethpb.StateSummary{Slot: 1, Root: r[:]} // slot 1 not in tree
+		err = db.SaveStateSummary(context.Background(), ss)
+		require.NoError(t, err)
 
-		for _, tc := range testCases {
-			r := bytesutil.ToBytes32([]byte{'A'})
-			ss := &ethpb.StateSummary{Slot: tc.slot, Root: r[:]}
-			err = db.SaveStateSummary(t.Context(), ss)
-			require.NoError(t, err)
-
-			hasSt := db.HasState(t.Context(), r)
-			require.Equal(t, tc.expected, hasSt)
-		}
+		has := db.HasState(context.Background(), r)
+		require.Equal(t, false, has)
 
 	})
 
@@ -1660,5 +1683,75 @@ func TestStore_HasStateUsingStateDiff(t *testing.T) {
 		hasState, err := db.hasStateUsingStateDiff(t.Context(), r)
 		require.ErrorIs(t, err, ErrSlotBeforeOffset)
 		require.Equal(t, false, hasState)
+	})
+
+	t.Run("falls back to block when summary missing", func(t *testing.T) {
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		require.NoError(t, setOffsetInDB(db, 0))
+
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = 0
+		signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		require.NoError(t, db.SaveBlock(t.Context(), signedBlk))
+		r, err := signedBlk.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, st.SetSlot(0))
+		require.NoError(t, db.SaveState(t.Context(), st, r))
+
+		hasSt := db.HasState(t.Context(), r)
+		require.Equal(t, true, hasSt)
+	})
+
+	t.Run("state summary found", func(t *testing.T) {
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		require.NoError(t, setOffsetInDB(db, 0))
+
+		r := bytesutil.ToBytes32([]byte{'A'})
+		ss := &ethpb.StateSummary{Slot: 0, Root: r[:]}
+		err := db.SaveStateSummary(context.Background(), ss)
+		require.NoError(t, err)
+
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, st.SetSlot(0))
+		require.NoError(t, db.SaveState(t.Context(), st, r))
+
+		hasSt := db.HasState(t.Context(), r)
+		require.Equal(t, true, hasSt)
+	})
+
+	t.Run("summary exists but no state", func(t *testing.T) {
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		require.NoError(t, setOffsetInDB(db, 0))
+
+		r := bytesutil.ToBytes32([]byte{'A'})
+		ss := &ethpb.StateSummary{Slot: 0, Root: r[:]}
+		err := db.SaveStateSummary(context.Background(), ss)
+		require.NoError(t, err)
+
+		hasSt := db.HasState(t.Context(), r)
+		require.Equal(t, false, hasSt)
 	})
 }
