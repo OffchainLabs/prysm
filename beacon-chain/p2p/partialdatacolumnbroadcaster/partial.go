@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
@@ -66,7 +65,6 @@ type ColumnCallbacks interface {
 // Broadcaster is the behaviour of the partial data column broadcaster used by the rest of the node.
 type Broadcaster interface {
 	Start(callbacks ColumnCallbacks)
-	Stop()
 	Publish(ctx context.Context, topicsAndColumns iter.Seq2[string, blocks.PartialDataColumn]) error
 	AppendPubSubOpts(opts []pubsub.Option) []pubsub.Option
 	Subscribe(ctx context.Context, t *pubsub.Topic) error
@@ -82,8 +80,6 @@ type PartialColumnBroadcaster struct {
 
 	peerFeedback      func(topic string, peer peer.ID, kind pubsub.PeerFeedbackKind) error
 	publishPartialCol func(topic string, groupID []byte, col *blocks.PartialDataColumn) error
-	stop              chan struct{}
-	stopOnce          sync.Once
 	callbacks         ColumnCallbacks
 	// map topic -> *pubsub.Topic
 	topics                           map[string]*pubsub.Topic
@@ -167,7 +163,7 @@ func (p *PartialColumnBroadcaster) enqueue(ctx context.Context, kind requestKind
 	select {
 	case p.incomingReq <- req:
 		return req, nil
-	case <-p.stop:
+	case <-p.ctx.Done():
 		return req, errPartialBroadcasterStopped
 	case <-ctx.Done():
 		return req, ctx.Err()
@@ -253,7 +249,6 @@ func NewBroadcaster(ctx context.Context, logger *logrus.Logger) *PartialColumnBr
 		groupTTL:         make(map[string]int8),
 		validHeaderCache: make(map[string]*ethpb.PartialDataColumnHeader),
 		headerSentCache:  make(map[string]map[peer.ID]bool),
-		stop:             make(chan struct{}),
 
 		// GossipSub sends the messages to this channel. The buffer should be
 		// big enough to avoid dropping messages. We don't want to block the gossipsub event loop for this.
@@ -380,7 +375,7 @@ func (p *PartialColumnBroadcaster) loop() {
 				err = errors.Wrap(err, "partial column broadcaster "+req.kind.String()+" event")
 			}
 			req.finish(err)
-		case <-p.stop:
+		case <-p.ctx.Done():
 			// Drain remaining requests before exiting the loop.
 			for {
 				select {
@@ -795,12 +790,6 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 		}
 	}
 	return nil
-}
-
-func (p *PartialColumnBroadcaster) Stop() {
-	p.stopOnce.Do(func() {
-		close(p.stop)
-	})
 }
 
 // Publish publishes partial columns for the given topics.

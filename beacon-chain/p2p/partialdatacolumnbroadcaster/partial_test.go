@@ -2,6 +2,7 @@ package partialdatacolumnbroadcaster
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"slices"
 	"sync"
@@ -33,6 +34,7 @@ type columnHandlerCall struct {
 type broadcasterHarness struct {
 	t           *testing.T
 	broadcaster *PartialColumnBroadcaster
+	cancel      context.CancelFunc
 }
 
 type callbackRecorder struct {
@@ -174,13 +176,15 @@ func (m *mockPubSub) publishedColumnCount() int {
 
 func newBroadcasterHarness(t *testing.T, ps *mockPubSub) *broadcasterHarness {
 	t.Helper()
-	broadcaster := NewBroadcaster(t.Context(), logrus.New())
+	ctx, cancel := context.WithCancel(t.Context())
+	broadcaster := NewBroadcaster(ctx, logrus.New())
 	broadcaster.peerFeedback = ps.peerFeedback
 	broadcaster.publishPartialCol = ps.publishPartialCol
 
 	return &broadcasterHarness{
 		t:           t,
 		broadcaster: broadcaster,
+		cancel:      cancel,
 	}
 }
 
@@ -189,9 +193,10 @@ func (h *broadcasterHarness) start(cr *callbackRecorder) {
 	go h.broadcaster.Start(cr)
 }
 
+// Stop stops the broadcaster's event loop by cancelling its context.
 func (h *broadcasterHarness) Stop() {
 	h.t.Helper()
-	h.broadcaster.Stop()
+	h.cancel()
 }
 
 func createPartialColumn(t *testing.T, nCells uint64, cells map[uint64][]byte) *blocks.PartialDataColumn {

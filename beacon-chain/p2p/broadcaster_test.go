@@ -837,7 +837,6 @@ func (f *fakePartialColumnBroadcaster) publishedColumns() []publishedPartial {
 }
 
 func (*fakePartialColumnBroadcaster) Start(partialdatacolumnbroadcaster.ColumnCallbacks) {}
-func (*fakePartialColumnBroadcaster) Stop()                                              {}
 func (*fakePartialColumnBroadcaster) AppendPubSubOpts(opts []pubsub.Option) []pubsub.Option {
 	return opts
 }

@@ -397,9 +397,7 @@ func (s *Service) Stop() error {
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
 	}
-	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
-		broadcaster.Stop()
-	}
+
 	return nil
 }
 
