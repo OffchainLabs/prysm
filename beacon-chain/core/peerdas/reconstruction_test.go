@@ -482,9 +482,21 @@ func TestComputeCellsAndProofsFromFlat(t *testing.T) {
 
 func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 	t.Run("nil blob and proof", func(t *testing.T) {
-		result, err := peerdas.ComputeCellsAndProofsFromStructured(0, []*pb.BlobAndProofV2{nil})
+		// An in-range nil entry (a missing blob) is skipped without error.
+		result, err := peerdas.ComputeCellsAndProofsFromStructured(1, []*pb.BlobAndProofV2{nil})
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), result.Included.Count())
+	})
+
+	t.Run("more blobs and proofs than commitments", func(t *testing.T) {
+		// The slice is indexed by blob index, so it must not be longer than the commitment count.
+		// This holds even when the out-of-range entries are nil, which would otherwise be silently
+		// dropped from the included bitlist.
+		_, err := peerdas.ComputeCellsAndProofsFromStructured(0, []*pb.BlobAndProofV2{nil})
+		require.ErrorContains(t, "exceeds commitment count", err)
+
+		_, err = peerdas.ComputeCellsAndProofsFromStructured(1, []*pb.BlobAndProofV2{nil, {}})
+		require.ErrorContains(t, "exceeds commitment count", err)
 	})
 
 	t.Run("nominal", func(t *testing.T) {
