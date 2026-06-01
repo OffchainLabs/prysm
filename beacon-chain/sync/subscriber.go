@@ -588,11 +588,14 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 // pruneNotWanted unsubscribes from topics we are currently subscribed to but that are
 // not in the list of wanted subnets.
 func (s *Service) pruneNotWanted(t *subnetTracker, wantedSubnets map[uint64]bool) {
+	suffix := s.cfg.p2p.Encoding().ProtocolSuffix()
 	for _, subnet := range t.unwanted(wantedSubnets) {
 		t.cancelSubscription(subnet)
-		topic := t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix())
+		topic := t.fullTopic(subnet, suffix)
 		if t.partial != nil {
-			_ = t.partial.broadcaster.Unsubscribe(s.ctx, topic)
+			if err := t.partial.broadcaster.Unsubscribe(s.ctx, topic); err != nil {
+				log.WithError(err).Error("Failed to unsubscribe from partial column")
+			}
 		}
 		s.unSubscribeFromTopic(topic)
 	}
@@ -640,17 +643,18 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
 	s.pruneNotWanted(t, subnetsToJoin)
+	suffix := s.cfg.p2p.Encoding().ProtocolSuffix()
 	for _, subnet := range t.missing(subnetsToJoin) {
-		topicStr := t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix())
-		topicOpts := make([]pubsub.TopicOpt, 0, 2)
+		topicStr := t.fullTopic(subnet, suffix)
+		var pubsubOpts []pubsub.TopicOpt
 
 		requestPartial := t.partial != nil
 
 		if requestPartial {
-			topicOpts = append(topicOpts, pubsub.RequestPartialMessages())
+			pubsubOpts = append(pubsubOpts, pubsub.RequestPartialMessages())
 		}
 
-		topic, err := s.cfg.p2p.JoinTopic(topicStr, topicOpts...)
+		topic, err := s.cfg.p2p.JoinTopic(topicStr, pubsubOpts...)
 		if err != nil {
 			log.WithError(err).Error("Failed to join topic")
 			return
@@ -658,9 +662,9 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 
 		if requestPartial {
 			log.Info("Subscribing to partial columns on", topicStr)
-			err = t.partial.broadcaster.Subscribe(s.ctx, topic)
-
-			if err != nil {
+			// A failed partial subscription is non-fatal; we log and continue, and still
+			// subscribe to the full columns below as a fallback.
+			if err := t.partial.broadcaster.Subscribe(s.ctx, topic); err != nil {
 				log.WithError(err).Error("Failed to subscribe to partial column")
 			}
 		}
