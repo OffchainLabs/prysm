@@ -228,6 +228,7 @@ func (b *BeaconState) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorInde
 			return
 		}
 
+		rov := new(readOnlyValidator)
 		for i := range b.validatorsMultiValue.Len(b) {
 			v, err := b.validatorsMultiValue.At(b, uint64(i))
 			if err != nil {
@@ -235,7 +236,8 @@ func (b *BeaconState) ValidatorsReadOnlySeq() iter.Seq2[primitives.ValidatorInde
 				return
 			}
 
-			if !yield(primitives.ValidatorIndex(i), NewValidatorFromCompact(v)) {
+			rov.validator = v
+			if !yield(primitives.ValidatorIndex(i), rov) {
 				return
 			}
 		}
