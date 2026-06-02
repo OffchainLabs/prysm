@@ -2,6 +2,7 @@ package debug
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -306,9 +307,20 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := buildDataColumnSidecarsJsonResponse(verifiedDataColumns)
+	var data json.RawMessage
+	if blk.Version() >= version.Gloas {
+		sidecars := buildDataColumnSidecarsGloasJsonResponse(verifiedDataColumns)
+		data, err = json.Marshal(sidecars)
+	} else {
+		sidecars, buildErr := buildDataColumnSidecarsJsonResponse(verifiedDataColumns)
+		if buildErr != nil {
+			httputil.HandleError(w, "Could not build data column sidecars response: "+buildErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		data, err = json.Marshal(sidecars)
+	}
 	if err != nil {
-		httputil.HandleError(w, "Could not build data column sidecars response: "+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not marshal data column sidecars: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	resp := &structs.GetDebugDataColumnSidecarsResponse{
@@ -398,6 +410,31 @@ func buildDataColumnSidecarsJsonResponse(verifiedDataColumns []blocks.VerifiedRO
 		}
 	}
 	return sidecars, nil
+}
+
+func buildDataColumnSidecarsGloasJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) []*structs.DataColumnSidecarGloas {
+	sidecars := make([]*structs.DataColumnSidecarGloas, len(verifiedDataColumns))
+	for i, dc := range verifiedDataColumns {
+		cells := dc.Column()
+		column := make([]string, len(cells))
+		for j, cell := range cells {
+			column[j] = hexutil.Encode(cell)
+		}
+		proofs := dc.KzgProofs()
+		kzgProofs := make([]string, len(proofs))
+		for j, proof := range proofs {
+			kzgProofs[j] = hexutil.Encode(proof)
+		}
+		root := dc.BlockRoot()
+		sidecars[i] = &structs.DataColumnSidecarGloas{
+			Index:           strconv.FormatUint(dc.Index(), 10),
+			Column:          column,
+			KzgProofs:       kzgProofs,
+			Slot:            strconv.FormatUint(uint64(dc.Slot()), 10),
+			BeaconBlockRoot: hexutil.Encode(root[:]),
+		}
+	}
+	return sidecars
 }
 
 // buildDataColumnSidecarsSSZResponse builds SSZ response for data column sidecars

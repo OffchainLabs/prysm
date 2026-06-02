@@ -151,14 +151,10 @@ func ActiveValidatorCount(ctx context.Context, s state.ReadOnlyBeaconState, epoc
 	}
 
 	count := uint64(0)
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	for _, val := range s.ValidatorsReadOnlySeq() {
 		if IsActiveValidatorUsingTrie(val, epoch) {
 			count++
 		}
-
-		return nil
-	}); err != nil {
-		return 0, fmt.Errorf("read from every validator: %w", err)
 	}
 
 	return count, nil

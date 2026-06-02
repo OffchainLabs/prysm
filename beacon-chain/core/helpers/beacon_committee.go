@@ -465,13 +465,10 @@ func ShuffledIndices(s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]pri
 	}
 
 	indices := make([]primitives.ValidatorIndex, 0, s.NumValidators())
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	for idx, val := range s.ValidatorsReadOnlySeq() {
 		if IsActiveValidatorUsingTrie(val, epoch) {
-			indices = append(indices, primitives.ValidatorIndex(idx))
+			indices = append(indices, idx)
 		}
-		return nil
-	}); err != nil {
-		return nil, err
 	}
 
 	// UnshuffleList is used as an optimized implementation for raw speed.
@@ -701,15 +698,10 @@ func PrecomputeProposerIndices(state state.ReadOnlyBeaconState, activeIndices []
 func scanActiveValidatorIndices(s state.ReadOnlyBeaconState, epoch primitives.Epoch, seed [32]byte) ([]primitives.ValidatorIndex, error) {
 	v, err, shared := committeeCache.Sf.Do(string(seed[:]), func() (any, error) {
 		var indices []primitives.ValidatorIndex
-
-		if err := s.ReadFromEveryValidator(func(i int, val state.ReadOnlyValidator) error {
+		for idx, val := range s.ValidatorsReadOnlySeq() {
 			if IsActiveValidatorUsingTrie(val, epoch) {
-				indices = append(indices, primitives.ValidatorIndex(i))
+				indices = append(indices, idx)
 			}
-
-			return nil
-		}); err != nil {
-			return nil, fmt.Errorf("read from every validator: %w", err)
 		}
 
 		fillCommitteeCacheAsync(seed, indices)

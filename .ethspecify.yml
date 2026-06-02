@@ -82,7 +82,6 @@ exceptions:
     - GLOAS_FORK_EPOCH#gloas
     - GLOAS_FORK_VERSION#gloas
     - MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS#gloas
-    - PAYLOAD_DUE_BPS#gloas
     - SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
     # heze
     - HEZE_FORK_EPOCH#heze

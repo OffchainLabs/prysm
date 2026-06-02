@@ -54,7 +54,9 @@ func (s *Service) validateDataColumnGloas(
 		if msg.Topic == nil || !strings.Contains(*msg.Topic+"/", expectedSubTopic) {
 			return blocks.VerifiedRODataColumn{}, errors.New("gloas data column on wrong subnet")
 		}
-		s.queuePendingGloasColumn(roDataColumn, pid)
+		if err := s.queuePendingGloasColumn(roDataColumn, pid); err != nil {
+			return blocks.VerifiedRODataColumn{}, err
+		}
 		return blocks.VerifiedRODataColumn{}, ignoreValidation(errors.New("gloas data column block not yet seen"))
 	}
 
@@ -124,14 +126,24 @@ func (s *Service) setSeenDataColumnRootIndex(root [fieldparams.RootLength]byte, 
 	s.seenDataColumnCache.Add(slot, key, true)
 }
 
-func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID) {
+// queuePendingGloasColumn returns a non-nil error for malformed sidecars (the caller propagates it as ValidationReject).
+func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID) error {
 	dc := roCol.DataColumnSidecarGloas()
 	if dc == nil {
-		return
+		return errors.New("nil gloas data column sidecar")
+	}
+	cells := len(dc.Column)
+	if cells == 0 || len(dc.KzgProofs) != cells {
+		return errors.Errorf("gloas data column length mismatch: cells=%d proofs=%d", cells, len(dc.KzgProofs))
+	}
+	cfg := params.BeaconConfig()
+	currentEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
+	if cells > max(cfg.MaxBlobsPerBlockAtEpoch(currentEpoch), cfg.MaxBlobsPerBlockAtEpoch(currentEpoch+1)) {
+		return errors.Errorf("gloas data column cell count %d exceeds network blob limit", cells)
 	}
 	idx := roCol.Index()
 	if idx >= fieldparams.NumberOfColumns {
-		return
+		return errors.Errorf("gloas data column index %d out of range", idx)
 	}
 
 	root := roCol.BlockRoot()
@@ -143,16 +155,17 @@ func (s *Service) queuePendingGloasColumn(roCol blocks.RODataColumn, pid peer.ID
 	entry := s.pendingGloasColumns[root]
 	if entry == nil {
 		if len(s.pendingGloasColumns) >= maxPendingGloasRoots {
-			return
+			return nil
 		}
 		entry = &pendingGloasEntry{slot: slot}
 		s.pendingGloasColumns[root] = entry
 	}
 
 	if entry.columns[idx] != nil {
-		return
+		return nil
 	}
 	entry.columns[idx] = &pendingColumnEntry{sidecar: dc, peer: pid}
+	return nil
 }
 
 func (s *Service) processPendingGloasColumns(root [fieldparams.RootLength]byte, blk interfaces.ReadOnlySignedBeaconBlock) {

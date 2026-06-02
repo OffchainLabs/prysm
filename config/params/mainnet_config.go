@@ -134,6 +134,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	SyncMessageDueBPSGloas:   primitives.BP(2500),
 	ContributionDueBPSGloas:  primitives.BP(5000),
 	PayloadAttestationDueBPS: primitives.BP(7500),
+	PayloadDueBPS:            primitives.BP(7500),
+	EquivocationEarlyDueBPS:  primitives.BP(7500),
 
 	// Ethereum PoW parameters.
 	DepositChainID:         1, // Chain ID of eth1 mainnet.

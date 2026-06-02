@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -727,6 +728,45 @@ func TestValidatingColumnRequest_CountedValidation(t *testing.T) {
 
 		err := vcr.countedValidation(roCols[0])
 		require.ErrorIs(t, err, errCommitmentLengthMismatch)
+	})
+
+	t.Run("sidecar signed block header signature mismatch returns error", func(t *testing.T) {
+		blockRoot := [32]byte{0x01}
+		commitment := make([]byte, 48)
+		commitment[0] = 0xaa
+		params := []util.DataColumnParam{
+			{
+				Index:          0,
+				Slot:           100,
+				ProposerIndex:  1,
+				ParentRoot:     blockRoot[:],
+				KzgCommitments: [][]byte{commitment},
+			},
+		}
+		roCols, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
+
+		var localBlockSig [fieldparams.BLSSignatureLength]byte
+		localBlockSig[0] = 0xff
+
+		vcr := &validatingColumnRequest{
+			columnSync: &columnSync{
+				columnBatch: &columnBatch{
+					toDownload: map[[32]byte]*toDownload{
+						roCols[0].BlockRoot(): {
+							remaining:      peerdas.NewColumnIndicesFromSlice([]uint64{0}),
+							commitments:    [][]byte{commitment},
+							blockSignature: localBlockSig,
+						},
+					},
+				},
+				peer: mockPeer,
+			},
+			bisector: newColumnBisector(func(peer.ID, string, error) {}),
+		}
+
+		err := vcr.countedValidation(roCols[0])
+		require.ErrorIs(t, err, errSidecarSignatureMismatch)
+		require.ErrorIs(t, err, errInvalidDataColumnResponse, "must trigger shouldDownscore")
 	})
 
 	t.Run("commitment value mismatch returns error", func(t *testing.T) {

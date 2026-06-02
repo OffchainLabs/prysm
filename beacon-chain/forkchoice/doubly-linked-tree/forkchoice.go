@@ -3,6 +3,7 @@ package doublylinkedtree
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
@@ -34,6 +35,7 @@ func New() *ForkChoice {
 		emptyNodeByRoot:               make(map[[fieldparams.RootLength]byte]*PayloadNode),
 		fullNodeByRoot:                make(map[[fieldparams.RootLength]byte]*PayloadNode),
 		slashedIndices:                make(map[primitives.ValidatorIndex]bool),
+		blockRootsBySlotProposer:      make(map[proposerSlotKey][][32]byte),
 		receivedBlocksLastEpoch:       [fieldparams.SlotsPerEpoch]primitives.Slot{},
 	}
 
@@ -125,7 +127,7 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 	if err != nil {
 		return err
 	}
-
+	f.RecordBlockForEquivocation(roblock.Block().Slot(), roblock.Block().ProposerIndex(), roblock.Root())
 	jc, fc = f.store.pullTips(state, pn.node, jc, fc)
 	if err := f.updateCheckpoints(ctx, jc, fc); err != nil {
 		_, remErr := f.store.removeNode(ctx, pn)
@@ -473,7 +475,28 @@ func (f *ForkChoice) UpdateFinalizedCheckpoint(fc *forkchoicetypes.Checkpoint) e
 	}
 	f.store.finalizedCheckpoint = fc
 	f.store.finalizedPayloadBlockHash = f.store.checkpointPayloadHashForRoot(fc.Root)
+	finalizedSlot, err := slots.EpochStart(fc.Epoch)
+	if err == nil {
+		for key := range f.store.blockRootsBySlotProposer {
+			if key.slot <= finalizedSlot {
+				delete(f.store.blockRootsBySlotProposer, key)
+			}
+		}
+	}
 	return nil
+}
+
+// RecordBlockForEquivocation appends root to the (slot, proposer) list, capped at two entries.
+func (f *ForkChoice) RecordBlockForEquivocation(slot primitives.Slot, proposer primitives.ValidatorIndex, root [32]byte) {
+	key := proposerSlotKey{slot: slot, proposer: proposer}
+	roots := f.store.blockRootsBySlotProposer[key]
+	if len(roots) >= 2 {
+		return
+	}
+	if slices.Contains(roots, root) {
+		return
+	}
+	f.store.blockRootsBySlotProposer[key] = append(roots, root)
 }
 
 // CommonAncestor returns the common ancestor root and slot between the two block roots r1 and r2.

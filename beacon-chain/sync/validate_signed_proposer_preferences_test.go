@@ -56,12 +56,10 @@ func TestValidateSignedProposerPreferencesGossip_InitialSync(t *testing.T) {
 
 func TestValidateSignedProposerPreferencesGossip_CheckpointBlockNotSeen(t *testing.T) {
 	ctx := context.Background()
-	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
-	// Rewrite dependent_root to a value with no corresponding block.
-	unknownRoot := [32]byte{0xde, 0xad, 0xbe, 0xef}
-	signedPreferences.Message.DependentRoot = unknownRoot[:]
-	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
-	s.cfg.chain.(*mock.ChainService).ForkchoiceRoots = map[[32]byte]bool{}
+	s, msg, _ := setupSignedProposerPreferencesService(t)
+	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(
+		mockSignedProposerPreferencesVerifier{errDependentRootSeen: errors.New("dependent_root block not seen")},
+	)
 
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
 	require.NotNil(t, err)
@@ -120,34 +118,72 @@ func TestValidateSignedProposerPreferencesGossip_AlreadySeen(t *testing.T) {
 		DependentRoot:  dependentRoot,
 		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
 		FeeRecipient:   primitives.ExecutionAddress{0x01},
-		GasLimit:       10,
+		TargetGasLimit: 10,
 	}, signedPreferences.Message.ProposalSlot))
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 }
 
-// TestValidateSignedProposerPreferencesGossip_CacheHitSkipsStateLoad asserts that
-// the dedup cache lookup short-circuits before the checkpoint state load. With
-// the saved state removed, a duplicate gossip message must still return
-// (ValidationIgnore, nil); reaching StateByRootNoCopy would surface an error.
-func TestValidateSignedProposerPreferencesGossip_CacheHitSkipsStateLoad(t *testing.T) {
+// TestValidateSignedProposerPreferencesGossip_HeadTooStale exercises the branch
+// that returns when the proposal is more than one epoch ahead of the head state
+// (and not the +2 boundary edge case). With head state at epoch 0 and proposal
+// in epoch 3 the validator must ignore — proposer_lookahead cannot cover it.
+func TestValidateSignedProposerPreferencesGossip_HeadTooStale(t *testing.T) {
 	ctx := context.Background()
-	s, msg, signedPreferences := setupSignedProposerPreferencesService(t)
+	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
 	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
-
-	dependentRoot := bytesutil.ToBytes32(signedPreferences.Message.DependentRoot)
-	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
-		DependentRoot:  dependentRoot,
-		ValidatorIndex: signedPreferences.Message.ValidatorIndex,
-		FeeRecipient:   primitives.ExecutionAddress{0x01},
-		GasLimit:       10,
-	}, signedPreferences.Message.ProposalSlot))
-	require.NoError(t, s.cfg.beaconDB.DeleteState(ctx, dependentRoot))
+	signedPreferences.Message.ProposalSlot = primitives.Slot(96)
+	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
 
 	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
-	require.NoError(t, err)
+	require.ErrorContains(t, "cannot verify", err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
+func TestValidateSignedProposerPreferencesGossip_DependentRootMismatchSkipsStateLoad(t *testing.T) {
+	ctx := context.Background()
+	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
+	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
+
+	chainService := s.cfg.chain.(*mock.ChainService)
+	chainService.HeadStateErr = errors.New("head state should not load")
+	chainService.DependentRootCB = func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+		require.Equal(t, [32]byte{}, root)
+		require.Equal(t, primitives.Epoch(0), epoch)
+		return [32]byte{0xbb}, nil
+	}
+
+	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+	require.ErrorContains(t, "dependent_root", err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
+func TestValidateSignedProposerPreferencesGossip_EpochPlus2DependentRootMismatch(t *testing.T) {
+	ctx := context.Background()
+	s, _, signedPreferences := setupSignedProposerPreferencesService(t)
+	s.newSignedProposerPreferencesVerifier = testNewSignedProposerPreferencesVerifier(mockSignedProposerPreferencesVerifier{})
+	signedPreferences.Message.ProposalSlot = primitives.Slot(64)
+	msg := signedProposerPreferencesToPubsub(t, s, s.cfg.p2p, signedPreferences)
+
+	var called bool
+	var gotRoot [32]byte
+	var gotEpoch primitives.Epoch
+	expectedRoot := [32]byte{0xaa}
+	s.cfg.chain.(*mock.ChainService).DependentRootCB = func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+		called = true
+		gotRoot = root
+		gotEpoch = epoch
+		return expectedRoot, nil
+	}
+
+	result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
+	require.ErrorContains(t, "dependent_root", err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, true, called)
+	require.Equal(t, [32]byte{}, gotRoot)
+	require.Equal(t, primitives.Epoch(1), gotEpoch)
 }
 
 func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
@@ -164,7 +200,7 @@ func TestValidateSignedProposerPreferencesGossip_HappyPath(t *testing.T) {
 	got, ok := s.proposerPreferencesCache.Get(dependentRoot, signedPreferences.Message.ProposalSlot)
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, signedPreferences.Message.FeeRecipient, got.FeeRecipient[:])
-	require.Equal(t, signedPreferences.Message.GasLimit, got.GasLimit)
+	require.Equal(t, signedPreferences.Message.TargetGasLimit, got.TargetGasLimit)
 	validatorData, ok := msg.ValidatorData.(*ethpb.SignedProposerPreferences)
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, signedPreferences, validatorData)
@@ -183,11 +219,11 @@ func TestSignedProposerPreferencesSubscriber_HappyPath(t *testing.T) {
 }
 
 type mockSignedProposerPreferencesVerifier struct {
-	errCurrentOrNextEpoch  error
-	errDependentRootSeen   error
-	errValidProposalSlot   error
-	errSignature           error
-	lastStateSlot          primitives.Slot
+	errCurrentOrNextEpoch error
+	errDependentRootSeen  error
+	errValidProposalSlot  error
+	errSignature          error
+	lastStateSlot         primitives.Slot
 }
 
 var _ verification.SignedProposerPreferencesVerifier = &mockSignedProposerPreferencesVerifier{}
@@ -245,9 +281,10 @@ func setupSignedProposerPreferencesService(t *testing.T) (*Service, *pubsub.Mess
 	require.NoError(t, db.SaveState(ctx, st, dependentRoot))
 
 	chainService := &mock.ChainService{
-		Genesis: time.Now(),
-		DB:      db,
-		State:   st,
+		Genesis:    time.Now(),
+		DB:         db,
+		State:      st,
+		TargetRoot: dependentRoot,
 		ForkchoiceRoots: map[[32]byte]bool{
 			dependentRoot: true,
 		},
@@ -277,7 +314,7 @@ func setupSignedProposerPreferencesService(t *testing.T) (*Service, *pubsub.Mess
 			ProposalSlot:   33,
 			ValidatorIndex: 0,
 			FeeRecipient:   bytes.Repeat([]byte{0x01}, 20),
-			GasLimit:       30_000_000,
+			TargetGasLimit: 30_000_000,
 		},
 		Signature: bytes.Repeat([]byte{0x02}, 96),
 	}
