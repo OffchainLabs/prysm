@@ -82,6 +82,20 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		s.rollbackBlock(ctx, cfg.roblock.Root())
 		return errors.Wrapf(err, "could not insert block %d to fork choice store", cfg.roblock.Block().Slot())
 	}
+
+	if cfg.roblock.Version() >= version.Fulu {
+		newPayloadRequestRoot, err := consensusblocks.ComputeNewPayloadRequestRoot(cfg.roblock)
+		if err != nil {
+			return fmt.Errorf("compute new payload request root: %w", err)
+		}
+
+		if err := s.cfg.BeaconDB.SaveNewPayloadRequestRoot(ctx, cfg.roblock.Root(), newPayloadRequestRoot); err != nil {
+			return fmt.Errorf("save new payload request root: %w", err)
+		}
+
+		s.cfg.ForkChoiceStore.SetNewPayloadRequestRoot(cfg.roblock.Root(), newPayloadRequestRoot)
+	}
+
 	if err := s.handleBlockAttestations(ctx, cfg.roblock.Block(), cfg.postState); err != nil {
 		return errors.Wrap(err, "could not handle block's attestations")
 	}
@@ -91,8 +105,8 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 
 	s.InsertSlashingsToForkChoiceStore(ctx, cfg.roblock.Block().Body().AttesterSlashings())
 	if cfg.isValidPayload {
-		if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, cfg.roblock.Root()); err != nil {
-			return errors.Wrap(err, "could not set optimistic block to valid")
+		if err := s.cfg.ForkChoiceStore.MarkELValidated(ctx, cfg.roblock.Root()); err != nil {
+			return fmt.Errorf("mark EL validated: %w", err)
 		}
 	}
 
@@ -354,8 +368,8 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	}
 	// Set their optimistic status
 	if isValidPayload {
-		if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, lastBR); err != nil {
-			return errors.Wrap(err, "could not set optimistic block to valid")
+		if err := s.cfg.ForkChoiceStore.MarkELValidated(ctx, lastBR); err != nil {
+			return fmt.Errorf("mark EL validated: %w", err)
 		}
 	}
 	return s.saveHeadNoDB(ctx, lastB, lastBR, preState, !isValidPayload)
@@ -421,6 +435,19 @@ func (s *Service) notifyEngineAndSaveData(
 		}
 		if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
 			return nil, false, errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
+		}
+
+		if b.Version() >= version.Fulu {
+			newPayloadRequestRoot, err := consensusblocks.ComputeNewPayloadRequestRoot(b)
+			if err != nil {
+				return nil, false, fmt.Errorf("compute new payload request root: %w", err)
+			}
+
+			if err := s.cfg.BeaconDB.SaveNewPayloadRequestRoot(ctx, root, newPayloadRequestRoot); err != nil {
+				return nil, false, fmt.Errorf("save new payload request root: %w", err)
+			}
+
+			args.NewPayloadRequestRoot = newPayloadRequestRoot
 		}
 
 		pendingNodes[i] = args
@@ -930,8 +957,7 @@ func (s *Service) isDataAvailable(
 		return errors.New("invalid nil beacon block")
 	}
 
-	root := roBlock.Root()
-	blockVersion := block.Version()
+	root, blockVersion := roBlock.Root(), roBlock.Version()
 	if blockVersion >= version.Fulu {
 		body := block.Body()
 		if body == nil {

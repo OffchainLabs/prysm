@@ -190,6 +190,11 @@ func TestGetSpec(t *testing.T) {
 	config.ConsolidationChurnLimitQuotient = 108
 	config.MaxPerEpochActivationChurnLimitGloas = 109
 
+	// EIP-8025
+	config.MaxProofDataBytes = 200
+	config.MinEpochsForExecutionProofRequests = 201
+	config.MinProofsRequired = 202
+
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
 	config.DomainBeaconProposer = dbp
@@ -639,6 +644,12 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "102", v)
 			case "SYNC_MESSAGE_DUE_BPS":
 				assert.Equal(t, "103", v)
+			case "MAX_PROOF_DATA_BYTES":
+				assert.Equal(t, "200", v)
+			case "MIN_EPOCHS_FOR_EXECUTION_PROOF_REQUESTS":
+				assert.Equal(t, "201", v)
+			case "MIN_PROOFS_REQUIRED":
+				assert.Equal(t, "202", v)
 			case "BUILDER_PAYMENT_THRESHOLD_NUMERATOR":
 				assert.Equal(t, "104", v)
 			case "BUILDER_PAYMENT_THRESHOLD_DENOMINATOR":

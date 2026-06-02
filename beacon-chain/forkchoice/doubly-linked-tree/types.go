@@ -47,6 +47,7 @@ type Store struct {
 	highestReceivedNode           *Node                                      // The highest slot node.
 	receivedBlocksLastEpoch       [fieldparams.SlotsPerEpoch]primitives.Slot // Using `highestReceivedSlot`. The slot of blocks received in the last epoch.
 	allTipsAreInvalid             bool                                       // tracks if all tips are not viable for head
+	nodeByNewPayloadRequest       map[[fieldparams.RootLength]byte]*Node     // nodes indexed by NewPayloadRequest hash tree root (EIP-8025).
 }
 
 // Node defines the individual block which includes its block parent, ancestor and how much weight accounted for it.
@@ -67,19 +68,22 @@ type Node struct {
 	weight                      uint64                       // weight of this node: the total balance including children
 	payloadAvailabilityVote     bitfield.Bitvector512        // PTC payload availability votes
 	payloadDataAvailabilityVote bitfield.Bitvector512        // PTC payload data availability votes
+	newPayloadRequestRoot       [fieldparams.RootLength]byte // NewPayloadRequest hash tree root (EIP-8025). Computed once at insertion.
 }
 
 // PayloadNode defines a full Forkchoice node after the Gloas fork, with the payload status either empty of full
 type PayloadNode struct {
-	optimistic     bool      // whether the block has been fully validated or not
-	full           bool      // whether this node represents a payload present or not
-	weight         uint64    // weight of this node: the total balance including children
-	balance        uint64    // the balance that voted for this node directly
-	gasLimit       uint64    // execution payload gas limit (only set on full nodes).
-	bestDescendant *Node     // bestDescendant node of this payload node.
-	node           *Node     // the consensus part of this full forkchoice node
-	timestamp      time.Time // The timestamp when the node was inserted.
-	children       []*Node   // the list of direct children of this Node
+	weight          uint64    // weight of this node: the total balance including children
+	balance         uint64    // the balance that voted for this node directly
+	gasLimit        uint64    // execution payload gas limit (only set on full nodes).
+	bestDescendant  *Node     // bestDescendant node of this payload node.
+	node            *Node     // the consensus part of this full forkchoice node
+	timestamp       time.Time // The timestamp when the node was inserted.
+	children        []*Node   // the list of direct children of this Node
+	optimistic      bool      // whether the block has been fully validated or not
+	full            bool      // whether this node represents a payload present or not
+	elValidated     bool      // whether the execution layer has validated this block's payload
+	hasEnoughProofs bool      // whether this block has enough execution proofs (zkvm only)
 }
 
 type proposerSlotKey struct {

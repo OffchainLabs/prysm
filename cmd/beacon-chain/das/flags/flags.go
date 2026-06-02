@@ -1,6 +1,8 @@
 package flags
 
 import (
+	"fmt"
+
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/urfave/cli/v2"
 )
@@ -17,9 +19,18 @@ var (
 		Value:   uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest),
 		Aliases: []string{"extend-blob-retention-epoch"},
 	}
+	ExecutionProofRetentionEpochFlag = &cli.Uint64Flag{
+		Name: "execution-proof-retention-epochs",
+		Usage: fmt.Sprintf(
+			"Override the default execution proof retention period (measured in epochs). The node will exit with an error at startup if the value is less than the default of %d epochs.",
+			params.BeaconConfig().MinEpochsForExecutionProofRequests,
+		),
+		Value: uint64(params.BeaconConfig().MinEpochsForExecutionProofRequests),
+	}
 )
 
 var Flags = []cli.Flag{
 	BackfillOldestSlot,
 	BlobRetentionEpochFlag,
+	ExecutionProofRetentionEpochFlag,
 }

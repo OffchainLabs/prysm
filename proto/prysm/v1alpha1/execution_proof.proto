@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/eth/ext/options.proto";
+
+option csharp_namespace = "Ethereum.Eth.v1alpha1";
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
+option java_multiple_files = true;
+option java_outer_classname = "ExecutionProofProto";
+option java_package = "org.ethereum.eth.v1alpha1";
+option php_namespace = "Ethereum\\Eth\\v1alpha1";
+
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8025/beacon-chain.md#new-signedexecutionproof
+message SignedExecutionProof {
+    ExecutionProof message = 1;
+    uint64 validator_index = 2 [(ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/prysm/v7/consensus-types/" "primitives.ValidatorIndex" ];
+    bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8025/beacon-chain.md#new-executionproof
+message ExecutionProof {
+    bytes proof_data = 1 [ (ethereum.eth.ext.ssz_max) = "proof.size" ];
+    bytes proof_type = 2 [ (ethereum.eth.ext.ssz_size) = "1" ];
+    PublicInput public_input = 3;
+}
+
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8025/beacon-chain.md#new-publicinput
+message PublicInput {
+    bytes new_payload_request_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// https://github.com/ethereum/consensus-specs/blob/master/specs/_features/eip8025/p2p-interface.md#proofbyrootidentifier
+message ProofByRootIdentifier {
+    bytes block_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+    bytes proof_types = 2 [ (ethereum.eth.ext.ssz_max) = "max_execution_proofs_per_payload.size" ];
+}

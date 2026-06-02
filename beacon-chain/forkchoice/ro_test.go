@@ -47,6 +47,8 @@ const (
 	dependentRootForEpochCalled
 	canonicalNodeAtSlotCalled
 	payloadWeightsCalled
+	rootsMissingExecutionProofsCalled
+	blockRootByNewPayloadRequestRootCalled
 )
 
 func _discard(t *testing.T, e error) {
@@ -183,6 +185,16 @@ func TestROLocking(t *testing.T) {
 			name: "gasLimitCalled",
 			call: gasLimitCalled,
 			cb:   func(g FastGetter) { _, err := g.GasLimit([32]byte{}); _discard(t, err) },
+		},
+		{
+			name: "rootsMissingExecutionProofsCalled",
+			call: rootsMissingExecutionProofsCalled,
+			cb:   func(g FastGetter) { _, err := g.RootsMissingExecutionProofs(); _discard(t, err) },
+		},
+		{
+			name: "blockRootByNewPayloadRequestRootCalled",
+			call: blockRootByNewPayloadRequestRootCalled,
+			cb:   func(g FastGetter) { g.BlockRootByNewPayloadRequestRoot([32]byte{}) },
 		},
 	}
 	for _, c := range cases {
@@ -367,4 +379,14 @@ func (ro *mockROForkchoice) GasLimit(_ [32]byte) (uint64, error) {
 func (ro *mockROForkchoice) CanonicalNodeAtSlot(_ primitives.Slot) ([32]byte, bool) {
 	ro.calls = append(ro.calls, canonicalNodeAtSlotCalled)
 	return [32]byte{}, false
+}
+
+func (ro *mockROForkchoice) RootsMissingExecutionProofs() ([][32]byte, error) {
+	ro.calls = append(ro.calls, rootsMissingExecutionProofsCalled)
+	return nil, nil
+}
+
+func (ro *mockROForkchoice) BlockRootByNewPayloadRequestRoot(_ [fieldparams.RootLength]byte) ([fieldparams.RootLength]byte, primitives.Slot, bool) {
+	ro.calls = append(ro.calls, blockRootByNewPayloadRequestRootCalled)
+	return [fieldparams.RootLength]byte{}, 0, false
 }

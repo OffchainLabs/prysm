@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	EventHead = "head"
+	EventHead  = "head"
+	EventBlock = "block"
 
 	EventError           = "error"
 	EventConnectionError = "connection_error"

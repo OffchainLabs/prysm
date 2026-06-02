@@ -113,3 +113,19 @@ type ExecutionPayloadBidVerifier interface {
 // NewExecutionPayloadBidVerifier is a function signature that can be used by code that needs to be
 // able to mock Initializer.NewExecutionPayloadBidVerifier without complex setup.
 type NewExecutionPayloadBidVerifier func(b interfaces.ROSignedExecutionPayloadBid, reqs []Requirement) ExecutionPayloadBidVerifier
+
+// SignedExecutionProofsVerifier defines the methods implemented by ROSignedExecutionProofsVerifier.
+type SignedExecutionProofsVerifier interface {
+	VerifiedROSignedExecutionProofs() ([]blocks.VerifiedROSignedExecutionProof, error)
+	SatisfyRequirement(Requirement)
+
+	IsFromActiveValidator() error
+	ValidProverSignature(ctx context.Context) error
+	ProofDataNonEmpty() error
+	ProofDataNotTooLarge() error
+	ProofVerified() error
+}
+
+// NewSignedExecutionProofsVerifier is a function signature that can be used to mock a setup where an
+// execution proofs verifier can be easily initialized.
+type NewSignedExecutionProofsVerifier func(proofs []blocks.ROSignedExecutionProof, reqs []Requirement) SignedExecutionProofsVerifier

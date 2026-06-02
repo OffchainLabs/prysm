@@ -231,7 +231,44 @@ func (s *Service) reValidatePeer(ctx context.Context, id peer.ID) error {
 	if err := s.sendPingRequest(ctx, id); err != nil && !isUnwantedError(err) {
 		log.WithError(err).WithField("pid", id).Debug("Could not ping peer")
 	}
+	// Exchange EIP-8025 execution proof status with peers that advertise
+	// zkvm awareness. Non-fatal: a failure does not invalidate the peer.
+	s.exchangeExecutionProofStatus(ctx, id)
 	return nil
+}
+
+// exchangeExecutionProofStatus sends an ExecutionProofStatus request to the
+// peer when we have evidence it speaks the EIP-8025 protocol. Two sources
+// of evidence:
+//   - The peer's ENR carries the zkvm entry (outbound peers we dialed).
+//   - We already have a cached ExecutionProofStatus from the peer, which
+//     means they previously sent us a request (inbound peers we didn't
+//     dial, so their ENR isn't necessarily in our store).
+//
+// The peer's reply is recorded via Peers().SetExecutionProofStatus; peer
+// selection doesn't consume it yet.
+func (s *Service) exchangeExecutionProofStatus(ctx context.Context, id peer.ID) {
+	if !s.peerSupportsExecutionProofs(id) {
+		return
+	}
+	remote, err := s.sendExecutionProofStatusRequest(ctx, id)
+	if err != nil {
+		log.WithError(err).WithField("pid", id).Debug("Could not exchange execution proof status")
+		return
+	}
+	log.WithFields(logrus.Fields{
+		"pid":           id,
+		"peerBlockRoot": fmt.Sprintf("%#x", remote.BlockRoot),
+		"peerSlot":      remote.Slot,
+	}).Debug("Exchanged execution proof status")
+}
+
+// peerSupportsExecutionProofs reports whether we have any evidence the peer
+// participates in the EIP-8025 RPC suite: either from its ENR (populated on
+// outbound dial) or from a previously observed ExecutionProofStatus (the peer
+// dialed us first and our handler cached the request).
+func (s *Service) peerSupportsExecutionProofs(id peer.ID) bool {
+	return s.cfg.p2p.Peers().ZkvmEnabledPeers()[id]
 }
 
 // statusRPCHandler reads the incoming Status RPC from the peer and responds with our version of a status message.

@@ -220,9 +220,19 @@ var (
 		Name:  "ignore-unviable-attestations",
 		Usage: "Ignores attestations whose target state is not viable with respect to the current head (avoid expensive state replay from lagging attesters).",
 	}
+
 	trackEquivocations = &cli.BoolFlag{
 		Name:  "track-equivocations",
 		Usage: "Records proposer equivocations observed on gossip and marks the slot in forkchoice if the equivocation arrives before the configured early deadline.",
+	}
+
+	// ZkvmModeFlag selects the ZKVM execution proof mode.
+	ZkvmModeFlag = &cli.StringFlag{
+		Name: "zkvm",
+		Usage: `Selects ZKVM execution proof mode. Accepted values:
+			execute-and-verify (run a local execution client and additionally
+			verify execution proofs received over gossip), or verify-only
+			(run with no execution client at all)`,
 	}
 )
 
@@ -289,6 +299,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,
+	ZkvmModeFlag,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

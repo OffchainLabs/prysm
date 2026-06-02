@@ -40,6 +40,7 @@ var mainnetNetworkConfig = &NetworkConfig{
 	AttSubnetKey:               "attnets",
 	SyncCommsSubnetKey:         "syncnets",
 	CustodyGroupCountKey:       "cgc",
+	ZkvmEnabledKey:             "eproof",
 	MinimumPeersInSubnetSearch: 20,
 	ContractDeploymentBlock:    11184524, // Note: contract was deployed in block 11052984 but no transactions were sent until 11184524.
 	BootstrapNodes: []string{
@@ -198,6 +199,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DomainBeaconBuilder:               bytesutil.Uint32ToBytes4(0x0B000000),
 	DomainPTCAttester:                 bytesutil.Uint32ToBytes4(0x0C000000),
 	DomainProposerPreferences:         bytesutil.Uint32ToBytes4(0x0D000000),
+	DomainExecutionProof:              bytesutil.Uint32ToBytes4(0x0D000000),
 
 	// Prysm constants.
 	GenesisValidatorsRoot:          [32]byte{75, 54, 61, 185, 78, 40, 97, 32, 215, 110, 185, 5, 52, 15, 221, 78, 84, 191, 233, 240, 107, 243, 63, 246, 207, 90, 210, 127, 81, 27, 254, 149},
@@ -382,6 +384,12 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 			MaxBlobsPerBlock: 21,
 		},
 	},
+
+	// EIP-8025: Optional Execution Proofs
+	MaxProofDataBytes:                  1_048_576, // 1 MiB
+	MinProofsRequired:                  2,
+	MinEpochsForExecutionProofRequests: 2,
+	MaxExecutionProofsPerPayload:       4,
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name

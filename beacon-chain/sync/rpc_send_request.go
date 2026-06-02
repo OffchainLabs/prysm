@@ -22,6 +22,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	goPeer "github.com/libp2p/go-libp2p/core/peer"
@@ -48,6 +49,7 @@ var (
 	errDataColumnChunkedReadFailure          = errors.New("failed to read stream of chunk-encoded data columns")
 	errMaxRequestDataColumnSidecarsExceeded  = errors.New("count of requested data column sidecars exceeds MAX_REQUEST_DATA_COLUMN_SIDECARS")
 	errMaxResponseDataColumnSidecarsExceeded = errors.New("peer returned more data column sidecars than requested")
+	errExecutionProofChunkedReadFailure      = errors.New("failed to read stream of chunk-encoded execution proofs")
 
 	errSidecarRPCValidation     = errors.Wrap(ErrInvalidFetchedData, "DataColumnSidecar")
 	errSidecarSlotsUnordered    = errors.Wrap(errSidecarRPCValidation, "slots not in ascending order")
@@ -1003,4 +1005,178 @@ func validateExecutionPayloadEnvelopeByRangeResponse(
 		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope parent hash %x does not match previous hash %x", env.Message.Payload.ParentHash, prevHash)
 	}
 	return envSlot, env.Message.Payload.BlockHash, nil
+}
+
+// ----------------
+// Execution proofs
+// ----------------
+
+// sendExecutionProofsByRootRequest sends an ExecutionProofsByRoot RPC request
+func (s *Service) sendExecutionProofsByRootRequest(
+	ctx context.Context,
+	pid peer.ID,
+	request p2ptypes.ExecutionProofsByRootReq,
+) ([]blocks.ROSignedExecutionProof, error) {
+	// Build the set of (blockRoot, proofType) pairs the caller asked for and
+	// compute how many proofs we may receive.
+	expectedCount := 0
+	requested := make(map[[fieldparams.RootLength]byte]map[uint8]bool, len(request))
+	for _, identifier := range request {
+		if identifier == nil {
+			continue
+		}
+
+		blockRoot := bytesutil.ToBytes32(identifier.BlockRoot)
+		if _, ok := requested[blockRoot]; !ok {
+			requested[blockRoot] = make(map[uint8]bool, len(identifier.ProofTypes))
+		}
+
+		for _, proofType := range identifier.ProofTypes {
+			requested[blockRoot][proofType] = true
+		}
+
+		expectedCount += len(identifier.ProofTypes)
+	}
+
+	if expectedCount == 0 {
+		return nil, nil
+	}
+
+	// Build the topic.
+	topic, err := p2p.TopicFromMessage(p2p.ExecutionProofsByRootName, slots.ToEpoch(s.cfg.clock.CurrentSlot()))
+	if err != nil {
+		return nil, fmt.Errorf("topic from message: %w", err)
+	}
+
+	log.WithFields(logrus.Fields{
+		"topic":      topic,
+		"identCount": len(request),
+		"expected":   expectedCount,
+	}).Debug("Sending execution proofs by root request")
+
+	// Send the request.
+	stream, err := s.cfg.p2p.Send(ctx, request, topic, pid)
+	if err != nil {
+		return nil, fmt.Errorf("send: %w", err)
+	}
+	defer closeStream(stream, log)
+
+	// Read execution roSignedProofs from the stream.
+	roSignedProofs := make([]blocks.ROSignedExecutionProof, 0, expectedCount)
+	seen := make(map[[fieldparams.RootLength]byte]map[uint8]bool, len(requested))
+
+	for range expectedCount {
+		raw, err := readChunkedExecutionProof(stream, s.cfg.p2p)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read chunked execution proof: %w", err)
+		}
+
+		if raw.Message == nil || raw.Message.PublicInput == nil || len(raw.Message.PublicInput.NewPayloadRequestRoot) != fieldparams.RootLength {
+			return nil, fmt.Errorf("malformed execution proof chunk: missing new payload request root")
+		}
+
+		if len(raw.Message.ProofType) != 1 {
+			return nil, fmt.Errorf("malformed execution proof chunk: missing proof type")
+		}
+
+		newPayloadRequestRoot := bytesutil.ToBytes32(raw.Message.PublicInput.NewPayloadRequestRoot)
+		blockRoot, slot, ok := s.cfg.chain.BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot)
+		if !ok {
+			return nil, fmt.Errorf("unexpected new payload request root %#x in response", newPayloadRequestRoot)
+		}
+
+		allowedTypes, ok := requested[blockRoot]
+		if !ok {
+			return nil, fmt.Errorf("resolved block root %#x was not in the request", blockRoot)
+		}
+
+		proofType := raw.Message.ProofType[0]
+		if _, ok := allowedTypes[proofType]; !ok {
+			return nil, fmt.Errorf("unexpected proof type %d for block root %#x", proofType, blockRoot)
+		}
+
+		if _, duplicate := seen[blockRoot][proofType]; duplicate {
+			return nil, fmt.Errorf("duplicate proof type %d for block root %#x", proofType, blockRoot)
+		}
+
+		if seen[blockRoot] == nil {
+			seen[blockRoot] = make(map[uint8]bool, len(allowedTypes))
+		}
+		seen[blockRoot][proofType] = true
+
+		roSignedProof, err := blocks.NewROSignedExecutionProof(raw, blockRoot, slot)
+		if err != nil {
+			return nil, fmt.Errorf("new ro signed execution proof: %w", err)
+		}
+
+		roSignedProofs = append(roSignedProofs, roSignedProof)
+	}
+
+	return roSignedProofs, nil
+}
+
+// sendExecutionProofStatusRequest sends our local execution-proof status to
+// the peer and returns the peer's reply. Per EIP-8025 the method uses the
+// same SSZ container for both request and response, carries no
+// <context-bytes>, and the response is a single chunk.
+func (s *Service) sendExecutionProofStatusRequest(ctx context.Context, pid peer.ID) (*p2ptypes.ExecutionProofStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, respTimeout)
+	defer cancel()
+
+	local := s.localExecutionProofStatus(ctx)
+
+	topic, err := p2p.TopicFromMessage(p2p.ExecutionProofStatusName, slots.ToEpoch(s.cfg.clock.CurrentSlot()))
+	if err != nil {
+		return nil, fmt.Errorf("topic from message: %w", err)
+	}
+
+	stream, err := s.cfg.p2p.Send(ctx, local, topic, pid)
+	if err != nil {
+		return nil, fmt.Errorf("send: %w", err)
+	}
+	defer closeStream(stream, log)
+
+	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
+	if err != nil {
+		return nil, fmt.Errorf("read status code: %w", err)
+	}
+	if code != 0 {
+		return nil, fmt.Errorf("execution proof status: %s", errMsg)
+	}
+
+	remote := new(p2ptypes.ExecutionProofStatus)
+	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, remote); err != nil {
+		return nil, fmt.Errorf("decode execution proof status: %w", err)
+	}
+	// Cache the reply so peer selection can query the peer's most recent
+	// proof-validated block alongside statuses received from inbound peers.
+	s.cfg.p2p.Peers().SetExecutionProofStatus(pid, remote)
+	return remote, nil
+}
+
+// readChunkedExecutionProof reads a single chunked SignedExecutionProof from
+// the stream. Per EIP-8025's p2p-interface.md, this RPC does not declare a
+// ForkDigest-context, so <context-bytes> is empty and the payload is read
+// immediately after the status byte.
+func readChunkedExecutionProof(stream libp2pcore.Stream, p2pApi p2p.P2P) (*ethpb.SignedExecutionProof, error) {
+	// Read the status code from the stream.
+	statusCode, errMessage, err := ReadStatusCode(stream, p2pApi.Encoding())
+	if err != nil {
+		return nil, fmt.Errorf("read status code: %w", err)
+	}
+
+	if statusCode != 0 {
+		return nil, fmt.Errorf("%w: %s", errExecutionProofChunkedReadFailure, errMessage)
+	}
+
+	// Decode the execution signedProof from the stream.
+	signedProof := new(ethpb.SignedExecutionProof)
+	if err := p2pApi.Encoding().DecodeWithMaxLength(stream, signedProof); err != nil {
+		return nil, fmt.Errorf("decode execution proof: %w", err)
+	}
+
+	return signedProof, nil
 }

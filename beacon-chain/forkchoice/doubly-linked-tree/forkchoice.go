@@ -34,6 +34,7 @@ func New() *ForkChoice {
 		proposerBoostRoot:             [32]byte{},
 		emptyNodeByRoot:               make(map[[fieldparams.RootLength]byte]*PayloadNode),
 		fullNodeByRoot:                make(map[[fieldparams.RootLength]byte]*PayloadNode),
+		nodeByNewPayloadRequest:       make(map[[fieldparams.RootLength]byte]*Node),
 		slashedIndices:                make(map[primitives.ValidatorIndex]bool),
 		blockRootsBySlotProposer:      make(map[proposerSlotKey][][32]byte),
 		receivedBlocksLastEpoch:       [fieldparams.SlotsPerEpoch]primitives.Slot{},
@@ -566,6 +567,7 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 			bcp.JustifiedCheckpoint.Epoch, bcp.FinalizedCheckpoint.Epoch); err != nil {
 			return err
 		}
+		f.SetNewPayloadRequestRoot(bcp.Block.Root(), bcp.NewPayloadRequestRoot)
 		if bcp.HasPayload {
 			root := bcp.Block.Root()
 			en := f.store.emptyNodeByRoot[root]
@@ -794,6 +796,122 @@ func (f *ForkChoice) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) (
 		}
 	}
 	return f.TargetRootForEpoch(targetNode.node.root, epoch)
+}
+
+// payloadNodeByRoot returns the PayloadNode for a given beacon block root,
+// preferring the full node when present.
+func (f *ForkChoice) payloadNodeByRoot(root [32]byte) *PayloadNode {
+	if pn, ok := f.store.fullNodeByRoot[root]; ok && pn != nil {
+		return pn
+	}
+
+	if pn, ok := f.store.emptyNodeByRoot[root]; ok && pn != nil {
+		return pn
+	}
+
+	return nil
+}
+
+// MarkELValidated marks the node with the given root as EL-validated, along
+// with all its ancestors up to the first already EL-validated one. It then
+// recursively transitions those newly-validated nodes from optimistic to
+// valid where their readiness conditions are met.
+func (f *ForkChoice) MarkELValidated(ctx context.Context, root [32]byte) error {
+	pn := f.payloadNodeByRoot(root)
+	if pn == nil {
+		return fmt.Errorf("node root %v: %w", fmt.Sprintf("%#x", root), ErrNilNode)
+	}
+
+	topChanged := pn
+	for cur := pn; cur != nil && !cur.elValidated; {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		cur.elValidated = true
+		topChanged = cur
+		if cur.node == nil || cur.node.parent == nil {
+			break
+		}
+
+		cur = cur.node.parent
+	}
+
+	if err := topChanged.tryMarkValid(ctx, f.store); err != nil {
+		return fmt.Errorf("try mark valid after EL validation: %w", err)
+	}
+
+	return nil
+}
+
+// MarkHasEnoughProofs marks the node with the given root as having enough
+// execution proofs, then recursively transitions it and its descendants
+// from optimistic to valid where their readiness conditions are met.
+func (f *ForkChoice) MarkHasEnoughProofs(ctx context.Context, root [32]byte) error {
+	pn := f.payloadNodeByRoot(root)
+	if pn == nil {
+		return fmt.Errorf("node root %v: %w", fmt.Sprintf("%#x", root), ErrNilNode)
+	}
+
+	pn.hasEnoughProofs = true
+	if err := pn.tryMarkValid(ctx, f.store); err != nil {
+		return fmt.Errorf("try mark valid: %w", err)
+	}
+
+	return nil
+}
+
+// SetNewPayloadRequestRoot records the NewPayloadRequest hash tree root for an
+// already-inserted block.
+func (f *ForkChoice) SetNewPayloadRequestRoot(blockRoot, newPayloadRequestRoot [fieldparams.RootLength]byte) {
+	if newPayloadRequestRoot == [fieldparams.RootLength]byte{} {
+		return
+	}
+
+	pn := f.payloadNodeByRoot(blockRoot)
+	if pn == nil || pn.node == nil {
+		return
+	}
+
+	pn.node.newPayloadRequestRoot = newPayloadRequestRoot
+	f.store.nodeByNewPayloadRequest[newPayloadRequestRoot] = pn.node
+}
+
+// BlockRootByNewPayloadRequestRoot returns the (block root, slot) of the node
+// whose NewPayloadRequest hashes to the given value, or ok=false if no
+// such node exists in the tree.
+func (f *ForkChoice) BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot [fieldparams.RootLength]byte) ([fieldparams.RootLength]byte, primitives.Slot, bool) {
+	node, ok := f.store.nodeByNewPayloadRequest[newPayloadRequestRoot]
+	if !ok || node == nil {
+		return [fieldparams.RootLength]byte{}, 0, false
+	}
+
+	return node.root, node.slot, true
+}
+
+// RootsMissingExecutionProofs returns roots of all post-Fulu nodes that
+// not yet have enough execution proofs.
+func (f *ForkChoice) RootsMissingExecutionProofs() ([][32]byte, error) {
+	fuluStart, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
+	if err != nil {
+		return nil, fmt.Errorf("fulu fork epoch start: %w", err)
+	}
+
+	roots := make([][32]byte, 0, len(f.store.emptyNodeByRoot))
+	for root, en := range f.store.emptyNodeByRoot {
+		if en == nil || en.node == nil || en.node.slot < fuluStart {
+			continue
+		}
+
+		pn := f.payloadNodeByRoot(root)
+		if pn == nil || pn.hasEnoughProofs {
+			continue
+		}
+
+		roots = append(roots, root)
+	}
+
+	return roots, nil
 }
 
 // ParentRoot returns the block root of the parent node if it is in forkchoice.

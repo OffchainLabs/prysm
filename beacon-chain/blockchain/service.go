@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
@@ -64,6 +65,7 @@ type Service struct {
 	payloadBeingSynced             *currentlySyncingBlock
 	blobStorage                    *filesystem.BlobStorage
 	dataColumnStorage              *filesystem.DataColumnStorage
+	proofStorage                   *filesystem.ProofStorage
 	slasherEnabled                 bool
 	lcStore                        *lightClient.Store
 	startWaitingDataColumnSidecars chan bool // for testing purposes only
@@ -89,6 +91,7 @@ type config struct {
 	P2P                      p2p.Accessor
 	MaxRoutines              int
 	StateNotifier            statefeed.Notifier
+	OperationNotifier        operation.Notifier
 	ForkChoiceStore          f.ForkChoicer
 	AttService               *attestations.Service
 	StateGen                 *stategen.State
@@ -427,8 +430,11 @@ func (s *Service) saveGenesisData(ctx context.Context, genesisState state.Beacon
 	}
 	s.cfg.ForkChoiceStore.SetOriginRoot(genesisBlkRoot)
 	// Set genesis as fully validated
-	if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(ctx, genesisBlkRoot); err != nil {
-		return errors.Wrap(err, "Could not set optimistic status of genesis block to false")
+	if err := s.cfg.ForkChoiceStore.MarkELValidated(ctx, genesisBlkRoot); err != nil {
+		return errors.Wrap(err, "Could not mark genesis block as EL validated")
+	}
+	if err := s.cfg.ForkChoiceStore.MarkHasEnoughProofs(ctx, genesisBlkRoot); err != nil {
+		return errors.Wrap(err, "Could not mark genesis block as having enough proofs")
 	}
 	s.cfg.ForkChoiceStore.SetGenesisTime(s.genesisTime)
 

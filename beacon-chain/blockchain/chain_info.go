@@ -63,6 +63,8 @@ type ForkchoiceFetcher interface {
 	CanonicalNodeAtSlot(primitives.Slot) ([32]byte, bool)
 	ShouldIgnoreData(parentRoot [32]byte, dataSlot primitives.Slot) bool
 	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
+	RootsMissingExecutionProofs() ([][32]byte, error)
+	BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot [32]byte) ([32]byte, primitives.Slot, bool)
 }
 
 // TimeFetcher retrieves the Ethereum consensus data that's related to time.
@@ -600,6 +602,25 @@ func (s *Service) RecentBlockSlot(root [32]byte) (primitives.Slot, error) {
 	s.cfg.ForkChoiceStore.RLock()
 	defer s.cfg.ForkChoiceStore.RUnlock()
 	return s.cfg.ForkChoiceStore.Slot(root)
+}
+
+// RootsMissingExecutionProofs returns the roots of all unfinalized post-Fulu
+// fork-choice nodes that do not yet have enough execution proofs.
+func (s *Service) RootsMissingExecutionProofs() ([][32]byte, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+
+	return s.cfg.ForkChoiceStore.RootsMissingExecutionProofs()
+}
+
+// BlockRootByNewPayloadRequestRoot returns the (block root, slot) of the
+// unfinalized fork-choice node whose execution NewPayloadRequest hashes to the
+// given value.
+func (s *Service) BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot [32]byte) ([32]byte, primitives.Slot, bool) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+
+	return s.cfg.ForkChoiceStore.BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot)
 }
 
 // inRegularSync queries the initial sync service to

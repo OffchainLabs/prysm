@@ -99,6 +99,8 @@ type FastGetter interface {
 	BlockHash(root [32]byte) ([32]byte, error)
 	GasLimit(root [32]byte) (uint64, error)
 	CanonicalNodeAtSlot(slot primitives.Slot) ([32]byte, bool)
+	RootsMissingExecutionProofs() ([][32]byte, error)
+	BlockRootByNewPayloadRequestRoot(newPayloadRequestRoot [fieldparams.RootLength]byte) ([fieldparams.RootLength]byte, primitives.Slot, bool)
 }
 
 // Setter allows to set forkchoice information
@@ -115,4 +117,7 @@ type Setter interface {
 	RecordBlockForEquivocation(primitives.Slot, primitives.ValidatorIndex, [32]byte)
 	SetPTCVote(root [32]byte, ptcIdx uint64, payloadPresent, blobDataAvailable bool)
 	MarkFullNode(root [32]byte)
+	MarkELValidated(context.Context, [32]byte) error
+	MarkHasEnoughProofs(context.Context, [32]byte) error
+	SetNewPayloadRequestRoot(blockRoot, newPayloadRequestRoot [fieldparams.RootLength]byte)
 }

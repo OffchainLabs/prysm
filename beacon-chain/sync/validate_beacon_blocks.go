@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	cBlocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -46,6 +47,22 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	// Validation runs on publish (not just subscriptions), so we should approve any message from
 	// ourselves.
 	if pid == s.cfg.p2p.PeerID() {
+		// TODO: We use here a hack that we send our own message when proposing a local block.
+		// We should find a better way to handle local blocks instead of sending them through pubsub.
+		m, err := s.decodePubsubMessage(msg)
+		if err != nil {
+			return pubsub.ValidationReject, errors.Wrap(err, "Could not decode message")
+		}
+
+		blk, ok := m.(interfaces.ReadOnlySignedBeaconBlock)
+		if !ok {
+			return pubsub.ValidationReject, errors.New("msg is not ethpb.ReadOnlySignedBeaconBlock")
+		}
+
+		if _, err := cBlocks.NewROBlock(blk); err != nil {
+			return pubsub.ValidationReject, fmt.Errorf("new beacon block: %w", err)
+		}
+
 		return pubsub.ValidationAccept, nil
 	}
 

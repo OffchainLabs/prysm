@@ -17,8 +17,9 @@ type Checkpoint struct {
 
 // BlockAndCheckpoints to call the InsertOptimisticChain function
 type BlockAndCheckpoints struct {
-	Block               consensus_blocks.ROBlock
-	JustifiedCheckpoint *ethpb.Checkpoint
-	FinalizedCheckpoint *ethpb.Checkpoint
-	HasPayload          bool
+	Block                 consensus_blocks.ROBlock
+	JustifiedCheckpoint   *ethpb.Checkpoint
+	FinalizedCheckpoint   *ethpb.Checkpoint
+	HasPayload            bool
+	NewPayloadRequestRoot [fieldparams.RootLength]byte
 }

@@ -53,6 +53,8 @@ type ForkChoiceNodeExtraData struct {
 	UnrealizedFinalizedEpoch string `json:"unrealized_finalized_epoch"`
 	Balance                  string `json:"balance"`
 	ExecutionOptimistic      bool   `json:"execution_optimistic"`
+	ExecutionValidated       bool   `json:"execution_validated"`
+	NewPayloadRequestRoot    string `json:"new_payload_request_root"`
 	TimeStamp                string `json:"timestamp"`
 	Target                   string `json:"target"`
 }

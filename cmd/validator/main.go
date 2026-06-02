@@ -52,6 +52,8 @@ var appFlags = []cli.Flag{
 	flags.BeaconRPCProviderFlag,
 	flags.BeaconRESTApiProviderFlag,
 	flags.BeaconRESTApiHeaders,
+	flags.ProverRESTApiProviderFlag,
+	flags.GenerateProofsFlag,
 	flags.CertFlag,
 	flags.GraffitiFlag,
 	flags.DisablePenaltyRewardLogFlag,

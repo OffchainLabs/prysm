@@ -245,6 +245,8 @@ func (s *Store) pruneFinalizedNodeByRootMap(ctx context.Context, node, finalized
 		fn.children = nil
 		delete(s.fullNodeByRoot, node.root)
 	}
+
+	delete(s.nodeByNewPayloadRequest, node.newPayloadRequestRoot)
 	updatePayloadNodeMetrics(s)
 	return nil
 }
@@ -301,6 +303,19 @@ func (s *Store) prune(ctx context.Context) error {
 		remaining = append(remaining, child)
 	}
 	fen.children = remaining
+
+	finalizedPayloadNode := s.fullNodeByRoot[finalizedRoot]
+	if finalizedPayloadNode == nil {
+		finalizedPayloadNode = s.emptyNodeByRoot[finalizedRoot]
+	}
+
+	if finalizedPayloadNode != nil {
+		finalizedPayloadNode.hasEnoughProofs = true
+		if err := finalizedPayloadNode.tryMarkValid(ctx, s); err != nil {
+			return fmt.Errorf("try mark valid after finalization: %w", err)
+		}
+	}
+
 	ffn := s.fullNodeByRoot[finalizedRoot]
 	if ffn == nil {
 		return nil

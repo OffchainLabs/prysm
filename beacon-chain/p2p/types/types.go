@@ -6,10 +6,12 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"sort"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
@@ -386,6 +388,244 @@ func (d DataColumnsByRootIdentifiers) SizeSSZ() int {
 		size += (d)[i].SizeSSZ()
 	}
 	return size
+}
+
+// ================================
+// ExecutionProofsByRootReq section
+// ================================
+var _ ssz.Marshaler = ExecutionProofsByRootReq{}
+var _ ssz.Unmarshaler = (*ExecutionProofsByRootReq)(nil)
+
+// ExecutionProofsByRootReq is used to specify a list of execution proof targets
+// (block root + proof types) in an ExecutionProofsByRoot RPC request, per EIP-8025.
+// It encodes SSZ as List[ProofByRootIdentifier, MAX_REQUEST_BLOCKS_DENEB].
+type ExecutionProofsByRootReq []*eth.ProofByRootIdentifier
+
+// UnmarshalSSZ implements ssz.Unmarshaler. It unmarshals the provided bytes buffer
+// into the ExecutionProofsByRootReq value.
+func (e *ExecutionProofsByRootReq) UnmarshalSSZ(buf []byte) error {
+	// Exit early if the buffer is too small to hold the first offset.
+	if len(buf) < bytesPerLengthOffset {
+		return nil
+	}
+
+	// The first four bytes are the offset of the first element, which equals the
+	// total size of the offset section.
+	offsetEnd := binary.LittleEndian.Uint32(buf[:bytesPerLengthOffset])
+	if offsetEnd%bytesPerLengthOffset != 0 {
+		return fmt.Errorf("expected offsets size to be a multiple of %d but got %d", bytesPerLengthOffset, offsetEnd)
+	}
+
+	count := offsetEnd / bytesPerLengthOffset
+	if count < 1 {
+		return nil
+	}
+
+	maxSize := params.BeaconConfig().MaxRequestBlocksDeneb
+	if uint64(count) > maxSize {
+		return fmt.Errorf("execution proofs by root request exceeds max size: %d > %d", count, maxSize)
+	}
+
+	if offsetEnd > uint32(len(buf)) {
+		return fmt.Errorf("offsets value %d larger than buffer %d", offsetEnd, len(buf))
+	}
+	valueStart := offsetEnd
+
+	*e = make([]*eth.ProofByRootIdentifier, count)
+	var start uint32
+	end := uint32(len(buf))
+	for i := count; i > 0; i-- {
+		offsetEnd -= bytesPerLengthOffset
+		start = binary.LittleEndian.Uint32(buf[offsetEnd : offsetEnd+bytesPerLengthOffset])
+		if start > end {
+			return fmt.Errorf("expected offset[%d] %d to be less than %d", i-1, start, end)
+		}
+
+		if start < valueStart {
+			return fmt.Errorf("offset[%d] %d indexes before value section %d", i-1, start, valueStart)
+		}
+
+		ident := &eth.ProofByRootIdentifier{}
+		if err := ident.UnmarshalSSZ(buf[start:end]); err != nil {
+			return fmt.Errorf("unmarshal proof by root identifier: %w", err)
+		}
+
+		(*e)[i-1] = ident
+		end = start
+	}
+
+	return nil
+}
+
+// MarshalSSZ serializes the ExecutionProofsByRootReq value to a byte slice.
+func (e ExecutionProofsByRootReq) MarshalSSZ() ([]byte, error) {
+	count := len(e)
+	maxSize := params.BeaconConfig().MaxRequestBlocksDeneb
+	if uint64(count) > maxSize {
+		return nil, fmt.Errorf("execution proofs by root request exceeds max size: %d > %d", count, maxSize)
+	}
+
+	if count == 0 {
+		return []byte{}, nil
+	}
+
+	sizes := make([]uint32, count)
+	valTotal := uint32(0)
+	for i, elem := range e {
+		if elem == nil {
+			return nil, fmt.Errorf("nil item in ExecutionProofsByRootReq list")
+		}
+
+		sizes[i] = uint32(elem.SizeSSZ())
+		valTotal += sizes[i]
+	}
+	offSize := uint32(bytesPerLengthOffset * count)
+	out := make([]byte, offSize, offSize+valTotal)
+	for i := range sizes {
+		binary.LittleEndian.PutUint32(out[i*bytesPerLengthOffset:(i+1)*bytesPerLengthOffset], offSize)
+		offSize += sizes[i]
+	}
+
+	for _, elem := range e {
+		var err error
+		out, err = elem.MarshalSSZTo(out)
+		if err != nil {
+			return nil, fmt.Errorf("marshal proof by root identifier: %w", err)
+		}
+	}
+
+	return out, nil
+}
+
+// MarshalSSZTo implements ssz.Marshaler. It appends the serialized
+// ExecutionProofsByRootReq value to the provided byte slice.
+func (e ExecutionProofsByRootReq) MarshalSSZTo(dst []byte) ([]byte, error) {
+	obj, err := e.MarshalSSZ()
+	if err != nil {
+		return nil, fmt.Errorf("marshal ssz: %w", err)
+	}
+
+	return append(dst, obj...), nil
+}
+
+// SizeSSZ implements ssz.Marshaler. It returns the size of the serialized representation.
+func (e ExecutionProofsByRootReq) SizeSSZ() int {
+	size := 0
+	for i := range e {
+		size += bytesPerLengthOffset
+		size += e[i].SizeSSZ()
+	}
+
+	return size
+}
+
+// =================================
+// ExecutionProofsByRangeReq section
+// =================================
+var _ ssz.Marshaler = (*ExecutionProofsByRangeReq)(nil)
+var _ ssz.Unmarshaler = (*ExecutionProofsByRangeReq)(nil)
+
+// executionProofsByRangeReqSize is the fixed SSZ size of an
+// ExecutionProofsByRangeReq container (two consecutive uint64 fields).
+const executionProofsByRangeReqSize = 16
+
+// ExecutionProofsByRangeReq is the SSZ container for the ExecutionProofsByRange
+// RPC request per EIP-8025: a starting slot and a slot count.
+//
+//	(
+//	  start_slot: Slot
+//	  count:      uint64
+//	)
+type ExecutionProofsByRangeReq struct {
+	StartSlot primitives.Slot
+	Count     uint64
+}
+
+// SizeSSZ returns the fixed serialized size of the container.
+func (r *ExecutionProofsByRangeReq) SizeSSZ() int {
+	return executionProofsByRangeReqSize
+}
+
+// MarshalSSZ serializes the container to a byte slice.
+func (r *ExecutionProofsByRangeReq) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, executionProofsByRangeReqSize)
+	binary.LittleEndian.PutUint64(buf[0:8], uint64(r.StartSlot))
+	binary.LittleEndian.PutUint64(buf[8:16], r.Count)
+	return buf, nil
+}
+
+// MarshalSSZTo appends the serialized container to the provided byte slice.
+func (r *ExecutionProofsByRangeReq) MarshalSSZTo(dst []byte) ([]byte, error) {
+	obj, err := r.MarshalSSZ()
+	if err != nil {
+		return nil, fmt.Errorf("marshal ssz: %w", err)
+	}
+	return append(dst, obj...), nil
+}
+
+// UnmarshalSSZ decodes the fixed-size container from the given byte slice.
+func (r *ExecutionProofsByRangeReq) UnmarshalSSZ(buf []byte) error {
+	if len(buf) != executionProofsByRangeReqSize {
+		return fmt.Errorf("expected %d bytes for ExecutionProofsByRangeReq, got %d", executionProofsByRangeReqSize, len(buf))
+	}
+	r.StartSlot = primitives.Slot(binary.LittleEndian.Uint64(buf[0:8]))
+	r.Count = binary.LittleEndian.Uint64(buf[8:16])
+	return nil
+}
+
+// ==============================
+// ExecutionProofStatus section
+// ==============================
+var _ ssz.Marshaler = (*ExecutionProofStatus)(nil)
+var _ ssz.Unmarshaler = (*ExecutionProofStatus)(nil)
+
+// executionProofStatusSize is the fixed SSZ size of an ExecutionProofStatus
+// container: 32-byte block root followed by an 8-byte slot.
+const executionProofStatusSize = fieldparams.RootLength + 8
+
+// ExecutionProofStatus is the SSZ container exchanged in both directions by
+// the ExecutionProofStatus RPC per EIP-8025. It identifies the most recent
+// block for which the node has verified sufficient execution proofs.
+//
+//	(
+//	  block_root: Root
+//	  slot:       Slot
+//	)
+type ExecutionProofStatus struct {
+	BlockRoot [fieldparams.RootLength]byte
+	Slot      primitives.Slot
+}
+
+// SizeSSZ returns the fixed serialized size of the container.
+func (s *ExecutionProofStatus) SizeSSZ() int {
+	return executionProofStatusSize
+}
+
+// MarshalSSZ serializes the container to a byte slice.
+func (s *ExecutionProofStatus) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, executionProofStatusSize)
+	copy(buf[0:fieldparams.RootLength], s.BlockRoot[:])
+	binary.LittleEndian.PutUint64(buf[fieldparams.RootLength:executionProofStatusSize], uint64(s.Slot))
+	return buf, nil
+}
+
+// MarshalSSZTo appends the serialized container to the provided byte slice.
+func (s *ExecutionProofStatus) MarshalSSZTo(dst []byte) ([]byte, error) {
+	obj, err := s.MarshalSSZ()
+	if err != nil {
+		return nil, fmt.Errorf("marshal ssz: %w", err)
+	}
+	return append(dst, obj...), nil
+}
+
+// UnmarshalSSZ decodes the fixed-size container from the given byte slice.
+func (s *ExecutionProofStatus) UnmarshalSSZ(buf []byte) error {
+	if len(buf) != executionProofStatusSize {
+		return fmt.Errorf("expected %d bytes for ExecutionProofStatus, got %d", executionProofStatusSize, len(buf))
+	}
+	copy(s.BlockRoot[:], buf[0:fieldparams.RootLength])
+	s.Slot = primitives.Slot(binary.LittleEndian.Uint64(buf[fieldparams.RootLength:executionProofStatusSize]))
+	return nil
 }
 
 func init() {

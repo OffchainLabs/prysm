@@ -54,4 +54,11 @@ const (
 	RequireProposerPreferencesDependentRootSeen
 	RequireProposerPreferencesProposalSlotValid
 	RequireProposerPreferencesSignatureValid
+
+	// Execution proof specific.
+	RequireActiveValidator
+	RequireValidProverSignature
+	RequireProofDataNonEmpty
+	RequireProofDataNotTooLarge
+	RequireProofVerified
 )

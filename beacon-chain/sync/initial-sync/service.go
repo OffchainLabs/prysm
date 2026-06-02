@@ -4,6 +4,7 @@
 package initialsync
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -237,10 +238,23 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 		return errors.Wrap(err, "error fetching origin checkpoint blockroot")
 	}
 
+	headRoot, err := s.cfg.Chain.HeadRoot(s.ctx)
+	if err != nil {
+		return errors.Wrap(err, "head root")
+	}
+
+	// Head root and origin block root are the same only when starting the node for the first time with an empty database.
+	// In this case, we want to fetch the origin block and its sidecars.
+	// In the contrary (already existing database), we can skip.
+	if !bytes.Equal(headRoot, blockRoot[:]) {
+		return nil
+	}
+
 	block, err := s.cfg.DB.Block(s.ctx, blockRoot)
 	if err != nil {
 		return errors.Wrap(err, "block")
 	}
+
 	if block == nil || block.IsNil() {
 		return errors.Errorf("origin block for root %#x not found in database", blockRoot)
 	}

@@ -36,6 +36,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -75,6 +76,7 @@ const (
 	seenProposerSlashingSize    = 100
 	badBlockSize                = 1000
 	syncMetricsInterval         = 10 * time.Second
+	seenExecutionProofSize      = 100
 )
 
 var (
@@ -116,6 +118,7 @@ type config struct {
 	dataColumnStorage       *filesystem.DataColumnStorage
 	batchVerifierLimit      int
 	payloadAttestationPool  payloadattestation.PoolManager
+	proofStorage            *filesystem.ProofStorage
 }
 
 // This defines the interface for interacting with block chain service
@@ -135,6 +138,7 @@ type blockchainService interface {
 	blockchain.OptimisticModeFetcher
 	blockchain.SlashingReceiver
 	blockchain.ForkchoiceFetcher
+	blockchain.ProofReceiver
 }
 
 // Service is responsible for handling all run time p2p related operations as the
@@ -162,6 +166,8 @@ type Service struct {
 	seenDataColumnCache                  *slotAwareCache
 	pendingGloasColumnsLock              sync.RWMutex
 	pendingGloasColumns                  map[[32]byte]*pendingGloasEntry
+	seenProofCache                       *lru.Cache
+	seenValidProofCache                  *lru.Cache
 	seenAggregatedAttestationLock        sync.RWMutex
 	seenAggregatedAttestationCache       *lru.Cache
 	seenUnAggregatedAttestationLock      sync.RWMutex
@@ -188,6 +194,7 @@ type Service struct {
 	verifierWaiter                       *verification.InitializerWaiter
 	newBlobVerifier                      verification.NewBlobVerifier
 	newColumnsVerifier                   verification.NewDataColumnsVerifier
+	newSignedExecutionProofsVerifier     verification.NewSignedExecutionProofsVerifier
 	newPayloadAttestationVerifier        verification.NewPayloadAttestationMsgVerifier
 	newSignedProposerPreferencesVerifier verification.NewSignedProposerPreferencesVerifier
 	newExecutionPayloadBidVerifier       verification.NewExecutionPayloadBidVerifier
@@ -297,6 +304,12 @@ func newExecutionPayloadBidVerifierFromInitializer(ini *verification.Initializer
 	}
 }
 
+func newExecutionProofsVerifierFromInitializer(ini *verification.Initializer) verification.NewSignedExecutionProofsVerifier {
+	return func(proofs []blocks.ROSignedExecutionProof, reqs []verification.Requirement) verification.SignedExecutionProofsVerifier {
+		return ini.NewExecutionProofsVerifier(proofs, reqs)
+	}
+}
+
 // Start the regular sync service.
 func (s *Service) Start() {
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -310,6 +323,7 @@ func (s *Service) Start() {
 	s.newSignedProposerPreferencesVerifier = newSignedProposerPreferencesVerifierFromInitializer(v)
 	s.newExecutionPayloadBidVerifier = newExecutionPayloadBidVerifierFromInitializer(v)
 	s.newExecutionPayloadEnvelopeVerifier = newPayloadVerifierFromInitializer(v)
+	s.newSignedExecutionProofsVerifier = newExecutionProofsVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
 	go s.startDiscoveryAndSubscriptions()
@@ -343,6 +357,11 @@ func (s *Service) Start() {
 		log.WithError(err).Error("Failed to maintain custody info")
 	}
 
+	if !features.Get().IsZkvmEnabled() {
+		return
+	}
+
+	go s.executionProofsFetcherLoop()
 }
 
 // Stop the regular sync service.
@@ -421,6 +440,8 @@ func (s *Service) initCaches() {
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
 	s.badPayloadCache = lruwrpr.New(badBlockSize)
+	s.seenProofCache = lruwrpr.New(seenBlockSize * 8 * 128) // TODO: Replace 8 with the actual max number of proofs per block and 128 with the maximal estimated prover count.
+	s.seenValidProofCache = lruwrpr.New(seenBlockSize * 8)  // TODO: Replace 8 with the actual max number of proofs per block.
 }
 
 func (s *Service) waitForChainStart() {

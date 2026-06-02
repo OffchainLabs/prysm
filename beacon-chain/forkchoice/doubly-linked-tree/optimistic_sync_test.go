@@ -366,12 +366,13 @@ func TestSetOptimisticToInvalid_ForkAtMerge_bis(t *testing.T) {
 	require.DeepEqual(t, roots, [][32]byte{{'c'}, {'d'}, {'e'}})
 }
 
-func TestSetOptimisticToValid(t *testing.T) {
+func TestMarkELValidatedAndHasEnoughProofs(t *testing.T) {
 	f := setup(1, 1)
 	op, err := f.IsOptimistic([32]byte{})
 	require.NoError(t, err)
 	require.Equal(t, true, op)
-	require.NoError(t, f.SetOptimisticToValid(t.Context(), [32]byte{}))
+	require.NoError(t, f.MarkELValidated(t.Context(), [32]byte{}))
+	require.NoError(t, f.MarkHasEnoughProofs(t.Context(), [32]byte{}))
 	op, err = f.IsOptimistic([32]byte{})
 	require.NoError(t, err)
 	require.Equal(t, false, op)

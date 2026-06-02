@@ -1,8 +1,11 @@
 package doublylinkedtree
 
 import (
+	"context"
+	"fmt"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -30,6 +33,75 @@ func (n *Node) leadsToViableHead(justifiedEpoch, currentEpoch primitives.Epoch) 
 		return n.viableForHead(justifiedEpoch, currentEpoch)
 	}
 	return n.bestDescendant.viableForHead(justifiedEpoch, currentEpoch)
+}
+
+// isNodeReady returns true if this node's local conditions for being
+// valid (ie. non optimistic) are met: the node is EL-validated, and if the ZKVM
+// feature is enabled and the node's slot is at or after the Fulu fork, it also
+// has enough execution proofs.
+func (pn *PayloadNode) isNodeReady() (bool, error) {
+	if !pn.elValidated {
+		return false, nil
+	}
+
+	if !features.Get().IsZkvmEnabled() {
+		return true, nil
+	}
+
+	fuluStart, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
+	if err != nil {
+		return false, fmt.Errorf("could not compute Fulu epoch start: %w", err)
+	}
+
+	if pn.node != nil && pn.node.slot >= fuluStart && !pn.hasEnoughProofs {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// tryMarkValid transitions this payload node from optimistic to valid if it is
+// locally ready and its parent is valid (ie. non optimistic), then recursively
+// propagates the transition to all descendants by invoking itself on each child.
+func (pn *PayloadNode) tryMarkValid(ctx context.Context, store *Store) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	if !pn.optimistic {
+		return nil
+	}
+
+	ready, err := pn.isNodeReady()
+	if err != nil {
+		return fmt.Errorf("is node ready: %w", err)
+	}
+
+	if !ready {
+		return nil
+	}
+
+	if pn.node != nil && pn.node.parent != nil && pn.node.parent.optimistic {
+		return nil
+	}
+
+	pn.optimistic = false
+	for _, child := range pn.children {
+		childPn := store.fullNodeByRoot[child.root]
+		if childPn == nil {
+			childPn = store.emptyNodeByRoot[child.root]
+		}
+
+		if childPn == nil {
+			continue
+		}
+
+		if err := childPn.tryMarkValid(ctx, store); err != nil {
+			return fmt.Errorf("try mark valid child: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // arrivedEarly returns whether this node was inserted before the first

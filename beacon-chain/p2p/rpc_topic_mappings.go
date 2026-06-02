@@ -73,6 +73,15 @@ const (
 
 	// ExecutionPayloadEnvelopesByRangeName is the name for the ExecutionPayloadEnvelopesByRange v1 message topic.
 	ExecutionPayloadEnvelopesByRangeName = "/execution_payload_envelopes_by_range"
+
+	// ExecutionProofsByRootName is the name for the ExecutionProofsByRoot v1 message topic.
+	ExecutionProofsByRootName = "/execution_proofs_by_root"
+
+	// ExecutionProofsByRangeName is the name for the ExecutionProofsByRange v1 message topic.
+	ExecutionProofsByRangeName = "/execution_proofs_by_range"
+
+	// ExecutionProofStatusName is the name for the ExecutionProofStatus v1 message topic.
+	ExecutionProofStatusName = "/execution_proof_status"
 )
 
 const (
@@ -119,6 +128,15 @@ const (
 	// in the slot range [start_slot, start_slot + count). New in Gloas.
 	// /eth2/beacon_chain/req/execution_payload_envelopes_by_range/1/
 	RPCExecutionPayloadEnvelopesByRangeTopicV1 = protocolPrefix + ExecutionPayloadEnvelopesByRangeName + SchemaVersionV1
+	// RPCExecutionProofsByRootTopicV1 is a topic for requesting execution proofs by their block root.
+	// /eth2/beacon_chain/req/execution_proofs_by_root/1 - New in Fulu.
+	RPCExecutionProofsByRootTopicV1 = protocolPrefix + ExecutionProofsByRootName + SchemaVersionV1
+	// RPCExecutionProofsByRangeTopicV1 is a topic for requesting execution proofs by slot range.
+	// /eth2/beacon_chain/req/execution_proofs_by_range/1 - New in Fulu (EIP-8025).
+	RPCExecutionProofsByRangeTopicV1 = protocolPrefix + ExecutionProofsByRangeName + SchemaVersionV1
+	// RPCExecutionProofStatusTopicV1 is a topic for exchanging the peer's most recent proof-validated block.
+	// /eth2/beacon_chain/req/execution_proof_status/1 - New in Fulu (EIP-8025).
+	RPCExecutionProofStatusTopicV1 = protocolPrefix + ExecutionProofStatusName + SchemaVersionV1
 
 	// V2 RPC Topics
 	// RPCStatusTopicV2 defines the v1 topic for the status rpc method.
@@ -187,6 +205,15 @@ var (
 		// DataColumnSidecarsByRoot v1 Message
 		RPCDataColumnSidecarsByRootTopicV1: p2ptypes.DataColumnsByRootIdentifiers{},
 
+		// ExecutionProofsByRoot v1 Message
+		RPCExecutionProofsByRootTopicV1: p2ptypes.ExecutionProofsByRootReq{},
+
+		// ExecutionProofsByRange v1 Message
+		RPCExecutionProofsByRangeTopicV1: &p2ptypes.ExecutionProofsByRangeReq{},
+
+		// ExecutionProofStatus v1 Message
+		RPCExecutionProofStatusTopicV1: &p2ptypes.ExecutionProofStatus{},
+
 		// ExecutionPayloadEnvelopesByRoot v1 Message
 		RPCExecutionPayloadEnvelopesByRootTopicV1: new(p2ptypes.ExecutionPayloadEnvelopesByRootReq),
 	}
@@ -214,6 +241,9 @@ var (
 		DataColumnSidecarsByRangeName:        true,
 		ExecutionPayloadEnvelopesByRootName:  true,
 		ExecutionPayloadEnvelopesByRangeName: true,
+		ExecutionProofsByRootName:            true,
+		ExecutionProofsByRangeName:           true,
+		ExecutionProofStatusName:             true,
 	}
 
 	// Maps all the RPC messages which are to updated in altair.

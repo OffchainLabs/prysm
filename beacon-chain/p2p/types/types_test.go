@@ -392,3 +392,64 @@ func TestDataColumnSidecarsByRootReq_MarshalUnmarshal(t *testing.T) {
 	require.NoError(t, err)
 	require.DeepEqual(t, req, unmarshalled)
 }
+
+func TestExecutionProofStatus_SSZRoundTrip(t *testing.T) {
+	var blockRoot [fieldparams.RootLength]byte
+	for i := range blockRoot {
+		blockRoot[i] = byte(i)
+	}
+	original := &ExecutionProofStatus{
+		BlockRoot: blockRoot,
+		Slot:      primitives.Slot(1234),
+	}
+
+	buf, err := original.MarshalSSZ()
+	require.NoError(t, err)
+	require.Equal(t, executionProofStatusSize, len(buf))
+	require.Equal(t, executionProofStatusSize, original.SizeSSZ())
+
+	var decoded ExecutionProofStatus
+	require.NoError(t, decoded.UnmarshalSSZ(buf))
+	require.DeepEqual(t, original.BlockRoot, decoded.BlockRoot)
+	require.Equal(t, original.Slot, decoded.Slot)
+
+	// MarshalSSZTo appends to an existing buffer without losing existing bytes.
+	prefix := []byte{0x01, 0x02, 0x03}
+	buf, err = original.MarshalSSZTo(append([]byte{}, prefix...))
+	require.NoError(t, err)
+	require.Equal(t, len(prefix)+executionProofStatusSize, len(buf))
+	require.DeepEqual(t, prefix, buf[:len(prefix)])
+
+	// UnmarshalSSZ rejects a buffer of the wrong size.
+	err = decoded.UnmarshalSSZ([]byte{0x00})
+	require.NotNil(t, err)
+}
+
+func TestExecutionProofsByRangeReq_SSZRoundTrip(t *testing.T) {
+	original := &ExecutionProofsByRangeReq{
+		StartSlot: primitives.Slot(42),
+		Count:     7,
+	}
+
+	buf, err := original.MarshalSSZ()
+	require.NoError(t, err)
+	require.Equal(t, executionProofsByRangeReqSize, len(buf))
+	require.Equal(t, executionProofsByRangeReqSize, original.SizeSSZ())
+
+	var decoded ExecutionProofsByRangeReq
+	require.NoError(t, decoded.UnmarshalSSZ(buf))
+	require.Equal(t, original.StartSlot, decoded.StartSlot)
+	require.Equal(t, original.Count, decoded.Count)
+
+	// MarshalSSZTo appends to an existing buffer without losing existing bytes.
+	prefix := []byte{0xde, 0xad, 0xbe, 0xef}
+	buf, err = original.MarshalSSZTo(append([]byte{}, prefix...))
+	require.NoError(t, err)
+	require.Equal(t, len(prefix)+executionProofsByRangeReqSize, len(buf))
+	require.DeepEqual(t, prefix, buf[:len(prefix)])
+
+	// UnmarshalSSZ rejects a buffer of the wrong size.
+	err = decoded.UnmarshalSSZ([]byte{0x00})
+	require.NotNil(t, err)
+}
+

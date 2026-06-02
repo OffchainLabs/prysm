@@ -105,7 +105,17 @@ func (s *Service) buildForkchoiceChain(ctx context.Context, head interfaces.Read
 		// This should be however safe for forkchoice at startup. An alternative would be to hook during the
 		// block processing pipeline when setting the head state, to compute the right states for the justified
 		// checkpoint.
-		chain = append(chain, &forkchoicetypes.BlockAndCheckpoints{Block: roblock, JustifiedCheckpoint: jp, FinalizedCheckpoint: cp})
+		bc := &forkchoicetypes.BlockAndCheckpoints{Block: roblock, JustifiedCheckpoint: jp, FinalizedCheckpoint: cp}
+		newPayloadRequestRoot, ok, err := s.cfg.BeaconDB.NewPayloadRequestRoot(ctx, root)
+		if err != nil {
+			return nil, fmt.Errorf("new payload request root: %w", err)
+		}
+
+		if ok {
+			bc.NewPayloadRequestRoot = newPayloadRequestRoot
+		}
+
+		chain = append(chain, bc)
 		root = head.Block().ParentRoot()
 		if root == fRoot {
 			break
@@ -136,14 +146,28 @@ func (s *Service) setupForkchoiceRoot(st state.BeaconState) error {
 	if err := s.cfg.ForkChoiceStore.InsertNode(s.ctx, st, roblock); err != nil {
 		return errors.Wrap(err, "could not insert finalized block to forkchoice")
 	}
+
+	// Rehydrate the NewPayloadRequest index for the finalized block (post-Fulu).
+	newPayloadRequestRoot, ok, err := s.cfg.BeaconDB.NewPayloadRequestRoot(s.ctx, fRoot)
+	if err != nil {
+		return fmt.Errorf("new payload request root: %w", err)
+	}
+
+	if ok {
+		s.cfg.ForkChoiceStore.SetNewPayloadRequestRoot(fRoot, newPayloadRequestRoot)
+	}
+
 	if !features.Get().EnableStartOptimistic {
 		lastValidatedCheckpoint, err := s.cfg.BeaconDB.LastValidatedCheckpoint(s.ctx)
 		if err != nil {
 			return errors.Wrap(err, "could not get last validated checkpoint")
 		}
 		if bytes.Equal(fRoot[:], lastValidatedCheckpoint.Root) {
-			if err := s.cfg.ForkChoiceStore.SetOptimisticToValid(s.ctx, fRoot); err != nil {
-				return errors.Wrap(err, "could not set finalized block as validated")
+			if err := s.cfg.ForkChoiceStore.MarkELValidated(s.ctx, fRoot); err != nil {
+				return fmt.Errorf("mark EL validated: %w", err)
+			}
+			if err := s.cfg.ForkChoiceStore.MarkHasEnoughProofs(s.ctx, fRoot); err != nil {
+				return fmt.Errorf("mark has enough proofs: %w", err)
 			}
 		}
 	}

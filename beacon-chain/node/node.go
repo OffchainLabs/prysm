@@ -127,6 +127,8 @@ type BeaconNode struct {
 	BlobStorageOptions       []filesystem.BlobStorageOption
 	DataColumnStorage        *filesystem.DataColumnStorage
 	DataColumnStorageOptions []filesystem.DataColumnStorageOption
+	ProofStorage             *filesystem.ProofStorage
+	ProofStorageOptions      []filesystem.ProofStorageOption
 	verifyInitWaiter         *verification.InitializerWaiter
 	lhsp                     *verification.LazyHeadStateProvider
 	syncChecker              *initialsync.SyncChecker
@@ -141,6 +143,20 @@ type BeaconNode struct {
 func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Context) ([]Option, error), opts ...Option) (*BeaconNode, error) {
 	if err := configureBeacon(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not set beacon configuration options")
+	}
+
+	// Validate zkVM flag and dependent endpoints.
+	zkvmEnabled := features.Get().IsZkvmEnabled()
+	zkvmVerifyOnly := features.Get().IsZkvmVerifyOnly()
+	verifierEndpoint := cliCtx.String(flags.VerifierRESTApiProviderFlag.Name)
+	mevRelayEndpoint := cliCtx.String(flags.MevRelayEndpoint.Name)
+
+	if zkvmEnabled && verifierEndpoint == "" {
+		return nil, fmt.Errorf("--%s requires --%s to be set", features.ZkvmModeFlag.Name, flags.VerifierRESTApiProviderFlag.Name)
+	}
+
+	if zkvmVerifyOnly && mevRelayEndpoint == "" {
+		log.Warningf("zkVM verify-only mode is active without --%s: this node will be unable to propose blocks", flags.MevRelayEndpoint.Name)
 	}
 
 	for _, of := range optFuncs {
@@ -248,6 +264,26 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		return nil, errors.Wrap(err, "could not clear data column storage")
 	}
 
+	if beacon.ProofStorage == nil {
+		finalizedEpochProvider := func() primitives.Epoch {
+			beacon.forkChoicer.RLock()
+			defer beacon.forkChoicer.RUnlock()
+
+			finalizedCheckpoint := beacon.forkChoicer.FinalizedCheckpoint()
+			return finalizedCheckpoint.Epoch
+		}
+
+		finalizedEpochProviderOption := filesystem.WithProofFinalizedEpochProvider(finalizedEpochProvider)
+
+		proofStorageOpts := append(beacon.ProofStorageOptions, finalizedEpochProviderOption)
+		proofStorage, err := filesystem.NewProofStorage(cliCtx.Context, proofStorageOpts...)
+		if err != nil {
+			return nil, errors.Wrap(err, "new proof storage")
+		}
+
+		beacon.ProofStorage = proofStorage
+	}
+
 	bfs, err := startBaseServices(cliCtx, beacon, depositAddress, dbClearer)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not start modules")
@@ -255,7 +291,10 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 
 	beacon.lhsp = &verification.LazyHeadStateProvider{}
 	beacon.verifyInitWaiter = verification.NewInitializerWaiter(
-		beacon.ClockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen, beacon.lhsp)
+		beacon.ClockWaiter,
+		forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen, beacon.lhsp,
+		verification.WithVerifierEndpoint(verifierEndpoint),
+	)
 
 	beacon.BackfillOpts = append(
 		beacon.BackfillOpts,
@@ -774,12 +813,14 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithSyncComplete(syncComplete),
 		blockchain.WithBlobStorage(b.BlobStorage),
 		blockchain.WithDataColumnStorage(b.DataColumnStorage),
+		blockchain.WithProofStorage(b.ProofStorage),
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		blockchain.WithProposerPreferencesCache(b.proposerPreferencesCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
 		blockchain.WithLightClientStore(b.lcStore),
+		blockchain.WithOperationNotifier(b),
 	)
 
 	blockchainService, err := blockchain.NewService(b.ctx, opts...)
@@ -868,6 +909,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithStateNotifier(b),
 		regularsync.WithBlobStorage(b.BlobStorage),
 		regularsync.WithDataColumnStorage(b.DataColumnStorage),
+		regularsync.WithExecutionProofStorage(b.ProofStorage),
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithTrackedValidatorsCache(b.trackedValidatorsCache),
@@ -1003,6 +1045,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		ExecutionPayloadEnvelopeReceiver: chainService,
 		BlobReceiver:                     chainService,
 		DataColumnReceiver:               chainService,
+		ProofReceiver:                    chainService,
 		AttestationReceiver:              chainService,
 		GenesisTimeFetcher:               chainService,
 		GenesisFetcher:                   chainService,

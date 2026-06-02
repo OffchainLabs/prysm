@@ -277,6 +277,7 @@ func (s *Service) Start() {
 			"inboundTCP":  inboundTCPCount,
 			"outboundTCP": outboundTCPCount,
 			"total":       total,
+			"zkvm":        len(s.peers.ZkvmEnabledPeers()),
 			"target":      s.cfg.MaxPeers,
 		}
 

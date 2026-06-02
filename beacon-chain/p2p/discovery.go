@@ -589,6 +589,11 @@ func (s *Service) createLocalNode(
 		localNode.Set(quicEntry)
 	}
 
+	if features.Get().IsZkvmEnabled() {
+		zkvmKeyEntry := enr.WithEntry(zkvmEnabledKeyEnrKey, true)
+		localNode.Set(zkvmKeyEntry)
+	}
+
 	localNode.SetFallbackIP(ipAddr)
 	localNode.SetFallbackUDP(udpPort)
 

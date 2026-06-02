@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -255,38 +256,47 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	selfBuildEnvelope := true
 	var bundle enginev1.BlobsBundler
 	var local *blocks.GetPayloadResponse
+
+	// TODO: Simplify this that's unreadable
 	if sBlk.Version() >= version.Bellatrix {
 		var err error
-		local, err = vs.getLocalPayload(ctx, sBlk.Block(), head, parentFull)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
-		}
-
-		if sBlk.Version() < version.Gloas {
-			// There's no reason to try to get a builder bid if local override is true.
-			var builderBid builderapi.Bid
-			if !(local.OverrideBuilder || skipMevBoost) {
-				latestHeader, err := head.LatestExecutionPayloadHeader()
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
-				}
-				parentGasLimit := latestHeader.GasLimit()
-				builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
-				if err != nil {
-					builderGetPayloadMissCount.Inc()
-					log.WithError(err).Error("Could not get builder payload")
-				}
-			}
-
-			winningBid, bundle, err = setExecutionData(ctx, sBlk, local, builderBid, builderBoostFactor)
+		if features.Get().IsZkvmVerifyOnly() {
+			winningBid, err = vs.setBuilderOnlyBlockExecution(ctx, sBlk, head)
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
+				return nil, fmt.Errorf("set builder-only block execution: %w", err)
 			}
 		} else {
-			selfBuildOnly := local.OverrideBuilder || skipMevBoost
-			selfBuildEnvelope, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
+			local, err = vs.getLocalPayload(ctx, sBlk.Block(), head, parentFull)
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
+				return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
+			}
+
+			if sBlk.Version() < version.Gloas {
+				// There's no reason to try to get a builder bid if local override is true.
+				var builderBid builderapi.Bid
+				if !(local.OverrideBuilder || skipMevBoost) {
+					latestHeader, err := head.LatestExecutionPayloadHeader()
+					if err != nil {
+						return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
+					}
+					parentGasLimit := latestHeader.GasLimit()
+					builderBid, err = vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), parentGasLimit)
+					if err != nil {
+						builderGetPayloadMissCount.Inc()
+						log.WithError(err).Error("Could not get builder payload")
+					}
+				}
+
+				winningBid, bundle, err = setExecutionData(ctx, sBlk, local, builderBid, builderBoostFactor)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
+				}
+			} else {
+				selfBuildOnly := local.OverrideBuilder || skipMevBoost
+				selfBuildEnvelope, err = vs.setExecutionPayloadBid(ctx, sBlk, local, selfBuildOnly)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "Could not set execution data for Gloas: %v", err)
+				}
 			}
 		}
 	}
@@ -307,6 +317,33 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 	}
 
 	return vs.constructGenericBeaconBlock(sBlk, bundle, winningBid)
+}
+
+// setBuilderOnlyBlockExecution wires the execution payload into sBlk using
+// only an external builder bid. Used in zkVM verify-only mode where the node
+// has no execution client to build a local payload from.
+func (vs *Server) setBuilderOnlyBlockExecution(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState) (primitives.Wei, error) {
+	latestHeader, err := head.LatestExecutionPayloadHeader()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get latest execution payload header: %v", err)
+	}
+
+	builderBid, err := vs.getBuilderPayloadAndBlobs(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex(), latestHeader.GasLimit())
+	if err != nil {
+		builderGetPayloadMissCount.Inc()
+		return nil, status.Errorf(codes.Internal, "zkvm verify-only: builder failed to provide a bid: %v", err)
+	}
+
+	if builderBid == nil {
+		return nil, status.Errorf(codes.Internal, "zkvm verify-only: builder did not return a bid")
+	}
+
+	winningBid, err := setBuilderOnlyExecution(sBlk, builderBid)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not set builder execution data: %v", err)
+	}
+
+	return winningBid, nil
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.

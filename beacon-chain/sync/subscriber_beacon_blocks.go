@@ -34,13 +34,12 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
-	s.setSeenBlockIndexSlot(signed.Block().Slot(), signed.Block().ProposerIndex())
-
 	block := signed.Block()
+	s.setSeenBlockIndexSlot(block.Slot(), block.ProposerIndex())
 
 	root, err := block.HashTreeRoot()
 	if err != nil {
-		return err
+		return fmt.Errorf("hash tree root: %w", err)
 	}
 
 	roBlock, err := blocks.NewROBlockWithRoot(signed, root)
@@ -194,6 +193,11 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 // processDataColumnSidecarsFromExecution retrieves (if available) data column sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, source peerdas.ConstructionPopulator) error {
+	// In zkVM verify-only mode there is no execution client to fetch columns from.
+	if features.Get().IsZkvmVerifyOnly() {
+		return nil
+	}
+
 	key := fmt.Sprintf("%#x", source.Root())
 	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (any, error) {
 		const delay = 250 * time.Millisecond

@@ -91,6 +91,8 @@ func (r Requirement) String() string {
 		return "RequireProposerPreferencesProposalSlotValid"
 	case RequireProposerPreferencesSignatureValid:
 		return "RequireProposerPreferencesSignatureValid"
+	case RequireProofVerified:
+		return "RequireProofVerified"
 	default:
 		return unknownRequirementName
 	}

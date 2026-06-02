@@ -48,6 +48,7 @@ go_library(
         "//runtime/prereqs:go_default_library",
         "//validator/accounts/wallet:go_default_library",
         "//validator/client:go_default_library",
+        "//validator/client/optionalproofs:go_default_library",
         "//validator/db:go_default_library",
         "//validator/db/filesystem:go_default_library",
         "//validator/db/iface:go_default_library",

@@ -20,6 +20,13 @@ var (
 		},
 		[]string{"result"},
 	)
+	executionProofSignatureCache = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "execution_proof_signature_cache",
+			Help: "Execution proof prover signature cache result.",
+		},
+		[]string{"result"},
+	)
 	dataColumnSidecarInclusionProofVerificationHistogram = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "beacon_data_column_sidecar_inclusion_proof_verification_milliseconds",

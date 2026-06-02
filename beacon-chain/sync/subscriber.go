@@ -330,6 +330,17 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 				getSubnetsRequiringPeers: s.allDataColumnSubnets,
 			})
 		})
+
+		if features.Get().IsZkvmEnabled() {
+			s.spawn(func() {
+				s.subscribe(
+					p2p.ExecutionProofSubnetTopicFormat,
+					s.validateExecutionProof,
+					s.executionProofSubscriber,
+					nse,
+				)
+			})
+		}
 	}
 
 	// New gossip topic in Gloas.

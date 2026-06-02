@@ -62,6 +62,12 @@ type DataColumnReceiver interface {
 	ReceiveDataColumns([]blocks.VerifiedRODataColumn) error
 }
 
+// ProofReceiver interface defines the methods of chain service for receiving new
+// execution proofs
+type ProofReceiver interface {
+	ReceiveProof(blocks.VerifiedROSignedExecutionProof) error
+}
+
 // SlashingReceiver interface defines the methods of chain service for receiving validated slashing over the wire.
 type SlashingReceiver interface {
 	ReceiveAttesterSlashing(ctx context.Context, slashing ethpb.AttSlashing)

@@ -10,6 +10,7 @@ import (
 	reflect "reflect"
 	sync "sync"
 
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -97,6 +98,74 @@ func (x *ExecutionBundleFulu) GetExecutionRequests() [][]byte {
 	return nil
 }
 
+type NewPayloadRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	ExecutionPayload  *ExecutionPayloadDeneb `protobuf:"bytes,1,opt,name=execution_payload,json=executionPayload,proto3" json:"execution_payload,omitempty"`
+	VersionedHashes   [][]byte               `protobuf:"bytes,2,rep,name=versioned_hashes,json=versionedHashes,proto3" json:"versioned_hashes,omitempty" ssz-max:"4096" ssz-size:"?,32"`
+	ParentBlockRoot   []byte                 `protobuf:"bytes,3,opt,name=parent_block_root,json=parentBlockRoot,proto3" json:"parent_block_root,omitempty" ssz-size:"32"`
+	ExecutionRequests *ExecutionRequests     `protobuf:"bytes,4,opt,name=execution_requests,json=executionRequests,proto3" json:"execution_requests,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *NewPayloadRequest) Reset() {
+	*x = NewPayloadRequest{}
+	mi := &file_proto_engine_v1_fulu_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NewPayloadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NewPayloadRequest) ProtoMessage() {}
+
+func (x *NewPayloadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_engine_v1_fulu_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NewPayloadRequest.ProtoReflect.Descriptor instead.
+func (*NewPayloadRequest) Descriptor() ([]byte, []int) {
+	return file_proto_engine_v1_fulu_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *NewPayloadRequest) GetExecutionPayload() *ExecutionPayloadDeneb {
+	if x != nil {
+		return x.ExecutionPayload
+	}
+	return nil
+}
+
+func (x *NewPayloadRequest) GetVersionedHashes() [][]byte {
+	if x != nil {
+		return x.VersionedHashes
+	}
+	return nil
+}
+
+func (x *NewPayloadRequest) GetParentBlockRoot() []byte {
+	if x != nil {
+		return x.ParentBlockRoot
+	}
+	return nil
+}
+
+func (x *NewPayloadRequest) GetExecutionRequests() *ExecutionRequests {
+	if x != nil {
+		return x.ExecutionRequests
+	}
+	return nil
+}
+
 type ExecutionBundleGloas struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	Payload               *ExecutionPayloadGloas `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
@@ -110,7 +179,7 @@ type ExecutionBundleGloas struct {
 
 func (x *ExecutionBundleGloas) Reset() {
 	*x = ExecutionBundleGloas{}
-	mi := &file_proto_engine_v1_fulu_proto_msgTypes[1]
+	mi := &file_proto_engine_v1_fulu_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -122,7 +191,7 @@ func (x *ExecutionBundleGloas) String() string {
 func (*ExecutionBundleGloas) ProtoMessage() {}
 
 func (x *ExecutionBundleGloas) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_engine_v1_fulu_proto_msgTypes[1]
+	mi := &file_proto_engine_v1_fulu_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -135,7 +204,7 @@ func (x *ExecutionBundleGloas) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecutionBundleGloas.ProtoReflect.Descriptor instead.
 func (*ExecutionBundleGloas) Descriptor() ([]byte, []int) {
-	return file_proto_engine_v1_fulu_proto_rawDescGZIP(), []int{1}
+	return file_proto_engine_v1_fulu_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ExecutionBundleGloas) GetPayload() *ExecutionPayloadGloas {
@@ -242,24 +311,28 @@ func file_proto_engine_v1_fulu_proto_rawDescGZIP() []byte {
 	return file_proto_engine_v1_fulu_proto_rawDescData
 }
 
-var file_proto_engine_v1_fulu_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_engine_v1_fulu_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_engine_v1_fulu_proto_goTypes = []any{
 	(*ExecutionBundleFulu)(nil),   // 0: ethereum.engine.v1.ExecutionBundleFulu
-	(*ExecutionBundleGloas)(nil),  // 1: ethereum.engine.v1.ExecutionBundleGloas
-	(*ExecutionPayloadDeneb)(nil), // 2: ethereum.engine.v1.ExecutionPayloadDeneb
-	(*BlobsBundleV2)(nil),         // 3: ethereum.engine.v1.BlobsBundleV2
-	(*ExecutionPayloadGloas)(nil), // 4: ethereum.engine.v1.ExecutionPayloadGloas
+	(*NewPayloadRequest)(nil),     // 1: ethereum.engine.v1.NewPayloadRequest
+	(*ExecutionBundleGloas)(nil),  // 2: ethereum.engine.v1.ExecutionBundleGloas
+	(*ExecutionPayloadDeneb)(nil), // 3: ethereum.engine.v1.ExecutionPayloadDeneb
+	(*BlobsBundleV2)(nil),         // 4: ethereum.engine.v1.BlobsBundleV2
+	(*ExecutionRequests)(nil),     // 5: ethereum.engine.v1.ExecutionRequests
+	(*ExecutionPayloadGloas)(nil), // 6: ethereum.engine.v1.ExecutionPayloadGloas
 }
 var file_proto_engine_v1_fulu_proto_depIdxs = []int32{
-	2, // 0: ethereum.engine.v1.ExecutionBundleFulu.payload:type_name -> ethereum.engine.v1.ExecutionPayloadDeneb
-	3, // 1: ethereum.engine.v1.ExecutionBundleFulu.blobs_bundle:type_name -> ethereum.engine.v1.BlobsBundleV2
-	4, // 2: ethereum.engine.v1.ExecutionBundleGloas.payload:type_name -> ethereum.engine.v1.ExecutionPayloadGloas
-	3, // 3: ethereum.engine.v1.ExecutionBundleGloas.blobs_bundle:type_name -> ethereum.engine.v1.BlobsBundleV2
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	3, // 0: ethereum.engine.v1.ExecutionBundleFulu.payload:type_name -> ethereum.engine.v1.ExecutionPayloadDeneb
+	4, // 1: ethereum.engine.v1.ExecutionBundleFulu.blobs_bundle:type_name -> ethereum.engine.v1.BlobsBundleV2
+	3, // 2: ethereum.engine.v1.NewPayloadRequest.execution_payload:type_name -> ethereum.engine.v1.ExecutionPayloadDeneb
+	5, // 3: ethereum.engine.v1.NewPayloadRequest.execution_requests:type_name -> ethereum.engine.v1.ExecutionRequests
+	6, // 4: ethereum.engine.v1.ExecutionBundleGloas.payload:type_name -> ethereum.engine.v1.ExecutionPayloadGloas
+	4, // 5: ethereum.engine.v1.ExecutionBundleGloas.blobs_bundle:type_name -> ethereum.engine.v1.BlobsBundleV2
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_engine_v1_fulu_proto_init() }
@@ -268,13 +341,14 @@ func file_proto_engine_v1_fulu_proto_init() {
 		return
 	}
 	file_proto_engine_v1_execution_engine_proto_init()
+	file_proto_engine_v1_electra_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_engine_v1_fulu_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

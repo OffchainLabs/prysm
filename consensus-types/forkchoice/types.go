@@ -42,6 +42,7 @@ type Dump struct {
 type Node struct {
 	Validity                 NodeValidity
 	ExecutionOptimistic      bool
+	ExecutionValidated       bool
 	Slot                     primitives.Slot
 	JustifiedEpoch           primitives.Epoch
 	FinalizedEpoch           primitives.Epoch
@@ -53,5 +54,6 @@ type Node struct {
 	BlockRoot                []byte
 	ParentRoot               []byte
 	ExecutionBlockHash       []byte
+	NewPayloadRequestRoot    []byte
 	Target                   []byte
 }

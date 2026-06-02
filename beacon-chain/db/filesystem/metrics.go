@@ -70,4 +70,36 @@ var (
 		Name: "data_column_prune_latency",
 		Help: "Latency of data column prune operations in milliseconds",
 	})
+
+	// Proofs
+	proofSaveLatency = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "proof_storage_save_latency",
+		Help:    "Latency of proof storage save operations in milliseconds",
+		Buckets: []float64{3, 5, 7, 9, 11, 13, 20, 50},
+	})
+	proofFetchLatency = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "proof_storage_get_latency",
+		Help:    "Latency of proof storage get operations in milliseconds",
+		Buckets: []float64{3, 5, 7, 9, 11, 13},
+	})
+	proofPrunedCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "proof_pruned",
+		Help: "Number of proof files pruned.",
+	})
+	proofWrittenCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "proof_written",
+		Help: "Number of proof files written",
+	})
+	proofDiskCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "proof_disk_count",
+		Help: "Approximate number of proof files in storage",
+	})
+	proofFileSyncLatency = promauto.NewSummary(prometheus.SummaryOpts{
+		Name: "proof_file_sync_latency",
+		Help: "Latency of sync operations when saving proofs in milliseconds",
+	})
+	proofPruneLatency = promauto.NewSummary(prometheus.SummaryOpts{
+		Name: "proof_prune_latency",
+		Help: "Latency of proof prune operations in milliseconds",
+	})
 )

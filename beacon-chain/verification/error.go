@@ -81,6 +81,29 @@ var (
 	errDataColumnVerificationImplementationFault = errors.New("could not verify blob data or create a valid VerifiedROBlob")
 )
 
+var (
+	// ErrProofInvalid is joined with all other execution proof verification errors.
+	ErrProofInvalid = AsVerificationFailure(errors.New("invalid execution proof"))
+
+	// ErrProofDataNonEmpty means RequireProofDataNonEmpty failed.
+	ErrProofDataEmpty = errors.Join(ErrProofInvalid, errors.New("proof data is empty"))
+
+	// ErrProofSizeTooLarge means RequireProofSizeLimits failed.
+	ErrProofSizeTooLarge = errors.Join(ErrProofInvalid, errors.New("proof data exceeds maximum size"))
+
+	// ErrInvalidProverSignature means RequireValidProverSignature failed.
+	ErrInvalidProverSignature = errors.Join(ErrProofInvalid, errors.New("prover signature could not be verified"))
+
+	// ErrProofVerificationFailed means the prover returned INVALID for the proof.
+	ErrProofVerificationFailed = errors.Join(ErrProofInvalid, errors.New("prover returned INVALID for execution proof"))
+
+	// ErrProofVerificationEndpoint means the prover verification endpoint returned an error.
+	ErrProofVerificationEndpoint = errors.Join(ErrProofInvalid, errors.New("prover verification endpoint error"))
+
+	// errProofsInvalid is a general error for proof verification failures.
+	errProofsInvalid = errors.New("execution proofs failed verification")
+)
+
 // VerificationMultiError is a custom error that can be used to access individual verification failures.
 type VerificationMultiError struct {
 	r   *results
