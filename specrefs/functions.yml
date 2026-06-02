@@ -7048,34 +7048,6 @@
         return compute_slots_since_epoch_start(slot) == 0
     </spec>
 
-- name: is_supporting_vote#gloas
-  sources: []
-  spec: |
-    <spec fn="is_supporting_vote" fork="gloas" hash="17be703c">
-    def is_supporting_vote(store: Store, node: ForkChoiceNode, message: LatestMessage) -> bool:
-        """
-        Returns whether the vote ``message`` supports the chain containing the
-        forkchoice node ``node``.
-        """
-        block = store.blocks[node.root]
-        if node.root == message.root:
-            if node.payload_status == PAYLOAD_STATUS_PENDING:
-                return True
-            assert message.slot >= block.slot
-            if message.slot == block.slot:
-                return False
-            if message.payload_present:
-                return node.payload_status == PAYLOAD_STATUS_FULL
-            else:
-                return node.payload_status == PAYLOAD_STATUS_EMPTY
-        else:
-            ancestor = get_ancestor(store, message.root, block.slot)
-            return node.root == ancestor.root and (
-                node.payload_status == PAYLOAD_STATUS_PENDING
-                or node.payload_status == ancestor.payload_status
-            )
-    </spec>
-
 - name: is_sync_committee_aggregator#altair
   sources:
     - file: beacon-chain/core/altair/sync_committee.go
