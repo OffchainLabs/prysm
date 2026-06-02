@@ -462,13 +462,10 @@ func ShuffledIndices(s state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]pri
 	}
 
 	indices := make([]primitives.ValidatorIndex, 0, s.NumValidators())
-	if err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	for idx, val := range s.ValidatorsReadOnlySeq() {
 		if IsActiveValidatorUsingTrie(val, epoch) {
-			indices = append(indices, primitives.ValidatorIndex(idx))
+			indices = append(indices, idx)
 		}
-		return nil
-	}); err != nil {
-		return nil, err
 	}
 
 	// UnshuffleList is used as an optimized implementation for raw speed.

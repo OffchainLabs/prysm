@@ -142,7 +142,7 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 		return
 	}
 	log.WithField("newHeadRoot", fmt.Sprintf("%#x", newHeadRoot)).Debug("Head changed due to attestations")
-	headState, headBlock, err := s.getStateAndBlock(ctx, newHeadRoot, newHeadRoot)
+	headState, headBlock, err := s.getStateAndBlock(ctx, newHeadRoot)
 	if err != nil {
 		log.WithError(err).Error("Could not get head block and state")
 		return
