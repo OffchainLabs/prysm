@@ -190,7 +190,7 @@ func TestPayloadAttestationData(t *testing.T) {
 		_, rpcErr := s.PayloadAttestationData(t.Context(), slot)
 		require.NotNil(t, rpcErr)
 		assert.Equal(t, ErrorReason(NotFound), rpcErr.Reason)
-		assert.ErrorContains(t, "no canonical block found at slot=5", rpcErr.Err)
+		assert.ErrorContains(t, "no block found at slot=5", rpcErr.Err)
 	})
 	t.Run("empty highest received root → Internal", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
