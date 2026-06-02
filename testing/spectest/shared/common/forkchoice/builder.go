@@ -10,10 +10,12 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -27,6 +29,7 @@ type Builder struct {
 	lastTick int64
 	execMock *engineMock
 	vwait    *verification.InitializerWaiter
+	fc       forkchoice.ForkChoicer
 }
 
 func NewBuilder(t testing.TB, initialState state.BeaconState, initialBlock interfaces.ReadOnlySignedBeaconBlock) *Builder {
@@ -47,6 +50,7 @@ func NewBuilder(t testing.TB, initialState state.BeaconState, initialBlock inter
 		service:  service,
 		execMock: execMock,
 		vwait:    bvw,
+		fc:       fc,
 	}
 }
 
@@ -115,6 +119,21 @@ func (bb *Builder) ValidBlock(t testing.TB, b interfaces.ReadOnlySignedBeaconBlo
 	require.NoError(t, bb.service.ReceiveBlock(ctx, b, r, nil))
 }
 
+// ExecutionPayloadEnvelope receives an envelope and notifies the chain service.
+// If expectValid is false the receive call must error; otherwise it must succeed.
+func (bb *Builder) ExecutionPayloadEnvelope(t testing.TB, signed *ethpb.SignedExecutionPayloadEnvelope, expectValid bool) {
+	ro, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signed)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	err = bb.service.ReceiveExecutionPayloadEnvelope(ctx, ro)
+	if expectValid {
+		require.NoError(t, err)
+	} else {
+		require.NotNil(t, err)
+	}
+}
+
 // PoWBlock receives the block and notifies a mocked execution engine.
 func (bb *Builder) PoWBlock(pb *ethpb.PowBlock) {
 	bb.execMock.powBlocks[bytesutil.ToBytes32(pb.BlockHash)] = pb
@@ -170,6 +189,16 @@ func (bb *Builder) Check(t testing.TB, c *Check) {
 		want := fmt.Sprintf("%#x", common.FromHex(*c.GetProposerHead))
 		got := fmt.Sprintf("%#x", bb.service.GetProposerHead())
 		require.Equal(t, want, got)
+	}
+	if c.HeadPayloadStatus != nil {
+		_, _, full, err := bb.fc.FullHead(ctx)
+		require.NoError(t, err)
+		want := *c.HeadPayloadStatus
+		got := 0
+		if full {
+			got = 1
+		}
+		require.Equal(t, want, got, "head payload status mismatch")
 	}
 	/* TODO: We need to mock the entire proposer system to be able to test this.
 	if c.ShouldOverrideFCU != nil {

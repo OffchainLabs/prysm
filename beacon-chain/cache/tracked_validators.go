@@ -21,6 +21,7 @@ type (
 		Active       bool
 		FeeRecipient primitives.ExecutionAddress
 		Index        primitives.ValidatorIndex
+		GasLimit     uint64
 	}
 
 	TrackedValidatorsCache struct {

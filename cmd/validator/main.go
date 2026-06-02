@@ -87,6 +87,7 @@ var appFlags = []cli.Flag{
 	flags.EnableBuilderFlag,
 	flags.BuilderGasLimitFlag,
 	flags.ValidatorsRegistrationBatchSizeFlag,
+	flags.EnableStatelessFlag,
 	////////////////////
 	cmd.DisableMonitoringFlag,
 	cmd.MonitoringHostFlag,
@@ -103,6 +104,7 @@ var appFlags = []cli.Flag{
 	cmd.TracingEndpointFlag,
 	cmd.TraceSampleFractionFlag,
 	cmd.LogFormat,
+	cmd.DisableLogColor,
 	cmd.LogFileName,
 	cmd.ConfigFileFlag,
 	cmd.ChainConfigFileFlag,
@@ -181,6 +183,7 @@ func main() {
 				formatter.FullTimestamp = true
 				formatter.ForceFormatting = true
 				formatter.ForceColors = true
+				formatter.DisableColors = ctx.Bool(cmd.DisableLogColor.Name)
 				formatter.VModule = vmodule
 				formatter.BaseVerbosity = verbosityLevel
 

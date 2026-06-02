@@ -69,6 +69,7 @@ go_test(
         "execution_payload_bid_test.go",
         "execution_payload_envelope_test.go",
         "filesystem_test.go",
+        "gas_limit_test.go",
         "initializer_test.go",
         "payload_attestation_test.go",
         "result_test.go",

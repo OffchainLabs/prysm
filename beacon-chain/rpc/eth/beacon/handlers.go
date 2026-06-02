@@ -643,6 +643,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 }
 
 var sszDecoders = map[string]blockDecoder{
+	version.String(version.Gloas):     decodeGloasSSZ,
 	version.String(version.Fulu):      decodeFuluSSZ,
 	version.String(version.Electra):   decodeElectraSSZ,
 	version.String(version.Deneb):     decodeDenebSSZ,
@@ -658,6 +659,18 @@ func decodeSSZToGenericBlock(versionHeader string, body []byte) (*eth.GenericSig
 		return decoder(body)
 	}
 	return nil, errors.New("body does not represent a valid block type")
+}
+
+func decodeGloasSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	gloasBlock := &eth.SignedBeaconBlockGloas{}
+	if err := gloasBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(
+			version.String(version.Gloas), err,
+		)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Gloas{Gloas: gloasBlock},
+	}, nil
 }
 
 func decodeFuluSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
@@ -798,6 +811,7 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 }
 
 var jsonDecoders = map[string]blockDecoder{
+	version.String(version.Gloas):     decodeGloasJSON,
 	version.String(version.Fulu):      decodeFuluJSON,
 	version.String(version.Electra):   decodeElectraJSON,
 	version.String(version.Deneb):     decodeDenebJSON,
@@ -813,6 +827,13 @@ func decodeJSONToGenericBlock(versionHeader string, body []byte) (*eth.GenericSi
 		return decoder(body)
 	}
 	return nil, fmt.Errorf("body does not represent a valid block type")
+}
+
+func decodeGloasJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	return decodeGenericJSON[*structs.SignedBeaconBlockGloas](
+		body,
+		version.String(version.Gloas),
+	)
 }
 
 func decodeFuluJSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
@@ -1318,27 +1339,27 @@ func (s *Server) GetBlockHeader(w http.ResponseWriter, r *http.Request) {
 	}
 	blockHeader, err := blk.Header()
 	if err != nil {
-		httputil.HandleError(w, "Could not get block header: %s"+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not get block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	headerRoot, err := blockHeader.Header.HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not hash block header: %s"+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not hash block header: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	blkRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
-		httputil.HandleError(w, "Could not hash block: %s"+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not hash block: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	canonical, err := s.ChainInfoFetcher.IsCanonical(ctx, blkRoot)
 	if err != nil {
-		httputil.HandleError(w, "Could not determine if block root is canonical: %s"+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not determine if block root is canonical: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
 	if err != nil {
-		httputil.HandleError(w, "Could not check if block is optimistic: %s"+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, "Could not check if block is optimistic: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 

@@ -6,7 +6,6 @@ package validator
 import (
 	"bytes"
 	"context"
-	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -50,8 +49,8 @@ type Server struct {
 	PayloadIDCache                   *cache.PayloadIDCache
 	TrackedValidatorsCache           *cache.TrackedValidatorsCache
 	ProposerPreferencesCache         *cache.ProposerPreferencesCache
-	executionPayloadEnvelopeMu       sync.RWMutex
-	executionPayloadEnvelope         *ethpb.ExecutionPayloadEnvelope
+	HighestBidCache                  *cache.HighestExecutionPayloadBidCache
+	ExecutionPayloadEnvelopeCache    *cache.ExecutionPayloadEnvelopeCache
 	HeadFetcher                      blockchain.HeadFetcher
 	ForkFetcher                      blockchain.ForkFetcher
 	ForkchoiceFetcher                blockchain.ForkchoiceFetcher

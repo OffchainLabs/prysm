@@ -185,6 +185,71 @@ type testSetupSlots struct {
 	lastblock primitives.Slot
 }
 
+type notFoundOnRootDB struct {
+	db.NoHeadAccessDatabase
+	target [32]byte
+}
+
+func (d *notFoundOnRootDB) HasState(ctx context.Context, blockRoot [32]byte) bool {
+	if blockRoot == d.target {
+		return true
+	}
+	return d.NoHeadAccessDatabase.HasState(ctx, blockRoot)
+}
+
+func (d *notFoundOnRootDB) State(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
+	if blockRoot == d.target {
+		return nil, db.ErrNotFoundState
+	}
+	return d.NoHeadAccessDatabase.State(ctx, blockRoot)
+}
+
+func TestStateByRoot_FallsBackToReplayOnNotFoundStateFromDirectRead(t *testing.T) {
+	ctx := t.Context()
+	beaconDB := testDB.SetupDB(t)
+
+	st9, _ := util.DeterministicGenesisState(t, 32)
+	st9, err := ReplayProcessSlots(ctx, st9, 9)
+	require.NoError(t, err)
+
+	hdr := st9.LatestBlockHeader()
+	hdrRoot, err := hdr.HashTreeRoot()
+	require.NoError(t, err)
+
+	st10 := st9.Copy()
+	blk10 := util.NewBeaconBlock()
+	blk10.Block.Slot = 10
+	blk10.Block.ParentRoot = hdrRoot[:]
+	idx10, err := helpers.BeaconProposerIndexAtSlot(ctx, st10, blk10.Block.Slot)
+	require.NoError(t, err)
+	blk10.Block.ProposerIndex = idx10
+	ib10, err := blt.NewSignedBeaconBlock(blk10)
+	require.NoError(t, err)
+
+	st10, err = executeStateTransitionStateGen(ctx, st10, ib10)
+	require.NoError(t, err)
+	st10Root, err := st10.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	blk10.Block.StateRoot = st10Root[:]
+
+	util.SaveBlock(t, ctx, beaconDB, blk10)
+	require.NoError(t, beaconDB.SaveState(ctx, st9, hdrRoot))
+
+	ib10, err = blt.NewSignedBeaconBlock(blk10)
+	require.NoError(t, err)
+	rob10, err := blt.NewROBlock(ib10)
+	require.NoError(t, err)
+
+	service := New(&notFoundOnRootDB{NoHeadAccessDatabase: beaconDB, target: rob10.Root()}, doublylinkedtree.New())
+
+	got, err := service.StateByRoot(ctx, rob10.Root())
+	require.NoError(t, err)
+
+	gotRoot, err := got.HashTreeRoot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, st10Root, gotRoot)
+}
+
 func TestLoadStateByRoot(t *testing.T) {
 	ctx := t.Context()
 	persistEpochBoundary := func(r testChain, slot primitives.Slot) {
@@ -401,7 +466,7 @@ func TestLoadStateByRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	// make state at slot 10 by transitioning a copy of st9 with ib10 (aka blk10)
-	st10, err = executeStateTransitionStateGen(t.Context(), st10, ib10, nil)
+	st10, err = executeStateTransitionStateGen(t.Context(), st10, ib10)
 	require.NoError(t, err)
 	st10Root, err := st10.HashTreeRoot(t.Context())
 	require.NoError(t, err)
@@ -424,7 +489,7 @@ func TestLoadStateByRoot(t *testing.T) {
 
 	// same steps as 9->10; stf 10->11, then block update
 	st11 := st10.Copy()
-	st11, err = executeStateTransitionStateGen(t.Context(), st11, ib11, nil)
+	st11, err = executeStateTransitionStateGen(t.Context(), st11, ib11)
 	require.NoError(t, err)
 	st11Root, err := st11.HashTreeRoot(t.Context())
 	require.NoError(t, err)
@@ -526,6 +591,47 @@ func TestLastAncestorState_CanGetUsingDB(t *testing.T) {
 	lastState, err := service.latestAncestor(ctx, r3)
 	require.NoError(t, err)
 	assert.Equal(t, b1State.Slot(), lastState.Slot(), "Did not get wanted state")
+}
+
+func TestLastAncestorState_FallsBackOnNotFoundStateFromDB(t *testing.T) {
+	ctx := t.Context()
+	beaconDB := testDB.SetupDB(t)
+
+	b0 := util.NewBeaconBlock()
+	b0.Block.ParentRoot = bytesutil.PadTo([]byte{'a'}, 32)
+	r0, err := b0.Block.HashTreeRoot()
+	require.NoError(t, err)
+	b1 := util.NewBeaconBlock()
+	b1.Block.Slot = 1
+	b1.Block.ParentRoot = bytesutil.PadTo(r0[:], 32)
+	r1, err := b1.Block.HashTreeRoot()
+	require.NoError(t, err)
+	b2 := util.NewBeaconBlock()
+	b2.Block.Slot = 2
+	b2.Block.ParentRoot = bytesutil.PadTo(r1[:], 32)
+	r2, err := b2.Block.HashTreeRoot()
+	require.NoError(t, err)
+	b3 := util.NewBeaconBlock()
+	b3.Block.Slot = 3
+	b3.Block.ParentRoot = bytesutil.PadTo(r2[:], 32)
+	r3, err := b3.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	b1State, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, b1State.SetSlot(1))
+
+	service := New(&notFoundOnRootDB{NoHeadAccessDatabase: beaconDB, target: r2}, doublylinkedtree.New())
+
+	util.SaveBlock(t, ctx, service.beaconDB, b0)
+	util.SaveBlock(t, ctx, service.beaconDB, b1)
+	util.SaveBlock(t, ctx, service.beaconDB, b2)
+	util.SaveBlock(t, ctx, service.beaconDB, b3)
+	require.NoError(t, service.beaconDB.SaveState(ctx, b1State, r1))
+
+	lastState, err := service.latestAncestor(ctx, r3)
+	require.NoError(t, err)
+	require.Equal(t, b1State.Slot(), lastState.Slot(), "Did not get wanted state")
 }
 
 func TestLastAncestorState_CanGetUsingCache(t *testing.T) {

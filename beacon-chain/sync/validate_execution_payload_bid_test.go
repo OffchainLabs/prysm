@@ -9,14 +9,18 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -43,6 +47,26 @@ func TestValidateExecutionPayloadBidGossip_AlreadySeenBuilder(t *testing.T) {
 
 	key := executionPayloadBidBuilderKey(signedBid.Message.Slot, signedBid.Message.BuilderIndex)
 	s.setSeenExecutionPayloadBidBuilder(signedBid.Message.Slot, key)
+	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+}
+
+// Dedup must short-circuit before every later check; duplicates pay only the cache lookup.
+func TestValidateExecutionPayloadBidGossip_DedupShortCircuitsAllLaterChecks(t *testing.T) {
+	ctx := context.Background()
+	s, msg, signedBid := setupExecutionPayloadBidService(t)
+	key := executionPayloadBidBuilderKey(signedBid.Message.Slot, signedBid.Message.BuilderIndex)
+	s.setSeenExecutionPayloadBidBuilder(signedBid.Message.Slot, key)
+	// Every subsequent verifier method would Reject/Ignore if it ran; the cache hit must skip them all.
+	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
+		errCurrentOrNextSlot:    errors.New("slot"),
+		errBuilderActive:        errors.New("builder"),
+		errExecutionPayment:     errors.New("payment"),
+		errFeeRecipientMismatch: errors.New("fee"),
+		errSignature:            errors.New("sig"),
+	})
+
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
@@ -89,8 +113,8 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name:      "zero execution payment",
-			verifier:  mockExecutionPayloadBidVerifier{errExecutionPayment: errors.New("zero payment")},
+			name:      "non-zero execution payment",
+			verifier:  mockExecutionPayloadBidVerifier{errExecutionPayment: errors.New("non-zero payment")},
 			result:    pubsub.ValidationReject,
 			wantError: true,
 		},
@@ -101,9 +125,9 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name:      "gas limit mismatch",
-			verifier:  mockExecutionPayloadBidVerifier{errGasLimitMismatch: errors.New("wrong gas limit")},
-			result:    pubsub.ValidationReject,
+			name:      "gas limit incompatible",
+			verifier:  mockExecutionPayloadBidVerifier{errGasLimitIncompatible: errors.New("incompatible gas limit")},
+			result:    pubsub.ValidationIgnore,
 			wantError: true,
 		},
 		{
@@ -115,6 +139,12 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 		{
 			name:      "inactive builder",
 			verifier:  mockExecutionPayloadBidVerifier{errBuilderActive: errors.New("inactive builder")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
+			name:      "slot not higher than parent",
+			verifier:  mockExecutionPayloadBidVerifier{errSlotHigherThanParent: errors.New("slot not higher than parent")},
 			result:    pubsub.ValidationReject,
 			wantError: true,
 		},
@@ -237,17 +267,17 @@ func TestValidateExecutionPayloadBidGossip_FeeRecipientMismatch(t *testing.T) {
 	require.ErrorIs(t, err, verification.ErrBidFeeRecipientMismatch)
 }
 
-func TestValidateExecutionPayloadBidGossip_GasLimitMismatch(t *testing.T) {
+func TestValidateExecutionPayloadBidGossip_GasLimitIncompatible(t *testing.T) {
 	ctx := context.Background()
 	s, msg, _ := setupExecutionPayloadBidService(t)
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(
-		mockExecutionPayloadBidVerifier{errGasLimitMismatch: verification.ErrBidGasLimitMismatch},
+		mockExecutionPayloadBidVerifier{errGasLimitIncompatible: verification.ErrBidGasLimitIncompatible},
 	)
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NotNil(t, err)
-	require.Equal(t, pubsub.ValidationReject, result)
-	require.ErrorIs(t, err, verification.ErrBidGasLimitMismatch)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.ErrorIs(t, err, verification.ErrBidGasLimitIncompatible)
 }
 
 func TestExecutionPayloadBidSubscriber_WrongMessage(t *testing.T) {
@@ -282,8 +312,9 @@ type mockExecutionPayloadBidVerifier struct {
 	errBuilderActive        error
 	errExecutionPayment     error
 	errFeeRecipientMismatch error
-	errGasLimitMismatch     error
+	errGasLimitIncompatible error
 	errParentBlockRootSeen  error
+	errSlotHigherThanParent error
 	errParentBlockHash      error
 	errBuilderCanCoverBid   error
 	errSignature            error
@@ -299,7 +330,7 @@ func (m *mockExecutionPayloadBidVerifier) VerifyBuilderActive(state.ReadOnlyBeac
 	return m.errBuilderActive
 }
 
-func (m *mockExecutionPayloadBidVerifier) VerifyExecutionPaymentNonZero() error {
+func (m *mockExecutionPayloadBidVerifier) VerifyExecutionPaymentZero() error {
 	return m.errExecutionPayment
 }
 
@@ -307,12 +338,16 @@ func (m *mockExecutionPayloadBidVerifier) VerifyFeeRecipientMatches([]byte) erro
 	return m.errFeeRecipientMismatch
 }
 
-func (m *mockExecutionPayloadBidVerifier) VerifyGasLimitMatches(uint64) error {
-	return m.errGasLimitMismatch
+func (m *mockExecutionPayloadBidVerifier) VerifyGasLimitTargetCompatible(uint64, uint64) error {
+	return m.errGasLimitIncompatible
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockRootSeen(func([32]byte) bool) error {
 	return m.errParentBlockRootSeen
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyBidSlotHigherThanParent(primitives.Slot) error {
+	return m.errSlotHigherThanParent
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockHash(func([32]byte) ([32]byte, error)) error {
@@ -339,16 +374,40 @@ func testNewExecutionPayloadBidVerifier(m mockExecutionPayloadBidVerifier) verif
 func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *ethpb.SignedExecutionPayloadBid) {
 	t.Helper()
 
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.GloasForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := context.Background()
+	db := dbtest.SetupDB(t)
 	p := p2ptest.NewTestP2P(t)
+
+	// Save a genesis block so beaconDB.GenesisBlockRoot resolves; bids at slot 1
+	// (epoch 0) hit the underflow branch in chain.DependentRootForEpoch which
+	// falls back to the genesis block root.
+	gb := util.NewBeaconBlock()
+	signedGenesis, err := blocks.NewSignedBeaconBlock(gb)
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(ctx, signedGenesis))
+	genesisRoot, err := signedGenesis.Block().HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveGenesisBlockRoot(ctx, genesisRoot))
+
 	state, err := util.NewBeaconStateGloas()
 	require.NoError(t, err)
+	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
+	signedBid.Message.BuilderIndex = 1
 	chainService := &mock.ChainService{
-		Genesis: time.Now(),
-		State:   state,
+		Genesis:    time.Now(),
+		State:      state,
+		TargetRoot: genesisRoot,
 		ForkchoiceRoots: map[[32]byte]bool{
 			[32]byte{0x02}: true,
 		},
 		ForkchoiceBlockHashes: map[[32]byte][32]byte{[32]byte{0x02}: [32]byte{0x01}},
+		ForkchoiceGasLimits:   map[[32]byte]uint64{[32]byte{0x02}: 1},
 	}
 	s := &Service{
 		seenExecutionPayloadBidCache:    newSlotAwareCache(10),
@@ -358,12 +417,18 @@ func setupExecutionPayloadBidService(t *testing.T) (*Service, *pubsub.Message, *
 			p2p:         p,
 			initialSync: &mockSync.Sync{},
 			chain:       chainService,
+			beaconDB:    db,
 			clock:       startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
 		},
 	}
-	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
-	signedBid.Message.BuilderIndex = 1
-	require.Equal(t, true, s.proposerPreferencesCache.Add(signedBid.Message.Slot, signedBid.Message.FeeRecipient, signedBid.Message.GasLimit))
+	// The Gloas test state has a zero-filled proposer lookahead, so the
+	// proposer for any slot is validator index 0.
+	require.Equal(t, true, s.proposerPreferencesCache.Add(cache.ProposerPreference{
+		DependentRoot:  genesisRoot,
+		ValidatorIndex: 0,
+		FeeRecipient:   bytesutil.ToBytes20(signedBid.Message.FeeRecipient),
+		TargetGasLimit: signedBid.Message.GasLimit,
+	}, signedBid.Message.Slot))
 	msg := executionPayloadBidToPubsub(t, s, p, signedBid)
 	return s, msg, signedBid
 }

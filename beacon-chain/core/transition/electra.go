@@ -10,6 +10,7 @@ import (
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/pkg/errors"
 )
 
@@ -50,6 +51,9 @@ var (
 //      for_ops(body.execution_payload.consolidation_requests, process_consolidation_request)
 
 func electraOperations(ctx context.Context, st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	ctx, span := trace.StartSpan(ctx, "core.state.electraOperations")
+	defer span.End()
+
 	var err error
 
 	// 6110 validations are in VerifyOperationLengths

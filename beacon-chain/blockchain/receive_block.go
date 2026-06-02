@@ -41,7 +41,7 @@ var epochsSinceFinalityExpandCache = primitives.Epoch(4)
 // BlockReceiver interface defines the methods of chain service for receiving and processing new blocks.
 type BlockReceiver interface {
 	ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityChecker) error
-	ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, avs das.AvailabilityChecker) error
+	ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error
 	HasBlock(ctx context.Context, root [32]byte) bool
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
 	BlockBeingSynced([32]byte) bool
@@ -182,15 +182,8 @@ func (s *Service) updateCheckpoints(
 	preState, postState state.BeaconState,
 	blockRoot [32]byte,
 ) error {
-	if coreTime.CurrentEpoch(postState) > cp.c && s.cfg.ForkChoiceStore.IsCanonical(blockRoot) {
-		headSt, err := s.HeadState(ctx)
-		if err != nil {
-			return errors.Wrap(err, "could not get head state")
-		}
-		if err := reportEpochMetrics(ctx, postState, headSt); err != nil {
-			log.WithError(err).Error("Could not report epoch metrics")
-		}
-	}
+	s.reportEpochMetrics(postState, cp.c, blockRoot)
+
 	if err := s.updateJustificationOnBlock(ctx, preState, postState, cp.j); err != nil {
 		return errors.Wrap(err, "could not update justified checkpoint")
 	}
@@ -205,6 +198,24 @@ func (s *Service) updateCheckpoints(
 		s.executePostFinalizationTasks(ctx, postState)
 	}
 	return nil
+}
+
+func (s *Service) reportEpochMetrics(postState state.BeaconState, prevEpoch primitives.Epoch, blockRoot [32]byte) {
+	if coreTime.CurrentEpoch(postState) <= prevEpoch || !s.cfg.ForkChoiceStore.IsCanonical(blockRoot) {
+		return
+	}
+
+	go func() {
+		headSt, err := s.HeadState(s.ctx)
+		if err != nil {
+			log.WithError(err).Error("Could not get head state for epoch metrics")
+			return
+		}
+
+		if err := reportEpochMetrics(s.ctx, postState, headSt); err != nil {
+			log.WithError(err).Error("Could not report epoch metrics")
+		}
+	}()
 }
 
 func (s *Service) validateExecutionAndConsensus(
@@ -373,7 +384,7 @@ func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedSta
 // ReceiveBlockBatch processes the whole block batch at once, assuming the block batch is linear ,transitioning
 // the state, performing batch verification of all collected signatures and then performing the appropriate
 // actions for a block post-transition.
-func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, avs das.AvailabilityChecker) error {
+func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, envelopes []interfaces.ROSignedExecutionPayloadEnvelope, avs das.AvailabilityChecker) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveBlockBatch")
 	defer span.End()
 
@@ -381,7 +392,7 @@ func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock
 	defer s.cfg.ForkChoiceStore.Unlock()
 
 	// Apply state transition on the incoming newly received block batches, one by one.
-	if err := s.onBlockBatch(ctx, blocks, avs); err != nil {
+	if err := s.onBlockBatch(ctx, blocks, envelopes, avs); err != nil {
 		err := errors.Wrap(err, "could not process block in batch")
 		tracing.AnnotateError(span, err)
 		return err
@@ -420,6 +431,15 @@ func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock
 
 	if err := s.cfg.BeaconDB.SaveBlocks(ctx, s.getInitSyncBlocks()); err != nil {
 		return err
+	}
+	for _, e := range envelopes {
+		protoEnv, ok := e.Proto().(*ethpb.SignedExecutionPayloadEnvelope)
+		if !ok {
+			return errors.New("could not type assert signed envelope to proto")
+		}
+		if err := s.cfg.BeaconDB.SaveExecutionPayloadEnvelope(ctx, protoEnv); err != nil {
+			return errors.Wrap(err, "could not save execution payload envelope")
+		}
 	}
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
 	if finalized == nil {
@@ -499,8 +519,14 @@ func (s *Service) markIncludedBlockBLSToExecChanges(headBlock interfaces.ReadOnl
 
 // This checks whether it's time to start saving hot state to DB.
 // It's time when there's `epochsSinceFinalitySaveHotStateDB` epochs of non-finality.
+//
+//	If state-diff is enabled, we will not save hot states to DB regardless of finality status.
+//
 // Requires a read lock on forkchoice
 func (s *Service) checkSaveHotStateDB(ctx context.Context) error {
+	if features.Get().EnableStateDiff {
+		return s.cfg.StateGen.DisableSaveHotStateToDB(ctx)
+	}
 	currentEpoch := slots.ToEpoch(s.CurrentSlot())
 	// Prevent `sinceFinality` going underflow.
 	var sinceFinality primitives.Epoch

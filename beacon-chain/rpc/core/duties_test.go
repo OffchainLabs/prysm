@@ -210,6 +210,36 @@ func TestProposalDependentRootV2(t *testing.T) {
 	})
 }
 
+func TestPTCDuties_ForkBoundaryFuluToGloas(t *testing.T) {
+	helpers.ClearCache()
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 1 // Epoch 0 is Fulu, epoch 1 is GloAS.
+	params.OverrideBeaconConfig(cfg)
+
+	// Create a Fulu state at epoch 0 (last Fulu epoch before GloAS fork).
+	numVals := params.BeaconConfig().MinGenesisActiveValidatorCount
+	st, _ := util.DeterministicGenesisStateFulu(t, numVals)
+
+	indices := []primitives.ValidatorIndex{0, 1, 2}
+	s := &Service{}
+
+	t.Run("current Fulu epoch returns empty", func(t *testing.T) {
+		duties, rpcErr := s.PTCDuties(t.Context(), st, 0, indices)
+		require.Equal(t, (*RpcError)(nil), rpcErr)
+		assert.Equal(t, 0, len(duties), "pre-GloAS epoch should yield no PTC assignments")
+	})
+
+	t.Run("next epoch at GloAS boundary returns empty on Fulu state", func(t *testing.T) {
+		// Epoch 1 == GloasForkEpoch, so the epoch check passes, but the
+		// state is still Fulu — PTC should NOT be computed.
+		duties, rpcErr := s.PTCDuties(t.Context(), st, 1, indices)
+		require.Equal(t, (*RpcError)(nil), rpcErr)
+		assert.Equal(t, 0, len(duties),
+			"GloAS-epoch PTC must not be computed from a Fulu state")
+	})
+}
+
 func TestFindValidatorIndexInCommittee(t *testing.T) {
 	committee := []primitives.ValidatorIndex{10, 20, 30}
 	assert.Equal(t, uint64(0), findValidatorIndexInCommittee(committee, 10))

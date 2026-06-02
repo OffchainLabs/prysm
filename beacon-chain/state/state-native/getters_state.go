@@ -216,10 +216,7 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			PendingConsolidations:         b.pendingConsolidations,
 		}
 	case version.Fulu:
-		lookahead := make([]uint64, len(b.proposerLookahead))
-		for i, v := range b.proposerLookahead {
-			lookahead[i] = uint64(v)
-		}
+
 		return &ethpb.BeaconStateFulu{
 			GenesisTime:                   b.genesisTime,
 			GenesisValidatorsRoot:         gvrCopy[:],
@@ -258,13 +255,9 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			PendingDeposits:               b.pendingDeposits,
 			PendingPartialWithdrawals:     b.pendingPartialWithdrawals,
 			PendingConsolidations:         b.pendingConsolidations,
-			ProposerLookahead:             lookahead,
+			ProposerLookahead:             b.proposerLookahead,
 		}
 	case version.Gloas:
-		lookahead := make([]uint64, len(b.proposerLookahead))
-		for i, v := range b.proposerLookahead {
-			lookahead[i] = uint64(v)
-		}
 
 		return &ethpb.BeaconStateGloas{
 			GenesisTime:                   b.genesisTime,
@@ -304,7 +297,7 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			PendingDeposits:               b.pendingDeposits,
 			PendingPartialWithdrawals:     b.pendingPartialWithdrawals,
 			PendingConsolidations:         b.pendingConsolidations,
-			ProposerLookahead:             lookahead,
+			ProposerLookahead:             b.proposerLookahead,
 			ExecutionPayloadAvailability:  b.executionPayloadAvailability,
 			Builders:                      b.builders,
 			NextWithdrawalBuilderIndex:    b.nextWithdrawalBuilderIndex,
@@ -312,6 +305,7 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			BuilderPendingWithdrawals:     b.builderPendingWithdrawals,
 			LatestBlockHash:               b.latestBlockHash,
 			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawals,
+			PtcWindow:                     b.ptcWindow,
 		}
 	default:
 		return nil
@@ -520,10 +514,7 @@ func (b *BeaconState) ToProto() any {
 			PendingConsolidations:         b.pendingConsolidationsVal(),
 		}
 	case version.Fulu:
-		lookahead := make([]uint64, len(b.proposerLookahead))
-		for i, v := range b.proposerLookahead {
-			lookahead[i] = uint64(v)
-		}
+
 		return &ethpb.BeaconStateFulu{
 			GenesisTime:                   b.genesisTime,
 			GenesisValidatorsRoot:         gvrCopy[:],
@@ -562,13 +553,9 @@ func (b *BeaconState) ToProto() any {
 			PendingDeposits:               b.pendingDepositsVal(),
 			PendingPartialWithdrawals:     b.pendingPartialWithdrawalsVal(),
 			PendingConsolidations:         b.pendingConsolidationsVal(),
-			ProposerLookahead:             lookahead,
+			ProposerLookahead:             b.proposerLookaheadVal(),
 		}
 	case version.Gloas:
-		lookahead := make([]uint64, len(b.proposerLookahead))
-		for i, v := range b.proposerLookahead {
-			lookahead[i] = uint64(v)
-		}
 
 		return &ethpb.BeaconStateGloas{
 			GenesisTime:                   b.genesisTime,
@@ -608,7 +595,7 @@ func (b *BeaconState) ToProto() any {
 			PendingDeposits:               b.pendingDepositsVal(),
 			PendingPartialWithdrawals:     b.pendingPartialWithdrawalsVal(),
 			PendingConsolidations:         b.pendingConsolidationsVal(),
-			ProposerLookahead:             lookahead,
+			ProposerLookahead:             b.proposerLookaheadVal(),
 			ExecutionPayloadAvailability:  b.executionPayloadAvailabilityVal(),
 			Builders:                      b.buildersVal(),
 			NextWithdrawalBuilderIndex:    b.nextWithdrawalBuilderIndex,
@@ -616,6 +603,7 @@ func (b *BeaconState) ToProto() any {
 			BuilderPendingWithdrawals:     b.builderPendingWithdrawalsVal(),
 			LatestBlockHash:               b.latestBlockHashVal(),
 			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawalsVal(),
+			PtcWindow:                     b.ptcWindowVal(),
 		}
 	default:
 		return nil

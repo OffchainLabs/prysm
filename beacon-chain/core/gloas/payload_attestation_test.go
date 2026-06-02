@@ -2,13 +2,17 @@ package gloas_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -119,7 +123,6 @@ func TestProcessPayloadAttestations_EmptyAggregationBits(t *testing.T) {
 }
 
 func TestProcessPayloadAttestations_HappyPath(t *testing.T) {
-	helpers.ClearCache()
 	setupTestConfig(t)
 
 	sk1, pk1 := newKey(t)
@@ -150,7 +153,6 @@ func TestProcessPayloadAttestations_HappyPath(t *testing.T) {
 }
 
 func TestProcessPayloadAttestations_MultipleAttestations(t *testing.T) {
-	helpers.ClearCache()
 	setupTestConfig(t)
 
 	sk1, pk1 := newKey(t)
@@ -211,12 +213,30 @@ func TestProcessPayloadAttestations_IndexedVerificationError(t *testing.T) {
 		errIndex:    0,
 	}
 	err := gloas.ProcessPayloadAttestations(t.Context(), errState, body)
-	require.ErrorContains(t, "failed to convert to indexed form", err)
-	require.ErrorContains(t, "failed to sample beacon committee 0", err)
+	require.ErrorContains(t, "failed to verify indexed form", err)
 	require.ErrorContains(t, "validator 0", err)
 }
 
 func newTestState(t *testing.T, vals []*eth.Validator, slot primitives.Slot) state.BeaconState {
+	t.Helper()
+
+	st, err := testutil.NewBeaconStateGloas(func(seed *eth.BeaconStateGloas) error {
+		seed.Slot = slot
+		seed.Validators = vals
+		seed.Balances = make([]uint64, len(vals))
+		for i, v := range vals {
+			seed.Balances[i] = v.EffectiveBalance
+		}
+		seed.PtcWindow = deterministicPTCWindow(len(vals))
+		return nil
+	})
+	require.NoError(t, err)
+	return st
+}
+
+func newPhase0TestState(t *testing.T, vals []*eth.Validator, slot primitives.Slot) state.BeaconState {
+	t.Helper()
+
 	st, err := testutil.NewBeaconState()
 	require.NoError(t, err)
 	for _, v := range vals {
@@ -224,8 +244,23 @@ func newTestState(t *testing.T, vals []*eth.Validator, slot primitives.Slot) sta
 		require.NoError(t, st.AppendBalance(v.EffectiveBalance))
 	}
 	require.NoError(t, st.SetSlot(slot))
-	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), st, slots.ToEpoch(slot)))
 	return st
+}
+
+func deterministicPTCWindow(validatorCount int) []*eth.PTCs {
+	window := make([]*eth.PTCs, 3*params.BeaconConfig().SlotsPerEpoch)
+	indices := make([]primitives.ValidatorIndex, fieldparams.PTCSize)
+	if validatorCount > 0 {
+		for i := range indices {
+			indices[i] = primitives.ValidatorIndex(i % validatorCount)
+		}
+	}
+	for i := range window {
+		window[i] = &eth.PTCs{
+			ValidatorIndices: slices.Clone(indices),
+		}
+	}
+	return window
 }
 
 func setupTestConfig(t *testing.T) {
@@ -292,6 +327,79 @@ func signAttestation(t *testing.T, st state.ReadOnlyBeaconState, data *eth.Paylo
 	return agg.Marshal()
 }
 
+func TestProcessPTCWindow(t *testing.T) {
+	fuluSt, _ := testutil.DeterministicGenesisStateFulu(t, 256)
+	st, err := gloas.UpgradeToGloas(fuluSt)
+	require.NoError(t, err)
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+	// Get original window.
+	origWindow, err := st.PTCWindow()
+	require.NoError(t, err)
+	windowSize := int(slotsPerEpoch.Mul(uint64(2 + params.BeaconConfig().MinSeedLookahead)))
+	require.Equal(t, windowSize, len(origWindow))
+
+	// Advance state to next epoch boundary so process_ptc_window sees a new epoch.
+	require.NoError(t, st.SetSlot(slotsPerEpoch))
+
+	// Process PTC window — should rotate.
+	require.NoError(t, gloas.ProcessPTCWindow(t.Context(), st))
+
+	newWindow, err := st.PTCWindow()
+	require.NoError(t, err)
+	require.Equal(t, windowSize, len(newWindow))
+
+	// The first two epochs should be the old epochs 1 and 2 (shifted left by one epoch).
+	for i := range 2 * slotsPerEpoch {
+		require.DeepEqual(t, origWindow[slotsPerEpoch+i], newWindow[i])
+	}
+
+	// The last epoch should be freshly computed — not all zeros.
+	lastStart := 2 * slotsPerEpoch
+	for i := range slotsPerEpoch {
+		ptcSlot := newWindow[lastStart+i]
+		require.NotNil(t, ptcSlot)
+		nonZero := false
+		for _, idx := range ptcSlot.ValidatorIndices {
+			if idx != 0 {
+				nonZero = true
+				break
+			}
+		}
+		require.Equal(t, true, nonZero, "last epoch slot %d should have non-zero validator indices", i)
+	}
+}
+
+// TestProcessPTCWindow_GoldenVector pins a fingerprint of the validator
+// indices produced by the balance-weighted PTC selection for a deterministic
+// state, guarding against unintended behavioral drift.
+func TestProcessPTCWindow_GoldenVector(t *testing.T) {
+	fuluSt, _ := testutil.DeterministicGenesisStateFulu(t, 256)
+	st, err := gloas.UpgradeToGloas(fuluSt)
+	require.NoError(t, err)
+	require.NoError(t, st.SetSlot(params.BeaconConfig().SlotsPerEpoch))
+	require.NoError(t, gloas.ProcessPTCWindow(t.Context(), st))
+
+	window, err := st.PTCWindow()
+	require.NoError(t, err)
+
+	// Fingerprint the newly-computed (last) epoch by sha256'ing the little-endian
+	// encoding of every validator index, slot-by-slot.
+	slotsPerEpoch := int(params.BeaconConfig().SlotsPerEpoch)
+	lastStart := len(window) - slotsPerEpoch
+	h := sha256.New()
+	var buf [8]byte
+	for i := range slotsPerEpoch {
+		for _, idx := range window[lastStart+i].ValidatorIndices {
+			binary.LittleEndian.PutUint64(buf[:], uint64(idx))
+			h.Write(buf[:])
+		}
+	}
+	const expected = "bfdb357dbb3f2abe4bba9a0d5d0d6d8ae9e19335e83f64f21b5a2f727a0f3ee9"
+	require.Equal(t, expected, hex.EncodeToString(h.Sum(nil)))
+}
+
 type validatorLookupErrState struct {
 	state.BeaconState
 	errIndex primitives.ValidatorIndex
@@ -303,4 +411,30 @@ func (s *validatorLookupErrState) ValidatorAtIndexReadOnly(idx primitives.Valida
 		return nil, state.ErrNilValidatorsInState
 	}
 	return s.BeaconState.ValidatorAtIndexReadOnly(idx)
+}
+
+// BenchmarkProcessPTCWindow measures end-to-end PTC window rotation, which
+// is dominated by the balance-weighted selection loop.
+//
+// Apple M4 Pro, mainnet config, 2048 validators:
+//
+//	before caching: 87.64 ms/op   136.9 MiB/op   1.230M allocs/op
+//	with caching:   47.20 ms/op   136.9 MiB/op   1.230M allocs/op
+//
+// The caching optimization (hash(seed || i/16) reused across 16 rounds)
+// cuts wall time by ~46% with no change to allocation profile — exactly
+// what's expected: we skipped SHA256 work, not memory traffic.
+func BenchmarkProcessPTCWindow(b *testing.B) {
+	fuluSt, _ := testutil.DeterministicGenesisStateFulu(b, 2048)
+	st, err := gloas.UpgradeToGloas(fuluSt)
+	require.NoError(b, err)
+	require.NoError(b, st.SetSlot(params.BeaconConfig().SlotsPerEpoch))
+
+	ctx := b.Context()
+	b.ResetTimer()
+	for b.Loop() {
+		if err := gloas.ProcessPTCWindow(ctx, st); err != nil {
+			b.Fatal(err)
+		}
+	}
 }

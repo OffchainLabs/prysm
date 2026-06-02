@@ -284,6 +284,10 @@ func (b *BeaconBlockBody) SignedExecutionPayloadBid() (*eth.SignedExecutionPaylo
 	panic("implement me")
 }
 
+func (b *BeaconBlockBody) ParentExecutionRequests() (*enginev1.ExecutionRequests, error) {
+	panic("implement me")
+}
+
 func (b *BeaconBlockBody) Attestations() []eth.Att {
 	panic("implement me")
 }

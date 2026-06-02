@@ -11,11 +11,13 @@ import (
 type writeOnlyGloasFields interface {
 	// Bids.
 	SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid) error
+	SetPTCWindow([]*ethpb.PTCs) error
+	RotatePTCWindow([]*ethpb.PTCs) error
 
 	// Builder pending payments / withdrawals.
 	SetBuilderPendingPayment(index primitives.Slot, payment *ethpb.BuilderPendingPayment) error
 	ClearBuilderPendingPayment(index primitives.Slot) error
-	QueueBuilderPayment() error
+	QueueBuilderPaymentForSlot(parentSlot primitives.Slot) error
 	RotateBuilderPendingPayments() error
 	AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal) error
 
@@ -32,6 +34,12 @@ type writeOnlyGloasFields interface {
 	UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64, participatedFlags map[uint8]bool) error
 	UpdateBuilderAtIndex(index primitives.BuilderIndex, builder *ethpb.Builder) error
 
+	// Bulk setters (used by hdiff).
+	SetBuilders([]*ethpb.Builder) error
+	SetBuilderPendingPayments([]*ethpb.BuilderPendingPayment) error
+	SetBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal) error
+	SetExecutionPayloadAvailabilityVector([]byte) error
+
 	// Withdrawals.
 	SetPayloadExpectedWithdrawals(withdrawals []*enginev1.Withdrawal) error
 	DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdrawal) error
@@ -43,6 +51,8 @@ type writeOnlyGloasFields interface {
 type readOnlyGloasFields interface {
 	// Bids.
 	LatestExecutionPayloadBid() (interfaces.ROExecutionPayloadBid, error)
+	PTCWindow() ([]*ethpb.PTCs, error)
+	PayloadCommitteeReadOnly(slot primitives.Slot) ([]primitives.ValidatorIndex, error)
 
 	// Builder pending payments / withdrawals.
 	BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error)
@@ -67,9 +77,10 @@ type readOnlyGloasFields interface {
 	NextWithdrawalBuilderIndex() (primitives.BuilderIndex, error)
 
 	// Withdrawals
-	IsParentBlockFull() (bool, error)
+	LatestBlockHashMatchesBidBlockHash() (bool, error)
 	ExpectedWithdrawalsGloas() (ExpectedWithdrawalsGloasResult, error)
 	PayloadExpectedWithdrawals() ([]*enginev1.Withdrawal, error)
+	WithdrawalsForPayload() ([]*enginev1.Withdrawal, error)
 }
 
 // ExpectedWithdrawalsGloasResult bundles the expected withdrawals and related counters

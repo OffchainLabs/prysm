@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -251,12 +250,9 @@ func (s *Service) validateUnaggregatedAttTopic(ctx context.Context, a eth.Att, b
 	}
 	subnet := helpers.ComputeSubnetForAttestation(valCount, a)
 	format := p2p.GossipTypeMapping[reflect.TypeFor[*eth.Attestation]()]
-	digest, err := s.currentForkDigest()
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return pubsub.ValidationIgnore, err
-	}
-	if !strings.HasPrefix(t, fmt.Sprintf(format, digest, subnet)) {
+	digest := params.ForkDigest(slots.ToEpoch(a.GetData().Slot))
+	expected := fmt.Sprintf(format, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+	if t != expected {
 		return pubsub.ValidationReject, errors.New("attestation's subnet does not match with pubsub topic")
 	}
 

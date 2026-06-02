@@ -107,6 +107,7 @@ type BeaconNode struct {
 	trackedValidatorsCache   *cache.TrackedValidatorsCache
 	proposerPreferencesCache *cache.ProposerPreferencesCache
 	payloadIDCache           *cache.PayloadIDCache
+	executionPayloadCache    *cache.ExecutionPayloadEnvelopeCache
 	stateFeed                *event.Feed
 	blockFeed                *event.Feed
 	opFeed                   *event.Feed
@@ -176,6 +177,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		// are global and include proposers we do not own.
 		proposerPreferencesCache: cache.NewProposerPreferencesCache(),
 		payloadIDCache:           cache.NewPayloadIDCache(),
+		executionPayloadCache:    cache.NewExecutionPayloadEnvelopeCache(),
 		slasherBlockHeadersFeed:  new(event.Feed),
 		slasherAttestationsFeed:  new(event.Feed),
 		serviceFlagOpts:          &serviceFlagOpts{},
@@ -559,6 +561,12 @@ func openDB(ctx context.Context, dbPath string, clearer *dbClearer) (*kv.Store, 
 		cfg := features.Get()
 		cfg.EnableStateDiff = false
 		features.Init(cfg)
+	} else if errors.Is(err, kv.ErrStateDiffExponentMismatch) {
+		log.WithError(err).Error("State-diff configuration mismatch; restart aborted. Use the stored exponents or re-sync the database.")
+		return nil, err
+	} else if errors.Is(err, kv.ErrStateDiffMissingSnapshot) || errors.Is(err, kv.ErrStateDiffCorrupted) {
+		log.WithError(err).Error("State-diff database corrupted; restart aborted. Delete database and re-sync from genesis/checkpoint.")
+		return nil, err
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "could not create database at %s", dbPath)
 	}
@@ -767,6 +775,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithBlobStorage(b.BlobStorage),
 		blockchain.WithDataColumnStorage(b.DataColumnStorage),
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
+		blockchain.WithProposerPreferencesCache(b.proposerPreferencesCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
@@ -943,6 +952,11 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		return err
 	}
 
+	var regularSyncService *regularsync.Service
+	if err := b.services.FetchService(&regularSyncService); err != nil {
+		return err
+	}
+
 	var slasherService *slasher.Service
 	if b.slasherEnabled {
 		if err := b.services.FetchService(&slasherService); err != nil {
@@ -1020,7 +1034,9 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		DataColumnStorage:                b.DataColumnStorage,
 		TrackedValidatorsCache:           b.trackedValidatorsCache,
 		ProposerPreferencesCache:         b.proposerPreferencesCache,
+		HighestBidCache:                  regularSyncService.HighestExecutionPayloadBidCache(),
 		PayloadIDCache:                   b.payloadIDCache,
+		ExecutionPayloadEnvelopeCache:    b.executionPayloadCache,
 		LCStore:                          b.lcStore,
 		GraffitiInfo:                     web3Service.GraffitiInfo(),
 	})

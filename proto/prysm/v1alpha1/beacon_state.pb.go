@@ -2070,45 +2070,45 @@ func (x *BeaconStateElectra) GetPendingConsolidations() []*PendingConsolidation 
 }
 
 type BeaconStateFulu struct {
-	state                         protoimpl.MessageState                                                     `protogen:"open.v1"`
-	GenesisTime                   uint64                                                                     `protobuf:"varint,1001,opt,name=genesis_time,json=genesisTime,proto3" json:"genesis_time,omitempty"`
-	GenesisValidatorsRoot         []byte                                                                     `protobuf:"bytes,1002,opt,name=genesis_validators_root,json=genesisValidatorsRoot,proto3" json:"genesis_validators_root,omitempty" ssz-size:"32"`
-	Slot                          github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot           `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
-	Fork                          *Fork                                                                      `protobuf:"bytes,1004,opt,name=fork,proto3" json:"fork,omitempty"`
-	LatestBlockHeader             *BeaconBlockHeader                                                         `protobuf:"bytes,2001,opt,name=latest_block_header,json=latestBlockHeader,proto3" json:"latest_block_header,omitempty"`
-	BlockRoots                    [][]byte                                                                   `protobuf:"bytes,2002,rep,name=block_roots,json=blockRoots,proto3" json:"block_roots,omitempty" ssz-size:"8192,32"`
-	StateRoots                    [][]byte                                                                   `protobuf:"bytes,2003,rep,name=state_roots,json=stateRoots,proto3" json:"state_roots,omitempty" ssz-size:"8192,32"`
-	HistoricalRoots               [][]byte                                                                   `protobuf:"bytes,2004,rep,name=historical_roots,json=historicalRoots,proto3" json:"historical_roots,omitempty" ssz-max:"16777216" ssz-size:"?,32"`
-	Eth1Data                      *Eth1Data                                                                  `protobuf:"bytes,3001,opt,name=eth1_data,json=eth1Data,proto3" json:"eth1_data,omitempty"`
-	Eth1DataVotes                 []*Eth1Data                                                                `protobuf:"bytes,3002,rep,name=eth1_data_votes,json=eth1DataVotes,proto3" json:"eth1_data_votes,omitempty" ssz-max:"2048"`
-	Eth1DepositIndex              uint64                                                                     `protobuf:"varint,3003,opt,name=eth1_deposit_index,json=eth1DepositIndex,proto3" json:"eth1_deposit_index,omitempty"`
-	Validators                    []*Validator                                                               `protobuf:"bytes,4001,rep,name=validators,proto3" json:"validators,omitempty" ssz-max:"1099511627776"`
-	Balances                      []uint64                                                                   `protobuf:"varint,4002,rep,packed,name=balances,proto3" json:"balances,omitempty" ssz-max:"1099511627776"`
-	RandaoMixes                   [][]byte                                                                   `protobuf:"bytes,5001,rep,name=randao_mixes,json=randaoMixes,proto3" json:"randao_mixes,omitempty" ssz-size:"65536,32"`
-	Slashings                     []uint64                                                                   `protobuf:"varint,6001,rep,packed,name=slashings,proto3" json:"slashings,omitempty" ssz-size:"8192"`
-	PreviousEpochParticipation    []byte                                                                     `protobuf:"bytes,7001,opt,name=previous_epoch_participation,json=previousEpochParticipation,proto3" json:"previous_epoch_participation,omitempty" ssz-max:"1099511627776"`
-	CurrentEpochParticipation     []byte                                                                     `protobuf:"bytes,7002,opt,name=current_epoch_participation,json=currentEpochParticipation,proto3" json:"current_epoch_participation,omitempty" ssz-max:"1099511627776"`
-	JustificationBits             github_com_OffchainLabs_go_bitfield.Bitvector4                             `protobuf:"bytes,8001,opt,name=justification_bits,json=justificationBits,proto3" json:"justification_bits,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitvector4" ssz-size:"1"`
-	PreviousJustifiedCheckpoint   *Checkpoint                                                                `protobuf:"bytes,8002,opt,name=previous_justified_checkpoint,json=previousJustifiedCheckpoint,proto3" json:"previous_justified_checkpoint,omitempty"`
-	CurrentJustifiedCheckpoint    *Checkpoint                                                                `protobuf:"bytes,8003,opt,name=current_justified_checkpoint,json=currentJustifiedCheckpoint,proto3" json:"current_justified_checkpoint,omitempty"`
-	FinalizedCheckpoint           *Checkpoint                                                                `protobuf:"bytes,8004,opt,name=finalized_checkpoint,json=finalizedCheckpoint,proto3" json:"finalized_checkpoint,omitempty"`
-	InactivityScores              []uint64                                                                   `protobuf:"varint,9001,rep,packed,name=inactivity_scores,json=inactivityScores,proto3" json:"inactivity_scores,omitempty" ssz-max:"1099511627776"`
-	CurrentSyncCommittee          *SyncCommittee                                                             `protobuf:"bytes,9002,opt,name=current_sync_committee,json=currentSyncCommittee,proto3" json:"current_sync_committee,omitempty"`
-	NextSyncCommittee             *SyncCommittee                                                             `protobuf:"bytes,9003,opt,name=next_sync_committee,json=nextSyncCommittee,proto3" json:"next_sync_committee,omitempty"`
-	LatestExecutionPayloadHeader  *v1.ExecutionPayloadHeaderDeneb                                            `protobuf:"bytes,10001,opt,name=latest_execution_payload_header,json=latestExecutionPayloadHeader,proto3" json:"latest_execution_payload_header,omitempty"`
-	NextWithdrawalIndex           uint64                                                                     `protobuf:"varint,11001,opt,name=next_withdrawal_index,json=nextWithdrawalIndex,proto3" json:"next_withdrawal_index,omitempty"`
-	NextWithdrawalValidatorIndex  github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex `protobuf:"varint,11002,opt,name=next_withdrawal_validator_index,json=nextWithdrawalValidatorIndex,proto3" json:"next_withdrawal_validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
-	HistoricalSummaries           []*HistoricalSummary                                                       `protobuf:"bytes,11003,rep,name=historical_summaries,json=historicalSummaries,proto3" json:"historical_summaries,omitempty" ssz-max:"16777216"`
-	DepositRequestsStartIndex     uint64                                                                     `protobuf:"varint,12001,opt,name=deposit_requests_start_index,json=depositRequestsStartIndex,proto3" json:"deposit_requests_start_index,omitempty"`
-	DepositBalanceToConsume       github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei           `protobuf:"varint,12002,opt,name=deposit_balance_to_consume,json=depositBalanceToConsume,proto3" json:"deposit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
-	ExitBalanceToConsume          github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei           `protobuf:"varint,12003,opt,name=exit_balance_to_consume,json=exitBalanceToConsume,proto3" json:"exit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
-	EarliestExitEpoch             github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch          `protobuf:"varint,12004,opt,name=earliest_exit_epoch,json=earliestExitEpoch,proto3" json:"earliest_exit_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
-	ConsolidationBalanceToConsume github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei           `protobuf:"varint,12005,opt,name=consolidation_balance_to_consume,json=consolidationBalanceToConsume,proto3" json:"consolidation_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
-	EarliestConsolidationEpoch    github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch          `protobuf:"varint,12006,opt,name=earliest_consolidation_epoch,json=earliestConsolidationEpoch,proto3" json:"earliest_consolidation_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
-	PendingDeposits               []*PendingDeposit                                                          `protobuf:"bytes,12007,rep,name=pending_deposits,json=pendingDeposits,proto3" json:"pending_deposits,omitempty" ssz-max:"134217728"`
-	PendingPartialWithdrawals     []*PendingPartialWithdrawal                                                `protobuf:"bytes,12008,rep,name=pending_partial_withdrawals,json=pendingPartialWithdrawals,proto3" json:"pending_partial_withdrawals,omitempty" ssz-max:"134217728"`
-	PendingConsolidations         []*PendingConsolidation                                                    `protobuf:"bytes,12009,rep,name=pending_consolidations,json=pendingConsolidations,proto3" json:"pending_consolidations,omitempty" ssz-max:"262144"`
-	ProposerLookahead             []uint64                                                                   `protobuf:"varint,13001,rep,packed,name=proposer_lookahead,json=proposerLookahead,proto3" json:"proposer_lookahead,omitempty" ssz-size:"64"`
+	state                         protoimpl.MessageState                                                       `protogen:"open.v1"`
+	GenesisTime                   uint64                                                                       `protobuf:"varint,1001,opt,name=genesis_time,json=genesisTime,proto3" json:"genesis_time,omitempty"`
+	GenesisValidatorsRoot         []byte                                                                       `protobuf:"bytes,1002,opt,name=genesis_validators_root,json=genesisValidatorsRoot,proto3" json:"genesis_validators_root,omitempty" ssz-size:"32"`
+	Slot                          github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot             `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
+	Fork                          *Fork                                                                        `protobuf:"bytes,1004,opt,name=fork,proto3" json:"fork,omitempty"`
+	LatestBlockHeader             *BeaconBlockHeader                                                           `protobuf:"bytes,2001,opt,name=latest_block_header,json=latestBlockHeader,proto3" json:"latest_block_header,omitempty"`
+	BlockRoots                    [][]byte                                                                     `protobuf:"bytes,2002,rep,name=block_roots,json=blockRoots,proto3" json:"block_roots,omitempty" ssz-size:"8192,32"`
+	StateRoots                    [][]byte                                                                     `protobuf:"bytes,2003,rep,name=state_roots,json=stateRoots,proto3" json:"state_roots,omitempty" ssz-size:"8192,32"`
+	HistoricalRoots               [][]byte                                                                     `protobuf:"bytes,2004,rep,name=historical_roots,json=historicalRoots,proto3" json:"historical_roots,omitempty" ssz-max:"16777216" ssz-size:"?,32"`
+	Eth1Data                      *Eth1Data                                                                    `protobuf:"bytes,3001,opt,name=eth1_data,json=eth1Data,proto3" json:"eth1_data,omitempty"`
+	Eth1DataVotes                 []*Eth1Data                                                                  `protobuf:"bytes,3002,rep,name=eth1_data_votes,json=eth1DataVotes,proto3" json:"eth1_data_votes,omitempty" ssz-max:"2048"`
+	Eth1DepositIndex              uint64                                                                       `protobuf:"varint,3003,opt,name=eth1_deposit_index,json=eth1DepositIndex,proto3" json:"eth1_deposit_index,omitempty"`
+	Validators                    []*Validator                                                                 `protobuf:"bytes,4001,rep,name=validators,proto3" json:"validators,omitempty" ssz-max:"1099511627776"`
+	Balances                      []uint64                                                                     `protobuf:"varint,4002,rep,packed,name=balances,proto3" json:"balances,omitempty" ssz-max:"1099511627776"`
+	RandaoMixes                   [][]byte                                                                     `protobuf:"bytes,5001,rep,name=randao_mixes,json=randaoMixes,proto3" json:"randao_mixes,omitempty" ssz-size:"65536,32"`
+	Slashings                     []uint64                                                                     `protobuf:"varint,6001,rep,packed,name=slashings,proto3" json:"slashings,omitempty" ssz-size:"8192"`
+	PreviousEpochParticipation    []byte                                                                       `protobuf:"bytes,7001,opt,name=previous_epoch_participation,json=previousEpochParticipation,proto3" json:"previous_epoch_participation,omitempty" ssz-max:"1099511627776"`
+	CurrentEpochParticipation     []byte                                                                       `protobuf:"bytes,7002,opt,name=current_epoch_participation,json=currentEpochParticipation,proto3" json:"current_epoch_participation,omitempty" ssz-max:"1099511627776"`
+	JustificationBits             github_com_OffchainLabs_go_bitfield.Bitvector4                               `protobuf:"bytes,8001,opt,name=justification_bits,json=justificationBits,proto3" json:"justification_bits,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitvector4" ssz-size:"1"`
+	PreviousJustifiedCheckpoint   *Checkpoint                                                                  `protobuf:"bytes,8002,opt,name=previous_justified_checkpoint,json=previousJustifiedCheckpoint,proto3" json:"previous_justified_checkpoint,omitempty"`
+	CurrentJustifiedCheckpoint    *Checkpoint                                                                  `protobuf:"bytes,8003,opt,name=current_justified_checkpoint,json=currentJustifiedCheckpoint,proto3" json:"current_justified_checkpoint,omitempty"`
+	FinalizedCheckpoint           *Checkpoint                                                                  `protobuf:"bytes,8004,opt,name=finalized_checkpoint,json=finalizedCheckpoint,proto3" json:"finalized_checkpoint,omitempty"`
+	InactivityScores              []uint64                                                                     `protobuf:"varint,9001,rep,packed,name=inactivity_scores,json=inactivityScores,proto3" json:"inactivity_scores,omitempty" ssz-max:"1099511627776"`
+	CurrentSyncCommittee          *SyncCommittee                                                               `protobuf:"bytes,9002,opt,name=current_sync_committee,json=currentSyncCommittee,proto3" json:"current_sync_committee,omitempty"`
+	NextSyncCommittee             *SyncCommittee                                                               `protobuf:"bytes,9003,opt,name=next_sync_committee,json=nextSyncCommittee,proto3" json:"next_sync_committee,omitempty"`
+	LatestExecutionPayloadHeader  *v1.ExecutionPayloadHeaderDeneb                                              `protobuf:"bytes,10001,opt,name=latest_execution_payload_header,json=latestExecutionPayloadHeader,proto3" json:"latest_execution_payload_header,omitempty"`
+	NextWithdrawalIndex           uint64                                                                       `protobuf:"varint,11001,opt,name=next_withdrawal_index,json=nextWithdrawalIndex,proto3" json:"next_withdrawal_index,omitempty"`
+	NextWithdrawalValidatorIndex  github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex   `protobuf:"varint,11002,opt,name=next_withdrawal_validator_index,json=nextWithdrawalValidatorIndex,proto3" json:"next_withdrawal_validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
+	HistoricalSummaries           []*HistoricalSummary                                                         `protobuf:"bytes,11003,rep,name=historical_summaries,json=historicalSummaries,proto3" json:"historical_summaries,omitempty" ssz-max:"16777216"`
+	DepositRequestsStartIndex     uint64                                                                       `protobuf:"varint,12001,opt,name=deposit_requests_start_index,json=depositRequestsStartIndex,proto3" json:"deposit_requests_start_index,omitempty"`
+	DepositBalanceToConsume       github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei             `protobuf:"varint,12002,opt,name=deposit_balance_to_consume,json=depositBalanceToConsume,proto3" json:"deposit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	ExitBalanceToConsume          github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei             `protobuf:"varint,12003,opt,name=exit_balance_to_consume,json=exitBalanceToConsume,proto3" json:"exit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	EarliestExitEpoch             github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch            `protobuf:"varint,12004,opt,name=earliest_exit_epoch,json=earliestExitEpoch,proto3" json:"earliest_exit_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
+	ConsolidationBalanceToConsume github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei             `protobuf:"varint,12005,opt,name=consolidation_balance_to_consume,json=consolidationBalanceToConsume,proto3" json:"consolidation_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	EarliestConsolidationEpoch    github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch            `protobuf:"varint,12006,opt,name=earliest_consolidation_epoch,json=earliestConsolidationEpoch,proto3" json:"earliest_consolidation_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
+	PendingDeposits               []*PendingDeposit                                                            `protobuf:"bytes,12007,rep,name=pending_deposits,json=pendingDeposits,proto3" json:"pending_deposits,omitempty" ssz-max:"134217728"`
+	PendingPartialWithdrawals     []*PendingPartialWithdrawal                                                  `protobuf:"bytes,12008,rep,name=pending_partial_withdrawals,json=pendingPartialWithdrawals,proto3" json:"pending_partial_withdrawals,omitempty" ssz-max:"134217728"`
+	PendingConsolidations         []*PendingConsolidation                                                      `protobuf:"bytes,12009,rep,name=pending_consolidations,json=pendingConsolidations,proto3" json:"pending_consolidations,omitempty" ssz-max:"262144"`
+	ProposerLookahead             []github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex `protobuf:"varint,13001,rep,packed,name=proposer_lookahead,json=proposerLookahead,proto3" json:"proposer_lookahead,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex" ssz-size:"64"`
 	unknownFields                 protoimpl.UnknownFields
 	sizeCache                     protoimpl.SizeCache
 }
@@ -2402,11 +2402,11 @@ func (x *BeaconStateFulu) GetPendingConsolidations() []*PendingConsolidation {
 	return nil
 }
 
-func (x *BeaconStateFulu) GetProposerLookahead() []uint64 {
+func (x *BeaconStateFulu) GetProposerLookahead() []github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex {
 	if x != nil {
 		return x.ProposerLookahead
 	}
-	return nil
+	return []github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(nil)
 }
 
 var File_proto_prysm_v1alpha1_beacon_state_proto protoreflect.FileDescriptor
@@ -3322,7 +3322,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x69, 0x6e, 0x67, 0x43, 0x6f, 0x6e, 0x73, 0x6f, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e,
 	0x42, 0x0a, 0x92, 0xb5, 0x18, 0x06, 0x32, 0x36, 0x32, 0x31, 0x34, 0x34, 0x52, 0x15, 0x70, 0x65,
 	0x6e, 0x64, 0x69, 0x6e, 0x67, 0x43, 0x6f, 0x6e, 0x73, 0x6f, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x69,
-	0x6f, 0x6e, 0x73, 0x22, 0xe6, 0x19, 0x0a, 0x0f, 0x42, 0x65, 0x61, 0x63, 0x6f, 0x6e, 0x53, 0x74,
+	0x6f, 0x6e, 0x73, 0x22, 0xb5, 0x1a, 0x0a, 0x0f, 0x42, 0x65, 0x61, 0x63, 0x6f, 0x6e, 0x53, 0x74,
 	0x61, 0x74, 0x65, 0x46, 0x75, 0x6c, 0x75, 0x12, 0x22, 0x0a, 0x0c, 0x67, 0x65, 0x6e, 0x65, 0x73,
 	0x69, 0x73, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x18, 0xe9, 0x07, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0b,
 	0x67, 0x65, 0x6e, 0x65, 0x73, 0x69, 0x73, 0x54, 0x69, 0x6d, 0x65, 0x12, 0x3f, 0x0a, 0x17, 0x67,
@@ -3525,21 +3525,25 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x64, 0x69, 0x6e, 0x67, 0x43, 0x6f, 0x6e, 0x73, 0x6f, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x69, 0x6f,
 	0x6e, 0x42, 0x0a, 0x92, 0xb5, 0x18, 0x06, 0x32, 0x36, 0x32, 0x31, 0x34, 0x34, 0x52, 0x15, 0x70,
 	0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x43, 0x6f, 0x6e, 0x73, 0x6f, 0x6c, 0x69, 0x64, 0x61, 0x74,
-	0x69, 0x6f, 0x6e, 0x73, 0x12, 0x36, 0x0a, 0x12, 0x70, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x65, 0x72,
-	0x5f, 0x6c, 0x6f, 0x6f, 0x6b, 0x61, 0x68, 0x65, 0x61, 0x64, 0x18, 0xc9, 0x65, 0x20, 0x03, 0x28,
-	0x04, 0x42, 0x06, 0x8a, 0xb5, 0x18, 0x02, 0x36, 0x34, 0x52, 0x11, 0x70, 0x72, 0x6f, 0x70, 0x6f,
-	0x73, 0x65, 0x72, 0x4c, 0x6f, 0x6f, 0x6b, 0x61, 0x68, 0x65, 0x61, 0x64, 0x42, 0x9a, 0x01, 0x0a,
-	0x19, 0x6f, 0x72, 0x67, 0x2e, 0x65, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x74,
-	0x68, 0x2e, 0x76, 0x31, 0x61, 0x6c, 0x70, 0x68, 0x61, 0x31, 0x42, 0x10, 0x42, 0x65, 0x61, 0x63,
-	0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x65, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x39,
-	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68,
-	0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37,
-	0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x31, 0x61,
-	0x6c, 0x70, 0x68, 0x61, 0x31, 0x3b, 0x65, 0x74, 0x68, 0xaa, 0x02, 0x15, 0x45, 0x74, 0x68, 0x65,
-	0x72, 0x65, 0x75, 0x6d, 0x2e, 0x45, 0x74, 0x68, 0x2e, 0x56, 0x31, 0x41, 0x6c, 0x70, 0x68, 0x61,
-	0x31, 0xca, 0x02, 0x15, 0x45, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x5c, 0x45, 0x74, 0x68,
-	0x5c, 0x76, 0x31, 0x61, 0x6c, 0x70, 0x68, 0x61, 0x31, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x33,
+	0x69, 0x6f, 0x6e, 0x73, 0x12, 0x84, 0x01, 0x0a, 0x12, 0x70, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x65,
+	0x72, 0x5f, 0x6c, 0x6f, 0x6f, 0x6b, 0x61, 0x68, 0x65, 0x61, 0x64, 0x18, 0xc9, 0x65, 0x20, 0x03,
+	0x28, 0x04, 0x42, 0x54, 0x82, 0xb5, 0x18, 0x4a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63,
+	0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f,
+	0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73,
+	0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69,
+	0x76, 0x65, 0x73, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x49, 0x6e, 0x64,
+	0x65, 0x78, 0x8a, 0xb5, 0x18, 0x02, 0x36, 0x34, 0x52, 0x11, 0x70, 0x72, 0x6f, 0x70, 0x6f, 0x73,
+	0x65, 0x72, 0x4c, 0x6f, 0x6f, 0x6b, 0x61, 0x68, 0x65, 0x61, 0x64, 0x42, 0x9a, 0x01, 0x0a, 0x19,
+	0x6f, 0x72, 0x67, 0x2e, 0x65, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x74, 0x68,
+	0x2e, 0x76, 0x31, 0x61, 0x6c, 0x70, 0x68, 0x61, 0x31, 0x42, 0x10, 0x42, 0x65, 0x61, 0x63, 0x6f,
+	0x6e, 0x53, 0x74, 0x61, 0x74, 0x65, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x39, 0x67,
+	0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61,
+	0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x31, 0x61, 0x6c,
+	0x70, 0x68, 0x61, 0x31, 0x3b, 0x65, 0x74, 0x68, 0xaa, 0x02, 0x15, 0x45, 0x74, 0x68, 0x65, 0x72,
+	0x65, 0x75, 0x6d, 0x2e, 0x45, 0x74, 0x68, 0x2e, 0x56, 0x31, 0x41, 0x6c, 0x70, 0x68, 0x61, 0x31,
+	0xca, 0x02, 0x15, 0x45, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x5c, 0x45, 0x74, 0x68, 0x5c,
+	0x76, 0x31, 0x61, 0x6c, 0x70, 0x68, 0x61, 0x31, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (

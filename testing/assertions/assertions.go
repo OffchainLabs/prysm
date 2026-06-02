@@ -55,9 +55,11 @@ func DeepEqual(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
 	if !isDeepEqual(expected, actual) {
 		errMsg := parseMsg("Values are not equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
-		opts := cmp.Options{cmp.AllowUnexported(expected), cmp.AllowUnexported(actual)}
+		var opts cmp.Options
 		if _, isProto := expected.(proto.Message); isProto {
-			opts = append(opts, protocmp.Transform())
+			opts = cmp.Options{protocmp.Transform()}
+		} else {
+			opts = cmp.Options{cmp.AllowUnexported(expected), cmp.AllowUnexported(actual)}
 		}
 		diff := cmp.Diff(expected, actual, opts...)
 		loggerFn("%s:%d %s, expected != actual, diff: %s", filepath.Base(file), line, errMsg, diff)

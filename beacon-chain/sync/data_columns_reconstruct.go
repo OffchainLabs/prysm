@@ -25,7 +25,10 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 
 		root := sidecar.BlockRoot()
 		slot := sidecar.Slot()
-		proposerIndex := sidecar.ProposerIndex()
+		proposerIndex, err := sidecar.ProposerIndex()
+		if err != nil {
+			return nil, err
+		}
 
 		// Return early if reconstruction is not needed.
 		if !s.shouldReconstruct(root) {

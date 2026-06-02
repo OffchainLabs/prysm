@@ -41,6 +41,7 @@ ssz_gen_marshal(
         "ExecutionPayloadHeaderCapella",
         "ExecutionPayloadHeaderDeneb",
         "ExecutionPayloadDeneb",
+        "ExecutionPayloadGloas",
         "ExecutionPayloadDenebAndBlobsBundle",
         "ExecutionPayloadDenebAndBlobsBundleV2",
         "BlindedBlobsBundle",
@@ -80,6 +81,7 @@ go_library(
         "electra.go",
         "execution_engine.go",
         "fulu.go",
+        "gloas.go",
         "json_marshal_unmarshal.go",
         ":ssz_generated_files",  # keep
     ],

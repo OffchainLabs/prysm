@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
@@ -68,9 +69,16 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 		return errors.Wrap(err, "save block")
 	}
 
-	// save state
-	if err = s.SaveState(ctx, state, blockRoot); err != nil {
-		return errors.Wrap(err, "save state")
+	if features.Get().EnableStateDiff {
+		// initializeStateDiff will save the state, so we don't need to call SaveState here
+		if err := s.initializeStateDiff(state.Slot(), state); err != nil {
+			return errors.Wrap(err, "failed to initialize state diff")
+		}
+	} else {
+		// save state
+		if err = s.SaveState(ctx, state, blockRoot); err != nil {
+			return errors.Wrap(err, "save state")
+		}
 	}
 
 	if err = s.SaveStateSummary(ctx, &ethpb.StateSummary{
@@ -109,9 +117,6 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 
 	if err = s.SaveFinalizedCheckpoint(ctx, chkpt); err != nil {
 		return errors.Wrap(err, "save finalized checkpoint")
-	}
-	if err := s.initializeStateDiff(state.Slot(), state); err != nil {
-		return errors.Wrap(err, "failed to initialize state diff")
 	}
 	return nil
 }

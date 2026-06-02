@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -366,8 +365,7 @@ func (c *beaconApiValidatorClient) validatorsForDuties(ctx context.Context, pubk
 		stringPubkeys[i] = stringPk
 	}
 
-	statusesWithDuties := []string{validator.ActiveOngoing.String(), validator.ActiveExiting.String()}
-	stateValidatorsResponse, err := c.stateValidatorsProvider.StateValidators(ctx, stringPubkeys, nil, statusesWithDuties)
+	stateValidatorsResponse, err := c.stateValidatorsProvider.StateValidators(ctx, stringPubkeys, nil, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get state validators")
 	}

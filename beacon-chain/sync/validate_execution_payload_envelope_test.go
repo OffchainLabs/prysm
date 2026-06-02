@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/async/abool"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
@@ -140,7 +141,8 @@ func TestExecutionPayloadEnvelopeSubscriber_WrongMessage(t *testing.T) {
 
 func TestExecutionPayloadEnvelopeSubscriber_HappyPath(t *testing.T) {
 	s := &Service{
-		cfg: &config{chain: &mock.ChainService{}},
+		cfg:          &config{chain: &mock.ChainService{}},
+		chainStarted: abool.New(),
 	}
 	root := [32]byte{0x01}
 	blockHash := [32]byte{0x02}
@@ -184,6 +186,10 @@ func (m *mockExecutionPayloadEnvelopeVerifier) VerifyBuilderValid(_ interfaces.R
 
 func (m *mockExecutionPayloadEnvelopeVerifier) VerifyPayloadHash(_ interfaces.ROExecutionPayloadBid) error {
 	return m.errPayloadHash
+}
+
+func (m *mockExecutionPayloadEnvelopeVerifier) VerifyExecutionRequestsRoot(_ interfaces.ROExecutionPayloadBid) error {
+	return nil
 }
 
 func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ state.ReadOnlyBeaconState) error {
@@ -331,7 +337,7 @@ func TestQueuePendingPayloadEnvelope_SelfBuildInvalidSignature(t *testing.T) {
 func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, builderIdx primitives.BuilderIndex, root, blockHash [32]byte) *ethpb.SignedExecutionPayloadEnvelope {
 	t.Helper()
 
-	payload := &enginev1.ExecutionPayloadDeneb{
+	payload := &enginev1.ExecutionPayloadGloas{
 		ParentHash:    bytes.Repeat([]byte{0x01}, 32),
 		FeeRecipient:  bytes.Repeat([]byte{0x02}, 20),
 		StateRoot:     bytes.Repeat([]byte{0x03}, 32),
@@ -348,6 +354,7 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 		Withdrawals:   []*enginev1.Withdrawal{},
 		BlobGasUsed:   0,
 		ExcessBlobGas: 0,
+		SlotNumber:    slot,
 	}
 
 	return &ethpb.SignedExecutionPayloadEnvelope{
@@ -356,10 +363,9 @@ func testSignedExecutionPayloadEnvelope(t *testing.T, slot primitives.Slot, buil
 			ExecutionRequests: &enginev1.ExecutionRequests{
 				Deposits: []*enginev1.DepositRequest{},
 			},
-			BuilderIndex:    builderIdx,
-			BeaconBlockRoot: root[:],
-			Slot:            slot,
-			StateRoot:       bytes.Repeat([]byte{0xBB}, 32),
+			BuilderIndex:          builderIdx,
+			BeaconBlockRoot:       root[:],
+			ParentBeaconBlockRoot: make([]byte, 32),
 		},
 		Signature: bytes.Repeat([]byte{0xAA}, 96),
 	}

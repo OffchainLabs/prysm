@@ -171,7 +171,7 @@ func (node *Node) Resume() error {
 
 // Stop kills the component and its underlying process.
 func (node *Node) Stop() error {
-	return node.cmd.Process.Kill()
+	return helpers.GracefulStop(node.cmd.Process)
 }
 
 func (node *Node) UnderlyingProcess() *os.Process {

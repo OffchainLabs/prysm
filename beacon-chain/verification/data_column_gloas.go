@@ -21,6 +21,13 @@ var GossipDataColumnSidecarRequirementsGloas = []Requirement{
 	RequireNotSeenGloas,
 }
 
+// PendingGloasColumnRequirements defines the requirements for columns queued before their block arrived.
+var PendingGloasColumnRequirements = []Requirement{
+	RequireSlotMatchesBlockGloas,
+	RequireValidFieldsGloas,
+	RequireSidecarKzgProofVerifiedGloas,
+}
+
 type ROGloasDataColumnVerifier struct {
 	sidecar blocks.RODataColumn
 	block   interfaces.ReadOnlyBeaconBlock
@@ -72,13 +79,13 @@ func (v *ROGloasDataColumnVerifier) VerifyDataColumnSidecarGloas() (err error) {
 	if err != nil {
 		return err
 	}
-	if v.sidecar.Index >= fieldparams.NumberOfColumns {
+	if v.sidecar.Index() >= fieldparams.NumberOfColumns {
 		return peerdas.ErrIndexTooLarge
 	}
-	if len(v.sidecar.Column) == 0 {
+	if len(v.sidecar.Column()) == 0 {
 		return peerdas.ErrNoKzgCommitments
 	}
-	if len(v.sidecar.Column) != len(kzgCommitments) || len(v.sidecar.Column) != len(v.sidecar.KzgProofs) {
+	if len(v.sidecar.Column()) != len(kzgCommitments) || len(v.sidecar.Column()) != len(v.sidecar.KzgProofs()) {
 		return peerdas.ErrMismatchLength
 	}
 	return nil
@@ -94,7 +101,7 @@ func (v *ROGloasDataColumnVerifier) CorrectSubnet(dataColumnSidecarSubTopic stri
 		return columnErrBuilder(errBadTopicLength)
 	}
 	expectedTopic := expectedTopics[0] + "/"
-	actualSubnet := peerdas.ComputeSubnetForDataColumnSidecar(v.sidecar.Index)
+	actualSubnet := peerdas.ComputeSubnetForDataColumnSidecar(v.sidecar.Index())
 	actualSubTopic := fmt.Sprintf(dataColumnSidecarSubTopic, actualSubnet)
 	if !strings.Contains(expectedTopic, actualSubTopic) {
 		return columnErrBuilder(errBadTopic)

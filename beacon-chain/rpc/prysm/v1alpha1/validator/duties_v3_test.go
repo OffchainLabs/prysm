@@ -320,7 +320,7 @@ func TestGetPTCDuties_OK(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	numVals := uint64(fieldparams.PTCSize + 64)
-	bs, _ := util.DeterministicGenesisStateFulu(t, numVals)
+	bs, _ := util.DeterministicGenesisStateGloas(t, numVals)
 	require.NoError(t, helpers.UpdateCommitteeCache(t.Context(), bs, 0))
 
 	genesisRoot := [32]byte{0xaa}
@@ -373,9 +373,9 @@ func TestGetPTCDuties_EpochOutOfBound(t *testing.T) {
 		SyncChecker: &mockSync.Sync{IsSyncing: false},
 	}
 	currentEpoch := primitives.Epoch(chain.CurrentSlot() / params.BeaconConfig().SlotsPerEpoch)
-	req := &ethpb.PTCDutiesRequest{Epoch: currentEpoch + 1}
+	req := &ethpb.PTCDutiesRequest{Epoch: currentEpoch + 2}
 	_, err := vs.GetPTCDuties(t.Context(), req)
-	assert.ErrorContains(t, "can not be greater than current epoch", err)
+	assert.ErrorContains(t, "can not be greater than next epoch", err)
 }
 
 func TestGetPTCDuties_PreGloasFork(t *testing.T) {

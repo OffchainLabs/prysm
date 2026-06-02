@@ -46,7 +46,7 @@ func EnsureReady(ctx context.Context, provider HostProvider, checker ReadyChecke
 					"previous": startingHost,
 					"current":  provider.CurrentHost(),
 					"tried":    attemptedHosts,
-				}).Info("Switched to responsive beacon node")
+				}).Warn("Switched to responsive beacon node")
 			}
 			return true
 		}

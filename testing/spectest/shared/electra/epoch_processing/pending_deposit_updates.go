@@ -29,7 +29,7 @@ func processPendingDeposits(t *testing.T, st state.BeaconState) (state.BeaconSta
 	// The caller of this method would normally have the precompute balance values for total
 	// active balance for this epoch. For ease of test setup, we will compute total active
 	// balance from the given state.
-	tab, err := helpers.TotalActiveBalance(st)
+	tab, err := helpers.TotalActiveBalance(t.Context(), st)
 	require.NoError(t, err)
 	return st, electra.ProcessPendingDeposits(context.TODO(), st, primitives.Gwei(tab))
 }

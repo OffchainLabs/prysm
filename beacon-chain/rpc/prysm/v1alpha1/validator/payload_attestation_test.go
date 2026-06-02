@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	payloadattestation "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -52,6 +52,7 @@ func TestPayloadAttestationData_OK(t *testing.T) {
 		TimeFetcher:       chain,
 		HeadFetcher:       chain,
 		ForkchoiceFetcher: chain,
+		CoreService:       &core.Service{GenesisTimeFetcher: chain, ForkchoiceFetcher: chain},
 	}
 
 	resp, err := vs.PayloadAttestationData(t.Context(), &ethpb.PayloadAttestationDataRequest{Slot: slot})
@@ -62,26 +63,6 @@ func TestPayloadAttestationData_OK(t *testing.T) {
 	assert.Equal(t, false, resp.BlobDataAvailable)
 }
 
-func TestPayloadAttestationData_SlotMismatch(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.GloasForkEpoch = 0
-	params.OverrideBeaconConfig(cfg)
-
-	current := primitives.Slot(10)
-	requested := primitives.Slot(9)
-	chain := &chainMock.ChainService{Slot: &current, Root: bytesutil.PadTo([]byte{0x01}, 32)}
-	vs := &Server{
-		SyncChecker:       &mockSync.Sync{IsSyncing: false},
-		TimeFetcher:       chain,
-		HeadFetcher:       chain,
-		ForkchoiceFetcher: chain,
-	}
-
-	_, err := vs.PayloadAttestationData(t.Context(), &ethpb.PayloadAttestationDataRequest{Slot: requested})
-	require.ErrorContains(t, "only available for current slot", err)
-}
-
 func TestSubmitPayloadAttestation_OK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
@@ -90,8 +71,8 @@ func TestSubmitPayloadAttestation_OK(t *testing.T) {
 
 	slot := primitives.Slot(0)
 	root := bytesutil.PadTo([]byte{0xBB}, 32)
-	st, _ := util.DeterministicGenesisState(t, 64)
-	ptc, err := gloas.PayloadCommittee(t.Context(), st, slot)
+	st, _ := util.DeterministicGenesisStateGloas(t, 64)
+	ptc, err := st.PayloadCommitteeReadOnly(slot)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(ptc))
 

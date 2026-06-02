@@ -192,6 +192,13 @@
     INACTIVITY_PENALTY_QUOTIENT_BELLATRIX: uint64 = 16777216
     </spec>
 
+- name: INCLUSION_LIST_COMMITTEE_SIZE#heze
+  sources: []
+  spec: |
+    <spec preset_var="INCLUSION_LIST_COMMITTEE_SIZE" fork="heze" hash="780fb63c">
+    INCLUSION_LIST_COMMITTEE_SIZE: uint64 = 16
+    </spec>
+
 - name: KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH#fulu
   sources:
     - file: proto/ssz_proto_library.bzl

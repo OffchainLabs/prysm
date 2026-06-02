@@ -189,10 +189,10 @@ func (vs *Server) GetPTCDuties(ctx context.Context, req *ethpb.PTCDutiesRequest)
 		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d is before Gloas fork epoch %d", req.Epoch, params.BeaconConfig().GloasForkEpoch)
 	}
 
-	// PTC assignments are not stable for the next epoch, so only allow current epoch.
 	currentEpoch := slots.ToEpoch(vs.TimeFetcher.CurrentSlot())
-	if req.Epoch > currentEpoch {
-		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than current epoch %d", req.Epoch, currentEpoch)
+	nextEpoch := currentEpoch.Add(1)
+	if req.Epoch > nextEpoch {
+		return nil, status.Errorf(codes.InvalidArgument, "Request epoch %d can not be greater than next epoch %d", req.Epoch, nextEpoch)
 	}
 
 	s, err := vs.HeadFetcher.HeadState(ctx)

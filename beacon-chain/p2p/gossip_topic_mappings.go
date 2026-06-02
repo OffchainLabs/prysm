@@ -92,6 +92,11 @@ func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 			return &ethpb.LightClientFinalityUpdateCapella{}
 		}
 		return gossipMessage(topic)
+	case DataColumnSubnetTopicFormat:
+		if epoch >= params.BeaconConfig().GloasForkEpoch {
+			return &ethpb.DataColumnSidecarGloas{}
+		}
+		return gossipMessage(topic)
 	default:
 		return gossipMessage(topic)
 	}
@@ -153,6 +158,7 @@ func init() {
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockFulu]()] = BlockSubnetTopicFormat
 	// Specially handle Gloas objects.
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockGloas]()] = BlockSubnetTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.DataColumnSidecarGloas]()] = DataColumnSubnetTopicFormat
 
 	// Payload attestation messages.
 	GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestationMessage]()] = PayloadAttestationMessageTopicFormat

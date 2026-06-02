@@ -58,10 +58,12 @@ go_test(
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
+        "//proto/dbval:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
     ],
 )

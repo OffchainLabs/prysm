@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"iter"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
@@ -95,31 +95,24 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	readOnlyVals, ok := valsFromIds(w, st, ids)
-	if !ok {
-		return
-	}
+	readOnlyVals, count := valsFromIds(st, ids)
 	epoch := slots.ToEpoch(st.Slot())
 
 	// Exit early if no matching validators were found or we don't want to further filter validators by status.
-	if len(readOnlyVals) == 0 || len(statuses) == 0 {
-		containers := make([]*structs.ValidatorContainer, len(readOnlyVals))
-		for i, val := range readOnlyVals {
+	if count == 0 || len(statuses) == 0 {
+		containers := make([]*structs.ValidatorContainer, 0, count)
+		for id, val := range readOnlyVals {
 			valStatus, err := helpers.ValidatorSubStatus(val, epoch)
 			if err != nil {
 				httputil.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
 				return
-			}
-			id := primitives.ValidatorIndex(i)
-			if len(ids) > 0 {
-				id = ids[i]
 			}
 			balance, err := st.BalanceAtIndex(id)
 			if err != nil {
 				httputil.HandleError(w, "Could not get validator balance: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			containers[i] = valContainerFromReadOnlyVal(val, id, balance, valStatus)
+			containers = append(containers, valContainerFromReadOnlyVal(val, id, balance, valStatus))
 		}
 		resp := &structs.GetValidatorsResponse{
 			Data:                containers,
@@ -139,8 +132,8 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 		}
 		filteredStatuses[vs] = true
 	}
-	valContainers := make([]*structs.ValidatorContainer, 0, len(readOnlyVals))
-	for i, val := range readOnlyVals {
+	valContainers := make([]*structs.ValidatorContainer, 0, count)
+	for id, val := range readOnlyVals {
 		valStatus, err := helpers.ValidatorStatus(val, epoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
@@ -152,18 +145,12 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if filteredStatuses[valStatus] || filteredStatuses[valSubStatus] {
-			var container *structs.ValidatorContainer
-			id := primitives.ValidatorIndex(i)
-			if len(ids) > 0 {
-				id = ids[i]
-			}
 			balance, err := st.BalanceAtIndex(id)
 			if err != nil {
 				httputil.HandleError(w, "Could not get validator balance: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			container = valContainerFromReadOnlyVal(val, id, balance, valSubStatus)
-			valContainers = append(valContainers, container)
+			valContainers = append(valContainers, valContainerFromReadOnlyVal(val, id, balance, valSubStatus))
 		}
 	}
 
@@ -200,25 +187,27 @@ func (s *Server) GetValidator(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	readOnlyVals, ok := valsFromIds(w, st, ids)
-	if !ok {
-		return
-	}
-	if len(ids) == 0 || len(readOnlyVals) == 0 {
+	if len(ids) == 0 {
 		httputil.HandleError(w, "No validator returned for the given ID", http.StatusInternalServerError)
 		return
 	}
-	valSubStatus, err := helpers.ValidatorSubStatus(readOnlyVals[0], slots.ToEpoch(st.Slot()))
+	valIdx := ids[0]
+	roVal, err := st.ValidatorAtIndexReadOnly(valIdx)
+	if err != nil {
+		httputil.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %s", valIdx, err.Error()), http.StatusInternalServerError)
+		return
+	}
+	valSubStatus, err := helpers.ValidatorSubStatus(roVal, slots.ToEpoch(st.Slot()))
 	if err != nil {
 		httputil.HandleError(w, "Could not get validator status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	bal, err := st.BalanceAtIndex(ids[0])
+	bal, err := st.BalanceAtIndex(valIdx)
 	if err != nil {
 		httputil.HandleError(w, "Could not get validator balance: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	container := valContainerFromReadOnlyVal(readOnlyVals[0], ids[0], bal, valSubStatus)
+	container := valContainerFromReadOnlyVal(roVal, valIdx, bal, valSubStatus)
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
@@ -372,26 +361,30 @@ func (s *Server) getValidatorIdentitiesSSZ(w http.ResponseWriter, st state.Beaco
 		return
 	}
 
-	vals := st.ValidatorsReadOnly()
 	var identities []*eth.ValidatorIdentity
 	if len(ids) == 0 {
-		identities = make([]*eth.ValidatorIdentity, len(vals))
-		for i, v := range vals {
+		identities = make([]*eth.ValidatorIdentity, 0, st.NumValidators())
+		for i, v := range st.ValidatorsReadOnlySeq() {
 			pubkey := v.PublicKey()
-			identities[i] = &eth.ValidatorIdentity{
-				Index:           primitives.ValidatorIndex(i),
+			identities = append(identities, &eth.ValidatorIdentity{
+				Index:           i,
 				Pubkey:          pubkey[:],
 				ActivationEpoch: v.ActivationEpoch(),
-			}
+			})
 		}
 	} else {
 		identities = make([]*eth.ValidatorIdentity, len(ids))
 		for i, id := range ids {
-			pubkey := vals[id].PublicKey()
+			v, err := st.ValidatorAtIndexReadOnly(id)
+			if err != nil {
+				httputil.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %s", id, err.Error()), http.StatusInternalServerError)
+				return
+			}
+			pubkey := v.PublicKey()
 			identities[i] = &eth.ValidatorIdentity{
 				Index:           id,
 				Pubkey:          pubkey[:],
-				ActivationEpoch: vals[id].ActivationEpoch(),
+				ActivationEpoch: v.ActivationEpoch(),
 			}
 		}
 	}
@@ -440,26 +433,30 @@ func (s *Server) getValidatorIdentitiesJSON(
 		return
 	}
 
-	vals := st.ValidatorsReadOnly()
 	var identities []*structs.ValidatorIdentity
 	if len(ids) == 0 {
-		identities = make([]*structs.ValidatorIdentity, len(vals))
-		for i, v := range vals {
+		identities = make([]*structs.ValidatorIdentity, 0, st.NumValidators())
+		for i, v := range st.ValidatorsReadOnlySeq() {
 			pubkey := v.PublicKey()
-			identities[i] = &structs.ValidatorIdentity{
+			identities = append(identities, &structs.ValidatorIdentity{
 				Index:           strconv.FormatUint(uint64(i), 10),
 				Pubkey:          hexutil.Encode(pubkey[:]),
 				ActivationEpoch: strconv.FormatUint(uint64(v.ActivationEpoch()), 10),
-			}
+			})
 		}
 	} else {
 		identities = make([]*structs.ValidatorIdentity, len(ids))
 		for i, id := range ids {
-			pubkey := vals[id].PublicKey()
+			v, err := st.ValidatorAtIndexReadOnly(id)
+			if err != nil {
+				httputil.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %s", id, err.Error()), http.StatusInternalServerError)
+				return
+			}
+			pubkey := v.PublicKey()
 			identities[i] = &structs.ValidatorIdentity{
 				Index:           strconv.FormatUint(uint64(id), 10),
 				Pubkey:          hexutil.Encode(pubkey[:]),
-				ActivationEpoch: strconv.FormatUint(uint64(vals[id].ActivationEpoch()), 10),
+				ActivationEpoch: strconv.FormatUint(uint64(v.ActivationEpoch()), 10),
 			}
 		}
 	}
@@ -513,30 +510,29 @@ func decodeIds(w http.ResponseWriter, st state.BeaconState, rawIds []string, ign
 	return ids, true
 }
 
-// valsFromIds returns read-only validators based on the supplied validator indices.
-func valsFromIds(w http.ResponseWriter, st state.BeaconState, ids []primitives.ValidatorIndex) ([]state.ReadOnlyValidator, bool) {
-	var vals []state.ReadOnlyValidator
+// valsFromIds returns an iterator over (validator index, read-only validator) pairs for the
+// supplied IDs. If ids is empty, the iterator covers every validator in the state. The returned
+// count is the number of pairs the iterator will yield. Indices in ids are assumed to be valid
+// (decodeIds enforces this); a lookup failure during iteration terminates the sequence early.
+func valsFromIds(st state.BeaconState, ids []primitives.ValidatorIndex) (iter.Seq2[primitives.ValidatorIndex, state.ReadOnlyValidator], int) {
 	if len(ids) == 0 {
-		vals = st.ValidatorsReadOnly()
-	} else {
-		vals = make([]state.ReadOnlyValidator, 0, len(ids))
+		return st.ValidatorsReadOnlySeq(), st.NumValidators()
+	}
+
+	seq := func(yield func(primitives.ValidatorIndex, state.ReadOnlyValidator) bool) {
 		for _, id := range ids {
-			val, err := st.ValidatorAtIndex(id)
+			val, err := st.ValidatorAtIndexReadOnly(id)
 			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Could not get validator at index %d: %s", id, err.Error()), http.StatusInternalServerError)
-				return nil, false
+				return
 			}
 
-			readOnlyVal, err := statenative.NewValidator(val)
-			if err != nil {
-				httputil.HandleError(w, "Could not convert validator: "+err.Error(), http.StatusInternalServerError)
-				return nil, false
+			if !yield(id, val) {
+				return
 			}
-			vals = append(vals, readOnlyVal)
 		}
 	}
 
-	return vals, true
+	return seq, len(ids)
 }
 
 func valContainerFromReadOnlyVal(
