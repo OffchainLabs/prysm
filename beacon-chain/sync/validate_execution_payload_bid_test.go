@@ -144,6 +144,12 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 			wantError: true,
 		},
 		{
+			name:      "slot not higher than parent",
+			verifier:  mockExecutionPayloadBidVerifier{errSlotHigherThanParent: errors.New("slot not higher than parent")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
 			name:      "parent hash mismatch",
 			verifier:  mockExecutionPayloadBidVerifier{errParentBlockHash: errors.New("wrong hash")},
 			result:    pubsub.ValidationIgnore,
@@ -339,6 +345,7 @@ type mockExecutionPayloadBidVerifier struct {
 	errFeeRecipientMismatch error
 	errGasLimitIncompatible error
 	errParentBlockRootSeen  error
+	errSlotHigherThanParent error
 	errParentBlockHash      error
 	errBuilderCanCoverBid   error
 	errSignature            error
@@ -368,6 +375,10 @@ func (m *mockExecutionPayloadBidVerifier) VerifyGasLimitTargetCompatible(uint64,
 
 func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockRootSeen(func([32]byte) bool) error {
 	return m.errParentBlockRootSeen
+}
+
+func (m *mockExecutionPayloadBidVerifier) VerifyBidSlotHigherThanParent(primitives.Slot) error {
+	return m.errSlotHigherThanParent
 }
 
 func (m *mockExecutionPayloadBidVerifier) VerifyParentBlockHash(func([32]byte) ([32]byte, error)) error {

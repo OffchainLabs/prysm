@@ -121,6 +121,14 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyParentBlockRootSeen(s.cfg.chain.InForkchoice); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
+	// [REJECT] bid.slot is greater than the slot of the block with root bid.parent_block_root.
+	parentSlot, err := s.cfg.chain.RecentBlockSlot(parentBlockRoot)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	if err := v.VerifyBidSlotHigherThanParent(parentSlot); err != nil {
+		return pubsub.ValidationReject, err
+	}
 	msg.ValidatorData = signedBid
 	return pubsub.ValidationAccept, nil
 }

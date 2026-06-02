@@ -32,7 +32,7 @@ func (s *Service) isNewHead(r [32]byte, full bool) bool {
 	return r != currentHeadRoot || full != currentFull || r == [32]byte{}
 }
 
-func (s *Service) getStateAndBlock(ctx context.Context, r, h [32]byte) (state.BeaconState, interfaces.ReadOnlySignedBeaconBlock, error) {
+func (s *Service) getStateAndBlock(ctx context.Context, r [32]byte) (state.BeaconState, interfaces.ReadOnlySignedBeaconBlock, error) {
 	if !s.hasBlockInInitSyncOrDB(ctx, r) {
 		return nil, nil, errors.New("block does not exist")
 	}
@@ -40,7 +40,7 @@ func (s *Service) getStateAndBlock(ctx context.Context, r, h [32]byte) (state.Be
 	if err != nil {
 		return nil, nil, err
 	}
-	headState, err := s.cfg.StateGen.StateByRoot(ctx, h)
+	headState, err := s.cfg.StateGen.StateByRoot(ctx, r)
 	if err != nil {
 		return nil, nil, err
 	}
