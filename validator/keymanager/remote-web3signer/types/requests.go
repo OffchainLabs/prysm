@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
 
@@ -452,6 +453,20 @@ func GetBlockV2BlindedSignRequest(request *validatorpb.SignRequest, genesisValid
 			return nil, err
 		}
 		b = beaconBlock
+	case *validatorpb.SignRequest_BlockGloas:
+		version = "GLOAS"
+		block, ok := request.Object.(*validatorpb.SignRequest_BlockGloas)
+		if !ok {
+			return nil, errors.New("failed to cast request object to gloas block")
+		}
+		if block == nil {
+			return nil, errors.New("invalid sign request: gloas block is nil")
+		}
+		beaconBlock, err := blocks.NewBeaconBlock(block.BlockGloas)
+		if err != nil {
+			return nil, err
+		}
+		b = beaconBlock
 	default:
 		return nil, errors.New("invalid sign request - invalid object type")
 	}
@@ -476,6 +491,134 @@ func GetBlockV2BlindedSignRequest(request *validatorpb.SignRequest, genesisValid
 				StateRoot:     beaconBlockHeader.StateRoot,
 				BodyRoot:      beaconBlockHeader.BodyRoot,
 			},
+		},
+	}, nil
+}
+
+// GetExecutionPayloadBidSignRequest maps the request for signing type EXECUTION_PAYLOAD_BID (gloas, builder role).
+func GetExecutionPayloadBidSignRequest(request *validatorpb.SignRequest, genesisValidatorsRoot []byte) (*ExecutionPayloadBidSignRequest, error) {
+	if request == nil {
+		return nil, errors.New("nil sign request provided")
+	}
+	bidReq, ok := request.Object.(*validatorpb.SignRequest_ExecutionPayloadBid)
+	if !ok {
+		return nil, errors.New("failed to cast request object to execution payload bid")
+	}
+	if bidReq == nil || bidReq.ExecutionPayloadBid == nil {
+		return nil, errors.New("invalid sign request: ExecutionPayloadBid is nil")
+	}
+	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	bid := bidReq.ExecutionPayloadBid
+	commitments := make([]hexutil.Bytes, len(bid.BlobKzgCommitments))
+	for i, c := range bid.BlobKzgCommitments {
+		commitments[i] = c
+	}
+	return &ExecutionPayloadBidSignRequest{
+		Type:        "EXECUTION_PAYLOAD_BID",
+		ForkInfo:    fork,
+		SigningRoot: request.SigningRoot,
+		ExecutionPayloadBid: &ExecutionPayloadBid{
+			ParentBlockHash:       bid.ParentBlockHash,
+			ParentBlockRoot:       bid.ParentBlockRoot,
+			BlockHash:             bid.BlockHash,
+			PrevRandao:            bid.PrevRandao,
+			FeeRecipient:          bid.FeeRecipient,
+			GasLimit:              fmt.Sprint(bid.GasLimit),
+			BuilderIndex:          fmt.Sprint(bid.BuilderIndex),
+			Slot:                  fmt.Sprint(bid.Slot),
+			Value:                 fmt.Sprint(bid.Value),
+			ExecutionPayment:      fmt.Sprint(bid.ExecutionPayment),
+			BlobKzgCommitments:    commitments,
+			ExecutionRequestsRoot: bid.ExecutionRequestsRoot,
+		},
+	}, nil
+}
+
+// GetExecutionPayloadEnvelopeSignRequest maps the request for signing type EXECUTION_PAYLOAD_ENVELOPE (gloas).
+func GetExecutionPayloadEnvelopeSignRequest(request *validatorpb.SignRequest, genesisValidatorsRoot []byte) (*ExecutionPayloadEnvelopeSignRequest, error) {
+	if request == nil {
+		return nil, errors.New("nil sign request provided")
+	}
+	envelopeReq, ok := request.Object.(*validatorpb.SignRequest_ExecutionPayloadEnvelope)
+	if !ok {
+		return nil, errors.New("failed to cast request object to execution payload envelope")
+	}
+	if envelopeReq == nil || envelopeReq.ExecutionPayloadEnvelope == nil {
+		return nil, errors.New("invalid sign request: ExecutionPayloadEnvelope is nil")
+	}
+	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	envelope, err := MapExecutionPayloadEnvelope(envelopeReq.ExecutionPayloadEnvelope)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecutionPayloadEnvelopeSignRequest{
+		Type:                     "EXECUTION_PAYLOAD_ENVELOPE",
+		ForkInfo:                 fork,
+		SigningRoot:              request.SigningRoot,
+		ExecutionPayloadEnvelope: envelope,
+	}, nil
+}
+
+// GetPayloadAttestationMessageSignRequest maps the request for signing type PAYLOAD_ATTESTATION_MESSAGE (gloas).
+func GetPayloadAttestationMessageSignRequest(request *validatorpb.SignRequest, genesisValidatorsRoot []byte) (*PayloadAttestationMessageSignRequest, error) {
+	if request == nil {
+		return nil, errors.New("nil sign request provided")
+	}
+	pa, ok := request.Object.(*validatorpb.SignRequest_PayloadAttestationData)
+	if !ok {
+		return nil, errors.New("failed to cast request object to payload attestation data")
+	}
+	if pa == nil || pa.PayloadAttestationData == nil {
+		return nil, errors.New("invalid sign request: PayloadAttestationData is nil")
+	}
+	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	return &PayloadAttestationMessageSignRequest{
+		Type:        "PAYLOAD_ATTESTATION_MESSAGE",
+		ForkInfo:    fork,
+		SigningRoot: request.SigningRoot,
+		PayloadAttestationMessage: &PayloadAttestationData{
+			BeaconBlockRoot:   pa.PayloadAttestationData.BeaconBlockRoot,
+			Slot:              fmt.Sprint(pa.PayloadAttestationData.Slot),
+			PayloadPresent:    pa.PayloadAttestationData.PayloadPresent,
+			BlobDataAvailable: pa.PayloadAttestationData.BlobDataAvailable,
+		},
+	}, nil
+}
+
+// GetProposerPreferencesSignRequest maps the request for signing type PROPOSER_PREFERENCES (gloas).
+func GetProposerPreferencesSignRequest(request *validatorpb.SignRequest, genesisValidatorsRoot []byte) (*ProposerPreferencesSignRequest, error) {
+	if request == nil {
+		return nil, errors.New("nil sign request provided")
+	}
+	pp, ok := request.Object.(*validatorpb.SignRequest_ProposerPreference)
+	if !ok {
+		return nil, errors.New("failed to cast request object to proposer preferences")
+	}
+	if pp == nil || pp.ProposerPreference == nil {
+		return nil, errors.New("invalid sign request: ProposerPreferences is nil")
+	}
+	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	return &ProposerPreferencesSignRequest{
+		Type:        "PROPOSER_PREFERENCES",
+		ForkInfo:    fork,
+		SigningRoot: request.SigningRoot,
+		ProposerPreferences: &ProposerPreferences{
+			ProposalSlot:   fmt.Sprint(pp.ProposerPreference.ProposalSlot),
+			ValidatorIndex: fmt.Sprint(pp.ProposerPreference.ValidatorIndex),
+			FeeRecipient:   pp.ProposerPreference.FeeRecipient,
+			GasLimit:       fmt.Sprint(pp.ProposerPreference.TargetGasLimit),
 		},
 	}, nil
 }

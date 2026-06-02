@@ -7,9 +7,12 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer/types"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer/types/mock"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func TestMapAggregateAndProof(t *testing.T) {
@@ -707,4 +710,222 @@ func TestMapSyncAggregatorSelectionData(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMapExecutionPayloadGloas(t *testing.T) {
+	baseFee := make([]byte, 32)
+	baseFee[0] = 1 // little-endian decimal 1
+	tests := []struct {
+		name    string
+		payload *enginev1.ExecutionPayloadGloas
+		want    *types.ExecutionPayloadGloas
+		wantErr string
+	}{
+		{
+			name:    "nil payload",
+			payload: nil,
+			wantErr: "execution payload is nil",
+		},
+		{
+			name: "happy path",
+			payload: &enginev1.ExecutionPayloadGloas{
+				ParentHash:      make([]byte, fieldparams.RootLength),
+				FeeRecipient:    make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:       make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:    make([]byte, fieldparams.RootLength),
+				LogsBloom:       make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:      make([]byte, fieldparams.RootLength),
+				BlockNumber:     42,
+				GasLimit:        30_000_000,
+				GasUsed:         21_000,
+				Timestamp:       1234,
+				ExtraData:       []byte{0xab, 0xcd},
+				BaseFeePerGas:   baseFee,
+				BlockHash:       make([]byte, fieldparams.RootLength),
+				Transactions:    [][]byte{{0x01, 0x02}, {0x03}},
+				Withdrawals:     []*enginev1.Withdrawal{{Index: 7, ValidatorIndex: 9, Address: make([]byte, fieldparams.FeeRecipientLength), Amount: 100}},
+				BlobGasUsed:     5,
+				ExcessBlobGas:   6,
+				BlockAccessList: []byte{0xff},
+				SlotNumber:      77,
+			},
+			want: &types.ExecutionPayloadGloas{
+				ParentHash:      make([]byte, fieldparams.RootLength),
+				FeeRecipient:    make([]byte, fieldparams.FeeRecipientLength),
+				StateRoot:       make([]byte, fieldparams.RootLength),
+				ReceiptsRoot:    make([]byte, fieldparams.RootLength),
+				LogsBloom:       make([]byte, fieldparams.LogsBloomLength),
+				PrevRandao:      make([]byte, fieldparams.RootLength),
+				BlockNumber:     "42",
+				GasLimit:        "30000000",
+				GasUsed:         "21000",
+				Timestamp:       "1234",
+				ExtraData:       []byte{0xab, 0xcd},
+				BaseFeePerGas:   "1",
+				BlockHash:       make([]byte, fieldparams.RootLength),
+				Transactions:    []hexutil.Bytes{{0x01, 0x02}, {0x03}},
+				Withdrawals:     []*types.Withdrawal{{Index: "7", ValidatorIndex: "9", Address: make([]byte, fieldparams.FeeRecipientLength), Amount: "100"}},
+				BlobGasUsed:     "5",
+				ExcessBlobGas:   "6",
+				BlockAccessList: []byte{0xff},
+				SlotNumber:      "77",
+			},
+		},
+		{
+			name: "nil withdrawal in slice errors",
+			payload: &enginev1.ExecutionPayloadGloas{
+				BaseFeePerGas: baseFee,
+				Withdrawals:   []*enginev1.Withdrawal{nil},
+			},
+			wantErr: "withdrawal at index 0 is nil",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := types.MapExecutionPayloadGloas(tt.payload)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, tt.wantErr, err)
+				return
+			}
+			require.NoError(t, err)
+			require.DeepEqual(t, tt.want, got)
+		})
+	}
+}
+
+func TestMapExecutionRequests(t *testing.T) {
+	tests := []struct {
+		name     string
+		requests *enginev1.ExecutionRequests
+		want     *types.ExecutionRequests
+		wantErr  string
+	}{
+		{
+			name:     "nil errors",
+			requests: nil,
+			wantErr:  "execution requests is nil",
+		},
+		{
+			name:     "empty slices produce empty (non-nil) slices",
+			requests: &enginev1.ExecutionRequests{},
+			want: &types.ExecutionRequests{
+				Deposits:       []*types.DepositRequest{},
+				Withdrawals:    []*types.WithdrawalRequest{},
+				Consolidations: []*types.ConsolidationRequest{},
+			},
+		},
+		{
+			name: "happy path with each request type",
+			requests: &enginev1.ExecutionRequests{
+				Deposits: []*enginev1.DepositRequest{{
+					Pubkey:                make([]byte, fieldparams.BLSPubkeyLength),
+					WithdrawalCredentials: make([]byte, 32),
+					Amount:                32_000_000_000,
+					Signature:             make([]byte, fieldparams.BLSSignatureLength),
+					Index:                 3,
+				}},
+				Withdrawals: []*enginev1.WithdrawalRequest{{
+					SourceAddress:   make([]byte, fieldparams.FeeRecipientLength),
+					ValidatorPubkey: make([]byte, fieldparams.BLSPubkeyLength),
+					Amount:          100,
+				}},
+				Consolidations: []*enginev1.ConsolidationRequest{{
+					SourceAddress: make([]byte, fieldparams.FeeRecipientLength),
+					SourcePubkey:  make([]byte, fieldparams.BLSPubkeyLength),
+					TargetPubkey:  make([]byte, fieldparams.BLSPubkeyLength),
+				}},
+			},
+			want: &types.ExecutionRequests{
+				Deposits: []*types.DepositRequest{{
+					Pubkey:                make([]byte, fieldparams.BLSPubkeyLength),
+					WithdrawalCredentials: make([]byte, 32),
+					Amount:                "32000000000",
+					Signature:             make([]byte, fieldparams.BLSSignatureLength),
+					Index:                 "3",
+				}},
+				Withdrawals: []*types.WithdrawalRequest{{
+					SourceAddress:   make([]byte, fieldparams.FeeRecipientLength),
+					ValidatorPubkey: make([]byte, fieldparams.BLSPubkeyLength),
+					Amount:          "100",
+				}},
+				Consolidations: []*types.ConsolidationRequest{{
+					SourceAddress: make([]byte, fieldparams.FeeRecipientLength),
+					SourcePubkey:  make([]byte, fieldparams.BLSPubkeyLength),
+					TargetPubkey:  make([]byte, fieldparams.BLSPubkeyLength),
+				}},
+			},
+		},
+		{
+			name:     "nil deposit in slice errors",
+			requests: &enginev1.ExecutionRequests{Deposits: []*enginev1.DepositRequest{nil}},
+			wantErr:  "deposit request at index 0 is nil",
+		},
+		{
+			name:     "nil withdrawal in slice errors",
+			requests: &enginev1.ExecutionRequests{Withdrawals: []*enginev1.WithdrawalRequest{nil}},
+			wantErr:  "withdrawal request at index 0 is nil",
+		},
+		{
+			name:     "nil consolidation in slice errors",
+			requests: &enginev1.ExecutionRequests{Consolidations: []*enginev1.ConsolidationRequest{nil}},
+			wantErr:  "consolidation request at index 0 is nil",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := types.MapExecutionRequests(tt.requests)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, tt.wantErr, err)
+				return
+			}
+			require.NoError(t, err)
+			require.DeepEqual(t, tt.want, got)
+		})
+	}
+}
+
+func TestMapExecutionPayloadEnvelope(t *testing.T) {
+	baseFee := make([]byte, 32)
+	tests := []struct {
+		name     string
+		envelope *ethpb.ExecutionPayloadEnvelope
+		wantErr  string
+	}{
+		{
+			name:     "nil envelope",
+			envelope: nil,
+			wantErr:  "execution payload envelope is nil",
+		},
+		{
+			name: "nil payload propagates error",
+			envelope: &ethpb.ExecutionPayloadEnvelope{
+				ExecutionRequests: &enginev1.ExecutionRequests{},
+			},
+			wantErr: "could not map execution payload: execution payload is nil",
+		},
+		{
+			name: "nil execution requests propagates error",
+			envelope: &ethpb.ExecutionPayloadEnvelope{
+				Payload: &enginev1.ExecutionPayloadGloas{BaseFeePerGas: baseFee},
+			},
+			wantErr: "could not map execution requests: execution requests is nil",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := types.MapExecutionPayloadEnvelope(tt.envelope)
+			require.ErrorContains(t, tt.wantErr, err)
+		})
+	}
+
+	t.Run("happy path", func(t *testing.T) {
+		envelope := mock.ExecutionPayloadEnvelopeProto()
+		envelope.BuilderIndex = 5
+		envelope.BeaconBlockRoot = make([]byte, fieldparams.RootLength)
+		got, err := types.MapExecutionPayloadEnvelope(envelope)
+		require.NoError(t, err)
+		require.Equal(t, "5", got.BuilderIndex)
+		require.NotNil(t, got.Payload)
+		require.NotNil(t, got.ExecutionRequests)
+	})
 }

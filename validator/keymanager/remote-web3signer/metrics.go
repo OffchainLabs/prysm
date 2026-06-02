@@ -57,4 +57,20 @@ var (
 		Name: "remote_web3signer_validator_registration_sign_requests_total",
 		Help: "Total number of validator registration sign requests",
 	})
+	executionPayloadBidSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "remote_web3signer_execution_payload_bid_sign_requests_total",
+		Help: "Total number of execution payload bid sign requests",
+	})
+	executionPayloadEnvelopeSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "remote_web3signer_execution_payload_envelope_sign_requests_total",
+		Help: "Total number of execution payload envelope sign requests",
+	})
+	payloadAttestationMessageSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "remote_web3signer_payload_attestation_message_sign_requests_total",
+		Help: "Total number of payload attestation message sign requests",
+	})
+	proposerPreferencesSignRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "remote_web3signer_proposer_preferences_sign_requests_total",
+		Help: "Total number of proposer preferences sign requests",
+	})
 )

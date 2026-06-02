@@ -568,3 +568,87 @@ func TestGetValidatorRegistrationSignRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestGetBlockGloasSignRequest(t *testing.T) {
+	got, err := types.GetBlockV2BlindedSignRequest(mock.GetMockSignRequest("BLOCK_V2_GLOAS"), make([]byte, fieldparams.RootLength))
+	require.NoError(t, err)
+	require.Equal(t, "BLOCK_V2", got.Type)
+	require.Equal(t, "GLOAS", got.BeaconBlock.Version)
+	require.NotNil(t, got.BeaconBlock.BlockHeader)
+}
+
+func TestGetExecutionPayloadEnvelopeSignRequest(t *testing.T) {
+	got, err := types.GetExecutionPayloadEnvelopeSignRequest(
+		mock.GetMockSignRequest("EXECUTION_PAYLOAD_ENVELOPE"),
+		make([]byte, fieldparams.RootLength),
+	)
+	require.NoError(t, err)
+	gotJSON, err := json.Marshal(got)
+	require.NoError(t, err)
+	wantJSON, err := json.Marshal(mock.ExecutionPayloadEnvelopeSignRequest())
+	require.NoError(t, err)
+	require.Equal(t, string(wantJSON), string(gotJSON))
+}
+
+func TestGetExecutionPayloadEnvelopeSignRequest_NilEnvelope(t *testing.T) {
+	req := &validatorpb.SignRequest{
+		Object: &validatorpb.SignRequest_ExecutionPayloadEnvelope{},
+	}
+	_, err := types.GetExecutionPayloadEnvelopeSignRequest(req, make([]byte, fieldparams.RootLength))
+	require.ErrorContains(t, "ExecutionPayloadEnvelope is nil", err)
+}
+
+func TestGetPayloadAttestationMessageSignRequest(t *testing.T) {
+	got, err := types.GetPayloadAttestationMessageSignRequest(
+		mock.GetMockSignRequest("PAYLOAD_ATTESTATION_MESSAGE"),
+		make([]byte, fieldparams.RootLength),
+	)
+	require.NoError(t, err)
+	require.DeepEqual(t, mock.PayloadAttestationMessageSignRequest(), got)
+}
+
+func TestGetPayloadAttestationMessageSignRequest_NilData(t *testing.T) {
+	req := &validatorpb.SignRequest{
+		Object: &validatorpb.SignRequest_PayloadAttestationData{},
+	}
+	_, err := types.GetPayloadAttestationMessageSignRequest(req, make([]byte, fieldparams.RootLength))
+	require.ErrorContains(t, "PayloadAttestationData is nil", err)
+}
+
+func TestGetProposerPreferencesSignRequest(t *testing.T) {
+	got, err := types.GetProposerPreferencesSignRequest(
+		mock.GetMockSignRequest("PROPOSER_PREFERENCES"),
+		make([]byte, fieldparams.RootLength),
+	)
+	require.NoError(t, err)
+	require.DeepEqual(t, mock.ProposerPreferencesSignRequest(), got)
+}
+
+func TestGetProposerPreferencesSignRequest_NilPref(t *testing.T) {
+	req := &validatorpb.SignRequest{
+		Object: &validatorpb.SignRequest_ProposerPreference{},
+	}
+	_, err := types.GetProposerPreferencesSignRequest(req, make([]byte, fieldparams.RootLength))
+	require.ErrorContains(t, "ProposerPreferences is nil", err)
+}
+
+func TestGetExecutionPayloadBidSignRequest(t *testing.T) {
+	got, err := types.GetExecutionPayloadBidSignRequest(
+		mock.GetMockSignRequest("EXECUTION_PAYLOAD_BID"),
+		make([]byte, fieldparams.RootLength),
+	)
+	require.NoError(t, err)
+	gotJSON, err := json.Marshal(got)
+	require.NoError(t, err)
+	wantJSON, err := json.Marshal(mock.ExecutionPayloadBidSignRequest())
+	require.NoError(t, err)
+	require.Equal(t, string(wantJSON), string(gotJSON))
+}
+
+func TestGetExecutionPayloadBidSignRequest_NilBid(t *testing.T) {
+	req := &validatorpb.SignRequest{
+		Object: &validatorpb.SignRequest_ExecutionPayloadBid{},
+	}
+	_, err := types.GetExecutionPayloadBidSignRequest(req, make([]byte, fieldparams.RootLength))
+	require.ErrorContains(t, "ExecutionPayloadBid is nil", err)
+}
