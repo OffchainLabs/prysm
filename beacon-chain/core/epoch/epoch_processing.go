@@ -59,27 +59,23 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 	eligibleForActivation := make([]primitives.ValidatorIndex, 0)
 	eligibleForEjection := make([]primitives.ValidatorIndex, 0)
 
-	if err := st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	for idx, val := range st.ValidatorsReadOnlySeq() {
 		// Collect validators eligible to enter the activation queue.
 		if helpers.IsEligibleForActivationQueue(val, currentEpoch) {
-			eligibleForActivationQ = append(eligibleForActivationQ, primitives.ValidatorIndex(idx))
+			eligibleForActivationQ = append(eligibleForActivationQ, idx)
 		}
 
 		// Collect validators to eject.
 		isActive := helpers.IsActiveValidatorUsingTrie(val, currentEpoch)
 		belowEjectionBalance := val.EffectiveBalance() <= ejectionBal
 		if isActive && belowEjectionBalance {
-			eligibleForEjection = append(eligibleForEjection, primitives.ValidatorIndex(idx))
+			eligibleForEjection = append(eligibleForEjection, idx)
 		}
 
 		// Collect validators eligible for activation and not yet dequeued for activation.
 		if helpers.IsEligibleForActivationUsingROVal(st, val) {
-			eligibleForActivation = append(eligibleForActivation, primitives.ValidatorIndex(idx))
+			eligibleForActivation = append(eligibleForActivation, idx)
 		}
-
-		return nil
-	}); err != nil {
-		return st, fmt.Errorf("failed to read validators: %w", err)
 	}
 
 	// Process validators for activation eligibility.
@@ -243,7 +239,7 @@ func ProcessSlashings(ctx context.Context, st state.BeaconState) error {
 
 	bals := st.Balances()
 	changed := false
-	err = st.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	for idx, val := range st.ValidatorsReadOnlySeq() {
 		correctEpoch := (currentEpoch + exitLength/2) == val.WithdrawableEpoch()
 		if val.Slashed() && correctEpoch {
 			var penalty uint64
@@ -257,10 +253,6 @@ func ProcessSlashings(ctx context.Context, st state.BeaconState) error {
 			bals[idx] = helpers.DecreaseBalanceWithVal(bals[idx], penalty)
 			changed = true
 		}
-		return nil
-	})
-	if err != nil {
-		return err
 	}
 	if changed {
 		if err := st.SetBalances(bals); err != nil {

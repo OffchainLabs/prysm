@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/math"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -38,7 +37,7 @@ func ExitInformation(s state.BeaconState) *ExitInfo {
 	currentEpoch := slots.ToEpoch(s.Slot())
 	totalActiveBalance := uint64(0)
 
-	err := s.ReadFromEveryValidator(func(idx int, val state.ReadOnlyValidator) error {
+	for _, val := range s.ValidatorsReadOnlySeq() {
 		e := val.ExitEpoch()
 		if e != farFutureEpoch {
 			if e > exitInfo.HighestExitEpoch {
@@ -53,10 +52,7 @@ func ExitInformation(s state.BeaconState) *ExitInfo {
 		if helpers.IsActiveValidatorUsingTrie(val, currentEpoch) {
 			totalActiveBalance += val.EffectiveBalance()
 		}
-
-		return nil
-	})
-	_ = err
+	}
 
 	// Apply minimum balance as per spec
 	exitInfo.TotalActiveBalance = max(params.BeaconConfig().EffectiveBalanceIncrement, totalActiveBalance)
@@ -302,64 +298,4 @@ func SlashValidator(
 		return nil, err
 	}
 	return s, nil
-}
-
-// ActivatedValidatorIndices determines the indices activated during the given epoch.
-func ActivatedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator) []primitives.ValidatorIndex {
-	activations := make([]primitives.ValidatorIndex, 0)
-	for i := range validators {
-		val := validators[i]
-		if val.ActivationEpoch <= epoch && epoch < val.ExitEpoch {
-			activations = append(activations, primitives.ValidatorIndex(i))
-		}
-	}
-	return activations
-}
-
-// SlashedValidatorIndices determines the indices slashed during the given epoch.
-func SlashedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator) []primitives.ValidatorIndex {
-	slashed := make([]primitives.ValidatorIndex, 0)
-	for i := range validators {
-		val := validators[i]
-		maxWithdrawableEpoch := primitives.MaxEpoch(val.WithdrawableEpoch, epoch+params.BeaconConfig().EpochsPerSlashingsVector)
-		if val.WithdrawableEpoch == maxWithdrawableEpoch && val.Slashed {
-			slashed = append(slashed, primitives.ValidatorIndex(i))
-		}
-	}
-	return slashed
-}
-
-// ExitedValidatorIndices returns the indices of validators who exited during the specified epoch.
-//
-// A validator is considered to have exited during an epoch if their ExitEpoch equals the epoch and
-// excludes validators that have been ejected.
-// This function simplifies the exit determination by directly checking the validator's ExitEpoch,
-// avoiding the complexities and potential inaccuracies of calculating withdrawable epochs.
-func ExitedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator) ([]primitives.ValidatorIndex, error) {
-	exited := make([]primitives.ValidatorIndex, 0)
-	for i, val := range validators {
-		if val.ExitEpoch == epoch && val.EffectiveBalance > params.BeaconConfig().EjectionBalance {
-			exited = append(exited, primitives.ValidatorIndex(i))
-		}
-	}
-	return exited, nil
-}
-
-// EjectedValidatorIndices returns the indices of validators who were ejected during the specified epoch.
-//
-// A validator is considered ejected during an epoch if:
-// - Their ExitEpoch equals the epoch.
-// - Their EffectiveBalance is less than or equal to the EjectionBalance threshold.
-//
-// This function simplifies the ejection determination by directly checking the validator's ExitEpoch
-// and EffectiveBalance, avoiding the complexities and potential inaccuracies of calculating
-// withdrawable epochs.
-func EjectedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator) ([]primitives.ValidatorIndex, error) {
-	ejected := make([]primitives.ValidatorIndex, 0)
-	for i, val := range validators {
-		if val.ExitEpoch == epoch && val.EffectiveBalance <= params.BeaconConfig().EjectionBalance {
-			ejected = append(ejected, primitives.ValidatorIndex(i))
-		}
-	}
-	return ejected, nil
 }
