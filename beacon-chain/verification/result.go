@@ -79,6 +79,8 @@ func (r Requirement) String() string {
 		return "RequireBidGasLimitCompatible"
 	case RequireBidParentBlockRootSeen:
 		return "RequireBidParentBlockRootSeen"
+	case RequireBidSlotHigherThanParent:
+		return "RequireBidSlotHigherThanParent"
 	case RequireBidParentBlockHashValid:
 		return "RequireBidParentBlockHashValid"
 	case RequireBidBuilderCanCover:
