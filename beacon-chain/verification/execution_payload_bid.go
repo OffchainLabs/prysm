@@ -129,10 +129,14 @@ func (v *BidVerifier) VerifyGasLimitTargetCompatible(parentGasLimit, targetGasLi
 // isGasLimitTargetCompatible reports whether gasLimit is compatible with
 // targetGasLimit under the EIP-1559 transition rule from parentGasLimit.
 //
-//	<spec fn="is_gas_limit_target_compatible" fork="gloas">
+//	<spec fn="is_gas_limit_target_compatible" fork="gloas" hash="3fa22023">
 //	def is_gas_limit_target_compatible(
 //	    parent_gas_limit: uint64, gas_limit: uint64, target_gas_limit: uint64
 //	) -> bool:
+//	    """
+//	    Check if ``gas_limit`` is compatible with ``target_gas_limit`` under the
+//	    EIP-1559 transition rule from ``parent_gas_limit``.
+//	    """
 //	    max_gas_limit_difference = max(parent_gas_limit // 1024, 1) - 1
 //	    min_gas_limit = parent_gas_limit - max_gas_limit_difference
 //	    max_gas_limit = parent_gas_limit + max_gas_limit_difference

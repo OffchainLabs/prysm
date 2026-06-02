@@ -914,8 +914,8 @@
 - name: compute_fork_version#phase0
   sources: []
   spec: |
-    <spec fn="compute_fork_version" fork="phase0" hash="69513274">
-    def compute_fork_version(epoch: Epoch) -> Version:
+    <spec fn="compute_fork_version" fork="phase0" hash="55e27800">
+    def compute_fork_version(epoch: Epoch) -> Version:  # noqa: ARG001
         """
         Return the fork version at the given ``epoch``.
         """
@@ -1149,7 +1149,7 @@
 - name: compute_matrix#fulu
   sources: []
   spec: |
-    <spec fn="compute_matrix" fork="fulu" hash="0b88eac1">
+    <spec fn="compute_matrix" fork="fulu" hash="87e3f29c">
     def compute_matrix(blobs: Sequence[Blob]) -> Sequence[MatrixEntry]:
         """
         Return the full, flattened sequence of matrix entries.
@@ -1160,7 +1160,7 @@
         matrix = []
         for blob_index, blob in enumerate(blobs):
             cells, proofs = compute_cells_and_kzg_proofs(blob)
-            for cell_index, (cell, proof) in enumerate(zip(cells, proofs)):
+            for cell_index, (cell, proof) in enumerate(zip(cells, proofs, strict=True)):
                 matrix.append(
                     MatrixEntry(
                         cell=cell,
@@ -1261,7 +1261,7 @@
     - file: beacon-chain/rpc/prysm/v1alpha1/validator/proposer_attestations_electra.go
       search: func computeOnChainAggregate(
   spec: |
-    <spec fn="compute_on_chain_aggregate" fork="electra" hash="f020af4c">
+    <spec fn="compute_on_chain_aggregate" fork="electra" hash="3aa56e8f">
     def compute_on_chain_aggregate(network_aggregates: Sequence[Attestation]) -> Attestation:
         aggregates = sorted(
             network_aggregates, key=lambda a: get_committee_indices(a.committee_bits)[0]
@@ -1276,7 +1276,7 @@
         signature = bls.Aggregate([a.signature for a in aggregates])
 
         committee_indices = [get_committee_indices(a.committee_bits)[0] for a in aggregates]
-        committee_flags = [(index in committee_indices) for index in range(0, MAX_COMMITTEES_PER_SLOT)]
+        committee_flags = [(index in committee_indices) for index in range(MAX_COMMITTEES_PER_SLOT)]
         committee_bits = Bitvector[MAX_COMMITTEES_PER_SLOT](committee_flags)
 
         return Attestation(
@@ -1618,7 +1618,7 @@
     - file: beacon-chain/sync/validate_sync_committee_message.go
       search: func (s *Service) rejectIncorrectSyncCommittee(
   spec: |
-    <spec fn="compute_subnets_for_sync_committee" fork="altair" hash="637ad33a">
+    <spec fn="compute_subnets_for_sync_committee" fork="altair" hash="dea6a459">
     def compute_subnets_for_sync_committee(
         state: BeaconState, validator_index: ValidatorIndex
     ) -> Set[SubnetID]:
@@ -1634,12 +1634,10 @@
         sync_committee_indices = [
             index for index, pubkey in enumerate(sync_committee.pubkeys) if pubkey == target_pubkey
         ]
-        return set(
-            [
-                SubnetID(index // (SYNC_COMMITTEE_SIZE // SYNC_COMMITTEE_SUBNET_COUNT))
-                for index in sync_committee_indices
-            ]
-        )
+        return {
+            SubnetID(index // (SYNC_COMMITTEE_SIZE // SYNC_COMMITTEE_SUBNET_COUNT))
+            for index in sync_committee_indices
+        }
     </spec>
 
 - name: compute_subscribed_subnet#phase0
@@ -1719,7 +1717,7 @@
     - file: beacon-chain/core/helpers/weak_subjectivity.go
       search: func ComputeWeakSubjectivityPeriod(
   spec: |
-    <spec fn="compute_weak_subjectivity_period" fork="phase0" hash="3f528e06">
+    <spec fn="compute_weak_subjectivity_period" fork="phase0" hash="d151e9de">
     def compute_weak_subjectivity_period(state: BeaconState) -> uint64:
         """
         Returns the weak subjectivity period for the current ``state``.
@@ -1737,7 +1735,7 @@
         Delta = MAX_DEPOSITS * SLOTS_PER_EPOCH
         D = SAFETY_DECAY
 
-        if T * (200 + 3 * D) < t * (200 + 12 * D):
+        if t * (200 + 12 * D) > T * (200 + 3 * D):
             epochs_for_validator_set_churn = (
                 N * (t * (200 + 12 * D) - T * (200 + 3 * D)) // (600 * delta * (2 * t + T))
             )
@@ -2058,12 +2056,10 @@
 - name: filter_block_tree#phase0
   sources: []
   spec: |
-    <spec fn="filter_block_tree" fork="phase0" hash="a1924421">
+    <spec fn="filter_block_tree" fork="phase0" hash="4a61f03a">
     def filter_block_tree(store: Store, block_root: Root, blocks: Dict[Root, BeaconBlock]) -> bool:
         block = store.blocks[block_root]
-        children = [
-            root for root in store.blocks.keys() if store.blocks[root].parent_root == block_root
-        ]
+        children = [root for root in store.blocks if store.blocks[root].parent_root == block_root]
 
         # If any children branches contain expected finalized/justified checkpoints,
         # add to filtered block-tree and signal viability to parent.
@@ -2131,7 +2127,7 @@
 - name: find_latest_confirmed_descendant#phase0
   sources: []
   spec: |
-    <spec fn="find_latest_confirmed_descendant" fork="phase0" hash="0d1fbbab">
+    <spec fn="find_latest_confirmed_descendant" fork="phase0" hash="f38db29f">
     def find_latest_confirmed_descendant(
         fcr_store: FastConfirmationStore, latest_confirmed_root: Root
     ) -> Root:
@@ -2140,7 +2136,7 @@
         starting from ``latest_confirmed_root``.
         """
         store = fcr_store.store
-        head = get_head(store)
+        head = get_head(store).root
         current_epoch = get_current_store_epoch(store)
         confirmed_root = latest_confirmed_root
 
@@ -2175,7 +2171,11 @@
 
                 # The algorithm can only rely on the previous head
                 # if it is a descendant of the block that is attempted to be confirmed
-                if not is_ancestor(store, fcr_store.previous_slot_head, block_root):
+                if not is_ancestor(
+                    store,
+                    get_node_for_root(fcr_store.previous_slot_head),
+                    get_node_for_root(block_root),
+                ):
                     break
 
                 if not is_one_confirmed(store, get_current_balance_source(fcr_store), block_root):
@@ -2350,37 +2350,29 @@
     - file: beacon-chain/forkchoice/doubly-linked-tree/forkchoice.go
       search: func (f *ForkChoice) AncestorRoot(
   spec: |
-    <spec fn="get_ancestor" fork="phase0" hash="0e8c06f9">
-    def get_ancestor(store: Store, root: Root, slot: Slot) -> Root:
-        block = store.blocks[root]
+    <spec fn="get_ancestor" fork="phase0" hash="360c1d65">
+    def get_ancestor(store: Store, node: ForkChoiceNode, slot: Slot) -> ForkChoiceNode:
+        block = store.blocks[node.root]
         if block.slot > slot:
-            return get_ancestor(store, block.parent_root, slot)
-        return root
+            parent = ForkChoiceNode(root=block.parent_root)
+            return get_ancestor(store, parent, slot)
+        return node
     </spec>
 
 - name: get_ancestor#gloas
   sources: []
   spec: |
-    <spec fn="get_ancestor" fork="gloas" hash="95b7e8fe">
-    def get_ancestor(store: Store, root: Root, slot: Slot) -> ForkChoiceNode:
-        """
-        Returns the beacon block root and the payload status of the ancestor of the beacon block
-        with ``root`` at ``slot``. If the beacon block with ``root`` is already at ``slot`` or we are
-        requesting an ancestor "in the future", it returns ``PAYLOAD_STATUS_PENDING``.
-        """
-        block = store.blocks[root]
-        if block.slot <= slot:
-            return ForkChoiceNode(root=root, payload_status=PAYLOAD_STATUS_PENDING)
-
-        parent = store.blocks[block.parent_root]
-        while parent.slot > slot:
-            block = parent
-            parent = store.blocks[block.parent_root]
-
-        return ForkChoiceNode(
-            root=block.parent_root,
-            payload_status=get_parent_payload_status(store, block),
-        )
+    <spec fn="get_ancestor" fork="gloas" hash="31a66ff1">
+    def get_ancestor(store: Store, node: ForkChoiceNode, slot: Slot) -> ForkChoiceNode:
+        block = store.blocks[node.root]
+        if block.slot > slot:
+            # [Modified in Gloas:EIP7732]
+            parent = ForkChoiceNode(
+                root=block.parent_root,
+                payload_status=get_parent_payload_status(store, block),
+            )
+            return get_ancestor(store, parent, slot)
+        return node
     </spec>
 
 - name: get_ancestor_roots#phase0
@@ -2619,8 +2611,8 @@
 - name: get_attestation_score#phase0
   sources: []
   spec: |
-    <spec fn="get_attestation_score" fork="phase0" hash="da969f50">
-    def get_attestation_score(store: Store, root: Root, state: BeaconState) -> Gwei:
+    <spec fn="get_attestation_score" fork="phase0" hash="0a9ceb6e">
+    def get_attestation_score(store: Store, node: ForkChoiceNode, state: BeaconState) -> Gwei:
         unslashed_and_active_indices = [
             i
             for i in get_active_validator_indices(state, get_current_epoch(state))
@@ -2633,8 +2625,7 @@
                 if (
                     i in store.latest_messages
                     and i not in store.equivocating_indices
-                    and get_ancestor(store, store.latest_messages[i].root, store.blocks[root].slot)
-                    == root
+                    and is_ancestor(store, get_supported_node(store, store.latest_messages[i]), node)
                 )
             )
         )
@@ -2643,15 +2634,8 @@
 - name: get_attestation_score#gloas
   sources: []
   spec: |
-    <spec fn="get_attestation_score" fork="gloas" hash="8a2e4701">
-    def get_attestation_score(
-        store: Store,
-        # [Modified in Gloas:EIP7732]
-        # Removed `root`
-        # [New in Gloas:EIP7732]
-        node: ForkChoiceNode,
-        state: BeaconState,
-    ) -> Gwei:
+    <spec fn="get_attestation_score" fork="gloas" hash="0a9ceb6e">
+    def get_attestation_score(store: Store, node: ForkChoiceNode, state: BeaconState) -> Gwei:
         unslashed_and_active_indices = [
             i
             for i in get_active_validator_indices(state, get_current_epoch(state))
@@ -2664,8 +2648,7 @@
                 if (
                     i in store.latest_messages
                     and i not in store.equivocating_indices
-                    # [Modified in Gloas:EIP7732]
-                    and is_supporting_vote(store, node, store.latest_messages[i])
+                    and is_ancestor(store, get_supported_node(store, store.latest_messages[i]), node)
                 )
             )
         )
@@ -2702,13 +2685,13 @@
     - file: proto/prysm/v1alpha1/attestation/attestation_utils.go
       search: func AttestingIndices(
   spec: |
-    <spec fn="get_attesting_indices" fork="phase0" hash="abbf9f2d">
+    <spec fn="get_attesting_indices" fork="phase0" hash="c012d980">
     def get_attesting_indices(state: BeaconState, attestation: Attestation) -> Set[ValidatorIndex]:
         """
         Return the set of attesting indices corresponding to ``data`` and ``bits``.
         """
         committee = get_beacon_committee(state, attestation.data.slot, attestation.data.index)
-        return set(index for i, index in enumerate(committee) if attestation.aggregation_bits[i])
+        return {index for i, index in enumerate(committee) if attestation.aggregation_bits[i]}
     </spec>
 
 - name: get_attesting_indices#electra
@@ -2716,7 +2699,7 @@
     - file: proto/prysm/v1alpha1/attestation/attestation_utils.go
       search: func AttestingIndices(
   spec: |
-    <spec fn="get_attesting_indices" fork="electra" hash="fd4b0475">
+    <spec fn="get_attesting_indices" fork="electra" hash="392a5a7e">
     def get_attesting_indices(state: BeaconState, attestation: Attestation) -> Set[ValidatorIndex]:
         """
         Return the set of attesting indices corresponding to ``aggregation_bits`` and ``committee_bits``.
@@ -2726,11 +2709,11 @@
         committee_offset = 0
         for committee_index in committee_indices:
             committee = get_beacon_committee(state, attestation.data.slot, committee_index)
-            committee_attesters = set(
+            committee_attesters = {
                 attester_index
                 for i, attester_index in enumerate(committee)
                 if attestation.aggregation_bits[committee_offset + i]
-            )
+            }
             output = output.union(committee_attesters)
 
             committee_offset += len(committee)
@@ -2880,6 +2863,26 @@
         Return the proposer indices for the given ``epoch``.
         """
         indices = get_active_validator_indices(state, epoch)
+        seed = get_seed(state, epoch, DOMAIN_BEACON_PROPOSER)
+        return compute_proposer_indices(state, epoch, seed, indices)
+    </spec>
+
+- name: get_beacon_proposer_indices#gloas
+  sources: []
+  spec: |
+    <spec fn="get_beacon_proposer_indices" fork="gloas" hash="a160057e">
+    def get_beacon_proposer_indices(
+        state: BeaconState, epoch: Epoch
+    ) -> Vector[ValidatorIndex, SLOTS_PER_EPOCH]:
+        """
+        Return the proposer indices for the given ``epoch``.
+        """
+        # [Modified in Gloas:EIP8045]
+        indices = [
+            index
+            for index in get_active_validator_indices(state, epoch)
+            if not state.validators[index].slashed
+        ]
         seed = get_seed(state, epoch, DOMAIN_BEACON_PROPOSER)
         return compute_proposer_indices(state, epoch, seed, indices)
     </spec>
@@ -3123,25 +3126,28 @@
 - name: get_checkpoint_block#phase0
   sources: []
   spec: |
-    <spec fn="get_checkpoint_block" fork="phase0" hash="9d8daa22">
+    <spec fn="get_checkpoint_block" fork="phase0" hash="6b5f6dd9">
     def get_checkpoint_block(store: Store, root: Root, epoch: Epoch) -> Root:
         """
         Compute the checkpoint block for epoch ``epoch`` in the chain of block ``root``
         """
         epoch_first_slot = compute_start_slot_at_epoch(epoch)
-        return get_ancestor(store, root, epoch_first_slot)
+        node = ForkChoiceNode(root=root)
+        return get_ancestor(store, node, epoch_first_slot).root
     </spec>
 
 - name: get_checkpoint_block#gloas
   sources: []
   spec: |
-    <spec fn="get_checkpoint_block" fork="gloas" hash="e238b732">
+    <spec fn="get_checkpoint_block" fork="gloas" hash="1acad623">
     def get_checkpoint_block(store: Store, root: Root, epoch: Epoch) -> Root:
         """
         Compute the checkpoint block for epoch ``epoch`` in the chain of block ``root``
         """
         epoch_first_slot = compute_start_slot_at_epoch(epoch)
-        return get_ancestor(store, root, epoch_first_slot).root
+        # [Modified in Gloas:EIP7732]
+        node = ForkChoiceNode(root=root, payload_status=PAYLOAD_STATUS_PENDING)
+        return get_ancestor(store, node, epoch_first_slot).root
     </spec>
 
 - name: get_checkpoint_for_block#phase0
@@ -3340,12 +3346,12 @@
 - name: get_current_target#phase0
   sources: []
   spec: |
-    <spec fn="get_current_target" fork="phase0" hash="8c81120b">
+    <spec fn="get_current_target" fork="phase0" hash="78140d53">
     def get_current_target(store: Store) -> Checkpoint:
         """
         Return current epoch target.
         """
-        head = get_head(store)
+        head = get_head(store).root
         current_epoch = get_current_store_epoch(store)
         return get_checkpoint_for_block(store, head, current_epoch)
     </spec>
@@ -3591,6 +3597,40 @@
             sidecar.slot,
             cells_and_kzg_proofs,
         )
+    </spec>
+
+- name: get_dependent_root#phase0
+  sources: []
+  spec: |
+    <spec fn="get_dependent_root" fork="phase0" hash="6c7301b5">
+    def get_dependent_root(store: Store, root: Root) -> Root:
+        epoch = get_current_store_epoch(store)
+        if epoch <= MIN_SEED_LOOKAHEAD:
+            # Genesis block parent
+            return Root()
+
+        node = ForkChoiceNode(root=root)
+        dependent_slot = Slot(compute_start_slot_at_epoch(epoch - MIN_SEED_LOOKAHEAD) - 1)
+        return get_ancestor(store, node, dependent_slot).root
+    </spec>
+
+- name: get_dependent_root#gloas
+  sources: []
+  spec: |
+    <spec fn="get_dependent_root" fork="gloas" hash="4e1d4042">
+    def get_dependent_root(store: Store, root: Root) -> Root:
+        epoch = get_current_store_epoch(store)
+        if epoch <= MIN_SEED_LOOKAHEAD:
+            # Genesis block parent
+            return Root()
+
+        # [Modified in Gloas:EIP7732]
+        node = ForkChoiceNode(
+            root=root,
+            payload_status=PAYLOAD_STATUS_PENDING,
+        )
+        dependent_slot = Slot(compute_start_slot_at_epoch(epoch - MIN_SEED_LOOKAHEAD) - 1)
+        return get_ancestor(store, node, dependent_slot).root
     </spec>
 
 - name: get_domain#phase0
@@ -4161,31 +4201,32 @@
     - file: beacon-chain/forkchoice/doubly-linked-tree/forkchoice.go
       search: func (f *ForkChoice) Head(
   spec: |
-    <spec fn="get_head" fork="phase0" hash="9fa2b1bd">
-    def get_head(store: Store) -> Root:
+    <spec fn="get_head" fork="phase0" hash="d6e08d79">
+    def get_head(store: Store) -> ForkChoiceNode:
         # Get filtered block tree that only includes viable branches
         blocks = get_filtered_block_tree(store)
         # Execute the LMD-GHOST fork choice
-        head = store.justified_checkpoint.root
+        head = ForkChoiceNode(root=store.justified_checkpoint.root)
         while True:
-            children = [root for root in blocks.keys() if blocks[root].parent_root == head]
+            children = get_node_children(store, blocks, head)
             if len(children) == 0:
                 return head
             # Sort by latest attesting balance with ties broken lexicographically
             # Ties broken by favoring block with lexicographically higher root
-            head = max(children, key=lambda root: (get_weight(store, root), root))
+            head = max(children, key=lambda child: (get_weight(store, child), child.root))
     </spec>
 
 - name: get_head#gloas
   sources: []
   spec: |
-    <spec fn="get_head" fork="gloas" hash="d03052ed">
+    <spec fn="get_head" fork="gloas" hash="e64bd18b">
     def get_head(store: Store) -> ForkChoiceNode:
         # Get filtered block tree that only includes viable branches
         blocks = get_filtered_block_tree(store)
         # Execute the LMD-GHOST fork-choice
         head = ForkChoiceNode(
             root=store.justified_checkpoint.root,
+            # [New in Gloas:EIP7732]
             payload_status=PAYLOAD_STATUS_PENDING,
         )
 
@@ -4199,6 +4240,7 @@
                 key=lambda child: (
                     get_weight(store, child),
                     child.root,
+                    # [New in Gloas:EIP7732]
                     get_payload_status_tiebreaker(store, child),
                 ),
             )
@@ -4370,7 +4412,7 @@
 - name: get_inclusion_list_committee#heze
   sources: []
   spec: |
-    <spec fn="get_inclusion_list_committee" fork="heze" hash="0e33a3f1">
+    <spec fn="get_inclusion_list_committee" fork="heze" hash="26546ce3">
     def get_inclusion_list_committee(
         state: BeaconState, slot: Slot
     ) -> Vector[ValidatorIndex, INCLUSION_LIST_COMMITTEE_SIZE]:
@@ -4384,9 +4426,9 @@
         for i in range(committees_per_slot):
             committee = get_beacon_committee(state, slot, CommitteeIndex(i))
             indices.extend(committee)
-        return Vector[ValidatorIndex, INCLUSION_LIST_COMMITTEE_SIZE](
-            [indices[i % len(indices)] for i in range(INCLUSION_LIST_COMMITTEE_SIZE)]
-        )
+        return Vector[ValidatorIndex, INCLUSION_LIST_COMMITTEE_SIZE]([
+            indices[i % len(indices)] for i in range(INCLUSION_LIST_COMMITTEE_SIZE)
+        ])
     </spec>
 
 - name: get_inclusion_list_committee_assignment#heze
@@ -4536,7 +4578,7 @@
 - name: get_latest_confirmed#phase0
   sources: []
   spec: |
-    <spec fn="get_latest_confirmed" fork="phase0" hash="37a128b1">
+    <spec fn="get_latest_confirmed" fork="phase0" hash="32f11e2b">
     def get_latest_confirmed(fcr_store: FastConfirmationStore) -> Root:
         """
         Return the most recent confirmed block by executing the FCR algorithm.
@@ -4550,10 +4592,10 @@
         # 2) the latest confirmed block does not belong to the canonical chain,
         # 3) the confirmed chain starting from the current epoch observed justified checkpoint
         #    cannot be re-confirmed at the start of the current epoch.
-        head = get_head(store)
+        head = get_head(store).root
         if (
             get_block_epoch(store, confirmed_root) + 1 < current_epoch
-            or not is_ancestor(store, head, confirmed_root)
+            or not is_ancestor(store, get_node_for_root(head), get_node_for_root(confirmed_root))
             or (
                 is_start_slot_at_epoch(get_current_slot(store))
                 and not is_confirmed_chain_safe(fcr_store, confirmed_root)
@@ -4890,10 +4932,22 @@
         )
     </spec>
 
+- name: get_node_children#phase0
+  sources: []
+  spec: |
+    <spec fn="get_node_children" fork="phase0" hash="ec6c4033">
+    def get_node_children(
+        store: Store,  # noqa: ARG001
+        blocks: Dict[Root, BeaconBlock],
+        node: ForkChoiceNode,
+    ) -> Sequence[ForkChoiceNode]:
+        return [ForkChoiceNode(root=root) for root in blocks if blocks[root].parent_root == node.root]
+    </spec>
+
 - name: get_node_children#gloas
   sources: []
   spec: |
-    <spec fn="get_node_children" fork="gloas" hash="395213b3">
+    <spec fn="get_node_children" fork="gloas" hash="49c8594f">
     def get_node_children(
         store: Store, blocks: Dict[Root, BeaconBlock], node: ForkChoiceNode
     ) -> Sequence[ForkChoiceNode]:
@@ -4905,12 +4959,29 @@
         else:
             return [
                 ForkChoiceNode(root=root, payload_status=PAYLOAD_STATUS_PENDING)
-                for root in blocks.keys()
+                for root in blocks
                 if (
                     blocks[root].parent_root == node.root
                     and node.payload_status == get_parent_payload_status(store, blocks[root])
                 )
             ]
+    </spec>
+
+- name: get_node_for_root#phase0
+  sources: []
+  spec: |
+    <spec fn="get_node_for_root" fork="phase0" hash="22a7e039">
+    def get_node_for_root(block_root: Root) -> ForkChoiceNode:
+        return ForkChoiceNode(root=block_root)
+    </spec>
+
+- name: get_node_for_root#gloas
+  sources: []
+  spec: |
+    <spec fn="get_node_for_root" fork="gloas" hash="75c9f337">
+    def get_node_for_root(block_root: Root) -> ForkChoiceNode:
+        # [Modified in Gloas:EIP7732]
+        return ForkChoiceNode(root=block_root, payload_status=PAYLOAD_STATUS_PENDING)
     </spec>
 
 - name: get_parent_payload_status#gloas
@@ -4955,19 +5026,18 @@
 - name: get_payload_status_tiebreaker#gloas
   sources: []
   spec: |
-    <spec fn="get_payload_status_tiebreaker" fork="gloas" hash="5ca841c3">
+    <spec fn="get_payload_status_tiebreaker" fork="gloas" hash="55e656e3">
     def get_payload_status_tiebreaker(store: Store, node: ForkChoiceNode) -> uint8:
-        if node.payload_status == PAYLOAD_STATUS_PENDING or store.blocks[
-            node.root
-        ].slot + 1 != get_current_slot(store):
-            return node.payload_status
-        else:
+        if is_previous_slot_payload_decision(store, node):
             # To decide on a payload from the previous slot, choose
             # between FULL and EMPTY based on `should_extend_payload`
             if node.payload_status == PAYLOAD_STATUS_EMPTY:
                 return 1
-            else:
-                return 2 if should_extend_payload(store, node.root) else 0
+            if should_extend_payload(store, node.root):
+                return 2
+            return 0
+        else:
+            return node.payload_status
     </spec>
 
 - name: get_pending_balance_to_withdraw#electra
@@ -5112,7 +5182,7 @@
 - name: get_proposer_head#phase0
   sources: []
   spec: |
-    <spec fn="get_proposer_head" fork="phase0" hash="99e8fc05">
+    <spec fn="get_proposer_head" fork="phase0" hash="0b2b3507">
     def get_proposer_head(store: Store, head_root: Root, slot: Slot) -> Root:
         head_block = store.blocks[head_root]
         parent_root = head_block.parent_root
@@ -5148,18 +5218,16 @@
         # Re-org more aggressively if there is a proposer equivocation in the previous slot.
         proposer_equivocation = is_proposer_equivocation(store, head_root)
 
-        if all(
-            [
-                head_late,
-                shuffling_stable,
-                ffg_competitive,
-                finalization_ok,
-                proposing_on_time,
-                single_slot_reorg,
-                head_weak,
-                parent_strong,
-            ]
-        ):
+        if all([
+            head_late,
+            shuffling_stable,
+            ffg_competitive,
+            finalization_ok,
+            proposing_on_time,
+            single_slot_reorg,
+            head_weak,
+            parent_strong,
+        ]):
             # We can re-org the current head by building upon its parent block.
             return parent_root
         elif all([head_weak, current_time_ok, proposer_equivocation]):
@@ -5252,12 +5320,12 @@
 - name: get_pulled_up_head_state#phase0
   sources: []
   spec: |
-    <spec fn="get_pulled_up_head_state" fork="phase0" hash="4d1ed100">
+    <spec fn="get_pulled_up_head_state" fork="phase0" hash="2530de3b">
     def get_pulled_up_head_state(store: Store) -> BeaconState:
         """
         Return the state of the head pulled up to the current epoch if needed.
         """
-        head = get_head(store)
+        head = get_head(store).root
         head_state = store.block_states[head]
         if get_current_epoch(head_state) < get_current_store_epoch(store):
             pulled_up_state = copy(head_state)
@@ -5278,6 +5346,25 @@
         Return the randao mix at a recent ``epoch``.
         """
         return state.randao_mixes[epoch % EPOCHS_PER_HISTORICAL_VECTOR]
+    </spec>
+
+- name: get_safe_execution_block_hash#bellatrix
+  sources: []
+  spec: |
+    <spec fn="get_safe_execution_block_hash" fork="bellatrix" hash="ccd5f801">
+    def get_safe_execution_block_hash(fcr_store: FastConfirmationStore) -> Hash32:
+        safe_block = fcr_store.store.blocks[fcr_store.confirmed_root]
+        return safe_block.body.execution_payload.block_hash
+    </spec>
+
+- name: get_safe_execution_block_hash#gloas
+  sources: []
+  spec: |
+    <spec fn="get_safe_execution_block_hash" fork="gloas" hash="4884e9d5">
+    def get_safe_execution_block_hash(fcr_store: FastConfirmationStore) -> Hash32:
+        safe_block = fcr_store.store.blocks[fcr_store.confirmed_root]
+        # [Modified in Gloas:EIP7732]
+        return safe_block.body.signed_execution_payload_bid.message.parent_block_hash
     </spec>
 
 - name: get_safety_threshold#altair
@@ -5313,12 +5400,12 @@
 - name: get_slot_committee#phase0
   sources: []
   spec: |
-    <spec fn="get_slot_committee" fork="phase0" hash="9ed6c775">
+    <spec fn="get_slot_committee" fork="phase0" hash="34f6f1c4">
     def get_slot_committee(store: Store, slot: Slot) -> Set[ValidatorIndex]:
         """
         Return participants of all committees in ``slot``.
         """
-        head = get_head(store)
+        head = get_head(store).root
         shuffling_source = store.block_states[head]
         committees_count = get_committee_count_per_slot(shuffling_source, compute_epoch_at_slot(slot))
         participants: Set[ValidatorIndex] = set()
@@ -5391,6 +5478,42 @@
         Return weight that can be discounted during the safety threshold computation for the block.
         """
         return compute_empty_slot_support_discount(store, balance_source, block_root)
+    </spec>
+
+- name: get_supported_node#phase0
+  sources: []
+  spec: |
+    <spec fn="get_supported_node" fork="phase0" hash="21e3292d">
+    def get_supported_node(
+        store: Store,  # noqa: ARG001
+        message: LatestMessage,
+    ) -> ForkChoiceNode:
+        """
+        Return a node supported by the ``message``.
+        """
+        return ForkChoiceNode(root=message.root)
+    </spec>
+
+- name: get_supported_node#gloas
+  sources: []
+  spec: |
+    <spec fn="get_supported_node" fork="gloas" hash="244f14f6">
+    def get_supported_node(store: Store, message: LatestMessage) -> ForkChoiceNode:
+        """
+        Return a node supported by the ``message``.
+        """
+        # [New in Gloas:EIP7732]
+        block = store.blocks[message.root]
+        if block.slot < message.slot:
+            if message.payload_present:
+                payload_status = PAYLOAD_STATUS_FULL
+            else:
+                payload_status = PAYLOAD_STATUS_EMPTY
+        else:
+            payload_status = PAYLOAD_STATUS_PENDING
+
+        # [Modified in Gloas:EIP7732]
+        return ForkChoiceNode(root=message.root, payload_status=payload_status)
     </spec>
 
 - name: get_sync_committee_message#altair
@@ -5492,9 +5615,9 @@
     - file: beacon-chain/rpc/prysm/v1alpha1/validator/proposer_execution_payload.go
       search: func (vs *Server) getTerminalBlockHashIfExists(
   spec: |
-    <spec fn="get_terminal_pow_block" fork="bellatrix" hash="90e145ca">
+    <spec fn="get_terminal_pow_block" fork="bellatrix" hash="8ead2ad2">
     def get_terminal_pow_block(pow_chain: Dict[Hash32, PowBlock]) -> Optional[PowBlock]:
-        if TERMINAL_BLOCK_HASH != Hash32():
+        if TERMINAL_BLOCK_HASH != EMPTY_BLOCK_HASH:
             # Terminal block hash override takes precedence over terminal total difficulty
             if TERMINAL_BLOCK_HASH in pow_chain:
                 return pow_chain[TERMINAL_BLOCK_HASH]
@@ -5826,58 +5949,51 @@
     - file: beacon-chain/forkchoice/doubly-linked-tree/forkchoice.go
       search: func (f *ForkChoice) Weight(
   spec: |
-    <spec fn="get_weight" fork="phase0" hash="b18bf25c">
-    def get_weight(store: Store, root: Root) -> Gwei:
+    <spec fn="get_weight" fork="phase0" hash="fc6b8e1a">
+    def get_weight(store: Store, node: ForkChoiceNode) -> Gwei:
         state = store.checkpoint_states[store.justified_checkpoint]
-        attestation_score = get_attestation_score(store, root, state)
+        attestation_score = get_attestation_score(store, node, state)
         if store.proposer_boost_root == Root():
             # Return only attestation score if ``proposer_boost_root`` is not set
             return attestation_score
 
         # Calculate proposer score if ``proposer_boost_root`` is set
         proposer_score = Gwei(0)
-        # Boost is applied if ``root`` is an ancestor of ``proposer_boost_root``
-        if get_ancestor(store, store.proposer_boost_root, store.blocks[root].slot) == root:
+        proposer_boost_node = ForkChoiceNode(root=store.proposer_boost_root)
+        # Boost is applied if ``node`` is an ancestor of ``proposer_boost_node``
+        if is_ancestor(store, proposer_boost_node, node):
             proposer_score = get_proposer_score(store)
+
         return attestation_score + proposer_score
     </spec>
 
 - name: get_weight#gloas
   sources: []
   spec: |
-    <spec fn="get_weight" fork="gloas" hash="10430b82">
-    def get_weight(
-        store: Store,
-        # [Modified in Gloas:EIP7732]
-        node: ForkChoiceNode,
-    ) -> Gwei:
-        if node.payload_status == PAYLOAD_STATUS_PENDING or store.blocks[
-            node.root
-        ].slot + 1 != get_current_slot(store):
-            state = store.checkpoint_states[store.justified_checkpoint]
-            attestation_score = get_attestation_score(store, node, state)
-            if not should_apply_proposer_boost(store):
-                # Return only attestation score if
-                # proposer boost should not apply
-                return attestation_score
-
-            # Calculate proposer score if `proposer_boost_root` is set
-            proposer_score = Gwei(0)
-
-            # `proposer_boost_root` is treated as a vote for the
-            # proposer's block in the current slot. Proposer boost
-            # is applied accordingly to all ancestors
-            message = LatestMessage(
-                slot=get_current_slot(store),
-                root=store.proposer_boost_root,
-                payload_present=False,
-            )
-            if is_supporting_vote(store, node, message):
-                proposer_score = get_proposer_score(store)
-
-            return attestation_score + proposer_score
-        else:
+    <spec fn="get_weight" fork="gloas" hash="ab3e64d6">
+    def get_weight(store: Store, node: ForkChoiceNode) -> Gwei:
+        # [New in Gloas:EIP7732]
+        if is_previous_slot_payload_decision(store, node):
             return Gwei(0)
+
+        state = store.checkpoint_states[store.justified_checkpoint]
+        attestation_score = get_attestation_score(store, node, state)
+        # [Modified in Gloas:EIP7732]
+        if not should_apply_proposer_boost(store):
+            # Return only attestation score if proposer boost should not apply
+            return attestation_score
+
+        # Calculate proposer score if proposer boost should apply
+        proposer_score = Gwei(0)
+        # [Modified in Gloas:EIP7732]
+        proposer_boost_node = ForkChoiceNode(
+            root=store.proposer_boost_root, payload_status=PAYLOAD_STATUS_PENDING
+        )
+        # Boost is applied if ``node`` is an ancestor of ``proposer_boost_node``
+        if is_ancestor(store, proposer_boost_node, node):
+            proposer_score = get_proposer_score(store)
+
+        return attestation_score + proposer_score
     </spec>
 
 - name: has_compounding_withdrawal_credential#electra
@@ -5954,7 +6070,7 @@
     - file: beacon-chain/core/transition/state.go
       search: func GenesisBeaconState(
   spec: |
-    <spec fn="initialize_beacon_state_from_eth1" fork="phase0" hash="d3a0ddd4">
+    <spec fn="initialize_beacon_state_from_eth1" fork="phase0" hash="7c0b0251">
     def initialize_beacon_state_from_eth1(
         eth1_block_hash: Hash32, eth1_timestamp: uint64, deposits: Sequence[Deposit]
     ) -> BeaconState:
@@ -5973,7 +6089,7 @@
         )
 
         # Process deposits
-        leaves = list(map(lambda deposit: deposit.data, deposits))
+        leaves = [deposit.data for deposit in deposits]
         for index, deposit in enumerate(deposits):
             deposit_data_list = List[DepositData, 2**DEPOSIT_CONTRACT_TREE_DEPTH](*leaves[: index + 1])
             state.eth1_data.deposit_root = hash_tree_root(deposit_data_list)
@@ -6203,12 +6319,25 @@
 - name: is_ancestor#phase0
   sources: []
   spec: |
-    <spec fn="is_ancestor" fork="phase0" hash="6e915ba5">
-    def is_ancestor(store: Store, block_root: Root, ancestor_root: Root) -> bool:
-        """
-        Return ``True`` if ``ancestor_root`` is an ancestor of ``block_root``.
-        """
-        return get_ancestor(store, block_root, store.blocks[ancestor_root].slot) == ancestor_root
+    <spec fn="is_ancestor" fork="phase0" hash="2878c47d">
+    def is_ancestor(store: Store, node: ForkChoiceNode, ancestor: ForkChoiceNode) -> bool:
+        return get_ancestor(store, node, store.blocks[ancestor.root].slot) == ancestor
+    </spec>
+
+- name: is_ancestor#gloas
+  sources: []
+  spec: |
+    <spec fn="is_ancestor" fork="gloas" hash="4df6a173">
+    def is_ancestor(store: Store, node: ForkChoiceNode, ancestor: ForkChoiceNode) -> bool:
+        node_ancestor = get_ancestor(store, node, store.blocks[ancestor.root].slot)
+        if node_ancestor.root != ancestor.root:
+            return False
+
+        # [New in Gloas:EIP7732]
+        return (
+            node_ancestor.payload_status == ancestor.payload_status
+            or ancestor.payload_status == PAYLOAD_STATUS_PENDING
+        )
     </spec>
 
 - name: is_assigned_to_sync_committee#altair
@@ -6346,16 +6475,16 @@
 - name: is_confirmed_chain_safe#phase0
   sources: []
   spec: |
-    <spec fn="is_confirmed_chain_safe" fork="phase0" hash="2423ff24">
+    <spec fn="is_confirmed_chain_safe" fork="phase0" hash="7e4d7c51">
     def is_confirmed_chain_safe(fcr_store: FastConfirmationStore, confirmed_root: Root) -> bool:
         """
         Return ``True`` if and only if all blocks of the confirmed chain
         starting from current_epoch_observed_justified_checkpoint are LMD-GHOST safe.
         """
         store = fcr_store.store
-        # Check if the confirmed_root is descendant of current_epoch_observed_justified_checkpoint
-        if not is_ancestor(
-            store, confirmed_root, fcr_store.current_epoch_observed_justified_checkpoint.root
+        # Check if the confirmed_root has current_epoch_observed_justified_checkpoint in its chain
+        if fcr_store.current_epoch_observed_justified_checkpoint != get_checkpoint_for_block(
+            store, confirmed_root, fcr_store.current_epoch_observed_justified_checkpoint.epoch
         ):
             return False
 
@@ -6368,8 +6497,10 @@
             # Limit reconfirmation to the first block of the previous epoch
             # as if it is successful, reconfirmation of the ancestors is implied.
             ancestor_at_previous_epoch_start = get_ancestor(
-                store, confirmed_root, compute_start_slot_at_epoch(Epoch(current_epoch - 1))
-            )
+                store,
+                get_node_for_root(confirmed_root),
+                compute_start_slot_at_epoch(Epoch(current_epoch - 1)),
+            ).root
             if get_block_epoch(store, ancestor_at_previous_epoch_start) + 1 == current_epoch:
                 # The parent of the first block of the previous epoch
                 start_root_exclusive = store.blocks[ancestor_at_previous_epoch_start].parent_root
@@ -6649,11 +6780,11 @@
 - name: is_head_weak#phase0
   sources: []
   spec: |
-    <spec fn="is_head_weak" fork="phase0" hash="3a6650d7">
+    <spec fn="is_head_weak" fork="phase0" hash="ac0fb917">
     def is_head_weak(store: Store, head_root: Root) -> bool:
         justified_state = store.checkpoint_states[store.justified_checkpoint]
         reorg_threshold = calculate_committee_fraction(justified_state, REORG_HEAD_WEIGHT_THRESHOLD)
-        head_weight = get_weight(store, head_root)
+        head_weight = get_weight(store, ForkChoiceNode(root=head_root))
         return head_weight < reorg_threshold
     </spec>
 
@@ -6698,7 +6829,7 @@
 - name: is_inclusion_list_bits_inclusive#heze
   sources: []
   spec: |
-    <spec fn="is_inclusion_list_bits_inclusive" fork="heze" hash="7fcf5191">
+    <spec fn="is_inclusion_list_bits_inclusive" fork="heze" hash="5ea16f62">
     def is_inclusion_list_bits_inclusive(
         store: InclusionListStore,
         state: BeaconState,
@@ -6715,7 +6846,7 @@
         return all(
             inclusion_bit or not local_inclusion_bit
             for inclusion_bit, local_inclusion_bit in zip(
-                inclusion_list_bits, local_inclusion_list_bits
+                inclusion_list_bits, local_inclusion_list_bits, strict=True
             )
         )
     </spec>
@@ -6749,7 +6880,7 @@
 - name: is_non_strict_superset#phase0
   sources: []
   spec: |
-    <spec fn="is_non_strict_superset" fork="phase0" hash="2f69cb02">
+    <spec fn="is_non_strict_superset" fork="phase0" hash="636b4456">
     def is_non_strict_superset(
         seen_bits_set: Set[Tuple[boolean, ...]],
         new_bits: Tuple[boolean, ...],
@@ -6760,7 +6891,7 @@
         """
         for prior_bits in seen_bits_set:
             is_superset = True
-            for prior_bit, new_bit in zip(prior_bits, new_bits):
+            for prior_bit, new_bit in zip(prior_bits, new_bits, strict=True):
                 if new_bit and not prior_bit:
                     is_superset = False
                     break
@@ -6789,12 +6920,12 @@
 - name: is_one_confirmed#phase0
   sources: []
   spec: |
-    <spec fn="is_one_confirmed" fork="phase0" hash="f06beafd">
+    <spec fn="is_one_confirmed" fork="phase0" hash="2a6e987b">
     def is_one_confirmed(store: Store, balance_source: BeaconState, block_root: Root) -> bool:
         """
         Return ``True`` if and only if the block is LMD-GHOST safe.
         """
-        support = get_attestation_score(store, block_root, balance_source)
+        support = get_attestation_score(store, get_node_for_root(block_root), balance_source)
         safety_threshold = compute_safety_threshold(store, block_root, balance_source)
         return support > safety_threshold
     </spec>
@@ -6836,12 +6967,12 @@
 - name: is_parent_strong#phase0
   sources: []
   spec: |
-    <spec fn="is_parent_strong" fork="phase0" hash="02a3fd0b">
+    <spec fn="is_parent_strong" fork="phase0" hash="24316fbe">
     def is_parent_strong(store: Store, root: Root) -> bool:
         justified_state = store.checkpoint_states[store.justified_checkpoint]
         parent_threshold = calculate_committee_fraction(justified_state, REORG_PARENT_WEIGHT_THRESHOLD)
         parent_root = store.blocks[root].parent_root
-        parent_weight = get_weight(store, parent_root)
+        parent_weight = get_weight(store, ForkChoiceNode(root=parent_root))
         return parent_weight > parent_threshold
     </spec>
 
@@ -6957,6 +7088,16 @@
             ):
                 return True
         return False
+    </spec>
+
+- name: is_previous_slot_payload_decision#gloas
+  sources: []
+  spec: |
+    <spec fn="is_previous_slot_payload_decision" fork="gloas" hash="fa0a2c02">
+    def is_previous_slot_payload_decision(store: Store, node: ForkChoiceNode) -> bool:
+        is_previous_slot = store.blocks[node.root].slot + 1 == get_current_slot(store)
+        is_payload_decision = node.payload_status in [PAYLOAD_STATUS_EMPTY, PAYLOAD_STATUS_FULL]
+        return is_previous_slot and is_payload_decision
     </spec>
 
 - name: is_proposer#phase0
@@ -7133,7 +7274,7 @@
     - file: beacon-chain/core/blocks/attestation.go
       search: func VerifyIndexedAttestation(
   spec: |
-    <spec fn="is_valid_indexed_attestation" fork="phase0" hash="31223a33">
+    <spec fn="is_valid_indexed_attestation" fork="phase0" hash="bb583b5b">
     def is_valid_indexed_attestation(
         state: BeaconState, indexed_attestation: IndexedAttestation
     ) -> bool:
@@ -7142,7 +7283,7 @@
         """
         # Verify indices are sorted and unique
         indices = indexed_attestation.attesting_indices
-        if len(indices) == 0 or not indices == sorted(set(indices)):
+        if len(indices) == 0 or indices != sorted(set(indices)):
             return False
         # Verify aggregate signature
         pubkeys = [state.validators[i].pubkey for i in indices]
@@ -7154,7 +7295,7 @@
 - name: is_valid_indexed_payload_attestation#gloas
   sources: []
   spec: |
-    <spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="d76e0f89">
+    <spec fn="is_valid_indexed_payload_attestation" fork="gloas" hash="745c04a1">
     def is_valid_indexed_payload_attestation(
         state: BeaconState, attestation: IndexedPayloadAttestation
     ) -> bool:
@@ -7164,7 +7305,7 @@
         """
         # Verify indices are non-empty and sorted
         indices = attestation.attesting_indices
-        if len(indices) == 0 or not indices == sorted(indices):
+        if len(indices) == 0 or indices != sorted(indices):
             return False
 
         # Verify aggregate signature
@@ -7597,7 +7738,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="phase0" hash="5f45947a">
+    <spec fn="on_block" fork="phase0" hash="36ebb320">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         block = signed_block.message
         # Parent block must be known
@@ -7621,14 +7762,17 @@
         # Check the block is valid and compute the post-state
         state = pre_state.copy()
         block_root = hash_tree_root(block)
-        state_transition(state, signed_block, True)
+        state_transition(state, signed_block, validate_result=True)
+
+        # Compute head before applying the block
+        head = get_head(store)
         # Add new block to the store
         store.blocks[block_root] = block
         # Add new state for this block to the store
         store.block_states[block_root] = state
 
         record_block_timeliness(store, block_root)
-        update_proposer_boost_root(store, block_root)
+        update_proposer_boost_root(store, head.root, block_root)
 
         # Update checkpoints in store if necessary
         update_checkpoints(store, state.current_justified_checkpoint, state.finalized_checkpoint)
@@ -7642,7 +7786,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="bellatrix" hash="e81d01c3">
+    <spec fn="on_block" fork="bellatrix" hash="317c8053">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -7672,19 +7816,21 @@
         # Check the block is valid and compute the post-state
         state = pre_state.copy()
         block_root = hash_tree_root(block)
-        state_transition(state, signed_block, True)
+        state_transition(state, signed_block, validate_result=True)
 
         # [New in Bellatrix]
         if is_merge_transition_block(pre_state, block.body):
             validate_merge_block(block)
 
+        # Compute head before applying the block
+        head = get_head(store)
         # Add new block to the store
         store.blocks[block_root] = block
         # Add new state for this block to the store
         store.block_states[block_root] = state
 
         record_block_timeliness(store, block_root)
-        update_proposer_boost_root(store, block_root)
+        update_proposer_boost_root(store, head.root, block_root)
 
         # Update checkpoints in store if necessary
         update_checkpoints(store, state.current_justified_checkpoint, state.finalized_checkpoint)
@@ -7698,7 +7844,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="capella" hash="7450531c">
+    <spec fn="on_block" fork="capella" hash="7e879033">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -7724,15 +7870,17 @@
         # Make a copy of the state to avoid mutability issues
         state = copy(store.block_states[block.parent_root])
         block_root = hash_tree_root(block)
-        state_transition(state, signed_block, True)
+        state_transition(state, signed_block, validate_result=True)
 
+        # Compute head before applying the block
+        head = get_head(store)
         # Add new block to the store
         store.blocks[block_root] = block
         # Add new state for this block to the store
         store.block_states[block_root] = state
 
         record_block_timeliness(store, block_root)
-        update_proposer_boost_root(store, block_root)
+        update_proposer_boost_root(store, head.root, block_root)
 
         # Update checkpoints in store if necessary
         update_checkpoints(store, state.current_justified_checkpoint, state.finalized_checkpoint)
@@ -7746,7 +7894,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="deneb" hash="bbad196e">
+    <spec fn="on_block" fork="deneb" hash="12aa50be">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -7777,15 +7925,17 @@
         # Make a copy of the state to avoid mutability issues
         state = copy(store.block_states[block.parent_root])
         block_root = hash_tree_root(block)
-        state_transition(state, signed_block, True)
+        state_transition(state, signed_block, validate_result=True)
 
+        # Compute head before applying the block
+        head = get_head(store)
         # Add new block to the store
         store.blocks[block_root] = block
         # Add new state for this block to the store
         store.block_states[block_root] = state
 
         record_block_timeliness(store, block_root)
-        update_proposer_boost_root(store, block_root)
+        update_proposer_boost_root(store, head.root, block_root)
 
         # Update checkpoints in store if necessary
         update_checkpoints(store, state.current_justified_checkpoint, state.finalized_checkpoint)
@@ -7799,7 +7949,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="fulu" hash="b8f279b9">
+    <spec fn="on_block" fork="fulu" hash="7a1448fc">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -7830,15 +7980,17 @@
 
         # Check the block is valid and compute the post-state
         block_root = hash_tree_root(block)
-        state_transition(state, signed_block, True)
+        state_transition(state, signed_block, validate_result=True)
 
+        # Compute head before applying the block
+        head = get_head(store)
         # Add new block to the store
         store.blocks[block_root] = block
         # Add new state for this block to the store
         store.block_states[block_root] = state
 
         record_block_timeliness(store, block_root)
-        update_proposer_boost_root(store, block_root)
+        update_proposer_boost_root(store, head.root, block_root)
 
         # Update checkpoints in store if necessary
         update_checkpoints(store, state.current_justified_checkpoint, state.finalized_checkpoint)
@@ -7850,7 +8002,7 @@
 - name: on_block#gloas
   sources: []
   spec: |
-    <spec fn="on_block" fork="gloas" hash="57c61016">
+    <spec fn="on_block" fork="gloas" hash="c370389d">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -7884,8 +8036,10 @@
 
         # Check the block is valid and compute the post-state
         block_root = hash_tree_root(block)
-        state_transition(state, signed_block, True)
+        state_transition(state, signed_block, validate_result=True)
 
+        # Compute head before applying the block
+        head = get_head(store)
         # Add new block to the store
         store.blocks[block_root] = block
         # Add new state for this block to the store
@@ -7898,7 +8052,7 @@
         notify_ptc_messages(store, state, block.body.payload_attestations)
 
         record_block_timeliness(store, block_root)
-        update_proposer_boost_root(store, block_root)
+        update_proposer_boost_root(store, head.root, block_root)
 
         # Update checkpoints in store if necessary
         update_checkpoints(store, state.current_justified_checkpoint, state.finalized_checkpoint)
@@ -8134,7 +8288,7 @@
 - name: prepare_execution_payload#bellatrix
   sources: []
   spec: |
-    <spec fn="prepare_execution_payload" fork="bellatrix" hash="6af4de76">
+    <spec fn="prepare_execution_payload" fork="bellatrix" hash="da7b5dbb">
     def prepare_execution_payload(
         state: BeaconState,
         safe_block_hash: Hash32,
@@ -8145,7 +8299,7 @@
     ) -> Optional[PayloadId]:
         if not is_merge_transition_complete(state):
             assert pow_chain is not None
-            is_terminal_block_hash_set = TERMINAL_BLOCK_HASH != Hash32()
+            is_terminal_block_hash_set = TERMINAL_BLOCK_HASH != EMPTY_BLOCK_HASH
             is_activation_epoch_reached = (
                 get_current_epoch(state) >= TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH
             )
@@ -8455,7 +8609,7 @@
     - file: beacon-chain/core/altair/attestation.go
       search: func ProcessAttestationNoVerifySignature(
   spec: |
-    <spec fn="process_attestation" fork="electra" hash="52d8bb9a">
+    <spec fn="process_attestation" fork="electra" hash="d0e174f7">
     def process_attestation(state: BeaconState, attestation: Attestation) -> None:
         data = attestation.data
         assert data.target.epoch in (get_previous_epoch(state), get_current_epoch(state))
@@ -8469,11 +8623,11 @@
         for committee_index in committee_indices:
             assert committee_index < get_committee_count_per_slot(state, data.target.epoch)
             committee = get_beacon_committee(state, data.slot, committee_index)
-            committee_attesters = set(
+            committee_attesters = {
                 attester_index
                 for i, attester_index in enumerate(committee)
                 if attestation.aggregation_bits[committee_offset + i]
-            )
+            }
             assert len(committee_attesters) > 0
             committee_offset += len(committee)
 
@@ -8514,7 +8668,7 @@
 - name: process_attestation#gloas
   sources: []
   spec: |
-    <spec fn="process_attestation" fork="gloas" hash="2258b5bb">
+    <spec fn="process_attestation" fork="gloas" hash="169ef683">
     def process_attestation(state: BeaconState, attestation: Attestation) -> None:
         data = attestation.data
         assert data.target.epoch in (get_previous_epoch(state), get_current_epoch(state))
@@ -8528,11 +8682,11 @@
         for committee_index in committee_indices:
             assert committee_index < get_committee_count_per_slot(state, data.target.epoch)
             committee = get_beacon_committee(state, data.slot, committee_index)
-            committee_attesters = set(
+            committee_attesters = {
                 attester_index
                 for i, attester_index in enumerate(committee)
                 if attestation.aggregation_bits[committee_offset + i]
-            )
+            }
             assert len(committee_attesters) > 0
             committee_offset += len(committee)
 
@@ -8702,6 +8856,21 @@
         process_randao(state, block.body)
         process_eth1_data(state, block.body)
         # [Modified in Electra:EIP6110:EIP7002:EIP7549:EIP7251]
+        process_operations(state, block.body)
+        process_sync_aggregate(state, block.body.sync_aggregate)
+    </spec>
+
+- name: process_block#fulu
+  sources: []
+  spec: |
+    <spec fn="process_block" fork="fulu" hash="78fb0372">
+    def process_block(state: BeaconState, block: BeaconBlock) -> None:
+        process_block_header(state, block)
+        process_withdrawals(state, block.body.execution_payload)
+        process_execution_payload(state, block.body, EXECUTION_ENGINE)
+        process_randao(state, block.body)
+        process_eth1_data(state, block.body)
+        # [Modified in Fulu]
         process_operations(state, block.body)
         process_sync_aggregate(state, block.body.sync_aggregate)
     </spec>
@@ -8949,13 +9118,28 @@
     - file: beacon-chain/core/requests/deposits.go
       search: func processDepositRequest(
   spec: |
-    <spec fn="process_deposit_request" fork="electra" hash="547c4a35">
+    <spec fn="process_deposit_request" fork="electra" hash="f5e90d86">
     def process_deposit_request(state: BeaconState, deposit_request: DepositRequest) -> None:
         # Set deposit request start index
         if state.deposit_requests_start_index == UNSET_DEPOSIT_REQUESTS_START_INDEX:
             state.deposit_requests_start_index = deposit_request.index
 
-        # Create pending deposit
+        state.pending_deposits.append(
+            PendingDeposit(
+                pubkey=deposit_request.pubkey,
+                withdrawal_credentials=deposit_request.withdrawal_credentials,
+                amount=deposit_request.amount,
+                signature=deposit_request.signature,
+                slot=state.slot,
+            )
+        )
+    </spec>
+
+- name: process_deposit_request#fulu
+  sources: []
+  spec: |
+    <spec fn="process_deposit_request" fork="fulu" hash="26509dcc">
+    def process_deposit_request(state: BeaconState, deposit_request: DepositRequest) -> None:
         state.pending_deposits.append(
             PendingDeposit(
                 pubkey=deposit_request.pubkey,
@@ -9964,21 +10148,36 @@
         for_ops(body.execution_requests.consolidations, process_consolidation_request)
     </spec>
 
+- name: process_operations#fulu
+  sources: []
+  spec: |
+    <spec fn="process_operations" fork="fulu" hash="818d28d9">
+    def process_operations(state: BeaconState, body: BeaconBlockBody) -> None:
+        # [Modified in Fulu]
+        assert len(body.deposits) == 0
+
+        def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
+            for operation in operations:
+                fn(state, operation)
+
+        for_ops(body.proposer_slashings, process_proposer_slashing)
+        for_ops(body.attester_slashings, process_attester_slashing)
+        for_ops(body.attestations, process_attestation)
+        # [Modified in Fulu]
+        # Removed `process_deposit`
+        for_ops(body.voluntary_exits, process_voluntary_exit)
+        for_ops(body.bls_to_execution_changes, process_bls_to_execution_change)
+        for_ops(body.execution_requests.deposits, process_deposit_request)
+        for_ops(body.execution_requests.withdrawals, process_withdrawal_request)
+        for_ops(body.execution_requests.consolidations, process_consolidation_request)
+    </spec>
+
 - name: process_operations#gloas
   sources: []
   spec: |
-    <spec fn="process_operations" fork="gloas" hash="05a7a4ea">
+    <spec fn="process_operations" fork="gloas" hash="e0633745">
     def process_operations(state: BeaconState, body: BeaconBlockBody) -> None:
-        # Disable former deposit mechanism once all prior deposits are processed
-        eth1_deposit_index_limit = min(
-            state.eth1_data.deposit_count, state.deposit_requests_start_index
-        )
-        if state.eth1_deposit_index < eth1_deposit_index_limit:
-            assert len(body.deposits) == min(
-                MAX_DEPOSITS, eth1_deposit_index_limit - state.eth1_deposit_index
-            )
-        else:
-            assert len(body.deposits) == 0
+        assert len(body.deposits) == 0
 
         def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
             for operation in operations:
@@ -9989,7 +10188,6 @@
         for_ops(body.attester_slashings, process_attester_slashing)
         # [Modified in Gloas:EIP7732]
         for_ops(body.attestations, process_attestation)
-        for_ops(body.deposits, process_deposit)
         # [Modified in Gloas:EIP7732]
         for_ops(body.voluntary_exits, process_voluntary_exit)
         for_ops(body.bls_to_execution_changes, process_bls_to_execution_change)
@@ -10170,10 +10368,71 @@
             state.deposit_balance_to_consume = Gwei(0)
     </spec>
 
+- name: process_pending_deposits#fulu
+  sources: []
+  spec: |
+    <spec fn="process_pending_deposits" fork="fulu" hash="02e6116b">
+    def process_pending_deposits(state: BeaconState) -> None:
+        next_epoch = Epoch(get_current_epoch(state) + 1)
+        available_for_processing = state.deposit_balance_to_consume + get_activation_exit_churn_limit(
+            state
+        )
+        processed_amount = 0
+        next_deposit_index = 0
+        deposits_to_postpone = []
+        is_churn_limit_reached = False
+        finalized_slot = compute_start_slot_at_epoch(state.finalized_checkpoint.epoch)
+
+        for deposit in state.pending_deposits:
+            # Check if deposit has been finalized, otherwise, stop processing.
+            if deposit.slot > finalized_slot:
+                break
+
+            # Check if number of processed deposits has not reached the limit, otherwise, stop processing.
+            if next_deposit_index >= MAX_PENDING_DEPOSITS_PER_EPOCH:
+                break
+
+            # Read validator state
+            is_validator_exited = False
+            is_validator_withdrawn = False
+            validator_pubkeys = [v.pubkey for v in state.validators]
+            if deposit.pubkey in validator_pubkeys:
+                validator = state.validators[ValidatorIndex(validator_pubkeys.index(deposit.pubkey))]
+                is_validator_exited = validator.exit_epoch < FAR_FUTURE_EPOCH
+                is_validator_withdrawn = validator.withdrawable_epoch < next_epoch
+
+            if is_validator_withdrawn:
+                # Deposited balance will never become active. Increase balance but do not consume churn
+                apply_pending_deposit(state, deposit)
+            elif is_validator_exited:
+                # Validator is exiting, postpone the deposit until after withdrawable epoch
+                deposits_to_postpone.append(deposit)
+            else:
+                # Check if deposit fits in the churn, otherwise, do no more deposit processing in this epoch.
+                is_churn_limit_reached = processed_amount + deposit.amount > available_for_processing
+                if is_churn_limit_reached:
+                    break
+
+                # Consume churn and apply deposit.
+                processed_amount += deposit.amount
+                apply_pending_deposit(state, deposit)
+
+            # Regardless of how the deposit was handled, we move on in the queue.
+            next_deposit_index += 1
+
+        state.pending_deposits = state.pending_deposits[next_deposit_index:] + deposits_to_postpone
+
+        # Accumulate churn only if the churn limit has been hit.
+        if is_churn_limit_reached:
+            state.deposit_balance_to_consume = available_for_processing - processed_amount
+        else:
+            state.deposit_balance_to_consume = Gwei(0)
+    </spec>
+
 - name: process_pending_deposits#gloas
   sources: []
   spec: |
-    <spec fn="process_pending_deposits" fork="gloas" hash="844e2ed3">
+    <spec fn="process_pending_deposits" fork="gloas" hash="1218fecc">
     def process_pending_deposits(state: BeaconState) -> None:
         next_epoch = Epoch(get_current_epoch(state) + 1)
         # [Modified in Gloas:EIP8061]
@@ -10186,16 +10445,6 @@
         finalized_slot = compute_start_slot_at_epoch(state.finalized_checkpoint.epoch)
 
         for deposit in state.pending_deposits:
-            # Do not process deposit requests if Eth1 bridge deposits are not yet applied.
-            if (
-                # Is deposit request
-                deposit.slot > GENESIS_SLOT
-                and
-                # There are pending Eth1 bridge deposits
-                state.eth1_deposit_index < state.deposit_requests_start_index
-            ):
-                break
-
             # Check if deposit has been finalized, otherwise, stop processing.
             if deposit.slot > finalized_slot:
                 break
@@ -10688,7 +10937,7 @@
     - file: beacon-chain/core/altair/block.go
       search: func ProcessSyncAggregate(
   spec: |
-    <spec fn="process_sync_aggregate" fork="altair" hash="5f7c046f">
+    <spec fn="process_sync_aggregate" fork="altair" hash="eb56554b">
     def process_sync_aggregate(state: BeaconState, sync_aggregate: SyncAggregate) -> None:
         # Verify sync committee aggregate signature signing over the previous slot block root
         committee_pubkeys = state.current_sync_committee.pubkeys
@@ -10700,7 +10949,7 @@
             # More than half participated - subtract non-participant keys.
             # First determine nonparticipating members
             non_participant_pubkeys = [
-                pubkey for pubkey, bit in zip(committee_pubkeys, committee_bits) if not bit
+                pubkey for pubkey, bit in zip(committee_pubkeys, committee_bits, strict=True) if not bit
             ]
             # Compute aggregate of non-participants
             non_participant_aggregate = eth_aggregate_pubkeys(non_participant_pubkeys)
@@ -10715,7 +10964,9 @@
             # Less than half participated - aggregate participant keys
             participant_pubkeys = [
                 pubkey
-                for pubkey, bit in zip(committee_pubkeys, sync_aggregate.sync_committee_bits)
+                for pubkey, bit in zip(
+                    committee_pubkeys, sync_aggregate.sync_committee_bits, strict=True
+                )
                 if bit
             ]
         previous_slot = max(state.slot, Slot(1)) - Slot(1)
@@ -10743,7 +10994,7 @@
             ValidatorIndex(all_pubkeys.index(pubkey)) for pubkey in state.current_sync_committee.pubkeys
         ]
         for participant_index, participation_bit in zip(
-            committee_indices, sync_aggregate.sync_committee_bits
+            committee_indices, sync_aggregate.sync_committee_bits, strict=True
         ):
             if participation_bit:
                 increase_balance(state, participant_index, participant_reward)
@@ -11145,7 +11396,7 @@
 - name: recover_matrix#fulu
   sources: []
   spec: |
-    <spec fn="recover_matrix" fork="fulu" hash="3db21f50">
+    <spec fn="recover_matrix" fork="fulu" hash="d21e29e7">
     def recover_matrix(
         partial_matrix: Sequence[MatrixEntry], blob_count: uint64
     ) -> Sequence[MatrixEntry]:
@@ -11160,7 +11411,9 @@
             cell_indices = [e.column_index for e in partial_matrix if e.row_index == blob_index]
             cells = [e.cell for e in partial_matrix if e.row_index == blob_index]
             recovered_cells, recovered_proofs = recover_cells_and_kzg_proofs(cell_indices, cells)
-            for cell_index, (cell, proof) in enumerate(zip(recovered_cells, recovered_proofs)):
+            for cell_index, (cell, proof) in enumerate(
+                zip(recovered_cells, recovered_proofs, strict=True)
+            ):
                 matrix.append(
                     MatrixEntry(
                         cell=cell,
@@ -11249,12 +11502,18 @@
 - name: should_build_on_full#gloas
   sources: []
   spec: |
-    <spec fn="should_build_on_full" fork="gloas" hash="229e3638">
+    <spec fn="should_build_on_full" fork="gloas" hash="40a75144">
     def should_build_on_full(store: Store, head: ForkChoiceNode) -> bool:
         assert head.payload_status != PAYLOAD_STATUS_PENDING
         if head.payload_status == PAYLOAD_STATUS_EMPTY:
             return False
-        return not payload_data_availability(store, head.root, available=False)
+        if store.blocks[head.root].slot + 1 != get_current_slot(store):
+            return True
+        if payload_data_availability(store, head.root, available=False):
+            return False
+        if payload_timeliness(store, head.root, timely=False):
+            return False
+        return True
     </spec>
 
 - name: should_extend_payload#gloas
@@ -11552,12 +11811,12 @@
 - name: update_fast_confirmation_variables#phase0
   sources: []
   spec: |
-    <spec fn="update_fast_confirmation_variables" fork="phase0" hash="b3419a9f">
+    <spec fn="update_fast_confirmation_variables" fork="phase0" hash="4002d8dd">
     def update_fast_confirmation_variables(fcr_store: FastConfirmationStore) -> None:
         # Update prev and curr slot head
         store = fcr_store.store
         fcr_store.previous_slot_head = fcr_store.current_slot_head
-        fcr_store.current_slot_head = get_head(store)
+        fcr_store.current_slot_head = get_head(store).root
 
         # Update greatest unrealized justified checkpoint at the last slot of an epoch
         if is_start_slot_at_epoch(Slot(get_current_slot(store) + 1)):
@@ -11686,44 +11945,32 @@
 - name: update_proposer_boost_root#phase0
   sources: []
   spec: |
-    <spec fn="update_proposer_boost_root" fork="phase0" hash="f037a32d">
-    def update_proposer_boost_root(store: Store, root: Root) -> None:
+    <spec fn="update_proposer_boost_root" fork="phase0" hash="3278de09">
+    def update_proposer_boost_root(store: Store, head: Root, root: Root) -> None:
         is_first_block = store.proposer_boost_root == Root()
         is_timely = store.block_timeliness[root]
+        is_same_dependent_root = get_dependent_root(store, root) == get_dependent_root(store, head)
 
         # Add proposer score boost if the block is timely, not conflicting with an
-        # existing block, with the same the proposer as the canonical chain.
-        if is_timely and is_first_block:
-            head_state = copy(store.block_states[get_head(store)])
-            slot = get_current_slot(store)
-            if head_state.slot < slot:
-                process_slots(head_state, slot)
-            block = store.blocks[root]
-            # Only update if the proposer is the same as on the canonical chain
-            if block.proposer_index == get_beacon_proposer_index(head_state):
-                store.proposer_boost_root = root
+        # existing block, with the same dependent root as the canonical chain head.
+        if is_timely and is_first_block and is_same_dependent_root:
+            store.proposer_boost_root = root
     </spec>
 
 - name: update_proposer_boost_root#gloas
   sources: []
   spec: |
-    <spec fn="update_proposer_boost_root" fork="gloas" hash="d813a162">
-    def update_proposer_boost_root(store: Store, root: Root) -> None:
+    <spec fn="update_proposer_boost_root" fork="gloas" hash="75ff4ddf">
+    def update_proposer_boost_root(store: Store, head: Root, root: Root) -> None:
         is_first_block = store.proposer_boost_root == Root()
         # [Modified in Gloas:EIP7732]
         is_timely = store.block_timeliness[root][ATTESTATION_TIMELINESS_INDEX]
+        is_same_dependent_root = get_dependent_root(store, root) == get_dependent_root(store, head)
 
-        # Add proposer score boost if the block is the first timely block
-        # for this slot, with the same proposer as the canonical chain.
-        if is_timely and is_first_block:
-            head_state = copy(store.block_states[get_head(store).root])
-            slot = get_current_slot(store)
-            if head_state.slot < slot:
-                process_slots(head_state, slot)
-            block = store.blocks[root]
-            # Only update if the proposer is the same as on the canonical chain
-            if block.proposer_index == get_beacon_proposer_index(head_state):
-                store.proposer_boost_root = root
+        # Add proposer score boost if the block is timely, not conflicting with an
+        # existing block, with the same dependent root as the canonical chain head.
+        if is_timely and is_first_block and is_same_dependent_root:
+            store.proposer_boost_root = root
     </spec>
 
 - name: update_unrealized_checkpoints#phase0
@@ -12415,15 +12662,14 @@
     - file: beacon-chain/core/electra/upgrade.go
       search: func UpgradeToElectra(
   spec: |
-    <spec fn="upgrade_to_electra" fork="electra" hash="c82f0e68">
+    <spec fn="upgrade_to_electra" fork="electra" hash="cdae19f9">
     def upgrade_to_electra(pre: deneb.BeaconState) -> BeaconState:
         epoch = deneb.get_current_epoch(pre)
 
         earliest_exit_epoch = compute_activation_exit_epoch(get_current_epoch(pre))
         for validator in pre.validators:
             if validator.exit_epoch != FAR_FUTURE_EPOCH:
-                if validator.exit_epoch > earliest_exit_epoch:
-                    earliest_exit_epoch = validator.exit_epoch
+                earliest_exit_epoch = max(earliest_exit_epoch, validator.exit_epoch)
         earliest_exit_epoch += Epoch(1)
 
         post = BeaconState(
@@ -13190,14 +13436,14 @@
 - name: validate_beacon_attestation_gossip#phase0
   sources: []
   spec: |
-    <spec fn="validate_beacon_attestation_gossip" fork="phase0" hash="5dcb83a5">
+    <spec fn="validate_beacon_attestation_gossip" fork="phase0" hash="b7375ab1">
     def validate_beacon_attestation_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         attestation: Attestation,
-        subnet_id: uint64,
         current_time_ms: uint64,
+        subnet_id: SubnetID,
     ) -> None:
         """
         Validate an Attestation for gossip propagation on a subnet.
@@ -13280,14 +13526,14 @@
 - name: validate_beacon_attestation_gossip#deneb
   sources: []
   spec: |
-    <spec fn="validate_beacon_attestation_gossip" fork="deneb" hash="fc0076a8">
+    <spec fn="validate_beacon_attestation_gossip" fork="deneb" hash="bc9dda54">
     def validate_beacon_attestation_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         attestation: Attestation,
-        subnet_id: uint64,
         current_time_ms: uint64,
+        subnet_id: SubnetID,
     ) -> None:
         """
         Validate an Attestation for gossip propagation on a subnet.
@@ -13387,15 +13633,15 @@
 - name: validate_beacon_attestation_gossip#electra
   sources: []
   spec: |
-    <spec fn="validate_beacon_attestation_gossip" fork="electra" hash="02f0dc34">
+    <spec fn="validate_beacon_attestation_gossip" fork="electra" hash="214a283d">
     def validate_beacon_attestation_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         # [Modified in Electra:EIP7549]
         attestation: SingleAttestation,
-        subnet_id: uint64,
         current_time_ms: uint64,
+        subnet_id: SubnetID,
     ) -> None:
         """
         Validate a SingleAttestation for gossip propagation on a subnet.
@@ -13574,7 +13820,7 @@
 - name: validate_beacon_block_gossip#bellatrix
   sources: []
   spec: |
-    <spec fn="validate_beacon_block_gossip" fork="bellatrix" hash="3df7ca9b">
+    <spec fn="validate_beacon_block_gossip" fork="bellatrix" hash="6b2b6629">
     def validate_beacon_block_gossip(
         seen: Seen,
         store: Store,
@@ -13582,7 +13828,7 @@
         signed_beacon_block: SignedBeaconBlock,
         current_time_ms: uint64,
         # [New in Bellatrix]
-        block_payload_statuses: Dict[Root, PayloadValidationStatus] = {},
+        block_payload_statuses: Dict[Root, PayloadValidationStatus],
     ) -> None:
         """
         Validate a SignedBeaconBlock for gossip propagation.
@@ -13644,11 +13890,11 @@
             # [IGNORE] The block's parent's execution payload passes validation
             if parent_payload_status == PAYLOAD_STATUS_INVALIDATED:
                 raise GossipIgnore("block's parent is valid and EL result is invalid")
-        else:
-            # [REJECT] The block's parent passes validation
-            if block.parent_root not in store.block_states:
-                # [Modified in Bellatrix]
-                raise GossipReject("block's parent is invalid and execution is not enabled")
+
+        # [REJECT] The block's parent passes validation
+        elif block.parent_root not in store.block_states:
+            # [Modified in Bellatrix]
+            raise GossipReject("block's parent is invalid and execution is not enabled")
 
         # [REJECT] The block is from a higher slot than its parent
         if block.slot <= store.blocks[block.parent_root].slot:
@@ -13676,14 +13922,14 @@
 - name: validate_beacon_block_gossip#capella
   sources: []
   spec: |
-    <spec fn="validate_beacon_block_gossip" fork="capella" hash="b1ac5c00">
+    <spec fn="validate_beacon_block_gossip" fork="capella" hash="18ed1bc4">
     def validate_beacon_block_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         signed_beacon_block: SignedBeaconBlock,
         current_time_ms: uint64,
-        block_payload_statuses: Dict[Root, PayloadValidationStatus] = {},
+        block_payload_statuses: Dict[Root, PayloadValidationStatus],
     ) -> None:
         """
         Validate a SignedBeaconBlock for gossip propagation.
@@ -13770,14 +14016,14 @@
 - name: validate_beacon_block_gossip#deneb
   sources: []
   spec: |
-    <spec fn="validate_beacon_block_gossip" fork="deneb" hash="4ab38790">
+    <spec fn="validate_beacon_block_gossip" fork="deneb" hash="679f5b63">
     def validate_beacon_block_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         signed_beacon_block: SignedBeaconBlock,
         current_time_ms: uint64,
-        block_payload_statuses: Dict[Root, PayloadValidationStatus] = {},
+        block_payload_statuses: Dict[Root, PayloadValidationStatus],
     ) -> None:
         """
         Validate a SignedBeaconBlock for gossip propagation.
@@ -13869,14 +14115,14 @@
 - name: validate_beacon_block_gossip#electra
   sources: []
   spec: |
-    <spec fn="validate_beacon_block_gossip" fork="electra" hash="8439df67">
+    <spec fn="validate_beacon_block_gossip" fork="electra" hash="b4939435">
     def validate_beacon_block_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         signed_beacon_block: SignedBeaconBlock,
         current_time_ms: uint64,
-        block_payload_statuses: Dict[Root, PayloadValidationStatus] = {},
+        block_payload_statuses: Dict[Root, PayloadValidationStatus],
     ) -> None:
         """
         Validate a SignedBeaconBlock for gossip propagation.
@@ -13965,17 +14211,119 @@
         seen.proposer_slots.add((block.proposer_index, block.slot))
     </spec>
 
+- name: validate_beacon_block_gossip#fulu
+  sources: []
+  spec: |
+    <spec fn="validate_beacon_block_gossip" fork="fulu" hash="58934408">
+    def validate_beacon_block_gossip(
+        seen: Seen,
+        store: Store,
+        state: BeaconState,
+        signed_beacon_block: SignedBeaconBlock,
+        current_time_ms: uint64,
+        block_payload_statuses: Optional[Dict[Root, PayloadValidationStatus]] = None,
+    ) -> None:
+        """
+        Validate a SignedBeaconBlock for gossip propagation.
+        Raises GossipIgnore or GossipReject on validation failure.
+        """
+        if block_payload_statuses is None:
+            block_payload_statuses = {}
+        block = signed_beacon_block.message
+        execution_payload = block.body.execution_payload
+
+        # [IGNORE] The block is not from a future slot
+        # (MAY be queued for processing at the appropriate slot)
+        if not is_not_from_future_slot(state, block.slot, current_time_ms):
+            raise GossipIgnore("block is from a future slot")
+
+        # [IGNORE] The block is from a slot greater than the latest finalized slot
+        # (MAY choose to validate and store such blocks for additional purposes
+        # -- e.g. slashing detection, archive nodes, etc)
+        finalized_slot = compute_start_slot_at_epoch(store.finalized_checkpoint.epoch)
+        if block.slot <= finalized_slot:
+            raise GossipIgnore("block is not from a slot greater than the latest finalized slot")
+
+        # [IGNORE] The block is the first block with valid signature received for the proposer for the slot
+        if (block.proposer_index, block.slot) in seen.proposer_slots:
+            raise GossipIgnore("block is not the first valid block for this proposer and slot")
+
+        # [REJECT] The proposer index is a valid validator index
+        if block.proposer_index >= len(state.validators):
+            raise GossipReject("proposer index out of range")
+
+        # [REJECT] The proposer signature is valid
+        proposer = state.validators[block.proposer_index]
+        domain = get_domain(state, DOMAIN_BEACON_PROPOSER, compute_epoch_at_slot(block.slot))
+        signing_root = compute_signing_root(block, domain)
+        if not bls.Verify(proposer.pubkey, signing_root, signed_beacon_block.signature):
+            raise GossipReject("invalid proposer signature")
+
+        # [IGNORE] The block's parent has been seen (via gossip or non-gossip sources)
+        # (MAY be queued until parent is retrieved)
+        if block.parent_root not in store.blocks:
+            raise GossipIgnore("block's parent has not been seen")
+
+        # [REJECT] The block's execution payload timestamp is correct with respect to the slot
+        if execution_payload.timestamp != compute_time_at_slot(state, block.slot):
+            raise GossipReject("incorrect execution payload timestamp")
+
+        parent_payload_status = PAYLOAD_STATUS_NOT_VALIDATED
+        if block.parent_root in block_payload_statuses:
+            parent_payload_status = block_payload_statuses[block.parent_root]
+
+        if block.parent_root not in store.block_states:
+            if parent_payload_status == PAYLOAD_STATUS_NOT_VALIDATED:
+                # [REJECT] The block's parent passes validation
+                raise GossipReject("block's parent is invalid and EL result is unknown")
+
+            # [IGNORE] The block's parent passes validation
+            raise GossipIgnore("block's parent is invalid and EL result is known")
+
+        # [IGNORE] The block's parent's execution payload passes validation
+        if parent_payload_status == PAYLOAD_STATUS_INVALIDATED:
+            raise GossipIgnore("block's parent is valid and EL result is invalid")
+
+        # [REJECT] The block is from a higher slot than its parent
+        if block.slot <= store.blocks[block.parent_root].slot:
+            raise GossipReject("block is not from a higher slot than its parent")
+
+        # [REJECT] The current finalized checkpoint is an ancestor of the block
+        checkpoint_block = get_checkpoint_block(
+            store, block.parent_root, store.finalized_checkpoint.epoch
+        )
+        if checkpoint_block != store.finalized_checkpoint.root:
+            raise GossipReject("finalized checkpoint is not an ancestor of block")
+
+        # [Modified in Fulu:EIP7892]
+        # [REJECT] The length of KZG commitments is less than or equal to the limit
+        max_blobs = get_blob_parameters(get_current_epoch(state)).max_blobs_per_block
+        if len(block.body.blob_kzg_commitments) > max_blobs:
+            raise GossipReject("too many blob kzg commitments")
+
+        # [REJECT] The block is proposed by the expected proposer for the slot
+        # (if shuffling is not available, IGNORE instead and MAY be queued for later)
+        parent_state = store.block_states[block.parent_root].copy()
+        process_slots(parent_state, block.slot)
+        expected_proposer = get_beacon_proposer_index(parent_state)
+        if block.proposer_index != expected_proposer:
+            raise GossipReject("block proposer_index does not match expected proposer")
+
+        # Mark this block as seen
+        seen.proposer_slots.add((block.proposer_index, block.slot))
+    </spec>
+
 - name: validate_blob_sidecar_gossip#deneb
   sources: []
   spec: |
-    <spec fn="validate_blob_sidecar_gossip" fork="deneb" hash="df80723a">
+    <spec fn="validate_blob_sidecar_gossip" fork="deneb" hash="2a9319ce">
     def validate_blob_sidecar_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         blob_sidecar: BlobSidecar,
-        subnet_id: SubnetID,
         current_time_ms: uint64,
+        subnet_id: SubnetID,
     ) -> None:
         """
         Validate a BlobSidecar for gossip propagation on a subnet.
@@ -14063,14 +14411,14 @@
 - name: validate_blob_sidecar_gossip#electra
   sources: []
   spec: |
-    <spec fn="validate_blob_sidecar_gossip" fork="electra" hash="184a7f15">
+    <spec fn="validate_blob_sidecar_gossip" fork="electra" hash="2240dacc">
     def validate_blob_sidecar_gossip(
         seen: Seen,
         store: Store,
         state: BeaconState,
         blob_sidecar: BlobSidecar,
-        subnet_id: SubnetID,
         current_time_ms: uint64,
+        subnet_id: SubnetID,
     ) -> None:
         """
         Validate a BlobSidecar for gossip propagation on a subnet.
@@ -14215,10 +14563,103 @@
         seen.bls_to_execution_change_indices.add(validator_index)
     </spec>
 
+- name: validate_data_column_sidecar_gossip#fulu
+  sources: []
+  spec: |
+    <spec fn="validate_data_column_sidecar_gossip" fork="fulu" hash="57a6f229">
+    def validate_data_column_sidecar_gossip(
+        seen: Seen,
+        store: Store,
+        state: BeaconState,
+        sidecar: DataColumnSidecar,
+        current_time_ms: uint64,
+        subnet_id: SubnetID,
+    ) -> None:
+        """
+        Validate a DataColumnSidecar for gossip propagation on a subnet.
+        Raises GossipIgnore or GossipReject on validation failure.
+        """
+        block_header = sidecar.signed_block_header.message
+
+        # [IGNORE] The sidecar is the first sidecar for the tuple
+        # (block_header.slot, block_header.proposer_index, sidecar.index)
+        sidecar_tuple = (block_header.slot, block_header.proposer_index, sidecar.index)
+        if sidecar_tuple in seen.data_column_sidecar_tuples:
+            raise GossipIgnore("already seen sidecar from this proposer for this slot and index")
+
+        # [REJECT] The sidecar is valid as verified by verify_data_column_sidecar
+        if not verify_data_column_sidecar(sidecar):
+            raise GossipReject("invalid sidecar")
+
+        # [REJECT] The sidecar is for the correct subnet
+        if compute_subnet_for_data_column_sidecar(sidecar.index) != subnet_id:
+            raise GossipReject("sidecar is for wrong subnet")
+
+        # [IGNORE] The sidecar is not from a future slot
+        # (MAY be queued for processing at the appropriate slot)
+        if not is_not_from_future_slot(state, block_header.slot, current_time_ms):
+            raise GossipIgnore("sidecar is from a future slot")
+
+        # [IGNORE] The sidecar is from a slot greater than the latest finalized slot
+        finalized_slot = compute_start_slot_at_epoch(store.finalized_checkpoint.epoch)
+        if block_header.slot <= finalized_slot:
+            raise GossipIgnore("sidecar is not from a slot greater than the latest finalized slot")
+
+        # [REJECT] The proposer index is a valid validator index
+        if block_header.proposer_index >= len(state.validators):
+            raise GossipReject("proposer index out of range")
+
+        # [REJECT] The proposer signature of sidecar.signed_block_header is valid
+        proposer = state.validators[block_header.proposer_index]
+        domain = get_domain(state, DOMAIN_BEACON_PROPOSER, compute_epoch_at_slot(block_header.slot))
+        signing_root = compute_signing_root(block_header, domain)
+        if not bls.Verify(proposer.pubkey, signing_root, sidecar.signed_block_header.signature):
+            raise GossipReject("invalid proposer signature on sidecar block header")
+
+        # [IGNORE] The sidecar's block's parent has been seen
+        # (MAY be queued for processing once the parent block is retrieved)
+        if block_header.parent_root not in store.blocks:
+            raise GossipIgnore("sidecar's parent has not been seen")
+
+        # [REJECT] The sidecar's block's parent passes validation
+        if block_header.parent_root not in store.block_states:
+            raise GossipReject("sidecar's parent failed validation")
+
+        # [REJECT] The sidecar is from a higher slot than the sidecar's block's parent
+        if block_header.slot <= store.blocks[block_header.parent_root].slot:
+            raise GossipReject("sidecar is not from a higher slot than its parent")
+
+        # [REJECT] The current finalized_checkpoint is an ancestor of the sidecar's block
+        checkpoint_block = get_checkpoint_block(
+            store, block_header.parent_root, store.finalized_checkpoint.epoch
+        )
+        if checkpoint_block != store.finalized_checkpoint.root:
+            raise GossipReject("finalized checkpoint is not an ancestor of sidecar's block")
+
+        # [REJECT] The sidecar is valid as verified by verify_data_column_sidecar_inclusion_proof
+        if not verify_data_column_sidecar_inclusion_proof(sidecar):
+            raise GossipReject("invalid sidecar inclusion proof")
+
+        # [REJECT] The sidecar is valid as verified by verify_data_column_sidecar_kzg_proofs
+        if not verify_data_column_sidecar_kzg_proofs(sidecar):
+            raise GossipReject("invalid sidecar kzg proofs")
+
+        # [REJECT] The sidecar is proposed by the expected proposer_index
+        # (if shuffling is not available, IGNORE instead and MAY be queued for later)
+        parent_state = store.block_states[block_header.parent_root].copy()
+        process_slots(parent_state, block_header.slot)
+        expected_proposer = get_beacon_proposer_index(parent_state)
+        if block_header.proposer_index != expected_proposer:
+            raise GossipReject("sidecar proposer_index does not match expected proposer")
+
+        # Mark this data column sidecar as seen
+        seen.data_column_sidecar_tuples.add(sidecar_tuple)
+    </spec>
+
 - name: validate_light_client_update#altair
   sources: []
   spec: |
-    <spec fn="validate_light_client_update" fork="altair" hash="eb5d169b">
+    <spec fn="validate_light_client_update" fork="altair" hash="1b14fa8e">
     def validate_light_client_update(
         store: LightClientStore,
         update: LightClientUpdate,
@@ -14290,7 +14731,9 @@
             sync_committee = store.next_sync_committee
         participant_pubkeys = [
             pubkey
-            for (bit, pubkey) in zip(sync_aggregate.sync_committee_bits, sync_committee.pubkeys)
+            for (bit, pubkey) in zip(
+                sync_aggregate.sync_committee_bits, sync_committee.pubkeys, strict=True
+            )
             if bit
         ]
         fork_version_slot = max(update.signature_slot, Slot(1)) - Slot(1)
@@ -14307,7 +14750,7 @@
     - file: beacon-chain/blockchain/pow_block.go
       search: func (s *Service) validateMergeBlock(
   spec: |
-    <spec fn="validate_merge_block" fork="bellatrix" hash="d51209cc">
+    <spec fn="validate_merge_block" fork="bellatrix" hash="6553dd1d">
     def validate_merge_block(block: BeaconBlock) -> None:
         """
         Check the parent PoW block of execution payload is a valid terminal PoW block.
@@ -14316,7 +14759,7 @@
         and a client software MAY delay a call to ``validate_merge_block``
         until the PoW block(s) become available.
         """
-        if TERMINAL_BLOCK_HASH != Hash32():
+        if TERMINAL_BLOCK_HASH != EMPTY_BLOCK_HASH:
             # If `TERMINAL_BLOCK_HASH` is used as an override, the activation epoch must be reached.
             assert compute_epoch_at_slot(block.slot) >= TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH
             assert block.body.execution_payload.parent_hash == TERMINAL_BLOCK_HASH
@@ -14408,6 +14851,143 @@
         # Attestations can only affect the fork-choice of subsequent slots.
         # Delay consideration in the fork-choice until their slot is in the past.
         assert get_current_slot(store) >= attestation.data.slot + 1
+    </spec>
+
+- name: validate_partial_data_column_sidecar_gossip#fulu
+  sources: []
+  spec: |
+    <spec fn="validate_partial_data_column_sidecar_gossip" fork="fulu" hash="a5f4b021">
+    def validate_partial_data_column_sidecar_gossip(
+        seen: Seen,
+        store: Store,
+        state: BeaconState,
+        sidecar: PartialDataColumnSidecar,
+        block_root: Root,
+        column_index: ColumnIndex,
+        current_time_ms: uint64,
+    ) -> None:
+        """
+        Validate a PartialDataColumnSidecar for gossip propagation on a subnet.
+        Raises GossipIgnore or GossipReject on validation failure.
+        """
+        has_header = len(sidecar.header) == 1
+        num_cells_present = sum(1 for b in sidecar.cells_present_bitmap if b)
+        has_cells = num_cells_present > 0
+
+        # [REJECT] A header and/or cells are present in the message
+        if not (has_header or has_cells):
+            raise GossipReject("partial message is semantically empty")
+
+        # [REJECT] The cell count equals the number of bits set in cells_present_bitmap
+        if len(sidecar.partial_column) != num_cells_present:
+            raise GossipReject("number of cells does not match number of set bits")
+
+        # [REJECT] The proof count equals the number of bits set in cells_present_bitmap
+        if len(sidecar.kzg_proofs) != num_cells_present:
+            raise GossipReject("number of proofs does not match number of set bits")
+
+        if has_header:
+            header = sidecar.header[0]
+            block_header = header.signed_block_header.message
+
+            # [REJECT] The received header MUST equal any previously validated header for this block
+            prior_header = seen.partial_data_column_headers.get(block_root)
+            if prior_header is not None and prior_header != header:
+                raise GossipReject("header differs from previously validated header")
+
+            # [REJECT] The signed_block_header hash matches the partial message's group id
+            if hash_tree_root(block_header) != block_root:
+                raise GossipReject("header's block root does not match partial message group id")
+
+            # [REJECT] The header's kzg_commitments list is non-empty
+            if len(header.kzg_commitments) == 0:
+                raise GossipReject("header's kzg_commitments is empty")
+
+            # [IGNORE] The header is not from a future slot
+            # (MAY be queued for processing at the appropriate slot)
+            if not is_not_from_future_slot(state, block_header.slot, current_time_ms):
+                raise GossipIgnore("header is from a future slot")
+
+            # [IGNORE] The header is from a slot greater than the latest finalized slot
+            finalized_slot = compute_start_slot_at_epoch(store.finalized_checkpoint.epoch)
+            if block_header.slot <= finalized_slot:
+                raise GossipIgnore("header is not from a slot greater than the latest finalized slot")
+
+            # [REJECT] The proposer index is a valid validator index
+            if block_header.proposer_index >= len(state.validators):
+                raise GossipReject("proposer index out of range")
+
+            # [REJECT] The proposer signature of signed_block_header is valid
+            proposer = state.validators[block_header.proposer_index]
+            domain = get_domain(state, DOMAIN_BEACON_PROPOSER, compute_epoch_at_slot(block_header.slot))
+            signing_root = compute_signing_root(block_header, domain)
+            if not bls.Verify(proposer.pubkey, signing_root, header.signed_block_header.signature):
+                raise GossipReject("invalid proposer signature on header")
+
+            # [IGNORE] The header's block's parent has been seen
+            # (MAY be queued for processing once the parent block is retrieved)
+            if block_header.parent_root not in store.blocks:
+                raise GossipIgnore("header's parent has not been seen")
+
+            # [REJECT] The header's block's parent passes validation
+            if block_header.parent_root not in store.block_states:
+                raise GossipReject("header's parent failed validation")
+
+            # [REJECT] The header is from a higher slot than the header's block's parent
+            if block_header.slot <= store.blocks[block_header.parent_root].slot:
+                raise GossipReject("header is not from a higher slot than its parent")
+
+            # [REJECT] The current finalized_checkpoint is an ancestor of the header's block
+            checkpoint_block = get_checkpoint_block(
+                store, block_header.parent_root, store.finalized_checkpoint.epoch
+            )
+            if checkpoint_block != store.finalized_checkpoint.root:
+                raise GossipReject("finalized checkpoint is not an ancestor of header's block")
+
+            # [REJECT] The header's kzg_commitments inclusion proof is valid
+            if not verify_partial_data_column_header_inclusion_proof(header):
+                raise GossipReject("invalid header inclusion proof")
+
+            # [REJECT] The header is proposed by the expected proposer_index
+            # (if shuffling is not available, IGNORE instead and MAY be queued for later)
+            parent_state = store.block_states[block_header.parent_root].copy()
+            process_slots(parent_state, block_header.slot)
+            expected_proposer = get_beacon_proposer_index(parent_state)
+            if block_header.proposer_index != expected_proposer:
+                raise GossipReject("header proposer_index does not match expected proposer")
+
+            # Mark this header as seen
+            seen.partial_data_column_headers[block_root] = header
+
+        if has_cells:
+            # [IGNORE] A valid corresponding PartialDataColumnHeader has been seen
+            header = seen.partial_data_column_headers.get(block_root)
+            if header is None:
+                raise GossipIgnore("valid corresponding header has not been seen")
+
+            block_header = header.signed_block_header.message
+
+            # [IGNORE] The corresponding header is not from a future slot
+            # (MAY be queued for processing at the appropriate slot)
+            if not is_not_from_future_slot(state, block_header.slot, current_time_ms):
+                raise GossipIgnore("corresponding header is from a future slot")
+
+            # [IGNORE] The corresponding header is from a slot greater than the latest finalized slot
+            finalized_slot = compute_start_slot_at_epoch(store.finalized_checkpoint.epoch)
+            if block_header.slot <= finalized_slot:
+                raise GossipIgnore(
+                    "corresponding header is not from a slot greater than the latest finalized slot"
+                )
+
+            # [REJECT] The cells_present_bitmap length equals the number of header kzg_commitments
+            if len(sidecar.cells_present_bitmap) != len(header.kzg_commitments):
+                raise GossipReject("bitmap length does not match commitments length")
+
+            # [REJECT] The sidecar's cell and proof data is valid
+            if not verify_partial_data_column_sidecar_kzg_proofs(
+                sidecar, header.kzg_commitments, column_index
+            ):
+                raise GossipReject("invalid sidecar kzg proofs")
     </spec>
 
 - name: validate_proposer_slashing_gossip#phase0
@@ -14576,13 +15156,13 @@
 - name: validate_sync_committee_message_gossip#altair
   sources: []
   spec: |
-    <spec fn="validate_sync_committee_message_gossip" fork="altair" hash="bd79f23b">
+    <spec fn="validate_sync_committee_message_gossip" fork="altair" hash="f3ed28bd">
     def validate_sync_committee_message_gossip(
         seen: Seen,
         state: BeaconState,
         sync_committee_message: SyncCommitteeMessage,
-        subnet_id: uint64,
         current_time_ms: uint64,
+        subnet_id: SubnetID,
     ) -> None:
         """
         Validate a SyncCommitteeMessage for gossip propagation on a subnet.
@@ -15112,10 +15692,10 @@
 - name: xor#phase0
   sources: []
   spec: |
-    <spec fn="xor" fork="phase0" hash="3b45f2e1">
+    <spec fn="xor" fork="phase0" hash="8548557e">
     def xor(bytes_1: Bytes32, bytes_2: Bytes32) -> Bytes32:
         """
         Return the exclusive-or of two 32-byte strings.
         """
-        return Bytes32(a ^ b for a, b in zip(bytes_1, bytes_2))
+        return Bytes32(a ^ b for a, b in zip(bytes_1, bytes_2, strict=True))
     </spec>
